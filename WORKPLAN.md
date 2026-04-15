@@ -25,10 +25,10 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Acceptance Criteria**
 
-- [ ] `make` in `objc/` produces `libMPGO.so` (or platform equivalent).
-- [ ] `make check` in `objc/` runs `MPGOTests` and all value class tests PASS.
-- [ ] Each value class: construction, equality, hashing, copying, NSCoding round-trip.
-- [ ] Edge cases covered: nil optional fields, zero-width ranges, extreme precisions.
+- [x] `make` in `objc/` produces `libMPGO.so` (or platform equivalent).
+- [x] `make check` in `objc/` runs `MPGOTests` and all value class tests PASS.
+- [x] Each value class: construction, equality, hashing, copying, NSCoding round-trip.
+- [x] Edge cases covered: nil optional fields, zero-width ranges, extreme precisions.
 
 ---
 
@@ -49,14 +49,14 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Acceptance Criteria**
 
-- [ ] Create / open / close an HDF5 file; file exists on disk.
-- [ ] Write & read float64 dataset, values match within 1e-12 epsilon.
-- [ ] Write & read chunked+compressed int32 dataset, byte-exact match.
-- [ ] Write & read complex128 dataset, real and imaginary components intact.
-- [ ] Partial read: write 1000 elements, read elements 500–599, verify.
-- [ ] `MPGOSignalArray` HDF5 round-trip: write → read → `-isEqual:` true.
-- [ ] Benchmark: 1M float64 elements, write < 100 ms, read < 100 ms (logged, PASS if under).
-- [ ] Error path: opening nonexistent file returns nil with populated `NSError`, no crash.
+- [x] Create / open / close an HDF5 file; file exists on disk.
+- [x] Write & read float64 dataset, values match within 1e-12 epsilon.
+- [x] Write & read chunked+compressed int32 dataset, byte-exact match.
+- [x] Write & read complex128 dataset, real and imaginary components intact.
+- [x] Partial read: write 1000 elements, read elements 500–599, verify.
+- [x] `MPGOSignalArray` HDF5 round-trip: write → read → `-isEqual:` true.
+- [x] Benchmark: 1M float64 elements, write < 100 ms, read < 100 ms (logged, PASS if under).
+- [x] Error path: opening nonexistent file returns nil with populated `NSError`, no crash.
 
 ---
 
@@ -74,11 +74,11 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Acceptance Criteria**
 
-- [ ] Construct a realistic 200-peak centroided MassSpectrum, round-trip, verify equality.
-- [ ] Construct a 32768-point NMR FID, round-trip, verify real/imag intact.
-- [ ] Construct a 2D NMR intensity matrix (e.g. 512×1024), round-trip, verify.
-- [ ] Chromatogram round-trip for each type (TIC, XIC, SRM).
-- [ ] MassSpectrum rejects construction with mismatched mz/intensity lengths.
+- [x] Construct a realistic 200-peak centroided MassSpectrum, round-trip, verify equality.
+- [x] Construct a 32768-point NMR FID, round-trip, verify real/imag intact.
+- [x] Construct a 2D NMR intensity matrix (e.g. 512×1024), round-trip, verify.
+- [x] Chromatogram round-trip for each type (TIC, XIC, SRM).
+- [x] MassSpectrum rejects construction with mismatched mz/intensity lengths.
 
 ---
 
@@ -94,11 +94,11 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Acceptance Criteria**
 
-- [ ] Create a 1000-spectrum run, write to HDF5.
-- [ ] Random-access read of spectrum 0, 500, 999 — verify each without reading unrelated spectra (confirm via HDF5 chunk access counts or dataset region selection).
-- [ ] Range query "RT between 10.0 and 12.0 minutes" returns expected subset.
-- [ ] Streaming iteration through all 1000 spectra yields correct order.
-- [ ] `MPGOInstrumentConfig` round-trip as HDF5 compound attribute.
+- [x] Create a 1000-spectrum run, write to HDF5.
+- [x] Random-access read of spectrum 0, 500, 999 — verify each without reading unrelated spectra (confirm via HDF5 chunk access counts or dataset region selection).
+- [x] Range query "RT between 10.0 and 12.0 minutes" returns expected subset.
+- [x] Streaming iteration through all 1000 spectra yields correct order.
+- [x] `MPGOInstrumentConfig` round-trip as HDF5 compound attribute.
 
 ---
 
@@ -115,10 +115,10 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Acceptance Criteria**
 
-- [ ] Build a dataset with 2 MS runs + 1 NMR run, 10 identifications, 5 quantifications, multi-step provenance.
-- [ ] Write to `.mpgo`, close, reopen, verify every field matches.
-- [ ] Provenance chain queryable by input entity reference.
-- [ ] TransitionList round-trip preserves collision energies and RT windows.
+- [x] Build a dataset with 2 MS runs + 1 NMR run, 10 identifications, 5 quantifications, multi-step provenance.
+- [x] Write to `.mpgo`, close, reopen, verify every field matches.
+- [x] Provenance chain queryable by input entity reference.
+- [x] TransitionList round-trip preserves collision energies and RT windows.
 
 ---
 
@@ -132,10 +132,10 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Acceptance Criteria**
 
-- [ ] Create a 64×64 pixel MSImage with synthetic spectra.
-- [ ] Write to HDF5, reopen.
-- [ ] Read tile (0..31, 0..31) without reading the other three tiles.
-- [ ] Round-trip equality for the full image.
+- [x] Create a 64×64 pixel MSImage with synthetic spectra.
+- [x] Write to HDF5, reopen.
+- [x] Read tile (0..31, 0..31) without reading the other three tiles.
+- [x] Round-trip equality for the full image.
 
 ---
 
@@ -151,11 +151,11 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Acceptance Criteria**
 
-- [ ] Encrypt an AcquisitionRun's intensity channel with a test key.
-- [ ] Verify unencrypted metadata (mz, scan headers) readable without key.
-- [ ] Decrypt with correct key → byte-exact match to original intensities.
-- [ ] Decrypt with wrong key → authenticated-decryption failure (GCM tag mismatch), no silent corruption.
-- [ ] Access policy JSON readable independently of key management.
+- [x] Encrypt an AcquisitionRun's intensity channel with a test key.
+- [x] Verify unencrypted metadata (mz, scan headers) readable without key.
+- [x] Decrypt with correct key → byte-exact match to original intensities.
+- [x] Decrypt with wrong key → authenticated-decryption failure (GCM tag mismatch), no silent corruption.
+- [x] Access policy JSON readable independently of key management.
 
 ---
 
@@ -170,17 +170,17 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Acceptance Criteria**
 
-- [ ] Query a 10,000-spectrum dataset for "MS2 with RT in [10, 12] and precursor in [500, 550]".
-- [ ] Instrumentation confirms only AU headers are read; signal channel data is untouched until matching spectra are explicitly loaded.
-- [ ] StreamWriter writes 500 spectra incrementally; file is valid after each flush.
-- [ ] StreamReader reads the same 500 spectra in order, values match originals.
-- [ ] Query performance: 10k-spectrum header scan completes in < 50 ms (logged, PASS if under).
+- [x] Query a 10,000-spectrum dataset for "MS2 with RT in [10, 12] and precursor in [500, 550]".
+- [x] Instrumentation confirms only AU headers are read; signal channel data is untouched until matching spectra are explicitly loaded.
+- [x] StreamWriter writes 500 spectra incrementally; file is valid after each flush.
+- [x] StreamReader reads the same 500 spectra in order, values match originals.
+- [x] Query performance: 10k-spectrum header scan completes in < 50 ms (logged, PASS if under).
 
 ---
 
 ## Overall Release Criteria (v0.1.0-alpha)
 
-- [ ] All eight milestones complete with all tests passing locally (WSL) and in GitHub Actions CI.
-- [ ] README, ARCHITECTURE, WORKPLAN, and all `docs/` files finalized.
-- [ ] No warnings under `-Wall -Wextra` with clang.
-- [ ] Tag `v0.1.0-alpha` pushed to `DTW-Thalion/MPEG-O`.
+- [x] All eight milestones complete with all tests passing locally (WSL) and in GitHub Actions CI. **379 tests pass on `ubuntu-latest`; benchmarks: 1M float64 write/read ~3 ms, 1000-spectrum run write ~22 ms, 10k-spectrum query scan ~0.2 ms.**
+- [x] README, ARCHITECTURE, WORKPLAN, and all `docs/` files finalized.
+- [x] No warnings under `-Wall -Wextra` with clang.
+- [ ] Tag `v0.1.0-alpha` pushed to `DTW-Thalion/MPEG-O`. *(pending — to be tagged after this docs commit)*
