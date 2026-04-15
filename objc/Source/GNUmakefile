@@ -42,7 +42,10 @@ libMPGO_HEADER_FILES = \
 	Protection/MPGOEncryptionManager.h \
 	Query/MPGOQuery.h \
 	Query/MPGOStreamWriter.h \
-	Query/MPGOStreamReader.h
+	Query/MPGOStreamReader.h \
+	Import/MPGOBase64.h \
+	Import/MPGOCVTermMapper.h \
+	Import/MPGOMzMLReader.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -74,7 +77,10 @@ libMPGO_OBJC_FILES = \
 	Protection/MPGOEncryptionManager.m \
 	Query/MPGOQuery.m \
 	Query/MPGOStreamWriter.m \
-	Query/MPGOStreamReader.m
+	Query/MPGOStreamReader.m \
+	Import/MPGOBase64.m \
+	Import/MPGOCVTermMapper.m \
+	Import/MPGOMzMLReader.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz -lcrypto
 
