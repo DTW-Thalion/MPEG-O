@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
-from typing import Iterator, Mapping
+from typing import Any, Iterator, Mapping
 
 import h5py
 import numpy as np
@@ -51,11 +51,38 @@ class SpectralDataset:
     nmr_runs: dict[str, AcquisitionRun] = field(default_factory=dict)
     encrypted_algorithm: str = ""
     _closed: bool = False
+    _remote_fileobj: Any = None  # fsspec file-like kept alive when remote
 
     # ------------------------------------------------------------- lifecycle
 
     @classmethod
-    def open(cls, path: str | Path) -> "SpectralDataset":
+    def open(cls, path: str | Path, **fsspec_kwargs: Any) -> "SpectralDataset":
+        """Open a ``.mpgo`` dataset from a local path or cloud URL.
+
+        URLs with a scheme recognised by :data:`mpeg_o.remote.REMOTE_SCHEMES`
+        (``s3://``, ``http(s)://``, ``gs://``, ``az://``, ``file://``) are
+        routed through fsspec and read lazily — only the HDF5 metadata and
+        any actively touched chunks are fetched. Extra keyword arguments are
+        forwarded to :func:`fsspec.open` and are typically used for
+        cloud-backend options (``anon=True``, ``key=...``, ...).
+        """
+        from .remote import is_remote_url, open_remote_file
+
+        if is_remote_url(path):
+            fileobj = open_remote_file(str(path), **fsspec_kwargs)
+            try:
+                f = h5py.File(fileobj, "r")
+            except Exception:
+                fileobj.close()
+                raise
+            try:
+                return cls._from_open_file(Path(str(path)), f,
+                                           remote_fileobj=fileobj)
+            except Exception:
+                f.close()
+                fileobj.close()
+                raise
+
         p = Path(path)
         f = h5py.File(p, "r")
         try:
@@ -65,7 +92,12 @@ class SpectralDataset:
             raise
 
     @classmethod
-    def _from_open_file(cls, path: Path, f: h5py.File) -> "SpectralDataset":
+    def _from_open_file(
+        cls,
+        path: Path,
+        f: h5py.File,
+        remote_fileobj: Any = None,
+    ) -> "SpectralDataset":
         version, features = io.read_feature_flags(f)
         flags = FeatureFlags.from_iterable(version, features)
         encrypted = io.read_string_attr(f, "encrypted", default="") or ""
@@ -102,11 +134,18 @@ class SpectralDataset:
             ms_runs=ms_runs,
             nmr_runs=nmr_runs,
             encrypted_algorithm=encrypted,
+            _remote_fileobj=remote_fileobj,
         )
 
     def close(self) -> None:
         if not self._closed:
             self.file.close()
+            if self._remote_fileobj is not None:
+                try:
+                    self._remote_fileobj.close()
+                except Exception:
+                    pass
+                self._remote_fileobj = None
             self._closed = True
 
     def __enter__(self) -> "SpectralDataset":
