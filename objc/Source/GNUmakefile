@@ -28,7 +28,10 @@ libMPGO_HEADER_FILES = \
 	Spectra/MPGONMRSpectrum.h \
 	Spectra/MPGONMR2DSpectrum.h \
 	Spectra/MPGOFreeInductionDecay.h \
-	Spectra/MPGOChromatogram.h
+	Spectra/MPGOChromatogram.h \
+	Run/MPGOInstrumentConfig.h \
+	Run/MPGOSpectrumIndex.h \
+	Run/MPGOAcquisitionRun.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -46,7 +49,10 @@ libMPGO_OBJC_FILES = \
 	Spectra/MPGONMRSpectrum.m \
 	Spectra/MPGONMR2DSpectrum.m \
 	Spectra/MPGOFreeInductionDecay.m \
-	Spectra/MPGOChromatogram.m
+	Spectra/MPGOChromatogram.m \
+	Run/MPGOInstrumentConfig.m \
+	Run/MPGOSpectrumIndex.m \
+	Run/MPGOAcquisitionRun.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz
 
