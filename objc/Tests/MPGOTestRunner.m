@@ -16,6 +16,7 @@ extern void testQueryAndStreaming(void);
 extern void testMzMLReader(void);
 extern void testMilestone10(void);
 extern void testMilestone11(void);
+extern void testMilestone12(void);
 
 int main(int argc, const char *argv[])
 {
@@ -79,6 +80,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 11: compound types + dataset encryption")
             testMilestone11();
         END_SET("Milestone 11: compound types + dataset encryption")
+
+        START_SET("Milestone 12: MSImage inheritance + native 2D NMR")
+            testMilestone12();
+        END_SET("Milestone 12: MSImage inheritance + native 2D NMR")
     }
     return 0;
 }

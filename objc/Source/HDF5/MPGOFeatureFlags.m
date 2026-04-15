@@ -9,6 +9,8 @@
 + (NSString *)featureCompoundProvenance      { return @"compound_provenance"; }
 + (NSString *)featureCompoundHeaders         { return @"opt_compound_headers"; }
 + (NSString *)featureDatasetEncryption       { return @"opt_dataset_encryption"; }
++ (NSString *)featureNative2DNMR             { return @"opt_native_2d_nmr"; }
++ (NSString *)featureNativeMSImageCube       { return @"opt_native_msimage_cube"; }
 
 + (NSString *)formatVersionForRoot:(MPGOHDF5Group *)root
 {

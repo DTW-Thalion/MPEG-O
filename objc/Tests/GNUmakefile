@@ -18,9 +18,10 @@ MPGOTests_OBJC_FILES = \
 	TestQueryAndStreaming.m \
 	TestMzMLReader.m \
 	TestMilestone10.m \
-	TestMilestone11.m
+	TestMilestone11.m \
+	TestMilestone12.m
 
-MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lz -lcrypto
+MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 ADDITIONAL_CPPFLAGS += -I../Source

@@ -103,6 +103,8 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
         [MPGOFeatureFlags featureCompoundQuantifications],
         [MPGOFeatureFlags featureCompoundProvenance],
         [MPGOFeatureFlags featureCompoundHeaders],
+        [MPGOFeatureFlags featureNative2DNMR],
+        [MPGOFeatureFlags featureNativeMSImageCube],
     ];
     if (![MPGOFeatureFlags writeFormatVersion:kMPGOFormatVersion
                                       features:features
@@ -182,6 +184,9 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
                                  datasetNamed:@"provenance"
                                         error:error]) return NO;
     }
+
+    // Subclass hook: adds its own datasets under /study/ before close.
+    if (![self writeAdditionalStudyContent:study error:error]) return NO;
 
     if (_transitions) {
         NSData *tdata = [NSJSONSerialization dataWithJSONObject:[_transitions asPlist]
@@ -306,6 +311,9 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
     ds->_file     = f;
     ds->_filePath = [path copy];
 
+    // Subclass hook: read additional /study/ content while file is open.
+    (void)[ds readAdditionalStudyContent:study error:NULL];
+
     if ([root hasAttributeNamed:@"access_policy_json"]) {
         ds->_accessPolicy = decodeAccessPolicy(
             [root stringAttributeNamed:@"access_policy_json" error:NULL]);
@@ -399,6 +407,22 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
 
 - (MPGOAccessPolicy *)accessPolicy { return _accessPolicy; }
 - (void)setAccessPolicy:(MPGOAccessPolicy *)policy { _accessPolicy = policy; }
+
+#pragma mark - Subclass hooks (default no-ops)
+
+- (BOOL)writeAdditionalStudyContent:(MPGOHDF5Group *)studyGroup
+                              error:(NSError **)error
+{
+    (void)studyGroup; (void)error;
+    return YES;
+}
+
+- (BOOL)readAdditionalStudyContent:(MPGOHDF5Group *)studyGroup
+                             error:(NSError **)error
+{
+    (void)studyGroup; (void)error;
+    return YES;
+}
 
 #pragma mark - Compound dataset sealing (encryption of /study compound datasets)
 

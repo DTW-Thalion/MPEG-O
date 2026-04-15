@@ -12,6 +12,7 @@
 @class MPGOProvenanceRecord;
 @class MPGOTransitionList;
 @class MPGOAccessPolicy;
+@class MPGOHDF5Group;
 
 /**
  * Root container for an MPEG-O `.mpgo` file. Owns a top-level `study/`
@@ -68,6 +69,19 @@
 - (BOOL)decryptWithKey:(NSData *)key error:(NSError **)error;
 - (MPGOAccessPolicy *)accessPolicy;
 - (void)setAccessPolicy:(MPGOAccessPolicy *)policy;
+
+#pragma mark - Subclass hooks
+
+/** Subclasses (e.g. MPGOMSImage) override to add their own datasets
+ *  under /study/ after the base dataset has been written. The default
+ *  is a no-op. Return NO to abort the write. */
+- (BOOL)writeAdditionalStudyContent:(MPGOHDF5Group *)studyGroup
+                              error:(NSError **)error;
+
+/** Subclasses override to read their own datasets under /study/ after
+ *  the base dataset has been loaded. Default is a no-op. */
+- (BOOL)readAdditionalStudyContent:(MPGOHDF5Group *)studyGroup
+                             error:(NSError **)error;
 
 @end
 

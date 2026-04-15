@@ -86,7 +86,7 @@ libMPGO_OBJC_FILES = \
 	Import/MPGOCVTermMapper.m \
 	Import/MPGOMzMLReader.m
 
-libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz -lcrypto
+libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/library.make

@@ -32,6 +32,8 @@
 + (NSString *)featureCompoundProvenance;     // @"compound_provenance"
 + (NSString *)featureCompoundHeaders;        // @"opt_compound_headers"
 + (NSString *)featureDatasetEncryption;      // @"opt_dataset_encryption"
++ (NSString *)featureNative2DNMR;            // @"opt_native_2d_nmr"
++ (NSString *)featureNativeMSImageCube;      // @"opt_native_msimage_cube"
 
 #pragma mark - Read
 
