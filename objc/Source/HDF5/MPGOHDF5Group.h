@@ -43,6 +43,22 @@
                        compressionLevel:(int)compressionLevel
                                   error:(NSError **)error;
 
+/** Create a dataset with an explicit ``MPGOCompression`` choice.
+ *  v0.3 M21: adds LZ4 (filter 32004) alongside zlib and "no
+ *  compression". The ``compressionLevel`` parameter is honoured for
+ *  zlib (0–9); LZ4 ignores it. ``MPGOCompressionLZ4`` requires the
+ *  plugin to be loadable at runtime; if ``H5Zfilter_avail(32004)``
+ *  is false the call fails with ``MPGOErrorDatasetCreate`` and a
+ *  descriptive error message.
+ */
+- (MPGOHDF5Dataset *)createDatasetNamed:(NSString *)name
+                              precision:(MPGOPrecision)precision
+                                 length:(NSUInteger)length
+                              chunkSize:(NSUInteger)chunkSize
+                            compression:(MPGOCompression)compression
+                       compressionLevel:(int)compressionLevel
+                                  error:(NSError **)error;
+
 - (MPGOHDF5Dataset *)openDatasetNamed:(NSString *)name error:(NSError **)error;
 
 #pragma mark - Attributes

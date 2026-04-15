@@ -100,17 +100,43 @@ DEFAULT_SIGNAL_CHUNK = 16384
 DEFAULT_INDEX_CHUNK = 1024
 
 
+def _lz4_filter_kwargs() -> dict[str, Any]:
+    """Return the keyword arguments that install the LZ4 filter on an
+    ``h5py.create_dataset`` call. Requires the ``hdf5plugin`` package to
+    be importable; raises ``RuntimeError`` otherwise with a pointer to
+    the optional-dependency install command."""
+    try:
+        import hdf5plugin  # noqa: PLC0415
+    except ImportError as exc:  # pragma: no cover
+        raise RuntimeError(
+            "LZ4 compression requires the 'codecs' optional dependency; "
+            "install with 'pip install mpeg-o[codecs]'"
+        ) from exc
+    return hdf5plugin.LZ4()
+
+
 def write_signal_channel(
     group: h5py.Group,
     name: str,
     data: np.ndarray,
     chunk_size: int = DEFAULT_SIGNAL_CHUNK,
     compression_level: int = 6,
+    *,
+    compression: str = "gzip",
 ) -> h5py.Dataset:
-    """Write a 1-D signal channel with ``zlib`` compression and chunking.
+    """Write a 1-D signal channel with the chosen compression codec.
 
-    Chunk size is clamped to ``len(data)`` when the dataset is shorter than
-    ``chunk_size`` to match the ObjC writer.
+    ``compression`` selects one of:
+
+    - ``"gzip"`` (default, zlib) — matches the ObjC
+      ``MPGOCompressionZlib`` default with ``compression_level``
+      mapping to the deflate level.
+    - ``"lz4"`` — HDF5 filter 32004 via ``hdf5plugin``. Raises
+      ``RuntimeError`` when the plugin isn't installed.
+    - ``"none"`` — chunked but uncompressed.
+
+    Chunk size is clamped to ``len(data)`` when the dataset is shorter
+    than ``chunk_size`` to match the ObjC writer.
     """
     if data.ndim != 1:
         raise ValueError(f"signal channel {name!r} must be 1-D, got shape={data.shape}")
@@ -118,13 +144,18 @@ def write_signal_channel(
     if length == 0:
         return group.create_dataset(name, data=data)
     chunks = (min(chunk_size, length),)
-    return group.create_dataset(
-        name,
-        data=data,
-        chunks=chunks,
-        compression="gzip",
-        compression_opts=compression_level,
-    )
+    if compression == "gzip":
+        return group.create_dataset(
+            name, data=data, chunks=chunks,
+            compression="gzip", compression_opts=compression_level,
+        )
+    if compression == "lz4":
+        return group.create_dataset(
+            name, data=data, chunks=chunks, **_lz4_filter_kwargs(),
+        )
+    if compression == "none":
+        return group.create_dataset(name, data=data, chunks=chunks)
+    raise ValueError(f"unknown compression codec {compression!r}")
 
 
 def read_signal_channel(group: h5py.Group, name: str) -> np.ndarray:

@@ -22,6 +22,7 @@ extern void testMilestone14(void);
 extern void testMilestone17(void);
 extern void testMilestone18(void);
 extern void testMilestone19(void);
+extern void testMilestone21(void);
 
 int main(int argc, const char *argv[])
 {
@@ -109,6 +110,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 19: mzML writer + indexedmzML")
             testMilestone19();
         END_SET("Milestone 19: mzML writer + indexedmzML")
+
+        START_SET("Milestone 21: LZ4 + Numpress-delta codecs")
+            testMilestone21();
+        END_SET("Milestone 21: LZ4 + Numpress-delta codecs")
     }
     return 0;
 }

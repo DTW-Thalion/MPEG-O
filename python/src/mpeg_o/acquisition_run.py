@@ -88,6 +88,11 @@ class AcquisitionRun:
     nucleus_type: str = ""
     provenance_json: str = ""
     _signal_cache: dict[str, h5py.Dataset] = field(default_factory=dict, repr=False)
+    # M21: eagerly decoded Numpress-delta channels, keyed by channel
+    # name. When present, :meth:`_materialize_spectrum` slices from
+    # this float64 buffer instead of hitting the HDF5 dataset, because
+    # Numpress decoding needs the running-sum prefix of the run.
+    _numpress_channels: dict[str, np.ndarray] = field(default_factory=dict, repr=False)
 
     @classmethod
     def open(cls, group: h5py.Group, name: str) -> "AcquisitionRun":
@@ -119,6 +124,22 @@ class AcquisitionRun:
                 detector_type=io.read_string_attr(cfg_group, "detector_type", "") or "",
             )
 
+        # M21: detect Numpress-delta channels via the
+        # ``<chName>_numpress_fixed_point`` attribute on the
+        # signal_channels group, and eagerly decode them here so
+        # :meth:`_materialize_spectrum` can just slice a float64 buffer.
+        numpress_channels: dict[str, np.ndarray] = {}
+        for chName in channel_names:
+            scale_attr = f"{chName}_numpress_fixed_point"
+            if scale_attr in sig_group.attrs:
+                from ._numpress import decode as _np_decode
+                ds_name = f"{chName}_values"
+                if ds_name not in sig_group:
+                    continue
+                raw = sig_group[ds_name][()]
+                scale = int(sig_group.attrs[scale_attr])
+                numpress_channels[chName] = _np_decode(raw, scale)
+
         return cls(
             name=name,
             group=group,
@@ -129,6 +150,7 @@ class AcquisitionRun:
             instrument_config=config,
             nucleus_type=nucleus,
             provenance_json=prov,
+            _numpress_channels=numpress_channels,
         )
 
     # ----------------------------------------------------- spectrum access
@@ -178,11 +200,15 @@ class AcquisitionRun:
 
         channels: dict[str, SignalArray] = {}
         for c in self.channel_names:
-            try:
-                ds = self._signal_dataset(c)
-            except KeyError:
-                continue
-            arr = ds[offset:end]
+            decoded = self._numpress_channels.get(c)
+            if decoded is not None:
+                arr = decoded[offset:end]
+            else:
+                try:
+                    ds = self._signal_dataset(c)
+                except KeyError:
+                    continue
+                arr = ds[offset:end]
             axis = _CHANNEL_AXIS.get(c, AxisDescriptor(name=c, unit=""))
             channels[c] = SignalArray.from_numpy(arr, axis=axis)
 

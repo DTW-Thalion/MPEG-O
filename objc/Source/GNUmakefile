@@ -23,6 +23,7 @@ libMPGO_HEADER_FILES = \
 	HDF5/MPGOHDF5Dataset.h \
 	HDF5/MPGOHDF5Attribute.h \
 	Core/MPGOSignalArray.h \
+	Core/MPGONumpress.h \
 	Spectra/MPGOSpectrum.h \
 	Spectra/MPGOMassSpectrum.h \
 	Spectra/MPGONMRSpectrum.h \
@@ -65,6 +66,7 @@ libMPGO_OBJC_FILES = \
 	HDF5/MPGOHDF5CompoundType.m \
 	HDF5/MPGOFeatureFlags.m \
 	Core/MPGOSignalArray.m \
+	Core/MPGONumpress.m \
 	Spectra/MPGOSpectrum.m \
 	Spectra/MPGOMassSpectrum.m \
 	Spectra/MPGONMRSpectrum.m \
