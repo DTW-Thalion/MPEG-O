@@ -352,3 +352,43 @@ the full milestone history.
       `objc/Tools/GNUmakefile`,
       `python/tests/test_mzml_writer.py`.
 
+### Milestone 20 — Cloud-Native Access
+
+- [ ] **Objective-C cloud-native `.mpgo` access.**
+      M20 shipped a Python-only cloud path because `h5py` can consume
+      any Python file-like object (fsspec's range-request stream
+      satisfies that interface). `libhdf5` reads exclusively through
+      Virtual File Drivers, and the default `sec2` VFD is POSIX-only,
+      so the ObjC reference implementation has no equivalent entry
+      point. The options, in rough order of preference:
+
+      1. **Link against libhdf5 built with the `ROS3` VFD
+         (`--with-ros3-vfd` + libcurl).** S3-only, but the smallest
+         delta: `MPGOHDF5File openAtPath:` grows an `openS3URL:`
+         variant that sets `H5Pset_fapl_ros3` before `H5Fopen`. The
+         CI job needs a libhdf5 rebuild (the apt package ships
+         without ROS3), and the test harness can reuse the existing
+         M20 threading HTTP server if we teach it the S3 API subset
+         ROS3 probes (or adopt `moto`).
+      2. **Custom VFD wrapping libcurl / NSURLSession.** Covers
+         HTTP, S3, GCS, Azure via one driver, but writing a VFD is
+         non-trivial (hundreds of lines of seek/cache plumbing) and
+         every MPGO deployment would need the driver registered.
+      3. **Download-then-open fallback.** Stage the whole file in
+         `/tmp` before `openAtPath:`. Simple to implement but
+         defeats M20's "individual spectrum does not download full
+         file" acceptance criterion; suitable only as a last-resort
+         compatibility path.
+
+      The on-disk `.mpgo` layout is unchanged by any of these, so
+      the milestone is a *transport* concern, not a *format* one.
+      Cloud-hosted files written from Python (including those that
+      carry v2 canonical signatures and compound per-run provenance)
+      are already readable by the ObjC reader as soon as they reach
+      a POSIX path.
+
+      Touches (option 1 path): `objc/Source/HDF5/MPGOHDF5File.{h,m}`
+      (new `openS3URL:` entry point), `objc/check-deps.sh` (probe
+      for ROS3), `.github/workflows/ci.yml` (libhdf5 rebuild step),
+      new `objc/Tests/TestCloudAccess.m` with an S3 mock harness.
+
