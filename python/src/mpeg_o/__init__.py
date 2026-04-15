@@ -5,7 +5,7 @@ main entry point.
 """
 from __future__ import annotations
 
-__version__ = "0.3.0a1"
+__version__ = "0.3.0"
 FORMAT_VERSION = "1.1"
 
 from .enums import (

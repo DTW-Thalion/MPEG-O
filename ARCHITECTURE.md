@@ -2,7 +2,21 @@
 
 MPEG-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data, specifically mass spectrometry and NMR spectroscopy.
 
-The Objective-C reference implementation expresses this architecture in three layers:
+As of v0.3.0 there are two interoperable reference implementations:
+
+- **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
+  implementation. Every format guarantee in `docs/format-spec.md` is
+  rooted here. 730 tests passing across M1–M22.
+- **Python (`mpeg-o` package)** (`python/`, LGPL-3.0 core +
+  Apache-2.0 importers/exporters) — a full reader/writer on top of
+  `h5py` + `numpy` that mirrors the Objective-C class hierarchy
+  1-to-1. Cross-language parity is asserted at every milestone: the
+  Python reader opens every ObjC reference fixture, the Python
+  writer produces files the ObjC `MpgoVerify` CLI decodes without
+  error, and `v2:` HMAC signatures plus Numpress-delta scale
+  factors are byte-identical between the two.
+
+Both implementations express the architecture in three layers:
 
 1. **Layer 1 — Protocols**: capability interfaces
 2. **Layer 2 — Abstract base classes**: domain-agnostic primitives
@@ -157,7 +171,91 @@ support incremental ingestion of large runs.
 
 ## Thread Safety
 
-**Not thread-safe in v0.1.** Concurrent access to a single `MPGOHDF5File` from multiple threads is undefined. Clients must serialize access externally. A future version may adopt HDF5's thread-safe build (`--enable-threadsafe`) with explicit locking.
+**Not thread-safe in v0.1–v0.3.** Concurrent access to a single `MPGOHDF5File` (or, on the Python side, a `SpectralDataset` wrapping an `h5py.File`) from multiple threads is undefined. Clients must serialize access externally. A future version may adopt HDF5's thread-safe build (`--enable-threadsafe`) with explicit locking.
+
+---
+
+## Python class mapping (v0.3, M16)
+
+The Python package mirrors the Objective-C hierarchy without the
+`MPGO` prefix. Files under `python/src/mpeg_o/` are keyed by
+snake_case module names.
+
+| Objective-C class                | Python class                              | Module                              |
+|----------------------------------|-------------------------------------------|-------------------------------------|
+| `MPGOSignalArray`                | `SignalArray`                             | `mpeg_o.signal_array`               |
+| `MPGOSpectrum`                   | `Spectrum`                                | `mpeg_o.spectrum`                   |
+| `MPGOMassSpectrum`               | `MassSpectrum`                            | `mpeg_o.mass_spectrum`              |
+| `MPGONMRSpectrum`                | `NMRSpectrum`                             | `mpeg_o.nmr_spectrum`               |
+| `MPGONMR2DSpectrum`              | `NMR2DSpectrum`                           | `mpeg_o.nmr_2d`                     |
+| `MPGOFreeInductionDecay`         | `FreeInductionDecay`                      | `mpeg_o.fid`                        |
+| `MPGOChromatogram`               | `Chromatogram`                            | `mpeg_o.chromatogram`               |
+| `MPGOAcquisitionRun`             | `AcquisitionRun` + `SpectrumIndex`        | `mpeg_o.acquisition_run`            |
+| `MPGOSpectralDataset`            | `SpectralDataset`                         | `mpeg_o.spectral_dataset`           |
+| `MPGOMSImage`                    | `MSImage`                                 | `mpeg_o.ms_image`                   |
+| `MPGOIdentification`             | `Identification`                          | `mpeg_o.identification`             |
+| `MPGOQuantification`             | `Quantification`                          | `mpeg_o.quantification`             |
+| `MPGOProvenanceRecord`           | `ProvenanceRecord`                        | `mpeg_o.provenance`                 |
+| `MPGOTransitionList`             | `TransitionList` / `Transition`           | `mpeg_o.transition_list`            |
+| `MPGOFeatureFlags`               | `FeatureFlags`                            | `mpeg_o.feature_flags`              |
+| `MPGOInstrumentConfig`           | `InstrumentConfig`                        | `mpeg_o.instrument_config`          |
+| `MPGOEncryptionManager`          | `mpeg_o.encryption` module                | `mpeg_o.encryption`                 |
+| `MPGOSignatureManager`           | `mpeg_o.signatures` module                | `mpeg_o.signatures`                 |
+| `MPGONumpress`                   | `mpeg_o._numpress` module                 | `mpeg_o._numpress`                  |
+| `MPGOMzMLReader` (Apache-2.0)    | `mpeg_o.importers.mzml`                   | `mpeg_o.importers.mzml`             |
+| `MPGONmrMLReader` (Apache-2.0)   | `mpeg_o.importers.nmrml`                  | `mpeg_o.importers.nmrml`            |
+| `MPGOMzMLWriter` (Apache-2.0)    | `mpeg_o.exporters.mzml`                   | `mpeg_o.exporters.mzml`             |
+| `MPGOCVTermMapper`               | `mpeg_o.importers.cv_term_mapper`         | `mpeg_o.importers.cv_term_mapper`   |
+| *(new in v0.3)*                  | `mpeg_o.remote` (fsspec URL dispatcher)   | `mpeg_o.remote`                     |
+
+### Key design idioms
+
+- **Frozen dataclasses** for immutable value types
+  (`ValueRange`, `CVParam`, `AxisDescriptor`, `EncodingSpec`,
+  `InstrumentConfig`, `Identification`, `Quantification`,
+  `ProvenanceRecord`, `FeatureFlags`).
+- **`IntEnum`**, not `StrEnum`, for all format enums
+  (`Precision`, `Compression`, `Polarity`, `SamplingMode`,
+  `AcquisitionMode`, `ChromatogramType`, `EncryptionLevel`). Each
+  one persists as an integer HDF5 attribute, so `IntEnum` values
+  are a direct pass-through and remove a translation table that
+  would otherwise need to stay in sync with the ObjC
+  `NS_ENUM(NSUInteger, ...)` declarations.
+- **Lazy signal access** — `AcquisitionRun` pre-loads the spectrum
+  index (small, eager) at open time and slices signal channels
+  from the HDF5 dataset only when a spectrum is touched.
+  Numpress-delta channels are the one exception: they're eagerly
+  decoded at open because the inverse cumsum needs the running-sum
+  prefix of the whole channel.
+- **String attributes** written as fixed-length NULLTERM strings
+  sized to `len(value) + 1` (h5py enforces a trailing null byte
+  on write, while the ObjC writer uses `len(value)` with no
+  terminator — both layouts are mutually readable).
+
+---
+
+## Compression codec matrix (v0.3, M21)
+
+| Codec              | Transport                                    | Lossy? | ObjC support                                          | Python support                                    |
+|--------------------|----------------------------------------------|--------|-------------------------------------------------------|---------------------------------------------------|
+| **zlib** (default) | `H5P_DEFLATE` filter, level 6                | No     | `MPGOCompressionZlib` via `H5Pset_deflate`            | `compression="gzip"` on `h5py.create_dataset`     |
+| **LZ4**            | HDF5 filter 32004 (plugin-gated)             | No     | `MPGOCompressionLZ4` via `H5Pset_filter(32004)`       | `compression="lz4"` via `hdf5plugin.LZ4()`        |
+| **Numpress-delta** | MPGO transform → int64 deltas + zlib         | Yes    | `MPGOCompressionNumpressDelta` via `MPGONumpress`     | `signal_compression="numpress_delta"`             |
+
+LZ4 availability is runtime-detected via `H5Zfilter_avail(32004)` in ObjC and `hdf5plugin.PLUGIN_PATH` + `h5py.h5z.filter_avail(32004)` in Python; both implementations skip their LZ4 tests cleanly when the filter is absent. Numpress-delta is always available because it is a pure-library transform that produces an ordinary int64 HDF5 dataset.
+
+---
+
+## Cloud-native access (v0.3, M20, Python-only)
+
+`SpectralDataset.open("s3://bucket/file.mpgo")` detects URL schemes via `mpeg_o.remote.is_remote_url` and routes them through `fsspec.open(url, "rb")`. The resulting seekable byte stream is handed to `h5py.File`, which then reads only the HDF5 chunks touched by the caller. Supported schemes include `file://`, `http(s)://`, `s3://`, `gs://`, `gcs://`, `az://`, `abfs(s)://`; the backend dependencies live behind the `cloud` optional extra.
+
+Performance characteristics (observed on a 15 MB fixture served over localhost with a 64 KiB fsspec block cache):
+
+- 10 random spectra from a 1,000-spectrum file: ~50 ms wall clock.
+- Fraction of file bytes actually transferred: ~24%.
+
+The Objective-C implementation reads only POSIX files in v0.3 because `libhdf5` consumes files via Virtual File Drivers (VFDs) rather than arbitrary byte streams. Integrating `libhdf5`'s ROS3 VFD (or a custom libcurl-backed VFD) is a tracked follow-up in `WORKPLAN.md`.
 
 ---
 

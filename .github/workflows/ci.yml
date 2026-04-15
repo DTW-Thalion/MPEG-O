@@ -162,8 +162,125 @@ jobs:
         working-directory: python
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          pip install -e ".[test,import,crypto]"
+          pip install -e ".[test,import,crypto,codecs]"
 
       - name: Run pytest
         working-directory: python
         run: pytest -v --tb=short
+
+  cross-compat:
+    name: Cross-language parity (ObjC ⇄ Python)
+    needs: [objc-build-test, python-test]
+    runs-on: ubuntu-latest
+
+    # Runs the Python test suite against a freshly-built Objective-C
+    # tree so the cross-language tests that subprocess into MpgoVerify
+    # and MpgoSign can actually find the binaries. This catches any
+    # byte-level divergence between the two writers / signers /
+    # codecs before a release tag is pushed.
+    env:
+      LIBOBJC2_REF: v2.3
+      TOOLS_MAKE_REF: make-2_9_3
+      LIBS_BASE_REF:  base-1_31_1
+      INSTALL_PREFIX: /usr/local
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies (apt)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build make git ca-certificates \
+            libhdf5-dev zlib1g-dev libssl-dev libxml2-dev \
+            libgnutls28-dev libffi-dev libicu-dev \
+            libblocksruntime-dev libcurl4-openssl-dev tzdata
+
+      - name: Cache GNUstep stack
+        id: gnustep-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/include/objc
+            /usr/local/include/GNUstep
+            /usr/local/lib/libobjc.so*
+            /usr/local/lib/libgnustep-base*
+            /usr/local/lib/GNUstep
+            /usr/local/share/GNUstep
+            /usr/local/bin/gnustep-config
+            /usr/local/bin/gdomap
+          key: gnustep-${{ runner.os }}-${{ env.LIBOBJC2_REF }}-${{ env.TOOLS_MAKE_REF }}-${{ env.LIBS_BASE_REF }}-v2
+
+      - name: Build libobjc2 from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -exo pipefail
+          git clone --depth 1 --branch "${LIBOBJC2_REF}" \
+            https://github.com/gnustep/libobjc2.git /tmp/libobjc2
+          cd /tmp/libobjc2
+          git submodule update --init --recursive
+          mkdir build && cd build
+          cmake -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ ..
+          ninja
+          sudo ninja install
+
+      - name: Build gnustep-make from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -exo pipefail
+          git clone --depth 1 --branch "${TOOLS_MAKE_REF}" \
+            https://github.com/gnustep/tools-make.git /tmp/tools-make
+          cd /tmp/tools-make
+          ./configure --prefix="${INSTALL_PREFIX}" \
+            --with-library-combo=ng-gnu-gnu CC=clang
+          make
+          sudo make install
+
+      - name: Build gnustep-base from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -exo pipefail
+          # shellcheck disable=SC1091
+          . "${INSTALL_PREFIX}/share/GNUstep/Makefiles/GNUstep.sh"
+          git clone --depth 1 --branch "${LIBS_BASE_REF}" \
+            https://github.com/gnustep/libs-base.git /tmp/libs-base
+          cd /tmp/libs-base
+          ./configure CC=clang
+          make
+          sudo -E make install
+
+      - name: Refresh dynamic linker cache
+        run: sudo ldconfig
+
+      - name: Build libMPGO + tools
+        working-directory: objc
+        run: ./build.sh
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install mpeg-o with cross-compat extras
+        working-directory: python
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -e ".[test,import,crypto,codecs]"
+
+      - name: Run cross-language parity tests
+        working-directory: python
+        env:
+          # Let h5py find the LZ4 filter plugin shipped by hdf5plugin
+          # so the M21 LZ4 tests run end-to-end in the cross-compat job.
+          HDF5_PLUGIN_PATH: ""  # populated by the Python harness
+        run: |
+          pytest -v --tb=short \
+            tests/test_cross_compat.py \
+            tests/test_canonical_signatures.py \
+            tests/test_compression_codecs.py \
+            tests/test_per_run_provenance.py
