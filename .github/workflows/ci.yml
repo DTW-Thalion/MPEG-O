@@ -46,7 +46,6 @@ jobs:
             libgnutls28-dev \
             libffi-dev \
             libicu-dev \
-            libdispatch-dev \
             libblocksruntime-dev \
             libcurl4-openssl-dev \
             tzdata
