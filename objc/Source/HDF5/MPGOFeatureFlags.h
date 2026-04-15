@@ -36,6 +36,7 @@
 + (NSString *)featureNativeMSImageCube;      // @"opt_native_msimage_cube"
 + (NSString *)featureDigitalSignatures;      // @"opt_digital_signatures"
 + (NSString *)featureCompoundPerRunProvenance; // @"compound_per_run_provenance" (M17)
++ (NSString *)featureCanonicalSignatures;      // @"opt_canonical_signatures" (M18)
 
 #pragma mark - Read
 

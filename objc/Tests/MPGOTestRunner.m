@@ -20,6 +20,7 @@ extern void testMilestone12(void);
 extern void testMilestone13(void);
 extern void testMilestone14(void);
 extern void testMilestone17(void);
+extern void testMilestone18(void);
 
 int main(int argc, const char *argv[])
 {
@@ -99,6 +100,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 17: compound per-run provenance")
             testMilestone17();
         END_SET("Milestone 17: compound per-run provenance")
+
+        START_SET("Milestone 18: canonical byte-order signatures")
+            testMilestone18();
+        END_SET("Milestone 18: canonical byte-order signatures")
     }
     return 0;
 }
