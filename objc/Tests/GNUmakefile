@@ -12,7 +12,8 @@ MPGOTests_OBJC_FILES = \
 	TestSignalArray.m \
 	TestSpectra.m \
 	TestAcquisitionRun.m \
-	TestSpectralDataset.m
+	TestSpectralDataset.m \
+	TestMSImage.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lz
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

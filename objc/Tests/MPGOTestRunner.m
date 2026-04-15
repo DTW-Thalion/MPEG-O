@@ -10,6 +10,7 @@ extern void testSignalArray(void);
 extern void testSpectra(void);
 extern void testAcquisitionRun(void);
 extern void testSpectralDataset(void);
+extern void testMSImage(void);
 
 int main(int argc, const char *argv[])
 {
@@ -49,6 +50,10 @@ int main(int argc, const char *argv[])
         START_SET("SpectralDataset (multi-run)")
             testSpectralDataset();
         END_SET("SpectralDataset (multi-run)")
+
+        START_SET("MSImage")
+            testMSImage();
+        END_SET("MSImage")
     }
     return 0;
 }

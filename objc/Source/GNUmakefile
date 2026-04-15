@@ -36,7 +36,8 @@ libMPGO_HEADER_FILES = \
 	Dataset/MPGOQuantification.h \
 	Dataset/MPGOProvenanceRecord.h \
 	Dataset/MPGOTransitionList.h \
-	Dataset/MPGOSpectralDataset.h
+	Dataset/MPGOSpectralDataset.h \
+	Image/MPGOMSImage.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -62,7 +63,8 @@ libMPGO_OBJC_FILES = \
 	Dataset/MPGOQuantification.m \
 	Dataset/MPGOProvenanceRecord.m \
 	Dataset/MPGOTransitionList.m \
-	Dataset/MPGOSpectralDataset.m
+	Dataset/MPGOSpectralDataset.m \
+	Image/MPGOMSImage.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz
 
