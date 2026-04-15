@@ -11,6 +11,7 @@ extern void testSpectra(void);
 extern void testAcquisitionRun(void);
 extern void testSpectralDataset(void);
 extern void testMSImage(void);
+extern void testEncryption(void);
 
 int main(int argc, const char *argv[])
 {
@@ -54,6 +55,10 @@ int main(int argc, const char *argv[])
         START_SET("MSImage")
             testMSImage();
         END_SET("MSImage")
+
+        START_SET("Encryption (AES-256-GCM)")
+            testEncryption();
+        END_SET("Encryption (AES-256-GCM)")
     }
     return 0;
 }
