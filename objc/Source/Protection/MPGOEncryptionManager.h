@@ -3,6 +3,12 @@
 
 #import <Foundation/Foundation.h>
 
+#if defined(__clang__) || defined(__GNUC__)
+#  define MPGO_DEPRECATED_MSG(msg) __attribute__((deprecated(msg)))
+#else
+#  define MPGO_DEPRECATED_MSG(msg)
+#endif
+
 /**
  * AES-256-GCM encryption helpers for selectively protecting sensitive
  * datasets inside an `.mpgo` file. Uses OpenSSL EVP under the hood.
@@ -53,7 +59,8 @@
 + (BOOL)encryptIntensityChannelInRun:(NSString *)runName
                           atFilePath:(NSString *)path
                              withKey:(NSData *)key
-                               error:(NSError **)error;
+                               error:(NSError **)error
+    MPGO_DEPRECATED_MSG("Use -[MPGOAcquisitionRun encryptWithKey:level:error:] instead");
 
 /**
  * Decrypt the previously-encrypted intensity channel for the named run.
@@ -63,10 +70,12 @@
 + (NSData *)decryptIntensityChannelInRun:(NSString *)runName
                               atFilePath:(NSString *)path
                                  withKey:(NSData *)key
-                                   error:(NSError **)error;
+                                   error:(NSError **)error
+    MPGO_DEPRECATED_MSG("Use -[MPGOAcquisitionRun decryptWithKey:error:] instead");
 
 + (BOOL)isIntensityChannelEncryptedInRun:(NSString *)runName
-                              atFilePath:(NSString *)path;
+                              atFilePath:(NSString *)path
+    MPGO_DEPRECATED_MSG("Query via MPGOAcquisitionRun.accessPolicy instead");
 
 @end
 

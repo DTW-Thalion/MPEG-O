@@ -14,6 +14,7 @@ extern void testMSImage(void);
 extern void testEncryption(void);
 extern void testQueryAndStreaming(void);
 extern void testMzMLReader(void);
+extern void testMilestone10(void);
 
 int main(int argc, const char *argv[])
 {
@@ -69,6 +70,10 @@ int main(int argc, const char *argv[])
         START_SET("mzML Reader (Milestone 9)")
             testMzMLReader();
         END_SET("mzML Reader (Milestone 9)")
+
+        START_SET("Milestone 10: protocols + modality-agnostic")
+            testMilestone10();
+        END_SET("Milestone 10: protocols + modality-agnostic")
     }
     return 0;
 }
