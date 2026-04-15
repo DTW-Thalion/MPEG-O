@@ -753,6 +753,43 @@ typedef NS_ENUM(NSUInteger, MPGOVerificationStatus) {
 - [ ] HDF5 tool compatibility preserved
 - [ ] Performance target met
 
+### Deferred to v0.3 — canonical byte-order normalization
+
+The M14 HMAC covers the raw bytes returned by `H5Dread` in native
+platform layout (little-endian on x86_64). This is sufficient for
+in-place tamper detection on a single host but is NOT portable: a
+signature produced on little-endian hardware will not verify after
+the file is re-read on a big-endian host (or vice versa), because
+HDF5's native type conversion flips byte order on read.
+
+A v0.3 follow-up should:
+
+1. Normalize each element to a canonical little-endian representation
+   before hashing. For numeric types this means requesting
+   `H5T_IEEE_F64LE`, `H5T_STD_U32LE`, etc. as the mem_type in
+   `H5Dread` so HDF5 converts from whatever the dataset's on-disk
+   type is to little-endian in-memory, regardless of host endianness.
+2. For compound datasets, walk the compound members and normalize
+   each numeric field the same way. Variable-length strings inside
+   compounds are already byte-order-independent (UTF-8 bytes).
+3. Bump the `@mpgo_signature` format to include an explicit
+   `version` prefix (e.g. `b"v2:" + base64(mac)`) so verifiers can
+   distinguish canonical-byte-order signatures from the v0.2
+   native-layout ones and reject the old format on mismatch.
+4. Update `MPGOSignatureManager.verifyDataset:` to attempt v2
+   verification first, fall back to v1 (warn via NSError userInfo)
+   only for files whose root feature list predates the upgrade.
+
+Acceptance criteria for the v0.3 milestone:
+
+- [ ] Canonical signatures verify across endianness (emulated by
+      writing with a BE mem_type and verifying with the normalized
+      reader).
+- [ ] Mixed-version file survives: pre-upgrade signatures still
+      verify in compatibility mode.
+- [ ] Compound type signatures are stable across struct padding
+      differences (padded bytes excluded from the hash).
+
 ---
 
 ## Milestone 15 — Format Specification + v0.2.0 Release
