@@ -41,6 +41,20 @@ MPGO_OBJC_RUNTIME ?= gnustep-2.0
 ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include
 ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include/hdf5/serial
 
+# On the apt gnustep-1.8 path, libobjc's runtime headers (objc/objc.h,
+# objc/runtime.h, ...) ship inside gcc's internal include directory,
+# which clang's Linux driver does not search automatically. Glob for
+# whatever gcc version is installed and add its objc header dir to the
+# include path. libobjc2-based gnustep-2.0 builds put the same headers
+# in /usr/local/include/objc/ and don't need this.
+ifeq ($(MPGO_OBJC_RUNTIME),gnustep-1.8)
+  GCC_OBJC_INCLUDE := $(firstword $(wildcard \
+      /usr/lib/gcc/x86_64-linux-gnu/*/include))
+  ifneq ($(GCC_OBJC_INCLUDE),)
+    ADDITIONAL_CPPFLAGS += -I$(GCC_OBJC_INCLUDE)
+  endif
+endif
+
 # Pass -fblocks only on the gnustep-2.0 path. On gnustep-1.8 (Ubuntu's apt
 # libgnustep-base-dev, built against GCC's libobjc), enabling blocks makes
 # GSVersionMacros.h include <objc/blocks_runtime.h>, which is a libobjc2
