@@ -32,6 +32,7 @@ fi
 
 # --- gnustep-base ----------------------------------------------------------
 gs_base=""
+gs_runtime=""
 for cand in /usr/local/lib/libgnustep-base.so \
             /usr/lib/x86_64-linux-gnu/libgnustep-base.so \
             /usr/lib/libgnustep-base.so; do
@@ -41,13 +42,28 @@ if [ -n "$gs_base" ]; then
     ok "gnustep-base ($gs_base)"
     if command -v nm >/dev/null 2>&1; then
         if nm -D "$gs_base" 2>/dev/null | grep -q '\._OBJC_CLASS_NSObject$'; then
+            gs_runtime="gnustep-2.0"
             say "       runtime ABI: gnustep-2.0 (non-fragile)"
         else
+            gs_runtime="gnustep-1.8"
             say "       runtime ABI: gnustep-1.8 (fragile)"
         fi
     fi
 else
     fail "libgnustep-base.so not found (install libgnustep-base-dev or build from source)"
+fi
+
+# --- Blocks runtime header (gnustep-1.8 path on Ubuntu) --------------------
+# Ubuntu's libgnustep-base-dev is built against libobjc (not libobjc2),
+# so objc/blocks_runtime.h is not supplied by the runtime and must come
+# from libblocksruntime-dev. gnustep-2.0 / libobjc2 builds ship it in-tree.
+if [ "$gs_runtime" = "gnustep-1.8" ]; then
+    if [ -f /usr/include/objc/blocks_runtime.h ] || \
+       [ -f /usr/local/include/objc/blocks_runtime.h ]; then
+        ok "objc/blocks_runtime.h"
+    else
+        fail "objc/blocks_runtime.h not found (install libblocksruntime-dev)"
+    fi
 fi
 
 # --- Objective-C compiler with ARC ----------------------------------------
