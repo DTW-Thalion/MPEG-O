@@ -1,5 +1,41 @@
-# MPEG-O — Python Implementation (planned)
+# MPEG-O — Python Implementation
 
-Python implementation — planned. Will follow the Objective-C reference implementation architecture.
+Python reader/writer for the MPEG-O multi-omics data standard (`.mpgo` files).
+Byte-compatible with the Objective-C reference implementation — see
+[`../docs/format-spec.md`](../docs/format-spec.md) for the normative HDF5 layout.
 
-See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and [`../WORKPLAN.md`](../WORKPLAN.md) for the canonical class hierarchy and milestone plan. The Python stream will use `h5py` for HDF5 access and mirror the `MPGO` class names without the prefix (e.g. `mpeg_o.SignalArray`, `mpeg_o.MassSpectrum`).
+## Install (development)
+
+```bash
+cd python
+python -m venv .venv
+. .venv/bin/activate
+pip install -e ".[test,import,crypto]"
+pytest
+```
+
+Requires Python 3.11+ and a system HDF5 library (`libhdf5-dev` on Ubuntu).
+
+## Usage
+
+```python
+from mpeg_o import SpectralDataset
+
+with SpectralDataset.open("example.mpgo") as ds:
+    run = ds.ms_runs["run_0001"]
+    spectrum = run[0]
+    mz = spectrum.mz_array.data        # numpy float64 array
+    intensity = spectrum.intensity_array.data
+```
+
+## Licensing
+
+- **Core** (`mpeg_o` package, excluding `importers/` and `exporters/`): LGPL-3.0-or-later
+- **Importers / exporters** (`mpeg_o.importers`, `mpeg_o.exporters`): Apache-2.0
+
+## Cross-compatibility
+
+The `tests/test_cross_compat.py` suite reads every reference fixture under
+`../objc/Tests/Fixtures/mpgo/` and, when the ObjC build tree is available,
+verifies Python-written files through the `mpgo-verify` tool. This guarantees
+byte-for-byte interoperability with the Objective-C reference implementation.
