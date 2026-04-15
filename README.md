@@ -100,6 +100,7 @@ works on both Debian/Ubuntu's apt packages and source builds against
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Full class hierarchy, protocols, and HDF5 container mapping
 - [`WORKPLAN.md`](WORKPLAN.md) — Milestone plan with acceptance criteria
+- [`docs/architectural-primitives.md`](docs/architectural-primitives.md) — Background analysis: the six primitives, five container philosophies, and the case for an MPEG-G-derived multi-omics standard
 - [`docs/primitives.md`](docs/primitives.md) — The six data primitives specification
 - [`docs/container-design.md`](docs/container-design.md) — HDF5 container layout
 - [`docs/class-hierarchy.md`](docs/class-hierarchy.md) — UML-style class descriptions
