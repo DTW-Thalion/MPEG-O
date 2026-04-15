@@ -14,7 +14,8 @@ MPGOTests_OBJC_FILES = \
 	TestAcquisitionRun.m \
 	TestSpectralDataset.m \
 	TestMSImage.m \
-	TestEncryption.m
+	TestEncryption.m \
+	TestQueryAndStreaming.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lz -lcrypto
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

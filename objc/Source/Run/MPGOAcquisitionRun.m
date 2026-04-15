@@ -45,6 +45,7 @@
     NSMutableData *pol     = [NSMutableData dataWithLength:n * sizeof(int32_t)];
     NSMutableData *pmz     = [NSMutableData dataWithLength:n * sizeof(double)];
     NSMutableData *pc      = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+    NSMutableData *bp      = [NSMutableData dataWithLength:n * sizeof(double)];
 
     uint64_t *off = offsets.mutableBytes;
     uint32_t *len = lengths.mutableBytes;
@@ -53,6 +54,7 @@
     int32_t  *plp = pol.mutableBytes;
     double   *pmp = pmz.mutableBytes;
     int32_t  *pcp = pc.mutableBytes;
+    double   *bpp = bp.mutableBytes;
 
     uint64_t cursor = 0;
     for (NSUInteger i = 0; i < n; i++) {
@@ -64,6 +66,14 @@
         plp[i] = (int32_t)s.polarity;
         pmp[i] = s.precursorMz;
         pcp[i] = (int32_t)s.precursorCharge;
+
+        // base peak intensity = max(intensity)
+        double maxI = 0;
+        const double *intP = s.intensityArray.buffer.bytes;
+        NSUInteger m = s.intensityArray.length;
+        for (NSUInteger j = 0; j < m; j++) if (intP[j] > maxI) maxI = intP[j];
+        bpp[i] = maxI;
+
         cursor += s.mzArray.length;
     }
     return [[MPGOSpectrumIndex alloc] initWithOffsets:offsets
@@ -72,7 +82,8 @@
                                              msLevels:ml
                                            polarities:pol
                                          precursorMzs:pmz
-                                     precursorCharges:pc];
+                                     precursorCharges:pc
+                                  basePeakIntensities:bp];
 }
 
 #pragma mark - HDF5 write

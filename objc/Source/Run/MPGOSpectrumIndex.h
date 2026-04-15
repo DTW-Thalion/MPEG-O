@@ -32,6 +32,7 @@
 - (MPGOPolarity)polarityAt:(NSUInteger)index;
 - (double)precursorMzAt:(NSUInteger)index;
 - (uint8_t)precursorChargeAt:(NSUInteger)index;
+- (double)basePeakIntensityAt:(NSUInteger)index;
 
 /** Indices whose retention time falls within [range.minimum, range.maximum]. */
 - (NSIndexSet *)indicesInRetentionTimeRange:(MPGOValueRange *)range;
@@ -45,7 +46,8 @@
                        msLevels:(NSData *)msLevels
                      polarities:(NSData *)polarities
                    precursorMzs:(NSData *)precursorMzs
-               precursorCharges:(NSData *)precursorCharges;
+               precursorCharges:(NSData *)precursorCharges
+             basePeakIntensities:(NSData *)basePeakIntensities;
 
 #pragma mark - HDF5
 
