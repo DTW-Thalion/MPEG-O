@@ -44,6 +44,7 @@ NSString *const MPGONmrMLReaderErrorDomain = @"MPGONmrMLReaderErrorDomain";
     BOOL _inAcquisitionParameterSet;
     BOOL _inFidData;
     BOOL _fidCompressed;
+    NSString *_fidByteFormat;  // copy of byteFormat attribute (nmrML varies)
     BOOL _inSpectrum1D;
     BOOL _inXAxis;
     BOOL _inYAxis;
@@ -219,7 +220,51 @@ didStartElement:(NSString *)elementName
 {
     if ([elementName isEqualToString:@"acquisitionParameterSet"]) {
         _inAcquisitionParameterSet = YES;
+        // Real nmrML 1.0 carries numberOfScans as an attribute, not a cvParam.
+        NSString *ns = attrs[@"numberOfScans"];
+        if (ns.length > 0) _numberOfScans = (NSUInteger)[ns integerValue];
         return;
+    }
+
+    // Real nmrML uses dedicated child elements for the key acquisition
+    // parameters rather than cvParams. Handle both.
+    if (_inAcquisitionParameterSet) {
+        if ([elementName isEqualToString:@"acquisitionNucleus"]) {
+            NSString *name = attrs[@"name"];
+            if (name.length > 0) {
+                // Map common long names to canonical short forms.
+                if ([name rangeOfString:@"hydrogen"].location != NSNotFound)
+                    _nucleusType = @"1H";
+                else if ([name rangeOfString:@"carbon"].location != NSNotFound)
+                    _nucleusType = @"13C";
+                else if ([name rangeOfString:@"nitrogen"].location != NSNotFound)
+                    _nucleusType = @"15N";
+                else if ([name rangeOfString:@"phosphorus"].location != NSNotFound)
+                    _nucleusType = @"31P";
+                else
+                    _nucleusType = [name copy];
+            }
+            return;
+        }
+        if ([elementName isEqualToString:@"irradiationFrequency"]) {
+            // Stored in Hz; MPGO_NMR_FREQUENCY is in MHz.
+            double hz = [attrs[@"value"] doubleValue];
+            if (hz > 0) _spectrometerFrequencyMHz = hz / 1.0e6;
+            return;
+        }
+        if ([elementName isEqualToString:@"sweepWidth"]) {
+            _sweepWidthPpm = [attrs[@"value"] doubleValue];
+            return;
+        }
+        if ([elementName isEqualToString:@"DirectDimensionParameterSet"]) {
+            NSString *ndp = attrs[@"numberOfDataPoints"];
+            if (ndp.length > 0 && _dwellTimeSeconds == 0 && _sweepWidthPpm > 0) {
+                // If explicit dwell isn't given elsewhere we leave it 0;
+                // consumers can derive from sweep width if desired.
+                (void)ndp;
+            }
+            return;
+        }
     }
 
     if ([elementName isEqualToString:@"fidData"]) {
@@ -227,6 +272,7 @@ didStartElement:(NSString *)elementName
         NSString *comp = attrs[@"compressed"];
         _fidCompressed = ([comp isEqualToString:@"true"] ||
                           [comp isEqualToString:@"zlib"]);
+        _fidByteFormat = [attrs[@"byteFormat"] copy] ?: @"float64";
         [_textBuf setString:@""];
         _capturingText = YES;
         return;
@@ -344,17 +390,56 @@ didStartElement:(NSString *)elementName
                    message:@"failed to decode fidData"];
         return;
     }
-    // float64 complex: interleaved real+imag doubles. Total bytes
-    // must be a multiple of 2 * sizeof(double).
-    if (decoded.length % (2 * sizeof(double)) != 0) {
-        [self failWithCode:MPGONmrMLReaderErrorArrayLengthMismatch
-                   message:@"fidData byte length is not a whole number of complex samples"];
-        return;
+
+    // byteFormat varies across vendor nmrML files. Widen each sample to
+    // float64 so the in-memory representation is always the MPGO
+    // complex128 (interleaved real+imag doubles).
+    NSData *complexBuf = nil;
+    NSUInteger complexLen = 0;
+    BOOL isInt = ([_fidByteFormat rangeOfString:@"Integer"].location != NSNotFound ||
+                  [_fidByteFormat rangeOfString:@"int32"].location != NSNotFound);
+    BOOL isInt64 = ([_fidByteFormat rangeOfString:@"Long"].location != NSNotFound ||
+                    [_fidByteFormat rangeOfString:@"int64"].location != NSNotFound);
+
+    if (isInt) {
+        if (decoded.length % (2 * sizeof(int32_t)) != 0) {
+            [self failWithCode:MPGONmrMLReaderErrorArrayLengthMismatch
+                       message:@"int32 fidData length is not a whole number of complex pairs"];
+            return;
+        }
+        NSUInteger sampleCount = decoded.length / sizeof(int32_t);
+        complexLen = sampleCount / 2;
+        NSMutableData *out = [NSMutableData dataWithLength:sampleCount * sizeof(double)];
+        const int32_t *src = decoded.bytes;
+        double *dst = out.mutableBytes;
+        for (NSUInteger i = 0; i < sampleCount; i++) dst[i] = (double)src[i];
+        complexBuf = out;
+    } else if (isInt64) {
+        if (decoded.length % (2 * sizeof(int64_t)) != 0) {
+            [self failWithCode:MPGONmrMLReaderErrorArrayLengthMismatch
+                       message:@"int64 fidData length is not a whole number of complex pairs"];
+            return;
+        }
+        NSUInteger sampleCount = decoded.length / sizeof(int64_t);
+        complexLen = sampleCount / 2;
+        NSMutableData *out = [NSMutableData dataWithLength:sampleCount * sizeof(double)];
+        const int64_t *src = decoded.bytes;
+        double *dst = out.mutableBytes;
+        for (NSUInteger i = 0; i < sampleCount; i++) dst[i] = (double)src[i];
+        complexBuf = out;
+    } else {
+        // Default: float64 complex (synthetic test fixture shape)
+        if (decoded.length % (2 * sizeof(double)) != 0) {
+            [self failWithCode:MPGONmrMLReaderErrorArrayLengthMismatch
+                       message:@"float64 fidData length is not a whole number of complex samples"];
+            return;
+        }
+        complexLen = decoded.length / (2 * sizeof(double));
+        complexBuf = decoded;
     }
-    NSUInteger complexLen = decoded.length / (2 * sizeof(double));
 
     MPGOFreeInductionDecay *fid =
-        [[MPGOFreeInductionDecay alloc] initWithComplexBuffer:decoded
+        [[MPGOFreeInductionDecay alloc] initWithComplexBuffer:complexBuf
                                                  complexLength:complexLen
                                               dwellTimeSeconds:_dwellTimeSeconds
                                                      scanCount:_numberOfScans

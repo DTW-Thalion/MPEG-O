@@ -172,4 +172,51 @@ void testMilestone13(void)
     }
 
     free(fid); free(cs); free(ins);
+
+    // ---- 4. Real HUPO/BMRB fixture (bmse000325.nmrML) ----
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSArray *candidates = @[
+            @"Fixtures/bmse000325.nmrML",
+            @"../Fixtures/bmse000325.nmrML",
+            @"Tests/Fixtures/bmse000325.nmrML",
+            @"../Tests/Fixtures/bmse000325.nmrML",
+        ];
+        NSString *fixturePath = nil;
+        for (NSString *p in candidates) {
+            if ([fm fileExistsAtPath:p]) { fixturePath = p; break; }
+        }
+        if (!fixturePath) {
+            printf("    [skip] bmse000325.nmrML fixture not found in CWD (non-fatal)\n");
+        } else {
+            NSError *err = nil;
+            NSDate *t0 = [NSDate date];
+            MPGONmrMLReader *r = [MPGONmrMLReader parseFilePath:fixturePath error:&err];
+            NSTimeInterval dt = -[t0 timeIntervalSinceNow];
+            PASS(r != nil, "bmse000325.nmrML parses");
+            PASS(err == nil, "bmse000325.nmrML has no parse error");
+
+            // acquisitionParameterSet numberOfScans="4"
+            PASS(r.numberOfScans == 4, "bmse numberOfScans = 4");
+            // acquisitionNucleus name="hydrogen atom" -> "1H"
+            PASS([r.nucleusType isEqualToString:@"1H"],
+                 "bmse nucleus mapped to 1H");
+            // irradiationFrequency = 4.9984E8 Hz -> 499.84 MHz
+            PASS(fabs(r.spectrometerFrequencyMHz - 499.84) < 0.1,
+                 "bmse irradiationFrequency parsed to ~499.84 MHz");
+            // sweepWidth 7002.80... Hz
+            PASS(r.sweepWidthPpm > 7000 && r.sweepWidthPpm < 7010,
+                 "bmse sweepWidth in expected range");
+
+            // fidData encodedLength=32768 int32 samples -> 16384 complex
+            PASS(r.fids.count == 1, "bmse has exactly one FID");
+            MPGOFreeInductionDecay *f = r.fids[0];
+            PASS(f.length == 16384, "bmse FID length = 16384 complex samples");
+            PASS(f.scanCount == 4, "bmse FID inherits scan count");
+            PASS(f.buffer.length == 16384 * 2 * sizeof(double),
+                 "bmse FID buffer widened to float64 complex");
+            printf("    [bench] bmse000325.nmrML (176 KB) parse %.2f ms\n",
+                   dt * 1000.0);
+        }
+    }
 }
