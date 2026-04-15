@@ -1,10 +1,5 @@
-# Inherit shared flags from the parent preamble.
-HDF5_PREFIX ?= /usr
+# Inherit all shared build flags (toolchain detection, runtime probe,
+# HDF5 paths, warnings) from the top-level preamble.
+include ../GNUmakefile.preamble
 
-ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include
-ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include/hdf5/serial
 ADDITIONAL_CPPFLAGS += -I.
-ADDITIONAL_OBJCFLAGS += -Wall -Wextra -Wno-unused-parameter -fobjc-arc
-
-ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib
-ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib/x86_64-linux-gnu/hdf5/serial

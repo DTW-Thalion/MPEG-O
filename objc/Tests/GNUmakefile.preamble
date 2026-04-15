@@ -1,10 +1,11 @@
-HDF5_PREFIX ?= /usr
+# Inherit all shared build flags (toolchain detection, runtime probe,
+# HDF5 paths, warnings, Testing.h include) from the top-level preamble.
+include ../GNUmakefile.preamble
 
-ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include
-ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include/hdf5/serial
 ADDITIONAL_CPPFLAGS += -I../Source
-ADDITIONAL_OBJCFLAGS += -Wall -Wextra -Wno-unused-parameter -fobjc-arc
+ADDITIONAL_LDFLAGS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
-ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib
-ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib/x86_64-linux-gnu/hdf5/serial
-ADDITIONAL_LDFLAGS += -L../Source/$(GNUSTEP_OBJ_DIR)
+# gnustep-make's Testing.h uses NSAutoreleasePool, which ARC forbids.
+# Compile the test driver in MRC mode; libMPGO itself remains under ARC.
+ADDITIONAL_OBJCFLAGS  += -fno-objc-arc
+ADDITIONAL_OBJCCFLAGS += -fno-objc-arc
