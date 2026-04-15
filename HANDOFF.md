@@ -1,227 +1,810 @@
-# MPEG-O Reference Implementation — Continuation Session
+# MPEG-O v0.2 — Continuation Session Prompt
 
-> **Status (post-tag):** All eight milestones complete and merged on
-> `main` (379 tests passing in CI). This document is preserved as the
-> historical brief for the continuation session that built v0.1.0-alpha
-> — refer to `WORKPLAN.md` for the canonical acceptance state and
-> `ARCHITECTURE.md` for the as-built class/HDF5 layout.
-
-You are taking over the MPEG-O reference implementation from a previous Claude Code session that ran on a different machine. This session will carry the project through **Milestones 1–8 plus the v0.1.0-alpha release**, executing on an i9 Windows + WSL/Ubuntu machine.
-
-## Repository
-
-- **URL:** https://github.com/DTW-Thalion/MPEG-O
-- **License:** LGPL-3.0
-- **Owner:** DTW-Thalion
-- **Default branch:** `main`
-- **Handoff point:** commit `9ba5938` — `build: add gcc objc header dir to include path on gnustep-1.8`
-
-### First thing to do
-
-Make sure the repo is cloned/updated on this machine, then **read these files in full before doing anything else**:
-
-1. `README.md` — project overview
-2. `ARCHITECTURE.md` — three-layer class hierarchy and HDF5 container mapping
-3. `WORKPLAN.md` — the eight milestones with acceptance criteria
-4. `docs/primitives.md`, `docs/container-design.md`, `docs/class-hierarchy.md`, `docs/ontology-mapping.md`
-5. `objc/GNUmakefile.preamble` — toolchain detection and flags
-6. `objc/check-deps.sh`, `objc/build.sh` — the build entry points
-7. `.github/workflows/ci.yml` — CI job definition
-
-Everything in those files is the source of truth. This handoff captures context that isn't in the tree.
+> **Status:** v0.1.0-alpha is **complete and tagged**. All eight original
+> milestones delivered, 379 tests passing in GitHub Actions CI, no
+> warnings under `-Wall -Wextra`. This session executes **Milestones
+> 9–15** to produce the **v0.2.0** release.
 
 ---
 
-## Current state
+## First Steps on This Machine
 
-### What's complete (Phase 0–2)
+Before writing any code:
 
-- **Phase 0** — repo created, directory skeleton, LGPL-3.0 license, README with MPEG-G → MPEG-O mapping table, badges.
-- **Phase 1** — `ARCHITECTURE.md` and `WORKPLAN.md` authored; `docs/` fully written.
-- **Phase 2** — Objective-C scaffolding: GNUStep Make build system, all five capability protocols (`MPGOIndexable`, `MPGOStreamable`, `MPGOCVAnnotatable`, `MPGOProvenanceable`, `MPGOEncryptable`), and **four fully-implemented value classes** with `NSCoding`/`NSCopying`/`isEqual`/`hash`: `MPGOCVParam`, `MPGOAxisDescriptor`, `MPGOEncodingSpec`, `MPGOValueRange`. Plus `MPGOEnums.h` with all enums. Test runner `MPGOTests` with a Phase 2 smoke test.
+1. Clone or pull the repo:
+   ```bash
+   git clone https://github.com/DTW-Thalion/MPEG-O.git
+   # or: cd MPEG-O && git pull
+   ```
 
-**Note:** The value classes ARE the Milestone 1 production code — they're not stubs. What Milestone 1 still needs is **comprehensive test coverage** for them (construction edge cases, equality, hashing, copying, NSCoding round-trip, nil optional fields, zero-width ranges, extreme precisions, etc.). See `WORKPLAN.md` for the full acceptance criteria.
+2. **Read these files in full** — they are the source of truth:
+   - `README.md` — project overview
+   - `ARCHITECTURE.md` — three-layer class hierarchy, HDF5 container mapping, and v0.1 simplification notes
+   - `WORKPLAN.md` — the eight completed milestones with acceptance criteria (all checked off)
+   - `docs/primitives.md`, `docs/container-design.md`, `docs/class-hierarchy.md`, `docs/ontology-mapping.md`
+   - `objc/GNUmakefile.preamble` — toolchain detection and build flags
+   - `objc/check-deps.sh`, `objc/build.sh` — the build entry points
+   - `.github/workflows/ci.yml` — CI job definition (source-built gnustep-2.0 + libobjc2)
 
-### Local build status (on the previous WSL machine)
+3. **Set up the local toolchain.** The build requires source-built gnustep-2.0 (libobjc2 + gnustep-make + gnustep-base) plus libhdf5 and OpenSSL:
+   ```bash
+   sudo apt-get install -y clang cmake ninja-build make git \
+       libhdf5-dev zlib1g-dev libssl-dev libxml2-dev \
+       libgnutls28-dev libffi-dev libicu-dev libblocksruntime-dev \
+       libcurl4-openssl-dev
+   # Then build libobjc2, gnustep-make, gnustep-base from source
+   # (see .github/workflows/ci.yml for exact steps and version tags)
+   ```
 
-- `./build.sh check` **passes, 8/8 tests green** against a **source-built gnustep-2.0 + libobjc2** setup.
-- The build is verified to work end-to-end locally with that toolchain.
-
-### CI status — **RED** at HEAD, needs fixing before Milestone 1
-
-The previous session got CI to run on GitHub Actions (Ubuntu 24.04 runner) and debugged through five layers of Ubuntu-apt-gnustep incompatibilities, each commit peeling another onion layer:
-
-1. `3f84a06` — Fixed `-fblocks` causing `objc/blocks_runtime.h` not found, by making `-fblocks` conditional on `gnustep-2.0` runtime.
-2. `4ba4c1b` — Restored the `gobjc` apt package (to provide libobjc runtime headers, even though clang is the actual compiler).
-3. `9ba5938` — Added `/usr/lib/gcc/x86_64-linux-gnu/*/include` to `ADDITIONAL_CPPFLAGS` on the `gnustep-1.8` path.
-
-**Current failure at HEAD:** `/usr/include/GNUstep/Foundation/Foundation.h:31:9: fatal error: 'objc/objc.h' file not found`
-
-The runtime ABI auto-detect correctly identifies `gnustep-1.8 (fragile)` and the `-fblocks` drop fires as expected, but the gcc-include-directory glob is either not expanding on the runner or `gobjc` on Ubuntu 24.04 isn't placing headers where the glob looks. The previous session never actually confirmed (with `find` or `dpkg -L`) where Ubuntu 24.04's `gobjc` puts `objc/objc.h`, or whether it installs it at all anymore.
-
-### CI contract (user decision, binding for this session)
-
-**Option (a): Match CI exactly. If CI is green, don't break it. If it is red, fix it before starting Milestone 1 work.**
-
-This means your **immediate Day 1 task** is to get CI green at a new HEAD, and only then begin Milestone 1. Do not skip CI and push Milestone 1 code on top of a red build.
-
-### Recommended CI fix strategy
-
-The apt Ubuntu gnustep-1.8 + clang combination is a fragile path where every fix reveals another layer. Two approaches, in order of preference:
-
-1. **Build gnustep-base from source against libobjc2 in the CI job**, mirroring the WSL developer setup. This gives you a `gnustep-2.0` runtime on CI that matches what developers use locally, making every test of local behavior directly applicable to CI. Adds roughly two minutes per CI run but eliminates a whole class of apt-path surprises. The job would:
-   - `apt-get install clang cmake ninja-build libhdf5-dev zlib1g-dev libssl-dev make`
-   - Build libobjc2 from source (https://github.com/gnustep/libobjc2)
-   - Build and install `gnustep-make` and `gnustep-base` from source against libobjc2
-   - Then `cd objc && ./build.sh check`
-
-2. **Continue diagnosing the apt path.** At minimum, start the next attempt by adding a CI step that prints `find /usr/lib/gcc -type d -name objc`, `dpkg -L gobjc | grep objc`, and `dpkg -L libgnustep-base-dev | grep objc` so you can see exactly where (if anywhere) `objc/objc.h` actually lands on the Ubuntu 24.04 runner. The previous session hypothesized `/usr/lib/gcc/x86_64-linux-gnu/14/include/objc/objc.h` without confirming.
-
-**Strong recommendation: option 1.** It converges on a single supported toolchain path (libobjc2-based gnustep-2.0) and makes CI a faithful mirror of the developer experience. The runtime auto-detect in `GNUmakefile.preamble` already handles both paths, so the change is confined to `.github/workflows/ci.yml` — no library code changes.
-
-### Local dev environment (this machine)
-
-- Windows 11 + WSL/Ubuntu, Claude Code running from PowerShell on Windows.
-- The previous session's WSL already had `gnustep-base` built from source against `libobjc2`. Confirm the same is true on this machine, or replicate that setup before trusting `./build.sh check`.
-- You can run `./build.sh check` inside WSL for sub-second verification. **Iterate locally** instead of waiting for CI round-trips during implementation.
+4. **Verify the build:**
+   ```bash
+   cd objc
+   ./build.sh check    # Must show 379 tests passing
+   ```
+   If this fails, replicate the CI toolchain build steps from `.github/workflows/ci.yml` locally before proceeding. Do not start milestone work on a broken build.
 
 ---
 
-## Binding decisions from the previous session
+## Current State — What v0.1.0-alpha Delivered
 
-These decisions were made collaboratively with the user and must be preserved unless the user explicitly revises them:
+### Complete and passing (379 tests)
+
+- **Milestone 1 — Foundation:** Five capability protocols (`MPGOIndexable`, `MPGOStreamable`, `MPGOCVAnnotatable`, `MPGOProvenanceable`, `MPGOEncryptable`), four value classes (`MPGOCVParam`, `MPGOAxisDescriptor`, `MPGOEncodingSpec`, `MPGOValueRange`) with full `NSCoding`/`NSCopying`/`isEqual`/`hash`, `MPGOEnums.h`.
+- **Milestone 2 — SignalArray + HDF5:** `MPGOHDF5File`, `MPGOHDF5Group`, `MPGOHDF5Dataset`, `MPGOHDF5Attribute` wrappers. `MPGOSignalArray` with float32/64, int32, complex128, chunked+zlib storage. 1M-element write/read ~3ms.
+- **Milestone 3 — Spectrum classes:** `MPGOSpectrum`, `MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`, `MPGOFreeInductionDecay`, `MPGOChromatogram`.
+- **Milestone 4 — AcquisitionRun:** `MPGOAcquisitionRun` with signal channel separation, `MPGOSpectrumIndex` (parallel 1-D datasets), `MPGOInstrumentConfig`, random access, streaming. 1000-spectrum run write ~22ms.
+- **Milestone 5 — Dataset + metadata:** `MPGOSpectralDataset` as root container, `MPGOIdentification`, `MPGOQuantification`, `MPGOProvenanceRecord`, `MPGOTransitionList`. Full `.mpgo` file round-trip.
+- **Milestone 6 — MSImage:** `MPGOMSImage` with spatial grid, tile-based access. Standalone class (not yet a `MPGOSpectralDataset` subclass).
+- **Milestone 7 — Encryption:** `MPGOEncryptionManager` with AES-256-GCM via OpenSSL. Selective per-dataset encryption. `MPGOAccessPolicy` with JSON persistence.
+- **Milestone 8 — Query + Streaming:** `MPGOQuery` with compressed-domain predicates (RT range, MS level, polarity, precursor m/z, base peak). `MPGOStreamWriter`/`MPGOStreamReader`. 10k-spectrum query scan ~0.2ms.
+
+### Known simplifications to resolve in v0.2
+
+From `ARCHITECTURE.md § Implementation notes (v0.1.0-alpha)`:
+
+1. **`MPGOEncryptable` is delegated, not directly conformed.** `MPGOAcquisitionRun` and `MPGOSpectralDataset` use the static `MPGOEncryptionManager` API rather than conforming to the protocol themselves.
+2. **`MPGOProvenanceable` is dataset-level only.** Provenance is stored as an array on `MPGOSpectralDataset`, not per-run.
+3. **Identifications, quantifications, provenance are JSON-encoded.** Stored as JSON strings in scalar HDF5 attributes, not as bespoke HDF5 compound types.
+4. **`MPGOSpectrumIndex` uses parallel 1-D datasets.** Eight separate datasets instead of one compound `headers` dataset.
+5. **`MPGOMSImage` is standalone.** Not a `MPGOSpectralDataset` subclass; no inherited identification/quantification/provenance support.
+6. **`MPGOAcquisitionRun` accepts only `MPGOMassSpectrum`.** NMR spectra live in a separate `nmrRuns` array.
+7. **`MPGONMR2DSpectrum` flattens its matrix.** 1D `MPGOSignalArray` with shape attributes instead of native 2D HDF5 dataset.
+
+---
+
+## Binding Decisions — Do Not Override
+
+These decisions were made collaboratively with the user across the v0.1 and v0.2 planning sessions. They are binding unless the user explicitly revises them in conversation.
+
+### From v0.1 session
 
 1. **Milestone-by-milestone checkpoints.** Complete Milestone N, commit, verify CI green, pause for user review before starting Milestone N+1. Do **not** chain milestones without user acknowledgment.
 
-2. **Clang-only.** `gcc`/`gobjc` cannot compile libMPGO because Objective-C ARC (`-fobjc-arc`) is required and gobjc doesn't support it. `build.sh` enforces `CC=clang OBJC=clang`. Never add code that would only work under gobjc.
+2. **Clang-only.** `gcc`/`gobjc` cannot compile libMPGO because Objective-C ARC (`-fobjc-arc`) is required and gobjc doesn't support it. `build.sh` enforces `CC=clang OBJC=clang`.
 
-3. **Value classes are immutable and return `self` from `-copyWithZone:`.** This is standard Cocoa practice for immutable value objects. Applies to `MPGOCVParam`, `MPGOAxisDescriptor`, `MPGOEncodingSpec`, `MPGOValueRange`, and any similar value classes added in later milestones (`MPGOInstrumentConfig`, `MPGOProvenanceRecord`, etc.).
+3. **Value classes are immutable and return `self` from `-copyWithZone:`.** Standard Cocoa pattern for immutable value objects.
 
-4. **No thread safety in v0.1.** Document as "not thread-safe" where relevant. Concurrent access to an `MPGOHDF5File` from multiple threads is undefined. A future version may adopt HDF5's `--enable-threadsafe` build with explicit locking, but not in v0.1.0-alpha.
+4. **No thread safety in v0.1 or v0.2.** Document as "not thread-safe" where relevant. Deferred to v0.3.
 
-5. **CRLF/LF is handled by `.gitattributes`.** The repo forces LF endings for all source and build files (`*.m`, `*.h`, `GNUmakefile`, `*.sh`, `*.yml`). This matters because files may be edited through tools that default to CRLF on Windows. Do not modify `.gitattributes`.
+5. **CRLF/LF handled by `.gitattributes`.** Do not modify `.gitattributes`.
 
-6. **Shell scripts must be committed with the executable bit set.** A previous CI run died because `build.sh` was committed with mode `100644`. If you add any new `.sh` files on Windows, use `git update-index --chmod=+x <file>` to set mode `100755` before committing.
+6. **Shell scripts must have executable bit.** Use `git update-index --chmod=+x <file>` for any new `.sh` files.
 
-7. **HDF5 is accessed via the C API wrapped in thin Objective-C classes.** Do not introduce a Python-style high-level HDF5 abstraction. Each `H5*` call should be wrapped with explicit return-code checks and `NSError` out-parameters for fallible operations. Every `hid_t` must be closed via the wrapper's `-dealloc` or `-close`.
+7. **HDF5 via C API wrapped in thin Objective-C classes.** Always check return values. Always close `hid_t` identifiers.
 
-8. **MPEG-O files use `.mpgo` extension and are valid HDF5 files internally.** Any HDF5-aware tool (`h5dump`, `h5py`, HDFView) must be able to inspect them without a special reader. MPEG-O adds semantic structure on top of HDF5's generic model, not a new binary format.
+8. **`.mpgo` file extension.** Internally valid HDF5 files.
 
-9. **Error handling uses `NSError **` out-parameters for fallible operations.** Return `nil` or `NO` on failure. Never throw exceptions for expected error paths.
+9. **Error handling uses `NSError **` out-parameters.** Return `nil` or `NO` on failure. Never throw exceptions for expected errors.
 
-10. **Test isolation:** every test creates its own temporary HDF5 file in `/tmp/mpgo_test_*` and deletes it after the test. Do not share fixture files between tests.
+10. **Test isolation.** Each test creates its own temporary HDF5 file in `/tmp/mpgo_test_*` and deletes it after the test.
 
-11. **Python and Java implementations are planned but not active.** `python/README.md` and `java/README.md` are stubs. Do not add code to `python/` or `java/` during this session unless the user explicitly asks. All active work is in `objc/`.
+11. **Commit discipline.** One commit per completed milestone with a clear message referencing the milestone number. Include `Co-Authored-By` trailer. HEREDOC for multi-line messages.
 
-12. **Commit discipline.** One commit per completed milestone with a clear message referencing the milestone number. Do not commit broken code. Use HEREDOC for multi-line commit messages and include the `Co-Authored-By` trailer.
+12. **Build verification.** `./build.sh check` must pass locally and in GitHub Actions CI before any milestone is considered complete.
 
-13. **Never create documentation files (`*.md`) beyond what the workplan specifies** unless the user explicitly requests them. The docs that exist (`README`, `ARCHITECTURE`, `WORKPLAN`, `docs/*.md`, `HANDOFF.md`) are the complete documentation surface until the user asks for more.
+13. **ARC on libMPGO, MRC on the test harness.** `objc/Tests/GNUmakefile.preamble` applies `-fno-objc-arc` to the test binary. Preserve this split.
 
----
+### From v0.2 planning session
 
-## Known gotchas carried forward
+14. **Milestone 10 (A1+A5) is simultaneous.** Protocol conformance and modality-agnostic runs are tackled together because they are deeply coupled.
 
-1. **HDF5 paths differ by install method.** Ubuntu apt installs headers under `/usr/include/hdf5/serial/` and libs under `/usr/lib/x86_64-linux-gnu/hdf5/serial/`. Homebrew uses `/opt/homebrew/opt/hdf5`. Source builds typically use `/usr/local`. The preamble accepts `HDF5_PREFIX` on the command line for overrides. Test all new HDF5 code paths with both apt and source-built HDF5 if possible.
+15. **mzML reader (Milestone 9) comes before Track A cleanup.** Real-world data validation precedes refactoring. Bugs found against PRIDE data get fixed before compound-type migration.
 
-2. **`Testing.h` uses `NSAutoreleasePool`, which ARC forbids.** `objc/Tests/GNUmakefile.preamble` applies `-fno-objc-arc` specifically to the test binary while leaving `libMPGO` itself under ARC. Preserve this split. Do not convert `libMPGO` to MRC or the test harness to ARC.
+16. **Python stream waits until v0.2 stabilizes.** No `python/` code until v0.2.0 is tagged and the on-disk format is frozen.
 
-3. **GNUstep Make's `test-tool.make` does not auto-run the binary on `make check`.** The top-level `objc/GNUmakefile` adds a custom `check::` target that depends on `all` and explicitly invokes `Tests/$(GNUSTEP_OBJ_DIR)/MPGOTests` with `LD_LIBRARY_PATH` extended to include the in-tree `libMPGO.so` and `/usr/local/lib`. If you add new test binaries, extend this target; don't reinvent it.
+17. **Formal schema evolution mechanism.** See "Versioning & Schema Evolution" section below.
 
-4. **Runtime ABI auto-detection probes `libgnustep-base.so` for the symbol `._OBJC_CLASS_NSObject`** (non-fragile v2) vs `_OBJC_CLASS_NSObject` (fragile v1). The detection is in `GNUmakefile.preamble` and is mirrored by `check-deps.sh`. If you add new toolchain flags that depend on the runtime, follow the same `ifeq ($(MPGO_OBJC_RUNTIME),gnustep-2.0)` pattern.
-
-5. **`-fblocks` is gated on gnustep-2.0 only.** On gnustep-1.8 (apt Ubuntu), clang's `-fblocks` causes `GSVersionMacros.h` to include `objc/blocks_runtime.h`, which isn't shipped by libobjc on that path. `libMPGO` must not depend on blocks-based APIs (`dispatch_*`, `^`-literals, etc.) until/unless the build requires gnustep-2.0. For v0.1, no code uses blocks.
-
-6. **Windows authoring quirk.** If files are ever re-saved through a Windows editor, `.gitattributes` should auto-correct line endings on commit, but watch for any `git diff` that shows whole-file changes due to line-ending drift. Fix with `git add --renormalize .` if it happens.
+18. **Permissive licensing (Apache-2.0) on the import/export layer.** Core `libMPGO` stays LGPL-3.0. Files under `Import/` and `Export/` are Apache-2.0.
 
 ---
 
-## Remaining work — the eight milestones
+## Versioning & Schema Evolution
 
-Full acceptance criteria are in `WORKPLAN.md`. High-level summary:
+Replace the current `@mpeg_o_version` string attribute with a two-part scheme on all new files:
 
-### Milestone 1 — Foundation tests (nearly done)
+### Format version attribute
 
-The value classes are already implemented. What's left is **comprehensive test coverage**. Replace the current Phase 2 smoke test in `objc/Tests/TestValueClasses.m` with thorough tests per the workplan. Add any missing test functions to `MPGOTestRunner.m`'s `START_SET`/`END_SET` blocks. Acceptance: all tests pass under `./build.sh check` locally and in CI.
+```
+@mpeg_o_format_version = "1.1"    (major.minor, string attribute on HDF5 root)
+```
 
-### Milestone 2 — SignalArray + HDF5 wrapper
+- **Major** increments on backward-incompatible layout changes
+- **Minor** increments on backward-compatible additions
 
-New files under `objc/Source/HDF5/`:
+### Feature flags attribute
 
-- `MPGOHDF5File` — `H5Fcreate`/`H5Fopen`/`H5Fclose`
-- `MPGOHDF5Group` — `H5Gcreate2`/`H5Gopen2`/`H5Gclose`
-- `MPGOHDF5Dataset` — `H5Dcreate2`/`H5Dwrite`/`H5Dread`/`H5Dclose`, supporting float32, float64, int32, int64, uint32, complex128 (compound type)
-- `MPGOHDF5Attribute` — `H5Acreate2`/`H5Awrite`/`H5Aread`
-- Chunked storage + zlib compression (`H5Pset_chunk`, `H5Pset_deflate`)
+```
+@mpeg_o_features = ["base_v1", "compound_identifications", "compound_headers", "per_run_provenance"]
+```
 
-Plus `objc/Source/Core/MPGOSignalArray.{h,m}` with HDF5 round-trip methods and CVAnnotation persistence. Add the new files to `libMPGO_OBJC_FILES` / `libMPGO_HEADER_FILES` in `objc/Source/GNUmakefile`.
+A JSON array of feature strings stored as a variable-length string attribute on the root group.
 
-### Milestone 3 — Spectrum + concrete spectrum classes
+- Features **without** a prefix are **required** — a reader must refuse to open the file if it doesn't support the feature
+- Features prefixed with `opt_` are **optional** — a reader may skip unknown optional features gracefully
 
-- `MPGOSpectrum` base class (dict of named SignalArrays)
-- `MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`, `MPGOFreeInductionDecay`, `MPGOChromatogram`
-- Each with HDF5 serialization following the container design
-- Validation: `MPGOMassSpectrum` rejects construction with mismatched m/z and intensity lengths
+### Backward compatibility with v0.1
 
-### Milestone 4 — AcquisitionRun + SpectrumIndex (Access Unit)
+v0.1 files carry `@mpeg_o_version = "1.0.0"` and no `@mpeg_o_features`. Readers detect v0.1 files by the absence of `@mpeg_o_features` and fall back to the v0.1 code path (JSON-encoded metadata, parallel index datasets, mass-spectrum-only runs).
 
-- Signal-channel separation on HDF5 write: extract all m/z values to one contiguous dataset, intensities to another, scan metadata to a compound dataset
-- `MPGOSpectrumIndex` with offsets/lengths/headers compound table
-- `MPGOInstrumentConfig` value class
-- Random-access reads via HDF5 hyperslab selection — verify only relevant chunks are touched
-- Full `MPGOStreamable` + `MPGOIndexable` support
+### Feature registry
 
-### Milestone 5 — SpectralDataset + Identification + Quantification + Provenance
+| Feature String | Milestone | Required? | Description |
+|---|---|---|---|
+| `base_v1` | 9 | Required | Core six primitives, signal channels, spectrum index |
+| `compound_identifications` | 11 | Required | Identifications/quantifications as HDF5 compound types |
+| `compound_headers` | 11 | Optional | SpectrumIndex compound headers dataset |
+| `per_run_provenance` | 10 | Optional | Each run carries its own provenance chain |
+| `opt_native_2d_nmr` | 12 | Optional | NMR2DSpectrum uses native 2D HDF5 datasets |
+| `opt_digital_signatures` | 14 | Optional | Signed provenance and data integrity |
 
-- `MPGOSpectralDataset` as root `.mpgo` file object
-- `MPGOIdentification`, `MPGOQuantification`, `MPGOProvenanceRecord`, `MPGOTransitionList`
-- Full multi-run `.mpgo` round-trip test
+### Implementation
 
-### Milestone 6 — MSImage (spatial extension)
+Create an `MPGOFeatureFlags` utility class:
 
-- `MPGOMSImage` extends `MPGOSpectralDataset` with a spatial grid
-- Tile-based Access Units (32×32 pixel default)
-- 3D HDF5 layout `[x, y, spectral_points]` with tile-aligned chunking
-
-### Milestone 7 — Protection / encryption
-
-- AES-256-GCM via OpenSSL (`libcrypto`)
-- `MPGOEncryptionManager` + `MPGOAccessPolicy` (JSON in `/protection/access_policies`)
-- Selective encryption: encrypt `intensity_values` while leaving `mz_values` + `scan_metadata` unencrypted
-- GCM auth-tag verification on decrypt; wrong key → clean authenticated-decryption failure, no silent corruption
-
-### Milestone 8 — Query API + streaming
-
-- `MPGOQuery` with compressed-domain queries via AU header scanning (does NOT decompress signal data)
-- `MPGOStreamWriter` / `MPGOStreamReader` for progressive I/O
-- Predicates: RT range, MS level, polarity, precursor m/z range, base peak intensity threshold
-- Performance: 10k-spectrum header scan < 50 ms
-
-### Release — v0.1.0-alpha
-
-All milestones complete, CI green, no warnings under `-Wall -Wextra`, tag `v0.1.0-alpha` pushed.
+```objc
+@interface MPGOFeatureFlags : NSObject
++ (NSArray<NSString *> *)readFromFile:(MPGOHDF5File *)file error:(NSError **)error;
++ (BOOL)writeFeatures:(NSArray<NSString *> *)features toFile:(MPGOHDF5File *)file error:(NSError **)error;
++ (BOOL)file:(MPGOHDF5File *)file supportsFeature:(NSString *)feature;
++ (BOOL)isV1File:(MPGOHDF5File *)file;  // checks for absence of @mpeg_o_features
+@end
+```
 
 ---
 
-## Implementation constraints (unchanged from the original brief)
+## Licensing Structure
 
-1. **All code is Objective-C under GNUStep** (`#import <Foundation/Foundation.h>`). No Apple-only frameworks.
-2. **HDF5 via the C API** wrapped in Objective-C. Always check return values. Always close identifiers.
-3. **ARC on libMPGO, MRC on the test harness.** Preserve the split.
-4. **`MPGO` prefix on all classes, enums, protocols.** No exceptions.
-5. **`.mpgo` file extension.** Internally they are HDF5 files.
-6. **External dependencies:** GNUStep Base, libhdf5, zlib (bundled with HDF5), OpenSSL/libcrypto (Milestone 7 only). Nothing else.
-7. **Commit discipline:** one commit per completed milestone, clear message, `Co-Authored-By` trailer, HEREDOC for multi-line messages.
-8. **Build verification:** `./build.sh check` must pass locally (WSL) and in GitHub Actions CI before any milestone is considered complete.
+### Directory layout
+
+```
+MPEG-O/
+├── LICENSE                      # LGPL-3.0 (covers core libMPGO)
+├── LICENSE-IMPORT-EXPORT        # Apache-2.0 (covers Import/ and Export/)
+├── objc/Source/
+│   ├── Core/                    # LGPL-3.0
+│   ├── HDF5/                    # LGPL-3.0
+│   ├── MS/                      # LGPL-3.0
+│   ├── NMR/                     # LGPL-3.0
+│   ├── Protocols/               # LGPL-3.0
+│   ├── ValueClasses/            # LGPL-3.0
+│   ├── Protection/              # LGPL-3.0
+│   ├── Query/                   # LGPL-3.0
+│   ├── Import/                  # Apache-2.0 ← NEW in v0.2
+│   │   ├── MPGOMzMLReader.h/.m
+│   │   ├── MPGONmrMLReader.h/.m
+│   │   ├── MPGOBase64.h/.m
+│   │   └── MPGOCVTermMapper.h/.m
+│   └── Export/                  # Apache-2.0 ← FUTURE (v0.3)
+```
+
+### File headers
+
+Every file under `Import/` and `Export/` carries:
+
+```objc
+/*
+ * Licensed under the Apache License, Version 2.0.
+ * See LICENSE-IMPORT-EXPORT in the repository root.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+```
+
+All other `.m` and `.h` files carry the existing LGPL-3.0 header.
+
+### LICENSE-IMPORT-EXPORT
+
+Create this file at the repo root containing the standard Apache License 2.0 text. The first action of Milestone 9 is to commit this file before writing any Import/ code.
+
+### GNUmakefile integration
+
+Add the `Import/` source files to `objc/Source/GNUmakefile`'s `libMPGO_OBJC_FILES` and `libMPGO_HEADER_FILES` lists. Apache-2.0 is compatible with LGPL-3.0 for combined works.
 
 ---
 
-## Recommended execution order for this session
+## Milestone 9 — mzML Reader (Real-World Data Import)
 
-1. **Pull the repo on this machine and read the files listed at the top of this document.**
-2. **Verify the WSL toolchain.** Run `./build.sh check` in `objc/` inside WSL and confirm 8/8 tests pass. If the WSL setup on this machine is not yet configured with source-built gnustep-2.0 + libobjc2, replicate that setup first. (Guidance: libobjc2 at https://github.com/gnustep/libobjc2, gnustep-make and gnustep-base at https://github.com/gnustep.)
-3. **Fix CI.** Open `.github/workflows/ci.yml` and implement the recommended "build gnustep from source against libobjc2" approach. Push, watch the run, iterate until green. Use `gh run watch` with `run_in_background: true` so you don't burn context on polling.
-4. **Milestone 1.** Replace the Phase 2 smoke test with full coverage. Commit, verify CI green, pause for user review.
-5. **Milestones 2–8.** One at a time, pausing for user review after each.
-6. **Tag `v0.1.0-alpha`.**
+**Track:** B1 — New capability
+**License:** Apache-2.0 (in `objc/Source/Import/`)
 
-Proceed. Ask the user if anything in this handoff is ambiguous before taking destructive or shared-state actions (pushing, creating PRs, tagging releases). Treat the user's CI-contract-option-(a) decision as binding: **CI must be green before any Milestone 1 work lands.**
+### Pre-work
+
+1. Commit `LICENSE-IMPORT-EXPORT` (Apache-2.0 text) at repo root.
+2. Create `objc/Source/Import/` directory.
+3. Add Import files to `objc/Source/GNUmakefile`.
+4. Download 2–3 small mzML test fixtures from PRIDE or the PSI mzML example files. Place in `objc/Tests/Fixtures/`. If files are > 5 MB each, create a `objc/Tests/Fixtures/download.sh` script that fetches them; add the script to `.gitignore` exceptions but not the data files themselves.
+
+### Classes to implement
+
+**`MPGOBase64` (`Import/MPGOBase64.h/.m`)**
+
+Decodes base64-encoded strings to `NSData`. Handles the mzML convention where `<binaryDataArray>` content is base64-encoded, optionally zlib-compressed.
+
+```objc
+@interface MPGOBase64 : NSObject
++ (NSData *)decodeString:(NSString *)base64String;
++ (NSData *)decodeString:(NSString *)base64String zlibInflate:(BOOL)inflate;
+@end
+```
+
+Use GNUStep's built-in base64 decoding if available (`-[NSData initWithBase64EncodedString:options:]` or `GSMimeDecoder`), falling back to a simple lookup-table implementation. For zlib inflate, use `uncompress()` from `<zlib.h>` (already linked).
+
+**`MPGOCVTermMapper` (`Import/MPGOCVTermMapper.h/.m`)**
+
+Maps PSI-MS controlled vocabulary accessions to MPGO enum values and property setters. Does not need to load the full OBO ontology file — hardcode mappings for the ~50 most common accessions:
+
+```objc
+@interface MPGOCVTermMapper : NSObject
+
+// Data type accessions
++ (MPGOPrecision)precisionForAccession:(NSString *)acc;
+// MS:1000521 → MPGOPrecisionFloat32 (32-bit float)
+// MS:1000523 → MPGOPrecisionFloat64 (64-bit float)
+
+// Compression accessions
++ (MPGOCompressionAlgorithm)compressionForAccession:(NSString *)acc;
+// MS:1000574 → MPGOCompressionZlib
+// MS:1000576 → MPGOCompressionNone
+
+// Array type accessions (which signal array is this?)
++ (NSString *)signalArrayNameForAccession:(NSString *)acc;
+// MS:1000514 → @"mz"
+// MS:1000515 → @"intensity"
+// MS:1000516 → @"charge"
+// MS:1000517 → @"signal_to_noise"
+// MS:1000595 → @"time" (for chromatograms)
+// MS:1000820 → @"ion_mobility"
+
+// Spectrum metadata accessions
++ (BOOL)isMSLevelAccession:(NSString *)acc;         // MS:1000511
++ (BOOL)isPolarityAccession:(NSString *)acc;         // MS:1000129 (neg), MS:1000130 (pos)
++ (BOOL)isScanWindowAccession:(NSString *)acc;       // MS:1000501 (lower), MS:1000500 (upper)
++ (BOOL)isTotalIonCurrentAccession:(NSString *)acc;  // MS:1000285
++ (BOOL)isBasePeakAccession:(NSString *)acc;         // MS:1000504 (m/z), MS:1000505 (intensity)
++ (BOOL)isRetentionTimeAccession:(NSString *)acc;    // MS:1000016
++ (BOOL)isScanStartTimeAccession:(NSString *)acc;    // MS:1000016
++ (BOOL)isPrecursorAccession:(NSString *)acc;        // MS:1000744 (selected ion m/z)
+
+// Passthrough: unknown accessions become raw MPGOCVParam objects
++ (MPGOCVParam *)cvParamFromAccession:(NSString *)acc
+                                 name:(NSString *)name
+                                value:(NSString *)value
+                          ontologyRef:(NSString *)ontRef
+                                 unit:(NSString *)unitAcc;
+@end
+```
+
+**`MPGOMzMLReader` (`Import/MPGOMzMLReader.h/.m`)**
+
+SAX-based mzML 1.1 parser using `NSXMLParser`. Implements `NSXMLParserDelegate`.
+
+```objc
+@interface MPGOMzMLReader : NSObject
+
++ (MPGOSpectralDataset *)readFromFilePath:(NSString *)path error:(NSError **)error;
++ (MPGOSpectralDataset *)readFromURL:(NSURL *)url error:(NSError **)error;
++ (MPGOSpectralDataset *)readFromData:(NSData *)data error:(NSError **)error;
+
+@end
+```
+
+**Parsing strategy:**
+
+The parser maintains a state stack tracking element nesting. Key elements:
+
+- `<mzML>` → root, extract version
+- `<cvList>` / `<cv>` → build ontology reference map
+- `<referenceableParamGroupList>` / `<referenceableParamGroup>` → store param groups for later expansion
+- `<fileDescription>` / `<sourceFileList>` → extract source file metadata
+- `<run>` → begin building an `MPGOAcquisitionRun`
+- `<spectrumList count="N">` → pre-allocate spectrum array
+- `<spectrum index="..." id="..." defaultArrayLength="...">` → begin a new `MPGOMassSpectrum`
+  - `<cvParam>` inside `<spectrum>` → extract MS level, polarity, scan time, etc. via `MPGOCVTermMapper`
+  - `<precursorList>` / `<precursor>` / `<selectedIon>` → extract precursor m/z, charge
+  - `<binaryDataArrayList>` / `<binaryDataArray>` → for each array:
+    - Collect `<cvParam>` to determine: precision (float32/64), compression (zlib/none), array type (m/z/intensity/etc.)
+    - Collect the base64 text content between start and end tags
+    - Decode via `MPGOBase64`
+    - Create `MPGOSignalArray` with appropriate `MPGOEncodingSpec` and `MPGOAxisDescriptor`
+- `<chromatogramList>` / `<chromatogram>` → similar pattern, produce `MPGOChromatogram` objects
+- `<dataProcessing>` / `<processingMethod>` → produce `MPGOProvenanceRecord` chain
+
+**Critical implementation details:**
+
+- `<binaryDataArray>` text content may arrive across multiple `parser:foundCharacters:` callbacks — accumulate into an `NSMutableString`.
+- `<referenceableParamGroup>` elements may be referenced from within spectra via `<referenceableParamGroupRef ref="..."/>`. Expand these inline during spectrum parsing.
+- The `defaultArrayLength` attribute on `<spectrum>` gives the expected element count — validate decoded array length against this.
+- mzML uses 1-indexed `<spectrum index="0">` (0-indexed despite the attribute name). The `id` attribute is a string like `"scan=1234"`.
+- Chromatogram arrays are time+intensity pairs, same decoding logic as spectrum arrays.
+- Unit accessions in `<cvParam unitAccession="UO:0000010">` should be preserved on `MPGOCVParam.unit`.
+
+### Tests for Milestone 9
+
+Create `objc/Tests/TestMzMLReader.m`:
+
+- Parse a centroided mzML file → verify spectrum count
+- Verify m/z and intensity arrays for specific spectra (compare against known values)
+- Verify MS level and polarity extracted correctly
+- Verify chromatogram count and TIC values
+- Verify retention times on spectra
+- Verify precursor m/z and charge for MS2 spectra
+- Full round-trip: mzML → `MPGOSpectralDataset` → write `.mpgo` → read `.mpgo` → verify spectrum count and array values
+- Error test: parse truncated/malformed XML → nil with NSError, no crash
+- If a profile-mode fixture is available: parse and verify larger arrays
+
+**Note on test fixtures:** If suitable mzML files cannot be committed to the repo due to size, create synthetic mzML test data programmatically — write a small helper that emits valid mzML XML with known m/z and intensity values, then parse that. This guarantees repeatable tests without external downloads.
+
+### Acceptance criteria
+
+- [ ] Parse a real (or realistic synthetic) centroided mzML file
+- [ ] Spectrum count matches `<spectrumList count="N">`
+- [ ] m/z and intensity arrays for sampled spectra match expected values within float64 epsilon
+- [ ] Chromatogram extraction works (TIC at minimum)
+- [ ] cvParam annotations (MS level, polarity, scan window, RT) correctly mapped
+- [ ] Full round-trip: mzML → MPGO objects → write .mpgo → read .mpgo → verify
+- [ ] Profile-mode mzML (larger arrays, possibly compressed) parses correctly
+- [ ] Malformed XML returns nil + NSError, no crash
+- [ ] Performance: 50 MB equivalent parses in < 10 seconds (logged, PASS if under)
+
+### Commit message
+
+```
+Milestone 9: mzML reader — real-world data import
+
+- MPGOMzMLReader: SAX-based mzML 1.1 parser via NSXMLParser
+- MPGOBase64: base64 decode + zlib inflate for binaryDataArray
+- MPGOCVTermMapper: PSI-MS CV accession → MPGO model mapping
+- LICENSE-IMPORT-EXPORT: Apache-2.0 for import/export layer
+- Full round-trip test: mzML → .mpgo → read back → verify
+```
+
+---
+
+## Milestone 10 — Protocol Conformance + Modality-Agnostic Runs
+
+**Track:** A1 + A5
+**License:** LGPL-3.0
+
+### Changes to existing classes
+
+**`MPGOAcquisitionRun`:**
+
+- Add formal `<MPGOEncryptable>` conformance. Implement `-encryptWithKey:level:error:` and `-decryptWithKey:error:` that delegate to `MPGOEncryptionManager` internally but present the protocol interface.
+- Add formal `<MPGOProvenanceable>` conformance. Each run carries its own `NSMutableArray<MPGOProvenanceRecord *> *provenanceRecords` property.
+- Remove the type restriction that only accepts `MPGOMassSpectrum`. Accept any `MPGOSpectrum` subclass.
+- Make signal channel serialization **name-driven**: when writing to HDF5, iterate the spectra's signal array dictionaries, collect unique array names, and create one HDF5 dataset per name. For MS runs this produces `mz_values` and `intensity_values` as before. For NMR runs this produces `chemical_shift_values` and `intensity_values`.
+- The `MPGOSpectrumIndex` header fields must accommodate NMR spectra (which lack `precursor_mz` and `ms_level`). Use sentinel values (e.g., `NAN` for precursor_mz, `0` for ms_level) for non-MS spectra, or make these fields nullable in the index.
+- Per-run provenance: write to `/run_NNNN/provenance/` group; read back on deserialization.
+
+**`MPGOSpectralDataset`:**
+
+- Add formal `<MPGOEncryptable>` conformance. Delegates to `MPGOEncryptionManager` for the file-level operations.
+- The existing `nmrRuns` array property can be deprecated in favor of regular `runs` entries that happen to contain NMR spectra.
+
+**`MPGOEncryptionManager`:**
+
+- Mark the file-path-based API methods with `MPGO_DEPRECATED_MSG("Use -[MPGOAcquisitionRun encryptWithKey:level:error:] instead")`.
+- Keep them functional for backward compatibility.
+
+### Tests for Milestone 10
+
+- Create `MPGOAcquisitionRun` with 100 `MPGOMassSpectrum` → write → read → verify (existing behavior preserved)
+- Create `MPGOAcquisitionRun` with 50 `MPGONMRSpectrum` → write → read → verify all chemical_shift and intensity arrays
+- Per-run provenance: add 3 steps → write → read → verify chain
+- Encrypt via run's protocol method → decrypt → verify data integrity
+- `MPGOQuery` works on NMR runs: "acquisition time > 5.0" predicate
+- `MPGOStreamWriter`/`Reader` round-trip on NMR runs
+- v0.1 `.mpgo` files still readable (backward compat test — use a fixture written by v0.1 code)
+- Deprecated `MPGOEncryptionManager` API still works
+
+### Acceptance criteria
+
+- [ ] MS run: 100 spectra write/read/verify
+- [ ] NMR run: 50 spectra write/read/verify
+- [ ] Per-run provenance round-trip
+- [ ] Encryption via protocol method
+- [ ] Query on NMR runs
+- [ ] Streaming on NMR runs
+- [ ] v0.1 file backward compatibility
+- [ ] Deprecation warnings emitted for old API
+
+---
+
+## Milestone 11 — Native HDF5 Compound Types
+
+**Track:** A2 + A3
+**License:** LGPL-3.0
+
+### New class
+
+**`MPGOHDF5CompoundType` (`HDF5/MPGOHDF5CompoundType.h/.m`)**
+
+Wraps `H5Tcreate(H5T_COMPOUND, ...)` with field registration:
+
+```objc
+@interface MPGOHDF5CompoundType : NSObject
+- (instancetype)initWithSize:(size_t)totalSize;
+- (BOOL)addField:(NSString *)name type:(hid_t)type offset:(size_t)offset;
+- (hid_t)typeId;
+- (void)close;
+@end
+```
+
+### Changes to serialization
+
+**Identifications:** Replace JSON-encoded string with compound dataset at `/study/identifications/`:
+
+```
+{
+    spectrum_ref:    uint32
+    chemical_entity: variable-length string
+    score:           float64
+    evidence_type:   variable-length string
+}
+```
+
+**Quantifications:** Replace JSON with compound dataset at `/study/quantifications/`:
+
+```
+{
+    abundance:       float64
+    sample_ref:      variable-length string
+    normalization:   variable-length string
+}
+```
+
+**Provenance records:** Replace JSON with compound dataset at `/run_NNNN/provenance/steps` (per-run) and `/study/provenance/steps` (dataset-level):
+
+```
+{
+    timestamp:       variable-length string (ISO8601)
+    software:        variable-length string
+    parameters_json: variable-length string (JSON-encoded NSDictionary)
+    input_refs:      variable-length string (JSON array of ref strings)
+    output_refs:     variable-length string (JSON array of ref strings)
+}
+```
+
+**SpectrumIndex compound headers:** Add a compound `headers` dataset alongside (not replacing) the existing parallel 1-D datasets:
+
+```
+{
+    offset:              uint64
+    length:              uint32
+    retention_time:      float64
+    ms_level:            uint8
+    polarity:            int8
+    precursor_mz:        float64
+    precursor_charge:    int32
+    base_peak_intensity: float64
+}
+```
+
+### Feature flags and backward compatibility
+
+**`MPGOFeatureFlags`** class (see Versioning section above). Writers emit `@mpeg_o_format_version` and `@mpeg_o_features`. Readers check for feature flags first; if absent, fall back to v0.1 JSON path.
+
+### Tests
+
+- 100 identifications as compound type → read → verify all fields
+- 50 quantifications as compound type → read → verify
+- Compound headers queryable via hyperslab read
+- Open a v0.1 `.mpgo` fixture → read succeeds via JSON fallback
+- New files contain `@mpeg_o_features` with expected values
+- `h5dump` produces readable compound type output (visual verification)
+- 10,000 identification records write/read < 50ms
+
+### Acceptance criteria
+
+- [ ] Compound identifications round-trip
+- [ ] Compound quantifications round-trip
+- [ ] Compound headers queryable
+- [ ] v0.1 backward compatibility
+- [ ] Feature flags written and read correctly
+- [ ] h5dump readability
+- [ ] Performance target met
+
+---
+
+## Milestone 12 — MSImage Inheritance + Native 2D NMR
+
+**Track:** A4 + A6
+**License:** LGPL-3.0
+
+### MSImage refactoring
+
+- `MPGOMSImage` becomes a subclass of `MPGOSpectralDataset`.
+- The spatial cube is stored under `/study/image_run_NNNN/` following the standard run group structure, with additional spatial metadata attributes (`spatial_width`, `spatial_height`, `pixel_size_x`, `pixel_size_y`, `scan_pattern`).
+- MSImage inherits identification, quantification, and provenance support from the superclass.
+- The v0.1 `/image_cube/` layout remains readable as a fallback.
+
+### Native 2D NMR
+
+- `MPGONMR2DSpectrum` stores its intensity matrix as a native 2D HDF5 dataset using `H5Dcreate2` with a rank-2 dataspace.
+- Add HDF5 dimension scales (`H5DSset_scale`, `H5DSattach_scale`) for the F1 and F2 axes.
+- The v0.1 flattened layout remains readable as a fallback.
+- Files containing native 2D NMR data include `opt_native_2d_nmr` in `@mpeg_o_features`.
+
+### Tests
+
+- 64×64 MSImage write/read/verify
+- MSImage with identifications and quantifications
+- MSImage provenance chain
+- HSQC-type 2D NMR (256×128) as native 2D dataset write/read/verify
+- `h5dump` displays 2D NMR dataset dimensions correctly
+- v0.1 flattened 2D NMR file readable
+
+### Acceptance criteria
+
+- [ ] MSImage inherits dataset capabilities
+- [ ] 2D NMR native HDF5 dataset round-trip
+- [ ] Dimension scales present and correct
+- [ ] Backward compatibility for both MSImage and 2D NMR v0.1 layouts
+- [ ] Feature flag `opt_native_2d_nmr` emitted
+
+---
+
+## Milestone 13 — nmrML Reader
+
+**Track:** B2
+**License:** Apache-2.0 (in `Import/`)
+
+### Classes to implement
+
+**`MPGONmrMLReader` (`Import/MPGONmrMLReader.h/.m`)**
+
+SAX-based nmrML parser, same `NSXMLParser` approach as the mzML reader.
+
+Key nmrML elements:
+- `<nmrML>` → root
+- `<acquisition>` / `<acquisition1D>` → acquisition parameters
+- `<fidData>` → base64-encoded complex128 FID (interleaved real+imaginary pairs as float64)
+- `<spectrum1D>` → processed spectrum
+- `<spectrumList>` → list of processed spectra
+- `<cvParam>` → uses nmrCV accessions (e.g., `NMR:1000001` for spectrometer frequency)
+
+**CV term mappings needed:**
+- `NMR:1000001` → spectrometer frequency (MHz)
+- `NMR:1000002` → nucleus type (1H, 13C, etc.)
+- `NMR:1400014` → sweep width
+- `NMR:1000003` → number of scans
+- `NMR:1000004` → dwell time
+
+Add nmrCV mappings to `MPGOCVTermMapper` or create a parallel `MPGONmrCVTermMapper`.
+
+### Tests
+
+- Parse nmrML example file → verify FID array (real + imaginary)
+- Verify acquisition parameters (frequency, nucleus, sweep width)
+- Processed 1D spectrum import if present
+- Full round-trip: nmrML → MPGO → .mpgo → read → verify
+- Error handling: invalid XML
+
+### Acceptance criteria
+
+- [ ] FID data arrays match reference
+- [ ] Acquisition parameters correctly mapped
+- [ ] Round-trip verification
+- [ ] Error handling
+
+---
+
+## Milestone 14 — Digital Signatures + Integrity Verification
+
+**Track:** B5
+**License:** LGPL-3.0
+
+### Classes to implement
+
+**`MPGOSignatureManager` (`Protection/MPGOSignatureManager.h/.m`)**
+
+```objc
+@interface MPGOSignatureManager : NSObject
+
+// Sign a dataset within an open .mpgo file
++ (BOOL)signDataset:(NSString *)datasetPath
+             inFile:(NSString *)filePath
+            withKey:(NSData *)hmacKey
+              error:(NSError **)error;
+
+// Verify a dataset's signature
++ (BOOL)verifyDataset:(NSString *)datasetPath
+               inFile:(NSString *)filePath
+              withKey:(NSData *)hmacKey
+                error:(NSError **)error;
+
+// Sign a provenance chain
++ (BOOL)signProvenanceInRun:(NSString *)runPath
+                     inFile:(NSString *)filePath
+                    withKey:(NSData *)hmacKey
+                      error:(NSError **)error;
+
+// Verify the entire provenance chain
++ (BOOL)verifyProvenanceInRun:(NSString *)runPath
+                       inFile:(NSString *)filePath
+                      withKey:(NSData *)hmacKey
+                        error:(NSError **)error;
+
+@end
+```
+
+**`MPGOVerifier` (`Protection/MPGOVerifier.h/.m`)**
+
+Higher-level verification API:
+
+```objc
+typedef NS_ENUM(NSUInteger, MPGOVerificationStatus) {
+    MPGOVerificationStatusValid,
+    MPGOVerificationStatusInvalid,
+    MPGOVerificationStatusNotSigned,
+    MPGOVerificationStatusError
+};
+
+@interface MPGOVerifier : NSObject
++ (MPGOVerificationStatus)verifyDataset:(NSString *)path
+                                 inFile:(NSString *)filePath
+                                withKey:(NSData *)key
+                                  error:(NSError **)error;
+@end
+```
+
+**Implementation:** Use HMAC-SHA256 via OpenSSL (`HMAC()` from `<openssl/hmac.h>`, already linked). Read the raw HDF5 dataset bytes, compute HMAC, store/compare as a base64-encoded HDF5 attribute named `@mpgo_signature` on the dataset. Files with signatures include `opt_digital_signatures` in `@mpeg_o_features`.
+
+### Tests
+
+- Sign intensity channel → verify → PASS
+- Tamper one byte → verify → FAIL with descriptive error
+- Sign provenance chain → verify chain → PASS
+- Unsigned dataset → `MPGOVerificationStatusNotSigned`
+- Signed file still readable by `h5dump`
+- 1M-element float64 sign+verify < 100ms
+
+### Acceptance criteria
+
+- [ ] Tamper detection works
+- [ ] Chain verification works
+- [ ] Unsigned datasets handled gracefully
+- [ ] HDF5 tool compatibility preserved
+- [ ] Performance target met
+
+---
+
+## Milestone 15 — Format Specification + v0.2.0 Release
+
+**Track:** Cross-cutting
+
+### Documentation deliverables
+
+**`docs/format-spec.md`** — standalone specification of the `.mpgo` HDF5 layout:
+
+- Every HDF5 group with its path, required/optional status, and purpose
+- Every HDF5 dataset with its path, datatype, dimensionality, chunking parameters, and compression
+- Every HDF5 attribute with its path, datatype, and semantics
+- All compound type definitions with field names, types, and offsets
+- The feature flag mechanism and registry
+- Versioning rules (what constitutes major vs minor changes)
+- Example `h5dump` output for a minimal valid `.mpgo` file
+
+This document must be detailed enough for a Python developer to implement a conforming reader without looking at the Objective-C source.
+
+**`docs/feature-flags.md`** — registry of all feature strings, their semantics, and which milestone introduced them.
+
+### Conformance test fixtures
+
+Create 5–8 reference `.mpgo` files in `objc/Tests/Fixtures/`:
+
+1. `minimal_ms.mpgo` — single MS run, 10 spectra, no identifications
+2. `full_ms.mpgo` — MS run with identifications, quantifications, provenance
+3. `nmr_1d.mpgo` — NMR 1D spectra
+4. `nmr_2d.mpgo` — NMR 2D spectrum (native layout)
+5. `ms_image.mpgo` — small MSImage
+6. `encrypted.mpgo` — selective encryption on intensity channel
+7. `signed.mpgo` — signed intensity channel with provenance
+8. `v0.1_compat.mpgo` — file written by v0.1 code (JSON metadata, parallel index)
+
+Each fixture has expected values documented in `objc/Tests/Fixtures/README.md`.
+
+### Final verification
+
+- All milestones 9–14 complete with tests green
+- v0.1.0-alpha `.mpgo` files readable by v0.2.0 code
+- CI includes mzML and nmrML parse + round-trip tests
+- No warnings under `-Wall -Wextra`
+- Update `README.md` with new sections on import/export and versioning
+- Update `ARCHITECTURE.md` to remove the v0.1 simplification notes (they are now resolved)
+- Update `WORKPLAN.md` to add milestones 9–15 with checked acceptance criteria
+
+### Release
+
+```bash
+git tag -a v0.2.0 -m "MPEG-O v0.2.0: mzML/nmrML import, modality-agnostic runs, compound HDF5 types, digital signatures, formal versioning"
+git push origin v0.2.0
+```
+
+---
+
+## Known Gotchas
+
+1. **HDF5 paths differ by install method.** Ubuntu apt: `/usr/include/hdf5/serial/` and `/usr/lib/x86_64-linux-gnu/hdf5/serial/`. Source builds: `/usr/local`. The preamble accepts `HDF5_PREFIX` on the command line.
+
+2. **`Testing.h` uses `NSAutoreleasePool`, which ARC forbids.** `objc/Tests/GNUmakefile.preamble` applies `-fno-objc-arc` to the test binary. Preserve this split.
+
+3. **GNUStep Make's `test-tool.make` does not auto-run.** The top-level `objc/GNUmakefile` has a custom `check::` target that explicitly invokes the test binary with `LD_LIBRARY_PATH` extended.
+
+4. **Runtime ABI auto-detection** probes `libgnustep-base.so` for `._OBJC_CLASS_NSObject` (v2) vs `_OBJC_CLASS_NSObject` (v1). Follow the `ifeq ($(MPGO_OBJC_RUNTIME),gnustep-2.0)` pattern for any new toolchain flags.
+
+5. **`-fblocks` is gated on gnustep-2.0 only.** libMPGO must not depend on blocks-based APIs.
+
+6. **Windows authoring quirk.** `.gitattributes` forces LF. If `git diff` shows whole-file changes, fix with `git add --renormalize .`
+
+7. **`NSXMLParser` availability.** GNUStep's `NSXMLParser` requires `libxml2`. The CI workflow already installs `libxml2-dev`. Verify it is present on the local machine before starting Milestone 9.
+
+8. **Variable-length HDF5 strings.** Creating VL string datasets requires `H5Tcopy(H5T_C_S1)` + `H5Tset_size(H5T_VARIABLE)`. VL strings in compound types need careful memory management — HDF5 allocates the string data on read, and the caller must free it with `H5Dvlen_reclaim()` (or `H5Treclaim()` in newer HDF5). Wrap this carefully in the compound type reader.
+
+9. **mzML `<referenceableParamGroup>`.** These are defined once and referenced by ID from multiple spectra. The parser must resolve these references during parsing. A common pattern: store them in an `NSDictionary<NSString *, NSArray<MPGOCVParam *> *>` keyed by `id`, then expand inline when `<referenceableParamGroupRef ref="..."/>` is encountered.
+
+10. **mzML base64 text across multiple callbacks.** `NSXMLParser` may deliver the text content of a `<binary>` element across multiple `parser:foundCharacters:` calls. Always accumulate into an `NSMutableString` and decode only in `parser:didEndElement:`.
+
+---
+
+## Dependency Graph
+
+```
+  Milestone 9 (mzML Reader)
+       │
+       ▼
+  Milestone 10 (Protocol Conformance + Agnostic Runs)
+       │
+       ▼
+  Milestone 11 (Compound Types + Headers + Feature Flags)
+       │
+       ├───────────────────────┐
+       ▼                       ▼
+  Milestone 12              Milestone 13
+  (MSImage + 2D NMR)        (nmrML Reader)
+       │                       │
+       └───────────┬───────────┘
+                   ▼
+            Milestone 14
+            (Digital Signatures)
+                   │
+                   ▼
+            Milestone 15
+            (Format Spec + v0.2.0)
+```
+
+Milestones 12 and 13 can proceed in parallel. Milestone 14 depends on both.
+
+---
+
+## Execution Checklist
+
+1. Pull repo, read all referenced files, verify local build (379 tests).
+2. **Milestone 9:** Commit LICENSE-IMPORT-EXPORT, implement mzML reader, test, push. Pause for user review.
+3. **Milestone 10:** Protocol conformance + agnostic runs. Pause for user review.
+4. **Milestone 11:** Compound types + feature flags. Pause for user review.
+5. **Milestones 12 + 13:** MSImage/2D NMR + nmrML reader. Pause for user review.
+6. **Milestone 14:** Digital signatures. Pause for user review.
+7. **Milestone 15:** Format spec, conformance fixtures, release prep. Tag v0.2.0.
+
+**CI must be green before any milestone is considered complete.** Do not push milestone commits on a red build. If CI breaks, fix it before proceeding.
