@@ -171,7 +171,70 @@ support incremental ingestion of large runs.
 
 ## Thread Safety
 
-**Not thread-safe in v0.1–v0.3.** Concurrent access to a single `MPGOHDF5File` (or, on the Python side, a `SpectralDataset` wrapping an `h5py.File`) from multiple threads is undefined. Clients must serialize access externally. A future version may adopt HDF5's thread-safe build (`--enable-threadsafe`) with explicit locking.
+**Opt-in reader-writer locking since v0.4 (Milestone 23).**
+
+### Objective-C: `MPGOHDF5File`
+
+Each `MPGOHDF5File` owns a `pthread_rwlock_t`. Every public method on
+`MPGOHDF5Group` and `MPGOHDF5Dataset` acquires either the shared (read)
+or exclusive (write) lock on the owning file for the duration of its
+HDF5 calls:
+
+* Read lock: `openGroupNamed:`, `hasChildNamed:`, `openDatasetNamed:`,
+  `stringAttributeNamed:`, `integerAttributeNamed:`, `hasAttributeNamed:`,
+  `readDataWithError:`, `readDataAtOffset:count:error:`.
+* Write lock: `createGroupNamed:`, `createDatasetNamed:…`, `setStringAttribute:`,
+  `setIntegerAttribute:`, `writeData:error:`.
+
+`-isThreadSafe` reports `YES` iff both (a) the wrapper rwlock initialised
+successfully **and** (b) the linked libhdf5 reports
+`H5is_library_threadsafe() == true`. When (b) is false, the wrapper enters
+**degraded mode**: readers are silently promoted to exclusive-lock
+acquisition so we never reenter a non-thread-safe libhdf5 from two
+threads concurrently. This keeps the safety guarantee regardless of how
+HDF5 was built, at the cost of reader parallelism. CI logs the runtime
+mode via a one-shot `H5is_library_threadsafe` probe.
+
+### Python: `SpectralDataset`
+
+Opt-in via `SpectralDataset.open(path, thread_safe=True)`. When enabled,
+the dataset carries an `mpeg_o._rwlock.RWLock` (writer-preferring,
+stdlib-only). `read_lock()` and `write_lock()` are context managers that
+are *no-ops* when `thread_safe` was not requested, so call sites can use
+them unconditionally:
+
+```python
+with SpectralDataset.open("dataset.mpgo", thread_safe=True) as ds:
+    with ds.read_lock():
+        ids = ds.identifications()
+```
+
+Internal accessors (`identifications`, `quantifications`, `provenance`,
+`close`) already acquire the appropriate lock. Deep traversal via
+`ds.ms_runs['run0'].spectra[...]` is **not** protected automatically —
+wrap such access sites in `ds.read_lock()` if multiple threads share the
+dataset.
+
+Python threads are serialised by h5py/cython through the GIL for the
+duration of each HDF5 C call, so the RW lock's role is to protect
+*composite* operations from writer interleaving, not to substitute for
+libhdf5's thread-safety.
+
+### What thread-safety does *not* buy you
+
+HDF5's threadsafe mode uses a global library mutex, so "2-4× parallel
+read speedup" is not physically achievable for pure HDF5 I/O regardless
+of our wrapper — the library serialises below. The measured benefit of
+M23 is:
+
+1. Crash-safety under concurrent access (safety, not speed).
+2. Writer exclusion — in-flight writes never interleave with readers,
+   eliminating a class of torn-read bugs.
+3. Low single-thread overhead (<15 % in the benchmark, see
+   `python/tests/test_milestone23_benchmark.py`).
+
+Parallel decode/decompress on top of the HDF5 critical path is a
+potential v0.5 optimisation (not in scope for M23).
 
 ---
 

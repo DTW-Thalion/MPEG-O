@@ -1,13 +1,15 @@
 #import "MPGOHDF5Group.h"
 #import "MPGOHDF5Dataset.h"
+#import "MPGOHDF5File.h"
 #import "MPGOHDF5Errors.h"
 #import "MPGOHDF5Types.h"
 #import <hdf5.h>
 
 @implementation MPGOHDF5Group
 {
-    hid_t _gid;
-    id    _retainer;   // strong ref to the parent (MPGOHDF5File or MPGOHDF5Group)
+    hid_t           _gid;
+    id              _retainer;   // strong ref to parent (MPGOHDF5File or MPGOHDF5Group)
+    MPGOHDF5File   *_file;       // cached owning file (for the wrapper rwlock)
 }
 
 - (instancetype)initWithGroupId:(hid_t)gid retainer:(id)retainer
@@ -16,17 +18,24 @@
     if (self) {
         _gid = gid;
         _retainer = retainer;
+        if ([retainer respondsToSelector:@selector(owningFile)]) {
+            _file = [(id)retainer owningFile];
+        }
     }
     return self;
 }
 
 - (hid_t)groupId { return _gid; }
 
+- (MPGOHDF5File *)owningFile { return _file; }
+
 #pragma mark - Sub-groups
 
 - (MPGOHDF5Group *)createGroupNamed:(NSString *)name error:(NSError **)error
 {
+    [_file lockForWriting];
     hid_t cid = H5Gcreate2(_gid, [name UTF8String], H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    [_file unlockForWriting];
     if (cid < 0) {
         if (error) *error = MPGOMakeError(MPGOErrorGroupCreate,
             @"H5Gcreate2 failed for '%@'", name);
@@ -37,7 +46,9 @@
 
 - (MPGOHDF5Group *)openGroupNamed:(NSString *)name error:(NSError **)error
 {
+    [_file lockForReading];
     hid_t cid = H5Gopen2(_gid, [name UTF8String], H5P_DEFAULT);
+    [_file unlockForReading];
     if (cid < 0) {
         if (error) *error = MPGOMakeError(MPGOErrorGroupOpen,
             @"H5Gopen2 failed for '%@'", name);
@@ -48,7 +59,9 @@
 
 - (BOOL)hasChildNamed:(NSString *)name
 {
+    [_file lockForReading];
     htri_t exists = H5Lexists(_gid, [name UTF8String], H5P_DEFAULT);
+    [_file unlockForReading];
     return exists > 0;
 }
 
@@ -80,20 +93,25 @@
                        compressionLevel:(int)compressionLevel
                                   error:(NSError **)error
 {
+    // Single-exit refactor: all early-return paths set (did, errCode, errMsg)
+    // and goto cleanup, which releases the write lock and constructs the result.
+    hid_t space = -1, plist = -1, htype = -1, did = -1;
+    MPGOErrorCode errCode = MPGOErrorDatasetCreate;
+    NSString *errMsg = nil;
+
+    [_file lockForWriting];
+
     hsize_t dims[1] = { (hsize_t)length };
-    hid_t   space   = H5Screate_simple(1, dims, NULL);
+    space = H5Screate_simple(1, dims, NULL);
     if (space < 0) {
-        if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
-            @"H5Screate_simple failed for '%@'", name);
-        return nil;
+        errMsg = [NSString stringWithFormat:@"H5Screate_simple failed for '%@'", name];
+        goto cleanup;
     }
 
-    hid_t plist = H5Pcreate(H5P_DATASET_CREATE);
+    plist = H5Pcreate(H5P_DATASET_CREATE);
     if (plist < 0) {
-        H5Sclose(space);
-        if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
-            @"H5Pcreate failed for '%@'", name);
-        return nil;
+        errMsg = [NSString stringWithFormat:@"H5Pcreate failed for '%@'", name];
+        goto cleanup;
     }
 
     if (chunkSize > 0 && length > 0) {
@@ -103,47 +121,44 @@
             H5Pset_deflate(plist, (unsigned)compressionLevel);
         } else if (compression == MPGOCompressionLZ4) {
             if (H5Zfilter_avail((H5Z_filter_t)MPGO_HDF5_LZ4_FILTER_ID) <= 0) {
-                H5Pclose(plist); H5Sclose(space);
-                if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
-                    @"LZ4 filter (id 32004) is not available; install "
-                    @"the hdf5plugin package or set HDF5_PLUGIN_PATH");
-                return nil;
+                errMsg = @"LZ4 filter (id 32004) is not available; install "
+                         @"the hdf5plugin package or set HDF5_PLUGIN_PATH";
+                goto cleanup;
             }
-            // filter_avail has confirmed the plugin is loadable; register
-            // it on the plist with no cd_values (default LZ4 block size).
             if (H5Pset_filter(plist, MPGO_HDF5_LZ4_FILTER_ID,
                               H5Z_FLAG_MANDATORY, 0, NULL) < 0) {
-                H5Pclose(plist); H5Sclose(space);
-                if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
-                    @"H5Pset_filter(LZ4) failed for '%@'", name);
-                return nil;
+                errMsg = [NSString stringWithFormat:
+                    @"H5Pset_filter(LZ4) failed for '%@'", name];
+                goto cleanup;
             }
         }
-        // MPGOCompressionNone: leave the plist alone (no filter).
     }
 
-    hid_t htype = MPGOHDF5TypeForPrecision(precision);
+    htype = MPGOHDF5TypeForPrecision(precision);
     if (htype < 0) {
-        H5Pclose(plist); H5Sclose(space);
-        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
-            @"unknown precision for '%@'", name);
-        return nil;
+        errCode = MPGOErrorInvalidArgument;
+        errMsg = [NSString stringWithFormat:@"unknown precision for '%@'", name];
+        goto cleanup;
     }
 
-    hid_t did = H5Dcreate2(_gid, [name UTF8String], htype, space,
-                           H5P_DEFAULT, plist, H5P_DEFAULT);
-    if (!MPGOHDF5TypeIsBuiltin(precision)) {
-        H5Tclose(htype);
+    did = H5Dcreate2(_gid, [name UTF8String], htype, space,
+                     H5P_DEFAULT, plist, H5P_DEFAULT);
+    if (did < 0) {
+        errMsg = [NSString stringWithFormat:@"H5Dcreate2 failed for '%@'", name];
+        goto cleanup;
     }
-    H5Pclose(plist);
-    H5Sclose(space);
+
+cleanup:
+    if (htype >= 0 && !MPGOHDF5TypeIsBuiltin(precision)) H5Tclose(htype);
+    if (plist >= 0) H5Pclose(plist);
+    if (space >= 0) H5Sclose(space);
+
+    [_file unlockForWriting];
 
     if (did < 0) {
-        if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
-            @"H5Dcreate2 failed for '%@'", name);
+        if (error) *error = MPGOMakeError(errCode, @"%@", errMsg);
         return nil;
     }
-
     return [[MPGOHDF5Dataset alloc] initWithDatasetId:did
                                             precision:precision
                                                length:length
@@ -152,8 +167,10 @@
 
 - (MPGOHDF5Dataset *)openDatasetNamed:(NSString *)name error:(NSError **)error
 {
+    [_file lockForReading];
     hid_t did = H5Dopen2(_gid, [name UTF8String], H5P_DEFAULT);
     if (did < 0) {
+        [_file unlockForReading];
         if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,
             @"H5Dopen2 failed for '%@'", name);
         return nil;
@@ -175,6 +192,7 @@
         precision = MPGOPrecisionComplex128;
     }
     H5Tclose(htype);
+    [_file unlockForReading];
 
     return [[MPGOHDF5Dataset alloc] initWithDatasetId:did
                                             precision:precision
@@ -188,6 +206,8 @@
 {
     const char *cstr = [value UTF8String];
     size_t      len  = strlen(cstr);
+
+    [_file lockForWriting];
 
     hid_t htype = H5Tcopy(H5T_C_S1);
     H5Tset_size(htype, len > 0 ? len : 1);
@@ -203,6 +223,7 @@
                            H5P_DEFAULT, H5P_DEFAULT);
     if (aid < 0) {
         H5Sclose(space); H5Tclose(htype);
+        [_file unlockForWriting];
         if (error) *error = MPGOMakeError(MPGOErrorAttributeCreate,
             @"H5Acreate2 failed for '%@'", name);
         return NO;
@@ -210,6 +231,7 @@
 
     herr_t s = H5Awrite(aid, htype, cstr);
     H5Aclose(aid); H5Sclose(space); H5Tclose(htype);
+    [_file unlockForWriting];
 
     if (s < 0) {
         if (error) *error = MPGOMakeError(MPGOErrorAttributeWrite,
@@ -221,13 +243,16 @@
 
 - (NSString *)stringAttributeNamed:(NSString *)name error:(NSError **)error
 {
+    [_file lockForReading];
     if (H5Aexists(_gid, [name UTF8String]) <= 0) {
+        [_file unlockForReading];
         if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
             @"attribute '%@' does not exist", name);
         return nil;
     }
     hid_t aid = H5Aopen(_gid, [name UTF8String], H5P_DEFAULT);
     if (aid < 0) {
+        [_file unlockForReading];
         if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
             @"H5Aopen failed for '%@'", name);
         return nil;
@@ -239,11 +264,13 @@
     NSString *result = [[NSString alloc] initWithUTF8String:buf];
     free(buf);
     H5Tclose(htype); H5Aclose(aid);
+    [_file unlockForReading];
     return result;
 }
 
 - (BOOL)setIntegerAttribute:(NSString *)name value:(int64_t)value error:(NSError **)error
 {
+    [_file lockForWriting];
     hid_t space = H5Screate(H5S_SCALAR);
     if (H5Aexists(_gid, [name UTF8String]) > 0) {
         H5Adelete(_gid, [name UTF8String]);
@@ -252,12 +279,14 @@
                            H5P_DEFAULT, H5P_DEFAULT);
     if (aid < 0) {
         H5Sclose(space);
+        [_file unlockForWriting];
         if (error) *error = MPGOMakeError(MPGOErrorAttributeCreate,
             @"H5Acreate2 (int) failed for '%@'", name);
         return NO;
     }
     herr_t s = H5Awrite(aid, H5T_NATIVE_INT64, &value);
     H5Aclose(aid); H5Sclose(space);
+    [_file unlockForWriting];
     if (s < 0) {
         if (error) *error = MPGOMakeError(MPGOErrorAttributeWrite,
             @"H5Awrite (int) failed for '%@'", name);
@@ -268,13 +297,16 @@
 
 - (int64_t)integerAttributeNamed:(NSString *)name exists:(BOOL *)outExists error:(NSError **)error
 {
+    [_file lockForReading];
     if (H5Aexists(_gid, [name UTF8String]) <= 0) {
+        [_file unlockForReading];
         if (outExists) *outExists = NO;
         return 0;
     }
     if (outExists) *outExists = YES;
     hid_t aid = H5Aopen(_gid, [name UTF8String], H5P_DEFAULT);
     if (aid < 0) {
+        [_file unlockForReading];
         if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
             @"H5Aopen failed for '%@'", name);
         return 0;
@@ -282,12 +314,16 @@
     int64_t value = 0;
     H5Aread(aid, H5T_NATIVE_INT64, &value);
     H5Aclose(aid);
+    [_file unlockForReading];
     return value;
 }
 
 - (BOOL)hasAttributeNamed:(NSString *)name
 {
-    return H5Aexists(_gid, [name UTF8String]) > 0;
+    [_file lockForReading];
+    htri_t exists = H5Aexists(_gid, [name UTF8String]);
+    [_file unlockForReading];
+    return exists > 0;
 }
 
 - (void)dealloc
