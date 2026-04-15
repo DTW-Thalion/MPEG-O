@@ -2,8 +2,10 @@
 
 Feature flags are declared on the HDF5 root group as the
 `@mpeg_o_features` attribute, which holds a JSON array of strings.
-Files written by libMPGO v0.2.0 always emit the full set of v0.2
+Files written by libMPGO v0.2+ always emit the full set of supported
 features so downstream readers can detect capabilities at a glance.
+v0.3.0 extends the v0.2 set with compound per-run provenance, canonical
+byte-order signatures, and LZ4 / Numpress-delta compression codecs.
 
 ## Semantics
 
@@ -29,6 +31,8 @@ path (see §11 of `format-spec.md`).
 | `opt_native_msimage_cube`    | optional  | M12          | `MPGOMSImage` cubes live at `/study/image_cube/` as rank-3 datasets (v0.1 location was `/image_cube/` at root). |
 | `opt_dataset_encryption`     | optional  | M11 add-on   | Dataset-level AES-256-GCM sealing reserved for files that set `@encrypted` on the root.           |
 | `opt_digital_signatures`     | optional  | M14          | File contains one or more HMAC-SHA256 signatures in `@mpgo_signature` / `@provenance_signature` attributes. |
+| `compound_per_run_provenance`| required  | M17 (v0.3)   | Per-run provenance is stored as a compound HDF5 dataset at `/study/ms_runs/<run>/provenance/steps` using the same 5-field type as dataset-level `/study/provenance`. v0.2 readers fall back to the `@provenance_json` legacy mirror, which the writer keeps in place for signature compatibility. |
+| `opt_canonical_signatures`   | optional  | M18 (v0.3)   | HMAC-SHA256 signatures are computed over a canonical little-endian byte stream (atomic numeric datasets via LE mem types, compound datasets field-by-field with VL strings emitted as `u32_le(len) \|\| bytes`). Stored as `"v2:" + base64(mac)`; unprefixed v0.2 signatures remain verifiable via a fallback path. |
 
 ## Adding a new feature
 
@@ -46,15 +50,23 @@ path (see §11 of `format-spec.md`).
 5. Update `format-spec.md` with the data-layout section describing
    the new content.
 
-## v0.3+ reserved flags
+## Compression codecs (M21, v0.3)
+
+Compression codecs are carried by individual signal-channel datasets
+rather than by root-level feature flags — readers detect them from the
+dataset's filter list or from a per-channel attribute — but they are
+documented here so implementers know what to expect.
+
+| Codec                  | Transport                                                                                                                                             |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| zlib (default)         | HDF5 `H5P_DEFLATE` filter at level 6. Lossless. Readable by every HDF5 library.                                                                       |
+| LZ4                    | HDF5 filter id **32004**. Requires the LZ4 plugin to be loadable at runtime (`libh5lz4.so` on disk, `HDF5_PLUGIN_PATH` pointing at it). Lossless.     |
+| Numpress-delta         | Per-channel transform, **not** an HDF5 filter. The dataset stores `int64` first differences and the signal_channels group carries a `@<channel>_numpress_fixed_point` int64 attribute with the scaling factor. Lossy, sub-ppm relative error for typical m/z. |
+
+## v0.4+ reserved flags
 
 The following feature strings are reserved for planned work and
 must not be re-used for other purposes:
 
-- `opt_canonical_signatures` — v0.3 canonical-byte-order HMAC (see
-  HANDOFF.md, Milestone 14 deferred subsection).
-- `compound_per_run_provenance` — future migration of per-run
-  provenance from the `@provenance_json` string attribute to a
-  compound dataset under each run group.
 - `opt_key_rotation` — envelope-style multi-key wrapping and
   rotation metadata.

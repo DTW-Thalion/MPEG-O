@@ -1,7 +1,8 @@
 # MPEG-O
 
 [![MPGO CI](https://github.com/DTW-Thalion/MPEG-O/actions/workflows/ci.yml/badge.svg)](https://github.com/DTW-Thalion/MPEG-O/actions/workflows/ci.yml)
-[![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+[![License: LGPL v3 (core) / Apache-2.0 (import/export)](https://img.shields.io/badge/License-LGPL_v3_%2F_Apache--2.0-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+[![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 
 **MPEG-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS) and nuclear magnetic resonance (NMR) spectroscopy data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of analytical spectroscopy and spectrometry.
 
@@ -37,9 +38,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUStep)** | **v0.1.0-alpha — Milestones 1–8 complete, 379 tests passing in CI** | `objc/` |
-| Python | Planned | `python/` |
-| Java | Planned | `java/` |
+| **Objective-C (GNUstep)** | **v0.3.0 — Milestones 1–22 complete, 730 tests passing** | `objc/` |
+| **Python (`mpeg-o`)**     | **v0.3.0 — Cross-language parity with ObjC via reference fixtures, 89 tests passing** | `python/` |
+| Java                      | Planned | `java/` |
 
 ### v0.1.0-alpha capabilities
 
@@ -70,9 +71,61 @@ Continuous integration runs every push on `ubuntu-latest` with **clang + libobjc
 
 v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2.0 code — the readers detect the absence of `@mpeg_o_features` and dispatch to JSON fallback paths.
 
+### v0.3.0 capabilities (additions to v0.2)
+
+* **Python `mpeg-o` package** — a full reader/writer for the `.mpgo` format built on `h5py` + `numpy`, mirroring the ObjC class hierarchy 1-to-1. Ships an editable layout under `python/src/mpeg_o/` with `importers/` (mzML + nmrML), `exporters/` (mzML), and `_numpress` codec helpers. PyPI name: **`mpeg-o`** (import as `mpeg_o`). Requires Python 3.11+. Every v0.2 reference fixture (`minimal_ms`, `full_ms`, `nmr_1d`, `encrypted`, `signed`) is loaded byte-compatibly by the Python reader, and a new `MpgoVerify` + `MpgoSign` ObjC CLI pair tests the other direction (Python-written files decoded by the ObjC reference reader).
+* **Compound per-run provenance** — `MPGOAcquisitionRun` persists its provenance chain as a compound HDF5 dataset at `/study/ms_runs/<run>/provenance/steps`, reusing the 5-field type from dataset-level `/study/provenance`. The legacy `@provenance_json` mirror is kept in place so the v0.2 signature manager continues to work. Feature flag: `compound_per_run_provenance`.
+* **Canonical byte-order signatures** — `MPGOSignatureManager` now hashes a canonical little-endian byte stream (atomic numeric datasets via LE memory types, compound datasets field-by-field with VL strings emitted as `u32_le(len) || bytes`). Signatures carry a `"v2:"` prefix; v0.2 native-byte signatures remain verifiable via an automatic fallback path. Cross-language byte-identical MACs between ObjC and Python by construction. Feature flag: `opt_canonical_signatures`.
+* **mzML writer** — `MPGOMzMLWriter` + `mpeg_o.exporters.mzml` emit indexed-mzML from a `SpectralDataset`, with byte-correct `<indexList>` offsets per spectrum and optional zlib compression of binary arrays. Licensed Apache-2.0 alongside the import layer.
+* **Cloud-native access (Python)** — `SpectralDataset.open("s3://bucket/file.mpgo")` routes URLs through `fsspec`. HTTP, S3, GCS, and Azure backends are supported through fsspec plugins; the reader pulls only the HDF5 metadata and a handful of chunks per touched spectrum. Benchmark: 10 random spectra from a 15 MB remote file in ~50 ms, ~24% of file bytes transferred.
+* **LZ4 + Numpress-delta compression** — optional signal-channel codecs. LZ4 via HDF5 filter 32004 (plugin-gated, skipped cleanly at runtime when unavailable) is ~35× faster on write / ~2× faster on read than zlib. Numpress-delta is a clean-room implementation of Teleman et al. 2014 (*MCP* 13(6)) with sub-ppm relative error for typical m/z data. Both codecs are cross-language byte-identical between ObjC and Python.
+
+## Python Installation
+
+```bash
+# Core reader/writer only
+pip install mpeg-o
+
+# With every optional extra (crypto, import, cloud, codecs)
+pip install 'mpeg-o[all]'
+```
+
+Individual extras:
+
+| Extra     | Pulls in                                    | Needed for                                            |
+|-----------|---------------------------------------------|-------------------------------------------------------|
+| `crypto`  | `cryptography>=41.0`                        | AES-256-GCM encryption / decryption of signal channels |
+| `import`  | `lxml`                                      | mzML / nmrML importers (`mpeg_o.importers`)           |
+| `cloud`   | `fsspec`, `s3fs`, `aiohttp`                 | `s3://` / `http(s)://` / `gs://` / `az://` open paths |
+| `codecs`  | `hdf5plugin>=4.0`                           | LZ4 signal-channel compression                        |
+
+### Python quick start
+
+```python
+from mpeg_o import SpectralDataset
+
+with SpectralDataset.open("example.mpgo") as ds:
+    run = ds.ms_runs["run_0001"]
+    spectrum = run[0]                      # lazy read
+    mz = spectrum.mz_array.data            # numpy float64
+    intensity = spectrum.intensity_array.data
+
+# Cloud-native access through fsspec:
+with SpectralDataset.open("s3://my-bucket/run.mpgo", anon=False) as ds:
+    ...
+```
+
+Run the Python test suite (requires libhdf5-dev + the `test` extra):
+
+```bash
+cd python
+pip install -e '.[test,codecs]'
+pytest
+```
+
 ## Building the Objective-C Reference Implementation
 
-Requires **GNUStep Base**, **GNUStep Make**, a compatible **Objective-C compiler** (clang or gobjc), **libhdf5** (≥ 1.10), **zlib**, and — for Milestone 7 — **OpenSSL/libcrypto**.
+Requires **GNUstep Base**, **GNUstep Make**, a compatible **Objective-C compiler** (clang, ARC required), **libhdf5** (≥ 1.10), **zlib**, and **OpenSSL/libcrypto**. Optional: the LZ4 HDF5 filter plugin (filter id 32004) for `MPGOCompressionLZ4` support; M21 tests skip cleanly when the plugin isn't loadable.
 
 ### Ubuntu / Debian / WSL
 

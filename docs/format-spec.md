@@ -1,9 +1,14 @@
-# MPEG-O `.mpgo` File Format Specification — v0.2.0
+# MPEG-O `.mpgo` File Format Specification — v0.3.0
 
 This document specifies the on-disk layout of an `.mpgo` file as written
-by libMPGO v0.2.0. It is detailed enough for a reader implemented in a
+by libMPGO v0.3.0. It is detailed enough for a reader implemented in a
 different language (Python, Rust, Go) to open, validate, and fully
 decode a file without consulting the reference Objective-C source.
+
+v0.3 is a strict superset of v0.2 on disk: every v0.2 fixture remains
+readable, and new content (compound per-run provenance, `v2:`
+canonical signatures, LZ4 / Numpress-delta compression codecs) is
+gated behind feature flags described alongside each section.
 
 A conforming `.mpgo` file is a plain HDF5 file (format 1.x) with the
 group, dataset, and attribute hierarchy described below. Any program
@@ -231,10 +236,24 @@ Feature flag: `compound_provenance`.
 
 ### 6.4 Per-run provenance
 
-Per-run provenance is stored as a JSON string in `@provenance_json`
-on the run group rather than as a compound dataset. The JSON shape
-matches the dataset-level compound record with the same field names.
-A future revision may migrate per-run provenance to compound as well.
+v0.3 (M17) migrates per-run provenance from the v0.2 `@provenance_json`
+string attribute to a native compound HDF5 dataset at
+`/study/ms_runs/<run>/provenance/steps`. The dataset uses the same
+5-field compound type as the dataset-level `/study/provenance`
+described in §6.3 above.
+
+The v0.3 writer emits **both** forms during the transition window: the
+compound dataset is the primary record, and the `@provenance_json`
+legacy mirror is kept in place so the v0.2 signature manager (which
+hashes the UTF-8 bytes of the JSON attribute) keeps working. A future
+release will drop the legacy mirror once canonical-byte-order
+signatures (§10 below) are wired to the compound dataset directly.
+
+The v0.3 reader prefers the compound subgroup when present and falls
+back to the `@provenance_json` attribute only when the subgroup is
+absent; a run with neither form decodes to an empty provenance chain.
+
+Feature flag: `compound_per_run_provenance`.
 
 ---
 
@@ -333,19 +352,72 @@ decrypt.
 ## 10. Digital signatures
 
 `MPGOSignatureManager.signDataset:inFile:withKey:error:` computes an
-HMAC-SHA256 over the raw bytes returned by `H5Dread` and stores the
-base64-encoded MAC in `@mpgo_signature` on the target dataset.
+HMAC-SHA256 over a canonical byte stream derived from the target
+dataset and stores a **prefixed** base64 MAC in `@mpgo_signature`.
 Provenance chain signing stores its MAC in `@provenance_signature`
 on the run group, computed over the UTF-8 bytes of
-`@provenance_json`.
+`@provenance_json` (legacy v0.2 path, kept for v0.2 compatibility).
 
-Feature flag (opt_): `opt_digital_signatures`. Written on first sign.
+### 10.1 v2 canonical signatures (M18, v0.3 default)
 
-**Known limitation (v0.2):** signatures cover native-endian bytes
-and are not portable across host endianness. See the v0.3 deferred
-work in HANDOFF.md for the canonical-byte-order upgrade plan.
+Stored as `"v2:" + base64(mac)`. The canonical byte stream is:
+
+- **Atomic numeric datasets** (float / int / uint, 1–8 bytes) — read
+  via an explicit little-endian HDF5 memory type
+  (`H5T_IEEE_F64LE`, `H5T_STD_U32LE`, ...). The resulting byte buffer
+  is canonical on any host architecture.
+- **Compound datasets** — each record is walked in declaration order.
+  Numeric members are read via a packed memory type that maps each
+  atomic member to its LE equivalent. Variable-length string members
+  are emitted as `u32_le(byte_length) || utf8_bytes`, so struct
+  padding and pointer layouts cannot influence the hash.
+- **Other classes** (fixed strings, enums, nested compounds) — fall
+  back to the native-bytes path, matching v0.2 behaviour.
+
+The v0.3 signer adds both `opt_digital_signatures` and
+`opt_canonical_signatures` to the root feature list on first sign.
+
+### 10.2 v1 native-byte signatures (v0.2 compatibility)
+
+Signatures without the `v2:` prefix are treated as v0.2 native-byte
+HMACs and verified by hashing `H5Dread` output in the dataset's
+native type. This is how the v0.2 `signed.mpgo` reference fixture
+continues to verify under v0.3 readers.
+
+### 10.3 Cross-language parity
+
+The MPGO Objective-C and Python implementations produce byte-identical
+`v2:` MACs for the same input (see the `MpgoSign` CLI test harness
+under `objc/Tools/` and `python/tests/test_canonical_signatures.py`).
+
+Feature flags: `opt_digital_signatures` (first sign), plus
+`opt_canonical_signatures` when any `v2:` signature is present.
 
 ---
+
+## 10.4 Compression codecs (M21, v0.3)
+
+Signal-channel datasets carry their compression codec via either the
+HDF5 filter pipeline or a dedicated per-channel attribute:
+
+| Codec                  | Transport                                                                                                                                                                     |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **zlib** (default)     | `H5P_DEFLATE` filter at level 6. Lossless. Readable by any HDF5 library without extra plugins.                                                                                |
+| **LZ4**                | HDF5 filter id **32004**. Requires the LZ4 filter plugin (`libh5lz4.so`) to be loadable at runtime via `HDF5_PLUGIN_PATH`. Lossless. ~35× faster write / ~2× faster read than zlib, at ~20% larger files on random data. |
+| **Numpress-delta**     | Per-channel transform implemented inside MPGO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. |
+
+### Numpress-delta algorithm
+
+1. Compute scale `S = floor((2^62 - 1) / max|v|)`; degenerate ranges
+   default to `S = 1`.
+2. Quantise: `q[i] = llround(v[i] * S)` (IEEE-754 round-to-even).
+3. Emit `deltas[0] = q[0]`, `deltas[i] = q[i] - q[i-1]` for `i ≥ 1`.
+4. Store `deltas` as the `<channel>_values` int64 HDF5 dataset with
+   zlib on top.
+
+Decoding is the exact inverse: cumsum the int64 array, cast to
+double, divide by the scale. The MPGO ObjC and Python encoders agree
+byte-for-byte on any input (see `test_numpress_scale_matches_objc_formula`).
 
 ## 11. Backward compatibility
 
