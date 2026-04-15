@@ -183,4 +183,4 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 - [x] All eight milestones complete with all tests passing locally (WSL) and in GitHub Actions CI. **379 tests pass on `ubuntu-latest`; benchmarks: 1M float64 write/read ~3 ms, 1000-spectrum run write ~22 ms, 10k-spectrum query scan ~0.2 ms.**
 - [x] README, ARCHITECTURE, WORKPLAN, and all `docs/` files finalized.
 - [x] No warnings under `-Wall -Wextra` with clang.
-- [ ] Tag `v0.1.0-alpha` pushed to `DTW-Thalion/MPEG-O`. *(pending — to be tagged after this docs commit)*
+- [x] Tag `v0.1.0-alpha` pushed to `DTW-Thalion/MPEG-O`.
