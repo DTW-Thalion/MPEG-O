@@ -1,0 +1,22 @@
+# Force LF line endings for all source and build files — critical for
+# GNUmakefiles and shell scripts when the repo is authored on Windows
+# but built in WSL / Linux CI.
+
+*            text=auto eol=lf
+
+*.m          text eol=lf
+*.h          text eol=lf
+*.c          text eol=lf
+*.cpp        text eol=lf
+*.hpp        text eol=lf
+*.py         text eol=lf
+*.java       text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.md         text eol=lf
+*.sh         text eol=lf
+GNUmakefile  text eol=lf
+*.preamble   text eol=lf
+*.postamble  text eol=lf
+Makefile     text eol=lf
+*.make       text eol=lf

@@ -1,0 +1,10 @@
+HDF5_PREFIX ?= /usr
+
+ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include
+ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include/hdf5/serial
+ADDITIONAL_CPPFLAGS += -I../Source
+ADDITIONAL_OBJCFLAGS += -Wall -Wextra -Wno-unused-parameter -fobjc-arc
+
+ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib
+ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib/x86_64-linux-gnu/hdf5/serial
+ADDITIONAL_LDFLAGS += -L../Source/$(GNUSTEP_OBJ_DIR)

@@ -1,0 +1,50 @@
+name: MPGO CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  objc-build-test:
+    name: Objective-C — build & test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gnustep \
+            gnustep-devel \
+            gnustep-make \
+            libgnustep-base-dev \
+            libobjc4 \
+            gobjc \
+            clang \
+            libhdf5-dev \
+            zlib1g-dev \
+            libssl-dev \
+            make
+
+      - name: Show toolchain versions
+        run: |
+          clang --version || true
+          gobjc --version || true
+          dpkg -s libhdf5-dev | grep Version || true
+          dpkg -s gnustep-make | grep Version || true
+
+      - name: Build libMPGO
+        working-directory: objc
+        run: |
+          . /usr/share/GNUstep/Makefiles/GNUstep.sh
+          make messages=yes
+
+      - name: Run tests
+        working-directory: objc
+        run: |
+          . /usr/share/GNUstep/Makefiles/GNUstep.sh
+          make check messages=yes

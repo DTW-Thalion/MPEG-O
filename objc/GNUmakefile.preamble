@@ -1,0 +1,15 @@
+# MPEG-O shared build flags
+#
+# Override HDF5_PREFIX on the command line if libhdf5 is installed outside
+# /usr or /usr/local, e.g.:
+#     make HDF5_PREFIX=/opt/homebrew
+
+HDF5_PREFIX ?= /usr
+
+ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include
+ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include/hdf5/serial
+ADDITIONAL_OBJCFLAGS += -Wall -Wextra -Wno-unused-parameter -fobjc-arc
+ADDITIONAL_OBJCCFLAGS += -Wall -Wextra -Wno-unused-parameter -fobjc-arc
+
+ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib
+ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib/x86_64-linux-gnu/hdf5/serial
