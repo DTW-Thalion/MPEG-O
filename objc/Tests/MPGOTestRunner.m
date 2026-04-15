@@ -18,6 +18,7 @@ extern void testMilestone10(void);
 extern void testMilestone11(void);
 extern void testMilestone12(void);
 extern void testMilestone13(void);
+extern void testMilestone14(void);
 
 int main(int argc, const char *argv[])
 {
@@ -89,6 +90,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 13: nmrML reader")
             testMilestone13();
         END_SET("Milestone 13: nmrML reader")
+
+        START_SET("Milestone 14: digital signatures + verification")
+            testMilestone14();
+        END_SET("Milestone 14: digital signatures + verification")
     }
     return 0;
 }

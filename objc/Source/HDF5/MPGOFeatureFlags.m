@@ -11,6 +11,7 @@
 + (NSString *)featureDatasetEncryption       { return @"opt_dataset_encryption"; }
 + (NSString *)featureNative2DNMR             { return @"opt_native_2d_nmr"; }
 + (NSString *)featureNativeMSImageCube       { return @"opt_native_msimage_cube"; }
++ (NSString *)featureDigitalSignatures       { return @"opt_digital_signatures"; }
 
 + (NSString *)formatVersionForRoot:(MPGOHDF5Group *)root
 {
