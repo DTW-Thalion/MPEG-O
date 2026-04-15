@@ -4,7 +4,10 @@ TEST_TOOL_NAME = MPGOTests
 
 MPGOTests_OBJC_FILES = \
 	MPGOTestRunner.m \
-	TestValueClasses.m
+	TestValueRange.m \
+	TestEncodingSpec.m \
+	TestAxisDescriptor.m \
+	TestCVParam.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lz
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
