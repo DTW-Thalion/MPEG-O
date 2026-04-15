@@ -37,6 +37,7 @@ libMPGO_HEADER_FILES = \
 	Dataset/MPGOProvenanceRecord.h \
 	Dataset/MPGOTransitionList.h \
 	Dataset/MPGOSpectralDataset.h \
+	Dataset/MPGOCompoundIO.h \
 	Image/MPGOMSImage.h \
 	Protection/MPGOAccessPolicy.h \
 	Protection/MPGOEncryptionManager.h \
@@ -57,6 +58,8 @@ libMPGO_OBJC_FILES = \
 	HDF5/MPGOHDF5File.m \
 	HDF5/MPGOHDF5Group.m \
 	HDF5/MPGOHDF5Dataset.m \
+	HDF5/MPGOHDF5CompoundType.m \
+	HDF5/MPGOFeatureFlags.m \
 	Core/MPGOSignalArray.m \
 	Spectra/MPGOSpectrum.m \
 	Spectra/MPGOMassSpectrum.m \
@@ -72,6 +75,7 @@ libMPGO_OBJC_FILES = \
 	Dataset/MPGOProvenanceRecord.m \
 	Dataset/MPGOTransitionList.m \
 	Dataset/MPGOSpectralDataset.m \
+	Dataset/MPGOCompoundIO.m \
 	Image/MPGOMSImage.m \
 	Protection/MPGOAccessPolicy.m \
 	Protection/MPGOEncryptionManager.m \

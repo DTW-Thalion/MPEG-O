@@ -85,6 +85,13 @@
  *  encryption methods have something to delegate to. Internal API. */
 - (void)setPersistenceFilePath:(NSString *)path runName:(NSString *)runName;
 
+/** Release all cached HDF5 handles (group + per-channel datasets).
+ *  After this call, spectrumAtIndex: fails; the run keeps its index
+ *  metadata so count/headers remain queryable. Used by
+ *  MPGOSpectralDataset.closeFile to fully release the underlying file
+ *  before an encrypt/decrypt reopen. */
+- (void)releaseHDF5Handles;
+
 #pragma mark - MPGOProvenanceable
 
 - (void)addProcessingStep:(MPGOProvenanceRecord *)step;

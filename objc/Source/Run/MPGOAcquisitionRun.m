@@ -290,6 +290,13 @@
         [NSMutableDictionary dictionaryWithCapacity:channelNames.count];
     for (NSString *chName in channelNames) {
         NSString *dsName = [chName stringByAppendingString:@"_values"];
+        if (![channels hasChildNamed:dsName]) {
+            // Channel is absent — most likely the file is encrypted
+            // and this channel lives as `<name>_values_encrypted`. Keep
+            // metadata load going; spectrumAtIndex: will error cleanly
+            // if anyone later asks for data from this channel.
+            continue;
+        }
         MPGOHDF5Dataset *ds = [channels openDatasetNamed:dsName error:error];
         if (!ds) return nil;
         channelDatasets[chName] = ds;
@@ -445,6 +452,12 @@
 {
     _persistenceFilePath = [path copy];
     _persistenceRunName  = [runName copy];
+}
+
+- (void)releaseHDF5Handles
+{
+    _channelDatasets     = nil;
+    _signalChannelsGroup = nil;
 }
 
 #pragma mark - MPGOProvenanceable
