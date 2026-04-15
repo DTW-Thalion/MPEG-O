@@ -45,13 +45,20 @@ ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include/hdf5/serial
 # objc/runtime.h, ...) ship inside gcc's internal include directory,
 # which clang's Linux driver does not search automatically. Glob for
 # whatever gcc version is installed and add its objc header dir to the
-# include path. libobjc2-based gnustep-2.0 builds put the same headers
-# in /usr/local/include/objc/ and don't need this.
+# include path.
+#
+# IMPORTANT: only do this when libobjc2's headers are NOT already present
+# under /usr/local/include/objc/. A source-built libobjc2 ships its own
+# (clang-compatible) objc/runtime.h there; pulling gcc's libobjc headers
+# in on top of that shadows the libobjc2 versions and produces clang
+# parse errors (member-access on `id`, missing ownership qualifiers, ...).
 ifeq ($(MPGO_OBJC_RUNTIME),gnustep-1.8)
-  GCC_OBJC_INCLUDE := $(firstword $(wildcard \
-      /usr/lib/gcc/x86_64-linux-gnu/*/include))
-  ifneq ($(GCC_OBJC_INCLUDE),)
-    ADDITIONAL_CPPFLAGS += -I$(GCC_OBJC_INCLUDE)
+  ifeq ($(wildcard /usr/local/include/objc/objc.h),)
+    GCC_OBJC_INCLUDE := $(firstword $(wildcard \
+        /usr/lib/gcc/x86_64-linux-gnu/*/include))
+    ifneq ($(GCC_OBJC_INCLUDE),)
+      ADDITIONAL_CPPFLAGS += -I$(GCC_OBJC_INCLUDE)
+    endif
   endif
 endif
 
