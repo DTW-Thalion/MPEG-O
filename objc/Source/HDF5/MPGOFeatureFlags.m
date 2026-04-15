@@ -13,6 +13,7 @@
 + (NSString *)featureNativeMSImageCube       { return @"opt_native_msimage_cube"; }
 + (NSString *)featureDigitalSignatures       { return @"opt_digital_signatures"; }
 + (NSString *)featureCompoundPerRunProvenance { return @"compound_per_run_provenance"; }
++ (NSString *)featureCanonicalSignatures     { return @"opt_canonical_signatures"; }
 
 + (NSString *)formatVersionForRoot:(MPGOHDF5Group *)root
 {

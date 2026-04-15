@@ -53,6 +53,190 @@ static NSData *readDatasetAsBytes(hid_t did)
     return buf;
 }
 
+#pragma mark - M18 canonical byte-order helpers
+
+/** Map an atomic file type to its little-endian equivalent memory type.
+ *  Returns H5I_INVALID_HID for unsupported classes so the caller can
+ *  fall back to a native read. */
+static hid_t canonicalLEForAtomic(hid_t fileType)
+{
+    H5T_class_t cls = H5Tget_class(fileType);
+    size_t size = H5Tget_size(fileType);
+    if (cls == H5T_FLOAT) {
+        if (size == 4) return H5T_IEEE_F32LE;
+        if (size == 8) return H5T_IEEE_F64LE;
+    } else if (cls == H5T_INTEGER) {
+        H5T_sign_t sign = H5Tget_sign(fileType);
+        if (sign == H5T_SGN_2) {
+            if (size == 1) return H5T_STD_I8LE;
+            if (size == 2) return H5T_STD_I16LE;
+            if (size == 4) return H5T_STD_I32LE;
+            if (size == 8) return H5T_STD_I64LE;
+        } else {
+            if (size == 1) return H5T_STD_U8LE;
+            if (size == 2) return H5T_STD_U16LE;
+            if (size == 4) return H5T_STD_U32LE;
+            if (size == 8) return H5T_STD_U64LE;
+        }
+    }
+    return H5I_INVALID_HID;
+}
+
+static void appendUInt32LE(NSMutableData *out, uint32_t v)
+{
+    uint8_t b[4] = {
+        (uint8_t)(v & 0xff),
+        (uint8_t)((v >> 8) & 0xff),
+        (uint8_t)((v >> 16) & 0xff),
+        (uint8_t)((v >> 24) & 0xff),
+    };
+    [out appendBytes:b length:4];
+}
+
+/** Compound canonical byte stream: for each record in declaration
+ *  order, walk members. Numeric members are read via LE memory types
+ *  (so the on-disk buffer is already canonical) and appended as-is.
+ *  Variable-length string members are emitted as
+ *  ``u32_le(byte_length) || bytes`` so padding and pointer layouts
+ *  cannot influence the result. */
+static NSData *canonicalBytesForCompoundDataset(hid_t did, hid_t fileType,
+                                                 hid_t space, hsize_t total)
+{
+    int nmembers = H5Tget_nmembers(fileType);
+    if (nmembers <= 0) {
+        NSMutableData *buf = [NSMutableData dataWithLength:0];
+        H5Sclose(space);
+        H5Tclose(fileType);
+        return buf;
+    }
+
+    // Build a packed memory type: numerics -> LE equivalent, VL strings
+    // stay as VL strings (pointer in the native buffer). Fixed-size
+    // strings are emitted via their native type class.
+    size_t packedSize = 0;
+    size_t *memOffset  = (size_t *)calloc(nmembers, sizeof(size_t));
+    hid_t  *memType    = (hid_t  *)calloc(nmembers, sizeof(hid_t));
+    BOOL   *memIsVL    = (BOOL   *)calloc(nmembers, sizeof(BOOL));
+    BOOL   *memOwnType = (BOOL   *)calloc(nmembers, sizeof(BOOL));
+
+    for (int i = 0; i < nmembers; i++) {
+        hid_t native = H5Tget_member_type(fileType, i);
+        H5T_class_t cls = H5Tget_class(native);
+        if (cls == H5T_STRING && H5Tis_variable_str(native) > 0) {
+            // VL string: native memory type holds a char*.
+            memOffset[i] = packedSize;
+            memType[i]   = native;
+            memIsVL[i]   = YES;
+            memOwnType[i] = YES;  // close after use
+            packedSize += sizeof(char *);
+        } else if (cls == H5T_FLOAT || cls == H5T_INTEGER) {
+            hid_t le = canonicalLEForAtomic(native);
+            if (le == H5I_INVALID_HID) le = native;
+            memOffset[i] = packedSize;
+            memType[i]   = le;
+            memIsVL[i]   = NO;
+            memOwnType[i] = NO;  // built-in IDs, don't close
+            packedSize += H5Tget_size(le);
+            H5Tclose(native);
+        } else {
+            // Fall back to native member type as-is (fixed strings,
+            // nested compounds, ...). Rare in practice for MPGO.
+            memOffset[i] = packedSize;
+            memType[i]   = native;
+            memIsVL[i]   = NO;
+            memOwnType[i] = YES;
+            packedSize += H5Tget_size(native);
+        }
+    }
+
+    hid_t packedType = H5Tcreate(H5T_COMPOUND, packedSize);
+    for (int i = 0; i < nmembers; i++) {
+        char *mname = H5Tget_member_name(fileType, i);
+        H5Tinsert(packedType, mname, memOffset[i], memType[i]);
+        H5free_memory(mname);
+    }
+
+    void *rawBuf = calloc((size_t)total, packedSize);
+    H5Dread(did, packedType, H5S_ALL, H5S_ALL, H5P_DEFAULT, rawBuf);
+
+    NSMutableData *out = [NSMutableData data];
+    for (hsize_t r = 0; r < total; r++) {
+        const uint8_t *record = (const uint8_t *)rawBuf + r * packedSize;
+        for (int i = 0; i < nmembers; i++) {
+            const uint8_t *fieldPtr = record + memOffset[i];
+            if (memIsVL[i]) {
+                const char *cstr = *(const char *const *)fieldPtr;
+                uint32_t blen = cstr ? (uint32_t)strlen(cstr) : 0;
+                appendUInt32LE(out, blen);
+                if (cstr && blen > 0) [out appendBytes:cstr length:blen];
+            } else {
+                size_t fsize = H5Tget_size(memType[i]);
+                [out appendBytes:fieldPtr length:fsize];
+            }
+        }
+    }
+
+    H5Dvlen_reclaim(packedType, space, H5P_DEFAULT, rawBuf);
+    free(rawBuf);
+    H5Tclose(packedType);
+    for (int i = 0; i < nmembers; i++) {
+        if (memOwnType[i]) H5Tclose(memType[i]);
+    }
+    free(memOffset);
+    free(memType);
+    free(memIsVL);
+    free(memOwnType);
+    H5Sclose(space);
+    H5Tclose(fileType);
+    return out;
+}
+
+/** v2 canonical byte reader.
+ *
+ *  Atomic numeric datasets are read via the host's little-endian mem
+ *  type so the resulting buffer is canonical on any architecture.
+ *  Compound datasets dispatch to :func:`canonicalBytesForCompoundDataset`.
+ *  Any other class (fixed-size strings, enums, ...) falls through to
+ *  the native-bytes form, matching the v1 behaviour.
+ */
+static NSData *readDatasetCanonical(hid_t did)
+{
+    hid_t fileType = H5Dget_type(did);
+    hid_t space    = H5Dget_space(did);
+    int rank = H5Sget_simple_extent_ndims(space);
+    hsize_t dims[16] = {0};
+    H5Sget_simple_extent_dims(space, dims, NULL);
+    hsize_t total = 1;
+    for (int i = 0; i < rank; i++) total *= dims[i];
+
+    H5T_class_t cls = H5Tget_class(fileType);
+
+    if (cls == H5T_FLOAT || cls == H5T_INTEGER) {
+        hid_t memType = canonicalLEForAtomic(fileType);
+        if (memType == H5I_INVALID_HID) memType = fileType;
+        size_t elemSize = H5Tget_size(memType);
+        NSMutableData *buf = [NSMutableData dataWithLength:(NSUInteger)total * elemSize];
+        H5Dread(did, memType, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf.mutableBytes);
+        H5Sclose(space);
+        H5Tclose(fileType);
+        return buf;
+    }
+
+    if (cls == H5T_COMPOUND) {
+        return canonicalBytesForCompoundDataset(did, fileType, space, total);
+    }
+
+    // Unsupported class: fall back to native bytes (v1 path behaviour).
+    size_t size = H5Tget_size(fileType);
+    NSMutableData *buf = [NSMutableData dataWithLength:(NSUInteger)total * size];
+    H5Dread(did, fileType, H5S_ALL, H5S_ALL, H5P_DEFAULT, buf.mutableBytes);
+    H5Sclose(space);
+    H5Tclose(fileType);
+    return buf;
+}
+
+static NSString *const kMPGOSignatureV2Prefix = @"v2:";
+
 static BOOL writeStringAttribute(hid_t locId, const char *name, NSString *value)
 {
     if (H5Aexists(locId, name) > 0) H5Adelete(locId, name);
@@ -96,14 +280,15 @@ static NSString *readStringAttribute(hid_t locId, const char *name)
     return out;
 }
 
-static BOOL ensureSignatureFeatureFlag(MPGOHDF5Group *root, NSError **error)
+static BOOL ensureSignatureFeatureFlags(MPGOHDF5Group *root, NSError **error)
 {
     NSArray *features = [MPGOFeatureFlags featuresForRoot:root];
-    if ([features containsObject:[MPGOFeatureFlags featureDigitalSignatures]]) {
-        return YES;
-    }
+    BOOL hasDig   = [features containsObject:[MPGOFeatureFlags featureDigitalSignatures]];
+    BOOL hasCanon = [features containsObject:[MPGOFeatureFlags featureCanonicalSignatures]];
+    if (hasDig && hasCanon) return YES;
     NSMutableArray *updated = [features mutableCopy];
-    [updated addObject:[MPGOFeatureFlags featureDigitalSignatures]];
+    if (!hasDig)   [updated addObject:[MPGOFeatureFlags featureDigitalSignatures]];
+    if (!hasCanon) [updated addObject:[MPGOFeatureFlags featureCanonicalSignatures]];
     NSString *version = [MPGOFeatureFlags formatVersionForRoot:root] ?: @"1.1";
     return [MPGOFeatureFlags writeFormatVersion:version
                                        features:updated
@@ -129,9 +314,14 @@ static BOOL ensureSignatureFeatureFlag(MPGOHDF5Group *root, NSError **error)
         return NO;
     }
 
-    NSData *bytes = readDatasetAsBytes(did);
+    // v0.3: canonical little-endian serialization before hashing so
+    // the MAC is portable across host endianness. The stored string
+    // carries a ``v2:`` prefix to distinguish it from v0.2 native
+    // signatures. Verifiers still accept unprefixed v1 signatures.
+    NSData *bytes = readDatasetCanonical(did);
     NSData *mac = [self hmacSHA256OfData:bytes withKey:hmacKey];
-    NSString *b64 = [mac base64EncodedStringWithOptions:0];
+    NSString *b64 = [kMPGOSignatureV2Prefix stringByAppendingString:
+                     [mac base64EncodedStringWithOptions:0]];
 
     BOOL ok = writeStringAttribute(did, "mpgo_signature", b64);
     H5Dclose(did);
@@ -142,8 +332,9 @@ static BOOL ensureSignatureFeatureFlag(MPGOHDF5Group *root, NSError **error)
         return NO;
     }
 
-    // Ensure the root feature flags include opt_digital_signatures.
-    ensureSignatureFeatureFlag([file rootGroup], error);
+    // Ensure the root feature flags include opt_digital_signatures and
+    // opt_canonical_signatures.
+    ensureSignatureFeatureFlags([file rootGroup], error);
     return [file close];
 }
 
@@ -171,10 +362,15 @@ static BOOL ensureSignatureFeatureFlag(MPGOHDF5Group *root, NSError **error)
             @"dataset %@ has no @mpgo_signature attribute", datasetPath);
         return NO;
     }
-    NSData *storedMac = [[NSData alloc] initWithBase64EncodedString:storedB64
+
+    BOOL isV2 = [storedB64 hasPrefix:kMPGOSignatureV2Prefix];
+    NSString *payloadB64 = isV2
+        ? [storedB64 substringFromIndex:kMPGOSignatureV2Prefix.length]
+        : storedB64;
+    NSData *storedMac = [[NSData alloc] initWithBase64EncodedString:payloadB64
                                                               options:0];
 
-    NSData *bytes = readDatasetAsBytes(did);
+    NSData *bytes = isV2 ? readDatasetCanonical(did) : readDatasetAsBytes(did);
     NSData *computedMac = [self hmacSHA256OfData:bytes withKey:hmacKey];
     H5Dclose(did);
     [file close];
@@ -226,7 +422,7 @@ static BOOL ensureSignatureFeatureFlag(MPGOHDF5Group *root, NSError **error)
         return NO;
     }
 
-    ensureSignatureFeatureFlag([file rootGroup], error);
+    ensureSignatureFeatureFlags([file rootGroup], error);
     return [file close];
 }
 
