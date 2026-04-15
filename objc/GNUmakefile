@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-SUBPROJECTS = Source Tests
+SUBPROJECTS = Source Tests Tools
 
 include $(GNUSTEP_MAKEFILES)/aggregate.make
 
