@@ -39,7 +39,10 @@ libMPGO_HEADER_FILES = \
 	Dataset/MPGOSpectralDataset.h \
 	Image/MPGOMSImage.h \
 	Protection/MPGOAccessPolicy.h \
-	Protection/MPGOEncryptionManager.h
+	Protection/MPGOEncryptionManager.h \
+	Query/MPGOQuery.h \
+	Query/MPGOStreamWriter.h \
+	Query/MPGOStreamReader.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -68,7 +71,10 @@ libMPGO_OBJC_FILES = \
 	Dataset/MPGOSpectralDataset.m \
 	Image/MPGOMSImage.m \
 	Protection/MPGOAccessPolicy.m \
-	Protection/MPGOEncryptionManager.m
+	Protection/MPGOEncryptionManager.m \
+	Query/MPGOQuery.m \
+	Query/MPGOStreamWriter.m \
+	Query/MPGOStreamReader.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz -lcrypto
 

@@ -14,6 +14,7 @@
     NSData *_polarities;       // int32_t[count]
     NSData *_precursorMzs;     // double[count]
     NSData *_precursorCharges; // int32_t[count]
+    NSData *_basePeakIntensities; // double[count]
     NSUInteger _count;
 }
 
@@ -24,17 +25,19 @@
                      polarities:(NSData *)polarities
                    precursorMzs:(NSData *)precursorMzs
                precursorCharges:(NSData *)precursorCharges
+             basePeakIntensities:(NSData *)basePeakIntensities
 {
     self = [super init];
     if (self) {
-        _offsets          = [offsets copy];
-        _lengths          = [lengths copy];
-        _retentionTimes   = [retentionTimes copy];
-        _msLevels         = [msLevels copy];
-        _polarities       = [polarities copy];
-        _precursorMzs     = [precursorMzs copy];
-        _precursorCharges = [precursorCharges copy];
-        _count            = offsets.length / sizeof(uint64_t);
+        _offsets             = [offsets copy];
+        _lengths             = [lengths copy];
+        _retentionTimes      = [retentionTimes copy];
+        _msLevels            = [msLevels copy];
+        _polarities          = [polarities copy];
+        _precursorMzs        = [precursorMzs copy];
+        _precursorCharges    = [precursorCharges copy];
+        _basePeakIntensities = [basePeakIntensities copy];
+        _count               = offsets.length / sizeof(uint64_t);
     }
     return self;
 }
@@ -48,6 +51,7 @@
 - (MPGOPolarity)polarityAt:(NSUInteger)i { return (MPGOPolarity)((const int32_t *)_polarities.bytes)[i]; }
 - (double)precursorMzAt:(NSUInteger)i   { return ((const double *)_precursorMzs.bytes)[i]; }
 - (uint8_t)precursorChargeAt:(NSUInteger)i { return (uint8_t)((const int32_t *)_precursorCharges.bytes)[i]; }
+- (double)basePeakIntensityAt:(NSUInteger)i { return ((const double *)_basePeakIntensities.bytes)[i]; }
 
 - (NSIndexSet *)indicesInRetentionTimeRange:(MPGOValueRange *)range
 {
@@ -104,6 +108,7 @@ static NSData *readArray(MPGOHDF5Group *g, NSString *name, NSError **error)
     if (!writeArray(g, @"polarities",       MPGOPrecisionInt32,   _polarities,       error)) return NO;
     if (!writeArray(g, @"precursor_mzs",    MPGOPrecisionFloat64, _precursorMzs,     error)) return NO;
     if (!writeArray(g, @"precursor_charges", MPGOPrecisionInt32,  _precursorCharges, error)) return NO;
+    if (!writeArray(g, @"base_peak_intensities", MPGOPrecisionFloat64, _basePeakIntensities, error)) return NO;
     return YES;
 }
 
@@ -118,14 +123,16 @@ static NSData *readArray(MPGOHDF5Group *g, NSString *name, NSError **error)
     NSData *pol     = readArray(g, @"polarities", error);
     NSData *pmz     = readArray(g, @"precursor_mzs", error);
     NSData *pc      = readArray(g, @"precursor_charges", error);
-    if (!offsets || !lengths || !rts || !ml || !pol || !pmz || !pc) return nil;
+    NSData *bp      = readArray(g, @"base_peak_intensities", error);
+    if (!offsets || !lengths || !rts || !ml || !pol || !pmz || !pc || !bp) return nil;
     return [[self alloc] initWithOffsets:offsets
                                  lengths:lengths
                           retentionTimes:rts
                                 msLevels:ml
                               polarities:pol
                             precursorMzs:pmz
-                        precursorCharges:pc];
+                        precursorCharges:pc
+                     basePeakIntensities:bp];
 }
 
 @end
