@@ -43,9 +43,11 @@ M23, M24, M26 start in parallel.
 
 **License:** LGPL-3.0
 
-**ObjC:** Verify `H5is_library_threadsafe()` in CI. If false, build HDF5 from source with `--enable-threadsafe`. Add `NSRecursiveLock` on `MPGOHDF5File` for all H5D/H5G operations. Add `-isThreadSafe` method. **Python:** `SpectralDataset` wraps `h5py.File` with `threading.RLock`. Opt-in via `thread_safe=True` param. **Docs:** Update ARCHITECTURE.md threading model. **Benchmark:** Single vs 4-thread read of 100 spectra from 10k-spectrum file. Overhead < 15%, speedup 2-4x.
+**ObjC:** Probe `H5is_library_threadsafe()` informationally in CI. Add `pthread_rwlock_t` on `MPGOHDF5File` with `lockForReading`/`lockForWriting` bracketing every H5D/H5G/H5A call in Group and Dataset wrappers. Add `-isThreadSafe` (conjunction of wrapper lock init and library threadsafe mode). When libhdf5 is not threadsafe, the wrapper degrades to exclusive-only locking so readers never race inside the library. **Python:** `mpeg_o._rwlock.RWLock` (writer-preferring, stdlib-only) + `SpectralDataset.open(..., thread_safe=True)` with `read_lock()`/`write_lock()` context managers that are no-ops when disabled. **Docs:** Update ARCHITECTURE.md threading model. **Benchmark:** Single vs 4-thread `identifications()` loop; overhead < 15% at single-thread.
 
-**Acceptance:** `H5is_library_threadsafe()` true in CI. Two threads read concurrently without crashes. Write blocks readers. Single-thread overhead < 15%. Model documented.
+**Acceptance:** `H5is_library_threadsafe` probed and logged in CI. Two threads read concurrently without crashes. Write excludes readers. Single-thread overhead < 15%. Model documented.
+
+**NOTE (post-implementation):** The original plan listed a "2-4x speedup" target. This is not physically achievable with HDF5 threadsafe mode — the library uses a global mutex, so concurrent reads serialise below our wrapper. M23 delivers crash-safety, writer exclusion, and low overhead; parallel decode on top of the HDF5 critical path is a candidate v0.5+ optimisation.
 
 ---
 
