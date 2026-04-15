@@ -1,0 +1,12 @@
+# GNUstep build artefacts
+obj/
+shared_obj/
+*.o
+*.d
+*.so
+*.so.*
+
+# OS / editor cruft
+.DS_Store
+*.swp
+*~

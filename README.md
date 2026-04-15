@@ -57,12 +57,30 @@ sudo apt-get install -y \
 
 ### Build & Test
 
+The `objc/build.sh` wrapper checks dependencies, sources the GNUstep
+environment, and invokes `make` with `clang` selected as the Objective-C
+compiler (the build requires ARC, which `gcc`'s `gobjc` does not support).
+
+```bash
+cd objc
+./build.sh           # build libMPGO and the test runner
+./build.sh check     # build, then run the test suite
+```
+
+Run `./check-deps.sh` directly to see exactly which prerequisites are present
+or missing without invoking the build. To build manually:
+
 ```bash
 . /usr/share/GNUstep/Makefiles/GNUstep.sh
 cd objc
-make
-make check
+make CC=clang OBJC=clang
+make CC=clang OBJC=clang check
 ```
+
+The Objective-C runtime ABI (`gnustep-1.8` legacy or `gnustep-2.0` non-fragile)
+is auto-detected from the installed `libgnustep-base.so`, so the same command
+works on both Debian/Ubuntu's apt packages and source builds against
+`libobjc2`.
 
 ## Documentation
 
