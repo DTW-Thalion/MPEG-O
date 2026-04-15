@@ -14,6 +14,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # gobjc is deliberately NOT installed: gcc's Objective-C front end
+      # lacks -fobjc-arc and cannot compile libMPGO. build.sh selects clang.
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -23,7 +25,6 @@ jobs:
             gnustep-make \
             libgnustep-base-dev \
             libobjc4 \
-            gobjc \
             clang \
             libhdf5-dev \
             zlib1g-dev \
@@ -33,18 +34,14 @@ jobs:
       - name: Show toolchain versions
         run: |
           clang --version || true
-          gobjc --version || true
           dpkg -s libhdf5-dev | grep Version || true
           dpkg -s gnustep-make | grep Version || true
+          dpkg -s libgnustep-base-dev | grep Version || true
 
       - name: Build libMPGO
         working-directory: objc
-        run: |
-          . /usr/share/GNUstep/Makefiles/GNUstep.sh
-          make messages=yes
+        run: ./build.sh
 
       - name: Run tests
         working-directory: objc
-        run: |
-          . /usr/share/GNUstep/Makefiles/GNUstep.sh
-          make check messages=yes
+        run: ./build.sh check
