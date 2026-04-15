@@ -17,6 +17,7 @@ extern void testMzMLReader(void);
 extern void testMilestone10(void);
 extern void testMilestone11(void);
 extern void testMilestone12(void);
+extern void testMilestone13(void);
 
 int main(int argc, const char *argv[])
 {
@@ -84,6 +85,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 12: MSImage inheritance + native 2D NMR")
             testMilestone12();
         END_SET("Milestone 12: MSImage inheritance + native 2D NMR")
+
+        START_SET("Milestone 13: nmrML reader")
+            testMilestone13();
+        END_SET("Milestone 13: nmrML reader")
     }
     return 0;
 }

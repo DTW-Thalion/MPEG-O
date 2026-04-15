@@ -64,6 +64,14 @@
 + (BOOL)isTotalIonChromatogramAccession:(NSString *)acc;     // MS:1000235
 + (BOOL)isSelectedReactionMonitoringAccession:(NSString *)acc;// MS:1001473
 
+#pragma mark - nmrCV accessions (Milestone 13)
+
++ (BOOL)isSpectrometerFrequencyAccession:(NSString *)acc; // NMR:1000001
++ (BOOL)isNucleusAccession:(NSString *)acc;               // NMR:1000002
++ (BOOL)isNumberOfScansAccession:(NSString *)acc;         // NMR:1000003
++ (BOOL)isDwellTimeAccession:(NSString *)acc;             // NMR:1000004
++ (BOOL)isSweepWidthAccession:(NSString *)acc;            // NMR:1400014
+
 #pragma mark - Passthrough
 
 /** Build a raw MPGOCVParam for an unrecognized accession. */

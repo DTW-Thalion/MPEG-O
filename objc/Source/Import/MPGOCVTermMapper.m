@@ -76,6 +76,23 @@
 + (BOOL)isSelectedReactionMonitoringAccession:(NSString *)acc
 { return [acc isEqualToString:@"MS:1001473"]; }
 
+#pragma mark - nmrCV (Milestone 13)
+
++ (BOOL)isSpectrometerFrequencyAccession:(NSString *)acc
+{ return [acc isEqualToString:@"NMR:1000001"]; }
+
++ (BOOL)isNucleusAccession:(NSString *)acc
+{ return [acc isEqualToString:@"NMR:1000002"]; }
+
++ (BOOL)isNumberOfScansAccession:(NSString *)acc
+{ return [acc isEqualToString:@"NMR:1000003"]; }
+
++ (BOOL)isDwellTimeAccession:(NSString *)acc
+{ return [acc isEqualToString:@"NMR:1000004"]; }
+
++ (BOOL)isSweepWidthAccession:(NSString *)acc
+{ return [acc isEqualToString:@"NMR:1400014"]; }
+
 + (MPGOCVParam *)cvParamFromAccession:(NSString *)acc
                                  name:(NSString *)name
                                 value:(NSString *)value

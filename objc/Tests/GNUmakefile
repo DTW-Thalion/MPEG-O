@@ -19,7 +19,8 @@ MPGOTests_OBJC_FILES = \
 	TestMzMLReader.m \
 	TestMilestone10.m \
 	TestMilestone11.m \
-	TestMilestone12.m
+	TestMilestone12.m \
+	TestMilestone13.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
