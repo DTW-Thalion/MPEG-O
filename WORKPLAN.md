@@ -313,3 +313,42 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 - [x] `docs/format-spec.md` and `docs/feature-flags.md` published.
 - [x] Reference `.mpgo` fixtures under `objc/Tests/Fixtures/mpgo/` committed.
 - [ ] Tag `v0.2.0` pushed to `DTW-Thalion/MPEG-O` *(user-gated per binding decision)*.
+
+## v0.3 Deferred Follow-Ups
+
+Items explicitly scoped out of their originating v0.3 milestone and
+parked here for a later pass. Each one has a pointer to where in the
+code the gap currently lives so it can be picked up without re-reading
+the full milestone history.
+
+### Milestone 19 — mzML Writer
+
+- [ ] **Chromatogram emission in the mzML writer.**
+      `MPGOMzMLWriter` currently emits only `<spectrumList>`; a
+      `<chromatogramList>` is never written. Blocked on
+      `MPGOAcquisitionRun` growing a first-class chromatogram API
+      (today the type exists via `MPGOChromatogram` but is not stored
+      on a run). Once the run model exposes chromatograms, both the
+      ObjC writer and `mpeg_o.exporters.mzml` should walk that list
+      into a second `<index name="chromatogram">` block inside the
+      existing `<indexList>`. Touches:
+      `objc/Source/Export/MPGOMzMLWriter.m`,
+      `python/src/mpeg_o/exporters/mzml.py`,
+      `objc/Tests/TestMilestone19.m`,
+      `python/tests/test_mzml_writer.py`.
+
+- [ ] **Direct byte-for-byte parity test between the ObjC and Python
+      mzML writers.** Both implementations currently share the same
+      XML template and are individually round-trip-tested through
+      their respective readers, but no test runs both writers on the
+      same input and diffs the bytes. The minimum delta is a tiny
+      `objc/Tools/MpgoToMzML.m` CLI (modelled on `MpgoVerify` and
+      `MpgoSign`) that takes a `.mpgo` path and writes an `.mzML` to
+      a second path; the Python side then adds a test that invokes
+      it via subprocess, calls `mpeg_o.exporters.mzml.write_dataset`
+      on the same input, and asserts byte-for-byte equality (or a
+      structural compare if any intentional formatting differences
+      remain). Touches: `objc/Tools/MpgoToMzML.m` (new),
+      `objc/Tools/GNUmakefile`,
+      `python/tests/test_mzml_writer.py`.
+
