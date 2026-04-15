@@ -524,6 +524,72 @@ Wraps `H5Tcreate(H5T_COMPOUND, ...)` with field registration:
 - [ ] h5dump readability
 - [ ] Performance target met
 
+### M11 add-on — MPGOSpectralDataset `<MPGOEncryptable>` conformance
+
+Unfinished M10 scope folded into M11 because it touches the same
+persistence layer as the compound-type migration. Separating these
+would force a second pass over `MPGOSpectralDataset` later.
+
+**Semantics.** File-level encrypt applies the key to every run's
+intensity channel *and* to the new compound identification /
+quantification datasets under `/study/`. One call protects all
+sensitive payloads under one key. m/z and spectrum-index header
+fields stay readable so tooling can scan without the key.
+
+**File handle management.** `MPGOSpectralDataset.readFromFilePath:`
+keeps the underlying HDF5 file open for lazy hyperslab reads, which
+blocks the encryption manager's RW reopen. Add:
+
+```objc
+- (BOOL)closeFile;   // releases root group + underlying HDF5 handle
+```
+
+After `closeFile`, lazy spectrum reads error out with a clear
+`MPGOErrorInvalidState`. Encrypt/decrypt require the file to be
+closed (or must close it themselves before delegating).
+
+**Protocol methods on `MPGOSpectralDataset`:**
+
+```objc
+- (BOOL)encryptWithKey:(NSData *)key
+                 level:(MPGOEncryptionLevel)level
+                 error:(NSError **)error;
+- (BOOL)decryptWithKey:(NSData *)key error:(NSError **)error;
+- (MPGOAccessPolicy *)accessPolicy;
+- (void)setAccessPolicy:(MPGOAccessPolicy *)policy;
+```
+
+`encryptWithKey:` closes the file, iterates `msRuns.allValues`,
+delegates to each run's `encryptWithKey:level:error:` (which already
+hits `MPGOEncryptionManager` under the hood), then encrypts the
+compound identification/quantification datasets via a new
+`+[MPGOEncryptionManager encryptCompoundDataset:atFilePath:withKey:error:]`
+helper added in the same milestone.
+
+**Access policy persistence.** Stored on the root group as
+`@access_policy_json` (JSON-encoded `MPGOAccessPolicy`). Runs
+inherit the dataset policy unless they carry their own override.
+
+**Root encryption marker.** Write `@encrypted = "aes-256-gcm"` on
+the root group so external tools can detect protected files without
+walking into per-run groups.
+
+**Out of scope for v0.2.** Key rotation, multi-key per-subject
+protection, and envelope-style key wrapping. Document as v0.3.
+
+### M11 add-on — Acceptance criteria
+
+- [ ] `[MPGOSpectralDataset closeFile]` releases the HDF5 handle;
+      subsequent lazy reads return `MPGOErrorInvalidState`
+- [ ] Dataset-level encrypt → reload → every run's intensity channel
+      reports encrypted; every run's m/z channel still readable
+- [ ] Dataset-level encrypt also protects the compound identification
+      and quantification datasets
+- [ ] `@encrypted` marker appears on the root group after encrypt
+- [ ] `@access_policy_json` round-trips through write/read
+- [ ] `MPGOSpectralDataset` formally conforms to `<MPGOEncryptable>`
+- [ ] Deprecated file-path API still functional
+
 ---
 
 ## Milestone 12 — MSImage Inheritance + Native 2D NMR
