@@ -2,22 +2,26 @@
 #define MPGO_MS_IMAGE_H
 
 #import <Foundation/Foundation.h>
+#import "Dataset/MPGOSpectralDataset.h"
+
+@class MPGOHDF5Group;
 
 /**
- * Mass-spectrometry imaging dataset: a `width × height` grid of pixels,
+ * Mass-spectrometry imaging dataset: a width x height grid of pixels,
  * each pixel a spectral profile of `spectralPoints` float64 values.
- * Persisted as a 3-D HDF5 dataset with shape `[height, width, spectralPoints]`
- * and tile-aligned chunking so reading a `(tileX, tileY)` tile only
- * touches that tile's chunk on disk.
  *
- * The cube buffer is stored row-major: index = (y * width + x) * spectralPoints + s.
+ * As of v0.2 (Milestone 12), MPGOMSImage inherits from
+ * MPGOSpectralDataset, so it carries identifications, quantifications,
+ * provenance records, and MPGOEncryptable / closeFile semantics for
+ * free. The image cube itself is persisted under `/study/image_cube/`
+ * as a 3-D HDF5 dataset with tile-aligned chunking.
  *
- * For v0.1 MSImage is a standalone container — it is conceptually an
- * extension of MPGOSpectralDataset but does not yet inherit from it.
- * The same file may also embed a full MPGOSpectralDataset under /study/
- * via that class's writer; MSImage stores its cube under /image_cube/.
+ * v0.1 layout (cube at `/image_cube/` in the root group) remains
+ * readable as a fallback via +readFromFilePath:.
+ *
+ * Buffer layout (row-major): `cube[(y * width + x) * spectralPoints + s]`.
  */
-@interface MPGOMSImage : NSObject
+@interface MPGOMSImage : MPGOSpectralDataset
 
 @property (readonly) NSUInteger width;
 @property (readonly) NSUInteger height;
@@ -25,27 +29,53 @@
 @property (readonly) NSUInteger tileSize;
 @property (readonly, copy) NSData *cube;     // float64[height * width * spectralPoints]
 
+/** Spatial metadata — optional, zero/empty when unknown. */
+@property (readonly) double pixelSizeX;
+@property (readonly) double pixelSizeY;
+@property (readonly, copy) NSString *scanPattern;
+
+#pragma mark - Initialization
+
+/** Convenience initializer for image-only datasets. Inherited dataset
+ *  fields are set to empty / nil defaults. */
 - (instancetype)initWithWidth:(NSUInteger)width
                        height:(NSUInteger)height
                spectralPoints:(NSUInteger)spectralPoints
                      tileSize:(NSUInteger)tileSize
                          cube:(NSData *)cube;
 
-- (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error;
+/** Full designated initializer — image fields plus dataset metadata. */
+- (instancetype)initWithTitle:(NSString *)title
+           isaInvestigationId:(NSString *)isaId
+              identifications:(NSArray *)identifications
+              quantifications:(NSArray *)quantifications
+            provenanceRecords:(NSArray *)provenance
+                        width:(NSUInteger)width
+                       height:(NSUInteger)height
+               spectralPoints:(NSUInteger)spectralPoints
+                     tileSize:(NSUInteger)tileSize
+                   pixelSizeX:(double)pixelSizeX
+                   pixelSizeY:(double)pixelSizeY
+                  scanPattern:(NSString *)scanPattern
+                         cube:(NSData *)cube;
+
+#pragma mark - Persistence
+
+/** Override of MPGOSpectralDataset's read; falls back to v0.1
+ *  `/image_cube/` if `/study/image_cube` is missing. */
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error;
 
 /**
- * Read a `tileWidth × tileHeight` tile starting at `(x, y)`. Returns
- * `tileHeight * tileWidth * spectralPoints` float64 doubles in row-major
- * layout. Issues a single 3-D hyperslab read against the on-disk dataset;
- * with chunking aligned to the tile size this reads exactly one chunk.
+ * Read a `tileWidth x tileHeight` tile starting at `(x, y)`. Supports
+ * both the v0.2 /study/image_cube layout and the v0.1 /image_cube
+ * layout by auto-detecting.
  */
 + (NSData *)readTileFromFilePath:(NSString *)path
-                            atX:(NSUInteger)x
-                              y:(NSUInteger)y
-                          width:(NSUInteger)tileWidth
-                         height:(NSUInteger)tileHeight
-                          error:(NSError **)error;
+                             atX:(NSUInteger)x
+                               y:(NSUInteger)y
+                           width:(NSUInteger)tileWidth
+                          height:(NSUInteger)tileHeight
+                           error:(NSError **)error;
 
 @end
 
