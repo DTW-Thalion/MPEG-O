@@ -35,6 +35,7 @@
 + (NSString *)featureNative2DNMR;            // @"opt_native_2d_nmr"
 + (NSString *)featureNativeMSImageCube;      // @"opt_native_msimage_cube"
 + (NSString *)featureDigitalSignatures;      // @"opt_digital_signatures"
++ (NSString *)featureCompoundPerRunProvenance; // @"compound_per_run_provenance" (M17)
 
 #pragma mark - Read
 

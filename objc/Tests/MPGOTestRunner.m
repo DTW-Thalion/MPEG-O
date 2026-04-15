@@ -19,6 +19,7 @@ extern void testMilestone11(void);
 extern void testMilestone12(void);
 extern void testMilestone13(void);
 extern void testMilestone14(void);
+extern void testMilestone17(void);
 
 int main(int argc, const char *argv[])
 {
@@ -94,6 +95,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 14: digital signatures + verification")
             testMilestone14();
         END_SET("Milestone 14: digital signatures + verification")
+
+        START_SET("Milestone 17: compound per-run provenance")
+            testMilestone17();
+        END_SET("Milestone 17: compound per-run provenance")
     }
     return 0;
 }

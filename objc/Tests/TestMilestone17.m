@@ -1,0 +1,279 @@
+/*
+ * TestMilestone17 — compound per-run provenance.
+ *
+ * Covers the v0.3 migration from ``@provenance_json`` (string attribute)
+ * to a compound HDF5 dataset at ``/study/ms_runs/<run>/provenance/steps``
+ * using the same compound type as the dataset-level ``/study/provenance``.
+ *
+ * The writer emits both forms during the transition so that (a) the v0.2
+ * signature manager, which operates on the JSON attribute, keeps working
+ * and (b) v0.2 readers can still load the file. The reader prefers the
+ * compound form when present and falls back to the JSON mirror otherwise.
+ */
+
+#import <Foundation/Foundation.h>
+#import "Testing.h"
+
+#import "Run/MPGOAcquisitionRun.h"
+#import "Run/MPGOInstrumentConfig.h"
+#import "Spectra/MPGOMassSpectrum.h"
+#import "Core/MPGOSignalArray.h"
+#import "ValueClasses/MPGOEncodingSpec.h"
+#import "ValueClasses/MPGOEnums.h"
+#import "Dataset/MPGOSpectralDataset.h"
+#import "Dataset/MPGOProvenanceRecord.h"
+#import "HDF5/MPGOHDF5File.h"
+#import "HDF5/MPGOHDF5Group.h"
+#import "HDF5/MPGOFeatureFlags.h"
+#import <hdf5.h>
+#import <unistd.h>
+
+static NSString *m17path(NSString *suffix)
+{
+    return [NSString stringWithFormat:@"/tmp/mpgo_test_m17_%d_%@.mpgo",
+            (int)getpid(), suffix];
+}
+
+static MPGOAcquisitionRun *m17BuildRunWithProvenance(void)
+{
+    NSMutableArray *spectra = [NSMutableArray array];
+    for (NSUInteger k = 0; k < 3; k++) {
+        double mz[4], in[4];
+        for (NSUInteger i = 0; i < 4; i++) {
+            mz[i] = 100.0 + (double)(k * 4 + i);
+            in[i] = (double)(k + 1) * 10.0 + (double)i;
+        }
+        MPGOEncodingSpec *enc =
+            [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
+                           compressionAlgorithm:MPGOCompressionZlib
+                                      byteOrder:MPGOByteOrderLittleEndian];
+        MPGOSignalArray *mzA =
+            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
+                                              length:4
+                                            encoding:enc
+                                                axis:nil];
+        MPGOSignalArray *inA =
+            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
+                                              length:4
+                                            encoding:enc
+                                                axis:nil];
+        [spectra addObject:
+            [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+                                       intensityArray:inA
+                                              msLevel:1
+                                             polarity:MPGOPolarityPositive
+                                           scanWindow:nil
+                                        indexPosition:k
+                                      scanTimeSeconds:(double)k
+                                          precursorMz:0
+                                      precursorCharge:0
+                                                error:NULL]];
+    }
+    MPGOInstrumentConfig *cfg =
+        [[MPGOInstrumentConfig alloc] initWithManufacturer:@"TestCo"
+                                                     model:@"M17"
+                                              serialNumber:@"00001"
+                                                sourceType:@"ESI"
+                                              analyzerType:@"Orbitrap"
+                                              detectorType:@"inductive"];
+    MPGOAcquisitionRun *run =
+        [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
+                                    acquisitionMode:MPGOAcquisitionModeMS1DDA
+                                   instrumentConfig:cfg];
+
+    MPGOProvenanceRecord *step1 =
+        [[MPGOProvenanceRecord alloc] initWithInputRefs:@[@"raw:run_0001"]
+                                                software:@"thermo-raw-parser/1.4"
+                                              parameters:@{@"denoise": @"yes"}
+                                              outputRefs:@[@"mpgo:run_0001"]
+                                           timestampUnix:1710000000];
+    MPGOProvenanceRecord *step2 =
+        [[MPGOProvenanceRecord alloc] initWithInputRefs:@[@"mpgo:run_0001"]
+                                                software:@"mpeg-o-obj/0.3.0"
+                                              parameters:@{@"mode": @"serialize"}
+                                              outputRefs:@[@"mpgo:run_0001"]
+                                           timestampUnix:1710000100];
+    [run addProcessingStep:step1];
+    [run addProcessingStep:step2];
+    return run;
+}
+
+static void m17WriteAndReopen(NSString *path)
+{
+    MPGOSpectralDataset *ds =
+        [[MPGOSpectralDataset alloc] initWithTitle:@"m17"
+                                isaInvestigationId:@"MPGO:m17"
+                                            msRuns:@{@"run_0001": m17BuildRunWithProvenance()}
+                                           nmrRuns:@{}
+                                   identifications:@[]
+                                   quantifications:@[]
+                                 provenanceRecords:@[]
+                                       transitions:nil];
+    NSError *err = nil;
+    PASS([ds writeToFilePath:path error:&err], "M17 dataset writes to disk");
+    PASS(err == nil, "M17 write produces no error");
+}
+
+void testMilestone17(void)
+{
+    // ---- 1. Write a v0.3 file and verify compound + legacy mirror ----
+    NSString *path = m17path(@"rt");
+    unlink([path fileSystemRepresentation]);
+    m17WriteAndReopen(path);
+
+    // Root-level feature flags include compound_per_run_provenance.
+    @autoreleasepool {
+        NSError *err = nil;
+        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
+        PASS(f != nil, "reopen for feature flag check");
+        NSArray *features = [MPGOFeatureFlags featuresForRoot:[f rootGroup]];
+        PASS([features containsObject:@"compound_per_run_provenance"],
+             "compound_per_run_provenance feature flag present");
+        (void)f;
+    }
+
+    // Both the compound subgroup and the legacy JSON mirror must exist.
+    @autoreleasepool {
+        NSError *err = nil;
+        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
+        MPGOHDF5Group *root  = [f rootGroup];
+        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+        MPGOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
+        MPGOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
+        PASS([run hasChildNamed:@"provenance"],
+             "compound per-run provenance subgroup written");
+        MPGOHDF5Group *prov = [run openGroupNamed:@"provenance" error:&err];
+        PASS([prov hasChildNamed:@"steps"],
+             "per-run provenance/steps compound dataset written");
+        PASS([run hasAttributeNamed:@"provenance_json"],
+             "legacy @provenance_json mirror still emitted (signature compat)");
+        (void)f;
+    }
+
+    // Round-trip the dataset and confirm the records decode correctly.
+    @autoreleasepool {
+        NSError *err = nil;
+        MPGOSpectralDataset *rt = [MPGOSpectralDataset readFromFilePath:path error:&err];
+        PASS(rt != nil, "reopen the round-tripped dataset");
+        MPGOAcquisitionRun *run = rt.msRuns[@"run_0001"];
+        PASS(run != nil, "round-tripped run is available");
+        NSArray *steps = [run provenanceChain];
+        PASS(steps.count == 2, "two provenance records decoded");
+        if (steps.count == 2) {
+            MPGOProvenanceRecord *s0 = steps[0];
+            PASS([s0.software isEqualToString:@"thermo-raw-parser/1.4"],
+                 "step 0 software matches");
+            PASS(s0.timestampUnix == 1710000000, "step 0 timestamp matches");
+            MPGOProvenanceRecord *s1 = steps[1];
+            PASS([s1.software isEqualToString:@"mpeg-o-obj/0.3.0"],
+                 "step 1 software matches");
+            PASS(s1.timestampUnix == 1710000100, "step 1 timestamp matches");
+        }
+    }
+    unlink([path fileSystemRepresentation]);
+
+    // ---- 2. Simulate a v0.2 file that only carries @provenance_json ----
+    //
+    // We write a normal v0.3 file, then manually unlink the compound
+    // provenance subgroup via the raw HDF5 API. The reader must fall
+    // back to the JSON attribute and still recover all records.
+    NSString *path2 = m17path(@"legacy");
+    unlink([path2 fileSystemRepresentation]);
+    m17WriteAndReopen(path2);
+
+    @autoreleasepool {
+        NSError *err = nil;
+        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path2 error:&err];
+        PASS(f != nil, "reopen writable for compound removal");
+        MPGOHDF5Group *root  = [f rootGroup];
+        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+        MPGOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
+        MPGOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
+        // Unlink the entire `provenance` subgroup.
+        herr_t rc = H5Ldelete(run.groupId, "provenance", H5P_DEFAULT);
+        PASS(rc >= 0, "manually unlink compound per-run provenance subgroup");
+        (void)f;
+    }
+
+    @autoreleasepool {
+        NSError *err = nil;
+        MPGOSpectralDataset *rt = [MPGOSpectralDataset readFromFilePath:path2 error:&err];
+        PASS(rt != nil, "reopen dataset after compound removal");
+        MPGOAcquisitionRun *run = rt.msRuns[@"run_0001"];
+        NSArray *steps = [run provenanceChain];
+        PASS(steps.count == 2,
+             "legacy @provenance_json fallback recovers both records");
+        if (steps.count == 2) {
+            MPGOProvenanceRecord *s0 = steps[0];
+            PASS([s0.software isEqualToString:@"thermo-raw-parser/1.4"],
+                 "legacy fallback preserves step 0 software");
+        }
+    }
+    unlink([path2 fileSystemRepresentation]);
+
+    // ---- 3. Run with no provenance writes no compound subgroup ----
+    NSString *path3 = m17path(@"empty");
+    unlink([path3 fileSystemRepresentation]);
+
+    MPGOAcquisitionRun *cleanRun = nil;
+    {
+        NSMutableArray *spectra = [NSMutableArray array];
+        for (NSUInteger k = 0; k < 2; k++) {
+            double mz[2] = { 100.0 + k, 101.0 + k };
+            double in[2] = { 1.0, 2.0 };
+            MPGOEncodingSpec *enc =
+                [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
+                               compressionAlgorithm:MPGOCompressionZlib
+                                          byteOrder:MPGOByteOrderLittleEndian];
+            MPGOSignalArray *mzA =
+                [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
+                                                  length:2 encoding:enc axis:nil];
+            MPGOSignalArray *inA =
+                [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
+                                                  length:2 encoding:enc axis:nil];
+            [spectra addObject:
+                [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+                                           intensityArray:inA
+                                                  msLevel:1
+                                                 polarity:MPGOPolarityPositive
+                                               scanWindow:nil
+                                            indexPosition:k
+                                          scanTimeSeconds:0
+                                              precursorMz:0
+                                          precursorCharge:0
+                                                    error:NULL]];
+        }
+        MPGOInstrumentConfig *cfg =
+            [[MPGOInstrumentConfig alloc] initWithManufacturer:@"" model:@"" serialNumber:@""
+                                                    sourceType:@"" analyzerType:@"" detectorType:@""];
+        cleanRun = [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
+                                               acquisitionMode:MPGOAcquisitionModeMS1DDA
+                                              instrumentConfig:cfg];
+    }
+    MPGOSpectralDataset *dsEmpty =
+        [[MPGOSpectralDataset alloc] initWithTitle:@"m17e"
+                                isaInvestigationId:@""
+                                            msRuns:@{@"run_0001": cleanRun}
+                                           nmrRuns:@{}
+                                   identifications:@[]
+                                   quantifications:@[]
+                                 provenanceRecords:@[]
+                                       transitions:nil];
+    NSError *err = nil;
+    PASS([dsEmpty writeToFilePath:path3 error:&err],
+         "dataset with no per-run provenance writes cleanly");
+
+    @autoreleasepool {
+        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path3 error:&err];
+        MPGOHDF5Group *root  = [f rootGroup];
+        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+        MPGOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
+        MPGOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
+        PASS(![run hasChildNamed:@"provenance"],
+             "no compound per-run provenance subgroup when records are empty");
+        PASS(![run hasAttributeNamed:@"provenance_json"],
+             "no legacy @provenance_json attribute when records are empty");
+        (void)f;
+    }
+    unlink([path3 fileSystemRepresentation]);
+}

@@ -96,12 +96,17 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
     if (!f) return NO;
     MPGOHDF5Group *root = [f rootGroup];
 
-    // Emit v0.2 format + feature flags.
+    // Emit v0.2 format + feature flags. The per-run compound provenance
+    // flag (M17) is emitted unconditionally: every v0.3 writer produces
+    // compound-form per-run provenance when any run carries records, and
+    // the flag advertises that capability to future readers even when the
+    // current in-memory dataset happens to have no provenance to persist.
     NSArray *features = @[
         [MPGOFeatureFlags featureBaseV1],
         [MPGOFeatureFlags featureCompoundIdentifications],
         [MPGOFeatureFlags featureCompoundQuantifications],
         [MPGOFeatureFlags featureCompoundProvenance],
+        [MPGOFeatureFlags featureCompoundPerRunProvenance],
         [MPGOFeatureFlags featureCompoundHeaders],
         [MPGOFeatureFlags featureNative2DNMR],
         [MPGOFeatureFlags featureNativeMSImageCube],

@@ -215,6 +215,7 @@ class SpectralDataset:
             "compound_identifications",
             "compound_quantifications",
             "compound_provenance",
+            "compound_per_run_provenance",
             "opt_compound_headers",
         ]
         with h5py.File(p, "w") as f:
@@ -258,6 +259,7 @@ class WrittenRun:
     precursor_charges: np.ndarray
     base_peak_intensities: np.ndarray
     nucleus_type: str = ""
+    provenance_records: list[ProvenanceRecord] = field(default_factory=list)
 
 
 def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
@@ -267,6 +269,22 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
     io.write_fixed_string_attr(g, "spectrum_class", run.spectrum_class)
     if run.nucleus_type:
         io.write_fixed_string_attr(g, "nucleus_type", run.nucleus_type)
+
+    if run.provenance_records:
+        prov = g.create_group("provenance")
+        _write_provenance(prov, run.provenance_records, dataset_name="steps")
+        # Legacy @provenance_json mirror so ObjC signature manager and
+        # v0.2 readers keep working — matches MPGOAcquisitionRun.m.
+        legacy = json.dumps([
+            {
+                "inputRefs": r.input_refs,
+                "software": r.software,
+                "parameters": r.parameters,
+                "outputRefs": r.output_refs,
+                "timestampUnix": int(r.timestamp_unix),
+            } for r in run.provenance_records
+        ])
+        io.write_fixed_string_attr(g, "provenance_json", legacy)
 
     cfg = g.create_group("instrument_config")
     for field_name in ("manufacturer", "model", "serial_number",
@@ -331,7 +349,12 @@ def _write_quantifications(study: h5py.Group, records: list[Quantification]) -> 
     ], fields)
 
 
-def _write_provenance(study: h5py.Group, records: list[ProvenanceRecord]) -> None:
+def _write_provenance(
+    study: h5py.Group,
+    records: list[ProvenanceRecord],
+    *,
+    dataset_name: str = "provenance",
+) -> None:
     fields = [
         ("timestamp_unix", "<i8"),
         ("software", io.vl_str()),
@@ -339,7 +362,7 @@ def _write_provenance(study: h5py.Group, records: list[ProvenanceRecord]) -> Non
         ("input_refs_json", io.vl_str()),
         ("output_refs_json", io.vl_str()),
     ]
-    io.write_compound_dataset(study, "provenance", [
+    io.write_compound_dataset(study, dataset_name, [
         {
             "timestamp_unix": int(r.timestamp_unix),
             "software": r.software,

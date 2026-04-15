@@ -56,6 +56,14 @@ def _mpgo_verify_binary() -> Path | None:
     return Path(which) if which else None
 
 
+def _libmpgo_dir() -> Path | None:
+    """Return the directory containing ``libMPGO.so`` in the build tree."""
+    obj = _REPO_ROOT / "objc" / "Source" / "obj"
+    if (obj / "libMPGO.so").is_file():
+        return obj
+    return None
+
+
 # ------------------------------------------------------- ObjC → Python ---
 
 
@@ -180,11 +188,17 @@ def test_python_written_file_verifies_via_objc_cli(tmp_path: Path) -> None:
     _write_python_fixture(out)
     binary = _mpgo_verify_binary()
     assert binary is not None
+    env = os.environ.copy()
+    lib_dir = _libmpgo_dir()
+    if lib_dir is not None:
+        existing = env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = f"{lib_dir}:{existing}" if existing else str(lib_dir)
     res = subprocess.run(
         [str(binary), str(out)],
         check=True,
         capture_output=True,
         text=True,
+        env=env,
     )
     report: dict[str, Any] = json.loads(res.stdout)
     assert report["title"] == "py cross compat"
