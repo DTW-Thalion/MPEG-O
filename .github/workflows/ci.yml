@@ -8,49 +8,124 @@ on:
 
 jobs:
   objc-build-test:
-    name: Objective-C — build & test
+    name: Objective-C — build & test (libobjc2 / gnustep-2.0)
     runs-on: ubuntu-latest
+
+    # We mirror the canonical developer setup: clang + libobjc2 +
+    # gnustep-make + gnustep-base built from source. This is the path the
+    # MPGO preamble's runtime auto-detect identifies as `gnustep-2.0`
+    # (non-fragile ABI), which enables `-fblocks` and avoids the layered
+    # incompatibilities of Ubuntu's apt gnustep-1.8 / GCC libobjc combo.
+    #
+    # Build cost: ~90 seconds for the three from-source components.
+    # Cached across runs via the `cache` step keyed on the upstream tags.
+    env:
+      LIBOBJC2_REF: v2.3
+      TOOLS_MAKE_REF: make-2_9_3
+      LIBS_BASE_REF:  base-1_31_1
+      INSTALL_PREFIX: /usr/local
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Toolchain note:
-      #
-      # We use clang as the Objective-C compiler (libMPGO requires ARC, and
-      # gcc's gobjc front end does not support -fobjc-arc). However we still
-      # install the `gobjc` package because it pulls in libobjc's runtime
-      # headers (objc/objc.h, objc/runtime.h, ...) that GNUstep's Foundation
-      # imports. Clang's Linux driver searches gcc's include directories,
-      # so installing gobjc is the canonical way to make those headers
-      # available to clang on Ubuntu. build.sh still selects clang via
-      # CC=clang OBJC=clang for the actual compile.
-      #
-      # Ubuntu's libgnustep-base-dev uses the gnustep-1.8 fragile ABI (built
-      # against GCC's libobjc, not libobjc2). The MPGO preamble auto-detects
-      # this and drops -fblocks on that path. Developers building gnustep
-      # from source against libobjc2 get gnustep-2.0 + -fblocks automatically.
-      - name: Install dependencies
+      - name: Install build dependencies (apt)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gnustep \
-            gnustep-devel \
-            gnustep-make \
-            libgnustep-base-dev \
-            libobjc4 \
-            gobjc \
             clang \
+            cmake \
+            ninja-build \
+            make \
+            git \
+            ca-certificates \
             libhdf5-dev \
             zlib1g-dev \
             libssl-dev \
-            make
+            libxml2-dev \
+            libgnutls28-dev \
+            libffi-dev \
+            libicu-dev \
+            libdispatch-dev \
+            libblocksruntime-dev \
+            libcurl4-openssl-dev \
+            tzdata
+
+      - name: Cache GNUstep stack (libobjc2 + tools-make + libs-base)
+        id: gnustep-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/include/objc
+            /usr/local/include/GNUstep
+            /usr/local/lib/libobjc.so*
+            /usr/local/lib/libgnustep-base*
+            /usr/local/lib/GNUstep
+            /usr/local/share/GNUstep
+            /usr/local/bin/gnustep-config
+            /usr/local/bin/gdomap
+          key: gnustep-${{ runner.os }}-${{ env.LIBOBJC2_REF }}-${{ env.TOOLS_MAKE_REF }}-${{ env.LIBS_BASE_REF }}-v2
+
+      - name: Build libobjc2 from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --branch "${LIBOBJC2_REF}" \
+            https://github.com/gnustep/libobjc2.git /tmp/libobjc2
+          cd /tmp/libobjc2
+          git submodule update --init --recursive
+          mkdir build && cd build
+          cmake -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            ..
+          ninja
+          sudo ninja install
+
+      - name: Build gnustep-make from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --branch "${TOOLS_MAKE_REF}" \
+            https://github.com/gnustep/tools-make.git /tmp/tools-make
+          cd /tmp/tools-make
+          ./configure \
+            --prefix="${INSTALL_PREFIX}" \
+            --with-library-combo=ng-gnu-gnu \
+            CC=clang
+          make
+          sudo make install
+
+      - name: Build gnustep-base from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+          # shellcheck disable=SC1091
+          . "${INSTALL_PREFIX}/share/GNUstep/Makefiles/GNUstep.sh"
+          git clone --depth 1 --branch "${LIBS_BASE_REF}" \
+            https://github.com/gnustep/libs-base.git /tmp/libs-base
+          cd /tmp/libs-base
+          ./configure CC=clang
+          make
+          sudo -E make install
+
+      - name: Refresh dynamic linker cache
+        run: sudo ldconfig
 
       - name: Show toolchain versions
         run: |
-          clang --version || true
+          clang --version
+          ${INSTALL_PREFIX}/bin/gnustep-config --variable=GNUSTEP_MAKEFILES
+          ${INSTALL_PREFIX}/bin/gnustep-config --objc-flags || true
           dpkg -s libhdf5-dev | grep Version || true
-          dpkg -s gnustep-make | grep Version || true
-          dpkg -s libgnustep-base-dev | grep Version || true
+          ls -l ${INSTALL_PREFIX}/lib/libobjc.so* || true
+          ls -l ${INSTALL_PREFIX}/lib/libgnustep-base.so* || true
+
+      - name: Dependency check
+        working-directory: objc
+        run: ./check-deps.sh
 
       - name: Build libMPGO
         working-directory: objc
