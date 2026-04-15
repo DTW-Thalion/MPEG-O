@@ -41,6 +41,8 @@ libMPGO_HEADER_FILES = \
 	Image/MPGOMSImage.h \
 	Protection/MPGOAccessPolicy.h \
 	Protection/MPGOEncryptionManager.h \
+	Protection/MPGOSignatureManager.h \
+	Protection/MPGOVerifier.h \
 	Query/MPGOQuery.h \
 	Query/MPGOStreamWriter.h \
 	Query/MPGOStreamReader.h \
@@ -80,6 +82,8 @@ libMPGO_OBJC_FILES = \
 	Image/MPGOMSImage.m \
 	Protection/MPGOAccessPolicy.m \
 	Protection/MPGOEncryptionManager.m \
+	Protection/MPGOSignatureManager.m \
+	Protection/MPGOVerifier.m \
 	Query/MPGOQuery.m \
 	Query/MPGOStreamWriter.m \
 	Query/MPGOStreamReader.m \
