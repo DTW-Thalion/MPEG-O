@@ -49,7 +49,8 @@ libMPGO_HEADER_FILES = \
 	Import/MPGOBase64.h \
 	Import/MPGOCVTermMapper.h \
 	Import/MPGOMzMLReader.h \
-	Import/MPGONmrMLReader.h
+	Import/MPGONmrMLReader.h \
+	Export/MPGOMzMLWriter.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -90,7 +91,8 @@ libMPGO_OBJC_FILES = \
 	Import/MPGOBase64.m \
 	Import/MPGOCVTermMapper.m \
 	Import/MPGOMzMLReader.m \
-	Import/MPGONmrMLReader.m
+	Import/MPGONmrMLReader.m \
+	Export/MPGOMzMLWriter.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto
 

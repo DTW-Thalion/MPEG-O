@@ -31,6 +31,17 @@
 + (NSData *)decodeString:(NSString *)base64String
              zlibInflate:(BOOL)inflate;
 
+#pragma mark - Encode (M19)
+
+/** Base64-encode ``data``. Returns ``@""`` for nil input. */
++ (NSString *)encodeData:(NSData *)data;
+
+/** Optionally zlib-compress ``data`` before base64-encoding so the
+ *  output matches what mzML readers expect for arrays annotated with
+ *  ``MS:1000574`` (zlib compression). */
++ (NSString *)encodeData:(NSData *)data
+              zlibDeflate:(BOOL)deflateFlag;
+
 @end
 
 #endif /* MPGO_BASE64_H */

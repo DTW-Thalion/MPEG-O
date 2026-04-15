@@ -68,4 +68,42 @@
     return [NSData dataWithData:out];
 }
 
+#pragma mark - Encode (M19)
+
++ (NSString *)encodeData:(NSData *)data
+{
+    if (!data) return @"";
+    return [data base64EncodedStringWithOptions:0];
+}
+
++ (NSString *)encodeData:(NSData *)data
+              zlibDeflate:(BOOL)deflateFlag
+{
+    if (!deflateFlag || data == nil || data.length == 0) {
+        return [self encodeData:data];
+    }
+
+    z_stream strm;
+    memset(&strm, 0, sizeof(strm));
+    if (deflateInit(&strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
+        return nil;
+    }
+    strm.next_in  = (Bytef *)data.bytes;
+    strm.avail_in = (uInt)data.length;
+
+    NSMutableData *out = [NSMutableData dataWithLength:deflateBound(&strm, (uLong)data.length) + 16];
+    strm.next_out  = (Bytef *)out.mutableBytes;
+    strm.avail_out = (uInt)out.length;
+
+    int ret = deflate(&strm, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        deflateEnd(&strm);
+        return nil;
+    }
+    NSUInteger written = out.length - strm.avail_out;
+    deflateEnd(&strm);
+    [out setLength:written];
+    return [out base64EncodedStringWithOptions:0];
+}
+
 @end
