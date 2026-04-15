@@ -40,21 +40,33 @@ This mirrors MPEG-G's hierarchy of protection scopes, enabling selective encrypt
 
 ## Layer 2 — Abstract Base Classes
 
+Conformance below reflects the **v0.1.0-alpha** implementation. Several
+classes that the original design declared as conforming to
+`MPGOEncryptable` / `MPGOProvenanceable` / `MPGOCVAnnotatable` instead
+delegate to the relevant managers in v0.1; see "Implementation notes
+(v0.1.0-alpha)" below.
+
 | Class | Inherits | Conforms To | Key Properties |
 |---|---|---|---|
-| `MPGOSignalArray` | `NSObject` | `MPGOCVAnnotatable` | `dataType`, `buffer` (NSData), `axisDescriptor`, `encodingSpec`, `cvAnnotations` |
-| `MPGOAxisDescriptor` | `NSObject` | — | `name`, `unit`, `valueRange`, `samplingMode` (uniform / non-uniform) |
-| `MPGOEncodingSpec` | `NSObject` | — | `precision`, `compressionAlgorithm`, `byteOrder` |
-| `MPGOValueRange` | `NSObject` | — | `minimum`, `maximum` |
-| `MPGOCVParam` | `NSObject` | — | `ontologyRef`, `accession`, `name`, `value`, `unit` |
-| `MPGOSpectrum` | `NSObject` | `MPGOCVAnnotatable`, `MPGOIndexable` | `signalArrays` (NSDictionary), `coordinateAxes`, `indexPosition`, `scanTime`, `precursorInfo` |
-| `MPGOAcquisitionRun` | `NSObject` | `MPGOIndexable`, `MPGOStreamable`, `MPGOProvenanceable`, `MPGOEncryptable` | `spectra`, `chromatograms`, `instrumentConfig`, `sourceFiles`, `provenance` |
-| `MPGOSpectralDataset` | `NSObject` | `MPGOIndexable`, `MPGOEncryptable`, `MPGOProvenanceable` | `runs`, `identifications`, `quantifications`, `studyMetadata` |
-| `MPGOIdentification` | `NSObject` | `MPGOCVAnnotatable` | `spectrumRef`, `chemicalEntity`, `confidenceScore`, `evidenceChain` |
-| `MPGOQuantification` | `NSObject` | `MPGOCVAnnotatable` | `abundanceValue`, `sampleRef`, `normalizationMetadata` |
-| `MPGOProvenanceRecord` | `NSObject` | — | `inputEntities`, `software`, `parameters`, `outputEntities`, `timestamp` |
-| `MPGOInstrumentConfig` | `NSObject` | `MPGOCVAnnotatable` | `manufacturer`, `model`, `serialNumber`, `sourceType`, `analyzerType`, `detectorType` |
-| `MPGOSpectrumIndex` | `NSObject` | — | `offsets` (uint64[]), `lengths` (uint32[]), `headers` (compound[]) |
+| `MPGOSignalArray` | `NSObject` | `MPGOCVAnnotatable` | `buffer` (NSData), `length`, `encoding`, `axis` |
+| `MPGOAxisDescriptor` | `NSObject` | `NSCoding`, `NSCopying` | `name`, `unit`, `valueRange`, `samplingMode` |
+| `MPGOEncodingSpec` | `NSObject` | `NSCoding`, `NSCopying` | `precision`, `compressionAlgorithm`, `byteOrder` |
+| `MPGOValueRange` | `NSObject` | `NSCoding`, `NSCopying` | `minimum`, `maximum` |
+| `MPGOCVParam` | `NSObject` | `NSCoding`, `NSCopying` | `ontologyRef`, `accession`, `name`, `value`, `unit` |
+| `MPGOSpectrum` | `NSObject` | — | `signalArrays` (NSDictionary), `axes`, `indexPosition`, `scanTimeSeconds`, `precursorMz`, `precursorCharge` |
+| `MPGOAcquisitionRun` | `NSObject` | `MPGOIndexable`, `MPGOStreamable` | `spectrumIndex`, `instrumentConfig`, `acquisitionMode`; lazy hyperslab reads when read from disk |
+| `MPGOSpectralDataset` | `NSObject` | — | `title`, `isaInvestigationId`, `msRuns`, `nmrRuns`, `identifications`, `quantifications`, `provenanceRecords`, `transitions` |
+| `MPGOIdentification` | `NSObject` | `NSCopying` | `runName`, `spectrumIndex`, `chemicalEntity`, `confidenceScore`, `evidenceChain` |
+| `MPGOQuantification` | `NSObject` | `NSCopying` | `chemicalEntity`, `sampleRef`, `abundance`, `normalizationMethod` |
+| `MPGOProvenanceRecord` | `NSObject` | `NSCopying` | `inputRefs`, `software`, `parameters`, `outputRefs`, `timestampUnix` |
+| `MPGOInstrumentConfig` | `NSObject` | `NSCoding`, `NSCopying` | `manufacturer`, `model`, `serialNumber`, `sourceType`, `analyzerType`, `detectorType` |
+| `MPGOSpectrumIndex` | `NSObject` | — | `offsets`, `lengths`, `retentionTimes`, `msLevels`, `polarities`, `precursorMzs`, `precursorCharges`, `basePeakIntensities` (parallel C arrays) |
+| `MPGOTransitionList` | `NSObject` | — | ordered `MPGOTransition` array |
+| `MPGOMSImage` | `NSObject` | — | `width`, `height`, `spectralPoints`, `tileSize`, `cube`; tile-aligned 3-D HDF5 storage |
+| `MPGOQuery` | `NSObject` | — | builder over `MPGOSpectrumIndex`; predicates: RT, MS level, polarity, precursor m/z, base peak |
+| `MPGOStreamWriter` / `MPGOStreamReader` | `NSObject` | — | incremental append with periodic flush; sequential read |
+| `MPGOEncryptionManager` | `NSObject` | — | static AES-256-GCM helpers (OpenSSL EVP) |
+| `MPGOAccessPolicy` | `NSObject` | `NSCopying` | JSON-encoded policy persisted under `/protection/access_policies` |
 
 ---
 
@@ -62,13 +74,12 @@ This mirrors MPEG-G's hierarchy of protection scopes, enabling selective encrypt
 
 | Class | Extends | Domain-Specific Properties |
 |---|---|---|
-| `MPGOMassSpectrum` | `MPGOSpectrum` | `mzArray`, `intensityArray` (mandatory); `ionMobilityArray` (optional); `msLevel`, `polarity`, `scanWindow` |
-| `MPGONMRSpectrum` | `MPGOSpectrum` | `chemicalShiftArray`, `intensityArray`, `nucleusType`, `spectrometerFrequency` |
-| `MPGONMR2DSpectrum` | `MPGOSpectrum` | `intensityMatrix` (2D SignalArray), `f1AxisDescriptor`, `f2AxisDescriptor`, `experimentType` |
-| `MPGOFreeInductionDecay` | `MPGOSignalArray` | `realComponent`, `imaginaryComponent`, `dwellTime`, `numberOfScans`, `receiverGain` |
-| `MPGOChromatogram` | `NSObject` (`MPGOCVAnnotatable`) | `timeArray`, `intensityArray`, `chromatogramType` (TIC / XIC / SRM) |
-| `MPGOMSImage` | `MPGOSpectralDataset` | `spatialDimensions`, `pixelSize`, `scanPattern`, `gridSpectra` |
-| `MPGOTransitionList` | `NSObject` | `transitions` (precursor→product with RT windows, collision energy) |
+| `MPGOMassSpectrum` | `MPGOSpectrum` | `mzArray`, `intensityArray` (mandatory, equal length); `msLevel`, `polarity`, `scanWindow` (optional) |
+| `MPGONMRSpectrum` | `MPGOSpectrum` | `chemicalShiftArray`, `intensityArray`, `nucleusType`, `spectrometerFrequencyMHz` |
+| `MPGONMR2DSpectrum` | `MPGOSpectrum` | `intensityMatrix` (flattened row-major float64), `width`, `height`, `f1Axis`, `f2Axis`, `nucleusF1`, `nucleusF2` |
+| `MPGOFreeInductionDecay` | `MPGOSignalArray` | Complex128 buffer (interleaved real/imag), `dwellTimeSeconds`, `scanCount`, `receiverGain` |
+| `MPGOChromatogram` | `MPGOSpectrum` | `timeArray`, `intensityArray`, `type` (TIC / XIC / SRM), `targetMz`, `precursorProductMz`, `productMz` |
+| `MPGOTransition` / `MPGOTransitionList` | `NSObject` | precursor → product m/z, collision energy, RT window |
 
 ---
 
@@ -134,12 +145,69 @@ MPEG-O files are HDF5 files with the `.mpgo` extension. The internal hierarchy m
 Every persistent class implements a pair of methods:
 
 ```objc
-- (BOOL)writeToHDF5Group:(MPGOHDF5Group *)group withName:(NSString *)name error:(NSError **)error;
-+ (instancetype)readFromHDF5Group:(MPGOHDF5Group *)group withName:(NSString *)name error:(NSError **)error;
+- (BOOL)writeToGroup:(MPGOHDF5Group *)group name:(NSString *)name error:(NSError **)error;
++ (instancetype)readFromGroup:(MPGOHDF5Group *)group name:(NSString *)name error:(NSError **)error;
 ```
 
-In-memory objects can be constructed, mutated, and held without touching HDF5 at all — persistence is explicit. The `MPGOSpectralDataset` class wraps an `MPGOHDF5File` and provides stream writers/readers for incremental ingestion.
+In-memory objects can be constructed, mutated, and held without
+touching HDF5 at all — persistence is explicit. `MPGOSpectralDataset`
+provides file-level entry points (`-writeToFilePath:error:` /
+`+readFromFilePath:error:`) and `MPGOStreamWriter` / `MPGOStreamReader`
+support incremental ingestion of large runs.
 
 ## Thread Safety
 
 **Not thread-safe in v0.1.** Concurrent access to a single `MPGOHDF5File` from multiple threads is undefined. Clients must serialize access externally. A future version may adopt HDF5's thread-safe build (`--enable-threadsafe`) with explicit locking.
+
+---
+
+## Implementation notes (v0.1.0-alpha)
+
+A few deliberate simplifications keep v0.1's surface area small. None
+affect on-disk readability via standard HDF5 tools.
+
+* **`MPGOEncryptable` is delegated, not directly conformed.**
+  `MPGOAcquisitionRun` and `MPGOSpectralDataset` do not yet conform to
+  `MPGOEncryptable` themselves; selective encryption of the intensity
+  channel is performed via the static `MPGOEncryptionManager` API
+  against an open `.mpgo` path. A v0.2 milestone may thread the
+  protocol through both classes' init/read paths.
+
+* **`MPGOProvenanceable` is satisfied at the dataset level.**
+  Provenance is stored as an array of `MPGOProvenanceRecord` on
+  `MPGOSpectralDataset` rather than per-run. The dataset-level
+  `-provenanceRecordsForInputRef:` query satisfies the workplan
+  acceptance criterion.
+
+* **Identifications, quantifications, and provenance are JSON-encoded.**
+  Stored as JSON strings under `/study/`'s scalar attributes rather than
+  as bespoke HDF5 compound types. The data is fully round-trippable and
+  inspectable with any JSON-aware tool, at the cost of slightly larger
+  on-disk footprint than a packed compound layout.
+
+* **`MPGOSpectrumIndex` uses parallel 1-D datasets.** The MPEG-G design
+  spec calls for a single compound `headers` dataset; v0.1 stores eight
+  parallel datasets (offsets, lengths, retention_times, ms_levels,
+  polarities, precursor_mzs, precursor_charges, base_peak_intensities)
+  for simpler readout from non-Cocoa tools and a smaller HDF5 wrapper
+  surface.
+
+* **`MPGOMSImage` is standalone, not a `MPGOSpectralDataset` subclass.**
+  The cube lives under `/image_cube/` and can coexist with a `/study/`
+  written by `MPGOSpectralDataset` in the same `.mpgo` file. Inheritance
+  may be added in a later milestone.
+
+* **Mass-spectrum runs only.** `MPGOAcquisitionRun` accepts only
+  `MPGOMassSpectrum` instances. NMR runs live as named arrays of
+  `MPGONMRSpectrum` directly under `MPGOSpectralDataset.nmrRuns`. Mixed
+  runs are a planned post-1.0 extension.
+
+* **`MPGONMR2DSpectrum` flattens its matrix.** The 2-D intensity matrix
+  is stored as a 1-D `MPGOSignalArray` with `width` × `height` bytes
+  plus shape attributes, rather than a native 2-D HDF5 dataset. Round-
+  trip equality is byte-exact; native multi-dim datasets may follow.
+
+* **`-fblocks` is disabled on the apt gnustep-1.8 toolchain path.**
+  `libMPGO` itself uses no block-based APIs; CI builds against
+  source-built `libobjc2` (gnustep-2.0 non-fragile ABI) where blocks
+  are available.

@@ -37,9 +37,23 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUStep)** | Active — reference implementation | `objc/` |
+| **Objective-C (GNUStep)** | **v0.1.0-alpha — Milestones 1–8 complete, 379 tests passing in CI** | `objc/` |
 | Python | Planned | `python/` |
 | Java | Planned | `java/` |
+
+### v0.1.0-alpha capabilities
+
+* **Foundation** — five capability protocols (`MPGOIndexable`, `MPGOStreamable`, `MPGOCVAnnotatable`, `MPGOProvenanceable`, `MPGOEncryptable`) plus the immutable value classes `MPGOValueRange`, `MPGOEncodingSpec`, `MPGOAxisDescriptor`, `MPGOCVParam`.
+* **HDF5 wrappers** — thin Cocoa wrappers over the libhdf5 C API (`MPGOHDF5File`, `MPGOHDF5Group`, `MPGOHDF5Dataset`, `MPGOHDF5Errors`, `MPGOHDF5Types`) supporting `float32` / `float64` / `int32` / `int64` / `uint32` / `complex128` (compound), chunked storage, and zlib compression. Hyperslab partial reads, automatic runtime ABI detection, and `NSError` out-parameters on every fallible call.
+* **Signal arrays** — `MPGOSignalArray` is the atomic typed-buffer unit, conforms to `MPGOCVAnnotatable`, and round-trips through HDF5 with axis descriptors and JSON-encoded CV annotations.
+* **Spectrum classes** — `MPGOSpectrum` base plus `MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`, `MPGOFreeInductionDecay` (Complex128-backed), and `MPGOChromatogram` (TIC/XIC/SRM).
+* **Acquisition runs** — `MPGOAcquisitionRun` conforms to `MPGOIndexable` + `MPGOStreamable`. Writing channelizes every spectrum into contiguous `mz_values` + `intensity_values` datasets; reading is lazy and uses HDF5 hyperslab selection so a random-access spectrum read only touches its own chunks. `MPGOSpectrumIndex` carries seven parallel scan-metadata arrays (offsets, lengths, RT, MS level, polarity, precursor m/z, base peak) for compressed-domain queries.
+* **Spectral datasets** — `MPGOSpectralDataset` is the root `.mpgo` container object. Holds named MS runs, named NMR-spectrum collections, identifications, quantifications, W3C PROV provenance records, and SRM/MRM transition lists. Multi-run round-trip and provenance lookup by input ref are first-class.
+* **MS imaging** — `MPGOMSImage` stores a 3-D `[height, width, spectralPoints]` HDF5 dataset with tile-aligned chunking; tile reads (default 32×32 pixels) hit exactly the chunks they need.
+* **Selective encryption** — `MPGOEncryptionManager` (AES-256-GCM via OpenSSL) encrypts an acquisition run's intensity channel in place while leaving `mz_values` and the spectrum index readable as plaintext. Wrong keys fail cleanly via GCM tag mismatch — never partial bytes. `MPGOAccessPolicy` persists JSON-encoded subject/stream/key-id metadata under `/protection/access_policies` independently of any key store.
+* **Query + streaming** — `MPGOQuery` builds compressed-domain predicates (RT range, MS level, polarity, precursor m/z range, base peak threshold) over an in-memory index without touching signal channels; a 10k-spectrum scan runs in ~0.2 ms in CI. `MPGOStreamWriter` / `MPGOStreamReader` provide incremental write + sequential read over runs of arbitrary size.
+
+Continuous integration runs every push on `ubuntu-latest` with **clang + libobjc2 + gnustep-base built from source** (the `gnustep-2.0` non-fragile ABI), then exercises the full test suite.
 
 ## Building the Objective-C Reference Implementation
 

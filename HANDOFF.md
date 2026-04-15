@@ -1,5 +1,11 @@
 # MPEG-O Reference Implementation — Continuation Session
 
+> **Status (post-tag):** All eight milestones complete and merged on
+> `main` (379 tests passing in CI). This document is preserved as the
+> historical brief for the continuation session that built v0.1.0-alpha
+> — refer to `WORKPLAN.md` for the canonical acceptance state and
+> `ARCHITECTURE.md` for the as-built class/HDF5 layout.
+
 You are taking over the MPEG-O reference implementation from a previous Claude Code session that ran on a different machine. This session will carry the project through **Milestones 1–8 plus the v0.1.0-alpha release**, executing on an i9 Windows + WSL/Ubuntu machine.
 
 ## Repository
