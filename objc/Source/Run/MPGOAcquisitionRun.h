@@ -4,46 +4,60 @@
 #import <Foundation/Foundation.h>
 #import "Protocols/MPGOIndexable.h"
 #import "Protocols/MPGOStreamable.h"
+#import "Protocols/MPGOProvenanceable.h"
+#import "Protocols/MPGOEncryptable.h"
 #import "ValueClasses/MPGOEnums.h"
 
+@class MPGOSpectrum;
 @class MPGOMassSpectrum;
 @class MPGOInstrumentConfig;
 @class MPGOSpectrumIndex;
 @class MPGOHDF5Group;
 @class MPGOValueRange;
+@class MPGOProvenanceRecord;
+@class MPGOAccessPolicy;
 
 /**
- * An ordered run of mass spectra sharing an instrument configuration
- * and acquisition mode. Maps to the MPEG-G Dataset concept; each
- * spectrum is an Access Unit.
+ * An ordered run of spectra sharing an instrument configuration and
+ * acquisition mode. Maps to the MPEG-G Dataset concept; each spectrum
+ * is an Access Unit.
  *
- * Persistence layout (under the parent group):
+ * v0.2 update: runs accept any MPGOSpectrum subclass (mass spectra,
+ * NMR spectra, ...). Signal channel serialization is name-driven, so
+ * an MS run writes mz_values + intensity_values (binary-identical to
+ * v0.1) and an NMR run writes chemical_shift_values + intensity_values.
+ * The run group carries a spectrum_class attribute identifying the
+ * subclass; absence of that attribute triggers v0.1 fallback
+ * (MPGOMassSpectrum with hardcoded channel names).
  *
- *   <run_name>/
- *     @acquisition_mode           (int attr)
- *     @spectrum_count             (int attr)
- *     instrument_config/          (string attrs)
- *     spectrum_index/             (parallel offset/length/metadata datasets)
- *     signal_channels/
- *       mz_values                 (float64[N_total], chunked, zlib-6)
- *       intensity_values          (float64[N_total], chunked, zlib-6)
- *
- * On read-back the run holds open HDF5 dataset handles to mz_values and
- * intensity_values; -spectrumAtIndex:error: issues hyperslab reads and
- * reconstructs the requested spectrum without touching unrelated chunks.
- *
- * For v0.1 only mass spectra are supported in a run; mixed runs are a
- * planned post-1.0 extension.
+ * Conformances (v0.2): MPGOProvenanceable (per-run provenance chain),
+ * MPGOEncryptable (delegates to MPGOEncryptionManager when the run
+ * carries persistence context set by MPGOSpectralDataset after load).
  */
-@interface MPGOAcquisitionRun : NSObject <MPGOIndexable, MPGOStreamable>
+@interface MPGOAcquisitionRun : NSObject <MPGOIndexable,
+                                          MPGOStreamable,
+                                          MPGOProvenanceable,
+                                          MPGOEncryptable>
 
 @property (readonly) MPGOAcquisitionMode acquisitionMode;
 @property (readonly, strong) MPGOInstrumentConfig *instrumentConfig;
 @property (readonly, strong) MPGOSpectrumIndex *spectrumIndex;
 
+/** Name of the dominant spectrum class for this run, e.g.
+ *  @"MPGOMassSpectrum" or @"MPGONMRSpectrum". Set from the first
+ *  spectrum at init or read from the HDF5 attribute. */
+@property (readonly, copy) NSString *spectrumClassName;
+
+/** NMR-only run-level metadata (zero/nil for MS runs). Propagated to
+ *  every reconstructed MPGONMRSpectrum. */
+@property (readonly, copy) NSString *nucleusType;
+@property (readonly) double spectrometerFrequencyMHz;
+
 #pragma mark - In-memory construction
 
-- (instancetype)initWithSpectra:(NSArray<MPGOMassSpectrum *> *)spectra
+/** v0.2 generalized initializer. Accepts any MPGOSpectrum subclass,
+ *  but all spectra in the same run must share a single subclass. */
+- (instancetype)initWithSpectra:(NSArray *)spectra
                 acquisitionMode:(MPGOAcquisitionMode)mode
                instrumentConfig:(MPGOInstrumentConfig *)config;
 
@@ -59,16 +73,33 @@
 
 #pragma mark - Random access
 
-/**
- * Materialize the spectrum at index. For runs constructed in memory,
- * returns the original instance. For runs read from disk, issues
- * hyperslab reads against mz_values + intensity_values and reconstructs
- * a fresh MPGOMassSpectrum holding only the requested slice.
- */
-- (MPGOMassSpectrum *)spectrumAtIndex:(NSUInteger)index error:(NSError **)error;
+/** v0.2: returns whatever MPGOSpectrum subclass the run holds. */
+- (id)spectrumAtIndex:(NSUInteger)index error:(NSError **)error;
 
 /** Indices in the given retention-time range, in ascending order. */
 - (NSArray<NSNumber *> *)indicesInRetentionTimeRange:(MPGOValueRange *)range;
+
+#pragma mark - Persistence context (used by MPGOSpectralDataset)
+
+/** Attach file-path + run-name context after load so protocol
+ *  encryption methods have something to delegate to. Internal API. */
+- (void)setPersistenceFilePath:(NSString *)path runName:(NSString *)runName;
+
+#pragma mark - MPGOProvenanceable
+
+- (void)addProcessingStep:(MPGOProvenanceRecord *)step;
+- (NSArray<MPGOProvenanceRecord *> *)provenanceChain;
+- (NSArray<NSString *> *)inputEntities;
+- (NSArray<NSString *> *)outputEntities;
+
+#pragma mark - MPGOEncryptable
+
+- (BOOL)encryptWithKey:(NSData *)key
+                 level:(MPGOEncryptionLevel)level
+                 error:(NSError **)error;
+- (BOOL)decryptWithKey:(NSData *)key error:(NSError **)error;
+- (MPGOAccessPolicy *)accessPolicy;
+- (void)setAccessPolicy:(MPGOAccessPolicy *)policy;
 
 @end
 

@@ -16,7 +16,8 @@ MPGOTests_OBJC_FILES = \
 	TestMSImage.m \
 	TestEncryption.m \
 	TestQueryAndStreaming.m \
-	TestMzMLReader.m
+	TestMzMLReader.m \
+	TestMilestone10.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lz -lcrypto
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

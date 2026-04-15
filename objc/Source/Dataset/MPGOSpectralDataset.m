@@ -142,7 +142,7 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
     NSString *title  = [study stringAttributeNamed:@"title" error:error];
     NSString *isaId  = [study stringAttributeNamed:@"isa_investigation_id" error:error];
 
-    // MS runs
+    // MS runs (v0.2: any MPGOSpectrum subclass, not just mass spectra)
     NSMutableDictionary *msRuns = [NSMutableDictionary dictionary];
     if ([study hasChildNamed:@"ms_runs"]) {
         MPGOHDF5Group *msg = [study openGroupNamed:@"ms_runs" error:error];
@@ -151,6 +151,8 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
             if (rname.length == 0) continue;
             MPGOAcquisitionRun *run = [MPGOAcquisitionRun readFromGroup:msg name:rname error:error];
             if (!run) return nil;
+            // Thread persistence context so protocol encryption methods work.
+            [run setPersistenceFilePath:path runName:rname];
             msRuns[rname] = run;
         }
     }

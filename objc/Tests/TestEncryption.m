@@ -1,3 +1,6 @@
+// This test set intentionally covers the deprecated file-path encryption
+// API. M10 acceptance criteria include "deprecated API still works".
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #import "Protection/MPGOEncryptionManager.h"
