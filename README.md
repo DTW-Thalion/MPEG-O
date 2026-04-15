@@ -82,7 +82,22 @@ cd objc
 ```
 
 Run `./check-deps.sh` directly to see exactly which prerequisites are present
-or missing without invoking the build. To build manually:
+or missing without invoking the build.
+
+### API documentation
+
+GSDoc-style HTML API documentation can be generated via `autogsdoc` (ships
+with gnustep-base). The wiring lives in `objc/Documentation/`; from `objc/`:
+
+```bash
+make docs        # generates Documentation/html/
+make docs-clean
+```
+
+The `Documentation/` subproject is intentionally not part of the default
+build so the test suite has no autogsdoc dependency. See
+`objc/Documentation/GNUmakefile` for a note on a known autogsdoc-from-source
+issue that some libs-base builds exhibit. To build manually:
 
 ```bash
 . /usr/share/GNUstep/Makefiles/GNUstep.sh

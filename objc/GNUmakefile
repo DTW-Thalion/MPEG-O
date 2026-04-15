@@ -15,3 +15,21 @@ check:: all
 	@echo "==> Running MPGO test suite"
 	@LD_LIBRARY_PATH="$(CURDIR)/Source/$(GNUSTEP_OBJ_DIR):/usr/local/lib:$$LD_LIBRARY_PATH" \
 	    Tests/$(GNUSTEP_OBJ_DIR)/MPGOTests
+
+# ---------------------------------------------------------------------------
+# `make docs` — generate GSDoc HTML API documentation via autogsdoc.
+# ---------------------------------------------------------------------------
+# The Documentation/ subproject is intentionally NOT in SUBPROJECTS so the
+# default build does not depend on autogsdoc being installed. Run explicitly:
+#
+#     ./build.sh docs        # via the wrapper (sources GNUstep.sh + clang)
+#     make docs              # if the GNUstep environment is already loaded
+#
+# Output lands in objc/Documentation/html/.
+.PHONY: docs docs-clean
+docs:
+	@echo "==> Generating libMPGO API documentation (autogsdoc)"
+	$(MAKE) -C Documentation
+
+docs-clean:
+	$(MAKE) -C Documentation clean
