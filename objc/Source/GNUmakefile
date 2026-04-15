@@ -15,13 +15,26 @@ libMPGO_HEADER_FILES = \
 	ValueClasses/MPGOAxisDescriptor.h \
 	ValueClasses/MPGOEncodingSpec.h \
 	ValueClasses/MPGOValueRange.h \
-	ValueClasses/MPGOEnums.h
+	ValueClasses/MPGOEnums.h \
+	HDF5/MPGOHDF5Errors.h \
+	HDF5/MPGOHDF5Types.h \
+	HDF5/MPGOHDF5File.h \
+	HDF5/MPGOHDF5Group.h \
+	HDF5/MPGOHDF5Dataset.h \
+	HDF5/MPGOHDF5Attribute.h \
+	Core/MPGOSignalArray.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
 	ValueClasses/MPGOAxisDescriptor.m \
 	ValueClasses/MPGOEncodingSpec.m \
-	ValueClasses/MPGOValueRange.m
+	ValueClasses/MPGOValueRange.m \
+	HDF5/MPGOHDF5Errors.m \
+	HDF5/MPGOHDF5Types.m \
+	HDF5/MPGOHDF5File.m \
+	HDF5/MPGOHDF5Group.m \
+	HDF5/MPGOHDF5Dataset.m \
+	Core/MPGOSignalArray.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz
 

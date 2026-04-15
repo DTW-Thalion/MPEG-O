@@ -7,7 +7,9 @@ MPGOTests_OBJC_FILES = \
 	TestValueRange.m \
 	TestEncodingSpec.m \
 	TestAxisDescriptor.m \
-	TestCVParam.m
+	TestCVParam.m \
+	TestHDF5.m \
+	TestSignalArray.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lz
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
