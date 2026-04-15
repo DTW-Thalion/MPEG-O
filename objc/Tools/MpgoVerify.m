@@ -13,10 +13,11 @@
 #import <Foundation/Foundation.h>
 
 #import "Dataset/MPGOSpectralDataset.h"
+#import "Dataset/MPGOIdentification.h"
+#import "Dataset/MPGOQuantification.h"
+#import "Dataset/MPGOProvenanceRecord.h"
 #import "Run/MPGOAcquisitionRun.h"
-#import "ValueClasses/MPGOIdentification.h"
-#import "ValueClasses/MPGOQuantification.h"
-#import "ValueClasses/MPGOProvenanceRecord.h"
+#import "Run/MPGOSpectrumIndex.h"
 
 static NSString *JSONEscape(NSString *s)
 {
@@ -72,7 +73,7 @@ int main(int argc, const char *argv[])
             if (!firstRun) [out appendString:@","];
             firstRun = NO;
             [out appendFormat:@"%@:{\"spectrum_count\":%lu}",
-                JSONEscape(rname), (unsigned long)run.spectra.count];
+                JSONEscape(rname), (unsigned long)run.spectrumIndex.count];
         }
         [out appendString:@"},"];
 

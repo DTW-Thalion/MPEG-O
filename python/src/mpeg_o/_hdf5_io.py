@@ -136,8 +136,14 @@ def read_signal_channel(group: h5py.Group, name: str) -> np.ndarray:
 
 
 def vl_str() -> np.dtype:
-    """Return an h5py variable-length UTF-8 string dtype."""
-    return h5py.string_dtype(encoding="utf-8")
+    """Return an h5py variable-length string dtype suitable for compound
+    members. Uses ASCII character set to match the Objective-C reference
+    reader, whose ``H5T_C_S1`` copies default to ``H5T_CSET_ASCII``. HDF5
+    has no built-in converter between ASCII and UTF-8 variable-length
+    strings, so even though the payload bytes are identical for 7-bit
+    data the character-set label must agree.
+    """
+    return h5py.string_dtype(encoding="ascii")
 
 
 def write_compound_dataset(
@@ -146,14 +152,22 @@ def write_compound_dataset(
     records: Sequence[dict[str, Any]],
     fields: Sequence[tuple[str, Any]],
     compression_level: int = 6,
+    *,
+    align: bool = True,
 ) -> h5py.Dataset:
     """Write a 1-D compound dataset.
 
     ``fields`` is an ordered sequence of ``(name, numpy_dtype)`` pairs. Use
     :func:`vl_str` for variable-length UTF-8 string members. ``records`` is a
     sequence of dicts keyed by field name.
+
+    ``align=True`` (the default) lays out the fields with C-struct padding
+    so the on-disk compound matches the offsets the Objective-C reference
+    reader expects. HDF5's type-conversion path refuses to bridge a
+    densely packed compound to a padded one by field name, so the
+    alignment must be correct on disk.
     """
-    dtype = np.dtype([(fname, ftype) for fname, ftype in fields])
+    dtype = np.dtype([(fname, ftype) for fname, ftype in fields], align=align)
     arr = np.zeros(len(records), dtype=dtype)
     for i, rec in enumerate(records):
         for fname, _ in fields:

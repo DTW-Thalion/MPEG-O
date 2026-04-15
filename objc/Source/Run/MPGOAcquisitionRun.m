@@ -8,6 +8,7 @@
 #import "ValueClasses/MPGOEncodingSpec.h"
 #import "ValueClasses/MPGOValueRange.h"
 #import "Dataset/MPGOProvenanceRecord.h"
+#import "Dataset/MPGOCompoundIO.h"
 #import "Protection/MPGOEncryptionManager.h"
 #import "Protection/MPGOAccessPolicy.h"
 #import "HDF5/MPGOHDF5File.h"
@@ -169,8 +170,28 @@
         if (![fd writeData:[NSData dataWithBytes:f length:sizeof(f)] error:error]) return NO;
     }
 
-    // Per-run provenance as a single JSON-encoded attribute
+    // Per-run provenance.
+    //
+    // v0.3 writes the records as a compound HDF5 dataset at
+    //     /study/ms_runs/<run>/provenance/steps
+    // using the same compound type as the dataset-level `/study/provenance`
+    // (see MPGOCompoundIO). The `compound_per_run_provenance` feature flag
+    // on the root group advertises this layout.
+    //
+    // For backward compatibility with v0.2 readers (including the in-tree
+    // signature manager which still operates on the JSON blob), the writer
+    // keeps `@provenance_json` as a legacy mirror. M18 will replace the
+    // mirror with a canonical-byte-order signature path that covers the
+    // compound dataset directly; until then the mirror is intentional.
     if (_provenance.count > 0) {
+        MPGOHDF5Group *provGroup =
+            [runGroup createGroupNamed:@"provenance" error:error];
+        if (!provGroup) return NO;
+        if (![MPGOCompoundIO writeProvenance:_provenance
+                                   intoGroup:provGroup
+                                datasetNamed:@"steps"
+                                       error:error]) return NO;
+
         NSMutableArray *plists = [NSMutableArray arrayWithCapacity:_provenance.count];
         for (MPGOProvenanceRecord *r in _provenance) [plists addObject:[r asPlist]];
         NSError *jErr = nil;
@@ -261,8 +282,22 @@
         }
     }
 
+    // Per-run provenance: prefer the v0.3 compound layout at
+    // runGroup/provenance/steps; fall back to the v0.2 @provenance_json
+    // attribute if the compound subgroup is absent. Pre-v0.2 files had
+    // neither form, in which case `provenance` remains an empty array.
     NSMutableArray<MPGOProvenanceRecord *> *provenance = [NSMutableArray array];
-    if ([runGroup hasAttributeNamed:@"provenance_json"]) {
+    if ([runGroup hasChildNamed:@"provenance"]) {
+        MPGOHDF5Group *provGroup = [runGroup openGroupNamed:@"provenance" error:NULL];
+        if (provGroup && [provGroup hasChildNamed:@"steps"]) {
+            NSArray *compound =
+                [MPGOCompoundIO readProvenanceFromGroup:provGroup
+                                           datasetNamed:@"steps"
+                                                  error:NULL];
+            if (compound) [provenance addObjectsFromArray:compound];
+        }
+    }
+    if (provenance.count == 0 && [runGroup hasAttributeNamed:@"provenance_json"]) {
         NSString *jstr = [runGroup stringAttributeNamed:@"provenance_json" error:NULL];
         NSData *jdata = [jstr dataUsingEncoding:NSUTF8StringEncoding];
         NSArray *plists = [NSJSONSerialization JSONObjectWithData:jdata

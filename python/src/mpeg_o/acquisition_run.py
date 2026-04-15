@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterator
 
+import json
+
 import h5py
 import numpy as np
 
@@ -13,6 +15,7 @@ from .enums import AcquisitionMode, Polarity
 from .instrument_config import InstrumentConfig
 from .mass_spectrum import MassSpectrum
 from .nmr_spectrum import NMRSpectrum
+from .provenance import ProvenanceRecord
 from .signal_array import SignalArray
 from .spectrum import Spectrum
 
@@ -137,6 +140,19 @@ class AcquisitionRun:
         for i in range(len(self)):
             yield self[i]
 
+    def provenance(self) -> list[ProvenanceRecord]:
+        """Per-run provenance records.
+
+        Prefers the v0.3 compound layout at ``<run>/provenance/steps`` and
+        falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2
+        files (no per-run provenance of any kind) return an empty list.
+        """
+        if "provenance" in self.group and "steps" in self.group["provenance"]:
+            return _decode_provenance_compound(self.group["provenance"], "steps")
+        if self.provenance_json:
+            return _decode_provenance_json(self.provenance_json)
+        return []
+
     def __getitem__(self, i: int) -> Spectrum:
         if i < 0:
             i += len(self)
@@ -186,3 +202,63 @@ class AcquisitionRun:
         if self.spectrum_class == "MPGONMRSpectrum":
             return NMRSpectrum(nucleus=self.nucleus_type, **common)
         return MassSpectrum(**common)
+
+
+# ------------------------------------------------ provenance decoders ---
+
+
+def _decode_provenance_compound(
+    prov_group: h5py.Group, dataset_name: str
+) -> list[ProvenanceRecord]:
+    records = io.read_compound_dataset(prov_group, dataset_name)
+    out: list[ProvenanceRecord] = []
+    for r in records:
+        out.append(ProvenanceRecord(
+            timestamp_unix=int(r.get("timestamp_unix", 0)),
+            software=str(r.get("software", "")),
+            parameters=_safe_json_dict(r.get("parameters_json", "{}")),
+            input_refs=_safe_json_list(r.get("input_refs_json", "[]")),
+            output_refs=_safe_json_list(r.get("output_refs_json", "[]")),
+        ))
+    return out
+
+
+def _decode_provenance_json(blob: str) -> list[ProvenanceRecord]:
+    try:
+        data = json.loads(blob) if blob else []
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[ProvenanceRecord] = []
+    for r in data:
+        if not isinstance(r, dict):
+            continue
+        out.append(ProvenanceRecord(
+            timestamp_unix=int(r.get("timestampUnix") or r.get("timestamp_unix") or 0),
+            software=str(r.get("software", "")),
+            parameters=r.get("parameters", {}) if isinstance(r.get("parameters"), dict) else {},
+            input_refs=[str(x) for x in (r.get("inputRefs") or r.get("input_refs") or [])],
+            output_refs=[str(x) for x in (r.get("outputRefs") or r.get("output_refs") or [])],
+        ))
+    return out
+
+
+def _safe_json_list(value: str | list) -> list[str]:
+    if isinstance(value, list):
+        return [str(x) for x in value]
+    try:
+        parsed = json.loads(value) if value else []
+    except json.JSONDecodeError:
+        return []
+    return [str(x) for x in parsed] if isinstance(parsed, list) else []
+
+
+def _safe_json_dict(value: str | dict) -> dict[str, object]:
+    if isinstance(value, dict):
+        return value
+    try:
+        parsed = json.loads(value) if value else {}
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}

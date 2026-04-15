@@ -12,6 +12,7 @@
 + (NSString *)featureNative2DNMR             { return @"opt_native_2d_nmr"; }
 + (NSString *)featureNativeMSImageCube       { return @"opt_native_msimage_cube"; }
 + (NSString *)featureDigitalSignatures       { return @"opt_digital_signatures"; }
++ (NSString *)featureCompoundPerRunProvenance { return @"compound_per_run_provenance"; }
 
 + (NSString *)formatVersionForRoot:(MPGOHDF5Group *)root
 {
