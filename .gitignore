@@ -6,6 +6,11 @@ shared_obj/
 *.so
 *.so.*
 
+# autogsdoc output
+objc/Documentation/html/
+objc/Documentation/*.gsdoc
+objc/Documentation/*.igsdoc
+
 # OS / editor cruft
 .DS_Store
 *.swp
