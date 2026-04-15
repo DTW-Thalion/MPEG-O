@@ -53,17 +53,21 @@ else
     fail "libgnustep-base.so not found (install libgnustep-base-dev or build from source)"
 fi
 
-# --- Blocks runtime header (gnustep-1.8 path on Ubuntu) --------------------
-# Ubuntu's libgnustep-base-dev is built against libobjc (not libobjc2),
-# so objc/blocks_runtime.h is not supplied by the runtime and must come
-# from libblocksruntime-dev. gnustep-2.0 / libobjc2 builds ship it in-tree.
-if [ "$gs_runtime" = "gnustep-1.8" ]; then
+# --- Blocks support --------------------------------------------------------
+# On gnustep-2.0 / libobjc2, blocks are fully supported and the preamble
+# enables -fblocks. On gnustep-1.8 / GCC's libobjc, clang's -fblocks triggers
+# GSVersionMacros.h to include <objc/blocks_runtime.h>, which libobjc does
+# not ship — so the preamble DROPS -fblocks on that path. This is a soft
+# capability note, not a build blocker.
+if [ "$gs_runtime" = "gnustep-2.0" ]; then
     if [ -f /usr/include/objc/blocks_runtime.h ] || \
        [ -f /usr/local/include/objc/blocks_runtime.h ]; then
-        ok "objc/blocks_runtime.h"
+        ok "blocks support (objc/blocks_runtime.h present)"
     else
-        fail "objc/blocks_runtime.h not found (install libblocksruntime-dev)"
+        note "objc/blocks_runtime.h missing despite gnustep-2.0 runtime — unusual libobjc2 layout"
     fi
+else
+    say "       blocks: disabled on gnustep-1.8 (preamble drops -fblocks)"
 fi
 
 # --- Objective-C compiler with ARC ----------------------------------------

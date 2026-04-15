@@ -17,11 +17,12 @@ jobs:
       # gobjc is deliberately NOT installed: gcc's Objective-C front end
       # lacks -fobjc-arc and cannot compile libMPGO. build.sh selects clang.
       #
-      # libblocksruntime-dev is required on the apt gnustep path because
-      # Ubuntu's libgnustep-base-dev is built against libobjc (not libobjc2),
-      # so objc/blocks_runtime.h is not supplied by the runtime itself and
-      # must come from the standalone package. WSL developers building
-      # gnustep against libobjc2 get this header for free.
+      # Ubuntu's libgnustep-base-dev uses the gnustep-1.8 fragile ABI (built
+      # against GCC's libobjc, not libobjc2). The MPGO preamble auto-detects
+      # this and drops -fblocks on that path, so no libobjc2/blocks packages
+      # are needed for CI. Developers building gnustep from source against
+      # libobjc2 on their dev machines pick up gnustep-2.0 automatically
+      # and get -fblocks enabled.
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -31,7 +32,6 @@ jobs:
             gnustep-make \
             libgnustep-base-dev \
             libobjc4 \
-            libblocksruntime-dev \
             clang \
             libhdf5-dev \
             zlib1g-dev \
