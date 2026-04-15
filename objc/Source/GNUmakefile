@@ -22,7 +22,13 @@ libMPGO_HEADER_FILES = \
 	HDF5/MPGOHDF5Group.h \
 	HDF5/MPGOHDF5Dataset.h \
 	HDF5/MPGOHDF5Attribute.h \
-	Core/MPGOSignalArray.h
+	Core/MPGOSignalArray.h \
+	Spectra/MPGOSpectrum.h \
+	Spectra/MPGOMassSpectrum.h \
+	Spectra/MPGONMRSpectrum.h \
+	Spectra/MPGONMR2DSpectrum.h \
+	Spectra/MPGOFreeInductionDecay.h \
+	Spectra/MPGOChromatogram.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -34,7 +40,13 @@ libMPGO_OBJC_FILES = \
 	HDF5/MPGOHDF5File.m \
 	HDF5/MPGOHDF5Group.m \
 	HDF5/MPGOHDF5Dataset.m \
-	Core/MPGOSignalArray.m
+	Core/MPGOSignalArray.m \
+	Spectra/MPGOSpectrum.m \
+	Spectra/MPGOMassSpectrum.m \
+	Spectra/MPGONMRSpectrum.m \
+	Spectra/MPGONMR2DSpectrum.m \
+	Spectra/MPGOFreeInductionDecay.m \
+	Spectra/MPGOChromatogram.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz
 
