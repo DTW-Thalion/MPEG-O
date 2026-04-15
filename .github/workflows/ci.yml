@@ -68,7 +68,7 @@ jobs:
       - name: Build libobjc2 from source
         if: steps.gnustep-cache.outputs.cache-hit != 'true'
         run: |
-          set -euxo pipefail
+          set -exo pipefail
           git clone --depth 1 --branch "${LIBOBJC2_REF}" \
             https://github.com/gnustep/libobjc2.git /tmp/libobjc2
           cd /tmp/libobjc2
@@ -86,7 +86,7 @@ jobs:
       - name: Build gnustep-make from source
         if: steps.gnustep-cache.outputs.cache-hit != 'true'
         run: |
-          set -euxo pipefail
+          set -exo pipefail
           git clone --depth 1 --branch "${TOOLS_MAKE_REF}" \
             https://github.com/gnustep/tools-make.git /tmp/tools-make
           cd /tmp/tools-make
@@ -100,7 +100,7 @@ jobs:
       - name: Build gnustep-base from source
         if: steps.gnustep-cache.outputs.cache-hit != 'true'
         run: |
-          set -euxo pipefail
+          set -exo pipefail
           # shellcheck disable=SC1091
           . "${INSTALL_PREFIX}/share/GNUstep/Makefiles/GNUstep.sh"
           git clone --depth 1 --branch "${LIBS_BASE_REF}" \
