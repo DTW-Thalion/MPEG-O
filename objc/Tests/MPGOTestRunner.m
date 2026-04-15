@@ -13,6 +13,7 @@ extern void testSpectralDataset(void);
 extern void testMSImage(void);
 extern void testEncryption(void);
 extern void testQueryAndStreaming(void);
+extern void testMzMLReader(void);
 
 int main(int argc, const char *argv[])
 {
@@ -64,6 +65,10 @@ int main(int argc, const char *argv[])
         START_SET("Query + Streaming")
             testQueryAndStreaming();
         END_SET("Query + Streaming")
+
+        START_SET("mzML Reader (Milestone 9)")
+            testMzMLReader();
+        END_SET("mzML Reader (Milestone 9)")
     }
     return 0;
 }
