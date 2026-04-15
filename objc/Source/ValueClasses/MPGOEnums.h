@@ -20,7 +20,8 @@ typedef NS_ENUM(NSUInteger, MPGOPrecision) {
 typedef NS_ENUM(NSUInteger, MPGOCompression) {
     MPGOCompressionNone = 0,
     MPGOCompressionZlib,
-    MPGOCompressionLZ4
+    MPGOCompressionLZ4,
+    MPGOCompressionNumpressDelta  // v0.3 M21: fixed-point + first-difference
 };
 
 typedef NS_ENUM(NSUInteger, MPGOByteOrder) {

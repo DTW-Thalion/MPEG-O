@@ -53,6 +53,12 @@
 @property (readonly, copy) NSString *nucleusType;
 @property (readonly) double spectrometerFrequencyMHz;
 
+/** v0.3 M21: compression codec applied to signal channel datasets
+ *  when persisting this run. Defaults to ``MPGOCompressionZlib`` so
+ *  existing callers are unaffected. Writers may set LZ4 or
+ *  Numpress-delta explicitly before calling ``writeToGroup:``. */
+@property (nonatomic) MPGOCompression signalCompression;
+
 #pragma mark - In-memory construction
 
 /** v0.2 generalized initializer. Accepts any MPGOSpectrum subclass,

@@ -9,6 +9,7 @@
 #import "ValueClasses/MPGOValueRange.h"
 #import "Dataset/MPGOProvenanceRecord.h"
 #import "Dataset/MPGOCompoundIO.h"
+#import "Core/MPGONumpress.h"
 #import "Protection/MPGOEncryptionManager.h"
 #import "Protection/MPGOAccessPolicy.h"
 #import "HDF5/MPGOHDF5File.h"
@@ -28,6 +29,12 @@
     NSMutableArray<MPGOProvenanceRecord *> *_provenance;
     MPGOAccessPolicy            *_accessPolicy;
 
+    // M21: eagerly decoded Numpress-delta channels, keyed by channel
+    // name. When a channel is present here, spectrumAtIndex: slices
+    // into this float64 buffer instead of reading the HDF5 dataset,
+    // because Numpress decoding needs the running sum prefix.
+    NSMutableDictionary<NSString *, NSData *> *_numpressChannels;
+
     // Persistence context attached post-load for protocol encryption
     NSString *_persistenceFilePath;
     NSString *_persistenceRunName;
@@ -46,6 +53,7 @@
         _instrumentConfig = config;
         _streamPosition   = 0;
         _provenance       = [NSMutableArray array];
+        _signalCompression = MPGOCompressionZlib;  // M21 default
 
         if (spectra.count > 0) {
             MPGOSpectrum *first = spectra[0];
@@ -231,14 +239,53 @@
             cursor += n;
         }
         NSString *dsName = [chName stringByAppendingString:@"_values"];
-        MPGOHDF5Dataset *ds = [channels createDatasetNamed:dsName
-                                                 precision:MPGOPrecisionFloat64
-                                                    length:total
-                                                 chunkSize:16384
-                                          compressionLevel:6
-                                                     error:error];
-        if (!ds) return NO;
-        if (![ds writeData:all error:error]) return NO;
+
+        if (_signalCompression == MPGOCompressionNumpressDelta) {
+            // Fixed-point + first-difference transform. The dataset
+            // stores int64 deltas; the reader detects the
+            // ``@numpress_fixed_point`` attribute and reverses.
+            const double *src = (const double *)all.bytes;
+            double minV = src[0], maxV = src[0];
+            for (NSUInteger k = 1; k < total; k++) {
+                if (src[k] < minV) minV = src[k];
+                if (src[k] > maxV) maxV = src[k];
+            }
+            int64_t scale = [MPGONumpress scaleForValueRangeMin:minV max:maxV];
+            NSMutableData *deltas = [NSMutableData dataWithLength:total * sizeof(int64_t)];
+            if (![MPGONumpress encodeFloat64:src
+                                        count:total
+                                        scale:scale
+                                    outDeltas:(int64_t *)deltas.mutableBytes]) {
+                if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
+                    @"numpress encode failed for '%@'", dsName);
+                return NO;
+            }
+            MPGOHDF5Dataset *ds =
+                [channels createDatasetNamed:dsName
+                                   precision:MPGOPrecisionInt64
+                                      length:total
+                                   chunkSize:16384
+                                 compression:MPGOCompressionZlib
+                            compressionLevel:6
+                                       error:error];
+            if (!ds) return NO;
+            if (![ds writeData:deltas error:error]) return NO;
+            if (![channels setIntegerAttribute:
+                    [NSString stringWithFormat:@"%@_numpress_fixed_point", chName]
+                                         value:scale
+                                         error:error]) return NO;
+        } else {
+            MPGOHDF5Dataset *ds =
+                [channels createDatasetNamed:dsName
+                                   precision:MPGOPrecisionFloat64
+                                      length:total
+                                   chunkSize:16384
+                                 compression:_signalCompression
+                            compressionLevel:6
+                                       error:error];
+            if (!ds) return NO;
+            if (![ds writeData:all error:error]) return NO;
+        }
     }
 
     return YES;
@@ -323,6 +370,9 @@
 
     NSMutableDictionary<NSString *, MPGOHDF5Dataset *> *channelDatasets =
         [NSMutableDictionary dictionaryWithCapacity:channelNames.count];
+    NSMutableDictionary<NSString *, NSData *> *numpressChannels =
+        [NSMutableDictionary dictionary];
+    MPGOCompression runCompression = MPGOCompressionZlib;
     for (NSString *chName in channelNames) {
         NSString *dsName = [chName stringByAppendingString:@"_values"];
         if (![channels hasChildNamed:dsName]) {
@@ -332,6 +382,38 @@
             // if anyone later asks for data from this channel.
             continue;
         }
+
+        // M21: detect Numpress-delta encoding via the per-channel
+        // ``@<chName>_numpress_fixed_point`` attribute. If present,
+        // open the dataset as int64, decode via MPGONumpress, cache
+        // the float64 result, and record the codec choice on the run
+        // so writers that re-persist this dataset preserve it.
+        NSString *scaleAttr = [NSString stringWithFormat:@"%@_numpress_fixed_point", chName];
+        if ([channels hasAttributeNamed:scaleAttr]) {
+            BOOL exists = NO;
+            int64_t scale =
+                [channels integerAttributeNamed:scaleAttr exists:&exists error:NULL];
+            MPGOHDF5Dataset *ds =
+                [channels openDatasetNamed:dsName error:error];
+            if (!ds) return nil;
+            NSData *raw = [ds readDataWithError:error];
+            if (!raw) return nil;
+            NSUInteger nElems = raw.length / sizeof(int64_t);
+            NSMutableData *decoded =
+                [NSMutableData dataWithLength:nElems * sizeof(double)];
+            if (![MPGONumpress decodeInt64:(const int64_t *)raw.bytes
+                                       count:nElems
+                                       scale:scale
+                                  outValues:(double *)decoded.mutableBytes]) {
+                if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,
+                    @"numpress decode failed for '%@'", chName);
+                return nil;
+            }
+            numpressChannels[chName] = decoded;
+            runCompression = MPGOCompressionNumpressDelta;
+            continue;
+        }
+
         MPGOHDF5Dataset *ds = [channels openDatasetNamed:dsName error:error];
         if (!ds) return nil;
         channelDatasets[chName] = ds;
@@ -350,6 +432,8 @@
     run->_inMemorySpectra      = nil;
     run->_streamPosition       = 0;
     run->_provenance           = provenance;
+    run->_numpressChannels     = numpressChannels.count > 0 ? numpressChannels : nil;
+    run->_signalCompression    = runCompression;
     return run;
 }
 
@@ -385,10 +469,20 @@
     NSMutableDictionary<NSString *, MPGOSignalArray *> *channels =
         [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
     for (NSString *chName in _channelNames) {
-        MPGOHDF5Dataset *ds = _channelDatasets[chName];
-        NSData *d = [ds readDataAtOffset:(NSUInteger)off
-                                    count:(NSUInteger)len
-                                    error:error];
+        NSData *d = nil;
+        NSData *decoded = _numpressChannels[chName];
+        if (decoded) {
+            // M21 Numpress-delta path: slice the eagerly-decoded
+            // float64 buffer directly. off/len are in element units.
+            const uint8_t *base = (const uint8_t *)decoded.bytes;
+            d = [NSData dataWithBytes:base + (NSUInteger)off * sizeof(double)
+                               length:(NSUInteger)len * sizeof(double)];
+        } else {
+            MPGOHDF5Dataset *ds = _channelDatasets[chName];
+            d = [ds readDataAtOffset:(NSUInteger)off
+                                count:(NSUInteger)len
+                                error:error];
+        }
         if (!d) return nil;
         MPGOSignalArray *sa = [[MPGOSignalArray alloc] initWithBuffer:d
                                                                 length:len

@@ -61,6 +61,25 @@
                        compressionLevel:(int)compressionLevel
                                   error:(NSError **)error
 {
+    return [self createDatasetNamed:name
+                          precision:precision
+                             length:length
+                          chunkSize:chunkSize
+                        compression:MPGOCompressionZlib
+                   compressionLevel:compressionLevel
+                              error:error];
+}
+
+#define MPGO_HDF5_LZ4_FILTER_ID 32004u
+
+- (MPGOHDF5Dataset *)createDatasetNamed:(NSString *)name
+                              precision:(MPGOPrecision)precision
+                                 length:(NSUInteger)length
+                              chunkSize:(NSUInteger)chunkSize
+                            compression:(MPGOCompression)compression
+                       compressionLevel:(int)compressionLevel
+                                  error:(NSError **)error
+{
     hsize_t dims[1] = { (hsize_t)length };
     hid_t   space   = H5Screate_simple(1, dims, NULL);
     if (space < 0) {
@@ -80,9 +99,27 @@
     if (chunkSize > 0 && length > 0) {
         hsize_t chunk[1] = { (hsize_t)MIN(chunkSize, length) };
         H5Pset_chunk(plist, 1, chunk);
-        if (compressionLevel > 0) {
+        if (compression == MPGOCompressionZlib && compressionLevel > 0) {
             H5Pset_deflate(plist, (unsigned)compressionLevel);
+        } else if (compression == MPGOCompressionLZ4) {
+            if (H5Zfilter_avail((H5Z_filter_t)MPGO_HDF5_LZ4_FILTER_ID) <= 0) {
+                H5Pclose(plist); H5Sclose(space);
+                if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
+                    @"LZ4 filter (id 32004) is not available; install "
+                    @"the hdf5plugin package or set HDF5_PLUGIN_PATH");
+                return nil;
+            }
+            // filter_avail has confirmed the plugin is loadable; register
+            // it on the plist with no cd_values (default LZ4 block size).
+            if (H5Pset_filter(plist, MPGO_HDF5_LZ4_FILTER_ID,
+                              H5Z_FLAG_MANDATORY, 0, NULL) < 0) {
+                H5Pclose(plist); H5Sclose(space);
+                if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
+                    @"H5Pset_filter(LZ4) failed for '%@'", name);
+                return nil;
+            }
         }
+        // MPGOCompressionNone: leave the plist alone (no filter).
     }
 
     hid_t htype = MPGOHDF5TypeForPrecision(precision);

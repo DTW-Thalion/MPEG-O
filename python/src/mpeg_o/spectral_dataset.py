@@ -299,6 +299,12 @@ class WrittenRun:
     base_peak_intensities: np.ndarray
     nucleus_type: str = ""
     provenance_records: list[ProvenanceRecord] = field(default_factory=list)
+    # v0.3 M21: signal compression codec. Valid values are the strings
+    # recognised by :func:`mpeg_o._hdf5_io.write_signal_channel` plus
+    # the MPGO-level ``"numpress_delta"`` codec, which transforms the
+    # float64 buffer into an int64 first-difference array and stores
+    # the fixed-point scaling factor on the signal_channels group.
+    signal_compression: str = "gzip"
 
 
 def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
@@ -347,9 +353,24 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
 
     sig = g.create_group("signal_channels")
     io.write_fixed_string_attr(sig, "channel_names", ",".join(run.channel_data.keys()))
+    codec = run.signal_compression
     for cname, buffer in run.channel_data.items():
-        io.write_signal_channel(sig, f"{cname}_values",
-                                buffer.astype("<f8", copy=False))
+        if codec == "numpress_delta":
+            from ._numpress import encode as _np_encode
+            deltas, scale = _np_encode(buffer.astype(np.float64, copy=False))
+            ds_name = f"{cname}_values"
+            io.write_signal_channel(
+                sig, ds_name, deltas, compression="gzip",
+            )
+            # Per-channel fixed-point attribute, matching the ObjC
+            # writer's ``@<chName>_numpress_fixed_point``.
+            io.write_int_attr(sig, f"{cname}_numpress_fixed_point", int(scale))
+        else:
+            io.write_signal_channel(
+                sig, f"{cname}_values",
+                buffer.astype("<f8", copy=False),
+                compression=codec,
+            )
 
 
 def _write_identifications(study: h5py.Group, records: list[Identification]) -> None:

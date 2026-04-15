@@ -31,8 +31,9 @@ dependencies = [
 crypto = ["cryptography>=41.0"]
 import = ["lxml"]
 cloud = ["fsspec", "s3fs", "aiohttp"]
-test = ["pytest>=7", "cryptography>=41.0", "lxml"]
-all = ["mpeg-o[crypto,import,cloud]"]
+codecs = ["hdf5plugin>=4.0"]
+test = ["pytest>=7", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0"]
+all = ["mpeg-o[crypto,import,cloud,codecs]"]
 
 [project.urls]
 Homepage = "https://github.com/DTW-Thalion/MPEG-O"
