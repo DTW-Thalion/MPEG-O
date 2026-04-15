@@ -37,7 +37,9 @@ libMPGO_HEADER_FILES = \
 	Dataset/MPGOProvenanceRecord.h \
 	Dataset/MPGOTransitionList.h \
 	Dataset/MPGOSpectralDataset.h \
-	Image/MPGOMSImage.h
+	Image/MPGOMSImage.h \
+	Protection/MPGOAccessPolicy.h \
+	Protection/MPGOEncryptionManager.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -64,9 +66,11 @@ libMPGO_OBJC_FILES = \
 	Dataset/MPGOProvenanceRecord.m \
 	Dataset/MPGOTransitionList.m \
 	Dataset/MPGOSpectralDataset.m \
-	Image/MPGOMSImage.m
+	Image/MPGOMSImage.m \
+	Protection/MPGOAccessPolicy.m \
+	Protection/MPGOEncryptionManager.m
 
-libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz
+libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz -lcrypto
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/library.make
