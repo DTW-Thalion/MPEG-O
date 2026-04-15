@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mpeg-o"
+version = "0.3.0a1"
+description = "Python reader/writer for the MPEG-O multi-omics data standard"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "LGPL-3.0-or-later" }
+authors = [{ name = "DTW-Thalion" }]
+keywords = ["mass-spectrometry", "NMR", "multi-omics", "HDF5", "mzML", "bioinformatics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Typing :: Typed",
+]
+dependencies = [
+    "h5py>=3.0",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+crypto = ["cryptography>=41.0"]
+import = ["lxml"]
+cloud = ["fsspec", "s3fs", "aiohttp"]
+test = ["pytest>=7", "cryptography>=41.0", "lxml"]
+all = ["mpeg-o[crypto,import,cloud]"]
+
+[project.urls]
+Homepage = "https://github.com/DTW-Thalion/MPEG-O"
+Repository = "https://github.com/DTW-Thalion/MPEG-O"
+Issues = "https://github.com/DTW-Thalion/MPEG-O/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mpeg_o = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
