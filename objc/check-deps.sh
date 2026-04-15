@@ -76,7 +76,33 @@ if command -v clang >/dev/null 2>&1; then
     objc_cc="clang"
     ok "clang ($(clang --version | head -n1))"
 else
-    note "clang not found — gcc/gobjc cannot compile this project (no -fobjc-arc)"
+    fail "clang not found — gcc/gobjc cannot compile this project (no -fobjc-arc)"
+fi
+
+# --- Objective-C runtime headers (objc/objc.h) -----------------------------
+# GNUstep's Foundation.h does `#import <objc/objc.h>`. That header is not
+# shipped by gnustep-base; on Ubuntu it comes from the `gobjc` package which
+# drops the libobjc headers into a gcc-internal directory that clang's
+# Linux driver searches automatically. Detect via clang itself if available.
+objc_h_found=0
+if [ -n "$objc_cc" ]; then
+    if printf '#import <objc/objc.h>\nint main(void){return 0;}\n' \
+       | clang -x objective-c -fsyntax-only - >/dev/null 2>&1; then
+        objc_h_found=1
+    fi
+fi
+# Fallback: direct filesystem probe
+if [ $objc_h_found -eq 0 ]; then
+    for cand in /usr/include/objc/objc.h \
+                /usr/local/include/objc/objc.h \
+                /usr/lib/gcc/x86_64-linux-gnu/*/include/objc/objc.h; do
+        if [ -f "$cand" ]; then objc_h_found=1; break; fi
+    done
+fi
+if [ $objc_h_found -eq 1 ]; then
+    ok "objc/objc.h reachable by the Objective-C compiler"
+else
+    fail "objc/objc.h not found (install gobjc — provides libobjc headers)"
 fi
 
 # --- HDF5 ------------------------------------------------------------------

@@ -14,15 +14,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # gobjc is deliberately NOT installed: gcc's Objective-C front end
-      # lacks -fobjc-arc and cannot compile libMPGO. build.sh selects clang.
+      # Toolchain note:
+      #
+      # We use clang as the Objective-C compiler (libMPGO requires ARC, and
+      # gcc's gobjc front end does not support -fobjc-arc). However we still
+      # install the `gobjc` package because it pulls in libobjc's runtime
+      # headers (objc/objc.h, objc/runtime.h, ...) that GNUstep's Foundation
+      # imports. Clang's Linux driver searches gcc's include directories,
+      # so installing gobjc is the canonical way to make those headers
+      # available to clang on Ubuntu. build.sh still selects clang via
+      # CC=clang OBJC=clang for the actual compile.
       #
       # Ubuntu's libgnustep-base-dev uses the gnustep-1.8 fragile ABI (built
       # against GCC's libobjc, not libobjc2). The MPGO preamble auto-detects
-      # this and drops -fblocks on that path, so no libobjc2/blocks packages
-      # are needed for CI. Developers building gnustep from source against
-      # libobjc2 on their dev machines pick up gnustep-2.0 automatically
-      # and get -fblocks enabled.
+      # this and drops -fblocks on that path. Developers building gnustep
+      # from source against libobjc2 get gnustep-2.0 + -fblocks automatically.
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -32,6 +38,7 @@ jobs:
             gnustep-make \
             libgnustep-base-dev \
             libobjc4 \
+            gobjc \
             clang \
             libhdf5-dev \
             zlib1g-dev \
