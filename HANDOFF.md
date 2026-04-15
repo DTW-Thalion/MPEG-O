@@ -1,627 +1,162 @@
-# MPEG-O v0.3 — Continuation Session Prompt
+# MPEG-O v0.4 — Continuation Session Prompt
 
-> **Status:** v0.2.0 is **complete** (656 tests passing in CI). This
-> session executes **Milestones 16–22** to produce the **v0.3.0**
-> release. The headline deliverable is the **Python `mpeg-o` package**.
+> **Status:** v0.3.0 is **complete**. Dual-language implementation (Objective-C + Python) with cross-implementation conformance, cloud access, LZ4/Numpress codecs, canonical signatures, mzML import/export. This session executes **Milestones 23-30** to produce **v0.4.0** — adding thread safety, the Java stream, key rotation, chromatogram API, ISA-Tab/JSON export, spectral anonymization, and nmrML export.
+
+## First Steps
+
+1. `git clone https://github.com/DTW-Thalion/MPEG-O.git && cd MPEG-O && git pull`
+2. Read: `README.md`, `ARCHITECTURE.md`, `WORKPLAN.md`, `docs/format-spec.md`, `docs/feature-flags.md`
+3. Verify: `cd objc && ./build.sh check` (ObjC tests) and `cd ../python && pip install -e ".[test,import,crypto]" && pytest` (Python tests)
+4. Tag v0.3.0 if not already tagged.
+
+## Binding Decisions
+
+### From v0.1-v0.3 (still active)
+
+1. Milestone-by-milestone checkpoints with user review. 2. Clang-only for ObjC (ARC). 3. Immutable value classes. 4. CRLF/LF via .gitattributes. 5. Shell scripts need executable bit. 6. HDF5 via C API with ObjC wrappers. 7. `.mpgo` extension. 8. `NSError **` out-params. 9. Test isolation. 10. One commit per milestone. 11. CI green before complete. 12. ARC on libMPGO, MRC on tests. 13. Apache-2.0 on import/export. 14. PyPI name `mpeg-o`, Python 3.11+. 15. Cloud via fsspec. 16. Numpress clean-room.
+
+### From v0.4 planning (new)
+
+17. **Java: Maven** build system (standard in bioinformatics). Package `com.dtwthalion.mpgo`. 18. **HDF5-Java: `hdf-java`** (HDF Group JNI). Full read/write. 19. **Anonymization: broad scope** — proteomics + metabolomics + NMR. 20. **ISA output: both ISA-Tab and ISA-JSON.** 21. **PyPI: remain on TestPyPI** until v1.0. 22. **Vendor import: Thermo `.raw` first** (most used). Bruker TDF deferred.
+
+## Dependency Graph
+
+```
+  M23 (Thread safety)  M24 (Chromatogram)  M26 (Java)
+       |                    |                   |
+       v                    v                   |
+  M25 (Key rotation)   M27 (ISA export)        |
+       |                    |                   |
+       v                    v                   |
+  M28 (Anonymization)  M29 (nmrML+stubs)       |
+       |                    |                   |
+       +--------+-----------+-------------------+
+                v
+          M30 (v0.4.0)
+```
+
+M23, M24, M26 start in parallel.
 
 ---
 
-## First Steps on This Machine
+## Milestone 23 — Thread Safety (ObjC + Python)
 
-1. Clone or pull the repo:
-   ```bash
-   git clone https://github.com/DTW-Thalion/MPEG-O.git
-   cd MPEG-O && git pull
-   ```
+**License:** LGPL-3.0
 
-2. **Read these files in full** — they are the source of truth:
-   - `README.md`, `ARCHITECTURE.md`, `WORKPLAN.md`
-   - `docs/format-spec.md` — the normative HDF5 layout (Python must match this exactly)
-   - `docs/feature-flags.md` — feature registry with reserved v0.3 flags
-   - `objc/Tests/Fixtures/mpgo/` — reference `.mpgo` fixtures for cross-compat testing
-   - `objc/Source/Import/` — mzML/nmrML readers (Python equivalents needed)
-   - `.github/workflows/ci.yml` — current CI (ObjC only; Python job to be added)
+**ObjC:** Verify `H5is_library_threadsafe()` in CI. If false, build HDF5 from source with `--enable-threadsafe`. Add `NSRecursiveLock` on `MPGOHDF5File` for all H5D/H5G operations. Add `-isThreadSafe` method. **Python:** `SpectralDataset` wraps `h5py.File` with `threading.RLock`. Opt-in via `thread_safe=True` param. **Docs:** Update ARCHITECTURE.md threading model. **Benchmark:** Single vs 4-thread read of 100 spectra from 10k-spectrum file. Overhead < 15%, speedup 2-4x.
 
-3. **Verify ObjC build:** `cd objc && ./build.sh check` → must show 656 tests passing
-
-4. **Tag v0.2.0** if not already tagged:
-   ```bash
-   git tag -a v0.2.0 -m "MPEG-O v0.2.0: mzML/nmrML import, modality-agnostic runs, compound HDF5 types, digital signatures, formal versioning"
-   git push origin v0.2.0
-   ```
+**Acceptance:** `H5is_library_threadsafe()` true in CI. Two threads read concurrently without crashes. Write blocks readers. Single-thread overhead < 15%. Model documented.
 
 ---
 
-## What v0.2.0 Delivered
+## Milestone 24 — Chromatogram API + mzML Writer Completion
 
-- **M1–M8 (v0.1.0-alpha):** Six primitives, HDF5 container, signal channels, spectrum index, query, streaming, AES-256-GCM encryption. 379 tests.
-- **M9:** mzML reader — SAX parser, base64+zlib, `MPGOCVTermMapper`, real HUPO-PSI fixtures.
-- **M10:** Protocol conformance — modality-agnostic runs (MS+NMR), per-run provenance via `@provenance_json`, `MPGOEncryptable` on runs.
-- **M11:** Native HDF5 compound types — `MPGOHDF5CompoundType`, `MPGOFeatureFlags` (`@mpeg_o_format_version = "1.1"`), `MPGOCompoundIO`, dataset-level encryption, v0.1 JSON fallback.
-- **M12:** MSImage inherits `MPGOSpectralDataset`, native rank-2 NMR datasets with dimension scales, `opt_native_2d_nmr` flag.
-- **M13:** nmrML reader — real BMRB fixture (`bmse000325.nmrML`), 16384-sample FID.
-- **M14:** Digital signatures — HMAC-SHA256, `MPGOVerifier`, provenance chain signing, `opt_digital_signatures` flag. Sign ~9ms / verify ~5ms.
-- **M15:** Format spec, feature-flags doc, 5 reference fixtures, fixture generator tool.
+**License:** LGPL-3.0 (core), Apache-2.0 (export)
 
-### Known v0.2 Limitations to Resolve in v0.3
+Resolves v0.3 M19 deferred item. **ObjC:** `MPGOAcquisitionRun` gains `chromatograms` property (`NSArray<MPGOChromatogram *>`). HDF5: `/study/ms_runs/run_NNNN/chromatograms/` with time_values + intensity_values + chromatogram_index. **Python:** matching `AcquisitionRun.chromatograms`. **mzML writer:** both ObjC and Python emit `<chromatogramList>` + `<index name="chromatogram">` with byte-correct offsets and cvParam type (TIC MS:1000235, XIC MS:1000627, SRM MS:1000789). **mzML reader:** chromatograms stored on run object.
 
-1. **Per-run provenance uses `@provenance_json` string attribute** instead of compound dataset. Reserved flag: `compound_per_run_provenance`.
-2. **Signatures cover native-endian bytes** — not portable across architectures. Reserved flag: `opt_canonical_signatures`.
-3. **No mzML export** — import only.
-4. **No Python implementation** — `python/README.md` is a stub.
-5. **No cloud-native access.**
-6. **Only zlib compression** — no LZ4 or Numpress.
+**Acceptance:** 100 spectra + 3 chromatograms round-trip. mzML chromatogram round-trip. v0.3 files readable (empty list). Cross-language parity. indexedmzML offsets correct.
 
 ---
 
-## Binding Decisions — Do Not Override
+## Milestone 25 — Key Rotation (`opt_key_rotation`)
 
-### From v0.1 + v0.2 sessions
+**License:** LGPL-3.0
 
-1. **Milestone-by-milestone checkpoints.** Complete N, commit, CI green, pause for user review. Do not chain milestones.
-2. **Clang-only for ObjC.** ARC required; `build.sh` enforces `CC=clang OBJC=clang`.
-3. **Immutable value classes** return `self` from `-copyWithZone:`.
-4. **No thread safety until v0.4.** Document as "not thread-safe."
-5. **CRLF/LF via `.gitattributes`.** Do not modify.
-6. **Shell scripts need executable bit.** `git update-index --chmod=+x`.
-7. **HDF5 via C API** with thin ObjC wrappers. Check returns. Close `hid_t`.
-8. **`.mpgo` extension.** Internally valid HDF5.
-9. **`NSError **` out-params.** Never throw for expected errors.
-10. **Test isolation.** Temp files in `/tmp/mpgo_test_*`, cleaned after.
-11. **Commit discipline.** One commit per milestone, `Co-Authored-By` trailer.
-12. **CI must be green** before any milestone is complete.
-13. **ARC on libMPGO, MRC on test harness.** Preserve the split.
-14. **Apache-2.0 on import/export layer.** Core stays LGPL-3.0.
+Envelope encryption: DEK wraps data, KEK wraps DEK. Rotation re-wraps DEK without re-encrypting data (O(1)). **HDF5:** `/protection/key_info` gains `dek_wrapped` dataset (60 bytes: 32 DEK + 12 IV + 16 tag), `@kek_id`, `@kek_algorithm` ("aes-256-gcm"), `@wrapped_at`, `key_history` compound dataset. **ObjC:** `MPGOKeyRotationManager` with `enableEnvelopeEncryption:`, `rotateKey:`, `unwrapDEK:`. **Python:** `mpeg_o.key_rotation` with matching functions. **Migration:** v0.3 direct-key files: decrypt with old key, generate DEK, re-encrypt, wrap DEK with KEK.
 
-### From v0.3 planning session
-
-15. **PyPI package name: `mpeg-o`** (import as `mpeg_o`).
-16. **Python 3.11+ minimum.** Enables `StrEnum`, better typing (`Self`).
-17. **Cloud access via `fsspec`** for multi-cloud abstraction.
-18. **Numpress: clean-room implementation** from Teleman et al., *MCP* 13(6), 2014.
-19. **Thread safety deferred to v0.4.** No concurrency work in v0.3.
+**Acceptance:** Encrypt with KEK-1, read OK. Rotate to KEK-2, read OK, KEK-1 fails. Key history tracks both. Rotation < 100ms. Cross-language parity. v0.3 backward compat.
 
 ---
 
-## Milestone Dependency Graph
+## Milestone 26 — Java Implementation
 
-```
-  Milestone 16 (Python core reader/writer)
-       |
-       +--------------------+----------------------+
-       v                    v                      v
-  Milestone 17         Milestone 18           Milestone 20
-  (Compound provenance) (Canonical sigs)      (Cloud-native)
-       |                    |                      |
-       +--------+-----------+                      |
-                v                                  |
-           Milestone 19                            |
-           (mzML writer)                           |
-                |                                  |
-                v                                  |
-           Milestone 21                            |
-           (LZ4 + Numpress)                        |
-                |                                  |
-                +--------------+-------------------+
-                               v
-                        Milestone 22
-                        (v0.3.0 release)
-```
+**License:** LGPL-3.0 (core), Apache-2.0 (importers/exporters)
 
-M16 is the critical path. M17+M18 (ObjC) can start in parallel. M20 (cloud) depends on M16 but is otherwise independent.
+Maven project under `java/`. Package `com.dtwthalion.mpgo`. JDK 17+. Uses `hdf-java` (HDF Group JNI) for HDF5, `javax.crypto` for AES-256-GCM and HMAC-SHA256, `javax.xml.parsers.SAXParser` for mzML/nmrML import, `java.util.Base64` for decoding. Java records for value types. AutoCloseable for file handles. Lazy-loading AcquisitionRun.
+
+**Structure:** `src/main/java/com/dtwthalion/mpgo/` with SignalArray, Spectrum hierarchy, AcquisitionRun, SpectralDataset, Identification, Quantification, ProvenanceRecord, FeatureFlags, Enums. Sub-packages: `hdf5/` (Hdf5File, Hdf5Group, Hdf5Dataset, Hdf5CompoundType, Hdf5IO), `protection/` (EncryptionManager, SignatureManager, KeyRotationManager, AccessPolicy), `importers/` (MzMLReader, NmrMLReader, CVTermMapper, Base64Decoder), `exporters/` (MzMLWriter). Tests under `src/test/` with CrossCompatTest reading ObjC/Python fixtures.
+
+**pom.xml:** hdf-java dependency, JUnit 5, maven.compiler.source/target=17. Surefire plugin with `-Djava.library.path` for native HDF5.
+
+**Acceptance:** `mvn package` produces jar. All fixtures readable. Round-trip verified. Java fixtures readable by ObjC and Python. Encryption, signature, key rotation cross-language parity. mzML import works. Chromatogram API works. CI: `mvn verify` green on JDK 17.
 
 ---
 
-## Milestone 16 — Python Package: Core Reader/Writer
+## Milestone 27 — ISA-Tab/JSON Export (All Three Languages)
 
-**Track:** Python stream
-**License:** LGPL-3.0 (core), Apache-2.0 (`importers/`, `exporters/`)
+**License:** Apache-2.0
 
-### Package structure
+**ObjC:** `MPGOISAExporter` in `Export/`. **Python:** `mpeg_o.exporters.isa`. **Java:** `ISAExporter.java` in `exporters/`.
 
-```
-python/
-+-- pyproject.toml
-+-- src/mpeg_o/
-|   +-- __init__.py             # Public API surface
-|   +-- enums.py                # Precision, Compression, Polarity, SamplingMode (StrEnum)
-|   +-- value_range.py          # ValueRange (frozen dataclass)
-|   +-- cv_param.py             # CVParam (frozen dataclass)
-|   +-- axis_descriptor.py      # AxisDescriptor (frozen dataclass)
-|   +-- encoding_spec.py        # EncodingSpec (frozen dataclass)
-|   +-- signal_array.py         # SignalArray <-> numpy.ndarray
-|   +-- spectrum.py             # Spectrum base class
-|   +-- mass_spectrum.py        # MassSpectrum
-|   +-- nmr_spectrum.py         # NMRSpectrum
-|   +-- nmr_2d.py               # NMR2DSpectrum (native 2D h5py dataset)
-|   +-- fid.py                  # FreeInductionDecay
-|   +-- chromatogram.py         # Chromatogram
-|   +-- acquisition_run.py      # AcquisitionRun + SpectrumIndex
-|   +-- instrument_config.py    # InstrumentConfig (frozen dataclass)
-|   +-- spectral_dataset.py     # SpectralDataset -- root .mpgo reader/writer
-|   +-- ms_image.py             # MSImage (SpectralDataset subclass)
-|   +-- identification.py       # Identification
-|   +-- quantification.py       # Quantification
-|   +-- provenance.py           # ProvenanceRecord
-|   +-- transition_list.py      # TransitionList
-|   +-- feature_flags.py        # FeatureFlags reader/writer
-|   +-- encryption.py           # AES-256-GCM via cryptography library
-|   +-- signatures.py           # HMAC-SHA256 sign/verify
-|   +-- _hdf5_io.py             # Internal h5py helpers
-+-- src/mpeg_o/importers/       # Apache-2.0
-|   +-- __init__.py
-|   +-- mzml.py                 # mzML reader (xml.etree.ElementTree)
-|   +-- nmrml.py                # nmrML reader
-|   +-- cv_term_mapper.py       # PSI-MS + nmrCV accession mappings
-+-- src/mpeg_o/exporters/       # Apache-2.0 (placeholder for M19)
-|   +-- __init__.py
-+-- tests/
-    +-- conftest.py              # pytest fixtures, tmp_path, ObjC fixture paths
-    +-- test_value_classes.py
-    +-- test_signal_array.py
-    +-- test_spectrum.py
-    +-- test_mass_spectrum.py
-    +-- test_nmr_spectrum.py
-    +-- test_nmr_2d.py
-    +-- test_fid.py
-    +-- test_chromatogram.py
-    +-- test_acquisition_run.py
-    +-- test_spectral_dataset.py
-    +-- test_ms_image.py
-    +-- test_identification.py
-    +-- test_provenance.py
-    +-- test_feature_flags.py
-    +-- test_encryption.py
-    +-- test_signatures.py
-    +-- test_mzml_reader.py
-    +-- test_nmrml_reader.py
-    +-- test_cross_compat.py     # THE critical test -- ObjC <-> Python interop
-```
+Mapping: Dataset title -> Investigation title. `isaInvestigationId` -> Investigation ID. Each AcquisitionRun -> Study + Assay. InstrumentConfig -> Assay technology/platform. ProvenanceRecord chain -> Protocol REF. Identification -> result file refs. CVParam -> parameter values. Chromatograms -> derived data refs.
 
-### pyproject.toml
+**ISA-Tab output:** `i_investigation.txt`, `s_study.txt`, `a_assay_ms.txt`/`a_assay_nmr.txt` (UTF-8 TSV). **ISA-JSON:** single JSON file per ISA-JSON schema.
 
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "mpeg-o"
-version = "0.3.0a1"
-description = "Python reader/writer for the MPEG-O multi-omics data standard"
-requires-python = ">=3.11"
-license = {text = "LGPL-3.0-or-later"}
-dependencies = [
-    "h5py>=3.0",
-    "numpy>=1.24",
-]
-
-[project.optional-dependencies]
-crypto = ["cryptography>=41.0"]
-import = ["lxml"]
-cloud = ["fsspec", "s3fs", "aiohttp"]
-test = ["pytest>=7", "cryptography>=41.0", "lxml"]
-all = ["mpeg-o[crypto,import,cloud]"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/mpeg_o"]
-```
-
-### Design idioms
-
-- **Frozen dataclasses** for value types: `CVParam`, `AxisDescriptor`, `EncodingSpec`, `ValueRange`, `InstrumentConfig`
-- **`StrEnum`** for all enums (Python 3.11+):
-  ```python
-  class Precision(StrEnum):
-      FLOAT32 = "float32"
-      FLOAT64 = "float64"
-      INT32 = "int32"
-      COMPLEX128 = "complex128"
-  ```
-- **`numpy.ndarray`** as signal buffer: `SignalArray.data` is numpy; `SignalArray.from_numpy(arr, axis=..., encoding=...)` constructs
-- **Context managers** for file handles:
-  ```python
-  with SpectralDataset.open("file.mpgo") as ds:
-      run = ds.ms_runs["run_0001"]
-      spectrum = run[0]
-      mz = spectrum.mz_array.data  # numpy array
-  ```
-- **Lazy loading:** `AcquisitionRun` reads spectrum index on open, loads signal data only on access
-- **Type hints** throughout; `py.typed` marker for PEP 561
-- **Pure Pythonic API:** no ObjC patterns, no NSData, no NSArray
-
-### HDF5 I/O layer (`_hdf5_io.py`)
-
-Critical bridge — must produce HDF5 files byte-compatible with ObjC implementation. Key functions:
-
-```python
-def write_signal_channel(group, name, data, chunk_size=16384,
-                         compression="gzip", compression_level=6):
-    """Write a 1-D signal channel with chunking and compression."""
-
-def read_signal_channel(group, name):
-    """Read a signal channel, handling compressed and uncompressed."""
-
-def write_compound_dataset(group, name, records, fields):
-    """Write compound dataset. fields=[(name, h5py_type), ...].
-    VL strings use h5py.string_dtype()."""
-
-def read_compound_dataset(group, name):
-    """Read compound dataset into list of dicts."""
-
-def write_feature_flags(root, version, features):
-    """Write @mpeg_o_format_version and @mpeg_o_features."""
-
-def read_feature_flags(root):
-    """Read version + features. Returns ("1.0.0", []) for v0.1."""
-
-def is_legacy_v1(root):
-    """True if no @mpeg_o_features attribute."""
-```
-
-### SpectralDataset reader logic
-
-`SpectralDataset.open(path)` must handle:
-
-1. Open via `h5py.File(path, "r")`
-2. Read `@mpeg_o_format_version` + `@mpeg_o_features` (or detect v0.1 legacy)
-3. Navigate `/study/` group
-4. For each `ms_runs/run_NNNN/`:
-   - Read `spectrum_index/` (offsets, lengths, headers)
-   - Lazily defer signal channel reads
-   - Read `instrument_config/` attributes
-   - Read `provenance/` (compound dataset or `@provenance_json` fallback)
-5. Read `/study/identifications` (compound or `@identifications_json`)
-6. Read `/study/quantifications` (compound or `@quantifications_json`)
-7. Read `/study/provenance/` (dataset-level)
-8. Detect NMR runs, MSImage cube, 2D NMR datasets
-9. Check encryption markers (`@encrypted`), signatures
-
-### Cross-implementation contract
-
-**The most important acceptance criterion in v0.3.** `test_cross_compat.py` does:
-1. For each fixture in `objc/Tests/Fixtures/mpgo/`: open with Python, verify spectrum counts, array values (float64 epsilon), identifications, quantifications, feature flags
-2. Write a test dataset from Python to temp `.mpgo`
-3. Verify field-by-field against known expected values (or run ObjC verifier)
-
-### mzML and nmrML importers
-
-Port ObjC SAX parsers to Python using `xml.etree.ElementTree`:
-- `mpeg_o.importers.mzml.read(path) -> SpectralDataset`
-- `mpeg_o.importers.nmrml.read(path) -> SpectralDataset`
-- `cv_term_mapper.py` — same hardcoded PSI-MS and nmrCV mappings as ObjC
-- Base64: `base64.b64decode()` + `zlib.decompress()` from stdlib
-- Handle `referenceableParamGroup` expansion, `defaultArrayLength` validation
-
-### Encryption and signatures
-
-- `mpeg_o.encryption`: `cryptography` library for AES-256-GCM (`AESGCM`)
-- `mpeg_o.signatures`: `hmac` + `hashlib` from stdlib for HMAC-SHA256
-- Must produce identical ciphertext/MAC as ObjC for same key and data
-
-### Acceptance criteria
-
-- [ ] `pip install -e ".[test]"` succeeds on Python 3.11, 3.12
-- [ ] Read every ObjC reference fixture -- all values match
-- [ ] Write -> read in Python round-trip verified
-- [ ] Write from Python -> compare against known expected values
-- [ ] Read ObjC-encrypted .mpgo -> decrypt -> values match
-- [ ] Read ObjC-signed .mpgo -> verify -> Valid
-- [ ] Feature flags identical to ObjC
-- [ ] mzML import: synthetic + HUPO-PSI fixtures, round-trip
-- [ ] nmrML import: synthetic + BMRB fixture, round-trip
-- [ ] `pytest` 100% green
-
-### Commit message
-
-```
-Milestone 16: Python mpeg-o package -- core reader/writer + importers
-
-- Full reader/writer for .mpgo files via h5py
-- Value classes as frozen dataclasses with StrEnum
-- Lazy-loading AcquisitionRun with SpectrumIndex
-- mzML and nmrML importers (Apache-2.0)
-- AES-256-GCM encryption and HMAC-SHA256 signatures
-- Cross-implementation tests against ObjC reference fixtures
-- pyproject.toml with hatchling build, Python 3.11+
-```
+**Acceptance:** Valid ISA-Tab and ISA-JSON from multi-run dataset. Validates with `isatools` (if available, skip otherwise). Metadata round-trip. Three languages produce structurally identical output.
 
 ---
 
-## Milestone 17 — Compound Per-Run Provenance (Objective-C)
+## Milestone 28 — Spectral Anonymization (ObjC + Python)
 
-**Track:** ObjC hardening | **License:** LGPL-3.0
+**License:** LGPL-3.0
 
-### Deliverables
+**ObjC:** `MPGOAnonymizer` in `Protection/`. **Python:** `mpeg_o.anonymization`.
 
-- Migrate per-run provenance from `@provenance_json` to compound dataset at `/study/ms_runs/run_NNNN/provenance/steps`
-- Same compound type as dataset-level provenance
-- Reader detects `@provenance_json` (v0.2) vs compound (v0.3)
-- `compound_per_run_provenance` feature flag
-- Deprecate `@provenance_json` with `MPGO_DEPRECATED_MSG`
-- Python reader (M16) handles both layouts
+**Policies — proteomics:** `redact_saav_spectra` — remove spectra with SAAV identifications. `mask_intensity_below_quantile` — zero below threshold. **Metabolomics:** `mask_rare_metabolites` — suppress signals linked to rare metabolites (below prevalence threshold from bundled/user JSON table mapping CHEBI IDs to population frequencies). **NMR:** `coarsen_chemical_shift_decimals` — reduce ppm precision. **Universal:** `coarsen_mz_decimals`, `strip_metadata_fields` (operator name, serial, source files, timestamps).
 
-### Acceptance criteria
+**Audit:** Signed ProvenanceRecord documenting policy, counts, timestamp. `opt_anonymized` feature flag. **Output:** new file, never in-place. Encrypted inputs require decryption key from caller.
 
-- [ ] New files use compound provenance per run
-- [ ] v0.2 `@provenance_json` files still readable
-- [ ] Feature flag emitted
-- [ ] Python handles both layouts
+**Bundled data:** `data/metabolite_prevalence.json` with common human metabolites. Documented as non-authoritative default.
 
-### Commit message
-
-```
-Milestone 17: Compound per-run provenance
-
-- Per-run provenance as HDF5 compound dataset
-- compound_per_run_provenance feature flag
-- @provenance_json deprecated with fallback reader
-```
+**Acceptance:** SAAV redaction removes correct spectra. Intensity masking works. m/z and chemical shift coarsening works. Rare metabolite masking works. Metadata stripping works. Provenance signed and verifiable. Readable by all three implementations. Original unmodified.
 
 ---
 
-## Milestone 18 — Canonical Byte-Order Signatures (Objective-C + Python)
+## Milestone 29 — nmrML Writer + Thermo RAW Stub
 
-**Track:** ObjC hardening | **License:** LGPL-3.0
+**License:** Apache-2.0
 
-### Deliverables
+**nmrML writer** in all three languages. Serializes NMRSpectrum and FID to nmrML XML: `<acquisition1D>`, `<fidData>` (base64 complex128), `<spectrum1D>`, nmrCV cvParams for nucleus, frequency, sweep width, dwell time.
 
-- Normalize to canonical little-endian before hashing: `H5T_IEEE_F64LE`, `H5T_STD_U32LE` as mem_type (ObjC); `dtype='<f8'` (Python)
-- Compound datasets: normalize numeric members; VL strings already BO-independent
-- Format: `"v2:" + base64(mac)` prefix
-- Verify attempts v2 first, v1 fallback with warning
-- `opt_canonical_signatures` feature flag
-- ObjC and Python produce identical v2 signatures
+**Thermo RAW stub** in all three languages. Defines public API, returns not-implemented error with SDK guidance. **ObjC:** `MPGOThermoRawReader` returns nil + NSError. **Python:** `mpeg_o.importers.thermo_raw.read()` raises NotImplementedError. **Java:** throws UnsupportedOperationException. API contract stable for future implementation.
 
-### Acceptance criteria
+**`docs/vendor-formats.md`:** new file covering Thermo .raw, Bruker TDF (stub), Waters MassLynx (stub) format overviews and integration patterns.
 
-- [ ] Canonical signatures verify across emulated endianness
-- [ ] v0.2 signatures verify in compat mode
-- [ ] Compound type sigs stable across padding
-- [ ] Cross-language parity
-
-### Commit message
-
-```
-Milestone 18: Canonical byte-order signatures
-
-- LE normalization before HMAC
-- "v2:" prefix for version detection
-- v1 backward compat
-- opt_canonical_signatures feature flag
-- Cross-language parity verified
-```
+**Acceptance:** nmrML round-trip verified across three languages. Stubs compile/import without error. `docs/vendor-formats.md` committed.
 
 ---
 
-## Milestone 19 — mzML Writer (Objective-C + Python)
+## Milestone 30 — v0.4.0 Release
 
-**Track:** Export | **License:** Apache-2.0
+**Docs:** Update format-spec.md, feature-flags.md, README.md, ARCHITECTURE.md, WORKPLAN.md. New docs/vendor-formats.md. **CI:** Add java-test job (JDK 17, mvn verify) and cross-compat-3way job (ObjC<->Python<->Java fixture exchange). **Packages:** mpeg-o updated on TestPyPI. Java artifact to GitHub Packages. **Release:** `git tag -a v0.4.0 -m "MPEG-O v0.4.0: Java stream, thread safety, key rotation, chromatogram API, ISA-Tab/JSON export, spectral anonymization, nmrML writer"`
 
-### Deliverables
-
-- **ObjC:** `MPGOMzMLWriter` in `objc/Source/Export/`
-- **Python:** `mpeg_o.exporters.mzml` in `python/src/mpeg_o/exporters/`
-- Reverse CVTermMapper: MPGO enum -> PSI-MS accession
-- Base64 + optional zlib for binary arrays
-- `indexedmzML` wrapper with byte-offset index
-- Chromatogram output
-- Apache-2.0 headers on all Export files
-- Add Export files to `objc/Source/GNUmakefile`
-
-### Acceptance criteria
-
-- [ ] Round-trip: mzML -> .mpgo -> mzML -> compare (float64 epsilon)
-- [ ] Output re-parseable by readers
-- [ ] Chromatograms included
-- [ ] indexedmzML offsets byte-correct
-- [ ] ObjC and Python produce structurally identical XML
-
-### Commit message
-
-```
-Milestone 19: mzML writer (Objective-C + Python)
-
-- MPGOMzMLWriter (Apache-2.0)
-- mpeg_o.exporters.mzml (Apache-2.0)
-- Reverse CVTermMapper
-- indexedmzML with byte-offset index
-```
-
----
-
-## Milestone 20 — Cloud-Native Access Prototype (Python)
-
-**Track:** Infrastructure | **License:** LGPL-3.0
-
-### Deliverables
-
-- `mpeg_o.remote` module using `fsspec`
-- `SpectralDataset.open("s3://bucket/file.mpgo")` detects URL, delegates
-- Strategy: `fsspec.open(url, "rb")` -> `h5py.File(fileobj, "r")`
-- Spectrum index fetched first, signal chunks lazy
-- Query via index headers without full download
-- CI test via `moto` (mock S3) or local HTTP server
-
-### Acceptance criteria
-
-- [ ] Open .mpgo from mock S3 (moto)
-- [ ] Spectrum index fetched with minimal I/O
-- [ ] Individual spectrum does not download full file
-- [ ] Remote query works
-- [ ] 10 spectra from 1000-spectrum file < 2 seconds (logged)
-
-### Commit message
-
-```
-Milestone 20: Cloud-native access prototype
-
-- mpeg_o.remote with fsspec
-- Transparent s3:// / gs:// / az:// URL handling
-- Lazy chunk-level reads
-- CI test with moto mock S3
-```
-
----
-
-## Milestone 21 — Compression Codecs: LZ4 + Numpress (Objective-C + Python)
-
-**Track:** Infrastructure | **License:** LGPL-3.0
-
-### LZ4
-
-- **ObjC:** HDF5 filter plugin (filter ID 32004). `H5Pset_filter`. Check `H5Zfilter_avail(32004)` at runtime; skip tests if unavailable.
-- **Python:** `hdf5plugin` package provides LZ4 filter. Add to `[project.optional-dependencies] codecs`.
-- New enum: `Compression.LZ4` / `MPGOCompressionLZ4`
-
-### Numpress
-
-Clean-room from Teleman et al., *MCP* 13(6):1537-1542, 2014, doi:10.1074/mcp.O114.037879
-
-- `numpress_linear_encode` / `numpress_linear_decode`
-- Fixed-point scaling factor + delta-encoded integers
-- Lossy, < 1 ppm relative error for m/z
-- Store in HDF5 dataset with `@numpress_fixed_point` attribute
-- **ObjC:** `objc/Source/Core/MPGONumpress.h/.m`
-- **Python:** `src/mpeg_o/_numpress.py` (pure Python + numpy)
-- New enum: `Compression.NUMPRESS_DELTA` / `MPGOCompressionNumpressDelta`
-
-### Benchmark
-
-10,000-spectrum synthetic LC-MS run. Compare zlib-6 vs LZ4 vs Numpress+zlib. Log sizes and read speeds.
-
-### Acceptance criteria
-
-- [ ] LZ4 round-trip in both languages
-- [ ] Numpress m/z within < 1 ppm relative error
-- [ ] Cross-language: ObjC LZ4 readable by Python, vice versa
-- [ ] Cross-language: ObjC Numpress readable by Python, vice versa
-- [ ] LZ4 decompression 2-5x faster than zlib (logged)
-
-### Commit message
-
-```
-Milestone 21: LZ4 + Numpress compression codecs
-
-- LZ4 via HDF5 filter plugin + hdf5plugin
-- Numpress linear (clean-room, Teleman et al. 2014)
-- Cross-language codec interop
-- Benchmark: LZ4 vs zlib
-```
-
----
-
-## Milestone 22 — v0.3.0 Release
-
-**Track:** Cross-cutting
-
-### Documentation
-
-- Update `docs/format-spec.md`: compound per-run provenance, `v2:` signature format, LZ4/Numpress
-- Update `docs/feature-flags.md`: new flags
-- Update `README.md`: Python install, usage, dual-language badges
-- Update `ARCHITECTURE.md`: Python class mapping, cloud design, codec matrix
-
-### CI expansion
-
-Add to `.github/workflows/ci.yml`:
-
-```yaml
-  python-test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.11', '3.12']
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - run: sudo apt-get install -y libhdf5-dev
-      - run: cd python && pip install -e ".[test,import]"
-      - run: cd python && pytest -v --tb=short
-
-  cross-compat:
-    needs: [objc-build-test, python-test]
-    runs-on: ubuntu-latest
-    # Build ObjC fixtures, install Python, cross-verify both directions
-```
-
-### Publish
-
-```bash
-cd python && pip install build twine
-python -m build
-twine upload --repository testpypi dist/*
-```
-
-### Release
-
-```bash
-git tag -a v0.3.0 -m "MPEG-O v0.3.0: Python mpeg-o package, mzML export, canonical signatures, cloud access, LZ4/Numpress codecs"
-git push origin v0.3.0
-```
-
-### Acceptance criteria
-
-- [ ] ObjC: all tests pass (656 + M17/M18/M19/M21 tests)
-- [ ] Python: all tests pass on 3.11 and 3.12
-- [ ] Every fixture readable by both implementations
-- [ ] v0.1 and v0.2 backward compat preserved
-- [ ] `mpeg-o` installable from TestPyPI
-- [ ] CI: ObjC + Python + cross-compat, all green
-- [ ] Tag `v0.3.0` pushed
+**Acceptance:** All three languages green. All fixtures cross-readable. v0.1/v0.2/v0.3 backward compat. TestPyPI updated. GitHub Packages artifact. CI all green. Tag pushed.
 
 ---
 
 ## Known Gotchas
 
-### Inherited (v0.1/v0.2)
+**Inherited:** 1. HDF5 paths differ by install. 2. Testing.h vs ARC split. 3. Custom check:: target. 4. Runtime ABI detect. 5. -fblocks gnustep-2.0 only. 6. LF enforcement. 7. NSXMLParser needs libxml2. 8. h5py compound types must match format-spec. 9. Fixed test IVs for cross-language crypto. 10. Numpress relative error. 11. LZ4 filter runtime check.
 
-1. **HDF5 paths:** apt `/usr/include/hdf5/serial/`, source `/usr/local`. `HDF5_PREFIX` override.
-2. **Testing.h vs ARC:** `-fno-objc-arc` on test binary. Preserve split.
-3. **test-tool.make:** Custom `check::` target with LD_LIBRARY_PATH.
-4. **Runtime ABI:** `ifeq ($(MPGO_OBJC_RUNTIME),gnustep-2.0)` pattern.
-5. **-fblocks:** gnustep-2.0 only.
-6. **LF enforcement:** `.gitattributes`. Fix with `git add --renormalize .`
-7. **NSXMLParser needs libxml2.** Already in CI.
-
-### New (v0.3)
-
-8. **h5py compound types:** Use `np.dtype` with named fields matching `docs/format-spec.md` exactly. VL strings via `h5py.string_dtype()`.
-9. **h5py file-like for cloud:** `h5py.File(fileobj, "r")` needs `.read()/.seek()/.tell()`. `fsspec.open()` satisfies this. h5py may buffer aggressively -- test actual I/O.
-10. **AES-256-GCM cross-language parity:** `cryptography` AESGCM and OpenSSL produce identical output for same key+IV+plaintext. Use **fixed test IV** (not `os.urandom()`) for cross-language verification.
-11. **Numpress precision:** Lossy. Tests use relative error: `abs(actual - expected) / max(abs(expected), 1.0) < 1e-6`.
-12. **LZ4 filter availability:** Ubuntu `libhdf5-dev` may lack LZ4 plugin. Python `hdf5plugin` bundles its own. ObjC: check `H5Zfilter_avail(32004)` at runtime, skip if unavailable.
-13. **PyPI name collision:** Verify `mpeg-o` availability before publishing: `pip index versions mpeg-o`.
-14. **pytest temp files:** Use `tmp_path` fixture, not `/tmp/` directly.
+**New (v0.4):** 12. HDF5 thread-safe: check `H5is_library_threadsafe()` at runtime; may need source build. 13. hdf-java JNI: set `-Djava.library.path` to HDF5 native lib dir in surefire. 14. hdf-java API: static methods on `hdf.hdf5lib.H5`; wrap into OO. 15. javax.crypto HMAC: validate 32-byte key length. 16. Key rotation backward compat: detect envelope vs direct encryption by presence of `dek_wrapped`. 17. ISA-Tab: UTF-8 TSV; validate with isatools if available. 18. Anonymization prevalence table: bundled default is non-authoritative; document clearly. 19. Anonymization of encrypted files: requires decryption key from caller.
 
 ---
 
 ## Execution Checklist
 
-1. Tag v0.2.0 if needed. Push.
-2. **Milestone 16:** Python core -- scaffold, reader, writer, importers, cross-compat. **Pause for user review.**
-3. **Milestone 17:** Compound per-run provenance (ObjC). **Pause for user review.**
-4. **Milestone 18:** Canonical signatures (ObjC + Python). **Pause for user review.**
-5. **Milestone 19:** mzML writer (ObjC + Python). **Pause for user review.**
-6. **Milestone 20:** Cloud-native access (Python). **Pause for user review.**
-7. **Milestone 21:** LZ4 + Numpress (ObjC + Python). **Pause for user review.**
-8. **Milestone 22:** Docs, CI, TestPyPI, tag v0.3.0.
+1. Tag v0.3.0 if needed.
+2. **M23:** Thread safety. **Pause.**
+3. **M24:** Chromatogram API. **Pause.**
+4. **M25:** Key rotation. **Pause.**
+5. **M26:** Java stream. **Pause.**
+6. **M27:** ISA-Tab/JSON export. **Pause.**
+7. **M28:** Spectral anonymization. **Pause.**
+8. **M29:** nmrML writer + Thermo stub. **Pause.**
+9. **M30:** Docs, CI, packages, tag v0.4.0.
 
 **CI must be green before any milestone is complete.**
 
----
+## Deferred to v0.5+
 
-## Deferred to v0.4+
-
-| Item | Description |
-|---|---|
-| Thread safety | HDF5 `--enable-threadsafe` + locking |
-| `opt_key_rotation` | Envelope-style multi-key wrapping |
-| Java stream | `com.dtwthalion.mpgo` with HDF5-Java |
-| Spectral anonymization | SAAV-containing spectrum redaction |
-| ISA-Tab export | Write ISA from SpectralDataset |
-| Streaming transport | MPEG-G Part 2 equivalent |
-| Zarr backend | Alternative cloud-native storage |
-| DuckDB query layer | SQL interface via extension |
+Streaming transport (MPEG-G Part 2). Zarr backend. DuckDB query layer. Bruker TDF import. Waters MassLynx import. Raman/IR spectrum support. PyPI stable release. Maven Central. MPEG-G conformance suite. v1.0 API freeze.
