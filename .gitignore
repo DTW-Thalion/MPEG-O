@@ -20,3 +20,5 @@ objc/Documentation/*.igsdoc
 __pycache__/
 *.egg-info/
 *.pyc
+python/dist/
+python/build/
