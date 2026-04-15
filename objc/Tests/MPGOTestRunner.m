@@ -9,6 +9,7 @@ extern void testHDF5(void);
 extern void testSignalArray(void);
 extern void testSpectra(void);
 extern void testAcquisitionRun(void);
+extern void testSpectralDataset(void);
 
 int main(int argc, const char *argv[])
 {
@@ -44,6 +45,10 @@ int main(int argc, const char *argv[])
         START_SET("AcquisitionRun + SpectrumIndex")
             testAcquisitionRun();
         END_SET("AcquisitionRun + SpectrumIndex")
+
+        START_SET("SpectralDataset (multi-run)")
+            testSpectralDataset();
+        END_SET("SpectralDataset (multi-run)")
     }
     return 0;
 }

@@ -31,7 +31,12 @@ libMPGO_HEADER_FILES = \
 	Spectra/MPGOChromatogram.h \
 	Run/MPGOInstrumentConfig.h \
 	Run/MPGOSpectrumIndex.h \
-	Run/MPGOAcquisitionRun.h
+	Run/MPGOAcquisitionRun.h \
+	Dataset/MPGOIdentification.h \
+	Dataset/MPGOQuantification.h \
+	Dataset/MPGOProvenanceRecord.h \
+	Dataset/MPGOTransitionList.h \
+	Dataset/MPGOSpectralDataset.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -52,7 +57,12 @@ libMPGO_OBJC_FILES = \
 	Spectra/MPGOChromatogram.m \
 	Run/MPGOInstrumentConfig.m \
 	Run/MPGOSpectrumIndex.m \
-	Run/MPGOAcquisitionRun.m
+	Run/MPGOAcquisitionRun.m \
+	Dataset/MPGOIdentification.m \
+	Dataset/MPGOQuantification.m \
+	Dataset/MPGOProvenanceRecord.m \
+	Dataset/MPGOTransitionList.m \
+	Dataset/MPGOSpectralDataset.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lz
 
