@@ -184,3 +184,132 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 - [x] README, ARCHITECTURE, WORKPLAN, and all `docs/` files finalized.
 - [x] No warnings under `-Wall -Wextra` with clang.
 - [x] Tag `v0.1.0-alpha` pushed to `DTW-Thalion/MPEG-O`.
+
+---
+
+# v0.2.0 Milestones (M9–M15)
+
+## Milestone 9 — mzML Reader
+
+**Deliverables**
+
+- `MPGOMzMLReader` SAX parser via `NSXMLParser` (Apache-2.0 in `Import/`).
+- `MPGOBase64` decoder + optional zlib inflate.
+- `MPGOCVTermMapper` hard-coded PSI-MS accession mappings.
+- Real fixtures: `tiny.pwiz.1.1.mzML` + `1min.mzML` from HUPO-PSI.
+
+**Acceptance Criteria**
+
+- [x] Parses centroided mzML and verifies spectrum count + m/z/intensity arrays.
+- [x] Handles zlib-compressed binary arrays.
+- [x] Full round-trip: mzML → MPGO → `.mpgo` → read-back.
+- [x] Malformed XML returns nil with NSError.
+
+## Milestone 10 — Protocol Conformance + Modality-Agnostic Runs
+
+**Deliverables**
+
+- `MPGOAcquisitionRun` accepts any `MPGOSpectrum` subclass (MS + NMR proven).
+- Name-driven signal channel serialization; v0.1 MS layout binary-compatible.
+- `<MPGOProvenanceable>` + `<MPGOEncryptable>` conformance on runs.
+- `MPGOEncryptionManager` file-path API marked with `MPGO_DEPRECATED_MSG`.
+
+**Acceptance Criteria**
+
+- [x] 100 MS + 50 NMR runs round-trip; compound header spot-check.
+- [x] Per-run provenance chain round-trip via `@provenance_json`.
+- [x] Protocol encrypt with persistence context delegates to encryption manager.
+- [x] NMR query + streaming round-trip.
+- [x] v0.1 backward compat via inline-synthesized legacy layout.
+
+## Milestone 11 — Native HDF5 Compound Types
+
+**Deliverables**
+
+- `MPGOHDF5CompoundType` wrapper (H5Tcreate compound + VL string helper).
+- `MPGOFeatureFlags` versioning utility (`@mpeg_o_format_version`, `@mpeg_o_features`).
+- `MPGOCompoundIO` for identifications / quantifications / dataset provenance / index headers.
+- `MPGOSpectralDataset.closeFile` + full `<MPGOEncryptable>` conformance.
+- Sealed compound blobs + `@encrypted` marker + `@access_policy_json`.
+
+**Acceptance Criteria**
+
+- [x] 100 idents / 50 quants / 5 prov records round-trip via compound.
+- [x] Feature flags present, queryable, JSON fallback for v0.1 files.
+- [x] Compound headers readable via `H5Dread` hyperslab.
+- [x] Dataset-level encrypt seals compound datasets and protects intensity channels.
+- [x] Performance: 10 k identifications write/read < 50 ms each.
+
+## Milestone 12 — MSImage Inheritance + Native 2D NMR
+
+**Deliverables**
+
+- `MPGOMSImage` inherits `MPGOSpectralDataset`; cube at `/study/image_cube/`.
+- Spatial metadata properties (`pixelSizeX/Y`, `scanPattern`).
+- `MPGONMR2DSpectrum` writes native rank-2 dataset `intensity_matrix_2d` with `H5DSattach_scale` dim scales.
+- `opt_native_2d_nmr` and `opt_native_msimage_cube` feature flags.
+
+**Acceptance Criteria**
+
+- [x] Inherited idents/quants/provenance round-trip through MSImage.
+- [x] v0.1 `/image_cube` fallback via inline-synthesized legacy layout.
+- [x] 256×128 HSQC rank-2 dataset + scale count verified via direct H5 inspection.
+- [x] v0.1 flattened 2D NMR fallback after deleting native dataset.
+
+## Milestone 13 — nmrML Reader
+
+**Deliverables**
+
+- `MPGONmrMLReader` SAX parser for nmrML 1.0+ (Apache-2.0 in `Import/`).
+- nmrCV accession predicates on `MPGOCVTermMapper`.
+- Real fixture: `bmse000325.nmrML` from BMRB via the nmrML project.
+- Real-file parser extensions: element-based acquisition params, int32/int64 FID widening.
+
+**Acceptance Criteria**
+
+- [x] Synthetic FID + spectrum1D round-trip with exact byte match.
+- [x] Real BMRB fixture: numberOfScans, nucleus, frequency, sweep width, 16384-sample FID extracted correctly.
+- [x] Round-trip nmrML → MPGO → `.mpgo` → read-back.
+- [x] Malformed XML returns nil with NSError.
+
+## Milestone 14 — Digital Signatures + Integrity Verification
+
+**Deliverables**
+
+- `MPGOSignatureManager` HMAC-SHA256 over dataset bytes via OpenSSL.
+- `MPGOVerifier` higher-level status API (Valid/Invalid/NotSigned/Error).
+- Provenance chain signing on `@provenance_json`.
+- `opt_digital_signatures` feature flag.
+
+**Acceptance Criteria**
+
+- [x] Sign + verify intensity channel; tamper one byte → Invalid with descriptive error.
+- [x] Unsigned dataset returns NotSigned cleanly.
+- [x] Provenance chain sign + verify.
+- [x] 1M float64 sign ~9 ms / verify ~5 ms (< 100 ms target).
+
+## Milestone 15 — Format Specification + v0.2.0 Release
+
+**Deliverables**
+
+- `docs/format-spec.md` — complete HDF5 layout spec for third-party readers.
+- `docs/feature-flags.md` — registry with semantics and introducing milestone.
+- `objc/Tools/MakeFixtures` — reference fixture generator.
+- Reference `.mpgo` fixtures under `objc/Tests/Fixtures/mpgo/`.
+- WORKPLAN updated; README + ARCHITECTURE notes on v0.2 changes.
+
+**Acceptance Criteria**
+
+- [x] format-spec.md is self-contained (third-party Python reader implementable).
+- [x] feature-flags.md covers all v0.2 flags plus v0.3 reserved slots.
+- [x] 5 reference fixtures generated deterministically and documented.
+- [x] M9–M15 all green; full suite passes with zero non-deprecation warnings.
+
+## Overall Release Criteria (v0.2.0)
+
+- [x] All seven v0.2 milestones complete with tests passing locally and in CI. **656 tests pass.**
+- [x] v0.1.0-alpha `.mpgo` files remain readable via v0.2 fallback paths (verified in TestMilestone10, TestMilestone11, TestMilestone12).
+- [x] No non-deprecation warnings under `-Wall -Wextra` with clang.
+- [x] `docs/format-spec.md` and `docs/feature-flags.md` published.
+- [x] Reference `.mpgo` fixtures under `objc/Tests/Fixtures/mpgo/` committed.
+- [ ] Tag `v0.2.0` pushed to `DTW-Thalion/MPEG-O` *(user-gated per binding decision)*.
