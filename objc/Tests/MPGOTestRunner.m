@@ -23,6 +23,7 @@ extern void testMilestone17(void);
 extern void testMilestone18(void);
 extern void testMilestone19(void);
 extern void testMilestone21(void);
+extern void testMilestone23(void);
 
 int main(int argc, const char *argv[])
 {
@@ -114,6 +115,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 21: LZ4 + Numpress-delta codecs")
             testMilestone21();
         END_SET("Milestone 21: LZ4 + Numpress-delta codecs")
+
+        START_SET("Milestone 23: thread-safe MPGOHDF5File")
+            testMilestone23();
+        END_SET("Milestone 23: thread-safe MPGOHDF5File")
     }
     return 0;
 }

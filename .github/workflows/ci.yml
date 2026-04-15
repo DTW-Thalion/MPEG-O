@@ -122,6 +122,26 @@ jobs:
           ls -l ${INSTALL_PREFIX}/lib/libobjc.so* || true
           ls -l ${INSTALL_PREFIX}/lib/libgnustep-base.so* || true
 
+      # M23: probe H5is_library_threadsafe() and log the result. apt's
+      # libhdf5-dev is serial; MPGOHDF5File detects that at open time and
+      # falls back to exclusive-only wrapper locking (see -isThreadSafe).
+      # The log makes the runtime mode visible in every CI run.
+      - name: Probe HDF5 thread-safety (informational)
+        run: |
+          set -eo pipefail
+          cat > /tmp/h5ts.c <<'EOF'
+          #include <hdf5.h>
+          #include <stdio.h>
+          int main(void) {
+              hbool_t ts = 0;
+              if (H5is_library_threadsafe(&ts) < 0) { puts("probe failed"); return 2; }
+              printf("H5is_library_threadsafe: %s\n", ts ? "YES" : "NO");
+              return 0;
+          }
+          EOF
+          clang /tmp/h5ts.c -lhdf5 -o /tmp/h5ts
+          /tmp/h5ts
+
       - name: Dependency check
         working-directory: objc
         run: ./check-deps.sh

@@ -1,4 +1,5 @@
 #import "MPGOHDF5Dataset.h"
+#import "MPGOHDF5File.h"
 #import "MPGOHDF5Errors.h"
 #import "MPGOHDF5Types.h"
 #import <hdf5.h>
@@ -9,6 +10,7 @@
     MPGOPrecision  _precision;
     NSUInteger     _length;
     id             _retainer;
+    MPGOHDF5File  *_file;   // cached owning file for wrapper rwlock (M23)
 }
 
 - (instancetype)initWithDatasetId:(hid_t)did
@@ -22,6 +24,9 @@
         _precision = precision;
         _length = length;
         _retainer = retainer;
+        if ([retainer respondsToSelector:@selector(owningFile)]) {
+            _file = [(id)retainer owningFile];
+        }
     }
     return self;
 }
@@ -39,9 +44,11 @@
             (unsigned long)expected, (unsigned long)data.length);
         return NO;
     }
+    [_file lockForWriting];
     hid_t htype = MPGOHDF5TypeForPrecision(_precision);
     herr_t s = H5Dwrite(_did, htype, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.bytes);
     if (!MPGOHDF5TypeIsBuiltin(_precision)) H5Tclose(htype);
+    [_file unlockForWriting];
     if (s < 0) {
         if (error) *error = MPGOMakeError(MPGOErrorDatasetWrite,
             @"H5Dwrite failed");
@@ -54,9 +61,11 @@
 {
     NSUInteger bytes = _length * MPGOPrecisionElementSize(_precision);
     NSMutableData *out = [NSMutableData dataWithLength:bytes];
+    [_file lockForReading];
     hid_t htype = MPGOHDF5TypeForPrecision(_precision);
     herr_t s = H5Dread(_did, htype, H5S_ALL, H5S_ALL, H5P_DEFAULT, out.mutableBytes);
     if (!MPGOHDF5TypeIsBuiltin(_precision)) H5Tclose(htype);
+    [_file unlockForReading];
     if (s < 0) {
         if (error) *error = MPGOMakeError(MPGOErrorDatasetRead,
             @"H5Dread failed");
@@ -77,6 +86,8 @@
         return nil;
     }
 
+    [_file lockForReading];
+
     hid_t fspace = H5Dget_space(_did);
     hsize_t off[1]   = { (hsize_t)offset };
     hsize_t cnt[1]   = { (hsize_t)count };
@@ -90,6 +101,8 @@
     herr_t s = H5Dread(_did, htype, mspace, fspace, H5P_DEFAULT, out.mutableBytes);
     if (!MPGOHDF5TypeIsBuiltin(_precision)) H5Tclose(htype);
     H5Sclose(mspace); H5Sclose(fspace);
+
+    [_file unlockForReading];
 
     if (s < 0) {
         if (error) *error = MPGOMakeError(MPGOErrorDatasetRead,

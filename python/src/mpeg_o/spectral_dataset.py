@@ -21,11 +21,24 @@ import h5py
 import numpy as np
 
 from . import _hdf5_io as io
+from ._rwlock import RWLock
 from .acquisition_run import AcquisitionRun
 from .feature_flags import FeatureFlags
 from .identification import Identification
 from .provenance import ProvenanceRecord
 from .quantification import Quantification
+
+# M23 sentinel: returned by ``read_lock``/``write_lock`` when ``thread_safe``
+# is False so call sites can use ``with ds.read_lock(): ...`` unconditionally.
+class _NullGuard:
+    def __enter__(self) -> "_NullGuard":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+
+_NULL_GUARD = _NullGuard()
 
 
 def _split_run_names(value: str | None) -> tuple[str, ...]:
@@ -52,11 +65,18 @@ class SpectralDataset:
     encrypted_algorithm: str = ""
     _closed: bool = False
     _remote_fileobj: Any = None  # fsspec file-like kept alive when remote
+    _lock: RWLock | None = None  # M23: set when opened with thread_safe=True
 
     # ------------------------------------------------------------- lifecycle
 
     @classmethod
-    def open(cls, path: str | Path, **fsspec_kwargs: Any) -> "SpectralDataset":
+    def open(
+        cls,
+        path: str | Path,
+        *,
+        thread_safe: bool = False,
+        **fsspec_kwargs: Any,
+    ) -> "SpectralDataset":
         """Open a ``.mpgo`` dataset from a local path or cloud URL.
 
         URLs with a scheme recognised by :data:`mpeg_o.remote.REMOTE_SCHEMES`
@@ -77,7 +97,8 @@ class SpectralDataset:
                 raise
             try:
                 return cls._from_open_file(Path(str(path)), f,
-                                           remote_fileobj=fileobj)
+                                           remote_fileobj=fileobj,
+                                           thread_safe=thread_safe)
             except Exception:
                 f.close()
                 fileobj.close()
@@ -86,7 +107,7 @@ class SpectralDataset:
         p = Path(path)
         f = h5py.File(p, "r")
         try:
-            return cls._from_open_file(p, f)
+            return cls._from_open_file(p, f, thread_safe=thread_safe)
         except Exception:
             f.close()
             raise
@@ -97,6 +118,7 @@ class SpectralDataset:
         path: Path,
         f: h5py.File,
         remote_fileobj: Any = None,
+        thread_safe: bool = False,
     ) -> "SpectralDataset":
         version, features = io.read_feature_flags(f)
         flags = FeatureFlags.from_iterable(version, features)
@@ -135,18 +157,40 @@ class SpectralDataset:
             nmr_runs=nmr_runs,
             encrypted_algorithm=encrypted,
             _remote_fileobj=remote_fileobj,
+            _lock=(RWLock() if thread_safe else None),
         )
 
+    # ----------------------------------------------------- thread safety (M23)
+
+    @property
+    def is_thread_safe(self) -> bool:
+        """True iff this dataset was opened with ``thread_safe=True``."""
+        return self._lock is not None
+
+    def read_lock(self) -> Any:
+        """Context manager acquiring the shared read lock.
+
+        A no-op when ``thread_safe`` was not set at open time, so call sites
+        can use ``with ds.read_lock(): ...`` unconditionally.
+        """
+        return self._lock.read() if self._lock is not None else _NULL_GUARD
+
+    def write_lock(self) -> Any:
+        """Context manager acquiring the exclusive write lock (no-op when
+        ``thread_safe`` was not set at open time)."""
+        return self._lock.write() if self._lock is not None else _NULL_GUARD
+
     def close(self) -> None:
-        if not self._closed:
-            self.file.close()
-            if self._remote_fileobj is not None:
-                try:
-                    self._remote_fileobj.close()
-                except Exception:
-                    pass
-                self._remote_fileobj = None
-            self._closed = True
+        with self.write_lock():
+            if not self._closed:
+                self.file.close()
+                if self._remote_fileobj is not None:
+                    try:
+                        self._remote_fileobj.close()
+                    except Exception:
+                        pass
+                    self._remote_fileobj = None
+                self._closed = True
 
     def __enter__(self) -> "SpectralDataset":
         return self
@@ -180,53 +224,56 @@ class SpectralDataset:
         return merged
 
     def identifications(self) -> list[Identification]:
-        study = self.file["study"]
-        if "identifications" in study:
-            return [
-                Identification(
-                    run_name=r["run_name"],
-                    spectrum_index=int(r["spectrum_index"]),
-                    chemical_entity=r["chemical_entity"],
-                    confidence_score=float(r["confidence_score"]),
-                    evidence_chain=_maybe_json_list(r.get("evidence_chain_json", "[]")),
-                )
-                for r in io.read_compound_dataset(study, "identifications")
-            ]
-        blob = io.read_string_attr(study, "identifications_json", default="")
-        return _decode_identifications_json(blob) if blob else []
+        with self.read_lock():
+            study = self.file["study"]
+            if "identifications" in study:
+                return [
+                    Identification(
+                        run_name=r["run_name"],
+                        spectrum_index=int(r["spectrum_index"]),
+                        chemical_entity=r["chemical_entity"],
+                        confidence_score=float(r["confidence_score"]),
+                        evidence_chain=_maybe_json_list(r.get("evidence_chain_json", "[]")),
+                    )
+                    for r in io.read_compound_dataset(study, "identifications")
+                ]
+            blob = io.read_string_attr(study, "identifications_json", default="")
+            return _decode_identifications_json(blob) if blob else []
 
     def quantifications(self) -> list[Quantification]:
-        study = self.file["study"]
-        if "quantifications" in study:
-            return [
-                Quantification(
-                    chemical_entity=r["chemical_entity"],
-                    sample_ref=r["sample_ref"],
-                    abundance=float(r["abundance"]),
-                    normalization_method=r.get("normalization_method", ""),
-                )
-                for r in io.read_compound_dataset(study, "quantifications")
-            ]
-        blob = io.read_string_attr(study, "quantifications_json", default="")
-        return _decode_quantifications_json(blob) if blob else []
+        with self.read_lock():
+            study = self.file["study"]
+            if "quantifications" in study:
+                return [
+                    Quantification(
+                        chemical_entity=r["chemical_entity"],
+                        sample_ref=r["sample_ref"],
+                        abundance=float(r["abundance"]),
+                        normalization_method=r.get("normalization_method", ""),
+                    )
+                    for r in io.read_compound_dataset(study, "quantifications")
+                ]
+            blob = io.read_string_attr(study, "quantifications_json", default="")
+            return _decode_quantifications_json(blob) if blob else []
 
     def provenance(self) -> list[ProvenanceRecord]:
-        study = self.file["study"]
-        if "provenance" in study:
-            out: list[ProvenanceRecord] = []
-            for r in io.read_compound_dataset(study, "provenance"):
-                out.append(
-                    ProvenanceRecord(
-                        timestamp_unix=int(r["timestamp_unix"]),
-                        software=r["software"],
-                        parameters=_maybe_json_dict(r.get("parameters_json", "{}")),
-                        input_refs=_maybe_json_list(r.get("input_refs_json", "[]")),
-                        output_refs=_maybe_json_list(r.get("output_refs_json", "[]")),
+        with self.read_lock():
+            study = self.file["study"]
+            if "provenance" in study:
+                out: list[ProvenanceRecord] = []
+                for r in io.read_compound_dataset(study, "provenance"):
+                    out.append(
+                        ProvenanceRecord(
+                            timestamp_unix=int(r["timestamp_unix"]),
+                            software=r["software"],
+                            parameters=_maybe_json_dict(r.get("parameters_json", "{}")),
+                            input_refs=_maybe_json_list(r.get("input_refs_json", "[]")),
+                            output_refs=_maybe_json_list(r.get("output_refs_json", "[]")),
+                        )
                     )
-                )
-            return out
-        blob = io.read_string_attr(study, "provenance_json", default="")
-        return _decode_provenance_json(blob) if blob else []
+                return out
+            blob = io.read_string_attr(study, "provenance_json", default="")
+            return _decode_provenance_json(blob) if blob else []
 
     # ---------------------------------------------------------------- writer
 
