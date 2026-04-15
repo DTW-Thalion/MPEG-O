@@ -1,7 +1,13 @@
-"""Export subpackage placeholder.
+"""mzML / exporter subpackage (Apache-2.0).
 
-mzML writing and other export formats land in Milestone 19; this module
-exists so the public package structure matches the planned layout.
+As of M19 the subpackage ships an indexed-mzML writer in
+:mod:`mpeg_o.exporters.mzml`. Future milestones will add chromatogram,
+MSImage, and nmrML exporters here.
 
 SPDX-License-Identifier: Apache-2.0
 """
+from __future__ import annotations
+
+from . import mzml
+
+__all__ = ["mzml"]

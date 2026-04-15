@@ -21,6 +21,7 @@ extern void testMilestone13(void);
 extern void testMilestone14(void);
 extern void testMilestone17(void);
 extern void testMilestone18(void);
+extern void testMilestone19(void);
 
 int main(int argc, const char *argv[])
 {
@@ -104,6 +105,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 18: canonical byte-order signatures")
             testMilestone18();
         END_SET("Milestone 18: canonical byte-order signatures")
+
+        START_SET("Milestone 19: mzML writer + indexedmzML")
+            testMilestone19();
+        END_SET("Milestone 19: mzML writer + indexedmzML")
     }
     return 0;
 }
