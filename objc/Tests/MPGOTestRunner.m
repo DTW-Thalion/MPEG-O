@@ -15,6 +15,7 @@ extern void testEncryption(void);
 extern void testQueryAndStreaming(void);
 extern void testMzMLReader(void);
 extern void testMilestone10(void);
+extern void testMilestone11(void);
 
 int main(int argc, const char *argv[])
 {
@@ -74,6 +75,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 10: protocols + modality-agnostic")
             testMilestone10();
         END_SET("Milestone 10: protocols + modality-agnostic")
+
+        START_SET("Milestone 11: compound types + dataset encryption")
+            testMilestone11();
+        END_SET("Milestone 11: compound types + dataset encryption")
     }
     return 0;
 }
