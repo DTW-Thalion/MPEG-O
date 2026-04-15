@@ -6,6 +6,7 @@
 #import "Spectra/MPGOMassSpectrum.h"
 #import "Spectra/MPGOChromatogram.h"
 #import "Run/MPGOAcquisitionRun.h"
+#import "Run/MPGOSpectrumIndex.h"
 #import "Dataset/MPGOSpectralDataset.h"
 #import "ValueClasses/MPGOEnums.h"
 #import <math.h>
@@ -267,5 +268,93 @@ void testMzMLReader(void)
         NSTimeInterval dt = -[t0 timeIntervalSinceNow];
         PASS(ds != nil, "100-peak synthetic parses");
         printf("    [bench] 100-peak synthetic mzML parse %.2f ms\n", dt * 1000.0);
+    }
+
+    // ---- real HUPO-PSI fixtures (if present) ----
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSArray *candidates = @[
+            @"Fixtures/tiny.pwiz.1.1.mzML",
+            @"../Fixtures/tiny.pwiz.1.1.mzML",
+            @"Tests/Fixtures/tiny.pwiz.1.1.mzML",
+            @"../Tests/Fixtures/tiny.pwiz.1.1.mzML",
+        ];
+        NSString *tinyPath = nil;
+        for (NSString *p in candidates) {
+            if ([fm fileExistsAtPath:p]) { tinyPath = p; break; }
+        }
+
+        if (!tinyPath) {
+            printf("    [skip] HUPO-PSI fixtures not found in CWD (non-fatal)\n");
+        } else {
+            NSError *err = nil;
+
+            // tiny.pwiz.1.1.mzML: 4 spectra, 2 chromatograms
+            NSDate *t0 = [NSDate date];
+            MPGOMzMLReader *r = [MPGOMzMLReader parseFilePath:tinyPath error:&err];
+            NSTimeInterval dt = -[t0 timeIntervalSinceNow];
+            PASS(r != nil, "tiny.pwiz.1.1.mzML parses");
+            PASS(err == nil, "tiny.pwiz.1.1.mzML has no parse error");
+            PASS(r.dataset != nil, "tiny.pwiz.1.1 dataset materialized");
+
+            MPGOAcquisitionRun *run = [r.dataset.msRuns.allValues firstObject];
+            PASS(run != nil, "tiny.pwiz.1.1 has at least one run");
+
+            NSUInteger msCount = run.spectrumIndex.count;
+            PASS(msCount > 0, "tiny.pwiz.1.1 exposes one or more mass spectra");
+
+            // chromatograms come out via the instance API
+            PASS(r.chromatograms.count == 2, "tiny.pwiz.1.1 has 2 chromatograms");
+
+            printf("    [bench] tiny.pwiz.1.1.mzML (25 KB) parse %.2f ms\n",
+                   dt * 1000.0);
+
+            // Spot check MS level + polarity on the first spectrum
+            MPGOMassSpectrum *first = [run spectrumAtIndex:0 error:&err];
+            PASS(first != nil, "first spectrum retrievable");
+            PASS(first.msLevel >= 1 && first.msLevel <= 3, "ms level in sane range");
+
+            // Full round trip to .mpgo
+            NSString *path = mpath(@"tiny_real");
+            unlink([path fileSystemRepresentation]);
+            PASS([r.dataset writeToFilePath:path error:&err],
+                 "tiny.pwiz.1.1 writes to .mpgo");
+            MPGOSpectralDataset *back =
+                [MPGOSpectralDataset readFromFilePath:path error:&err];
+            PASS(back != nil, "tiny.pwiz.1.1 .mpgo reads back");
+            MPGOAcquisitionRun *backRun = [back.msRuns.allValues firstObject];
+            PASS(backRun != nil, "round-trip run recovered");
+            unlink([path fileSystemRepresentation]);
+        }
+
+        // 1min.mzML fixture: 39 spectra, real instrument data
+        NSArray *oneMinCandidates = @[
+            @"Fixtures/1min.mzML",
+            @"../Fixtures/1min.mzML",
+            @"Tests/Fixtures/1min.mzML",
+            @"../Tests/Fixtures/1min.mzML",
+        ];
+        NSString *oneMinPath = nil;
+        for (NSString *p in oneMinCandidates) {
+            if ([fm fileExistsAtPath:p]) { oneMinPath = p; break; }
+        }
+
+        if (oneMinPath) {
+            NSError *err = nil;
+            NSDate *t0 = [NSDate date];
+            MPGOSpectralDataset *ds =
+                [MPGOMzMLReader readFromFilePath:oneMinPath error:&err];
+            NSTimeInterval dt = -[t0 timeIntervalSinceNow];
+            PASS(ds != nil, "1min.mzML parses");
+            PASS(err == nil, "1min.mzML has no parse error");
+
+            MPGOAcquisitionRun *run = [ds.msRuns.allValues firstObject];
+            PASS(run != nil, "1min.mzML has a run");
+
+            NSUInteger count = run.spectrumIndex.count;
+            PASS(count > 0, "1min.mzML exposes spectra");
+            printf("    [bench] 1min.mzML (311 KB, %lu spectra) parse %.2f ms\n",
+                   (unsigned long)count, dt * 1000.0);
+        }
     }
 }
