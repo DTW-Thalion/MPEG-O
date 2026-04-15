@@ -8,6 +8,7 @@ extern void testCVParam(void);
 extern void testHDF5(void);
 extern void testSignalArray(void);
 extern void testSpectra(void);
+extern void testAcquisitionRun(void);
 
 int main(int argc, const char *argv[])
 {
@@ -39,6 +40,10 @@ int main(int argc, const char *argv[])
         START_SET("Spectrum classes")
             testSpectra();
         END_SET("Spectrum classes")
+
+        START_SET("AcquisitionRun + SpectrumIndex")
+            testAcquisitionRun();
+        END_SET("AcquisitionRun + SpectrumIndex")
     }
     return 0;
 }
