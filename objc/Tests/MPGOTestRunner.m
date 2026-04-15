@@ -5,6 +5,8 @@ extern void testValueRange(void);
 extern void testEncodingSpec(void);
 extern void testAxisDescriptor(void);
 extern void testCVParam(void);
+extern void testHDF5(void);
+extern void testSignalArray(void);
 
 int main(int argc, const char *argv[])
 {
@@ -24,6 +26,14 @@ int main(int argc, const char *argv[])
         START_SET("MPGOCVParam")
             testCVParam();
         END_SET("MPGOCVParam")
+
+        START_SET("MPGOHDF5 wrappers")
+            testHDF5();
+        END_SET("MPGOHDF5 wrappers")
+
+        START_SET("MPGOSignalArray")
+            testSignalArray();
+        END_SET("MPGOSignalArray")
     }
     return 0;
 }
