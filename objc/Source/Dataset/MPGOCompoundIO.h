@@ -8,6 +8,7 @@
 @class MPGOQuantification;
 @class MPGOProvenanceRecord;
 @class MPGOSpectrumIndex;
+@class MPGOCompoundField;
 
 /**
  * Compound-type persistence helpers for MPEG-O v0.2+ on-disk format.
@@ -74,6 +75,23 @@
 + (NSDictionary *)readCompoundHeaderRow:(NSUInteger)row
                                fromGroup:(MPGOHDF5Group *)parent
                                    error:(NSError **)error;
+
+#pragma mark - Generic schema-driven write/read (M39 provider adapter)
+
+/** Write an array of rows (each NSDictionary keyed by field name)
+ *  into a compound dataset with the given schema. */
++ (BOOL)writeGeneric:(NSArray<NSDictionary *> *)rows
+            intoGroup:(MPGOHDF5Group *)parent
+         datasetNamed:(NSString *)name
+               fields:(NSArray<MPGOCompoundField *> *)fields
+                error:(NSError **)error;
+
+/** Read an existing compound dataset, returning rows as NSDictionary
+ *  keyed by field name. */
++ (NSArray<NSDictionary *> *)readGenericFromGroup:(MPGOHDF5Group *)parent
+                                       datasetNamed:(NSString *)name
+                                             fields:(NSArray<MPGOCompoundField *> *)fields
+                                              error:(NSError **)error;
 
 @end
 

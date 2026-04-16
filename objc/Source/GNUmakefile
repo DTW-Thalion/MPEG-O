@@ -56,7 +56,12 @@ libMPGO_HEADER_FILES = \
 	Import/MPGOThermoRawReader.h \
 	Export/MPGOMzMLWriter.h \
 	Export/MPGONmrMLWriter.h \
-	Export/MPGOISAExporter.h
+	Export/MPGOISAExporter.h \
+	Providers/MPGOCompoundField.h \
+	Providers/MPGOStorageProtocols.h \
+	Providers/MPGOProviderRegistry.h \
+	Providers/MPGOHDF5Provider.h \
+	Providers/MPGOMemoryProvider.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -104,7 +109,11 @@ libMPGO_OBJC_FILES = \
 	Import/MPGOThermoRawReader.m \
 	Export/MPGOMzMLWriter.m \
 	Export/MPGONmrMLWriter.m \
-	Export/MPGOISAExporter.m
+	Export/MPGOISAExporter.m \
+	Providers/MPGOCompoundField.m \
+	Providers/MPGOProviderRegistry.m \
+	Providers/MPGOHDF5Provider.m \
+	Providers/MPGOMemoryProvider.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto
 

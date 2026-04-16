@@ -37,6 +37,41 @@ public class Hdf5Group implements AutoCloseable {
     public long getGroupId() { return groupId; }
     public Hdf5File owningFile() { return file; }
 
+    /** Short (last-path-segment) name of this group, or "/" for root. */
+    public String name() {
+        try {
+            String[] buf = new String[1];
+            H5.H5Iget_name_long(groupId, buf, 1024);
+            String full = buf[0];
+            if (full == null || full.isEmpty() || "/".equals(full)) return "/";
+            int slash = full.lastIndexOf('/');
+            return slash >= 0 && slash < full.length() - 1
+                    ? full.substring(slash + 1) : full;
+        } catch (HDF5LibraryException e) {
+            return "/";
+        }
+    }
+
+    /** Names of every link (group or dataset) directly under this group. */
+    public java.util.List<String> childNames() {
+        file.lockForReading();
+        try {
+            long n = H5.H5Gn_members(groupId, ".");
+            java.util.List<String> out = new java.util.ArrayList<>((int) n);
+            String[] oname = new String[1];
+            int[] otype = new int[1];
+            for (int i = 0; i < n; i++) {
+                H5.H5Gget_obj_info_idx(groupId, ".", i, oname, otype);
+                if (oname[0] != null) out.add(oname[0]);
+            }
+            return out;
+        } catch (HDF5LibraryException e) {
+            return java.util.List.of();
+        } finally {
+            file.unlockForReading();
+        }
+    }
+
     // ── Sub-groups ──────────────────────────────────────────────────
 
     public Hdf5Group createGroup(String name) {
@@ -310,6 +345,44 @@ public class Hdf5Group implements AutoCloseable {
             return H5.H5Aexists(groupId, name);
         } catch (HDF5LibraryException e) {
             return false;
+        } finally {
+            file.unlockForReading();
+        }
+    }
+
+    public void deleteAttribute(String name) {
+        file.lockForWriting();
+        try {
+            if (H5.H5Aexists(groupId, name)) {
+                H5.H5Adelete(groupId, name);
+            }
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.AttributeException(
+                    "H5Adelete failed for '" + name + "': " + e.getMessage());
+        } finally {
+            file.unlockForWriting();
+        }
+    }
+
+    public java.util.List<String> attributeNames() {
+        file.lockForReading();
+        try {
+            int n = (int) H5.H5Oget_info(groupId).num_attrs;
+            java.util.List<String> out = new java.util.ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                long aid = H5.H5Aopen_by_idx(groupId, ".",
+                        HDF5Constants.H5_INDEX_NAME, HDF5Constants.H5_ITER_INC,
+                        (long) i, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+                try {
+                    String nm = H5.H5Aget_name(aid);
+                    if (nm != null) out.add(nm);
+                } finally {
+                    try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+                }
+            }
+            return out;
+        } catch (HDF5LibraryException e) {
+            return java.util.List.of();
         } finally {
             file.unlockForReading();
         }

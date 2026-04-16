@@ -1,0 +1,249 @@
+"""In-memory storage provider — Milestone 39 Part D.
+
+Holds the full group tree in Python dicts. Useful for tests and
+transient pipelines where no file I/O is needed, and the existence of
+this provider alongside :class:`~mpeg_o.providers.hdf5.Hdf5Provider`
+is the proof that the abstraction actually works — if
+``SpectralDataset`` functions identically over both, the protocol
+contract is correct.
+
+SPDX-License-Identifier: LGPL-3.0-or-later
+"""
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+
+from ..enums import Compression, Precision
+from .base import (
+    CompoundField,
+    CompoundFieldKind,
+    StorageDataset,
+    StorageGroup,
+    StorageProvider,
+)
+
+
+# ── Open-registry of in-process stores ────────────────────────────────
+# Keyed by an opaque URL like ``memory://some-name``. Lets two calls
+# with the same URL see the same tree, which mirrors how file-backed
+# providers behave.
+
+_STORES: dict[str, "_MemoryRoot"] = {}
+
+
+class _Dataset(StorageDataset):
+    __slots__ = ("_name", "_precision", "_length", "_fields", "_data", "_attrs")
+
+    def __init__(self, name: str, precision: Precision | None,
+                 length: int, fields: tuple[CompoundField, ...] | None):
+        self._name = name
+        self._precision = precision
+        self._length = length
+        self._fields = fields
+        self._data: np.ndarray | None = None
+        self._attrs: dict[str, Any] = {}
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def precision(self) -> Precision | None:
+        return self._precision
+
+    @property
+    def length(self) -> int:
+        return self._length
+
+    @property
+    def compound_fields(self) -> tuple[CompoundField, ...] | None:
+        return self._fields
+
+    def read(self, offset: int = 0, count: int = -1) -> np.ndarray:
+        if self._data is None:
+            return np.zeros(0, dtype=self._default_dtype())
+        if count < 0:
+            return self._data[offset:]
+        return self._data[offset: offset + count]
+
+    def write(self, data: np.ndarray) -> None:
+        if len(data) != self._length:
+            raise ValueError(
+                f"dataset '{self._name}' expects {self._length} elements, "
+                f"got {len(data)}")
+        self._data = np.array(data, copy=True)
+
+    def has_attribute(self, name: str) -> bool:
+        return name in self._attrs
+
+    def get_attribute(self, name: str) -> Any:
+        return self._attrs[name]
+
+    def set_attribute(self, name: str, value: Any) -> None:
+        self._attrs[name] = value
+
+    def _default_dtype(self) -> np.dtype:
+        if self._fields is not None:
+            return _compound_dtype(self._fields)
+        if self._precision is not None:
+            return np.dtype(self._precision.numpy_dtype())
+        return np.dtype("<f8")
+
+
+class _Group(StorageGroup):
+    __slots__ = ("_name", "_children", "_datasets", "_attrs")
+
+    def __init__(self, name: str):
+        self._name = name
+        self._children: dict[str, "_Group"] = {}
+        self._datasets: dict[str, _Dataset] = {}
+        self._attrs: dict[str, Any] = {}
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def child_names(self) -> list[str]:
+        return list(self._children.keys()) + list(self._datasets.keys())
+
+    def has_child(self, name: str) -> bool:
+        return name in self._children or name in self._datasets
+
+    def open_group(self, name: str) -> StorageGroup:
+        if name not in self._children:
+            raise KeyError(f"group '{name}' not found in '{self._name}'")
+        return self._children[name]
+
+    def create_group(self, name: str) -> StorageGroup:
+        if self.has_child(name):
+            raise ValueError(f"'{name}' already exists in '{self._name}'")
+        g = _Group(name)
+        self._children[name] = g
+        return g
+
+    def delete_child(self, name: str) -> None:
+        self._children.pop(name, None)
+        self._datasets.pop(name, None)
+
+    def open_dataset(self, name: str) -> StorageDataset:
+        if name not in self._datasets:
+            raise KeyError(f"dataset '{name}' not found in '{self._name}'")
+        return self._datasets[name]
+
+    def create_dataset(self, name: str, precision: Precision,
+                       length: int, *,
+                       chunk_size: int = 0,
+                       compression: Compression = Compression.NONE,
+                       compression_level: int = 6) -> StorageDataset:
+        # chunk_size / compression args are ignored — in-memory store
+        # has no chunk or filter pipeline.
+        del chunk_size, compression, compression_level
+        if self.has_child(name):
+            raise ValueError(f"'{name}' already exists in '{self._name}'")
+        ds = _Dataset(name, precision, length, fields=None)
+        self._datasets[name] = ds
+        return ds
+
+    def create_compound_dataset(self, name: str,
+                                 fields: list[CompoundField],
+                                 count: int) -> StorageDataset:
+        if self.has_child(name):
+            raise ValueError(f"'{name}' already exists in '{self._name}'")
+        ds = _Dataset(name, precision=None, length=count,
+                      fields=tuple(fields))
+        self._datasets[name] = ds
+        return ds
+
+    def has_attribute(self, name: str) -> bool:
+        return name in self._attrs
+
+    def get_attribute(self, name: str) -> Any:
+        return self._attrs[name]
+
+    def set_attribute(self, name: str, value: Any) -> None:
+        self._attrs[name] = value
+
+    def delete_attribute(self, name: str) -> None:
+        self._attrs.pop(name, None)
+
+    def attribute_names(self) -> list[str]:
+        return list(self._attrs.keys())
+
+
+class _MemoryRoot:
+    """Shared root backing a MemoryProvider URL."""
+
+    __slots__ = ("root",)
+
+    def __init__(self) -> None:
+        self.root = _Group("/")
+
+
+class MemoryProvider(StorageProvider):
+    """In-memory provider. URLs look like ``memory://<name>``; the
+    same name opened twice returns the same tree until
+    :meth:`discard_store` wipes it or the process exits."""
+
+    def __init__(self, url: str, root: _MemoryRoot):
+        self._url = url
+        self._root = root
+        self._open = True
+
+    @classmethod
+    def open(cls, path_or_url: str, *, mode: str = "r", **kwargs
+             ) -> "MemoryProvider":
+        del kwargs
+        url = _normalise_url(path_or_url)
+        if mode == "w":
+            _STORES[url] = _MemoryRoot()
+        elif mode == "r":
+            if url not in _STORES:
+                raise FileNotFoundError(
+                    f"memory store '{url}' not found (create with mode='w')")
+        elif mode in ("r+", "a"):
+            _STORES.setdefault(url, _MemoryRoot())
+        else:
+            raise ValueError(f"unknown mode: {mode}")
+        return cls(url, _STORES[url])
+
+    @property
+    def provider_name(self) -> str:
+        return "memory"
+
+    def root_group(self) -> StorageGroup:
+        return self._root.root
+
+    def is_open(self) -> bool:
+        return self._open
+
+    def close(self) -> None:
+        self._open = False
+
+    @staticmethod
+    def discard_store(url: str) -> None:
+        """Remove a named store. Mainly useful in tests."""
+        _STORES.pop(_normalise_url(url), None)
+
+
+def _normalise_url(path_or_url: str) -> str:
+    if path_or_url.startswith("memory://"):
+        return path_or_url
+    return f"memory://{path_or_url}"
+
+
+def _compound_dtype(fields: tuple[CompoundField, ...]) -> np.dtype:
+    items: list[tuple[str, Any]] = []
+    for f in fields:
+        if f.kind == CompoundFieldKind.UINT32:
+            items.append((f.name, "<u4"))
+        elif f.kind == CompoundFieldKind.INT64:
+            items.append((f.name, "<i8"))
+        elif f.kind == CompoundFieldKind.FLOAT64:
+            items.append((f.name, "<f8"))
+        elif f.kind == CompoundFieldKind.VL_STRING:
+            items.append((f.name, object))
+        else:
+            raise ValueError(f"unknown compound kind: {f.kind}")
+    return np.dtype(items)

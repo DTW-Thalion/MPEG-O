@@ -6,6 +6,7 @@
 #import "HDF5/MPGOHDF5Group.h"
 #import "HDF5/MPGOHDF5Errors.h"
 #import "HDF5/MPGOHDF5CompoundType.h"
+#import "Providers/MPGOCompoundField.h"
 #import "ValueClasses/MPGOEnums.h"
 #import <hdf5.h>
 #import <stdlib.h>
@@ -580,6 +581,178 @@ static BOOL readCompoundDataset(hid_t group_id,
               @"precursor_mz":        @(rec.precursor_mz),
               @"precursor_charge":    @(rec.precursor_charge),
               @"base_peak_intensity": @(rec.base_peak_intensity) };
+}
+
+#pragma mark - Generic schema-driven write/read
+
+static size_t fieldByteSize(MPGOCompoundFieldKind kind)
+{
+    switch (kind) {
+        case MPGOCompoundFieldKindUInt32:   return 4;
+        case MPGOCompoundFieldKindInt64:    return 8;
+        case MPGOCompoundFieldKindFloat64:  return 8;
+        case MPGOCompoundFieldKindVLString: return sizeof(char *);
+    }
+    return 0;
+}
+
++ (BOOL)writeGeneric:(NSArray<NSDictionary *> *)rows
+            intoGroup:(MPGOHDF5Group *)parent
+         datasetNamed:(NSString *)name
+               fields:(NSArray<MPGOCompoundField *> *)fields
+                error:(NSError **)error
+{
+    NSUInteger n = rows.count;
+    size_t recSize = 0;
+    NSMutableArray<NSNumber *> *offsets = [NSMutableArray array];
+    for (MPGOCompoundField *f in fields) {
+        [offsets addObject:@(recSize)];
+        recSize += fieldByteSize(f.kind);
+    }
+    if (recSize == 0) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+                @"empty compound schema");
+        return NO;
+    }
+
+    MPGOHDF5CompoundType *t = [[MPGOHDF5CompoundType alloc] initWithSize:recSize];
+    for (NSUInteger i = 0; i < fields.count; i++) {
+        MPGOCompoundField *f = fields[i];
+        size_t off = (size_t)[offsets[i] unsignedIntegerValue];
+        switch (f.kind) {
+            case MPGOCompoundFieldKindUInt32:
+                [t addField:f.name type:H5T_NATIVE_UINT32 offset:off]; break;
+            case MPGOCompoundFieldKindInt64:
+                [t addField:f.name type:H5T_NATIVE_INT64 offset:off]; break;
+            case MPGOCompoundFieldKindFloat64:
+                [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
+            case MPGOCompoundFieldKindVLString:
+                [t addVariableLengthStringFieldNamed:f.name atOffset:off]; break;
+        }
+    }
+
+    uint8_t *buf = calloc(n > 0 ? n : 1, recSize);
+    NSMutableArray *retained = [NSMutableArray array];
+    for (NSUInteger r = 0; r < n; r++) {
+        NSDictionary *row = rows[r];
+        uint8_t *base = buf + r * recSize;
+        for (NSUInteger i = 0; i < fields.count; i++) {
+            MPGOCompoundField *f = fields[i];
+            size_t off = (size_t)[offsets[i] unsignedIntegerValue];
+            id v = row[f.name];
+            switch (f.kind) {
+                case MPGOCompoundFieldKindUInt32: {
+                    uint32_t x = (uint32_t)[v unsignedIntValue];
+                    memcpy(base + off, &x, 4);
+                    break;
+                }
+                case MPGOCompoundFieldKindInt64: {
+                    int64_t x = [v longLongValue];
+                    memcpy(base + off, &x, 8);
+                    break;
+                }
+                case MPGOCompoundFieldKindFloat64: {
+                    double x = [v doubleValue];
+                    memcpy(base + off, &x, 8);
+                    break;
+                }
+                case MPGOCompoundFieldKindVLString: {
+                    NSString *s = [v isKindOfClass:[NSString class]] ? v : @"";
+                    [retained addObject:s];
+                    const char *cstr = [s UTF8String];
+                    memcpy(base + off, &cstr, sizeof(char *));
+                    break;
+                }
+            }
+        }
+    }
+
+    BOOL ok = writeCompoundDataset(parent.groupId, [name UTF8String],
+                                    t.typeId, n, buf, error);
+    free(buf);
+    [retained removeAllObjects];
+    [t close];
+    return ok;
+}
+
++ (NSArray<NSDictionary *> *)readGenericFromGroup:(MPGOHDF5Group *)parent
+                                       datasetNamed:(NSString *)name
+                                             fields:(NSArray<MPGOCompoundField *> *)fields
+                                              error:(NSError **)error
+{
+    size_t recSize = 0;
+    NSMutableArray<NSNumber *> *offsets = [NSMutableArray array];
+    for (MPGOCompoundField *f in fields) {
+        [offsets addObject:@(recSize)];
+        recSize += fieldByteSize(f.kind);
+    }
+    if (recSize == 0) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+                @"empty compound schema");
+        return nil;
+    }
+
+    MPGOHDF5CompoundType *t = [[MPGOHDF5CompoundType alloc] initWithSize:recSize];
+    for (NSUInteger i = 0; i < fields.count; i++) {
+        MPGOCompoundField *f = fields[i];
+        size_t off = (size_t)[offsets[i] unsignedIntegerValue];
+        switch (f.kind) {
+            case MPGOCompoundFieldKindUInt32:
+                [t addField:f.name type:H5T_NATIVE_UINT32 offset:off]; break;
+            case MPGOCompoundFieldKindInt64:
+                [t addField:f.name type:H5T_NATIVE_INT64 offset:off]; break;
+            case MPGOCompoundFieldKindFloat64:
+                [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
+            case MPGOCompoundFieldKindVLString:
+                [t addVariableLengthStringFieldNamed:f.name atOffset:off]; break;
+        }
+    }
+
+    NSUInteger n = 0;
+    void *buf = NULL;
+    hid_t space_id = -1;
+    if (!readCompoundDataset(parent.groupId, [name UTF8String],
+                              t.typeId, recSize, &n, &buf, &space_id, error)) {
+        [t close];
+        return nil;
+    }
+
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:n];
+    uint8_t *recs = (uint8_t *)buf;
+    for (NSUInteger r = 0; r < n; r++) {
+        NSMutableDictionary *row = [NSMutableDictionary dictionary];
+        uint8_t *base = recs + r * recSize;
+        for (NSUInteger i = 0; i < fields.count; i++) {
+            MPGOCompoundField *f = fields[i];
+            size_t off = (size_t)[offsets[i] unsignedIntegerValue];
+            switch (f.kind) {
+                case MPGOCompoundFieldKindUInt32: {
+                    uint32_t x; memcpy(&x, base + off, 4);
+                    row[f.name] = @(x); break;
+                }
+                case MPGOCompoundFieldKindInt64: {
+                    int64_t x; memcpy(&x, base + off, 8);
+                    row[f.name] = @(x); break;
+                }
+                case MPGOCompoundFieldKindFloat64: {
+                    double x; memcpy(&x, base + off, 8);
+                    row[f.name] = @(x); break;
+                }
+                case MPGOCompoundFieldKindVLString: {
+                    char *ptr; memcpy(&ptr, base + off, sizeof(char *));
+                    row[f.name] = ptr ? [NSString stringWithUTF8String:ptr] : @"";
+                    break;
+                }
+            }
+        }
+        [out addObject:row];
+    }
+
+    H5Dvlen_reclaim(t.typeId, space_id, H5P_DEFAULT, buf);
+    free(buf);
+    H5Sclose(space_id);
+    [t close];
+    return out;
 }
 
 @end

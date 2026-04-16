@@ -343,6 +343,72 @@ cleanup:
     return exists > 0;
 }
 
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error
+{
+    [_file lockForWriting];
+    if (H5Aexists(_gid, [name UTF8String]) > 0) {
+        H5Adelete(_gid, [name UTF8String]);
+    }
+    [_file unlockForWriting];
+    return YES;
+}
+
+static herr_t collect_attr(hid_t loc, const char *name,
+                            const H5A_info_t *ainfo, void *op_data)
+{
+    (void)loc; (void)ainfo;
+    NSMutableArray *out = (__bridge NSMutableArray *)op_data;
+    [out addObject:[NSString stringWithUTF8String:name]];
+    return 0;
+}
+
+- (NSArray<NSString *> *)attributeNames
+{
+    NSMutableArray *out = [NSMutableArray array];
+    [_file lockForReading];
+    H5Aiterate2(_gid, H5_INDEX_NAME, H5_ITER_INC, NULL,
+                 collect_attr, (__bridge void *)out);
+    [_file unlockForReading];
+    return out;
+}
+
+static herr_t collect_link(hid_t loc, const char *name,
+                            const H5L_info_t *linfo, void *op_data)
+{
+    (void)loc; (void)linfo;
+    NSMutableArray *out = (__bridge NSMutableArray *)op_data;
+    [out addObject:[NSString stringWithUTF8String:name]];
+    return 0;
+}
+
+- (NSArray<NSString *> *)childNames
+{
+    NSMutableArray *out = [NSMutableArray array];
+    [_file lockForReading];
+    H5Literate(_gid, H5_INDEX_NAME, H5_ITER_INC, NULL,
+                collect_link, (__bridge void *)out);
+    [_file unlockForReading];
+    return out;
+}
+
+- (NSString *)groupName
+{
+    [_file lockForReading];
+    ssize_t sz = H5Iget_name(_gid, NULL, 0);
+    if (sz <= 0) { [_file unlockForReading]; return @"/"; }
+    char *buf = malloc((size_t)sz + 1);
+    H5Iget_name(_gid, buf, (size_t)sz + 1);
+    [_file unlockForReading];
+    NSString *full = [NSString stringWithUTF8String:buf];
+    free(buf);
+    if (full.length == 0 || [full isEqualToString:@"/"]) return @"/";
+    NSRange slash = [full rangeOfString:@"/" options:NSBackwardsSearch];
+    if (slash.location == NSNotFound || slash.location + 1 >= full.length) {
+        return full;
+    }
+    return [full substringFromIndex:slash.location + 1];
+}
+
 - (void)dealloc
 {
     if (_gid >= 0) H5Gclose(_gid);

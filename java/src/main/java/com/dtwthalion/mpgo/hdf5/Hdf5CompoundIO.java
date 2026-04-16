@@ -47,7 +47,7 @@ public final class Hdf5CompoundIO {
         public final int[] offsets;
         public final int totalSize;
 
-        Schema(List<Field> fields) {
+        public Schema(List<Field> fields) {
             this.fields = List.copyOf(fields);
             this.offsets = new int[fields.size()];
             int off = 0;

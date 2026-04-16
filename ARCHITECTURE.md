@@ -105,6 +105,73 @@ delegate to the relevant managers in v0.1; see "Implementation notes
 
 ---
 
+## Storage Provider Abstraction (v0.6, M39)
+
+The data model and API are the standard; the storage backend is a
+**pluggable implementation detail**. Two providers ship:
+
+```
+                 ┌─────────────────────────┐
+                 │  SpectralDataset / ...  │   upper layers
+                 └────────────┬────────────┘
+                              │ talks only to protocols
+                              ▼
+        ┌─────────────────────────────────────────────┐
+        │ <StorageProvider> / <StorageGroup> /         │
+        │         <StorageDataset>                     │
+        └────────────┬────────────────────┬────────────┘
+                     │                    │
+                     ▼                    ▼
+            ┌─────────────────┐  ┌─────────────────┐
+            │  Hdf5Provider   │  │ MemoryProvider  │
+            │   (h5py/libhdf5)│  │ (dict-tree)     │
+            └─────────────────┘  └─────────────────┘
+```
+
+Providers register via platform-native discovery:
+
+* **Python** — `importlib.metadata` entry points
+  (`project.entry-points."mpeg_o.providers"` in `pyproject.toml`).
+* **Java** — `java.util.ServiceLoader` with a service file at
+  `META-INF/services/com.dtwthalion.mpgo.providers.StorageProvider`.
+* **ObjC** — `+load` registration into `MPGOProviderRegistry`.
+
+Each language exposes the same **capability floor**:
+
+| Capability | Required |
+|---|---|
+| Hierarchical groups | ✓ |
+| Named 1-D typed datasets | ✓ |
+| Partial/hyperslab reads | ✓ |
+| Chunked storage | ✓ |
+| Compression (zlib, LZ4) | ✓ |
+| Compound types with VL strings | ✓ |
+| Scalar + array attributes on groups and datasets | ✓ |
+
+`MemoryProvider` exists so the abstraction is provable: if round-trip
+tests pass identically over `Hdf5Provider` and `MemoryProvider`, the
+protocol contract is correct. Future providers (Zarr, SQLite, …) are
+drop-in additions.
+
+### Transport
+
+Transport is **orthogonal** to storage. Python's `Hdf5Provider.open`
+routes cloud URLs (`s3://…`, `http://…`) through `fsspec` so
+S3/HTTP access works without a separate transport class. Java
+cloud access and ObjC ROS3 are deferred to v0.7+ (see
+`HANDOFF.md`).
+
+### Caller refactor status
+
+v0.6 ships the abstraction and the two providers. Upper-layer
+classes still talk directly to `h5py` / `MPGOHDF5Group` / `Hdf5File`
+from v0.5 code; the provider interfaces are additive. Migrating
+every `SpectralDataset` / `AcquisitionRun` / `CompoundIO` /
+protection class to use the protocol is tracked as v0.7 work so
+that v0.6 ships without touching signed/encrypted data paths.
+
+---
+
 ## HDF5 Container Mapping
 
 MPEG-O files are HDF5 files with the `.mpgo` extension. The internal hierarchy mirrors the MPEG-G file model:
