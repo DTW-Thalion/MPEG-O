@@ -1,10 +1,9 @@
 # MPEG-O v0.5 — Java Feature Parity
 
-> **Status:** v0.4.0 is **complete**. ObjC (836 assertions) + Python
-> (120 tests) at full parity with thread safety, chromatograms, key
-> rotation, ISA export, anonymization, nmrML writer, LZ4/Numpress.
-> This session executes **Milestones 31-36** to bring the **Java stream
-> to full feature parity** with ObjC and Python, producing **v0.5.0**.
+> **Status:** v0.5.0 is **complete**. All three implementations at
+> full feature parity: ObjC (836 assertions), Python (120 tests),
+> Java (62 tests on JDK 17). Milestones 31-36 delivered the Java
+> stream. Three-way cross-implementation conformance verified.
 
 ## Critical Update: hdf-java Maven Artifacts Now Available
 
@@ -474,13 +473,13 @@ git push origin v0.5.0
 
 ## Execution Checklist
 
-1. Tag v0.4.0 if needed.
-2. **M31:** Java CI + scaffold + HDF5 wrappers. **Pause for user review.**
-3. **M32:** Java core primitives + runs + dataset. **Pause for user review.**
-4. **M33:** Java import/export. **Pause for user review.**
-5. **M34:** Java protection layer. **Pause for user review.**
-6. **M35:** Java advanced features. **Pause for user review.**
-7. **M36:** Three-way conformance + v0.5.0 release.
+1. ~~Tag v0.4.0 if needed.~~ Done.
+2. **M31:** Java CI + scaffold + HDF5 wrappers. Done (17 tests).
+3. **M32:** Java core primitives + runs + dataset. Done (26 tests).
+4. **M33:** Java import/export. Done (36 tests).
+5. **M34:** Java protection layer. Done (50 tests).
+6. **M35:** Java advanced features. Done (62 tests).
+7. **M36:** Three-way conformance + v0.5.0 release. Done.
 
 **CI must be green before any milestone is complete.**
 

@@ -1,9 +1,9 @@
 # MPEG-O — Java Implementation
 
 Java implementation of the MPEG-O multi-omics spectral data container,
-mirroring the Objective-C reference implementation architecture.
+at full feature parity with the Objective-C and Python implementations.
 
-Package: `com.dtwthalion.mpgo`  
+Package: `com.dtwthalion.mpgo`
 License: LGPL-3.0-or-later (core), Apache-2.0 (importers/exporters)
 
 ## Prerequisites
@@ -16,6 +16,9 @@ License: LGPL-3.0-or-later (core), Apache-2.0 (importers/exporters)
 # Ubuntu/Debian
 sudo apt-get install libhdf5-dev libhdf5-java libhdf5-jni
 ```
+
+**Note:** CI uses the same `apt` packages. GitHub Packages auth
+(for `hdf5-java-jni` 2.0+) is not required when using system packages.
 
 ## Build & Test
 
@@ -39,14 +42,36 @@ The Java implementation mirrors the three-layer ObjC/Python pattern:
 | Layer | Java Package | Description |
 |-------|-------------|-------------|
 | HDF5 wrappers | `com.dtwthalion.mpgo.hdf5` | `Hdf5File`, `Hdf5Group`, `Hdf5Dataset`, `Hdf5CompoundType` |
-| Enums | `com.dtwthalion.mpgo` | `Enums.Precision`, `Enums.Compression`, etc. |
-| Core (M32+) | `com.dtwthalion.mpgo` | `SignalArray`, `Spectrum`, `AcquisitionRun`, `SpectralDataset` |
+| Core + enums | `com.dtwthalion.mpgo` | `SignalArray`, `Spectrum`, `AcquisitionRun`, `SpectralDataset`, `FeatureFlags`, `NumpressCodec` |
+| Importers | `com.dtwthalion.mpgo.importers` | `MzMLReader`, `NmrMLReader`, `CVTermMapper`, `ThermoRawReader` (stub) |
+| Exporters | `com.dtwthalion.mpgo.exporters` | `MzMLWriter`, `NmrMLWriter`, `ISAExporter` |
+| Protection | `com.dtwthalion.mpgo.protection` | `EncryptionManager`, `SignatureManager`, `KeyRotationManager`, `Anonymizer` |
 
-See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and [`../WORKPLAN.md`](../WORKPLAN.md)
-for the canonical class hierarchy and milestone plan.
+See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the full 28-class mapping
+table and design notes.
+
+## Test Suite (62 tests)
+
+| Test Class | Count | Coverage |
+|-----------|-------|---------|
+| `Hdf5FileTest` | 8 | File/group/attribute operations |
+| `Hdf5DatasetTest` | 9 | All precisions, compression, hyperslab |
+| `SpectralDatasetTest` | 9 | Round-trips, fixtures, MSImage |
+| `ImportExportTest` | 10 | mzML, nmrML, ISA, Thermo stub |
+| `ProtectionTest` | 14 | Encrypt, sign, key rotation, anonymize |
+| `AdvancedFeaturesTest` | 12 | Thread safety, LZ4, Numpress-delta |
 
 ## Test Fixtures
 
-Test resources at `src/test/resources/mpgo/` are symlinked to the canonical
-ObjC fixtures at `objc/Tests/Fixtures/mpgo/`. These are the cross-language
-conformance files used by all three implementations.
+Test resources at `src/test/resources/mpgo/` contain the canonical ObjC
+reference `.mpgo` files. XML fixtures (`tiny.pwiz.1.1.mzML`,
+`bmse000325.nmrML`, `1min.mzML`) are used for import round-trip testing.
+
+## Cross-Language Compatibility
+
+The Java implementation is byte-compatible with ObjC and Python for:
+- AES-256-GCM encryption (same IV/tag layout, same ciphertext)
+- HMAC-SHA256 `v2:` canonical signatures (little-endian normalization)
+- Numpress-delta encoding (deterministic scale + delta output)
+- HDF5 signal channel layout (chunked float64, zlib level 6)
+- Feature flag JSON serialization

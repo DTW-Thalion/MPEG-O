@@ -1,9 +1,11 @@
-# MPEG-O `.mpgo` File Format Specification — v0.3.0
+# MPEG-O `.mpgo` File Format Specification — v0.4.0
 
 This document specifies the on-disk layout of an `.mpgo` file as written
-by libMPGO v0.3.0. It is detailed enough for a reader implemented in a
-different language (Python, Rust, Go) to open, validate, and fully
-decode a file without consulting the reference Objective-C source.
+by libMPGO v0.4.0 (ObjC reference implementation). It is detailed enough
+for a reader implemented in a different language (Python, Java, Rust, Go)
+to open, validate, and fully decode a file without consulting the
+reference source. As of v0.5.0, three interoperable implementations
+(ObjC, Python, Java) read and write this format.
 
 v0.3 is a strict superset of v0.2 on disk: every v0.2 fixture remains
 readable, and new content (compound per-run provenance, `v2:`
