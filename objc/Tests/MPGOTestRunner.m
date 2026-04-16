@@ -24,6 +24,7 @@ extern void testMilestone18(void);
 extern void testMilestone19(void);
 extern void testMilestone21(void);
 extern void testMilestone23(void);
+extern void testMilestone24(void);
 
 int main(int argc, const char *argv[])
 {
@@ -119,6 +120,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 23: thread-safe MPGOHDF5File")
             testMilestone23();
         END_SET("Milestone 23: thread-safe MPGOHDF5File")
+
+        START_SET("Milestone 24: chromatogram API + mzML writer completion")
+            testMilestone24();
+        END_SET("Milestone 24: chromatogram API + mzML writer completion")
     }
     return 0;
 }

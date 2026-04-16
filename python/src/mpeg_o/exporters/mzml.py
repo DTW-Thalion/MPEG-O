@@ -206,15 +206,77 @@ def dataset_to_bytes(
         emit('        </spectrum>\n')
 
     emit('      </spectrumList>\n')
+
+    # M24: chromatogramList
+    chroms = list(getattr(chosen_run, "chromatograms", []) or [])
+    chrom_offsets: list[tuple[str, int]] = []
+    if chroms:
+        emit(f'      <chromatogramList count="{len(chroms)}"'
+             f' defaultDataProcessingRef="dp_export">\n')
+        for i, c in enumerate(chroms):
+            cid = f"chrom={i + 1}"
+            offset_before = total
+            emit(f'{INDENT}<chromatogram index="{i}" id="{_xml_escape(cid)}"'
+                 f' defaultArrayLength="{int(c.retention_times.shape[0])}">\n')
+            chrom_offsets.append((cid, offset_before + len(INDENT)))
+
+            ctype = int(c.chromatogram_type)
+            if ctype == 0:  # TIC
+                emit('          <cvParam cvRef="MS" accession="MS:1000235"'
+                     ' name="total ion current chromatogram" value=""/>\n')
+            elif ctype == 1:  # XIC
+                emit('          <cvParam cvRef="MS" accession="MS:1000627"'
+                     ' name="selected ion current chromatogram" value=""/>\n')
+                emit(f'          <userParam name="target m/z"'
+                     f' value="{_fmt_double(float(c.target_mz))}" type="xsd:double"/>\n')
+            elif ctype == 2:  # SRM
+                emit('          <cvParam cvRef="MS" accession="MS:1001473"'
+                     ' name="selected reaction monitoring chromatogram" value=""/>\n')
+                emit(f'          <userParam name="precursor m/z"'
+                     f' value="{_fmt_double(float(c.precursor_mz))}" type="xsd:double"/>\n')
+                emit(f'          <userParam name="product m/z"'
+                     f' value="{_fmt_double(float(c.product_mz))}" type="xsd:double"/>\n')
+
+            t_arr = np.ascontiguousarray(c.retention_times, dtype="<f8")
+            i_arr = np.ascontiguousarray(c.intensities, dtype="<f8")
+            t_b64 = _encode_array(t_arr, zlib_compression)
+            i_b64 = _encode_array(i_arr, zlib_compression)
+            comp_acc = "MS:1000574" if zlib_compression else "MS:1000576"
+            comp_name = "zlib compression" if zlib_compression else "no compression"
+
+            emit('          <binaryDataArrayList count="2">\n')
+            # time array (MS:1000595) + intensity array (MS:1000515)
+            for accession, name, unit_acc, unit_name, payload in (
+                ("MS:1000595", "time array", "UO:0000010", "second", t_b64),
+                ("MS:1000515", "intensity array", "MS:1000131", "number of counts", i_b64),
+            ):
+                unit_cv = "UO" if accession == "MS:1000595" else "MS"
+                emit(f'            <binaryDataArray encodedLength="{len(payload)}">\n')
+                emit('              <cvParam cvRef="MS" accession="MS:1000523" name="64-bit float" value=""/>\n')
+                emit(f'              <cvParam cvRef="MS" accession="{comp_acc}" name="{comp_name}" value=""/>\n')
+                emit(f'              <cvParam cvRef="MS" accession="{accession}" name="{name}" value=""'
+                     f' unitCvRef="{unit_cv}" unitAccession="{unit_acc}" unitName="{unit_name}"/>\n')
+                emit(f'              <binary>{payload}</binary>\n')
+                emit('            </binaryDataArray>\n')
+            emit('          </binaryDataArrayList>\n')
+            emit('        </chromatogram>\n')
+        emit('      </chromatogramList>\n')
+
     emit('    </run>\n')
     emit('  </mzML>\n')
 
     index_list_offset = total
-    emit('  <indexList count="1">\n')
+    index_count = 1 + (1 if chroms else 0)
+    emit(f'  <indexList count="{index_count}">\n')
     emit('    <index name="spectrum">\n')
     for scan_id, offset in spectrum_offsets:
         emit(f'      <offset idRef="{_xml_escape(scan_id)}">{offset}</offset>\n')
     emit('    </index>\n')
+    if chroms:
+        emit('    <index name="chromatogram">\n')
+        for cid, offset in chrom_offsets:
+            emit(f'      <offset idRef="{_xml_escape(cid)}">{offset}</offset>\n')
+        emit('    </index>\n')
     emit('  </indexList>\n')
     emit(f'  <indexListOffset>{index_list_offset}</indexListOffset>\n')
     emit('  <fileChecksum>0</fileChecksum>\n')

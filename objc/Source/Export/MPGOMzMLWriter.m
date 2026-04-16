@@ -12,6 +12,7 @@
 #import "Run/MPGOAcquisitionRun.h"
 #import "Run/MPGOSpectrumIndex.h"
 #import "Spectra/MPGOMassSpectrum.h"
+#import "Spectra/MPGOChromatogram.h"
 #import "ValueClasses/MPGOEnums.h"
 #import "ValueClasses/MPGOValueRange.h"
 #import "Import/MPGOBase64.h"
@@ -287,6 +288,91 @@ static NSString *precisionName(BOOL useFloat32)
     }
 
     appendUTF8(body, @"      </spectrumList>\n");
+
+    // ------------------------------------------------------------------
+    // M24: chromatogramList
+    // ------------------------------------------------------------------
+    NSArray<MPGOChromatogram *> *chroms = chosenRun.chromatograms;
+    NSMutableArray<NSNumber *> *chromOffsets = [NSMutableArray arrayWithCapacity:chroms.count];
+    NSMutableArray<NSString *> *chromIds = [NSMutableArray arrayWithCapacity:chroms.count];
+    if (chroms.count > 0) {
+        NSString *chromListOpen = [NSString stringWithFormat:
+            @"      <chromatogramList count=\"%lu\" defaultDataProcessingRef=\"dp_export\">\n",
+            (unsigned long)chroms.count];
+        appendUTF8(body, chromListOpen);
+
+        for (NSUInteger i = 0; i < chroms.count; i++) {
+            MPGOChromatogram *c = chroms[i];
+            NSUInteger arrayLen = c.timeArray.length;
+            NSString *cid = [NSString stringWithFormat:@"chrom=%lu", (unsigned long)(i + 1)];
+            [chromIds addObject:cid];
+
+            NSUInteger offset = body.length;
+            [chromOffsets addObject:@(offset + strlen("        "))];
+
+            NSString *open = [NSString stringWithFormat:
+                @"        <chromatogram index=\"%lu\" id=\"%@\" defaultArrayLength=\"%lu\">\n",
+                (unsigned long)i, xmlEscape(cid), (unsigned long)arrayLen];
+            appendUTF8(body, open);
+
+            // Type cvParam. MS:1000235 = TIC, MS:1000627 = XIC (also
+            // called "selected ion chromatogram"), MS:1000789 = SRM.
+            if (c.type == MPGOChromatogramTypeTIC) {
+                appendUTF8(body, @"          <cvParam cvRef=\"MS\" accession=\"MS:1000235\" name=\"total ion current chromatogram\" value=\"\"/>\n");
+            } else if (c.type == MPGOChromatogramTypeXIC) {
+                appendUTF8(body, @"          <cvParam cvRef=\"MS\" accession=\"MS:1000627\" name=\"selected ion current chromatogram\" value=\"\"/>\n");
+                NSString *tm = [NSString stringWithFormat:
+                    @"          <userParam name=\"target m/z\" value=\"%@\" type=\"xsd:double\"/>\n",
+                    fmtDouble(c.targetMz)];
+                appendUTF8(body, tm);
+            } else if (c.type == MPGOChromatogramTypeSRM) {
+                appendUTF8(body, @"          <cvParam cvRef=\"MS\" accession=\"MS:1001473\" name=\"selected reaction monitoring chromatogram\" value=\"\"/>\n");
+                NSString *pm = [NSString stringWithFormat:
+                    @"          <userParam name=\"precursor m/z\" value=\"%@\" type=\"xsd:double\"/>\n"
+                    @"          <userParam name=\"product m/z\" value=\"%@\" type=\"xsd:double\"/>\n",
+                    fmtDouble(c.precursorProductMz), fmtDouble(c.productMz)];
+                appendUTF8(body, pm);
+            }
+
+            NSData *tBuf = c.timeArray.buffer;
+            NSData *iBuf = c.intensityArray.buffer;
+            NSString *tB64 = [MPGOBase64 encodeData:tBuf zlibDeflate:zlibCompression];
+            NSString *iB64 = [MPGOBase64 encodeData:iBuf zlibDeflate:zlibCompression];
+
+            appendUTF8(body, @"          <binaryDataArrayList count=\"2\">\n");
+            NSString *tArr = [NSString stringWithFormat:
+                @"            <binaryDataArray encodedLength=\"%lu\">\n"
+                @"              <cvParam cvRef=\"MS\" accession=\"%@\" name=\"%@\" value=\"\"/>\n"
+                @"              <cvParam cvRef=\"MS\" accession=\"%@\" name=\"%@\" value=\"\"/>\n"
+                @"              <cvParam cvRef=\"MS\" accession=\"MS:1000595\" name=\"time array\" value=\"\" unitCvRef=\"UO\" unitAccession=\"UO:0000010\" unitName=\"second\"/>\n"
+                @"              <binary>%@</binary>\n"
+                @"            </binaryDataArray>\n",
+                (unsigned long)tB64.length,
+                precisionAccession(NO), precisionName(NO),
+                (zlibCompression ? @"MS:1000574" : @"MS:1000576"),
+                (zlibCompression ? @"zlib compression" : @"no compression"),
+                tB64];
+            appendUTF8(body, tArr);
+
+            NSString *iArr = [NSString stringWithFormat:
+                @"            <binaryDataArray encodedLength=\"%lu\">\n"
+                @"              <cvParam cvRef=\"MS\" accession=\"%@\" name=\"%@\" value=\"\"/>\n"
+                @"              <cvParam cvRef=\"MS\" accession=\"%@\" name=\"%@\" value=\"\"/>\n"
+                @"              <cvParam cvRef=\"MS\" accession=\"MS:1000515\" name=\"intensity array\" value=\"\" unitCvRef=\"MS\" unitAccession=\"MS:1000131\" unitName=\"number of counts\"/>\n"
+                @"              <binary>%@</binary>\n"
+                @"            </binaryDataArray>\n",
+                (unsigned long)iB64.length,
+                precisionAccession(NO), precisionName(NO),
+                (zlibCompression ? @"MS:1000574" : @"MS:1000576"),
+                (zlibCompression ? @"zlib compression" : @"no compression"),
+                iB64];
+            appendUTF8(body, iArr);
+            appendUTF8(body, @"          </binaryDataArrayList>\n");
+            appendUTF8(body, @"        </chromatogram>\n");
+        }
+        appendUTF8(body, @"      </chromatogramList>\n");
+    }
+
     appendUTF8(body, @"    </run>\n");
     appendUTF8(body, @"  </mzML>\n");
 
@@ -295,7 +381,11 @@ static NSString *precisionName(BOOL useFloat32)
     // ------------------------------------------------------------------
     NSUInteger indexListOffset = body.length;
 
-    appendUTF8(body, @"  <indexList count=\"1\">\n");
+    NSUInteger indexCount = 1 + (chroms.count > 0 ? 1 : 0);
+    NSString *indexListOpen = [NSString stringWithFormat:
+        @"  <indexList count=\"%lu\">\n", (unsigned long)indexCount];
+    appendUTF8(body, indexListOpen);
+
     appendUTF8(body, @"    <index name=\"spectrum\">\n");
     for (NSUInteger i = 0; i < spectrumOffsets.count; i++) {
         NSString *entry = [NSString stringWithFormat:
@@ -305,6 +395,18 @@ static NSString *precisionName(BOOL useFloat32)
         appendUTF8(body, entry);
     }
     appendUTF8(body, @"    </index>\n");
+
+    if (chroms.count > 0) {
+        appendUTF8(body, @"    <index name=\"chromatogram\">\n");
+        for (NSUInteger i = 0; i < chromOffsets.count; i++) {
+            NSString *entry = [NSString stringWithFormat:
+                @"      <offset idRef=\"%@\">%llu</offset>\n",
+                xmlEscape(chromIds[i]),
+                (unsigned long long)chromOffsets[i].unsignedLongLongValue];
+            appendUTF8(body, entry);
+        }
+        appendUTF8(body, @"    </index>\n");
+    }
     appendUTF8(body, @"  </indexList>\n");
 
     NSString *ilo = [NSString stringWithFormat:

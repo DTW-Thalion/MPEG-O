@@ -33,6 +33,18 @@ class ImportedSpectrum:
 
 
 @dataclass(slots=True)
+class ImportedChromatogram:
+    """One decoded chromatogram trace from mzML (M24)."""
+
+    retention_times: np.ndarray
+    intensities: np.ndarray
+    chromatogram_type: int = 0  # ChromatogramType IntEnum value
+    target_mz: float = 0.0
+    precursor_mz: float = 0.0
+    product_mz: float = 0.0
+
+
+@dataclass(slots=True)
 class ImportResult:
     """Container returned by the mzML / nmrML importers."""
 
@@ -40,6 +52,7 @@ class ImportResult:
     isa_investigation_id: str = ""
     ms_spectra: list[ImportedSpectrum] = field(default_factory=list)
     nmr_spectra: list[ImportedSpectrum] = field(default_factory=list)
+    chromatograms: list[ImportedChromatogram] = field(default_factory=list)
     nucleus_type: str = ""
     identifications: list[Identification] = field(default_factory=list)
     quantifications: list[Quantification] = field(default_factory=list)
@@ -58,12 +71,32 @@ class ImportResult:
         """Convert the parsed spectra into ``WrittenRun`` buffers ready for
         :func:`SpectralDataset.write_minimal`.
         """
+        from ..chromatogram import Chromatogram
+        from ..enums import ChromatogramType
+
+        chrom_objs = [
+            Chromatogram(
+                retention_times=c.retention_times,
+                intensities=c.intensities,
+                chromatogram_type=ChromatogramType(c.chromatogram_type),
+                target_mz=c.target_mz,
+                precursor_mz=c.precursor_mz,
+                product_mz=c.product_mz,
+            )
+            for c in self.chromatograms
+        ]
+
         runs: dict[str, WrittenRun] = {}
         if self.ms_spectra:
             runs["run_0001"] = _pack_run(
                 self.ms_spectra, spectrum_class="MPGOMassSpectrum",
                 acquisition_mode=0, channel_x="mz",
+                chromatograms=chrom_objs,
             )
+        elif chrom_objs:
+            # Chromatograms with no spectra — synthesize an empty run to
+            # carry them so the /chromatograms/ group has somewhere to live.
+            runs["run_0001"] = _empty_run_with_chromatograms(chrom_objs)
         if self.nmr_spectra:
             runs["nmr_run"] = _pack_run(
                 self.nmr_spectra, spectrum_class="MPGONMRSpectrum",
@@ -93,6 +126,7 @@ def _pack_run(
     acquisition_mode: int,
     channel_x: str,
     nucleus_type: str = "",
+    chromatograms: list | None = None,
 ) -> WrittenRun:
     n = len(spectra)
     lengths = np.array([s.mz_or_chemical_shift.shape[0] for s in spectra], dtype=np.uint32)
@@ -131,4 +165,22 @@ def _pack_run(
         precursor_charges=_col("precursor_charge", np.int32),
         base_peak_intensities=base_peaks,
         nucleus_type=nucleus_type,
+        chromatograms=list(chromatograms or []),
+    )
+
+
+def _empty_run_with_chromatograms(chromatograms: list) -> WrittenRun:
+    """Build an empty MS run that carries only chromatograms."""
+    z8 = np.zeros(0, dtype=np.uint64)
+    z4 = np.zeros(0, dtype=np.uint32)
+    f8 = np.zeros(0, dtype=np.float64)
+    i4 = np.zeros(0, dtype=np.int32)
+    return WrittenRun(
+        spectrum_class="MPGOMassSpectrum",
+        acquisition_mode=0,
+        channel_data={"mz": f8, "intensity": f8},
+        offsets=z8, lengths=z4,
+        retention_times=f8, ms_levels=i4, polarities=i4,
+        precursor_mzs=f8, precursor_charges=i4, base_peak_intensities=f8,
+        chromatograms=list(chromatograms),
     )

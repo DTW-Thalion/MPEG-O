@@ -352,6 +352,10 @@ class WrittenRun:
     # float64 buffer into an int64 first-difference array and stores
     # the fixed-point scaling factor on the signal_channels group.
     signal_compression: str = "gzip"
+    # v0.4 M24: optional chromatogram traces for this run. Empty list
+    # results in no /chromatograms/ group, preserving byte parity with
+    # v0.3 files written by callers that don't supply chromatograms.
+    chromatograms: list = field(default_factory=list)  # list[Chromatogram]
 
 
 def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
@@ -418,6 +422,11 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
                 buffer.astype("<f8", copy=False),
                 compression=codec,
             )
+
+    # M24: chromatograms
+    if run.chromatograms:
+        from .acquisition_run import write_chromatograms_to_run_group
+        write_chromatograms_to_run_group(g, run.chromatograms)
 
 
 def _write_identifications(study: h5py.Group, records: list[Identification]) -> None:

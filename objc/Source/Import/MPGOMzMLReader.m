@@ -55,6 +55,9 @@ NSString *const MPGOMzMLReaderErrorDomain = @"MPGOMzMLReaderErrorDomain";
     BOOL _inChromatogram;
     NSUInteger _chromDefaultLen;
     MPGOChromatogramType _chromType;
+    double _chromTargetMz;        // M24: parsed from userParam
+    double _chromPrecursorMz;     // M24
+    double _chromProductMz;       // M24
     NSMutableDictionary<NSString *, MPGOSignalArray *> *_chromArrays;
 
     // Current binaryDataArray
@@ -213,6 +216,9 @@ NSString *const MPGOMzMLReaderErrorDomain = @"MPGOMzMLReaderErrorDomain";
     _inChromatogram = NO;
     _chromDefaultLen = 0;
     _chromType = MPGOChromatogramTypeTIC;
+    _chromTargetMz    = 0.0;
+    _chromPrecursorMz = 0.0;
+    _chromProductMz   = 0.0;
     [_chromArrays removeAllObjects];
 }
 
@@ -316,6 +322,16 @@ didStartElement:(NSString *)elementName
         [self handleCVParamWithAttributes:attrs];
         return;
     }
+
+    // M24: parse userParam target/precursor/product m/z inside a chromatogram.
+    if ([elementName isEqualToString:@"userParam"] && _inChromatogram) {
+        NSString *name = attrs[@"name"];
+        double v = [attrs[@"value"] doubleValue];
+        if ([name isEqualToString:@"target m/z"])    _chromTargetMz    = v;
+        else if ([name isEqualToString:@"precursor m/z"]) _chromPrecursorMz = v;
+        else if ([name isEqualToString:@"product m/z"])   _chromProductMz   = v;
+        return;
+    }
 }
 
 - (void)handleCVParamWithAttributes:(NSDictionary<NSString *, NSString *> *)attrs
@@ -409,10 +425,14 @@ didStartElement:(NSString *)elementName
         return;
     }
 
-    // 6. Inside chromatogram directly: detect TIC vs SRM
+    // 6. Inside chromatogram directly: detect TIC / XIC / SRM
     if (_inChromatogram) {
         if ([MPGOCVTermMapper isTotalIonChromatogramAccession:acc]) {
             _chromType = MPGOChromatogramTypeTIC;
+            return;
+        }
+        if ([acc isEqualToString:@"MS:1000627"]) {    // M24: XIC
+            _chromType = MPGOChromatogramTypeXIC;
             return;
         }
         if ([MPGOCVTermMapper isSelectedReactionMonitoringAccession:acc]) {
@@ -557,9 +577,9 @@ didStartElement:(NSString *)elementName
             [[MPGOChromatogram alloc] initWithTimeArray:time
                                          intensityArray:ints
                                                    type:_chromType
-                                               targetMz:0.0
-                                            precursorMz:0.0
-                                              productMz:0.0
+                                               targetMz:_chromTargetMz
+                                            precursorMz:_chromPrecursorMz
+                                              productMz:_chromProductMz
                                                   error:&err];
         if (c) [_chromatograms addObject:c];
     }
