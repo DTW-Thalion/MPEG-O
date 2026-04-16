@@ -28,6 +28,7 @@ extern void testMilestone24(void);
 extern void testMilestone25(void);
 extern void testMilestone27(void);
 extern void testMilestone28(void);
+extern void testMilestone29(void);
 
 int main(int argc, const char *argv[])
 {
@@ -139,6 +140,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 28: spectral anonymization")
             testMilestone28();
         END_SET("Milestone 28: spectral anonymization")
+
+        START_SET("Milestone 29: nmrML writer + Thermo RAW stub")
+            testMilestone29();
+        END_SET("Milestone 29: nmrML writer + Thermo RAW stub")
     }
     return 0;
 }
