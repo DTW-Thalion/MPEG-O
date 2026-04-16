@@ -17,7 +17,7 @@ import numpy as np
 from ..enums import Polarity, Precision
 from . import cv_term_mapper as cv
 from ._base64_zlib import decode as decode_base64
-from .import_result import ImportResult, ImportedSpectrum
+from .import_result import ImportResult, ImportedChromatogram, ImportedSpectrum
 
 
 class MzMLParseError(ValueError):
@@ -50,13 +50,14 @@ def read(path: str | Path) -> ImportResult:
             _handle_end(state, tag, elem)
             elem.clear()
 
-    if not state.spectra:
-        raise MzMLParseError(f"{path}: no usable spectra parsed")
+    if not state.spectra and not state.chromatograms:
+        raise MzMLParseError(f"{path}: no usable spectra or chromatograms parsed")
 
     return ImportResult(
         title=state.run_id or "mzml_import",
         isa_investigation_id="",
         ms_spectra=state.spectra,
+        chromatograms=state.chromatograms,
         source_file=str(path),
     )
 
@@ -66,7 +67,7 @@ def read(path: str | Path) -> ImportResult:
 
 class _State:
     __slots__ = (
-        "source_file", "run_id", "spectra",
+        "source_file", "run_id", "spectra", "chromatograms",
         "in_spectrum", "spec_index", "spec_default_len",
         "ms_level", "polarity", "scan_time",
         "precursor_mz", "precursor_charge",
@@ -74,13 +75,15 @@ class _State:
         "bin_text",
         "spec_arrays",
         "in_precursor", "in_selected_ion", "in_scan", "in_scan_window",
-        "in_chromatogram",
+        "in_chromatogram", "chrom_type", "chrom_target_mz",
+        "chrom_precursor_mz", "chrom_product_mz",
     )
 
     def __init__(self, source_file: str) -> None:
         self.source_file = source_file
         self.run_id = ""
         self.spectra: list[ImportedSpectrum] = []
+        self.chromatograms: list[ImportedChromatogram] = []
         self.in_spectrum = False
         self.spec_index = 0
         self.spec_default_len = 0
@@ -100,6 +103,11 @@ class _State:
         self.in_scan = 0
         self.in_scan_window = 0
         self.in_chromatogram = False
+        # M24
+        self.chrom_type = 0
+        self.chrom_target_mz = 0.0
+        self.chrom_precursor_mz = 0.0
+        self.chrom_product_mz = 0.0
 
     def reset_spectrum(self) -> None:
         self.in_spectrum = False
@@ -110,6 +118,14 @@ class _State:
         self.scan_time = 0.0
         self.precursor_mz = 0.0
         self.precursor_charge = 0
+        self.spec_arrays.clear()
+
+    def reset_chromatogram(self) -> None:
+        self.in_chromatogram = False
+        self.chrom_type = 0
+        self.chrom_target_mz = 0.0
+        self.chrom_precursor_mz = 0.0
+        self.chrom_product_mz = 0.0
         self.spec_arrays.clear()
 
     def reset_bin(self) -> None:
@@ -147,7 +163,22 @@ def _handle_start(state: _State, tag: str, elem: Any) -> None:
             state.spec_default_len = 0
         return
     if tag == "chromatogram":
+        state.reset_chromatogram()
         state.in_chromatogram = True
+        try:
+            state.spec_default_len = int(attrs.get("defaultArrayLength", "0"))
+        except ValueError:
+            state.spec_default_len = 0
+        return
+    if tag == "userParam" and state.in_chromatogram:
+        name = attrs.get("name", "")
+        value = attrs.get("value", "") or ""
+        if name == "target m/z":
+            state.chrom_target_mz = _to_float(value)
+        elif name == "precursor m/z":
+            state.chrom_precursor_mz = _to_float(value)
+        elif name == "product m/z":
+            state.chrom_product_mz = _to_float(value)
         return
     if tag == "binaryDataArray":
         state.reset_bin()
@@ -233,6 +264,18 @@ def _handle_cv_param(state: _State, attrs: dict[str, str]) -> None:
             state.scan_time = t
             return
 
+    # 6. directly inside chromatogram: type CV terms (M24)
+    if state.in_chromatogram:
+        if acc == "MS:1000235":       # TIC
+            state.chrom_type = 0
+            return
+        if acc == "MS:1000627":       # XIC / selected ion current
+            state.chrom_type = 1
+            return
+        if acc == "MS:1001473":       # SRM chromatogram
+            state.chrom_type = 2
+            return
+
 
 def _handle_end(state: _State, tag: str, elem: Any) -> None:
     if tag == "binary":
@@ -246,7 +289,7 @@ def _handle_end(state: _State, tag: str, elem: Any) -> None:
         _finish_spectrum(state)
         return
     if tag == "chromatogram":
-        state.in_chromatogram = False
+        _finish_chromatogram(state)
         return
     if tag == "precursor":
         state.in_precursor -= 1
@@ -297,6 +340,23 @@ def _finish_spectrum(state: _State) -> None:
             precursor_charge=state.precursor_charge,
         ))
     state.reset_spectrum()
+
+
+def _finish_chromatogram(state: _State) -> None:
+    if not state.in_chromatogram:
+        return
+    t = state.spec_arrays.get("time")
+    i = state.spec_arrays.get("intensity")
+    if t is not None and i is not None and t.shape == i.shape:
+        state.chromatograms.append(ImportedChromatogram(
+            retention_times=t,
+            intensities=i,
+            chromatogram_type=state.chrom_type,
+            target_mz=state.chrom_target_mz,
+            precursor_mz=state.chrom_precursor_mz,
+            product_mz=state.chrom_product_mz,
+        ))
+    state.reset_chromatogram()
 
 
 def _to_float(value: str) -> float:

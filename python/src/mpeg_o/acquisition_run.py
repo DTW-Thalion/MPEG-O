@@ -11,7 +11,8 @@ import numpy as np
 
 from . import _hdf5_io as io
 from .axis_descriptor import AxisDescriptor
-from .enums import AcquisitionMode, Polarity
+from .chromatogram import Chromatogram
+from .enums import AcquisitionMode, ChromatogramType, Polarity
 from .instrument_config import InstrumentConfig
 from .mass_spectrum import MassSpectrum
 from .nmr_spectrum import NMRSpectrum
@@ -87,6 +88,8 @@ class AcquisitionRun:
     instrument_config: InstrumentConfig
     nucleus_type: str = ""
     provenance_json: str = ""
+    # M24: chromatogram traces. Empty list on v0.3 files (group absent).
+    chromatograms: list[Chromatogram] = field(default_factory=list)
     _signal_cache: dict[str, h5py.Dataset] = field(default_factory=dict, repr=False)
     # M21: eagerly decoded Numpress-delta channels, keyed by channel
     # name. When present, :meth:`_materialize_spectrum` slices from
@@ -150,6 +153,7 @@ class AcquisitionRun:
             instrument_config=config,
             nucleus_type=nucleus,
             provenance_json=prov,
+            chromatograms=_read_chromatograms(group),
             _numpress_channels=numpress_channels,
         )
 
@@ -288,3 +292,90 @@ def _safe_json_dict(value: str | dict) -> dict[str, object]:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+# ----------------------------------------------------- M24 chromatograms ---
+
+
+def _read_chromatograms(run_group: h5py.Group) -> list[Chromatogram]:
+    """Read ``<run>/chromatograms/`` into a list of :class:`Chromatogram`.
+
+    Returns an empty list when the group is absent (v0.3 backward compat).
+    """
+    if "chromatograms" not in run_group:
+        return []
+    g = run_group["chromatograms"]
+    count = int(g.attrs.get("count", 0))
+    if count <= 0:
+        return []
+    time_all = g["time_values"][()]
+    int_all  = g["intensity_values"][()]
+    idx = g["chromatogram_index"]
+    offsets       = idx["offsets"][()]
+    lengths       = idx["lengths"][()]
+    types         = idx["types"][()]
+    target_mzs    = idx["target_mzs"][()]
+    precursor_mzs = idx["precursor_mzs"][()]
+    product_mzs   = idx["product_mzs"][()]
+
+    out: list[Chromatogram] = []
+    for i in range(count):
+        off = int(offsets[i])
+        n   = int(lengths[i])
+        out.append(Chromatogram(
+            retention_times=np.asarray(time_all[off:off+n], dtype="<f8").copy(),
+            intensities=np.asarray(int_all[off:off+n], dtype="<f8").copy(),
+            chromatogram_type=ChromatogramType(int(types[i])),
+            target_mz=float(target_mzs[i]),
+            precursor_mz=float(precursor_mzs[i]),
+            product_mz=float(product_mzs[i]),
+        ))
+    return out
+
+
+def write_chromatograms_to_run_group(
+    run_group: h5py.Group, chromatograms: list[Chromatogram]
+) -> None:
+    """Write ``chromatograms`` under ``<run>/chromatograms/``.
+
+    Does nothing when the list is empty so v0.3 readers continue to see
+    the absence of the group. Layout mirrors the ObjC writer for byte
+    parity in the cross-compat tests.
+    """
+    if not chromatograms:
+        return
+    g = run_group.create_group("chromatograms")
+    g.attrs["count"] = np.int64(len(chromatograms))
+
+    total = sum(int(c.retention_times.shape[0]) for c in chromatograms)
+    time_all = np.empty(total, dtype="<f8")
+    int_all  = np.empty(total, dtype="<f8")
+    offsets  = np.empty(len(chromatograms), dtype="<i8")
+    lengths  = np.empty(len(chromatograms), dtype="<u4")
+    types    = np.empty(len(chromatograms), dtype="<i4")
+    targets  = np.empty(len(chromatograms), dtype="<f8")
+    precs    = np.empty(len(chromatograms), dtype="<f8")
+    prods    = np.empty(len(chromatograms), dtype="<f8")
+
+    cursor = 0
+    for i, c in enumerate(chromatograms):
+        n = int(c.retention_times.shape[0])
+        time_all[cursor:cursor+n] = c.retention_times.astype("<f8", copy=False)
+        int_all [cursor:cursor+n] = c.intensities.astype("<f8", copy=False)
+        offsets[i] = cursor
+        lengths[i] = n
+        types[i]   = int(c.chromatogram_type)
+        targets[i] = c.target_mz
+        precs[i]   = c.precursor_mz
+        prods[i]   = c.product_mz
+        cursor += n
+
+    g.create_dataset("time_values",      data=time_all)
+    g.create_dataset("intensity_values", data=int_all)
+    idx = g.create_group("chromatogram_index")
+    idx.create_dataset("offsets",       data=offsets)
+    idx.create_dataset("lengths",       data=lengths)
+    idx.create_dataset("types",         data=types)
+    idx.create_dataset("target_mzs",    data=targets)
+    idx.create_dataset("precursor_mzs", data=precs)
+    idx.create_dataset("product_mzs",   data=prods)

@@ -4,6 +4,7 @@
 #import "Spectra/MPGOSpectrum.h"
 #import "Spectra/MPGOMassSpectrum.h"
 #import "Spectra/MPGONMRSpectrum.h"
+#import "Spectra/MPGOChromatogram.h"
 #import "Core/MPGOSignalArray.h"
 #import "ValueClasses/MPGOEncodingSpec.h"
 #import "ValueClasses/MPGOValueRange.h"
@@ -38,7 +39,12 @@
     // Persistence context attached post-load for protocol encryption
     NSString *_persistenceFilePath;
     NSString *_persistenceRunName;
+
+    // M24: chromatogram traces carried with this run.
+    NSArray<MPGOChromatogram *> *_chromatograms;
 }
+
+@synthesize chromatograms = _chromatograms;
 
 #pragma mark - Construction
 
@@ -72,6 +78,19 @@
         }
 
         _spectrumIndex = [self buildIndexFromSpectra:spectra];
+        _chromatograms = @[];
+    }
+    return self;
+}
+
+- (instancetype)initWithSpectra:(NSArray *)spectra
+                  chromatograms:(NSArray<MPGOChromatogram *> *)chromatograms
+                acquisitionMode:(MPGOAcquisitionMode)mode
+               instrumentConfig:(MPGOInstrumentConfig *)config
+{
+    self = [self initWithSpectra:spectra acquisitionMode:mode instrumentConfig:config];
+    if (self) {
+        _chromatograms = chromatograms ? [chromatograms copy] : @[];
     }
     return self;
 }
@@ -288,7 +307,97 @@
         }
     }
 
+    // M24: chromatograms under <run>/chromatograms/
+    if (_chromatograms.count > 0) {
+        if (![self writeChromatogramsToRunGroup:runGroup error:error]) return NO;
+    }
+
     return YES;
+}
+
+// M24 helper — lays out /chromatograms/ with concatenated time/intensity
+// datasets and a chromatogram_index/ subgroup of parallel metadata.
+- (BOOL)writeChromatogramsToRunGroup:(MPGOHDF5Group *)runGroup
+                                error:(NSError **)error
+{
+    NSUInteger nChroms = _chromatograms.count;
+    MPGOHDF5Group *chromGroup =
+        [runGroup createGroupNamed:@"chromatograms" error:error];
+    if (!chromGroup) return NO;
+    if (![chromGroup setIntegerAttribute:@"count"
+                                    value:(int64_t)nChroms
+                                    error:error]) return NO;
+
+    NSUInteger totalPoints = 0;
+    for (MPGOChromatogram *c in _chromatograms) totalPoints += c.timeArray.length;
+
+    NSMutableData *timeAll = [NSMutableData dataWithLength:totalPoints * sizeof(double)];
+    NSMutableData *intAll  = [NSMutableData dataWithLength:totalPoints * sizeof(double)];
+
+    int64_t  *offsets      = calloc(nChroms, sizeof(int64_t));
+    uint32_t *lengths      = calloc(nChroms, sizeof(uint32_t));
+    int32_t  *types        = calloc(nChroms, sizeof(int32_t));
+    double   *targetMzs    = calloc(nChroms, sizeof(double));
+    double   *precursorMzs = calloc(nChroms, sizeof(double));
+    double   *productMzs   = calloc(nChroms, sizeof(double));
+
+    NSUInteger cursor = 0;
+    for (NSUInteger i = 0; i < nChroms; i++) {
+        MPGOChromatogram *c = _chromatograms[i];
+        NSUInteger n = c.timeArray.length;
+        memcpy((uint8_t *)timeAll.mutableBytes + cursor * sizeof(double),
+               c.timeArray.buffer.bytes, n * sizeof(double));
+        memcpy((uint8_t *)intAll.mutableBytes + cursor * sizeof(double),
+               c.intensityArray.buffer.bytes, n * sizeof(double));
+        offsets[i]      = (int64_t)cursor;
+        lengths[i]      = (uint32_t)n;
+        types[i]        = (int32_t)c.type;
+        targetMzs[i]    = c.targetMz;
+        precursorMzs[i] = c.precursorProductMz;
+        productMzs[i]   = c.productMz;
+        cursor += n;
+    }
+
+    BOOL ok = YES;
+
+    #define WRITE_DS(_grp, _dname, _prec, _nelem, _data) do { \
+        MPGOHDF5Dataset *_ds = [(_grp) createDatasetNamed:(_dname) \
+                                                precision:(_prec) \
+                                                   length:(_nelem) \
+                                                chunkSize:0 \
+                                         compressionLevel:0 \
+                                                    error:error]; \
+        if (!_ds) { ok = NO; break; } \
+        if (![_ds writeData:(_data) error:error]) { ok = NO; break; } \
+    } while (0)
+
+    do {
+        WRITE_DS(chromGroup, @"time_values",      MPGOPrecisionFloat64, totalPoints, timeAll);
+        WRITE_DS(chromGroup, @"intensity_values", MPGOPrecisionFloat64, totalPoints, intAll);
+
+        MPGOHDF5Group *idx =
+            [chromGroup createGroupNamed:@"chromatogram_index" error:error];
+        if (!idx) { ok = NO; break; }
+
+        WRITE_DS(idx, @"offsets",      MPGOPrecisionInt64,   nChroms,
+                 [NSData dataWithBytesNoCopy:offsets      length:nChroms*sizeof(int64_t)  freeWhenDone:NO]);
+        WRITE_DS(idx, @"lengths",      MPGOPrecisionUInt32,  nChroms,
+                 [NSData dataWithBytesNoCopy:lengths      length:nChroms*sizeof(uint32_t) freeWhenDone:NO]);
+        WRITE_DS(idx, @"types",        MPGOPrecisionInt32,   nChroms,
+                 [NSData dataWithBytesNoCopy:types        length:nChroms*sizeof(int32_t)  freeWhenDone:NO]);
+        WRITE_DS(idx, @"target_mzs",   MPGOPrecisionFloat64, nChroms,
+                 [NSData dataWithBytesNoCopy:targetMzs    length:nChroms*sizeof(double)   freeWhenDone:NO]);
+        WRITE_DS(idx, @"precursor_mzs",MPGOPrecisionFloat64, nChroms,
+                 [NSData dataWithBytesNoCopy:precursorMzs length:nChroms*sizeof(double)   freeWhenDone:NO]);
+        WRITE_DS(idx, @"product_mzs",  MPGOPrecisionFloat64, nChroms,
+                 [NSData dataWithBytesNoCopy:productMzs   length:nChroms*sizeof(double)   freeWhenDone:NO]);
+    } while (0);
+
+    #undef WRITE_DS
+
+    free(offsets); free(lengths); free(types);
+    free(targetMzs); free(precursorMzs); free(productMzs);
+    return ok;
 }
 
 #pragma mark - HDF5 read
@@ -434,7 +543,81 @@
     run->_provenance           = provenance;
     run->_numpressChannels     = numpressChannels.count > 0 ? numpressChannels : nil;
     run->_signalCompression    = runCompression;
+
+    // M24: read chromatograms if present. Absence means v0.3 file → empty list.
+    run->_chromatograms = [self readChromatogramsFromRunGroup:runGroup];
     return run;
+}
+
++ (NSArray<MPGOChromatogram *> *)readChromatogramsFromRunGroup:(MPGOHDF5Group *)runGroup
+{
+    if (![runGroup hasChildNamed:@"chromatograms"]) return @[];
+    MPGOHDF5Group *chromGroup = [runGroup openGroupNamed:@"chromatograms" error:NULL];
+    if (!chromGroup) return @[];
+
+    BOOL exists = NO;
+    int64_t count = [chromGroup integerAttributeNamed:@"count" exists:&exists error:NULL];
+    if (!exists || count <= 0) return @[];
+
+    MPGOHDF5Dataset *timeDs = [chromGroup openDatasetNamed:@"time_values" error:NULL];
+    MPGOHDF5Dataset *intDs  = [chromGroup openDatasetNamed:@"intensity_values" error:NULL];
+    if (!timeDs || !intDs) return @[];
+    NSData *timeAll = [timeDs readDataWithError:NULL];
+    NSData *intAll  = [intDs  readDataWithError:NULL];
+    if (!timeAll || !intAll) return @[];
+
+    MPGOHDF5Group *idxGroup = [chromGroup openGroupNamed:@"chromatogram_index" error:NULL];
+    if (!idxGroup) return @[];
+
+    NSData *offsetsData   = [[idxGroup openDatasetNamed:@"offsets" error:NULL] readDataWithError:NULL];
+    NSData *lengthsData   = [[idxGroup openDatasetNamed:@"lengths" error:NULL] readDataWithError:NULL];
+    NSData *typesData     = [[idxGroup openDatasetNamed:@"types" error:NULL] readDataWithError:NULL];
+    NSData *targetData    = [[idxGroup openDatasetNamed:@"target_mzs" error:NULL] readDataWithError:NULL];
+    NSData *precursorData = [[idxGroup openDatasetNamed:@"precursor_mzs" error:NULL] readDataWithError:NULL];
+    NSData *productData   = [[idxGroup openDatasetNamed:@"product_mzs" error:NULL] readDataWithError:NULL];
+    if (!offsetsData || !lengthsData || !typesData ||
+        !targetData || !precursorData || !productData) return @[];
+
+    const int64_t  *offsets      = offsetsData.bytes;
+    const uint32_t *lengths      = lengthsData.bytes;
+    const int32_t  *types        = typesData.bytes;
+    const double   *targetMzs    = targetData.bytes;
+    const double   *precursorMzs = precursorData.bytes;
+    const double   *productMzs   = productData.bytes;
+
+    MPGOEncodingSpec *enc =
+        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
+                       compressionAlgorithm:MPGOCompressionZlib
+                                  byteOrder:MPGOByteOrderLittleEndian];
+
+    NSMutableArray<MPGOChromatogram *> *out =
+        [NSMutableArray arrayWithCapacity:(NSUInteger)count];
+    for (int64_t i = 0; i < count; i++) {
+        NSUInteger off = (NSUInteger)offsets[i];
+        NSUInteger len = (NSUInteger)lengths[i];
+        NSData *tSlice = [NSData dataWithBytes:(const uint8_t *)timeAll.bytes + off*sizeof(double)
+                                         length:len*sizeof(double)];
+        NSData *iSlice = [NSData dataWithBytes:(const uint8_t *)intAll.bytes  + off*sizeof(double)
+                                         length:len*sizeof(double)];
+        MPGOSignalArray *tArr = [[MPGOSignalArray alloc] initWithBuffer:tSlice
+                                                                  length:len
+                                                                encoding:enc
+                                                                    axis:nil];
+        MPGOSignalArray *iArr = [[MPGOSignalArray alloc] initWithBuffer:iSlice
+                                                                  length:len
+                                                                encoding:enc
+                                                                    axis:nil];
+        MPGOChromatogram *c =
+            [[MPGOChromatogram alloc] initWithTimeArray:tArr
+                                          intensityArray:iArr
+                                                    type:(MPGOChromatogramType)types[i]
+                                                targetMz:targetMzs[i]
+                                             precursorMz:precursorMzs[i]
+                                               productMz:productMzs[i]
+                                                   error:NULL];
+        if (c) [out addObject:c];
+    }
+    return [out copy];
 }
 
 #pragma mark - Random access

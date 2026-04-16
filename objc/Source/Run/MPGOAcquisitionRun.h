@@ -10,6 +10,7 @@
 
 @class MPGOSpectrum;
 @class MPGOMassSpectrum;
+@class MPGOChromatogram;
 @class MPGOInstrumentConfig;
 @class MPGOSpectrumIndex;
 @class MPGOHDF5Group;
@@ -59,11 +60,25 @@
  *  Numpress-delta explicitly before calling ``writeToGroup:``. */
 @property (nonatomic) MPGOCompression signalCompression;
 
+/** v0.4 M24: chromatogram traces associated with this run (TIC / XIC /
+ *  SRM). Empty by default so v0.3 files read back as zero-chromatogram
+ *  runs without a schema bump. Persisted under
+ *  ``<run>/chromatograms/`` with concatenated ``time_values`` +
+ *  ``intensity_values`` datasets and a ``chromatogram_index/`` subgroup
+ *  of parallel metadata arrays. */
+@property (readonly, copy) NSArray<MPGOChromatogram *> *chromatograms;
+
 #pragma mark - In-memory construction
 
 /** v0.2 generalized initializer. Accepts any MPGOSpectrum subclass,
  *  but all spectra in the same run must share a single subclass. */
 - (instancetype)initWithSpectra:(NSArray *)spectra
+                acquisitionMode:(MPGOAcquisitionMode)mode
+               instrumentConfig:(MPGOInstrumentConfig *)config;
+
+/** v0.4 M24 initializer. ``chromatograms`` may be nil/empty. */
+- (instancetype)initWithSpectra:(NSArray *)spectra
+                  chromatograms:(NSArray<MPGOChromatogram *> *)chromatograms
                 acquisitionMode:(MPGOAcquisitionMode)mode
                instrumentConfig:(MPGOInstrumentConfig *)config;
 
