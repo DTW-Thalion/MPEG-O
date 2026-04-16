@@ -53,7 +53,10 @@ def test_nmrml_write_to_disk(tmp_path: Path) -> None:
     assert out.stat().st_size > 100
 
 
-def test_thermo_raw_stub_raises() -> None:
+def test_thermo_raw_rejects_missing_file() -> None:
+    # M29 stub raised NotImplementedError unconditionally; M38 replaced
+    # the stub with a real ThermoRawFileParser delegation, which rejects
+    # a missing input path before looking for the binary.
     from mpeg_o.importers.thermo_raw import read
-    with pytest.raises(NotImplementedError, match="not yet implemented"):
-        read("/tmp/fake.raw")
+    with pytest.raises(FileNotFoundError):
+        read("/tmp/definitely-does-not-exist-mpgo-m38.raw")

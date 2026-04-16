@@ -269,15 +269,63 @@ class ImportExportTest {
         }
     }
 
-    // ── Thermo stub ─────────────────────────────────────────────────
+    // ── Thermo (M38 delegation) ────────────────────────────────────
 
     @Test
-    void thermoStubThrows() {
-        UnsupportedOperationException ex = assertThrows(
-                UnsupportedOperationException.class,
-                () -> ThermoRawReader.read("test.raw"));
-        assertTrue(ex.getMessage().contains("Thermo"));
-        assertTrue(ex.getMessage().contains("RawFileReader"));
+    void thermoRejectsMissingFile() {
+        // M29 stub unconditionally threw UnsupportedOperationException.
+        // M38 replaced it with a real delegation that validates the input.
+        var ex = assertThrows(java.io.IOException.class,
+                () -> ThermoRawReader.read(
+                        "/tmp/definitely-missing-mpgo-m38.raw"));
+        assertNotNull(ex.getMessage());
+    }
+
+    @Test
+    void thermoDelegatesToMockBinary() throws Exception {
+        Path mockDir = tempDir.resolve("thermo_mock");
+        Files.createDirectories(mockDir);
+
+        Path fixtureMzML = Path.of(getFixturePath("tiny.pwiz.1.1.mzML"));
+        Path mockBin = mockDir.resolve("mock-parser");
+        Files.writeString(mockBin,
+                "#!/usr/bin/env bash\n" +
+                "set -e\n" +
+                "while [ $# -gt 0 ]; do\n" +
+                "  case \"$1\" in\n" +
+                "    -i) in_path=\"$2\"; shift 2;;\n" +
+                "    -o) out_dir=\"$2\"; shift 2;;\n" +
+                "    -f) shift 2;;\n" +
+                "    *) shift;;\n" +
+                "  esac\n" +
+                "done\n" +
+                "base=$(basename \"$in_path\" .raw)\n" +
+                "cp " + fixtureMzML + " \"$out_dir/$base.mzML\"\n");
+        mockBin.toFile().setExecutable(true);
+
+        Path raw = mockDir.resolve("sample.raw");
+        Files.writeString(raw, "fake raw bytes");
+
+        // Override binary via explicit argument.
+        AcquisitionRun run = ThermoRawReader.read(raw.toString(),
+                mockBin.toString());
+        assertNotNull(run);
+        assertTrue(run.spectrumCount() > 0);
+    }
+
+    @Test
+    void thermoNonzeroExitSurfacesError() throws Exception {
+        Path failing = tempDir.resolve("failing-parser");
+        Files.writeString(failing, "#!/usr/bin/env bash\nexit 7\n");
+        failing.toFile().setExecutable(true);
+
+        Path raw = tempDir.resolve("sample.raw");
+        Files.writeString(raw, "fake");
+
+        var ex = assertThrows(java.io.IOException.class,
+                () -> ThermoRawReader.read(raw.toString(), failing.toString()));
+        assertTrue(ex.getMessage().contains("7") ||
+                   ex.getMessage().toLowerCase().contains("thermo"));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────
