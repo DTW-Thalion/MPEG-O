@@ -5,6 +5,7 @@
  */
 package com.dtwthalion.mpgo;
 
+import com.dtwthalion.mpgo.hdf5.Hdf5CompoundIO;
 import com.dtwthalion.mpgo.hdf5.Hdf5File;
 import com.dtwthalion.mpgo.hdf5.Hdf5Group;
 
@@ -17,6 +18,15 @@ import java.util.*;
  * <p>HDF5 layout: root group has {@code @mpeg_o_format_version} and
  * {@code @mpeg_o_features} attributes. The {@code /study/} group contains
  * runs, identifications, quantifications, and provenance.</p>
+ *
+ * <p><b>Compound metadata (§6 of format-spec).</b> Writing emits the
+ * native HDF5 compound dataset <em>and</em> a JSON attribute mirror
+ * (transition-window behavior, §6.4). Reading prefers the JSON attribute
+ * because JHI5 1.10 cannot marshal VL-string fields out of a compound;
+ * when only the native compound is present, primitive fields are
+ * recovered via type projection and VL-string fields decode as empty
+ * strings. The mirror is emitted to keep Java-written files fully
+ * round-trippable by every implementation.</p>
  */
 public class SpectralDataset implements AutoCloseable {
 
@@ -93,25 +103,9 @@ public class SpectralDataset implements AutoCloseable {
                         }
                     }
 
-                    // Identifications — v0.2+ compound dataset or v0.1 JSON
-                    if (flags.has(FeatureFlags.COMPOUND_IDENTIFICATIONS)
-                            && study.hasChild("identifications")) {
-                        idents = readCompoundIdentifications(study);
-                    } else if (study.hasAttribute("identifications_json")) {
-                        // v0.1 JSON fallback — parse later
-                    }
-
-                    // Quantifications
-                    if (flags.has(FeatureFlags.COMPOUND_QUANTIFICATIONS)
-                            && study.hasChild("quantifications")) {
-                        quants = readCompoundQuantifications(study);
-                    }
-
-                    // Provenance
-                    if (flags.has(FeatureFlags.COMPOUND_PROVENANCE)
-                            && study.hasChild("provenance")) {
-                        prov = readCompoundProvenance(study);
-                    }
+                    idents = readIdentifications(study);
+                    quants = readQuantifications(study);
+                    prov = readProvenance(study);
                 }
             }
 
@@ -150,7 +144,6 @@ public class SpectralDataset implements AutoCloseable {
                 if (isaInvestigationId != null)
                     study.setStringAttribute("isa_investigation_id", isaInvestigationId);
 
-                // Write runs
                 Map<String, AcquisitionRun> runMap = new LinkedHashMap<>();
                 if (runs != null && !runs.isEmpty()) {
                     try (Hdf5Group msRunsGroup = study.createGroup("ms_runs")) {
@@ -166,19 +159,14 @@ public class SpectralDataset implements AutoCloseable {
                     }
                 }
 
-                // Write identifications as compound dataset
                 if (identifications != null && !identifications.isEmpty()) {
-                    writeCompoundIdentifications(study, identifications);
+                    writeIdentifications(study, identifications);
                 }
-
-                // Write quantifications as compound dataset
                 if (quantifications != null && !quantifications.isEmpty()) {
-                    writeCompoundQuantifications(study, quantifications);
+                    writeQuantifications(study, quantifications);
                 }
-
-                // Write provenance as compound dataset
                 if (provenanceRecords != null && !provenanceRecords.isEmpty()) {
-                    writeCompoundProvenance(study, provenanceRecords);
+                    writeProvenance(study, provenanceRecords);
                 }
 
                 return new SpectralDataset(file, featureFlags, title, isaInvestigationId,
@@ -189,78 +177,208 @@ public class SpectralDataset implements AutoCloseable {
         }
     }
 
-    // ── Compound dataset I/O (JSON-in-attributes for now) ───────────
-    // Full compound HDF5 I/O requires VL string support in Java HDF5.
-    // For M32, we use JSON string attributes as the portable path that
-    // all three implementations can read.
+    // ── Compound metadata: identifications ──────────────────────────
 
-    private static void writeCompoundIdentifications(Hdf5Group study,
-                                                      List<Identification> idents) {
+    private static void writeIdentifications(Hdf5Group study,
+                                              List<Identification> idents) {
+        // Native compound dataset matching format-spec §6.1
+        Hdf5CompoundIO.writeCompoundDataset(study, "identifications",
+                Hdf5CompoundIO.identificationSchema(),
+                idents.size(),
+                (row, pool) -> new Object[]{
+                        pool.addString(idents.get(row).runName()),
+                        idents.get(row).spectrumIndex(),
+                        pool.addString(idents.get(row).chemicalEntity()),
+                        idents.get(row).confidenceScore(),
+                        pool.addString(idents.get(row).evidenceChainJson())
+                });
+
+        // JSON mirror on @identifications_json so JHI5-1.10 readers
+        // (currently only our own) can recover VL-string fields.
         StringBuilder json = new StringBuilder("[");
         for (int i = 0; i < idents.size(); i++) {
-            if (i > 0) json.append(",");
+            if (i > 0) json.append(',');
             Identification id = idents.get(i);
-            json.append("{\"run_name\":\"").append(id.runName()).append("\"")
+            json.append('{')
+                .append("\"run_name\":").append(MiniJson.quote(id.runName()))
                 .append(",\"spectrum_index\":").append(id.spectrumIndex())
-                .append(",\"chemical_entity\":\"").append(id.chemicalEntity()).append("\"")
+                .append(",\"chemical_entity\":").append(MiniJson.quote(id.chemicalEntity()))
                 .append(",\"confidence_score\":").append(id.confidenceScore())
-                .append(",\"evidence_chain\":").append(id.evidenceChainJson())
-                .append("}");
+                .append(",\"evidence_chain\":").append(
+                        id.evidenceChainJson() == null || id.evidenceChainJson().isEmpty()
+                                ? "[]" : id.evidenceChainJson())
+                .append('}');
         }
-        json.append("]");
+        json.append(']');
         study.setStringAttribute("identifications_json", json.toString());
     }
 
-    private static List<Identification> readCompoundIdentifications(Hdf5Group study) {
-        // Compound dataset reading requires native compound I/O.
-        // Fall back to JSON attribute if present.
+    private static List<Identification> readIdentifications(Hdf5Group study) {
         if (study.hasAttribute("identifications_json")) {
-            // JSON parsing placeholder — return empty for now
-            return List.of();
+            return parseIdentificationsJson(study.readStringAttribute("identifications_json"));
+        }
+        if (study.hasChild("identifications")) {
+            // Python/ObjC file without JSON mirror — recover primitive fields.
+            // VL strings decode as empty (see class-level javadoc).
+            List<Object[]> rows = Hdf5CompoundIO.readCompoundPrimitives(
+                    study, "identifications", Hdf5CompoundIO.identificationSchema());
+            List<Identification> out = new ArrayList<>(rows.size());
+            for (Object[] r : rows) {
+                out.add(new Identification(
+                        (String) r[0], (Integer) r[1], (String) r[2],
+                        (Double) r[3], (String) r[4]));
+            }
+            return out;
         }
         return List.of();
     }
 
-    private static void writeCompoundQuantifications(Hdf5Group study,
-                                                      List<Quantification> quants) {
+    // ── Compound metadata: quantifications ──────────────────────────
+
+    private static void writeQuantifications(Hdf5Group study,
+                                              List<Quantification> quants) {
+        Hdf5CompoundIO.writeCompoundDataset(study, "quantifications",
+                Hdf5CompoundIO.quantificationSchema(),
+                quants.size(),
+                (row, pool) -> new Object[]{
+                        pool.addString(quants.get(row).chemicalEntity()),
+                        pool.addString(quants.get(row).sampleRef()),
+                        quants.get(row).abundance(),
+                        pool.addString(quants.get(row).normalizationMethod() != null
+                                ? quants.get(row).normalizationMethod() : "")
+                });
+
         StringBuilder json = new StringBuilder("[");
         for (int i = 0; i < quants.size(); i++) {
-            if (i > 0) json.append(",");
+            if (i > 0) json.append(',');
             Quantification q = quants.get(i);
-            json.append("{\"chemical_entity\":\"").append(q.chemicalEntity()).append("\"")
-                .append(",\"sample_ref\":\"").append(q.sampleRef()).append("\"")
+            json.append('{')
+                .append("\"chemical_entity\":").append(MiniJson.quote(q.chemicalEntity()))
+                .append(",\"sample_ref\":").append(MiniJson.quote(q.sampleRef()))
                 .append(",\"abundance\":").append(q.abundance());
-            if (q.normalizationMethod() != null)
-                json.append(",\"normalization_method\":\"").append(q.normalizationMethod()).append("\"");
-            json.append("}");
+            if (q.normalizationMethod() != null) {
+                json.append(",\"normalization_method\":").append(MiniJson.quote(q.normalizationMethod()));
+            }
+            json.append('}');
         }
-        json.append("]");
+        json.append(']');
         study.setStringAttribute("quantifications_json", json.toString());
     }
 
-    private static List<Quantification> readCompoundQuantifications(Hdf5Group study) {
+    private static List<Quantification> readQuantifications(Hdf5Group study) {
+        if (study.hasAttribute("quantifications_json")) {
+            return parseQuantificationsJson(study.readStringAttribute("quantifications_json"));
+        }
+        if (study.hasChild("quantifications")) {
+            List<Object[]> rows = Hdf5CompoundIO.readCompoundPrimitives(
+                    study, "quantifications", Hdf5CompoundIO.quantificationSchema());
+            List<Quantification> out = new ArrayList<>(rows.size());
+            for (Object[] r : rows) {
+                String norm = (String) r[3];
+                if (norm != null && norm.isEmpty()) norm = null;
+                out.add(new Quantification(
+                        (String) r[0], (String) r[1], (Double) r[2], norm));
+            }
+            return out;
+        }
         return List.of();
     }
 
-    private static void writeCompoundProvenance(Hdf5Group study,
-                                                 List<ProvenanceRecord> records) {
+    // ── Compound metadata: provenance ───────────────────────────────
+
+    private static void writeProvenance(Hdf5Group study,
+                                         List<ProvenanceRecord> records) {
+        Hdf5CompoundIO.writeCompoundDataset(study, "provenance",
+                Hdf5CompoundIO.provenanceSchema(),
+                records.size(),
+                (row, pool) -> new Object[]{
+                        records.get(row).timestampUnix(),
+                        pool.addString(records.get(row).software()),
+                        pool.addString(records.get(row).parametersJson()),
+                        pool.addString(records.get(row).inputRefsJson()),
+                        pool.addString(records.get(row).outputRefsJson())
+                });
+
         StringBuilder json = new StringBuilder("[");
         for (int i = 0; i < records.size(); i++) {
-            if (i > 0) json.append(",");
+            if (i > 0) json.append(',');
             ProvenanceRecord r = records.get(i);
-            json.append("{\"timestamp_unix\":").append(r.timestampUnix())
-                .append(",\"software\":\"").append(r.software()).append("\"")
-                .append(",\"parameters\":").append(r.parametersJson())
-                .append(",\"input_refs\":").append(r.inputRefsJson())
-                .append(",\"output_refs\":").append(r.outputRefsJson())
-                .append("}");
+            json.append('{')
+                .append("\"timestamp_unix\":").append(r.timestampUnix())
+                .append(",\"software\":").append(MiniJson.quote(r.software()))
+                .append(",\"parameters\":").append(nonEmptyJson(r.parametersJson(), "{}"))
+                .append(",\"input_refs\":").append(nonEmptyJson(r.inputRefsJson(), "[]"))
+                .append(",\"output_refs\":").append(nonEmptyJson(r.outputRefsJson(), "[]"))
+                .append('}');
         }
-        json.append("]");
+        json.append(']');
         study.setStringAttribute("provenance_json", json.toString());
     }
 
-    private static List<ProvenanceRecord> readCompoundProvenance(Hdf5Group study) {
+    private static List<ProvenanceRecord> readProvenance(Hdf5Group study) {
+        if (study.hasAttribute("provenance_json")) {
+            return parseProvenanceJson(study.readStringAttribute("provenance_json"));
+        }
+        if (study.hasChild("provenance")) {
+            List<Object[]> rows = Hdf5CompoundIO.readCompoundPrimitives(
+                    study, "provenance", Hdf5CompoundIO.provenanceSchema());
+            List<ProvenanceRecord> out = new ArrayList<>(rows.size());
+            for (Object[] r : rows) {
+                out.add(new ProvenanceRecord(
+                        (Long) r[0], (String) r[1], (String) r[2],
+                        (String) r[3], (String) r[4]));
+            }
+            return out;
+        }
         return List.of();
+    }
+
+    // ── JSON parsing (attribute fallback path) ──────────────────────
+
+    private static List<Identification> parseIdentificationsJson(String blob) {
+        List<Identification> out = new ArrayList<>();
+        for (Map<String, Object> r : MiniJson.parseArrayOfObjects(blob)) {
+            String runName = MiniJson.getString(r, "run_name", "");
+            int idx = (int) MiniJson.getLong(r, "spectrum_index", 0);
+            String chem = MiniJson.getString(r, "chemical_entity", "");
+            double conf = MiniJson.getDouble(r, "confidence_score", 0.0);
+            Object ev = r.get("evidence_chain");
+            String evJson = ev == null ? "[]" : MiniJson.encode(ev);
+            out.add(new Identification(runName, idx, chem, conf, evJson));
+        }
+        return out;
+    }
+
+    private static List<Quantification> parseQuantificationsJson(String blob) {
+        List<Quantification> out = new ArrayList<>();
+        for (Map<String, Object> r : MiniJson.parseArrayOfObjects(blob)) {
+            String chem = MiniJson.getString(r, "chemical_entity", "");
+            String sample = MiniJson.getString(r, "sample_ref", "");
+            double abund = MiniJson.getDouble(r, "abundance", 0.0);
+            String norm = r.containsKey("normalization_method")
+                    ? MiniJson.getString(r, "normalization_method", null)
+                    : null;
+            if (norm != null && norm.isEmpty()) norm = null;
+            out.add(new Quantification(chem, sample, abund, norm));
+        }
+        return out;
+    }
+
+    private static List<ProvenanceRecord> parseProvenanceJson(String blob) {
+        List<ProvenanceRecord> out = new ArrayList<>();
+        for (Map<String, Object> r : MiniJson.parseArrayOfObjects(blob)) {
+            long ts = MiniJson.getLong(r, "timestamp_unix", 0);
+            String software = MiniJson.getString(r, "software", "");
+            String params = r.containsKey("parameters") ? MiniJson.encode(r.get("parameters")) : "{}";
+            String inRefs = r.containsKey("input_refs") ? MiniJson.encode(r.get("input_refs")) : "[]";
+            String outRefs = r.containsKey("output_refs") ? MiniJson.encode(r.get("output_refs")) : "[]";
+            out.add(new ProvenanceRecord(ts, software, params, inRefs, outRefs));
+        }
+        return out;
+    }
+
+    private static String nonEmptyJson(String s, String fallback) {
+        return s == null || s.isEmpty() ? fallback : s;
     }
 
     @Override

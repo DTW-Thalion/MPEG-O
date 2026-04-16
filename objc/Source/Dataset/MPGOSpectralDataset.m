@@ -449,6 +449,10 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
         NSData *json = [NSJSONSerialization dataWithJSONObject:plists options:0 error:error];
         if (!json) { [f close]; return NO; }
         H5Ldelete(study.groupId, "identifications", H5P_DEFAULT);
+        // M37: also strip the JSON attribute mirror so sealed files are
+        // not readable without decryption.
+        if ([study hasAttributeNamed:@"identifications_json"])
+            H5Adelete(study.groupId, "identifications_json");
         if (![self writeSealedBlob:json name:@"identifications_sealed"
                            inGroup:study key:key error:error]) { [f close]; return NO; }
     }
@@ -463,6 +467,8 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
         NSData *json = [NSJSONSerialization dataWithJSONObject:plists options:0 error:error];
         if (!json) { [f close]; return NO; }
         H5Ldelete(study.groupId, "quantifications", H5P_DEFAULT);
+        if ([study hasAttributeNamed:@"quantifications_json"])
+            H5Adelete(study.groupId, "quantifications_json");
         if (![self writeSealedBlob:json name:@"quantifications_sealed"
                            inGroup:study key:key error:error]) { [f close]; return NO; }
     }
