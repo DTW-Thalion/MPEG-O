@@ -27,7 +27,8 @@ MPGOTests_OBJC_FILES = \
 	TestMilestone19.m \
 	TestMilestone21.m \
 	TestMilestone23.m \
-	TestMilestone24.m
+	TestMilestone24.m \
+	TestMilestone25.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

@@ -24,6 +24,9 @@ OPT_DIGITAL_SIGNATURES = "opt_digital_signatures"
 OPT_CANONICAL_SIGNATURES = "opt_canonical_signatures"
 COMPOUND_PER_RUN_PROVENANCE = "compound_per_run_provenance"
 
+# v0.4 (M25): envelope encryption + rotatable KEK wrapping the DEK.
+OPT_KEY_ROTATION = "opt_key_rotation"
+
 
 @dataclass(frozen=True, slots=True)
 class FeatureFlags:

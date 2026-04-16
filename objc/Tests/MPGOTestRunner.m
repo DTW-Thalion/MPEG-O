@@ -25,6 +25,7 @@ extern void testMilestone19(void);
 extern void testMilestone21(void);
 extern void testMilestone23(void);
 extern void testMilestone24(void);
+extern void testMilestone25(void);
 
 int main(int argc, const char *argv[])
 {
@@ -124,6 +125,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 24: chromatogram API + mzML writer completion")
             testMilestone24();
         END_SET("Milestone 24: chromatogram API + mzML writer completion")
+
+        START_SET("Milestone 25: envelope encryption + key rotation")
+            testMilestone25();
+        END_SET("Milestone 25: envelope encryption + key rotation")
     }
     return 0;
 }

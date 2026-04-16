@@ -37,6 +37,7 @@
 + (NSString *)featureDigitalSignatures;      // @"opt_digital_signatures"
 + (NSString *)featureCompoundPerRunProvenance; // @"compound_per_run_provenance" (M17)
 + (NSString *)featureCanonicalSignatures;      // @"opt_canonical_signatures" (M18)
++ (NSString *)featureKeyRotation;              // @"opt_key_rotation" (M25)
 
 #pragma mark - Read
 

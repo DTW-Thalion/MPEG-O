@@ -29,6 +29,10 @@
 - (MPGOHDF5Group *)openGroupNamed:(NSString *)name error:(NSError **)error;
 - (BOOL)hasChildNamed:(NSString *)name;
 
+/** Delete the named link (child group / dataset). No-op when the child
+ *  is absent. Used by M25 key rotation to overwrite dek_wrapped. */
+- (BOOL)deleteChildNamed:(NSString *)name error:(NSError **)error;
+
 #pragma mark - Datasets
 
 /**
