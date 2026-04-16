@@ -44,7 +44,7 @@ _PRELUDE = (
     '      </fileContent>\n'
     '    </fileDescription>\n'
     '    <softwareList count="1">\n'
-    '      <software id="mpeg_o" version="0.3.0">\n'
+    '      <software id="mpeg_o" version="0.4.0">\n'
     '        <cvParam cvRef="MS" accession="MS:1000799" name="custom unreleased software tool" value="mpeg-o"/>\n'
     '      </software>\n'
     '    </softwareList>\n'

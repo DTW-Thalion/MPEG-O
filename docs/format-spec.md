@@ -100,7 +100,8 @@ Each `/study/ms_runs/<name>/` group contains:
 ├── _spectrometer_freq_mhz              (1 × float64) — optional, NMR only
 ├── instrument_config/                  (group with string attrs)
 ├── spectrum_index/                     (group, described in §4)
-└── signal_channels/                    (group, described in §5)
+├── signal_channels/                    (group, described in §5)
+└── chromatograms/                      (group, optional, M24 v0.4, described in §5a)
 ```
 
 **Spectrum classes** currently recognized:
@@ -185,6 +186,52 @@ For an MS run the channels are `{mz, intensity}` producing
 Each channel's concatenated dataset is indexed by `offsets[i]` and
 `lengths[i]` from `spectrum_index/`: spectrum `i`'s contents for
 channel `c` is `<c>_values[offsets[i] .. offsets[i] + lengths[i])`.
+
+---
+
+## 5a. Chromatograms (M24, v0.4)
+
+The `chromatograms/` group is **optional** — v0.3 files lack it and
+readers return an empty list. When present:
+
+```
+chromatograms/
+├── @count                              (int64, number of chromatograms)
+├── time_values                         (float64[total_points], concatenated)
+├── intensity_values                    (float64[total_points], concatenated)
+└── chromatogram_index/                 (subgroup, parallel metadata arrays)
+    ├── offsets                          (int64[count])
+    ├── lengths                          (uint32[count])
+    ├── types                            (int32[count]; MPGOChromatogramType enum)
+    ├── target_mzs                       (float64[count]; XIC target m/z, 0.0 otherwise)
+    ├── precursor_mzs                    (float64[count]; SRM precursor, 0.0 otherwise)
+    └── product_mzs                      (float64[count]; SRM product, 0.0 otherwise)
+```
+
+Chromatogram `i`'s time/intensity slice is
+`time_values[offsets[i] .. offsets[i] + lengths[i])`.
+
+**MPGOChromatogramType enum**: 0 = TIC, 1 = XIC, 2 = SRM.
+
+---
+
+## 5b. Envelope encryption key info (M25, v0.4)
+
+The `opt_key_rotation` feature flag gates the `/protection/key_info/`
+group. When present:
+
+```
+/protection/key_info/
+├── @kek_id                             (string, caller-supplied KEK identifier)
+├── @kek_algorithm                      (string, "aes-256-gcm" in v0.4)
+├── @wrapped_at                         (string, ISO-8601 timestamp)
+├── @key_history_json                   (string, JSON array of prior entries)
+└── dek_wrapped                         (uint8[60] = 32 cipher + 12 IV + 16 tag)
+```
+
+The DEK wraps signal data via AES-256-GCM (same as `opt_dataset_encryption`).
+The KEK wraps the DEK. Rotation re-wraps only the DEK — signal datasets
+are not touched, so rotation cost is O(1) in file size.
 
 ---
 

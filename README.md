@@ -38,9 +38,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **v0.3.0 — Milestones 1–22 complete, 730 tests passing** | `objc/` |
-| **Python (`mpeg-o`)**     | **v0.3.0 — Cross-language parity with ObjC via reference fixtures, 89 tests passing** | `python/` |
-| Java                      | Planned | `java/` |
+| **Objective-C (GNUstep)** | **v0.4.0 — Milestones 1–25, 27–29 complete, 836 assertions passing** | `objc/` |
+| **Python (`mpeg-o`)**     | **v0.4.0 — Cross-language parity with ObjC, 120 tests passing** | `python/` |
+| Java                      | Deferred to v0.5+ (hdf-java JNI build dependency) | `java/` |
 
 ### v0.1.0-alpha capabilities
 
@@ -79,6 +79,16 @@ v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2
 * **mzML writer** — `MPGOMzMLWriter` + `mpeg_o.exporters.mzml` emit indexed-mzML from a `SpectralDataset`, with byte-correct `<indexList>` offsets per spectrum and optional zlib compression of binary arrays. Licensed Apache-2.0 alongside the import layer.
 * **Cloud-native access (Python)** — `SpectralDataset.open("s3://bucket/file.mpgo")` routes URLs through `fsspec`. HTTP, S3, GCS, and Azure backends are supported through fsspec plugins; the reader pulls only the HDF5 metadata and a handful of chunks per touched spectrum. Benchmark: 10 random spectra from a 15 MB remote file in ~50 ms, ~24% of file bytes transferred.
 * **LZ4 + Numpress-delta compression** — optional signal-channel codecs. LZ4 via HDF5 filter 32004 (plugin-gated, skipped cleanly at runtime when unavailable) is ~35× faster on write / ~2× faster on read than zlib. Numpress-delta is a clean-room implementation of Teleman et al. 2014 (*MCP* 13(6)) with sub-ppm relative error for typical m/z data. Both codecs are cross-language byte-identical between ObjC and Python.
+
+### v0.4.0 capabilities (additions to v0.3)
+
+* **Thread safety (M23)** — `MPGOHDF5File` carries a `pthread_rwlock_t` that serializes writes and allows concurrent reads. Python side: opt-in `SpectralDataset.open(..., thread_safe=True)` with a writer-preferring `RWLock`. Degrades to exclusive locking on non-threadsafe libhdf5 builds.
+* **Chromatogram API (M24)** — `MPGOAcquisitionRun.chromatograms` persists TIC/XIC/SRM traces under `<run>/chromatograms/` with a parallel-array chromatogram index. mzML writer emits `<chromatogramList>` + `<index name="chromatogram">` with byte-correct offsets; reader parses them back.
+* **Envelope encryption + key rotation (M25)** — DEK encrypts data, KEK wraps DEK. `/protection/key_info/` stores the 60-byte wrapped DEK blob + KEK metadata. Rotation re-wraps in O(1) without touching signal datasets. Feature flag: `opt_key_rotation`.
+* **ISA-Tab / ISA-JSON export (M27)** — `MPGOISAExporter` / `mpeg_o.exporters.isa` produces investigation/study/assay TSV files + ISA-JSON from a `SpectralDataset`. Licensed Apache-2.0.
+* **Spectral anonymization (M28)** — policy-based pipeline (SAAV redaction, intensity masking, m/z coarsening, rare-metabolite suppression, metadata stripping) that reads a dataset and writes a new `.mpgo`. Audit trail via provenance record. Feature flag: `opt_anonymized`.
+* **nmrML writer (M29)** — serializes `NMRSpectrum` + FID to nmrML XML with acquisition parameters and base64 spectrum arrays. Round-trips through the existing nmrML reader.
+* **Thermo RAW stub (M29)** — `MPGOThermoRawReader` / `mpeg_o.importers.thermo_raw` stub; returns not-implemented error with SDK guidance. See `docs/vendor-formats.md`.
 
 ## Python Installation
 
