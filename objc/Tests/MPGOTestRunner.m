@@ -26,6 +26,7 @@ extern void testMilestone21(void);
 extern void testMilestone23(void);
 extern void testMilestone24(void);
 extern void testMilestone25(void);
+extern void testMilestone27(void);
 
 int main(int argc, const char *argv[])
 {
@@ -129,6 +130,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 25: envelope encryption + key rotation")
             testMilestone25();
         END_SET("Milestone 25: envelope encryption + key rotation")
+
+        START_SET("Milestone 27: ISA-Tab / ISA-JSON exporter")
+            testMilestone27();
+        END_SET("Milestone 27: ISA-Tab / ISA-JSON exporter")
     }
     return 0;
 }
