@@ -1,0 +1,238 @@
+"""HDF5 storage provider — Milestone 39 Part C.
+
+Adapter that exposes ``h5py`` through the :mod:`mpeg_o.providers.base`
+contract. No behavioural change — callers that used ``h5py.File``
+directly can switch to ``Hdf5Provider.open(path)`` and continue.
+
+SPDX-License-Identifier: LGPL-3.0-or-later
+"""
+from __future__ import annotations
+
+from typing import Any
+
+import h5py
+import numpy as np
+
+from ..enums import Compression, Precision
+from .base import (
+    CompoundField,
+    CompoundFieldKind,
+    StorageDataset,
+    StorageGroup,
+    StorageProvider,
+)
+
+
+# ── Precision / dtype glue ────────────────────────────────────────────
+
+
+def _precision_from_dtype(dt: np.dtype) -> Precision | None:
+    """Map an h5py dataset dtype to the MPEG-O Precision enum, or
+    ``None`` for compound datasets."""
+    if dt.kind == "V":  # void — compound or opaque
+        return None
+    by_dtype = {
+        "<f4": Precision.FLOAT32, "<f8": Precision.FLOAT64,
+        "<i4": Precision.INT32, "<i8": Precision.INT64,
+        "<u4": Precision.UINT32, "<c16": Precision.COMPLEX128,
+    }
+    return by_dtype.get(dt.str)
+
+
+def _fields_from_dtype(dt: np.dtype) -> tuple[CompoundField, ...] | None:
+    if dt.names is None:
+        return None
+    out: list[CompoundField] = []
+    for nm in dt.names:
+        sub = dt.fields[nm][0]
+        if h5py.check_string_dtype(sub) is not None:
+            kind = CompoundFieldKind.VL_STRING
+        elif sub.str == "<u4":
+            kind = CompoundFieldKind.UINT32
+        elif sub.str == "<i8":
+            kind = CompoundFieldKind.INT64
+        elif sub.str == "<f8":
+            kind = CompoundFieldKind.FLOAT64
+        else:
+            # Unknown field kind — leave as float64 placeholder; callers
+            # that care should downgrade gracefully.
+            kind = CompoundFieldKind.FLOAT64
+        out.append(CompoundField(name=nm, kind=kind))
+    return tuple(out)
+
+
+def _compound_dtype(fields: list[CompoundField]) -> np.dtype:
+    items: list[tuple[str, Any]] = []
+    vl = h5py.string_dtype(encoding="utf-8")
+    for f in fields:
+        if f.kind == CompoundFieldKind.UINT32:
+            items.append((f.name, "<u4"))
+        elif f.kind == CompoundFieldKind.INT64:
+            items.append((f.name, "<i8"))
+        elif f.kind == CompoundFieldKind.FLOAT64:
+            items.append((f.name, "<f8"))
+        elif f.kind == CompoundFieldKind.VL_STRING:
+            items.append((f.name, vl))
+        else:
+            raise ValueError(f"unknown compound kind: {f.kind}")
+    return np.dtype(items)
+
+
+# ── Adapters ──────────────────────────────────────────────────────────
+
+
+class _Dataset(StorageDataset):
+    def __init__(self, ds: h5py.Dataset):
+        self._ds = ds
+
+    @property
+    def name(self) -> str:
+        return self._ds.name.rsplit("/", 1)[-1]
+
+    @property
+    def precision(self) -> Precision | None:
+        return _precision_from_dtype(self._ds.dtype)
+
+    @property
+    def length(self) -> int:
+        return int(self._ds.shape[0]) if self._ds.shape else 0
+
+    @property
+    def compound_fields(self) -> tuple[CompoundField, ...] | None:
+        return _fields_from_dtype(self._ds.dtype)
+
+    def read(self, offset: int = 0, count: int = -1) -> np.ndarray:
+        if count < 0:
+            return self._ds[offset:]
+        return self._ds[offset: offset + count]
+
+    def write(self, data: np.ndarray) -> None:
+        self._ds[...] = data
+
+    def has_attribute(self, name: str) -> bool:
+        return name in self._ds.attrs
+
+    def get_attribute(self, name: str) -> Any:
+        return self._ds.attrs[name]
+
+    def set_attribute(self, name: str, value: Any) -> None:
+        self._ds.attrs[name] = value
+
+
+class _Group(StorageGroup):
+    def __init__(self, grp: h5py.Group):
+        self._grp = grp
+
+    @property
+    def name(self) -> str:
+        return self._grp.name.rsplit("/", 1)[-1] or "/"
+
+    def child_names(self) -> list[str]:
+        return list(self._grp.keys())
+
+    def has_child(self, name: str) -> bool:
+        return name in self._grp
+
+    def open_group(self, name: str) -> StorageGroup:
+        obj = self._grp[name]
+        if not isinstance(obj, h5py.Group):
+            raise KeyError(f"'{name}' is not a group")
+        return _Group(obj)
+
+    def create_group(self, name: str) -> StorageGroup:
+        return _Group(self._grp.create_group(name))
+
+    def delete_child(self, name: str) -> None:
+        if name in self._grp:
+            del self._grp[name]
+
+    def open_dataset(self, name: str) -> StorageDataset:
+        obj = self._grp[name]
+        if not isinstance(obj, h5py.Dataset):
+            raise KeyError(f"'{name}' is not a dataset")
+        return _Dataset(obj)
+
+    def create_dataset(self, name: str, precision: Precision,
+                       length: int, *,
+                       chunk_size: int = 0,
+                       compression: Compression = Compression.NONE,
+                       compression_level: int = 6) -> StorageDataset:
+        kwargs: dict[str, Any] = {
+            "shape": (length,),
+            "dtype": precision.numpy_dtype(),
+        }
+        if chunk_size > 0:
+            kwargs["chunks"] = (min(chunk_size, max(length, 1)),)
+        if compression == Compression.ZLIB:
+            kwargs["compression"] = "gzip"
+            kwargs["compression_opts"] = compression_level
+        elif compression == Compression.LZ4:
+            # LZ4 filter id 32004; requires hdf5plugin on the read side.
+            kwargs["compression"] = 32004
+        ds = self._grp.create_dataset(name, **kwargs)
+        return _Dataset(ds)
+
+    def create_compound_dataset(self, name: str,
+                                 fields: list[CompoundField],
+                                 count: int) -> StorageDataset:
+        dt = _compound_dtype(fields)
+        ds = self._grp.create_dataset(name, shape=(count,), dtype=dt)
+        return _Dataset(ds)
+
+    def has_attribute(self, name: str) -> bool:
+        return name in self._grp.attrs
+
+    def get_attribute(self, name: str) -> Any:
+        return self._grp.attrs[name]
+
+    def set_attribute(self, name: str, value: Any) -> None:
+        self._grp.attrs[name] = value
+
+    def delete_attribute(self, name: str) -> None:
+        if name in self._grp.attrs:
+            del self._grp.attrs[name]
+
+    def attribute_names(self) -> list[str]:
+        return list(self._grp.attrs.keys())
+
+
+class Hdf5Provider(StorageProvider):
+    """Storage provider backed by an h5py-managed HDF5 file."""
+
+    def __init__(self, file: h5py.File):
+        self._file = file
+
+    @classmethod
+    def open(cls, path_or_url: str, *, mode: str = "r", **kwargs
+             ) -> "Hdf5Provider":
+        # Accept fsspec URLs too: h5py can take a file-like object from
+        # fsspec. That makes Hdf5Provider usable over S3/HTTP transports
+        # without any extra wiring.
+        if "://" in path_or_url and not path_or_url.startswith("file://"):
+            try:
+                import fsspec  # type: ignore[import-not-found]
+            except ImportError as e:  # pragma: no cover
+                raise ImportError(
+                    "Opening HDF5 over a URL scheme requires fsspec "
+                    "(pip install 'mpeg-o[cloud]')") from e
+            f = fsspec.open(path_or_url, mode="rb" if mode == "r" else mode).open()
+            return cls(h5py.File(f, mode=mode, **kwargs))
+        if path_or_url.startswith("file://"):
+            path_or_url = path_or_url[len("file://"):]
+        return cls(h5py.File(path_or_url, mode=mode, **kwargs))
+
+    @property
+    def provider_name(self) -> str:
+        return "hdf5"
+
+    def root_group(self) -> StorageGroup:
+        return _Group(self._file)
+
+    def is_open(self) -> bool:
+        return bool(self._file)
+
+    def close(self) -> None:
+        try:
+            self._file.close()
+        except Exception:
+            pass

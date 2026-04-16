@@ -40,6 +40,10 @@ Homepage = "https://github.com/DTW-Thalion/MPEG-O"
 Repository = "https://github.com/DTW-Thalion/MPEG-O"
 Issues = "https://github.com/DTW-Thalion/MPEG-O/issues"
 
+[project.entry-points."mpeg_o.providers"]
+hdf5 = "mpeg_o.providers.hdf5:Hdf5Provider"
+memory = "mpeg_o.providers.memory:MemoryProvider"
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 

@@ -83,6 +83,18 @@
 
 - (BOOL)hasAttributeNamed:(NSString *)name;
 
+/** Delete the named attribute. No-op when the attribute is absent. */
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error;
+
+/** Alphabetically ordered names of every attribute on this group. */
+- (NSArray<NSString *> *)attributeNames;
+
+/** Names of every link (group or dataset) directly under this group. */
+- (NSArray<NSString *> *)childNames;
+
+/** Short (last-path-segment) name, or "/" for root. */
+- (NSString *)groupName;
+
 @end
 
 #endif

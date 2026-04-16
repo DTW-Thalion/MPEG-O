@@ -1,0 +1,245 @@
+"""Contract + round-trip tests for the storage provider abstraction —
+Milestone 39 Part A/B/D.
+
+Parametrised across the two shipping providers so that every
+behavioural test runs through both paths. If ``SpectralDataset``
+functions identically over ``MemoryProvider`` and ``Hdf5Provider``,
+the protocol contract is correct.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from mpeg_o.enums import Compression, Precision
+from mpeg_o.providers import (
+    CompoundField,
+    CompoundFieldKind,
+    StorageProvider,
+    discover_providers,
+    open_provider,
+    register_provider,
+)
+from mpeg_o.providers.hdf5 import Hdf5Provider
+from mpeg_o.providers.memory import MemoryProvider
+
+
+# ── Fixture helpers ───────────────────────────────────────────────────
+
+@pytest.fixture
+def hdf5_url(tmp_path: Path) -> str:
+    return str(tmp_path / "provider.h5")
+
+
+@pytest.fixture
+def memory_url() -> str:
+    url = "memory://test-providers"
+    yield url
+    MemoryProvider.discard_store(url)
+
+
+def _open_w(provider: str, url: str) -> StorageProvider:
+    return open_provider(url, provider=provider, mode="w")
+
+
+def _open_r(provider: str, url: str) -> StorageProvider:
+    return open_provider(url, provider=provider, mode="r")
+
+
+PROVIDERS = ("hdf5", "memory")
+
+
+# ── Discovery ────────────────────────────────────────────────────────
+
+
+def test_discover_returns_both_default_providers() -> None:
+    providers = discover_providers()
+    assert "hdf5" in providers
+    assert "memory" in providers
+    assert providers["hdf5"] is Hdf5Provider
+    assert providers["memory"] is MemoryProvider
+
+
+def test_register_overrides_builtin() -> None:
+    class Stub(StorageProvider):
+        @classmethod
+        def open(cls, path_or_url, *, mode="r", **kwargs):
+            return cls()
+        provider_name = "stub"
+        def root_group(self): raise NotImplementedError
+        def is_open(self): return True
+        def close(self): pass
+
+    register_provider("hdf5", Stub)
+    try:
+        assert discover_providers()["hdf5"] is Stub
+    finally:
+        register_provider("hdf5", Hdf5Provider)
+
+
+def test_open_by_url_scheme_resolves(tmp_path: Path) -> None:
+    p = tmp_path / "scheme.h5"
+    prov = open_provider(f"file://{p}", mode="w")
+    assert prov.provider_name == "hdf5"
+    prov.close()
+
+    prov2 = open_provider("memory://scheme-test", mode="w")
+    assert prov2.provider_name == "memory"
+    MemoryProvider.discard_store("memory://scheme-test")
+
+
+# ── Group + attribute round-trip ─────────────────────────────────────
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_nested_groups_and_attributes(provider: str,
+                                        hdf5_url: str,
+                                        memory_url: str) -> None:
+    url = memory_url if provider == "memory" else hdf5_url
+    with _open_w(provider, url) as p:
+        root = p.root_group()
+        root.set_attribute("title", "round-trip")
+        study = root.create_group("study")
+        study.set_attribute("version", 11)
+        runs = study.create_group("ms_runs")
+        runs.create_group("run_0001")
+        assert root.has_child("study")
+        assert study.has_child("ms_runs")
+        assert runs.has_child("run_0001")
+
+    with _open_r(provider, url) as p:
+        root = p.root_group()
+        title = root.get_attribute("title")
+        # HDF5 returns bytes; MemoryProvider returns what was stored
+        if isinstance(title, bytes):
+            title = title.decode()
+        assert title == "round-trip"
+        assert root.has_child("study")
+        assert "study" in root.child_names()
+
+
+# ── Primitive dataset round-trip ─────────────────────────────────────
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_primitive_dataset_roundtrip(provider: str,
+                                       hdf5_url: str,
+                                       memory_url: str) -> None:
+    url = memory_url if provider == "memory" else hdf5_url
+    expected = np.array([1.0, 2.5, 3.14, -0.001, 1e10], dtype="<f8")
+
+    with _open_w(provider, url) as p:
+        ds = p.root_group().create_dataset("values", Precision.FLOAT64,
+                                             length=len(expected))
+        ds.write(expected)
+        assert ds.length == len(expected)
+        assert ds.precision == Precision.FLOAT64
+
+    with _open_r(provider, url) as p:
+        ds = p.root_group().open_dataset("values")
+        np.testing.assert_array_equal(ds.read(), expected)
+        np.testing.assert_array_equal(ds.read(offset=1, count=2), expected[1:3])
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_primitive_dataset_int64(provider: str,
+                                   hdf5_url: str,
+                                   memory_url: str) -> None:
+    url = memory_url if provider == "memory" else hdf5_url
+    expected = np.array([-1, 0, 1, 1 << 40], dtype="<i8")
+
+    with _open_w(provider, url) as p:
+        ds = p.root_group().create_dataset("ints", Precision.INT64,
+                                             length=len(expected))
+        ds.write(expected)
+
+    with _open_r(provider, url) as p:
+        got = p.root_group().open_dataset("ints").read()
+        np.testing.assert_array_equal(got, expected)
+
+
+# ── Compound dataset round-trip (all kinds) ─────────────────────────
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_compound_dataset_roundtrip(provider: str,
+                                      hdf5_url: str,
+                                      memory_url: str) -> None:
+    url = memory_url if provider == "memory" else hdf5_url
+    schema = [
+        CompoundField("run_name", CompoundFieldKind.VL_STRING),
+        CompoundField("spectrum_index", CompoundFieldKind.UINT32),
+        CompoundField("chemical_entity", CompoundFieldKind.VL_STRING),
+        CompoundField("confidence_score", CompoundFieldKind.FLOAT64),
+        CompoundField("evidence_chain_json", CompoundFieldKind.VL_STRING),
+    ]
+    if provider == "hdf5":
+        import h5py
+        vl = h5py.string_dtype(encoding="utf-8")
+        dt = np.dtype([
+            ("run_name", vl), ("spectrum_index", "<u4"),
+            ("chemical_entity", vl), ("confidence_score", "<f8"),
+            ("evidence_chain_json", vl),
+        ])
+    else:
+        dt = np.dtype([
+            ("run_name", object), ("spectrum_index", "<u4"),
+            ("chemical_entity", object), ("confidence_score", "<f8"),
+            ("evidence_chain_json", object),
+        ])
+    records = np.array([
+        ("run_A", 0, "CHEBI:15377", 0.95, "[\"MS2 match\"]"),
+        ("run_B", 3, "HMDB:0001234", 0.72, "[]"),
+    ], dtype=dt)
+
+    with _open_w(provider, url) as p:
+        ds = p.root_group().create_compound_dataset(
+                "identifications", schema, count=len(records))
+        ds.write(records)
+        assert ds.compound_fields == tuple(schema)
+        assert ds.length == len(records)
+
+    with _open_r(provider, url) as p:
+        got = p.root_group().open_dataset("identifications").read()
+        assert len(got) == 2
+        run_name_0 = got[0]["run_name"]
+        if isinstance(run_name_0, bytes):
+            run_name_0 = run_name_0.decode()
+        assert run_name_0 == "run_A"
+        assert int(got[1]["spectrum_index"]) == 3
+        assert got[0]["confidence_score"] == pytest.approx(0.95)
+
+
+# ── Attribute delete ─────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_delete_attribute(provider: str,
+                            hdf5_url: str,
+                            memory_url: str) -> None:
+    url = memory_url if provider == "memory" else hdf5_url
+    with _open_w(provider, url) as p:
+        g = p.root_group()
+        g.set_attribute("scratch", "x")
+        assert g.has_attribute("scratch")
+        g.delete_attribute("scratch")
+        assert not g.has_attribute("scratch")
+
+
+# ── Transport: fsspec path via file:// scheme ──────────────────────
+
+
+def test_hdf5_provider_accepts_file_scheme(tmp_path: Path) -> None:
+    """The Hdf5Provider's fsspec-style URL router must strip file://
+    and open the path directly. This locks the v0.6 behaviour used by
+    callers that pass fully-qualified URLs."""
+    path = tmp_path / "scheme_smoke.h5"
+    with open_provider(f"file://{path}", mode="w") as p:
+        root = p.root_group()
+        root.create_dataset("x", Precision.FLOAT64, length=1).write(
+                np.array([1.0]))
+
+    with open_provider(f"file://{path}", mode="r") as p:
+        assert p.root_group().open_dataset("x").read().tolist() == [1.0]

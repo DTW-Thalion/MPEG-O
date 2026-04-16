@@ -1,0 +1,49 @@
+/*
+ * MPEG-O Java Implementation
+ * Copyright (C) 2026 DTW-Thalion
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+package com.dtwthalion.mpgo.providers;
+
+/**
+ * Storage backend entry point.
+ *
+ * <p>Implementations are discovered via
+ * {@link java.util.ServiceLoader}. Each implementation must also
+ * expose a no-argument public constructor so the loader can
+ * instantiate it; the useful work happens in {@link #open(String, Mode)}.</p>
+ *
+ * <p>Implementations are required to support the capability floor
+ * listed in {@code docs/format-spec.md} — hierarchical groups,
+ * typed 1-D datasets, partial reads, chunked storage, compression,
+ * compound datasets with VL strings, scalar and array attributes.
+ * Unsupported capabilities raise
+ * {@link UnsupportedOperationException} at the call site.</p>
+ */
+public interface StorageProvider extends AutoCloseable {
+
+    /** Open modes mirroring h5py semantics. */
+    enum Mode { READ, READ_WRITE, CREATE, APPEND }
+
+    /** Short identifier used for logging and registry lookup. */
+    String providerName();
+
+    /** Return {@code true} if this provider supports opening the
+     *  given path or URL. Used by the registry to pick a provider by
+     *  scheme when the caller hasn't named one explicitly. */
+    boolean supportsUrl(String pathOrUrl);
+
+    /** Open the backing store. The provider instance is returned
+     *  so chaining is possible: {@code new Hdf5Provider().open(...)}.
+     *
+     *  <p>Re-opening an already-open provider is an error.</p> */
+    StorageProvider open(String pathOrUrl, Mode mode);
+
+    /** Root group ("/"). Must be called after {@link #open}. */
+    StorageGroup rootGroup();
+
+    boolean isOpen();
+
+    @Override
+    void close();
+}
