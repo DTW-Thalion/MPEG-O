@@ -27,6 +27,9 @@ COMPOUND_PER_RUN_PROVENANCE = "compound_per_run_provenance"
 # v0.4 (M25): envelope encryption + rotatable KEK wrapping the DEK.
 OPT_KEY_ROTATION = "opt_key_rotation"
 
+# v0.4 (M28): file has been through the anonymization pipeline.
+OPT_ANONYMIZED = "opt_anonymized"
+
 
 @dataclass(frozen=True, slots=True)
 class FeatureFlags:
