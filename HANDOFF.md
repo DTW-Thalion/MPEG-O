@@ -1,32 +1,10 @@
-# MPEG-O v0.5 — Java Feature Parity
+# MPEG-O v0.6 — Storage/Transport Provider Abstraction
 
-> **Status:** v0.5.0 is **complete**. All three implementations at
-> full feature parity: ObjC (836 assertions), Python (120 tests),
-> Java (62 tests on JDK 17). Milestones 31-36 delivered the Java
-> stream. Three-way cross-implementation conformance verified.
-
-## Critical Update: hdf-java Maven Artifacts Now Available
-
-The v0.4 session deferred Java because `libhdf5_java` required building
-from HDF Group source. **HDF5 2.0.0 (Nov 2025) now publishes official
-Maven artifacts** with platform-specific JNI JARs:
-
-```xml
-<dependency>
-    <groupId>org.hdfgroup</groupId>
-    <artifactId>hdf5-java-jni</artifactId>
-    <version>2.0.0</version>
-    <classifier>linux-x86_64</classifier>
-</dependency>
-```
-
-Available on GitHub Packages (requires a GitHub PAT with `read:packages`).
-This eliminates the build-from-source blocker entirely. The `pom.xml`
-must include the HDF Group GitHub Packages repository, and CI must
-configure Maven `settings.xml` with the token.
-
-**Note:** GitHub Packages auth is required even for public packages.
-CI uses `${{ secrets.GITHUB_TOKEN }}` which has `read:packages` by default.
+> **Status:** v0.5.0 is **complete**. Three languages at feature parity
+> (ObjC 836 assertions, Python 120 tests, Java 62 tests). This session
+> executes **Milestones 37–42** to introduce the **pluggable storage and
+> transport provider architecture**, fix Java compound I/O, add Thermo
+> `.raw` import via delegation, and publish to PyPI + Maven Central.
 
 ---
 
@@ -34,468 +12,526 @@ CI uses `${{ secrets.GITHUB_TOKEN }}` which has `read:packages` by default.
 
 1. `git clone https://github.com/DTW-Thalion/MPEG-O.git && cd MPEG-O && git pull`
 2. Read: `README.md`, `ARCHITECTURE.md`, `WORKPLAN.md`, `docs/format-spec.md`, `docs/feature-flags.md`
-3. Verify existing: `cd objc && ./build.sh check` and `cd ../python && pip install -e ".[test,import,crypto]" && pytest`
-4. Tag v0.4.0 if not already tagged.
+3. Verify all three builds:
+   ```bash
+   cd objc && ./build.sh check
+   cd ../python && pip install -e ".[test,import,crypto]" && pytest
+   cd ../java && mvn verify -B
+   ```
+4. Tag v0.5.0 if not already tagged.
 
-## Binding Decisions — All Prior Decisions Active, Plus:
+---
 
-23. **Java: Maven** with `org.hdfgroup:hdf5-java-jni:2.0.0` from GitHub Packages. JDK 17+.
-24. **HDF5 API style:** Static methods on `hdf.hdf5lib.H5` + `hdf.hdf5lib.HDF5Constants`. Wrap into OO classes (`Hdf5File`, `Hdf5Group`, `Hdf5Dataset`) matching the ObjC/Python pattern.
-25. **Java crypto:** `javax.crypto` for AES-256-GCM (`Cipher.getInstance("AES/GCM/NoPadding")`) and `javax.crypto.Mac` for HMAC-SHA256. No external crypto dependency.
-26. **Java XML:** `javax.xml.parsers.SAXParser` for mzML/nmrML import. `javax.xml.stream.XMLStreamWriter` for mzML/nmrML export.
-27. **Java value types:** Java records (JDK 16+) for CVParam, AxisDescriptor, EncodingSpec, ValueRange, InstrumentConfig.
-28. **Cross-compat is the gate:** Every milestone's acceptance criteria include three-way fixture verification. A milestone is not complete until Java reads ObjC/Python fixtures AND ObjC/Python read Java-written fixtures.
+## Binding Decisions — All Prior (1–28) Active, Plus:
+
+29. **Storage/Transport Provider abstraction.** The data model and API are the standard; the storage backend is a pluggable implementation detail. All three languages define provider protocols/ABCs/interfaces. HDF5 becomes one implementation, not the only one.
+30. **Provider auto-discovery.** ObjC: `NSBundle` + `+load` registration. Python: `importlib.metadata` entry points. Java: `java.util.ServiceLoader`. Providers register themselves; upper layers query the registry.
+31. **Provider capability floor.** Every storage provider MUST support: hierarchical groups, named datasets with typed arrays, partial reads (hyperslab equivalent), chunked storage, compression, compound types with VL strings, and scalar/array attributes on groups and datasets. The interface defines all of these; providers that cannot deliver a capability throw a clear `UnsupportedOperationException` / `NSError` / `NotImplementedError`.
+32. **Two providers in v0.6.** `Hdf5Provider` (refactored from existing code) and `MemoryProvider` (in-memory, for tests and transient pipelines). The MemoryProvider proves the abstraction actually works.
+33. **Transport is orthogonal to storage.** `LocalTransport` (POSIX), `S3Transport` (ROS3 for ObjC, fsspec for Python), `HttpTransport` (range requests). Transport delivers bytes; storage interprets them.
+34. **Thermo `.raw` via delegation to ThermoRawFileParser.** No proprietary code in MPEG-O's dependency tree. Shell out to `ThermoRawFileParser` (user-installed), capture mzML output, read with existing mzML reader.
+35. **Maven Central groupId: `global.thalion`** (reversed `thalion.global`). Full artifact: `global.thalion:mpgo:0.6.0`.
+36. **Multiple releases before v1.0.** v0.6 API review is a checkpoint, not a freeze.
 
 ---
 
 ## Dependency Graph
 
 ```
-  M31 (CI + scaffold + HDF5 wrappers)
-       |
-       v
-  M32 (Core: primitives + runs + dataset)
-       |
-       v
-  M33 (Import/export: mzML, nmrML, ISA, Thermo stub)
-       |
-       v
-  M34 (Protection: encrypt, sign, key rotation, anonymize)
-       |
-       v
-  M35 (Advanced: thread safety, chromatograms, codecs)
-       |
-       v
-  M36 (Three-way conformance + v0.5.0)
+  M37 (Java compound I/O)     M38 (Thermo delegation)
+       |                           |
+       v                           |
+  M39 (Provider abstraction — all three languages)
+       |                           |
+       +------------+--------------+
+                    |
+                    v
+               M40 (Publishing: PyPI + Maven Central)
+                    |
+                    v
+               M41 (API review checkpoint)
+                    |
+                    v
+               M42 (v0.6.0 release)
 ```
 
-Strictly sequential — each builds on the previous. No parallelism needed; this is a single-language catch-up.
+M37 and M38 are independent and can start in parallel. M39 depends on M37 (Java needs working compound I/O before refactoring into providers). M40 depends on M39 (publish the provider-based architecture). M38 feeds into M39 (Thermo reader uses the format provider pattern).
 
 ---
 
-## Milestone 31 — Java CI + Maven Scaffold + HDF5 Wrappers
+## Milestone 37 — Java Compound Dataset I/O + JSON Parsing
 
 **License:** LGPL-3.0
 
-### Deliverables
+v0.5 Java writes JSON attributes and returns `List.of()` for compound reads. This blocks Java from properly reading ObjC/Python-written files.
 
-**Maven project scaffold:**
+**Deliverables**
 
-```
-java/
-+-- pom.xml
-+-- src/main/java/com/dtwthalion/mpgo/
-|   +-- hdf5/
-|   |   +-- Hdf5File.java
-|   |   +-- Hdf5Group.java
-|   |   +-- Hdf5Dataset.java
-|   |   +-- Hdf5CompoundType.java
-|   |   +-- Hdf5Errors.java
-|   +-- Enums.java
-+-- src/test/java/com/dtwthalion/mpgo/
-|   +-- Hdf5FileTest.java
-|   +-- Hdf5DatasetTest.java
-+-- src/test/resources/
-    +-- (symlink or copy of objc/Tests/Fixtures/mpgo/)
-```
+- `Hdf5CompoundType.java` upgraded: VL-string-aware compound type creation, read, write via `H5Tcreate(H5T_COMPOUND)` + `H5Tset_size(H5T_VARIABLE)`
+- `SpectralDataset.create()` writes native compound datasets matching `format-spec.md` §6
+- `SpectralDataset.open()` reads native compound datasets for identifications, quantifications, provenance
+- Full JSON parsing for `readCompoundIdentifications`, `readCompoundQuantifications`, `readCompoundProvenance` (currently return `List.of()`)
+- JSON fallback retained for v0.1/v0.2 files
+- JSON attribute mirror retained on write for backward compat
 
-**pom.xml:**
+**Acceptance**
 
-```xml
-<project>
-    <groupId>com.dtwthalion</groupId>
-    <artifactId>mpgo</artifactId>
-    <version>0.5.0-SNAPSHOT</version>
-    <packaging>jar</packaging>
-
-    <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
-        <hdf5.version>2.0.0</hdf5.version>
-    </properties>
-
-    <repositories>
-        <repository>
-            <id>hdfgroup-github</id>
-            <url>https://maven.pkg.github.com/HDFGroup/hdf5</url>
-        </repository>
-    </repositories>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.hdfgroup</groupId>
-            <artifactId>hdf5-java-jni</artifactId>
-            <version>${hdf5.version}</version>
-            <classifier>linux-x86_64</classifier>
-        </dependency>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>5.11.0</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.2.5</version>
-                <configuration>
-                    <argLine>-Djava.library.path=/usr/lib/x86_64-linux-gnu/hdf5/serial</argLine>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
-</project>
-```
-
-**HDF5 wrapper layer:**
-
-Mirror the ObjC/Python pattern:
-
-- `Hdf5File`: wraps `H5.H5Fcreate`/`H5Fopen`/`H5Fclose`. Implements `AutoCloseable`. Owns a `ReentrantReadWriteLock` for thread safety.
-- `Hdf5Group`: wraps `H5Gcreate2`/`H5Gopen2`/`H5Gclose`. String/integer attribute read/write. `hasChild()` check.
-- `Hdf5Dataset`: wraps `H5Dcreate2`/`H5Dwrite`/`H5Dread`/`H5Dclose`. Support float32/64, int32/64, uint32, complex128 (compound). Chunked + zlib compression. Partial reads via hyperslab.
-- `Hdf5CompoundType`: wraps `H5Tcreate(H5T_COMPOUND)` with VL string fields.
-- `Enums.java`: `Precision`, `Compression`, `Polarity`, `SamplingMode`, `AcquisitionMode`, `ChromatogramType`, `ByteOrder`, `EncryptionLevel` — all Java enums.
-
-**CI job:**
-
-```yaml
-  java-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - name: Install native HDF5
-        run: sudo apt-get install -y libhdf5-dev
-      - name: Configure Maven for GitHub Packages
-        run: |
-          mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml << 'EOF'
-          <settings>
-            <servers>
-              <server>
-                <id>hdfgroup-github</id>
-                <username>${env.GITHUB_ACTOR}</username>
-                <password>${env.GITHUB_TOKEN}</password>
-              </server>
-            </servers>
-          </settings>
-          EOF
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and test
-        working-directory: java
-        run: mvn verify
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-### Acceptance criteria
-
-- [ ] `mvn compile` succeeds with hdf5-java-jni resolved from GitHub Packages
-- [ ] `Hdf5File` create/open/close; file exists on disk
-- [ ] `Hdf5Dataset` write float64 + read back; values match within epsilon
-- [ ] Chunked + zlib compressed int32 dataset round-trip
-- [ ] Complex128 compound type round-trip
-- [ ] Partial read (hyperslab) verified
-- [ ] String and integer attributes on groups
-- [ ] CI java-test job green
+- [ ] Java writes compound identifications matching format-spec §6.1
+- [ ] Java reads ObjC-written compound idents/quants/provenance — all fields match
+- [ ] Java-written compound datasets readable by ObjC and Python
+- [ ] v0.1 JSON fallback works
+- [ ] Three-way cross-compat green
 
 ---
 
-## Milestone 32 — Java Core: Primitives + Runs + Dataset
-
-**License:** LGPL-3.0
-
-### Deliverables
-
-All six primitives + container classes:
-
-**Value classes (Java records):**
-- `CVParam(String ontologyRef, String accession, String name, String value, String unit)`
-- `AxisDescriptor(String name, String unit, ValueRange range, SamplingMode mode)`
-- `EncodingSpec(Precision precision, Compression compression, ByteOrder byteOrder)`
-- `ValueRange(double minimum, double maximum)`
-- `InstrumentConfig(String manufacturer, String model, String serialNumber, String sourceType, String analyzerType, String detectorType)`
-
-**Core classes:**
-- `SignalArray` — typed buffer (`double[]`, `float[]`, `int[]`) with encoding + axis + CV annotations
-- `Spectrum` — named SignalArray dictionary + coordinate axes + scan time
-- `MassSpectrum` extends Spectrum — m/z + intensity + msLevel + polarity
-- `NMRSpectrum` extends Spectrum — chemical shift + intensity + nucleus + frequency
-- `NMR2DSpectrum` — 2D intensity matrix with F1/F2 descriptors; native rank-2 HDF5 dataset
-- `FreeInductionDecay` — complex128 real+imaginary + dwell time
-- `Chromatogram` — time + intensity + type enum
-- `AcquisitionRun` — ordered spectra + chromatograms + instrument config + spectrum index + provenance. Lazy loading. Implements `AutoCloseable`.
-- `SpectrumIndex` — offsets/lengths/headers for O(1) access
-- `SpectralDataset` — root `.mpgo` reader/writer. `open(path)` returns `AutoCloseable` handle. Lazy loading. Reads v0.1, v0.2, v0.3, v0.4 files via feature flag dispatch.
-- `MSImage` extends SpectralDataset — spatial grid with tile access
-- `Identification`, `Quantification`, `ProvenanceRecord`, `TransitionList`
-- `FeatureFlags` — reader/writer matching ObjC/Python exactly
-
-**HDF5 I/O:**
-- Signal channel separation on write (same layout as ObjC/Python)
-- Compound datasets for identifications/quantifications/provenance
-- Feature flags: `@mpeg_o_format_version` + `@mpeg_o_features`
-- v0.1 JSON fallback paths for legacy files
-- Compound per-run provenance (v0.3+) with `@provenance_json` fallback (v0.2)
-
-### Acceptance criteria
-
-- [ ] Read every ObjC/Python reference fixture — spectrum counts, array values, identifications, quantifications, provenance, feature flags all match
-- [ ] Write a multi-run dataset (MS + NMR) -> read back -> round-trip verified
-- [ ] Java-written fixtures readable by ObjC `mpgo-verify` tool and Python reader
-- [ ] MSImage tile access works
-- [ ] v0.1, v0.2, v0.3 backward compat verified
-- [ ] Chromatograms on runs round-trip (v0.4 feature)
-
----
-
-## Milestone 33 — Java Import/Export
+## Milestone 38 — Thermo `.raw` Import via ThermoRawFileParser Delegation
 
 **License:** Apache-2.0
 
-### Deliverables
+No proprietary code in MPEG-O. Shell out to the user-installed `ThermoRawFileParser` binary, which converts `.raw` → mzML, then read the mzML with our existing reader.
 
-All in `com.dtwthalion.mpgo.importers` and `com.dtwthalion.mpgo.exporters`:
+**Deliverables**
 
-**mzML reader (`MzMLReader.java`):**
-- SAX parser via `javax.xml.parsers.SAXParser`
-- Base64 decode via `java.util.Base64` + `java.util.zip.Inflater` for zlib
-- `CVTermMapper.java` with hardcoded PSI-MS + nmrCV accessions
-- `referenceableParamGroup` expansion
-- `defaultArrayLength` validation
+**Python: `mpeg_o.importers.thermo_raw`**
 
-**mzML writer (`MzMLWriter.java`):**
-- XMLStreamWriter output
-- Reverse CVTermMapper
-- Base64 + optional zlib for binary arrays
-- `indexedmzML` with byte-offset index
-- `<chromatogramList>` emission
+```python
+def read(path: str | Path, *,
+         thermorawfileparser: str | None = None) -> SpectralDataset:
+    """Import a Thermo .raw file via ThermoRawFileParser.
 
-**nmrML reader (`NmrMLReader.java`):**
-- SAX parser for nmrML
-- Complex128 FID decoding (interleaved real+imaginary)
+    Args:
+        path: Path to the .raw file
+        thermorawfileparser: Path to ThermoRawFileParser binary.
+            If None, searches PATH. Raises FileNotFoundError if not found.
 
-**nmrML writer (`NmrMLWriter.java`):**
-- XMLStreamWriter for `<acquisition1D>`, `<fidData>`, `<spectrum1D>`
+    The binary is invoked as:
+        ThermoRawFileParser -i <raw> -o <tmpdir> -f 2  # format 2 = mzML
 
-**ISA exporter (`ISAExporter.java`):**
-- ISA-Tab TSV output
-- ISA-JSON output
-- Same mapping rules as ObjC/Python
+    The resulting mzML is parsed with mpeg_o.importers.mzml.read(),
+    then the temp file is deleted.
+    """
+```
 
-**Thermo RAW stub (`ThermoRawReader.java`):**
-- Throws `UnsupportedOperationException` with SDK guidance
+**ObjC: `MPGOThermoRawReader`**
 
-### Acceptance criteria
+Replace the stub with a real implementation that:
+1. Uses `NSTask` to invoke `ThermoRawFileParser` (or `mono ThermoRawFileParser.exe` on systems without .NET 8)
+2. Captures the mzML output in a temp directory
+3. Reads with `MPGOMzMLReader`
+4. Cleans up temp files
+5. Returns nil + descriptive NSError if ThermoRawFileParser not found
 
-- [ ] mzML round-trip: mzML -> .mpgo -> mzML -> compare spectra
-- [ ] mzML chromatograms included in output
-- [ ] nmrML round-trip: nmrML -> .mpgo -> nmrML -> verify FID
-- [ ] ISA-Tab output matches ObjC/Python structurally
-- [ ] ISA-JSON output matches ObjC/Python structurally
-- [ ] Parse HUPO-PSI `tiny.pwiz.1.1.mzML` fixture; verify spectrum count
-- [ ] Parse BMRB `bmse000325.nmrML` fixture; verify FID
-- [ ] Thermo stub throws with guidance message
-- [ ] indexedmzML offsets byte-correct
+**Java: `ThermoRawReader.java`**
+
+Same pattern: `ProcessBuilder` to invoke ThermoRawFileParser, parse mzML output with `MzMLReader`.
+
+**`docs/vendor-formats.md` update:**
+- Installation instructions for ThermoRawFileParser (.NET 8 runtime, or Mono, or Conda/BioContainers)
+- Note that Thermo's `.raw` format has no open specification
+- Link to CompOmics ThermoRawFileParser repo
+
+**Testing:**
+- If ThermoRawFileParser is on PATH, run integration test with a small `.raw` fixture
+- If not on PATH, skip gracefully with log message
+- Unit test the delegation mechanism with a mock binary that outputs known mzML
+
+**Acceptance**
+
+- [ ] Python: `thermo_raw.read("sample.raw")` returns valid SpectralDataset (when ThermoRawFileParser available)
+- [ ] ObjC: `MPGOThermoRawReader` returns dataset (when available)
+- [ ] Java: `ThermoRawReader.read()` returns dataset (when available)
+- [ ] Missing binary → clear error, not crash
+- [ ] Mock-binary unit test works in CI without ThermoRawFileParser installed
+- [ ] `docs/vendor-formats.md` updated
 
 ---
 
-## Milestone 34 — Java Protection Layer
+## Milestone 39 — Storage/Transport Provider Abstraction (All Three Languages)
 
 **License:** LGPL-3.0
 
-### Deliverables
+This is the headline milestone. Extract protocols/ABCs/interfaces for storage and transport. Refactor all existing HDF5 code to implement the new protocols. Add a MemoryProvider to prove the abstraction.
 
-**Encryption (`EncryptionManager.java`):**
-- AES-256-GCM via `javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")`
-- Selective per-channel encryption (intensity encrypted, m/z clear)
-- Compound dataset sealing
-- `@encrypted` marker + `@access_policy_json`
+### Part A — Define the Provider Interfaces
 
-**Signatures (`SignatureManager.java`):**
-- HMAC-SHA256 via `javax.crypto.Mac.getInstance("HmacSHA256")`
-- v2 canonical byte-order signatures (little-endian normalization)
-- `"v2:" + base64(mac)` format
-- v1 native-byte fallback for pre-v0.3 files
-- Provenance chain signing
+**ObjC protocols** (in `objc/Source/Providers/`):
 
-**Key rotation (`KeyRotationManager.java`):**
-- Envelope encryption (DEK + KEK)
-- `enableEnvelopeEncryption()`, `rotateKey()`, `unwrapDEK()`
-- `/protection/key_info` with `dek_wrapped`, `@kek_id`, `key_history`
-- Migration from v0.3 direct encryption
+```objc
+@protocol MPGOStorageProvider <NSObject>
+- (id<MPGOStorageGroup>)rootGroup:(NSError **)error;
+- (BOOL)close:(NSError **)error;
+- (BOOL)isOpen;
+- (NSString *)providerName;  // "hdf5", "memory", etc.
+@end
 
-**Anonymization (`Anonymizer.java`):**
-- SAAV spectrum redaction
-- Intensity quantile masking
-- m/z coarsening, chemical shift coarsening
-- Rare metabolite masking (bundled prevalence table)
-- Metadata stripping
-- Signed anonymization provenance
-- `opt_anonymized` feature flag
+@protocol MPGOStorageGroup <NSObject>
+- (NSString *)name;
+- (BOOL)hasChild:(NSString *)name;
+- (NSArray<NSString *> *)childNames:(NSError **)error;
 
-### Acceptance criteria
+// Subgroup navigation
+- (id<MPGOStorageGroup>)openGroup:(NSString *)name error:(NSError **)error;
+- (id<MPGOStorageGroup>)createGroup:(NSString *)name error:(NSError **)error;
+- (BOOL)deleteChild:(NSString *)name error:(NSError **)error;
 
-- [ ] Encrypt in Java -> decrypt in Java -> data correct
-- [ ] Encrypt in Java -> decrypt in Python/ObjC -> data correct (cross-language)
-- [ ] ObjC/Python encrypted fixtures -> decrypt in Java -> correct
-- [ ] Sign in Java -> verify in all three languages
-- [ ] Canonical v2 signatures match across all three languages for same data
-- [ ] Key rotation: KEK-1 -> KEK-2 -> read with KEK-2; cross-language parity
-- [ ] Anonymize in Java: SAAV redaction, intensity masking, coarsening verified
-- [ ] Anonymized files readable by ObjC and Python
+// Dataset access
+- (id<MPGOStorageDataset>)openDataset:(NSString *)name error:(NSError **)error;
+- (id<MPGOStorageDataset>)createDataset:(NSString *)name
+                              precision:(MPGOPrecision)precision
+                                 length:(NSUInteger)length
+                              chunkSize:(NSUInteger)chunkSize
+                       compressionLevel:(NSInteger)level
+                                  error:(NSError **)error;
+
+// Compound dataset access
+- (id<MPGOStorageDataset>)createCompoundDataset:(NSString *)name
+                                          fields:(NSArray<MPGOCompoundField *> *)fields
+                                           count:(NSUInteger)count
+                                           error:(NSError **)error;
+
+// Attributes
+- (BOOL)hasAttribute:(NSString *)name;
+- (NSString *)stringAttribute:(NSString *)name error:(NSError **)error;
+- (BOOL)setStringAttribute:(NSString *)name value:(NSString *)value error:(NSError **)error;
+- (int64_t)integerAttribute:(NSString *)name defaultValue:(int64_t)def;
+- (BOOL)setIntegerAttribute:(NSString *)name value:(int64_t)value error:(NSError **)error;
+@end
+
+@protocol MPGOStorageDataset <NSObject>
+- (MPGOPrecision)precision;
+- (NSUInteger)length;
+- (NSData *)readAll:(NSError **)error;
+- (NSData *)readSlice:(NSRange)range error:(NSError **)error;   // hyperslab
+- (BOOL)writeData:(NSData *)data error:(NSError **)error;
+- (BOOL)close;
+@end
+```
+
+**Python ABCs** (in `mpeg_o/providers/base.py`):
+
+```python
+class StorageProvider(ABC):
+    @abstractmethod
+    def root_group(self) -> "StorageGroup": ...
+    @abstractmethod
+    def close(self) -> None: ...
+    @abstractmethod
+    def provider_name(self) -> str: ...
+
+class StorageGroup(ABC):
+    @abstractmethod
+    def has_child(self, name: str) -> bool: ...
+    @abstractmethod
+    def child_names(self) -> list[str]: ...
+    @abstractmethod
+    def open_group(self, name: str) -> "StorageGroup": ...
+    @abstractmethod
+    def create_group(self, name: str) -> "StorageGroup": ...
+    @abstractmethod
+    def open_dataset(self, name: str) -> "StorageDataset": ...
+    @abstractmethod
+    def create_dataset(self, name: str, precision: Precision,
+                       length: int, chunk_size: int = 16384,
+                       compression_level: int = 6) -> "StorageDataset": ...
+    @abstractmethod
+    def create_compound_dataset(self, name: str,
+                                 fields: list[CompoundField],
+                                 count: int) -> "StorageDataset": ...
+    @abstractmethod
+    def get_attribute(self, name: str) -> str | int | None: ...
+    @abstractmethod
+    def set_attribute(self, name: str, value: str | int) -> None: ...
+    @abstractmethod
+    def has_attribute(self, name: str) -> bool: ...
+
+class StorageDataset(ABC):
+    @abstractmethod
+    def read(self, offset: int = 0, count: int = -1) -> np.ndarray: ...
+    @abstractmethod
+    def write(self, data: np.ndarray) -> None: ...
+    @abstractmethod
+    def precision(self) -> Precision: ...
+    @abstractmethod
+    def length(self) -> int: ...
+```
+
+**Java interfaces** (in `com.dtwthalion.mpgo.providers`):
+
+```java
+public interface StorageProvider extends AutoCloseable {
+    StorageGroup rootGroup();
+    String providerName();
+}
+
+public interface StorageGroup extends AutoCloseable {
+    boolean hasChild(String name);
+    List<String> childNames();
+    StorageGroup openGroup(String name);
+    StorageGroup createGroup(String name);
+    StorageDataset openDataset(String name);
+    StorageDataset createDataset(String name, Precision precision,
+                                  long length, int chunkSize, int compressionLevel);
+    StorageDataset createCompoundDataset(String name,
+                                          List<CompoundField> fields, int count);
+    String getStringAttribute(String name);
+    void setStringAttribute(String name, String value);
+    long getIntegerAttribute(String name, long defaultValue);
+    void setIntegerAttribute(String name, long value);
+    boolean hasAttribute(String name);
+}
+
+public interface StorageDataset extends AutoCloseable {
+    Object readData();                      // full read
+    Object readSlice(long offset, int count); // hyperslab
+    void writeData(Object data);
+    Precision precision();
+    long length();
+}
+```
+
+### Part B — Provider Registry + Auto-Discovery
+
+**ObjC:** `MPGOProviderRegistry` singleton. Providers register via `+load`:
+
+```objc
+@interface MPGOProviderRegistry : NSObject
++ (instancetype)shared;
+- (void)registerProvider:(Class<MPGOStorageProvider>)providerClass
+                 forScheme:(NSString *)scheme;  // "file", "s3", "memory"
+- (id<MPGOStorageProvider>)providerForURL:(NSURL *)url error:(NSError **)error;
+@end
+
+// In MPGOHDF5Provider.m:
++ (void)load {
+    [[MPGOProviderRegistry shared] registerProvider:self forScheme:@"file"];
+    [[MPGOProviderRegistry shared] registerProvider:self forScheme:@"hdf5"];
+}
+```
+
+**Python:** `importlib.metadata` entry points:
+
+```toml
+# pyproject.toml
+[project.entry-points."mpeg_o.providers"]
+hdf5 = "mpeg_o.providers.hdf5:Hdf5Provider"
+memory = "mpeg_o.providers.memory:MemoryProvider"
+```
+
+```python
+# mpeg_o/providers/registry.py
+from importlib.metadata import entry_points
+
+def discover_providers() -> dict[str, type[StorageProvider]]:
+    eps = entry_points(group="mpeg_o.providers")
+    return {ep.name: ep.load() for ep in eps}
+```
+
+**Java:** `java.util.ServiceLoader`:
+
+```java
+// META-INF/services/com.dtwthalion.mpgo.providers.StorageProvider
+// contains: com.dtwthalion.mpgo.providers.Hdf5Provider
+// contains: com.dtwthalion.mpgo.providers.MemoryProvider
+
+public class ProviderRegistry {
+    public static StorageProvider forScheme(String scheme) {
+        for (StorageProvider p : ServiceLoader.load(StorageProvider.class)) {
+            if (p.supportsScheme(scheme)) return p;
+        }
+        throw new IllegalArgumentException("No provider for scheme: " + scheme);
+    }
+}
+```
+
+### Part C — Refactor Existing HDF5 Code into Hdf5Provider
+
+**ObjC:**
+- `MPGOHDF5Provider` implements `<MPGOStorageProvider>` — wraps `MPGOHDF5File`
+- `MPGOHDF5GroupAdapter` implements `<MPGOStorageGroup>` — wraps `MPGOHDF5Group`
+- `MPGOHDF5DatasetAdapter` implements `<MPGOStorageDataset>` — wraps `MPGOHDF5Dataset`
+- Existing `MPGOHDF5File`/`Group`/`Dataset` classes remain internally but are no longer called directly by upper layers
+- `MPGOAcquisitionRun`, `MPGOSpectralDataset`, `MPGOCompoundIO`, `MPGOSignatureManager`, `MPGOEncryptionManager`, `MPGOKeyRotationManager` all switch from direct HDF5 calls to `<MPGOStorageGroup>` / `<MPGOStorageDataset>` protocol calls
+- Thread safety (`pthread_rwlock_t`) stays on `MPGOHDF5File`; the adapter delegates lock calls
+
+**Python:**
+- `mpeg_o.providers.hdf5.Hdf5Provider` wraps `h5py.File`
+- `mpeg_o.providers.hdf5.Hdf5Group` wraps `h5py.Group`
+- `mpeg_o.providers.hdf5.Hdf5Dataset` wraps `h5py.Dataset`
+- `_hdf5_io.py` helper functions refactored to use provider interfaces
+- `SpectralDataset.open()` resolves provider via registry, then proceeds with provider-agnostic code
+- fsspec cloud access becomes a transport concern: `Hdf5Provider` accepts either a path or a file-like object
+
+**Java:**
+- `com.dtwthalion.mpgo.providers.Hdf5Provider` wraps existing `Hdf5File`
+- Same adapter pattern
+
+### Part D — MemoryProvider (Second Provider)
+
+In-memory storage for tests and transient pipelines. Proves the abstraction works without touching disk.
+
+**Data model:** `Map<String, Object>` tree where groups are nested maps and datasets are typed arrays. Attributes are a parallel metadata map.
+
+```python
+class MemoryProvider(StorageProvider):
+    """In-memory storage provider. Data lives in Python dicts.
+    Useful for tests and transient pipelines where no file I/O is needed."""
+
+    def __init__(self):
+        self._root = {"__attrs__": {}, "__datasets__": {}, "__children__": {}}
+
+    def root_group(self) -> "MemoryGroup":
+        return MemoryGroup(self._root)
+```
+
+**Three-language implementation:** ObjC (NSDictionary tree), Python (dict tree), Java (HashMap tree).
+
+**Validation:** Create a `SpectralDataset` using `MemoryProvider`, populate with spectra, read back, verify all values match. This is the proof that the abstraction works — if `SpectralDataset` functions identically over `MemoryProvider` and `Hdf5Provider`, the protocol contract is correct.
+
+### Part E — SpectralDataset.open() Factory
+
+```python
+def open(path_or_url: str, *, provider: str | None = None, **kwargs):
+    if provider:
+        # Explicit provider override
+        cls = registry.get(provider)
+    elif "://" in path_or_url:
+        scheme = path_or_url.split("://")[0]
+        cls = registry.for_scheme(scheme)
+    else:
+        # Local file — detect by extension or content
+        cls = registry.for_scheme("file")
+    return cls.open(path_or_url, **kwargs)
+```
+
+### Acceptance
+
+- [ ] ObjC: `MPGOStorageProvider` / `Group` / `Dataset` protocols defined
+- [ ] Python: `StorageProvider` / `Group` / `Dataset` ABCs defined
+- [ ] Java: `StorageProvider` / `Group` / `Dataset` interfaces defined
+- [ ] `Hdf5Provider` passes all existing tests (no regression)
+- [ ] `MemoryProvider` passes a round-trip test: create dataset with spectra, read back, verify
+- [ ] Provider registry auto-discovers both providers in all three languages
+- [ ] `SpectralDataset.open()` resolves providers by URL scheme
+- [ ] Three-way cross-compat still green (HDF5 path unchanged)
+- [ ] S3 transport works via HDF5 provider (Python: fsspec, ObjC: ROS3 if available)
+- [ ] `ARCHITECTURE.md` updated with provider architecture diagram
 
 ---
 
-## Milestone 35 — Java Advanced Features
+## Milestone 40 — Package Publishing (PyPI + Maven Central)
 
-**License:** LGPL-3.0
+**License:** N/A
 
-### Deliverables
+**PyPI:**
+- Publish `mpeg-o` v0.6.0 to PyPI proper. `pip install mpeg-o` works globally.
+- Includes provider entry points for auto-discovery.
 
-**Thread safety:**
-- `Hdf5File` owns `ReentrantReadWriteLock`
-- All group/dataset operations acquire read or write lock
-- `isThreadSafe()` method (probe `H5.H5is_library_threadsafe()`)
-- Degraded exclusive-only mode when HDF5 is not threadsafe
+**Maven Central:**
+- Publish `global.thalion:mpgo:0.6.0` via Sonatype OSSRH.
+- Requires: GPG-signed artifacts, Sonatype JIRA account, domain `thalion.global` verified.
+- `pom.xml` groupId changes from `com.dtwthalion` to `global.thalion`.
+- Includes `META-INF/services` for ServiceLoader discovery.
 
-**LZ4 compression:**
-- HDF5 filter 32004; check availability at runtime via `H5.H5Zfilter_avail()`
-- Skip LZ4 tests gracefully if filter not loadable
-- LZ4-compressed files from ObjC/Python readable
+**GitHub Packages:** Continue as mirror for both.
 
-**Numpress-delta:**
-- Clean-room implementation from Teleman et al. 2014
-- `NumpressCodec.java` with `linearEncode()` / `linearDecode()`
-- Sub-ppm relative error verified
-- Numpress files from ObjC/Python readable; Java-written files readable by both
+**Acceptance**
 
-**Cloud access (optional):**
-- If time permits: investigate HDF5 2.0's improved ROS3 VFD (S3 native reads) which is now in the official release
-- Otherwise: document as v0.6 scope with a note that Python's fsspec path is the recommended cloud access method
-
-### Acceptance criteria
-
-- [ ] Two Java threads reading concurrently — no crashes
-- [ ] Writer blocks readers
-- [ ] LZ4 round-trip (if filter available)
-- [ ] ObjC/Python LZ4 files readable by Java
-- [ ] Numpress round-trip within < 1 ppm
-- [ ] Cross-language Numpress parity
-- [ ] Thread safety model documented
+- [ ] `pip install mpeg-o` from PyPI works
+- [ ] `global.thalion:mpgo` resolves from Maven Central without special repo config
+- [ ] Both packages include correct license, URLs, description
+- [ ] Entry points / ServiceLoader configs present and functional
 
 ---
 
-## Milestone 36 — Three-Way Conformance + v0.5.0 Release
+## Milestone 41 — API Review Checkpoint
 
-**Track:** Cross-cutting
+**License:** All
 
-### Three-way cross-compat CI job
+Not a freeze — a checkpoint for consistency and documentation before more releases.
 
-```yaml
-  cross-compat-3way:
-    needs: [objc-build-test, python-test, java-test]
-    runs-on: ubuntu-latest
-    steps:
-      # 1. Build ObjC, generate fixtures
-      # 2. Install Python, read ObjC fixtures
-      # 3. Build Java, read ObjC fixtures
-      # 4. Write fixtures from Python, read in ObjC + Java
-      # 5. Write fixtures from Java, read in ObjC + Python
-      # 6. Verify: all values match across all three
-```
+**Deliverables**
 
-### Documentation
+- `docs/api-review-v0.6.md`: lists every public class/method/interface across three languages, flags inconsistencies
+- Provider interfaces marked as **Provisional** (may change before v1.0)
+- Core data model classes (SignalArray, Spectrum, AcquisitionRun, SpectralDataset) marked as **Stable**
+- All public APIs have docstrings/javadoc/header comments
+- `docs/migration-guide.md`: mzML → MPEG-O and nmrML → MPEG-O workflows
 
-- `ARCHITECTURE.md`: Java class mapping table, HDF5 2.0 Maven setup
-- `README.md`: Java build instructions, three-language badges, all three streams at v0.5.0
-- `WORKPLAN.md`: M31-M36 with checked criteria
-- `docs/format-spec.md`: no layout changes (Java is a reader/writer, not a format change)
+**Acceptance**
 
-### Package publishing
+- [ ] `docs/api-review-v0.6.md` committed
+- [ ] `docs/migration-guide.md` committed
+- [ ] No undocumented public APIs
+- [ ] Provider interfaces clearly marked Provisional
 
-- `mpeg-o` updated on TestPyPI
-- Java artifact to GitHub Packages (`com.dtwthalion:mpgo:0.5.0`)
+---
 
-### Release
+## Milestone 42 — v0.6.0 Release
 
-```bash
-git tag -a v0.5.0 -m "MPEG-O v0.5.0: Java implementation at full feature parity with ObjC and Python. Three-way cross-implementation conformance."
-git push origin v0.5.0
-```
+**Deliverables**
 
-### Acceptance criteria
+- All docs updated (ARCHITECTURE with provider diagram, format-spec, feature-flags, vendor-formats, api-review, migration-guide)
+- CI: three-language matrix + cross-compat + provider tests
+- Packages on PyPI and Maven Central
+- `pom.xml` groupId: `global.thalion`
+- Tag v0.6.0
 
-- [ ] ObjC: all tests pass (unchanged from v0.4)
-- [ ] Python: all tests pass on 3.11 and 3.12 (unchanged from v0.4)
-- [ ] Java: all tests pass on JDK 17
-- [ ] Three-way cross-compat: every fixture readable by all three
-- [ ] v0.1/v0.2/v0.3/v0.4 backward compat preserved in Java
-- [ ] Java artifact on GitHub Packages
-- [ ] CI: ObjC + Python + Java + 3-way cross-compat, all green
-- [ ] Tag `v0.5.0` pushed
+**Acceptance**
+
+- [ ] All three languages green
+- [ ] Three-way cross-compat green
+- [ ] MemoryProvider round-trip passes in all three languages
+- [ ] `pip install mpeg-o` from PyPI
+- [ ] Maven Central resolves
+- [ ] v0.1–v0.5 backward compat preserved
+- [ ] Tag pushed
 
 ---
 
 ## Known Gotchas
 
-**Inherited (1-19):** All prior gotchas remain active. Key ones for Java:
+**Inherited (1–25):** All prior gotchas active.
 
-9. **Fixed test IVs for cross-language crypto.** Java, ObjC, Python must all use the same test key and IV. `javax.crypto` AESGCM and OpenSSL produce identical output for same inputs.
-16. **Key rotation backward compat.** Detect envelope vs direct encryption by presence of `dek_wrapped`.
-18. **Anonymization prevalence table.** Bundle `data/metabolite_prevalence.json` in the Java jar's resources.
+**New (v0.6):**
 
-**New (v0.5):**
+26. **Provider refactor scope.** Every class that currently calls `MPGOHDF5Group` or `MPGOHDF5Dataset` directly must be updated to use `<MPGOStorageGroup>` / `<MPGOStorageDataset>`. This includes `MPGOAcquisitionRun`, `MPGOSpectralDataset`, `MPGOCompoundIO`, `MPGOSignatureManager`, `MPGOEncryptionManager`, `MPGOKeyRotationManager`, `MPGOAnonymizer`, `MPGOFeatureFlags`. Grep for `MPGOHDF5` in the source to find all call sites.
 
-20. **GitHub Packages auth for hdf5-java-jni.** CI uses `${{ secrets.GITHUB_TOKEN }}` which has `read:packages` by default. Local dev needs a PAT with `read:packages` in `~/.m2/settings.xml`. Document this in `java/README.md`.
+27. **MemoryProvider compound types.** The MemoryProvider must support compound datasets (list-of-dicts internally). This is simpler than HDF5 compound types but the interface must be identical from the caller's perspective.
 
-21. **HDF5 2.0 API changes.** HDF5 2.0 renamed some constants and deprecated `H5Dcreate1` in favor of `H5Dcreate`. Use `HDF5Constants.H5P_DEFAULT` consistently. The `H5.H5Dcreate()` wrapper in 2.0 uses the v2 signature by default.
+28. **Provider entry point naming.** Python entry points use `mpeg_o.providers` group. Java uses `com.dtwthalion.mpgo.providers.StorageProvider` service interface (note: this must be updated to `global.thalion.mpgo.providers.StorageProvider` when groupId changes in M40). ObjC uses `+load` class method registration.
 
-22. **Java native library path.** `hdf5-java-jni` bundles the JNI `.so` inside the JAR, but `libhdf5.so` must be on the system. CI: `apt-get install libhdf5-dev`. Surefire plugin: `-Djava.library.path=/usr/lib/x86_64-linux-gnu/hdf5/serial`. The exact path varies by Ubuntu version.
+29. **ThermoRawFileParser detection.** Search PATH for `ThermoRawFileParser` (Linux .NET 8 self-contained), `ThermoRawFileParser.exe` (Mono), or check `THERMORAWFILEPARSER` env var. The binary name varies by installation method (Conda, Docker, manual).
 
-23. **VL strings in Java.** HDF5-Java represents VL strings as `String[]` arrays. Reading a VL string dataset returns `String[]`; writing requires `H5.H5Dwrite_VLStrings()`. Compound types with VL string fields use the `H5.H5Tset_size(HDF5Constants.H5T_VARIABLE)` pattern.
+30. **Maven Central groupId migration.** Changing from `com.dtwthalion` to `global.thalion` is a breaking change for any Java consumer. Since v0.5 was only on GitHub Packages (not Maven Central), the blast radius is minimal, but document the change clearly.
 
-24. **Java complex128.** HDF5 compound type `{double re; double im;}`. In Java, represent as `double[]` pairs or a `record Complex128(double re, double im)`. Read/write via compound type wrappers.
-
-25. **Java Base64 + zlib.** `java.util.Base64.getDecoder().decode()` + `java.util.zip.Inflater` for mzML binary arrays. Unlike Python's `zlib.decompress()`, Java's `Inflater` requires explicit output buffer sizing — use a growing `ByteArrayOutputStream`.
+31. **Sonatype OSSRH setup.** Requires: Sonatype JIRA account, domain verification for `thalion.global` (TXT record or GitHub repo proof), GPG key for artifact signing, CI secrets for deployment. This setup work should happen early in the release cycle, not during M40.
 
 ---
 
 ## Execution Checklist
 
-1. ~~Tag v0.4.0 if needed.~~ Done.
-2. **M31:** Java CI + scaffold + HDF5 wrappers. Done (17 tests).
-3. **M32:** Java core primitives + runs + dataset. Done (26 tests).
-4. **M33:** Java import/export. Done (36 tests).
-5. **M34:** Java protection layer. Done (50 tests).
-6. **M35:** Java advanced features. Done (62 tests).
-7. **M36:** Three-way conformance + v0.5.0 release. Done.
+1. Tag v0.5.0 if needed.
+2. **M37:** Java compound I/O fix. **Pause.**
+3. **M38:** Thermo delegation. **Pause.**
+4. **M39:** Provider abstraction (all three languages). **Pause.**
+5. **M40:** PyPI + Maven Central publishing. **Pause.**
+6. **M41:** API review checkpoint. **Pause.**
+7. **M42:** Tag v0.6.0.
 
 **CI must be green before any milestone is complete.**
 
 ---
 
-## Deferred to v0.6+
+## Deferred to v0.7+
 
 | Item | Description |
 |---|---|
-| Java cloud access | HDF5 2.0 ROS3 VFD for native S3 reads |
-| Streaming transport | MPEG-G Part 2 real-time acquisition |
-| Zarr backend | Alternative to HDF5 |
-| DuckDB query layer | SQL interface via extension |
-| Bruker TDF import | Real implementation |
+| ZarrProvider | Zarr storage backend (the abstraction makes this straightforward) |
+| SQLiteProvider | SQLite metadata + binary signal storage |
+| DBMSTransport | Store .mpgo data in Postgres/MySQL |
+| Java cloud access | ROS3 VFD or equivalent for Java |
+| Bruker TDF import | Real implementation via TDF SDK |
 | Waters MassLynx import | Stub + implementation |
-| Raman/IR support | Extend Spectrum hierarchy |
-| PyPI stable release | Graduate from TestPyPI |
-| Maven Central | Publish Java artifact publicly |
-| v1.0 API freeze | Stable release |
+| Raman/IR support | New Spectrum subclasses |
+| Streaming transport | MPEG-G Part 2 protocol |
+| v1.0 API freeze | After production feedback on provider architecture |
