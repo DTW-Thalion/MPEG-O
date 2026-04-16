@@ -1,0 +1,325 @@
+/*
+ * MPEG-O Java Implementation
+ * Copyright (C) 2026 DTW-Thalion
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+package com.dtwthalion.mpgo;
+
+import com.dtwthalion.mpgo.Enums.*;
+import com.dtwthalion.mpgo.hdf5.*;
+import com.dtwthalion.mpgo.protection.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * M34 acceptance criteria tests for encryption, signatures, key rotation,
+ * and anonymization.
+ */
+class ProtectionTest {
+
+    @TempDir
+    Path tempDir;
+
+    // ── Encryption ──────────────────────────────────────────────────
+
+    @Test
+    void encryptDecryptRoundTrip() {
+        byte[] key = EncryptionManager.testKey();
+        byte[] plaintext = "Hello, MPEG-O encryption!".getBytes();
+
+        EncryptionManager.EncryptResult result = EncryptionManager.encrypt(plaintext, key);
+        assertNotNull(result.ciphertext());
+        assertEquals(12, result.iv().length);
+        assertEquals(16, result.tag().length);
+
+        byte[] decrypted = EncryptionManager.decrypt(
+                result.ciphertext(), result.iv(), result.tag(), key);
+        assertArrayEquals(plaintext, decrypted);
+    }
+
+    @Test
+    void encryptDecryptChannel() {
+        byte[] key = EncryptionManager.testKey();
+        double[] data = { 100.5, 200.3, 300.1, 400.7, 500.9 };
+
+        EncryptionManager.EncryptResult result = EncryptionManager.encryptChannel(data, key);
+        assertNotNull(result.ciphertext());
+
+        double[] decrypted = EncryptionManager.decryptChannel(
+                result.ciphertext(), result.iv(), result.tag(), key, data.length);
+        assertArrayEquals(data, decrypted, 1e-15);
+    }
+
+    @Test
+    void wrongKeyFailsDecryption() {
+        byte[] key = EncryptionManager.testKey();
+        byte[] wrongKey = new byte[32];
+        Arrays.fill(wrongKey, (byte) 0x42);
+
+        byte[] plaintext = "secret data".getBytes();
+        EncryptionManager.EncryptResult result = EncryptionManager.encrypt(plaintext, key);
+
+        assertThrows(Exception.class, () ->
+                EncryptionManager.decrypt(result.ciphertext(), result.iv(), result.tag(), wrongKey));
+    }
+
+    @Test
+    void readEncryptedFixture() {
+        // Read the encrypted fixture and verify structure
+        String fixturePath = getFixturePath("mpgo/encrypted.mpgo");
+        try (Hdf5File f = Hdf5File.openReadOnly(fixturePath);
+             Hdf5Group root = f.rootGroup()) {
+            assertTrue(root.hasAttribute("encrypted"));
+            assertEquals("aes-256-gcm", root.readStringAttribute("encrypted"));
+        }
+    }
+
+    // ── Signatures ──────────────────────────────────────────────────
+
+    @Test
+    void signAndVerify() {
+        byte[] key = SignatureManager.testKey();
+        double[] data = { 1.0, 2.0, 3.0, 4.0, 5.0 };
+        byte[] canonical = SignatureManager.canonicalBytes(data);
+
+        String sig = SignatureManager.sign(canonical, key);
+        assertTrue(sig.startsWith("v2:"));
+        assertTrue(SignatureManager.verify(canonical, sig, key));
+
+        // Wrong data should not verify
+        double[] wrong = { 1.0, 2.0, 3.0, 4.0, 6.0 };
+        byte[] wrongCanonical = SignatureManager.canonicalBytes(wrong);
+        assertFalse(SignatureManager.verify(wrongCanonical, sig, key));
+    }
+
+    @Test
+    void v2SignatureFormat() {
+        byte[] key = SignatureManager.testKey();
+        byte[] data = { 0x01, 0x02, 0x03 };
+
+        String sig = SignatureManager.sign(data, key);
+        assertTrue(sig.startsWith("v2:"));
+
+        // The base64 part should decode to 32 bytes (HMAC-SHA256)
+        String b64 = sig.substring(3);
+        byte[] decoded = java.util.Base64.getDecoder().decode(b64);
+        assertEquals(32, decoded.length);
+    }
+
+    @Test
+    void canonicalBytesLittleEndian() {
+        double[] data = { 1.0 };
+        byte[] bytes = SignatureManager.canonicalBytes(data);
+        assertEquals(8, bytes.length);
+        // 1.0 in IEEE 754 LE = 00 00 00 00 00 00 F0 3F
+        assertEquals((byte) 0x00, bytes[0]);
+        assertEquals((byte) 0x3F, bytes[7]);
+        assertEquals((byte) 0xF0, bytes[6]);
+    }
+
+    @Test
+    void canonicalStringBytes() {
+        byte[] bytes = SignatureManager.canonicalStringBytes("test");
+        assertEquals(8, bytes.length); // 4 (length) + 4 (chars)
+        // Length prefix: 4 in LE = 04 00 00 00
+        assertEquals((byte) 0x04, bytes[0]);
+        assertEquals((byte) 0x00, bytes[1]);
+        // String bytes
+        assertEquals((byte) 't', bytes[4]);
+        assertEquals((byte) 'e', bytes[5]);
+    }
+
+    @Test
+    void readSignedFixture() {
+        String fixturePath = getFixturePath("mpgo/signed.mpgo");
+        try (Hdf5File f = Hdf5File.openReadOnly(fixturePath);
+             Hdf5Group root = f.rootGroup()) {
+            FeatureFlags flags = FeatureFlags.readFrom(root);
+            assertTrue(flags.has(FeatureFlags.OPT_DIGITAL_SIGNATURES));
+        }
+    }
+
+    // ── Key Rotation ────────────────────────────────────────────────
+
+    @Test
+    void keyWrapUnwrap() {
+        byte[] kek = EncryptionManager.testKey();
+        byte[] dek = new byte[32];
+        new java.security.SecureRandom().nextBytes(dek);
+
+        byte[] wrapped = EncryptionManager.wrapKey(dek, kek);
+        assertEquals(60, wrapped.length); // 32 cipher + 12 IV + 16 tag
+
+        byte[] unwrapped = EncryptionManager.unwrapKey(wrapped, kek);
+        assertArrayEquals(dek, unwrapped);
+    }
+
+    @Test
+    void keyRotationRoundTrip() {
+        String path = tempDir.resolve("key_rotation.mpgo").toString();
+        byte[] kek1 = new byte[32];
+        Arrays.fill(kek1, (byte) 0x11);
+        byte[] kek2 = new byte[32];
+        Arrays.fill(kek2, (byte) 0x22);
+
+        // Create with KEK-1
+        KeyRotationManager mgr = new KeyRotationManager();
+        mgr.enableEnvelopeEncryption(kek1, "kek-1");
+        byte[] originalDek = mgr.getDek().clone();
+
+        try (Hdf5File f = Hdf5File.create(path);
+             Hdf5Group root = f.rootGroup()) {
+            FeatureFlags.defaultCurrent()
+                    .with(FeatureFlags.OPT_KEY_ROTATION)
+                    .writeTo(root);
+            mgr.writeTo(root);
+        }
+
+        // Read back with KEK-1
+        try (Hdf5File f = Hdf5File.open(path);
+             Hdf5Group root = f.rootGroup()) {
+            KeyRotationManager readMgr = KeyRotationManager.readFrom(root, kek1);
+            assertArrayEquals(originalDek, readMgr.getDek());
+
+            // Rotate to KEK-2
+            readMgr.rotateKey(kek2, "kek-2");
+            readMgr.writeTo(root);
+        }
+
+        // Read with KEK-2
+        try (Hdf5File f = Hdf5File.openReadOnly(path);
+             Hdf5Group root = f.rootGroup()) {
+            KeyRotationManager readMgr2 = KeyRotationManager.readFrom(root, kek2);
+            assertArrayEquals(originalDek, readMgr2.getDek(),
+                    "DEK should survive rotation from KEK-1 to KEK-2");
+        }
+    }
+
+    // ── Anonymization ───────────────────────────────────────────────
+
+    @Test
+    void anonymizeSaavRedaction() {
+        String inputPath = tempDir.resolve("anon_input.mpgo").toString();
+        String outputPath = tempDir.resolve("anon_output.mpgo").toString();
+
+        // Create dataset with one SAAV identification
+        SpectrumIndex idx = new SpectrumIndex(3,
+                new long[]{0, 4, 8}, new int[]{4, 4, 4},
+                new double[]{0, 1, 2}, new int[]{1, 1, 1},
+                new int[]{1, 1, 1}, new double[]{0, 0, 0},
+                new int[]{0, 0, 0}, new double[]{100, 200, 300});
+        Map<String, double[]> ch = new LinkedHashMap<>();
+        ch.put("mz", new double[]{100,200,300,400, 150,250,350,450, 110,210,310,410});
+        ch.put("intensity", new double[]{10,20,30,40, 15,25,35,45, 11,21,31,41});
+
+        AcquisitionRun run = new AcquisitionRun("run_0001", AcquisitionMode.MS1_DDA,
+                idx, null, ch, List.of(), List.of(), null, 0);
+
+        List<Identification> idents = List.of(
+                Identification.of("run_0001", 1, "SAAV:p.Ala123Val", 0.9, List.of("MS2")),
+                Identification.of("run_0001", 0, "CHEBI:15377", 0.95, List.of("RT"))
+        );
+
+        try (SpectralDataset ds = SpectralDataset.create(inputPath, "Anon Test",
+                null, List.of(run), idents, List.of(), List.of())) {
+            Anonymizer.AnonymizationPolicy policy = new Anonymizer.AnonymizationPolicy(
+                    true, 0, false, 0.05, -1, -1, true);
+            Anonymizer.AnonymizationResult result = Anonymizer.anonymize(ds, outputPath, policy);
+
+            assertEquals(1, result.spectraRedacted());
+            assertEquals(1, result.metadataFieldsStripped());
+        }
+
+        // Verify anonymized file
+        try (SpectralDataset anon = SpectralDataset.open(outputPath)) {
+            assertEquals("", anon.title()); // metadata stripped
+            assertTrue(anon.featureFlags().has(FeatureFlags.OPT_ANONYMIZED));
+
+            AcquisitionRun anonRun = anon.msRuns().get("run_0001");
+            assertNotNull(anonRun);
+            // Spectrum 1 (SAAV) should be zeroed
+            double[] mz1 = anonRun.channelSlice("mz", 1);
+            for (double v : mz1) assertEquals(0.0, v, 1e-15);
+            // Spectrum 0 (non-SAAV) should be intact
+            double[] mz0 = anonRun.channelSlice("mz", 0);
+            assertEquals(100.0, mz0[0], 1e-10);
+        }
+    }
+
+    @Test
+    void anonymizeIntensityMasking() {
+        String inputPath = tempDir.resolve("mask_input.mpgo").toString();
+        String outputPath = tempDir.resolve("mask_output.mpgo").toString();
+
+        SpectrumIndex idx = new SpectrumIndex(1,
+                new long[]{0}, new int[]{10},
+                new double[]{0}, new int[]{1}, new int[]{1},
+                new double[]{0}, new int[]{0}, new double[]{1000});
+        Map<String, double[]> ch = new LinkedHashMap<>();
+        ch.put("mz", new double[]{100,200,300,400,500,600,700,800,900,1000});
+        ch.put("intensity", new double[]{1,2,3,4,5,6,7,8,9,10});
+
+        AcquisitionRun run = new AcquisitionRun("run", AcquisitionMode.MS1_DDA,
+                idx, null, ch, List.of(), List.of(), null, 0);
+
+        try (SpectralDataset ds = SpectralDataset.create(inputPath, "Mask",
+                null, List.of(run), List.of(), List.of(), List.of())) {
+            Anonymizer.AnonymizationPolicy policy = new Anonymizer.AnonymizationPolicy(
+                    false, 0.5, false, 0.05, -1, -1, false);
+            Anonymizer.AnonymizationResult result = Anonymizer.anonymize(ds, outputPath, policy);
+            assertTrue(result.intensitiesZeroed() > 0);
+        }
+
+        try (SpectralDataset anon = SpectralDataset.open(outputPath)) {
+            double[] intensity = anon.msRuns().get("run").channels().get("intensity");
+            // Values below 50th percentile (5.5) should be zeroed
+            long zeroCount = Arrays.stream(intensity).filter(v -> v == 0.0).count();
+            assertTrue(zeroCount > 0);
+        }
+    }
+
+    @Test
+    void anonymizeMzCoarsening() {
+        String inputPath = tempDir.resolve("coarse_input.mpgo").toString();
+        String outputPath = tempDir.resolve("coarse_output.mpgo").toString();
+
+        SpectrumIndex idx = new SpectrumIndex(1,
+                new long[]{0}, new int[]{3},
+                new double[]{0}, new int[]{1}, new int[]{1},
+                new double[]{0}, new int[]{0}, new double[]{100});
+        Map<String, double[]> ch = new LinkedHashMap<>();
+        ch.put("mz", new double[]{100.12345, 200.67891, 300.99999});
+        ch.put("intensity", new double[]{10, 20, 30});
+
+        AcquisitionRun run = new AcquisitionRun("run", AcquisitionMode.MS1_DDA,
+                idx, null, ch, List.of(), List.of(), null, 0);
+
+        try (SpectralDataset ds = SpectralDataset.create(inputPath, "Coarse",
+                null, List.of(run), List.of(), List.of(), List.of())) {
+            Anonymizer.AnonymizationPolicy policy = new Anonymizer.AnonymizationPolicy(
+                    false, 0, false, 0.05, 2, -1, false);
+            Anonymizer.AnonymizationResult result = Anonymizer.anonymize(ds, outputPath, policy);
+            assertTrue(result.mzValuesCoarsened() > 0);
+        }
+
+        try (SpectralDataset anon = SpectralDataset.open(outputPath)) {
+            double[] mz = anon.msRuns().get("run").channels().get("mz");
+            assertEquals(100.12, mz[0], 1e-10);
+            assertEquals(200.68, mz[1], 1e-10);
+            assertEquals(301.0, mz[2], 1e-10);
+        }
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────
+
+    private static String getFixturePath(String name) {
+        var url = ProtectionTest.class.getClassLoader().getResource(name);
+        if (url == null) throw new RuntimeException("Fixture not found: " + name);
+        return url.getFile();
+    }
+}
