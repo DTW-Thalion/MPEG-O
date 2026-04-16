@@ -14,6 +14,7 @@
 + (NSString *)featureDigitalSignatures       { return @"opt_digital_signatures"; }
 + (NSString *)featureCompoundPerRunProvenance { return @"compound_per_run_provenance"; }
 + (NSString *)featureCanonicalSignatures     { return @"opt_canonical_signatures"; }
++ (NSString *)featureKeyRotation             { return @"opt_key_rotation"; }
 
 + (NSString *)formatVersionForRoot:(MPGOHDF5Group *)root
 {

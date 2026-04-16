@@ -65,6 +65,23 @@
     return exists > 0;
 }
 
+- (BOOL)deleteChildNamed:(NSString *)name error:(NSError **)error
+{
+    [_file lockForWriting];
+    htri_t exists = H5Lexists(_gid, [name UTF8String], H5P_DEFAULT);
+    BOOL ok = YES;
+    if (exists > 0) {
+        herr_t s = H5Ldelete(_gid, [name UTF8String], H5P_DEFAULT);
+        if (s < 0) ok = NO;
+    }
+    [_file unlockForWriting];
+    if (!ok && error) {
+        *error = MPGOMakeError(MPGOErrorDatasetCreate,
+            @"H5Ldelete failed for '%@'", name);
+    }
+    return ok;
+}
+
 #pragma mark - Datasets
 
 - (MPGOHDF5Dataset *)createDatasetNamed:(NSString *)name
