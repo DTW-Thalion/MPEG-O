@@ -3,6 +3,7 @@
 [![MPGO CI](https://github.com/DTW-Thalion/MPEG-O/actions/workflows/ci.yml/badge.svg)](https://github.com/DTW-Thalion/MPEG-O/actions/workflows/ci.yml)
 [![License: LGPL v3 (core) / Apache-2.0 (import/export)](https://img.shields.io/badge/License-LGPL_v3_%2F_Apache--2.0-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+[![Java: 17+](https://img.shields.io/badge/java-17%2B-blue.svg)](https://www.java.com/)
 
 **MPEG-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS) and nuclear magnetic resonance (NMR) spectroscopy data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of analytical spectroscopy and spectrometry.
 
@@ -38,9 +39,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **v0.4.0 — Milestones 1–25, 27–29 complete, 836 assertions passing** | `objc/` |
-| **Python (`mpeg-o`)**     | **v0.4.0 — Cross-language parity with ObjC, 120 tests passing** | `python/` |
-| Java | v0.5.0 — Full feature parity (M31–M36). Maven + JDK 17. | `java/` |
+| **Objective-C (GNUstep)** | **v0.5.0 — Normative reference. 836 assertions passing.** | `objc/` |
+| **Python (`mpeg-o`)**     | **v0.5.0 — Full parity with ObjC and Java. 120 tests passing.** | `python/` |
+| **Java (`com.dtwthalion.mpgo`)** | **v0.5.0 — Full parity with ObjC and Python. 62 tests, JDK 17, Maven.** | `java/` |
 
 ### v0.1.0-alpha capabilities
 

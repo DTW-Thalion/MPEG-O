@@ -2,21 +2,29 @@
 
 MPEG-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data, specifically mass spectrometry and NMR spectroscopy.
 
-As of v0.3.0 there are two interoperable reference implementations:
+As of v0.5.0 there are three interoperable reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
   implementation. Every format guarantee in `docs/format-spec.md` is
-  rooted here. 730 tests passing across M1–M22.
+  rooted here. 836 assertions passing across M1–M30.
 - **Python (`mpeg-o` package)** (`python/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — a full reader/writer on top of
   `h5py` + `numpy` that mirrors the Objective-C class hierarchy
-  1-to-1. Cross-language parity is asserted at every milestone: the
-  Python reader opens every ObjC reference fixture, the Python
-  writer produces files the ObjC `MpgoVerify` CLI decodes without
+  1-to-1. 120 tests passing. Cross-language parity is asserted at
+  every milestone: the Python reader opens every ObjC reference
+  fixture, the Python writer produces files the ObjC `MpgoVerify`
+  CLI decodes without
   error, and `v2:` HMAC signatures plus Numpress-delta scale
   factors are byte-identical between the two.
+- **Java (`com.dtwthalion.mpgo`)** (`java/`, LGPL-3.0 core +
+  Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
+  mirroring the ObjC/Python class hierarchy. 62 tests passing.
+  Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
+  crypto dependency). HDF5 via system `libhdf5-java` bindings.
+  Three-way cross-implementation conformance verified at every
+  milestone via CI.
 
-Both implementations express the architecture in three layers:
+All three implementations express the architecture in three layers:
 
 1. **Layer 1 — Protocols**: capability interfaces
 2. **Layer 2 — Abstract base classes**: domain-agnostic primitives
