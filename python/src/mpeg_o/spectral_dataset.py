@@ -446,6 +446,17 @@ def _write_identifications(study: h5py.Group, records: list[Identification]) -> 
             "evidence_chain_json": json.dumps(r.evidence_chain),
         } for r in records
     ], fields)
+    # M37: emit @identifications_json mirror so Java (JHI5 1.10 cannot
+    # marshal compound-with-VL reads) can recover the full record set.
+    io.write_fixed_string_attr(study, "identifications_json", json.dumps([
+        {
+            "run_name": r.run_name,
+            "spectrum_index": int(r.spectrum_index),
+            "chemical_entity": r.chemical_entity,
+            "confidence_score": float(r.confidence_score),
+            "evidence_chain": list(r.evidence_chain),
+        } for r in records
+    ]))
 
 
 def _write_quantifications(study: h5py.Group, records: list[Quantification]) -> None:
@@ -463,6 +474,16 @@ def _write_quantifications(study: h5py.Group, records: list[Quantification]) -> 
             "normalization_method": r.normalization_method,
         } for r in records
     ], fields)
+    # M37: JSON mirror (see _write_identifications)
+    io.write_fixed_string_attr(study, "quantifications_json", json.dumps([
+        {
+            "chemical_entity": r.chemical_entity,
+            "sample_ref": r.sample_ref,
+            "abundance": float(r.abundance),
+            **({"normalization_method": r.normalization_method}
+               if r.normalization_method else {}),
+        } for r in records
+    ]))
 
 
 def _write_provenance(
@@ -487,6 +508,19 @@ def _write_provenance(
             "output_refs_json": json.dumps(r.output_refs),
         } for r in records
     ], fields)
+    # M37: JSON mirror. Only emitted for the top-level /study/provenance
+    # dataset; per-run provenance (§6.4) stays compound-only because the
+    # Java reader never descends into run-level compound datasets.
+    if dataset_name == "provenance":
+        io.write_fixed_string_attr(study, "provenance_json", json.dumps([
+            {
+                "timestamp_unix": int(r.timestamp_unix),
+                "software": r.software,
+                "parameters": r.parameters,
+                "input_refs": list(r.input_refs),
+                "output_refs": list(r.output_refs),
+            } for r in records
+        ]))
 
 
 # --------------------------------------------------------- JSON fallback ---

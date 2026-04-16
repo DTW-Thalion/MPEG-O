@@ -22,3 +22,6 @@ __pycache__/
 *.pyc
 python/dist/
 python/build/
+
+# Maven build output
+java/target/

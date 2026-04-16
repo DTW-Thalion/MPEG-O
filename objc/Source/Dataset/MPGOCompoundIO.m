@@ -90,6 +90,33 @@ static char *dupCString(NSString *s, NSMutableArray *retained)
     return (char *)[src UTF8String];
 }
 
+// M37: write a JSON-string attribute carrying the same array of
+// plist dicts as the compound dataset. Lets Java (JHI5 1.10 cannot
+// marshal compound-with-VL reads) recover the full record set.
+// Top-level dataset names only — per-run "steps" dataset does not
+// get a mirror (its parent group does not model this format-spec §6
+// attribute).
+static void writeJsonMirrorForDatasetNamed(MPGOHDF5Group *parent,
+                                             NSString *datasetName,
+                                             NSArray *plists)
+{
+    NSString *attrName = nil;
+    if ([datasetName isEqualToString:@"identifications"])
+        attrName = @"identifications_json";
+    else if ([datasetName isEqualToString:@"quantifications"])
+        attrName = @"quantifications_json";
+    else if ([datasetName isEqualToString:@"provenance"])
+        attrName = @"provenance_json";
+    else
+        return;
+
+    NSError *jerr = nil;
+    NSData *d = [NSJSONSerialization dataWithJSONObject:plists options:0 error:&jerr];
+    if (!d) return;
+    NSString *json = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
+    [parent setStringAttribute:attrName value:json error:NULL];
+}
+
 #pragma mark - Low-level write/read
 
 static BOOL writeCompoundDataset(hid_t group_id,
@@ -213,6 +240,11 @@ static BOOL readCompoundDataset(hid_t group_id,
     free(records);
     [retained removeAllObjects];
     [t close];
+    if (ok) {
+        NSMutableArray *plists = [NSMutableArray arrayWithCapacity:n];
+        for (MPGOIdentification *i in idents) [plists addObject:[i asPlist]];
+        writeJsonMirrorForDatasetNamed(parent, name, plists);
+    }
     return ok;
 }
 
@@ -304,6 +336,11 @@ static BOOL readCompoundDataset(hid_t group_id,
     free(records);
     [retained removeAllObjects];
     [t close];
+    if (ok) {
+        NSMutableArray *plists = [NSMutableArray arrayWithCapacity:n];
+        for (MPGOQuantification *q in quants) [plists addObject:[q asPlist]];
+        writeJsonMirrorForDatasetNamed(parent, name, plists);
+    }
     return ok;
 }
 
@@ -396,6 +433,11 @@ static BOOL readCompoundDataset(hid_t group_id,
     free(recs);
     [retained removeAllObjects];
     [t close];
+    if (ok) {
+        NSMutableArray *plists = [NSMutableArray arrayWithCapacity:n];
+        for (MPGOProvenanceRecord *r in records) [plists addObject:[r asPlist]];
+        writeJsonMirrorForDatasetNamed(parent, name, plists);
+    }
     return ok;
 }
 

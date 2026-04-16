@@ -384,6 +384,25 @@ class SpectralDatasetTest {
 
             AcquisitionRun run = ds.msRuns().values().iterator().next();
             assertTrue(run.spectrumCount() > 0);
+
+            // M37: fixture carries @identifications_json / @quantifications_json /
+            // @provenance_json mirror attributes, so Java recovers the VL-string
+            // fields with full fidelity via the JSON attribute path.
+            List<Identification> idents = ds.identifications();
+            assertEquals(10, idents.size());
+            assertEquals("run_0001", idents.get(0).runName());
+            assertEquals("CHEBI:15000", idents.get(0).chemicalEntity());
+            assertTrue(idents.get(0).evidenceChainJson().contains("MS:1002217"));
+
+            List<Quantification> quants = ds.quantifications();
+            assertEquals(5, quants.size());
+            assertEquals("CHEBI:15000", quants.get(0).chemicalEntity());
+            assertEquals("sample_A", quants.get(0).sampleRef());
+            assertEquals("median", quants.get(0).normalizationMethod());
+
+            assertEquals(2, ds.provenanceRecords().size());
+            assertNotNull(ds.provenanceRecords().get(0).software());
+            assertFalse(ds.provenanceRecords().get(0).software().isEmpty());
         }
     }
 
@@ -405,6 +424,172 @@ class SpectralDatasetTest {
             assertNotNull(nmrRun, "Expected an NMR run in nmr_1d.mpgo");
             assertEquals("1H", nmrRun.nucleusType());
             assertTrue(nmrRun.spectrometerFrequencyMHz() > 0);
+        }
+    }
+
+    // ── M37: Compound metadata round-trips ──────────────────────────
+
+    @Test
+    void identificationsRoundTrip() {
+        String path = tempDir.resolve("m37_ids.mpgo").toString();
+
+        List<Identification> idents = List.of(
+                Identification.of("run_A", 0, "CHEBI:15377", 0.95,
+                        List.of("MS2 match", "RT match")),
+                Identification.of("run_B", 3, "CHEBI:17234", 0.88,
+                        List.of("fragmentation pattern")),
+                Identification.of("run_A", 7, "HMDB:0001234", 0.72,
+                        List.of()));
+
+        try (SpectralDataset ds = SpectralDataset.create(path, "ids test", null,
+                List.of(), idents, List.of(), List.of())) {
+            assertNotNull(ds);
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            List<Identification> read = ds.identifications();
+            assertEquals(3, read.size(), "expected 3 identifications");
+
+            assertEquals("run_A", read.get(0).runName());
+            assertEquals(0, read.get(0).spectrumIndex());
+            assertEquals("CHEBI:15377", read.get(0).chemicalEntity());
+            assertEquals(0.95, read.get(0).confidenceScore(), 1e-12);
+            assertTrue(read.get(0).evidenceChainJson().contains("MS2 match"));
+            assertTrue(read.get(0).evidenceChainJson().contains("RT match"));
+
+            assertEquals("run_B", read.get(1).runName());
+            assertEquals(3, read.get(1).spectrumIndex());
+            assertEquals("CHEBI:17234", read.get(1).chemicalEntity());
+            assertEquals(0.88, read.get(1).confidenceScore(), 1e-12);
+
+            assertEquals("HMDB:0001234", read.get(2).chemicalEntity());
+            assertEquals(0.72, read.get(2).confidenceScore(), 1e-12);
+        }
+    }
+
+    @Test
+    void quantificationsRoundTrip() {
+        String path = tempDir.resolve("m37_quants.mpgo").toString();
+
+        List<Quantification> quants = List.of(
+                new Quantification("CHEBI:15377", "sample_A", 1234.5, "TIC"),
+                new Quantification("CHEBI:17234", "sample_A", 87.2, null),
+                new Quantification("HMDB:0001234", "sample_B", 4567.89, "median"));
+
+        try (SpectralDataset ds = SpectralDataset.create(path, "quants test", null,
+                List.of(), List.of(), quants, List.of())) {
+            assertNotNull(ds);
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            List<Quantification> read = ds.quantifications();
+            assertEquals(3, read.size());
+
+            assertEquals("CHEBI:15377", read.get(0).chemicalEntity());
+            assertEquals("sample_A", read.get(0).sampleRef());
+            assertEquals(1234.5, read.get(0).abundance(), 1e-12);
+            assertEquals("TIC", read.get(0).normalizationMethod());
+
+            assertEquals("CHEBI:17234", read.get(1).chemicalEntity());
+            // null or empty string both acceptable for unset normalization
+            String n1 = read.get(1).normalizationMethod();
+            assertTrue(n1 == null || n1.isEmpty(), "expected null/empty norm, got: " + n1);
+
+            assertEquals(4567.89, read.get(2).abundance(), 1e-12);
+            assertEquals("median", read.get(2).normalizationMethod());
+        }
+    }
+
+    @Test
+    void legacyJsonOnlyIdentificationsReadable() {
+        // Simulate v0.1/v0.2 file: only @identifications_json, no compound dataset.
+        String path = tempDir.resolve("legacy_json_ids.mpgo").toString();
+        try (Hdf5File f = Hdf5File.create(path);
+             Hdf5Group root = f.rootGroup()) {
+            FeatureFlags.defaultCurrent().writeTo(root);
+            try (Hdf5Group study = root.createGroup("study")) {
+                study.setStringAttribute("title", "legacy");
+                study.setStringAttribute("identifications_json",
+                        "[{\"run_name\":\"old_run\",\"spectrum_index\":5,"
+                        + "\"chemical_entity\":\"glucose\",\"confidence_score\":0.42,"
+                        + "\"evidence_chain\":[\"only match\"]}]");
+            }
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            List<Identification> idents = ds.identifications();
+            assertEquals(1, idents.size());
+            assertEquals("old_run", idents.get(0).runName());
+            assertEquals(5, idents.get(0).spectrumIndex());
+            assertEquals("glucose", idents.get(0).chemicalEntity());
+            assertEquals(0.42, idents.get(0).confidenceScore(), 1e-12);
+            assertTrue(idents.get(0).evidenceChainJson().contains("only match"));
+        }
+    }
+
+    @Test
+    void compoundOnlyRecoversPrimitives() {
+        // Simulate a Python/ObjC file with compound dataset but no JSON mirror:
+        // Java reads primitives via projection; VL strings decode as empty.
+        String path = tempDir.resolve("compound_only.mpgo").toString();
+
+        List<Identification> idents = List.of(
+                Identification.of("run_X", 42, "CHEBI:99999", 0.61, List.of("tag")));
+
+        try (SpectralDataset ds = SpectralDataset.create(path, "compound test",
+                null, List.of(), idents, List.of(), List.of())) {
+            assertNotNull(ds);
+        }
+
+        // Strip the JSON mirror to emulate a writer that only emits compound.
+        try (Hdf5File f = Hdf5File.open(path);
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study")) {
+            try {
+                hdf.hdf5lib.H5.H5Adelete(study.getGroupId(), "identifications_json");
+            } catch (hdf.hdf5lib.exceptions.HDF5LibraryException e) {
+                fail("could not strip mirror: " + e.getMessage());
+            }
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            List<Identification> read = ds.identifications();
+            assertEquals(1, read.size());
+            // Primitives recovered via compound projection:
+            assertEquals(42, read.get(0).spectrumIndex());
+            assertEquals(0.61, read.get(0).confidenceScore(), 1e-12);
+            // VL fields decode as empty (documented JHI5 1.10 limitation):
+            assertEquals("", read.get(0).runName());
+            assertEquals("", read.get(0).chemicalEntity());
+        }
+    }
+
+    @Test
+    void provenanceRoundTrip() {
+        String path = tempDir.resolve("m37_prov.mpgo").toString();
+
+        List<ProvenanceRecord> prov = List.of(
+                ProvenanceRecord.of("mpgo-java-test", Map.of("version", "0.6.0", "mode", "test"),
+                        List.of("input_a", "input_b"), List.of("output_x")),
+                ProvenanceRecord.of("tool-b", Map.of(), List.of(), List.of("final_out")));
+
+        try (SpectralDataset ds = SpectralDataset.create(path, "prov test", null,
+                List.of(), List.of(), List.of(), prov)) {
+            assertNotNull(ds);
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            List<ProvenanceRecord> read = ds.provenanceRecords();
+            assertEquals(2, read.size());
+
+            assertEquals("mpgo-java-test", read.get(0).software());
+            assertTrue(read.get(0).parametersJson().contains("0.6.0"));
+            assertTrue(read.get(0).inputRefsJson().contains("input_a"));
+            assertTrue(read.get(0).outputRefsJson().contains("output_x"));
+            assertTrue(read.get(0).timestampUnix() > 0);
+
+            assertEquals("tool-b", read.get(1).software());
+            assertTrue(read.get(1).outputRefsJson().contains("final_out"));
         }
     }
 

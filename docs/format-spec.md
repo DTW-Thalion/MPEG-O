@@ -485,6 +485,39 @@ A v0.2 reader recognizes a v0.1 file by the absence of
 All v0.1 files written by libMPGO v0.1.0-alpha are readable by v0.2.0
 code without modification.
 
+### 11.1 Compound JSON mirror (v0.6 / M37)
+
+All three writers (ObjC, Python, Java) emit the `*_json` string
+attribute <em>alongside</em> the `/study/{identifications,quantifications,provenance}`
+compound dataset. The attribute carries the same records as the
+compound, encoded as a JSON array of objects:
+
+```
+[{"run_name": "...", "spectrum_index": 0, "chemical_entity": "...",
+  "confidence_score": 0.95, "evidence_chain": ["..."]}, ...]
+```
+
+The mirror exists because the HDF5 Java binding JHI5 1.10.x (the
+version on current apt/homebrew HDF5 packages) cannot marshal
+variable-length-string fields out of a compound dataset: the JNI
+rejects any H5Dread whose mem-type contains `H5T_STRING` or
+`H5T_VLEN`. Java therefore prefers the JSON attribute on read and
+only falls back to primitive-field projection of the compound when
+the mirror is absent, which yields empty strings for every VL field.
+
+The mirror is <em>not</em> emitted for the per-run `<run>/provenance/steps`
+compound dataset (§6.4) — per-run provenance was added after the
+v0.2 attribute fallback and Java's reader does not descend into
+run-level compound metadata.
+
+Sealing (§10): encryption moves the compound dataset into
+`*_sealed` blobs; the sealing code deletes the matching `*_json`
+attribute so sealed files stay opaque without the key.
+
+A future release will remove the mirror once Java's HDF5 binding
+gains compound-with-VL read support, at which point every reader
+will go through the compound dataset directly.
+
 ---
 
 ## 12. Example `h5dump` output (minimal MS file)
