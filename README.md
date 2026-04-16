@@ -40,7 +40,7 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 |---|---|---|
 | **Objective-C (GNUstep)** | **v0.4.0 — Milestones 1–25, 27–29 complete, 836 assertions passing** | `objc/` |
 | **Python (`mpeg-o`)**     | **v0.4.0 — Cross-language parity with ObjC, 120 tests passing** | `python/` |
-| Java                      | Deferred to v0.5+ (hdf-java JNI build dependency) | `java/` |
+| Java | v0.5.0 — Full feature parity (M31–M36). Maven + JDK 17. | `java/` |
 
 ### v0.1.0-alpha capabilities
 
@@ -131,6 +131,16 @@ Run the Python test suite (requires libhdf5-dev + the `test` extra):
 cd python
 pip install -e '.[test,codecs]'
 pytest
+```
+
+### Building the Java implementation
+
+```bash
+# Prerequisites: JDK 17+, Maven 3.8+, libhdf5-dev, libhdf5-java, libhdf5-jni
+sudo apt-get install openjdk-17-jdk-headless maven libhdf5-dev libhdf5-java libhdf5-jni
+
+cd java
+mvn verify -B
 ```
 
 ## Building the Objective-C Reference Implementation

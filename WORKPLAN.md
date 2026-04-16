@@ -405,3 +405,16 @@ API, key rotation, ISA-Tab/JSON export, spectral anonymization, nmrML
 writer, Thermo RAW stub, release prep) are tracked in `HANDOFF.md`.
 
 Java implementation (M26) is deferred to v0.5+.
+
+---
+
+## v0.5.0 — Java Feature Parity (M31–M36)
+
+Milestones 31–36 are tracked in `HANDOFF.md`. Summary:
+
+- [x] **M31** Java CI + Maven scaffold + HDF5 wrappers (17 tests)
+- [x] **M32** Java core: primitives, runs, dataset, MSImage (26 tests)
+- [x] **M33** Java import/export: mzML, nmrML, ISA, Thermo stub (36 tests)
+- [x] **M34** Java protection: encrypt, sign, key rotation, anonymize (50 tests)
+- [x] **M35** Java advanced: thread safety, LZ4, Numpress-delta (62 tests)
+- [x] **M36** Three-way conformance + v0.5.0 release (62 tests)
