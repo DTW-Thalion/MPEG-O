@@ -1,0 +1,23 @@
+{
+  "_comment": "Non-authoritative default prevalence table for spectral anonymization (M28). Maps CHEBI IDs of common human metabolites to approximate population prevalence (fraction, 0.0-1.0). Metabolites with prevalence below a caller-specified threshold are candidates for suppression in the mask_rare_metabolites policy. This table is intentionally small and illustrative; production deployments should supply domain-specific tables.",
+  "CHEBI:15377": 1.0,
+  "CHEBI:17234": 0.98,
+  "CHEBI:15903": 0.95,
+  "CHEBI:16015": 0.92,
+  "CHEBI:15422": 0.90,
+  "CHEBI:16236": 0.88,
+  "CHEBI:15846": 0.85,
+  "CHEBI:16027": 0.80,
+  "CHEBI:16810": 0.75,
+  "CHEBI:17754": 0.70,
+  "CHEBI:18367": 0.60,
+  "CHEBI:27823": 0.50,
+  "CHEBI:16335": 0.35,
+  "CHEBI:28790": 0.20,
+  "CHEBI:17895": 0.10,
+  "CHEBI:15756": 0.05,
+  "CHEBI:28044": 0.02,
+  "CHEBI:16856": 0.01,
+  "CHEBI:29073": 0.005,
+  "CHEBI:30089": 0.001
+}

@@ -15,6 +15,7 @@
 + (NSString *)featureCompoundPerRunProvenance { return @"compound_per_run_provenance"; }
 + (NSString *)featureCanonicalSignatures     { return @"opt_canonical_signatures"; }
 + (NSString *)featureKeyRotation             { return @"opt_key_rotation"; }
++ (NSString *)featureAnonymized              { return @"opt_anonymized"; }
 
 + (NSString *)formatVersionForRoot:(MPGOHDF5Group *)root
 {
