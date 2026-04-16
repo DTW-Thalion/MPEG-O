@@ -11,6 +11,8 @@
 #import "ValueClasses/MPGOEncodingSpec.h"
 #import "ValueClasses/MPGOEnums.h"
 #import <unistd.h>
+#import <sys/stat.h>
+#import <stdlib.h>
 #import <math.h>
 
 static NSString *m29TempPath(NSString *suffix)
@@ -99,13 +101,62 @@ void testMilestone29(void)
         unlink([path fileSystemRepresentation]);
     }
 
-    // ---- Thermo RAW stub returns nil + error ----
+    // ---- Thermo RAW reader rejects missing input file (M38) ----
+    // M29 stub returned nil unconditionally; M38 replaced it with a real
+    // ThermoRawFileParser delegation that validates the input first.
     {
         NSError *err = nil;
-        id result = [MPGOThermoRawReader readFromFilePath:@"/tmp/fake.raw" error:&err];
-        PASS(result == nil, "M29: Thermo stub returns nil");
-        PASS(err != nil, "M29: Thermo stub populates NSError");
-        PASS([err.localizedDescription rangeOfString:@"not yet implemented"].location != NSNotFound,
-             "M29: Thermo error message mentions not-yet-implemented");
+        id result = [MPGOThermoRawReader readFromFilePath:
+                @"/tmp/definitely-does-not-exist-mpgo-m38.raw" error:&err];
+        PASS(result == nil, "M38: Thermo reader returns nil for missing file");
+        PASS(err != nil, "M38: Thermo reader populates NSError for missing file");
+    }
+
+    // ---- M38: end-to-end delegation via mock binary ----
+    {
+        NSFileManager *fm = [NSFileManager defaultManager];
+        NSString *cwd = [fm currentDirectoryPath];
+        NSString *fixtureAbs = [cwd stringByAppendingPathComponent:
+                                @"Tests/Fixtures/tiny.pwiz.1.1.mzML"];
+        if (![fm fileExistsAtPath:fixtureAbs]) {
+            fixtureAbs = [cwd stringByAppendingPathComponent:
+                         @"objc/Tests/Fixtures/tiny.pwiz.1.1.mzML"];
+        }
+
+        NSString *tmpDir = m29TempPath(@"thermodir");
+        [fm createDirectoryAtPath:tmpDir withIntermediateDirectories:YES
+                       attributes:nil error:NULL];
+
+        NSString *mockScript = [tmpDir stringByAppendingPathComponent:@"mock-parser"];
+        NSString *shellScript = [NSString stringWithFormat:
+            @"#!/usr/bin/env bash\n"
+            @"set -e\n"
+            @"while [ $# -gt 0 ]; do\n"
+            @"  case \"$1\" in\n"
+            @"    -i) in_path=\"$2\"; shift 2;;\n"
+            @"    -o) out_dir=\"$2\"; shift 2;;\n"
+            @"    -f) shift 2;;\n"
+            @"    *) shift;;\n"
+            @"  esac\n"
+            @"done\n"
+            @"base=$(basename \"$in_path\" .raw)\n"
+            @"cp %@ \"$out_dir/$base.mzML\"\n", fixtureAbs];
+        [shellScript writeToFile:mockScript atomically:YES
+                         encoding:NSUTF8StringEncoding error:NULL];
+        chmod([mockScript fileSystemRepresentation], 0755);
+
+        NSString *rawPath = [tmpDir stringByAppendingPathComponent:@"sample.raw"];
+        [@"fake raw bytes" writeToFile:rawPath atomically:YES
+                              encoding:NSUTF8StringEncoding error:NULL];
+
+        setenv("THERMORAWFILEPARSER", [mockScript fileSystemRepresentation], 1);
+        NSError *err = nil;
+        id result = [MPGOThermoRawReader readFromFilePath:rawPath error:&err];
+        unsetenv("THERMORAWFILEPARSER");
+
+        PASS(result != nil, "M38: Thermo reader returns dataset via mock binary");
+        PASS(err == nil, "M38: no error when mock binary succeeds");
+
+        [fm removeItemAtPath:tmpDir error:NULL];
     }
 }

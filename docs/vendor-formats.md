@@ -3,27 +3,63 @@
 This document covers the status and integration patterns for vendor-specific
 mass spectrometry and NMR data formats in MPEG-O.
 
-## Thermo .raw (v0.5+ — stub in v0.4)
+## Thermo .raw (v0.6+ — delegation to ThermoRawFileParser)
 
-**Status:** API stub defined; implementation deferred.
+**Status:** Implemented via delegation. No proprietary code ships
+with MPEG-O; the converter is resolved at runtime.
 
-Thermo Scientific `.raw` files are the most common proprietary MS format
-in proteomics and metabolomics. They are binary, undocumented, and can
-only be read via the **Thermo RawFileReader SDK** (free-as-in-beer
-license, Windows/.NET only) or community wrappers.
+Thermo Scientific `.raw` files are the most common proprietary MS
+format in proteomics and metabolomics. The format has no open spec;
+reading it requires Thermo's closed-source `RawFileReader` .NET
+assembly. The CompOmics team's [ThermoRawFileParser][trfp] wraps
+that assembly in a CLI that emits mzML / MGF / parquet. MPEG-O
+delegates to that CLI and parses the emitted mzML with its existing
+reader.
 
-**Integration path (v0.5+):**
+[trfp]: https://github.com/compomics/ThermoRawFileParser
 
-* **ObjC:** Link against a C wrapper around `ThermoFisher.CommonCore.RawFileReader`
-  (via Mono/.NET interop or a pre-built native bridge). The `MPGOThermoRawReader`
-  class defines the stable API.
-* **Python:** Use `pythonnet` to call the .NET SDK, or use the
-  `pymsfilereader` / `pyRawFileReader` community packages.
-* **Java:** JNI bridge to the .NET SDK via jni4net or similar.
+### Installation
 
-**Key data to extract:** scan headers (RT, MS level, polarity, precursor
-m/z/charge), profile or centroid m/z+intensity arrays, TIC/BPC
-chromatograms, instrument method metadata.
+| Method | Command | Notes |
+|---|---|---|
+| **Conda/Mamba** | `conda install -c bioconda thermorawfileparser` | Ships a self-contained build; no Mono needed. |
+| **BioContainers (Docker)** | `docker pull quay.io/biocontainers/thermorawfileparser:<tag>` | Bind-mount your `.raw` into the container. |
+| **Release tarball** | Download `ThermoRawFileParser.zip` from the [releases page][trfp-rel] | Requires Mono ≥ 6.x for the `.exe` build; the self-contained Linux build needs no extra runtime. |
+| **Nix** | `nix-shell -p thermorawfileparser` | |
+
+[trfp-rel]: https://github.com/compomics/ThermoRawFileParser/releases
+
+### Binary resolution (all three languages)
+
+1. Explicit argument (`thermorawfileparser=` in Python;
+   `ThermoRawReader.read(path, binPath)` in Java; env var for ObjC).
+2. `THERMORAWFILEPARSER` environment variable (absolute path).
+3. `ThermoRawFileParser` on `PATH` (.NET 8 self-contained build).
+4. `ThermoRawFileParser.exe` on `PATH` — invoked via `mono` if present.
+
+If none resolves, the importer raises a clear error that references
+this document. The input file is validated **before** the binary
+lookup, so missing-file errors surface even when the parser isn't
+installed.
+
+### Command invoked
+
+```
+<binary> -i <path/to/sample.raw> -o <tmpdir> -f 2
+```
+
+`-f 2` selects mzML output. The importer reads
+`<tmpdir>/<stem>.mzML` — or the first `*.mzML` in the temp dir if
+naming differs — via the existing mzML parser, then deletes the temp
+directory.
+
+### What is recovered
+
+Everything the mzML bridge preserves: scan headers (RT, MS level,
+polarity, precursor m/z + charge), profile or centroid m/z + intensity
+arrays, TIC/BPC chromatograms. Thermo-specific extended method
+metadata that the bridge drops is not carried into MPEG-O by this
+path — if that data is load-bearing, you will need a direct reader.
 
 ## Bruker TDF (v0.5+ — deferred)
 
