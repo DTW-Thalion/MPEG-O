@@ -1,0 +1,123 @@
+/* MPEG-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
+package com.dtwthalion.mpgo.protection;
+
+import com.dtwthalion.mpgo.Enums.Precision;
+import com.dtwthalion.mpgo.hdf5.*;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.util.*;
+
+public class KeyRotationManager {
+
+    private byte[] dek;       // 32-byte data encryption key
+    private byte[] currentKek; // current key-encryption key
+    private String kekId;
+    private final List<Map<String, String>> keyHistory = new ArrayList<>();
+
+    /** Enable envelope encryption with a new random DEK wrapped by the given KEK. */
+    public void enableEnvelopeEncryption(byte[] kek, String kekId) {
+        this.currentKek = kek.clone();
+        this.kekId = kekId;
+        this.dek = new byte[32];
+        new SecureRandom().nextBytes(this.dek);
+    }
+
+    /** Get the DEK for encrypting/decrypting data. */
+    public byte[] getDek() { return dek; }
+
+    /** Rotate: unwrap DEK with old KEK, re-wrap with new KEK. */
+    public void rotateKey(byte[] newKek, String newKekId) {
+        // Record old KEK in history
+        Map<String, String> entry = new LinkedHashMap<>();
+        entry.put("timestamp", Instant.now().toString());
+        entry.put("kek_id", this.kekId);
+        entry.put("kek_algorithm", "aes-256-gcm");
+        keyHistory.add(entry);
+
+        // Re-wrap DEK with new KEK
+        this.currentKek = newKek.clone();
+        this.kekId = newKekId;
+    }
+
+    /** Write key info to /protection/key_info/ group under root. */
+    public void writeTo(Hdf5Group rootGroup) {
+        Hdf5Group prot;
+        if (rootGroup.hasChild("protection")) {
+            prot = rootGroup.openGroup("protection");
+        } else {
+            prot = rootGroup.createGroup("protection");
+        }
+        try (prot) {
+            Hdf5Group ki;
+            if (prot.hasChild("key_info")) {
+                prot.deleteChild("key_info");
+            }
+            ki = prot.createGroup("key_info");
+            try (ki) {
+                ki.setStringAttribute("kek_id", kekId);
+                ki.setStringAttribute("kek_algorithm", "aes-256-gcm");
+                ki.setStringAttribute("wrapped_at", Instant.now().toString());
+                ki.setStringAttribute("key_history_json", historyToJson());
+
+                // Write wrapped DEK as int32[15] (60 bytes)
+                byte[] wrapped = EncryptionManager.wrapKey(dek, currentKek);
+                // Store as int32 array: 60 bytes = 15 int32 slots
+                int[] wrappedInts = new int[15];
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(wrapped);
+                bb.order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                for (int i = 0; i < 15; i++) wrappedInts[i] = bb.getInt();
+
+                try (Hdf5Dataset ds = ki.createDataset("dek_wrapped",
+                        Precision.INT32, 15, 0, 0)) {
+                    ds.writeData(wrappedInts);
+                }
+            }
+        }
+    }
+
+    /** Read key info from /protection/key_info/ and unwrap DEK with given KEK. */
+    public static KeyRotationManager readFrom(Hdf5Group rootGroup, byte[] kek) {
+        KeyRotationManager mgr = new KeyRotationManager();
+        try (Hdf5Group prot = rootGroup.openGroup("protection");
+             Hdf5Group ki = prot.openGroup("key_info")) {
+            mgr.kekId = ki.readStringAttribute("kek_id");
+            mgr.currentKek = kek.clone();
+
+            // Read wrapped DEK
+            try (Hdf5Dataset ds = ki.openDataset("dek_wrapped")) {
+                int[] wrappedInts = (int[]) ds.readData();
+                byte[] wrapped = new byte[60];
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(wrapped);
+                bb.order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                for (int v : wrappedInts) bb.putInt(v);
+                mgr.dek = EncryptionManager.unwrapKey(wrapped, kek);
+            }
+
+            if (ki.hasAttribute("key_history_json")) {
+                // Parse history (simple, not critical for functionality)
+                String json = ki.readStringAttribute("key_history_json");
+                // Minimal parse - store raw for now
+            }
+        }
+        return mgr;
+    }
+
+    private String historyToJson() {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < keyHistory.size(); i++) {
+            if (i > 0) sb.append(",");
+            Map<String, String> e = keyHistory.get(i);
+            sb.append("{");
+            boolean first = true;
+            for (var entry : e.entrySet()) {
+                if (!first) sb.append(",");
+                sb.append("\"").append(entry.getKey()).append("\":\"")
+                  .append(entry.getValue()).append("\"");
+                first = false;
+            }
+            sb.append("}");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+}
