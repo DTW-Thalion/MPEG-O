@@ -17,25 +17,39 @@
 
 ### From v0.4 planning (new)
 
-17. **Java: Maven** build system (standard in bioinformatics). Package `com.dtwthalion.mpgo`. 18. **HDF5-Java: `hdf-java`** (HDF Group JNI). Full read/write. 19. **Anonymization: broad scope** — proteomics + metabolomics + NMR. 20. **ISA output: both ISA-Tab and ISA-JSON.** 21. **PyPI: remain on TestPyPI** until v1.0. 22. **Vendor import: Thermo `.raw` first** (most used). Bruker TDF deferred.
+17. ~~**Java: Maven** build system~~ — **DEFERRED to v0.5+** (see M26 note below).
+18. ~~**HDF5-Java: `hdf-java`** (HDF Group JNI). Full read/write.~~ — deferred with M26.
+19. **Anonymization: broad scope** — proteomics + metabolomics + NMR.
+20. **ISA output: both ISA-Tab and ISA-JSON.**
+21. **PyPI: remain on TestPyPI** until v1.0.
+22. **Vendor import: Thermo `.raw` first** (most used). Bruker TDF deferred.
 
 ## Dependency Graph
 
 ```
-  M23 (Thread safety)  M24 (Chromatogram)  M26 (Java)
-       |                    |                   |
-       v                    v                   |
-  M25 (Key rotation)   M27 (ISA export)        |
-       |                    |                   |
-       v                    v                   |
-  M28 (Anonymization)  M29 (nmrML+stubs)       |
-       |                    |                   |
-       +--------+-----------+-------------------+
+  M23 (Thread safety)  M24 (Chromatogram)
+       |                    |
+       v                    v
+  M25 (Key rotation)   M27 (ISA export, two-lang)
+       |                    |
+       v                    v
+  M28 (Anonymization)  M29 (nmrML + Thermo stubs)
+       |                    |
+       +--------+-----------+
                 v
           M30 (v0.4.0)
 ```
 
-M23, M24, M26 start in parallel.
+**M26 (Java stream) is deferred to v0.5+.** Rationale: hdf-java's JNI
+layer (libhdf5_java) is not available in Ubuntu apt and must be built
+from HDF Group source against a matching libhdf5 version — a fragile,
+multi-hour setup that blocks the v0.4 release train. v0.4 ships as a
+two-language release (ObjC + Python) with Java deferred until we can
+either land a stable hdf-java build in CI or port to a pure-Java HDF5
+reader (jhdf has promise but lacks encryption-aware writes).
+
+M23 and M24 started in parallel at the top of v0.4; M27-M29 now
+proceed two-language.
 
 ---
 
@@ -71,31 +85,36 @@ Envelope encryption: DEK wraps data, KEK wraps DEK. Rotation re-wraps DEK withou
 
 ---
 
-## Milestone 26 — Java Implementation
+## Milestone 26 — Java Implementation — **DEFERRED to v0.5+**
 
-**License:** LGPL-3.0 (core), Apache-2.0 (importers/exporters)
+Originally planned as a full third-language port with hdf-java JNI. On
+inspection during v0.4 execution the `hdf-java` dependency proved
+prohibitive: libhdf5_java is not packaged for Ubuntu, must be built
+from HDF Group source against a matching libhdf5 minor version, and
+adds a fragile multi-hour step to both local dev and CI. Rather than
+ship a half-baked Java stream that doesn't satisfy the acceptance
+criteria ("all fixtures readable, cross-language parity, CI green"),
+the v0.4 train continues as a two-language release.
 
-Maven project under `java/`. Package `com.dtwthalion.mpgo`. JDK 17+. Uses `hdf-java` (HDF Group JNI) for HDF5, `javax.crypto` for AES-256-GCM and HMAC-SHA256, `javax.xml.parsers.SAXParser` for mzML/nmrML import, `java.util.Base64` for decoding. Java records for value types. AutoCloseable for file handles. Lazy-loading AcquisitionRun.
-
-**Structure:** `src/main/java/com/dtwthalion/mpgo/` with SignalArray, Spectrum hierarchy, AcquisitionRun, SpectralDataset, Identification, Quantification, ProvenanceRecord, FeatureFlags, Enums. Sub-packages: `hdf5/` (Hdf5File, Hdf5Group, Hdf5Dataset, Hdf5CompoundType, Hdf5IO), `protection/` (EncryptionManager, SignatureManager, KeyRotationManager, AccessPolicy), `importers/` (MzMLReader, NmrMLReader, CVTermMapper, Base64Decoder), `exporters/` (MzMLWriter). Tests under `src/test/` with CrossCompatTest reading ObjC/Python fixtures.
-
-**pom.xml:** hdf-java dependency, JUnit 5, maven.compiler.source/target=17. Surefire plugin with `-Djava.library.path` for native HDF5.
-
-**Acceptance:** `mvn package` produces jar. All fixtures readable. Round-trip verified. Java fixtures readable by ObjC and Python. Encryption, signature, key rotation cross-language parity. mzML import works. Chromatogram API works. CI: `mvn verify` green on JDK 17.
+Resumption options for v0.5+:
+  * Build libhdf5_java from source in CI (bulk of work is build-system).
+  * Port to **jhdf** (pure-Java HDF5 reader) and accept read-only Java
+    in v0.5 with write support deferred further.
+  * Use JNI only for the encryption path and keep the rest on jhdf.
 
 ---
 
-## Milestone 27 — ISA-Tab/JSON Export (All Three Languages)
+## Milestone 27 — ISA-Tab/JSON Export (Two Languages)
 
 **License:** Apache-2.0
 
-**ObjC:** `MPGOISAExporter` in `Export/`. **Python:** `mpeg_o.exporters.isa`. **Java:** `ISAExporter.java` in `exporters/`.
+**ObjC:** `MPGOISAExporter` in `Export/`. **Python:** `mpeg_o.exporters.isa`. Java stub tracked as v0.5+.
 
 Mapping: Dataset title -> Investigation title. `isaInvestigationId` -> Investigation ID. Each AcquisitionRun -> Study + Assay. InstrumentConfig -> Assay technology/platform. ProvenanceRecord chain -> Protocol REF. Identification -> result file refs. CVParam -> parameter values. Chromatograms -> derived data refs.
 
 **ISA-Tab output:** `i_investigation.txt`, `s_study.txt`, `a_assay_ms.txt`/`a_assay_nmr.txt` (UTF-8 TSV). **ISA-JSON:** single JSON file per ISA-JSON schema.
 
-**Acceptance:** Valid ISA-Tab and ISA-JSON from multi-run dataset. Validates with `isatools` (if available, skip otherwise). Metadata round-trip. Three languages produce structurally identical output.
+**Acceptance:** Valid ISA-Tab and ISA-JSON from multi-run dataset. Validates with `isatools` (if available, skip otherwise). Metadata round-trip. ObjC and Python produce structurally identical output.
 
 ---
 
@@ -131,9 +150,9 @@ Mapping: Dataset title -> Investigation title. `isaInvestigationId` -> Investiga
 
 ## Milestone 30 — v0.4.0 Release
 
-**Docs:** Update format-spec.md, feature-flags.md, README.md, ARCHITECTURE.md, WORKPLAN.md. New docs/vendor-formats.md. **CI:** Add java-test job (JDK 17, mvn verify) and cross-compat-3way job (ObjC<->Python<->Java fixture exchange). **Packages:** mpeg-o updated on TestPyPI. Java artifact to GitHub Packages. **Release:** `git tag -a v0.4.0 -m "MPEG-O v0.4.0: Java stream, thread safety, key rotation, chromatogram API, ISA-Tab/JSON export, spectral anonymization, nmrML writer"`
+**Docs:** Update format-spec.md, feature-flags.md, README.md, ARCHITECTURE.md, WORKPLAN.md. New docs/vendor-formats.md. **CI:** keeps the existing two-language matrix (ObjC + Python). The Java job originally planned for M30 rolls into v0.5+ along with M26. **Packages:** mpeg-o updated on TestPyPI. **Release:** `git tag -a v0.4.0 -m "MPEG-O v0.4.0: thread safety, chromatogram API, key rotation, ISA-Tab/JSON export, spectral anonymization, nmrML writer"`
 
-**Acceptance:** All three languages green. All fixtures cross-readable. v0.1/v0.2/v0.3 backward compat. TestPyPI updated. GitHub Packages artifact. CI all green. Tag pushed.
+**Acceptance:** ObjC and Python green. All fixtures cross-readable. v0.1/v0.2/v0.3 backward compat. TestPyPI updated. CI all green. Tag pushed.
 
 ---
 
@@ -141,24 +160,28 @@ Mapping: Dataset title -> Investigation title. `isaInvestigationId` -> Investiga
 
 **Inherited:** 1. HDF5 paths differ by install. 2. Testing.h vs ARC split. 3. Custom check:: target. 4. Runtime ABI detect. 5. -fblocks gnustep-2.0 only. 6. LF enforcement. 7. NSXMLParser needs libxml2. 8. h5py compound types must match format-spec. 9. Fixed test IVs for cross-language crypto. 10. Numpress relative error. 11. LZ4 filter runtime check.
 
-**New (v0.4):** 12. HDF5 thread-safe: check `H5is_library_threadsafe()` at runtime; may need source build. 13. hdf-java JNI: set `-Djava.library.path` to HDF5 native lib dir in surefire. 14. hdf-java API: static methods on `hdf.hdf5lib.H5`; wrap into OO. 15. javax.crypto HMAC: validate 32-byte key length. 16. Key rotation backward compat: detect envelope vs direct encryption by presence of `dek_wrapped`. 17. ISA-Tab: UTF-8 TSV; validate with isatools if available. 18. Anonymization prevalence table: bundled default is non-authoritative; document clearly. 19. Anonymization of encrypted files: requires decryption key from caller.
+**New (v0.4):** 12. HDF5 thread-safe: check `H5is_library_threadsafe()` at runtime; may need source build. 13. ~~hdf-java JNI~~ and 14. ~~hdf-java API~~: dropped with M26 deferral. 15. javax.crypto HMAC — not applicable in v0.4 (Java deferred). 16. Key rotation backward compat: detect envelope vs direct encryption by presence of `dek_wrapped`. 17. ISA-Tab: UTF-8 TSV; validate with isatools if available. 18. Anonymization prevalence table: bundled default is non-authoritative; document clearly. 19. Anonymization of encrypted files: requires decryption key from caller.
 
 ---
 
 ## Execution Checklist
 
 1. Tag v0.3.0 if needed.
-2. **M23:** Thread safety. **Pause.**
-3. **M24:** Chromatogram API. **Pause.**
-4. **M25:** Key rotation. **Pause.**
-5. **M26:** Java stream. **Pause.**
-6. **M27:** ISA-Tab/JSON export. **Pause.**
+2. **M23:** Thread safety. **DONE.**
+3. **M24:** Chromatogram API. **DONE.**
+4. **M25:** Key rotation. **DONE.**
+5. ~~**M26:** Java stream.~~ **DEFERRED to v0.5+.**
+6. **M27:** ISA-Tab/JSON export (ObjC + Python). **Pause.**
 7. **M28:** Spectral anonymization. **Pause.**
-8. **M29:** nmrML writer + Thermo stub. **Pause.**
+8. **M29:** nmrML writer + Thermo stub (ObjC + Python). **Pause.**
 9. **M30:** Docs, CI, packages, tag v0.4.0.
 
 **CI must be green before any milestone is complete.**
 
 ## Deferred to v0.5+
 
-Streaming transport (MPEG-G Part 2). Zarr backend. DuckDB query layer. Bruker TDF import. Waters MassLynx import. Raman/IR spectrum support. PyPI stable release. Maven Central. MPEG-G conformance suite. v1.0 API freeze.
+Java implementation (M26 — hdf-java/jhdf decision, Maven stream, JNI
+build in CI). Streaming transport (MPEG-G Part 2). Zarr backend.
+DuckDB query layer. Bruker TDF import. Waters MassLynx import.
+Raman/IR spectrum support. PyPI stable release. Maven Central.
+MPEG-G conformance suite. v1.0 API freeze.
