@@ -213,7 +213,7 @@ jobs:
         run: mvn verify -B
 
   cross-compat:
-    name: Cross-language parity (ObjC ⇄ Python)
+    name: Cross-language parity (ObjC ⇄ Python ⇄ Java)
     needs: [objc-build-test, python-test, java-test]
     runs-on: ubuntu-latest
 
@@ -328,3 +328,20 @@ jobs:
             tests/test_canonical_signatures.py \
             tests/test_compression_codecs.py \
             tests/test_per_run_provenance.py
+
+      - name: Install JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install HDF5 Java bindings
+        run: sudo apt-get install -y --no-install-recommends libhdf5-java libhdf5-jni
+
+      - name: Java reads ObjC fixtures
+        working-directory: java
+        run: mvn test -B -Dtest="SpectralDatasetTest#readMinimalMsFixture+readFullMsFixture+readNmr1dFixture"
+
+      - name: Java full test suite
+        working-directory: java
+        run: mvn verify -B

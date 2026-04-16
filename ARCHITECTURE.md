@@ -271,6 +271,49 @@ snake_case module names.
 | `MPGOCVTermMapper`               | `mpeg_o.importers.cv_term_mapper`         | `mpeg_o.importers.cv_term_mapper`   |
 | *(new in v0.3)*                  | `mpeg_o.remote` (fsspec URL dispatcher)   | `mpeg_o.remote`                     |
 
+---
+
+## Java Class Mapping (v0.5, M31–M35)
+
+| ObjC Class | Java Class | Package |
+|------------|-----------|---------|
+| `MPGOSignalArray` | `SignalArray` | `com.dtwthalion.mpgo` |
+| `MPGOSpectrum` | `Spectrum` | `com.dtwthalion.mpgo` |
+| `MPGOMassSpectrum` | `MassSpectrum` | `com.dtwthalion.mpgo` |
+| `MPGONMRSpectrum` | `NMRSpectrum` | `com.dtwthalion.mpgo` |
+| `MPGONMR2DSpectrum` | `NMR2DSpectrum` | `com.dtwthalion.mpgo` |
+| `MPGOFreeInductionDecay` | `FreeInductionDecay` | `com.dtwthalion.mpgo` |
+| `MPGOChromatogram` | `Chromatogram` | `com.dtwthalion.mpgo` |
+| `MPGOSpectrumIndex` | `SpectrumIndex` | `com.dtwthalion.mpgo` |
+| `MPGOAcquisitionRun` | `AcquisitionRun` | `com.dtwthalion.mpgo` |
+| `MPGOSpectralDataset` | `SpectralDataset` | `com.dtwthalion.mpgo` |
+| `MPGOMSImage` | `MSImage` | `com.dtwthalion.mpgo` |
+| `MPGOFeatureFlags` | `FeatureFlags` | `com.dtwthalion.mpgo` |
+| `MPGOIdentification` | `Identification` | `com.dtwthalion.mpgo` (record) |
+| `MPGOQuantification` | `Quantification` | `com.dtwthalion.mpgo` (record) |
+| `MPGOProvenanceRecord` | `ProvenanceRecord` | `com.dtwthalion.mpgo` (record) |
+| `MPGOEncryptionManager` | `EncryptionManager` | `com.dtwthalion.mpgo.protection` |
+| `MPGOSignatureManager` | `SignatureManager` | `com.dtwthalion.mpgo.protection` |
+| `MPGOKeyRotationManager` | `KeyRotationManager` | `com.dtwthalion.mpgo.protection` |
+| `MPGOAnonymizer` | `Anonymizer` | `com.dtwthalion.mpgo.protection` |
+| `MPGOMzMLReader` | `MzMLReader` | `com.dtwthalion.mpgo.importers` |
+| `MPGOMzMLWriter` | `MzMLWriter` | `com.dtwthalion.mpgo.exporters` |
+| `MPGONmrMLReader` | `NmrMLReader` | `com.dtwthalion.mpgo.importers` |
+| `MPGONmrMLWriter` | `NmrMLWriter` | `com.dtwthalion.mpgo.exporters` |
+| `MPGOISAExporter` | `ISAExporter` | `com.dtwthalion.mpgo.exporters` |
+| `MPGONumpress` | `NumpressCodec` | `com.dtwthalion.mpgo` |
+| `MPGOHDF5File` | `Hdf5File` | `com.dtwthalion.mpgo.hdf5` |
+| `MPGOHDF5Group` | `Hdf5Group` | `com.dtwthalion.mpgo.hdf5` |
+| `MPGOHDF5Dataset` | `Hdf5Dataset` | `com.dtwthalion.mpgo.hdf5` |
+
+Java uses `AutoCloseable` + try-with-resources instead of ObjC `-dealloc`. Thread
+safety via `ReentrantReadWriteLock` on `Hdf5File` (same model as ObjC's
+`pthread_rwlock_t`). Value types use Java records (JDK 17). Crypto via
+`javax.crypto` (no external dependency). Maven build with system HDF5 1.10
+bindings (`libhdf5-java`).
+
+---
+
 ### Key design idioms
 
 - **Frozen dataclasses** for immutable value types
