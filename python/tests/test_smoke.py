@@ -4,7 +4,7 @@ import mpeg_o
 
 def test_version_string() -> None:
     assert isinstance(mpeg_o.__version__, str)
-    assert mpeg_o.__version__.startswith("0.3.")
+    assert mpeg_o.__version__.startswith("0.4.")
 
 
 def test_format_version() -> None:

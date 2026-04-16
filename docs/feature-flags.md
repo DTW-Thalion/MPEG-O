@@ -63,10 +63,9 @@ documented here so implementers know what to expect.
 | LZ4                    | HDF5 filter id **32004**. Requires the LZ4 plugin to be loadable at runtime (`libh5lz4.so` on disk, `HDF5_PLUGIN_PATH` pointing at it). Lossless.     |
 | Numpress-delta         | Per-channel transform, **not** an HDF5 filter. The dataset stores `int64` first differences and the signal_channels group carries a `@<channel>_numpress_fixed_point` int64 attribute with the scaling factor. Lossy, sub-ppm relative error for typical m/z. |
 
-## v0.4+ reserved flags
+## v0.4 flags
 
-The following feature strings are reserved for planned work and
-must not be re-used for other purposes:
-
-- `opt_key_rotation` — envelope-style multi-key wrapping and
-  rotation metadata.
+| Flag                         | Required? | Since        | Semantics                                                                                          |
+|------------------------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
+| `opt_key_rotation`           | optional  | M25 (v0.4)   | Envelope encryption: a DEK wraps signal data, a KEK wraps the DEK. `/protection/key_info/` holds the 60-byte `dek_wrapped` dataset (32 cipher + 12 IV + 16 tag), `@kek_id`, `@kek_algorithm`, `@wrapped_at`, and `@key_history_json`. Rotation re-wraps without re-encrypting data. |
+| `opt_anonymized`             | optional  | M28 (v0.4)   | The file has been through the anonymization pipeline. A ProvenanceRecord documents which policies ran, how many spectra/values were affected, and the timestamp. |

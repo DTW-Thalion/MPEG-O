@@ -392,3 +392,16 @@ the full milestone history.
       for ROS3), `.github/workflows/ci.yml` (libhdf5 rebuild step),
       new `objc/Tests/TestCloudAccess.m` with an S3 mock harness.
 
+
+
+---
+
+## v0.3.0 and v0.4.0
+
+Milestones 16–22 (v0.3.0: Python package, compound per-run provenance,
+canonical signatures, mzML writer, cloud access, LZ4/Numpress codecs,
+release prep) and Milestones 23–30 (v0.4.0: thread safety, chromatogram
+API, key rotation, ISA-Tab/JSON export, spectral anonymization, nmrML
+writer, Thermo RAW stub, release prep) are tracked in `HANDOFF.md`.
+
+Java implementation (M26) is deferred to v0.5+.
