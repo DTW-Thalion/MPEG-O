@@ -171,7 +171,8 @@ public class Hdf5Dataset implements AutoCloseable {
             case FLOAT64 -> new double[n];
             case INT32, UINT32 -> new int[n];
             case INT64 -> new long[n];
-            case COMPLEX128 -> new byte[n * 16]; // should not reach here
+            case UINT8 -> new byte[n];
+            case COMPLEX128 -> new byte[n * 16];
         };
     }
 
