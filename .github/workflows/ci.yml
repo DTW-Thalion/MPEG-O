@@ -188,9 +188,33 @@ jobs:
         working-directory: python
         run: pytest -v --tb=short
 
+  java-test:
+    name: Java — build & test (Maven + JDK 17)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libhdf5-dev libhdf5-java libhdf5-jni
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build and test
+        working-directory: java
+        run: mvn verify -B
+
   cross-compat:
     name: Cross-language parity (ObjC ⇄ Python)
-    needs: [objc-build-test, python-test]
+    needs: [objc-build-test, python-test, java-test]
     runs-on: ubuntu-latest
 
     # Runs the Python test suite against a freshly-built Objective-C

@@ -1,0 +1,362 @@
+/*
+ * MPEG-O Java Implementation
+ * Copyright (C) 2026 DTW-Thalion
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+package com.dtwthalion.mpgo.hdf5;
+
+import com.dtwthalion.mpgo.Enums.Compression;
+import com.dtwthalion.mpgo.Enums.Precision;
+import hdf.hdf5lib.H5;
+import hdf.hdf5lib.HDF5Constants;
+import hdf.hdf5lib.exceptions.HDF5LibraryException;
+
+/**
+ * Thin wrapper around an HDF5 group handle. Created by
+ * {@link Hdf5File#rootGroup()} or by another group's
+ * {@link #createGroup}/{@link #openGroup}.
+ *
+ * <p>Non-owning: the parent file's lifetime is retained by every group
+ * derived from it. All public methods acquire the appropriate lock from
+ * the owning file.</p>
+ */
+public class Hdf5Group implements AutoCloseable {
+
+    private static final int LZ4_FILTER_ID = 32004;
+
+    private long groupId;
+    private final Hdf5File file;
+    private boolean closed;
+
+    Hdf5Group(long groupId, Hdf5File file) {
+        this.groupId = groupId;
+        this.file = file;
+        this.closed = false;
+    }
+
+    public long getGroupId() { return groupId; }
+    public Hdf5File owningFile() { return file; }
+
+    // ── Sub-groups ──────────────────────────────────────────────────
+
+    public Hdf5Group createGroup(String name) {
+        file.lockForWriting();
+        try {
+            long gid = H5.H5Gcreate(groupId, name,
+                    HDF5Constants.H5P_DEFAULT,
+                    HDF5Constants.H5P_DEFAULT,
+                    HDF5Constants.H5P_DEFAULT);
+            if (gid < 0) throw new Hdf5Errors.GroupCreateException(name);
+            return new Hdf5Group(gid, file);
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.GroupCreateException(name);
+        } finally {
+            file.unlockForWriting();
+        }
+    }
+
+    public Hdf5Group openGroup(String name) {
+        file.lockForReading();
+        try {
+            long gid = H5.H5Gopen(groupId, name, HDF5Constants.H5P_DEFAULT);
+            if (gid < 0) throw new Hdf5Errors.GroupOpenException(name);
+            return new Hdf5Group(gid, file);
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.GroupOpenException(name);
+        } finally {
+            file.unlockForReading();
+        }
+    }
+
+    public boolean hasChild(String name) {
+        file.lockForReading();
+        try {
+            return H5.H5Lexists(groupId, name, HDF5Constants.H5P_DEFAULT);
+        } catch (HDF5LibraryException e) {
+            return false;
+        } finally {
+            file.unlockForReading();
+        }
+    }
+
+    public void deleteChild(String name) {
+        file.lockForWriting();
+        try {
+            if (H5.H5Lexists(groupId, name, HDF5Constants.H5P_DEFAULT)) {
+                H5.H5Ldelete(groupId, name, HDF5Constants.H5P_DEFAULT);
+            }
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.DatasetCreateException(
+                    "H5Ldelete failed for '" + name + "'");
+        } finally {
+            file.unlockForWriting();
+        }
+    }
+
+    // ── Datasets ────────────────────────────────────────────────────
+
+    /**
+     * Create a 1-D dataset with zlib compression at the given level (0=none, 1-9).
+     */
+    public Hdf5Dataset createDataset(String name, Precision precision,
+                                     long length, long chunkSize,
+                                     int compressionLevel) {
+        return createDataset(name, precision, length, chunkSize,
+                Compression.ZLIB, compressionLevel);
+    }
+
+    /**
+     * Create a 1-D dataset with explicit compression choice.
+     */
+    public Hdf5Dataset createDataset(String name, Precision precision,
+                                     long length, long chunkSize,
+                                     Compression compression,
+                                     int compressionLevel) {
+        file.lockForWriting();
+        long space = -1, plist = -1, htype = -1, did = -1;
+        try {
+            long[] dims = { length };
+            space = H5.H5Screate_simple(1, dims, null);
+            if (space < 0) throw new Hdf5Errors.DatasetCreateException(
+                    "H5Screate_simple failed for '" + name + "'");
+
+            plist = H5.H5Pcreate(HDF5Constants.H5P_DATASET_CREATE);
+            if (plist < 0) throw new Hdf5Errors.DatasetCreateException(
+                    "H5Pcreate failed for '" + name + "'");
+
+            if (chunkSize > 0 && length > 0) {
+                long[] chunk = { Math.min(chunkSize, length) };
+                H5.H5Pset_chunk(plist, 1, chunk);
+                if (compression == Compression.ZLIB && compressionLevel > 0) {
+                    H5.H5Pset_deflate(plist, compressionLevel);
+                } else if (compression == Compression.LZ4) {
+                    if (H5.H5Zfilter_avail(LZ4_FILTER_ID) <= 0) {
+                        throw new Hdf5Errors.DatasetCreateException(
+                                "LZ4 filter (id 32004) is not available; " +
+                                "install the hdf5plugin package or set HDF5_PLUGIN_PATH");
+                    }
+                    H5.H5Pset_filter(plist, LZ4_FILTER_ID,
+                            HDF5Constants.H5Z_FLAG_MANDATORY, 0, null);
+                }
+            }
+
+            htype = hdf5TypeFor(precision);
+            did = H5.H5Dcreate(groupId, name, htype, space,
+                    HDF5Constants.H5P_DEFAULT, plist, HDF5Constants.H5P_DEFAULT);
+            if (did < 0) throw new Hdf5Errors.DatasetCreateException(
+                    "H5Dcreate2 failed for '" + name + "'");
+
+            return new Hdf5Dataset(did, precision, length, file);
+        } catch (HDF5LibraryException e) {
+            if (did >= 0) try { H5.H5Dclose(did); } catch (Exception ignored) {}
+            throw new Hdf5Errors.DatasetCreateException(
+                    "H5Dcreate failed for '" + name + "': " + e.getMessage());
+        } finally {
+            if (!precision.isBuiltin() && htype >= 0)
+                try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+            if (plist >= 0) try { H5.H5Pclose(plist); } catch (Exception ignored) {}
+            if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ignored) {}
+            file.unlockForWriting();
+        }
+    }
+
+    public Hdf5Dataset openDataset(String name) {
+        file.lockForReading();
+        try {
+            long did = H5.H5Dopen(groupId, name, HDF5Constants.H5P_DEFAULT);
+            if (did < 0) throw new Hdf5Errors.DatasetOpenException(name);
+
+            long space = H5.H5Dget_space(did);
+            long[] dims = new long[1];
+            H5.H5Sget_simple_extent_dims(space, dims, null);
+            H5.H5Sclose(space);
+
+            long htid = H5.H5Dget_type(did);
+            Precision precision = precisionFromType(htid);
+            H5.H5Tclose(htid);
+
+            return new Hdf5Dataset(did, precision, dims[0], file);
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.DatasetOpenException(name);
+        } finally {
+            file.unlockForReading();
+        }
+    }
+
+    // ── Attributes ──────────────────────────────────────────────────
+
+    public void setStringAttribute(String name, String value) {
+        file.lockForWriting();
+        long htype = -1, space = -1, aid = -1;
+        try {
+            byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            int len = Math.max(bytes.length, 1);
+
+            htype = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+            H5.H5Tset_size(htype, len);
+            H5.H5Tset_strpad(htype, HDF5Constants.H5T_STR_NULLTERM);
+
+            space = H5.H5Screate(HDF5Constants.H5S_SCALAR);
+
+            if (H5.H5Aexists(groupId, name)) {
+                H5.H5Adelete(groupId, name);
+            }
+
+            aid = H5.H5Acreate(groupId, name, htype, space,
+                    HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+            if (aid < 0) throw new Hdf5Errors.AttributeException(
+                    "H5Acreate2 failed for '" + name + "'");
+
+            // Write as byte array padded to type size
+            byte[] padded = new byte[len];
+            System.arraycopy(bytes, 0, padded, 0, Math.min(bytes.length, len));
+            H5.H5Awrite(aid, htype, padded);
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.AttributeException(
+                    "setStringAttribute failed for '" + name + "': " + e.getMessage());
+        } finally {
+            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ignored) {}
+            if (htype >= 0) try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+            file.unlockForWriting();
+        }
+    }
+
+    public String readStringAttribute(String name) {
+        file.lockForReading();
+        long aid = -1, htype = -1;
+        try {
+            if (!H5.H5Aexists(groupId, name)) {
+                throw new Hdf5Errors.AttributeException(
+                        "attribute '" + name + "' does not exist");
+            }
+            aid = H5.H5Aopen(groupId, name, HDF5Constants.H5P_DEFAULT);
+            if (aid < 0) throw new Hdf5Errors.AttributeException(
+                    "H5Aopen failed for '" + name + "'");
+
+            htype = H5.H5Aget_type(aid);
+            long size = H5.H5Tget_size(htype);
+
+            byte[] buf = new byte[(int) size];
+            H5.H5Aread(aid, htype, buf);
+
+            // Trim trailing nulls
+            int end = buf.length;
+            while (end > 0 && buf[end - 1] == 0) end--;
+            return new String(buf, 0, end, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.AttributeException(
+                    "readStringAttribute failed for '" + name + "': " + e.getMessage());
+        } finally {
+            if (htype >= 0) try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            file.unlockForReading();
+        }
+    }
+
+    public void setIntegerAttribute(String name, long value) {
+        file.lockForWriting();
+        long space = -1, aid = -1;
+        try {
+            space = H5.H5Screate(HDF5Constants.H5S_SCALAR);
+            if (H5.H5Aexists(groupId, name)) {
+                H5.H5Adelete(groupId, name);
+            }
+            aid = H5.H5Acreate(groupId, name, HDF5Constants.H5T_NATIVE_INT64,
+                    space, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+            if (aid < 0) throw new Hdf5Errors.AttributeException(
+                    "H5Acreate2 (int) failed for '" + name + "'");
+
+            long[] data = { value };
+            H5.H5Awrite(aid, HDF5Constants.H5T_NATIVE_INT64, data);
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.AttributeException(
+                    "setIntegerAttribute failed for '" + name + "': " + e.getMessage());
+        } finally {
+            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ignored) {}
+            file.unlockForWriting();
+        }
+    }
+
+    /**
+     * Read an integer attribute. Returns the value, or {@code defaultValue}
+     * if the attribute does not exist.
+     */
+    public long readIntegerAttribute(String name, long defaultValue) {
+        file.lockForReading();
+        long aid = -1;
+        try {
+            if (!H5.H5Aexists(groupId, name)) {
+                return defaultValue;
+            }
+            aid = H5.H5Aopen(groupId, name, HDF5Constants.H5P_DEFAULT);
+            if (aid < 0) return defaultValue;
+
+            long[] data = new long[1];
+            H5.H5Aread(aid, HDF5Constants.H5T_NATIVE_INT64, data);
+            return data[0];
+        } catch (HDF5LibraryException e) {
+            return defaultValue;
+        } finally {
+            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            file.unlockForReading();
+        }
+    }
+
+    public boolean hasAttribute(String name) {
+        file.lockForReading();
+        try {
+            return H5.H5Aexists(groupId, name);
+        } catch (HDF5LibraryException e) {
+            return false;
+        } finally {
+            file.unlockForReading();
+        }
+    }
+
+    @Override
+    public void close() {
+        if (closed) return;
+        try {
+            H5.H5Gclose(groupId);
+        } catch (HDF5LibraryException ignored) {}
+        closed = true;
+    }
+
+    // ── Internal helpers ────────────────────────────────────────────
+
+    /**
+     * Build the HDF5 type id for a given Precision. For COMPLEX128, creates
+     * a compound type {double re; double im;} — caller must close if not builtin.
+     */
+    static long hdf5TypeFor(Precision precision) throws HDF5LibraryException {
+        if (precision.isBuiltin()) {
+            return precision.nativeTypeId();
+        }
+        // COMPLEX128: compound {double re, double im}
+        long tid = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, 16);
+        H5.H5Tinsert(tid, "re", 0, HDF5Constants.H5T_NATIVE_DOUBLE);
+        H5.H5Tinsert(tid, "im", 8, HDF5Constants.H5T_NATIVE_DOUBLE);
+        return tid;
+    }
+
+    static Precision precisionFromType(long htid) throws HDF5LibraryException {
+        if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_FLOAT))
+            return Precision.FLOAT32;
+        if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_DOUBLE))
+            return Precision.FLOAT64;
+        if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_INT32))
+            return Precision.INT32;
+        if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_INT64))
+            return Precision.INT64;
+        if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT32))
+            return Precision.UINT32;
+        // Check for compound with size == 16 (complex128)
+        if ((int) H5.H5Tget_class(htid) == HDF5Constants.H5T_COMPOUND
+                && H5.H5Tget_size(htid) == 16) {
+            return Precision.COMPLEX128;
+        }
+        return Precision.FLOAT64; // fallback
+    }
+}
