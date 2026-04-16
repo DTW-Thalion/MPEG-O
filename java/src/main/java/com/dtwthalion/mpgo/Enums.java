@@ -16,24 +16,35 @@ public final class Enums {
     private Enums() {}
 
     public enum Precision {
-        FLOAT32(4, HDF5Constants.H5T_NATIVE_FLOAT),
-        FLOAT64(8, HDF5Constants.H5T_NATIVE_DOUBLE),
-        INT32(4, HDF5Constants.H5T_NATIVE_INT32),
-        INT64(8, HDF5Constants.H5T_NATIVE_INT64),
-        UINT32(4, HDF5Constants.H5T_NATIVE_UINT32),
-        COMPLEX128(16, -1); // compound type, built at runtime
+        INT32(4, HDF5Constants.H5T_NATIVE_INT32, 0),
+        FLOAT32(4, HDF5Constants.H5T_NATIVE_FLOAT, 1),
+        FLOAT64(8, HDF5Constants.H5T_NATIVE_DOUBLE, 2),
+        INT64(8, HDF5Constants.H5T_NATIVE_INT64, 3),
+        UINT32(4, HDF5Constants.H5T_NATIVE_UINT32, 4),
+        UINT8(1, -1, 5),          // raw bytes, no native HDF5 type
+        COMPLEX128(16, -1, 6);    // compound type, built at runtime
 
         private final int elementSize;
         private final long nativeTypeId;
+        private final int hdf5Value;
 
-        Precision(int elementSize, long nativeTypeId) {
+        Precision(int elementSize, long nativeTypeId, int hdf5Value) {
             this.elementSize = elementSize;
             this.nativeTypeId = nativeTypeId;
+            this.hdf5Value = hdf5Value;
         }
 
         public int elementSize() { return elementSize; }
         public long nativeTypeId() { return nativeTypeId; }
         public boolean isBuiltin() { return nativeTypeId >= 0; }
+        public int hdf5Value() { return hdf5Value; }
+
+        public static Precision fromHdf5Value(int v) {
+            for (Precision p : values()) {
+                if (p.hdf5Value == v) return p;
+            }
+            throw new IllegalArgumentException("Unknown HDF5 precision value: " + v);
+        }
     }
 
     public enum Compression {
