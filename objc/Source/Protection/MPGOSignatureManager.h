@@ -25,6 +25,12 @@
  *
  * All methods require a 32-byte HMAC key. Shorter keys are padded
  * internally by OpenSSL; callers should use a strong 256-bit secret.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.signatures
+ *   Java:   com.dtwthalion.mpgo.protection.SignatureManager
  */
 @interface MPGOSignatureManager : NSObject
 

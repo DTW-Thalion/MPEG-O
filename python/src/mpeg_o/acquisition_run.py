@@ -10,9 +10,10 @@ import h5py
 import numpy as np
 
 from . import _hdf5_io as io
+from .access_policy import AccessPolicy
 from .axis_descriptor import AxisDescriptor
 from .chromatogram import Chromatogram
-from .enums import AcquisitionMode, ChromatogramType, Polarity
+from .enums import AcquisitionMode, ChromatogramType, EncryptionLevel, Polarity
 from .instrument_config import InstrumentConfig
 from .mass_spectrum import MassSpectrum
 from .nmr_spectrum import NMRSpectrum
@@ -196,6 +197,8 @@ class AcquisitionRun:
     # M41.3: Streamable cursor and Provenanceable cache.
     _cursor: int = field(default=0, repr=False)
     _provenance_cache: list[ProvenanceRecord] | None = field(default=None, repr=False)
+    # M41.5: Encryptable conformance.
+    _access_policy: AccessPolicy | None = field(default=None, repr=False)
 
     @classmethod
     def open(cls, group: h5py.Group, name: str) -> "AcquisitionRun":
@@ -364,6 +367,38 @@ class AcquisitionRun:
                 if e not in seen:
                     seen.append(e)
         return seen
+
+    # ---- Encryptable conformance ----
+
+    def encrypt_with_key(self, key: bytes, level: EncryptionLevel) -> None:
+        """Encrypt this run's protectable content at the given granularity.
+
+        In the Python port, this requires a persistence context (not
+        yet exposed); callers use :mod:`mpeg_o.encryption` directly
+        for file-level operations.
+        """
+        raise NotImplementedError(
+            "AcquisitionRun.encrypt_with_key requires a persistence "
+            "context; use mpeg_o.encryption directly for file-level "
+            "operations")
+
+    def decrypt_with_key(self, key: bytes) -> None:
+        """Decrypt previously-encrypted content.
+
+        See :meth:`encrypt_with_key` for persistence-context
+        requirements.
+        """
+        raise NotImplementedError(
+            "AcquisitionRun.decrypt_with_key requires a persistence "
+            "context; use mpeg_o.encryption directly")
+
+    def access_policy(self) -> AccessPolicy | None:
+        """Return the current access policy, or ``None`` if not set."""
+        return self._access_policy
+
+    def set_access_policy(self, policy: AccessPolicy | None) -> None:
+        """Replace the current access policy."""
+        object.__setattr__(self, "_access_policy", policy)
 
     def _signal_dataset(self, channel: str) -> h5py.Dataset:
         ds = self._signal_cache.get(channel)

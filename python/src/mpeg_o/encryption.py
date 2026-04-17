@@ -15,6 +15,13 @@ Per-channel encrypted-signal-channel layout (see §5 of ``docs/format-spec.md``)
     @<channel>_ciphertext_bytes   int64  exact ciphertext length
     @<channel>_original_count     int64  original element count
     @<channel>_algorithm          string "AES-256-GCM"
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOEncryptionManager`` · Java:
+``com.dtwthalion.mpgo.protection.EncryptionManager``.
+
+API status: Stable.
 """
 from __future__ import annotations
 

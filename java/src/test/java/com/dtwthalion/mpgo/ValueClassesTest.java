@@ -306,4 +306,125 @@ class ValueClassesTest {
         assertEquals(new ValueRange(10.0, 20.0),
                      tl.transitionAtIndex(0).retentionTimeWindow());
     }
+
+    @Test
+    void accessPolicyHoldsMap() {
+        com.dtwthalion.mpgo.protection.AccessPolicy p =
+            new com.dtwthalion.mpgo.protection.AccessPolicy(
+                java.util.Map.of("subjects", java.util.List.of("alice"),
+                                 "key_id", "kek-1"));
+        assertEquals(java.util.List.of("alice"), p.policy().get("subjects"));
+        assertEquals("kek-1", p.policy().get("key_id"));
+
+        com.dtwthalion.mpgo.protection.AccessPolicy empty =
+            new com.dtwthalion.mpgo.protection.AccessPolicy(null);
+        assertTrue(empty.policy().isEmpty());
+    }
+
+    @Test
+    void verifierStatusWrapping() {
+        byte[] data = "hello, mpeg-o".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) '0');
+
+        // NOT_SIGNED
+        assertEquals(com.dtwthalion.mpgo.protection.Verifier.Status.NOT_SIGNED,
+            com.dtwthalion.mpgo.protection.Verifier.verify(data, null, key));
+        assertEquals(com.dtwthalion.mpgo.protection.Verifier.Status.NOT_SIGNED,
+            com.dtwthalion.mpgo.protection.Verifier.verify(data, "", key));
+
+        // VALID — sign with SignatureManager, then verify
+        String sig = com.dtwthalion.mpgo.protection.SignatureManager.sign(data, key);
+        assertEquals(com.dtwthalion.mpgo.protection.Verifier.Status.VALID,
+            com.dtwthalion.mpgo.protection.Verifier.verify(data, sig, key));
+
+        // INVALID — wrong key
+        byte[] wrongKey = new byte[32];
+        java.util.Arrays.fill(wrongKey, (byte) '1');
+        assertEquals(com.dtwthalion.mpgo.protection.Verifier.Status.INVALID,
+            com.dtwthalion.mpgo.protection.Verifier.verify(data, sig, wrongKey));
+    }
+
+    @Test
+    void anonymizationPolicyDefaults() {
+        com.dtwthalion.mpgo.protection.Anonymizer.AnonymizationPolicy p =
+            com.dtwthalion.mpgo.protection.Anonymizer.AnonymizationPolicy.defaults();
+        assertTrue(p.redactSaavSpectra());
+        assertEquals(0.0, p.maskIntensityBelowQuantile(), 1e-9);
+        assertEquals(-1, p.coarsenMzDecimals());
+    }
+
+    @Test
+    void encryptionRoundTrip() {
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) '0');
+        byte[] plaintext = "hello, mpeg-o encryption".getBytes(
+            java.nio.charset.StandardCharsets.UTF_8);
+
+        com.dtwthalion.mpgo.protection.EncryptionManager.EncryptResult r =
+            com.dtwthalion.mpgo.protection.EncryptionManager.encrypt(plaintext, key);
+        // decrypt(ciphertext, iv, tag, key)
+        byte[] recovered = com.dtwthalion.mpgo.protection.EncryptionManager.decrypt(
+            r.ciphertext(), r.iv(), r.tag(), key);
+        assertArrayEquals(plaintext, recovered);
+    }
+
+    @Test
+    void keyRotationManagerRoundTrip() {
+        com.dtwthalion.mpgo.protection.KeyRotationManager mgr =
+            new com.dtwthalion.mpgo.protection.KeyRotationManager();
+        byte[] kek = new byte[32];
+        java.util.Arrays.fill(kek, (byte) 'K');
+        mgr.enableEnvelopeEncryption(kek, "kek-1");
+        assertNotNull(mgr.getDek());
+        assertEquals(32, mgr.getDek().length);
+    }
+
+    @Test
+    void signatureRoundTrip() {
+        byte[] data = "hello, mpeg-o signatures".getBytes(
+            java.nio.charset.StandardCharsets.UTF_8);
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) '0');
+
+        String sig = com.dtwthalion.mpgo.protection.SignatureManager.sign(data, key);
+        assertTrue(com.dtwthalion.mpgo.protection.SignatureManager.verify(data, sig, key));
+
+        byte[] wrongKey = new byte[32];
+        java.util.Arrays.fill(wrongKey, (byte) '1');
+        assertFalse(com.dtwthalion.mpgo.protection.SignatureManager.verify(data, sig, wrongKey));
+    }
+
+    @Test
+    void acquisitionRunHasEncryptableSurface() {
+        SpectrumIndex idx = new SpectrumIndex(0,
+            new long[0], new int[0], new double[0], new int[0], new int[0],
+            new double[0], new int[0], new double[0]);
+        AcquisitionRun run = new AcquisitionRun("run0",
+            Enums.AcquisitionMode.MS1_DDA, idx, null, java.util.Map.of(),
+            java.util.List.of(), java.util.List.of(), null, 0);
+        assertTrue(run instanceof com.dtwthalion.mpgo.protocols.Encryptable);
+        assertNull(run.accessPolicy());
+        com.dtwthalion.mpgo.protection.AccessPolicy pol =
+            new com.dtwthalion.mpgo.protection.AccessPolicy(
+                java.util.Map.of("owner", "alice"));
+        run.setAccessPolicy(pol);
+        assertSame(pol, run.accessPolicy());
+    }
+
+    @Test
+    void spectralDatasetHasEncryptableSurface() {
+        // SpectralDataset construction is complex (opens an HDF5 file).
+        // Use class-level surface check.
+        java.util.Set<String> names = java.util.Arrays.stream(
+            SpectralDataset.class.getMethods())
+            .map(java.lang.reflect.Method::getName)
+            .collect(java.util.stream.Collectors.toSet());
+        assertTrue(names.contains("encryptWithKey"));
+        assertTrue(names.contains("decryptWithKey"));
+        assertTrue(names.contains("accessPolicy"));
+        assertTrue(names.contains("setAccessPolicy"));
+        assertTrue(com.dtwthalion.mpgo.protocols.Encryptable.class
+            .isAssignableFrom(SpectralDataset.class));
+    }
 }

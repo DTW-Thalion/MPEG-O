@@ -7,6 +7,21 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.*;
 
+/**
+ * Envelope encryption and key rotation for MPEG-O datasets.
+ *
+ * <p>A Data Encryption Key (DEK) encrypts signal payloads; a Key Encryption
+ * Key (KEK) wraps the DEK with AES-256-GCM. Rotation re-wraps the DEK
+ * under a new KEK without touching any signal dataset, so it is O(1) in
+ * file size.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOKeyRotationManager}, Python {@code mpeg_o.key_rotation}.</p>
+ *
+ * @since 0.6
+ */
 public class KeyRotationManager {
 
     private byte[] dek;       // 32-byte data encryption key

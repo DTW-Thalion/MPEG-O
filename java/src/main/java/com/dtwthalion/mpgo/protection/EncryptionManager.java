@@ -14,6 +14,13 @@ import javax.crypto.spec.SecretKeySpec;
  * AES-256-GCM encryption/decryption for MPEG-O datasets.
  *
  * <p>Key parameters: 32-byte key, 12-byte random IV, 128-bit (16-byte) authentication tag.
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOEncryptionManager}, Python {@code mpeg_o.encryption}.</p>
+ *
+ * @since 0.6
  */
 public final class EncryptionManager {
 

@@ -36,6 +36,7 @@ public class AcquisitionRun implements
         com.dtwthalion.mpgo.protocols.Indexable<Spectrum>,
         com.dtwthalion.mpgo.protocols.Streamable<Spectrum>,
         com.dtwthalion.mpgo.protocols.Provenanceable,
+        com.dtwthalion.mpgo.protocols.Encryptable,
         AutoCloseable {
 
     private static final int CHUNK_SIZE = 16384;
@@ -58,6 +59,8 @@ public class AcquisitionRun implements
     // M41.3: Streamable cursor and Provenanceable cache.
     private int cursor = 0;
     private java.util.List<ProvenanceRecord> provenanceCache;
+    // M41.5: Encryptable conformance.
+    private com.dtwthalion.mpgo.protection.AccessPolicy accessPolicy;
 
     public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
                           SpectrumIndex spectrumIndex,
@@ -202,6 +205,30 @@ public class AcquisitionRun implements
             provenanceCache = new java.util.ArrayList<>(provenanceRecords);
         }
         return provenanceCache;
+    }
+
+    // ---- Encryptable conformance ----
+
+    @Override
+    public void encryptWithKey(byte[] key, com.dtwthalion.mpgo.Enums.EncryptionLevel level) {
+        throw new UnsupportedOperationException(
+            "AcquisitionRun.encryptWithKey requires a persistence " +
+            "context; use com.dtwthalion.mpgo.protection.EncryptionManager " +
+            "directly for file-level operations");
+    }
+
+    @Override
+    public void decryptWithKey(byte[] key) {
+        throw new UnsupportedOperationException(
+            "AcquisitionRun.decryptWithKey requires a persistence context");
+    }
+
+    @Override
+    public Object accessPolicy() { return accessPolicy; }
+
+    @Override
+    public void setAccessPolicy(Object policy) {
+        this.accessPolicy = (com.dtwthalion.mpgo.protection.AccessPolicy) policy;
     }
 
     // ── HDF5 I/O ────────────────────────────────────────────────────

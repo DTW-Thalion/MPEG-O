@@ -35,6 +35,12 @@
  *   [mgr rotateToKEK:kek2 kekId:@"kek-2" oldKEK:kek1 error:&err];
  *   // Later still, read:
  *   NSData *recovered = [mgr unwrapDEKWithKEK:kek2 error:&err];
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.key_rotation
+ *   Java:   com.dtwthalion.mpgo.protection.KeyRotationManager
  */
 @interface MPGOKeyRotationManager : NSObject
 

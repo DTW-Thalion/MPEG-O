@@ -22,6 +22,12 @@
  * so callers don't need to thread an open MPGOHDF5File handle through.
  * They open the file in read-write mode, mutate the dataset structure,
  * and close it.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.encryption
+ *   Java:   com.dtwthalion.mpgo.protection.EncryptionManager
  */
 @interface MPGOEncryptionManager : NSObject
 

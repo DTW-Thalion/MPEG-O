@@ -22,7 +22,9 @@ import numpy as np
 
 from . import _hdf5_io as io
 from ._rwlock import RWLock
+from .access_policy import AccessPolicy
 from .acquisition_run import AcquisitionRun
+from .enums import EncryptionLevel
 from .feature_flags import FeatureFlags
 from .identification import Identification
 from .providers import StorageProvider, open_provider
@@ -91,6 +93,8 @@ class SpectralDataset:
     # protocol; it is the provider's native handle when ``provider`` is
     # set. New call sites should reach for ``provider.root_group()`` or
     # ``provider.native_handle()`` instead of ``file`` directly.
+    # M41.5: Encryptable conformance.
+    _access_policy: AccessPolicy | None = field(default=None, repr=False)
 
     # ------------------------------------------------------------- lifecycle
 
@@ -316,6 +320,33 @@ class SpectralDataset:
                 return out
             blob = io.read_string_attr(study, "provenance_json", default="")
             return _decode_provenance_json(blob) if blob else []
+
+    # ---- Encryptable conformance ----
+
+    def encrypt_with_key(self, key: bytes, level: EncryptionLevel) -> None:
+        """Encrypt this dataset's protectable content at the given
+        granularity.
+
+        Requires a persistence context (not yet exposed in Python);
+        use :mod:`mpeg_o.encryption` directly for file-level
+        operations.
+        """
+        raise NotImplementedError(
+            "SpectralDataset.encrypt_with_key requires a persistence "
+            "context; use mpeg_o.encryption directly")
+
+    def decrypt_with_key(self, key: bytes) -> None:
+        raise NotImplementedError(
+            "SpectralDataset.decrypt_with_key requires a persistence "
+            "context; use mpeg_o.encryption directly")
+
+    def access_policy(self) -> AccessPolicy | None:
+        """Return the current access policy, or ``None`` if not set."""
+        return self._access_policy
+
+    def set_access_policy(self, policy: AccessPolicy | None) -> None:
+        """Replace the current access policy."""
+        object.__setattr__(self, "_access_policy", policy)
 
     # ---------------------------------------------------------------- writer
 
