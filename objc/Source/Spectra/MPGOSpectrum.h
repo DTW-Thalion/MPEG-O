@@ -19,6 +19,12 @@
  * HDF5 representation: each spectrum is an HDF5 group whose immediate
  * children are MPGOSignalArray sub-groups (one per named array) plus
  * scalar attributes for the metadata fields.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.spectrum.Spectrum
+ *   Java:   com.dtwthalion.mpgo.Spectrum
  */
 @interface MPGOSpectrum : NSObject
 

@@ -73,11 +73,15 @@ class ImportResult:
         """
         from ..chromatogram import Chromatogram
         from ..enums import ChromatogramType
+        from ..signal_array import SignalArray
 
         chrom_objs = [
             Chromatogram(
-                retention_times=c.retention_times,
-                intensities=c.intensities,
+                signal_arrays={
+                    "time": SignalArray(data=c.retention_times),
+                    "intensity": SignalArray(data=c.intensities),
+                },
+                axes=[],
                 chromatogram_type=ChromatogramType(c.chromatogram_type),
                 target_mz=c.target_mz,
                 precursor_mz=c.precursor_mz,

@@ -15,6 +15,13 @@ interoperable with the Objective-C reference implementation by
 construction: both sides use the same scale computation, the same
 rounding rule, and the same delta pass.
 
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGONumpress`` · Java:
+``com.dtwthalion.mpgo.NumpressCodec``.
+
+API status: Stable.
+
 SPDX-License-Identifier: LGPL-3.0-or-later
 """
 from __future__ import annotations

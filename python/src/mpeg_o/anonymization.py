@@ -137,7 +137,7 @@ def anonymize(
         for out_i, src_i in enumerate(kept_indices):
             spec = run[int(src_i)]
             for c in run.channel_names:
-                arr = spec.channels[c].data.copy()
+                arr = spec.signal_arrays[c].data.copy()
 
                 if c == "mz" and policy.coarsen_mz_decimals is not None:
                     arr = np.round(arr, policy.coarsen_mz_decimals)
@@ -163,15 +163,15 @@ def anonymize(
 
                 channel_buffers[c].append(arr)
 
-            n_pts = int(spec.channels[run.channel_names[0]].data.shape[0])
+            n_pts = int(spec.signal_arrays[run.channel_names[0]].data.shape[0])
             offsets[out_i] = cursor
             lengths[out_i] = n_pts
-            rts[out_i] = float(spec.retention_time)
+            rts[out_i] = float(spec.scan_time_seconds)
             mls[out_i] = int(spec.ms_level)
             pols[out_i] = int(spec.polarity)
             pmzs[out_i] = float(spec.precursor_mz)
             pcs[out_i] = int(spec.precursor_charge)
-            bps[out_i] = float(spec.base_peak_intensity)
+            bps[out_i] = float(run.index.base_peak_intensities[src_i])
             cursor += n_pts
 
         channel_data = {

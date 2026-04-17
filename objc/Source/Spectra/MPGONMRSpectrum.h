@@ -26,4 +26,10 @@
 
 @end
 
+/*
+ * Cross-language equivalents:
+ *   Java:   com.dtwthalion.mpgo.NMRSpectrum
+ *   Python: mpeg_o.nmr_spectrum.NMRSpectrum
+ */
+
 #endif

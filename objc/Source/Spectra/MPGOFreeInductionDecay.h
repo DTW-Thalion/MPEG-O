@@ -10,6 +10,10 @@
  *
  * Length is the number of complex points (i.e. half the number of
  * doubles in the buffer).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.fid.FreeInductionDecay
+ *   Java:   com.dtwthalion.mpgo.FreeInductionDecay
  */
 @interface MPGOFreeInductionDecay : MPGOSignalArray
 

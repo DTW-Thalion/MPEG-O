@@ -24,6 +24,12 @@
  * byte-identical between the MPGO Objective-C and Python
  * implementations by construction: both sides use the same scale
  * computation, the same rounding rule, and the same delta pass.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o._numpress
+ *   Java:   com.dtwthalion.mpgo.NumpressCodec
  */
 @interface MPGONumpress : NSObject
 

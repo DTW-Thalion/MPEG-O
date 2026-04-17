@@ -6,14 +6,33 @@
 package com.dtwthalion.mpgo;
 
 import com.dtwthalion.mpgo.Enums.*;
+import com.dtwthalion.mpgo.protocols.CVAnnotatable;
 import java.util.*;
 
-public class SignalArray {
+/**
+ * The atomic unit of measured signal in MPEG-O. A {@code SignalArray} is a
+ * typed numeric buffer with an encoding spec, an optional axis descriptor,
+ * and an arbitrary number of CV annotations.
+ *
+ * <p>CV annotations are mutable: use {@link #addCvParam}, {@link #removeCvParam},
+ * and the query methods from {@link CVAnnotatable}. The {@link #cvParams()}
+ * accessor returns an unmodifiable view; mutate only through the
+ * {@code CVAnnotatable} methods.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b><br>
+ * Python: {@code mpeg_o.signal_array.SignalArray}<br>
+ * Objective-C: {@code MPGOSignalArray}</p>
+ *
+ * @since 0.6
+ */
+public class SignalArray implements CVAnnotatable {
     private final Object buffer;  // float[], double[], int[], long[], or byte[]
     private final int length;
     private final EncodingSpec encoding;
     private final AxisDescriptor axis;      // nullable
-    private final List<CVParam> cvParams;   // empty if none
+    private final ArrayList<CVParam> cvParams;
 
     public SignalArray(Object buffer, int length, EncodingSpec encoding,
                        AxisDescriptor axis, List<CVParam> cvParams) {
@@ -21,27 +40,40 @@ public class SignalArray {
         this.length = length;
         this.encoding = encoding;
         this.axis = axis;
-        this.cvParams = cvParams != null ? List.copyOf(cvParams) : List.of();
+        this.cvParams = cvParams != null
+            ? new ArrayList<>(cvParams)
+            : new ArrayList<>();
     }
 
-    // Convenience: create from double[]
+    // ------------------------------------------------------------------
+    // Convenience constructors
+    // ------------------------------------------------------------------
+
+    /** Create from {@code double[]} with default FLOAT64/ZLIB/LE encoding. */
     public static SignalArray ofDoubles(double[] data) {
         return new SignalArray(data, data.length,
             new EncodingSpec(Precision.FLOAT64, Compression.ZLIB, ByteOrder.LITTLE_ENDIAN),
             null, null);
     }
 
+    /** Create from {@code float[]} with default FLOAT32/ZLIB/LE encoding. */
     public static SignalArray ofFloats(float[] data) {
         return new SignalArray(data, data.length,
             new EncodingSpec(Precision.FLOAT32, Compression.ZLIB, ByteOrder.LITTLE_ENDIAN),
             null, null);
     }
 
+    // ------------------------------------------------------------------
+    // Accessors
+    // ------------------------------------------------------------------
+
     public Object buffer() { return buffer; }
     public int length() { return length; }
     public EncodingSpec encoding() { return encoding; }
     public AxisDescriptor axis() { return axis; }
-    public List<CVParam> cvParams() { return cvParams; }
+
+    /** @return an unmodifiable view of the CV annotations list. */
+    public List<CVParam> cvParams() { return Collections.unmodifiableList(cvParams); }
 
     public double[] asDoubles() {
         if (buffer instanceof double[] d) return d;
@@ -61,5 +93,56 @@ public class SignalArray {
     public long[] asLongs() {
         if (buffer instanceof long[] l) return l;
         throw new ClassCastException("buffer is not long[]");
+    }
+
+    // ------------------------------------------------------------------
+    // CVAnnotatable
+    // ------------------------------------------------------------------
+
+    /** {@inheritDoc} */
+    @Override
+    public void addCvParam(CVParam param) {
+        cvParams.add(param);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void removeCvParam(CVParam param) {
+        cvParams.remove(param);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<CVParam> allCvParams() {
+        return Collections.unmodifiableList(cvParams);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<CVParam> cvParamsForAccession(String accession) {
+        List<CVParam> result = new ArrayList<>();
+        for (CVParam p : cvParams) {
+            if (accession.equals(p.accession())) result.add(p);
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<CVParam> cvParamsForOntologyRef(String ontologyRef) {
+        List<CVParam> result = new ArrayList<>();
+        for (CVParam p : cvParams) {
+            if (ontologyRef.equals(p.ontologyRef())) result.add(p);
+        }
+        return Collections.unmodifiableList(result);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean hasCvParamWithAccession(String accession) {
+        for (CVParam p : cvParams) {
+            if (accession.equals(p.accession())) return true;
+        }
+        return false;
     }
 }

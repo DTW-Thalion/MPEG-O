@@ -16,19 +16,15 @@ def _make_spectrum() -> NMRSpectrum:
     cs = np.array([0.5, 1.5, 2.5, 3.5], dtype=np.float64)
     it = np.array([10.0, 20.0, 30.0, 20.0], dtype=np.float64)
     return NMRSpectrum(
-        channels={
+        signal_arrays={
             "chemical_shift": SignalArray.from_numpy(cs, axis=AxisDescriptor(name="chemical_shift", unit="ppm")),
             "intensity": SignalArray.from_numpy(it, axis=AxisDescriptor(name="intensity", unit="counts")),
         },
-        nucleus="1H",
-        retention_time=0.0,
-        ms_level=0,
-        polarity=0,
+        nucleus_type="1H",
+        scan_time_seconds=0.0,
         precursor_mz=0.0,
         precursor_charge=0,
-        base_peak_intensity=30.0,
-        index=0,
-        run_name="",
+        index_position=0,
     )
 
 

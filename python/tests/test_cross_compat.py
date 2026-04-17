@@ -99,8 +99,8 @@ def test_python_reads_every_objc_fixture(
             first = run[0]
             if isinstance(first, MassSpectrum):
                 assert first.mz_array.data.dtype == np.float64
-            assert first.index == 0
-            assert first.run_name == run_name
+            assert first.index_position == 0
+            assert run.name == run_name
 
 
 def test_python_reads_full_ms_compound_counts_match_readme() -> None:

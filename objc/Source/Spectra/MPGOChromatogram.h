@@ -10,6 +10,10 @@
  * Chromatogram: time-vs-intensity trace, with TIC, XIC, or SRM type.
  * For XIC the targetMz field is meaningful; for SRM the precursorMz +
  * productMz fields apply (transition); both are zero for TIC.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.chromatogram.Chromatogram
+ *   Java:   com.dtwthalion.mpgo.Chromatogram
  */
 @interface MPGOChromatogram : MPGOSpectrum
 
