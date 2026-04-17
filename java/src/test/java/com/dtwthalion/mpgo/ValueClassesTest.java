@@ -10,6 +10,7 @@ import com.dtwthalion.mpgo.Enums.Precision;
 import com.dtwthalion.mpgo.Enums.Compression;
 import com.dtwthalion.mpgo.Enums.ByteOrder;
 import com.dtwthalion.mpgo.Enums.SamplingMode;
+import com.dtwthalion.mpgo.Enums.AcquisitionMode;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -426,5 +427,63 @@ class ValueClassesTest {
         assertTrue(names.contains("setAccessPolicy"));
         assertTrue(com.dtwthalion.mpgo.protocols.Encryptable.class
             .isAssignableFrom(SpectralDataset.class));
+    }
+
+    @Test
+    void queryBuilderIntersects() {
+        SpectrumIndex idx = new SpectrumIndex(4,
+            new long[]{0, 10, 20, 30},
+            new int[]{10, 10, 10, 10},
+            new double[]{1.0, 2.0, 3.0, 4.0},
+            new int[]{1, 2, 2, 1},
+            new int[]{1, 1, -1, 1},
+            new double[]{0.0, 500.0, 510.0, 0.0},
+            new int[]{0, 2, 2, 0},
+            new double[]{100.0, 200.0, 300.0, 400.0});
+        java.util.List<Integer> matches = Query.onIndex(idx)
+            .withMsLevel(2)
+            .withRetentionTimeRange(new ValueRange(1.5, 2.5))
+            .matchingIndices();
+        assertEquals(java.util.List.of(1), matches);
+
+        matches = Query.onIndex(idx)
+            .withPolarity(Enums.Polarity.NEGATIVE)
+            .matchingIndices();
+        assertEquals(java.util.List.of(2), matches);
+    }
+
+    @Test
+    void streamReaderExistsAndIsAutoCloseable() {
+        // Full round-trip requires a written .mpgo file; surface-check
+        // for class existence and AutoCloseable contract is the slice's
+        // parity deliverable. The underlying AcquisitionRun.readFrom is
+        // already exercised by SpectralDatasetTest cross-compat checks.
+        Class<?> c = StreamReader.class;
+        assertTrue(java.util.Arrays.stream(c.getMethods())
+            .anyMatch(m -> m.getName().equals("nextSpectrum")));
+        assertTrue(java.util.Arrays.stream(c.getMethods())
+            .anyMatch(m -> m.getName().equals("totalCount")));
+        assertTrue(AutoCloseable.class.isAssignableFrom(c));
+    }
+
+    @Test
+    void streamWriterBuffersSpectra() {
+        StreamWriter w = new StreamWriter(
+            "/tmp/does-not-matter-not-flushed.mpgo", "run0",
+            Enums.AcquisitionMode.MS1_DDA,
+            new InstrumentConfig("", "", "", "", "", ""));
+        assertEquals(0, w.spectrumCount());
+
+        double[] mz = {100.0, 200.0};
+        double[] intensity = {1.0, 2.0};
+        MassSpectrum ms = new MassSpectrum(mz, intensity,
+            0, 0.0, 0.0, 0, 1, Enums.Polarity.UNKNOWN, null);
+        w.appendSpectrum(ms);
+        assertEquals(1, w.spectrumCount());
+
+        // flush throws UnsupportedOperationException — expected for v0.6 surface.
+        assertThrows(UnsupportedOperationException.class, w::flush);
+
+        w.close();
     }
 }

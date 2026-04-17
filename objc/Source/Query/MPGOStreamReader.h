@@ -12,6 +12,12 @@
  * advances a position counter and returns spectra one at a time via
  * the existing hyperslab path. Suitable for streaming through runs
  * larger than memory.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.stream_reader.StreamReader
+ *   Java:   com.dtwthalion.mpgo.StreamReader
  */
 @interface MPGOStreamReader : NSObject
 

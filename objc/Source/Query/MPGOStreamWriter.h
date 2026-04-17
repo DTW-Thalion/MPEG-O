@@ -19,6 +19,12 @@
  * For v0.1 the writer's flush is whole-file regenerative: simple,
  * correct, and bounded for the streaming-demo case (≤ a few thousand
  * spectra). A future milestone may switch to extendable HDF5 datasets.
+ *
+ * API status: Stable (flush integration pending).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.stream_writer.StreamWriter
+ *   Java:   com.dtwthalion.mpgo.StreamWriter
  */
 @interface MPGOStreamWriter : NSObject
 

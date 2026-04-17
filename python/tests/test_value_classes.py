@@ -549,3 +549,99 @@ def test_spectral_dataset_has_encryptable_surface():
     assert hasattr(SpectralDataset, "access_policy")
     assert hasattr(SpectralDataset, "set_access_policy")
     assert issubclass(SpectralDataset, Encryptable)
+
+
+def test_query_builder_intersects():
+    import numpy as np
+    from mpeg_o.acquisition_run import SpectrumIndex
+    from mpeg_o.query import Query
+    from mpeg_o.value_range import ValueRange
+    from mpeg_o.enums import Polarity
+
+    idx = SpectrumIndex(
+        offsets=np.array([0, 10, 20, 30], dtype="<u8"),
+        lengths=np.array([10, 10, 10, 10], dtype="<u4"),
+        retention_times=np.array([1.0, 2.0, 3.0, 4.0], dtype="<f8"),
+        ms_levels=np.array([1, 2, 2, 1], dtype="<i4"),
+        polarities=np.array([1, 1, -1, 1], dtype="<i4"),
+        precursor_mzs=np.array([0.0, 500.0, 510.0, 0.0], dtype="<f8"),
+        precursor_charges=np.array([0, 2, 2, 0], dtype="<i4"),
+        base_peak_intensities=np.array([100.0, 200.0, 300.0, 400.0], dtype="<f8"),
+    )
+    matches = (Query.on_index(idx)
+               .with_ms_level(2)
+               .with_retention_time_range(ValueRange(1.5, 2.5))
+               .matching_indices())
+    assert matches == [1]
+
+    matches = (Query.on_index(idx)
+               .with_polarity(Polarity.NEGATIVE)
+               .matching_indices())
+    assert matches == [2]
+
+
+def test_stream_reader_iterates_spectra(tmp_path):
+    import h5py
+    import numpy as np
+    from mpeg_o.stream_reader import StreamReader
+    from mpeg_o.enums import AcquisitionMode
+
+    path = str(tmp_path / "minimal.mpgo")
+    with h5py.File(path, "w") as f:
+        study = f.create_group("study")
+        runs = study.create_group("ms_runs")
+        g = runs.create_group("run0")
+        g.attrs["acquisition_mode"] = np.int64(AcquisitionMode.MS1_DDA)
+        g.attrs["spectrum_class"] = "MPGOMassSpectrum"
+        idx = g.create_group("spectrum_index")
+        idx.create_dataset("offsets", data=np.array([0, 2], dtype="<u8"))
+        idx.create_dataset("lengths", data=np.array([2, 2], dtype="<u4"))
+        idx.create_dataset("retention_times", data=np.array([1.0, 2.0], dtype="<f8"))
+        idx.create_dataset("ms_levels", data=np.array([1, 1], dtype="<i4"))
+        idx.create_dataset("polarities", data=np.array([1, 1], dtype="<i4"))
+        idx.create_dataset("precursor_mzs", data=np.array([0.0, 0.0], dtype="<f8"))
+        idx.create_dataset("precursor_charges", data=np.array([0, 0], dtype="<i4"))
+        idx.create_dataset("base_peak_intensities", data=np.array([10.0, 20.0], dtype="<f8"))
+        sc = g.create_group("signal_channels")
+        sc.attrs["channel_names"] = "mz,intensity"
+        sc.create_dataset("mz_values", data=np.array([100.0, 200.0, 100.0, 200.0], dtype="<f8"))
+        sc.create_dataset("intensity_values", data=np.array([1.0, 2.0, 3.0, 4.0], dtype="<f8"))
+
+    with StreamReader(path, "run0") as reader:
+        assert reader.total_count == 2
+        assert not reader.at_end()
+        s0 = reader.next_spectrum()
+        assert s0 is not None
+        assert reader.current_position == 1
+        reader.reset()
+        assert reader.current_position == 0
+
+
+def test_stream_writer_buffers_spectra():
+    import numpy as np
+    import pytest
+    from mpeg_o.stream_writer import StreamWriter
+    from mpeg_o.mass_spectrum import MassSpectrum
+    from mpeg_o.signal_array import SignalArray
+    from mpeg_o.instrument_config import InstrumentConfig
+    from mpeg_o.enums import AcquisitionMode
+
+    w = StreamWriter(
+        file_path="/tmp/does-not-matter-not-flushed.mpgo",
+        run_name="run0",
+        acquisition_mode=AcquisitionMode.MS1_DDA,
+        instrument_config=InstrumentConfig(),
+    )
+    assert w.spectrum_count == 0
+
+    mz = SignalArray(data=np.array([100.0, 200.0]))
+    intensity = SignalArray(data=np.array([1.0, 2.0]))
+    ms = MassSpectrum(signal_arrays={"mz": mz, "intensity": intensity}, axes=[])
+    w.append_spectrum(ms)
+    assert w.spectrum_count == 1
+
+    # flush raises NotImplementedError — expected for v0.6 surface.
+    with pytest.raises(NotImplementedError):
+        w.flush()
+
+    w.close()
