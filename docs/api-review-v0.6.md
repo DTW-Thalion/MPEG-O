@@ -293,7 +293,6 @@ returning `SignalArray`. Fields retained: `chromatogram_type`, `target_mz`,
 | `MPGOInstrumentConfig` | `mpeg_o.instrument_config.InstrumentConfig` | `com.dtwthalion.mpgo.InstrumentConfig` | Stable |
 | `MPGOSpectrumIndex` | `mpeg_o.acquisition_run.SpectrumIndex` | `com.dtwthalion.mpgo.SpectrumIndex` | Stable |
 | `MPGOMSImage` | `mpeg_o.ms_image.MSImage` | `com.dtwthalion.mpgo.MSImage` | Stable |
-| `MPGOSpectralDataset` | `mpeg_o.spectral_dataset.SpectralDataset` | `com.dtwthalion.mpgo.SpectralDataset` | Stable |
 
 #### Method-level notes
 
@@ -460,14 +459,14 @@ matching the ObjC semantics that require a context object.
 
 | ObjC method | Python method | Java method | Status |
 |---|---|---|---|
-| `accessPolicy` | `access_policy` (property) | `accessPolicy()` | Functional |
-| `setAccessPolicy:` | `access_policy` (setter) | `setAccessPolicy(AccessPolicy)` | Functional |
+| `accessPolicy` | `access_policy()` | `accessPolicy()` | Functional |
+| `setAccessPolicy:` | `set_access_policy(policy)` | `setAccessPolicy(AccessPolicy)` | Functional |
 | `encryptWithKey:error:` | `encrypt_with_key(key)` | `encryptWithKey(byte[])` | Raises pending context |
 | `decryptWithKey:error:` | `decrypt_with_key(key)` | `decryptWithKey(byte[])` | Raises pending context |
 
 **Verifier** — class was missing entirely in Python and Java; added in this
 slice. `VerificationStatus` enum with 4 states
-(`VALID`, `INVALID`, `TAMPERED`, `UNKNOWN`) added to both languages.
+(`VALID`, `INVALID`, `NOT_SIGNED`, `ERROR`) added to both languages.
 
 **AccessPolicy** — value class missing in Python and Java; added in this slice.
 
@@ -588,7 +587,8 @@ all three languages. Protocol method surface matches; Python uses `ABC`,
 Java uses `interface`, ObjC uses `@protocol`.
 
 **CompoundField** — value class (ObjC struct-like, Python dataclass, Java
-record). Fields `name`, `dtype`, `shape` match across all three.
+record). Fields `name` and `kind` match across all three; `kind` is a
+4-member enum (`UINT32`, `INT64`, `FLOAT64`, `VL_STRING`).
 
 #### Fixes applied in M41.7
 
@@ -612,12 +612,12 @@ record). Fields `name`, `dtype`, `shape` match across all three.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOMzMLReader` | `mpeg_o.importers.mzml.MzMLReader` | `com.dtwthalion.mpgo.importers.MzMLReader` | Stable |
-| `MPGOMzMLWriter` | `mpeg_o.exporters.mzml.MzMLWriter` | `com.dtwthalion.mpgo.exporters.MzMLWriter` | Stable |
-| `MPGONmrMLReader` | `mpeg_o.importers.nmrml.NmrMLReader` | `com.dtwthalion.mpgo.importers.NmrMLReader` | Stable |
-| `MPGONmrMLWriter` | `mpeg_o.exporters.nmrml.NmrMLWriter` | `com.dtwthalion.mpgo.exporters.NmrMLWriter` | Stable |
-| `MPGOThermoRawReader` | `mpeg_o.importers.thermo.ThermoReader` | `com.dtwthalion.mpgo.importers.ThermoReader` | Stable |
-| `MPGOISAExporter` | `mpeg_o.exporters.isa.ISAExporter` | `com.dtwthalion.mpgo.exporters.ISAExporter` | Stable |
+| `MPGOMzMLReader` | `mpeg_o.importers.mzml` (module) | `com.dtwthalion.mpgo.importers.MzMLReader` | Stable |
+| `MPGOMzMLWriter` | `mpeg_o.exporters.mzml` (module) | `com.dtwthalion.mpgo.exporters.MzMLWriter` | Stable |
+| `MPGONmrMLReader` | `mpeg_o.importers.nmrml` (module) | `com.dtwthalion.mpgo.importers.NmrMLReader` | Stable |
+| `MPGONmrMLWriter` | `mpeg_o.exporters.nmrml` (module) | `com.dtwthalion.mpgo.exporters.NmrMLWriter` | Stable |
+| `MPGOThermoRawReader` | `mpeg_o.importers.thermo_raw` (module) | `com.dtwthalion.mpgo.importers.ThermoRawReader` | Stable |
+| `MPGOISAExporter` | `mpeg_o.exporters.isa` (module) | `com.dtwthalion.mpgo.exporters.ISAExporter` | Stable |
 | `MPGOCVTermMapper` | `mpeg_o.importers.cv_term_mapper` (module) | `com.dtwthalion.mpgo.importers.CVTermMapper` | Stable |
 | `MPGOBase64` | `mpeg_o.importers._base64_zlib` (internal) | `java.util.Base64` (stdlib, no wrapper) | Internal |
 | — | `mpeg_o.importers.ImportResult` | — | Internal (Python-only helper) |
