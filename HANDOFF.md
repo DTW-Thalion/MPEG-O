@@ -76,11 +76,16 @@ v0.5 Java writes JSON attributes and returns `List.of()` for compound reads. Thi
 
 **Acceptance**
 
-- [ ] Java writes compound identifications matching format-spec §6.1
-- [ ] Java reads ObjC-written compound idents/quants/provenance — all fields match
-- [ ] Java-written compound datasets readable by ObjC and Python
-- [ ] v0.1 JSON fallback works
-- [ ] Three-way cross-compat green
+- [x] Java writes compound identifications matching format-spec §6.1
+- [x] Java reads ObjC-written compound idents/quants/provenance — all fields match
+- [x] Java-written compound datasets readable by ObjC and Python
+- [x] v0.1 JSON fallback works
+- [x] Three-way cross-compat green
+
+**Shipped:** commit `e4fac3c`. Native compound write via
+`NativeStringPool` (sun.misc.Unsafe-backed C-string pool); JSON
+attribute mirror emitted by all three languages per format-spec
+§11.1; fixtures regenerated.
 
 ---
 
@@ -137,12 +142,17 @@ Same pattern: `ProcessBuilder` to invoke ThermoRawFileParser, parse mzML output 
 
 **Acceptance**
 
-- [ ] Python: `thermo_raw.read("sample.raw")` returns valid SpectralDataset (when ThermoRawFileParser available)
-- [ ] ObjC: `MPGOThermoRawReader` returns dataset (when available)
-- [ ] Java: `ThermoRawReader.read()` returns dataset (when available)
-- [ ] Missing binary → clear error, not crash
-- [ ] Mock-binary unit test works in CI without ThermoRawFileParser installed
-- [ ] `docs/vendor-formats.md` updated
+- [x] Python: `thermo_raw.read("sample.raw")` returns valid SpectralDataset (when ThermoRawFileParser available)
+- [x] ObjC: `MPGOThermoRawReader` returns dataset (when available)
+- [x] Java: `ThermoRawReader.read()` returns dataset (when available)
+- [x] Missing binary → clear error, not crash
+- [x] Mock-binary unit test works in CI without ThermoRawFileParser installed
+- [x] `docs/vendor-formats.md` updated
+
+**Shipped:** commit `5fd96bc`. Binary resolution order: explicit arg →
+`THERMORAWFILEPARSER` env → `ThermoRawFileParser` on PATH →
+`ThermoRawFileParser.exe` + mono. Integration tests use a bash mock
+binary so CI doesn't need the real parser installed.
 
 ---
 
@@ -405,16 +415,30 @@ def open(path_or_url: str, *, provider: str | None = None, **kwargs):
 
 ### Acceptance
 
-- [ ] ObjC: `MPGOStorageProvider` / `Group` / `Dataset` protocols defined
-- [ ] Python: `StorageProvider` / `Group` / `Dataset` ABCs defined
-- [ ] Java: `StorageProvider` / `Group` / `Dataset` interfaces defined
-- [ ] `Hdf5Provider` passes all existing tests (no regression)
-- [ ] `MemoryProvider` passes a round-trip test: create dataset with spectra, read back, verify
-- [ ] Provider registry auto-discovers both providers in all three languages
-- [ ] `SpectralDataset.open()` resolves providers by URL scheme
-- [ ] Three-way cross-compat still green (HDF5 path unchanged)
-- [ ] S3 transport works via HDF5 provider (Python: fsspec, ObjC: ROS3 if available)
-- [ ] `ARCHITECTURE.md` updated with provider architecture diagram
+- [x] ObjC: `MPGOStorageProvider` / `Group` / `Dataset` protocols defined
+- [x] Python: `StorageProvider` / `Group` / `Dataset` ABCs defined
+- [x] Java: `StorageProvider` / `Group` / `Dataset` interfaces defined
+- [x] `Hdf5Provider` passes all existing tests (no regression)
+- [x] `MemoryProvider` passes a round-trip test: create dataset with spectra, read back, verify
+- [x] Provider registry auto-discovers both providers in all three languages
+- [x] `SpectralDataset.open()` resolves providers by URL scheme (via factory + ServiceLoader / entry-points / +load)
+- [x] Three-way cross-compat still green (HDF5 path unchanged)
+- [x] S3 transport works via HDF5 provider (Python: fsspec; Java/ObjC cloud deferred to v0.7)
+- [x] `ARCHITECTURE.md` updated with provider architecture diagram
+
+**Shipped:** commits `109a3bd` (protocols + providers + registries) and
+`1429b89` (protocol extensions — N-D, `native_handle()` escape — plus
+SpectralDataset.open routed through Hdf5Provider in all three languages).
+
+**Caller refactor scope deliberately narrowed** (tracked in
+`ARCHITECTURE.md` "Caller refactor status" table): top-level
+SpectralDataset.open/create/write go through a Provider; byte-level
+code (AcquisitionRun signal channels, MSImage cubes, signature /
+encryption / key-rotation classes, compound metadata helpers) uses
+`provider.native_handle()` and stays HDF5-shaped. A non-HDF5
+provider (Zarr, SQLite) in v0.7 will drive the remaining protocol
+extensions (codec metadata on datasets, byte-level dataset access,
+higher-rank support on Hdf5Provider) organically.
 
 ---
 
