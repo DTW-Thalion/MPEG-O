@@ -22,6 +22,12 @@
  *             withRetentionTimeRange:[MPGOValueRange rangeWithMinimum:600 maximum:720]]
  *             withPrecursorMzRange:[MPGOValueRange rangeWithMinimum:500 maximum:550]]
  *             matchingIndices];
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.query.Query
+ *   Java:   com.dtwthalion.mpgo.Query
  */
 @interface MPGOQuery : NSObject
 
