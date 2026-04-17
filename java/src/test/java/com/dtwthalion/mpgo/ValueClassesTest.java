@@ -546,8 +546,12 @@ class ValueClassesTest {
             com.dtwthalion.mpgo.importers.CVTermMapper.precisionFor("MS:1000523"));
         assertEquals(Enums.Precision.FLOAT32,
             com.dtwthalion.mpgo.importers.CVTermMapper.precisionFor("MS:1000521"));
-        // Unknown accession → null (Java returns null; ObjC/Python return Float64).
-        assertNull(com.dtwthalion.mpgo.importers.CVTermMapper.precisionFor("MS:9999999"),
-            "unknown accession should return null in Java");
+        // Unknown accession → FLOAT64 default (matches ObjC and Python).
+        assertEquals(Enums.Precision.FLOAT64,
+            com.dtwthalion.mpgo.importers.CVTermMapper.precisionFor("MS:9999999"),
+            "unknown accession should return FLOAT64 default");
+        // Callers that need to distinguish unknown from FLOAT64 use isPrecisionAccession.
+        assertTrue(com.dtwthalion.mpgo.importers.CVTermMapper.isPrecisionAccession("MS:1000523"));
+        assertFalse(com.dtwthalion.mpgo.importers.CVTermMapper.isPrecisionAccession("MS:9999999"));
     }
 }

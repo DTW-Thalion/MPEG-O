@@ -624,16 +624,15 @@ record). Fields `name` and `kind` match across all three; `kind` is a
 
 #### Method-level notes
 
-**CVTermMapper** — one real behavior divergence exists and is documented but
-not fixed in M41.8 (see Fixes/Deferred below):
-
-| Method | ObjC | Python | Java |
-|---|---|---|---|
-| `precisionForAccession:` / `precision_for(accession)` / `precisionFor(String)` | Returns `Precision.FLOAT64` for unknown accessions | Returns `Precision.FLOAT64` | Returns `null` — **divergence** |
-
-This is the only cross-language behavior divergence in the entire v0.6 surface.
-It is documented as a known divergence, not a known stylistic difference. Fix
-is deferred post-M41 (would be a behavior change mixed into a docs-only slice).
+**CVTermMapper** — `precisionFor` returns `Precision.FLOAT64` for unknown
+accessions in all three languages, matching the safe-default contract.
+Previously Java returned `null`; fixed in a post-M41.9 commit by aligning
+Java's default to FLOAT64 and adding a companion `isPrecisionAccession(String)`
+helper for dispatch code that needs to distinguish "unknown cvParam" from
+"actually FLOAT64". The `MzMLReader` was updated to gate on
+`isPrecisionAccession` before calling `precisionFor`, matching ObjC's
+membership-check-first dispatch pattern. No remaining cross-language
+behavior divergences in the v0.6 surface.
 
 **Base64** — ObjC wraps Base64 in `MPGOBase64` (public). Python has a private
 `_base64_zlib` helper (internal). Java uses `java.util.Base64` from the
@@ -654,14 +653,13 @@ use inline structures for the same purpose. Classified as Internal.
   round-trip (+2 tests).
 - Java parity test added for CVTermMapper accession lookup (+1 test).
 - `CVTermMapper.precisionFor` Java divergence (`null` vs `FLOAT64`) documented
-  in commit message and this review; behavior not changed to avoid mixing
-  behavior changes into documentation work.
+  in commit message and this review; behavior not changed in this slice.
+  **Fixed post-M41.9** by making Java return `Precision.FLOAT64` default and
+  adding `isPrecisionAccession(String)` helper; `MzMLReader` dispatch updated
+  to match ObjC's membership-first pattern.
 
 #### Deferred
 
-- Java `CVTermMapper.precisionFor` returning `null` for unknown accessions —
-  fix deferred post-M41. Should return `Precision.FLOAT64` to match ObjC and
-  Python; change is trivial but is a behavior change and should be its own commit.
 - Java Base64 wrapper class — not planned; stdlib usage is idiomatic and
   preferred.
 
@@ -778,13 +776,17 @@ Not a divergence; all three are "not fully integrated in v0.6."
 in Python and Java pending full `SpectralDataset` write-path integration.
 The ObjC `flushWithError:` has the same deferred status. Not a divergence.
 
-### 4.12 Java CVTermMapper.precisionFor divergence
+### 4.12 Java CVTermMapper.precisionFor — resolved
 
-This is the **one real behavior divergence** in the v0.6 surface, listed here
-for cross-reference. Java `CVTermMapper.precisionFor(String)` returns `null`
-for an unrecognised accession; ObjC and Python return `Precision.FLOAT64`
-as a safe default. This is a bug in Java, not a stylistic difference.
-Fix is deferred post-M41 (§ Slice 41.8 Deferred).
+Previously Java's `CVTermMapper.precisionFor(String)` returned `null` for
+an unrecognised accession while ObjC and Python returned `Precision.FLOAT64`
+as a safe default. **Fixed post-M41.9**: Java now returns FLOAT64 default
+too, and adds an `isPrecisionAccession(String)` helper for dispatch code
+(e.g. `MzMLReader`) that needs to distinguish "unknown cvParam" from
+"actually FLOAT64". The `MzMLReader` dispatcher was updated to gate on
+`isPrecisionAccession` before calling `precisionFor`, matching ObjC's
+membership-first dispatch pattern. No remaining behavior divergences in
+the v0.6 surface.
 
 ---
 
