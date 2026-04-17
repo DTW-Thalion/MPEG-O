@@ -69,6 +69,9 @@ def discover_providers() -> dict[str, type[StorageProvider]]:
     if "memory" not in _REGISTRY:
         from .memory import MemoryProvider
         _REGISTRY["memory"] = MemoryProvider
+    if "sqlite" not in _REGISTRY:
+        from .sqlite import SqliteProvider
+        _REGISTRY["sqlite"] = SqliteProvider
     return dict(_REGISTRY)
 
 
