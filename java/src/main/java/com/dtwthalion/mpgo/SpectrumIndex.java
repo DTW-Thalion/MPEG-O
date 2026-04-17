@@ -12,10 +12,20 @@ import com.dtwthalion.mpgo.hdf5.Hdf5Group;
 
 /**
  * Compressed-domain query index for spectra in an acquisition run.
- * Parallel arrays: offsets, lengths, retention times, MS levels, polarities,
- * precursor m/z, precursor charges, base peak intensities.
+ *
+ * <p>Parallel arrays: offsets, lengths, retention times, MS levels,
+ * polarities, precursor m/z, precursor charges, base peak intensities.
+ * Kept entirely in memory; signal channels remain lazy on disk.</p>
  *
  * <p>HDF5 layout: {@code <run>/spectrum_index/} group with named datasets.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOSpectrumIndex}, Python
+ * {@code mpeg_o.acquisition_run.SpectrumIndex}.</p>
+ *
+ * @since 0.6
  */
 public class SpectrumIndex {
 
@@ -56,7 +66,32 @@ public class SpectrumIndex {
 
     public long offsetAt(int i) { return offsets[i]; }
     public int lengthAt(int i) { return lengths[i]; }
+    public double retentionTimeAt(int i) { return retentionTimes[i]; }
+    public int msLevelAt(int i) { return msLevels[i]; }
     public Polarity polarityAt(int i) { return Polarity.fromInt(polarities[i]); }
+    public double precursorMzAt(int i) { return precursorMzs[i]; }
+    public int precursorChargeAt(int i) { return precursorCharges[i]; }
+    public double basePeakIntensityAt(int i) { return basePeakIntensities[i]; }
+
+    /**
+     * @return indices whose retention time lies within
+     *         {@code [range.minimum(), range.maximum()]}.
+     */
+    public java.util.List<Integer> indicesInRetentionTimeRange(ValueRange range) {
+        java.util.List<Integer> out = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            double t = retentionTimes[i];
+            if (t >= range.minimum() && t <= range.maximum()) out.add(i);
+        }
+        return out;
+    }
+
+    /** @return indices whose {@code msLevel} equals {@code msLevel}. */
+    public java.util.List<Integer> indicesForMsLevel(int msLevel) {
+        java.util.List<Integer> out = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) if (msLevels[i] == msLevel) out.add(i);
+        return out;
+    }
 
     /** Write this index to an HDF5 group (creates spectrum_index/ subgroup). */
     public void writeTo(Hdf5Group runGroup) {

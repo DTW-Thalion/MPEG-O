@@ -16,9 +16,11 @@ from .enums import AcquisitionMode, ChromatogramType, Polarity
 from .instrument_config import InstrumentConfig
 from .mass_spectrum import MassSpectrum
 from .nmr_spectrum import NMRSpectrum
+from .protocols import Indexable, Streamable, Provenanceable
 from .provenance import ProvenanceRecord
 from .signal_array import SignalArray
 from .spectrum import Spectrum
+from .value_range import ValueRange
 
 # Channel -> default axis metadata for the two spectrum classes we currently
 # materialize lazily. Writers may store additional channels; reading an unknown
@@ -38,6 +40,34 @@ class SpectrumIndex:
     ``/study/ms_runs/<name>/spectrum_index/`` described in §4 of
     ``docs/format-spec.md``. They are small (length = spectrum_count) and
     cheap to hold in memory; signal channels remain lazy.
+
+    Parameters
+    ----------
+    offsets : numpy.ndarray
+        Starting element index of each spectrum in the mz_values channel.
+    lengths : numpy.ndarray
+        Number of elements (peaks) in each spectrum.
+    retention_times : numpy.ndarray
+        Retention time in seconds for each spectrum.
+    ms_levels : numpy.ndarray
+        MS level (1, 2, …) for each spectrum.
+    polarities : numpy.ndarray
+        Polarity (1=positive, -1=negative, 0=unknown) for each spectrum.
+    precursor_mzs : numpy.ndarray
+        Precursor m/z for each spectrum (0.0 for MS1).
+    precursor_charges : numpy.ndarray
+        Precursor charge state for each spectrum (0 for MS1).
+    base_peak_intensities : numpy.ndarray
+        Base-peak intensity for each spectrum.
+
+    Notes
+    -----
+    API status: Stable.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOSpectrumIndex`` ·
+    Java: ``com.dtwthalion.mpgo.SpectrumIndex``.
     """
 
     offsets: np.ndarray
@@ -52,6 +82,57 @@ class SpectrumIndex:
     @property
     def count(self) -> int:
         return int(self.offsets.shape[0])
+
+    # ------------------------------------------------------------------ #
+    # Element-at accessors                                                 #
+    # ------------------------------------------------------------------ #
+
+    def offset_at(self, index: int) -> int:
+        """Return element offset of spectrum ``index`` in mz_values."""
+        return int(self.offsets[index])
+
+    def length_at(self, index: int) -> int:
+        """Return element count (peaks) of spectrum ``index``."""
+        return int(self.lengths[index])
+
+    def retention_time_at(self, index: int) -> float:
+        """Return retention time in seconds of spectrum ``index``."""
+        return float(self.retention_times[index])
+
+    def ms_level_at(self, index: int) -> int:
+        """Return MS level of spectrum ``index``."""
+        return int(self.ms_levels[index])
+
+    def polarity_at(self, index: int) -> Polarity:
+        """Return :class:`~mpeg_o.enums.Polarity` of spectrum ``index``."""
+        return Polarity(int(self.polarities[index]))
+
+    def precursor_mz_at(self, index: int) -> float:
+        """Return precursor m/z of spectrum ``index`` (0.0 for MS1)."""
+        return float(self.precursor_mzs[index])
+
+    def precursor_charge_at(self, index: int) -> int:
+        """Return precursor charge state of spectrum ``index`` (0 for MS1)."""
+        return int(self.precursor_charges[index])
+
+    def base_peak_intensity_at(self, index: int) -> float:
+        """Return base-peak intensity of spectrum ``index``."""
+        return float(self.base_peak_intensities[index])
+
+    # ------------------------------------------------------------------ #
+    # Range queries                                                        #
+    # ------------------------------------------------------------------ #
+
+    def indices_in_retention_time_range(self, value_range: ValueRange) -> list[int]:
+        """Return indices whose retention time lies in
+        ``[value_range.minimum, value_range.maximum]`` (inclusive)."""
+        rt = self.retention_times
+        mask = (rt >= value_range.minimum) & (rt <= value_range.maximum)
+        return np.where(mask)[0].tolist()
+
+    def indices_for_ms_level(self, ms_level: int) -> list[int]:
+        """Return indices whose ``ms_level`` equals ``ms_level``."""
+        return np.where(self.ms_levels == ms_level)[0].tolist()
 
     @classmethod
     def read(cls, idx_group: h5py.Group) -> "SpectrumIndex":
@@ -74,9 +155,25 @@ class SpectrumIndex:
 class AcquisitionRun:
     """Lazy view over one acquisition run inside an ``.mpgo`` file.
 
-    Spectrum access is zero-copy-aware: the spectrum index is pre-loaded into
-    numpy arrays at open time but signal channels are sliced on demand, so
-    random access to spectrum *i* touches only the dataset bytes it needs.
+    Conforms to :class:`~mpeg_o.protocols.Indexable`,
+    :class:`~mpeg_o.protocols.Streamable`, and
+    :class:`~mpeg_o.protocols.Provenanceable`.
+    :class:`~mpeg_o.protocols.Encryptable` conformance is delivered
+    in slice 41.5 when the encryption manager subsystem lands.
+
+    Spectrum access is zero-copy-aware: the spectrum index is
+    pre-loaded into numpy arrays at open time but signal channels are
+    sliced on demand, so random access to spectrum ``i`` touches only
+    the dataset bytes it needs.
+
+    Notes
+    -----
+    API status: Stable (Encryptable surface pending).
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOAcquisitionRun`` · Java:
+    ``com.dtwthalion.mpgo.AcquisitionRun``.
     """
 
     name: str
@@ -96,6 +193,9 @@ class AcquisitionRun:
     # this float64 buffer instead of hitting the HDF5 dataset, because
     # Numpress decoding needs the running-sum prefix of the run.
     _numpress_channels: dict[str, np.ndarray] = field(default_factory=dict, repr=False)
+    # M41.3: Streamable cursor and Provenanceable cache.
+    _cursor: int = field(default=0, repr=False)
+    _provenance_cache: list[ProvenanceRecord] | None = field(default=None, repr=False)
 
     @classmethod
     def open(cls, group: h5py.Group, name: str) -> "AcquisitionRun":
@@ -185,6 +285,85 @@ class AcquisitionRun:
         if not 0 <= i < len(self):
             raise IndexError(f"spectrum index {i} out of range [0, {len(self)})")
         return self._materialize_spectrum(i)
+
+    # ---- Indexable conformance ----
+
+    def object_at_index(self, index: int) -> Spectrum:
+        """Return the spectrum at ``index``. Negative indices are supported."""
+        return self[index]
+
+    def count(self) -> int:
+        """Return the total number of spectra."""
+        return len(self)
+
+    def object_for_key(self, key: object) -> Spectrum:
+        """Not supported — AcquisitionRun uses integer indexing only."""
+        raise NotImplementedError("AcquisitionRun does not support key-based access")
+
+    def objects_in_range(self, start: int, stop: int) -> list[Spectrum]:
+        """Return spectra in the half-open slice ``[start, stop)``."""
+        return [self[i] for i in range(start, stop)]
+
+    # ---- Streamable conformance ----
+
+    def next_object(self) -> Spectrum:
+        """Return the next spectrum and advance the cursor."""
+        if self._cursor >= len(self):
+            raise StopIteration
+        s = self[self._cursor]
+        self._cursor += 1
+        return s
+
+    def has_more(self) -> bool:
+        """Return ``True`` if ``next_object`` can be called."""
+        return self._cursor < len(self)
+
+    def current_position(self) -> int:
+        """0-based position of the next spectrum to be yielded."""
+        return self._cursor
+
+    def seek_to_position(self, position: int) -> bool:
+        """Reposition the cursor. Returns ``True`` on success."""
+        if not 0 <= position <= len(self):
+            return False
+        self._cursor = position
+        return True
+
+    def reset(self) -> None:
+        """Reposition the cursor to 0."""
+        self._cursor = 0
+
+    # ---- Provenanceable conformance ----
+
+    def add_processing_step(self, step: ProvenanceRecord) -> None:
+        """Append a processing step to this run's provenance chain."""
+        if self._provenance_cache is None:
+            self._provenance_cache = self.provenance()
+        self._provenance_cache.append(step)
+
+    def provenance_chain(self) -> list[ProvenanceRecord]:
+        """Return this run's provenance records in insertion order."""
+        if self._provenance_cache is not None:
+            return list(self._provenance_cache)
+        return self.provenance()
+
+    def input_entities(self) -> list[str]:
+        """Distinct input entity identifiers referenced by the chain."""
+        seen: list[str] = []
+        for r in self.provenance_chain():
+            for e in r.input_refs:
+                if e not in seen:
+                    seen.append(e)
+        return seen
+
+    def output_entities(self) -> list[str]:
+        """Distinct output entity identifiers referenced by the chain."""
+        seen: list[str] = []
+        for r in self.provenance_chain():
+            for e in r.output_refs:
+                if e not in seen:
+                    seen.append(e)
+        return seen
 
     def _signal_dataset(self, channel: str) -> h5py.Dataset:
         ds = self._signal_cache.get(channel)

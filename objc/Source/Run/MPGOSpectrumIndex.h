@@ -17,6 +17,12 @@
  * Range queries (RT, ms_level, polarity) operate on the in-memory
  * arrays and do not touch the signal channels — this is the
  * "compressed-domain query" property of the MPEG-G access-unit model.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.acquisition_run.SpectrumIndex
+ *   Java:   com.dtwthalion.mpgo.SpectrumIndex
  */
 @interface MPGOSpectrumIndex : NSObject
 

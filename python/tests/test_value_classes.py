@@ -269,3 +269,103 @@ def test_nmr_2d_uses_axis_descriptors_and_inherits_spectrum():
     assert spec.f2_axis is f2
     assert spec.matrix_height == 10
     assert spec.matrix_width == 20
+
+
+def test_spectrum_index_element_accessors():
+    from mpeg_o.acquisition_run import SpectrumIndex
+    from mpeg_o.value_range import ValueRange
+    from mpeg_o.enums import Polarity
+    import numpy as np
+
+    idx = SpectrumIndex(
+        offsets=np.array([0, 10, 20], dtype="<u8"),
+        lengths=np.array([10, 10, 10], dtype="<u4"),
+        retention_times=np.array([1.0, 2.0, 3.0], dtype="<f8"),
+        ms_levels=np.array([1, 2, 1], dtype="<i4"),
+        polarities=np.array([1, 1, -1], dtype="<i4"),
+        precursor_mzs=np.array([0.0, 500.0, 0.0], dtype="<f8"),
+        precursor_charges=np.array([0, 2, 0], dtype="<i4"),
+        base_peak_intensities=np.array([100.0, 200.0, 300.0], dtype="<f8"),
+    )
+    assert idx.offset_at(1) == 10
+    assert idx.length_at(2) == 10
+    assert idx.retention_time_at(0) == 1.0
+    assert idx.ms_level_at(1) == 2
+    assert idx.polarity_at(2) is Polarity.NEGATIVE
+    assert idx.precursor_mz_at(1) == 500.0
+    assert idx.precursor_charge_at(1) == 2
+    assert idx.base_peak_intensity_at(2) == 300.0
+
+    assert idx.indices_in_retention_time_range(ValueRange(1.5, 2.5)) == [1]
+    assert idx.indices_for_ms_level(1) == [0, 2]
+
+
+def test_acquisition_run_conforms_to_protocols():
+    import h5py
+    import numpy as np
+    import tempfile
+    from pathlib import Path
+    from mpeg_o.acquisition_run import AcquisitionRun
+    from mpeg_o.enums import AcquisitionMode
+    from mpeg_o.protocols import Indexable, Streamable, Provenanceable
+
+    tmp = Path(tempfile.mkstemp(suffix=".h5")[1])
+    try:
+        with h5py.File(tmp, "w") as f:
+            g = f.create_group("run0")
+            g.attrs["acquisition_mode"] = np.int64(AcquisitionMode.MS1_DDA)
+            g.attrs["spectrum_class"] = "MPGOMassSpectrum"
+            idx = g.create_group("spectrum_index")
+            idx.create_dataset("offsets", data=np.array([0, 2], dtype="<u8"))
+            idx.create_dataset("lengths", data=np.array([2, 2], dtype="<u4"))
+            idx.create_dataset("retention_times", data=np.array([0.0, 1.0], dtype="<f8"))
+            idx.create_dataset("ms_levels", data=np.array([1, 1], dtype="<i4"))
+            idx.create_dataset("polarities", data=np.array([1, 1], dtype="<i4"))
+            idx.create_dataset("precursor_mzs", data=np.array([0.0, 0.0], dtype="<f8"))
+            idx.create_dataset("precursor_charges", data=np.array([0, 0], dtype="<i4"))
+            idx.create_dataset("base_peak_intensities", data=np.array([10.0, 20.0], dtype="<f8"))
+            sc = g.create_group("signal_channels")
+            sc.attrs["channel_names"] = "mz,intensity"
+            sc.create_dataset("mz_values", data=np.array([100.0, 200.0, 100.0, 200.0], dtype="<f8"))
+            sc.create_dataset("intensity_values", data=np.array([1.0, 2.0, 3.0, 4.0], dtype="<f8"))
+
+        with h5py.File(tmp, "r") as f:
+            run = AcquisitionRun.open(f["run0"], name="run0")
+
+            assert isinstance(run, Indexable)
+            assert run.count() == 2
+            assert run.object_at_index(0) is not None
+
+            assert isinstance(run, Streamable)
+            assert run.has_more()
+            s0 = run.next_object()
+            assert s0 is not None
+            assert run.current_position() == 1
+            run.reset()
+            assert run.current_position() == 0
+
+            assert isinstance(run, Provenanceable)
+            assert run.provenance_chain() == []
+            assert run.input_entities() == []
+            assert run.output_entities() == []
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def test_ms_image_has_dataset_level_fields():
+    from mpeg_o.ms_image import MSImage
+    import numpy as np
+
+    img = MSImage(
+        width=2, height=2, spectral_points=3,
+        intensity=np.zeros((2, 2, 3)),
+        tile_size=64,
+        title="imaging run",
+        isa_investigation_id="ISA-001",
+    )
+    assert img.title == "imaging run"
+    assert img.isa_investigation_id == "ISA-001"
+    assert img.identifications == []
+    assert img.quantifications == []
+    assert img.provenance_records == []
+    assert img.tile_size == 64

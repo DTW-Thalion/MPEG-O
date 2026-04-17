@@ -9,6 +9,12 @@
  * Immutable value class describing the instrument used to acquire a
  * run. Persisted as a small group of string attributes under
  * `instrument_config/` within the parent run group.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.instrument_config.InstrumentConfig
+ *   Java:   com.dtwthalion.mpgo.InstrumentConfig
  */
 @interface MPGOInstrumentConfig : NSObject <NSCopying, NSCoding>
 

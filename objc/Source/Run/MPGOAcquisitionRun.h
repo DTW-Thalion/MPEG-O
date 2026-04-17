@@ -34,6 +34,13 @@
  * Conformances (v0.2): MPGOProvenanceable (per-run provenance chain),
  * MPGOEncryptable (delegates to MPGOEncryptionManager when the run
  * carries persistence context set by MPGOSpectralDataset after load).
+ *
+ * API status: Stable (Encryptable surface deferred to M41.5 in
+ * non-ObjC implementations).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.acquisition_run.AcquisitionRun
+ *   Java:   com.dtwthalion.mpgo.AcquisitionRun
  */
 @interface MPGOAcquisitionRun : NSObject <MPGOIndexable,
                                           MPGOStreamable,

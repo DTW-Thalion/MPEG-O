@@ -18,8 +18,25 @@ import java.util.*;
  * <p>HDF5 layout: {@code /study/ms_runs/<name>/} with subgroups
  * {@code spectrum_index/}, {@code signal_channels/}, {@code instrument_config/},
  * {@code chromatograms/} (optional), and {@code provenance/} (optional).</p>
+ *
+ * <p>Conforms to {@link com.dtwthalion.mpgo.protocols.Indexable},
+ * {@link com.dtwthalion.mpgo.protocols.Streamable}, and
+ * {@link com.dtwthalion.mpgo.protocols.Provenanceable}.
+ * {@code Encryptable} conformance is deferred to M41.5.</p>
+ *
+ * <p><b>API status:</b> Stable (Encryptable surface pending).</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOAcquisitionRun}, Python
+ * {@code mpeg_o.acquisition_run.AcquisitionRun}.</p>
+ *
+ * @since 0.6
  */
-public class AcquisitionRun implements AutoCloseable {
+public class AcquisitionRun implements
+        com.dtwthalion.mpgo.protocols.Indexable<Spectrum>,
+        com.dtwthalion.mpgo.protocols.Streamable<Spectrum>,
+        com.dtwthalion.mpgo.protocols.Provenanceable,
+        AutoCloseable {
 
     private static final int CHUNK_SIZE = 16384;
     private static final int COMPRESSION_LEVEL = 6;
@@ -37,6 +54,10 @@ public class AcquisitionRun implements AutoCloseable {
 
     // Channel data (concatenated across all spectra)
     private final Map<String, double[]> channels;
+
+    // M41.3: Streamable cursor and Provenanceable cache.
+    private int cursor = 0;
+    private java.util.List<ProvenanceRecord> provenanceCache;
 
     public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
                           SpectrumIndex spectrumIndex,
@@ -84,6 +105,133 @@ public class AcquisitionRun implements AutoCloseable {
             case NMR_2D -> "MPGONMR2DSpectrum";
             default -> "MPGOMassSpectrum";
         };
+    }
+
+    // ── Protocol conformances ────────────────────────────────────────
+
+    // ---- Indexable conformance ----
+
+    @Override
+    public Spectrum objectAtIndex(int index) {
+        long offset = spectrumIndex.offsetAt(index);
+        int length = spectrumIndex.lengthAt(index);
+
+        double[] mz = channels.getOrDefault("mz", new double[0]);
+        double[] intensity = channels.getOrDefault("intensity", new double[0]);
+        double[] chemShift = channels.getOrDefault("chemical_shift", new double[0]);
+
+        double scanTime = spectrumIndex.retentionTimeAt(index);
+        double precursorMz = spectrumIndex.precursorMzAt(index);
+        int precursorCharge = spectrumIndex.precursorChargeAt(index);
+
+        if (chemShift.length > 0) {
+            double[] cs = java.util.Arrays.copyOfRange(chemShift, (int) offset, (int) offset + length);
+            double[] it = java.util.Arrays.copyOfRange(intensity, (int) offset, (int) offset + length);
+            return new NMRSpectrum(cs, it, index, scanTime,
+                nucleusType != null ? nucleusType : "",
+                spectrometerFrequencyMHz);
+        }
+
+        double[] mzSlice = java.util.Arrays.copyOfRange(mz, (int) offset, (int) offset + length);
+        double[] intSlice = java.util.Arrays.copyOfRange(intensity, (int) offset, (int) offset + length);
+        return new MassSpectrum(mzSlice, intSlice, index, scanTime,
+            precursorMz, precursorCharge,
+            spectrumIndex.msLevelAt(index),
+            spectrumIndex.polarityAt(index),
+            null);
+    }
+
+    @Override
+    public int count() { return spectrumIndex.count(); }
+
+    // ---- Streamable conformance ----
+
+    @Override
+    public Spectrum nextObject() {
+        if (cursor >= count()) throw new java.util.NoSuchElementException();
+        Spectrum s = objectAtIndex(cursor);
+        cursor++;
+        return s;
+    }
+
+    @Override
+    public boolean hasMore() { return cursor < count(); }
+
+    @Override
+    public int currentPosition() { return cursor; }
+
+    @Override
+    public boolean seekToPosition(int position) {
+        if (position < 0 || position > count()) return false;
+        cursor = position;
+        return true;
+    }
+
+    @Override
+    public void reset() { cursor = 0; }
+
+    // ---- Provenanceable conformance ----
+
+    @Override
+    public void addProcessingStep(ProvenanceRecord step) {
+        ensureProvenanceCache().add(step);
+    }
+
+    @Override
+    public java.util.List<ProvenanceRecord> provenanceChain() {
+        if (provenanceCache != null) return java.util.List.copyOf(provenanceCache);
+        return provenanceRecords;
+    }
+
+    @Override
+    public java.util.List<String> inputEntities() {
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        for (ProvenanceRecord r : provenanceChain()) {
+            seen.addAll(parseStringArray(r.inputRefsJson()));
+        }
+        return new java.util.ArrayList<>(seen);
+    }
+
+    @Override
+    public java.util.List<String> outputEntities() {
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        for (ProvenanceRecord r : provenanceChain()) {
+            seen.addAll(parseStringArray(r.outputRefsJson()));
+        }
+        return new java.util.ArrayList<>(seen);
+    }
+
+    private java.util.List<ProvenanceRecord> ensureProvenanceCache() {
+        if (provenanceCache == null) {
+            provenanceCache = new java.util.ArrayList<>(provenanceRecords);
+        }
+        return provenanceCache;
+    }
+
+    /**
+     * Minimal JSON string-array parser for {@code ["a","b","c"]} format.
+     * Returns empty list on null, empty, or malformed input. Will be
+     * replaced by proper List&lt;String&gt; accessor on
+     * {@link ProvenanceRecord} in slice 41.4.
+     */
+    private static java.util.List<String> parseStringArray(String json) {
+        if (json == null) return java.util.List.of();
+        String trimmed = json.trim();
+        if (trimmed.isEmpty() || trimmed.equals("[]")) return java.util.List.of();
+        if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return java.util.List.of();
+        String inner = trimmed.substring(1, trimmed.length() - 1).trim();
+        if (inner.isEmpty()) return java.util.List.of();
+        java.util.List<String> out = new java.util.ArrayList<>();
+        // Simple split on ","  — works because our refs are URIs/IDs without commas.
+        // For robustness, strip outer quotes per element.
+        for (String tok : inner.split(",")) {
+            String t = tok.trim();
+            if (t.startsWith("\"") && t.endsWith("\"")) {
+                t = t.substring(1, t.length() - 1).replace("\\\"", "\"");
+            }
+            if (!t.isEmpty()) out.add(t);
+        }
+        return out;
     }
 
     // ── HDF5 I/O ────────────────────────────────────────────────────
