@@ -7,6 +7,26 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+/**
+ * Applies caller-selected policies to a dataset and writes a new
+ * {@code .mpgo} file. The original is never modified.
+ *
+ * <p>Supported policies (matching ObjC {@code MPGOAnonymizationPolicy}):
+ * redact SAAV spectra, mask low-intensity samples, mask rare
+ * metabolites, coarsen m/z decimals, coarsen chemical-shift
+ * decimals, strip metadata fields.</p>
+ *
+ * <p>Output carries the {@code opt_anonymized} feature flag and a
+ * {@link com.dtwthalion.mpgo.ProvenanceRecord} documenting which
+ * policies ran.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOAnonymizer}, Python {@code mpeg_o.anonymization}.</p>
+ *
+ * @since 0.6
+ */
 public class Anonymizer {
 
     public record AnonymizationPolicy(

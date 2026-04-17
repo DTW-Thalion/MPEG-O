@@ -12,6 +12,13 @@ import javax.crypto.spec.SecretKeySpec;
 
 /**
  * HMAC-SHA256 signatures with v2 canonical little-endian format for MPEG-O datasets.
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOSignatureManager}, Python {@code mpeg_o.signatures}.</p>
+ *
+ * @since 0.6
  */
 public final class SignatureManager {
 

@@ -39,7 +39,9 @@ import java.util.*;
  *
  * @since 0.6
  */
-public class SpectralDataset implements AutoCloseable {
+public class SpectralDataset implements
+        com.dtwthalion.mpgo.protocols.Encryptable,
+        AutoCloseable {
 
     private final StorageProvider provider;  // M39: owning provider
     private final Hdf5File file;             // native handle (kept for
@@ -51,6 +53,8 @@ public class SpectralDataset implements AutoCloseable {
     private final List<Identification> identifications;
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
+    // M41.5: Encryptable conformance.
+    private com.dtwthalion.mpgo.protection.AccessPolicy accessPolicy;
 
     private SpectralDataset(StorageProvider provider, Hdf5File file,
                             FeatureFlags featureFlags,
@@ -426,6 +430,30 @@ public class SpectralDataset implements AutoCloseable {
 
     private static String nonEmptyJson(String s, String fallback) {
         return s == null || s.isEmpty() ? fallback : s;
+    }
+
+    // ---- Encryptable conformance ----
+
+    @Override
+    public void encryptWithKey(byte[] key, com.dtwthalion.mpgo.Enums.EncryptionLevel level) {
+        throw new UnsupportedOperationException(
+            "SpectralDataset.encryptWithKey requires a persistence " +
+            "context; use com.dtwthalion.mpgo.protection.EncryptionManager " +
+            "directly for file-level operations");
+    }
+
+    @Override
+    public void decryptWithKey(byte[] key) {
+        throw new UnsupportedOperationException(
+            "SpectralDataset.decryptWithKey requires a persistence context");
+    }
+
+    @Override
+    public Object accessPolicy() { return accessPolicy; }
+
+    @Override
+    public void setAccessPolicy(Object policy) {
+        this.accessPolicy = (com.dtwthalion.mpgo.protection.AccessPolicy) policy;
     }
 
     @Override

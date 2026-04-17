@@ -15,6 +15,12 @@
  * dictionary of arbitrary key/value pairs that the application is free
  * to interpret (typical fields: `subjects`, `streams`, `expiry`,
  * `key_id`, `audit_contact`).
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.access_policy.AccessPolicy
+ *   Java:   com.dtwthalion.mpgo.protection.AccessPolicy
  */
 @interface MPGOAccessPolicy : NSObject <NSCopying>
 

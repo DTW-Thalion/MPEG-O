@@ -21,6 +21,12 @@
  *
  * Output carries the ``opt_anonymized`` feature flag and a
  * ``ProvenanceRecord`` documenting which policies ran.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.anonymization
+ *   Java:   com.dtwthalion.mpgo.protection.Anonymizer
  */
 @interface MPGOAnonymizationPolicy : NSObject
 

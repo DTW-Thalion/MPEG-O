@@ -27,6 +27,13 @@ how many spectra / values were affected, and the timestamp. The output
 carries the ``opt_anonymized`` feature flag.
 
 SPDX-License-Identifier: LGPL-3.0-or-later
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOAnonymizer`` · Java:
+``com.dtwthalion.mpgo.protection.Anonymizer``.
+
+API status: Stable.
 """
 from __future__ import annotations
 

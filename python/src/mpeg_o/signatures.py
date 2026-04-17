@@ -14,6 +14,13 @@ through the native-bytes path.
 
 The format is fully interoperable with the Objective-C reference
 implementation — see ``objc/Source/Protection/MPGOSignatureManager.m``.
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOSignatureManager`` · Java:
+``com.dtwthalion.mpgo.protection.SignatureManager``.
+
+API status: Stable.
 """
 from __future__ import annotations
 

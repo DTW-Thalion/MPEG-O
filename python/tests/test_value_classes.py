@@ -79,6 +79,26 @@ def test_instrument_config_all_empty_by_default() -> None:
         assert getattr(i, field) == ""
 
 
+def test_verifier_status_wrapping():
+    from mpeg_o.verifier import Verifier, VerificationStatus
+    from mpeg_o import signatures
+
+    data = b"hello, mpeg-o"
+    key = b"0" * 32
+
+    # NOT_SIGNED
+    assert Verifier.verify(data, None, key) == VerificationStatus.NOT_SIGNED
+    assert Verifier.verify(data, "", key) == VerificationStatus.NOT_SIGNED
+
+    # VALID (construct a legitimate v2 signature)
+    sig = "v2:" + signatures.hmac_sha256_b64(data, key)
+    assert Verifier.verify(data, sig, key) == VerificationStatus.VALID
+
+    # INVALID (wrong key)
+    wrong_key = b"1" * 32
+    assert Verifier.verify(data, sig, wrong_key) == VerificationStatus.INVALID
+
+
 def test_compression_includes_numpress_delta():
     from mpeg_o.enums import Compression
     assert Compression.NUMPRESS_DELTA.value == 3
@@ -424,3 +444,108 @@ def test_transition_list_count_and_index():
     assert tl.count() == 1
     assert tl.transition_at_index(0) is t
     assert tl.transition_at_index(0).retention_time_window == ValueRange(10.0, 20.0)
+
+
+def test_access_policy_holds_dict():
+    from mpeg_o.access_policy import AccessPolicy
+    p = AccessPolicy(policy={"subjects": ["alice"], "key_id": "kek-1"})
+    assert p.policy["subjects"] == ["alice"]
+    assert p.policy["key_id"] == "kek-1"
+
+    default = AccessPolicy()
+    assert default.policy == {}
+
+
+def test_anonymization_policy_defaults():
+    from mpeg_o.anonymization import AnonymizationPolicy
+    p = AnonymizationPolicy()  # defaults
+    assert hasattr(p, "redact_saav_spectra")
+    assert hasattr(p, "mask_intensity_below_quantile")
+    assert hasattr(p, "coarsen_mz_decimals")
+
+
+def test_encryption_round_trip():
+    from mpeg_o import encryption
+
+    key = b"0" * 32
+    plaintext = b"hello, mpeg-o encryption"
+    blob = encryption.encrypt_bytes(plaintext, key)
+    recovered = encryption.decrypt_bytes(blob, key)
+    assert recovered == plaintext
+
+
+def test_key_rotation_fresh_manager_has_no_envelope():
+    import h5py, tempfile
+    from pathlib import Path
+    from mpeg_o.key_rotation import has_envelope_encryption
+
+    tmp = Path(tempfile.mkstemp(suffix=".h5")[1])
+    try:
+        with h5py.File(tmp, "w"):
+            pass  # empty file
+        with h5py.File(tmp, "r") as f:
+            assert not has_envelope_encryption(f)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def test_signature_round_trip():
+    from mpeg_o import signatures
+    import base64
+
+    data = b"hello, mpeg-o signatures"
+    key = b"0" * 32
+    sig = signatures.hmac_sha256_b64(data, key)
+    # Expected: base64(hmac_sha256(data, key))
+    assert base64.b64decode(sig) == signatures.hmac_sha256(data, key)
+
+
+def test_acquisition_run_has_encryptable_surface():
+    import h5py
+    import numpy as np
+    import tempfile
+    from pathlib import Path
+    from mpeg_o.acquisition_run import AcquisitionRun
+    from mpeg_o.access_policy import AccessPolicy
+    from mpeg_o.enums import AcquisitionMode
+    from mpeg_o.protocols import Encryptable
+
+    tmp = Path(tempfile.mkstemp(suffix=".h5")[1])
+    try:
+        with h5py.File(tmp, "w") as f:
+            g = f.create_group("run0")
+            g.attrs["acquisition_mode"] = np.int64(AcquisitionMode.MS1_DDA)
+            g.attrs["spectrum_class"] = "MPGOMassSpectrum"
+            idx = g.create_group("spectrum_index")
+            idx.create_dataset("offsets", data=np.array([0], dtype="<u8"))
+            idx.create_dataset("lengths", data=np.array([0], dtype="<u4"))
+            idx.create_dataset("retention_times", data=np.array([0.0], dtype="<f8"))
+            idx.create_dataset("ms_levels", data=np.array([1], dtype="<i4"))
+            idx.create_dataset("polarities", data=np.array([1], dtype="<i4"))
+            idx.create_dataset("precursor_mzs", data=np.array([0.0], dtype="<f8"))
+            idx.create_dataset("precursor_charges", data=np.array([0], dtype="<i4"))
+            idx.create_dataset("base_peak_intensities", data=np.array([0.0], dtype="<f8"))
+            sc = g.create_group("signal_channels")
+            sc.attrs["channel_names"] = "mz,intensity"
+            sc.create_dataset("mz_values", data=np.array([], dtype="<f8"))
+            sc.create_dataset("intensity_values", data=np.array([], dtype="<f8"))
+
+        with h5py.File(tmp, "r") as f:
+            run = AcquisitionRun.open(f["run0"], name="run0")
+            assert isinstance(run, Encryptable)
+            assert run.access_policy() is None
+            pol = AccessPolicy(policy={"owner": "alice"})
+            run.set_access_policy(pol)
+            assert run.access_policy() is pol
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def test_spectral_dataset_has_encryptable_surface():
+    from mpeg_o.spectral_dataset import SpectralDataset
+    from mpeg_o.protocols import Encryptable
+    assert hasattr(SpectralDataset, "encrypt_with_key")
+    assert hasattr(SpectralDataset, "decrypt_with_key")
+    assert hasattr(SpectralDataset, "access_policy")
+    assert hasattr(SpectralDataset, "set_access_policy")
+    assert issubclass(SpectralDataset, Encryptable)

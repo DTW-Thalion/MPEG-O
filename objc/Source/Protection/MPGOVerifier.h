@@ -16,6 +16,12 @@ typedef NS_ENUM(NSUInteger, MPGOVerificationStatus) {
  * enum, plus an error fallback for I/O failures. Use this instead of
  * MPGOSignatureManager when you want to render a status to an end
  * user.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.verifier.Verifier
+ *   Java:   com.dtwthalion.mpgo.protection.Verifier
  */
 @interface MPGOVerifier : NSObject
 

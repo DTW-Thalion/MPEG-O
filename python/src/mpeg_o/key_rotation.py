@@ -32,6 +32,13 @@ Usage::
 
     with h5py.File("x.mpgo", "r") as f:
         dek = unwrap_dek(f, kek=kek2)
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOKeyRotationManager`` · Java:
+``com.dtwthalion.mpgo.protection.KeyRotationManager``.
+
+API status: Stable.
 """
 from __future__ import annotations
 
