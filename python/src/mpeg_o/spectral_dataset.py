@@ -104,6 +104,7 @@ class SpectralDataset:
         path: str | Path,
         *,
         thread_safe: bool = False,
+        writable: bool = False,
         **fsspec_kwargs: Any,
     ) -> "SpectralDataset":
         """Open a ``.mpgo`` dataset from a local path or cloud URL.
@@ -114,6 +115,15 @@ class SpectralDataset:
         any actively touched chunks are fetched. Extra keyword arguments are
         forwarded to :func:`fsspec.open` and are typically used for
         cloud-backend options (``anon=True``, ``key=...``, ...).
+
+        Parameters
+        ----------
+        writable:
+            If ``True``, open the file in read-write mode (``"r+"``) so
+            that in-place operations such as
+            :meth:`AcquisitionRun.encrypt_with_key` can write back to the
+            same file handle. Ignored for remote URLs (which are always
+            read-only). Default: ``False``.
 
         M39: a :class:`~mpeg_o.providers.Hdf5Provider` is constructed for
         the target and exposed as ``dataset.provider``. The legacy
@@ -141,7 +151,8 @@ class SpectralDataset:
                 raise
 
         p = Path(path)
-        provider = Hdf5Provider.open(str(p), mode="r")
+        mode = "r+" if writable else "r"
+        provider = Hdf5Provider.open(str(p), mode=mode)
         f = provider.native_handle()
         try:
             return cls._from_open_file(p, f, thread_safe=thread_safe,
@@ -170,13 +181,19 @@ class SpectralDataset:
         title = io.read_string_attr(study, "title", default="") or ""
         isa = io.read_string_attr(study, "isa_investigation_id", default="") or ""
 
+        # Resolve the canonical file path for the persistence context that
+        # enables AcquisitionRun.encrypt_with_key / decrypt_with_key.
+        file_path = str(path)
+
         ms_runs: dict[str, AcquisitionRun] = {}
         if "ms_runs" in study:
             ms_group = study["ms_runs"]
             names = _split_run_names(io.read_string_attr(ms_group, "_run_names", default=""))
             for name in names:
                 if name in ms_group:
-                    ms_runs[name] = AcquisitionRun.open(ms_group[name], name)
+                    run = AcquisitionRun.open(ms_group[name], name)
+                    run._set_persistence_context(file_path, name)
+                    ms_runs[name] = run
 
         nmr_runs: dict[str, AcquisitionRun] = {}
         if "nmr_runs" in study:
@@ -184,7 +201,9 @@ class SpectralDataset:
             names = _split_run_names(io.read_string_attr(nmr_group, "_run_names", default=""))
             for name in names:
                 if name in nmr_group:
-                    nmr_runs[name] = AcquisitionRun.open(nmr_group[name], name)
+                    run = AcquisitionRun.open(nmr_group[name], name)
+                    run._set_persistence_context(file_path, name)
+                    nmr_runs[name] = run
 
         return cls(
             path=path,
@@ -323,22 +342,27 @@ class SpectralDataset:
 
     # ---- Encryptable conformance ----
 
-    def encrypt_with_key(self, key: bytes, level: EncryptionLevel) -> None:
-        """Encrypt this dataset's protectable content at the given
-        granularity.
+    def encrypt_with_key(
+        self, key: bytes, level: EncryptionLevel | None = None
+    ) -> None:
+        """Encrypt protectable content at the given granularity.
 
-        Requires a persistence context (not yet exposed in Python);
-        use :mod:`mpeg_o.encryption` directly for file-level
-        operations.
+        For DATASET-level encryption (ObjC ``MPGOEncryptionLevelDataset``),
+        encrypts every MS run's intensity channel in place. For finer-grained
+        levels, callers should use ``run.encrypt_with_key`` directly.
+
+        Matches ObjC ``-[MPGOSpectralDataset encryptWithKey:level:error:]``.
         """
-        raise NotImplementedError(
-            "SpectralDataset.encrypt_with_key requires a persistence "
-            "context; use mpeg_o.encryption directly")
+        for run in self.ms_runs.values():
+            run.encrypt_with_key(key, level)
 
-    def decrypt_with_key(self, key: bytes) -> None:
-        raise NotImplementedError(
-            "SpectralDataset.decrypt_with_key requires a persistence "
-            "context; use mpeg_o.encryption directly")
+    def decrypt_with_key(self, key: bytes) -> dict[str, bytes]:
+        """Decrypt every MS run's intensity channel.
+
+        Returns a mapping of ``{run_name: plaintext_bytes}``. The on-disk
+        file is NOT modified — decryption is read-only.
+        """
+        return {name: run.decrypt_with_key(key) for name, run in self.ms_runs.items()}
 
     def access_policy(self) -> AccessPolicy | None:
         """Return the current access policy, or ``None`` if not set."""

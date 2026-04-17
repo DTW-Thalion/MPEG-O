@@ -74,6 +74,11 @@ public class SpectralDataset implements
         this.provenanceRecords = provenanceRecords;
     }
 
+    /** The absolute path of the underlying .mpgo file (null for in-memory datasets). */
+    public String filePath() {
+        return file != null ? file.getPath() : null;
+    }
+
     /** M39: the owning storage provider. New call sites should reach
      *  for this instead of the native {@link Hdf5File}. */
     public StorageProvider provider() { return provider; }
@@ -124,6 +129,7 @@ public class SpectralDataset implements
                                     String name = rn.strip();
                                     if (!name.isEmpty() && msRunsGroup.hasChild(name)) {
                                         AcquisitionRun run = AcquisitionRun.readFrom(msRunsGroup, name);
+                                        run.setPersistenceContext(path, name);
                                         runs.put(name, run);
                                     }
                                 }
@@ -435,17 +441,14 @@ public class SpectralDataset implements
     // ---- Encryptable conformance ----
 
     @Override
-    public void encryptWithKey(byte[] key, com.dtwthalion.mpgo.Enums.EncryptionLevel level) {
-        throw new UnsupportedOperationException(
-            "SpectralDataset.encryptWithKey requires a persistence " +
-            "context; use com.dtwthalion.mpgo.protection.EncryptionManager " +
-            "directly for file-level operations");
+    public void encryptWithKey(byte[] key, com.dtwthalion.mpgo.Enums.EncryptionLevel level)
+            throws Exception {
+        for (var run : msRuns.values()) run.encryptWithKey(key, level);
     }
 
     @Override
-    public void decryptWithKey(byte[] key) {
-        throw new UnsupportedOperationException(
-            "SpectralDataset.decryptWithKey requires a persistence context");
+    public void decryptWithKey(byte[] key) throws Exception {
+        for (var run : msRuns.values()) run.decryptWithKey(key);
     }
 
     @Override

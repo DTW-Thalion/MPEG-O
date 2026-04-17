@@ -4,7 +4,9 @@ package com.dtwthalion.mpgo;
 import com.dtwthalion.mpgo.Enums.AcquisitionMode;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Incrementally append mass spectra to an {@code .mpgo} file.
@@ -19,10 +21,7 @@ import java.util.List;
  * spectra). A future milestone may switch to extendable HDF5
  * datasets.</p>
  *
- * <p><b>API status:</b> Stable. {@link #flush} integration with
- * {@code SpectralDataset}'s write path is a future milestone;
- * callers buffer spectra and persist via {@code SpectralDataset}
- * directly today.</p>
+ * <p><b>API status:</b> Stable.</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code MPGOStreamWriter}, Python
@@ -53,12 +52,77 @@ public final class StreamWriter implements AutoCloseable {
 
     public int spectrumCount() { return spectra.size(); }
 
+    /**
+     * Rewrite the target file with all buffered spectra so far.
+     *
+     * <p>Flattens the buffered spectra into concatenated m/z and intensity
+     * arrays, builds a {@link SpectrumIndex} and an {@link AcquisitionRun},
+     * then delegates to {@link SpectralDataset#create} so the file is a
+     * valid {@code .mpgo} after each call.</p>
+     */
     public void flush() {
-        throw new UnsupportedOperationException(
-            "StreamWriter.flush requires integration with " +
-            "SpectralDataset.write — full implementation in a future " +
-            "milestone. For now, callers buffer spectra and write via " +
-            "SpectralDataset directly.");
+        int n = spectra.size();
+        int totalPoints = spectra.stream().mapToInt(s -> s.mzValues().length).sum();
+
+        double[] mzAll = new double[totalPoints];
+        double[] intensityAll = new double[totalPoints];
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        double[] rts = new double[n];
+        int[] msLevels = new int[n];
+        int[] polarities = new int[n];
+        double[] precursorMzs = new double[n];
+        int[] precursorCharges = new int[n];
+        double[] basePeakIntensities = new double[n];
+
+        int offset = 0;
+        for (int i = 0; i < n; i++) {
+            MassSpectrum ms = spectra.get(i);
+            double[] mz = ms.mzValues();
+            double[] intensity = ms.intensityValues();
+            System.arraycopy(mz, 0, mzAll, offset, mz.length);
+            System.arraycopy(intensity, 0, intensityAll, offset, intensity.length);
+            offsets[i] = offset;
+            lengths[i] = mz.length;
+            rts[i] = ms.scanTimeSeconds();
+            msLevels[i] = ms.msLevel();
+            polarities[i] = ms.polarity().intValue();
+            precursorMzs[i] = ms.precursorMz();
+            precursorCharges[i] = ms.precursorCharge();
+            double basePeak = 0.0;
+            for (int j = 0; j < intensity.length; j++) {
+                if (intensity[j] > basePeak) basePeak = intensity[j];
+            }
+            basePeakIntensities[i] = basePeak;
+            offset += mz.length;
+        }
+
+        SpectrumIndex idx = new SpectrumIndex(n,
+            offsets, lengths, rts, msLevels, polarities,
+            precursorMzs, precursorCharges, basePeakIntensities);
+
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mzAll);
+        channels.put("intensity", intensityAll);
+
+        AcquisitionRun run = new AcquisitionRun(
+            runName,
+            acquisitionMode,
+            idx,
+            instrumentConfig,
+            channels,
+            List.of(),
+            List.of(),
+            null,
+            0.0
+        );
+
+        try (SpectralDataset ds = SpectralDataset.create(
+                filePath, "", null,
+                List.of(run),
+                List.of(), List.of(), List.of())) {
+            // file written; ds closed by try-with-resources
+        }
     }
 
     public void flushAndClose() {

@@ -183,12 +183,166 @@ public final class EncryptionManager {
         return key;
     }
 
+    // --------------------------------------------------------- file ops
+
+    /**
+     * Encrypt the intensity_values dataset of the named MS run inside the
+     * {@code .mpgo} file at {@code filePath}, in place.
+     *
+     * <p>Locates {@code /study/ms_runs/<runName>/signal_channels/}, reads
+     * the plaintext {@code intensity_values} dataset, encrypts its bytes
+     * with AES-256-GCM, writes {@code intensity_values_encrypted} (byte
+     * array packed as int32 padded to 4-byte boundary), plus sibling
+     * {@code intensity_iv} and {@code intensity_tag} datasets, plus
+     * attributes {@code intensity_ciphertext_bytes} (int64),
+     * {@code intensity_original_count} (int64), and
+     * {@code intensity_algorithm} ("AES-256-GCM"), then deletes the
+     * original {@code intensity_values} dataset.</p>
+     *
+     * <p>Idempotent: if the channel is already encrypted, returns
+     * silently without re-encrypting.</p>
+     *
+     * @param filePath absolute path to the .mpgo file
+     * @param runName  run key under /study/ms_runs/
+     * @param key      32-byte AES-256 key
+     */
+    public static void encryptIntensityChannelInRun(String filePath, String runName, byte[] key) {
+        try (com.dtwthalion.mpgo.hdf5.Hdf5File f =
+                     com.dtwthalion.mpgo.hdf5.Hdf5File.open(filePath);
+             com.dtwthalion.mpgo.hdf5.Hdf5Group root = f.rootGroup();
+             com.dtwthalion.mpgo.hdf5.Hdf5Group study = root.openGroup("study");
+             com.dtwthalion.mpgo.hdf5.Hdf5Group msRuns = study.openGroup("ms_runs");
+             com.dtwthalion.mpgo.hdf5.Hdf5Group runGroup = msRuns.openGroup(runName);
+             com.dtwthalion.mpgo.hdf5.Hdf5Group sig = runGroup.openGroup("signal_channels")) {
+
+            // Idempotent: already encrypted
+            if (sig.hasChild("intensity_values_encrypted")) return;
+
+            // Read plaintext intensity_values
+            double[] data;
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds = sig.openDataset("intensity_values")) {
+                data = (double[]) ds.readData();
+            }
+
+            // Encrypt
+            EncryptResult er = encryptChannel(data, key);
+            byte[] ciphertext = er.ciphertext();
+            byte[] iv = er.iv();    // 12 bytes
+            byte[] tag = er.tag();  // 16 bytes
+
+            // Pad ciphertext to 4-byte boundary, pack as int[]
+            int paddedLen = (ciphertext.length + 3) & ~3;
+            byte[] padded = Arrays.copyOf(ciphertext, paddedLen);
+            int[] cipherInts = bytesToInts(padded);
+
+            // Pack iv (12 bytes → 3 ints) and tag (16 bytes → 4 ints)
+            int[] ivInts = bytesToInts(iv);      // exactly 3
+            int[] tagInts = bytesToInts(tag);    // exactly 4
+
+            // Write encrypted datasets (no chunking/compression for small crypto blobs)
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds =
+                         sig.createDataset("intensity_values_encrypted",
+                                 com.dtwthalion.mpgo.Enums.Precision.INT32,
+                                 cipherInts.length, 0, 0)) {
+                ds.writeData(cipherInts);
+            }
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds =
+                         sig.createDataset("intensity_iv",
+                                 com.dtwthalion.mpgo.Enums.Precision.INT32,
+                                 ivInts.length, 0, 0)) {
+                ds.writeData(ivInts);
+            }
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds =
+                         sig.createDataset("intensity_tag",
+                                 com.dtwthalion.mpgo.Enums.Precision.INT32,
+                                 tagInts.length, 0, 0)) {
+                ds.writeData(tagInts);
+            }
+
+            // Write attributes
+            sig.setIntegerAttribute("intensity_ciphertext_bytes", ciphertext.length);
+            sig.setIntegerAttribute("intensity_original_count", data.length);
+            sig.setStringAttribute("intensity_algorithm", "AES-256-GCM");
+
+            // Delete the plaintext dataset
+            sig.deleteChild("intensity_values");
+        }
+    }
+
+    /**
+     * Decrypt the previously-encrypted intensity channel for the named run.
+     * Returns plaintext bytes (length = original_count * 8 for float64).
+     * The on-disk file is NOT modified.
+     *
+     * @param filePath absolute path to the .mpgo file
+     * @param runName  run key
+     * @param key      32-byte AES-256 key
+     * @return plaintext bytes
+     */
+    public static byte[] decryptIntensityChannelInRun(String filePath, String runName, byte[] key) {
+        try (com.dtwthalion.mpgo.hdf5.Hdf5File f =
+                     com.dtwthalion.mpgo.hdf5.Hdf5File.openReadOnly(filePath);
+             com.dtwthalion.mpgo.hdf5.Hdf5Group root = f.rootGroup();
+             com.dtwthalion.mpgo.hdf5.Hdf5Group study = root.openGroup("study");
+             com.dtwthalion.mpgo.hdf5.Hdf5Group msRuns = study.openGroup("ms_runs");
+             com.dtwthalion.mpgo.hdf5.Hdf5Group runGroup = msRuns.openGroup(runName);
+             com.dtwthalion.mpgo.hdf5.Hdf5Group sig = runGroup.openGroup("signal_channels")) {
+
+            // Read ciphertext_bytes attribute
+            long ciphertextBytes = sig.readIntegerAttribute("intensity_ciphertext_bytes", -1);
+            if (ciphertextBytes < 0) {
+                throw new IllegalStateException(
+                        "intensity_ciphertext_bytes attribute missing; is channel encrypted?");
+            }
+
+            // Read encrypted int32 datasets
+            int[] cipherInts;
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds =
+                         sig.openDataset("intensity_values_encrypted")) {
+                cipherInts = (int[]) ds.readData();
+            }
+            int[] ivInts;
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds = sig.openDataset("intensity_iv")) {
+                ivInts = (int[]) ds.readData();
+            }
+            int[] tagInts;
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds = sig.openDataset("intensity_tag")) {
+                tagInts = (int[]) ds.readData();
+            }
+
+            // Unpack
+            byte[] ciphertextPadded = intsToBytes(cipherInts);
+            byte[] ciphertext = Arrays.copyOf(ciphertextPadded, (int) ciphertextBytes);
+            byte[] iv = intsToBytes(ivInts);
+            byte[] tag = intsToBytes(tagInts);
+
+            return decrypt(ciphertext, iv, tag, key);
+        }
+    }
+
     // ------------------------------------------------------------ helpers
 
     private static void validateKey(byte[] key) {
         if (key == null || key.length != KEY_BYTES) {
             throw new IllegalArgumentException("Key must be exactly 32 bytes");
         }
+    }
+
+    /** Pack bytes (length must be multiple of 4) into little-endian int[]. */
+    private static int[] bytesToInts(byte[] bytes) {
+        int n = (bytes.length + 3) / 4;
+        byte[] padded = bytes.length % 4 == 0 ? bytes : Arrays.copyOf(bytes, n * 4);
+        int[] ints = new int[n];
+        ByteBuffer buf = ByteBuffer.wrap(padded).order(ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < n; i++) ints[i] = buf.getInt();
+        return ints;
+    }
+
+    /** Unpack little-endian int[] to bytes. */
+    private static byte[] intsToBytes(int[] ints) {
+        ByteBuffer buf = ByteBuffer.allocate(ints.length * 4).order(ByteOrder.LITTLE_ENDIAN);
+        for (int v : ints) buf.putInt(v);
+        return buf.array();
     }
 
     private static byte[] doublesToLeBytes(double[] data) {
