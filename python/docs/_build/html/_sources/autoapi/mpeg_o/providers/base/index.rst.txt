@@ -1,0 +1,409 @@
+mpeg_o.providers.base
+=====================
+
+.. py:module:: mpeg_o.providers.base
+
+.. autoapi-nested-parse::
+
+   Abstract storage-provider contract — Milestone 39 Part A.
+
+   A storage provider exposes a hierarchical group tree where each group
+   owns typed datasets (primitive 1-D arrays + compound records) and
+   attributes. HDF5 is one implementation; in-memory is another; a
+   future Zarr provider is yet another. Upper layers
+   (:class:`~mpeg_o.SpectralDataset` et al.) must talk to these ABCs and
+   stay backend-agnostic.
+
+   The capability floor — what every provider MUST support — matches
+   HANDOFF binding decision #31:
+
+   * hierarchical groups
+   * named datasets with typed arrays
+   * partial reads (hyperslab-equivalent slicing)
+   * chunked storage
+   * compression
+   * compound types with variable-length string fields
+   * scalar and array attributes on groups and datasets
+
+   Providers that cannot deliver a capability raise
+   ``NotImplementedError`` with a clear message; callers degrade or
+   error out at the caller layer.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOStorageProtocols.h`` · Java:
+   ``com.dtwthalion.mpgo.providers`` package.
+
+   API status: Stable (Provisional per M39 — may change before v1.0).
+
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.providers.base.CompoundFieldKind
+   mpeg_o.providers.base.CompoundField
+   mpeg_o.providers.base.StorageDataset
+   mpeg_o.providers.base.StorageGroup
+   mpeg_o.providers.base.StorageProvider
+
+
+Module Contents
+---------------
+
+.. py:class:: CompoundFieldKind(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   Kinds of fields allowed inside a compound dataset record.
+
+   Kept small on purpose: these are the kinds MPEG-O §6 actually uses
+   across identifications, quantifications, provenance, and compound
+   spectrum-index headers. Adding a new kind is a spec change.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOCompoundFieldKind`` · Java:
+   ``com.dtwthalion.mpgo.providers.CompoundField.Kind``.
+
+
+   .. py:attribute:: UINT32
+      :value: 'uint32'
+
+
+
+   .. py:attribute:: INT64
+      :value: 'int64'
+
+
+
+   .. py:attribute:: FLOAT64
+      :value: 'float64'
+
+
+
+   .. py:attribute:: VL_STRING
+      :value: 'vl_string'
+
+
+
+.. py:class:: CompoundField
+
+   One field inside a compound-dataset record.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOCompoundField`` · Java:
+   ``com.dtwthalion.mpgo.providers.CompoundField``.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: kind
+      :type:  CompoundFieldKind
+
+
+.. py:class:: StorageDataset
+
+   Bases: :py:obj:`abc.ABC`
+
+
+   A typed array (or compound record array) stored under a
+   :class:`StorageGroup`. 1-D is the common case; N-D is supported
+   for image cubes and 2-D NMR (see :meth:`create_dataset_nd`).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOStorageDataset`` · Java:
+   ``com.dtwthalion.mpgo.providers.StorageDataset``.
+
+
+   .. py:property:: name
+      :type: str
+
+      :abstractmethod:
+
+
+
+   .. py:property:: precision
+      :type: mpeg_o.enums.Precision | None
+
+      :abstractmethod:
+
+
+      Element precision for primitive datasets; ``None`` for
+      compound datasets (use :meth:`compound_fields` there).
+
+
+   .. py:property:: shape
+      :type: tuple[int, Ellipsis]
+
+      :abstractmethod:
+
+
+      Full shape tuple. 1-D datasets return ``(N,)``.
+
+
+   .. py:property:: length
+      :type: int
+
+
+      Size along the first axis (= shape[0]). Convenience for
+      callers that only deal with 1-D datasets.
+
+
+   .. py:property:: chunks
+      :type: tuple[int, Ellipsis] | None
+
+
+      Chunk shape, or ``None`` for contiguous storage. Default
+      ``None`` — providers that care override.
+
+
+   .. py:property:: compound_fields
+      :type: tuple[CompoundField, Ellipsis] | None
+
+      :abstractmethod:
+
+
+      Field schema for compound datasets, or ``None`` for
+      primitive datasets.
+
+
+   .. py:method:: read(offset: int = 0, count: int = -1) -> numpy.ndarray
+      :abstractmethod:
+
+
+      Read ``count`` elements starting at ``offset``. ``count == -1``
+      reads from ``offset`` to the end. Compound datasets return a
+      structured ndarray whose dtype matches :meth:`compound_fields`.
+
+
+
+   .. py:method:: write(data: numpy.ndarray) -> None
+      :abstractmethod:
+
+
+      Write the full array. Shape must match :meth:`length` and
+      dtype must match the declared precision / compound schema.
+
+
+
+   .. py:method:: has_attribute(name: str) -> bool
+      :abstractmethod:
+
+
+
+   .. py:method:: get_attribute(name: str) -> Any
+      :abstractmethod:
+
+
+
+   .. py:method:: set_attribute(name: str, value: Any) -> None
+      :abstractmethod:
+
+
+
+   .. py:method:: close() -> None
+
+      Release any per-dataset resources. Default no-op.
+
+
+
+   .. py:method:: __enter__() -> StorageDataset
+
+
+   .. py:method:: __exit__(exc_type, exc, tb) -> None
+
+
+.. py:class:: StorageGroup
+
+   Bases: :py:obj:`abc.ABC`
+
+
+   A named directory of sub-groups and datasets.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOStorageGroup`` · Java:
+   ``com.dtwthalion.mpgo.providers.StorageGroup``.
+
+
+   .. py:property:: name
+      :type: str
+
+      :abstractmethod:
+
+
+
+   .. py:method:: child_names() -> list[str]
+      :abstractmethod:
+
+
+
+   .. py:method:: has_child(name: str) -> bool
+      :abstractmethod:
+
+
+
+   .. py:method:: open_group(name: str) -> StorageGroup
+      :abstractmethod:
+
+
+
+   .. py:method:: create_group(name: str) -> StorageGroup
+      :abstractmethod:
+
+
+
+   .. py:method:: delete_child(name: str) -> None
+      :abstractmethod:
+
+
+
+   .. py:method:: open_dataset(name: str) -> StorageDataset
+      :abstractmethod:
+
+
+
+   .. py:method:: create_dataset(name: str, precision: mpeg_o.enums.Precision, length: int, *, chunk_size: int = 0, compression: mpeg_o.enums.Compression = Compression.NONE, compression_level: int = 6) -> StorageDataset
+      :abstractmethod:
+
+
+      Create a primitive 1-D dataset.
+
+      ``chunk_size == 0`` selects a contiguous (unchunked) layout.
+      ``compression == NONE`` disables filters regardless of
+      ``compression_level``.
+
+
+
+   .. py:method:: create_dataset_nd(name: str, precision: mpeg_o.enums.Precision, shape: tuple[int, Ellipsis], *, chunks: tuple[int, Ellipsis] | None = None, compression: mpeg_o.enums.Compression = Compression.NONE, compression_level: int = 6) -> StorageDataset
+
+      Create a multi-dimensional dataset. 1-D path delegates to
+      :meth:`create_dataset` for backward compat; overrides extend
+      to higher ranks.
+
+
+
+   .. py:method:: create_compound_dataset(name: str, fields: list[CompoundField], count: int) -> StorageDataset
+      :abstractmethod:
+
+
+      Create a 1-D compound dataset with the given field schema.
+
+
+
+   .. py:method:: has_attribute(name: str) -> bool
+      :abstractmethod:
+
+
+
+   .. py:method:: get_attribute(name: str) -> Any
+      :abstractmethod:
+
+
+
+   .. py:method:: set_attribute(name: str, value: Any) -> None
+      :abstractmethod:
+
+
+
+   .. py:method:: delete_attribute(name: str) -> None
+      :abstractmethod:
+
+
+
+   .. py:method:: attribute_names() -> list[str]
+      :abstractmethod:
+
+
+
+   .. py:method:: close() -> None
+
+      Release any per-group resources. Default no-op.
+
+
+
+   .. py:method:: __enter__() -> StorageGroup
+
+
+   .. py:method:: __exit__(exc_type, exc, tb) -> None
+
+
+.. py:class:: StorageProvider
+
+   Bases: :py:obj:`abc.ABC`
+
+
+   Opens a storage backend and exposes its root group.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOStorageProvider`` · Java:
+   ``com.dtwthalion.mpgo.providers.StorageProvider``.
+
+
+   .. py:method:: open(path_or_url: str, *, mode: str = 'r', **kwargs) -> StorageProvider
+      :classmethod:
+
+      :abstractmethod:
+
+
+      Open an existing backing store.
+
+      ``mode`` mirrors h5py semantics: ``"r"`` read-only, ``"r+"``
+      read/write existing, ``"w"`` create/truncate, ``"a"`` append.
+
+
+
+   .. py:property:: provider_name
+      :type: str
+
+      :abstractmethod:
+
+
+      Short identifier used for logging and registry lookup
+      (``"hdf5"``, ``"memory"``, ``"zarr"``, …).
+
+
+   .. py:method:: root_group() -> StorageGroup
+      :abstractmethod:
+
+
+
+   .. py:method:: is_open() -> bool
+      :abstractmethod:
+
+
+
+   .. py:method:: close() -> None
+      :abstractmethod:
+
+
+
+   .. py:method:: native_handle() -> Any
+
+      Return the underlying native storage handle — ``h5py.File``
+      for :class:`Hdf5Provider`, ``None`` for :class:`MemoryProvider`.
+
+      Escape hatch for byte-level code (signatures, encryption,
+      native compression filters) that cannot be expressed through
+      the protocol. Any caller that invokes this is pinned to a
+      specific backend.
+
+
+
+   .. py:method:: __enter__() -> StorageProvider
+
+
+   .. py:method:: __exit__(exc_type, exc, tb) -> None
+
+

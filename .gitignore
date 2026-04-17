@@ -29,3 +29,7 @@ java/target/
 # ObjC test summary artifact
 objc/tests.sum
 objc/Tests/tests.sum
+
+# Sphinx build cache (Python doc generator intermediate output;
+# committed HTML lives under docs/api/python/).
+python/docs/_build/

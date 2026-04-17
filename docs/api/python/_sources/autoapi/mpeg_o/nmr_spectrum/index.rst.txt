@@ -1,0 +1,81 @@
+mpeg_o.nmr_spectrum
+===================
+
+.. py:module:: mpeg_o.nmr_spectrum
+
+.. autoapi-nested-parse::
+
+   ``NMRSpectrum`` — 1-D NMR subclass with chemical-shift + intensity.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.nmr_spectrum.NMRSpectrum
+
+
+Module Contents
+---------------
+
+.. py:class:: NMRSpectrum
+
+   Bases: :py:obj:`mpeg_o.spectrum.Spectrum`
+
+
+   A 1-D NMR spectrum with ``chemical_shift`` and ``intensity`` channels.
+
+   :param nucleus_type: Nucleus type (``"1H"``, ``"13C"``, ``"31P"``, ...).
+   :type nucleus_type: str, default ""
+   :param spectrometer_frequency_mhz: Spectrometer frequency in MHz.
+   :type spectrometer_frequency_mhz: float, default 0.0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGONMRSpectrum`` · Java:
+   ``com.dtwthalion.mpgo.NMRSpectrum``.
+
+
+   .. py:attribute:: CHEMICAL_SHIFT
+      :value: 'chemical_shift'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: nucleus_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: spectrometer_frequency_mhz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:property:: chemical_shift_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"chemical_shift"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+

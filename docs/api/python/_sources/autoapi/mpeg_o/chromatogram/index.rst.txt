@@ -1,0 +1,92 @@
+mpeg_o.chromatogram
+===================
+
+.. py:module:: mpeg_o.chromatogram
+
+.. autoapi-nested-parse::
+
+   ``Chromatogram`` — time-vs-intensity Spectrum subclass.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.chromatogram.Chromatogram
+
+
+Module Contents
+---------------
+
+.. py:class:: Chromatogram
+
+   Bases: :py:obj:`mpeg_o.spectrum.Spectrum`
+
+
+   Chromatogram: time-vs-intensity trace. TIC, XIC, or SRM.
+
+   Subclass of :class:`Spectrum`. The time and intensity arrays live
+   in :attr:`signal_arrays` under keys ``"time"`` and ``"intensity"``.
+
+   :param chromatogram_type: TIC / XIC / SRM.
+   :type chromatogram_type: ChromatogramType, default ChromatogramType.TIC
+   :param target_mz: XIC target m/z. ``0`` if not XIC.
+   :type target_mz: float, default 0.0
+   :param product_mz: SRM product m/z. ``0`` if not SRM.
+   :type product_mz: float, default 0.0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Standard channel names are ``"time"`` and ``"intensity"``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOChromatogram`` · Java:
+   ``com.dtwthalion.mpgo.Chromatogram``.
+
+
+   .. py:attribute:: TIME
+      :value: 'time'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: chromatogram_type
+      :type:  mpeg_o.enums.ChromatogramType
+
+
+   .. py:attribute:: target_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: product_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:property:: time_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"time"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+

@@ -25,44 +25,8 @@ DOCUMENT_NAME = libMPGO
 
 libMPGO_HEADER_FILES_DIR = ../Source
 
-libMPGO_AGSDOC_FILES = \
-	../Source/Protocols/MPGOIndexable.h \
-	../Source/Protocols/MPGOStreamable.h \
-	../Source/Protocols/MPGOCVAnnotatable.h \
-	../Source/Protocols/MPGOProvenanceable.h \
-	../Source/Protocols/MPGOEncryptable.h \
-	../Source/ValueClasses/MPGOEnums.h \
-	../Source/ValueClasses/MPGOValueRange.h \
-	../Source/ValueClasses/MPGOEncodingSpec.h \
-	../Source/ValueClasses/MPGOAxisDescriptor.h \
-	../Source/ValueClasses/MPGOCVParam.h \
-	../Source/HDF5/MPGOHDF5Errors.h \
-	../Source/HDF5/MPGOHDF5Types.h \
-	../Source/HDF5/MPGOHDF5File.h \
-	../Source/HDF5/MPGOHDF5Group.h \
-	../Source/HDF5/MPGOHDF5Dataset.h \
-	../Source/HDF5/MPGOHDF5Attribute.h \
-	../Source/Core/MPGOSignalArray.h \
-	../Source/Spectra/MPGOSpectrum.h \
-	../Source/Spectra/MPGOMassSpectrum.h \
-	../Source/Spectra/MPGONMRSpectrum.h \
-	../Source/Spectra/MPGONMR2DSpectrum.h \
-	../Source/Spectra/MPGOFreeInductionDecay.h \
-	../Source/Spectra/MPGOChromatogram.h \
-	../Source/Run/MPGOInstrumentConfig.h \
-	../Source/Run/MPGOSpectrumIndex.h \
-	../Source/Run/MPGOAcquisitionRun.h \
-	../Source/Dataset/MPGOIdentification.h \
-	../Source/Dataset/MPGOQuantification.h \
-	../Source/Dataset/MPGOProvenanceRecord.h \
-	../Source/Dataset/MPGOTransitionList.h \
-	../Source/Dataset/MPGOSpectralDataset.h \
-	../Source/Image/MPGOMSImage.h \
-	../Source/Protection/MPGOAccessPolicy.h \
-	../Source/Protection/MPGOEncryptionManager.h \
-	../Source/Query/MPGOQuery.h \
-	../Source/Query/MPGOStreamWriter.h \
-	../Source/Query/MPGOStreamReader.h
+# Use shell glob to pick up every public header (including post-M41 additions)
+libMPGO_AGSDOC_FILES := $(shell find ../Source -name '*.h')
 
 libMPGO_AGSDOC_FLAGS = \
 	-MakeFrames YES \

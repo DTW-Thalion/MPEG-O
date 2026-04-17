@@ -1,0 +1,197 @@
+mpeg_o.importers.import_result
+==============================
+
+.. py:module:: mpeg_o.importers.import_result
+
+.. autoapi-nested-parse::
+
+   ``ImportResult`` — lightweight in-memory container produced by importers.
+
+   The main ``SpectralDataset`` class wraps an open HDF5 file, which would be
+   awkward to construct from an importer that has no backing file yet. Instead,
+   importers produce an :class:`ImportResult` that can be inspected in memory
+   and then flushed to a real ``.mpgo`` file with :meth:`ImportResult.to_mpgo`.
+
+   .. rubric:: Notes
+
+   API status: Stable (Python-idiomatic helper; ObjC and Java use
+   inline constructs).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.importers.import_result.ImportedSpectrum
+   mpeg_o.importers.import_result.ImportedChromatogram
+   mpeg_o.importers.import_result.ImportResult
+
+
+Module Contents
+---------------
+
+.. py:class:: ImportedSpectrum
+
+   One decoded spectrum from an import-time XML parse.
+
+
+   .. py:attribute:: mz_or_chemical_shift
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: intensity
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: retention_time
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: ms_level
+      :type:  int
+      :value: 1
+
+
+
+   .. py:attribute:: polarity
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: precursor_charge
+      :type:  int
+      :value: 0
+
+
+
+.. py:class:: ImportedChromatogram
+
+   One decoded chromatogram trace from mzML (M24).
+
+
+   .. py:attribute:: retention_times
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: intensities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: chromatogram_type
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: target_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: product_mz
+      :type:  float
+      :value: 0.0
+
+
+
+.. py:class:: ImportResult
+
+   Container returned by the mzML / nmrML importers.
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: ms_spectra
+      :type:  list[ImportedSpectrum]
+      :value: []
+
+
+
+   .. py:attribute:: nmr_spectra
+      :type:  list[ImportedSpectrum]
+      :value: []
+
+
+
+   .. py:attribute:: chromatograms
+      :type:  list[ImportedChromatogram]
+      :value: []
+
+
+
+   .. py:attribute:: nucleus_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: identifications
+      :type:  list[mpeg_o.identification.Identification]
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list[mpeg_o.quantification.Quantification]
+      :value: []
+
+
+
+   .. py:attribute:: provenance
+      :type:  list[mpeg_o.provenance.ProvenanceRecord]
+      :value: []
+
+
+
+   .. py:attribute:: source_file
+      :type:  str
+      :value: ''
+
+
+
+   .. py:method:: __iter__() -> Iterator[ImportedSpectrum]
+
+
+   .. py:property:: spectrum_count
+      :type: int
+
+
+
+   .. py:method:: build_runs() -> dict[str, mpeg_o.spectral_dataset.WrittenRun]
+
+      Convert the parsed spectra into ``WrittenRun`` buffers ready for
+      :func:`SpectralDataset.write_minimal`.
+
+
+
+   .. py:method:: to_mpgo(path: str | pathlib.Path, features: list[str] | None = None) -> pathlib.Path
+
+

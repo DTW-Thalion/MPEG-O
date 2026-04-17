@@ -1,0 +1,54 @@
+mpeg_o.exporters.isa
+====================
+
+.. py:module:: mpeg_o.exporters.isa
+
+.. autoapi-nested-parse::
+
+   ISA-Tab / ISA-JSON exporter — Python mirror of ``MPGOISAExporter``.
+
+   Produces a bundle of UTF-8 text files that describe a
+   :class:`mpeg_o.SpectralDataset` in the Investigation / Study / Assay
+   model. Output is byte-identical to the Objective-C exporter for the
+   same logical input — the M27 cross-language parity test asserts this.
+
+   File mapping:
+
+       i_investigation.txt        one row per Investigation metadata field
+       s_study.txt                one row per sample (= acquisition run)
+       a_assay_ms_<run>.txt       one file per MS run, one row per run
+       investigation.json         ISA-JSON (single file per investigation)
+
+   SPDX-License-Identifier: Apache-2.0
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOISAExporter`` · Java:
+   ``com.dtwthalion.mpgo.exporters.ISAExporter``
+
+   API status: Stable.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   mpeg_o.exporters.isa.bundle_for_dataset
+   mpeg_o.exporters.isa.write_bundle_for_dataset
+
+
+Module Contents
+---------------
+
+.. py:function:: bundle_for_dataset(dataset: mpeg_o.spectral_dataset.SpectralDataset) -> dict[str, bytes]
+
+   Return the ISA bundle as ``{filename: bytes}`` for ``dataset``.
+
+
+.. py:function:: write_bundle_for_dataset(dataset: mpeg_o.spectral_dataset.SpectralDataset, directory: str | pathlib.Path) -> pathlib.Path
+
+   Write the ISA bundle to ``directory`` (creating it if needed).
+
+

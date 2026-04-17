@@ -1,0 +1,129 @@
+mpeg_o.feature_flags
+====================
+
+.. py:module:: mpeg_o.feature_flags
+
+.. autoapi-nested-parse::
+
+   ``FeatureFlags`` — the registry of format feature strings used by a file.
+
+   The actual on-disk read/write lives in :mod:`mpeg_o._hdf5_io`; this module
+   provides a thin value object and the canonical list of reserved feature
+   names documented in ``docs/feature-flags.md``.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   mpeg_o.feature_flags.BASE_V1
+   mpeg_o.feature_flags.COMPOUND_IDENTIFICATIONS
+   mpeg_o.feature_flags.COMPOUND_QUANTIFICATIONS
+   mpeg_o.feature_flags.COMPOUND_PROVENANCE
+   mpeg_o.feature_flags.OPT_COMPOUND_HEADERS
+   mpeg_o.feature_flags.OPT_NATIVE_2D_NMR
+   mpeg_o.feature_flags.OPT_NATIVE_MSIMAGE_CUBE
+   mpeg_o.feature_flags.OPT_DATASET_ENCRYPTION
+   mpeg_o.feature_flags.OPT_DIGITAL_SIGNATURES
+   mpeg_o.feature_flags.OPT_CANONICAL_SIGNATURES
+   mpeg_o.feature_flags.COMPOUND_PER_RUN_PROVENANCE
+   mpeg_o.feature_flags.OPT_KEY_ROTATION
+   mpeg_o.feature_flags.OPT_ANONYMIZED
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.feature_flags.FeatureFlags
+
+
+Module Contents
+---------------
+
+.. py:data:: BASE_V1
+   :value: 'base_v1'
+
+
+.. py:data:: COMPOUND_IDENTIFICATIONS
+   :value: 'compound_identifications'
+
+
+.. py:data:: COMPOUND_QUANTIFICATIONS
+   :value: 'compound_quantifications'
+
+
+.. py:data:: COMPOUND_PROVENANCE
+   :value: 'compound_provenance'
+
+
+.. py:data:: OPT_COMPOUND_HEADERS
+   :value: 'opt_compound_headers'
+
+
+.. py:data:: OPT_NATIVE_2D_NMR
+   :value: 'opt_native_2d_nmr'
+
+
+.. py:data:: OPT_NATIVE_MSIMAGE_CUBE
+   :value: 'opt_native_msimage_cube'
+
+
+.. py:data:: OPT_DATASET_ENCRYPTION
+   :value: 'opt_dataset_encryption'
+
+
+.. py:data:: OPT_DIGITAL_SIGNATURES
+   :value: 'opt_digital_signatures'
+
+
+.. py:data:: OPT_CANONICAL_SIGNATURES
+   :value: 'opt_canonical_signatures'
+
+
+.. py:data:: COMPOUND_PER_RUN_PROVENANCE
+   :value: 'compound_per_run_provenance'
+
+
+.. py:data:: OPT_KEY_ROTATION
+   :value: 'opt_key_rotation'
+
+
+.. py:data:: OPT_ANONYMIZED
+   :value: 'opt_anonymized'
+
+
+.. py:class:: FeatureFlags
+
+   Immutable set of format feature strings with a version label.
+
+
+   .. py:attribute:: version
+      :type:  str
+      :value: '1.1'
+
+
+
+   .. py:attribute:: features
+      :type:  tuple[str, Ellipsis]
+      :value: ()
+
+
+
+   .. py:method:: from_iterable(version: str, features: Iterable[str]) -> FeatureFlags
+      :classmethod:
+
+
+
+   .. py:method:: has(name: str) -> bool
+
+
+   .. py:method:: required() -> tuple[str, Ellipsis]
+
+      Features whose absence should cause a reader to refuse the file.
+
+
+

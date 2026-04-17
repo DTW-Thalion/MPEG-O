@@ -1,0 +1,1828 @@
+mpeg_o
+======
+
+.. py:module:: mpeg_o
+
+.. autoapi-nested-parse::
+
+   MPEG-O — Python reader/writer for the multi-omics data standard.
+
+   Public API is re-exported here. See :class:`mpeg_o.SpectralDataset` for the
+   main entry point.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/mpeg_o/access_policy/index
+   /autoapi/mpeg_o/acquisition_run/index
+   /autoapi/mpeg_o/anonymization/index
+   /autoapi/mpeg_o/axis_descriptor/index
+   /autoapi/mpeg_o/chromatogram/index
+   /autoapi/mpeg_o/cv_param/index
+   /autoapi/mpeg_o/encoding_spec/index
+   /autoapi/mpeg_o/encryption/index
+   /autoapi/mpeg_o/enums/index
+   /autoapi/mpeg_o/exporters/index
+   /autoapi/mpeg_o/feature_flags/index
+   /autoapi/mpeg_o/fid/index
+   /autoapi/mpeg_o/identification/index
+   /autoapi/mpeg_o/importers/index
+   /autoapi/mpeg_o/instrument_config/index
+   /autoapi/mpeg_o/key_rotation/index
+   /autoapi/mpeg_o/mass_spectrum/index
+   /autoapi/mpeg_o/ms_image/index
+   /autoapi/mpeg_o/nmr_2d/index
+   /autoapi/mpeg_o/nmr_spectrum/index
+   /autoapi/mpeg_o/protocols/index
+   /autoapi/mpeg_o/provenance/index
+   /autoapi/mpeg_o/providers/index
+   /autoapi/mpeg_o/quantification/index
+   /autoapi/mpeg_o/query/index
+   /autoapi/mpeg_o/remote/index
+   /autoapi/mpeg_o/signal_array/index
+   /autoapi/mpeg_o/signatures/index
+   /autoapi/mpeg_o/spectral_dataset/index
+   /autoapi/mpeg_o/spectrum/index
+   /autoapi/mpeg_o/stream_reader/index
+   /autoapi/mpeg_o/stream_writer/index
+   /autoapi/mpeg_o/transition_list/index
+   /autoapi/mpeg_o/value_range/index
+   /autoapi/mpeg_o/verifier/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   mpeg_o.__version__
+   mpeg_o.FORMAT_VERSION
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.AcquisitionMode
+   mpeg_o.Compression
+   mpeg_o.Polarity
+   mpeg_o.Precision
+   mpeg_o.SamplingMode
+   mpeg_o.ValueRange
+   mpeg_o.CVParam
+   mpeg_o.AxisDescriptor
+   mpeg_o.EncodingSpec
+   mpeg_o.InstrumentConfig
+   mpeg_o.SignalArray
+   mpeg_o.Spectrum
+   mpeg_o.MassSpectrum
+   mpeg_o.NMRSpectrum
+   mpeg_o.NMR2DSpectrum
+   mpeg_o.FreeInductionDecay
+   mpeg_o.Chromatogram
+   mpeg_o.Identification
+   mpeg_o.Quantification
+   mpeg_o.ProvenanceRecord
+   mpeg_o.Transition
+   mpeg_o.TransitionList
+   mpeg_o.FeatureFlags
+   mpeg_o.AcquisitionRun
+   mpeg_o.SpectrumIndex
+   mpeg_o.MSImage
+
+
+Package Contents
+----------------
+
+.. py:data:: __version__
+   :value: '0.4.0'
+
+
+.. py:data:: FORMAT_VERSION
+   :value: '1.1'
+
+
+.. py:class:: AcquisitionMode
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   High-level acquisition scheme for a run.
+
+   Cross-language: ObjC ``MPGOAcquisitionMode`` · Java
+   ``Enums.AcquisitionMode``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: MS1_DDA
+      :value: 0
+
+
+
+   .. py:attribute:: MS2_DDA
+      :value: 1
+
+
+
+   .. py:attribute:: DIA
+      :value: 2
+
+
+
+   .. py:attribute:: SRM
+      :value: 3
+
+
+
+   .. py:attribute:: NMR_1D
+      :value: 4
+
+
+
+   .. py:attribute:: NMR_2D
+      :value: 5
+
+
+
+   .. py:attribute:: IMAGING
+      :value: 6
+
+
+
+.. py:class:: Compression
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Compression algorithm applied to a signal buffer.
+
+   Cross-language: ObjC ``MPGOCompression`` · Java
+   ``Enums.Compression``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: NONE
+      :value: 0
+
+
+
+   .. py:attribute:: ZLIB
+      :value: 1
+
+
+
+   .. py:attribute:: LZ4
+      :value: 2
+
+
+
+   .. py:attribute:: NUMPRESS_DELTA
+      :value: 3
+
+
+
+.. py:class:: Polarity
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Ion polarity for mass spectrometry.
+
+   Cross-language: ObjC ``MPGOPolarity`` · Java
+   ``Enums.Polarity``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: UNKNOWN
+      :value: 0
+
+
+
+   .. py:attribute:: POSITIVE
+      :value: 1
+
+
+
+   .. py:attribute:: NEGATIVE
+      :value: -1
+
+
+
+.. py:class:: Precision
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Numeric precision of a signal buffer.
+
+   Cross-language: ObjC ``MPGOPrecision`` · Java
+   ``Enums.Precision``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: FLOAT32
+      :value: 0
+
+
+
+   .. py:attribute:: FLOAT64
+      :value: 1
+
+
+
+   .. py:attribute:: INT32
+      :value: 2
+
+
+
+   .. py:attribute:: INT64
+      :value: 3
+
+
+
+   .. py:attribute:: UINT32
+      :value: 4
+
+
+
+   .. py:attribute:: COMPLEX128
+      :value: 5
+
+
+
+   .. py:method:: numpy_dtype() -> str
+
+      Return the little-endian NumPy dtype string for this precision.
+
+
+
+.. py:class:: SamplingMode
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Axis sampling regularity.
+
+   Cross-language: ObjC ``MPGOSamplingMode`` · Java
+   ``Enums.SamplingMode``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: UNIFORM
+      :value: 0
+
+
+
+   .. py:attribute:: NON_UNIFORM
+      :value: 1
+
+
+
+.. py:class:: ValueRange
+
+   An inclusive numeric interval ``[minimum, maximum]``.
+
+   Immutable value class. Empty or inverted ranges are permitted at
+   construction time; consumers decide whether ``minimum > maximum``
+   is meaningful in their context.
+
+   :param minimum: Lower bound (inclusive).
+   :type minimum: float
+   :param maximum: Upper bound (inclusive).
+   :type maximum: float
+
+   .. attribute:: span
+
+      Difference ``maximum - minimum``.
+
+      :type: float
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOValueRange`` · Java:
+   ``com.dtwthalion.mpgo.ValueRange``.
+
+
+   .. py:attribute:: minimum
+      :type:  float
+
+
+   .. py:attribute:: maximum
+      :type:  float
+
+
+   .. py:method:: contains(value: float) -> bool
+
+      Return ``True`` if ``value`` lies within the closed range.
+
+      :param value:
+      :type value: float
+
+      :returns: *bool*
+
+
+
+   .. py:property:: span
+      :type: float
+
+
+      Difference between ``maximum`` and ``minimum``.
+
+
+.. py:class:: CVParam
+
+   A single controlled-vocabulary parameter reference.
+
+   Immutable value class in the form
+   ``(ontology_ref, accession, name, [value], [unit])``.
+
+   :param ontology_ref: Ontology short name (``"MS"``, ``"NMR"``, ``"UO"``, ...).
+   :type ontology_ref: str
+   :param accession: Ontology accession in ``<CV>:<id>`` form
+                     (e.g. ``"MS:1000515"``).
+   :type accession: str
+   :param name: Human-readable label.
+   :type name: str
+   :param value: Optional free-form value. Use an empty string when the
+                 parameter is a pure assertion with no associated value.
+   :type value: str, default ""
+   :param unit: Optional unit accession (typically a UO or MS term).
+   :type unit: str or None, default None
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOCVParam`` · Java:
+   ``com.dtwthalion.mpgo.CVParam``.
+
+
+   .. py:attribute:: ontology_ref
+      :type:  str
+
+
+   .. py:attribute:: accession
+      :type:  str
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: value
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: unit
+      :type:  str | None
+      :value: None
+
+
+
+.. py:class:: AxisDescriptor
+
+   Describes a single axis of a :class:`~mpeg_o.signal_array.SignalArray`.
+
+   Immutable value class. ``name`` is a short token (``"mz"``,
+   ``"chemical_shift"``, ...) and ``unit`` is a free-form label
+   (``"m/z"``, ``"ppm"``, ``"s"``, ...).
+
+   :param name: Semantic name of the axis.
+   :type name: str
+   :param unit: Unit of the axis values.
+   :type unit: str
+   :param value_range: Numeric bounds of the axis. ``None`` when unknown.
+   :type value_range: ValueRange or None, default None
+   :param sampling_mode: Whether samples are regularly spaced.
+   :type sampling_mode: SamplingMode, default SamplingMode.UNIFORM
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOAxisDescriptor`` · Java:
+   ``com.dtwthalion.mpgo.AxisDescriptor``.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: unit
+      :type:  str
+
+
+   .. py:attribute:: value_range
+      :type:  mpeg_o.value_range.ValueRange | None
+      :value: None
+
+
+
+   .. py:attribute:: sampling_mode
+      :type:  mpeg_o.enums.SamplingMode
+
+
+.. py:class:: EncodingSpec
+
+   Describes how a signal buffer is encoded on disk.
+
+   Immutable value class pairing numeric precision, compression
+   algorithm, and byte order.
+
+   :param precision: Numeric precision of each sample.
+   :type precision: Precision, default Precision.FLOAT64
+   :param compression: Compression algorithm.
+   :type compression: Compression, default Compression.ZLIB
+   :param byte_order: Byte order on disk.
+   :type byte_order: ByteOrder, default ByteOrder.LITTLE_ENDIAN
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   The HDF5 compression level (0-9 for zlib) is a
+   provider-configuration concern and lives on
+   :class:`~mpeg_o.providers.hdf5.Hdf5Provider` via
+   ``create_dataset(compression_level=...)``, not on this value
+   class.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOEncodingSpec`` · Java:
+   ``com.dtwthalion.mpgo.EncodingSpec``.
+
+
+   .. py:attribute:: precision
+      :type:  mpeg_o.enums.Precision
+
+
+   .. py:attribute:: compression
+      :type:  mpeg_o.enums.Compression
+
+
+   .. py:attribute:: byte_order
+      :type:  mpeg_o.enums.ByteOrder
+
+
+   .. py:method:: element_size() -> int
+
+      Return the size in bytes of one element at this precision.
+
+
+
+.. py:class:: InstrumentConfig
+
+   Instrument configuration block persisted as HDF5 string attributes.
+
+   All fields default to empty strings because the format spec
+   explicitly allows every sub-field to be missing (§3 of
+   ``docs/format-spec.md``).
+
+   :param manufacturer: Instrument manufacturer (e.g. ``"Thermo Fisher Scientific"``).
+   :type manufacturer: str, default ""
+   :param model: Instrument model (e.g. ``"Orbitrap Eclipse"``).
+   :type model: str, default ""
+   :param serial_number: Serial number.
+   :type serial_number: str, default ""
+   :param source_type: Ionization source (e.g. ``"ESI"``, ``"MALDI"``).
+   :type source_type: str, default ""
+   :param analyzer_type: Mass analyzer (e.g. ``"Orbitrap"``, ``"TOF"``).
+   :type analyzer_type: str, default ""
+   :param detector_type: Detector (e.g. ``"inductive"``, ``"electron multiplier"``).
+   :type detector_type: str, default ""
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOInstrumentConfig`` · Java:
+   ``com.dtwthalion.mpgo.InstrumentConfig``.
+
+
+   .. py:attribute:: manufacturer
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: model
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: serial_number
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: source_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: analyzer_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: detector_type
+      :type:  str
+      :value: ''
+
+
+
+.. py:class:: SignalArray
+
+   A named 1-D numeric signal buffer paired with axis and encoding
+   metadata, with CV annotation support.
+
+   :param data: 1-D numeric array holding the raw signal values. Callers should
+                treat the array contents as immutable after construction.
+   :type data: numpy.ndarray
+   :param axis: Descriptor of the physical dimension represented by ``data``
+                (e.g. m/z, ppm). ``None`` when the axis is not yet known or not
+                applicable.
+   :type axis: AxisDescriptor or None, optional
+   :param encoding: Wire-format encoding for HDF5 serialisation.  Defaults to
+                    FLOAT64 / ZLIB / little-endian.
+   :type encoding: EncodingSpec, optional
+   :param cv_params: Initial CV annotations.  Usually empty; grow at runtime via
+                     :meth:`add_cv_param`.
+   :type cv_params: list of CVParam, optional
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOSignalArray`` ·
+   Java: ``com.dtwthalion.mpgo.SignalArray``
+
+
+   .. py:attribute:: data
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: axis
+      :type:  mpeg_o.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: encoding
+      :type:  mpeg_o.encoding_spec.EncodingSpec
+
+
+   .. py:attribute:: cv_params
+      :type:  list[mpeg_o.cv_param.CVParam]
+      :value: []
+
+
+
+   .. py:method:: add_cv_param(param: mpeg_o.cv_param.CVParam) -> None
+
+      Attach *param* to this array in insertion order.
+
+
+
+   .. py:method:: remove_cv_param(param: mpeg_o.cv_param.CVParam) -> None
+
+      Detach *param*.  No-op if not present.
+
+
+
+   .. py:method:: all_cv_params() -> list[mpeg_o.cv_param.CVParam]
+
+      Return all attached CV params in insertion order.
+
+
+
+   .. py:method:: cv_params_for_accession(accession: str) -> list[mpeg_o.cv_param.CVParam]
+
+      Return params whose ``accession`` equals *accession*.
+
+
+
+   .. py:method:: cv_params_for_ontology_ref(ontology_ref: str) -> list[mpeg_o.cv_param.CVParam]
+
+      Return params whose ``ontology_ref`` equals *ontology_ref*.
+
+
+
+   .. py:method:: has_cv_param_with_accession(accession: str) -> bool
+
+      Return ``True`` if at least one attached param matches *accession*.
+
+
+
+   .. py:method:: from_numpy(array: numpy.ndarray, axis: mpeg_o.axis_descriptor.AxisDescriptor | None = None, encoding: mpeg_o.encoding_spec.EncodingSpec | None = None) -> SignalArray
+      :classmethod:
+
+
+
+   .. py:method:: __len__() -> int
+
+
+.. py:class:: Spectrum
+
+   Generic multi-channel 1-D spectrum with per-scan metadata.
+
+   Holds an ordered mapping of named :class:`SignalArray` objects and
+   the coordinate axes that index them, plus per-scan metadata
+   (index position, scan time, optional precursor info for tandem
+   MS).
+
+   Concrete subclasses (:class:`MassSpectrum`, :class:`NMRSpectrum`)
+   add their own typed metadata.
+
+   :param signal_arrays: Named signal arrays keyed by channel name
+                         (``"mz"``, ``"intensity"``, ``"chemical_shift"``, ...).
+   :type signal_arrays: dict[str, SignalArray]
+   :param axes: Coordinate axes describing the signal arrays.
+   :type axes: list[AxisDescriptor]
+   :param index_position: Position in the parent :class:`~mpeg_o.acquisition_run.AcquisitionRun` (0-based).
+   :type index_position: int, default 0
+   :param scan_time_seconds: Scan time in seconds from run start.
+   :type scan_time_seconds: float, default 0.0
+   :param precursor_mz: Precursor m/z for tandem MS. ``0`` if not tandem.
+   :type precursor_mz: float, default 0.0
+   :param precursor_charge: Precursor charge state. ``0`` if unknown.
+   :type precursor_charge: int, default 0
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   HDF5 representation: each spectrum is an HDF5 group whose
+   immediate children are ``SignalArray`` sub-groups plus scalar
+   attributes for the metadata fields.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOSpectrum`` · Java:
+   ``com.dtwthalion.mpgo.Spectrum``.
+
+
+   .. py:attribute:: signal_arrays
+      :type:  dict[str, mpeg_o.signal_array.SignalArray]
+
+
+   .. py:attribute:: axes
+      :type:  list[mpeg_o.axis_descriptor.AxisDescriptor]
+      :value: []
+
+
+
+   .. py:attribute:: index_position
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: scan_time_seconds
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: precursor_charge
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: signal_array(name: str) -> mpeg_o.signal_array.SignalArray
+
+      Return the named ``SignalArray``. Raises ``KeyError`` if absent.
+
+
+
+   .. py:method:: has_signal_array(name: str) -> bool
+
+      Return ``True`` iff ``name`` is in ``signal_arrays``.
+
+
+
+   .. py:method:: signal_array_names() -> list[str]
+
+      Return the channel names in insertion order.
+
+
+
+   .. py:method:: __len__() -> int
+
+
+.. py:class:: MassSpectrum
+
+   Bases: :py:obj:`mpeg_o.spectrum.Spectrum`
+
+
+   A mass spectrum: m/z + intensity arrays plus MS level, polarity,
+   and an optional scan window.
+
+   :param ms_level: MS level (1, 2, 3, ...).
+   :type ms_level: int, default 1
+   :param polarity: Ion polarity.
+   :type polarity: Polarity, default Polarity.UNKNOWN
+   :param scan_window: m/z range covered by the scan. ``None`` if not reported.
+   :type scan_window: ValueRange or None, default None
+   :param \*plus all base :class:`Spectrum` parameters (signal_arrays:
+   :param axes:
+   :param :
+   :param index_position:
+   :param scan_time_seconds:
+   :param precursor_mz:
+   :param precursor_charge)*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Standard channel names are ``"mz"`` and ``"intensity"``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOMassSpectrum`` · Java:
+   ``com.dtwthalion.mpgo.MassSpectrum``.
+
+
+   .. py:attribute:: MZ
+      :value: 'mz'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: ms_level
+      :type:  int
+      :value: 1
+
+
+
+   .. py:attribute:: polarity
+      :type:  mpeg_o.enums.Polarity
+
+
+   .. py:attribute:: scan_window
+      :type:  mpeg_o.value_range.ValueRange | None
+      :value: None
+
+
+
+   .. py:property:: mz_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"mz"`` :class:`SignalArray`. Raises if absent.
+
+
+   .. py:property:: intensity_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+
+.. py:class:: NMRSpectrum
+
+   Bases: :py:obj:`mpeg_o.spectrum.Spectrum`
+
+
+   A 1-D NMR spectrum with ``chemical_shift`` and ``intensity`` channels.
+
+   :param nucleus_type: Nucleus type (``"1H"``, ``"13C"``, ``"31P"``, ...).
+   :type nucleus_type: str, default ""
+   :param spectrometer_frequency_mhz: Spectrometer frequency in MHz.
+   :type spectrometer_frequency_mhz: float, default 0.0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGONMRSpectrum`` · Java:
+   ``com.dtwthalion.mpgo.NMRSpectrum``.
+
+
+   .. py:attribute:: CHEMICAL_SHIFT
+      :value: 'chemical_shift'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: nucleus_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: spectrometer_frequency_mhz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:property:: chemical_shift_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"chemical_shift"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+
+.. py:class:: NMR2DSpectrum
+
+   Bases: :py:obj:`mpeg_o.spectrum.Spectrum`
+
+
+   2-D NMR spectrum: rank-2 intensity matrix with F1 and F2 axes.
+
+   Subclass of :class:`Spectrum`. The matrix is stored as a rank-2
+   ``numpy.ndarray`` of shape ``(height, width)``.
+
+   :param intensity_matrix: Rank-2 intensity matrix; shape ``(height, width)``.
+   :type intensity_matrix: numpy.ndarray
+   :param f1_axis: F1 axis descriptor.
+   :type f1_axis: AxisDescriptor or None, default None
+   :param f2_axis: F2 axis descriptor.
+   :type f2_axis: AxisDescriptor or None, default None
+   :param nucleus_f1: Nucleus type on F1 (``"1H"``, ``"13C"``, ...).
+   :type nucleus_f1: str, default ""
+   :param nucleus_f2: Nucleus type on F2.
+   :type nucleus_f2: str, default ""
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGONMR2DSpectrum`` · Java:
+   ``com.dtwthalion.mpgo.NMR2DSpectrum``.
+
+
+   .. py:attribute:: intensity_matrix
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: f1_axis
+      :type:  mpeg_o.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: f2_axis
+      :type:  mpeg_o.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: nucleus_f1
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: nucleus_f2
+      :type:  str
+      :value: ''
+
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:property:: matrix_height
+      :type: int
+
+
+
+   .. py:property:: matrix_width
+      :type: int
+
+
+
+.. py:class:: FreeInductionDecay
+
+   Bases: :py:obj:`mpeg_o.signal_array.SignalArray`
+
+
+   NMR free-induction-decay signal.
+
+   Subclass of :class:`SignalArray` holding a complex-valued buffer
+   plus FID-specific acquisition metadata: dwell time, scan count,
+   receiver gain.
+
+   :param dwell_time_seconds: Sample spacing in seconds.
+   :type dwell_time_seconds: float, default 0.0
+   :param scan_count: Number of scans averaged.
+   :type scan_count: int, default 1
+   :param receiver_gain: Receiver gain used during acquisition.
+   :type receiver_gain: float, default 1.0
+   :param \*plus all base :class:`SignalArray` parameters (data:
+   :param axis:
+   :param :
+   :param encoding:
+   :param cv_params)*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOFreeInductionDecay`` · Java:
+   ``com.dtwthalion.mpgo.FreeInductionDecay``.
+
+
+   .. py:attribute:: dwell_time_seconds
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: scan_count
+      :type:  int
+      :value: 1
+
+
+
+   .. py:attribute:: receiver_gain
+      :type:  float
+      :value: 1.0
+
+
+
+.. py:class:: Chromatogram
+
+   Bases: :py:obj:`mpeg_o.spectrum.Spectrum`
+
+
+   Chromatogram: time-vs-intensity trace. TIC, XIC, or SRM.
+
+   Subclass of :class:`Spectrum`. The time and intensity arrays live
+   in :attr:`signal_arrays` under keys ``"time"`` and ``"intensity"``.
+
+   :param chromatogram_type: TIC / XIC / SRM.
+   :type chromatogram_type: ChromatogramType, default ChromatogramType.TIC
+   :param target_mz: XIC target m/z. ``0`` if not XIC.
+   :type target_mz: float, default 0.0
+   :param product_mz: SRM product m/z. ``0`` if not SRM.
+   :type product_mz: float, default 0.0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Standard channel names are ``"time"`` and ``"intensity"``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOChromatogram`` · Java:
+   ``com.dtwthalion.mpgo.Chromatogram``.
+
+
+   .. py:attribute:: TIME
+      :value: 'time'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: chromatogram_type
+      :type:  mpeg_o.enums.ChromatogramType
+
+
+   .. py:attribute:: target_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: product_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:property:: time_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"time"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: mpeg_o.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+
+.. py:class:: Identification
+
+   A spectrum-level chemical-entity identification.
+
+   Links a spectrum (by its 0-based index within an acquisition run)
+   to a chemical entity with a confidence score and an evidence
+   chain.
+
+   :param run_name: Acquisition run that contains the spectrum.
+   :type run_name: str
+   :param spectrum_index: 0-based position within that run.
+   :type spectrum_index: int
+   :param chemical_entity: CHEBI accession or chemical formula.
+   :type chemical_entity: str
+   :param confidence_score: Score in ``[0.0, 1.0]``.
+   :type confidence_score: float
+   :param evidence_chain: Ordered list of free-form evidence strings (typically CV
+                          accession references).
+   :type evidence_chain: list[str], default []
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOIdentification`` · Java:
+   ``com.dtwthalion.mpgo.Identification``.
+
+
+   .. py:attribute:: run_name
+      :type:  str
+
+
+   .. py:attribute:: spectrum_index
+      :type:  int
+
+
+   .. py:attribute:: chemical_entity
+      :type:  str
+
+
+   .. py:attribute:: confidence_score
+      :type:  float
+
+
+   .. py:attribute:: evidence_chain
+      :type:  list[str]
+      :value: []
+
+
+
+.. py:class:: Quantification
+
+   An abundance observation for a chemical entity in a sample.
+
+   :param chemical_entity: CHEBI accession or chemical formula.
+   :type chemical_entity: str
+   :param sample_ref: Sample identifier.
+   :type sample_ref: str
+   :param abundance: Measured abundance.
+   :type abundance: float
+   :param normalization_method: Normalization method. Empty string represents an unnormalized
+                                abundance.
+   :type normalization_method: str, default ""
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOQuantification`` · Java:
+   ``com.dtwthalion.mpgo.Quantification``.
+
+
+   .. py:attribute:: chemical_entity
+      :type:  str
+
+
+   .. py:attribute:: sample_ref
+      :type:  str
+
+
+   .. py:attribute:: abundance
+      :type:  float
+
+
+   .. py:attribute:: normalization_method
+      :type:  str
+      :value: ''
+
+
+
+.. py:class:: ProvenanceRecord
+
+   A single provenance step describing how data was produced or
+   transformed. W3C PROV-compatible.
+
+   :param timestamp_unix: Unix timestamp (seconds since 1970-01-01T00:00:00Z).
+   :type timestamp_unix: int, default 0
+   :param software: Software name + version (e.g. ``"MSConvert 3.0.24052"``).
+   :type software: str, default ""
+   :param parameters: Software-specific processing parameters.
+   :type parameters: dict[str, Any], default {}
+   :param input_refs: URIs / identifiers of input entities.
+   :type input_refs: list[str], default []
+   :param output_refs: URIs / identifiers of output entities.
+   :type output_refs: list[str], default []
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOProvenanceRecord`` · Java:
+   ``com.dtwthalion.mpgo.ProvenanceRecord``.
+
+
+   .. py:attribute:: timestamp_unix
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: software
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: parameters
+      :type:  dict[str, Any]
+
+
+   .. py:attribute:: input_refs
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:attribute:: output_refs
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:method:: contains_input_ref(ref: str) -> bool
+
+      Return ``True`` iff ``ref`` is in ``input_refs``.
+
+
+
+.. py:class:: Transition
+
+   One SRM/MRM transition.
+
+   :param precursor_mz: Precursor m/z.
+   :type precursor_mz: float
+   :param product_mz: Product m/z.
+   :type product_mz: float
+   :param collision_energy: Collision energy (eV).
+   :type collision_energy: float, default 0.0
+   :param retention_time_window: Optional retention-time acceptance window.
+   :type retention_time_window: ValueRange or None, default None
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOTransition`` · Java:
+   ``com.dtwthalion.mpgo.TransitionList.Transition``.
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+
+
+   .. py:attribute:: product_mz
+      :type:  float
+
+
+   .. py:attribute:: collision_energy
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: retention_time_window
+      :type:  mpeg_o.value_range.ValueRange | None
+      :value: None
+
+
+
+.. py:class:: TransitionList
+
+   An ordered collection of SRM/MRM transitions.
+
+   :param transitions: Ordered transitions.
+   :type transitions: tuple[Transition, ...], default ()
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOTransitionList`` · Java:
+   ``com.dtwthalion.mpgo.TransitionList``.
+
+
+   .. py:attribute:: transitions
+      :type:  tuple[Transition, Ellipsis]
+      :value: ()
+
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: count() -> int
+
+      Return the number of transitions.
+
+
+
+   .. py:method:: transition_at_index(index: int) -> Transition
+
+      Return the transition at ``index``.
+
+
+
+.. py:class:: FeatureFlags
+
+   Immutable set of format feature strings with a version label.
+
+
+   .. py:attribute:: version
+      :type:  str
+      :value: '1.1'
+
+
+
+   .. py:attribute:: features
+      :type:  tuple[str, Ellipsis]
+      :value: ()
+
+
+
+   .. py:method:: from_iterable(version: str, features: Iterable[str]) -> FeatureFlags
+      :classmethod:
+
+
+
+   .. py:method:: has(name: str) -> bool
+
+
+   .. py:method:: required() -> tuple[str, Ellipsis]
+
+      Features whose absence should cause a reader to refuse the file.
+
+
+
+.. py:class:: AcquisitionRun
+
+   Lazy view over one acquisition run inside an ``.mpgo`` file.
+
+   Conforms to :class:`~mpeg_o.protocols.Indexable`,
+   :class:`~mpeg_o.protocols.Streamable`, and
+   :class:`~mpeg_o.protocols.Provenanceable`.
+   :class:`~mpeg_o.protocols.Encryptable` conformance is delivered
+   in slice 41.5 when the encryption manager subsystem lands.
+
+   Spectrum access is zero-copy-aware: the spectrum index is
+   pre-loaded into numpy arrays at open time but signal channels are
+   sliced on demand, so random access to spectrum ``i`` touches only
+   the dataset bytes it needs.
+
+   .. rubric:: Notes
+
+   API status: Stable (Encryptable surface pending).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOAcquisitionRun`` · Java:
+   ``com.dtwthalion.mpgo.AcquisitionRun``.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: group
+      :type:  h5py.Group
+
+
+   .. py:attribute:: spectrum_class
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  mpeg_o.enums.AcquisitionMode
+
+
+   .. py:attribute:: index
+      :type:  SpectrumIndex
+
+
+   .. py:attribute:: channel_names
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:attribute:: instrument_config
+      :type:  mpeg_o.instrument_config.InstrumentConfig
+
+
+   .. py:attribute:: nucleus_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: provenance_json
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: chromatograms
+      :type:  list[mpeg_o.chromatogram.Chromatogram]
+      :value: []
+
+
+
+   .. py:method:: open(group: h5py.Group, name: str) -> AcquisitionRun
+      :classmethod:
+
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: __iter__() -> Iterator[mpeg_o.spectrum.Spectrum]
+
+
+   .. py:method:: provenance() -> list[mpeg_o.provenance.ProvenanceRecord]
+
+      Per-run provenance records.
+
+      Prefers the v0.3 compound layout at ``<run>/provenance/steps`` and
+      falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2
+      files (no per-run provenance of any kind) return an empty list.
+
+
+
+   .. py:method:: __getitem__(i: int) -> mpeg_o.spectrum.Spectrum
+
+
+   .. py:method:: object_at_index(index: int) -> mpeg_o.spectrum.Spectrum
+
+      Return the spectrum at ``index``. Negative indices are supported.
+
+
+
+   .. py:method:: count() -> int
+
+      Return the total number of spectra.
+
+
+
+   .. py:method:: object_for_key(key: object) -> mpeg_o.spectrum.Spectrum
+      :abstractmethod:
+
+
+      Not supported — AcquisitionRun uses integer indexing only.
+
+
+
+   .. py:method:: objects_in_range(start: int, stop: int) -> list[mpeg_o.spectrum.Spectrum]
+
+      Return spectra in the half-open slice ``[start, stop)``.
+
+
+
+   .. py:method:: next_object() -> mpeg_o.spectrum.Spectrum
+
+      Return the next spectrum and advance the cursor.
+
+
+
+   .. py:method:: has_more() -> bool
+
+      Return ``True`` if ``next_object`` can be called.
+
+
+
+   .. py:method:: current_position() -> int
+
+      0-based position of the next spectrum to be yielded.
+
+
+
+   .. py:method:: seek_to_position(position: int) -> bool
+
+      Reposition the cursor. Returns ``True`` on success.
+
+
+
+   .. py:method:: reset() -> None
+
+      Reposition the cursor to 0.
+
+
+
+   .. py:method:: add_processing_step(step: mpeg_o.provenance.ProvenanceRecord) -> None
+
+      Append a processing step to this run's provenance chain.
+
+
+
+   .. py:method:: provenance_chain() -> list[mpeg_o.provenance.ProvenanceRecord]
+
+      Return this run's provenance records in insertion order.
+
+
+
+   .. py:method:: input_entities() -> list[str]
+
+      Distinct input entity identifiers referenced by the chain.
+
+
+
+   .. py:method:: output_entities() -> list[str]
+
+      Distinct output entity identifiers referenced by the chain.
+
+
+
+   .. py:method:: encrypt_with_key(key: bytes, level: mpeg_o.enums.EncryptionLevel) -> None
+
+      Encrypt this run's intensity channel in place.
+
+      Operates through the already-open HDF5 group so no second file
+      handle is required — the file must be open for writing (``"r+"``
+      or ``"w"``). Matches ObjC
+      ``-[MPGOAcquisitionRun encryptWithKey:level:error:]`` semantics.
+
+      Requires a persistence context — call only after opening via
+      :meth:`SpectralDataset.open`.
+
+
+
+   .. py:method:: decrypt_with_key(key: bytes) -> bytes
+
+      Decrypt this run's intensity channel.
+
+      Returns the plaintext bytes. The on-disk file is NOT modified.
+      Operates through the already-open HDF5 group. Matches ObjC
+      ``-[MPGOAcquisitionRun decryptWithKey:]`` semantics (NSData → bytes).
+
+      Requires a persistence context — call only after opening via
+      :meth:`SpectralDataset.open`.
+
+
+
+   .. py:method:: access_policy() -> mpeg_o.access_policy.AccessPolicy | None
+
+      Return the current access policy, or ``None`` if not set.
+
+
+
+   .. py:method:: set_access_policy(policy: mpeg_o.access_policy.AccessPolicy | None) -> None
+
+      Replace the current access policy.
+
+
+
+.. py:class:: SpectrumIndex
+
+   Parallel per-spectrum arrays loaded eagerly at run open time.
+
+   The arrays map 1:1 to the datasets under
+   ``/study/ms_runs/<name>/spectrum_index/`` described in §4 of
+   ``docs/format-spec.md``. They are small (length = spectrum_count) and
+   cheap to hold in memory; signal channels remain lazy.
+
+   :param offsets: Starting element index of each spectrum in the mz_values channel.
+   :type offsets: numpy.ndarray
+   :param lengths: Number of elements (peaks) in each spectrum.
+   :type lengths: numpy.ndarray
+   :param retention_times: Retention time in seconds for each spectrum.
+   :type retention_times: numpy.ndarray
+   :param ms_levels: MS level (1, 2, …) for each spectrum.
+   :type ms_levels: numpy.ndarray
+   :param polarities: Polarity (1=positive, -1=negative, 0=unknown) for each spectrum.
+   :type polarities: numpy.ndarray
+   :param precursor_mzs: Precursor m/z for each spectrum (0.0 for MS1).
+   :type precursor_mzs: numpy.ndarray
+   :param precursor_charges: Precursor charge state for each spectrum (0 for MS1).
+   :type precursor_charges: numpy.ndarray
+   :param base_peak_intensities: Base-peak intensity for each spectrum.
+   :type base_peak_intensities: numpy.ndarray
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOSpectrumIndex`` ·
+   Java: ``com.dtwthalion.mpgo.SpectrumIndex``.
+
+
+   .. py:attribute:: offsets
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: retention_times
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: ms_levels
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: polarities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: precursor_mzs
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: precursor_charges
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: base_peak_intensities
+      :type:  numpy.ndarray
+
+
+   .. py:property:: count
+      :type: int
+
+
+
+   .. py:method:: offset_at(index: int) -> int
+
+      Return element offset of spectrum ``index`` in mz_values.
+
+
+
+   .. py:method:: length_at(index: int) -> int
+
+      Return element count (peaks) of spectrum ``index``.
+
+
+
+   .. py:method:: retention_time_at(index: int) -> float
+
+      Return retention time in seconds of spectrum ``index``.
+
+
+
+   .. py:method:: ms_level_at(index: int) -> int
+
+      Return MS level of spectrum ``index``.
+
+
+
+   .. py:method:: polarity_at(index: int) -> mpeg_o.enums.Polarity
+
+      Return :class:`~mpeg_o.enums.Polarity` of spectrum ``index``.
+
+
+
+   .. py:method:: precursor_mz_at(index: int) -> float
+
+      Return precursor m/z of spectrum ``index`` (0.0 for MS1).
+
+
+
+   .. py:method:: precursor_charge_at(index: int) -> int
+
+      Return precursor charge state of spectrum ``index`` (0 for MS1).
+
+
+
+   .. py:method:: base_peak_intensity_at(index: int) -> float
+
+      Return base-peak intensity of spectrum ``index``.
+
+
+
+   .. py:method:: indices_in_retention_time_range(value_range: mpeg_o.value_range.ValueRange) -> list[int]
+
+      Return indices whose retention time lies in
+      ``[value_range.minimum, value_range.maximum]`` (inclusive).
+
+
+
+   .. py:method:: indices_for_ms_level(ms_level: int) -> list[int]
+
+      Return indices whose ``ms_level`` equals ``ms_level``.
+
+
+
+   .. py:method:: read(idx_group: h5py.Group) -> SpectrumIndex
+      :classmethod:
+
+
+
+.. py:class:: MSImage
+
+   Mass-spectrometry imaging dataset: a ``width × height`` grid of
+   pixels, each pixel a spectral profile of ``spectral_points`` values.
+
+   :param width: Image grid dimensions in pixels.
+   :type width: int, default 0
+   :param height: Image grid dimensions in pixels.
+   :type height: int, default 0
+   :param spectral_points: Number of float64 values per pixel.
+   :type spectral_points: int, default 0
+   :param intensity: Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
+   :type intensity: numpy.ndarray, default empty rank-3 array
+   :param pixel_size_x: Spatial pixel size (implementation-defined units).
+   :type pixel_size_x: float, default 0.0
+   :param pixel_size_y: Spatial pixel size (implementation-defined units).
+   :type pixel_size_y: float, default 0.0
+   :param scan_pattern: Scan pattern label (e.g. ``"raster"``, ``"random_access"``).
+   :type scan_pattern: str, default ""
+   :param tile_size: HDF5 chunk tile size for reads; 0 means native cube chunks.
+   :type tile_size: int, default 0
+   :param title: Dataset-level metadata. In Objective-C these are inherited
+                 from ``MPGOSpectralDataset``; in Python they are composed
+                 directly onto ``MSImage``.
+   :type title: str, default ""
+   :param isa_investigation_id: Dataset-level metadata. In Objective-C these are inherited
+                                from ``MPGOSpectralDataset``; in Python they are composed
+                                directly onto ``MSImage``.
+   :type isa_investigation_id: str, default ""
+   :param identifications: Dataset-level identifications (composed — see Notes).
+   :type identifications: list, default []
+   :param quantifications: Dataset-level quantifications (composed).
+   :type quantifications: list, default []
+   :param provenance_records: Dataset-level provenance records (composed).
+   :type provenance_records: list, default []
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   **Composition vs inheritance.** In Objective-C ``MPGOMSImage``
+   inherits from ``MPGOSpectralDataset`` so dataset-level fields come
+   for free. In Python, ``SpectralDataset`` is a file-handle wrapper
+   whose lifecycle does not map cleanly to an MSImage subclass;
+   composition is used here (the five dataset-level fields live on
+   ``MSImage`` directly). This is a known stylistic difference
+   between the language implementations, recorded in
+   :doc:`/api-review-v0.6`.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOMSImage`` · Java:
+   ``com.dtwthalion.mpgo.MSImage``.
+
+
+   .. py:attribute:: width
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: height
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: spectral_points
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_size_x
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: pixel_size_y
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: intensity
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: scan_pattern
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: tile_size
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: identifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: provenance_records
+      :type:  list
+      :value: []
+
+
+
+   .. py:method:: __post_init__() -> None
+
+

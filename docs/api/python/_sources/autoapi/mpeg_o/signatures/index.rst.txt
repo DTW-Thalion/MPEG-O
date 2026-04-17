@@ -1,0 +1,103 @@
+mpeg_o.signatures
+=================
+
+.. py:module:: mpeg_o.signatures
+
+.. autoapi-nested-parse::
+
+   HMAC-SHA256 digital signatures matching the ObjC reference implementation.
+
+   v0.2 (``v1`` in this file) signed over the raw bytes returned by
+   ``H5Dread`` in the dataset's native memory type; on little-endian hosts
+   that happens to be the same as the canonical form, but signatures would
+   not validate across host endianness. v0.3 introduces a ``v2`` canonical
+   form that normalizes atomic numeric datasets to little-endian before
+   hashing and emits compound records with a fixed per-field layout
+   (little-endian numerics plus ``u32_le(length) || bytes`` for VL strings).
+
+   Stored signatures carry a ``v2:`` prefix; verifiers accept unprefixed
+   ``v1`` signatures for backward compatibility and silently route them
+   through the native-bytes path.
+
+   The format is fully interoperable with the Objective-C reference
+   implementation — see ``objc/Source/Protection/MPGOSignatureManager.m``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOSignatureManager`` · Java:
+   ``com.dtwthalion.mpgo.protection.SignatureManager``.
+
+   API status: Stable.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   mpeg_o.signatures.SIGNATURE_ATTR
+   mpeg_o.signatures.PROVENANCE_SIGNATURE_ATTR
+   mpeg_o.signatures.SIGNATURE_V2_PREFIX
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   mpeg_o.signatures.hmac_sha256
+   mpeg_o.signatures.hmac_sha256_b64
+   mpeg_o.signatures.sign_dataset
+   mpeg_o.signatures.verify_dataset
+   mpeg_o.signatures.verify_provenance
+
+
+Module Contents
+---------------
+
+.. py:data:: SIGNATURE_ATTR
+   :value: 'mpgo_signature'
+
+
+.. py:data:: PROVENANCE_SIGNATURE_ATTR
+   :value: 'provenance_signature'
+
+
+.. py:data:: SIGNATURE_V2_PREFIX
+   :value: 'v2:'
+
+
+.. py:function:: hmac_sha256(data: bytes, key: bytes) -> bytes
+
+   Return the raw 32-byte HMAC-SHA256 MAC.
+
+
+.. py:function:: hmac_sha256_b64(data: bytes, key: bytes) -> str
+
+   Return the base64-encoded MAC as produced by the ObjC writer.
+
+
+.. py:function:: sign_dataset(dataset: h5py.Dataset, key: bytes) -> str
+
+   Sign ``dataset`` with a canonical (v2) HMAC-SHA256 signature.
+
+   The resulting attribute string carries a ``v2:`` prefix. Use
+   :func:`verify_dataset` to validate; it transparently falls back to
+   the v0.2 unprefixed native-bytes path for legacy files.
+
+
+.. py:function:: verify_dataset(dataset: h5py.Dataset, key: bytes) -> bool
+
+   Verify the stored ``@mpgo_signature`` against ``key``.
+
+   Accepts both the v0.3 ``v2:`` canonical layout and the v0.2 native
+   layout; the prefix distinguishes the two. Uses timing-safe
+   comparison via :func:`hmac.compare_digest`.
+
+
+.. py:function:: verify_provenance(run_group: h5py.Group, key: bytes) -> bool
+
+   Verify the ``@provenance_signature`` over ``@provenance_json``.
+
+

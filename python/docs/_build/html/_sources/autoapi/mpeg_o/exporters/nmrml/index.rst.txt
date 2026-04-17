@@ -1,0 +1,43 @@
+mpeg_o.exporters.nmrml
+======================
+
+.. py:module:: mpeg_o.exporters.nmrml
+
+.. autoapi-nested-parse::
+
+   nmrML writer — Milestone 29.
+
+   Serializes an :class:`mpeg_o.NMRSpectrum` (and optionally its FID) to
+   an nmrML XML document. Output mirrors the elements parsed by
+   ``mpeg_o.importers.nmrml`` so it round-trips through the reader.
+
+   SPDX-License-Identifier: Apache-2.0
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGONmrMLWriter`` · Java:
+   ``com.dtwthalion.mpgo.exporters.NmrMLWriter``
+
+   API status: Stable.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   mpeg_o.exporters.nmrml.spectrum_to_bytes
+   mpeg_o.exporters.nmrml.write_spectrum
+
+
+Module Contents
+---------------
+
+.. py:function:: spectrum_to_bytes(spectrum: mpeg_o.nmr_spectrum.NMRSpectrum, *, fid: FreeInductionDecay | None = None, sweep_width_ppm: float = 0.0) -> bytes
+
+   Build an nmrML byte blob from ``spectrum`` + optional ``fid``.
+
+
+.. py:function:: write_spectrum(spectrum: mpeg_o.nmr_spectrum.NMRSpectrum, path: str | pathlib.Path, *, fid: FreeInductionDecay | None = None, sweep_width_ppm: float = 0.0) -> pathlib.Path
+

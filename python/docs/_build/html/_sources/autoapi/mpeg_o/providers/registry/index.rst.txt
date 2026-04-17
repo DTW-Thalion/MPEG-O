@@ -1,0 +1,72 @@
+mpeg_o.providers.registry
+=========================
+
+.. py:module:: mpeg_o.providers.registry
+
+.. autoapi-nested-parse::
+
+   Provider registry + factory — Milestone 39 Part B/E.
+
+   Providers register via ``importlib.metadata`` entry points in the
+   ``mpeg_o.providers`` group. In-process registration
+   (:func:`register_provider`) is also supported for testing.
+
+   Lookup by provider name (``"hdf5"``, ``"memory"``) or by URL scheme
+   (``"file"``, ``"memory"``, ``"s3"``, ``"http"``, ``"https"``).
+
+   Entry points are declared in ``pyproject.toml``:
+
+   .. code-block:: toml
+
+       [project.entry-points."mpeg_o.providers"]
+       hdf5 = "mpeg_o.providers.hdf5:Hdf5Provider"
+       memory = "mpeg_o.providers.memory:MemoryProvider"
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOProviderRegistry`` class ·
+   Java: ``com.dtwthalion.mpgo.providers.ProviderRegistry`` class ·
+   Python: module-level functions
+   (``discover_providers``, ``open_provider``, ``register_provider``)
+   — idiomatic for Python packaging.
+
+   API status: Stable (Provisional per M39).
+
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   mpeg_o.providers.registry.register_provider
+   mpeg_o.providers.registry.discover_providers
+   mpeg_o.providers.registry.open_provider
+
+
+Module Contents
+---------------
+
+.. py:function:: register_provider(name: str, cls: type[mpeg_o.providers.base.StorageProvider]) -> None
+
+   Register ``cls`` under ``name``. Overrides an existing entry.
+
+
+.. py:function:: discover_providers() -> dict[str, type[mpeg_o.providers.base.StorageProvider]]
+
+   Return the full map of registered providers, loading entry
+   points lazily on first call. Subsequent calls reuse the cache.
+
+
+.. py:function:: open_provider(path_or_url: str, *, provider: str | None = None, mode: str = 'r', **kwargs: Any) -> mpeg_o.providers.base.StorageProvider
+
+   Resolve a provider and open a backing store.
+
+   * ``provider`` — explicit provider name (bypasses URL detection).
+   * URL scheme — e.g. ``memory://foo``, ``s3://bucket/key.mpgo``,
+     ``file:///path/to/data.mpgo``.
+   * Otherwise — bare path, routed to the ``hdf5`` provider.
+
+
