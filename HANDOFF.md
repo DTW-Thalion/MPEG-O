@@ -1,10 +1,8 @@
 # MPEG-O v0.6 — Storage/Transport Provider Abstraction
 
-> **Status:** v0.5.0 is **complete**. Three languages at feature parity
-> (ObjC 836 assertions, Python 120 tests, Java 62 tests). This session
-> executes **Milestones 37–42** to introduce the **pluggable storage and
-> transport provider architecture**, fix Java compound I/O, add Thermo
-> `.raw` import via delegation, and publish to PyPI + Maven Central.
+> **Status:** v0.6.0 release candidate — final user review pending before tag.
+> Milestones 37–41 complete. ObjC 867 assertions, Python 184 tests, Java 126 tests.
+> Cross-compat 8/8. v0.6.0 tag is user-gated; do not push or tag without explicit approval.
 
 ---
 
@@ -467,7 +465,7 @@ higher-rank support on Hdf5Provider) organically.
 
 ---
 
-## Milestone 41 — API Review Checkpoint
+## Milestone 41 — API Review Checkpoint (SHIPPED 2026-04-17)
 
 **License:** All
 
@@ -481,12 +479,29 @@ Not a freeze — a checkpoint for consistency and documentation before more rele
 - All public APIs have docstrings/javadoc/header comments
 - `docs/migration-guide.md`: mzML → MPEG-O and nmrML → MPEG-O workflows
 
+**Shipped:** 9 commits (d63018a / 621d9b9 / 8b300a9 / 551e157 / fc88d8e /
+00b9f2b / d57a036 / 13c024e / final commit). ObjC is normative. Python and
+Java brought to semantic parity across 8 subsystems:
+
+- 41.1: Domain protocols + ValueClasses (d63018a)
+- 41.2: Core + Spectra (621d9b9)
+- 41.3: Run + Image (8b300a9)
+- 41.4: Dataset (551e157)
+- 41.5: Protection (fc88d8e)
+- 41.6: Query (00b9f2b)
+- 41.7: Storage providers (d57a036)
+- 41.8: Import/Export (13c024e)
+- 41.9: Docs assembly (this commit)
+
+Test counts end-of-M41: ObjC 867, Python 184, Java 126. Cross-compat 8/8.
+Deferred items documented in `docs/api-review-v0.6.md` Known Stylistic Differences and Deferred sections.
+
 **Acceptance**
 
-- [ ] `docs/api-review-v0.6.md` committed
-- [ ] `docs/migration-guide.md` committed
-- [ ] No undocumented public APIs
-- [ ] Provider interfaces clearly marked Provisional
+- [x] `docs/api-review-v0.6.md` committed
+- [x] `docs/migration-guide.md` committed
+- [x] No undocumented public APIs
+- [x] Provider interfaces clearly marked Provisional
 
 ---
 
