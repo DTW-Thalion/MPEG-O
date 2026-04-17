@@ -61,7 +61,8 @@ libMPGO_HEADER_FILES = \
 	Providers/MPGOStorageProtocols.h \
 	Providers/MPGOProviderRegistry.h \
 	Providers/MPGOHDF5Provider.h \
-	Providers/MPGOMemoryProvider.h
+	Providers/MPGOMemoryProvider.h \
+	Providers/MPGOSqliteProvider.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -113,9 +114,10 @@ libMPGO_OBJC_FILES = \
 	Providers/MPGOCompoundField.m \
 	Providers/MPGOProviderRegistry.m \
 	Providers/MPGOHDF5Provider.m \
-	Providers/MPGOMemoryProvider.m
+	Providers/MPGOMemoryProvider.m \
+	Providers/MPGOSqliteProvider.m
 
-libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto
+libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/library.make
