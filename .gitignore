@@ -25,3 +25,7 @@ python/build/
 
 # Maven build output
 java/target/
+
+# ObjC test summary artifact
+objc/tests.sum
+objc/Tests/tests.sum

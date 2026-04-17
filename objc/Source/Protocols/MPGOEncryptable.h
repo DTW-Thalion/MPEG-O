@@ -12,6 +12,12 @@
  * descriptor-stream, or access-unit granularity, enabling selective
  * protection (e.g. encrypting intensity values while leaving m/z and
  * scan metadata readable for indexing and search).
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.protocols.Encryptable
+ *   Java:   com.dtwthalion.mpgo.protocols.Encryptable
  */
 @protocol MPGOEncryptable <NSObject>
 

@@ -3,6 +3,17 @@
 
 #import <Foundation/Foundation.h>
 
+/*
+ * Cross-language equivalents:
+ *   Python: mpeg_o.enums
+ *   Java:   com.dtwthalion.mpgo.Enums
+ *
+ * Declaration order in each ObjC NS_ENUM is authoritative; Python's
+ * IntEnum values and Java's enum declaration order must match.
+ *
+ * API status: Stable.
+ */
+
 typedef NS_ENUM(NSUInteger, MPGOSamplingMode) {
     MPGOSamplingModeUniform = 0,
     MPGOSamplingModeNonUniform

@@ -7,6 +7,12 @@
  * Objects conforming to MPGOIndexable support O(1) random access by
  * integer index and, optionally, by key or range. This is the primary
  * access protocol for collections of spectra, runs, and access units.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.protocols.Indexable
+ *   Java:   com.dtwthalion.mpgo.protocols.Indexable
  */
 @protocol MPGOIndexable <NSObject>
 

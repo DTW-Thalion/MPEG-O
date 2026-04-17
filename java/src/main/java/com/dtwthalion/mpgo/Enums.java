@@ -8,61 +8,90 @@ package com.dtwthalion.mpgo;
 import hdf.hdf5lib.HDF5Constants;
 
 /**
- * Enumerations mirroring the ObjC/Python value sets.
- * Ordinal values match the ObjC NS_ENUM values for cross-language parity.
+ * Enumerations mirroring the ObjC {@code MPGOEnums.h} integer values.
+ *
+ * <p>Declaration order in each {@code enum} matches the ObjC
+ * {@code NS_ENUM} integer values so that {@link Enum#ordinal()} is a
+ * direct pass-through of the on-disk attribute. No translation table
+ * can go stale.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOEnums.h}, Python {@code mpeg_o.enums}.</p>
+ *
+ * @since 0.6
  */
 public final class Enums {
 
     private Enums() {}
 
+    /** Numeric precision of a signal buffer. */
     public enum Precision {
-        INT32(4, HDF5Constants.H5T_NATIVE_INT32, 0),
-        FLOAT32(4, HDF5Constants.H5T_NATIVE_FLOAT, 1),
-        FLOAT64(8, HDF5Constants.H5T_NATIVE_DOUBLE, 2),
-        INT64(8, HDF5Constants.H5T_NATIVE_INT64, 3),
-        UINT32(4, HDF5Constants.H5T_NATIVE_UINT32, 4),
-        UINT8(1, -1, 5),          // raw bytes, no native HDF5 type
-        COMPLEX128(16, -1, 6);    // compound type, built at runtime
+        /** 32-bit IEEE 754 single-precision float (4 bytes). */
+        FLOAT32(4, HDF5Constants.H5T_NATIVE_FLOAT),
+        /** 64-bit IEEE 754 double-precision float (8 bytes). */
+        FLOAT64(8, HDF5Constants.H5T_NATIVE_DOUBLE),
+        /** Signed 32-bit integer (4 bytes). */
+        INT32(4, HDF5Constants.H5T_NATIVE_INT32),
+        /** Signed 64-bit integer (8 bytes). */
+        INT64(8, HDF5Constants.H5T_NATIVE_INT64),
+        /** Unsigned 32-bit integer stored as signed {@code int} (4 bytes). */
+        UINT32(4, HDF5Constants.H5T_NATIVE_UINT32),
+        /** 128-bit complex: two {@code double} values per element (16 bytes). */
+        COMPLEX128(16, -1);  // compound type, built at runtime
 
         private final int elementSize;
         private final long nativeTypeId;
-        private final int hdf5Value;
 
-        Precision(int elementSize, long nativeTypeId, int hdf5Value) {
+        Precision(int elementSize, long nativeTypeId) {
             this.elementSize = elementSize;
             this.nativeTypeId = nativeTypeId;
-            this.hdf5Value = hdf5Value;
         }
 
+        /** @return size in bytes of a single element at this precision. */
         public int elementSize() { return elementSize; }
-        public long nativeTypeId() { return nativeTypeId; }
-        public boolean isBuiltin() { return nativeTypeId >= 0; }
-        public int hdf5Value() { return hdf5Value; }
 
-        public static Precision fromHdf5Value(int v) {
-            for (Precision p : values()) {
-                if (p.hdf5Value == v) return p;
-            }
-            throw new IllegalArgumentException("Unknown HDF5 precision value: " + v);
-        }
+        /** @return native HDF5 type id, or -1 if synthesized at runtime. */
+        public long nativeTypeId() { return nativeTypeId; }
+
+        /** @return {@code true} if backed by a builtin HDF5 type. */
+        public boolean isBuiltin() { return nativeTypeId >= 0; }
     }
 
+    /** Compression algorithm applied to a signal buffer. */
     public enum Compression {
+        /** No compression; raw binary layout. */
         NONE,
+        /** Deflate (zlib/gzip-compatible) compression. */
         ZLIB,
+        /** LZ4 block compression. */
         LZ4,
+        /** NumPRESS delta-integer compression for ordered m/z or retention-time arrays. */
         NUMPRESS_DELTA
     }
 
+    /** Ion polarity for mass spectrometry. */
     public enum Polarity {
+        /** Polarity not specified or not applicable. */
         UNKNOWN(0),
+        /** Positive-ion mode. */
         POSITIVE(1),
+        /** Negative-ion mode. */
         NEGATIVE(-1);
 
         private final int value;
         Polarity(int value) { this.value = value; }
+
+        /** @return the integer on-disk representation of this polarity. */
         public int intValue() { return value; }
 
+        /**
+         * Resolve an integer on-disk value to a {@link Polarity} constant.
+         *
+         * @param v the integer value read from the file
+         * @return the matching constant, or {@link #UNKNOWN} if unrecognised
+         */
         public static Polarity fromInt(int v) {
             return switch (v) {
                 case 1 -> POSITIVE;
@@ -72,37 +101,61 @@ public final class Enums {
         }
     }
 
+    /** Axis sampling regularity. */
     public enum SamplingMode {
+        /** Evenly-spaced samples (fixed step size). */
         UNIFORM,
+        /** Arbitrarily-spaced samples (coordinate array required). */
         NON_UNIFORM
     }
 
+    /** High-level acquisition scheme for a run. */
     public enum AcquisitionMode {
+        /** Data-dependent acquisition, MS1 survey scan. */
         MS1_DDA,
+        /** Data-dependent acquisition, MS2 fragmentation scan. */
         MS2_DDA,
+        /** Data-independent acquisition. */
         DIA,
+        /** Selected reaction monitoring. */
         SRM,
+        /** One-dimensional NMR experiment. */
         NMR_1D,
+        /** Two-dimensional NMR experiment. */
         NMR_2D,
+        /** Mass spectrometry imaging. */
         IMAGING
     }
 
+    /** Chromatogram kind. */
     public enum ChromatogramType {
+        /** Total ion chromatogram. */
         TIC,
+        /** Extracted ion chromatogram. */
         XIC,
+        /** Selected reaction monitoring chromatogram. */
         SRM
     }
 
+    /** Byte order of a signal buffer on disk. */
     public enum ByteOrder {
+        /** Least-significant byte first (x86 native). */
         LITTLE_ENDIAN,
+        /** Most-significant byte first (network order). */
         BIG_ENDIAN
     }
 
+    /** Multi-level protection granularity (MPEG-G style). */
     public enum EncryptionLevel {
+        /** No encryption applied. */
         NONE,
+        /** Protection spans a complete dataset group. */
         DATASET_GROUP,
+        /** Protection spans a single dataset. */
         DATASET,
+        /** Protection spans a descriptor stream within a dataset. */
         DESCRIPTOR_STREAM,
+        /** Protection spans a single access unit (finest granularity). */
         ACCESS_UNIT
     }
 }

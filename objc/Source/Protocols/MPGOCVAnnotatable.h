@@ -10,6 +10,12 @@
  * vocabulary parameters from any ontology (PSI-MS, nmrCV, CHEBI, BFO, ...).
  * This is the primary extensibility mechanism in MPEG-O: the schema stays
  * minimal while semantic richness lives in curated external ontologies.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.protocols.CVAnnotatable
+ *   Java:   com.dtwthalion.mpgo.protocols.CVAnnotatable
+ *
+ * API status: Stable.
  */
 @protocol MPGOCVAnnotatable <NSObject>
 

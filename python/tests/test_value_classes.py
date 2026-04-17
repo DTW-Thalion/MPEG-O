@@ -54,9 +54,9 @@ def test_value_range_is_frozen() -> None:
 
 
 def test_cv_param_defaults() -> None:
-    p = CVParam(accession="MS:1000515", name="intensity array")
+    p = CVParam(ontology_ref="MS", accession="MS:1000515", name="intensity array")
     assert p.value == ""
-    assert p.unit_accession is None
+    assert p.unit is None
 
 
 def test_axis_descriptor_default_sampling() -> None:
@@ -65,11 +65,11 @@ def test_axis_descriptor_default_sampling() -> None:
 
 
 def test_encoding_spec_defaults() -> None:
+    from mpeg_o.enums import ByteOrder
     e = EncodingSpec()
     assert e.precision is Precision.FLOAT64
     assert e.compression is Compression.ZLIB
-    assert e.compression_level == 6
-    assert e.little_endian is True
+    assert e.byte_order is ByteOrder.LITTLE_ENDIAN
 
 
 def test_instrument_config_all_empty_by_default() -> None:
@@ -77,3 +77,69 @@ def test_instrument_config_all_empty_by_default() -> None:
     for field in ("manufacturer", "model", "serial_number", "source_type",
                   "analyzer_type", "detector_type"):
         assert getattr(i, field) == ""
+
+
+def test_compression_includes_numpress_delta():
+    from mpeg_o.enums import Compression
+    assert Compression.NUMPRESS_DELTA.value == 3
+
+
+def test_byte_order_enum_exists():
+    from mpeg_o.enums import ByteOrder
+    assert ByteOrder.LITTLE_ENDIAN.value == 0
+    assert ByteOrder.BIG_ENDIAN.value == 1
+
+def test_value_range_span_and_contains():
+    from mpeg_o.value_range import ValueRange
+    r = ValueRange(0.0, 10.0)
+    assert r.span == 10.0
+    assert r.contains(5.0)
+    assert not r.contains(-1.0)
+
+
+def test_axis_descriptor_has_value_range():
+    from mpeg_o.axis_descriptor import AxisDescriptor
+    from mpeg_o.value_range import ValueRange
+    from mpeg_o.enums import SamplingMode
+
+    a = AxisDescriptor(
+        name="mz",
+        unit="m/z",
+        value_range=ValueRange(100.0, 1000.0),
+        sampling_mode=SamplingMode.NON_UNIFORM,
+    )
+    assert a.value_range == ValueRange(100.0, 1000.0)
+    assert a.sampling_mode is SamplingMode.NON_UNIFORM
+
+
+def test_encoding_spec_uses_byte_order_enum():
+    from mpeg_o.encoding_spec import EncodingSpec
+    from mpeg_o.enums import Precision, Compression, ByteOrder
+    e = EncodingSpec(
+        precision=Precision.FLOAT64,
+        compression=Compression.ZLIB,
+        byte_order=ByteOrder.LITTLE_ENDIAN,
+    )
+    assert e.byte_order is ByteOrder.LITTLE_ENDIAN
+
+
+def test_encoding_spec_element_size():
+    from mpeg_o.encoding_spec import EncodingSpec
+    from mpeg_o.enums import Precision
+    assert EncodingSpec(precision=Precision.FLOAT32).element_size() == 4
+    assert EncodingSpec(precision=Precision.FLOAT64).element_size() == 8
+    assert EncodingSpec(precision=Precision.COMPLEX128).element_size() == 16
+
+
+def test_cv_param_has_ontology_ref_and_single_unit():
+    from mpeg_o.cv_param import CVParam
+    p = CVParam(
+        ontology_ref="MS",
+        accession="MS:1000515",
+        name="intensity array",
+        value="",
+        unit="MS:1000131",
+    )
+    assert p.ontology_ref == "MS"
+    assert p.accession == "MS:1000515"
+    assert p.unit == "MS:1000131"

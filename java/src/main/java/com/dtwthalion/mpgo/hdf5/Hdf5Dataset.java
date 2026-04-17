@@ -43,7 +43,7 @@ public class Hdf5Dataset implements AutoCloseable {
     /**
      * Write all elements.
      *
-     * <p>The data parameter type depends on the precision:
+     * <p>The data parameter type depends on the precision:</p>
      * <ul>
      *   <li>FLOAT32: {@code float[]}</li>
      *   <li>FLOAT64: {@code double[]}</li>
@@ -51,7 +51,9 @@ public class Hdf5Dataset implements AutoCloseable {
      *   <li>INT64: {@code long[]}</li>
      *   <li>UINT32: {@code int[]} (interpreted as unsigned)</li>
      *   <li>COMPLEX128: {@code double[]} with length 2*N (re,im pairs)</li>
-     * </ul></p>
+     * </ul>
+     *
+     * @param data array of the appropriate primitive type for this dataset's precision
      */
     public void writeData(Object data) {
         file.lockForWriting();
@@ -171,7 +173,6 @@ public class Hdf5Dataset implements AutoCloseable {
             case FLOAT64 -> new double[n];
             case INT32, UINT32 -> new int[n];
             case INT64 -> new long[n];
-            case UINT8 -> new byte[n];
             case COMPLEX128 -> new byte[n * 16];
         };
     }

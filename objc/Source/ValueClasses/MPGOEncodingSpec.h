@@ -7,6 +7,12 @@
 /**
  * Describes how a SignalArray's buffer is encoded: numeric precision,
  * compression algorithm, and byte order. Immutable value class.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.encoding_spec.EncodingSpec
+ *   Java:   com.dtwthalion.mpgo.EncodingSpec
  */
 @interface MPGOEncodingSpec : NSObject <NSCoding, NSCopying>
 
