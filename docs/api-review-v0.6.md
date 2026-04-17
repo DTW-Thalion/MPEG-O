@@ -836,3 +836,145 @@ types against Python `python/src/mpeg_o/` and Java
 `java/src/main/java/com/dtwthalion/mpgo/`; apply the same five-category
 classification; preserve all entries in §4 unless a consensus decision to
 align exists.
+
+---
+
+## 6. Appendix B — SQLite Provider: Provisional Stress-Test Findings
+
+Post-v0.6.0, a third storage provider (`SqliteProvider`) was implemented in
+all three languages as a stress test of the Provisional storage-provider
+subsystem. The explicit goal was to accumulate cross-backend experience
+so the subsystem can move Provisional → Stable in v0.7 with known
+interface gaps documented rather than discovered mid-migration.
+
+### Deliverables
+
+| Language | File | Tests |
+|---|---|---|
+| Python | `mpeg_o/providers/sqlite.py` (700 LoC) | 24 tests |
+| Java | `com.dtwthalion.mpgo.providers.SqliteProvider` (670 LoC) | 24 tests |
+| Objective-C | `MPGOSqliteProvider.m` (~850 LoC) | 132 assertions |
+
+Schema identical across all three (DDL, PRAGMAs, little-endian BLOB layout,
+JSON compound encoding). Cross-language compat verified manually: a
+`.mpgo.sqlite` written by any implementation is byte-identically readable
+by the other two.
+
+**Commits:**
+- `44baf65` — Python SqliteProvider + structural round-trip test (A+C₁)
+- `b3d5b46` — Java + ObjC SqliteProvider (B)
+
+### 6.1 Interface gaps surfaced
+
+These are the 13 gaps the tri-language stress test surfaced. Each should
+be resolved or consciously accepted before the storage-provider subsystem
+moves to Stable in v0.7.
+
+#### Cross-backend abstraction leaks (all languages)
+
+**Gap 1 — `open` classmethod vs instance-mutating usage.** The ABC / protocol
+declares `open` as a factory-style classmethod in Python and similar in
+Java, but callers commonly write `p = Provider(); p.open(path)` expecting
+`p` to be mutated. A classmethod receives `cls`, not the instance, so this
+pattern silently does nothing. MemoryProvider has the same latent issue.
+**Resolution candidates:** pick one style (factory classmethod OR two-phase
+init-then-connect) and enforce it across all providers.
+
+**Gap 2 — Compound `read()` return type divergence.** The ABC promises a
+structured `ndarray` for compound datasets; SQLite stores compound rows as
+JSON and returns `list[dict]` (Python) / `List<Map<String,Object>>` (Java).
+Converting JSON rows to a typed structured array is expensive and lossy for
+VL_STRING fields. **Resolution candidates:** (a) accept backend-specific
+compound return types in the ABC contract, or (b) mandate a common
+intermediate shape (e.g. list-of-dicts) across all backends, including HDF5.
+
+**Gap 3 — `chunks` / `compression` / `compression_level` no-ops on SQLite.**
+SQLite stores datasets as contiguous BLOBs; no chunked I/O, no filter
+pipeline. Parameters are accepted for interface compatibility and silently
+ignored. **Resolution candidate:** ABC should expose a
+`supports_chunking()` / `supports_compression()` capability query so callers
+can degrade gracefully; or mandate that providers raise
+`NotImplementedError` on unsupported capabilities.
+
+**Gap 4 — `read(offset, count)` for N-D primitives is full-BLOB-deserialize.**
+SQLite BLOBs are opaque; hyperslab-style range reads require deserializing
+the full dataset first. Acceptable for the stress-test role; disqualifies
+SQLite for large imaging cubes where HDF5's chunked reads are essential.
+**Resolution candidate:** document this as a performance characteristic,
+not a correctness gap.
+
+**Gap 5 — `provider_name` shape inconsistency.** Python ABC declares it as
+`@property`; ObjC and Java expose it as a method. Mechanical for callers
+to navigate but easy to get wrong when writing new tests. **Resolution:**
+converge on one style in the Provisional review.
+
+#### Language-specific gaps
+
+**Gap 6 — JDBC `PRAGMA`-in-transaction constraint (Java only).**
+`PRAGMA journal_mode = WAL` throws if executed inside an open transaction.
+Must apply PRAGMAs in auto-commit mode before switching to
+`setAutoCommit(false)`. No equivalent constraint in Python's `sqlite3`
+module. Encoded as a fixed convention in the Java SqliteProvider.
+
+**Gap 7 — `Enums.Precision` transitively loads HDF5 JNI (Java only).**
+Unexpected architectural finding: `Enums.Precision` has a static
+initializer that loads `HDF5Constants`, which requires the native HDF5 JNI
+library and SLF4J on the classpath. A SqliteProvider with zero HDF5
+dependency still drags HDF5 into the classpath the moment it references
+`Precision`. Pre-existing architectural coupling, exposed by this slice.
+**Resolution candidate:** factor Precision's HDF5 type-constants into a
+separate `Precision.Hdf5Types` companion class that only loads on demand.
+
+**Gap 8 — `StorageDataset` missing `deleteAttribute` / `attributeNames`
+in the Java interface.** Python ABC declares both on `StorageDataset`;
+Java interface omits them. Java SqliteDataset implements them as concrete
+(non-interface) methods. **Resolution:** add these to the Java interface
+in the Provisional review. See also gap 13.
+
+**Gap 9 — ND write shape-update edge case (Java only).** Python's `write()`
+updates `shape_json` to `arr.shape` (numpy carries the shape through).
+Java's `writeAll(Object)` must special-case 1-D vs N-D array types.
+Currently handled as a defensive in-place fix; not a protocol-level issue
+but worth documenting.
+
+**Gap 10 — `NSNumber objCType` ambiguity (ObjC only).** Detecting whether
+a boxed `NSNumber` originated from a `float` vs `double` literal is
+implementation-defined. ObjC SqliteProvider guards with both checks; the
+`attr_type='float'` path fires correctly regardless of the box width.
+
+**Gap 11 — Transaction model divergence.** ObjC and Java batch writes in
+explicit `BEGIN ... COMMIT` transactions; Python commits per-write. The
+batch style is faster for bulk loads but loses the most recent uncommitted
+operation on crash. A future `beginTransaction` / `commitTransaction`
+method on the ABC would let callers opt into batching explicitly.
+
+**Gap 12 — `nativeHandle` returns nil for `sqlite3 *` (ObjC only).** ARC
+cannot safely bridge-cast a raw C pointer to `id`. The protocol promises
+a native handle for byte-level callers (signatures, encryption); SQLite's
+`sqlite3 *` requires either an `NSValue` wrapper or a custom opaque
+wrapper class. Currently returns `nil` and is documented.
+
+**Gap 13 — `deleteAttributeNamed` missing from ObjC `<MPGOStorageDataset>`
+protocol.** Matches gap 8 in Java. Systemic across the two typed
+languages — the Python ABC has it, ObjC and Java protocols don't.
+
+### 6.2 Recommendations for v0.7 Provisional → Stable review
+
+1. **Resolve `open` shape** (gap 1) — pick one pattern, enforce in ABC and all three reference implementations.
+2. **Resolve compound `read()` return type** (gap 2) — this is the most consequential abstraction leak; either admit backend-specific return types or mandate a uniform shape.
+3. **Add capability queries** (gap 3) — `supports_chunking`, `supports_compression` on the protocol so callers can degrade.
+4. **Add `deleteAttribute` + `attributeNames` to `StorageDataset`** in Java and ObjC protocols (gaps 8 and 13).
+5. **Refactor `Precision` HDF5 coupling** (gap 7) so non-HDF5 providers don't drag HDF5 JNI.
+6. **Add transaction-batch methods** to the protocol (gap 11) so the model is explicit rather than per-provider-convention.
+
+The remaining gaps (4, 5, 6, 9, 10, 12) are either performance characteristics
+or language-idiom-specific implementation notes that should be documented
+as expected behavior rather than changed.
+
+### 6.3 Test count impact
+
+Post-SQLite-work totals:
+- ObjC 999 assertions (867 M41 baseline + 132 SQLite)
+- Python 211 tests (187 M41 baseline + 24 SQLite)
+- Java 152 tests (128 M41 baseline + 24 SQLite)
+- HDF5 cross-compat 8/8 unchanged.
