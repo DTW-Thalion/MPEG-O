@@ -8,9 +8,26 @@ from dataclasses import dataclass
 class Quantification:
     """An abundance observation for a chemical entity in a sample.
 
-    Matches the ``quantifications`` compound dataset schema in §6.2 of
-    ``docs/format-spec.md``. ``normalization_method`` of ``""`` represents
-    an unnormalized abundance.
+    Parameters
+    ----------
+    chemical_entity : str
+        CHEBI accession or chemical formula.
+    sample_ref : str
+        Sample identifier.
+    abundance : float
+        Measured abundance.
+    normalization_method : str, default ""
+        Normalization method. Empty string represents an unnormalized
+        abundance.
+
+    Notes
+    -----
+    API status: Stable.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOQuantification`` · Java:
+    ``com.dtwthalion.mpgo.Quantification``.
     """
 
     chemical_entity: str

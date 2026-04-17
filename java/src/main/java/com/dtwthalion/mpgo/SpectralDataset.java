@@ -29,6 +29,15 @@ import java.util.*;
  * recovered via type projection and VL-string fields decode as empty
  * strings. The mirror is emitted to keep Java-written files fully
  * round-trippable by every implementation.</p>
+ *
+ * <p><b>API status:</b> Stable. {@code Encryptable} conformance is
+ * delivered in slice 41.5 when the encryption manager lands in Java.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOSpectralDataset}, Python
+ * {@code mpeg_o.spectral_dataset.SpectralDataset}.</p>
+ *
+ * @since 0.6
  */
 public class SpectralDataset implements AutoCloseable {
 
@@ -243,7 +252,7 @@ public class SpectralDataset implements AutoCloseable {
             for (Object[] r : rows) {
                 out.add(new Identification(
                         (String) r[0], (Integer) r[1], (String) r[2],
-                        (Double) r[3], (String) r[4]));
+                        (Double) r[3], MiniJson.parseArrayOfStrings((String) r[4])));
             }
             return out;
         }
@@ -342,8 +351,10 @@ public class SpectralDataset implements AutoCloseable {
             List<ProvenanceRecord> out = new ArrayList<>(rows.size());
             for (Object[] r : rows) {
                 out.add(new ProvenanceRecord(
-                        (Long) r[0], (String) r[1], (String) r[2],
-                        (String) r[3], (String) r[4]));
+                        (Long) r[0], (String) r[1],
+                        MiniJson.parseStringMap((String) r[2]),
+                        MiniJson.parseArrayOfStrings((String) r[3]),
+                        MiniJson.parseArrayOfStrings((String) r[4])));
             }
             return out;
         }
@@ -360,8 +371,10 @@ public class SpectralDataset implements AutoCloseable {
             String chem = MiniJson.getString(r, "chemical_entity", "");
             double conf = MiniJson.getDouble(r, "confidence_score", 0.0);
             Object ev = r.get("evidence_chain");
-            String evJson = ev == null ? "[]" : MiniJson.encode(ev);
-            out.add(new Identification(runName, idx, chem, conf, evJson));
+            List<String> evidenceChain = ev instanceof List<?> list
+                    ? list.stream().map(Object::toString).toList()
+                    : List.of();
+            out.add(new Identification(runName, idx, chem, conf, evidenceChain));
         }
         return out;
     }
@@ -386,9 +399,26 @@ public class SpectralDataset implements AutoCloseable {
         for (Map<String, Object> r : MiniJson.parseArrayOfObjects(blob)) {
             long ts = MiniJson.getLong(r, "timestamp_unix", 0);
             String software = MiniJson.getString(r, "software", "");
-            String params = r.containsKey("parameters") ? MiniJson.encode(r.get("parameters")) : "{}";
-            String inRefs = r.containsKey("input_refs") ? MiniJson.encode(r.get("input_refs")) : "[]";
-            String outRefs = r.containsKey("output_refs") ? MiniJson.encode(r.get("output_refs")) : "[]";
+            Object paramsObj = r.get("parameters");
+            Map<String, String> params;
+            if (paramsObj instanceof Map<?, ?> m) {
+                Map<String, String> tmp = new java.util.LinkedHashMap<>();
+                for (Map.Entry<?, ?> e : m.entrySet()) {
+                    tmp.put(e.getKey().toString(),
+                            e.getValue() == null ? "" : e.getValue().toString());
+                }
+                params = tmp;
+            } else {
+                params = Map.of();
+            }
+            Object inRefsObj = r.get("input_refs");
+            List<String> inRefs = inRefsObj instanceof List<?> l
+                    ? l.stream().map(o -> o == null ? "" : o.toString()).toList()
+                    : List.of();
+            Object outRefsObj = r.get("output_refs");
+            List<String> outRefs = outRefsObj instanceof List<?> l
+                    ? l.stream().map(o -> o == null ? "" : o.toString()).toList()
+                    : List.of();
             out.add(new ProvenanceRecord(ts, software, params, inRefs, outRefs));
         }
         return out;

@@ -8,8 +8,32 @@ from dataclasses import dataclass, field
 class Identification:
     """A spectrum-level chemical-entity identification.
 
-    Matches the ``identifications`` compound dataset schema in §6.1 of
-    ``docs/format-spec.md``.
+    Links a spectrum (by its 0-based index within an acquisition run)
+    to a chemical entity with a confidence score and an evidence
+    chain.
+
+    Parameters
+    ----------
+    run_name : str
+        Acquisition run that contains the spectrum.
+    spectrum_index : int
+        0-based position within that run.
+    chemical_entity : str
+        CHEBI accession or chemical formula.
+    confidence_score : float
+        Score in ``[0.0, 1.0]``.
+    evidence_chain : list[str], default []
+        Ordered list of free-form evidence strings (typically CV
+        accession references).
+
+    Notes
+    -----
+    API status: Stable.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOIdentification`` · Java:
+    ``com.dtwthalion.mpgo.Identification``.
     """
 
     run_name: str

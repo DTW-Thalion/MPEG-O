@@ -186,18 +186,14 @@ public class AcquisitionRun implements
     @Override
     public java.util.List<String> inputEntities() {
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
-        for (ProvenanceRecord r : provenanceChain()) {
-            seen.addAll(parseStringArray(r.inputRefsJson()));
-        }
+        for (ProvenanceRecord r : provenanceChain()) seen.addAll(r.inputRefs());
         return new java.util.ArrayList<>(seen);
     }
 
     @Override
     public java.util.List<String> outputEntities() {
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
-        for (ProvenanceRecord r : provenanceChain()) {
-            seen.addAll(parseStringArray(r.outputRefsJson()));
-        }
+        for (ProvenanceRecord r : provenanceChain()) seen.addAll(r.outputRefs());
         return new java.util.ArrayList<>(seen);
     }
 
@@ -206,32 +202,6 @@ public class AcquisitionRun implements
             provenanceCache = new java.util.ArrayList<>(provenanceRecords);
         }
         return provenanceCache;
-    }
-
-    /**
-     * Minimal JSON string-array parser for {@code ["a","b","c"]} format.
-     * Returns empty list on null, empty, or malformed input. Will be
-     * replaced by proper List&lt;String&gt; accessor on
-     * {@link ProvenanceRecord} in slice 41.4.
-     */
-    private static java.util.List<String> parseStringArray(String json) {
-        if (json == null) return java.util.List.of();
-        String trimmed = json.trim();
-        if (trimmed.isEmpty() || trimmed.equals("[]")) return java.util.List.of();
-        if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return java.util.List.of();
-        String inner = trimmed.substring(1, trimmed.length() - 1).trim();
-        if (inner.isEmpty()) return java.util.List.of();
-        java.util.List<String> out = new java.util.ArrayList<>();
-        // Simple split on ","  — works because our refs are URIs/IDs without commas.
-        // For robustness, strip outer quotes per element.
-        for (String tok : inner.split(",")) {
-            String t = tok.trim();
-            if (t.startsWith("\"") && t.endsWith("\"")) {
-                t = t.substring(1, t.length() - 1).replace("\\\"", "\"");
-            }
-            if (!t.isEmpty()) out.add(t);
-        }
-        return out;
     }
 
     // ── HDF5 I/O ────────────────────────────────────────────────────

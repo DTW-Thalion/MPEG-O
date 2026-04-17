@@ -10,6 +10,12 @@
  * chemical entity identification, with a confidence score and an evidence
  * chain represented as an ordered list of free-form strings (typically CV
  * accession references such as "MS:1002217 search engine specific score").
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.identification.Identification
+ *   Java:   com.dtwthalion.mpgo.Identification
  */
 @interface MPGOIdentification : NSObject <NSCopying>
 

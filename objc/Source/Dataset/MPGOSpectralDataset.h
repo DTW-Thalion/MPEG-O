@@ -23,6 +23,13 @@
  *
  * Persistence is via -writeToFilePath:error: / +readFromFilePath:error:
  * which open or create the underlying HDF5 file directly.
+ *
+ * API status: Stable. Encryptable conformance delivered in
+ * M41.5 in non-ObjC implementations.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.spectral_dataset.SpectralDataset
+ *   Java:   com.dtwthalion.mpgo.SpectralDataset
  */
 @interface MPGOSpectralDataset : NSObject <MPGOEncryptable>
 

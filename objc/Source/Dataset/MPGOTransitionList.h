@@ -26,6 +26,12 @@
 /**
  * Ordered list of MPGOTransition objects. Stored in the dataset as a
  * single JSON-encoded string attribute under /study/transitions/.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.transition_list.TransitionList
+ *   Java:   com.dtwthalion.mpgo.TransitionList
  */
 @interface MPGOTransitionList : NSObject
 

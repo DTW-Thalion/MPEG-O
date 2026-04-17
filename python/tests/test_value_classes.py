@@ -369,3 +369,58 @@ def test_ms_image_has_dataset_level_fields():
     assert img.quantifications == []
     assert img.provenance_records == []
     assert img.tile_size == 64
+
+
+def test_identification_fields():
+    from mpeg_o.identification import Identification
+    i = Identification(
+        run_name="run_0001",
+        spectrum_index=42,
+        chemical_entity="CHEBI:17234",
+        confidence_score=0.95,
+        evidence_chain=["MS:1002217", "MS:1001143"],
+    )
+    assert i.run_name == "run_0001"
+    assert i.spectrum_index == 42
+    assert i.chemical_entity == "CHEBI:17234"
+    assert i.confidence_score == 0.95
+    assert i.evidence_chain == ["MS:1002217", "MS:1001143"]
+
+
+def test_quantification_fields():
+    from mpeg_o.quantification import Quantification
+    q = Quantification(
+        chemical_entity="CHEBI:17234",
+        sample_ref="sample1",
+        abundance=1234.5,
+        normalization_method="median",
+    )
+    assert q.chemical_entity == "CHEBI:17234"
+    assert q.sample_ref == "sample1"
+    assert q.abundance == 1234.5
+    assert q.normalization_method == "median"
+
+
+def test_provenance_record_contains_input_ref():
+    from mpeg_o.provenance import ProvenanceRecord
+    r = ProvenanceRecord(
+        timestamp_unix=1700000000,
+        software="MSConvert 3.0",
+        parameters={"threshold": "100"},
+        input_refs=["file:///data/raw/run.mzML"],
+        output_refs=["file:///data/processed/run.mpgo"],
+    )
+    assert r.contains_input_ref("file:///data/raw/run.mzML")
+    assert not r.contains_input_ref("file:///data/raw/other.mzML")
+
+
+def test_transition_list_count_and_index():
+    from mpeg_o.transition_list import Transition, TransitionList
+    from mpeg_o.value_range import ValueRange
+    t = Transition(
+        precursor_mz=500.0, product_mz=100.0, collision_energy=25.0,
+        retention_time_window=ValueRange(10.0, 20.0))
+    tl = TransitionList(transitions=(t,))
+    assert tl.count() == 1
+    assert tl.transition_at_index(0) is t
+    assert tl.transition_at_index(0).retention_time_window == ValueRange(10.0, 20.0)
