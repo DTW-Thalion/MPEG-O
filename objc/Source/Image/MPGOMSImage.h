@@ -20,6 +20,12 @@
  * readable as a fallback via +readFromFilePath:.
  *
  * Buffer layout (row-major): `cube[(y * width + x) * spectralPoints + s]`.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.ms_image.MSImage
+ *   Java:   com.dtwthalion.mpgo.MSImage
  */
 @interface MPGOMSImage : MPGOSpectralDataset
 

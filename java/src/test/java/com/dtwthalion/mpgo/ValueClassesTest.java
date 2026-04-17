@@ -186,4 +186,80 @@ class ValueClassesTest {
         assertNotNull(chrom.timeArray());
         assertEquals(ChromatogramType.TIC, chrom.type());
     }
+
+    @Test
+    void spectrumIndexElementAccessors() {
+        SpectrumIndex idx = new SpectrumIndex(3,
+            new long[]{0, 10, 20},
+            new int[]{10, 10, 10},
+            new double[]{1.0, 2.0, 3.0},
+            new int[]{1, 2, 1},
+            new int[]{1, 1, -1},
+            new double[]{0.0, 500.0, 0.0},
+            new int[]{0, 2, 0},
+            new double[]{100.0, 200.0, 300.0}
+        );
+        assertEquals(10, idx.offsetAt(1));
+        assertEquals(10, idx.lengthAt(2));
+        assertEquals(1.0, idx.retentionTimeAt(0), 1e-12);
+        assertEquals(2, idx.msLevelAt(1));
+        assertEquals(Enums.Polarity.NEGATIVE, idx.polarityAt(2));
+        assertEquals(500.0, idx.precursorMzAt(1), 1e-9);
+        assertEquals(2, idx.precursorChargeAt(1));
+        assertEquals(300.0, idx.basePeakIntensityAt(2), 1e-9);
+
+        java.util.List<Integer> rtMatches =
+            idx.indicesInRetentionTimeRange(new ValueRange(1.5, 2.5));
+        assertEquals(java.util.List.of(1), rtMatches);
+
+        java.util.List<Integer> msLevel1 = idx.indicesForMsLevel(1);
+        assertEquals(java.util.List.of(0, 2), msLevel1);
+    }
+
+    @Test
+    void acquisitionRunImplementsProtocols() throws Exception {
+        SpectrumIndex idx = new SpectrumIndex(2,
+            new long[]{0, 2}, new int[]{2, 2},
+            new double[]{0.0, 1.0}, new int[]{1, 1},
+            new int[]{1, 1}, new double[]{0.0, 0.0},
+            new int[]{0, 0}, new double[]{10.0, 20.0}
+        );
+        java.util.Map<String, double[]> channels = java.util.Map.of(
+            "mz", new double[]{100.0, 200.0, 100.0, 200.0},
+            "intensity", new double[]{1.0, 2.0, 3.0, 4.0}
+        );
+        AcquisitionRun run = new AcquisitionRun("run0",
+            Enums.AcquisitionMode.MS1_DDA, idx, null, channels,
+            java.util.List.of(), java.util.List.of(), null, 0);
+
+        assertTrue(run instanceof com.dtwthalion.mpgo.protocols.Indexable);
+        assertEquals(2, run.count());
+        assertNotNull(run.objectAtIndex(0));
+
+        assertTrue(run instanceof com.dtwthalion.mpgo.protocols.Streamable);
+        assertTrue(run.hasMore());
+        Spectrum s0 = run.nextObject();
+        assertNotNull(s0);
+        assertEquals(1, run.currentPosition());
+        run.reset();
+        assertEquals(0, run.currentPosition());
+
+        assertTrue(run instanceof com.dtwthalion.mpgo.protocols.Provenanceable);
+        assertEquals(java.util.List.of(), run.provenanceChain());
+        assertEquals(java.util.List.of(), run.inputEntities());
+    }
+
+    @Test
+    void msImageHasDatasetLevelFields() {
+        double[] cube = new double[12]; // 2x2x3
+        MSImage img = new MSImage(2, 2, 3, 64, 10.0, 10.0, "raster", cube,
+            "imaging run", "ISA-001",
+            java.util.List.of(), java.util.List.of(), java.util.List.of());
+        assertEquals("imaging run", img.title());
+        assertEquals("ISA-001", img.isaInvestigationId());
+        assertEquals(64, img.tileSize());
+        assertTrue(img.identifications().isEmpty());
+        assertTrue(img.quantifications().isEmpty());
+        assertTrue(img.provenanceRecords().isEmpty());
+    }
 }

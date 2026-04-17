@@ -7,45 +7,96 @@ package com.dtwthalion.mpgo;
 
 import com.dtwthalion.mpgo.Enums.Precision;
 import com.dtwthalion.mpgo.hdf5.Hdf5Dataset;
-import com.dtwthalion.mpgo.hdf5.Hdf5File;
 import com.dtwthalion.mpgo.hdf5.Hdf5Group;
+
+import java.util.List;
 
 /**
  * Imaging mass spectrometry dataset with spatial grid and tile access.
- * Extends SpectralDataset conceptually but stored as a 3-D intensity cube.
  *
- * <p>HDF5 layout: {@code /study/image_cube/intensity} (rank-3: height x width x spectral_points)
- * with spatial metadata attributes.</p>
+ * <p>Stored as a 3-D intensity cube
+ * ({@code height × width × spectralPoints}) under
+ * {@code /study/image_cube/}.</p>
+ *
+ * <p><b>Composition vs inheritance.</b> In Objective-C,
+ * {@code MPGOMSImage} inherits from {@code MPGOSpectralDataset} so
+ * dataset-level fields come for free. In Java,
+ * {@code SpectralDataset} is a file-handle wrapper whose lifecycle
+ * does not map cleanly to an MSImage subclass; composition is used
+ * here (the five dataset-level fields live on {@code MSImage}
+ * directly). This stylistic difference is recorded in
+ * {@code docs/api-review-v0.6.md}.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOMSImage}, Python {@code mpeg_o.ms_image.MSImage}.</p>
+ *
+ * @since 0.6
  */
 public class MSImage {
 
     private final int width;
     private final int height;
     private final int spectralPoints;
+    private final int tileSize;
     private final double pixelSizeX;
     private final double pixelSizeY;
     private final String scanPattern;
-    private final double[] intensityCube; // flattened [height][width][spectralPoints]
+    private final double[] intensityCube;
 
-    public MSImage(int width, int height, int spectralPoints,
+    // Dataset-level composition fields
+    private final String title;
+    private final String isaInvestigationId;
+    private final List<Identification> identifications;
+    private final List<Quantification> quantifications;
+    private final List<ProvenanceRecord> provenanceRecords;
+
+    public MSImage(int width, int height, int spectralPoints, int tileSize,
                    double pixelSizeX, double pixelSizeY, String scanPattern,
-                   double[] intensityCube) {
+                   double[] intensityCube,
+                   String title, String isaInvestigationId,
+                   List<Identification> identifications,
+                   List<Quantification> quantifications,
+                   List<ProvenanceRecord> provenanceRecords) {
         this.width = width;
         this.height = height;
         this.spectralPoints = spectralPoints;
+        this.tileSize = tileSize;
         this.pixelSizeX = pixelSizeX;
         this.pixelSizeY = pixelSizeY;
         this.scanPattern = scanPattern;
         this.intensityCube = intensityCube;
+        this.title = title != null ? title : "";
+        this.isaInvestigationId = isaInvestigationId != null ? isaInvestigationId : "";
+        this.identifications = identifications != null ? List.copyOf(identifications) : List.of();
+        this.quantifications = quantifications != null ? List.copyOf(quantifications) : List.of();
+        this.provenanceRecords = provenanceRecords != null ? List.copyOf(provenanceRecords) : List.of();
+    }
+
+    /** Convenience — image-only construction (empty dataset-level metadata). */
+    public MSImage(int width, int height, int spectralPoints,
+                   double pixelSizeX, double pixelSizeY, String scanPattern,
+                   double[] intensityCube) {
+        this(width, height, spectralPoints, 0,
+             pixelSizeX, pixelSizeY, scanPattern, intensityCube,
+             "", "", List.of(), List.of(), List.of());
     }
 
     public int width() { return width; }
     public int height() { return height; }
     public int spectralPoints() { return spectralPoints; }
+    public int tileSize() { return tileSize; }
     public double pixelSizeX() { return pixelSizeX; }
     public double pixelSizeY() { return pixelSizeY; }
     public String scanPattern() { return scanPattern; }
     public double[] intensityCube() { return intensityCube; }
+
+    public String title() { return title; }
+    public String isaInvestigationId() { return isaInvestigationId; }
+    public List<Identification> identifications() { return identifications; }
+    public List<Quantification> quantifications() { return quantifications; }
+    public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
 
     /** Get intensity at pixel (row, col) for spectral index s. */
     public double valueAt(int row, int col, int s) {
@@ -71,7 +122,6 @@ public class MSImage {
             if (scanPattern != null)
                 ic.setStringAttribute("scan_pattern", scanPattern);
 
-            // Write flattened 3D cube as 1D dataset (rank-3 requires low-level API)
             try (Hdf5Dataset ds = ic.createDataset("intensity", Precision.FLOAT64,
                     intensityCube.length, 16384, 6)) {
                 ds.writeData(intensityCube);
