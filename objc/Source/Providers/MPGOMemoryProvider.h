@@ -13,6 +13,12 @@
  * +discardStore: clears it. Exists alongside MPGOHDF5Provider to prove
  * the abstraction works — if upper layers read/write identically
  * through both, the protocol contract is correct.
+ *
+ * API status: Stable (Provisional per M39 — may change before v1.0).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.providers.memory.MemoryProvider
+ *   Java:   com.dtwthalion.mpgo.providers.MemoryProvider
  */
 @interface MPGOMemoryProvider : NSObject <MPGOStorageProvider>
 

@@ -4,6 +4,13 @@ Adapter that exposes ``h5py`` through the :mod:`mpeg_o.providers.base`
 contract. No behavioural change — callers that used ``h5py.File``
 directly can switch to ``Hdf5Provider.open(path)`` and continue.
 
+API status: Stable (Provisional per M39 — may change before v1.0).
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOHDF5Provider`` class
+Java:        ``com.dtwthalion.mpgo.providers.Hdf5Provider`` class
+
 SPDX-License-Identifier: LGPL-3.0-or-later
 """
 from __future__ import annotations
@@ -221,7 +228,14 @@ class _Group(StorageGroup):
 
 
 class Hdf5Provider(StorageProvider):
-    """Storage provider backed by an h5py-managed HDF5 file."""
+    """Storage provider backed by an h5py-managed HDF5 file.
+
+    API status: Stable (Provisional per M39 — may change before v1.0).
+
+    Cross-language equivalents:
+      Objective-C: ``MPGOHDF5Provider``
+      Java:        ``com.dtwthalion.mpgo.providers.Hdf5Provider``
+    """
 
     def __init__(self, file: h5py.File):
         self._file = file

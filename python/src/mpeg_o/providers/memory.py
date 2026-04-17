@@ -7,6 +7,13 @@ is the proof that the abstraction actually works — if
 ``SpectralDataset`` functions identically over both, the protocol
 contract is correct.
 
+API status: Stable (Provisional per M39 — may change before v1.0).
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOMemoryProvider`` class
+Java:        ``com.dtwthalion.mpgo.providers.MemoryProvider`` class
+
 SPDX-License-Identifier: LGPL-3.0-or-later
 """
 from __future__ import annotations
@@ -212,7 +219,14 @@ class _MemoryRoot:
 class MemoryProvider(StorageProvider):
     """In-memory provider. URLs look like ``memory://<name>``; the
     same name opened twice returns the same tree until
-    :meth:`discard_store` wipes it or the process exits."""
+    :meth:`discard_store` wipes it or the process exits.
+
+    API status: Stable (Provisional per M39 — may change before v1.0).
+
+    Cross-language equivalents:
+      Objective-C: ``MPGOMemoryProvider``
+      Java:        ``com.dtwthalion.mpgo.providers.MemoryProvider``
+    """
 
     def __init__(self, url: str, root: _MemoryRoot):
         self._url = url

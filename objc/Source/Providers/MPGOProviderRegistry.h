@@ -10,6 +10,14 @@
 /**
  * Provider registry singleton. Providers self-register via +load.
  * Callers resolve by explicit name or URL scheme.
+ *
+ * API status: Stable (Provisional per M39 — may change before v1.0).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.providers — module-level functions
+ *           (discover_providers, open_provider, register_provider)
+ *           — idiomatic for Python packaging.
+ *   Java:   com.dtwthalion.mpgo.providers.ProviderRegistry class
  */
 @interface MPGOProviderRegistry : NSObject
 

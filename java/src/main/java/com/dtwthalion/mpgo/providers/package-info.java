@@ -14,5 +14,10 @@
  *   <li>{@link com.dtwthalion.mpgo.providers.MemoryProvider} —
  *   in-memory tree for tests and transient pipelines.</li>
  * </ul>
+ *
+ * <p><b>API status:</b> Stable (Provisional per M39 — may change
+ * before v1.0).</p>
+ *
+ * @since 0.6
  */
 package com.dtwthalion.mpgo.providers;

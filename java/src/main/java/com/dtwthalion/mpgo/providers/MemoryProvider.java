@@ -20,6 +20,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code SpectralDataset} reads and writes identically over
  * {@link Hdf5Provider} and {@code MemoryProvider}, the interface is
  * correct.</p>
+ *
+ * <p>API status: Stable (Provisional per M39 — may change before v1.0).</p>
+ *
+ * <p>Cross-language equivalents:
+ * <ul>
+ *   <li>Objective-C: {@code MPGOMemoryProvider}</li>
+ *   <li>Python: {@code mpeg_o.providers.memory.MemoryProvider}</li>
+ * </ul>
+ *
+ * @since 0.6
  */
 public final class MemoryProvider implements StorageProvider {
 

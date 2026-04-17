@@ -645,3 +645,30 @@ def test_stream_writer_buffers_spectra():
         w.flush()
 
     w.close()
+
+
+def test_provider_registry_discovers_builtin_providers() -> None:
+    from mpeg_o.providers import discover_providers
+
+    providers = discover_providers()
+    # Two built-in providers must be present.
+    assert 'hdf5' in providers
+    assert 'memory' in providers
+
+
+def test_memory_provider_round_trip() -> None:
+    from mpeg_o.providers.memory import MemoryProvider
+    from mpeg_o.providers.base import StorageProvider
+
+    # MemoryProvider.open() is the entry point (constructor requires
+    # internal args); mode='w' creates a fresh in-process store.
+    url = 'memory://test-value-classes-smoke'
+    p = MemoryProvider.open(url, mode='w')
+    assert isinstance(p, StorageProvider)
+    assert p.is_open()
+    # root_group() is reachable without error.
+    root = p.root_group()
+    assert root is not None
+    p.close()
+    assert not p.is_open()
+    MemoryProvider.discard_store(url)

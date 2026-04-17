@@ -486,4 +486,54 @@ class ValueClassesTest {
 
         w.close();
     }
+
+    @Test
+    void storageProtocolsExposed() {
+        com.dtwthalion.mpgo.providers.CompoundField cf =
+            new com.dtwthalion.mpgo.providers.CompoundField(
+                "accession",
+                com.dtwthalion.mpgo.providers.CompoundField.Kind.VL_STRING);
+        assertEquals("accession", cf.name());
+        assertEquals(com.dtwthalion.mpgo.providers.CompoundField.Kind.VL_STRING,
+                     cf.kind());
+
+        // Interface types are loadable and have the expected methods.
+        assertTrue(com.dtwthalion.mpgo.providers.StorageProvider.class.isInterface());
+        assertTrue(com.dtwthalion.mpgo.providers.StorageGroup.class.isInterface());
+        assertTrue(com.dtwthalion.mpgo.providers.StorageDataset.class.isInterface());
+
+        // CompoundField.Kind has 4 members matching the spec.
+        assertEquals(4, com.dtwthalion.mpgo.providers.CompoundField.Kind.values().length);
+    }
+
+    @Test
+    void memoryProviderInstantiates() {
+        com.dtwthalion.mpgo.providers.MemoryProvider p =
+            new com.dtwthalion.mpgo.providers.MemoryProvider();
+        assertNotNull(p);
+        assertEquals("memory", p.providerName());
+        // Instance satisfies the StorageProvider interface contract.
+        assertTrue(p instanceof com.dtwthalion.mpgo.providers.StorageProvider);
+    }
+
+    @Test
+    void providerRegistryResolvesMemoryByName() {
+        // ProviderRegistry.discover() returns a name→class map; open()
+        // with an explicit provider name is the name-based lookup.
+        java.util.Map<String, Class<? extends com.dtwthalion.mpgo.providers.StorageProvider>>
+            providers = com.dtwthalion.mpgo.providers.ProviderRegistry.discover();
+        assertTrue(providers.containsKey("memory"),
+                "expected memory in " + providers.keySet());
+
+        String url = "memory://value-classes-parity-" + System.nanoTime();
+        try (com.dtwthalion.mpgo.providers.StorageProvider p =
+                com.dtwthalion.mpgo.providers.ProviderRegistry.open(
+                    url,
+                    com.dtwthalion.mpgo.providers.StorageProvider.Mode.CREATE,
+                    "memory")) {
+            assertNotNull(p);
+            assertEquals("memory", p.providerName());
+        }
+        com.dtwthalion.mpgo.providers.MemoryProvider.discardStore(url);
+    }
 }

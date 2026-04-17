@@ -33,6 +33,17 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 // Dataset
 // ──────────────────────────────────────────────────────────────
 
+/**
+ * A typed array (or compound record array) stored under an
+ * MPGOStorageGroup. 1-D is the common case; N-D is supported for
+ * image cubes and 2-D NMR data.
+ *
+ * API status: Stable (Provisional per M39 — may change before v1.0).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.providers.base.StorageDataset
+ *   Java:   com.dtwthalion.mpgo.providers.StorageDataset
+ */
 @protocol MPGOStorageDataset <NSObject>
 
 - (NSString *)name;
@@ -71,6 +82,20 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 // Group
 // ──────────────────────────────────────────────────────────────
 
+/**
+ * A named directory of sub-groups and datasets.
+ *
+ * Groups form a hierarchical namespace. Every provider exposes at
+ * least one root group via MPGOStorageProvider. Upper-layer objects
+ * (MPGOSpectralDataset, MPGOAcquisitionRun, etc.) navigate the tree
+ * exclusively through this protocol.
+ *
+ * API status: Stable (Provisional per M39 — may change before v1.0).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.providers.base.StorageGroup
+ *   Java:   com.dtwthalion.mpgo.providers.StorageGroup
+ */
 @protocol MPGOStorageGroup <NSObject>
 
 - (NSString *)name;
@@ -126,6 +151,21 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 // Provider
 // ──────────────────────────────────────────────────────────────
 
+/**
+ * Storage backend entry point.
+ *
+ * A provider opens a backing store (HDF5 file, in-memory tree, future
+ * Zarr store, etc.) and exposes its root MPGOStorageGroup. Providers
+ * are selected by scheme-based routing via @c supportsURL: or named
+ * explicitly. Upper layers talk only to the protocols and stay
+ * backend-agnostic.
+ *
+ * API status: Stable (Provisional per M39 — may change before v1.0).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.providers.base.StorageProvider
+ *   Java:   com.dtwthalion.mpgo.providers.StorageProvider
+ */
 @protocol MPGOStorageProvider <NSObject>
 
 - (NSString *)providerName;           ///< "hdf5", "memory", …

@@ -12,6 +12,18 @@ import java.util.*;
  * {@link java.util.ServiceLoader} (service file
  * {@code META-INF/services/com.dtwthalion.mpgo.providers.StorageProvider}).
  * In-process registration is also supported for tests.
+ *
+ * <p>API status: Stable (Provisional per M39 — may change before v1.0).</p>
+ *
+ * <p>Cross-language equivalents:
+ * <ul>
+ *   <li>Objective-C: {@code MPGOProviderRegistry} (singleton class)</li>
+ *   <li>Python: module-level functions in {@code mpeg_o.providers}
+ *       ({@code discover_providers}, {@code open_provider},
+ *       {@code register_provider}) — idiomatic for Python packaging.</li>
+ * </ul>
+ *
+ * @since 0.6
  */
 public final class ProviderRegistry {
 
