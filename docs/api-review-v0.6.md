@@ -451,18 +451,22 @@ stylistic differences (§4).
 #### Method-level notes
 
 **Encryptable conformance on AcquisitionRun and SpectralDataset** — delivered
-in this slice for both Python and Java. The `access_policy`/`setAccessPolicy`
-getter and setter are fully functional in-memory. The `encrypt_with_key` /
-`decrypt_with_key` methods raise `NotImplementedError` (Python) /
-`UnsupportedOperationException` (Java) pending persistence-context wiring —
-matching the ObjC semantics that require a context object.
+in this slice for both Python and Java; surface only in M41.5 (raising
+stubs on `encrypt_with_key` / `decrypt_with_key`), **full delegation
+completed post-M41.9** via new `encrypt_intensity_channel_in_run` helper on
+`mpeg_o.encryption` / `EncryptionManager.encryptIntensityChannelInRun`.
 
 | ObjC method | Python method | Java method | Status |
 |---|---|---|---|
 | `accessPolicy` | `access_policy()` | `accessPolicy()` | Functional |
 | `setAccessPolicy:` | `set_access_policy(policy)` | `setAccessPolicy(AccessPolicy)` | Functional |
-| `encryptWithKey:error:` | `encrypt_with_key(key)` | `encryptWithKey(byte[])` | Raises pending context |
-| `decryptWithKey:error:` | `decrypt_with_key(key)` | `decryptWithKey(byte[])` | Raises pending context |
+| `encryptWithKey:error:` | `encrypt_with_key(key, level)` | `encryptWithKey(byte[], EncryptionLevel)` | Functional |
+| `decryptWithKey:error:` | `decrypt_with_key(key) -> bytes` | `decryptWithKey(byte[])` | Functional |
+
+Python uses `SpectralDataset.open(path, writable=True)` to keep the file
+in R/W mode during the encrypt session; Java matches the ObjC pattern
+(close the dataset before calling `run.encryptWithKey`; the persistence
+context on the run allows the delegation to re-open the file R/W).
 
 **Verifier** — class was missing entirely in Python and Java; added in this
 slice. `VerificationStatus` enum with 4 states
@@ -477,13 +481,13 @@ slice. `VerificationStatus` enum with 4 states
 - Python `AcquisitionRun` and `SpectralDataset` gained `Encryptable`
   conformance (deferred from M41.3/M41.4).
 - Java `AcquisitionRun` and `SpectralDataset` gained `Encryptable` conformance.
-- `encrypt_with_key`/`decrypt_with_key` raise intentionally (pending context).
+- `encrypt_with_key`/`decrypt_with_key` raise intentionally during M41.5
+  (pending context); **fully implemented post-M41.9** via new
+  `encrypt_intensity_channel_in_run` helper + persistence-context wiring.
 - GSdoc xref blocks added to six ObjC protection headers.
 
 #### Deferred
 
-- `encrypt_with_key`/`decrypt_with_key` full integration — requires
-  persistence-context wiring; deferred to post-v0.6.
 - Java `KeyRotationManager` and `SignatureManager` static-vs-instance shape
   differences preserved as known stylistic differences; no further alignment
   planned for v0.6.
@@ -523,17 +527,17 @@ applied filters, returning `list[int]`/`List<Integer>`.
 (`__enter__`/`__exit__`); Java implements `AutoCloseable` with try-with-resources.
 
 **StreamWriter** — incremental append + whole-file regenerative flush.
-`append(spectrum)` / `appendSpectrum(Spectrum)` buffers in memory.
-`flush()` / `flush()` raises `NotImplementedError` /
-`UnsupportedOperationException` pending full `SpectralDataset` write-path
-integration — matches ObjC's "requires persistence context" semantics.
-`spectrum_count` / `spectrumCount()` and `append` are functional.
+`append_spectrum` / `appendSpectrum` buffers in memory. `flush()`
+materializes the `.mpgo` file by packing buffered spectra into an
+`AcquisitionRun` and delegating to Python `SpectralDataset.write_minimal`
+/ Java `SpectralDataset.create`. **Full integration completed post-M41.9**;
+all surface methods are functional.
 
 | ObjC selector | Python method | Java method | Status |
 |---|---|---|---|
-| `appendSpectrum:` | `append(spectrum)` | `appendSpectrum(Spectrum)` | Functional |
+| `appendSpectrum:` | `append_spectrum(spectrum)` | `appendSpectrum(MassSpectrum)` | Functional |
 | `spectrumCount` | `spectrum_count` | `spectrumCount()` | Functional |
-| `flushWithError:` | `flush()` | `flush()` | Raises pending write-path integration |
+| `flushWithError:` | `flush()` | `flush()` | Functional |
 
 **Note:** Java `Hdf5File` surface uses `openReadOnly(path)` (not the
 hypothetical `open(path, false)` in the original plan); `StreamReader` was
@@ -548,8 +552,9 @@ adapted accordingly.
 
 #### Deferred
 
-- `StreamWriter.flush` full integration with `SpectralDataset` write path —
-  deferred post-v0.6. Surface parity is complete; behavior raises intentionally.
+- None. `StreamWriter.flush` integration with `SpectralDataset` write path
+  was surface-only in M41.6; **fully implemented post-M41.9** —
+  `flush()` now materializes a valid `.mpgo` file.
 
 ---
 
@@ -762,18 +767,29 @@ The Java names are idiomatic for the Numpress linear algorithm. The ObjC/Python
 names are generic. These names were considered for alignment in M41.2 and
 deliberately left as-is.
 
-### 4.10 Encryptable methods — partial implementation
+### 4.10 Encryptable methods — resolved
 
 `encrypt_with_key` / `decrypt_with_key` on `AcquisitionRun` and
-`SpectralDataset` raise `NotImplementedError` (Python) /
-`UnsupportedOperationException` (Java) in v0.6. This matches the ObjC
-semantics that require an `MPGOEncryptionManager` persistence context.
-Not a divergence; all three are "not fully integrated in v0.6."
+`SpectralDataset` raised `NotImplementedError` / `UnsupportedOperationException`
+during M41.5 (surface only). **Fully implemented post-M41.9** via new
+`encrypt_intensity_channel_in_run` helper on `mpeg_o.encryption` / Java
+`EncryptionManager.encryptIntensityChannelInRun`, plus persistence-context
+wiring on `AcquisitionRun` + `SpectralDataset`. All three languages now
+perform real AES-256-GCM encryption of the intensity channel with
+byte-identical wire format. Python uses `SpectralDataset.open(path,
+writable=True)` to keep the file R/W during the encrypt session; Java
+matches the ObjC close-then-encrypt pattern (retain run reference, close
+dataset, call `run.encryptWithKey(key, level)` which re-opens R/W via
+the persistence context).
 
-### 4.11 StreamWriter.flush — partial implementation
+### 4.11 StreamWriter.flush — resolved
 
-`StreamWriter.flush()` raises `NotImplementedError` / `UnsupportedOperationException`
-in Python and Java pending full `SpectralDataset` write-path integration.
+`StreamWriter.flush()` raised during M41.6 pending the write-path
+integration. **Fully implemented post-M41.9**: `flush()` in both
+Python and Java packs buffered `MassSpectrum` objects into an
+`AcquisitionRun` and materializes a valid `.mpgo` file by delegating
+to Python's `SpectralDataset.write_minimal` / Java's
+`SpectralDataset.create`.
 The ObjC `flushWithError:` has the same deferred status. Not a divergence.
 
 ### 4.12 Java CVTermMapper.precisionFor — resolved
@@ -809,8 +825,10 @@ and Signature-drift gaps were resolved within the slice that introduced them;
 Shape-drift differences are documented per-subsystem. The audit was re-verified
 at each slice boundary by running `./build.sh check` (ObjC), `pytest` (Python),
 and `mvn verify` (Java) and confirming that three-way cross-compatibility
-fixtures round-trip (8/8). Final test counts at M41.8 completion:
-ObjC 867 assertions, Python 184, Java 126.
+fixtures round-trip (8/8). Final test counts at M41.9 completion:
+ObjC 867 assertions, Python 184, Java 126. Post-M41.9 behavior fixes
+(CVTermMapper.precisionFor, real Encryptable delegation, StreamWriter.flush)
+bring counts to Python 187, Java 128.
 
 To reproduce this review for a future milestone: read ObjC headers in
 `objc/Source/` as normative; compare field names, method names, and parameter

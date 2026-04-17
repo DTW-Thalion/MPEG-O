@@ -481,9 +481,6 @@ class ValueClassesTest {
         w.appendSpectrum(ms);
         assertEquals(1, w.spectrumCount());
 
-        // flush throws UnsupportedOperationException — expected for v0.6 surface.
-        assertThrows(UnsupportedOperationException.class, w::flush);
-
         w.close();
     }
 
@@ -553,5 +550,30 @@ class ValueClassesTest {
         // Callers that need to distinguish unknown from FLOAT64 use isPrecisionAccession.
         assertTrue(com.dtwthalion.mpgo.importers.CVTermMapper.isPrecisionAccession("MS:1000523"));
         assertFalse(com.dtwthalion.mpgo.importers.CVTermMapper.isPrecisionAccession("MS:9999999"));
+    }
+
+    @Test
+    void streamWriterFlushRoundTrip(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tmp) throws Exception {
+        String path = tmp.resolve("streamed.mpgo").toString();
+        StreamWriter w = new StreamWriter(path, "run_0001",
+            Enums.AcquisitionMode.MS1_DDA,
+            new InstrumentConfig("", "", "", "", "", ""));
+
+        for (int i = 0; i < 3; i++) {
+            double[] mz = { 100.0 + i, 200.0 + i };
+            double[] intensity = { 1.0 + i, 2.0 + i };
+            MassSpectrum ms = new MassSpectrum(mz, intensity,
+                i, (double) i, 0.0, 0, 1, Enums.Polarity.POSITIVE, null);
+            w.appendSpectrum(ms);
+        }
+
+        assertEquals(3, w.spectrumCount());
+        w.flush();
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            AcquisitionRun run = ds.msRuns().get("run_0001");
+            assertNotNull(run);
+            assertEquals(3, run.count());
+        }
     }
 }

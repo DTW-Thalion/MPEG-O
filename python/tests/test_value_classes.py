@@ -619,7 +619,6 @@ def test_stream_reader_iterates_spectra(tmp_path):
 
 def test_stream_writer_buffers_spectra():
     import numpy as np
-    import pytest
     from mpeg_o.stream_writer import StreamWriter
     from mpeg_o.mass_spectrum import MassSpectrum
     from mpeg_o.signal_array import SignalArray
@@ -639,10 +638,6 @@ def test_stream_writer_buffers_spectra():
     ms = MassSpectrum(signal_arrays={"mz": mz, "intensity": intensity}, axes=[])
     w.append_spectrum(ms)
     assert w.spectrum_count == 1
-
-    # flush raises NotImplementedError — expected for v0.6 surface.
-    with pytest.raises(NotImplementedError):
-        w.flush()
 
     w.close()
 
@@ -698,3 +693,47 @@ def test_base64_zlib_round_trip():
     # Round trip with zlib: encode manually, decode via module.
     encoded_z = base64.b64encode(zlib.compress(raw)).decode("ascii")
     assert decode(encoded_z, zlib_compressed=True) == raw
+
+
+def test_stream_writer_flush_round_trip(tmp_path):
+    """StreamWriter.flush writes a valid .mpgo file that can be re-read."""
+    import numpy as np
+    from mpeg_o.stream_writer import StreamWriter
+    from mpeg_o.mass_spectrum import MassSpectrum
+    from mpeg_o.signal_array import SignalArray
+    from mpeg_o.instrument_config import InstrumentConfig
+    from mpeg_o.enums import AcquisitionMode, Polarity
+    from mpeg_o import SpectralDataset
+
+    path = tmp_path / "streamed.mpgo"
+    writer = StreamWriter(
+        file_path=str(path),
+        run_name="run_0001",
+        acquisition_mode=AcquisitionMode.MS1_DDA,
+        instrument_config=InstrumentConfig(),
+    )
+
+    # Append 3 spectra
+    for i in range(3):
+        mz = SignalArray(data=np.array([100.0 + i, 200.0 + i], dtype="<f8"))
+        intensity = SignalArray(data=np.array([1.0 + i, 2.0 + i], dtype="<f8"))
+        ms = MassSpectrum(
+            signal_arrays={"mz": mz, "intensity": intensity},
+            axes=[],
+            index_position=i,
+            scan_time_seconds=float(i),
+            ms_level=1,
+            polarity=Polarity.POSITIVE,
+        )
+        writer.append_spectrum(ms)
+
+    assert writer.spectrum_count == 3
+    writer.flush()
+
+    # Re-open and verify
+    ds = SpectralDataset.open(str(path))
+    try:
+        run = ds.ms_runs["run_0001"]
+        assert run.count() == 3
+    finally:
+        ds.close()

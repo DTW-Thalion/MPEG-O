@@ -55,16 +55,59 @@ class StreamWriter:
     def flush(self) -> None:
         """Rewrite the target file with all buffered spectra so far.
 
-        The file is a valid ``.mpgo`` after each flush.
+        Converts each buffered :class:`~mpeg_o.mass_spectrum.MassSpectrum`
+        into an :class:`~mpeg_o.importers.import_result.ImportedSpectrum`,
+        packs them into a :class:`~mpeg_o.spectral_dataset.WrittenRun`, and
+        delegates to :meth:`~mpeg_o.spectral_dataset.SpectralDataset.write_minimal`
+        so the target file is a valid ``.mpgo`` after each call.
         """
-        # Build an in-memory SpectralDataset with one AcquisitionRun
-        # containing the buffered spectra, then write it out.
-        # Delegate to SpectralDataset's write path (whatever it is).
-        raise NotImplementedError(
-            "StreamWriter.flush requires integration with "
-            "SpectralDataset.write — full implementation in a future "
-            "milestone. For now, callers buffer spectra and write via "
-            "SpectralDataset directly.")
+        import numpy as np
+        from .importers.import_result import ImportedSpectrum, _pack_run
+        from .spectral_dataset import SpectralDataset
+
+        imported = [
+            ImportedSpectrum(
+                mz_or_chemical_shift=ms.mz_array.data,
+                intensity=ms.intensity_array.data,
+                retention_time=ms.scan_time_seconds,
+                ms_level=ms.ms_level,
+                polarity=int(ms.polarity),
+                precursor_mz=ms.precursor_mz,
+                precursor_charge=ms.precursor_charge,
+            )
+            for ms in self._spectra
+        ]
+
+        if imported:
+            written_run = _pack_run(
+                imported,
+                spectrum_class="MPGOMassSpectrum",
+                acquisition_mode=int(self._acquisition_mode),
+                channel_x="mz",
+            )
+        else:
+            from .spectral_dataset import WrittenRun
+            written_run = WrittenRun(
+                spectrum_class="MPGOMassSpectrum",
+                acquisition_mode=int(self._acquisition_mode),
+                channel_data={"mz": np.zeros(0, dtype=np.float64),
+                              "intensity": np.zeros(0, dtype=np.float64)},
+                offsets=np.zeros(0, dtype=np.uint64),
+                lengths=np.zeros(0, dtype=np.uint32),
+                retention_times=np.zeros(0, dtype=np.float64),
+                ms_levels=np.zeros(0, dtype=np.int32),
+                polarities=np.zeros(0, dtype=np.int32),
+                precursor_mzs=np.zeros(0, dtype=np.float64),
+                precursor_charges=np.zeros(0, dtype=np.int32),
+                base_peak_intensities=np.zeros(0, dtype=np.float64),
+            )
+
+        SpectralDataset.write_minimal(
+            self._path,
+            title="",
+            isa_investigation_id="",
+            runs={self._run_name: written_run},
+        )
 
     def flush_and_close(self) -> None:
         """Flush one final time and release resources."""

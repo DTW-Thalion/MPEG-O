@@ -121,3 +121,147 @@ def read_encrypted_channel(
 
     plaintext = decrypt_bytes(SealedBlob(ciphertext, iv, tag), key)
     return np.frombuffer(plaintext, dtype=dtype).copy()
+
+
+# ---------------------------------------------- run-level helpers ---
+
+
+def _encrypt_intensity_in_signal_group(
+    sig: h5py.Group, key: bytes
+) -> None:
+    """Encrypt the ``intensity_values`` dataset inside an open signal_channels group.
+
+    This is the shared implementation used by both
+    :func:`encrypt_intensity_channel_in_run` (file-path API) and
+    :meth:`~mpeg_o.acquisition_run.AcquisitionRun.encrypt_with_key`
+    (group API, which avoids re-opening the file).
+
+    Idempotent: returns silently if ``intensity_values_encrypted`` already
+    exists. Callers are responsible for key-length validation.
+    """
+    # Idempotency: already encrypted — return silently
+    if "intensity_values_encrypted" in sig:
+        return
+
+    if "intensity_values" not in sig:
+        raise KeyError("intensity_values not found in signal_channels group")
+
+    # Read plaintext as float64 array, record element count
+    plain_arr = sig["intensity_values"][()].astype("<f8", copy=False)
+    original_count = int(plain_arr.shape[0])
+    plaintext = plain_arr.tobytes()
+
+    # Encrypt
+    blob = encrypt_bytes(plaintext, key)
+
+    # Pad ciphertext to 4-byte boundary and store as int32 array
+    ct = blob.ciphertext
+    remainder = len(ct) % 4
+    if remainder:
+        ct = ct + b"\x00" * (4 - remainder)
+    ct_arr = np.frombuffer(ct, dtype="<i4").copy()
+
+    # Store IV as 3 × int32 (12 bytes) and tag as 4 × int32 (16 bytes)
+    iv_arr = np.frombuffer(blob.iv, dtype="<i4").copy()
+    tag_arr = np.frombuffer(blob.tag, dtype="<i4").copy()
+
+    # Write encrypted datasets
+    sig.create_dataset("intensity_values_encrypted", data=ct_arr)
+    sig.create_dataset("intensity_iv", data=iv_arr)
+    sig.create_dataset("intensity_tag", data=tag_arr)
+
+    # Write scalar attributes on signal_channels group
+    sig.attrs["intensity_ciphertext_bytes"] = np.int64(len(blob.ciphertext))
+    sig.attrs["intensity_original_count"] = np.int64(original_count)
+    sig.attrs["intensity_algorithm"] = ALGORITHM_NAME
+
+    # Remove plaintext dataset
+    del sig["intensity_values"]
+
+
+def encrypt_intensity_channel_in_run(
+    file_path: str, run_name: str, key: bytes
+) -> None:
+    """Encrypt the intensity_values dataset of the named MS run in place.
+
+    Matches ObjC
+    ``+[MPGOEncryptionManager encryptIntensityChannelInRun:atFilePath:withKey:error:]``.
+
+    Opens the .mpgo file read-write, locates
+    ``/study/ms_runs/<run_name>/signal_channels/``, encrypts the
+    ``intensity_values`` dataset bytes with AES-256-GCM, writes an
+    ``intensity_values_encrypted`` dataset (bytes padded to 4-byte boundary,
+    stored as int32 array for ObjC wire compat) plus sibling scalar
+    datasets ``intensity_iv`` and ``intensity_tag``, plus attributes
+    ``intensity_ciphertext_bytes`` (int64), ``intensity_original_count``
+    (int64), and ``intensity_algorithm`` ("AES-256-GCM"), and deletes the
+    original ``intensity_values`` dataset.
+
+    Idempotent: if ``intensity_values_encrypted`` already exists, returns
+    silently without re-encrypting.
+
+    Raises ``FileNotFoundError`` if the file or run does not exist,
+    ``ValueError`` if key is not 32 bytes.
+    """
+    if len(key) != AES_KEY_LEN:
+        raise ValueError(f"AES-256-GCM key must be {AES_KEY_LEN} bytes, got {len(key)}")
+
+    import os
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    with h5py.File(file_path, "r+") as f:
+        run_path = f"study/ms_runs/{run_name}"
+        if run_path not in f:
+            raise FileNotFoundError(
+                f"Run {run_name!r} not found in {file_path!r}"
+            )
+        sig = f[f"{run_path}/signal_channels"]
+        _encrypt_intensity_in_signal_group(sig, key)
+
+
+def encrypt_intensity_channel_in_group(
+    signal_channels_group: h5py.Group, key: bytes
+) -> None:
+    """Encrypt the intensity_values dataset inside an already-open signal_channels group.
+
+    Use this variant when the caller already holds an open h5py file handle
+    (e.g. via :class:`~mpeg_o.spectral_dataset.SpectralDataset`) and cannot
+    open the file a second time. Semantics are identical to
+    :func:`encrypt_intensity_channel_in_run`.
+
+    Raises ``ValueError`` if ``key`` is not 32 bytes, ``KeyError`` if
+    ``intensity_values`` is absent.
+    """
+    if len(key) != AES_KEY_LEN:
+        raise ValueError(f"AES-256-GCM key must be {AES_KEY_LEN} bytes, got {len(key)}")
+    _encrypt_intensity_in_signal_group(signal_channels_group, key)
+
+
+def decrypt_intensity_channel_in_run(
+    file_path: str, run_name: str, key: bytes
+) -> np.ndarray:
+    """Decrypt the intensity_values channel of the named MS run.
+
+    Matches ObjC
+    ``+[MPGOEncryptionManager decryptIntensityChannelInRun:atFilePath:withKey:error:]``.
+
+    Returns a float64 numpy array with the original element count. The
+    on-disk file is NOT modified — decryption is read-only.
+
+    Raises ``FileNotFoundError``, ``KeyError`` (run not found), or
+    ``ValueError`` (channel not encrypted / key wrong) as appropriate.
+    """
+    if len(key) != AES_KEY_LEN:
+        raise ValueError(f"AES-256-GCM key must be {AES_KEY_LEN} bytes, got {len(key)}")
+
+    import os
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    with h5py.File(file_path, "r") as f:
+        run_path = f"study/ms_runs/{run_name}"
+        if run_path not in f:
+            raise KeyError(f"Run {run_name!r} not found in {file_path!r}")
+        sig = f[f"{run_path}/signal_channels"]
+        return read_encrypted_channel(sig, "intensity", key, dtype="<f8")

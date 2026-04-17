@@ -315,6 +315,66 @@ class ProtectionTest {
         }
     }
 
+    // ── AcquisitionRun / SpectralDataset Encryptable ────────────────
+
+    @Test
+    void acquisitionRunEncryptDecryptRoundTrip() throws Exception {
+        String path = tempDir.resolve("encryptable.mpgo").toString();
+        byte[] key = new byte[32];
+        for (int i = 0; i < 32; i++) key[i] = (byte) i;
+        double[] originalIntensity = { 1.0, 2.0, 3.0, 4.0 };
+
+        // Build a minimal fixture with one run containing an intensity channel
+        SpectrumIndex idx = new SpectrumIndex(1,
+                new long[]{0}, new int[]{4},
+                new double[]{0.0}, new int[]{1}, new int[]{1},
+                new double[]{0.0}, new int[]{0}, new double[]{100.0});
+        Map<String, double[]> ch = new LinkedHashMap<>();
+        ch.put("mz", new double[]{100.0, 200.0, 300.0, 400.0});
+        ch.put("intensity", originalIntensity);
+        AcquisitionRun run = new AcquisitionRun("run_0001", AcquisitionMode.MS1_DDA,
+                idx, null, ch, List.of(), List.of(), null, 0.0);
+        try (SpectralDataset ds = SpectralDataset.create(path, "EncryptTest",
+                null, List.of(run), List.of(), List.of(), List.of())) {
+            // dataset written; close before re-opening
+        }
+
+        // HDF5 cannot open R/W while a R/O handle is open (same pattern
+        // as ObjC: close file before encrypt, then re-open for reads).
+        // The persistence context is captured at open-time so the run can
+        // encrypt itself AFTER the dataset is closed.
+        AcquisitionRun runRef;
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            runRef = ds.msRuns().get("run_0001");
+            assertNotNull(runRef, "run_0001 must be present in fixture");
+            assertNotNull(ds.filePath(), "filePath must be set on SpectralDataset");
+            assertEquals("run_0001", runRef.name());
+        }
+
+        // Dataset is closed; run retains its persistence context.
+        // Exercise the full delegation: run.encryptWithKey → EncryptionManager.
+        runRef.encryptWithKey(key, com.dtwthalion.mpgo.Enums.EncryptionLevel.DATASET);
+
+        // Re-open to verify encryption is on disk.
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            // fixture successfully reads back after encryption
+            assertNotNull(ds.msRuns().get("run_0001"));
+        }
+
+        // Decrypt via EncryptionManager.decryptIntensityChannelInRun and assert plaintext
+        byte[] plaintext = EncryptionManager.decryptIntensityChannelInRun(path, "run_0001", key);
+
+        java.nio.DoubleBuffer db = java.nio.ByteBuffer
+                .wrap(plaintext).order(java.nio.ByteOrder.LITTLE_ENDIAN).asDoubleBuffer();
+        double[] recovered = new double[originalIntensity.length];
+        db.get(recovered);
+        assertArrayEquals(originalIntensity, recovered, 1e-12,
+                "decrypted intensity values must match original");
+
+        // Idempotency: encrypting again should be a no-op (no exception)
+        EncryptionManager.encryptIntensityChannelInRun(path, "run_0001", key);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────
 
     private static String getFixturePath(String name) {

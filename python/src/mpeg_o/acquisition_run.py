@@ -199,6 +199,10 @@ class AcquisitionRun:
     _provenance_cache: list[ProvenanceRecord] | None = field(default=None, repr=False)
     # M41.5: Encryptable conformance.
     _access_policy: AccessPolicy | None = field(default=None, repr=False)
+    # M41.5: persistence context — set by SpectralDataset.open so that
+    # encrypt_with_key / decrypt_with_key can delegate to the encryption module.
+    _persistence_file_path: str | None = field(default=None, repr=False)
+    _persistence_run_name: str | None = field(default=None, repr=False)
 
     @classmethod
     def open(cls, group: h5py.Group, name: str) -> "AcquisitionRun":
@@ -370,27 +374,54 @@ class AcquisitionRun:
 
     # ---- Encryptable conformance ----
 
+    def _set_persistence_context(self, file_path: str, run_name: str) -> None:
+        """Attach file + run path so ``encrypt_with_key`` can delegate.
+
+        Internal API — called by SpectralDataset._from_open_file after
+        loading each run.
+        """
+        object.__setattr__(self, "_persistence_file_path", file_path)
+        object.__setattr__(self, "_persistence_run_name", run_name)
+
     def encrypt_with_key(self, key: bytes, level: EncryptionLevel) -> None:
-        """Encrypt this run's protectable content at the given granularity.
+        """Encrypt this run's intensity channel in place.
 
-        In the Python port, this requires a persistence context (not
-        yet exposed); callers use :mod:`mpeg_o.encryption` directly
-        for file-level operations.
+        Operates through the already-open HDF5 group so no second file
+        handle is required — the file must be open for writing (``"r+"``
+        or ``"w"``). Matches ObjC
+        ``-[MPGOAcquisitionRun encryptWithKey:level:error:]`` semantics.
+
+        Requires a persistence context — call only after opening via
+        :meth:`SpectralDataset.open`.
         """
-        raise NotImplementedError(
-            "AcquisitionRun.encrypt_with_key requires a persistence "
-            "context; use mpeg_o.encryption directly for file-level "
-            "operations")
+        if not self._persistence_file_path or not self._persistence_run_name:
+            raise RuntimeError(
+                "AcquisitionRun.encrypt_with_key requires a persistence "
+                "context; call via a run obtained from SpectralDataset.open"
+            )
+        from .encryption import encrypt_intensity_channel_in_group
+        sig_group = self.group["signal_channels"]
+        encrypt_intensity_channel_in_group(sig_group, key)
 
-    def decrypt_with_key(self, key: bytes) -> None:
-        """Decrypt previously-encrypted content.
+    def decrypt_with_key(self, key: bytes) -> bytes:
+        """Decrypt this run's intensity channel.
 
-        See :meth:`encrypt_with_key` for persistence-context
-        requirements.
+        Returns the plaintext bytes. The on-disk file is NOT modified.
+        Operates through the already-open HDF5 group. Matches ObjC
+        ``-[MPGOAcquisitionRun decryptWithKey:]`` semantics (NSData → bytes).
+
+        Requires a persistence context — call only after opening via
+        :meth:`SpectralDataset.open`.
         """
-        raise NotImplementedError(
-            "AcquisitionRun.decrypt_with_key requires a persistence "
-            "context; use mpeg_o.encryption directly")
+        if not self._persistence_file_path or not self._persistence_run_name:
+            raise RuntimeError(
+                "AcquisitionRun.decrypt_with_key requires a persistence "
+                "context; call via a run obtained from SpectralDataset.open"
+            )
+        from .encryption import read_encrypted_channel
+        sig_group = self.group["signal_channels"]
+        arr = read_encrypted_channel(sig_group, "intensity", key, dtype="<f8")
+        return arr.tobytes()
 
     def access_policy(self) -> AccessPolicy | None:
         """Return the current access policy, or ``None`` if not set."""

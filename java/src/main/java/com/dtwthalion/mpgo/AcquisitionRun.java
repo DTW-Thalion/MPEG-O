@@ -61,6 +61,8 @@ public class AcquisitionRun implements
     private java.util.List<ProvenanceRecord> provenanceCache;
     // M41.5: Encryptable conformance.
     private com.dtwthalion.mpgo.protection.AccessPolicy accessPolicy;
+    private String persistenceFilePath;
+    private String persistenceRunName;
 
     public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
                           SpectrumIndex spectrumIndex,
@@ -209,18 +211,40 @@ public class AcquisitionRun implements
 
     // ---- Encryptable conformance ----
 
-    @Override
-    public void encryptWithKey(byte[] key, com.dtwthalion.mpgo.Enums.EncryptionLevel level) {
-        throw new UnsupportedOperationException(
-            "AcquisitionRun.encryptWithKey requires a persistence " +
-            "context; use com.dtwthalion.mpgo.protection.EncryptionManager " +
-            "directly for file-level operations");
+    /**
+     * Attach the persistence context after loading — used by
+     * {@link SpectralDataset} so {@link #encryptWithKey} can delegate.
+     */
+    public void setPersistenceContext(String filePath, String runName) {
+        this.persistenceFilePath = filePath;
+        this.persistenceRunName = runName;
     }
 
     @Override
-    public void decryptWithKey(byte[] key) {
-        throw new UnsupportedOperationException(
-            "AcquisitionRun.decryptWithKey requires a persistence context");
+    public void encryptWithKey(byte[] key, com.dtwthalion.mpgo.Enums.EncryptionLevel level)
+            throws Exception {
+        if (persistenceFilePath == null || persistenceRunName == null) {
+            throw new IllegalStateException(
+                "AcquisitionRun.encryptWithKey requires a persistence " +
+                "context; call via a run obtained from SpectralDataset.open");
+        }
+        com.dtwthalion.mpgo.protection.EncryptionManager
+            .encryptIntensityChannelInRun(persistenceFilePath, persistenceRunName, key);
+    }
+
+    @Override
+    public void decryptWithKey(byte[] key) throws Exception {
+        // The protocol declares void return; plaintext is not returned to the
+        // caller because decrypt is read-only (file is not rewritten).
+        // If caller wants plaintext bytes, use
+        // EncryptionManager.decryptIntensityChannelInRun directly.
+        if (persistenceFilePath == null || persistenceRunName == null) {
+            throw new IllegalStateException(
+                "AcquisitionRun.decryptWithKey requires a persistence context");
+        }
+        // Verify we can decrypt (auth-tag check) without returning data.
+        com.dtwthalion.mpgo.protection.EncryptionManager
+            .decryptIntensityChannelInRun(persistenceFilePath, persistenceRunName, key);
     }
 
     @Override
