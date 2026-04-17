@@ -8,6 +8,8 @@ package com.dtwthalion.mpgo;
 import com.dtwthalion.mpgo.hdf5.Hdf5CompoundIO;
 import com.dtwthalion.mpgo.hdf5.Hdf5File;
 import com.dtwthalion.mpgo.hdf5.Hdf5Group;
+import com.dtwthalion.mpgo.providers.Hdf5Provider;
+import com.dtwthalion.mpgo.providers.StorageProvider;
 
 import java.util.*;
 
@@ -30,7 +32,9 @@ import java.util.*;
  */
 public class SpectralDataset implements AutoCloseable {
 
-    private final Hdf5File file;
+    private final StorageProvider provider;  // M39: owning provider
+    private final Hdf5File file;             // native handle (kept for
+                                              // signature/encryption paths)
     private final FeatureFlags featureFlags;
     private final String title;
     private final String isaInvestigationId;
@@ -39,12 +43,14 @@ public class SpectralDataset implements AutoCloseable {
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
 
-    private SpectralDataset(Hdf5File file, FeatureFlags featureFlags,
+    private SpectralDataset(StorageProvider provider, Hdf5File file,
+                            FeatureFlags featureFlags,
                             String title, String isaInvestigationId,
                             Map<String, AcquisitionRun> msRuns,
                             List<Identification> identifications,
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords) {
+        this.provider = provider;
         this.file = file;
         this.featureFlags = featureFlags;
         this.title = title;
@@ -54,6 +60,10 @@ public class SpectralDataset implements AutoCloseable {
         this.quantifications = quantifications;
         this.provenanceRecords = provenanceRecords;
     }
+
+    /** M39: the owning storage provider. New call sites should reach
+     *  for this instead of the native {@link Hdf5File}. */
+    public StorageProvider provider() { return provider; }
 
     // ── Accessors ───────────────────────────────────────────────────
 
@@ -67,9 +77,14 @@ public class SpectralDataset implements AutoCloseable {
 
     // ── Open (read) ─────────────────────────────────────────────────
 
-    /** Open an existing .mpgo file for reading. */
+    /** Open an existing .mpgo file for reading. M39: routes through a
+     *  fresh {@link Hdf5Provider}. The resulting SpectralDataset exposes
+     *  that provider via {@link #provider()}; legacy byte-level code
+     *  continues to access the native {@link Hdf5File}. */
     public static SpectralDataset open(String path) {
-        Hdf5File file = Hdf5File.openReadOnly(path);
+        Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
+                .open(path, StorageProvider.Mode.READ);
+        Hdf5File file = (Hdf5File) provider.nativeHandle();
         try (Hdf5Group root = file.rootGroup()) {
             FeatureFlags flags = FeatureFlags.readFrom(root);
 
@@ -109,7 +124,7 @@ public class SpectralDataset implements AutoCloseable {
                 }
             }
 
-            return new SpectralDataset(file, flags, title, isaId, runs,
+            return new SpectralDataset(provider, file, flags, title, isaId, runs,
                     idents, quants, prov);
         }
     }
@@ -135,7 +150,9 @@ public class SpectralDataset implements AutoCloseable {
                                           List<Quantification> quantifications,
                                           List<ProvenanceRecord> provenanceRecords,
                                           FeatureFlags featureFlags) {
-        Hdf5File file = Hdf5File.create(path);
+        Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
+                .open(path, StorageProvider.Mode.CREATE);
+        Hdf5File file = (Hdf5File) provider.nativeHandle();
         try (Hdf5Group root = file.rootGroup()) {
             featureFlags.writeTo(root);
 
@@ -169,7 +186,7 @@ public class SpectralDataset implements AutoCloseable {
                     writeProvenance(study, provenanceRecords);
                 }
 
-                return new SpectralDataset(file, featureFlags, title, isaInvestigationId,
+                return new SpectralDataset(provider, file, featureFlags, title, isaInvestigationId,
                         runMap, identifications != null ? identifications : List.of(),
                         quantifications != null ? quantifications : List.of(),
                         provenanceRecords != null ? provenanceRecords : List.of());
@@ -383,6 +400,13 @@ public class SpectralDataset implements AutoCloseable {
 
     @Override
     public void close() {
-        if (file != null) file.close();
+        // Prefer closing via the provider (owns the native handle); fall
+        // back to direct file close for legacy callers that didn't go
+        // through Hdf5Provider.
+        if (provider != null) {
+            provider.close();
+        } else if (file != null) {
+            file.close();
+        }
     }
 }

@@ -34,13 +34,17 @@ _STORES: dict[str, "_MemoryRoot"] = {}
 
 
 class _Dataset(StorageDataset):
-    __slots__ = ("_name", "_precision", "_length", "_fields", "_data", "_attrs")
+    __slots__ = ("_name", "_precision", "_shape", "_chunks", "_fields",
+                 "_data", "_attrs")
 
     def __init__(self, name: str, precision: Precision | None,
-                 length: int, fields: tuple[CompoundField, ...] | None):
+                 shape: tuple[int, ...],
+                 fields: tuple[CompoundField, ...] | None,
+                 chunks: tuple[int, ...] | None = None):
         self._name = name
         self._precision = precision
-        self._length = length
+        self._shape = shape
+        self._chunks = chunks
         self._fields = fields
         self._data: np.ndarray | None = None
         self._attrs: dict[str, Any] = {}
@@ -54,8 +58,12 @@ class _Dataset(StorageDataset):
         return self._precision
 
     @property
-    def length(self) -> int:
-        return self._length
+    def shape(self) -> tuple[int, ...]:
+        return self._shape
+
+    @property
+    def chunks(self) -> tuple[int, ...] | None:
+        return self._chunks
 
     @property
     def compound_fields(self) -> tuple[CompoundField, ...] | None:
@@ -64,16 +72,22 @@ class _Dataset(StorageDataset):
     def read(self, offset: int = 0, count: int = -1) -> np.ndarray:
         if self._data is None:
             return np.zeros(0, dtype=self._default_dtype())
+        if len(self._shape) != 1:
+            # N-D: hyperslab along axis 0 only
+            if count < 0:
+                return self._data[offset:]
+            return self._data[offset: offset + count]
         if count < 0:
             return self._data[offset:]
         return self._data[offset: offset + count]
 
     def write(self, data: np.ndarray) -> None:
-        if len(data) != self._length:
+        arr = np.asarray(data)
+        if arr.shape != self._shape and arr.shape[0] != self._shape[0]:
             raise ValueError(
-                f"dataset '{self._name}' expects {self._length} elements, "
-                f"got {len(data)}")
-        self._data = np.array(data, copy=True)
+                f"dataset '{self._name}' expects shape {self._shape}, "
+                f"got {arr.shape}")
+        self._data = np.array(arr, copy=True)
 
     def has_attribute(self, name: str) -> bool:
         return name in self._attrs
@@ -139,10 +153,24 @@ class _Group(StorageGroup):
                        compression_level: int = 6) -> StorageDataset:
         # chunk_size / compression args are ignored — in-memory store
         # has no chunk or filter pipeline.
-        del chunk_size, compression, compression_level
+        del compression, compression_level
         if self.has_child(name):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
-        ds = _Dataset(name, precision, length, fields=None)
+        chunks = (chunk_size,) if chunk_size > 0 else None
+        ds = _Dataset(name, precision, (length,), fields=None, chunks=chunks)
+        self._datasets[name] = ds
+        return ds
+
+    def create_dataset_nd(self, name: str, precision: Precision,
+                           shape: tuple[int, ...], *,
+                           chunks: tuple[int, ...] | None = None,
+                           compression: Compression = Compression.NONE,
+                           compression_level: int = 6) -> StorageDataset:
+        del compression, compression_level
+        if self.has_child(name):
+            raise ValueError(f"'{name}' already exists in '{self._name}'")
+        ds = _Dataset(name, precision, tuple(shape), fields=None,
+                      chunks=tuple(chunks) if chunks else None)
         self._datasets[name] = ds
         return ds
 
@@ -151,7 +179,7 @@ class _Group(StorageGroup):
                                  count: int) -> StorageDataset:
         if self.has_child(name):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
-        ds = _Dataset(name, precision=None, length=count,
+        ds = _Dataset(name, precision=None, shape=(count,),
                       fields=tuple(fields))
         self._datasets[name] = ds
         return ds

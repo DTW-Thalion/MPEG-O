@@ -25,6 +25,8 @@ from ._rwlock import RWLock
 from .acquisition_run import AcquisitionRun
 from .feature_flags import FeatureFlags
 from .identification import Identification
+from .providers import StorageProvider, open_provider
+from .providers.hdf5 import Hdf5Provider
 from .provenance import ProvenanceRecord
 from .quantification import Quantification
 
@@ -66,6 +68,13 @@ class SpectralDataset:
     _closed: bool = False
     _remote_fileobj: Any = None  # fsspec file-like kept alive when remote
     _lock: RWLock | None = None  # M23: set when opened with thread_safe=True
+    provider: StorageProvider | None = None  # M39: owning storage provider
+    # ``provider`` is the backend abstraction introduced in M39. ``file``
+    # remains the canonical h5py handle for byte-level code (signatures,
+    # encryption, signal-channel codecs) that isn't expressed through the
+    # protocol; it is the provider's native handle when ``provider`` is
+    # set. New call sites should reach for ``provider.root_group()`` or
+    # ``provider.native_handle()`` instead of ``file`` directly.
 
     # ------------------------------------------------------------- lifecycle
 
@@ -85,6 +94,11 @@ class SpectralDataset:
         any actively touched chunks are fetched. Extra keyword arguments are
         forwarded to :func:`fsspec.open` and are typically used for
         cloud-backend options (``anon=True``, ``key=...``, ...).
+
+        M39: a :class:`~mpeg_o.providers.Hdf5Provider` is constructed for
+        the target and exposed as ``dataset.provider``. The legacy
+        ``dataset.file`` attribute continues to point at the underlying
+        ``h5py.File`` (= ``provider.native_handle()``).
         """
         from .remote import is_remote_url, open_remote_file
 
@@ -96,20 +110,24 @@ class SpectralDataset:
                 fileobj.close()
                 raise
             try:
+                provider = Hdf5Provider(f)
                 return cls._from_open_file(Path(str(path)), f,
                                            remote_fileobj=fileobj,
-                                           thread_safe=thread_safe)
+                                           thread_safe=thread_safe,
+                                           provider=provider)
             except Exception:
                 f.close()
                 fileobj.close()
                 raise
 
         p = Path(path)
-        f = h5py.File(p, "r")
+        provider = Hdf5Provider.open(str(p), mode="r")
+        f = provider.native_handle()
         try:
-            return cls._from_open_file(p, f, thread_safe=thread_safe)
+            return cls._from_open_file(p, f, thread_safe=thread_safe,
+                                         provider=provider)
         except Exception:
-            f.close()
+            provider.close()
             raise
 
     @classmethod
@@ -119,6 +137,7 @@ class SpectralDataset:
         f: h5py.File,
         remote_fileobj: Any = None,
         thread_safe: bool = False,
+        provider: StorageProvider | None = None,
     ) -> "SpectralDataset":
         version, features = io.read_feature_flags(f)
         flags = FeatureFlags.from_iterable(version, features)
@@ -158,6 +177,7 @@ class SpectralDataset:
             encrypted_algorithm=encrypted,
             _remote_fileobj=remote_fileobj,
             _lock=(RWLock() if thread_safe else None),
+            provider=provider,
         )
 
     # ----------------------------------------------------- thread safety (M23)
@@ -183,7 +203,13 @@ class SpectralDataset:
     def close(self) -> None:
         with self.write_lock():
             if not self._closed:
-                self.file.close()
+                # Close via the provider when we have one — it owns the
+                # h5py.File and any fsspec file-like. Fall back to direct
+                # close for legacy instances constructed without M39.
+                if self.provider is not None:
+                    self.provider.close()
+                else:
+                    self.file.close()
                 if self._remote_fileobj is not None:
                     try:
                         self._remote_fileobj.close()

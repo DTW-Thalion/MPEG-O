@@ -27,14 +27,16 @@
 @interface MPGOMemDataset : NSObject <MPGOStorageDataset> {
     NSString     *_name;
     MPGOPrecision _precision;
-    NSUInteger    _length;
+    NSArray<NSNumber *> *_shape;
+    NSArray<NSNumber *> *_chunks;
     NSArray<MPGOCompoundField *> *_fields;
     id            _data;
     NSMutableDictionary<NSString *, id> *_attrs;
 }
 - (instancetype)initWithName:(NSString *)name
                     precision:(MPGOPrecision)precision
-                       length:(NSUInteger)length
+                        shape:(NSArray<NSNumber *> *)shape
+                       chunks:(NSArray<NSNumber *> *)chunks
                        fields:(NSArray<MPGOCompoundField *> *)fields;
 @end
 
@@ -115,14 +117,40 @@
                               compressionLevel:(int)compressionLevel
                                          error:(NSError **)error
 {
-    (void)chunkSize; (void)compression; (void)compressionLevel;
+    (void)compression; (void)compressionLevel;
+    if ([self hasChildNamed:name]) {
+        if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
+                @"child '%@' already exists in '%@'", name, _name);
+        return nil;
+    }
+    NSArray *shape = @[@(length)];
+    NSArray *chunks = chunkSize > 0 ? @[@(chunkSize)] : nil;
+    MPGOMemDataset *d = [[MPGOMemDataset alloc]
+            initWithName:name precision:precision
+                    shape:shape chunks:chunks fields:nil];
+    _datasets[name] = d;
+    return d;
+}
+
+- (id<MPGOStorageDataset>)createDatasetNDNamed:(NSString *)name
+                                      precision:(MPGOPrecision)precision
+                                          shape:(NSArray<NSNumber *> *)shape
+                                         chunks:(NSArray<NSNumber *> *)chunks
+                                    compression:(MPGOCompression)compression
+                               compressionLevel:(int)compressionLevel
+                                          error:(NSError **)error
+{
+    (void)compression; (void)compressionLevel;
     if ([self hasChildNamed:name]) {
         if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
                 @"child '%@' already exists in '%@'", name, _name);
         return nil;
     }
     MPGOMemDataset *d = [[MPGOMemDataset alloc]
-            initWithName:name precision:precision length:length fields:nil];
+            initWithName:name precision:precision
+                    shape:[shape copy]
+                   chunks:[chunks copy]
+                   fields:nil];
     _datasets[name] = d;
     return d;
 }
@@ -138,8 +166,8 @@
         return nil;
     }
     MPGOMemDataset *d = [[MPGOMemDataset alloc]
-            initWithName:name precision:0 length:count
-                  fields:[fields copy]];
+            initWithName:name precision:0
+                    shape:@[@(count)] chunks:nil fields:[fields copy]];
     _datasets[name] = d;
     return d;
 }
@@ -182,14 +210,16 @@
 
 - (instancetype)initWithName:(NSString *)name
                     precision:(MPGOPrecision)precision
-                       length:(NSUInteger)length
+                        shape:(NSArray<NSNumber *> *)shape
+                       chunks:(NSArray<NSNumber *> *)chunks
                        fields:(NSArray<MPGOCompoundField *> *)fields
 {
     self = [super init];
     if (self) {
         _name      = [name copy];
         _precision = precision;
-        _length    = length;
+        _shape     = [shape copy];
+        _chunks    = [chunks copy];
         _fields    = [fields copy];
         _attrs     = [NSMutableDictionary dictionary];
     }
@@ -198,7 +228,9 @@
 
 - (NSString *)name { return _name; }
 - (MPGOPrecision)precision { return _precision; }
-- (NSUInteger)length { return _length; }
+- (NSArray<NSNumber *> *)shape { return _shape; }
+- (NSArray<NSNumber *> *)chunks { return _chunks; }
+- (NSUInteger)length { return _shape.count > 0 ? [_shape[0] unsignedIntegerValue] : 0; }
 - (NSArray<MPGOCompoundField *> *)compoundFields { return _fields; }
 
 - (id)readAll:(NSError **)error { return _data; }
@@ -321,6 +353,7 @@ static NSString *normaliseURL(NSString *url)
 
 - (id<MPGOStorageGroup>)rootGroupWithError:(NSError **)error { return _root; }
 - (BOOL)isOpen { return _open; }
+- (id)nativeHandle { return nil; }
 - (void)close  { _open = NO; }
 
 + (void)discardStore:(NSString *)url

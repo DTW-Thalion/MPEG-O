@@ -183,6 +183,43 @@ class ProviderTest {
         if ("memory".equals(provider)) MemoryProvider.discardStore(url);
     }
 
+    @Test
+    void nativeHandleEscapeHatch() {
+        // Hdf5Provider exposes an Hdf5File for byte-level code paths;
+        // MemoryProvider returns null.
+        String path = tempDir.resolve("native.h5").toString();
+        try (StorageProvider p = ProviderRegistry.open(path,
+                StorageProvider.Mode.CREATE)) {
+            Object h = p.nativeHandle();
+            assertNotNull(h, "hdf5 provider must expose a native handle");
+            assertEquals("Hdf5File", h.getClass().getSimpleName());
+        }
+        String url = "memory://native-hatch";
+        try (StorageProvider p = ProviderRegistry.open(url,
+                StorageProvider.Mode.CREATE)) {
+            assertNull(p.nativeHandle(),
+                    "memory provider has no native handle");
+        }
+        MemoryProvider.discardStore(url);
+    }
+
+    @Test
+    void memoryProviderSupportsNDDatasets() {
+        String url = "memory://nd-test";
+        try (StorageProvider p = ProviderRegistry.open(url,
+                StorageProvider.Mode.CREATE)) {
+            StorageDataset ds = p.rootGroup().createDatasetND(
+                    "cube", Precision.FLOAT64,
+                    new long[]{2, 3, 4}, new long[]{1, 3, 4},
+                    Compression.NONE, 0);
+            assertArrayEquals(new long[]{2, 3, 4}, ds.shape());
+            assertArrayEquals(new long[]{1, 3, 4}, ds.chunks());
+            // length() convenience returns first axis
+            assertEquals(2, ds.length());
+        }
+        MemoryProvider.discardStore(url);
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"hdf5", "memory"})
     void deleteAttribute(String provider) {

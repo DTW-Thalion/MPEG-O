@@ -66,6 +66,9 @@ public final class Hdf5Provider implements StorageProvider {
     public boolean isOpen() { return open; }
 
     @Override
+    public Object nativeHandle() { return file; }
+
+    @Override
     public void close() {
         if (file != null) file.close();
         open = false;
@@ -198,7 +201,7 @@ public final class Hdf5Provider implements StorageProvider {
 
         @Override public String name() { return name; }
         @Override public Precision precision() { return delegate.getPrecision(); }
-        @Override public long length() { return delegate.getLength(); }
+        @Override public long[] shape() { return new long[]{ delegate.getLength() }; }
         @Override public List<CompoundField> compoundFields() { return null; }
 
         @Override public Object readAll() { return delegate.readData(); }
@@ -242,7 +245,7 @@ public final class Hdf5Provider implements StorageProvider {
 
         @Override public String name() { return name; }
         @Override public Precision precision() { return null; }
-        @Override public long length() { return count; }
+        @Override public long[] shape() { return new long[]{ count }; }
 
         @Override public List<CompoundField> compoundFields() {
             return schema.fields.stream()

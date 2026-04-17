@@ -14,6 +14,8 @@
 #import "HDF5/MPGOFeatureFlags.h"
 #import "Protection/MPGOEncryptionManager.h"
 #import "Protection/MPGOAccessPolicy.h"
+#import "Providers/MPGOStorageProtocols.h"
+#import "Providers/MPGOHDF5Provider.h"
 #import <hdf5.h>
 
 // v0.2 format version emitted by this writer.
@@ -21,12 +23,14 @@ static NSString *const kMPGOFormatVersion = @"1.1";
 
 @implementation MPGOSpectralDataset
 {
-    MPGOHDF5File     *_file;   // retained while alive for lazy reads
+    MPGOHDF5File     *_file;       // retained while alive for lazy reads
     NSString         *_filePath;
     MPGOAccessPolicy *_accessPolicy;
+    id<MPGOStorageProvider> _provider;  // M39: owns _file
 }
 
 @synthesize filePath = _filePath;
+@synthesize provider = _provider;
 
 - (instancetype)initWithTitle:(NSString *)title
            isaInvestigationId:(NSString *)isaId
@@ -92,7 +96,12 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
 
 - (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error
 {
-    MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:error];
+    // M39: route through MPGOHDF5Provider. writeToFilePath: is a
+    // transactional create-write-close (handle isn't retained) so we
+    // close the provider at the tail of the method.
+    MPGOHDF5Provider *p = [[MPGOHDF5Provider alloc] init];
+    if (![p openURL:path mode:MPGOStorageOpenModeCreate error:error]) return NO;
+    MPGOHDF5File *f = (MPGOHDF5File *)[p nativeHandle];
     if (!f) return NO;
     MPGOHDF5Group *root = [f rootGroup];
 
@@ -210,7 +219,11 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
 
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error
 {
-    MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:error];
+    // M39: route through MPGOHDF5Provider; the native handle is the
+    // MPGOHDF5File previously obtained directly.
+    MPGOHDF5Provider *p = [[MPGOHDF5Provider alloc] init];
+    if (![p openURL:path mode:MPGOStorageOpenModeRead error:error]) return nil;
+    MPGOHDF5File *f = (MPGOHDF5File *)[p nativeHandle];
     if (!f) return nil;
     MPGOHDF5Group *root = [f rootGroup];
 
@@ -314,6 +327,7 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
                                          provenanceRecords:prov
                                                transitions:trans];
     ds->_file     = f;
+    ds->_provider = p;
     ds->_filePath = [path copy];
 
     // Subclass hook: read additional /study/ content while file is open.
@@ -337,6 +351,8 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
     if (_file) {
         BOOL ok = [_file close];
         _file = nil;
+        [_provider close];
+        _provider = nil;
         return ok;
     }
     return YES;

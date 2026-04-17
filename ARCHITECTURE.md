@@ -163,12 +163,22 @@ cloud access and ObjC ROS3 are deferred to v0.7+ (see
 
 ### Caller refactor status
 
-v0.6 ships the abstraction and the two providers. Upper-layer
-classes still talk directly to `h5py` / `MPGOHDF5Group` / `Hdf5File`
-from v0.5 code; the provider interfaces are additive. Migrating
-every `SpectralDataset` / `AcquisitionRun` / `CompoundIO` /
-protection class to use the protocol is tracked as v0.7 work so
-that v0.6 ships without touching signed/encrypted data paths.
+v0.6 ships the abstraction, both providers, **and the top-level
+entry-point refactor**:
+
+| Class | Status |
+|---|---|
+| `SpectralDataset.open` / `.create` / `.write_minimal` | **Provider-aware** — construct `Hdf5Provider` internally, exposed on `dataset.provider` |
+| `Hdf5Provider.native_handle()` | Returns underlying `h5py.File` / `Hdf5File` / `MPGOHDF5File` for byte-level code |
+| `AcquisitionRun`, `MSImage` signal-channel and cube writes | **Still native** — use `dataset.provider.native_handle()` |
+| `SignatureManager`, `EncryptionManager`, `KeyRotationManager`, `Anonymizer` | **Still native** — operate on HDF5 bytes directly |
+| Compound metadata write helpers | Native for now; port to `StorageGroup` covered in v0.7 |
+
+The data model's *identity* now flows through the protocol; byte-level
+code paths continue to use HDF5 directly through the `native_handle()`
+escape hatch. A non-HDF5 provider (Zarr, SQLite) will trigger the
+next round of refactoring in v0.7 when the specific codec and
+encryption constraints of that backend become concrete.
 
 ---
 

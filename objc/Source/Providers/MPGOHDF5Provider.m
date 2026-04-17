@@ -44,6 +44,8 @@
 - (NSString *)name { return _name; }
 - (MPGOPrecision)precision { return _ds.precision; }
 - (NSUInteger)length { return _ds.length; }
+- (NSArray<NSNumber *> *)shape { return @[@(_ds.length)]; }
+- (NSArray<NSNumber *> *)chunks { return nil; }
 - (NSArray<MPGOCompoundField *> *)compoundFields { return nil; }
 
 - (id)readAll:(NSError **)error
@@ -146,6 +148,31 @@
     return d ? [[MPGOHDF5DatasetAdapter alloc] initWithDataset:d name:name] : nil;
 }
 
+- (id<MPGOStorageDataset>)createDatasetNDNamed:(NSString *)name
+                                      precision:(MPGOPrecision)precision
+                                          shape:(NSArray<NSNumber *> *)shape
+                                         chunks:(NSArray<NSNumber *> *)chunks
+                                    compression:(MPGOCompression)compression
+                               compressionLevel:(int)compressionLevel
+                                          error:(NSError **)error
+{
+    if (shape.count == 1) {
+        NSUInteger chunkSize = chunks.count > 0 ? [chunks[0] unsignedIntegerValue] : 0;
+        return [self createDatasetNamed:name
+                               precision:precision
+                                  length:[shape[0] unsignedIntegerValue]
+                               chunkSize:chunkSize
+                             compression:compression
+                        compressionLevel:compressionLevel
+                                   error:error];
+    }
+    if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
+            @"MPGOHDF5Provider does not yet implement N-D datasets "
+            @"(shape=%@); use MPGOHDF5Group directly for image cubes",
+            shape);
+    return nil;
+}
+
 - (id<MPGOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
                                                  fields:(NSArray<MPGOCompoundField *> *)fields
                                                   count:(NSUInteger)count
@@ -227,6 +254,8 @@
 - (NSString *)name { return _name; }
 - (MPGOPrecision)precision { return 0; }
 - (NSUInteger)length { return _count; }
+- (NSArray<NSNumber *> *)shape { return @[@(_count)]; }
+- (NSArray<NSNumber *> *)chunks { return nil; }
 - (NSArray<MPGOCompoundField *> *)compoundFields { return _fields; }
 
 - (id)readAll:(NSError **)error
@@ -329,6 +358,7 @@
 }
 
 - (BOOL)isOpen { return _open; }
+- (id)nativeHandle { return _file; }
 - (void)close { [_file close]; _open = NO; }
 
 @end

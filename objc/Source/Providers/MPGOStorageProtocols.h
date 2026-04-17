@@ -37,7 +37,9 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 
 - (NSString *)name;
 - (MPGOPrecision)precision;  ///< meaningful only for primitive datasets
-- (NSUInteger)length;
+- (NSArray<NSNumber *> *)shape;   ///< full shape; 1-D returns @[@N]
+- (NSArray<NSNumber *> *)chunks;  ///< chunk shape, or nil for contiguous
+- (NSUInteger)length;             ///< convenience: shape[0]
 - (NSArray<MPGOCompoundField *> *)compoundFields;  ///< nil for primitives
 
 /** Full read. Primitive datasets return NSData of length * sizeof(element);
@@ -91,6 +93,16 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
                              compressionLevel:(int)compressionLevel
                                         error:(NSError **)error;
 
+/** Create an N-D dataset. Returns nil + ``MPGOErrorDatasetCreate`` when
+ *  the provider does not support the requested rank. */
+- (id<MPGOStorageDataset>)createDatasetNDNamed:(NSString *)name
+                                      precision:(MPGOPrecision)precision
+                                          shape:(NSArray<NSNumber *> *)shape
+                                         chunks:(NSArray<NSNumber *> *)chunks
+                                    compression:(MPGOCompression)compression
+                               compressionLevel:(int)compressionLevel
+                                          error:(NSError **)error;
+
 - (id<MPGOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
                                                 fields:(NSArray<MPGOCompoundField *> *)fields
                                                  count:(NSUInteger)count
@@ -124,6 +136,11 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 - (id<MPGOStorageGroup>)rootGroupWithError:(NSError **)error;
 - (BOOL)isOpen;
 - (void)close;
+
+/** Escape hatch returning the underlying native handle
+ *  (``MPGOHDF5File`` for the HDF5 provider, nil for memory).
+ *  Byte-level callers (signatures, encryption) use this. */
+- (id)nativeHandle;
 
 @end
 

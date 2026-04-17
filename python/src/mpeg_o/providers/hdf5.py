@@ -94,8 +94,13 @@ class _Dataset(StorageDataset):
         return _precision_from_dtype(self._ds.dtype)
 
     @property
-    def length(self) -> int:
-        return int(self._ds.shape[0]) if self._ds.shape else 0
+    def shape(self) -> tuple[int, ...]:
+        return tuple(self._ds.shape) if self._ds.shape else (0,)
+
+    @property
+    def chunks(self) -> tuple[int, ...] | None:
+        c = self._ds.chunks
+        return tuple(c) if c else None
 
     @property
     def compound_fields(self) -> tuple[CompoundField, ...] | None:
@@ -172,6 +177,25 @@ class _Group(StorageGroup):
         ds = self._grp.create_dataset(name, **kwargs)
         return _Dataset(ds)
 
+    def create_dataset_nd(self, name: str, precision: Precision,
+                           shape: tuple[int, ...], *,
+                           chunks: tuple[int, ...] | None = None,
+                           compression: Compression = Compression.NONE,
+                           compression_level: int = 6) -> StorageDataset:
+        kwargs: dict[str, Any] = {
+            "shape": shape,
+            "dtype": precision.numpy_dtype(),
+        }
+        if chunks is not None:
+            kwargs["chunks"] = tuple(chunks)
+        if compression == Compression.ZLIB:
+            kwargs["compression"] = "gzip"
+            kwargs["compression_opts"] = compression_level
+        elif compression == Compression.LZ4:
+            kwargs["compression"] = 32004
+        ds = self._grp.create_dataset(name, **kwargs)
+        return _Dataset(ds)
+
     def create_compound_dataset(self, name: str,
                                  fields: list[CompoundField],
                                  count: int) -> StorageDataset:
@@ -236,3 +260,8 @@ class Hdf5Provider(StorageProvider):
             self._file.close()
         except Exception:
             pass
+
+    def native_handle(self) -> h5py.File:
+        """Underlying h5py.File — escape hatch for byte-level code
+        (signature hashing, encryption, native compression filters)."""
+        return self._file

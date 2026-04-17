@@ -18,7 +18,17 @@ public interface StorageDataset extends AutoCloseable {
      *  (use {@link #compoundFields()} there). */
     Precision precision();
 
-    long length();
+    /** Full shape tuple. 1-D datasets return {@code {N}}. */
+    long[] shape();
+
+    /** Size along the first axis (= {@code shape()[0]}). */
+    default long length() {
+        long[] s = shape();
+        return s != null && s.length > 0 ? s[0] : 0L;
+    }
+
+    /** Chunk shape, or {@code null} for contiguous storage. */
+    default long[] chunks() { return null; }
 
     /** Compound field schema, or {@code null} for primitive datasets. */
     List<CompoundField> compoundFields();
