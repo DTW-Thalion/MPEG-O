@@ -35,6 +35,12 @@
  * The Python side lives in ``mpeg_o.exporters.isa`` and produces
  * byte-identical output for the same input. This is verified by the
  * M27 cross-language parity tests.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.exporters.isa
+ *   Java:   com.dtwthalion.mpgo.exporters.ISAExporter
  */
 @interface MPGOISAExporter : NSObject
 

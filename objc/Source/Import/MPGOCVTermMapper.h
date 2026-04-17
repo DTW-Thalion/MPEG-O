@@ -27,6 +27,12 @@
  *   - -precisionForAccession: returns MPGOPrecisionFloat64 for unknown
  *   - -compressionForAccession: returns MPGOCompressionNone for unknown
  *   - -signalArrayNameForAccession: returns nil for unknown
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.importers.cv_term_mapper
+ *   Java:   com.dtwthalion.mpgo.importers.CVTermMapper
  */
 @interface MPGOCVTermMapper : NSObject
 

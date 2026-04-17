@@ -1,4 +1,13 @@
-"""Base64 + optional zlib decode for mzML / nmrML binary payloads."""
+"""Base64 + optional zlib decode for mzML / nmrML binary payloads.
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOBase64`` class · Java:
+uses ``java.util.Base64`` from the standard library directly — no
+MPGO wrapper needed.
+
+API status: Stable (internal helper).
+"""
 from __future__ import annotations
 
 import base64

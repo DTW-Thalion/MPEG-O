@@ -672,3 +672,29 @@ def test_memory_provider_round_trip() -> None:
     p.close()
     assert not p.is_open()
     MemoryProvider.discard_store(url)
+
+
+# ── M41.8 Task 1: Import/Export subsystem xref parity tests ──────────────────
+
+
+def test_cv_term_mapper_basic_accessions():
+    from mpeg_o.importers import cv_term_mapper as m
+    from mpeg_o.enums import Precision
+    # MS:1000521 = 32-bit float; MS:1000523 = 64-bit float.
+    assert m.precision_for("MS:1000523") == Precision.FLOAT64
+    assert m.precision_for("MS:1000521") == Precision.FLOAT32
+    # Unknown accession → Float64 sentinel per ObjC spec.
+    assert m.precision_for("MS:9999999") == Precision.FLOAT64
+
+
+def test_base64_zlib_round_trip():
+    import base64
+    import zlib
+    from mpeg_o.importers._base64_zlib import decode
+    raw = b"hello mpeg-o base64"
+    # Round trip without zlib: encode manually, decode via module.
+    encoded_plain = base64.b64encode(raw).decode("ascii")
+    assert decode(encoded_plain, zlib_compressed=False) == raw
+    # Round trip with zlib: encode manually, decode via module.
+    encoded_z = base64.b64encode(zlib.compress(raw)).decode("ascii")
+    assert decode(encoded_z, zlib_compressed=True) == raw

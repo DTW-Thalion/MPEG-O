@@ -14,6 +14,15 @@ Binary resolution order:
 .. _ThermoRawFileParser: https://github.com/compomics/ThermoRawFileParser
 
 SPDX-License-Identifier: Apache-2.0
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOThermoRawReader`` (v0.4 stub; delegation to
+ThermoRawFileParser is a future milestone in ObjC) · Java:
+``com.dtwthalion.mpgo.importers.ThermoRawReader`` (M38 shipped; delegates
+to ThermoRawFileParser binary)
+
+API status: Stable (M38 shipped; delegates to ThermoRawFileParser binary).
 """
 from __future__ import annotations
 

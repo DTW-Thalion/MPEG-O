@@ -13,6 +13,13 @@ File mapping:
     investigation.json         ISA-JSON (single file per investigation)
 
 SPDX-License-Identifier: Apache-2.0
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOISAExporter`` · Java:
+``com.dtwthalion.mpgo.exporters.ISAExporter``
+
+API status: Stable.
 """
 from __future__ import annotations
 

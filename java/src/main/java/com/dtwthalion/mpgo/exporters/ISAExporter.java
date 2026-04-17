@@ -16,6 +16,14 @@ import java.util.Map;
 
 /**
  * Exports a {@link SpectralDataset} to ISA-Tab TSV files and ISA-JSON.
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b><br>
+ * Objective-C: {@code MPGOISAExporter} &middot;
+ * Python: {@code mpeg_o.exporters.isa}</p>
+ *
+ * @since 0.6
  */
 public final class ISAExporter {
 

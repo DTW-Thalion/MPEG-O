@@ -5,6 +5,13 @@ stripped on the fly (mzML files declare ``xmlns="http://psi.hupo.org/ms/mzml"``)
 so element names match the ObjC parser exactly. Only the subset of fields
 exercised by the reference fixtures is preserved; unused cvParams are
 ignored rather than forwarded, matching the ObjC reader's behaviour.
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOMzMLReader`` · Java:
+``com.dtwthalion.mpgo.importers.MzMLReader``
+
+API status: Stable.
 """
 from __future__ import annotations
 

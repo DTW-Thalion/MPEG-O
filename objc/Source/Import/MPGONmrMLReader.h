@@ -32,6 +32,12 @@
  *     chemical shift + intensity arrays
  *
  * Not thread-safe. Returns nil with NSError on malformed input.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.importers.nmrml
+ *   Java:   com.dtwthalion.mpgo.importers.NmrMLReader
  */
 @interface MPGONmrMLReader : NSObject
 

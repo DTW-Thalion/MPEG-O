@@ -26,6 +26,12 @@
  *   NMR:1000003 — number of scans
  *   NMR:1000004 — dwell time (seconds)
  *   NMR:1400014 — sweep width (ppm)
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.exporters.nmrml
+ *   Java:   com.dtwthalion.mpgo.exporters.NmrMLWriter
  */
 @interface MPGONmrMLWriter : NSObject
 

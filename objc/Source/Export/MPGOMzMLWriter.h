@@ -32,6 +32,12 @@
  * NMR runs, chromatograms, MSImage cubes, and referenceable param
  * groups are deliberately out of scope for M19; extending the writer
  * for them is a straightforward follow-up.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.exporters.mzml
+ *   Java:   com.dtwthalion.mpgo.exporters.MzMLWriter
  */
 @interface MPGOMzMLWriter : NSObject
 
