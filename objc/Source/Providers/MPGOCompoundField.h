@@ -15,6 +15,15 @@ typedef NS_ENUM(NSInteger, MPGOCompoundFieldKind) {
     MPGOCompoundFieldKindVLString = 3,
 };
 
+/**
+ * One field inside a compound-dataset record.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.providers.base.CompoundField
+ *   Java:   com.dtwthalion.mpgo.providers.CompoundField
+ */
 @interface MPGOCompoundField : NSObject <NSCopying>
 @property (readonly, copy) NSString *name;
 @property (readonly)       MPGOCompoundFieldKind kind;

@@ -22,6 +22,13 @@ Providers that cannot deliver a capability raise
 ``NotImplementedError`` with a clear message; callers degrade or
 error out at the caller layer.
 
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOStorageProtocols.h`` · Java:
+``com.dtwthalion.mpgo.providers`` package.
+
+API status: Stable (Provisional per M39 — may change before v1.0).
+
 SPDX-License-Identifier: LGPL-3.0-or-later
 """
 from __future__ import annotations
@@ -42,6 +49,11 @@ class CompoundFieldKind(Enum):
     Kept small on purpose: these are the kinds MPEG-O §6 actually uses
     across identifications, quantifications, provenance, and compound
     spectrum-index headers. Adding a new kind is a spec change.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOCompoundFieldKind`` · Java:
+    ``com.dtwthalion.mpgo.providers.CompoundField.Kind``.
     """
 
     UINT32 = "uint32"
@@ -52,7 +64,13 @@ class CompoundFieldKind(Enum):
 
 @dataclass(frozen=True)
 class CompoundField:
-    """One field inside a compound-dataset record."""
+    """One field inside a compound-dataset record.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOCompoundField`` · Java:
+    ``com.dtwthalion.mpgo.providers.CompoundField``.
+    """
 
     name: str
     kind: CompoundFieldKind
@@ -61,7 +79,13 @@ class CompoundField:
 class StorageDataset(ABC):
     """A typed array (or compound record array) stored under a
     :class:`StorageGroup`. 1-D is the common case; N-D is supported
-    for image cubes and 2-D NMR (see :meth:`create_dataset_nd`)."""
+    for image cubes and 2-D NMR (see :meth:`create_dataset_nd`).
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOStorageDataset`` · Java:
+    ``com.dtwthalion.mpgo.providers.StorageDataset``.
+    """
 
     # ── Type and shape ──────────────────────────────────────────────
 
@@ -136,7 +160,13 @@ class StorageDataset(ABC):
 
 
 class StorageGroup(ABC):
-    """A named directory of sub-groups and datasets."""
+    """A named directory of sub-groups and datasets.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOStorageGroup`` · Java:
+    ``com.dtwthalion.mpgo.providers.StorageGroup``.
+    """
 
     # ── Identity ────────────────────────────────────────────────────
 
@@ -233,7 +263,13 @@ class StorageGroup(ABC):
 
 
 class StorageProvider(ABC):
-    """Opens a storage backend and exposes its root group."""
+    """Opens a storage backend and exposes its root group.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOStorageProvider`` · Java:
+    ``com.dtwthalion.mpgo.providers.StorageProvider``.
+    """
 
     @classmethod
     @abstractmethod

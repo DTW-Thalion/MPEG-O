@@ -15,6 +15,16 @@ Entry points are declared in ``pyproject.toml``:
     hdf5 = "mpeg_o.providers.hdf5:Hdf5Provider"
     memory = "mpeg_o.providers.memory:MemoryProvider"
 
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOProviderRegistry`` class ·
+Java: ``com.dtwthalion.mpgo.providers.ProviderRegistry`` class ·
+Python: module-level functions
+(``discover_providers``, ``open_provider``, ``register_provider``)
+— idiomatic for Python packaging.
+
+API status: Stable (Provisional per M39).
+
 SPDX-License-Identifier: LGPL-3.0-or-later
 """
 from __future__ import annotations

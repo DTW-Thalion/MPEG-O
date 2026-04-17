@@ -23,6 +23,16 @@ import java.util.stream.Collectors;
  * / {@link Hdf5Group} / {@link Hdf5Dataset} layer — no behavioural
  * change; callers that used those directly can switch to
  * {@code Hdf5Provider.open(path, Mode.READ)} and continue.
+ *
+ * <p>API status: Stable (Provisional per M39 — may change before v1.0).</p>
+ *
+ * <p>Cross-language equivalents:
+ * <ul>
+ *   <li>Objective-C: {@code MPGOHDF5Provider}</li>
+ *   <li>Python: {@code mpeg_o.providers.hdf5.Hdf5Provider}</li>
+ * </ul>
+ *
+ * @since 0.6
  */
 public final class Hdf5Provider implements StorageProvider {
 

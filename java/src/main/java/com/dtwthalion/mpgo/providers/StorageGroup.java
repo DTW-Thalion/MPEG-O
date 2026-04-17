@@ -10,7 +10,18 @@ import com.dtwthalion.mpgo.Enums.Precision;
 
 import java.util.List;
 
-/** Named directory of subgroups, datasets, and attributes. */
+/**
+ * Named directory of subgroups, datasets, and attributes.
+ *
+ * <p><b>API status:</b> Stable (Provisional per M39 — may change
+ * before v1.0).</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOStorageGroup}, Python
+ * {@code mpeg_o.providers.base.StorageGroup}.</p>
+ *
+ * @since 0.6
+ */
 public interface StorageGroup extends AutoCloseable {
 
     String name();

@@ -9,7 +9,18 @@ import com.dtwthalion.mpgo.Enums.Precision;
 
 import java.util.List;
 
-/** One 1-D typed array or compound-record array. */
+/**
+ * One 1-D typed array or compound-record array.
+ *
+ * <p><b>API status:</b> Stable (Provisional per M39 — may change
+ * before v1.0).</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOStorageDataset}, Python
+ * {@code mpeg_o.providers.base.StorageDataset}.</p>
+ *
+ * @since 0.6
+ */
 public interface StorageDataset extends AutoCloseable {
 
     String name();

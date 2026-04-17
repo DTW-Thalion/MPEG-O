@@ -19,6 +19,15 @@ package com.dtwthalion.mpgo.providers;
  * compound datasets with VL strings, scalar and array attributes.
  * Unsupported capabilities raise
  * {@link UnsupportedOperationException} at the call site.</p>
+ *
+ * <p><b>API status:</b> Stable (Provisional per M39 — may change
+ * before v1.0).</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOStorageProvider}, Python
+ * {@code mpeg_o.providers.base.StorageProvider}.</p>
+ *
+ * @since 0.6
  */
 public interface StorageProvider extends AutoCloseable {
 
