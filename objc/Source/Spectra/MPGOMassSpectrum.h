@@ -11,6 +11,10 @@
  * A mass spectrum: m/z + intensity arrays plus MS level, polarity, and
  * an optional scan window. Construction enforces equal-length m/z and
  * intensity arrays.
+ *
+ * Cross-language equivalents:
+ *   Python  — mpeg_o.mass_spectrum.MassSpectrum
+ *   Java    — com.dtwthalion.mpgo.MassSpectrum
  */
 @interface MPGOMassSpectrum : MPGOSpectrum
 

@@ -18,6 +18,16 @@ package com.dtwthalion.mpgo;
  *
  * <p>Relative error is well under 1 ppm for typical MS m/z data (100-2000 Da)
  * due to the 62-bit precision headroom.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <b>Cross-language equivalents:</b>
+ * <ul>
+ *   <li>Objective-C: {@code MPGONumpress}</li>
+ *   <li>Python: {@code mpeg_o._numpress}</li>
+ * </ul>
+ *
+ * @since 0.6
  */
 public final class NumpressCodec {
 
@@ -26,7 +36,25 @@ public final class NumpressCodec {
     private NumpressCodec() {}
 
     /**
-     * Compute the fixed-point scale factor for a given data range.
+     * Compute the fixed-point scale factor for a value range.
+     * Matches ObjC {@code +[MPGONumpress scaleForValueRangeMin:max:]} and
+     * Python {@code mpeg_o._numpress.scale_for_range}.
+     *
+     * @param minValue minimum value in the range
+     * @param maxValue maximum value in the range
+     * @return scale factor (always >= 1)
+     */
+    public static long scaleForRange(double minValue, double maxValue) {
+        double absMax = Math.max(Math.abs(minValue), Math.abs(maxValue));
+        if (absMax == 0 || !Double.isFinite(absMax)) return 1;
+        long scale = (long) Math.floor((double) HEADROOM / absMax);
+        return Math.max(scale, 1);
+    }
+
+    /**
+     * Convenience — compute scale from a data array. Delegates to
+     * {@link #scaleForRange(double, double)} using the array's
+     * absolute maximum as both bounds.
      *
      * @param values the data array
      * @return scale factor (always >= 1)
@@ -37,9 +65,7 @@ public final class NumpressCodec {
             double abs = Math.abs(v);
             if (abs > absMax) absMax = abs;
         }
-        if (absMax == 0 || !Double.isFinite(absMax)) return 1;
-        long scale = (long) Math.floor((double) HEADROOM / absMax);
-        return Math.max(scale, 1);
+        return scaleForRange(-absMax, absMax);
     }
 
     /**

@@ -81,7 +81,7 @@ def test_mask_intensity_below_quantile(tmp_path: Path) -> None:
     assert result.intensities_zeroed > 0
     with SpectralDataset.open(out) as anon:
         spec = anon.ms_runs["run_0001"][0]
-        assert float(np.min(spec.channels["intensity"].data)) == 0.0
+        assert float(np.min(spec.signal_arrays["intensity"].data)) == 0.0
 
 
 def test_coarsen_mz_decimals(tmp_path: Path) -> None:
@@ -95,7 +95,7 @@ def test_coarsen_mz_decimals(tmp_path: Path) -> None:
     assert result.mz_values_coarsened > 0
     with SpectralDataset.open(out) as anon:
         spec = anon.ms_runs["run_0001"][0]
-        mz = spec.channels["mz"].data
+        mz = spec.signal_arrays["mz"].data
         assert np.all(mz == np.round(mz, 0))
 
 
@@ -116,9 +116,9 @@ def test_mask_rare_metabolites(tmp_path: Path) -> None:
     assert result.metabolites_masked == 1
     with SpectralDataset.open(out) as anon:
         spec0 = anon.ms_runs["run_0001"][0]
-        assert float(np.max(spec0.channels["intensity"].data)) == 0.0
+        assert float(np.max(spec0.signal_arrays["intensity"].data)) == 0.0
         spec1 = anon.ms_runs["run_0001"][1]
-        assert float(np.max(spec1.channels["intensity"].data)) > 0.0
+        assert float(np.max(spec1.signal_arrays["intensity"].data)) > 0.0
 
 
 def test_strip_metadata_fields(tmp_path: Path) -> None:

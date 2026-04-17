@@ -165,7 +165,7 @@ def dataset_to_bytes(
         emit('            <cvParam cvRef="MS" accession="MS:1000795" name="no combination" value=""/>\n')
         emit('            <scan>\n')
         emit(f'              <cvParam cvRef="MS" accession="MS:1000016" name="scan start time"'
-             f' value="{_fmt_double(float(spec.retention_time))}"'
+             f' value="{_fmt_double(float(spec.scan_time_seconds))}"'
              f' unitCvRef="UO" unitAccession="UO:0000010" unitName="second"/>\n')
         emit('            </scan>\n')
         emit('          </scanList>\n')
@@ -217,7 +217,7 @@ def dataset_to_bytes(
             cid = f"chrom={i + 1}"
             offset_before = total
             emit(f'{INDENT}<chromatogram index="{i}" id="{_xml_escape(cid)}"'
-                 f' defaultArrayLength="{int(c.retention_times.shape[0])}">\n')
+                 f' defaultArrayLength="{len(c.time_array)}">\n')
             chrom_offsets.append((cid, offset_before + len(INDENT)))
 
             ctype = int(c.chromatogram_type)
@@ -237,8 +237,8 @@ def dataset_to_bytes(
                 emit(f'          <userParam name="product m/z"'
                      f' value="{_fmt_double(float(c.product_mz))}" type="xsd:double"/>\n')
 
-            t_arr = np.ascontiguousarray(c.retention_times, dtype="<f8")
-            i_arr = np.ascontiguousarray(c.intensities, dtype="<f8")
+            t_arr = np.ascontiguousarray(c.time_array.data, dtype="<f8")
+            i_arr = np.ascontiguousarray(c.intensity_array.data, dtype="<f8")
             t_b64 = _encode_array(t_arr, zlib_compression)
             i_b64 = _encode_array(i_arr, zlib_compression)
             comp_acc = "MS:1000574" if zlib_compression else "MS:1000576"

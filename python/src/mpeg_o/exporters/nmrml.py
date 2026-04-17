@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from ..fid import FID
+    from ..fid import FreeInductionDecay
     from ..nmr_spectrum import NMRSpectrum
 
 
@@ -32,7 +32,7 @@ def _fmt(v: float) -> str:
 def spectrum_to_bytes(
     spectrum: "NMRSpectrum",
     *,
-    fid: "FID | None" = None,
+    fid: "FreeInductionDecay | None" = None,
     sweep_width_ppm: float = 0.0,
 ) -> bytes:
     """Build an nmrML byte blob from ``spectrum`` + optional ``fid``."""
@@ -56,9 +56,9 @@ def spectrum_to_bytes(
     emit('    <acquisition1D>\n')
     emit('      <acquisitionParameterSet numberOfScans="1">\n')
 
-    nucleus = spectrum.nucleus if hasattr(spectrum, "nucleus") else ""
+    nucleus = spectrum.nucleus_type if hasattr(spectrum, "nucleus_type") else ""
     freq_mhz = 0.0
-    if hasattr(spectrum, "channels") and "chemical_shift" in spectrum.channels:
+    if hasattr(spectrum, "signal_arrays") and "chemical_shift" in spectrum.signal_arrays:
         pass  # freq comes from the run, not the spectrum
     emit(f'        <acquisitionNucleus name="{nucleus}"/>\n')
 
@@ -75,7 +75,7 @@ def spectrum_to_bytes(
 
     if fid is not None:
         emit(f'        <cvParam cvRef="nmrCV" accession="NMR:1000004"'
-             f' name="dwell time" value="{_fmt(fid.dwell_time_s)}"/>\n')
+             f' name="dwell time" value="{_fmt(fid.dwell_time_seconds)}"/>\n')
 
     emit('      </acquisitionParameterSet>\n')
 
@@ -95,8 +95,8 @@ def spectrum_to_bytes(
     emit('  <spectrumList>\n')
     emit('    <spectrum1D>\n')
 
-    cs_data = spectrum.channels["chemical_shift"].data
-    int_data = spectrum.channels["intensity"].data
+    cs_data = spectrum.signal_arrays["chemical_shift"].data
+    int_data = spectrum.signal_arrays["intensity"].data
     x_b64 = _encode(cs_data)
     y_b64 = _encode(int_data)
 
@@ -125,7 +125,7 @@ def write_spectrum(
     spectrum: "NMRSpectrum",
     path: str | Path,
     *,
-    fid: "FID | None" = None,
+    fid: "FreeInductionDecay | None" = None,
     sweep_width_ppm: float = 0.0,
 ) -> Path:
     blob = spectrum_to_bytes(spectrum, fid=fid, sweep_width_ppm=sweep_width_ppm)

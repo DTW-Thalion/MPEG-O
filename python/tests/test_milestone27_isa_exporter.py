@@ -29,6 +29,7 @@ from mpeg_o.chromatogram import Chromatogram
 from mpeg_o.enums import ChromatogramType
 from mpeg_o.exporters.isa import bundle_for_dataset, write_bundle_for_dataset
 from mpeg_o.instrument_config import InstrumentConfig
+from mpeg_o.signal_array import SignalArray
 
 
 def _make_run(*, with_chromatograms: bool) -> WrittenRun:
@@ -40,8 +41,11 @@ def _make_run(*, with_chromatograms: bool) -> WrittenRun:
     chroms: list[Chromatogram] = []
     if with_chromatograms:
         chroms.append(Chromatogram(
-            retention_times=np.array([0.0, 1.0, 2.0], dtype=np.float64),
-            intensities=np.array([100.0, 500.0, 200.0], dtype=np.float64),
+            signal_arrays={
+                "time": SignalArray(data=np.array([0.0, 1.0, 2.0], dtype=np.float64)),
+                "intensity": SignalArray(data=np.array([100.0, 500.0, 200.0], dtype=np.float64)),
+            },
+            axes=[],
             chromatogram_type=ChromatogramType.TIC,
         ))
     return WrittenRun(

@@ -2,47 +2,78 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping
 
-import numpy as np
-
-from .enums import Polarity
+from .axis_descriptor import AxisDescriptor
 from .signal_array import SignalArray
 
 
 @dataclass(slots=True)
 class Spectrum:
-    """A multi-channel 1-D spectrum with per-scan metadata.
+    """Generic multi-channel 1-D spectrum with per-scan metadata.
 
-    ``channels`` maps a short channel name (``"mz"``, ``"intensity"``,
-    ``"chemical_shift"``, ...) to its ``SignalArray``. Subclasses such as
-    :class:`MassSpectrum` expose convenience properties for the standard
-    channel names but do not constrain what may be stored.
+    Holds an ordered mapping of named :class:`SignalArray` objects and
+    the coordinate axes that index them, plus per-scan metadata
+    (index position, scan time, optional precursor info for tandem
+    MS).
+
+    Concrete subclasses (:class:`MassSpectrum`, :class:`NMRSpectrum`)
+    add their own typed metadata.
+
+    Parameters
+    ----------
+    signal_arrays : dict[str, SignalArray]
+        Named signal arrays keyed by channel name
+        (``"mz"``, ``"intensity"``, ``"chemical_shift"``, ...).
+    axes : list[AxisDescriptor]
+        Coordinate axes describing the signal arrays.
+    index_position : int, default 0
+        Position in the parent :class:`~mpeg_o.acquisition_run.AcquisitionRun` (0-based).
+    scan_time_seconds : float, default 0.0
+        Scan time in seconds from run start.
+    precursor_mz : float, default 0.0
+        Precursor m/z for tandem MS. ``0`` if not tandem.
+    precursor_charge : int, default 0
+        Precursor charge state. ``0`` if unknown.
+
+    Notes
+    -----
+    API status: Stable.
+
+    HDF5 representation: each spectrum is an HDF5 group whose
+    immediate children are ``SignalArray`` sub-groups plus scalar
+    attributes for the metadata fields.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOSpectrum`` · Java:
+    ``com.dtwthalion.mpgo.Spectrum``.
     """
 
-    channels: dict[str, SignalArray] = field(default_factory=dict)
-    retention_time: float = 0.0
-    ms_level: int = 0
-    polarity: Polarity = Polarity.UNKNOWN
+    signal_arrays: dict[str, SignalArray] = field(default_factory=dict)
+    axes: list[AxisDescriptor] = field(default_factory=list)
+    index_position: int = 0
+    scan_time_seconds: float = 0.0
     precursor_mz: float = 0.0
     precursor_charge: int = 0
-    base_peak_intensity: float = 0.0
-    index: int = 0
-    run_name: str = ""
 
-    def channel(self, name: str) -> SignalArray:
+    def signal_array(self, name: str) -> SignalArray:
+        """Return the named ``SignalArray``. Raises ``KeyError`` if absent."""
         try:
-            return self.channels[name]
+            return self.signal_arrays[name]
         except KeyError as exc:
-            raise KeyError(f"no such channel {name!r}; have {sorted(self.channels)}") from exc
+            raise KeyError(
+                f"no such signal array {name!r}; have {sorted(self.signal_arrays)}"
+            ) from exc
 
-    def has_channel(self, name: str) -> bool:
-        return name in self.channels
+    def has_signal_array(self, name: str) -> bool:
+        """Return ``True`` iff ``name`` is in ``signal_arrays``."""
+        return name in self.signal_arrays
 
-    def channel_names(self) -> list[str]:
-        return list(self.channels.keys())
+    def signal_array_names(self) -> list[str]:
+        """Return the channel names in insertion order."""
+        return list(self.signal_arrays.keys())
 
     def __len__(self) -> int:
-        if not self.channels:
+        if not self.signal_arrays:
             return 0
-        return min(len(c) for c in self.channels.values())
+        return min(len(c) for c in self.signal_arrays.values())

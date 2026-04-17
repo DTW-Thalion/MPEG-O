@@ -1,23 +1,42 @@
-"""``FreeInductionDecay`` — time-domain NMR signal."""
+"""``FreeInductionDecay`` — NMR time-domain SignalArray subclass."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
 
+from .signal_array import SignalArray
+
 
 @dataclass(slots=True)
-class FreeInductionDecay:
-    """A time-domain NMR free-induction-decay signal.
+class FreeInductionDecay(SignalArray):
+    """NMR free-induction-decay signal.
 
-    The data array is typically real-valued (one channel) or complex-valued
-    (quadrature detection). ``dwell_time_s`` is the sample spacing in seconds.
+    Subclass of :class:`SignalArray` holding a complex-valued buffer
+    plus FID-specific acquisition metadata: dwell time, scan count,
+    receiver gain.
+
+    Parameters
+    ----------
+    dwell_time_seconds : float, default 0.0
+        Sample spacing in seconds.
+    scan_count : int, default 1
+        Number of scans averaged.
+    receiver_gain : float, default 1.0
+        Receiver gain used during acquisition.
+    *plus all base :class:`SignalArray` parameters (data, axis,
+    encoding, cv_params)*
+
+    Notes
+    -----
+    API status: Stable.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOFreeInductionDecay`` · Java:
+    ``com.dtwthalion.mpgo.FreeInductionDecay``.
     """
 
-    data: np.ndarray
-    dwell_time_s: float
-    spectrometer_frequency_mhz: float = 0.0
-    nucleus: str = ""
-
-    def __len__(self) -> int:
-        return int(self.data.shape[0])
+    dwell_time_seconds: float = 0.0
+    scan_count: int = 1
+    receiver_gain: float = 1.0

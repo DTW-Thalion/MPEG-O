@@ -5,10 +5,22 @@
  */
 package com.dtwthalion.mpgo;
 
-import java.util.*;
+import java.util.Map;
 
+/**
+ * 1-D NMR spectrum: chemical-shift + intensity arrays plus nucleus
+ * type and spectrometer frequency in MHz.
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGONMRSpectrum}, Python
+ * {@code mpeg_o.nmr_spectrum.NMRSpectrum}.</p>
+ *
+ * @since 0.6
+ */
 public class NMRSpectrum extends Spectrum {
-    private final String nucleusType;       // e.g., "1H", "13C"
+    private final String nucleusType;
     private final double spectrometerFrequencyMHz;
 
     public NMRSpectrum(double[] chemicalShiftValues, double[] intensityValues,
@@ -22,8 +34,21 @@ public class NMRSpectrum extends Spectrum {
         this.spectrometerFrequencyMHz = spectrometerFrequencyMHz;
     }
 
-    public double[] chemicalShiftValues() { return signalArray("chemical_shift").asDoubles(); }
-    public double[] intensityValues() { return signalArray("intensity").asDoubles(); }
+    /** Returns the {@code "chemical_shift"} {@link SignalArray}. */
+    public SignalArray chemicalShiftArray() { return signalArray("chemical_shift"); }
+
+    /** Returns the {@code "intensity"} {@link SignalArray}. */
+    public SignalArray intensityArray() { return signalArray("intensity"); }
+
+    /** Convenience: chemical-shift values as a primitive array. */
+    public double[] chemicalShiftValues() { return chemicalShiftArray().asDoubles(); }
+
+    /** Convenience: intensity values as a primitive array. */
+    public double[] intensityValues() { return intensityArray().asDoubles(); }
+
+    /** Nucleus type, e.g. {@code "1H"}, {@code "13C"}, {@code "31P"}. */
     public String nucleusType() { return nucleusType; }
+
+    /** Spectrometer frequency in MHz. */
     public double spectrometerFrequencyMHz() { return spectrometerFrequencyMHz; }
 }

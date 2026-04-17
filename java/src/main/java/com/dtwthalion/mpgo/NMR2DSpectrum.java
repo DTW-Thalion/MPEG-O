@@ -5,20 +5,33 @@
  */
 package com.dtwthalion.mpgo;
 
-public class NMR2DSpectrum {
-    private final double[] intensityMatrix; // flattened row-major [height * width]
+import java.util.Map;
+
+/**
+ * 2-D NMR spectrum: row-major {@code double[]} intensity matrix of
+ * {@code width × height} points plus F1 and F2 axis descriptors.
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGONMR2DSpectrum}, Python
+ * {@code mpeg_o.nmr_2d.NMR2DSpectrum}.</p>
+ *
+ * @since 0.6
+ */
+public class NMR2DSpectrum extends Spectrum {
+    private final double[] intensityMatrix;
     private final int width;
     private final int height;
     private final AxisDescriptor f1Axis;
     private final AxisDescriptor f2Axis;
     private final String nucleusF1;
     private final String nucleusF2;
-    private final double spectrometerFrequencyMHz;
 
     public NMR2DSpectrum(double[] intensityMatrix, int width, int height,
                          AxisDescriptor f1Axis, AxisDescriptor f2Axis,
-                         String nucleusF1, String nucleusF2,
-                         double spectrometerFrequencyMHz) {
+                         String nucleusF1, String nucleusF2) {
+        super(Map.of(), 0, 0.0);
         this.intensityMatrix = intensityMatrix;
         this.width = width;
         this.height = height;
@@ -26,7 +39,6 @@ public class NMR2DSpectrum {
         this.f2Axis = f2Axis;
         this.nucleusF1 = nucleusF1;
         this.nucleusF2 = nucleusF2;
-        this.spectrometerFrequencyMHz = spectrometerFrequencyMHz;
     }
 
     public double[] intensityMatrix() { return intensityMatrix; }
@@ -36,9 +48,8 @@ public class NMR2DSpectrum {
     public AxisDescriptor f2Axis() { return f2Axis; }
     public String nucleusF1() { return nucleusF1; }
     public String nucleusF2() { return nucleusF2; }
-    public double spectrometerFrequencyMHz() { return spectrometerFrequencyMHz; }
 
-    /** Get intensity at (row, col). */
+    /** @return intensity at (row, col). */
     public double valueAt(int row, int col) {
         return intensityMatrix[row * width + col];
     }

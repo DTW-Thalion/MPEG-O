@@ -7,22 +7,36 @@ package com.dtwthalion.mpgo;
 
 import com.dtwthalion.mpgo.Enums.ChromatogramType;
 
-public class Chromatogram {
-    private final double[] timeValues;
-    private final double[] intensityValues;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Chromatogram: time-vs-intensity trace. TIC, XIC, or SRM. Subclass
+ * of {@link Spectrum}.
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOChromatogram}, Python
+ * {@code mpeg_o.chromatogram.Chromatogram}.</p>
+ *
+ * @since 0.6
+ */
+public class Chromatogram extends Spectrum {
     private final ChromatogramType type;
     private final double targetMz;
-    private final double precursorMz;
     private final double productMz;
+    // precursorMz lives on the base Spectrum class
 
     public Chromatogram(double[] timeValues, double[] intensityValues,
                         ChromatogramType type,
                         double targetMz, double precursorMz, double productMz) {
-        this.timeValues = timeValues;
-        this.intensityValues = intensityValues;
+        super(Map.of(
+            "time", SignalArray.ofDoubles(timeValues),
+            "intensity", SignalArray.ofDoubles(intensityValues)
+        ), List.of(), 0, 0.0, precursorMz, 0);
         this.type = type;
         this.targetMz = targetMz;
-        this.precursorMz = precursorMz;
         this.productMz = productMz;
     }
 
@@ -30,11 +44,12 @@ public class Chromatogram {
         return new Chromatogram(time, intensity, ChromatogramType.TIC, 0, 0, 0);
     }
 
-    public double[] timeValues() { return timeValues; }
-    public double[] intensityValues() { return intensityValues; }
+    public SignalArray timeArray() { return signalArray("time"); }
+    public SignalArray intensityArray() { return signalArray("intensity"); }
+    public double[] timeValues() { return timeArray().asDoubles(); }
+    public double[] intensityValues() { return intensityArray().asDoubles(); }
     public ChromatogramType type() { return type; }
     public double targetMz() { return targetMz; }
-    public double precursorMz() { return precursorMz; }
     public double productMz() { return productMz; }
-    public int length() { return timeValues.length; }
+    public int length() { return timeValues().length; }
 }

@@ -19,6 +19,7 @@ from mpeg_o.chromatogram import Chromatogram
 from mpeg_o.enums import ChromatogramType
 from mpeg_o.exporters.mzml import dataset_to_bytes
 from mpeg_o.importers.mzml import read as read_mzml
+from mpeg_o.signal_array import SignalArray
 
 
 def _empty_ms_run() -> WrittenRun:
@@ -43,11 +44,17 @@ def _make_chromatograms() -> list[Chromatogram]:
     i8  = np.arange(8, dtype=np.float64) * 13 + 50
     t12 = np.linspace(0.0, 12.0, 12, dtype=np.float64)
     i12 = np.arange(12, dtype=np.float64) * 3 + 250
+    def _chrom(t, i, **kw):
+        return Chromatogram(
+            signal_arrays={"time": SignalArray(data=t), "intensity": SignalArray(data=i)},
+            axes=[],
+            **kw,
+        )
     return [
-        Chromatogram(t10, i10, chromatogram_type=ChromatogramType.TIC),
-        Chromatogram(t8,  i8,  chromatogram_type=ChromatogramType.XIC, target_mz=523.25),
-        Chromatogram(t12, i12, chromatogram_type=ChromatogramType.SRM,
-                     precursor_mz=400.5, product_mz=185.1),
+        _chrom(t10, i10, chromatogram_type=ChromatogramType.TIC),
+        _chrom(t8,  i8,  chromatogram_type=ChromatogramType.XIC, target_mz=523.25),
+        _chrom(t12, i12, chromatogram_type=ChromatogramType.SRM,
+               precursor_mz=400.5, product_mz=185.1),
     ]
 
 
@@ -66,13 +73,13 @@ def test_chromatograms_mpgo_round_trip(tmp_path: Path) -> None:
         assert len(run_back.chromatograms) == 3
         c0, c1, c2 = run_back.chromatograms
         assert c0.chromatogram_type == ChromatogramType.TIC
-        assert c0.retention_times.shape[0] == 10
+        assert len(c0.time_array) == 10
         assert c1.chromatogram_type == ChromatogramType.XIC
         assert c1.target_mz == 523.25
         assert c2.chromatogram_type == ChromatogramType.SRM
         assert c2.precursor_mz == 400.5
         assert c2.product_mz == 185.1
-        assert np.array_equal(c0.intensities,
+        assert np.array_equal(c0.intensity_array.data,
                               np.arange(10, dtype=np.float64) * 7 + 100)
 
 

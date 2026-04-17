@@ -202,7 +202,7 @@ class AcquisitionRun:
         length = int(self.index.lengths[i])
         end = offset + length
 
-        channels: dict[str, SignalArray] = {}
+        signal_arrays: dict[str, SignalArray] = {}
         for c in self.channel_names:
             decoded = self._numpress_channels.get(c)
             if decoded is not None:
@@ -214,24 +214,24 @@ class AcquisitionRun:
                     continue
                 arr = ds[offset:end]
             axis = _CHANNEL_AXIS.get(c, AxisDescriptor(name=c, unit=""))
-            channels[c] = SignalArray.from_numpy(arr, axis=axis)
+            signal_arrays[c] = SignalArray.from_numpy(arr, axis=axis)
 
         polarity = Polarity(int(self.index.polarities[i]))
-        common = dict(
-            channels=channels,
-            retention_time=float(self.index.retention_times[i]),
-            ms_level=int(self.index.ms_levels[i]),
-            polarity=polarity,
+        base_kwargs = dict(
+            signal_arrays=signal_arrays,
+            index_position=i,
+            scan_time_seconds=float(self.index.retention_times[i]),
             precursor_mz=float(self.index.precursor_mzs[i]),
             precursor_charge=int(self.index.precursor_charges[i]),
-            base_peak_intensity=float(self.index.base_peak_intensities[i]),
-            index=i,
-            run_name=self.name,
         )
 
         if self.spectrum_class == "MPGONMRSpectrum":
-            return NMRSpectrum(nucleus=self.nucleus_type, **common)
-        return MassSpectrum(**common)
+            return NMRSpectrum(nucleus_type=self.nucleus_type, **base_kwargs)
+        return MassSpectrum(
+            ms_level=int(self.index.ms_levels[i]),
+            polarity=polarity,
+            **base_kwargs,
+        )
 
 
 # ------------------------------------------------ provenance decoders ---
@@ -318,13 +318,18 @@ def _read_chromatograms(run_group: h5py.Group) -> list[Chromatogram]:
     precursor_mzs = idx["precursor_mzs"][()]
     product_mzs   = idx["product_mzs"][()]
 
+    from .signal_array import SignalArray
+
     out: list[Chromatogram] = []
     for i in range(count):
         off = int(offsets[i])
         n   = int(lengths[i])
         out.append(Chromatogram(
-            retention_times=np.asarray(time_all[off:off+n], dtype="<f8").copy(),
-            intensities=np.asarray(int_all[off:off+n], dtype="<f8").copy(),
+            signal_arrays={
+                "time": SignalArray(data=np.asarray(time_all[off:off+n], dtype="<f8").copy()),
+                "intensity": SignalArray(data=np.asarray(int_all[off:off+n], dtype="<f8").copy()),
+            },
+            axes=[],
             chromatogram_type=ChromatogramType(int(types[i])),
             target_mz=float(target_mzs[i]),
             precursor_mz=float(precursor_mzs[i]),
@@ -347,7 +352,7 @@ def write_chromatograms_to_run_group(
     g = run_group.create_group("chromatograms")
     g.attrs["count"] = np.int64(len(chromatograms))
 
-    total = sum(int(c.retention_times.shape[0]) for c in chromatograms)
+    total = sum(len(c.time_array) for c in chromatograms)
     time_all = np.empty(total, dtype="<f8")
     int_all  = np.empty(total, dtype="<f8")
     offsets  = np.empty(len(chromatograms), dtype="<i8")
@@ -359,9 +364,9 @@ def write_chromatograms_to_run_group(
 
     cursor = 0
     for i, c in enumerate(chromatograms):
-        n = int(c.retention_times.shape[0])
-        time_all[cursor:cursor+n] = c.retention_times.astype("<f8", copy=False)
-        int_all [cursor:cursor+n] = c.intensities.astype("<f8", copy=False)
+        n = len(c.time_array)
+        time_all[cursor:cursor+n] = c.time_array.data.astype("<f8", copy=False)
+        int_all [cursor:cursor+n] = c.intensity_array.data.astype("<f8", copy=False)
         offsets[i] = cursor
         lengths[i] = n
         types[i]   = int(c.chromatogram_type)

@@ -22,6 +22,12 @@
  *
  * Not thread-safe. Mutating CV annotations from multiple threads is
  * undefined.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.signal_array.SignalArray
+ *   Java:   com.dtwthalion.mpgo.SignalArray
  */
 @interface MPGOSignalArray : NSObject <MPGOCVAnnotatable>
 

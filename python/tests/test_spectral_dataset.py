@@ -39,8 +39,8 @@ def test_reads_minimal_ms_fixture(minimal_ms_fixture: Path) -> None:
         # lazy per-spectrum access
         s0 = run[0]
         assert isinstance(s0, MassSpectrum)
-        assert s0.index == 0
-        assert s0.run_name == "run_0001"
+        assert s0.index_position == 0
+        assert run.name == "run_0001"
         assert len(s0.mz_array.data) == len(s0.intensity_array.data) > 0
         # mz values should be strictly positive for synthetic fixtures
         assert s0.mz_array.data[0] > 0
@@ -74,7 +74,7 @@ def test_reads_nmr_1d_fixture(nmr_1d_fixture: Path) -> None:
         assert run.acquisition_mode is AcquisitionMode.NMR_1D
         s = run[0]
         assert isinstance(s, NMRSpectrum)
-        assert s.nucleus == "1H"
+        assert s.nucleus_type == "1H"
         assert len(s.chemical_shift_array.data) == len(s.intensity_array.data)
 
 
