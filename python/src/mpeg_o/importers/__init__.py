@@ -5,6 +5,14 @@ repository root); the core ``mpeg_o`` package is LGPL-3.0-or-later. Keeping
 the import layer under a more permissive license mirrors the Objective-C
 reference implementation and matches common bioinformatics practice where
 format translators are freely embeddable.
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``Source/Import/`` headers (``MPGOMzMLReader``,
+``MPGONmrMLReader``, etc.) · Java:
+``com.dtwthalion.mpgo.importers`` package
+
+API status: Stable.
 """
 from __future__ import annotations
 

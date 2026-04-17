@@ -21,6 +21,14 @@ import java.util.zip.Deflater;
  *
  * <p>Uses {@link StringBuilder} (not XMLStreamWriter) for precise byte-offset
  * control required by the indexedmzML index and checksum footer.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b><br>
+ * Objective-C: {@code MPGOMzMLWriter} &middot;
+ * Python: {@code mpeg_o.exporters.mzml}</p>
+ *
+ * @since 0.6
  */
 public final class MzMLWriter {
 

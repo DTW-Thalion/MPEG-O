@@ -17,6 +17,14 @@ import java.util.Base64;
  *
  * <p>Uses {@link StringBuilder} for output construction. Arrays are encoded as
  * Base64 little-endian float64 without compression.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b><br>
+ * Objective-C: {@code MPGONmrMLWriter} &middot;
+ * Python: {@code mpeg_o.exporters.nmrml}</p>
+ *
+ * @since 0.6
  */
 public final class NmrMLWriter {
 

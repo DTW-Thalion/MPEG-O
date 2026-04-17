@@ -4,6 +4,13 @@ Handles ``spectrum1D`` files (1-D NMR). The acquisition parameter block
 is recognised in both its cvParam and attribute-carrying forms. FID data
 is parsed and discarded in this minimal port; it is reserved for a later
 milestone that adds a ``FreeInductionDecay`` writer.
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGONmrMLReader`` · Java:
+``com.dtwthalion.mpgo.importers.NmrMLReader``
+
+API status: Stable.
 """
 from __future__ import annotations
 

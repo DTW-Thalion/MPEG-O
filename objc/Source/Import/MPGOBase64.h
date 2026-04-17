@@ -18,6 +18,12 @@
  * optionally inflates, and returns the raw bytes as NSData.
  *
  * Not thread-safe; callers are responsible for synchronization.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.importers._base64_zlib (private helper)
+ *   Java:   java.util.Base64 (standard library — no MPGO wrapper)
  */
 @interface MPGOBase64 : NSObject
 

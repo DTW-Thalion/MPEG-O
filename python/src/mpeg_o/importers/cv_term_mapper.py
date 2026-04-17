@@ -3,6 +3,13 @@
 Exact Python port of the ObjC ``MPGOCVTermMapper`` lookup tables. The set
 deliberately mirrors the ObjC side so that writing an ``mzML`` from Python
 (M19) produces the same accession choices as the ObjC exporter.
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOCVTermMapper`` · Java:
+``com.dtwthalion.mpgo.importers.CVTermMapper``
+
+API status: Stable.
 """
 from __future__ import annotations
 

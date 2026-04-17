@@ -8,6 +8,18 @@ package com.dtwthalion.mpgo.importers;
 import com.dtwthalion.mpgo.Enums.*;
 import java.util.Map;
 
+/**
+ * Maps PSI-MS and nmrCV controlled-vocabulary accessions to MPGO model
+ * values (precision, compression, array role, spectrum metadata).
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b><br>
+ * Objective-C: {@code MPGOCVTermMapper} &middot;
+ * Python: {@code mpeg_o.importers.cv_term_mapper}</p>
+ *
+ * @since 0.6
+ */
 public final class CVTermMapper {
     private CVTermMapper() {}
 

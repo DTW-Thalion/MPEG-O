@@ -4,6 +4,11 @@ The main ``SpectralDataset`` class wraps an open HDF5 file, which would be
 awkward to construct from an importer that has no backing file yet. Instead,
 importers produce an :class:`ImportResult` that can be inspected in memory
 and then flushed to a real ``.mpgo`` file with :meth:`ImportResult.to_mpgo`.
+
+Notes
+-----
+API status: Stable (Python-idiomatic helper; ObjC and Java use
+inline constructs).
 """
 from __future__ import annotations
 

@@ -8,6 +8,13 @@ implementation. The text is assembled by hand (rather than through
 UTF-8 byte stream, not into a DOM model.
 
 SPDX-License-Identifier: Apache-2.0
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGOMzMLWriter`` · Java:
+``com.dtwthalion.mpgo.exporters.MzMLWriter``
+
+API status: Stable.
 """
 from __future__ import annotations
 

@@ -17,6 +17,19 @@ import java.nio.ByteOrder;
 import java.util.*;
 import java.util.zip.Inflater;
 
+/**
+ * SAX-based mzML 1.1 parser. Produces an {@link AcquisitionRun} from an
+ * mzML document, decoding binary data arrays, cvParam metadata, and
+ * chromatograms.
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b><br>
+ * Objective-C: {@code MPGOMzMLReader} &middot;
+ * Python: {@code mpeg_o.importers.mzml}</p>
+ *
+ * @since 0.6
+ */
 public class MzMLReader {
 
     public static AcquisitionRun read(String path) throws Exception {

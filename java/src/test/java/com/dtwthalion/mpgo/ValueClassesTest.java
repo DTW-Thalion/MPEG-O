@@ -536,4 +536,18 @@ class ValueClassesTest {
         }
         com.dtwthalion.mpgo.providers.MemoryProvider.discardStore(url);
     }
+
+    // ── M41.8 Task 1: Import/Export subsystem xref parity tests ──────────────
+
+    @Test
+    void cvTermMapperBasicAccessions() {
+        // PSI-MS accessions MS:1000521 = Float32, MS:1000523 = Float64.
+        assertEquals(Enums.Precision.FLOAT64,
+            com.dtwthalion.mpgo.importers.CVTermMapper.precisionFor("MS:1000523"));
+        assertEquals(Enums.Precision.FLOAT32,
+            com.dtwthalion.mpgo.importers.CVTermMapper.precisionFor("MS:1000521"));
+        // Unknown accession → null (Java returns null; ObjC/Python return Float64).
+        assertNull(com.dtwthalion.mpgo.importers.CVTermMapper.precisionFor("MS:9999999"),
+            "unknown accession should return null in Java");
+    }
 }

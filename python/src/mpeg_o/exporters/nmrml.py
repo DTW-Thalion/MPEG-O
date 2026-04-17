@@ -5,6 +5,13 @@ an nmrML XML document. Output mirrors the elements parsed by
 ``mpeg_o.importers.nmrml`` so it round-trips through the reader.
 
 SPDX-License-Identifier: Apache-2.0
+
+Cross-language equivalents
+--------------------------
+Objective-C: ``MPGONmrMLWriter`` · Java:
+``com.dtwthalion.mpgo.exporters.NmrMLWriter``
+
+API status: Stable.
 """
 from __future__ import annotations
 

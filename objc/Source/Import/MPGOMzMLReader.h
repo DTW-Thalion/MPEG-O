@@ -34,6 +34,12 @@
  *
  * On malformed input the reader returns nil and populates `error` with a
  * descriptive NSError in the `MPGOMzMLReaderErrorDomain`. Not thread-safe.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.importers.mzml
+ *   Java:   com.dtwthalion.mpgo.importers.MzMLReader
  */
 @interface MPGOMzMLReader : NSObject
 

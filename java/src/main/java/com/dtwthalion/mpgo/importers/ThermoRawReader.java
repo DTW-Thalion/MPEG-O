@@ -28,6 +28,16 @@ import java.util.stream.Stream;
  *   <li>{@code ThermoRawFileParser} on {@code PATH}.</li>
  *   <li>{@code ThermoRawFileParser.exe} on {@code PATH} — invoked via {@code mono}.</li>
  * </ol>
+ *
+ * <p><b>API status:</b> Stable (M38 shipped; delegates to ThermoRawFileParser
+ * binary).</p>
+ *
+ * <p><b>Cross-language equivalents:</b><br>
+ * Objective-C: {@code MPGOThermoRawReader} (v0.4 stub; delegation to
+ * ThermoRawFileParser is a future milestone in ObjC) &middot;
+ * Python: {@code mpeg_o.importers.thermo_raw} (M38 shipped)</p>
+ *
+ * @since 0.6
  */
 public final class ThermoRawReader {
 

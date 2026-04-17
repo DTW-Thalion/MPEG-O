@@ -28,6 +28,14 @@ import java.util.zip.Inflater;
  * {@link AcquisitionRun} with {@link AcquisitionMode#NMR_1D} mode,
  * {@code chemical_shift} and {@code intensity} channels, and optionally a
  * {@link FreeInductionDecay}.</p>
+ *
+ * <p><b>API status:</b> Stable.</p>
+ *
+ * <p><b>Cross-language equivalents:</b><br>
+ * Objective-C: {@code MPGONmrMLReader} &middot;
+ * Python: {@code mpeg_o.importers.nmrml}</p>
+ *
+ * @since 0.6
  */
 public final class NmrMLReader {
 
