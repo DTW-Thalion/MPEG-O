@@ -7,6 +7,12 @@
  * Objects conforming to MPGOStreamable support sequential access with
  * explicit positioning. This enables efficient iteration over large
  * datasets without materializing the entire collection in memory.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.protocols.Streamable
+ *   Java:   com.dtwthalion.mpgo.protocols.Streamable
  */
 @protocol MPGOStreamable <NSObject>
 

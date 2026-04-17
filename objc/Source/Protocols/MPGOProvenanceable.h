@@ -10,6 +10,12 @@
  * chain of processing records. Every transformation applied to the data
  * contributes an entry; the chain makes the object self-documenting and
  * supports regulatory audit trails.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.protocols.Provenanceable
+ *   Java:   com.dtwthalion.mpgo.protocols.Provenanceable
  */
 @protocol MPGOProvenanceable <NSObject>
 

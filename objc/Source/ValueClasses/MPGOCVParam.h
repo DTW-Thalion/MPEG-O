@@ -7,6 +7,12 @@
  * A single controlled-vocabulary parameter: (ontology, accession, name,
  * optional value, optional unit). Immutable value class. Stub in Phase 2 —
  * full implementation lands in Milestone 1.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.cv_param.CVParam
+ *   Java:   com.dtwthalion.mpgo.CVParam
  */
 @interface MPGOCVParam : NSObject <NSCoding, NSCopying>
 

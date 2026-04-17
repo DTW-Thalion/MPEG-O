@@ -6,6 +6,12 @@
 /**
  * Closed numeric range [minimum, maximum]. Immutable value class.
  * Used by MPGOAxisDescriptor to describe the bounds of a signal axis.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.value_range.ValueRange
+ *   Java:   com.dtwthalion.mpgo.ValueRange
  */
 @interface MPGOValueRange : NSObject <NSCoding, NSCopying>
 

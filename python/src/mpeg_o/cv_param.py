@@ -1,4 +1,4 @@
-"""``CVParam`` — controlled-vocabulary parameter (PSI-MS, nmrCV, ...)."""
+"""``CVParam`` — controlled-vocabulary parameter reference."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,15 +6,38 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class CVParam:
-    """A controlled-vocabulary parameter reference.
+    """A single controlled-vocabulary parameter reference.
 
-    Mirrors the ObjC ``MPGOCVParam`` value class. ``accession`` follows the
-    ``<CV>:<id>`` form used by PSI-MS (e.g. ``"MS:1000515"``) or nmrCV
-    (e.g. ``"NMR:1000002"``). ``unit_accession`` may be ``None``.
+    Immutable value class in the form
+    ``(ontology_ref, accession, name, [value], [unit])``.
+
+    Parameters
+    ----------
+    ontology_ref : str
+        Ontology short name (``"MS"``, ``"NMR"``, ``"UO"``, ...).
+    accession : str
+        Ontology accession in ``<CV>:<id>`` form
+        (e.g. ``"MS:1000515"``).
+    name : str
+        Human-readable label.
+    value : str, default ""
+        Optional free-form value. Use an empty string when the
+        parameter is a pure assertion with no associated value.
+    unit : str or None, default None
+        Optional unit accession (typically a UO or MS term).
+
+    Notes
+    -----
+    API status: Stable.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOCVParam`` · Java:
+    ``com.dtwthalion.mpgo.CVParam``.
     """
 
+    ontology_ref: str
     accession: str
     name: str
     value: str = ""
-    unit_accession: str | None = None
-    unit_name: str | None = None
+    unit: str | None = None

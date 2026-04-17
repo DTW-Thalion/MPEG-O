@@ -8,6 +8,12 @@
 /**
  * Describes a single axis of a SignalArray: its semantic name, unit,
  * numeric range, and sampling mode. Immutable value class.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.axis_descriptor.AxisDescriptor
+ *   Java:   com.dtwthalion.mpgo.AxisDescriptor
  */
 @interface MPGOAxisDescriptor : NSObject <NSCoding, NSCopying>
 
