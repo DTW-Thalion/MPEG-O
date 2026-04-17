@@ -30,6 +30,7 @@ extern void testMilestone27(void);
 extern void testMilestone28(void);
 extern void testMilestone29(void);
 extern void testMilestone39(void);
+extern void testSqliteProvider(void);
 
 int main(int argc, const char *argv[])
 {
@@ -149,6 +150,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 39: provider abstraction")
             testMilestone39();
         END_SET("Milestone 39: provider abstraction")
+
+        START_SET("Milestone 41: SQLite storage provider")
+            testSqliteProvider();
+        END_SET("Milestone 41: SQLite storage provider")
     }
     return 0;
 }

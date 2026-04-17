@@ -32,9 +32,10 @@ MPGOTests_OBJC_FILES = \
 	TestMilestone27.m \
 	TestMilestone28.m \
 	TestMilestone29.m \
-	TestMilestone39.m
+	TestMilestone39.m \
+	TestSqliteProvider.m
 
-MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto
+MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 ADDITIONAL_CPPFLAGS += -I../Source
