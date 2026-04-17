@@ -216,8 +216,10 @@ public class MzMLReader {
             if (acc == null) return;
 
             if (inBinaryDataArray) {
-                Precision p = CVTermMapper.precisionFor(acc);
-                if (p != null) { curPrecision = p; return; }
+                if (CVTermMapper.isPrecisionAccession(acc)) {
+                    curPrecision = CVTermMapper.precisionFor(acc);
+                    return;
+                }
                 if (CVTermMapper.isZlib(acc)) { curZlib = true; return; }
                 String role = CVTermMapper.arrayRoleFor(acc);
                 if (role != null) { curArrayRole = role; return; }

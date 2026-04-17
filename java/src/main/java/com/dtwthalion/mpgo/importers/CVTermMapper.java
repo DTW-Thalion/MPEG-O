@@ -83,13 +83,36 @@ public final class CVTermMapper {
         return ARRAY_ROLE_MAP.get(accession);
     }
 
+    /**
+     * @return {@code true} iff {@code accession} is one of the four
+     *         known precision accessions ({@code MS:1000521},
+     *         {@code MS:1000523}, {@code MS:1000519},
+     *         {@code MS:1000522}). Callers that need to distinguish
+     *         "is this a precision cvParam?" from "what precision?"
+     *         should gate on this before calling {@link #precisionFor}.
+     */
+    public static boolean isPrecisionAccession(String accession) {
+        return MS_32BIT_FLOAT.equals(accession)
+            || MS_64BIT_FLOAT.equals(accession)
+            || MS_32BIT_INT.equals(accession)
+            || MS_64BIT_INT.equals(accession);
+    }
+
+    /**
+     * @return the {@link Precision} implied by {@code accession}.
+     *         For unknown accessions returns {@link Precision#FLOAT64}
+     *         as a safe default, matching ObjC {@code +precisionForAccession:}
+     *         and Python {@code precision_for(accession)}. Callers that
+     *         need to distinguish "unknown" from "FLOAT64" should gate
+     *         on {@link #isPrecisionAccession} first.
+     */
     public static Precision precisionFor(String accession) {
         return switch (accession) {
             case MS_32BIT_FLOAT -> Precision.FLOAT32;
             case MS_64BIT_FLOAT -> Precision.FLOAT64;
             case MS_32BIT_INT -> Precision.INT32;
             case MS_64BIT_INT -> Precision.INT64;
-            default -> null;
+            default -> Precision.FLOAT64;
         };
     }
 
