@@ -262,4 +262,48 @@ class ValueClassesTest {
         assertTrue(img.quantifications().isEmpty());
         assertTrue(img.provenanceRecords().isEmpty());
     }
+
+    @Test
+    void identificationTypedEvidenceChain() {
+        java.util.List<String> evidence = java.util.List.of("MS:1002217", "MS:1001143");
+        Identification i = new Identification(
+            "run_0001", 42, "CHEBI:17234", 0.95, evidence);
+        assertEquals("run_0001", i.runName());
+        assertEquals(42, i.spectrumIndex());
+        assertEquals("CHEBI:17234", i.chemicalEntity());
+        assertEquals(0.95, i.confidenceScore(), 1e-9);
+        assertEquals(evidence, i.evidenceChain());
+    }
+
+    @Test
+    void quantificationFields() {
+        Quantification q = new Quantification(
+            "CHEBI:17234", "sample1", 1234.5, "median");
+        assertEquals("CHEBI:17234", q.chemicalEntity());
+        assertEquals("sample1", q.sampleRef());
+        assertEquals(1234.5, q.abundance(), 1e-9);
+        assertEquals("median", q.normalizationMethod());
+    }
+
+    @Test
+    void provenanceRecordContainsInputRef() {
+        ProvenanceRecord r = new ProvenanceRecord(
+            1700000000L, "MSConvert 3.0",
+            java.util.Map.of("threshold", "100"),
+            java.util.List.of("file:///data/raw/run.mzML"),
+            java.util.List.of("file:///data/processed/run.mpgo"));
+        assertTrue(r.containsInputRef("file:///data/raw/run.mzML"));
+        assertFalse(r.containsInputRef("file:///data/raw/other.mzML"));
+    }
+
+    @Test
+    void transitionListCountAndIndex() {
+        TransitionList.Transition t = new TransitionList.Transition(
+            500.0, 100.0, 25.0, new ValueRange(10.0, 20.0));
+        TransitionList tl = new TransitionList(java.util.List.of(t));
+        assertEquals(1, tl.count());
+        assertSame(t, tl.transitionAtIndex(0));
+        assertEquals(new ValueRange(10.0, 20.0),
+                     tl.transitionAtIndex(0).retentionTimeWindow());
+    }
 }

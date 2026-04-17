@@ -8,6 +8,12 @@
  * a software activity (name + parameters), a list of output entity URIs,
  * and a Unix timestamp. Stored in /study/<run>/provenance/steps as a
  * JSON-encoded array on disk.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.provenance.ProvenanceRecord
+ *   Java:   com.dtwthalion.mpgo.ProvenanceRecord
  */
 @interface MPGOProvenanceRecord : NSObject <NSCopying>
 

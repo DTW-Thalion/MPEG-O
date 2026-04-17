@@ -41,6 +41,39 @@ public final class MiniJson {
         return out;
     }
 
+    /**
+     * Parse a JSON object whose values are strings, e.g.
+     * {@code {"key":"val"}}. Non-string values are coerced via
+     * {@code toString()}. Returns an empty map on null or malformed input.
+     */
+    public static Map<String, String> parseStringMap(String blob) {
+        if (blob == null || blob.isEmpty()) return Map.of();
+        Parser p = new Parser(blob);
+        p.skipWhitespace();
+        Object v = p.parseValue();
+        if (!(v instanceof Map<?, ?> m)) return Map.of();
+        Map<String, String> out = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> e : m.entrySet()) {
+            out.put(e.getKey().toString(),
+                    e.getValue() == null ? "" : e.getValue().toString());
+        }
+        return out;
+    }
+
+    /** Parse a JSON array of strings, e.g. {@code ["a","b"]}. */
+    public static List<String> parseArrayOfStrings(String blob) {
+        if (blob == null || blob.isEmpty()) return List.of();
+        Parser p = new Parser(blob);
+        p.skipWhitespace();
+        Object v = p.parseValue();
+        if (!(v instanceof List<?> list)) return List.of();
+        List<String> out = new ArrayList<>(list.size());
+        for (Object o : list) {
+            out.add(o == null ? "" : o.toString());
+        }
+        return out;
+    }
+
     /** Encode any parsed value back to JSON. Round-trips what parser produces. */
     public static String encode(Object v) {
         StringBuilder sb = new StringBuilder();

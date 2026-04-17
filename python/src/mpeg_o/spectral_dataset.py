@@ -51,10 +51,26 @@ def _split_run_names(value: str | None) -> tuple[str, ...]:
 
 @dataclass(slots=True)
 class SpectralDataset:
-    """A read view over a ``.mpgo`` file.
+    """Root container for an MPEG-O ``.mpgo`` file.
 
-    Use :meth:`SpectralDataset.open` as the main entry point; it returns an
-    object that can be used as a context manager.
+    Owns a top-level ``study/`` group plus zero or more named MS
+    acquisition runs, zero or more named NMR-spectrum collections,
+    the dataset-wide identifications, quantifications, provenance
+    records, and an optional transition list.
+
+    Persistence uses a
+    :class:`~mpeg_o.providers.base.StorageProvider` (HDF5 by
+    default); callers may supply another via the ``provider`` kwarg.
+
+    Notes
+    -----
+    API status: Stable. ``Encryptable`` conformance is delivered in
+    slice 41.5 when the encryption manager lands in Python.
+
+    Cross-language equivalents
+    --------------------------
+    Objective-C: ``MPGOSpectralDataset`` · Java:
+    ``com.dtwthalion.mpgo.SpectralDataset``.
     """
 
     path: Path

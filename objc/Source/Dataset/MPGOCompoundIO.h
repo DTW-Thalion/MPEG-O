@@ -22,6 +22,16 @@
  * All functions use variable-length C strings inside the compound records
  * so h5dump can visualize them directly and external tools that understand
  * compound types can introspect without a bespoke reader.
+ *
+ * API status: Stable (internal helper).
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o._hdf5_io (private helper module)
+ *   Java:   com.dtwthalion.mpgo.hdf5.Hdf5CompoundIO
+ *
+ * Each language exposes these differently due to HDF5 binding
+ * shapes; see docs/api-review-v0.6.md for the documented stylistic
+ * difference.
  */
 @interface MPGOCompoundIO : NSObject
 

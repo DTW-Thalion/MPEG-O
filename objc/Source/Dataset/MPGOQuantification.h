@@ -7,6 +7,12 @@
  * Abundance value for a chemical entity in a sample, with optional
  * normalization metadata. Stored alongside identifications under
  * /study/quantifications/ in the MPEG-O container.
+ *
+ * API status: Stable.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.quantification.Quantification
+ *   Java:   com.dtwthalion.mpgo.Quantification
  */
 @interface MPGOQuantification : NSObject <NSCopying>
 
