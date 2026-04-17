@@ -1,0 +1,175 @@
+mpeg_o.encryption
+=================
+
+.. py:module:: mpeg_o.encryption
+
+.. autoapi-nested-parse::
+
+   AES-256-GCM encryption / decryption matching the ObjC reference layout.
+
+   The Objective-C implementation uses OpenSSL ``EVP_aes_256_gcm`` with a
+   12-byte IV and a 16-byte auth tag. Ciphertext is stored separately from the
+   tag (via ``EVP_CTRL_GCM_GET_TAG``). Python mirrors this using
+   ``cryptography.hazmat.primitives.ciphers.aead.AESGCM`` — note that
+   ``AESGCM.encrypt`` returns ``ciphertext || tag``; we split the last 16 bytes
+   off to match the OpenSSL layout.
+
+   Per-channel encrypted-signal-channel layout (see §5 of ``docs/format-spec.md``)::
+
+       <channel>_values_encrypted    int32 raw byte container, zero-padded to /4
+       <channel>_iv                  3 × int32 raw bytes (12-byte IV)
+       <channel>_tag                 4 × int32 raw bytes (16-byte GCM tag)
+       @<channel>_ciphertext_bytes   int64  exact ciphertext length
+       @<channel>_original_count     int64  original element count
+       @<channel>_algorithm          string "AES-256-GCM"
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOEncryptionManager`` · Java:
+   ``com.dtwthalion.mpgo.protection.EncryptionManager``.
+
+   API status: Stable.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   mpeg_o.encryption.AES_KEY_LEN
+   mpeg_o.encryption.AES_IV_LEN
+   mpeg_o.encryption.AES_TAG_LEN
+   mpeg_o.encryption.ALGORITHM_NAME
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.encryption.SealedBlob
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   mpeg_o.encryption.encrypt_bytes
+   mpeg_o.encryption.decrypt_bytes
+   mpeg_o.encryption.read_encrypted_channel
+   mpeg_o.encryption.encrypt_intensity_channel_in_run
+   mpeg_o.encryption.encrypt_intensity_channel_in_group
+   mpeg_o.encryption.decrypt_intensity_channel_in_run
+
+
+Module Contents
+---------------
+
+.. py:data:: AES_KEY_LEN
+   :value: 32
+
+
+.. py:data:: AES_IV_LEN
+   :value: 12
+
+
+.. py:data:: AES_TAG_LEN
+   :value: 16
+
+
+.. py:data:: ALGORITHM_NAME
+   :value: 'AES-256-GCM'
+
+
+.. py:class:: SealedBlob
+
+   Result of an AES-256-GCM encrypt: separate ciphertext, IV, and tag.
+
+
+   .. py:attribute:: ciphertext
+      :type:  bytes
+
+
+   .. py:attribute:: iv
+      :type:  bytes
+
+
+   .. py:attribute:: tag
+      :type:  bytes
+
+
+.. py:function:: encrypt_bytes(plaintext: bytes, key: bytes, iv: bytes | None = None) -> SealedBlob
+
+   Encrypt ``plaintext`` with AES-256-GCM. Returns ciphertext/iv/tag tuple.
+
+   If ``iv`` is ``None`` a random 12-byte nonce is generated. Tests that need
+   cross-implementation parity should pass a fixed ``iv``.
+
+
+.. py:function:: decrypt_bytes(blob: SealedBlob, key: bytes) -> bytes
+
+   Decrypt an AES-256-GCM sealed blob. Raises on authentication failure.
+
+
+.. py:function:: read_encrypted_channel(channels_group: h5py.Group, channel: str, key: bytes, dtype: str = '<f8') -> numpy.ndarray
+
+   Decrypt one encrypted signal channel from a ``signal_channels`` group.
+
+   The plaintext is interpreted as an array of ``dtype`` (default
+   little-endian float64, matching the ObjC writer). Raises ``KeyError`` if
+   the channel is not encrypted in this group.
+
+
+.. py:function:: encrypt_intensity_channel_in_run(file_path: str, run_name: str, key: bytes) -> None
+
+   Encrypt the intensity_values dataset of the named MS run in place.
+
+   Matches ObjC
+   ``+[MPGOEncryptionManager encryptIntensityChannelInRun:atFilePath:withKey:error:]``.
+
+   Opens the .mpgo file read-write, locates
+   ``/study/ms_runs/<run_name>/signal_channels/``, encrypts the
+   ``intensity_values`` dataset bytes with AES-256-GCM, writes an
+   ``intensity_values_encrypted`` dataset (bytes padded to 4-byte boundary,
+   stored as int32 array for ObjC wire compat) plus sibling scalar
+   datasets ``intensity_iv`` and ``intensity_tag``, plus attributes
+   ``intensity_ciphertext_bytes`` (int64), ``intensity_original_count``
+   (int64), and ``intensity_algorithm`` ("AES-256-GCM"), and deletes the
+   original ``intensity_values`` dataset.
+
+   Idempotent: if ``intensity_values_encrypted`` already exists, returns
+   silently without re-encrypting.
+
+   Raises ``FileNotFoundError`` if the file or run does not exist,
+   ``ValueError`` if key is not 32 bytes.
+
+
+.. py:function:: encrypt_intensity_channel_in_group(signal_channels_group: h5py.Group, key: bytes) -> None
+
+   Encrypt the intensity_values dataset inside an already-open signal_channels group.
+
+   Use this variant when the caller already holds an open h5py file handle
+   (e.g. via :class:`~mpeg_o.spectral_dataset.SpectralDataset`) and cannot
+   open the file a second time. Semantics are identical to
+   :func:`encrypt_intensity_channel_in_run`.
+
+   Raises ``ValueError`` if ``key`` is not 32 bytes, ``KeyError`` if
+   ``intensity_values`` is absent.
+
+
+.. py:function:: decrypt_intensity_channel_in_run(file_path: str, run_name: str, key: bytes) -> numpy.ndarray
+
+   Decrypt the intensity_values channel of the named MS run.
+
+   Matches ObjC
+   ``+[MPGOEncryptionManager decryptIntensityChannelInRun:atFilePath:withKey:error:]``.
+
+   Returns a float64 numpy array with the original element count. The
+   on-disk file is NOT modified — decryption is read-only.
+
+   Raises ``FileNotFoundError``, ``KeyError`` (run not found), or
+   ``ValueError`` (channel not encrypted / key wrong) as appropriate.
+
+

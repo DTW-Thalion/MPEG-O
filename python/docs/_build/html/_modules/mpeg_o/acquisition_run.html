@@ -1,0 +1,1125 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>mpeg_o.acquisition_run - MPEG-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">MPEG-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  <span class="sidebar-brand-text">MPEG-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/mpeg_o/index.html">mpeg_o</a><input aria-label="Toggle navigation of mpeg_o" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/access_policy/index.html">mpeg_o.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/acquisition_run/index.html">mpeg_o.acquisition_run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/anonymization/index.html">mpeg_o.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/axis_descriptor/index.html">mpeg_o.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/chromatogram/index.html">mpeg_o.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/cv_param/index.html">mpeg_o.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/encoding_spec/index.html">mpeg_o.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/encryption/index.html">mpeg_o.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/enums/index.html">mpeg_o.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/mpeg_o/exporters/index.html">mpeg_o.exporters</a><input aria-label="Toggle navigation of mpeg_o.exporters" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/exporters/isa/index.html">mpeg_o.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/exporters/mzml/index.html">mpeg_o.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/exporters/nmrml/index.html">mpeg_o.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/feature_flags/index.html">mpeg_o.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/fid/index.html">mpeg_o.fid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/identification/index.html">mpeg_o.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/mpeg_o/importers/index.html">mpeg_o.importers</a><input aria-label="Toggle navigation of mpeg_o.importers" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/importers/cv_term_mapper/index.html">mpeg_o.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/importers/import_result/index.html">mpeg_o.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/importers/mzml/index.html">mpeg_o.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/importers/nmrml/index.html">mpeg_o.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/importers/thermo_raw/index.html">mpeg_o.importers.thermo_raw</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/instrument_config/index.html">mpeg_o.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/key_rotation/index.html">mpeg_o.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/mass_spectrum/index.html">mpeg_o.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/ms_image/index.html">mpeg_o.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/nmr_2d/index.html">mpeg_o.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/nmr_spectrum/index.html">mpeg_o.nmr_spectrum</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/mpeg_o/protocols/index.html">mpeg_o.protocols</a><input aria-label="Toggle navigation of mpeg_o.protocols" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/protocols/cv_annotatable/index.html">mpeg_o.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/protocols/encryptable/index.html">mpeg_o.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/protocols/indexable/index.html">mpeg_o.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/protocols/provenanceable/index.html">mpeg_o.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/protocols/streamable/index.html">mpeg_o.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/provenance/index.html">mpeg_o.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/mpeg_o/providers/index.html">mpeg_o.providers</a><input aria-label="Toggle navigation of mpeg_o.providers" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/providers/base/index.html">mpeg_o.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/providers/hdf5/index.html">mpeg_o.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/providers/memory/index.html">mpeg_o.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/providers/registry/index.html">mpeg_o.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/mpeg_o/providers/sqlite/index.html">mpeg_o.providers.sqlite</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/quantification/index.html">mpeg_o.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/query/index.html">mpeg_o.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/remote/index.html">mpeg_o.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/signal_array/index.html">mpeg_o.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/signatures/index.html">mpeg_o.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/spectral_dataset/index.html">mpeg_o.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/spectrum/index.html">mpeg_o.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/stream_reader/index.html">mpeg_o.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/stream_writer/index.html">mpeg_o.stream_writer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/transition_list/index.html">mpeg_o.transition_list</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/value_range/index.html">mpeg_o.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/mpeg_o/verifier/index.html">mpeg_o.verifier</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for mpeg_o.acquisition_run</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;``AcquisitionRun`` — lazy view over one ``/study/ms_runs/&lt;name&gt;/`` group.&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_hdf5_io</span> <span class="k">as</span> <span class="n">io</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.access_policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">AccessPolicy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.axis_descriptor</span><span class="w"> </span><span class="kn">import</span> <span class="n">AxisDescriptor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.chromatogram</span><span class="w"> </span><span class="kn">import</span> <span class="n">Chromatogram</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.enums</span><span class="w"> </span><span class="kn">import</span> <span class="n">AcquisitionMode</span><span class="p">,</span> <span class="n">ChromatogramType</span><span class="p">,</span> <span class="n">EncryptionLevel</span><span class="p">,</span> <span class="n">Polarity</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.instrument_config</span><span class="w"> </span><span class="kn">import</span> <span class="n">InstrumentConfig</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.mass_spectrum</span><span class="w"> </span><span class="kn">import</span> <span class="n">MassSpectrum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.nmr_spectrum</span><span class="w"> </span><span class="kn">import</span> <span class="n">NMRSpectrum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.protocols</span><span class="w"> </span><span class="kn">import</span> <span class="n">Indexable</span><span class="p">,</span> <span class="n">Streamable</span><span class="p">,</span> <span class="n">Provenanceable</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.provenance</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProvenanceRecord</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.signal_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">SignalArray</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.spectrum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Spectrum</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.value_range</span><span class="w"> </span><span class="kn">import</span> <span class="n">ValueRange</span>
+
+<span class="c1"># Channel -&gt; default axis metadata for the two spectrum classes we currently</span>
+<span class="c1"># materialize lazily. Writers may store additional channels; reading an unknown</span>
+<span class="c1"># channel falls back to a generic &quot;amplitude&quot; axis.</span>
+<span class="n">_CHANNEL_AXIS</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AxisDescriptor</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;mz&quot;</span><span class="p">:</span> <span class="n">AxisDescriptor</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;mz&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;m/z&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;intensity&quot;</span><span class="p">:</span> <span class="n">AxisDescriptor</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;intensity&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;counts&quot;</span><span class="p">),</span>
+    <span class="s2">&quot;chemical_shift&quot;</span><span class="p">:</span> <span class="n">AxisDescriptor</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;chemical_shift&quot;</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;ppm&quot;</span><span class="p">),</span>
+<span class="p">}</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="SpectrumIndex">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SpectrumIndex</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parallel per-spectrum arrays loaded eagerly at run open time.</span>
+
+<span class="sd">    The arrays map 1:1 to the datasets under</span>
+<span class="sd">    ``/study/ms_runs/&lt;name&gt;/spectrum_index/`` described in §4 of</span>
+<span class="sd">    ``docs/format-spec.md``. They are small (length = spectrum_count) and</span>
+<span class="sd">    cheap to hold in memory; signal channels remain lazy.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    offsets : numpy.ndarray</span>
+<span class="sd">        Starting element index of each spectrum in the mz_values channel.</span>
+<span class="sd">    lengths : numpy.ndarray</span>
+<span class="sd">        Number of elements (peaks) in each spectrum.</span>
+<span class="sd">    retention_times : numpy.ndarray</span>
+<span class="sd">        Retention time in seconds for each spectrum.</span>
+<span class="sd">    ms_levels : numpy.ndarray</span>
+<span class="sd">        MS level (1, 2, …) for each spectrum.</span>
+<span class="sd">    polarities : numpy.ndarray</span>
+<span class="sd">        Polarity (1=positive, -1=negative, 0=unknown) for each spectrum.</span>
+<span class="sd">    precursor_mzs : numpy.ndarray</span>
+<span class="sd">        Precursor m/z for each spectrum (0.0 for MS1).</span>
+<span class="sd">    precursor_charges : numpy.ndarray</span>
+<span class="sd">        Precursor charge state for each spectrum (0 for MS1).</span>
+<span class="sd">    base_peak_intensities : numpy.ndarray</span>
+<span class="sd">        Base-peak intensity for each spectrum.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    API status: Stable.</span>
+
+<span class="sd">    Cross-language equivalents</span>
+<span class="sd">    --------------------------</span>
+<span class="sd">    Objective-C: ``MPGOSpectrumIndex`` ·</span>
+<span class="sd">    Java: ``com.dtwthalion.mpgo.SpectrumIndex``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="SpectrumIndex.offsets">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.offsets">[docs]</a>
+    <span class="n">offsets</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="SpectrumIndex.lengths">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.lengths">[docs]</a>
+    <span class="n">lengths</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="SpectrumIndex.retention_times">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.retention_times">[docs]</a>
+    <span class="n">retention_times</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="SpectrumIndex.ms_levels">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.ms_levels">[docs]</a>
+    <span class="n">ms_levels</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="SpectrumIndex.polarities">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.polarities">[docs]</a>
+    <span class="n">polarities</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="SpectrumIndex.precursor_mzs">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.precursor_mzs">[docs]</a>
+    <span class="n">precursor_mzs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="SpectrumIndex.precursor_charges">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.precursor_charges">[docs]</a>
+    <span class="n">precursor_charges</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="SpectrumIndex.base_peak_intensities">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.base_peak_intensities">[docs]</a>
+    <span class="n">base_peak_intensities</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="SpectrumIndex.count">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.SpectrumIndex.count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+    <span class="c1"># Element-at accessors                                                 #</span>
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+
+<div class="viewcode-block" id="SpectrumIndex.offset_at">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.offset_at">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">offset_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return element offset of spectrum ``index`` in mz_values.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="n">index</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SpectrumIndex.length_at">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.length_at">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">length_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return element count (peaks) of spectrum ``index``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lengths</span><span class="p">[</span><span class="n">index</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SpectrumIndex.retention_time_at">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.retention_time_at">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">retention_time_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return retention time in seconds of spectrum ``index``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">retention_times</span><span class="p">[</span><span class="n">index</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SpectrumIndex.ms_level_at">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.ms_level_at">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">ms_level_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return MS level of spectrum ``index``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ms_levels</span><span class="p">[</span><span class="n">index</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SpectrumIndex.polarity_at">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.polarity_at">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">polarity_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Polarity</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return :class:`~mpeg_o.enums.Polarity` of spectrum ``index``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">Polarity</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">polarities</span><span class="p">[</span><span class="n">index</span><span class="p">]))</span></div>
+
+
+<div class="viewcode-block" id="SpectrumIndex.precursor_mz_at">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.precursor_mz_at">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">precursor_mz_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return precursor m/z of spectrum ``index`` (0.0 for MS1).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">precursor_mzs</span><span class="p">[</span><span class="n">index</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SpectrumIndex.precursor_charge_at">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.precursor_charge_at">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">precursor_charge_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return precursor charge state of spectrum ``index`` (0 for MS1).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">precursor_charges</span><span class="p">[</span><span class="n">index</span><span class="p">])</span></div>
+
+
+<div class="viewcode-block" id="SpectrumIndex.base_peak_intensity_at">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.base_peak_intensity_at">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">base_peak_intensity_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return base-peak intensity of spectrum ``index``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_peak_intensities</span><span class="p">[</span><span class="n">index</span><span class="p">])</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+    <span class="c1"># Range queries                                                        #</span>
+    <span class="c1"># ------------------------------------------------------------------ #</span>
+
+<div class="viewcode-block" id="SpectrumIndex.indices_in_retention_time_range">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.indices_in_retention_time_range">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">indices_in_retention_time_range</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value_range</span><span class="p">:</span> <span class="n">ValueRange</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return indices whose retention time lies in</span>
+<span class="sd">        ``[value_range.minimum, value_range.maximum]`` (inclusive).&quot;&quot;&quot;</span>
+        <span class="n">rt</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">retention_times</span>
+        <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">rt</span> <span class="o">&gt;=</span> <span class="n">value_range</span><span class="o">.</span><span class="n">minimum</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">rt</span> <span class="o">&lt;=</span> <span class="n">value_range</span><span class="o">.</span><span class="n">maximum</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">mask</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="SpectrumIndex.indices_for_ms_level">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.indices_for_ms_level">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">indices_for_ms_level</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ms_level</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return indices whose ``ms_level`` equals ``ms_level``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ms_levels</span> <span class="o">==</span> <span class="n">ms_level</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span></div>
+
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SpectrumIndex.read">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.SpectrumIndex.read">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">idx_group</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SpectrumIndex&quot;</span><span class="p">:</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">col</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">idx_group</span><span class="p">[</span><span class="n">name</span><span class="p">][()]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">offsets</span><span class="o">=</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;offsets&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;u8&quot;</span><span class="p">),</span>
+            <span class="n">lengths</span><span class="o">=</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;lengths&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;u4&quot;</span><span class="p">),</span>
+            <span class="n">retention_times</span><span class="o">=</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;retention_times&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+            <span class="n">ms_levels</span><span class="o">=</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;ms_levels&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;i4&quot;</span><span class="p">),</span>
+            <span class="n">polarities</span><span class="o">=</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;polarities&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;i4&quot;</span><span class="p">),</span>
+            <span class="n">precursor_mzs</span><span class="o">=</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;precursor_mzs&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+            <span class="n">precursor_charges</span><span class="o">=</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;precursor_charges&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;i4&quot;</span><span class="p">),</span>
+            <span class="n">base_peak_intensities</span><span class="o">=</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;base_peak_intensities&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="AcquisitionRun">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AcquisitionRun</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Lazy view over one acquisition run inside an ``.mpgo`` file.</span>
+
+<span class="sd">    Conforms to :class:`~mpeg_o.protocols.Indexable`,</span>
+<span class="sd">    :class:`~mpeg_o.protocols.Streamable`, and</span>
+<span class="sd">    :class:`~mpeg_o.protocols.Provenanceable`.</span>
+<span class="sd">    :class:`~mpeg_o.protocols.Encryptable` conformance is delivered</span>
+<span class="sd">    in slice 41.5 when the encryption manager subsystem lands.</span>
+
+<span class="sd">    Spectrum access is zero-copy-aware: the spectrum index is</span>
+<span class="sd">    pre-loaded into numpy arrays at open time but signal channels are</span>
+<span class="sd">    sliced on demand, so random access to spectrum ``i`` touches only</span>
+<span class="sd">    the dataset bytes it needs.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    API status: Stable (Encryptable surface pending).</span>
+
+<span class="sd">    Cross-language equivalents</span>
+<span class="sd">    --------------------------</span>
+<span class="sd">    Objective-C: ``MPGOAcquisitionRun`` · Java:</span>
+<span class="sd">    ``com.dtwthalion.mpgo.AcquisitionRun``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="AcquisitionRun.name">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.name">[docs]</a>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="AcquisitionRun.group">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.group">[docs]</a>
+    <span class="n">group</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span></div>
+
+<div class="viewcode-block" id="AcquisitionRun.spectrum_class">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.spectrum_class">[docs]</a>
+    <span class="n">spectrum_class</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="AcquisitionRun.acquisition_mode">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.acquisition_mode">[docs]</a>
+    <span class="n">acquisition_mode</span><span class="p">:</span> <span class="n">AcquisitionMode</span></div>
+
+<div class="viewcode-block" id="AcquisitionRun.index">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.index">[docs]</a>
+    <span class="n">index</span><span class="p">:</span> <span class="n">SpectrumIndex</span></div>
+
+<div class="viewcode-block" id="AcquisitionRun.channel_names">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.channel_names">[docs]</a>
+    <span class="n">channel_names</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="AcquisitionRun.instrument_config">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.instrument_config">[docs]</a>
+    <span class="n">instrument_config</span><span class="p">:</span> <span class="n">InstrumentConfig</span></div>
+
+<div class="viewcode-block" id="AcquisitionRun.nucleus_type">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.nucleus_type">[docs]</a>
+    <span class="n">nucleus_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
+
+<div class="viewcode-block" id="AcquisitionRun.provenance_json">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.provenance_json">[docs]</a>
+    <span class="n">provenance_json</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
+
+    <span class="c1"># M24: chromatogram traces. Empty list on v0.3 files (group absent).</span>
+<div class="viewcode-block" id="AcquisitionRun.chromatograms">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.AcquisitionRun.chromatograms">[docs]</a>
+    <span class="n">chromatograms</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Chromatogram</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+    <span class="n">_signal_cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Dataset</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="c1"># M21: eagerly decoded Numpress-delta channels, keyed by channel</span>
+    <span class="c1"># name. When present, :meth:`_materialize_spectrum` slices from</span>
+    <span class="c1"># this float64 buffer instead of hitting the HDF5 dataset, because</span>
+    <span class="c1"># Numpress decoding needs the running-sum prefix of the run.</span>
+    <span class="n">_numpress_channels</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="c1"># M41.3: Streamable cursor and Provenanceable cache.</span>
+    <span class="n">_cursor</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">_provenance_cache</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="c1"># M41.5: Encryptable conformance.</span>
+    <span class="n">_access_policy</span><span class="p">:</span> <span class="n">AccessPolicy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="c1"># M41.5: persistence context — set by SpectralDataset.open so that</span>
+    <span class="c1"># encrypt_with_key / decrypt_with_key can delegate to the encryption module.</span>
+    <span class="n">_persistence_file_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">_persistence_run_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="AcquisitionRun.open">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.open">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">open</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">group</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AcquisitionRun&quot;</span><span class="p">:</span>
+        <span class="n">mode_raw</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_int_attr</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="s2">&quot;acquisition_mode&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span>
+        <span class="n">spectrum_class</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span>
+            <span class="n">group</span><span class="p">,</span> <span class="s2">&quot;spectrum_class&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;MPGOMassSpectrum&quot;</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;MPGOMassSpectrum&quot;</span>
+        <span class="n">nucleus</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="s2">&quot;nucleus_type&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">prov</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">group</span><span class="p">,</span> <span class="s2">&quot;provenance_json&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="n">idx</span> <span class="o">=</span> <span class="n">SpectrumIndex</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;spectrum_index&quot;</span><span class="p">])</span>
+
+        <span class="n">sig_group</span> <span class="o">=</span> <span class="n">group</span><span class="p">[</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">]</span>
+        <span class="n">channel_names_raw</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span>
+            <span class="n">sig_group</span><span class="p">,</span> <span class="s2">&quot;channel_names&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;mz,intensity&quot;</span>
+        <span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;mz,intensity&quot;</span>
+        <span class="n">channel_names</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">channel_names_raw</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">c</span><span class="p">)</span>
+
+        <span class="n">cfg_group</span> <span class="o">=</span> <span class="n">group</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;instrument_config&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cfg_group</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="n">InstrumentConfig</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">config</span> <span class="o">=</span> <span class="n">InstrumentConfig</span><span class="p">(</span>
+                <span class="n">manufacturer</span><span class="o">=</span><span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">cfg_group</span><span class="p">,</span> <span class="s2">&quot;manufacturer&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">model</span><span class="o">=</span><span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">cfg_group</span><span class="p">,</span> <span class="s2">&quot;model&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">serial_number</span><span class="o">=</span><span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">cfg_group</span><span class="p">,</span> <span class="s2">&quot;serial_number&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">source_type</span><span class="o">=</span><span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">cfg_group</span><span class="p">,</span> <span class="s2">&quot;source_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">analyzer_type</span><span class="o">=</span><span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">cfg_group</span><span class="p">,</span> <span class="s2">&quot;analyzer_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">detector_type</span><span class="o">=</span><span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">cfg_group</span><span class="p">,</span> <span class="s2">&quot;detector_type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="c1"># M21: detect Numpress-delta channels via the</span>
+        <span class="c1"># ``&lt;chName&gt;_numpress_fixed_point`` attribute on the</span>
+        <span class="c1"># signal_channels group, and eagerly decode them here so</span>
+        <span class="c1"># :meth:`_materialize_spectrum` can just slice a float64 buffer.</span>
+        <span class="n">numpress_channels</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">chName</span> <span class="ow">in</span> <span class="n">channel_names</span><span class="p">:</span>
+            <span class="n">scale_attr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">chName</span><span class="si">}</span><span class="s2">_numpress_fixed_point&quot;</span>
+            <span class="k">if</span> <span class="n">scale_attr</span> <span class="ow">in</span> <span class="n">sig_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
+                <span class="kn">from</span><span class="w"> </span><span class="nn">._numpress</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode</span> <span class="k">as</span> <span class="n">_np_decode</span>
+                <span class="n">ds_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">chName</span><span class="si">}</span><span class="s2">_values&quot;</span>
+                <span class="k">if</span> <span class="n">ds_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sig_group</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">raw</span> <span class="o">=</span> <span class="n">sig_group</span><span class="p">[</span><span class="n">ds_name</span><span class="p">][()]</span>
+                <span class="n">scale</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">sig_group</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="n">scale_attr</span><span class="p">])</span>
+                <span class="n">numpress_channels</span><span class="p">[</span><span class="n">chName</span><span class="p">]</span> <span class="o">=</span> <span class="n">_np_decode</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">scale</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">group</span><span class="o">=</span><span class="n">group</span><span class="p">,</span>
+            <span class="n">spectrum_class</span><span class="o">=</span><span class="n">spectrum_class</span><span class="p">,</span>
+            <span class="n">acquisition_mode</span><span class="o">=</span><span class="n">AcquisitionMode</span><span class="p">(</span><span class="n">mode_raw</span><span class="p">),</span>
+            <span class="n">index</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span>
+            <span class="n">channel_names</span><span class="o">=</span><span class="n">channel_names</span><span class="p">,</span>
+            <span class="n">instrument_config</span><span class="o">=</span><span class="n">config</span><span class="p">,</span>
+            <span class="n">nucleus_type</span><span class="o">=</span><span class="n">nucleus</span><span class="p">,</span>
+            <span class="n">provenance_json</span><span class="o">=</span><span class="n">prov</span><span class="p">,</span>
+            <span class="n">chromatograms</span><span class="o">=</span><span class="n">_read_chromatograms</span><span class="p">(</span><span class="n">group</span><span class="p">),</span>
+            <span class="n">_numpress_channels</span><span class="o">=</span><span class="n">numpress_channels</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="c1"># ----------------------------------------------------- spectrum access</span>
+
+<div class="viewcode-block" id="AcquisitionRun.__len__">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.__len__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">count</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.__iter__">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.__iter__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">Spectrum</span><span class="p">]:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)):</span>
+            <span class="k">yield</span> <span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.provenance">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.provenance">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">provenance</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Per-run provenance records.</span>
+
+<span class="sd">        Prefers the v0.3 compound layout at ``&lt;run&gt;/provenance/steps`` and</span>
+<span class="sd">        falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2</span>
+<span class="sd">        files (no per-run provenance of any kind) return an empty list.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;provenance&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span> <span class="ow">and</span> <span class="s2">&quot;steps&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;provenance&quot;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">_decode_provenance_compound</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;provenance&quot;</span><span class="p">],</span> <span class="s2">&quot;steps&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">provenance_json</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_decode_provenance_json</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">provenance_json</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.__getitem__">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.__getitem__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Spectrum</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;spectrum index </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> out of range [0, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_materialize_spectrum</span><span class="p">(</span><span class="n">i</span><span class="p">)</span></div>
+
+
+    <span class="c1"># ---- Indexable conformance ----</span>
+
+<div class="viewcode-block" id="AcquisitionRun.object_at_index">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.object_at_index">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">object_at_index</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Spectrum</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the spectrum at ``index``. Negative indices are supported.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="n">index</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.count">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.count">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">count</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the total number of spectra.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.object_for_key">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.object_for_key">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">object_for_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Spectrum</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Not supported — AcquisitionRun uses integer indexing only.&quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;AcquisitionRun does not support key-based access&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.objects_in_range">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.objects_in_range">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">objects_in_range</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">stop</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Spectrum</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return spectra in the half-open slice ``[start, stop)``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">)]</span></div>
+
+
+    <span class="c1"># ---- Streamable conformance ----</span>
+
+<div class="viewcode-block" id="AcquisitionRun.next_object">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.next_object">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">next_object</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Spectrum</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the next spectrum and advance the cursor.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">StopIteration</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="bp">self</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">s</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.has_more">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.has_more">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_more</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return ``True`` if ``next_object`` can be called.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.current_position">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.current_position">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">current_position</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;0-based position of the next spectrum to be yielded.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.seek_to_position">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.seek_to_position">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">seek_to_position</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">position</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reposition the cursor. Returns ``True`` on success.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">position</span> <span class="o">&lt;=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span> <span class="o">=</span> <span class="n">position</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.reset">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.reset">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reposition the cursor to 0.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cursor</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+
+    <span class="c1"># ---- Provenanceable conformance ----</span>
+
+<div class="viewcode-block" id="AcquisitionRun.add_processing_step">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.add_processing_step">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_processing_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">step</span><span class="p">:</span> <span class="n">ProvenanceRecord</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Append a processing step to this run&#39;s provenance chain.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_provenance_cache</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_provenance_cache</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">provenance</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_provenance_cache</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">step</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.provenance_chain">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.provenance_chain">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">provenance_chain</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return this run&#39;s provenance records in insertion order.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_provenance_cache</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_provenance_cache</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">provenance</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.input_entities">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.input_entities">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">input_entities</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Distinct input entity identifiers referenced by the chain.&quot;&quot;&quot;</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">provenance_chain</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">input_refs</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                    <span class="n">seen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">seen</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.output_entities">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.output_entities">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">output_entities</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Distinct output entity identifiers referenced by the chain.&quot;&quot;&quot;</span>
+        <span class="n">seen</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">provenance_chain</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">output_refs</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">e</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
+                    <span class="n">seen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">seen</span></div>
+
+
+    <span class="c1"># ---- Encryptable conformance ----</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_set_persistence_context</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">run_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Attach file + run path so ``encrypt_with_key`` can delegate.</span>
+
+<span class="sd">        Internal API — called by SpectralDataset._from_open_file after</span>
+<span class="sd">        loading each run.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_persistence_file_path&quot;</span><span class="p">,</span> <span class="n">file_path</span><span class="p">)</span>
+        <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_persistence_run_name&quot;</span><span class="p">,</span> <span class="n">run_name</span><span class="p">)</span>
+
+<div class="viewcode-block" id="AcquisitionRun.encrypt_with_key">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.encrypt_with_key">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encrypt_with_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">level</span><span class="p">:</span> <span class="n">EncryptionLevel</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encrypt this run&#39;s intensity channel in place.</span>
+
+<span class="sd">        Operates through the already-open HDF5 group so no second file</span>
+<span class="sd">        handle is required — the file must be open for writing (``&quot;r+&quot;``</span>
+<span class="sd">        or ``&quot;w&quot;``). Matches ObjC</span>
+<span class="sd">        ``-[MPGOAcquisitionRun encryptWithKey:level:error:]`` semantics.</span>
+
+<span class="sd">        Requires a persistence context — call only after opening via</span>
+<span class="sd">        :meth:`SpectralDataset.open`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_persistence_file_path</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_persistence_run_name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;AcquisitionRun.encrypt_with_key requires a persistence &quot;</span>
+                <span class="s2">&quot;context; call via a run obtained from SpectralDataset.open&quot;</span>
+            <span class="p">)</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.encryption</span><span class="w"> </span><span class="kn">import</span> <span class="n">encrypt_intensity_channel_in_group</span>
+        <span class="n">sig_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">]</span>
+        <span class="n">encrypt_intensity_channel_in_group</span><span class="p">(</span><span class="n">sig_group</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.decrypt_with_key">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.decrypt_with_key">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decrypt_with_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Decrypt this run&#39;s intensity channel.</span>
+
+<span class="sd">        Returns the plaintext bytes. The on-disk file is NOT modified.</span>
+<span class="sd">        Operates through the already-open HDF5 group. Matches ObjC</span>
+<span class="sd">        ``-[MPGOAcquisitionRun decryptWithKey:]`` semantics (NSData → bytes).</span>
+
+<span class="sd">        Requires a persistence context — call only after opening via</span>
+<span class="sd">        :meth:`SpectralDataset.open`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_persistence_file_path</span> <span class="ow">or</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_persistence_run_name</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;AcquisitionRun.decrypt_with_key requires a persistence &quot;</span>
+                <span class="s2">&quot;context; call via a run obtained from SpectralDataset.open&quot;</span>
+            <span class="p">)</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.encryption</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_encrypted_channel</span>
+        <span class="n">sig_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">]</span>
+        <span class="n">arr</span> <span class="o">=</span> <span class="n">read_encrypted_channel</span><span class="p">(</span><span class="n">sig_group</span><span class="p">,</span> <span class="s2">&quot;intensity&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">arr</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.access_policy">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.access_policy">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">access_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AccessPolicy</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the current access policy, or ``None`` if not set.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_access_policy</span></div>
+
+
+<div class="viewcode-block" id="AcquisitionRun.set_access_policy">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/index.html#mpeg_o.acquisition_run.AcquisitionRun.set_access_policy">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_access_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">AccessPolicy</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Replace the current access policy.&quot;&quot;&quot;</span>
+        <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_access_policy&quot;</span><span class="p">,</span> <span class="n">policy</span><span class="p">)</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_signal_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">channel</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Dataset</span><span class="p">:</span>
+        <span class="n">ds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">channel</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ds</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">channel</span><span class="si">}</span><span class="s2">_values&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;signal channel </span><span class="si">{</span><span class="n">channel</span><span class="si">!r}</span><span class="s2"> missing under run </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">ds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">[</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">][</span><span class="n">name</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_signal_cache</span><span class="p">[</span><span class="n">channel</span><span class="p">]</span> <span class="o">=</span> <span class="n">ds</span>
+        <span class="k">return</span> <span class="n">ds</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_materialize_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Spectrum</span><span class="p">:</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">length</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">lengths</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">offset</span> <span class="o">+</span> <span class="n">length</span>
+
+        <span class="n">signal_arrays</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">SignalArray</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">channel_names</span><span class="p">:</span>
+            <span class="n">decoded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_numpress_channels</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">decoded</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">arr</span> <span class="o">=</span> <span class="n">decoded</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">end</span><span class="p">]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">ds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_dataset</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="n">arr</span> <span class="o">=</span> <span class="n">ds</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">end</span><span class="p">]</span>
+            <span class="n">axis</span> <span class="o">=</span> <span class="n">_CHANNEL_AXIS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">AxisDescriptor</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">c</span><span class="p">,</span> <span class="n">unit</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+            <span class="n">signal_arrays</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">=</span> <span class="n">SignalArray</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="n">axis</span><span class="p">)</span>
+
+        <span class="n">polarity</span> <span class="o">=</span> <span class="n">Polarity</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">polarities</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+        <span class="n">base_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">signal_arrays</span><span class="o">=</span><span class="n">signal_arrays</span><span class="p">,</span>
+            <span class="n">index_position</span><span class="o">=</span><span class="n">i</span><span class="p">,</span>
+            <span class="n">scan_time_seconds</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">retention_times</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span>
+            <span class="n">precursor_mz</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">precursor_mzs</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span>
+            <span class="n">precursor_charge</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">precursor_charges</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spectrum_class</span> <span class="o">==</span> <span class="s2">&quot;MPGONMRSpectrum&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">NMRSpectrum</span><span class="p">(</span><span class="n">nucleus_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">nucleus_type</span><span class="p">,</span> <span class="o">**</span><span class="n">base_kwargs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">MassSpectrum</span><span class="p">(</span>
+            <span class="n">ms_level</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">ms_levels</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span>
+            <span class="n">polarity</span><span class="o">=</span><span class="n">polarity</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">base_kwargs</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="c1"># ------------------------------------------------ provenance decoders ---</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_decode_provenance_compound</span><span class="p">(</span>
+    <span class="n">prov_group</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span> <span class="n">dataset_name</span><span class="p">:</span> <span class="nb">str</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]:</span>
+    <span class="n">records</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_compound_dataset</span><span class="p">(</span><span class="n">prov_group</span><span class="p">,</span> <span class="n">dataset_name</span><span class="p">)</span>
+    <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ProvenanceRecord</span><span class="p">(</span>
+            <span class="n">timestamp_unix</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;timestamp_unix&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span>
+            <span class="n">software</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;software&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="n">_safe_json_dict</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters_json&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">)),</span>
+            <span class="n">input_refs</span><span class="o">=</span><span class="n">_safe_json_list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;input_refs_json&quot;</span><span class="p">,</span> <span class="s2">&quot;[]&quot;</span><span class="p">)),</span>
+            <span class="n">output_refs</span><span class="o">=</span><span class="n">_safe_json_list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_refs_json&quot;</span><span class="p">,</span> <span class="s2">&quot;[]&quot;</span><span class="p">)),</span>
+        <span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_decode_provenance_json</span><span class="p">(</span><span class="n">blob</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span> <span class="k">if</span> <span class="n">blob</span> <span class="k">else</span> <span class="p">[]</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">continue</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ProvenanceRecord</span><span class="p">(</span>
+            <span class="n">timestamp_unix</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;timestampUnix&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;timestamp_unix&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="n">software</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;software&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">),</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{},</span>
+            <span class="n">input_refs</span><span class="o">=</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;inputRefs&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;input_refs&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[])],</span>
+            <span class="n">output_refs</span><span class="o">=</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;outputRefs&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_refs&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[])],</span>
+        <span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_safe_json_list</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">value</span><span class="p">]</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="p">[]</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="k">return</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">parsed</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parsed</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="p">[]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_safe_json_dict</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="p">{}</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="n">parsed</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parsed</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
+
+
+<span class="c1"># ----------------------------------------------------- M24 chromatograms ---</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_read_chromatograms</span><span class="p">(</span><span class="n">run_group</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Chromatogram</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read ``&lt;run&gt;/chromatograms/`` into a list of :class:`Chromatogram`.</span>
+
+<span class="sd">    Returns an empty list when the group is absent (v0.3 backward compat).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="s2">&quot;chromatograms&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">run_group</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">run_group</span><span class="p">[</span><span class="s2">&quot;chromatograms&quot;</span><span class="p">]</span>
+    <span class="n">count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">g</span><span class="o">.</span><span class="n">attrs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;count&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">count</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">time_all</span> <span class="o">=</span> <span class="n">g</span><span class="p">[</span><span class="s2">&quot;time_values&quot;</span><span class="p">][()]</span>
+    <span class="n">int_all</span>  <span class="o">=</span> <span class="n">g</span><span class="p">[</span><span class="s2">&quot;intensity_values&quot;</span><span class="p">][()]</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">g</span><span class="p">[</span><span class="s2">&quot;chromatogram_index&quot;</span><span class="p">]</span>
+    <span class="n">offsets</span>       <span class="o">=</span> <span class="n">idx</span><span class="p">[</span><span class="s2">&quot;offsets&quot;</span><span class="p">][()]</span>
+    <span class="n">lengths</span>       <span class="o">=</span> <span class="n">idx</span><span class="p">[</span><span class="s2">&quot;lengths&quot;</span><span class="p">][()]</span>
+    <span class="n">types</span>         <span class="o">=</span> <span class="n">idx</span><span class="p">[</span><span class="s2">&quot;types&quot;</span><span class="p">][()]</span>
+    <span class="n">target_mzs</span>    <span class="o">=</span> <span class="n">idx</span><span class="p">[</span><span class="s2">&quot;target_mzs&quot;</span><span class="p">][()]</span>
+    <span class="n">precursor_mzs</span> <span class="o">=</span> <span class="n">idx</span><span class="p">[</span><span class="s2">&quot;precursor_mzs&quot;</span><span class="p">][()]</span>
+    <span class="n">product_mzs</span>   <span class="o">=</span> <span class="n">idx</span><span class="p">[</span><span class="s2">&quot;product_mzs&quot;</span><span class="p">][()]</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.signal_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">SignalArray</span>
+
+    <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Chromatogram</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
+        <span class="n">off</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">offsets</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">n</span>   <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">lengths</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Chromatogram</span><span class="p">(</span>
+            <span class="n">signal_arrays</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;time&quot;</span><span class="p">:</span> <span class="n">SignalArray</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">time_all</span><span class="p">[</span><span class="n">off</span><span class="p">:</span><span class="n">off</span><span class="o">+</span><span class="n">n</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()),</span>
+                <span class="s2">&quot;intensity&quot;</span><span class="p">:</span> <span class="n">SignalArray</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">int_all</span><span class="p">[</span><span class="n">off</span><span class="p">:</span><span class="n">off</span><span class="o">+</span><span class="n">n</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">copy</span><span class="p">()),</span>
+            <span class="p">},</span>
+            <span class="n">axes</span><span class="o">=</span><span class="p">[],</span>
+            <span class="n">chromatogram_type</span><span class="o">=</span><span class="n">ChromatogramType</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">types</span><span class="p">[</span><span class="n">i</span><span class="p">])),</span>
+            <span class="n">target_mz</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">target_mzs</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span>
+            <span class="n">precursor_mz</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">precursor_mzs</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span>
+            <span class="n">product_mz</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">product_mzs</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span>
+        <span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<div class="viewcode-block" id="write_chromatograms_to_run_group">
+<a class="viewcode-back" href="../../autoapi/mpeg_o/acquisition_run/index.html#mpeg_o.acquisition_run.write_chromatograms_to_run_group">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">write_chromatograms_to_run_group</span><span class="p">(</span>
+    <span class="n">run_group</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span> <span class="n">chromatograms</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Chromatogram</span><span class="p">]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write ``chromatograms`` under ``&lt;run&gt;/chromatograms/``.</span>
+
+<span class="sd">    Does nothing when the list is empty so v0.3 readers continue to see</span>
+<span class="sd">    the absence of the group. Layout mirrors the ObjC writer for byte</span>
+<span class="sd">    parity in the cross-compat tests.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">chromatograms</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">run_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;chromatograms&quot;</span><span class="p">)</span>
+    <span class="n">g</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;count&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chromatograms</span><span class="p">))</span>
+
+    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">time_array</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">chromatograms</span><span class="p">)</span>
+    <span class="n">time_all</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+    <span class="n">int_all</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+    <span class="n">offsets</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chromatograms</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;i8&quot;</span><span class="p">)</span>
+    <span class="n">lengths</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chromatograms</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;u4&quot;</span><span class="p">)</span>
+    <span class="n">types</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chromatograms</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;i4&quot;</span><span class="p">)</span>
+    <span class="n">targets</span>  <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chromatograms</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+    <span class="n">precs</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chromatograms</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+    <span class="n">prods</span>    <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">chromatograms</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+
+    <span class="n">cursor</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">chromatograms</span><span class="p">):</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">time_array</span><span class="p">)</span>
+        <span class="n">time_all</span><span class="p">[</span><span class="n">cursor</span><span class="p">:</span><span class="n">cursor</span><span class="o">+</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">time_array</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">int_all</span> <span class="p">[</span><span class="n">cursor</span><span class="p">:</span><span class="n">cursor</span><span class="o">+</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">intensity_array</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">offsets</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">cursor</span>
+        <span class="n">lengths</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">n</span>
+        <span class="n">types</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>   <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">chromatogram_type</span><span class="p">)</span>
+        <span class="n">targets</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">target_mz</span>
+        <span class="n">precs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>   <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">precursor_mz</span>
+        <span class="n">prods</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>   <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">product_mz</span>
+        <span class="n">cursor</span> <span class="o">+=</span> <span class="n">n</span>
+
+    <span class="n">g</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s2">&quot;time_values&quot;</span><span class="p">,</span>      <span class="n">data</span><span class="o">=</span><span class="n">time_all</span><span class="p">)</span>
+    <span class="n">g</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s2">&quot;intensity_values&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">int_all</span><span class="p">)</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;chromatogram_index&quot;</span><span class="p">)</span>
+    <span class="n">idx</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s2">&quot;offsets&quot;</span><span class="p">,</span>       <span class="n">data</span><span class="o">=</span><span class="n">offsets</span><span class="p">)</span>
+    <span class="n">idx</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s2">&quot;lengths&quot;</span><span class="p">,</span>       <span class="n">data</span><span class="o">=</span><span class="n">lengths</span><span class="p">)</span>
+    <span class="n">idx</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s2">&quot;types&quot;</span><span class="p">,</span>         <span class="n">data</span><span class="o">=</span><span class="n">types</span><span class="p">)</span>
+    <span class="n">idx</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s2">&quot;target_mzs&quot;</span><span class="p">,</span>    <span class="n">data</span><span class="o">=</span><span class="n">targets</span><span class="p">)</span>
+    <span class="n">idx</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s2">&quot;precursor_mzs&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">precs</span><span class="p">)</span>
+    <span class="n">idx</span><span class="o">.</span><span class="n">create_dataset</span><span class="p">(</span><span class="s2">&quot;product_mzs&quot;</span><span class="p">,</span>   <span class="n">data</span><span class="o">=</span><span class="n">prods</span><span class="p">)</span></div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DTW-Thalion
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=2bd037f0"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

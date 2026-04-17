@@ -1,0 +1,78 @@
+mpeg_o.protocols.streamable
+===========================
+
+.. py:module:: mpeg_o.protocols.streamable
+
+.. autoapi-nested-parse::
+
+   ``Streamable`` — sequential access with explicit positioning.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.protocols.streamable.Streamable
+
+
+Module Contents
+---------------
+
+.. py:class:: Streamable
+
+   Bases: :py:obj:`Protocol`
+
+
+   Capability for sequential access with explicit positioning.
+
+   Enables efficient iteration over large datasets without
+   materializing the entire collection in memory.
+
+   .. method:: next_object()
+
+      Return the next element and advance the cursor.
+
+   .. method:: has_more()
+
+      Return ``True`` if ``next_object`` can be called.
+
+   .. method:: current_position()
+
+      Return the 0-based position of the next element to be yielded.
+
+   .. method:: seek_to_position(position)
+
+      Reposition the cursor. Returns ``True`` on success.
+
+   .. method:: reset()
+
+      Reposition the cursor to 0.
+      
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOStreamable`` ·
+   Java: ``com.dtwthalion.mpgo.protocols.Streamable``
+
+
+   .. py:method:: next_object() -> Any
+
+
+   .. py:method:: has_more() -> bool
+
+
+   .. py:method:: current_position() -> int
+
+
+   .. py:method:: seek_to_position(position: int) -> bool
+
+
+   .. py:method:: reset() -> None
+
+

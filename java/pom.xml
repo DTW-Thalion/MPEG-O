@@ -100,6 +100,27 @@
                     <argLine>-Djava.library.path=${hdf5.native.path}</argLine>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.6.3</version>
+                <configuration>
+                    <source>17</source>
+                    <doctitle>MPEG-O Java API (v0.6.1)</doctitle>
+                    <windowtitle>MPEG-O Java API</windowtitle>
+                    <show>protected</show>
+                    <failOnWarnings>false</failOnWarnings>
+                    <doclint>none</doclint>
+                    <additionalOptions>
+                        <additionalOption>-Xdoclint:none</additionalOption>
+                    </additionalOptions>
+                    <links>
+                        <link>https://docs.oracle.com/en/java/javase/17/docs/api/</link>
+                    </links>
+                    <reportOutputDirectory>${project.basedir}/../docs/api/java</reportOutputDirectory>
+                    <destDir>.</destDir>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

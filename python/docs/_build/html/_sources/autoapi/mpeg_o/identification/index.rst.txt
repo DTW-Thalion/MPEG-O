@@ -1,0 +1,74 @@
+mpeg_o.identification
+=====================
+
+.. py:module:: mpeg_o.identification
+
+.. autoapi-nested-parse::
+
+   ``Identification`` — spectrum-to-chemical-entity assignment record.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.identification.Identification
+
+
+Module Contents
+---------------
+
+.. py:class:: Identification
+
+   A spectrum-level chemical-entity identification.
+
+   Links a spectrum (by its 0-based index within an acquisition run)
+   to a chemical entity with a confidence score and an evidence
+   chain.
+
+   :param run_name: Acquisition run that contains the spectrum.
+   :type run_name: str
+   :param spectrum_index: 0-based position within that run.
+   :type spectrum_index: int
+   :param chemical_entity: CHEBI accession or chemical formula.
+   :type chemical_entity: str
+   :param confidence_score: Score in ``[0.0, 1.0]``.
+   :type confidence_score: float
+   :param evidence_chain: Ordered list of free-form evidence strings (typically CV
+                          accession references).
+   :type evidence_chain: list[str], default []
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOIdentification`` · Java:
+   ``com.dtwthalion.mpgo.Identification``.
+
+
+   .. py:attribute:: run_name
+      :type:  str
+
+
+   .. py:attribute:: spectrum_index
+      :type:  int
+
+
+   .. py:attribute:: chemical_entity
+      :type:  str
+
+
+   .. py:attribute:: confidence_score
+      :type:  float
+
+
+   .. py:attribute:: evidence_chain
+      :type:  list[str]
+      :value: []
+
+
+

@@ -1,0 +1,104 @@
+mpeg_o.transition_list
+======================
+
+.. py:module:: mpeg_o.transition_list
+
+.. autoapi-nested-parse::
+
+   ``TransitionList`` — targeted SRM/MRM transition collection.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.transition_list.Transition
+   mpeg_o.transition_list.TransitionList
+
+
+Module Contents
+---------------
+
+.. py:class:: Transition
+
+   One SRM/MRM transition.
+
+   :param precursor_mz: Precursor m/z.
+   :type precursor_mz: float
+   :param product_mz: Product m/z.
+   :type product_mz: float
+   :param collision_energy: Collision energy (eV).
+   :type collision_energy: float, default 0.0
+   :param retention_time_window: Optional retention-time acceptance window.
+   :type retention_time_window: ValueRange or None, default None
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOTransition`` · Java:
+   ``com.dtwthalion.mpgo.TransitionList.Transition``.
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+
+
+   .. py:attribute:: product_mz
+      :type:  float
+
+
+   .. py:attribute:: collision_energy
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: retention_time_window
+      :type:  mpeg_o.value_range.ValueRange | None
+      :value: None
+
+
+
+.. py:class:: TransitionList
+
+   An ordered collection of SRM/MRM transitions.
+
+   :param transitions: Ordered transitions.
+   :type transitions: tuple[Transition, ...], default ()
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOTransitionList`` · Java:
+   ``com.dtwthalion.mpgo.TransitionList``.
+
+
+   .. py:attribute:: transitions
+      :type:  tuple[Transition, Ellipsis]
+      :value: ()
+
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: count() -> int
+
+      Return the number of transitions.
+
+
+
+   .. py:method:: transition_at_index(index: int) -> Transition
+
+      Return the transition at ``index``.
+
+
+

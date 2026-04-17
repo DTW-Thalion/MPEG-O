@@ -1,0 +1,73 @@
+mpeg_o.protocols.indexable
+==========================
+
+.. py:module:: mpeg_o.protocols.indexable
+
+.. autoapi-nested-parse::
+
+   Indexable — O(1) random access by index, key, or range.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.protocols.indexable.Indexable
+
+
+Module Contents
+---------------
+
+.. py:class:: Indexable
+
+   Bases: :py:obj:`Protocol`
+
+
+   Capability for collections that support O(1) random access.
+
+   Every conformer provides index-based access. Key-based and
+   range-based access are optional; conformers that do not support
+   them raise NotImplementedError.
+
+   .. method:: object_at_index(index)
+
+      Return the element at index (0-based).
+
+   .. method:: count()
+
+      Return the total number of elements.
+
+   .. method:: object_for_key(key)
+
+      Optional. Return the element associated with key or raise
+      KeyError.
+
+   .. method:: objects_in_range(start, stop)
+
+      Optional. Return the half-open slice [start, stop).
+      
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: MPGOIndexable ·
+   Java: com.dtwthalion.mpgo.protocols.Indexable
+
+
+   .. py:method:: object_at_index(index: int) -> Any
+
+
+   .. py:method:: count() -> int
+
+
+   .. py:method:: object_for_key(key: Any) -> Any
+
+
+   .. py:method:: objects_in_range(start: int, stop: int) -> list[Any]
+
+

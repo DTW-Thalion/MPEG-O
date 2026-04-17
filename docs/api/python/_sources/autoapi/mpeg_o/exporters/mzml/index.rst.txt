@@ -1,0 +1,54 @@
+mpeg_o.exporters.mzml
+=====================
+
+.. py:module:: mpeg_o.exporters.mzml
+
+.. autoapi-nested-parse::
+
+   mzML writer — Python port of ``MPGOMzMLWriter``.
+
+   Serializes a :class:`mpeg_o.SpectralDataset` to an ``indexedmzML`` file,
+   mirroring the XML structure produced by the Objective-C reference
+   implementation. The text is assembled by hand (rather than through
+   ``xml.etree``) so byte offsets can be tracked precisely for the
+   ``<indexList>`` entries — ``indexedmzML`` requires offsets into the raw
+   UTF-8 byte stream, not into a DOM model.
+
+   SPDX-License-Identifier: Apache-2.0
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOMzMLWriter`` · Java:
+   ``com.dtwthalion.mpgo.exporters.MzMLWriter``
+
+   API status: Stable.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   mpeg_o.exporters.mzml.write_dataset
+   mpeg_o.exporters.mzml.dataset_to_bytes
+
+
+Module Contents
+---------------
+
+.. py:function:: write_dataset(dataset: mpeg_o.spectral_dataset.SpectralDataset, path: str | pathlib.Path, *, zlib_compression: bool = False) -> pathlib.Path
+
+   Serialize ``dataset`` to ``path`` as indexed mzML.
+
+   The first ``MPGOMassSpectrum``-class run in ``dataset.ms_runs`` is
+   exported. Additional runs, NMR runs, MSImage cubes, and chromatograms
+   are deliberately skipped for M19; extending the writer to cover them
+   is straightforward.
+
+
+.. py:function:: dataset_to_bytes(dataset: mpeg_o.spectral_dataset.SpectralDataset, *, zlib_compression: bool = False) -> bytes
+
+   Build an indexed-mzML byte blob from ``dataset``.
+
+

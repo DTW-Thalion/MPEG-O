@@ -1,0 +1,177 @@
+mpeg_o.anonymization
+====================
+
+.. py:module:: mpeg_o.anonymization
+
+.. autoapi-nested-parse::
+
+   Milestone 28 — Spectral anonymization.
+
+   Applies caller-selected policies to a :class:`SpectralDataset` and
+   writes a **new** ``.mpgo`` file. The original is never modified.
+
+   Policies
+   --------
+   Proteomics:
+     ``redact_saav_spectra``          remove spectra with SAAV identifications
+     ``mask_intensity_below_quantile`` zero intensities below a percentile
+
+   Metabolomics:
+     ``mask_rare_metabolites``        suppress signals linked to metabolites
+                                       below a prevalence threshold
+
+   NMR:
+     ``coarsen_chemical_shift_decimals`` reduce ppm precision
+
+   Universal:
+     ``coarsen_mz_decimals``          reduce m/z precision
+     ``strip_metadata_fields``        remove operator, serial, source, timestamps
+
+   Audit
+   -----
+   A :class:`ProvenanceRecord` is appended documenting which policies ran,
+   how many spectra / values were affected, and the timestamp. The output
+   carries the ``opt_anonymized`` feature flag.
+
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOAnonymizer`` · Java:
+   ``com.dtwthalion.mpgo.protection.Anonymizer``.
+
+   API status: Stable.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.anonymization.AnonymizationPolicy
+   mpeg_o.anonymization.AnonymizationResult
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   mpeg_o.anonymization.anonymize
+
+
+Module Contents
+---------------
+
+.. py:class:: AnonymizationPolicy
+
+   Which policies to apply and their parameters.
+
+
+   .. py:attribute:: redact_saav_spectra
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: mask_intensity_below_quantile
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: mask_rare_metabolites
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: rare_metabolite_threshold
+      :type:  float
+      :value: 0.05
+
+
+
+   .. py:attribute:: rare_metabolite_table
+      :type:  dict[str, float] | None
+      :value: None
+
+
+
+   .. py:attribute:: coarsen_chemical_shift_decimals
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: coarsen_mz_decimals
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: strip_metadata_fields
+      :type:  bool
+      :value: False
+
+
+
+.. py:class:: AnonymizationResult
+
+   Summary of what the anonymizer did.
+
+
+   .. py:attribute:: output_path
+      :type:  pathlib.Path
+
+
+   .. py:attribute:: spectra_redacted
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: intensities_zeroed
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: mz_values_coarsened
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: chemical_shift_values_coarsened
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: metabolites_masked
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: metadata_fields_stripped
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: policies_applied
+      :type:  list[str]
+      :value: []
+
+
+
+.. py:function:: anonymize(source: mpeg_o.spectral_dataset.SpectralDataset, output_path: str | pathlib.Path, policy: AnonymizationPolicy) -> AnonymizationResult
+
+   Apply ``policy`` to ``source`` and write a new ``.mpgo`` to ``output_path``.
+
+   The source dataset must be open for reading. The original is not modified.
+
+

@@ -1,0 +1,53 @@
+mpeg_o.access_policy
+====================
+
+.. py:module:: mpeg_o.access_policy
+
+.. autoapi-nested-parse::
+
+   ``AccessPolicy`` — who-may-decrypt-what policy dictionary.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.access_policy.AccessPolicy
+
+
+Module Contents
+---------------
+
+.. py:class:: AccessPolicy
+
+   Access policy describing who may decrypt which streams in an
+   ``.mpgo`` file.
+
+   Stored as a JSON string under ``/protection/access_policies`` on
+   disk, so the policy is human-inspectable and recoverable
+   independently of any key-management system.
+
+   The policy is intentionally schema-free at this layer: the dict
+   holds arbitrary key/value pairs that the application is free to
+   interpret (typical fields: ``subjects``, ``streams``, ``expiry``,
+   ``key_id``, ``audit_contact``).
+
+   :param policy: Arbitrary key/value policy payload.
+   :type policy: dict[str, Any], default {}
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOAccessPolicy`` · Java:
+   ``com.dtwthalion.mpgo.protection.AccessPolicy``.
+
+
+   .. py:attribute:: policy
+      :type:  dict[str, Any]
+
+

@@ -1,0 +1,117 @@
+mpeg_o.spectrum
+===============
+
+.. py:module:: mpeg_o.spectrum
+
+.. autoapi-nested-parse::
+
+   ``Spectrum`` — generic multi-channel spectrum base class.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   mpeg_o.spectrum.Spectrum
+
+
+Module Contents
+---------------
+
+.. py:class:: Spectrum
+
+   Generic multi-channel 1-D spectrum with per-scan metadata.
+
+   Holds an ordered mapping of named :class:`SignalArray` objects and
+   the coordinate axes that index them, plus per-scan metadata
+   (index position, scan time, optional precursor info for tandem
+   MS).
+
+   Concrete subclasses (:class:`MassSpectrum`, :class:`NMRSpectrum`)
+   add their own typed metadata.
+
+   :param signal_arrays: Named signal arrays keyed by channel name
+                         (``"mz"``, ``"intensity"``, ``"chemical_shift"``, ...).
+   :type signal_arrays: dict[str, SignalArray]
+   :param axes: Coordinate axes describing the signal arrays.
+   :type axes: list[AxisDescriptor]
+   :param index_position: Position in the parent :class:`~mpeg_o.acquisition_run.AcquisitionRun` (0-based).
+   :type index_position: int, default 0
+   :param scan_time_seconds: Scan time in seconds from run start.
+   :type scan_time_seconds: float, default 0.0
+   :param precursor_mz: Precursor m/z for tandem MS. ``0`` if not tandem.
+   :type precursor_mz: float, default 0.0
+   :param precursor_charge: Precursor charge state. ``0`` if unknown.
+   :type precursor_charge: int, default 0
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   HDF5 representation: each spectrum is an HDF5 group whose
+   immediate children are ``SignalArray`` sub-groups plus scalar
+   attributes for the metadata fields.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGOSpectrum`` · Java:
+   ``com.dtwthalion.mpgo.Spectrum``.
+
+
+   .. py:attribute:: signal_arrays
+      :type:  dict[str, mpeg_o.signal_array.SignalArray]
+
+
+   .. py:attribute:: axes
+      :type:  list[mpeg_o.axis_descriptor.AxisDescriptor]
+      :value: []
+
+
+
+   .. py:attribute:: index_position
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: scan_time_seconds
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: precursor_charge
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: signal_array(name: str) -> mpeg_o.signal_array.SignalArray
+
+      Return the named ``SignalArray``. Raises ``KeyError`` if absent.
+
+
+
+   .. py:method:: has_signal_array(name: str) -> bool
+
+      Return ``True`` iff ``name`` is in ``signal_arrays``.
+
+
+
+   .. py:method:: signal_array_names() -> list[str]
+
+      Return the channel names in insertion order.
+
+
+
+   .. py:method:: __len__() -> int
+
+

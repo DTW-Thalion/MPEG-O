@@ -1,0 +1,57 @@
+mpeg_o.importers.nmrml
+======================
+
+.. py:module:: mpeg_o.importers.nmrml
+
+.. autoapi-nested-parse::
+
+   nmrML reader — Python port of ``MPGONmrMLReader``.
+
+   Handles ``spectrum1D`` files (1-D NMR). The acquisition parameter block
+   is recognised in both its cvParam and attribute-carrying forms. FID data
+   is parsed and discarded in this minimal port; it is reserved for a later
+   milestone that adds a ``FreeInductionDecay`` writer.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``MPGONmrMLReader`` · Java:
+   ``com.dtwthalion.mpgo.importers.NmrMLReader``
+
+   API status: Stable.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   mpeg_o.importers.nmrml.NmrMLParseError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   mpeg_o.importers.nmrml.read
+
+
+Module Contents
+---------------
+
+.. py:exception:: NmrMLParseError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Inappropriate argument value (of correct type).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:function:: read(path: str | pathlib.Path) -> mpeg_o.importers.import_result.ImportResult
+
+   Parse an nmrML file and return an :class:`ImportResult`.
+
+
