@@ -133,8 +133,6 @@ languages. Naming follows language idiom:
 |---|---|---|---|
 | `valueRange` | `value_range` | `valueRange()` | Python: was missing; Java: renamed from `range` |
 | `samplingMode` | `sampling_mode` | `samplingMode()` | Java: renamed from `mode` |
-| `label` | `label` | `label()` | Unchanged |
-| `units` | `units` | `units()` | Unchanged |
 
 **CVParam** — ObjC has `ontologyRef` and separate `unit`; Python previously
 had `unit_accession`/`unit_name` split; Java record already matched ObjC:
@@ -365,7 +363,7 @@ and xref parity only in this slice.
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
 | `MPGOIdentification` | `mpeg_o.identification.Identification` | `com.dtwthalion.mpgo.Identification` | Stable |
-| `MPGOProvenanceRecord` | `mpeg_o.provenance_record.ProvenanceRecord` | `com.dtwthalion.mpgo.ProvenanceRecord` | Stable |
+| `MPGOProvenanceRecord` | `mpeg_o.provenance.ProvenanceRecord` | `com.dtwthalion.mpgo.ProvenanceRecord` | Stable |
 | `MPGOQuantification` | `mpeg_o.quantification.Quantification` | `com.dtwthalion.mpgo.Quantification` | Stable |
 | `MPGOTransitionList` | `mpeg_o.transition_list.TransitionList` | `com.dtwthalion.mpgo.TransitionList` | Stable |
 | `MPGOTransition` (nested) | `mpeg_o.transition_list.Transition` | `com.dtwthalion.mpgo.TransitionList.Transition` | Stable |
@@ -437,17 +435,17 @@ Documented as a known stylistic difference (§4).
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOAccessPolicy` | `mpeg_o.protection.AccessPolicy` | `com.dtwthalion.mpgo.protection.AccessPolicy` | Stable |
-| `MPGOAnonymizer` | `mpeg_o.protection.anonymizer` (module) | `com.dtwthalion.mpgo.protection.Anonymizer` | Stable |
-| `MPGOEncryptionManager` | `mpeg_o.protection.encryption_manager` (module) | `com.dtwthalion.mpgo.protection.EncryptionManager` | Stable |
-| `MPGOKeyRotationManager` | `mpeg_o.protection.key_rotation_manager` (module) | `com.dtwthalion.mpgo.protection.KeyRotationManager` | Stable |
-| `MPGOSignatureManager` | `mpeg_o.protection.signature_manager` (module) | `com.dtwthalion.mpgo.protection.SignatureManager` | Stable |
-| `MPGOVerifier` | `mpeg_o.protection.Verifier` | `com.dtwthalion.mpgo.protection.Verifier` | Stable |
-| `MPGOVerificationStatus` | `mpeg_o.protection.VerificationStatus` | `com.dtwthalion.mpgo.protection.VerificationStatus` | Stable |
+| `MPGOAccessPolicy` | `mpeg_o.access_policy.AccessPolicy` | `com.dtwthalion.mpgo.protection.AccessPolicy` | Stable |
+| `MPGOAnonymizer` | `mpeg_o.anonymization` (module) | `com.dtwthalion.mpgo.protection.Anonymizer` | Stable |
+| `MPGOEncryptionManager` | `mpeg_o.encryption` (module) | `com.dtwthalion.mpgo.protection.EncryptionManager` | Stable |
+| `MPGOKeyRotationManager` | `mpeg_o.key_rotation` (module) | `com.dtwthalion.mpgo.protection.KeyRotationManager` | Stable |
+| `MPGOSignatureManager` | `mpeg_o.signatures` (module) | `com.dtwthalion.mpgo.protection.SignatureManager` | Stable |
+| `MPGOVerifier` | `mpeg_o.verifier.Verifier` | `com.dtwthalion.mpgo.protection.Verifier` | Stable |
+| `MPGOVerificationStatus` | `mpeg_o.verifier.VerificationStatus` | `com.dtwthalion.mpgo.protection.VerificationStatus` | Stable |
 
 **Note on manager idioms:** ObjC uses class methods (e.g.
 `+[MPGOEncryptionManager encryptData:withKey:error:]`). Python uses module-level
-functions (e.g. `mpeg_o.protection.encryption_manager.encrypt_data(data, key)`).
+functions (e.g. `mpeg_o.encryption.encrypt_bytes(plaintext, key)`).
 Java uses a mix of static and instance methods. These are preserved as known
 stylistic differences (§4).
 
@@ -568,7 +566,7 @@ adapted accordingly.
 | `MPGOStorageGroup` | `mpeg_o.providers.StorageGroup` | `com.dtwthalion.mpgo.providers.StorageGroup` | Provisional (per M39) |
 | `MPGOStorageDataset` | `mpeg_o.providers.StorageDataset` | `com.dtwthalion.mpgo.providers.StorageDataset` | Provisional (per M39) |
 | `MPGOCompoundField` | `mpeg_o.providers.CompoundField` | `com.dtwthalion.mpgo.providers.CompoundField` | Provisional (per M39) |
-| `MPGOHdf5Provider` | `mpeg_o.providers.Hdf5Provider` | `com.dtwthalion.mpgo.providers.Hdf5Provider` | Provisional (per M39) |
+| `MPGOHDF5Provider` | `mpeg_o.providers.Hdf5Provider` | `com.dtwthalion.mpgo.providers.Hdf5Provider` | Provisional (per M39) |
 | `MPGOMemoryProvider` | `mpeg_o.providers.MemoryProvider` | `com.dtwthalion.mpgo.providers.MemoryProvider` | Provisional (per M39) |
 | `MPGOProviderRegistry` | `mpeg_o.providers` (module-level) | `com.dtwthalion.mpgo.providers.ProviderRegistry` | Provisional (per M39) |
 
@@ -581,8 +579,8 @@ and cross-language xref blocks.
 
 **ProviderRegistry** — an intentional language-idiomatic divergence (see §4):
 ObjC and Java use a `ProviderRegistry` class with class/static methods.
-Python uses module-level functions (`mpeg_o.providers.register(name, factory)`,
-`mpeg_o.providers.resolve(name)`, `mpeg_o.providers.discover_builtins()`).
+Python uses module-level functions (`mpeg_o.providers.register_provider(name, factory)`,
+`mpeg_o.providers.open_provider(url)`, `mpeg_o.providers.discover_providers()`).
 This is a known stylistic difference, not a parity gap.
 
 **StorageProvider / StorageGroup / StorageDataset** — abstract interfaces in
@@ -618,9 +616,9 @@ record). Fields `name`, `dtype`, `shape` match across all three.
 | `MPGOMzMLWriter` | `mpeg_o.exporters.mzml.MzMLWriter` | `com.dtwthalion.mpgo.exporters.MzMLWriter` | Stable |
 | `MPGONmrMLReader` | `mpeg_o.importers.nmrml.NmrMLReader` | `com.dtwthalion.mpgo.importers.NmrMLReader` | Stable |
 | `MPGONmrMLWriter` | `mpeg_o.exporters.nmrml.NmrMLWriter` | `com.dtwthalion.mpgo.exporters.NmrMLWriter` | Stable |
-| `MPGOThermoReader` | `mpeg_o.importers.thermo.ThermoReader` | `com.dtwthalion.mpgo.importers.ThermoReader` | Stable |
+| `MPGOThermoRawReader` | `mpeg_o.importers.thermo.ThermoReader` | `com.dtwthalion.mpgo.importers.ThermoReader` | Stable |
 | `MPGOISAExporter` | `mpeg_o.exporters.isa.ISAExporter` | `com.dtwthalion.mpgo.exporters.ISAExporter` | Stable |
-| `MPGOCVTermMapper` | `mpeg_o.importers.cv_term_mapper.CVTermMapper` | `com.dtwthalion.mpgo.importers.CVTermMapper` | Stable |
+| `MPGOCVTermMapper` | `mpeg_o.importers.cv_term_mapper` (module) | `com.dtwthalion.mpgo.importers.CVTermMapper` | Stable |
 | `MPGOBase64` | `mpeg_o.importers._base64_zlib` (internal) | `java.util.Base64` (stdlib, no wrapper) | Internal |
 | — | `mpeg_o.importers.ImportResult` | — | Internal (Python-only helper) |
 
@@ -724,8 +722,8 @@ The storage-provider registry diverges intentionally:
 - ObjC: `MPGOProviderRegistry` class with class methods.
 - Java: `com.dtwthalion.mpgo.providers.ProviderRegistry` class with static
   methods.
-- Python: module-level functions in `mpeg_o.providers` (`register()`,
-  `resolve()`, `discover_builtins()`).
+- Python: module-level functions in `mpeg_o.providers` (`register_provider()`,
+  `open_provider()`, `discover_providers()`).
 
 ### 4.6 Base64 handling
 

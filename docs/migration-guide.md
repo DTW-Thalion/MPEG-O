@@ -127,7 +127,7 @@ from mpeg_o import SpectralDataset
 ds = SpectralDataset.open("sample.mpgo")
 run = ds.ms_runs["run_0001"]
 print(f"Wrote {run.count()} spectra.")
-ds.file.close()
+ds.close()
 ```
 
 For a more thorough check, iterate spectra and inspect the signal arrays:
@@ -148,7 +148,7 @@ for i in range(min(3, run.count())):
         f"ms_level={spectrum.ms_level}"
     )
 
-ds.file.close()
+ds.close()
 ```
 
 If chromatograms were present in the source mzML, they are stored inside
@@ -203,7 +203,7 @@ from mpeg_o import SpectralDataset
 ds = SpectralDataset.open("sample.mpgo")
 run = ds.nmr_runs["nmr_run"]
 print(f"Wrote {run.count()} NMR spectra.")
-ds.file.close()
+ds.close()
 ```
 
 Inspect the first spectrum's signal arrays:
@@ -218,12 +218,12 @@ spectrum = run[0]
 cs_arr = spectrum.signal_arrays["chemical_shift"]
 intensity_arr = spectrum.signal_arrays["intensity"]
 print(
-    f"  chemical shift range: {float(cs_arr[0].value):.2f} to "
-    f"{float(cs_arr[-1].value):.2f} ppm, "
+    f"  chemical shift range: {float(cs_arr.data[0]):.2f} to "
+    f"{float(cs_arr.data[-1]):.2f} ppm, "
     f"{len(cs_arr)} points"
 )
 
-ds.file.close()
+ds.close()
 ```
 
 ---
@@ -309,7 +309,7 @@ try:
     # ... work with ds ...
     pass
 finally:
-    ds.file.close()
+    ds.close()
 ```
 
 Or use the context manager if available in your version.
@@ -342,7 +342,7 @@ def convert_and_verify(mzml_path: str, out_path: str) -> None:
         run = ds.ms_runs["run_0001"]
         print(f"Round-trip OK: {run.count()} spectra in run_0001")
     finally:
-        ds.file.close()
+        ds.close()
 
 if __name__ == "__main__":
     convert_and_verify(sys.argv[1], sys.argv[2])
@@ -377,7 +377,7 @@ def convert_and_verify_nmr(nmrml_path: str, out_path: str) -> None:
         run = ds.nmr_runs["nmr_run"]
         print(f"Round-trip OK: {run.count()} NMR spectra in nmr_run")
     finally:
-        ds.file.close()
+        ds.close()
 
 if __name__ == "__main__":
     convert_and_verify_nmr(sys.argv[1], sys.argv[2])
@@ -393,9 +393,8 @@ if __name__ == "__main__":
   attribute types, feature-flag encoding.
 - `docs/feature-flags.md` — complete list of optional feature flags and their
   effects on the written file.
-- `python/tests/test_importers.py` — pytest tests that exercise both importers
-  against the canonical fixtures.
+- `python/tests/test_importers.py` — pytest tests exercising both importers
+  against the canonical fixtures, including `ImportResult` attribute validation,
+  provenance mapping, and chromatogram decoding.
 - `python/tests/test_cross_compat.py` — cross-language round-trip tests.
-- `python/tests/test_importers.py` — isolated unit tests for `ImportResult`
-  attributes, provenance mapping, and chromatogram decoding.
 
