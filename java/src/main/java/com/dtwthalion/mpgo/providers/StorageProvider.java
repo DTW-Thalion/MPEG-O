@@ -44,6 +44,16 @@ public interface StorageProvider extends AutoCloseable {
 
     boolean isOpen();
 
+    /** Return the underlying native storage handle — an
+     *  {@link com.dtwthalion.mpgo.hdf5.Hdf5File} for
+     *  {@link Hdf5Provider}, {@code null} for {@link MemoryProvider}.
+     *
+     *  <p>Escape hatch for byte-level code (signatures, encryption,
+     *  native compression filters) that cannot be expressed through
+     *  the protocol. Any caller that invokes this is pinned to a
+     *  specific backend.</p> */
+    default Object nativeHandle() { return null; }
+
     @Override
     void close();
 }

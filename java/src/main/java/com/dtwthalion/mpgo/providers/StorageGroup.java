@@ -37,6 +37,21 @@ public interface StorageGroup extends AutoCloseable {
                                   Compression compression,
                                   int compressionLevel);
 
+    /** Create a multi-dimensional dataset. 1-D delegates to
+     *  {@link #createDataset}; higher ranks require provider override. */
+    default StorageDataset createDatasetND(String name, Precision precision,
+                                             long[] shape, long[] chunks,
+                                             Compression compression,
+                                             int compressionLevel) {
+        if (shape != null && shape.length == 1) {
+            int chunkSize = (chunks != null && chunks.length == 1) ? (int) chunks[0] : 0;
+            return createDataset(name, precision, shape[0], chunkSize,
+                                  compression, compressionLevel);
+        }
+        throw new UnsupportedOperationException(
+                getClass().getSimpleName() + " does not implement N-D datasets");
+    }
+
     /** Create a 1-D compound dataset. */
     StorageDataset createCompoundDataset(String name,
                                           List<CompoundField> fields,

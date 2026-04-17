@@ -13,6 +13,7 @@
 @class MPGOTransitionList;
 @class MPGOAccessPolicy;
 @class MPGOHDF5Group;
+@protocol MPGOStorageProvider;
 
 /**
  * Root container for an MPEG-O `.mpgo` file. Owns a top-level `study/`
@@ -57,6 +58,12 @@
 /** The path from which the dataset was last read or written. nil
  *  until persistence has happened at least once. */
 @property (readonly, copy) NSString *filePath;
+
+/** M39: owning storage provider, set when this dataset was opened or
+ *  written via +readFromFilePath: / -writeToFilePath:. New call sites
+ *  should reach for this; byte-level code continues to use the
+ *  underlying native handle (``[provider nativeHandle]``). */
+@property (readonly, strong) id<MPGOStorageProvider> provider;
 
 /** Provenance records whose inputRefs contain `ref`. */
 - (NSArray<MPGOProvenanceRecord *> *)provenanceRecordsForInputRef:(NSString *)ref;

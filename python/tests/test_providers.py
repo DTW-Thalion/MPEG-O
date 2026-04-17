@@ -231,6 +231,64 @@ def test_delete_attribute(provider: str,
 # ── Transport: fsspec path via file:// scheme ──────────────────────
 
 
+# ── N-D datasets + native-handle escape ───────────────────────────
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_nd_dataset_roundtrip(provider: str,
+                                hdf5_url: str,
+                                memory_url: str) -> None:
+    url = memory_url if provider == "memory" else hdf5_url
+    cube = np.arange(24, dtype="<f8").reshape((2, 3, 4))
+
+    with _open_w(provider, url) as p:
+        ds = p.root_group().create_dataset_nd(
+                "cube", Precision.FLOAT64, cube.shape,
+                chunks=(1, 3, 4))
+        ds.write(cube)
+        assert ds.shape == (2, 3, 4)
+        assert ds.chunks == (1, 3, 4) or ds.chunks is None
+
+    with _open_r(provider, url) as p:
+        ds = p.root_group().open_dataset("cube")
+        assert ds.shape == (2, 3, 4)
+
+    if provider == "memory":
+        MemoryProvider.discard_store(url)
+
+
+def test_hdf5_native_handle_returns_h5py_file(hdf5_url: str) -> None:
+    import h5py
+    with open_provider(hdf5_url, mode="w") as p:
+        handle = p.native_handle()
+        assert isinstance(handle, h5py.File)
+
+
+def test_memory_native_handle_is_none(memory_url: str) -> None:
+    with open_provider(memory_url, mode="w") as p:
+        assert p.native_handle() is None
+    MemoryProvider.discard_store(memory_url)
+
+
+def test_spectral_dataset_open_wires_provider(tmp_path: Path) -> None:
+    """SpectralDataset.open routes through Hdf5Provider and exposes it
+    on the ``provider`` attribute; closing flows through the provider."""
+    from mpeg_o import SpectralDataset
+    import h5py
+
+    path = tmp_path / "wired.mpgo"
+    with h5py.File(path, "w") as f:
+        f.attrs["mpeg_o_format_version"] = "1.1"
+        f.attrs["mpeg_o_features"] = "[\"base_v1\"]"
+        f.create_group("study")
+
+    with SpectralDataset.open(path) as ds:
+        assert ds.provider is not None
+        assert ds.provider.provider_name == "hdf5"
+        # ds.file is the same h5py.File as provider.native_handle()
+        assert ds.provider.native_handle() is ds.file
+
+
 def test_hdf5_provider_accepts_file_scheme(tmp_path: Path) -> None:
     """The Hdf5Provider's fsspec-style URL router must strip file://
     and open the path directly. This locks the v0.6 behaviour used by

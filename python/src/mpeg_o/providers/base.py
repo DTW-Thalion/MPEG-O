@@ -59,8 +59,9 @@ class CompoundField:
 
 
 class StorageDataset(ABC):
-    """A 1-D typed array (or 1-D compound record array) stored under a
-    :class:`StorageGroup`."""
+    """A typed array (or compound record array) stored under a
+    :class:`StorageGroup`. 1-D is the common case; N-D is supported
+    for image cubes and 2-D NMR (see :meth:`create_dataset_nd`)."""
 
     # ── Type and shape ──────────────────────────────────────────────
 
@@ -76,7 +77,20 @@ class StorageDataset(ABC):
 
     @property
     @abstractmethod
-    def length(self) -> int: ...
+    def shape(self) -> tuple[int, ...]:
+        """Full shape tuple. 1-D datasets return ``(N,)``."""
+
+    @property
+    def length(self) -> int:
+        """Size along the first axis (= shape[0]). Convenience for
+        callers that only deal with 1-D datasets."""
+        return self.shape[0] if self.shape else 0
+
+    @property
+    def chunks(self) -> tuple[int, ...] | None:
+        """Chunk shape, or ``None`` for contiguous storage. Default
+        ``None`` — providers that care override."""
+        return None
 
     @property
     @abstractmethod
@@ -164,6 +178,24 @@ class StorageGroup(ABC):
         ``compression == NONE`` disables filters regardless of
         ``compression_level``."""
 
+    def create_dataset_nd(self, name: str, precision: Precision,
+                           shape: tuple[int, ...], *,
+                           chunks: tuple[int, ...] | None = None,
+                           compression: Compression = Compression.NONE,
+                           compression_level: int = 6) -> StorageDataset:
+        """Create a multi-dimensional dataset. 1-D path delegates to
+        :meth:`create_dataset` for backward compat; overrides extend
+        to higher ranks."""
+        if len(shape) == 1:
+            chunk_size = chunks[0] if chunks else 0
+            return self.create_dataset(name, precision, shape[0],
+                                         chunk_size=chunk_size,
+                                         compression=compression,
+                                         compression_level=compression_level)
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement N-D datasets "
+            f"(shape={shape})")
+
     @abstractmethod
     def create_compound_dataset(self, name: str,
                                  fields: list[CompoundField],
@@ -226,6 +258,16 @@ class StorageProvider(ABC):
 
     @abstractmethod
     def close(self) -> None: ...
+
+    def native_handle(self) -> Any:
+        """Return the underlying native storage handle — ``h5py.File``
+        for :class:`Hdf5Provider`, ``None`` for :class:`MemoryProvider`.
+
+        Escape hatch for byte-level code (signatures, encryption,
+        native compression filters) that cannot be expressed through
+        the protocol. Any caller that invokes this is pinned to a
+        specific backend."""
+        return None
 
     def __enter__(self) -> "StorageProvider":
         return self

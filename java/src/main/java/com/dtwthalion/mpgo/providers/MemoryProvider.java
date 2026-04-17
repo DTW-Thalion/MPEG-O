@@ -135,7 +135,22 @@ public final class MemoryProvider implements StorageProvider {
                                              Compression compression,
                                              int compressionLevel) {
             if (hasChild(n)) throw new IllegalArgumentException("exists: " + n);
-            MemDataset d = new MemDataset(n, precision, length, null);
+            long[] chunks = chunkSize > 0 ? new long[]{chunkSize} : null;
+            MemDataset d = new MemDataset(n, precision, new long[]{length},
+                                            chunks, null);
+            datasets.put(n, d);
+            return d;
+        }
+
+        @Override
+        public StorageDataset createDatasetND(String n, Precision precision,
+                                                long[] shape, long[] chunks,
+                                                Compression compression,
+                                                int compressionLevel) {
+            if (hasChild(n)) throw new IllegalArgumentException("exists: " + n);
+            MemDataset d = new MemDataset(n, precision, shape.clone(),
+                                            chunks != null ? chunks.clone() : null,
+                                            null);
             datasets.put(n, d);
             return d;
         }
@@ -145,7 +160,8 @@ public final class MemoryProvider implements StorageProvider {
                                                      List<CompoundField> fields,
                                                      long count) {
             if (hasChild(n)) throw new IllegalArgumentException("exists: " + n);
-            MemDataset d = new MemDataset(n, null, count, List.copyOf(fields));
+            MemDataset d = new MemDataset(n, null, new long[]{count}, null,
+                                            List.copyOf(fields));
             datasets.put(n, d);
             return d;
         }
@@ -162,22 +178,25 @@ public final class MemoryProvider implements StorageProvider {
     static final class MemDataset implements StorageDataset {
         private final String name;
         private final Precision precision;
-        private final long length;
+        private final long[] shape;
+        private final long[] chunks;
         private final List<CompoundField> fields;
         private Object data;
         private final Map<String, Object> attrs = new LinkedHashMap<>();
 
-        MemDataset(String name, Precision precision, long length,
-                    List<CompoundField> fields) {
+        MemDataset(String name, Precision precision, long[] shape,
+                    long[] chunks, List<CompoundField> fields) {
             this.name = name;
             this.precision = precision;
-            this.length = length;
+            this.shape = shape;
+            this.chunks = chunks;
             this.fields = fields;
         }
 
         @Override public String name() { return name; }
         @Override public Precision precision() { return precision; }
-        @Override public long length() { return length; }
+        @Override public long[] shape() { return shape.clone(); }
+        @Override public long[] chunks() { return chunks == null ? null : chunks.clone(); }
         @Override public List<CompoundField> compoundFields() { return fields; }
 
         @Override public Object readAll() { return data; }
