@@ -33,7 +33,9 @@ fi
 # --- gnustep-base ----------------------------------------------------------
 gs_base=""
 gs_runtime=""
-for cand in /usr/local/lib/libgnustep-base.so \
+for cand in /usr/GNUstep/Local/Library/Libraries/libgnustep-base.so \
+            /usr/GNUstep/System/Library/Libraries/libgnustep-base.so \
+            /usr/local/lib/libgnustep-base.so \
             /usr/lib/x86_64-linux-gnu/libgnustep-base.so \
             /usr/lib/libgnustep-base.so; do
     if [ -f "$cand" ]; then gs_base="$cand"; break; fi
