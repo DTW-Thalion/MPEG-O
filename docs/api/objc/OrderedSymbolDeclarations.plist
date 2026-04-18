@@ -1,0 +1,572 @@
+{
+    "(MPGOCVAnnotatable)" = (
+	"-addCVParam:",
+	"-removeCVParam:",
+	"-allCVParams",
+	"-cvParamsForAccession:",
+	"-cvParamsForOntologyRef:",
+	"-hasCVParamWithAccession:"
+    );
+    "(MPGOEncryptable)" = (
+	"-encryptWithKey:level:error:",
+	"-decryptWithKey:error:",
+	"-accessPolicy",
+	"-setAccessPolicy:"
+    );
+    "(MPGOIndexable)" = (
+	"-objectAtIndex:",
+	"-count",
+	"-objectForKey:",
+	"-objectsInRange:"
+    );
+    "(MPGOProvenanceable)" = (
+	"-addProcessingStep:",
+	"-provenanceChain",
+	"-inputEntities",
+	"-outputEntities"
+    );
+    "(MPGOStorageDataset)" = (
+	"-name",
+	"-precision",
+	"-shape",
+	"-chunks",
+	"-length",
+	"-compoundFields",
+	"-readAll:",
+	"-readSliceAtOffset:count:error:",
+	"-writeAll:error:",
+	"-hasAttributeNamed:",
+	"-attributeValueForName:error:",
+	"-setAttributeValue:forName:error:",
+	"-close"
+    );
+    "(MPGOStorageGroup)" = (
+	"-name",
+	"-childNames",
+	"-hasChildNamed:",
+	"-openGroupNamed:error:",
+	"-createGroupNamed:error:",
+	"-deleteChildNamed:error:",
+	"-openDatasetNamed:error:",
+	"-createDatasetNamed:precision:length:chunkSize:compression:compressionLevel:error:",
+	"-createDatasetNDNamed:precision:shape:chunks:compression:compressionLevel:error:",
+	"-createCompoundDatasetNamed:fields:count:error:",
+	"-hasAttributeNamed:",
+	"-attributeValueForName:error:",
+	"-setAttributeValue:forName:error:",
+	"-deleteAttributeNamed:error:",
+	"-attributeNames",
+	"-close"
+    );
+    "(MPGOStorageProvider)" = (
+	"-providerName",
+	"-supportsURL:",
+	"-openURL:mode:error:",
+	"-rootGroupWithError:",
+	"-isOpen",
+	"-close",
+	"-nativeHandle"
+    );
+    "(MPGOStreamable)" = (
+	"-nextObject",
+	"-hasMore",
+	"-currentPosition",
+	"-seekToPosition:",
+	"-reset"
+    );
+    MPGOAccessPolicy = (
+	"-policy",
+	"-initWithPolicy:",
+	"-writeToFile:error:",
+	"+readFromFile:error:"
+    );
+    MPGOAcquisitionRun = (
+	"-acquisitionMode",
+	"-instrumentConfig",
+	"-spectrumIndex",
+	"-spectrumClassName",
+	"-nucleusType",
+	"-spectrometerFrequencyMHz",
+	"-signalCompression",
+	"-setSignalCompression:",
+	"-chromatograms",
+	"-initWithSpectra:acquisitionMode:instrumentConfig:",
+	"-initWithSpectra:chromatograms:acquisitionMode:instrumentConfig:",
+	"-writeToGroup:name:error:",
+	"+readFromGroup:name:error:",
+	"-spectrumAtIndex:error:",
+	"-indicesInRetentionTimeRange:",
+	"-setPersistenceFilePath:runName:",
+	"-releaseHDF5Handles",
+	"-addProcessingStep:",
+	"-provenanceChain",
+	"-inputEntities",
+	"-outputEntities",
+	"-encryptWithKey:level:error:",
+	"-decryptWithKey:error:",
+	"-accessPolicy",
+	"-setAccessPolicy:"
+    );
+    MPGOAnonymizationPolicy = (
+	"-redactSAAVSpectra",
+	"-setRedactSAAVSpectra:",
+	"-maskIntensityBelowQuantile",
+	"-setMaskIntensityBelowQuantile:",
+	"-maskRareMetabolites",
+	"-setMaskRareMetabolites:",
+	"-rareMetaboliteThreshold",
+	"-setRareMetaboliteThreshold:",
+	"-rareMetaboliteTable",
+	"-setRareMetaboliteTable:",
+	"-coarsenMzDecimals",
+	"-setCoarsenMzDecimals:",
+	"-coarsenChemicalShiftDecimals",
+	"-setCoarsenChemicalShiftDecimals:",
+	"-stripMetadataFields",
+	"-setStripMetadataFields:"
+    );
+    MPGOAnonymizationResult = (
+	"-spectraRedacted",
+	"-setSpectraRedacted:",
+	"-intensitiesZeroed",
+	"-setIntensitiesZeroed:",
+	"-mzValuesCoarsened",
+	"-setMzValuesCoarsened:",
+	"-chemicalShiftValuesCoarsened",
+	"-setChemicalShiftValuesCoarsened:",
+	"-metabolitesMasked",
+	"-setMetabolitesMasked:",
+	"-metadataFieldsStripped",
+	"-setMetadataFieldsStripped:",
+	"-policiesApplied",
+	"-setPoliciesApplied:"
+    );
+    MPGOAnonymizer = (
+	"+anonymizeDataset:outputPath:policy:error:"
+    );
+    MPGOAxisDescriptor = (
+	"-name",
+	"-unit",
+	"-valueRange",
+	"-samplingMode",
+	"-initWithName:unit:valueRange:samplingMode:",
+	"+descriptorWithName:unit:valueRange:samplingMode:"
+    );
+    MPGOBase64 = (
+	"+decodeString:",
+	"+decodeString:zlibInflate:",
+	"+encodeData:",
+	"+encodeData:zlibDeflate:"
+    );
+    MPGOCVParam = (
+	"-ontologyRef",
+	"-accession",
+	"-name",
+	"-value",
+	"-unit",
+	"-initWithOntologyRef:accession:name:value:unit:",
+	"+paramWithOntologyRef:accession:name:value:unit:"
+    );
+    MPGOCVTermMapper = (
+	"+precisionForAccession:",
+	"+compressionForAccession:",
+	"+signalArrayNameForAccession:",
+	"+isMSLevelAccession:",
+	"+isPositivePolarityAccession:",
+	"+isNegativePolarityAccession:",
+	"+isScanWindowLowerAccession:",
+	"+isScanWindowUpperAccession:",
+	"+isTotalIonCurrentAccession:",
+	"+isBasePeakMzAccession:",
+	"+isBasePeakIntensityAccession:",
+	"+isScanStartTimeAccession:",
+	"+isSelectedIonMzAccession:",
+	"+isChargeStateAccession:",
+	"+isTotalIonChromatogramAccession:",
+	"+isSelectedReactionMonitoringAccession:",
+	"+isSpectrometerFrequencyAccession:",
+	"+isNucleusAccession:",
+	"+isNumberOfScansAccession:",
+	"+isDwellTimeAccession:",
+	"+isSweepWidthAccession:",
+	"+cvParamFromAccession:name:value:ontologyRef:unit:"
+    );
+    MPGOChromatogram = (
+	"-timeArray",
+	"-intensityArray",
+	"-type",
+	"-targetMz",
+	"-precursorProductMz",
+	"-productMz",
+	"-initWithTimeArray:intensityArray:type:targetMz:precursorMz:productMz:error:"
+    );
+    MPGOCompoundField = (
+	"-name",
+	"-kind",
+	"+fieldWithName:kind:",
+	"-initWithName:kind:"
+    );
+    MPGOCompoundIO = (
+	"+writeIdentifications:intoGroup:datasetNamed:error:",
+	"+readIdentificationsFromGroup:datasetNamed:error:",
+	"+writeQuantifications:intoGroup:datasetNamed:error:",
+	"+readQuantificationsFromGroup:datasetNamed:error:",
+	"+writeProvenance:intoGroup:datasetNamed:error:",
+	"+readProvenanceFromGroup:datasetNamed:error:",
+	"+writeCompoundHeadersForIndex:intoGroup:error:",
+	"+readCompoundHeaderRow:fromGroup:error:",
+	"+writeGeneric:intoGroup:datasetNamed:fields:error:",
+	"+readGenericFromGroup:datasetNamed:fields:error:"
+    );
+    MPGOEncodingSpec = (
+	"-precision",
+	"-compressionAlgorithm",
+	"-byteOrder",
+	"-initWithPrecision:compressionAlgorithm:byteOrder:",
+	"+specWithPrecision:compressionAlgorithm:byteOrder:",
+	"-elementSize"
+    );
+    MPGOEncryptionManager = (
+	"+encryptData:withKey:iv:authTag:error:",
+	"+decryptData:withKey:iv:authTag:error:"
+    );
+    MPGOFeatureFlags = (
+	"+featureBaseV1",
+	"+featureCompoundIdentifications",
+	"+featureCompoundQuantifications",
+	"+featureCompoundProvenance",
+	"+featureCompoundHeaders",
+	"+featureDatasetEncryption",
+	"+featureNative2DNMR",
+	"+featureNativeMSImageCube",
+	"+featureDigitalSignatures",
+	"+featureCompoundPerRunProvenance",
+	"+featureCanonicalSignatures",
+	"+featureKeyRotation",
+	"+featureAnonymized",
+	"+formatVersionForRoot:",
+	"+featuresForRoot:",
+	"+root:supportsFeature:",
+	"+isLegacyV1File:",
+	"+writeFormatVersion:features:toRoot:error:"
+    );
+    MPGOFreeInductionDecay = (
+	"-dwellTimeSeconds",
+	"-scanCount",
+	"-receiverGain",
+	"-initWithComplexBuffer:complexLength:dwellTimeSeconds:scanCount:receiverGain:"
+    );
+    MPGOHDF5CompoundType = (
+	"-initWithSize:",
+	"-addField:type:offset:",
+	"-addVariableLengthStringFieldNamed:atOffset:",
+	"-typeId",
+	"-totalSize",
+	"-close"
+    );
+    MPGOHDF5Dataset = (
+	"-initWithDatasetId:precision:length:retainer:",
+	"-datasetId",
+	"-precision",
+	"-length",
+	"-writeData:error:",
+	"-readDataWithError:",
+	"-readDataAtOffset:count:error:"
+    );
+    MPGOHDF5File = (
+	"-path",
+	"+createAtPath:error:",
+	"+openAtPath:error:",
+	"+openReadOnlyAtPath:error:",
+	"-rootGroup",
+	"-close",
+	"-isThreadSafe",
+	"-lockForReading",
+	"-unlockForReading",
+	"-lockForWriting",
+	"-unlockForWriting",
+	"-owningFile"
+    );
+    MPGOHDF5Group = (
+	"-initWithGroupId:retainer:",
+	"-groupId",
+	"-createGroupNamed:error:",
+	"-openGroupNamed:error:",
+	"-hasChildNamed:",
+	"-deleteChildNamed:error:",
+	"-createDatasetNamed:precision:length:chunkSize:compressionLevel:error:",
+	"-createDatasetNamed:precision:length:chunkSize:compression:compressionLevel:error:",
+	"-openDatasetNamed:error:",
+	"-setStringAttribute:value:error:",
+	"-stringAttributeNamed:error:",
+	"-setIntegerAttribute:value:error:",
+	"-integerAttributeNamed:exists:error:",
+	"-hasAttributeNamed:",
+	"-deleteAttributeNamed:error:",
+	"-attributeNames",
+	"-childNames",
+	"-groupName"
+    );
+    MPGOISAExporter = (
+	"+bundleForDataset:error:",
+	"+writeBundleForDataset:toDirectory:error:"
+    );
+    MPGOIdentification = (
+	"-runName",
+	"-spectrumIndex",
+	"-chemicalEntity",
+	"-confidenceScore",
+	"-evidenceChain",
+	"-initWithRunName:spectrumIndex:chemicalEntity:confidenceScore:evidenceChain:",
+	"-asPlist",
+	"+fromPlist:"
+    );
+    MPGOInstrumentConfig = (
+	"-manufacturer",
+	"-model",
+	"-serialNumber",
+	"-sourceType",
+	"-analyzerType",
+	"-detectorType",
+	"-initWithManufacturer:model:serialNumber:sourceType:analyzerType:detectorType:",
+	"-writeToGroup:error:",
+	"+readFromGroup:error:"
+    );
+    MPGOKeyRotationManager = (
+	"+managerWithFile:",
+	"-enableEnvelopeEncryptionWithKEK:kekId:error:",
+	"-rotateToKEK:kekId:oldKEK:error:",
+	"-unwrapDEKWithKEK:error:",
+	"-hasEnvelopeEncryption",
+	"-keyHistory"
+    );
+    MPGOMSImage = (
+	"-width",
+	"-height",
+	"-spectralPoints",
+	"-tileSize",
+	"-cube",
+	"-pixelSizeX",
+	"-pixelSizeY",
+	"-scanPattern",
+	"-initWithWidth:height:spectralPoints:tileSize:cube:",
+	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:cube:",
+	"+readFromFilePath:error:",
+	"+readTileFromFilePath:atX:y:width:height:error:"
+    );
+    MPGOMassSpectrum = (
+	"-mzArray",
+	"-intensityArray",
+	"-msLevel",
+	"-polarity",
+	"-scanWindow",
+	"-initWithMzArray:intensityArray:msLevel:polarity:scanWindow:indexPosition:scanTimeSeconds:precursorMz:precursorCharge:error:"
+    );
+    MPGOMemoryProvider = (
+	"+discardStore:"
+    );
+    MPGOMzMLReader = (
+	"+readFromFilePath:error:",
+	"+readFromURL:error:",
+	"+readFromData:error:",
+	"+parseFilePath:error:",
+	"+parseData:error:",
+	"-dataset",
+	"-chromatograms"
+    );
+    MPGOMzMLWriter = (
+	"+dataForDataset:zlibCompression:error:",
+	"+writeDataset:toPath:zlibCompression:error:"
+    );
+    MPGONMR2DSpectrum = (
+	"-intensityMatrix",
+	"-width",
+	"-height",
+	"-f1Axis",
+	"-f2Axis",
+	"-nucleusF1",
+	"-nucleusF2",
+	"-initWithIntensityMatrix:width:height:f1Axis:f2Axis:nucleusF1:nucleusF2:indexPosition:error:"
+    );
+    MPGONMRSpectrum = (
+	"-chemicalShiftArray",
+	"-intensityArray",
+	"-nucleusType",
+	"-spectrometerFrequencyMHz",
+	"-initWithChemicalShiftArray:intensityArray:nucleusType:spectrometerFrequencyMHz:indexPosition:scanTimeSeconds:error:"
+    );
+    MPGONmrMLReader = (
+	"+readFromFilePath:error:",
+	"+readFromURL:error:",
+	"+readFromData:error:",
+	"+parseFilePath:error:",
+	"+parseData:error:",
+	"-dataset",
+	"-fids",
+	"-spectrometerFrequencyMHz",
+	"-nucleusType",
+	"-numberOfScans",
+	"-dwellTimeSeconds",
+	"-sweepWidthPpm"
+    );
+    MPGONmrMLWriter = (
+	"+dataForSpectrum:fid:sweepWidthPPM:error:",
+	"+writeSpectrum:fid:sweepWidthPPM:toPath:error:"
+    );
+    MPGONumpress = (
+	"+scaleForValueRangeMin:max:",
+	"+encodeFloat64:count:scale:outDeltas:",
+	"+decodeInt64:count:scale:outValues:"
+    );
+    MPGOProvenanceRecord = (
+	"-inputRefs",
+	"-software",
+	"-parameters",
+	"-outputRefs",
+	"-timestampUnix",
+	"-initWithInputRefs:software:parameters:outputRefs:timestampUnix:",
+	"-containsInputRef:",
+	"-asPlist",
+	"+fromPlist:"
+    );
+    MPGOProviderRegistry = (
+	"+sharedRegistry",
+	"-registerProviderClass:forName:",
+	"-knownProviderNames",
+	"-openURL:mode:provider:error:"
+    );
+    MPGOQuantification = (
+	"-chemicalEntity",
+	"-sampleRef",
+	"-abundance",
+	"-normalizationMethod",
+	"-initWithChemicalEntity:sampleRef:abundance:normalizationMethod:",
+	"-asPlist",
+	"+fromPlist:"
+    );
+    MPGOQuery = (
+	"+queryOnIndex:",
+	"-withRetentionTimeRange:",
+	"-withMsLevel:",
+	"-withPolarity:",
+	"-withPrecursorMzRange:",
+	"-withBasePeakIntensityAtLeast:",
+	"-matchingIndices"
+    );
+    MPGOSignalArray = (
+	"-buffer",
+	"-length",
+	"-encoding",
+	"-axis",
+	"-initWithBuffer:length:encoding:axis:",
+	"-writeToGroup:name:chunkSize:compressionLevel:error:",
+	"+readFromGroup:name:error:",
+	"-isEqual:",
+	"-hash"
+    );
+    MPGOSignatureManager = (
+	"+hmacSHA256OfData:withKey:",
+	"+signDataset:inFile:withKey:error:",
+	"+verifyDataset:inFile:withKey:error:",
+	"+signProvenanceInRun:inFile:withKey:error:",
+	"+verifyProvenanceInRun:inFile:withKey:error:"
+    );
+    MPGOSpectralDataset = (
+	"-title",
+	"-isaInvestigationId",
+	"-msRuns",
+	"-nmrRuns",
+	"-identifications",
+	"-quantifications",
+	"-provenanceRecords",
+	"-transitions",
+	"-initWithTitle:isaInvestigationId:msRuns:nmrRuns:identifications:quantifications:provenanceRecords:transitions:",
+	"-writeToFilePath:error:",
+	"+readFromFilePath:error:",
+	"-closeFile",
+	"-filePath",
+	"-provider",
+	"-provenanceRecordsForInputRef:",
+	"-encryptWithKey:level:error:",
+	"-decryptWithKey:error:",
+	"-accessPolicy",
+	"-setAccessPolicy:",
+	"-writeAdditionalStudyContent:error:",
+	"-readAdditionalStudyContent:error:"
+    );
+    MPGOSpectrum = (
+	"-signalArrays",
+	"-axes",
+	"-indexPosition",
+	"-scanTimeSeconds",
+	"-precursorMz",
+	"-precursorCharge",
+	"-initWithSignalArrays:axes:indexPosition:scanTimeSeconds:precursorMz:precursorCharge:",
+	"-writeToGroup:name:error:",
+	"+readFromGroup:name:error:",
+	"-writeAdditionalAttributesToGroup:error:",
+	"-readAdditionalAttributesFromGroup:error:"
+    );
+    MPGOSpectrumIndex = (
+	"-count",
+	"-offsetAt:",
+	"-lengthAt:",
+	"-retentionTimeAt:",
+	"-msLevelAt:",
+	"-polarityAt:",
+	"-precursorMzAt:",
+	"-precursorChargeAt:",
+	"-basePeakIntensityAt:",
+	"-indicesInRetentionTimeRange:",
+	"-indicesForMsLevel:",
+	"-initWithOffsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:",
+	"-writeToGroup:error:",
+	"+readFromGroup:error:"
+    );
+    MPGOStreamReader = (
+	"-initWithFilePath:runName:error:",
+	"-totalCount",
+	"-currentPosition",
+	"-atEnd",
+	"-nextSpectrumWithError:",
+	"-reset",
+	"-close"
+    );
+    MPGOStreamWriter = (
+	"-initWithFilePath:runName:acquisitionMode:instrumentConfig:error:",
+	"-appendSpectrum:error:",
+	"-flushWithError:",
+	"-flushAndCloseWithError:",
+	"-spectrumCount"
+    );
+    MPGOThermoRawReader = (
+	"+readFromFilePath:error:"
+    );
+    MPGOTransition = (
+	"-precursorMz",
+	"-productMz",
+	"-collisionEnergy",
+	"-retentionTimeWindow",
+	"-initWithPrecursorMz:productMz:collisionEnergy:retentionTimeWindow:"
+    );
+    MPGOTransitionList = (
+	"-transitions",
+	"-initWithTransitions:",
+	"-count",
+	"-transitionAtIndex:",
+	"-asPlist",
+	"+fromPlist:"
+    );
+    MPGOValueRange = (
+	"-minimum",
+	"-maximum",
+	"-initWithMinimum:maximum:",
+	"+rangeWithMinimum:maximum:",
+	"-span",
+	"-containsValue:"
+    );
+    MPGOVerifier = (
+	"+verifyDataset:inFile:withKey:error:",
+	"+verifyProvenanceInRun:inFile:withKey:error:"
+    );
+}

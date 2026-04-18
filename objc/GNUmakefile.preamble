@@ -20,6 +20,8 @@ HDF5_PREFIX ?= /usr
 # symbol `_OBJC_CLASS_NSObject` (gnustep-1.8) vs the modern non-fragile symbol
 # `._OBJC_CLASS_NSObject` (gnustep-2.0) and pass the matching -fobjc-runtime.
 GNUSTEP_BASE_LIB := $(firstword $(wildcard \
+    /usr/GNUstep/Local/Library/Libraries/libgnustep-base.so \
+    /usr/GNUstep/System/Library/Libraries/libgnustep-base.so \
     /usr/local/lib/libgnustep-base.so \
     /usr/lib/x86_64-linux-gnu/libgnustep-base.so \
     /usr/lib/libgnustep-base.so))
@@ -83,6 +85,7 @@ ADDITIONAL_OBJCCFLAGS += -Wall -Wextra -Wno-unused-parameter -fobjc-arc \
 ADDITIONAL_OBJCFLAGS  += -I$(GNUSTEP_MAKEFILES)/TestFramework
 ADDITIONAL_OBJCCFLAGS += -I$(GNUSTEP_MAKEFILES)/TestFramework
 
+ADDITIONAL_LDFLAGS += -L/usr/local/lib
 ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib
 ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib/x86_64-linux-gnu/hdf5/serial
 ADDITIONAL_LDFLAGS += -lsqlite3
