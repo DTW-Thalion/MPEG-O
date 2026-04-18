@@ -26,6 +26,7 @@
 #import "Protection/MPGOPostQuantumCrypto.h"
 #import "Protection/MPGOSignatureManager.h"
 #import "Providers/MPGOHDF5Provider.h"
+#import "Providers/MPGOProviderRegistry.h"
 #import "Providers/MPGOStorageProtocols.h"
 
 static NSData *readBytes(NSString *path)
@@ -153,6 +154,117 @@ static int subHdf5Verify(int argc, char **argv)
     return ok ? 0 : 1;
 }
 
+// ── Provider-agnostic sign/verify (v0.8 M54.1) ───────────────────────
+
+static id<MPGOStorageDataset> openDatasetAtPath(id<MPGOStorageGroup> root,
+                                                  NSString *path,
+                                                  NSError **error)
+{
+    NSString *trimmed = [path hasPrefix:@"/"] ? [path substringFromIndex:1] : path;
+    NSArray<NSString *> *parts = [trimmed componentsSeparatedByString:@"/"];
+    id<MPGOStorageGroup> cur = root;
+    for (NSUInteger i = 0; i + 1 < parts.count; i++) {
+        cur = [cur openGroupNamed:parts[i] error:error];
+        if (!cur) return nil;
+    }
+    return [cur openDatasetNamed:parts.lastObject error:error];
+}
+
+static int subProviderSign(int argc, char **argv)
+{
+    if (argc < 5) { fprintf(stderr, "usage: provider-sign URL DS_PATH SK_IN\n"); return 2; }
+    NSError *err = nil;
+    NSData *sk = readBytes(@(argv[4]));
+    id<MPGOStorageProvider> p =
+        [[MPGOProviderRegistry sharedRegistry] openURL:@(argv[2])
+                                                   mode:MPGOStorageOpenModeReadWrite
+                                               provider:nil
+                                                  error:&err];
+    if (!p) {
+        fprintf(stderr, "open failed: %s\n",
+                err.localizedDescription.UTF8String ?: "(unknown)");
+        return 2;
+    }
+    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<MPGOStorageDataset> ds = openDatasetAtPath(root, @(argv[3]), &err);
+    if (!ds) {
+        fprintf(stderr, "dataset open failed: %s\n",
+                err.localizedDescription.UTF8String ?: "(unknown)");
+        [p close];
+        return 2;
+    }
+    NSData *canonical = [ds readCanonicalBytes:&err];
+    if (!canonical) {
+        fprintf(stderr, "canonical read failed\n");
+        [p close];
+        return 2;
+    }
+    // ML-DSA-87 v3: signature.
+    NSData *sig = [MPGOPostQuantumCrypto sigSignWithPrivateKey:sk
+                                                         message:canonical
+                                                           error:&err];
+    if (!sig) {
+        fprintf(stderr, "sign failed: %s\n",
+                err.localizedDescription.UTF8String ?: "(unknown)");
+        [p close];
+        return 2;
+    }
+    NSString *stored = [@"v3:" stringByAppendingString:
+        [sig base64EncodedStringWithOptions:0]];
+    BOOL ok = [ds setAttributeValue:stored forName:@"mpgo_signature" error:&err];
+    [p close];
+    if (!ok) {
+        fprintf(stderr, "setAttribute failed: %s\n",
+                err.localizedDescription.UTF8String ?: "(unknown)");
+        return 2;
+    }
+    return 0;
+}
+
+static int subProviderVerify(int argc, char **argv)
+{
+    if (argc < 5) { fprintf(stderr, "usage: provider-verify URL DS_PATH PK_IN\n"); return 2; }
+    NSError *err = nil;
+    NSData *pk = readBytes(@(argv[4]));
+    id<MPGOStorageProvider> p =
+        [[MPGOProviderRegistry sharedRegistry] openURL:@(argv[2])
+                                                   mode:MPGOStorageOpenModeRead
+                                               provider:nil
+                                                  error:&err];
+    if (!p) {
+        fprintf(stderr, "open failed: %s\n",
+                err.localizedDescription.UTF8String ?: "(unknown)");
+        return 2;
+    }
+    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<MPGOStorageDataset> ds = openDatasetAtPath(root, @(argv[3]), &err);
+    if (!ds) {
+        fprintf(stderr, "dataset open failed: %s\n",
+                err.localizedDescription.UTF8String ?: "(unknown)");
+        [p close];
+        return 2;
+    }
+    NSData *canonical = [ds readCanonicalBytes:&err];
+    id stored = [ds attributeValueForName:@"mpgo_signature" error:&err];
+    [p close];
+    if (!stored) {
+        fprintf(stderr, "no @mpgo_signature\n");
+        return 2;
+    }
+    NSString *s = [stored isKindOfClass:[NSString class]] ? stored : [stored description];
+    if (![s hasPrefix:@"v3:"]) {
+        fprintf(stderr, "stored signature is not v3\n");
+        return 2;
+    }
+    NSString *b64 = [s substringFromIndex:3];
+    NSData *sig = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+    BOOL ok = [MPGOPostQuantumCrypto sigVerifyWithPublicKey:pk
+                                                     message:canonical
+                                                   signature:sig
+                                                       error:&err];
+    return ok ? 0 : 1;
+}
+
 int main(int argc, char **argv)
 {
     @autoreleasepool {
@@ -165,8 +277,10 @@ int main(int argc, char **argv)
                 "  kem-keygen  PK_OUT  SK_OUT\n"
                 "  kem-encaps  PK_IN   CT_OUT  SS_OUT\n"
                 "  kem-decaps  SK_IN   CT_IN   SS_OUT\n"
-                "  hdf5-sign   FILE    DATASET_PATH  SK_IN\n"
-                "  hdf5-verify FILE    DATASET_PATH  PK_IN\n");
+                "  hdf5-sign      FILE    DATASET_PATH  SK_IN\n"
+                "  hdf5-verify    FILE    DATASET_PATH  PK_IN\n"
+                "  provider-sign   URL     DATASET_PATH  SK_IN\n"
+                "  provider-verify URL     DATASET_PATH  PK_IN\n");
             return 2;
         }
         NSString *sub = @(argv[1]);
@@ -178,6 +292,8 @@ int main(int argc, char **argv)
         if ([sub isEqualToString:@"kem-decaps"]) return subKemDecaps(argc, argv);
         if ([sub isEqualToString:@"hdf5-sign"])   return subHdf5Sign(argc, argv);
         if ([sub isEqualToString:@"hdf5-verify"]) return subHdf5Verify(argc, argv);
+        if ([sub isEqualToString:@"provider-sign"])   return subProviderSign(argc, argv);
+        if ([sub isEqualToString:@"provider-verify"]) return subProviderVerify(argc, argv);
         fprintf(stderr, "unknown subcommand: %s\n", argv[1]);
         return 2;
     }

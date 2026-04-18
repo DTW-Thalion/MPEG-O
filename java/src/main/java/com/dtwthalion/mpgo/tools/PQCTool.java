@@ -9,6 +9,10 @@ import com.dtwthalion.mpgo.protection.PostQuantumCrypto;
 import com.dtwthalion.mpgo.protection.PostQuantumCrypto.KeyPair;
 import com.dtwthalion.mpgo.protection.PostQuantumCrypto.KemEncapResult;
 import com.dtwthalion.mpgo.protection.SignatureManager;
+import com.dtwthalion.mpgo.providers.ProviderRegistry;
+import com.dtwthalion.mpgo.providers.StorageDataset;
+import com.dtwthalion.mpgo.providers.StorageGroup;
+import com.dtwthalion.mpgo.providers.StorageProvider;
 
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
@@ -65,6 +69,8 @@ public final class PQCTool {
                 case "kem-decaps" -> kemDecaps(args);
                 case "hdf5-sign"   -> hdf5Sign(args);
                 case "hdf5-verify" -> hdf5Verify(args);
+                case "provider-sign"   -> providerSign(args);
+                case "provider-verify" -> providerVerify(args);
                 default -> {
                     System.err.println("unknown subcommand: " + sub);
                     usage();
@@ -86,8 +92,10 @@ public final class PQCTool {
             + "  kem-keygen  PK_OUT  SK_OUT\n"
             + "  kem-encaps  PK_IN   CT_OUT  SS_OUT\n"
             + "  kem-decaps  SK_IN   CT_IN   SS_OUT\n"
-            + "  hdf5-sign   FILE    DATASET_PATH  SK_IN\n"
-            + "  hdf5-verify FILE    DATASET_PATH  PK_IN");
+            + "  hdf5-sign      FILE    DATASET_PATH  SK_IN\n"
+            + "  hdf5-verify    FILE    DATASET_PATH  PK_IN\n"
+            + "  provider-sign   URL     DATASET_PATH  SK_IN\n"
+            + "  provider-verify URL     DATASET_PATH  PK_IN");
     }
 
     private static byte[] readBytes(String path) throws java.io.IOException {
@@ -167,6 +175,64 @@ public final class PQCTool {
         byte[] pk = readBytes(args[3]);
         boolean ok = signOrVerifyHdf5(args[1], args[2], pk, /* sign= */ false);
         System.exit(ok ? 0 : 1);
+    }
+
+    // ── Provider-agnostic sign/verify (v0.8 M54.1) ───────────────────
+
+    private static void providerSign(String[] args) throws Exception {
+        require(args, 4, "provider-sign URL DATASET_PATH SK_IN");
+        byte[] sk = readBytes(args[3]);
+        signOrVerifyProvider(args[1], args[2], sk, /* sign= */ true);
+    }
+
+    private static void providerVerify(String[] args) throws Exception {
+        require(args, 4, "provider-verify URL DATASET_PATH PK_IN");
+        byte[] pk = readBytes(args[3]);
+        boolean ok = signOrVerifyProvider(args[1], args[2], pk, /* sign= */ false);
+        System.exit(ok ? 0 : 1);
+    }
+
+    /**
+     * Provider-dispatched sign/verify. Uses the ProviderRegistry to
+     * pick the backend by URL scheme, then drives the StorageDataset
+     * contract for canonical bytes + attribute I/O. Works for any
+     * provider that implements get/setAttribute on its datasets —
+     * currently Zarr, Memory, SQLite, and HDF5 (v0.8).
+     */
+    private static boolean signOrVerifyProvider(String url, String dsPath,
+                                                  byte[] key, boolean sign)
+            throws Exception {
+        String trimmed = dsPath.startsWith("/") ? dsPath.substring(1) : dsPath;
+        String[] parts = trimmed.split("/");
+        if (parts.length == 0) {
+            throw new IllegalArgumentException("bad dataset path: " + dsPath);
+        }
+        StorageProvider.Mode mode = sign
+                ? StorageProvider.Mode.READ_WRITE
+                : StorageProvider.Mode.READ;
+        try (StorageProvider p = ProviderRegistry.open(url, mode)) {
+            StorageGroup cur = p.rootGroup();
+            for (int i = 0; i < parts.length - 1; i++) {
+                cur = cur.openGroup(parts[i]);
+            }
+            String dsName = parts[parts.length - 1];
+            try (StorageDataset ds = cur.openDataset(dsName)) {
+                byte[] canonical = ds.readCanonicalBytes();
+                if (sign) {
+                    String stored = SignatureManager.sign(canonical, key,
+                            "ml-dsa-87");
+                    ds.setAttribute("mpgo_signature", stored);
+                    return true;
+                }
+                Object stored = ds.getAttribute("mpgo_signature");
+                if (stored == null) {
+                    throw new IllegalStateException(
+                            "no @mpgo_signature on " + dsPath);
+                }
+                return SignatureManager.verify(canonical, stored.toString(),
+                        key, "ml-dsa-87");
+            }
+        }
     }
 
     /**
