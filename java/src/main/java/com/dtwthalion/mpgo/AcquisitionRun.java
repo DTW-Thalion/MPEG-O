@@ -6,8 +6,8 @@
 package com.dtwthalion.mpgo;
 
 import com.dtwthalion.mpgo.Enums.*;
-import com.dtwthalion.mpgo.hdf5.Hdf5Dataset;
-import com.dtwthalion.mpgo.hdf5.Hdf5Group;
+import com.dtwthalion.mpgo.providers.StorageDataset;
+import com.dtwthalion.mpgo.providers.StorageGroup;
 
 import java.util.*;
 
@@ -23,6 +23,10 @@ import java.util.*;
  * {@link com.dtwthalion.mpgo.protocols.Streamable}, and
  * {@link com.dtwthalion.mpgo.protocols.Provenanceable}.
  * {@code Encryptable} conformance is deferred to M41.5.</p>
+ *
+ * <p>v0.7 M44: I/O routed through {@link StorageGroup} /
+ * {@link StorageDataset}; this class no longer references the low-level
+ * {@code Hdf5Group} / {@code Hdf5Dataset} types.</p>
  *
  * <p><b>API status:</b> Stable (Encryptable surface pending).</p>
  *
@@ -255,22 +259,27 @@ public class AcquisitionRun implements
         this.accessPolicy = (com.dtwthalion.mpgo.protection.AccessPolicy) policy;
     }
 
-    // ── HDF5 I/O ────────────────────────────────────────────────────
+    // ── Storage I/O ─────────────────────────────────────────────────
+    //
+    // v0.7 M44: everything below is routed through the StorageGroup /
+    // StorageDataset protocols. HDF5, SQLite, and Memory providers all
+    // satisfy the same contract.
 
     /** Write this run to a parent group (creates <name>/ subgroup). */
-    public void writeTo(Hdf5Group parentGroup) {
-        try (Hdf5Group runGroup = parentGroup.createGroup(name)) {
-            runGroup.setIntegerAttribute("acquisition_mode", acquisitionMode.ordinal());
-            runGroup.setIntegerAttribute("spectrum_count", spectrumIndex.count());
-            runGroup.setStringAttribute("spectrum_class", spectrumClassName());
+    public void writeTo(StorageGroup parentGroup) {
+        try (StorageGroup runGroup = parentGroup.createGroup(name)) {
+            runGroup.setAttribute("acquisition_mode", (long) acquisitionMode.ordinal());
+            runGroup.setAttribute("spectrum_count", (long) spectrumIndex.count());
+            runGroup.setAttribute("spectrum_class", spectrumClassName());
 
             if (nucleusType != null) {
-                runGroup.setStringAttribute("nucleus_type", nucleusType);
+                runGroup.setAttribute("nucleus_type", nucleusType);
             }
             if (spectrometerFrequencyMHz > 0) {
-                try (Hdf5Dataset ds = runGroup.createDataset("_spectrometer_freq_mhz",
-                        Precision.FLOAT64, 1, 0, 0)) {
-                    ds.writeData(new double[]{ spectrometerFrequencyMHz });
+                try (StorageDataset ds = runGroup.createDataset(
+                        "_spectrometer_freq_mhz", Precision.FLOAT64, 1, 0,
+                        Compression.NONE, 0)) {
+                    ds.writeAll(new double[]{ spectrometerFrequencyMHz });
                 }
             }
 
@@ -297,26 +306,19 @@ public class AcquisitionRun implements
         }
     }
 
-    /** Read a run from an existing HDF5 group. */
-    public static AcquisitionRun readFrom(Hdf5Group parentGroup, String runName) {
-        try (Hdf5Group runGroup = parentGroup.openGroup(runName)) {
+    /** Read a run from an existing storage group. */
+    public static AcquisitionRun readFrom(StorageGroup parentGroup, String runName) {
+        try (StorageGroup runGroup = parentGroup.openGroup(runName)) {
             AcquisitionMode mode = AcquisitionMode.values()[
-                    (int) runGroup.readIntegerAttribute("acquisition_mode", 0)];
+                    ((Number) runGroup.getAttribute("acquisition_mode")).intValue()];
 
-            String spectrumClass = null;
-            if (runGroup.hasAttribute("spectrum_class")) {
-                spectrumClass = runGroup.readStringAttribute("spectrum_class");
-            }
-
-            String nucleusType = null;
-            if (runGroup.hasAttribute("nucleus_type")) {
-                nucleusType = runGroup.readStringAttribute("nucleus_type");
-            }
+            String nucleusType = runGroup.hasAttribute("nucleus_type")
+                    ? (String) runGroup.getAttribute("nucleus_type") : null;
 
             double freqMHz = 0;
             if (runGroup.hasChild("_spectrometer_freq_mhz")) {
-                try (Hdf5Dataset ds = runGroup.openDataset("_spectrometer_freq_mhz")) {
-                    freqMHz = ((double[]) ds.readData())[0];
+                try (StorageDataset ds = runGroup.openDataset("_spectrometer_freq_mhz")) {
+                    freqMHz = ((double[]) ds.readAll())[0];
                 }
             }
 
@@ -331,8 +333,8 @@ public class AcquisitionRun implements
         }
     }
 
-    private void writeSignalChannels(Hdf5Group runGroup) {
-        try (Hdf5Group sc = runGroup.createGroup("signal_channels")) {
+    private void writeSignalChannels(StorageGroup runGroup) {
+        try (StorageGroup sc = runGroup.createGroup("signal_channels")) {
             StringBuilder channelNames = new StringBuilder();
             boolean first = true;
             for (var entry : channels.entrySet()) {
@@ -342,26 +344,29 @@ public class AcquisitionRun implements
 
                 String dsName = entry.getKey() + "_values";
                 double[] data = entry.getValue();
-                try (Hdf5Dataset ds = sc.createDataset(dsName, Precision.FLOAT64,
-                        data.length, CHUNK_SIZE, COMPRESSION_LEVEL)) {
-                    ds.writeData(data);
+                try (StorageDataset ds = sc.createDataset(dsName, Precision.FLOAT64,
+                        data.length, CHUNK_SIZE, Compression.ZLIB, COMPRESSION_LEVEL)) {
+                    ds.writeAll(data);
                 }
             }
-            sc.setStringAttribute("channel_names", channelNames.toString());
+            sc.setAttribute("channel_names", channelNames.toString());
         }
     }
 
-    private static Map<String, double[]> readSignalChannels(Hdf5Group runGroup) {
+    private static Map<String, double[]> readSignalChannels(StorageGroup runGroup) {
         Map<String, double[]> channels = new LinkedHashMap<>();
         if (!runGroup.hasChild("signal_channels")) return channels;
 
-        try (Hdf5Group sc = runGroup.openGroup("signal_channels")) {
-            String namesStr = sc.readStringAttribute("channel_names");
+        try (StorageGroup sc = runGroup.openGroup("signal_channels")) {
+            String namesStr = (String) sc.getAttribute("channel_names");
             for (String ch : namesStr.split(",")) {
                 String dsName = ch.strip() + "_values";
                 if (sc.hasChild(dsName)) {
-                    try (Hdf5Dataset ds = sc.openDataset(dsName)) {
-                        channels.put(ch.strip(), (double[]) ds.readData());
+                    try (StorageDataset ds = sc.openDataset(dsName)) {
+                        // v0.7 M44: route through the storage protocol, not
+                        // Hdf5Dataset directly. Providers decide how to
+                        // materialise the underlying array.
+                        channels.put(ch.strip(), (double[]) ds.readAll());
                     }
                 }
             }
@@ -369,26 +374,26 @@ public class AcquisitionRun implements
         return channels;
     }
 
-    private void writeInstrumentConfig(Hdf5Group runGroup) {
-        try (Hdf5Group ic = runGroup.createGroup("instrument_config")) {
+    private void writeInstrumentConfig(StorageGroup runGroup) {
+        try (StorageGroup ic = runGroup.createGroup("instrument_config")) {
             if (instrumentConfig.manufacturer() != null)
-                ic.setStringAttribute("manufacturer", instrumentConfig.manufacturer());
+                ic.setAttribute("manufacturer", instrumentConfig.manufacturer());
             if (instrumentConfig.model() != null)
-                ic.setStringAttribute("model", instrumentConfig.model());
+                ic.setAttribute("model", instrumentConfig.model());
             if (instrumentConfig.serialNumber() != null)
-                ic.setStringAttribute("serial_number", instrumentConfig.serialNumber());
+                ic.setAttribute("serial_number", instrumentConfig.serialNumber());
             if (instrumentConfig.sourceType() != null)
-                ic.setStringAttribute("source_type", instrumentConfig.sourceType());
+                ic.setAttribute("source_type", instrumentConfig.sourceType());
             if (instrumentConfig.analyzerType() != null)
-                ic.setStringAttribute("analyzer_type", instrumentConfig.analyzerType());
+                ic.setAttribute("analyzer_type", instrumentConfig.analyzerType());
             if (instrumentConfig.detectorType() != null)
-                ic.setStringAttribute("detector_type", instrumentConfig.detectorType());
+                ic.setAttribute("detector_type", instrumentConfig.detectorType());
         }
     }
 
-    private static InstrumentConfig readInstrumentConfig(Hdf5Group runGroup) {
+    private static InstrumentConfig readInstrumentConfig(StorageGroup runGroup) {
         if (!runGroup.hasChild("instrument_config")) return null;
-        try (Hdf5Group ic = runGroup.openGroup("instrument_config")) {
+        try (StorageGroup ic = runGroup.openGroup("instrument_config")) {
             return new InstrumentConfig(
                 readOptionalAttr(ic, "manufacturer"),
                 readOptionalAttr(ic, "model"),
@@ -400,9 +405,9 @@ public class AcquisitionRun implements
         }
     }
 
-    private void writeChromatograms(Hdf5Group runGroup) {
-        try (Hdf5Group cg = runGroup.createGroup("chromatograms")) {
-            cg.setIntegerAttribute("count", chromatograms.size());
+    private void writeChromatograms(StorageGroup runGroup) {
+        try (StorageGroup cg = runGroup.createGroup("chromatograms")) {
+            cg.setAttribute("count", (long) chromatograms.size());
 
             // Concatenate time and intensity arrays
             int totalPoints = chromatograms.stream().mapToInt(Chromatogram::length).sum();
@@ -432,7 +437,7 @@ public class AcquisitionRun implements
             writeDoubleDs(cg, "time_values", allTime);
             writeDoubleDs(cg, "intensity_values", allIntensity);
 
-            try (Hdf5Group idx = cg.createGroup("chromatogram_index")) {
+            try (StorageGroup idx = cg.createGroup("chromatogram_index")) {
                 writeLongDs(idx, "offsets", offsets);
                 writeIntDs(idx, "lengths", lengths);
                 writeIntDs(idx, "types", types);
@@ -443,15 +448,15 @@ public class AcquisitionRun implements
         }
     }
 
-    private static List<Chromatogram> readChromatograms(Hdf5Group runGroup) {
+    private static List<Chromatogram> readChromatograms(StorageGroup runGroup) {
         if (!runGroup.hasChild("chromatograms")) return List.of();
         List<Chromatogram> result = new ArrayList<>();
 
-        try (Hdf5Group cg = runGroup.openGroup("chromatograms")) {
+        try (StorageGroup cg = runGroup.openGroup("chromatograms")) {
             double[] allTime = readDoubleDs(cg, "time_values");
             double[] allIntensity = readDoubleDs(cg, "intensity_values");
 
-            try (Hdf5Group idx = cg.openGroup("chromatogram_index")) {
+            try (StorageGroup idx = cg.openGroup("chromatogram_index")) {
                 long[] offsets = readLongDs(idx, "offsets");
                 int[] lengths = readIntDs(idx, "lengths");
                 int[] types = readIntDs(idx, "types");
@@ -473,9 +478,9 @@ public class AcquisitionRun implements
         return result;
     }
 
-    private void writeProvenance(Hdf5Group runGroup) {
+    private void writeProvenance(StorageGroup runGroup) {
         // v0.3+: per-run provenance as JSON attribute (compound dataset deferred)
-        try (Hdf5Group prov = runGroup.createGroup("provenance")) {
+        try (StorageGroup prov = runGroup.createGroup("provenance")) {
             StringBuilder json = new StringBuilder("[");
             for (int i = 0; i < provenanceRecords.size(); i++) {
                 if (i > 0) json.append(",");
@@ -488,11 +493,11 @@ public class AcquisitionRun implements
                     .append("}");
             }
             json.append("]");
-            runGroup.setStringAttribute("provenance_json", json.toString());
+            runGroup.setAttribute("provenance_json", json.toString());
         }
     }
 
-    private static List<ProvenanceRecord> readProvenance(Hdf5Group runGroup) {
+    private static List<ProvenanceRecord> readProvenance(StorageGroup runGroup) {
         // Read from provenance_json attribute (v0.2+ compat)
         if (!runGroup.hasAttribute("provenance_json")) return List.of();
         // Simple parse — full JSON parsing deferred to M32 compound dataset support
@@ -501,49 +506,51 @@ public class AcquisitionRun implements
 
     // ── Dataset helpers ─────────────────────────────────────────────
 
-    private static void writeDoubleDs(Hdf5Group g, String name, double[] data) {
-        try (Hdf5Dataset ds = g.createDataset(name, Precision.FLOAT64,
-                data.length, CHUNK_SIZE, COMPRESSION_LEVEL)) {
-            ds.writeData(data);
+    private static void writeDoubleDs(StorageGroup g, String name, double[] data) {
+        try (StorageDataset ds = g.createDataset(name, Precision.FLOAT64,
+                data.length, CHUNK_SIZE, Compression.ZLIB, COMPRESSION_LEVEL)) {
+            ds.writeAll(data);
         }
     }
 
-    private static void writeLongDs(Hdf5Group g, String name, long[] data) {
-        try (Hdf5Dataset ds = g.createDataset(name, Precision.INT64, data.length, 0, 0)) {
-            ds.writeData(data);
+    private static void writeLongDs(StorageGroup g, String name, long[] data) {
+        try (StorageDataset ds = g.createDataset(name, Precision.INT64,
+                data.length, 0, Compression.NONE, 0)) {
+            ds.writeAll(data);
         }
     }
 
-    private static void writeIntDs(Hdf5Group g, String name, int[] data) {
-        try (Hdf5Dataset ds = g.createDataset(name, Precision.INT32, data.length, 0, 0)) {
-            ds.writeData(data);
+    private static void writeIntDs(StorageGroup g, String name, int[] data) {
+        try (StorageDataset ds = g.createDataset(name, Precision.INT32,
+                data.length, 0, Compression.NONE, 0)) {
+            ds.writeAll(data);
         }
     }
 
-    private static double[] readDoubleDs(Hdf5Group g, String name) {
-        try (Hdf5Dataset ds = g.openDataset(name)) {
-            return (double[]) ds.readData();
+    private static double[] readDoubleDs(StorageGroup g, String name) {
+        try (StorageDataset ds = g.openDataset(name)) {
+            return (double[]) ds.readAll();
         }
     }
 
-    private static long[] readLongDs(Hdf5Group g, String name) {
-        try (Hdf5Dataset ds = g.openDataset(name)) {
-            return (long[]) ds.readData();
+    private static long[] readLongDs(StorageGroup g, String name) {
+        try (StorageDataset ds = g.openDataset(name)) {
+            return (long[]) ds.readAll();
         }
     }
 
-    private static int[] readIntDs(Hdf5Group g, String name) {
-        try (Hdf5Dataset ds = g.openDataset(name)) {
-            return (int[]) ds.readData();
+    private static int[] readIntDs(StorageGroup g, String name) {
+        try (StorageDataset ds = g.openDataset(name)) {
+            return (int[]) ds.readAll();
         }
     }
 
-    private static String readOptionalAttr(Hdf5Group g, String name) {
-        return g.hasAttribute(name) ? g.readStringAttribute(name) : null;
+    private static String readOptionalAttr(StorageGroup g, String name) {
+        return g.hasAttribute(name) ? (String) g.getAttribute(name) : null;
     }
 
     @Override
     public void close() {
-        // No HDF5 handles held — all closed after read/write
+        // No storage handles held — all closed after read/write
     }
 }

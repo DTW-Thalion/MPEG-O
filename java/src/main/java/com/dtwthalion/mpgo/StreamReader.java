@@ -3,6 +3,7 @@ package com.dtwthalion.mpgo;
 
 import com.dtwthalion.mpgo.hdf5.Hdf5File;
 import com.dtwthalion.mpgo.hdf5.Hdf5Group;
+import com.dtwthalion.mpgo.providers.Hdf5Provider;
 
 /**
  * Sequential reader for a single MS run inside an {@code .mpgo}
@@ -25,7 +26,10 @@ public final class StreamReader implements AutoCloseable {
         this.file = Hdf5File.openReadOnly(filePath);
         try (Hdf5Group study = file.rootGroup().openGroup("study");
              Hdf5Group runs = study.openGroup("ms_runs")) {
-            this.run = AcquisitionRun.readFrom(runs, runName);
+            // v0.7 M44: AcquisitionRun.readFrom takes StorageGroup; wrap the
+            // raw Hdf5Group via the Hdf5Provider adapter.
+            this.run = AcquisitionRun.readFrom(
+                    Hdf5Provider.adapterForGroup(runs), runName);
         }
     }
 

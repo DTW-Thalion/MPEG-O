@@ -18,12 +18,19 @@
 #import "HDF5/MPGOHDF5Dataset.h"
 #import "HDF5/MPGOHDF5Errors.h"
 #import "HDF5/MPGOHDF5Types.h"
+#import "Providers/MPGOStorageProtocols.h"
+#import "Providers/MPGOHDF5Provider.h"
 
 @implementation MPGOAcquisitionRun
 {
     NSArray                     *_inMemorySpectra;       // nil when read-from-disk
-    MPGOHDF5Group               *_signalChannelsGroup;   // nil when in-memory
-    NSMutableDictionary<NSString *, MPGOHDF5Dataset *> *_channelDatasets;
+    // v0.7 M44: storage-protocol iVars. Populated by
+    // +readFromGroup:name:error: via MPGOHDF5Provider's adapter
+    // factory; the hot spectrum-read path goes through the protocol
+    // (readSliceAtOffset:count:error:) so a future non-HDF5 provider
+    // can host a run without per-class migration.
+    id<MPGOStorageGroup>         _storageSignalGroup;    // nil when in-memory
+    NSMutableDictionary<NSString *, id<MPGOStorageDataset>> *_storageDatasets;
     NSArray<NSString *>         *_channelNames;          // ordered list
     NSUInteger                   _streamPosition;
 
@@ -477,7 +484,11 @@
         channelNames = @[@"mz", @"intensity"];
     }
 
-    NSMutableDictionary<NSString *, MPGOHDF5Dataset *> *channelDatasets =
+    // v0.7 M44: channelDatasets is a protocol-valued dictionary so
+    // the hot-path read routes through MPGOStorageDataset. Each
+    // MPGOHDF5Dataset is wrapped via +[MPGOHDF5Provider adapterForDataset:name:]
+    // before being stored.
+    NSMutableDictionary<NSString *, id<MPGOStorageDataset>> *channelDatasets =
         [NSMutableDictionary dictionaryWithCapacity:channelNames.count];
     NSMutableDictionary<NSString *, NSData *> *numpressChannels =
         [NSMutableDictionary dictionary];
@@ -525,15 +536,16 @@
 
         MPGOHDF5Dataset *ds = [channels openDatasetNamed:dsName error:error];
         if (!ds) return nil;
-        channelDatasets[chName] = ds;
+        channelDatasets[chName] =
+            [MPGOHDF5Provider adapterForDataset:ds name:dsName];
     }
 
     MPGOAcquisitionRun *run = [[self alloc] init];
     run->_acquisitionMode      = mode;
     run->_instrumentConfig     = cfg;
     run->_spectrumIndex        = idx;
-    run->_signalChannelsGroup  = channels;
-    run->_channelDatasets      = channelDatasets;
+    run->_storageSignalGroup   = [MPGOHDF5Provider adapterForGroup:channels];
+    run->_storageDatasets      = channelDatasets;
     run->_channelNames         = [channelNames copy];
     run->_spectrumClassName    = [className copy];
     run->_nucleusType          = [nucleus copy];
@@ -661,10 +673,15 @@
             d = [NSData dataWithBytes:base + (NSUInteger)off * sizeof(double)
                                length:(NSUInteger)len * sizeof(double)];
         } else {
-            MPGOHDF5Dataset *ds = _channelDatasets[chName];
-            d = [ds readDataAtOffset:(NSUInteger)off
-                                count:(NSUInteger)len
-                                error:error];
+            // v0.7 M44: route the hot spectrum read through the
+            // storage protocol instead of MPGOHDF5Dataset directly.
+            // Works uniformly across HDF5/Memory/SQLite backends;
+            // M43's cross-backend byte-identity tests guarantee
+            // equivalence.
+            id<MPGOStorageDataset> ds = _storageDatasets[chName];
+            d = [ds readSliceAtOffset:(NSUInteger)off
+                                 count:(NSUInteger)len
+                                 error:error];
         }
         if (!d) return nil;
         MPGOSignalArray *sa = [[MPGOSignalArray alloc] initWithBuffer:d
@@ -768,8 +785,8 @@
 
 - (void)releaseHDF5Handles
 {
-    _channelDatasets     = nil;
-    _signalChannelsGroup = nil;
+    _storageDatasets     = nil;
+    _storageSignalGroup  = nil;
 }
 
 #pragma mark - MPGOProvenanceable

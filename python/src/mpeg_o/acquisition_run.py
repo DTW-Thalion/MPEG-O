@@ -19,9 +19,37 @@ from .mass_spectrum import MassSpectrum
 from .nmr_spectrum import NMRSpectrum
 from .protocols import Indexable, Streamable, Provenanceable
 from .provenance import ProvenanceRecord
+from .providers.base import StorageDataset, StorageGroup
 from .signal_array import SignalArray
 from .spectrum import Spectrum
 from .value_range import ValueRange
+
+
+def _wrap_hdf5_group(obj: object) -> StorageGroup:
+    """v0.7 M44 helper: adapt an h5py.Group (legacy caller) to a
+    :class:`StorageGroup` view. Pass-through for StorageGroup inputs."""
+    if isinstance(obj, StorageGroup):
+        return obj
+    # Assume h5py.Group.
+    from .providers.hdf5 import _Group as _Hdf5Group
+    return _Hdf5Group(obj)
+
+
+def _native_h5py(group: StorageGroup) -> "h5py.Group":
+    """Return the underlying h5py.Group for a StorageGroup backed by
+    :class:`~mpeg_o.providers.hdf5.Hdf5Provider`. Raises if the group
+    is not HDF5-backed — callers that need cold-path attribute
+    helpers (``io.read_string_attr``) route through this shim while
+    the v0.8 migration extends those helpers to accept StorageGroup
+    directly."""
+    native = getattr(group, "_grp", None)
+    if native is None:
+        raise TypeError(
+            "AcquisitionRun cold-path attribute helpers require an "
+            "HDF5-backed StorageGroup; got "
+            f"{type(group).__name__}"
+        )
+    return native
 
 # Channel -> default axis metadata for the two spectrum classes we currently
 # materialize lazily. Writers may store additional channels; reading an unknown
@@ -136,9 +164,24 @@ class SpectrumIndex:
         return np.where(self.ms_levels == ms_level)[0].tolist()
 
     @classmethod
-    def read(cls, idx_group: h5py.Group) -> "SpectrumIndex":
-        def col(name: str, dtype: str) -> np.ndarray:
-            return idx_group[name][()].astype(dtype, copy=False)
+    def read(cls, idx_group: StorageGroup | "h5py.Group") -> "SpectrumIndex":
+        """Load all index columns.
+
+        Accepts either a :class:`StorageGroup` (v0.7 M44 protocol path)
+        or an :class:`h5py.Group` (legacy). The h5py path is retained
+        via ``_native_h5py`` so existing callers that dereferenced
+        child groups with ``group["spectrum_index"]`` continue to work.
+        """
+        if isinstance(idx_group, StorageGroup):
+            # Protocol path: read columns via StorageDataset.read().
+            def col(name: str, dtype: str) -> np.ndarray:
+                ds = idx_group.open_dataset(name)
+                arr = ds.read()
+                return np.asarray(arr).astype(dtype, copy=False)
+        else:
+            # Legacy h5py.Group path.
+            def col(name: str, dtype: str) -> np.ndarray:
+                return idx_group[name][()].astype(dtype, copy=False)
 
         return cls(
             offsets=col("offsets", "<u8"),
@@ -178,7 +221,7 @@ class AcquisitionRun:
     """
 
     name: str
-    group: h5py.Group
+    group: StorageGroup  # v0.7 M44: was h5py.Group; wrap legacy callers via _wrap_hdf5_group.
     spectrum_class: str
     acquisition_mode: AcquisitionMode
     index: SpectrumIndex
@@ -188,7 +231,8 @@ class AcquisitionRun:
     provenance_json: str = ""
     # M24: chromatogram traces. Empty list on v0.3 files (group absent).
     chromatograms: list[Chromatogram] = field(default_factory=list)
-    _signal_cache: dict[str, h5py.Dataset] = field(default_factory=dict, repr=False)
+    # v0.7 M44: signal cache holds protocol datasets, not h5py.Dataset.
+    _signal_cache: dict[str, StorageDataset] = field(default_factory=dict, repr=False)
     # M21: eagerly decoded Numpress-delta channels, keyed by channel
     # name. When present, :meth:`_materialize_spectrum` slices from
     # this float64 buffer instead of hitting the HDF5 dataset, because
@@ -205,23 +249,38 @@ class AcquisitionRun:
     _persistence_run_name: str | None = field(default=None, repr=False)
 
     @classmethod
-    def open(cls, group: h5py.Group, name: str) -> "AcquisitionRun":
-        mode_raw = io.read_int_attr(group, "acquisition_mode", default=0) or 0
+    def open(cls, group: StorageGroup | "h5py.Group", name: str) -> "AcquisitionRun":
+        """Open a run from a storage-provider group (v0.7 M44).
+
+        Accepts either a :class:`StorageGroup` (protocol path) or an
+        :class:`h5py.Group` (legacy path — wrapped transparently via
+        :class:`~mpeg_o.providers.hdf5._Group`). The constructor
+        preserves the storage-provider type on the ``group`` field so
+        hot-path spectrum reads route through
+        :meth:`StorageDataset.read` without touching h5py directly.
+        """
+        # v0.7 M44: allow both shapes. Cold-path attribute helpers
+        # still use the h5py wrapper, so retain the native handle for
+        # them.
+        sgroup = _wrap_hdf5_group(group)
+        h5group = _native_h5py(sgroup)
+
+        mode_raw = io.read_int_attr(h5group, "acquisition_mode", default=0) or 0
         spectrum_class = io.read_string_attr(
-            group, "spectrum_class", default="MPGOMassSpectrum"
+            h5group, "spectrum_class", default="MPGOMassSpectrum"
         ) or "MPGOMassSpectrum"
-        nucleus = io.read_string_attr(group, "nucleus_type", default="") or ""
-        prov = io.read_string_attr(group, "provenance_json", default="") or ""
+        nucleus = io.read_string_attr(h5group, "nucleus_type", default="") or ""
+        prov = io.read_string_attr(h5group, "provenance_json", default="") or ""
 
-        idx = SpectrumIndex.read(group["spectrum_index"])
+        idx = SpectrumIndex.read(h5group["spectrum_index"])
 
-        sig_group = group["signal_channels"]
+        sig_group = h5group["signal_channels"]
         channel_names_raw = io.read_string_attr(
             sig_group, "channel_names", default="mz,intensity"
         ) or "mz,intensity"
         channel_names = tuple(c for c in channel_names_raw.split(",") if c)
 
-        cfg_group = group.get("instrument_config")
+        cfg_group = h5group.get("instrument_config")
         if cfg_group is None:
             config = InstrumentConfig()
         else:
@@ -252,7 +311,7 @@ class AcquisitionRun:
 
         return cls(
             name=name,
-            group=group,
+            group=sgroup,  # v0.7 M44: StorageGroup protocol value.
             spectrum_class=spectrum_class,
             acquisition_mode=AcquisitionMode(mode_raw),
             index=idx,
@@ -260,7 +319,7 @@ class AcquisitionRun:
             instrument_config=config,
             nucleus_type=nucleus,
             provenance_json=prov,
-            chromatograms=_read_chromatograms(group),
+            chromatograms=_read_chromatograms(h5group),
             _numpress_channels=numpress_channels,
         )
 
@@ -280,8 +339,13 @@ class AcquisitionRun:
         falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2
         files (no per-run provenance of any kind) return an empty list.
         """
-        if "provenance" in self.group and "steps" in self.group["provenance"]:
-            return _decode_provenance_compound(self.group["provenance"], "steps")
+        # v0.7 M44: cold-path — cast to native h5py handle for the
+        # compound-provenance reader, which uses the h5py typed-read
+        # API directly. Protocol-native compound reads are a v0.8
+        # follow-up.
+        h5group = _native_h5py(self.group)
+        if "provenance" in h5group and "steps" in h5group["provenance"]:
+            return _decode_provenance_compound(h5group["provenance"], "steps")
         if self.provenance_json:
             return _decode_provenance_json(self.provenance_json)
         return []
@@ -400,7 +464,11 @@ class AcquisitionRun:
                 "context; call via a run obtained from SpectralDataset.open"
             )
         from .encryption import encrypt_intensity_channel_in_group
-        sig_group = self.group["signal_channels"]
+        # v0.7 M44: the in-place intensity encrypter still uses h5py
+        # group mutation (multi-dataset rewrite). Route via native
+        # handle; a protocol-native rewrite is a v0.8 follow-up.
+        h5group = _native_h5py(self.group)
+        sig_group = h5group["signal_channels"]
         encrypt_intensity_channel_in_group(sig_group, key)
 
     def decrypt_with_key(self, key: bytes) -> bytes:
@@ -419,7 +487,9 @@ class AcquisitionRun:
                 "context; call via a run obtained from SpectralDataset.open"
             )
         from .encryption import read_encrypted_channel
-        sig_group = self.group["signal_channels"]
+        # v0.7 M44: cold-path, same rationale as encrypt_with_key.
+        h5group = _native_h5py(self.group)
+        sig_group = h5group["signal_channels"]
         arr = read_encrypted_channel(sig_group, "intensity", key, dtype="<f8")
         return arr.tobytes()
 
@@ -431,33 +501,41 @@ class AcquisitionRun:
         """Replace the current access policy."""
         object.__setattr__(self, "_access_policy", policy)
 
-    def _signal_dataset(self, channel: str) -> h5py.Dataset:
+    def _signal_dataset(self, channel: str) -> StorageDataset:
+        """Resolve ``channel`` to its ``<channel>_values`` StorageDataset
+        (v0.7 M44). Cached across calls; missing channels raise
+        :class:`KeyError` so :meth:`_materialize_spectrum` can skip."""
         ds = self._signal_cache.get(channel)
         if ds is not None:
             return ds
         name = f"{channel}_values"
-        if name not in self.group["signal_channels"]:
-            raise KeyError(f"signal channel {channel!r} missing under run {self.name!r}")
-        ds = self.group["signal_channels"][name]
+        sig_group = self.group.open_group("signal_channels")
+        if not sig_group.has_child(name):
+            raise KeyError(
+                f"signal channel {channel!r} missing under run {self.name!r}")
+        ds = sig_group.open_dataset(name)
         self._signal_cache[channel] = ds
         return ds
 
     def _materialize_spectrum(self, i: int) -> Spectrum:
         offset = int(self.index.offsets[i])
         length = int(self.index.lengths[i])
-        end = offset + length
 
         signal_arrays: dict[str, SignalArray] = {}
         for c in self.channel_names:
             decoded = self._numpress_channels.get(c)
             if decoded is not None:
-                arr = decoded[offset:end]
+                arr = decoded[offset:offset + length]
             else:
                 try:
                     ds = self._signal_dataset(c)
                 except KeyError:
                     continue
-                arr = ds[offset:end]
+                # v0.7 M44: read through the storage protocol, not
+                # h5py slicing. Works uniformly across Hdf5/Memory/
+                # Sqlite providers — the cross-backend byte-identity
+                # tests in M43 guarantee equivalence.
+                arr = np.asarray(ds.read(offset=offset, count=length))
             axis = _CHANNEL_AXIS.get(c, AxisDescriptor(name=c, unit=""))
             signal_arrays[c] = SignalArray.from_numpy(arr, axis=axis)
 

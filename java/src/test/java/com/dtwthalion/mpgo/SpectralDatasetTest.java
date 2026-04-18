@@ -329,7 +329,10 @@ class SpectralDatasetTest {
                     .with(FeatureFlags.OPT_NATIVE_MSIMAGE_CUBE)
                     .writeTo(root);
             try (Hdf5Group study = root.createGroup("study")) {
-                image.writeTo(study);
+                // v0.7 M44: MSImage.writeTo takes StorageGroup; wrap the
+                // raw Hdf5Group via the Hdf5Provider adapter.
+                image.writeTo(com.dtwthalion.mpgo.providers.Hdf5Provider
+                        .adapterForGroup(study));
             }
         }
 
@@ -337,7 +340,10 @@ class SpectralDatasetTest {
         try (Hdf5File f = Hdf5File.openReadOnly(path);
              Hdf5Group root = f.rootGroup();
              Hdf5Group study = root.openGroup("study")) {
-            MSImage read = MSImage.readFrom(study);
+            // v0.7 M44: MSImage.readFrom takes StorageGroup; wrap the
+            // raw Hdf5Group via the Hdf5Provider adapter.
+            MSImage read = MSImage.readFrom(com.dtwthalion.mpgo.providers
+                    .Hdf5Provider.adapterForGroup(study));
             assertNotNull(read);
             assertEquals(w, read.width());
             assertEquals(h, read.height());
