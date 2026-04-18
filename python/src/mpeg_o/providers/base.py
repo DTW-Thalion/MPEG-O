@@ -324,6 +324,37 @@ class StorageProvider(ABC):
         and SQLite return False."""
         return False
 
+    # ── Transactions (Appendix B Gap 11) ─────────────────────────
+
+    def begin_transaction(self) -> None:
+        """Start a write-batching transaction. Calls to
+        :meth:`StorageGroup.create_dataset`,
+        :meth:`StorageDataset.write`, and attribute setters are
+        buffered until :meth:`commit_transaction` is invoked.
+
+        Default no-op for backends that have no transactional model
+        (HDF5, in-memory). SQLite overrides this to issue ``BEGIN``
+        on the underlying connection — callers that wrap bulk loads
+        in ``begin_transaction`` / ``commit_transaction`` get the
+        SQLite batch speedup without the Python provider's implicit
+        per-write commit.
+
+        Nested transactions are not required to be supported; a
+        provider may raise if called twice without an intervening
+        commit or rollback."""
+        return None
+
+    def commit_transaction(self) -> None:
+        """Commit and end an open transaction started by
+        :meth:`begin_transaction`. Default no-op."""
+        return None
+
+    def rollback_transaction(self) -> None:
+        """Roll back and end an open transaction started by
+        :meth:`begin_transaction`. Default no-op; backends without
+        transactional semantics have no changes to roll back."""
+        return None
+
     def native_handle(self) -> Any:
         """Return the underlying native storage handle — ``h5py.File``
         for :class:`Hdf5Provider`, ``None`` for :class:`MemoryProvider`.

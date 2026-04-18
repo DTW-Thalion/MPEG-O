@@ -1233,6 +1233,28 @@ static NSString *resolveURLToPath(NSString *url)
 
 - (BOOL)isOpen { return _open; }
 
+// ── Transactions (Appendix B Gap 11) ─────────────────────────
+// The provider runs in a permanent BEGIN...COMMIT loop (writes sit
+// in an implicit transaction after open; every attr setter ends with
+// "COMMIT; BEGIN"). These overrides surface the batch boundaries
+// explicitly for callers that opt in.
+
+- (void)beginTransaction
+{
+    // No-op: the provider already opens a transaction after every
+    // commit. Documented for API symmetry with HDF5/Memory.
+}
+
+- (void)commitTransaction
+{
+    if (_db) sqlite3_exec(_db, "COMMIT; BEGIN", NULL, NULL, NULL);
+}
+
+- (void)rollbackTransaction
+{
+    if (_db) sqlite3_exec(_db, "ROLLBACK; BEGIN", NULL, NULL, NULL);
+}
+
 - (id<MPGOStorageGroup>)rootGroupWithError:(NSError **)error
 {
     if (!_db) {

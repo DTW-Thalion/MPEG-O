@@ -197,6 +197,20 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
  *  Gap 3. */
 - (BOOL)supportsCompression;
 
+// ── Transactions (Appendix B Gap 11) ────────────────────────────
+
+/** Start a write-batching transaction. No-op on HDF5 and Memory;
+ *  issues ``BEGIN`` on the underlying connection for SQLite. */
+- (void)beginTransaction;
+
+/** Commit and end a transaction started with ``-beginTransaction``.
+ *  No-op on HDF5 and Memory. */
+- (void)commitTransaction;
+
+/** Roll back and end a transaction started with
+ *  ``-beginTransaction``. No-op on HDF5 and Memory. */
+- (void)rollbackTransaction;
+
 @end
 
 #endif  /* MPGO_STORAGE_PROTOCOLS_H */

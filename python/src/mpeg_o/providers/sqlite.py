@@ -689,6 +689,23 @@ class SqliteProvider(StorageProvider):
         """Return the raw ``sqlite3.Connection``. Escape hatch."""
         return self._conn
 
+    # ── Transactions (Appendix B Gap 11) ─────────────────────────
+
+    def begin_transaction(self) -> None:
+        if self._conn is None:
+            raise IOError("provider is not open")
+        self._conn.execute("BEGIN")
+
+    def commit_transaction(self) -> None:
+        if self._conn is None:
+            raise IOError("provider is not open")
+        self._conn.commit()
+
+    def rollback_transaction(self) -> None:
+        if self._conn is None:
+            raise IOError("provider is not open")
+        self._conn.rollback()
+
     @staticmethod
     def supports_url(url: str) -> bool:
         """Return True for ``sqlite://`` URLs and recognised file extensions."""

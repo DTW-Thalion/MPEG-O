@@ -77,6 +77,26 @@ public interface StorageProvider extends AutoCloseable {
      *  {@link Hdf5Provider} returns {@code true} (zlib + LZ4). */
     default boolean supportsCompression() { return false; }
 
+    // ── Transactions (Appendix B Gap 11) ─────────────────────────
+
+    /** Start a write-batching transaction. Default no-op (HDF5,
+     *  Memory). SQLiteProvider overrides this to issue {@code BEGIN}
+     *  on the underlying JDBC connection.
+     *
+     *  <p>Callers that wrap bulk loads in
+     *  {@code beginTransaction() / commitTransaction()} get the SQLite
+     *  batch speedup without the ad-hoc per-provider convention the
+     *  M39 providers used before.</p> */
+    default void beginTransaction() {}
+
+    /** Commit and end an open transaction started by
+     *  {@link #beginTransaction()}. Default no-op. */
+    default void commitTransaction() {}
+
+    /** Roll back and end an open transaction started by
+     *  {@link #beginTransaction()}. Default no-op. */
+    default void rollbackTransaction() {}
+
     @Override
     void close();
 }

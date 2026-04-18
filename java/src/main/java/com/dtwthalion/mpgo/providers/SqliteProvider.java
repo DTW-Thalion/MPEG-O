@@ -146,6 +146,36 @@ public final class SqliteProvider implements StorageProvider {
         }
     }
 
+    // ── Transactions (Appendix B Gap 11) ──────────────────────────────────
+
+    /** The Java SqliteProvider runs in {@code autoCommit=false} mode
+     *  once {@code doOpen} switches it there, so every write already
+     *  sits in an implicit transaction. These overrides make the
+     *  commit / rollback boundaries explicit for callers that want
+     *  to batch. */
+    @Override
+    public void beginTransaction() {
+        // No-op: autoCommit=false means a transaction is already open
+        // after the previous commit. Documented here for API symmetry
+        // with Python's explicit BEGIN.
+    }
+
+    @Override
+    public void commitTransaction() {
+        if (conn == null) throw new IllegalStateException("provider not open");
+        try { conn.commit(); } catch (SQLException e) {
+            throw new RuntimeException("commit failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void rollbackTransaction() {
+        if (conn == null) throw new IllegalStateException("provider not open");
+        try { conn.rollback(); } catch (SQLException e) {
+            throw new RuntimeException("rollback failed: " + e.getMessage(), e);
+        }
+    }
+
     // ── Internal open logic ──────────────────────────────────────────────
 
     private void doOpen(String filePath, Mode mode) throws SQLException {
