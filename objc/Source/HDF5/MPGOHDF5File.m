@@ -63,6 +63,114 @@
     return [[self alloc] initWithFileId:fid path:path];
 }
 
++ (BOOL)isS3Supported
+{
+#ifdef H5_HAVE_ROS3_VFD
+    return YES;
+#else
+    // Probe at runtime — apt's libhdf5 exports H5Pset_fapl_ros3 even
+    // when the compile-time macro isn't exposed in the header we ship
+    // against. Call H5Zfilter_avail on a sentinel; safer is to try to
+    // set the ROS3 fapl on a transient plist and observe.
+    hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
+    if (fapl < 0) return NO;
+    H5FD_ros3_fapl_t cfg = { .version = H5FD_CURR_ROS3_FAPL_T_VERSION,
+                              .authenticate = false };
+    herr_t rc = H5Pset_fapl_ros3(fapl, &cfg);
+    H5Pclose(fapl);
+    return rc >= 0 ? YES : NO;
+#endif
+}
+
+static NSString *translateS3URL(NSString *url, NSString *region)
+{
+    // s3://bucket/key  →  https://bucket.s3.<region>.amazonaws.com/key
+    // Any other scheme is passed through unchanged.
+    if (![url hasPrefix:@"s3://"]) return url;
+    NSString *rest = [url substringFromIndex:5];
+    NSRange slash = [rest rangeOfString:@"/"];
+    if (slash.location == NSNotFound) {
+        return [NSString stringWithFormat:@"https://%@.s3.%@.amazonaws.com/",
+                rest, region];
+    }
+    NSString *bucket = [rest substringToIndex:slash.location];
+    NSString *key    = [rest substringFromIndex:slash.location + 1];
+    return [NSString stringWithFormat:@"https://%@.s3.%@.amazonaws.com/%@",
+            bucket, region, key];
+}
+
++ (instancetype)openS3URL:(NSString *)url
+                    region:(NSString *)awsRegion
+              accessKeyId:(NSString *)accessKeyId
+          secretAccessKey:(NSString *)secretAccessKey
+             sessionToken:(NSString *)sessionToken
+                     error:(NSError **)error
+{
+    NSParameterAssert(url != nil);
+
+    if (![self isS3Supported]) {
+        if (error) *error = MPGOMakeError(MPGOErrorFileOpen,
+            @"libhdf5 was built without ROS3 VFD support; rebuild "
+            @"libhdf5 with --with-ros3-vfd (or install a distribution "
+            @"build that includes it)");
+        return nil;
+    }
+
+    if (awsRegion.length == 0) {
+        const char *env = getenv("AWS_REGION");
+        awsRegion = env ? [NSString stringWithUTF8String:env] : @"us-east-1";
+    }
+    NSString *httpsURL = translateS3URL(url, awsRegion);
+
+    hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
+    if (fapl < 0) {
+        if (error) *error = MPGOMakeError(MPGOErrorFileOpen,
+            @"H5Pcreate(H5P_FILE_ACCESS) failed");
+        return nil;
+    }
+
+    H5FD_ros3_fapl_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.version = H5FD_CURR_ROS3_FAPL_T_VERSION;
+    cfg.authenticate = (accessKeyId.length > 0 && secretAccessKey.length > 0);
+    if (cfg.authenticate) {
+        strncpy(cfg.aws_region, [awsRegion UTF8String],
+                sizeof(cfg.aws_region) - 1);
+        strncpy(cfg.secret_id, [accessKeyId UTF8String],
+                sizeof(cfg.secret_id) - 1);
+        strncpy(cfg.secret_key, [secretAccessKey UTF8String],
+                sizeof(cfg.secret_key) - 1);
+    }
+
+    if (H5Pset_fapl_ros3(fapl, &cfg) < 0) {
+        H5Pclose(fapl);
+        if (error) *error = MPGOMakeError(MPGOErrorFileOpen,
+            @"H5Pset_fapl_ros3 failed for %@", url);
+        return nil;
+    }
+
+    // Session token requires the newer ros3 fapl (v2). Apply it only
+    // when the caller provides one; older libhdf5 versions lack the
+    // helper and will skip the call.
+#if defined(H5_HAVE_ROS3_VFD) && defined(H5FD_ROS3_MAX_SECRET_TOK_LEN)
+    if (sessionToken.length > 0) {
+        H5Pset_fapl_ros3_token(fapl, [sessionToken UTF8String]);
+    }
+#else
+    (void)sessionToken;
+#endif
+
+    hid_t fid = H5Fopen([httpsURL UTF8String], H5F_ACC_RDONLY, fapl);
+    H5Pclose(fapl);
+    if (fid < 0) {
+        if (error) *error = MPGOMakeError(MPGOErrorFileOpen,
+            @"H5Fopen(ROS3) failed for %@ "
+            @"(check bucket/key/region/credentials)", httpsURL);
+        return nil;
+    }
+    return [[self alloc] initWithFileId:fid path:httpsURL];
+}
+
 - (instancetype)initWithFileId:(hid_t)fid path:(NSString *)path
 {
     self = [super init];
