@@ -1,4 +1,4 @@
-# Migration Guide: mzML and nmrML to MPEG-O (v0.6)
+# Migration Guide: mzML and nmrML to MPEG-O (v0.7)
 
 ## Audience and prerequisites
 
@@ -8,8 +8,9 @@ write MPEG-O (`.mpgo`) files instead. It covers only the Python implementation.
 **You need:**
 
 - Python 3.11 or later
-- An MPEG-O v0.6 checkout (PyPI publishing is deferred to M40; install from source)
+- An MPEG-O v0.7 checkout (PyPI publishing is deferred to M40; install from source)
 - For Thermo `.raw` input: ThermoRawFileParser on your `PATH` (see section 6)
+- For a non-HDF5 backend: `pip install 'mpeg-o[zarr]'` (v0.7 M46)
 
 ---
 
@@ -385,16 +386,98 @@ if __name__ == "__main__":
 
 ---
 
-## 6. See also
+## 6. Migrating from v0.6 to v0.7
 
-- `docs/api-review-v0.6.md` — three-column parity map (Python / ObjC / Java)
-  with stability markers for every public class and method.
+v0.7 is backward-compatible at the Python API level — **no existing
+call needs to change**. The additions are opt-in:
+
+### 6.1 Switch to a different storage backend
+
+Any call that opened a file directly now takes a URL and routes to the
+matching provider:
+
+```python
+from mpeg_o.providers import open_provider
+
+# Default — HDF5 (unchanged from v0.6)
+with open_provider("run.mpgo", mode="r") as p:
+    ...
+
+# In-process scratch
+with open_provider("memory://scratch", mode="w") as p:
+    ...
+
+# SQLite (v0.6.1)
+with open_provider("sqlite:///tmp/run.db", mode="w") as p:
+    ...
+
+# Zarr (v0.7, needs `pip install 'mpeg-o[zarr]'`)
+with open_provider("zarr:///tmp/store.zarr", mode="w") as p:
+    ...
+with open_provider("zarr+s3://bucket/key.zarr", mode="r") as p:
+    ...
+```
+
+See `docs/providers.md` for the feature matrix across providers.
+
+### 6.2 Request a specific crypto algorithm
+
+`encrypt_bytes`, `decrypt_bytes`, `sign_dataset`, `verify_dataset`,
+and `enable_envelope_encryption` gained optional `algorithm=`
+parameters that validate against the `CipherSuite` catalog. Default
+behaviour is unchanged (`aes-256-gcm` / `hmac-sha256`):
+
+```python
+from mpeg_o.encryption import encrypt_bytes
+
+ct, iv, tag = encrypt_bytes(b"payload", key32,
+                             algorithm="aes-256-gcm")  # explicit
+```
+
+Reserved algorithm IDs for ML-KEM-1024, ML-DSA-87, and SHAKE-256 are
+present in the catalog but raise `UnsupportedAlgorithmError` until
+v0.8+.
+
+### 6.3 Adopt the versioned wrapped-key blob
+
+New key-rotation callers should let the default take care of it —
+v0.7 writers emit the v1.2 blob format by default when the
+`wrapped_key_v2` feature flag is enabled on the file. Legacy
+60-byte v1.1 blobs remain readable indefinitely (binding decision
+38). See `docs/format-spec.md §5b.2` for the exact byte layout.
+
+### 6.4 `read_canonical_bytes` for cross-backend signing
+
+If you implemented custom signing on top of v0.6's `native_handle()`,
+switch to the protocol-native path:
+
+```python
+sig_input = dataset.read_canonical_bytes()
+```
+
+This returns the same bytes regardless of provider (HDF5 / Memory /
+SQLite / Zarr), so signatures verify across backend transitions.
+Binding decision 37.
+
+---
+
+## 7. See also
+
+- `docs/api-review-v0.7.md` — three-column parity map (Python / ObjC / Java)
+  with stability markers for every public class and method, plus
+  Appendix A (stylistic differences), B (gap summary), and C
+  (cross-language error-domain mapping).
+- `docs/api-review-v0.6.md` — the v0.6 baseline (kept for diff visibility).
 - `docs/format-spec.md` — on-disk HDF5 layout: group hierarchy, dataset names,
-  attribute types, feature-flag encoding.
-- `docs/feature-flags.md` — complete list of optional feature flags and their
+  attribute types, feature-flag encoding, v1.2 wrapped-key blob spec.
+- `docs/feature-flags.md` — complete list of feature flags and their
   effects on the written file.
+- `docs/providers.md` — storage provider feature matrix (HDF5 /
+  Memory / SQLite / Zarr).
 - `python/tests/test_importers.py` — pytest tests exercising both importers
   against the canonical fixtures, including `ImportResult` attribute validation,
   provenance mapping, and chromatogram decoding.
 - `python/tests/test_cross_compat.py` — cross-language round-trip tests.
+- `python/tests/test_compound_writer_parity.py` — cross-language
+  compound-dataset byte-parity harness (M51).
 

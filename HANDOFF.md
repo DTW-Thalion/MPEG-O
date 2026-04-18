@@ -1,32 +1,53 @@
 # MPEG-O v0.7 — Storage & Crypto Abstraction Hardening
 
-> **Status (2026-04-18):** v0.6.1 shipped (SQLiteProvider, full API docs,
-> ROS3 cloud reads, 6 Appendix B gap resolutions). v0.7 plan now active.
-> Current test counts: ObjC 1002 assertions, Python 219 tests, Java 152 tests.
-> Cross-compat 8/8.
+> **Status (2026-04-18):** v0.7 milestone block complete. **Must-have
+> cut (M43, M44, M45, M47, M48, M50) all landed; both stretch items
+> (M46 ZarrProvider, M51 compound-parity harness) also landed.** Only
+> M49 (PQC preview) remains — explicitly deferred per binding
+> decision 36 until liboqs / BC-PQC ship production builds.
+> Current test counts: ObjC 1057 assertions, Python 284 tests, Java 179 tests.
+> Cross-compat 10/10 (adds ZarrProvider canonical-bytes parity + the
+> M51 three-way compound-dumper grid to the v0.6 matrix).
 >
-> **v0.7 goal:** close the remaining HDF5 / classical-crypto couplings the
-> v0.6.1 code review surfaced so that (a) a non-HDF5 storage backend
-> (Zarr, Parquet, future formats) can host MPEG-O data end-to-end, and
-> (b) post-quantum cryptographic primitives (ML-KEM, ML-DSA) can drop in
-> as the NIST standards mature. See `## v0.7 Milestone Block` below.
+> **v0.7 goal (achieved):** close the remaining HDF5 / classical-crypto
+> couplings the v0.6.1 code review surfaced so that (a) a non-HDF5
+> storage backend (Zarr, Parquet, future formats) can host MPEG-O data
+> end-to-end — validated via the Python ZarrProvider reference impl,
+> and (b) post-quantum cryptographic primitives (ML-KEM, ML-DSA) can
+> drop in as the NIST standards mature — reserved algorithm IDs + the
+> `CipherSuite` catalog are in place. See `## v0.7 Milestone Block`
+> below for per-milestone status.
 >
 > **v0.6 retained (shipped) — see the lower half of this document for
 > historical milestone records M37-M42.**
+
+## v0.7 Milestone Status (summary)
+
+| Milestone | Track | Status | Commit |
+|---|---|---|---|
+| M50 — cross-language polish (6 sub-items) | C | ✅ Done | `770c95f` |
+| M47 — versioned wrapped-key blob v1.2 | B | ✅ Done | `0617fd0` |
+| M43 — `read_canonical_bytes` protocol method | A | ✅ Done | `a057e87` |
+| M48 — CipherSuite catalog + `algorithm=` API | B | ✅ Done | `1111363` |
+| M45 — `create_dataset_nd` on Memory + SQLite | A | ✅ Done | `ba3ebc2` |
+| M44 — AcquisitionRun + MSImage protocol-native | A | ✅ Done | `453fd38` |
+| M51 — compound writes byte-parity harness | C | ✅ Done (stretch) | `2a5dafe` |
+| M46 — ZarrProvider Python reference impl | A | ✅ Done (stretch) | `8fe0277` |
+| M49 — PQC preview mode | B | ⏸ Deferred | v0.8+ |
 
 ---
 
 ## First Steps
 
 1. `git clone https://github.com/DTW-Thalion/MPEG-O.git && cd MPEG-O && git pull`
-2. Read: `README.md`, `ARCHITECTURE.md`, `WORKPLAN.md`, `docs/format-spec.md`, `docs/feature-flags.md`, `docs/api-review-v0.6.md`
+2. Read: `README.md`, `ARCHITECTURE.md`, `WORKPLAN.md`, `docs/format-spec.md`, `docs/feature-flags.md`, `docs/api-review-v0.7.md`, `docs/providers.md`
 3. Verify all three builds:
    ```bash
    cd objc && ./build.sh check
-   cd ../python && pip install -e ".[test,import,crypto]" && pytest
+   cd ../python && pip install -e ".[test,import,crypto,zarr]" && pytest
    cd ../java && mvn verify -B
    ```
-4. Expected: ObjC 1002 assertions, Python 219, Java 152, all pass.
+4. Expected (v0.7.0): ObjC 1057 assertions, Python 284 tests, Java 179 tests, all pass.
 
 ---
 

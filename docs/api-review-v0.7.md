@@ -1,13 +1,14 @@
 # MPEG-O v0.7 API Review — Cross-Language Consistency Notes
 
-> **Milestone block:** v0.7 Track C (M50, M51)
+> **Milestone block:** v0.7 (all must-have + both stretch items complete)
 > **Date:** 2026-04-18
-> **Author:** Generated from the v0.6.1 code review + M50 sub-item work.
+> **Author:** Generated from the v0.6.1 code review, M50 sub-item work,
+> and observations during M43 / M44 / M45 / M46 / M47 / M48 / M51.
 > **Scope:** appendices only. The v0.6 review document
 > (`docs/api-review-v0.6.md`) remains the authoritative parity table.
 > This document captures the *findings* — known stylistic differences,
-> error-mapping equivalences, and consistency decisions — that the
-> v0.6.1 review surfaced.
+> error-mapping equivalences, provider feature-matrix facts, and
+> consistency decisions — that the v0.7 milestone work produced.
 
 ---
 

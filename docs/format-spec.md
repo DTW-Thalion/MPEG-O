@@ -1,16 +1,29 @@
-# MPEG-O `.mpgo` File Format Specification — v0.4.0
+# MPEG-O `.mpgo` File Format Specification — v0.7.0
 
 This document specifies the on-disk layout of an `.mpgo` file as written
-by libMPGO v0.4.0 (ObjC reference implementation). It is detailed enough
+by libMPGO v0.7.0 (ObjC reference implementation). It is detailed enough
 for a reader implemented in a different language (Python, Java, Rust, Go)
 to open, validate, and fully decode a file without consulting the
-reference source. As of v0.5.0, three interoperable implementations
-(ObjC, Python, Java) read and write this format.
+reference source. Three interoperable implementations (ObjC, Python, Java)
+read and write this format; a Python-only `ZarrProvider` ships in v0.7
+as an alternative chunked-array container backend with byte-parity on
+compound records and canonical bytes (see `docs/providers.md`).
 
-v0.3 is a strict superset of v0.2 on disk: every v0.2 fixture remains
-readable, and new content (compound per-run provenance, `v2:`
-canonical signatures, LZ4 / Numpress-delta compression codecs) is
-gated behind feature flags described alongside each section.
+Each point release is a strict superset of the previous release on
+disk:
+
+- **v0.3** — compound per-run provenance, `v2:` canonical signatures,
+  LZ4 / Numpress-delta compression codecs.
+- **v0.4** — envelope encryption + key rotation, spectral anonymization,
+  nmrML writer, chromatogram API.
+- **v0.7** — `mpeg_o_format_version` bumps from `"1.1"` to `"1.2"`; the
+  versioned wrapped-key blob (§10b) replaces the fixed 60-byte v1.1
+  blob; `read_canonical_bytes` becomes the byte-level contract for
+  signatures and encryption (§10c).
+
+Every feature added after v0.2 is gated by a feature flag (see
+`docs/feature-flags.md`) so readers can detect capability support at
+open time.
 
 A conforming `.mpgo` file is a plain HDF5 file (format 1.x) with the
 group, dataset, and attribute hierarchy described below. Any program
@@ -24,7 +37,7 @@ Every v0.2+ file carries two attributes on the root group `/`:
 
 | Attribute                | Type              | Value                              |
 |--------------------------|-------------------|------------------------------------|
-| `mpeg_o_format_version`  | fixed-len string  | `"1.1"` (major.minor)              |
+| `mpeg_o_format_version`  | fixed-len string  | `"1.2"` in v0.7; `"1.1"` in v0.2–v0.6 (major.minor) |
 | `mpeg_o_features`        | fixed-len string  | JSON array of feature strings      |
 
 **Version semantics:**
@@ -217,7 +230,7 @@ Chromatogram `i`'s time/intensity slice is
 
 ---
 
-## 5b. Envelope encryption key info (M25, v0.4)
+## 5b. Envelope encryption key info (M25, v0.4; v1.2 blob in v0.7)
 
 The `opt_key_rotation` feature flag gates the `/protection/key_info/`
 group. When present:
@@ -225,15 +238,63 @@ group. When present:
 ```
 /protection/key_info/
 ├── @kek_id                             (string, caller-supplied KEK identifier)
-├── @kek_algorithm                      (string, "aes-256-gcm" in v0.4)
+├── @kek_algorithm                      (string, "aes-256-gcm" default; identifies the KEK cipher)
 ├── @wrapped_at                         (string, ISO-8601 timestamp)
 ├── @key_history_json                   (string, JSON array of prior entries)
-└── dek_wrapped                         (uint8[60] = 32 cipher + 12 IV + 16 tag)
+├── @dek_wrapped_bytes                  (int64, actual blob length — v0.7+, see below)
+└── dek_wrapped                         (uint8[N]; layout depends on the blob version)
 ```
 
-The DEK wraps signal data via AES-256-GCM (same as `opt_dataset_encryption`).
-The KEK wraps the DEK. Rotation re-wraps only the DEK — signal datasets
-are not touched, so rotation cost is O(1) in file size.
+### 5b.1 v1.1 wrapped-key layout (pre-v0.7 writers)
+
+Fixed 60 bytes, AES-256-GCM-only:
+
+```
+offset  len  field
+0       32   AES-256-GCM ciphertext (wrapped 32-byte DEK)
+32      12   IV
+44      16   auth tag
+```
+
+v0.7+ readers accept this layout indefinitely (binding decision 38);
+the dispatch rule is **"if blob length == 60 and magic bytes are not
+`'M','W'`, treat as v1.1"**.
+
+### 5b.2 v1.2 versioned wrapped-key blob (v0.7, `wrapped_key_v2` flag)
+
+When the `wrapped_key_v2` feature flag is present, `dek_wrapped` is a
+variable-length blob:
+
+```
+offset  len  field
+0       2    magic         = 0x4D 0x57  ('M','W' — MPGO Wrap)
+2       1    version       = 0x02
+3       2    algorithm_id  (big-endian)
+               0x0000 = AES-256-GCM
+               0x0001 = ML-KEM-1024 (reserved for M49)
+               0x0002 = reserved
+5       4    ciphertext_len (big-endian, u32)
+9       2    metadata_len   (big-endian, u16)
+11      M    metadata       (algorithm-specific; for AES-GCM: 12-byte IV ∥ 16-byte tag)
+11+M    C    ciphertext     (for AES-GCM: 32-byte wrapped DEK)
+```
+
+Total length = `11 + metadata_len + ciphertext_len`. For AES-256-GCM
+this equals 11 + 28 + 32 = **71 bytes**. The `@dek_wrapped_bytes`
+attribute records the exact length so readers can avoid relying on
+dataset-size probes through storage adapters that pad to a fixed
+width.
+
+Writers default to v1.2 when the feature flag is set; readers fall
+back to v1.1 for any blob that doesn't start with the `'M','W'` magic.
+`docs/feature-flags.md §v0.7` has the flag definition; `CipherSuite`
+(M48) is the runtime dispatch catalog that maps `algorithm_id` to a
+concrete cipher.
+
+The DEK wraps signal data via AES-256-GCM (same as
+`opt_dataset_encryption`). The KEK wraps the DEK. Rotation re-wraps
+only the DEK — signal datasets are not touched, so rotation cost is
+O(1) in file size.
 
 ---
 
@@ -441,6 +502,33 @@ under `objc/Tools/` and `python/tests/test_canonical_signatures.py`).
 
 Feature flags: `opt_digital_signatures` (first sign), plus
 `opt_canonical_signatures` when any `v2:` signature is present.
+
+---
+
+## 10c. Byte-level protocol contract (M43, v0.7)
+
+All cryptographic paths — signatures and dataset / envelope encryption
+— consume their input through the `StorageDataset.read_canonical_bytes`
+method defined by the protocol abstraction
+(`MPGOStorageDataset`, `com.dtwthalion.mpgo.providers.StorageDataset`,
+`mpeg_o.providers.base.StorageDataset`). The canonical stream is:
+
+- **Primitive numeric datasets** — little-endian packed values.
+- **Compound datasets** — rows in storage order; fields in declaration
+  order. Variable-length strings encoded as `u32_le(length) ||
+  utf-8_bytes`. Numeric fields little-endian.
+
+On big-endian hosts the conversion is an explicit byteswap (HDF5's
+automatic type conversion is **not** relied on). Every provider that
+ships with v0.7 (`Hdf5Provider`, `MemoryProvider`, `SqliteProvider`,
+`ZarrProvider`) emits bit-equal bytes for the same logical data;
+cross-backend round-trip tests in
+`python/tests/test_canonical_bytes_cross_backend.py` and
+`python/tests/test_zarr_provider.py::test_compound_canonical_bytes_matches_hdf5`
+lock that guarantee.
+
+Binding decision 37: a signed or encrypted dataset verifies
+identically regardless of which provider wrote it.
 
 ---
 
