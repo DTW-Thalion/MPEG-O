@@ -28,9 +28,24 @@ libMPGO_HEADER_FILES_DIR = ../Source
 # Use shell glob to pick up every public header (including post-M41 additions)
 libMPGO_AGSDOC_FILES := $(shell find ../Source -name '*.h')
 
+# NB: -MakeFrames MUST be NO. With MakeFrames=YES, autogsdoc emits bare
+# <body> pages (no wrapper divs) plus a <FRAMESET> index.html. The
+# shipped default-styles.css sets `body { display: flex; height: 100vh; }`
+# expecting .content-bar / .content-pane children — without those
+# wrappers the direct body children flow left-to-right and the page is
+# unreadable. -MakeFrames NO puts the CSS-navigation wrappers back in
+# every class page and produces a proper HTML5 layout (no frameset).
 libMPGO_AGSDOC_FLAGS = \
-	-MakeFrames YES \
+	-MakeFrames NO \
 	-DocumentationDirectory html \
 	-Project libMPGO
 
 include $(GNUSTEP_MAKEFILES)/documentation.make
+
+# Install the hand-written landing page after autogsdoc runs. With
+# -MakeFrames NO autogsdoc doesn't emit an index.html of its own; every
+# class page carries the sidebar, but we still want a single-URL entry
+# point for the doc site.
+after-all::
+	@cp index.html.in libMPGO/index.html
+	@echo " Installed landing page: libMPGO/index.html"
