@@ -1,4 +1,6 @@
 #import "MPGOSignatureManager.h"
+#import "MPGOCipherSuite.h"
+#import "MPGOPostQuantumCrypto.h"
 #import "HDF5/MPGOHDF5File.h"
 #import "HDF5/MPGOHDF5Group.h"
 #import "HDF5/MPGOHDF5Errors.h"
@@ -236,6 +238,7 @@ static NSData *readDatasetCanonical(hid_t did)
 }
 
 static NSString *const kMPGOSignatureV2Prefix = @"v2:";
+static NSString *const kMPGOSignatureV3Prefix = @"v3:";  // v0.8 M49.1
 
 static BOOL writeStringAttribute(hid_t locId, const char *name, NSString *value)
 {
@@ -381,6 +384,177 @@ static BOOL ensureSignatureFeatureFlags(MPGOHDF5Group *root, NSError **error)
         return NO;
     }
     return YES;
+}
+
+#pragma mark - Algorithm-dispatched sign / verify (v0.8 M49.1)
+
+// Add opt_pqc_preview to the root feature list (idempotent). Used
+// whenever a v3: signature is written or read.
+static BOOL markPQCPreviewFeature(MPGOHDF5Group *root, NSError **error)
+{
+    NSArray<NSString *> *features = [MPGOFeatureFlags featuresForRoot:root];
+    NSString *flag = [MPGOFeatureFlags featurePQCPreview];
+    if ([features containsObject:flag]) return YES;
+    NSMutableArray *updated = [features mutableCopy] ?: [NSMutableArray array];
+    [updated addObject:flag];
+    NSString *version = [MPGOFeatureFlags formatVersionForRoot:root] ?: @"1.2";
+    return [MPGOFeatureFlags writeFormatVersion:version
+                                        features:updated
+                                          toRoot:root
+                                           error:error];
+}
+
++ (BOOL)signDataset:(NSString *)datasetPath
+             inFile:(NSString *)filePath
+            withKey:(NSData *)key
+           algorithm:(NSString *)algorithm
+              error:(NSError **)error
+{
+    if ([algorithm isEqualToString:@"hmac-sha256"]) {
+        return [self signDataset:datasetPath
+                          inFile:filePath
+                         withKey:key
+                           error:error];
+    }
+    if (![algorithm isEqualToString:@"ml-dsa-87"]) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"signDataset: algorithm %@ not supported", algorithm);
+        return NO;
+    }
+    if (![MPGOCipherSuite validatePrivateKey:key
+                                    algorithm:@"ml-dsa-87"
+                                        error:error]) {
+        return NO;
+    }
+
+    MPGOHDF5File *file = [MPGOHDF5File openAtPath:filePath error:error];
+    if (!file) return NO;
+
+    hid_t did = openDatasetByPath([file rootGroup].groupId, datasetPath);
+    if (did < 0) {
+        if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,
+            @"cannot open dataset %@ for signing", datasetPath);
+        [file close];
+        return NO;
+    }
+
+    NSData *canonical = readDatasetCanonical(did);
+    NSData *sig = [MPGOPostQuantumCrypto sigSignWithPrivateKey:key
+                                                         message:canonical
+                                                           error:error];
+    if (!sig) {
+        H5Dclose(did);
+        [file close];
+        return NO;
+    }
+    NSString *stored = [kMPGOSignatureV3Prefix stringByAppendingString:
+        [sig base64EncodedStringWithOptions:0]];
+
+    BOOL ok = writeStringAttribute(did, "mpgo_signature", stored);
+    H5Dclose(did);
+    if (!ok) {
+        if (error) *error = MPGOMakeError(MPGOErrorAttributeWrite,
+            @"failed to write @mpgo_signature on %@", datasetPath);
+        [file close];
+        return NO;
+    }
+
+    // Feature flag updates: v3 implies both opt_digital_signatures and
+    // opt_pqc_preview. The canonical-sig flag is informative (v3 is
+    // canonical by construction), so we keep it on for consistency.
+    ensureSignatureFeatureFlags([file rootGroup], error);
+    markPQCPreviewFeature([file rootGroup], error);
+    return [file close];
+}
+
++ (BOOL)verifyDataset:(NSString *)datasetPath
+               inFile:(NSString *)filePath
+              withKey:(NSData *)key
+            algorithm:(NSString *)algorithm
+                error:(NSError **)error
+{
+    MPGOHDF5File *file = [MPGOHDF5File openReadOnlyAtPath:filePath error:error];
+    if (!file) return NO;
+
+    hid_t did = openDatasetByPath([file rootGroup].groupId, datasetPath);
+    if (did < 0) {
+        if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,
+            @"cannot open dataset %@ for verification", datasetPath);
+        [file close];
+        return NO;
+    }
+
+    NSString *stored = readStringAttribute(did, "mpgo_signature");
+    if (!stored) {
+        H5Dclose(did);
+        [file close];
+        if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
+            @"dataset %@ has no @mpgo_signature attribute", datasetPath);
+        return NO;
+    }
+
+    BOOL storedIsV3 = [stored hasPrefix:kMPGOSignatureV3Prefix];
+
+    // Algorithm/prefix must match — don't silently accept a crossed check.
+    if (storedIsV3 && ![algorithm isEqualToString:@"ml-dsa-87"]) {
+        H5Dclose(did);
+        [file close];
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"stored signature is v3 (ml-dsa-87) but caller passed "
+            @"algorithm=%@", algorithm);
+        return NO;
+    }
+    if ([algorithm isEqualToString:@"ml-dsa-87"] && !storedIsV3) {
+        H5Dclose(did);
+        [file close];
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"stored signature is not v3 (ml-dsa-87) — pass "
+            @"algorithm=hmac-sha256 to verify legacy signatures");
+        return NO;
+    }
+
+    if (storedIsV3) {
+        if (![MPGOCipherSuite validatePublicKey:key
+                                       algorithm:@"ml-dsa-87"
+                                           error:error]) {
+            H5Dclose(did);
+            [file close];
+            return NO;
+        }
+        NSString *payloadB64 = [stored substringFromIndex:
+            kMPGOSignatureV3Prefix.length];
+        NSData *sig = [[NSData alloc] initWithBase64EncodedString:payloadB64
+                                                            options:0];
+        if (!sig) {
+            H5Dclose(did);
+            [file close];
+            if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
+                @"v3: base64 payload malformed on %@", datasetPath);
+            return NO;
+        }
+        NSData *canonical = readDatasetCanonical(did);
+        H5Dclose(did);
+        [file close];
+        NSError *pqcErr = nil;
+        BOOL ok = [MPGOPostQuantumCrypto sigVerifyWithPublicKey:key
+                                                         message:canonical
+                                                       signature:sig
+                                                           error:&pqcErr];
+        if (!ok) {
+            if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
+                @"v3 signature failed verification on %@", datasetPath);
+            return NO;
+        }
+        return YES;
+    }
+
+    // HMAC (v1/v2) path — delegate to the legacy entry point.
+    H5Dclose(did);
+    [file close];
+    return [self verifyDataset:datasetPath
+                        inFile:filePath
+                       withKey:key
+                         error:error];
 }
 
 #pragma mark - Provenance signing

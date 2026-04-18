@@ -94,6 +94,46 @@
             legacyV1:(BOOL)legacyV1
               error:(NSError **)error;
 
+/**
+ * Envelope encryption with an algorithm selector (v0.8 M49.1).
+ *
+ * For ``algorithm="aes-256-gcm"`` (default), ``kek`` is a 32-byte
+ * symmetric key. For ``algorithm="ml-kem-1024"``, ``kek`` is the
+ * 1568-byte ML-KEM encapsulation <b>public</b> key, and the resulting
+ * file gets the ``opt_pqc_preview`` feature flag on its root group.
+ *
+ * @since 0.8
+ */
+- (NSData *)enableEnvelopeEncryptionWithKEK:(NSData *)kek
+                                      kekId:(NSString *)kekId
+                                   algorithm:(NSString *)algorithm
+                                       error:(NSError **)error;
+
+/**
+ * Unwrap the DEK under the given algorithm. For
+ * ``algorithm="ml-kem-1024"``, ``kek`` is the 3168-byte decapsulation
+ * <b>private</b> key.
+ *
+ * @since 0.8
+ */
+- (NSData *)unwrapDEKWithKEK:(NSData *)kek
+                    algorithm:(NSString *)algorithm
+                        error:(NSError **)error;
+
+/**
+ * Rotate the wrapping key with optional algorithm migration
+ * (AES-256-GCM ⇄ ML-KEM-1024). ``oldAlgorithm`` matches the algorithm
+ * used to write the file; pass a different ``newAlgorithm`` to migrate.
+ *
+ * @since 0.8
+ */
+- (BOOL)rotateToKEK:(NSData *)newKEK
+              kekId:(NSString *)newKEKId
+             oldKEK:(NSData *)oldKEK
+        oldAlgorithm:(NSString *)oldAlgorithm
+        newAlgorithm:(NSString *)newAlgorithm
+              error:(NSError **)error;
+
 /** Returns YES if ``/protection/key_info/dek_wrapped`` is present. */
 - (BOOL)hasEnvelopeEncryption;
 
