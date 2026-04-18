@@ -42,6 +42,7 @@ libMPGO_HEADER_FILES = \
 	Image/MPGOMSImage.h \
 	Protection/MPGOAccessPolicy.h \
 	Protection/MPGOAnonymizer.h \
+	Protection/MPGOCipherSuite.h \
 	Protection/MPGOEncryptionManager.h \
 	Protection/MPGOKeyRotationManager.h \
 	Protection/MPGOSignatureManager.h \
@@ -97,6 +98,7 @@ libMPGO_OBJC_FILES = \
 	Image/MPGOMSImage.m \
 	Protection/MPGOAccessPolicy.m \
 	Protection/MPGOAnonymizer.m \
+	Protection/MPGOCipherSuite.m \
 	Protection/MPGOEncryptionManager.m \
 	Protection/MPGOKeyRotationManager.m \
 	Protection/MPGOSignatureManager.m \

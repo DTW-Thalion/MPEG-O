@@ -42,14 +42,33 @@ public final class EncryptionManager {
     // -------------------------------------------------------------- core ops
 
     /**
-     * Encrypt plaintext bytes.
+     * Encrypt plaintext bytes with AES-256-GCM (default cipher suite).
+     * Shorthand for {@link #encrypt(byte[], byte[], String)} with
+     * {@code algorithm="aes-256-gcm"}.
      *
      * @param plaintext data to encrypt
      * @param key       32-byte AES-256 key
      * @return EncryptResult containing ciphertext, iv, and tag
      */
     public static EncryptResult encrypt(byte[] plaintext, byte[] key) {
-        validateKey(key);
+        return encrypt(plaintext, key, "aes-256-gcm");
+    }
+
+    /**
+     * Encrypt plaintext bytes with the named cipher suite. v0.7 M48:
+     * algorithm selection is routed through {@link CipherSuite}.
+     * Only {@code "aes-256-gcm"} is active in v0.7; reserved suites
+     * raise {@link CipherSuite.UnsupportedAlgorithmException}.
+     *
+     * @since 0.7
+     */
+    public static EncryptResult encrypt(byte[] plaintext, byte[] key,
+                                         String algorithm) {
+        CipherSuite.validateKey(algorithm, key);
+        if (!"aes-256-gcm".equals(algorithm)) {
+            throw new CipherSuite.UnsupportedAlgorithmException(
+                algorithm + ": AEAD path not yet implemented");
+        }
         try {
             byte[] iv = new byte[IV_BYTES];
             RNG.nextBytes(iv);
@@ -71,7 +90,8 @@ public final class EncryptionManager {
     }
 
     /**
-     * Decrypt ciphertext given iv and tag.
+     * Decrypt ciphertext given iv and tag (AES-256-GCM default).
+     * Shorthand for {@link #decrypt(byte[], byte[], byte[], byte[], String)}.
      *
      * @param ciphertext encrypted bytes (without tag)
      * @param iv         12-byte initialisation vector
@@ -80,7 +100,22 @@ public final class EncryptionManager {
      * @return plaintext bytes
      */
     public static byte[] decrypt(byte[] ciphertext, byte[] iv, byte[] tag, byte[] key) {
-        validateKey(key);
+        return decrypt(ciphertext, iv, tag, key, "aes-256-gcm");
+    }
+
+    /**
+     * Decrypt with the named cipher suite. v0.7 M48: algorithm
+     * selection via {@link CipherSuite}.
+     *
+     * @since 0.7
+     */
+    public static byte[] decrypt(byte[] ciphertext, byte[] iv, byte[] tag,
+                                   byte[] key, String algorithm) {
+        CipherSuite.validateKey(algorithm, key);
+        if (!"aes-256-gcm".equals(algorithm)) {
+            throw new CipherSuite.UnsupportedAlgorithmException(
+                algorithm + ": AEAD path not yet implemented");
+        }
         try {
             // Reassemble ciphertext||tag as javax.crypto expects
             byte[] combined = new byte[ciphertext.length + tag.length];
@@ -175,10 +210,28 @@ public final class EncryptionManager {
      * @since 0.7
      */
     public static byte[] wrapKey(byte[] dek, byte[] kek, boolean legacyV1) {
-        if (dek.length != KEY_BYTES) {
-            throw new IllegalArgumentException("DEK must be 32 bytes");
+        return wrapKey(dek, kek, legacyV1, "aes-256-gcm");
+    }
+
+    /**
+     * Wrap a DEK with an explicit version selector and cipher suite.
+     * v0.7 M48: the algorithm identifier is validated via
+     * {@link CipherSuite}. Reserved suites
+     * ({@code "ml-kem-1024"}, M49 target) raise
+     * {@link CipherSuite.UnsupportedAlgorithmException}.
+     *
+     * @since 0.7
+     */
+    public static byte[] wrapKey(byte[] dek, byte[] kek, boolean legacyV1,
+                                   String algorithm) {
+        CipherSuite.validateKey(algorithm, kek);
+        CipherSuite.validateKey(algorithm, dek);
+        if (legacyV1 && !"aes-256-gcm".equals(algorithm)) {
+            throw new IllegalArgumentException(
+                "v1.1 legacy layout is AES-256-GCM only; refusing to "
+                + "emit v1.1 for algorithm=" + algorithm);
         }
-        EncryptResult er = encrypt(dek, kek);
+        EncryptResult er = encrypt(dek, kek, algorithm);
         if (legacyV1) {
             byte[] blob = new byte[V11_BLOB_LEN];
             System.arraycopy(er.ciphertext(), 0, blob, 0, KEY_BYTES);
