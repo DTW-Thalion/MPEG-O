@@ -88,6 +88,24 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
  *  ``doesNotRecognizeSelector:``. */
 - (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error;
 
+/** Return the dataset contents as a byte stream in the MPGO
+ *  canonical layout (v0.7 M43).
+ *
+ *  Semantics:
+ *    - Primitive numeric: little-endian packed values.
+ *    - Compound: rows in storage order; fields in declaration order.
+ *      VL strings as u32_le(length) || utf-8_bytes. Numeric fields
+ *      little-endian.
+ *
+ *  Signatures and encryption consume this so a signed or encrypted
+ *  dataset verifies identically regardless of which provider wrote
+ *  it. Required on the protocol because signature/encryption callers
+ *  can never silently skip the canonicalisation step.
+ *
+ *  Returns nil on read failure; populated NSError on failure.
+ */
+- (NSData *)readCanonicalBytes:(NSError **)error;
+
 - (BOOL)hasAttributeNamed:(NSString *)name;
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error;
 - (BOOL)setAttributeValue:(id)value

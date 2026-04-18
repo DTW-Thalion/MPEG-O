@@ -1,5 +1,6 @@
 #import "MPGOHDF5Provider.h"
 #import "MPGOProviderRegistry.h"
+#import "MPGOCanonicalBytes.h"
 #import "HDF5/MPGOHDF5File.h"
 #import "HDF5/MPGOHDF5Group.h"
 #import "HDF5/MPGOHDF5Dataset.h"
@@ -68,6 +69,14 @@
     if (error) *error = MPGOMakeError(MPGOErrorDatasetRead,
         @"readRows: is only valid for compound datasets");
     return nil;
+}
+
+- (NSData *)readCanonicalBytes:(NSError **)error
+{
+    NSData *raw = [_ds readDataWithError:error];
+    if (!raw) return nil;
+    return [MPGOCanonicalBytes canonicalBytesForNumericData:raw
+                                                   precision:_ds.precision];
 }
 
 - (BOOL)hasAttributeNamed:(NSString *)name { (void)name; return NO; }
@@ -307,6 +316,14 @@
 - (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error
 {
     return [self readAll:error];
+}
+
+- (NSData *)readCanonicalBytes:(NSError **)error
+{
+    NSArray<NSDictionary<NSString *, id> *> *rows = [self readRows:error];
+    if (!rows) return nil;
+    return [MPGOCanonicalBytes canonicalBytesForCompoundRows:rows
+                                                       fields:_fields];
 }
 
 - (BOOL)hasAttributeNamed:(NSString *)name { (void)name; return NO; }

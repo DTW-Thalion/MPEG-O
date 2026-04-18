@@ -60,6 +60,7 @@ libMPGO_HEADER_FILES = \
 	Providers/MPGOCompoundField.h \
 	Providers/MPGOStorageProtocols.h \
 	Providers/MPGOProviderRegistry.h \
+	Providers/MPGOCanonicalBytes.h \
 	Providers/MPGOHDF5Provider.h \
 	Providers/MPGOMemoryProvider.h \
 	Providers/MPGOSqliteProvider.h
@@ -113,6 +114,7 @@ libMPGO_OBJC_FILES = \
 	Export/MPGOISAExporter.m \
 	Providers/MPGOCompoundField.m \
 	Providers/MPGOProviderRegistry.m \
+	Providers/MPGOCanonicalBytes.m \
 	Providers/MPGOHDF5Provider.m \
 	Providers/MPGOMemoryProvider.m \
 	Providers/MPGOSqliteProvider.m

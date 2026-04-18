@@ -67,78 +67,15 @@ def _dataset_native_bytes(dataset: h5py.Dataset) -> bytes:
 def _dataset_canonical_bytes(dataset: h5py.Dataset) -> bytes:
     """Return the canonical little-endian byte stream for ``dataset`` (v2).
 
-    Atomic numeric datasets are cast to their little-endian equivalent
-    and serialized via ``ndarray.tobytes()``. Compound datasets are
-    walked field by field: numeric members are emitted in little-endian
-    byte order and VL strings are emitted as ``u32_le(length) || bytes``.
-    Any unsupported class (fixed strings, enums, nested compounds, ...)
-    falls back to the native-bytes form, matching the ObjC fallback.
+    v0.7 M43: this helper now delegates to the storage-provider
+    protocol's :meth:`StorageDataset.read_canonical_bytes`, so the byte
+    stream is guaranteed bit-identical across HDF5, Memory, and SQLite
+    backends — a file signed through any provider verifies through any
+    other. The HDF5 path still runs its optimised native-dtype walk via
+    the :class:`mpeg_o.providers.hdf5._Dataset` override.
     """
-    file_dtype = dataset.dtype
-    if file_dtype.names:
-        return _compound_canonical_bytes(dataset)
-    kind = file_dtype.kind
-    if kind in ("f", "i", "u"):
-        target = _atomic_le_dtype(file_dtype)
-        if target is None:
-            return _dataset_native_bytes(dataset)
-        arr = dataset[()].astype(target, copy=False)
-        return arr.tobytes()
-    return _dataset_native_bytes(dataset)
-
-
-def _atomic_le_dtype(dt: np.dtype) -> np.dtype | None:
-    if dt.kind == "f":
-        if dt.itemsize == 4:
-            return np.dtype("<f4")
-        if dt.itemsize == 8:
-            return np.dtype("<f8")
-    if dt.kind == "i":
-        return np.dtype(f"<i{dt.itemsize}")
-    if dt.kind == "u":
-        return np.dtype(f"<u{dt.itemsize}")
-    return None
-
-
-def _compound_canonical_bytes(dataset: h5py.Dataset) -> bytes:
-    """Walk a compound dataset and emit the canonical M18 byte stream."""
-    arr = dataset[()]
-    dt = arr.dtype
-    field_names = dt.names or ()
-
-    # Pre-compute per-field handling: (is_vl_string, le_dtype_or_None)
-    field_plan: list[tuple[str, bool, np.dtype | None]] = []
-    for fname in field_names:
-        fdt = dt.fields[fname][0]
-        if fdt.kind == "O":
-            field_plan.append((fname, True, None))
-        elif fdt.kind in ("f", "i", "u"):
-            field_plan.append((fname, False, _atomic_le_dtype(fdt)))
-        else:
-            field_plan.append((fname, False, None))
-
-    chunks: list[bytes] = []
-    for row in arr:
-        for fname, is_vl, target in field_plan:
-            value = row[fname]
-            if is_vl:
-                if isinstance(value, bytes):
-                    payload = value
-                elif isinstance(value, str):
-                    payload = value.encode("utf-8")
-                elif value is None:
-                    payload = b""
-                else:
-                    payload = str(value).encode("utf-8")
-                chunks.append(len(payload).to_bytes(4, "little"))
-                if payload:
-                    chunks.append(payload)
-            elif target is not None:
-                chunks.append(np.asarray(value, dtype=target).tobytes())
-            else:
-                # Unknown class — fall through to numpy's native bytes.
-                chunks.append(np.asarray(value).tobytes())
-    return b"".join(chunks)
+    from .providers.hdf5 import _Dataset as _Hdf5Dataset
+    return _Hdf5Dataset(dataset).read_canonical_bytes()
 
 
 def sign_dataset(dataset: h5py.Dataset, key: bytes) -> str:

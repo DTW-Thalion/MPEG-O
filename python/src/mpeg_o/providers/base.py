@@ -178,6 +178,52 @@ class StorageDataset(ABC):
             f"unexpected compound read() return type {type(data)!r} "
             f"for dataset '{self.name}'")
 
+    def read_canonical_bytes(self, offset: int = 0, count: int = -1) -> bytes:
+        """Return the dataset contents as a byte stream in the MPGO
+        canonical layout (v0.7 M43).
+
+        Semantics:
+
+        * **Primitive numeric dataset.** Little-endian packed values,
+          emitted via ``ndarray.tobytes()``. On big-endian hosts the
+          conversion is a real byteswap.
+        * **Compound dataset.** Rows walked in storage order; each
+          row's fields walked in declaration order. VL strings encoded
+          as ``u32_le(length) || utf-8_bytes``. Numeric fields
+          little-endian.
+        * **Slicing.** ``offset`` and ``count`` are applied in the same
+          row/element units as :meth:`read`. ``count == -1`` reads from
+          ``offset`` to the end.
+
+        Signatures and encryption consume this method so that a signed
+        or encrypted dataset verifies identically regardless of which
+        provider wrote it. The default implementation delegates to
+        :mod:`mpeg_o.providers._canonical`; concrete providers may
+        override when a zero-copy fast-path exists
+        (:class:`~mpeg_o.providers.hdf5.Hdf5Provider` does this).
+
+        Appendix B Gap 2 follow-up — extends :meth:`read_rows` by
+        promising a stable byte form, not just a stable row form."""
+        # Local import to keep the ABC's top-level import surface slim.
+        from . import _canonical
+        data = self.read(offset, count)
+        if self.compound_fields is None:
+            if not isinstance(data, np.ndarray):
+                data = np.asarray(data)
+            return _canonical.canonicalise_primitive(data)
+        if isinstance(data, np.ndarray) and data.dtype.names is not None:
+            return _canonical.canonicalise_compound_structured(data)
+        if isinstance(data, list):
+            fields = self.compound_fields
+            return _canonical.canonicalise_compound_rows(
+                data,
+                field_order=[f.name for f in fields],
+                field_kinds=[f.kind.name for f in fields],
+            )
+        raise TypeError(
+            f"unexpected read() return type {type(data)!r} for "
+            f"read_canonical_bytes on dataset '{self.name}'")
+
     # ── Attributes ──────────────────────────────────────────────────
 
     @abstractmethod
