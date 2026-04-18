@@ -125,15 +125,58 @@ class StorageDataset(ABC):
     # ── Read / write ────────────────────────────────────────────────
 
     @abstractmethod
-    def read(self, offset: int = 0, count: int = -1) -> np.ndarray:
+    def read(self, offset: int = 0, count: int = -1) -> Any:
         """Read ``count`` elements starting at ``offset``. ``count == -1``
-        reads from ``offset`` to the end. Compound datasets return a
-        structured ndarray whose dtype matches :meth:`compound_fields`."""
+        reads from ``offset`` to the end.
+
+        Return type varies by backend (Appendix B Gap 2):
+
+        * **Primitive datasets**: always :class:`numpy.ndarray` with
+          dtype matching :meth:`precision`.
+        * **Compound datasets — HDF5**: structured :class:`numpy.ndarray`
+          with dtype matching :meth:`compound_fields`. Zero-copy for
+          primitive fields; VL-string fields materialize as Python
+          strings.
+        * **Compound datasets — SQLite / other non-typed backends**:
+          :class:`list` of :class:`dict` rows (``list[dict[str, Any]]``)
+          keyed by field name. Backends that store compound rows as
+          JSON cannot cheaply construct a structured ndarray.
+
+        For backend-agnostic row iteration, call :meth:`read_rows` —
+        it normalises both shapes into a uniform ``list[dict]`` without
+        the caller needing to know the provider type."""
 
     @abstractmethod
-    def write(self, data: np.ndarray) -> None:
+    def write(self, data: Any) -> None:
         """Write the full array. Shape must match :meth:`length` and
-        dtype must match the declared precision / compound schema."""
+        dtype must match the declared precision / compound schema.
+
+        Accepts both shapes returned by :meth:`read`: a structured
+        ndarray or a ``list[dict]`` for compound datasets."""
+
+    def read_rows(self) -> list[dict[str, Any]]:
+        """Read a compound dataset as a uniform ``list[dict]`` regardless
+        of backend. Default implementation converts a structured
+        ndarray; SQLite and other list-of-dicts backends pass through.
+
+        Non-compound datasets raise ``TypeError``.
+
+        Appendix B Gap 2 — backend-agnostic compound access."""
+        if self.compound_fields is None:
+            raise TypeError(
+                f"read_rows() is only valid for compound datasets; "
+                f"'{self.name}' is primitive")
+        data = self.read()
+        if isinstance(data, list):
+            return data  # already list-of-dicts (SQLite)
+        if isinstance(data, np.ndarray) and data.dtype.names is not None:
+            return [
+                {name: row[name] for name in data.dtype.names}
+                for row in data
+            ]
+        raise TypeError(
+            f"unexpected compound read() return type {type(data)!r} "
+            f"for dataset '{self.name}'")
 
     # ── Attributes ──────────────────────────────────────────────────
 

@@ -53,9 +53,17 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 - (NSUInteger)length;             ///< convenience: shape[0]
 - (NSArray<MPGOCompoundField *> *)compoundFields;  ///< nil for primitives
 
-/** Full read. Primitive datasets return NSData of length * sizeof(element);
- *  compound datasets return NSArray&lt;NSDictionary *&gt; where each dict maps
- *  field name to boxed value. */
+/** Full read.
+ *
+ *  Return type varies by backend (Appendix B Gap 2):
+ *    - Primitive datasets: NSData of length * sizeof(element).
+ *    - Compound datasets (all backends): NSArray&lt;NSDictionary *&gt;
+ *      where each dict maps field name to boxed value. The ObjC
+ *      reference implementation returns this shape for both HDF5 and
+ *      SQLite providers, so callers do not need to branch on
+ *      provider type. The universal helper ``-readRows:`` returns
+ *      the same value and is provided for cross-language parity with
+ *      Python / Java. */
 - (id)readAll:(NSError **)error;
 
 /** Hyperslab read. */
@@ -66,6 +74,20 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 /** Write. For primitives, ``data`` is NSData of length * sizeof(element);
  *  for compound, an NSArray&lt;NSDictionary *&gt;. */
 - (BOOL)writeAll:(id)data error:(NSError **)error;
+
+@optional
+
+/** Backend-agnostic compound read. Returns
+ *  NSArray&lt;NSDictionary *&gt; for compound datasets, nil + NSError
+ *  for primitives.
+ *
+ *  Default implementation (provided by MPGOStorageProtocols.m) just
+ *  calls ``-readAll:`` — ObjC compound readers already return the
+ *  NSDictionary shape universally, so there is no conversion step.
+ *  Appendix B Gap 2. */
+- (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error;
+
+@required
 
 - (BOOL)hasAttributeNamed:(NSString *)name;
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error;

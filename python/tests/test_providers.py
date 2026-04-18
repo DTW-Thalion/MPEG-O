@@ -244,6 +244,64 @@ def test_compound_dataset_roundtrip(provider: str,
         assert got[0]["confidence_score"] == pytest.approx(0.95)
 
 
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_read_rows_normalises_compound(provider: str,
+                                         hdf5_url: str,
+                                         memory_url: str) -> None:
+    """Appendix B Gap 2: read_rows() returns list[dict] regardless of
+    backend so callers can iterate compound rows without knowing
+    whether read() returned a structured ndarray or a list[dict]."""
+    url = memory_url if provider == "memory" else hdf5_url
+    schema = [
+        CompoundField("run_name", CompoundFieldKind.VL_STRING),
+        CompoundField("idx", CompoundFieldKind.UINT32),
+        CompoundField("score", CompoundFieldKind.FLOAT64),
+    ]
+    if provider == "hdf5":
+        import h5py
+        vl = h5py.string_dtype(encoding="utf-8")
+        dt = np.dtype([("run_name", vl), ("idx", "<u4"), ("score", "<f8")])
+    else:
+        dt = np.dtype([("run_name", object), ("idx", "<u4"), ("score", "<f8")])
+    records = np.array(
+        [("runA", 0, 0.1), ("runB", 1, 0.2), ("runC", 2, 0.3)],
+        dtype=dt,
+    )
+
+    with _open_w(provider, url) as p:
+        ds = p.root_group().create_compound_dataset("rows", schema, count=3)
+        ds.write(records)
+
+    with _open_r(provider, url) as p:
+        ds = p.root_group().open_dataset("rows")
+        rows = ds.read_rows()
+        assert isinstance(rows, list)
+        assert len(rows) == 3
+        assert all(isinstance(r, dict) for r in rows)
+        # Normalise VL-string so assertions work uniformly across backends.
+        def _str(v: object) -> str:
+            return v.decode() if isinstance(v, bytes) else str(v)
+        assert _str(rows[0]["run_name"]) == "runA"
+        assert int(rows[2]["idx"]) == 2
+        assert rows[1]["score"] == pytest.approx(0.2)
+
+
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_read_rows_rejects_primitive(provider: str,
+                                       hdf5_url: str,
+                                       memory_url: str) -> None:
+    url = memory_url if provider == "memory" else hdf5_url
+    with _open_w(provider, url) as p:
+        ds = p.root_group().create_dataset(
+            "primitive", Precision.FLOAT64, length=3)
+        ds.write(np.array([1.0, 2.0, 3.0]))
+
+    with _open_r(provider, url) as p:
+        ds = p.root_group().open_dataset("primitive")
+        with pytest.raises(TypeError, match="compound"):
+            ds.read_rows()
+
+
 # ── Attribute delete ─────────────────────────────────────────────────
 
 
