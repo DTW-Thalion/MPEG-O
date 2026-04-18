@@ -135,8 +135,67 @@ def test_cross_language_parity(tmp_path: Path) -> None:
         ki = f["/protection/key_info"]
         wrapped = ki["dek_wrapped"][()]
         assert wrapped.dtype == "uint8"
-        assert wrapped.shape == (60,)
+        # v0.7 M47: default output is the v1.2 wrapped-key blob (71 bytes
+        # for AES-256-GCM: 11-byte header + 28-byte metadata + 32-byte
+        # ciphertext). v1.1 legacy (60 bytes) remains readable — see
+        # test_v11_backward_compat_unwrap below.
+        assert wrapped.shape == (71,)
+        # Magic bytes "MW" + version 0x02 + algorithm_id 0x0000 (AES-256-GCM)
+        assert bytes(wrapped[:3]) == b"MW\x02"
+        assert bytes(wrapped[3:5]) == b"\x00\x00"
         assert ki.attrs["kek_id"] == b"kek-1" or ki.attrs["kek_id"] == "kek-1"
         assert "aes-256-gcm" in str(ki.attrs["kek_algorithm"])
         dek2 = unwrap_dek(f, kek)
         assert dek2 == dek1
+
+
+def test_v11_backward_compat_unwrap(tmp_path: Path) -> None:
+    """M47 Binding Decision 38: the v1.1 60-byte AES-256-GCM wrapped
+    blob remains readable forever. Hand-craft a v1.1 file and verify
+    v0.7+ code unwraps it correctly."""
+    from mpeg_o.key_rotation import _wrap_dek, _write_wrapped_dataset
+    import numpy as np
+
+    path = tmp_path / "m47_legacy_v11.mpgo"
+    kek = _key(0xB2)
+    dek = _key(0xC3)
+    # Produce the v1.1 layout explicitly via the legacy path.
+    legacy_blob = _wrap_dek(dek, kek, legacy_v1=True)
+    assert len(legacy_blob) == 60
+
+    with h5py.File(path, "w") as f:
+        prot = f.create_group("protection")
+        ki = prot.create_group("key_info")
+        _write_wrapped_dataset(ki, legacy_blob)
+        ki.attrs["kek_id"] = np.bytes_(b"legacy-kek")
+        ki.attrs["kek_algorithm"] = np.bytes_(b"aes-256-gcm")
+
+    with h5py.File(path, "r") as f:
+        assert unwrap_dek(f, kek) == dek
+
+
+def test_v12_reject_unknown_algorithm(tmp_path: Path) -> None:
+    """A v1.2 blob carrying a reserved algorithm id (e.g. ML-KEM-1024,
+    M49) must raise UnsupportedWrappedBlobError — not a garbled
+    decrypt error."""
+    from mpeg_o.key_rotation import (
+        UnsupportedWrappedBlobError,
+        _WK_ALG_ML_KEM_1024,
+        _pack_blob_v2,
+        _unwrap_dek,
+    )
+
+    # Hand-craft a dummy ML-KEM blob (1568-byte ciphertext, 0-byte metadata).
+    pqc_ciphertext = bytes(range(256)) * 7  # 1792 bytes — any non-60
+    pqc_ciphertext = pqc_ciphertext[:1568]
+    dummy = _pack_blob_v2(
+        _WK_ALG_ML_KEM_1024,
+        ciphertext=pqc_ciphertext,
+        metadata=b"",
+    )
+    try:
+        _unwrap_dek(dummy, _key(0xD4))
+    except UnsupportedWrappedBlobError as e:
+        assert "0x0001" in str(e)
+    else:
+        raise AssertionError("expected UnsupportedWrappedBlobError")

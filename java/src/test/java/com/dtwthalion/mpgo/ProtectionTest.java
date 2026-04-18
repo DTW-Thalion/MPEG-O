@@ -152,11 +152,51 @@ class ProtectionTest {
         byte[] dek = new byte[32];
         new java.security.SecureRandom().nextBytes(dek);
 
+        // v0.7 M47: default wrapKey emits the v1.2 versioned blob
+        // (71 bytes for AES-256-GCM: 11-byte header + 28-byte
+        // metadata + 32-byte ciphertext). The legacy v1.1 60-byte
+        // layout is tested separately below.
         byte[] wrapped = EncryptionManager.wrapKey(dek, kek);
-        assertEquals(60, wrapped.length); // 32 cipher + 12 IV + 16 tag
-
+        assertEquals(71, wrapped.length,
+                "default v1.2 AES-GCM blob must be 71 bytes");
+        assertEquals((byte) 'M', wrapped[0]);
+        assertEquals((byte) 'W', wrapped[1]);
+        assertEquals((byte) 0x02, wrapped[2]);
         byte[] unwrapped = EncryptionManager.unwrapKey(wrapped, kek);
         assertArrayEquals(dek, unwrapped);
+    }
+
+    @Test
+    void keyWrapUnwrapLegacyV11BackwardCompat() {
+        // M47 Binding Decision 38: v1.1 60-byte AES-GCM blobs remain
+        // readable by v0.7+ code indefinitely.
+        byte[] kek = EncryptionManager.testKey();
+        byte[] dek = new byte[32];
+        new java.security.SecureRandom().nextBytes(dek);
+
+        byte[] legacy = EncryptionManager.wrapKey(dek, kek, /* legacyV1= */ true);
+        assertEquals(60, legacy.length, "v1.1 layout is 60 bytes");
+        byte[] unwrapped = EncryptionManager.unwrapKey(legacy, kek);
+        assertArrayEquals(dek, unwrapped,
+                "v0.7 unwrapKey must accept v1.1 legacy blobs");
+    }
+
+    @Test
+    void keyUnwrapRejectsUnknownV12Algorithm() {
+        // A v1.2 blob carrying a reserved algorithm id (e.g. ML-KEM-1024,
+        // M49 target) must raise IllegalArgumentException, not a
+        // garbled decrypt error.
+        byte[] pqcDummy = new byte[1568];
+        for (int i = 0; i < pqcDummy.length; i++) pqcDummy[i] = (byte) (i & 0xFF);
+        byte[] v12 = EncryptionManager.packBlobV2(
+                EncryptionManager.WK_ALG_ML_KEM_1024,
+                pqcDummy, new byte[0]);
+        byte[] kek = EncryptionManager.testKey();
+        IllegalArgumentException thrown = assertThrows(
+                IllegalArgumentException.class,
+                () -> EncryptionManager.unwrapKey(v12, kek));
+        assertTrue(thrown.getMessage().contains("0x0001"),
+                "error must identify the unsupported algorithm id");
     }
 
     @Test

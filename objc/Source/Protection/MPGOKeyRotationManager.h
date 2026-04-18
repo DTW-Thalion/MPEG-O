@@ -78,6 +78,22 @@
  */
 - (NSData *)unwrapDEKWithKEK:(NSData *)kek error:(NSError **)error;
 
+/**
+ * Low-level wrap primitive with explicit version selection.
+ *
+ * Default callers should prefer
+ * ``-enableEnvelopeEncryptionWithKEK:kekId:error:`` which always writes
+ * the v1.2 versioned blob (M47). This method is exposed for regression
+ * fixtures and cross-version backward-compat tests: pass ``legacyV1=YES``
+ * to emit the 60-byte v1.1 layout readable by pre-v0.7 code.
+ *
+ * @since 0.7
+ */
+- (NSData *)wrapDEK:(NSData *)dek
+            withKEK:(NSData *)kek
+            legacyV1:(BOOL)legacyV1
+              error:(NSError **)error;
+
 /** Returns YES if ``/protection/key_info/dek_wrapped`` is present. */
 - (BOOL)hasEnvelopeEncryption;
 

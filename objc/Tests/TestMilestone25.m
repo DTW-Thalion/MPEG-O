@@ -124,4 +124,90 @@ void testMilestone25(void)
     }
 
     unlink([path fileSystemRepresentation]);
+
+    // ---- M47: v1.2 wrapped-key blob is the default ----
+    NSString *v12Path = m25TempPath(@"v12");
+    unlink([v12Path fileSystemRepresentation]);
+    {
+        NSError *err = nil;
+        MPGOHDF5File *f = [MPGOHDF5File createAtPath:v12Path error:&err];
+        MPGOKeyRotationManager *mgr = [MPGOKeyRotationManager managerWithFile:f];
+        NSData *dek = [mgr enableEnvelopeEncryptionWithKEK:kek1
+                                                      kekId:@"kek-v12"
+                                                      error:&err];
+        PASS(dek != nil, "M47: enableEnvelopeEncryption produces DEK");
+        [f close];
+
+        // Re-open and inspect the raw dek_wrapped bytes + the new
+        // @dek_wrapped_bytes attribute that records the actual length.
+        f = [MPGOHDF5File openReadOnlyAtPath:v12Path error:&err];
+        MPGOHDF5Group *root = [f rootGroup];
+        MPGOHDF5Group *prot = [root openGroupNamed:@"protection" error:&err];
+        MPGOHDF5Group *ki   = [prot openGroupNamed:@"key_info" error:&err];
+        MPGOHDF5Dataset *ds = [ki openDatasetNamed:@"dek_wrapped" error:&err];
+        NSData *rawAligned = [ds readDataWithError:&err];
+        PASS(rawAligned != nil, "M47: raw dek_wrapped readable");
+
+        BOOL haveLenAttr = NO;
+        int64_t declared = [ki integerAttributeNamed:@"dek_wrapped_bytes"
+                                                 exists:&haveLenAttr
+                                                  error:NULL];
+        PASS(haveLenAttr, "M47: @dek_wrapped_bytes attribute present");
+        PASS(declared == 71,
+             "M47: v1.2 AES-GCM blob is 71 bytes (got %lld)", declared);
+        // Magic 'MW' + version 0x02 + algorithm_id 0x0000.
+        const uint8_t *raw = rawAligned.bytes;
+        PASS(raw[0] == 'M' && raw[1] == 'W' && raw[2] == 0x02,
+             "M47: v1.2 blob magic + version header");
+        PASS(raw[3] == 0x00 && raw[4] == 0x00,
+             "M47: algorithm_id = 0x0000 (AES-256-GCM)");
+
+        [f close];
+    }
+    unlink([v12Path fileSystemRepresentation]);
+
+    // ---- M47 Binding Decision 38: v1.1 (60-byte) legacy readable ----
+    NSString *v11Path = m25TempPath(@"v11-legacy");
+    unlink([v11Path fileSystemRepresentation]);
+    {
+        // Hand-craft a v1.1 file: 60-byte blob, no @dek_wrapped_bytes.
+        NSError *err = nil;
+        MPGOHDF5File *f = [MPGOHDF5File createAtPath:v11Path error:&err];
+        MPGOKeyRotationManager *mgr = [MPGOKeyRotationManager managerWithFile:f];
+
+        NSData *dek = m25MakeKey(0xD4);
+        NSData *v11Blob = [mgr wrapDEK:dek
+                                 withKEK:kek1
+                                 legacyV1:YES
+                                   error:&err];
+        PASS(v11Blob.length == 60,
+             "M47: legacyV1 wrap produces 60-byte blob");
+
+        MPGOHDF5Group *root = [f rootGroup];
+        MPGOHDF5Group *prot = [root createGroupNamed:@"protection" error:&err];
+        MPGOHDF5Group *ki   = [prot createGroupNamed:@"key_info" error:&err];
+        // Write via the public path so @dek_wrapped_bytes would be
+        // included — then delete the attribute so this mimics a real
+        // pre-v0.7 file exactly.
+        MPGOHDF5Dataset *ds = [ki createDatasetNamed:@"dek_wrapped"
+                                             precision:MPGOPrecisionInt32
+                                                length:15
+                                             chunkSize:0
+                                           compression:MPGOCompressionNone
+                                      compressionLevel:0
+                                                 error:&err];
+        [ds writeData:v11Blob error:&err];
+        [ki setStringAttribute:@"kek_id" value:@"kek-v11" error:&err];
+        [ki setStringAttribute:@"kek_algorithm" value:@"aes-256-gcm" error:&err];
+        [f close];
+
+        // Unwrap via v0.7 code — must succeed.
+        f = [MPGOHDF5File openAtPath:v11Path error:&err];
+        mgr = [MPGOKeyRotationManager managerWithFile:f];
+        NSData *recovered = [mgr unwrapDEKWithKEK:kek1 error:&err];
+        PASS(recovered != nil && [recovered isEqualToData:dek],
+             "M47: v1.1 legacy 60-byte blob unwraps under v0.7 code");
+        [f close];
+    }
+    unlink([v11Path fileSystemRepresentation]);
 }

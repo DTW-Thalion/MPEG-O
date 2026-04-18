@@ -74,16 +74,25 @@ public class KeyRotationManager {
                 ki.setStringAttribute("wrapped_at", Instant.now().toString());
                 ki.setStringAttribute("key_history_json", historyToJson());
 
-                // Write wrapped DEK as int32[15] (60 bytes)
+                // Write wrapped DEK as UINT32 array (v0.7 M47: default
+                // wrap is the v1.2 versioned blob, 71 bytes for AES-GCM,
+                // padded with zero bytes to the next 4-byte boundary).
+                // Legacy v1.1 (60 bytes → 15 int32) still readable; the
+                // length attribute disambiguates.
                 byte[] wrapped = EncryptionManager.wrapKey(dek, currentKek);
-                // Store as int32 array: 60 bytes = 15 int32 slots
-                int[] wrappedInts = new int[15];
-                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(wrapped);
+                int padded = ((wrapped.length + 3) / 4) * 4;
+                byte[] padBuf = new byte[padded];
+                System.arraycopy(wrapped, 0, padBuf, 0, wrapped.length);
+                int[] wrappedInts = new int[padded / 4];
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(padBuf);
                 bb.order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                for (int i = 0; i < 15; i++) wrappedInts[i] = bb.getInt();
+                for (int i = 0; i < wrappedInts.length; i++) {
+                    wrappedInts[i] = bb.getInt();
+                }
 
+                ki.setIntegerAttribute("dek_wrapped_bytes", wrapped.length);
                 try (Hdf5Dataset ds = ki.createDataset("dek_wrapped",
-                        Precision.INT32, 15, 0, 0)) {
+                        Precision.INT32, wrappedInts.length, 0, 0)) {
                     ds.writeData(wrappedInts);
                 }
             }
@@ -98,13 +107,20 @@ public class KeyRotationManager {
             mgr.kekId = ki.readStringAttribute("kek_id");
             mgr.currentKek = kek.clone();
 
-            // Read wrapped DEK
+            // Read wrapped DEK. v0.7 files carry @dek_wrapped_bytes
+            // (actual blob length, dispatch v1.1 vs v1.2). Pre-v0.7
+            // files lack that attribute and are always exactly 60
+            // bytes (v1.1 AES-256-GCM).
             try (Hdf5Dataset ds = ki.openDataset("dek_wrapped")) {
                 int[] wrappedInts = (int[]) ds.readData();
-                byte[] wrapped = new byte[60];
-                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(wrapped);
+                byte[] padded = new byte[wrappedInts.length * 4];
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(padded);
                 bb.order(java.nio.ByteOrder.LITTLE_ENDIAN);
                 for (int v : wrappedInts) bb.putInt(v);
+                long declaredLen = ki.readIntegerAttribute(
+                        "dek_wrapped_bytes", 60L);
+                byte[] wrapped = java.util.Arrays.copyOfRange(padded, 0,
+                        (int) declaredLen);
                 mgr.dek = EncryptionManager.unwrapKey(wrapped, kek);
             }
 
