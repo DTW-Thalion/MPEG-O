@@ -336,19 +336,22 @@ the full milestone history.
       `test_milestone24_chromatograms.py`.
 
 - [x] **Direct byte-for-byte parity test between the ObjC and Python
-      mzML writers.** *Shipped.* `objc/Tools/MpgoToMzML.m` is a minimal
-      CLI modelled on `MpgoVerify` / `MpgoSign`, and
+      mzML writers.** *Shipped and green.* `objc/Tools/MpgoToMzML.m`
+      is a minimal CLI modelled on `MpgoVerify` / `MpgoSign`, and
       `python/tests/test_mzml_writer_parity.py` drives both writers
       on the same fixture and structurally diffs the output (masking
       indexListOffset, fileChecksum, and absolute-byte offset
-      attributes that encode file state). The harness surfaced a
-      real ObjC-writer divergence that is currently marked
-      `xfail(strict=True)` — on `SpectralDataset.write_minimal`
-      fixtures the ObjC writer only emits the first `<spectrum>`
-      despite `run.spectrumIndex.count` correctly reporting 3. Bug
-      is in the interaction between the reader and
-      `MPGOMzMLWriter`'s spectrum loop; infrastructure is in place
-      to lock the fix in when it lands.
+      attributes that encode file state). The harness caught a real
+      cross-language read-path bug on first run: ObjC's
+      `MPGOHDF5Group.openDatasetNamed:` didn't probe for
+      `H5T_NATIVE_UINT64` and fell through to `MPGOPrecisionFloat64`,
+      so Python-written `spectrum_index/offsets` (uint64 per
+      format-spec §6) were read with an implicit HDF5 int-to-float
+      conversion and `MPGOMzMLWriter` silently dropped every spectrum
+      after index 0 when `spectrumAtIndex:` returned nil. Fix: the
+      precision probe now maps `H5T_NATIVE_UINT64 → MPGOPrecisionInt64`
+      (bit-identical for non-negative values). Parity test now
+      passes.
 
 ### Milestone 20 — Cloud-Native Access
 
