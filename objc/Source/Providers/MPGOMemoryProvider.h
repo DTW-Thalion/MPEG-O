@@ -8,7 +8,7 @@
 #import "MPGOStorageProtocols.h"
 
 /**
- * In-memory storage provider. URLs look like ``memory://<name>``;
+ * In-memory storage provider. URLs look like ``memory://&lt;name&gt;``;
  * opening the same name twice returns the same tree until
  * +discardStore: clears it. Exists alongside MPGOHDF5Provider to prove
  * the abstraction works — if upper layers read/write identically

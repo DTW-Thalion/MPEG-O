@@ -3,11 +3,13 @@
 
 #import <Foundation/Foundation.h>
 
-#if defined(__clang__) || defined(__GNUC__)
-#  define MPGO_DEPRECATED_MSG(msg) __attribute__((deprecated(msg)))
-#else
-#  define MPGO_DEPRECATED_MSG(msg)
-#endif
+/* clang and gcc both support __attribute__((deprecated(msg))). The
+ * cross-compiler guard that used to wrap this has been removed because
+ * (a) every supported toolchain recognizes the attribute and (b)
+ * autogsdoc has its own tokenizer and does not run the C preprocessor,
+ * so the bare __attribute__((deprecated(...))) is parsed directly by
+ * AGSParser.m — an intermediate macro produces an 'error parsing
+ * method name' warning on every method it decorates. */
 
 /**
  * AES-256-GCM encryption helpers for selectively protecting sensitive
@@ -66,7 +68,7 @@
                           atFilePath:(NSString *)path
                              withKey:(NSData *)key
                                error:(NSError **)error
-    MPGO_DEPRECATED_MSG("Use -[MPGOAcquisitionRun encryptWithKey:level:error:] instead");
+    __attribute__((deprecated("Use -encryptWithKey_level_error_ on MPGOAcquisitionRun instead")));
 
 /**
  * Decrypt the previously-encrypted intensity channel for the named run.
@@ -77,11 +79,11 @@
                               atFilePath:(NSString *)path
                                  withKey:(NSData *)key
                                    error:(NSError **)error
-    MPGO_DEPRECATED_MSG("Use -[MPGOAcquisitionRun decryptWithKey:error:] instead");
+    __attribute__((deprecated("Use -decryptWithKey_error_ on MPGOAcquisitionRun instead")));
 
 + (BOOL)isIntensityChannelEncryptedInRun:(NSString *)runName
                               atFilePath:(NSString *)path
-    MPGO_DEPRECATED_MSG("Query via MPGOAcquisitionRun.accessPolicy instead");
+    __attribute__((deprecated("Query via MPGOAcquisitionRun.accessPolicy instead")));
 
 @end
 

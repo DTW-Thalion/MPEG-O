@@ -101,6 +101,12 @@
 	"+decodeString:zlibInflate:" = {
 	    MPGOBase64 = MPGOBase64;
 	};
+	"+decryptData:withKey:iv:authTag:error:" = {
+	    MPGOEncryptionManager = MPGOEncryptionManager;
+	};
+	"+decryptIntensityChannelInRun:atFilePath:withKey:error:" = {
+	    MPGOEncryptionManager = MPGOEncryptionManager;
+	};
 	"+descriptorWithName:unit:valueRange:samplingMode:" = {
 	    MPGOAxisDescriptor = MPGOAxisDescriptor;
 	};
@@ -115,6 +121,12 @@
 	};
 	"+encodeFloat64:count:scale:outDeltas:" = {
 	    MPGONumpress = MPGONumpress;
+	};
+	"+encryptData:withKey:iv:authTag:error:" = {
+	    MPGOEncryptionManager = MPGOEncryptionManager;
+	};
+	"+encryptIntensityChannelInRun:atFilePath:withKey:error:" = {
+	    MPGOEncryptionManager = MPGOEncryptionManager;
 	};
 	"+featureAnonymized" = {
 	    MPGOFeatureFlags = MPGOFeatureFlags;
@@ -185,6 +197,9 @@
 	"+isDwellTimeAccession:" = {
 	    MPGOCVTermMapper = MPGOCVTermMapper;
 	};
+	"+isIntensityChannelEncryptedInRun:atFilePath:" = {
+	    MPGOEncryptionManager = MPGOEncryptionManager;
+	};
 	"+isLegacyV1File:" = {
 	    MPGOFeatureFlags = MPGOFeatureFlags;
 	};
@@ -229,6 +244,9 @@
 	};
 	"+isTotalIonCurrentAccession:" = {
 	    MPGOCVTermMapper = MPGOCVTermMapper;
+	};
+	"+managerWithFile:" = {
+	    MPGOKeyRotationManager = MPGOKeyRotationManager;
 	};
 	"+openAtPath:error:" = {
 	    MPGOHDF5File = MPGOHDF5File;
@@ -546,6 +564,9 @@
 	"-elementSize" = {
 	    MPGOEncodingSpec = MPGOEncodingSpec;
 	};
+	"-enableEnvelopeEncryptionWithKEK:kekId:error:" = {
+	    MPGOKeyRotationManager = MPGOKeyRotationManager;
+	};
 	"-encoding" = {
 	    MPGOSignalArray = MPGOSignalArray;
 	};
@@ -592,6 +613,9 @@
 	"-hasChildNamed:" = {
 	    "(MPGOStorageGroup)" = MPGOStorageProtocols;
 	    MPGOHDF5Group = MPGOHDF5Group;
+	};
+	"-hasEnvelopeEncryption" = {
+	    MPGOKeyRotationManager = MPGOKeyRotationManager;
 	};
 	"-hasMore" = {
 	    "(MPGOStreamable)" = MPGOStreamable;
@@ -741,6 +765,9 @@
 	};
 	"-isaInvestigationId" = {
 	    MPGOSpectralDataset = MPGOSpectralDataset;
+	};
+	"-keyHistory" = {
+	    MPGOKeyRotationManager = MPGOKeyRotationManager;
 	};
 	"-kind" = {
 	    MPGOCompoundField = MPGOCompoundField;
@@ -1002,6 +1029,9 @@
 	"-rootGroupWithError:" = {
 	    "(MPGOStorageProvider)" = MPGOStorageProtocols;
 	};
+	"-rotateToKEK:kekId:oldKEK:error:" = {
+	    MPGOKeyRotationManager = MPGOKeyRotationManager;
+	};
 	"-runName" = {
 	    MPGOIdentification = MPGOIdentification;
 	};
@@ -1192,6 +1222,9 @@
 	};
 	"-unlockForWriting" = {
 	    MPGOHDF5File = MPGOHDF5File;
+	};
+	"-unwrapDEKWithKEK:error:" = {
+	    MPGOKeyRotationManager = MPGOKeyRotationManager;
 	};
 	"-value" = {
 	    MPGOCVParam = MPGOCVParam;
@@ -1968,6 +2001,13 @@
 	    "-initWithPrecision:compressionAlgorithm:byteOrder:" = MPGOEncodingSpec;
 	    "-precision" = MPGOEncodingSpec;
 	};
+	MPGOEncryptionManager = {
+	    "+decryptData:withKey:iv:authTag:error:" = MPGOEncryptionManager;
+	    "+decryptIntensityChannelInRun:atFilePath:withKey:error:" = MPGOEncryptionManager;
+	    "+encryptData:withKey:iv:authTag:error:" = MPGOEncryptionManager;
+	    "+encryptIntensityChannelInRun:atFilePath:withKey:error:" = MPGOEncryptionManager;
+	    "+isIntensityChannelEncryptedInRun:atFilePath:" = MPGOEncryptionManager;
+	};
 	MPGOFeatureFlags = {
 	    "+featureAnonymized" = MPGOFeatureFlags;
 	    "+featureBaseV1" = MPGOFeatureFlags;
@@ -2069,6 +2109,14 @@
 	    "-serialNumber" = MPGOInstrumentConfig;
 	    "-sourceType" = MPGOInstrumentConfig;
 	    "-writeToGroup:error:" = MPGOInstrumentConfig;
+	};
+	MPGOKeyRotationManager = {
+	    "+managerWithFile:" = MPGOKeyRotationManager;
+	    "-enableEnvelopeEncryptionWithKEK:kekId:error:" = MPGOKeyRotationManager;
+	    "-hasEnvelopeEncryption" = MPGOKeyRotationManager;
+	    "-keyHistory" = MPGOKeyRotationManager;
+	    "-rotateToKEK:kekId:oldKEK:error:" = MPGOKeyRotationManager;
+	    "-unwrapDEKWithKEK:error:" = MPGOKeyRotationManager;
 	};
 	MPGOMSImage = {
 	    "+readFromFilePath:error:" = MPGOMSImage;

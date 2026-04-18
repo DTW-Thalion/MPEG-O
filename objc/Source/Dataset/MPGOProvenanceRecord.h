@@ -6,7 +6,7 @@
 /**
  * W3C PROV-compatible processing record: a list of input entity URIs,
  * a software activity (name + parameters), a list of output entity URIs,
- * and a Unix timestamp. Stored in /study/<run>/provenance/steps as a
+ * and a Unix timestamp. Stored in /study/&lt;run&gt;/provenance/steps as a
  * JSON-encoded array on disk.
  *
  * API status: Stable.

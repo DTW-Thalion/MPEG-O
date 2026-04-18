@@ -138,7 +138,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-04-17</p>
+        <p><b>Date:</b> Generated at 2026-04-18</p>
 
             <div>
         </div>
@@ -155,7 +155,17 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Base64 decoding utilities for mzML binaryDataArray
+          content. mzML &lt;binaryDataArray&gt; elements wrap
+          their numeric payload in base64 and optionally compress
+          with zlib. This class decodes the string, optionally
+          inflates, and returns the raw bytes as NSData. Not
+          thread-safe; callers are responsible for
+          synchronization. API status: Stable.
+          Cross-language equivalents: Python:
+          mpeg_o.importers._base64_zlib
+          (private helper) Java: java.util.Base64 (standard
+          library &#8212; no MPGO wrapper)
         
         </div>
         <p class="global_method_index">

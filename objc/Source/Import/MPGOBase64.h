@@ -13,7 +13,7 @@
 /**
  * Base64 decoding utilities for mzML binaryDataArray content.
  *
- * mzML <binaryDataArray> elements wrap their numeric payload in base64
+ * mzML &lt;binaryDataArray&gt; elements wrap their numeric payload in base64
  * and optionally compress with zlib. This class decodes the string,
  * optionally inflates, and returns the raw bytes as NSData.
  *

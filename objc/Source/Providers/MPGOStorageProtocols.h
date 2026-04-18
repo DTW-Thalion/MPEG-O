@@ -54,7 +54,7 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 - (NSArray<MPGOCompoundField *> *)compoundFields;  ///< nil for primitives
 
 /** Full read. Primitive datasets return NSData of length * sizeof(element);
- *  compound datasets return NSArray<NSDictionary *> where each dict maps
+ *  compound datasets return NSArray&lt;NSDictionary *&gt; where each dict maps
  *  field name to boxed value. */
 - (id)readAll:(NSError **)error;
 
@@ -64,7 +64,7 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
                   error:(NSError **)error;
 
 /** Write. For primitives, ``data`` is NSData of length * sizeof(element);
- *  for compound, an NSArray<NSDictionary *>. */
+ *  for compound, an NSArray&lt;NSDictionary *&gt;. */
 - (BOOL)writeAll:(id)data error:(NSError **)error;
 
 - (BOOL)hasAttributeNamed:(NSString *)name;

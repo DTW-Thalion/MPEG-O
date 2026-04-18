@@ -228,7 +228,10 @@
     );
     MPGOEncryptionManager = (
 	"+encryptData:withKey:iv:authTag:error:",
-	"+decryptData:withKey:iv:authTag:error:"
+	"+decryptData:withKey:iv:authTag:error:",
+	"+encryptIntensityChannelInRun:atFilePath:withKey:error:",
+	"+decryptIntensityChannelInRun:atFilePath:withKey:error:",
+	"+isIntensityChannelEncryptedInRun:atFilePath:"
     );
     MPGOFeatureFlags = (
 	"+featureBaseV1",

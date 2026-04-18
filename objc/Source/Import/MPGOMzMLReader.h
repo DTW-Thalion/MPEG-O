@@ -16,16 +16,16 @@
 /**
  * SAX-based mzML 1.1 parser. Consumes an mzML document and produces a
  * populated MPGOSpectralDataset containing one MPGOAcquisitionRun per
- * <run> element. Chromatograms appear as extra spectra carrying the
+ * &lt;run&gt; element. Chromatograms appear as extra spectra carrying the
  * MPGOChromatogram class tag.
  *
  * What is parsed:
- *   - <spectrum> elements with cvParam-driven metadata (MS level,
- *     polarity, scan start time, scan window, precursor m/z & charge)
- *   - <binaryDataArray> payloads decoded via MPGOBase64, typed via
+ *   - &lt;spectrum&gt; elements with cvParam-driven metadata (MS level,
+ *     polarity, scan start time, scan window, precursor m/z &amp; charge)
+ *   - &lt;binaryDataArray&gt; payloads decoded via MPGOBase64, typed via
  *     MPGOCVTermMapper, packaged as MPGOSignalArray
- *   - <chromatogram> elements with time + intensity arrays
- *   - <dataProcessing> as MPGOProvenanceRecord chain (best-effort)
+ *   - &lt;chromatogram&gt; elements with time + intensity arrays
+ *   - &lt;dataProcessing&gt; as MPGOProvenanceRecord chain (best-effort)
  *
  * What is ignored (v0.2):
  *   - spectrumRef / sourceFileRef cross-references
