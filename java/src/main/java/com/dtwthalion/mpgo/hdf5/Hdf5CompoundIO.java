@@ -20,6 +20,8 @@ import java.util.List;
  * {@link NativeStringPool}; reads recover only the primitive fields,
  * returning empty strings for VL slots (see {@link com.dtwthalion.mpgo.SpectralDataset}
  * for the read-path rationale).
+ *
+ * @since 0.6
  */
 public final class Hdf5CompoundIO {
 

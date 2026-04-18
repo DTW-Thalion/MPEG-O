@@ -55,8 +55,15 @@ public final class NmrMLReader {
         public FreeInductionDecay fid() { return fid; }
     }
 
-    /** Read an nmrML file from the given path. */
-    public static NmrMLResult read(String path) {
+    /**
+     * Read an nmrML file from the given path.
+     *
+     * @throws NmrMLParseException if the document is malformed.
+     * @throws UncheckedIOException if the file cannot be read
+     *         (preserved for API backward compatibility; v0.8 will
+     *         migrate to checked {@link java.io.IOException}).
+     */
+    public static NmrMLResult read(String path) throws NmrMLParseException {
         try (InputStream is = Files.newInputStream(Path.of(path))) {
             return read(is, Path.of(path).getFileName().toString());
         } catch (IOException e) {
@@ -64,8 +71,13 @@ public final class NmrMLReader {
         }
     }
 
-    /** Read an nmrML document from an input stream. */
-    public static NmrMLResult read(InputStream is, String name) {
+    /**
+     * Read an nmrML document from an input stream.
+     *
+     * @throws NmrMLParseException if the document is malformed.
+     */
+    public static NmrMLResult read(InputStream is, String name)
+            throws NmrMLParseException {
         try {
             SAXParserFactory factory = SAXParserFactory.newInstance();
             factory.setNamespaceAware(true);
@@ -74,7 +86,8 @@ public final class NmrMLReader {
             parser.parse(is, handler);
             return handler.buildResult(name);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse nmrML: " + name, e);
+            throw new NmrMLParseException(
+                "Failed to parse nmrML: " + name + ": " + e.getMessage(), e);
         }
     }
 

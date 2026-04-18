@@ -8,6 +8,8 @@ package com.dtwthalion.mpgo.hdf5;
 /**
  * Exception hierarchy for HDF5 wrapper operations.
  * Mirrors ObjC MPGOErrorCode enum as typed exception subclasses.
+ *
+ * @since 0.5
  */
 public class Hdf5Errors {
 

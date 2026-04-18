@@ -32,17 +32,32 @@ import java.util.zip.Inflater;
  */
 public class MzMLReader {
 
-    public static AcquisitionRun read(String path) throws Exception {
+    /**
+     * @throws MzMLParseException if the document is malformed.
+     * @throws IOException if the file cannot be read.
+     */
+    public static AcquisitionRun read(String path)
+            throws MzMLParseException, IOException {
         return read(new File(path));
     }
 
-    public static AcquisitionRun read(File file) throws Exception {
-        SAXParserFactory factory = SAXParserFactory.newInstance();
-        factory.setNamespaceAware(true);
-        SAXParser parser = factory.newSAXParser();
-        MzMLHandler handler = new MzMLHandler();
-        parser.parse(file, handler);
-        return handler.buildRun(file.getName().replaceFirst("\\.mzML$", ""));
+    /**
+     * @throws MzMLParseException if the document is malformed.
+     * @throws IOException if the file cannot be read.
+     */
+    public static AcquisitionRun read(File file)
+            throws MzMLParseException, IOException {
+        try {
+            SAXParserFactory factory = SAXParserFactory.newInstance();
+            factory.setNamespaceAware(true);
+            SAXParser parser = factory.newSAXParser();
+            MzMLHandler handler = new MzMLHandler();
+            parser.parse(file, handler);
+            return handler.buildRun(file.getName().replaceFirst("\\.mzML$", ""));
+        } catch (SAXException | javax.xml.parsers.ParserConfigurationException e) {
+            throw new MzMLParseException(
+                "failed to parse mzML '" + file + "': " + e.getMessage(), e);
+        }
     }
 
     // Base64 + optional zlib decode

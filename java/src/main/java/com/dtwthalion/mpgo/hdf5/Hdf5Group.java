@@ -19,6 +19,8 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
  * <p>Non-owning: the parent file's lifetime is retained by every group
  * derived from it. All public methods acquire the appropriate lock from
  * the owning file.</p>
+ *
+ * @since 0.5
  */
 public class Hdf5Group implements AutoCloseable {
 

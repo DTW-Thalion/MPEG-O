@@ -10,8 +10,10 @@ import java.util.*;
 
 /**
  * Reader/writer for MPEG-O feature flags stored as root group attributes.
- * @mpeg_o_format_version = "1.1"
- * @mpeg_o_features = JSON array of feature strings
+ * {@code @mpeg_o_format_version = "1.1"}
+ * {@code @mpeg_o_features = JSON array of feature strings}
+ *
+ * @since 0.5
  */
 public final class FeatureFlags {
     // Required features (must refuse if unrecognized)

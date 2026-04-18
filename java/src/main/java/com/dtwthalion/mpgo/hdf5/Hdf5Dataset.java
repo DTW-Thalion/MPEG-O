@@ -19,6 +19,8 @@ import java.nio.ByteOrder;
  *
  * <p>Datasets are created with a definite element count and precision;
  * the shape cannot be resized after creation.</p>
+ *
+ * @since 0.5
  */
 public class Hdf5Dataset implements AutoCloseable {
 

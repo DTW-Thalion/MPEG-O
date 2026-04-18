@@ -49,6 +49,25 @@ class ImportExportTest {
     }
 
     @Test
+    void mzmlMalformedThrowsMzMLParseException() throws Exception {
+        // M50.3: MzMLReader throws MzMLParseException (specific) —
+        // not bare Exception — so callers can catch parse failures
+        // narrowly. Write a non-mzML file and verify the exception
+        // shape + that it extends IOException (for catch (IOException)
+        // backward compatibility).
+        Path bogus = tempDir.resolve("not-mzml.mzML");
+        Files.writeString(bogus, "<not mzml><<garbage>>");
+        MzMLParseException thrown = assertThrows(
+            MzMLParseException.class,
+            () -> MzMLReader.read(bogus.toString()),
+            "malformed mzML must throw MzMLParseException specifically");
+        assertTrue(thrown instanceof MpgoReaderException,
+            "MzMLParseException must extend MpgoReaderException");
+        assertTrue(thrown instanceof java.io.IOException,
+            "MzMLParseException must extend IOException for compatibility");
+    }
+
+    @Test
     void mzmlRoundTrip() throws Exception {
         // Read mzML -> write .mpgo -> read back -> write mzML -> compare
         String mzmlPath = getFixturePath("tiny.pwiz.1.1.mzML");

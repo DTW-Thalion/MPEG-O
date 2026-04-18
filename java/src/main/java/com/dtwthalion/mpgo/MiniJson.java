@@ -18,6 +18,8 @@ import java.util.Map;
  *
  * <p>Not a general-purpose JSON library. Kept in-tree to avoid pulling
  * Jackson/Gson into the dependency tree for one attribute parser.</p>
+ *
+ * @since 0.5
  */
 public final class MiniJson {
 
