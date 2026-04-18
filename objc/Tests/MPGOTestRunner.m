@@ -31,6 +31,7 @@ extern void testMilestone28(void);
 extern void testMilestone29(void);
 extern void testMilestone39(void);
 extern void testMilestone49(void);
+extern void testMilestone52(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
@@ -179,6 +180,10 @@ int main(int argc, const char *argv[])
         START_SET("M49: post-quantum crypto (liboqs)")
             testMilestone49();
         END_SET("M49: post-quantum crypto (liboqs)")
+
+        START_SET("M52: ObjC ZarrProvider")
+            testMilestone52();
+        END_SET("M52: ObjC ZarrProvider")
     }
     return 0;
 }
