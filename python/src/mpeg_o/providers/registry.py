@@ -72,6 +72,16 @@ def discover_providers() -> dict[str, type[StorageProvider]]:
     if "sqlite" not in _REGISTRY:
         from .sqlite import SqliteProvider
         _REGISTRY["sqlite"] = SqliteProvider
+    # v0.7 M46: register the optional ZarrProvider when zarr is
+    # available. Absence is fine — importers that need it will fall
+    # through to ImportError from the provider module.
+    if "zarr" not in _REGISTRY:
+        try:
+            from .zarr import ZarrProvider
+        except ImportError:
+            pass
+        else:
+            _REGISTRY["zarr"] = ZarrProvider
     return dict(_REGISTRY)
 
 
@@ -82,6 +92,11 @@ def _class_for_scheme(scheme: str) -> type[StorageProvider]:
     # Map transport / filesystem schemes onto storage providers.
     aliases = {
         "file": "hdf5", "http": "hdf5", "https": "hdf5", "s3": "hdf5",
+        # v0.7 M46: zarr composite schemes all route to the
+        # ZarrProvider; the provider itself inspects the URL to pick
+        # the backing store (DirectoryStore, FSStore, MemoryStore).
+        "zarr": "zarr", "zarr+memory": "zarr",
+        "zarr+s3": "zarr", "zarr+file": "zarr",
     }
     mapped = aliases.get(scheme)
     if mapped and mapped in providers:
