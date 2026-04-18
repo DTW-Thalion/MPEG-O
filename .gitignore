@@ -8,8 +8,12 @@ shared_obj/
 
 # autogsdoc output
 objc/Documentation/html/
+objc/Documentation/libMPGO/
 objc/Documentation/*.gsdoc
 objc/Documentation/*.igsdoc
+
+# Claude Code local state
+.claude/
 
 # OS / editor cruft
 .DS_Store
