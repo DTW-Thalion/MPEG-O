@@ -279,14 +279,30 @@ class StorageProvider(ABC):
     ``com.dtwthalion.mpgo.providers.StorageProvider``.
     """
 
-    @classmethod
     @abstractmethod
-    def open(cls, path_or_url: str, *, mode: str = "r", **kwargs
+    def open(self, path_or_url: str, *, mode: str = "r", **kwargs
              ) -> "StorageProvider":
-        """Open an existing backing store.
+        """Open a backing store and bind it to this provider.
 
         ``mode`` mirrors h5py semantics: ``"r"`` read-only, ``"r+"``
-        read/write existing, ``"w"`` create/truncate, ``"a"`` append."""
+        read/write existing, ``"w"`` create/truncate, ``"a"`` append.
+
+        Appendix B Gap 1 — unified open() dispatch. Both call styles
+        are supported and semantically equivalent:
+
+        * **Factory style** (returns a new instance)::
+
+            p = SqliteProvider.open("/path", mode="w")
+
+        * **Instance style** (mutates ``self``, returns ``self``)::
+
+            p = SqliteProvider()
+            p.open("/path", mode="w")
+
+        Every concrete Python provider detects which style is in use
+        by inspecting the first positional argument. This matches the
+        Java {@code provider.open(path, mode)} instance-method idiom
+        and the ObjC {@code -openURL:mode:error:} selector."""
 
     @abstractmethod
     def provider_name(self) -> str:
