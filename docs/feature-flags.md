@@ -10,6 +10,9 @@ Later versions layer additional features on top:
   signatures, LZ4 / Numpress-delta compression codecs.
 - **v0.4.0** — envelope encryption + key rotation, anonymization.
 - **v0.7.0** — versioned wrapped-key blob format (`wrapped_key_v2`).
+- **v0.8.0** — post-quantum crypto preview (`opt_pqc_preview`):
+  ML-KEM-1024 envelope wrapping (FIPS 203), ML-DSA-87 dataset
+  signatures (`v3:` prefix, FIPS 204). See `docs/pqc.md`.
 
 The on-disk `mpeg_o_format_version` attribute is **"1.2"** for files
 written by v0.7+ writers (was `"1.1"` in v0.2 through v0.6). Readers
@@ -86,12 +89,19 @@ documented here so implementers know what to expect.
 |----------------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
 | `wrapped_key_v2`     | optional  | M47 (v0.7)   | `/protection/key_info/dek_wrapped` uses the versioned v1.2 envelope: `[magic "MW" (2) \| version 0x02 (1) \| algorithm_id (2, BE) \| ciphertext_len (4, BE) \| metadata_len (2, BE) \| metadata \| ciphertext]`. Algorithm IDs: `0x0000 = AES-256-GCM` (default), `0x0001 = ML-KEM-1024` (reserved for M49). For AES-GCM the metadata section is `[iv (12) \| tag (16)]` and ciphertext holds the 32-byte wrapped DEK. Writers emit v1.2 when this flag is present; readers that see the flag accept both v1.1 (60-byte legacy) and v1.2 blobs. v1.1-only readers silently read pre-v0.7 files that lack the flag. Binding decision 38. |
 
-Algorithm discriminators reserved in v0.7 but first-shipped in v0.8+:
+Algorithm discriminators:
 
-- `0x0001` — ML-KEM-1024 (post-quantum key encapsulation, M49)
+- `0x0000` — AES-256-GCM (shipped v0.7)
+- `0x0001` — **ML-KEM-1024** (post-quantum, v0.8 M49 — ACTIVE; see `docs/pqc.md`)
 - `0x0002` — reserved
 
 `docs/format-spec.md §10b` specifies the v1.2 blob layout byte-by-byte.
+
+## v0.8 flags
+
+| Flag                 | Required? | Since        | Semantics                                                                                          |
+|----------------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
+| `opt_pqc_preview`    | optional  | M49 (v0.8)   | File uses post-quantum crypto: ML-KEM-1024 envelope wrapping (`algorithm_id=0x0001` in the v1.2 wrapped-key blob) and/or ML-DSA-87 dataset signatures (`v3:` prefix on `@mpgo_signature`). Set automatically whenever either primitive is used on writes. Readers without PQC support can still open the file and read unencrypted / classically-signed datasets; they raise `UnsupportedAlgorithmError` on PQC-specific operations. See `docs/pqc.md` for the full library-choice rationale (Python/ObjC use liboqs; Java uses Bouncy Castle). |
 
 ## v0.7 storage + crypto surface (non-flag)
 

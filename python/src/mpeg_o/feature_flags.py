@@ -30,6 +30,13 @@ OPT_KEY_ROTATION = "opt_key_rotation"
 # v0.4 (M28): file has been through the anonymization pipeline.
 OPT_ANONYMIZED = "opt_anonymized"
 
+# v0.8 (M49): file uses post-quantum crypto — ML-KEM-1024 key wrapping
+# and/or ML-DSA-87 (v3:) signatures. Set whenever either primitive is
+# used. Opt-flag (reader without PQC can still open the file and read
+# unencrypted datasets; it just cannot verify v3: signatures or unwrap
+# ML-KEM-wrapped DEKs).
+OPT_PQC_PREVIEW = "opt_pqc_preview"
+
 
 @dataclass(frozen=True, slots=True)
 class FeatureFlags:

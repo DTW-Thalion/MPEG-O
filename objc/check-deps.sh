@@ -148,6 +148,26 @@ else
     note "openssl headers not found — required for Milestone 7 (install libssl-dev)"
 fi
 
+# --- liboqs (v0.8 M49, optional for ObjC build; required for PQC tests) ----
+# Python/ObjC use liboqs; Java uses Bouncy Castle. Ubuntu 24.04 has no apt
+# package for liboqs — liboqs-python auto-installs to ~/_oqs on first import,
+# and the build probes $OQS_PREFIX, ~/_oqs, /usr/local/oqs, /opt/oqs.
+oqs_hdr=""
+for cand in "${OQS_PREFIX:-}/include/oqs/oqs.h" \
+            "$HOME/_oqs/include/oqs/oqs.h" \
+            /usr/local/oqs/include/oqs/oqs.h \
+            /opt/oqs/include/oqs/oqs.h \
+            /usr/local/include/oqs/oqs.h \
+            /usr/include/oqs/oqs.h; do
+    if [ -f "$cand" ]; then oqs_hdr="$cand"; break; fi
+done
+if [ -n "$oqs_hdr" ]; then
+    ok "liboqs headers ($oqs_hdr) — PQC enabled (ML-KEM-1024, ML-DSA-87)"
+else
+    note "liboqs not found — PQC entry points will raise at runtime "
+    note "       (pip install 'mpeg-o[pqc]' auto-installs to \$HOME/_oqs)"
+fi
+
 echo
 if [ $missing -gt 0 ]; then
     echo "==> $missing required dependency(ies) missing. See above."

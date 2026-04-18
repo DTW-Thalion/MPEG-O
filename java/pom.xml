@@ -66,6 +66,16 @@
             <artifactId>sqlite-jdbc</artifactId>
             <version>3.46.1.3</version>
         </dependency>
+
+        <!-- v0.8 M49: Bouncy Castle for ML-KEM-1024 + ML-DSA-87 (PQC).
+             Python/ObjC use liboqs; Java uses BC because liboqs's Java
+             bindings are immature and BC is production-ready as of 1.79.
+             See docs/pqc.md for the discrepancy rationale. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.80</version>
+        </dependency>
     </dependencies>
 
     <profiles>

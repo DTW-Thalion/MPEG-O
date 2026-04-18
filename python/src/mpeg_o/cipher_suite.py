@@ -6,15 +6,22 @@ AES-KW-style wrap for KEK). Key sizes and nonce lengths were
 hardcoded module-level constants.
 
 v0.7 M48 generalises the public API with an ``algorithm=`` keyword
-parameter backed by this catalog. The intent is to shape the
+parameter backed by this catalog. The intent was to shape the
 parameter hole so M49's post-quantum binding is a pure plug-in — no
 API change — once ML-KEM-1024 / ML-DSA-87 are ready.
 
-**No new algorithms are activated by M48.** ``"ml-kem-1024"``,
-``"ml-dsa-87"``, ``"shake256"`` entries are reserved: their
-metadata is recorded, but :func:`validate_key` on those names raises
-:class:`UnsupportedAlgorithmError` until M49 adds the actual
-primitive.
+v0.8 M49 activates the post-quantum entries. ``"ml-kem-1024"`` (FIPS
+203) and ``"ml-dsa-87"`` (FIPS 204) transition from
+``status="reserved"`` to ``status="active"``. Activation requires
+the optional ``[pqc]`` extra (``pip install 'mpeg-o[pqc]'`` pulls in
+``liboqs-python``, which in turn needs a system liboqs 0.14+). Without
+that extra, :mod:`mpeg_o.pqc` import raises
+:class:`~mpeg_o.pqc.PQCUnavailableError` and all PQC entry points fail
+cleanly — the catalog still lists the entries but the sign/wrap code
+paths refuse to run.
+
+``"shake256"`` remains reserved (no consumer yet in the protection
+APIs; a v0.9 domain-separator primitive may activate it).
 
 Design notes (binding decision 39):
 * ``CipherSuite`` is a **static allow-list**, not a plugin registry.
@@ -50,11 +57,12 @@ Status = Literal["active", "reserved"]
 class _Entry:
     algorithm: str
     category: Category
-    key_size: int | None  # None = variable / not fixed
+    key_size: int | None  # symmetric key or (for KEM/Signature) PUBLIC key length
     nonce_size: int
     tag_size: int  # for AEAD; signature size for signatures
     status: Status
     notes: str = ""
+    private_key_size: int | None = None  # KEM / Signature only
 
 
 # ── The catalog ─────────────────────────────────────────────────────
@@ -70,15 +78,18 @@ _CATALOG: dict[str, _Entry] = {
         status="active",
         notes="Default for bulk encryption and envelope wrapping.",
     ),
-    # KEM (reserved for M49)
+    # KEM
     "ml-kem-1024": _Entry(
         algorithm="ml-kem-1024",
         category="KEM",
-        key_size=1568,   # public-key size; private-key is 3168
+        key_size=1568,            # public-key size
+        private_key_size=3168,    # ML-KEM-1024 decapsulation key
         nonce_size=0,
-        tag_size=0,
-        status="reserved",
-        notes="NIST FIPS 203 ML-KEM-1024. Activates in M49 via liboqs.",
+        tag_size=0,               # ciphertext length is 1568, handled at the blob layer
+        status="active",
+        notes="NIST FIPS 203 ML-KEM-1024. v0.8 M49; requires [pqc] extra "
+              "(liboqs-python + liboqs ≥ 0.14). Java path is Bouncy Castle "
+              "(org.bouncycastle:bcprov-jdk18on ≥ 1.79).",
     ),
     # MAC / Signature
     "hmac-sha256": _Entry(
@@ -93,11 +104,14 @@ _CATALOG: dict[str, _Entry] = {
     "ml-dsa-87": _Entry(
         algorithm="ml-dsa-87",
         category="Signature",
-        key_size=4864,   # ML-DSA-87 public key size
+        key_size=2592,            # FIPS 204 ML-DSA-87 public key
+        private_key_size=4896,    # FIPS 204 ML-DSA-87 signing key
         nonce_size=0,
-        tag_size=4627,   # ML-DSA-87 signature size
-        status="reserved",
-        notes="NIST FIPS 204 ML-DSA-87. Activates in M49 via liboqs.",
+        tag_size=4627,            # ML-DSA-87 signature size
+        status="active",
+        notes="NIST FIPS 204 ML-DSA-87. v0.8 M49; requires [pqc] extra on "
+              "Python / ObjC (liboqs), Bouncy Castle on Java. Emits v3: "
+              "signature-attribute prefix.",
     ),
     # Hash
     "sha-256": _Entry(
@@ -176,8 +190,19 @@ def validate_key(algorithm: str, key: bytes) -> None:
     bytes). For reserved-status algorithms, raises
     :class:`UnsupportedAlgorithmError` so callers don't silently run
     against stub code paths.
+
+    Asymmetric algorithms (category KEM / Signature) have two key
+    shapes — public and private. ``validate_key`` on a KEM / Signature
+    algorithm raises :class:`InvalidKeyError` directing the caller to
+    :func:`validate_public_key` or :func:`validate_private_key`; this
+    keeps role confusion out of the symmetric-focused call sites.
     """
     entry = _require_active(algorithm)
+    if entry.category in ("KEM", "Signature"):
+        raise InvalidKeyError(
+            f"{algorithm!r} is asymmetric — use validate_public_key "
+            f"or validate_private_key instead of validate_key"
+        )
     if entry.key_size is None:
         if len(key) == 0:
             raise InvalidKeyError(
@@ -189,6 +214,70 @@ def validate_key(algorithm: str, key: bytes) -> None:
             f"{algorithm}: key must be {entry.key_size} bytes "
             f"(got {len(key)})"
         )
+
+
+def validate_public_key(algorithm: str, key: bytes) -> None:
+    """Raise :class:`InvalidKeyError` if ``key`` is not the right length
+    for ``algorithm``'s public key (KEM encapsulation / signature
+    verification). Symmetric algorithms raise immediately — use
+    :func:`validate_key`."""
+    entry = _require_active(algorithm)
+    if entry.category not in ("KEM", "Signature"):
+        raise InvalidKeyError(
+            f"{algorithm!r} is symmetric; use validate_key instead"
+        )
+    if len(key) != entry.key_size:
+        raise InvalidKeyError(
+            f"{algorithm}: public key must be {entry.key_size} bytes "
+            f"(got {len(key)})"
+        )
+
+
+def validate_private_key(algorithm: str, key: bytes) -> None:
+    """Raise :class:`InvalidKeyError` if ``key`` is not the right length
+    for ``algorithm``'s private key (KEM decapsulation / signing).
+    Symmetric algorithms raise immediately — use :func:`validate_key`."""
+    entry = _require_active(algorithm)
+    if entry.category not in ("KEM", "Signature"):
+        raise InvalidKeyError(
+            f"{algorithm!r} is symmetric; use validate_key instead"
+        )
+    if entry.private_key_size is None:
+        raise InvalidKeyError(
+            f"{algorithm}: private_key_size is not declared in the catalog"
+        )
+    if len(key) != entry.private_key_size:
+        raise InvalidKeyError(
+            f"{algorithm}: private key must be {entry.private_key_size} bytes "
+            f"(got {len(key)})"
+        )
+
+
+def public_key_size(algorithm: str) -> int:
+    """Return the asymmetric public-key length in bytes. Raises for
+    symmetric algorithms."""
+    entry = _require(algorithm)
+    if entry.category not in ("KEM", "Signature"):
+        raise UnsupportedAlgorithmError(
+            f"{algorithm!r} is symmetric — no public key"
+        )
+    assert entry.key_size is not None
+    return entry.key_size
+
+
+def private_key_size(algorithm: str) -> int:
+    """Return the asymmetric private-key length in bytes. Raises for
+    symmetric algorithms."""
+    entry = _require(algorithm)
+    if entry.category not in ("KEM", "Signature"):
+        raise UnsupportedAlgorithmError(
+            f"{algorithm!r} is symmetric — no private key"
+        )
+    if entry.private_key_size is None:
+        raise UnsupportedAlgorithmError(
+            f"{algorithm!r} catalog entry is missing private_key_size"
+        )
+    return entry.private_key_size
 
 
 def algorithms(*, status: Status | None = None) -> list[str]:

@@ -89,3 +89,23 @@ ADDITIONAL_LDFLAGS += -L/usr/local/lib
 ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib
 ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib/x86_64-linux-gnu/hdf5/serial
 ADDITIONAL_LDFLAGS += -lsqlite3
+
+# v0.8 M49: post-quantum crypto via liboqs. Probe $OQS_PREFIX and
+# $HOME/_oqs (the default liboqs-python install target) before giving
+# up — Ubuntu 24.04 has no apt package for liboqs as of 2026-04, so
+# every host either builds from source or relies on the auto-install
+# that liboqs-python performs on its first import. If liboqs is not
+# found, PQC entry points raise at runtime with a clear error.
+OQS_PREFIX ?= $(firstword $(wildcard \
+    $(HOME)/_oqs \
+    /usr/local/oqs \
+    /opt/oqs))
+ifneq ($(OQS_PREFIX),)
+  ifneq ($(wildcard $(OQS_PREFIX)/include/oqs/oqs.h),)
+    ADDITIONAL_CPPFLAGS += -I$(OQS_PREFIX)/include -DMPGO_HAVE_LIBOQS=1
+    ADDITIONAL_LDFLAGS  += -L$(OQS_PREFIX)/lib -L$(OQS_PREFIX)/lib64
+    ADDITIONAL_LDFLAGS  += -loqs
+    ADDITIONAL_LDFLAGS  += -Wl,-rpath,$(OQS_PREFIX)/lib
+    ADDITIONAL_LDFLAGS  += -Wl,-rpath,$(OQS_PREFIX)/lib64
+  endif
+endif
