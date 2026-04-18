@@ -182,6 +182,99 @@ def verify_provenance(run_group: h5py.Group, key: bytes) -> bool:
     return hmac.compare_digest(stored, expected)
 
 
+# ── Provider-agnostic sign / verify (v0.8 M54.1) ─────────────────────────
+
+
+def sign_storage_dataset(
+    dataset: Any,
+    key: bytes,
+    *,
+    algorithm: str = "hmac-sha256",
+) -> str:
+    """Sign any :class:`~mpeg_o.providers.base.StorageDataset` with the
+    named algorithm.
+
+    Mirrors :func:`sign_dataset` (h5py-native) but works across every
+    provider — HDF5, Memory, SQLite, Zarr. The canonical byte stream
+    comes from :meth:`StorageDataset.read_canonical_bytes` so the
+    signature is identical regardless of backend.
+
+    Used by the M54.1 cross-language conformance matrix. The dataset
+    must support ``set_attribute("mpgo_signature", str)`` — every
+    shipping provider does.
+
+    @since 0.8 (v0.8 M54.1)
+    """
+    from . import cipher_suite
+    canonical = dataset.read_canonical_bytes()
+    if algorithm == "hmac-sha256":
+        cipher_suite.validate_key(algorithm, key)
+        mac_b64 = hmac_sha256_b64(canonical, key)
+        prefixed = SIGNATURE_V2_PREFIX + mac_b64
+    elif algorithm == "ml-dsa-87":
+        cipher_suite.validate_private_key(algorithm, key)
+        from . import pqc
+        sig = pqc.sig_sign(key, canonical)
+        prefixed = SIGNATURE_V3_PREFIX + base64.b64encode(sig).decode("ascii")
+    else:
+        raise cipher_suite.UnsupportedAlgorithmError(
+            f"{algorithm}: signature path not yet implemented"
+        )
+    dataset.set_attribute(SIGNATURE_ATTR, prefixed)
+    return prefixed
+
+
+def verify_storage_dataset(
+    dataset: Any,
+    key: bytes,
+    *,
+    algorithm: str = "hmac-sha256",
+) -> bool:
+    """Verify any :class:`~mpeg_o.providers.base.StorageDataset`'s
+    stored ``@mpgo_signature``.
+
+    Prefix/algorithm must match — a ``v3:`` attribute with
+    ``algorithm="hmac-sha256"`` raises
+    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError` so silent
+    acceptance of a wrong-scheme file is impossible.
+
+    @since 0.8 (v0.8 M54.1)
+    """
+    from . import cipher_suite
+    stored = dataset.get_attribute(SIGNATURE_ATTR)
+    if stored is None:
+        return False
+    if isinstance(stored, bytes):
+        stored = stored.decode("utf-8", errors="replace")
+    stored = str(stored)
+
+    canonical = dataset.read_canonical_bytes()
+
+    if stored.startswith(SIGNATURE_V3_PREFIX):
+        if algorithm != "ml-dsa-87":
+            raise cipher_suite.UnsupportedAlgorithmError(
+                f"stored signature is v3 (ml-dsa-87) but caller "
+                f"passed algorithm={algorithm!r}"
+            )
+        cipher_suite.validate_public_key(algorithm, key)
+        from . import pqc
+        sig = base64.b64decode(stored[len(SIGNATURE_V3_PREFIX):])
+        return pqc.sig_verify(key, canonical, sig)
+
+    if algorithm == "ml-dsa-87":
+        raise cipher_suite.UnsupportedAlgorithmError(
+            "stored signature is not v3 (ml-dsa-87) — pass "
+            "algorithm='hmac-sha256' to verify legacy signatures"
+        )
+    cipher_suite.validate_key(algorithm, key)
+    if stored.startswith(SIGNATURE_V2_PREFIX):
+        payload = stored[len(SIGNATURE_V2_PREFIX):]
+    else:
+        payload = stored
+    expected = hmac_sha256_b64(canonical, key)
+    return hmac.compare_digest(payload, expected)
+
+
 # --------------------------------------------------- VL string attr helpers ---
 
 
