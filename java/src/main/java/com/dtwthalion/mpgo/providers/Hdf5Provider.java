@@ -72,6 +72,28 @@ public final class Hdf5Provider implements StorageProvider {
         return new Hdf5GroupAdapter(file.rootGroup(), /*ownsNative=*/true);
     }
 
+    /** v0.7 M44: wrap a raw {@link Hdf5Group} in the provider adapter
+     *  so callers holding the low-level handle (AcquisitionRun,
+     *  SpectralDataset) can hand it off as a protocol
+     *  {@link StorageGroup}. The adapter does <b>not</b> take ownership
+     *  of the underlying HDF5 handle; the caller must keep the
+     *  {@code Hdf5Group} alive for as long as the adapter is used.
+     *
+     *  @since 0.7 */
+    public static StorageGroup adapterForGroup(Hdf5Group group) {
+        return new Hdf5GroupAdapter(group, /*ownsNative=*/false);
+    }
+
+    /** v0.7 M44: wrap a raw {@link Hdf5Dataset} as a protocol
+     *  {@link StorageDataset}. Same non-owning semantics as
+     *  {@link #adapterForGroup}.
+     *
+     *  @since 0.7 */
+    public static StorageDataset adapterForDataset(Hdf5Dataset dataset,
+                                                     String name) {
+        return new Hdf5DatasetAdapter(dataset, name, null, /*ownsNative=*/false);
+    }
+
     @Override
     public boolean isOpen() { return open; }
 
@@ -245,13 +267,41 @@ public final class Hdf5Provider implements StorageProvider {
 
         @Override public Object getAttribute(String name) {
             // Strings and longs are the two shapes MPEG-O uses today.
-            if (delegate.hasAttribute(name)) {
-                try { return delegate.readStringAttribute(name); }
-                catch (Exception ignored) {}
-                try { return delegate.readIntegerAttribute(name, 0L); }
-                catch (Exception ignored) {}
+            // Probe the attribute's HDF5 type class so integer attributes
+            // don't get misread as UTF-8 garbage (readStringAttribute
+            // happily decodes the raw 8-byte int as a string without
+            // throwing).
+            if (!delegate.hasAttribute(name)) return null;
+            int tclass = attributeTypeClass(delegate.getGroupId(), name);
+            if (tclass == HDF5Constants.H5T_INTEGER) {
+                return delegate.readIntegerAttribute(name, 0L);
             }
+            if (tclass == HDF5Constants.H5T_STRING) {
+                return delegate.readStringAttribute(name);
+            }
+            // Unknown class (float, compound, …) — try string first,
+            // then integer, to preserve the prior behaviour for edge
+            // cases not yet exercised by the test suite.
+            try { return delegate.readStringAttribute(name); }
+            catch (Exception ignored) {}
+            try { return delegate.readIntegerAttribute(name, 0L); }
+            catch (Exception ignored) {}
             return null;
+        }
+
+        private static int attributeTypeClass(long groupId, String name) {
+            long aid = -1, tid = -1;
+            try {
+                aid = H5.H5Aopen(groupId, name, HDF5Constants.H5P_DEFAULT);
+                if (aid < 0) return -1;
+                tid = H5.H5Aget_type(aid);
+                return H5.H5Tget_class(tid);
+            } catch (HDF5LibraryException e) {
+                return -1;
+            } finally {
+                if (tid >= 0) try { H5.H5Tclose(tid); } catch (Exception ignored) {}
+                if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            }
         }
 
         @Override public void setAttribute(String name, Object value) {
@@ -286,9 +336,10 @@ public final class Hdf5Provider implements StorageProvider {
         private final Hdf5Dataset delegate;
         private final String name;
         private final long[] ndShape;  // v0.7 M45: null ⇒ 1-D
+        private final boolean ownsNative;
 
         Hdf5DatasetAdapter(Hdf5Dataset delegate, String name) {
-            this(delegate, name, null);
+            this(delegate, name, null, /*ownsNative=*/true);
         }
 
         /** v0.7 M45: N-D variant. {@code ndShape} preserves the full
@@ -298,9 +349,15 @@ public final class Hdf5Provider implements StorageProvider {
          *  {@code H5Screate_simple(rank, dims, null)} storage is a
          *  v0.8 optimisation — see M44's MSImage refactor. */
         Hdf5DatasetAdapter(Hdf5Dataset delegate, String name, long[] ndShape) {
+            this(delegate, name, ndShape, /*ownsNative=*/true);
+        }
+
+        Hdf5DatasetAdapter(Hdf5Dataset delegate, String name, long[] ndShape,
+                            boolean ownsNative) {
             this.delegate = delegate;
             this.name = name;
             this.ndShape = ndShape == null ? null : ndShape.clone();
+            this.ownsNative = ownsNative;
         }
 
         @Override public String name() { return name; }
@@ -329,7 +386,9 @@ public final class Hdf5Provider implements StorageProvider {
         }
         @Override public List<String> attributeNames() { return List.of(); }
 
-        @Override public void close() { delegate.close(); }
+        @Override public void close() {
+            if (ownsNative) delegate.close();
+        }
     }
 
     // ── Compound dataset adapter ────────────────────────────────

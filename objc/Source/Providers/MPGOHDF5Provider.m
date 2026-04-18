@@ -491,4 +491,17 @@
 - (BOOL)supportsChunking    { return YES; }
 - (BOOL)supportsCompression { return YES; }
 
+// ── v0.7 M44: factory wrappers (expose internal adapters) ───────────
+
++ (id<MPGOStorageGroup>)adapterForGroup:(MPGOHDF5Group *)group
+{
+    return [[MPGOHDF5GroupAdapter alloc] initWithGroup:group];
+}
+
++ (id<MPGOStorageDataset>)adapterForDataset:(MPGOHDF5Dataset *)dataset
+                                         name:(NSString *)name
+{
+    return [[MPGOHDF5DatasetAdapter alloc] initWithDataset:dataset name:name];
+}
+
 @end

@@ -5,9 +5,10 @@
  */
 package com.dtwthalion.mpgo;
 
+import com.dtwthalion.mpgo.Enums.Compression;
 import com.dtwthalion.mpgo.Enums.Precision;
-import com.dtwthalion.mpgo.hdf5.Hdf5Dataset;
-import com.dtwthalion.mpgo.hdf5.Hdf5Group;
+import com.dtwthalion.mpgo.providers.StorageDataset;
+import com.dtwthalion.mpgo.providers.StorageGroup;
 
 import java.util.List;
 
@@ -17,6 +18,10 @@ import java.util.List;
  * <p>Stored as a 3-D intensity cube
  * ({@code height × width × spectralPoints}) under
  * {@code /study/image_cube/}.</p>
+ *
+ * <p>v0.7 M44: I/O routed through {@link StorageGroup} /
+ * {@link StorageDataset}; this class no longer references the low-level
+ * {@code Hdf5Group} / {@code Hdf5Dataset} types.</p>
  *
  * <p><b>Composition vs inheritance.</b> In Objective-C,
  * {@code MPGOMSImage} inherits from {@code MPGOSpectralDataset} so
@@ -111,41 +116,53 @@ public class MSImage {
         return result;
     }
 
-    /** Write this image cube to an HDF5 study group. */
-    public void writeTo(Hdf5Group studyGroup) {
-        try (Hdf5Group ic = studyGroup.createGroup("image_cube")) {
-            ic.setIntegerAttribute("width", width);
-            ic.setIntegerAttribute("height", height);
-            ic.setIntegerAttribute("spectral_points", spectralPoints);
-            ic.setStringAttribute("pixel_size_x", String.valueOf(pixelSizeX));
-            ic.setStringAttribute("pixel_size_y", String.valueOf(pixelSizeY));
+    /** Write this image cube to a storage study group.
+     *
+     *  <p>v0.7 M44: emits the cube as a 3-D dataset via
+     *  {@link StorageGroup#createDatasetND} so every backend can
+     *  round-trip the spatial+spectral rank.</p> */
+    public void writeTo(StorageGroup studyGroup) {
+        try (StorageGroup ic = studyGroup.createGroup("image_cube")) {
+            ic.setAttribute("width", (long) width);
+            ic.setAttribute("height", (long) height);
+            ic.setAttribute("spectral_points", (long) spectralPoints);
+            ic.setAttribute("pixel_size_x", String.valueOf(pixelSizeX));
+            ic.setAttribute("pixel_size_y", String.valueOf(pixelSizeY));
             if (scanPattern != null)
-                ic.setStringAttribute("scan_pattern", scanPattern);
+                ic.setAttribute("scan_pattern", scanPattern);
 
-            try (Hdf5Dataset ds = ic.createDataset("intensity", Precision.FLOAT64,
-                    intensityCube.length, 16384, 6)) {
-                ds.writeData(intensityCube);
+            long[] shape = { height, width, spectralPoints };
+            long[] chunks = { 1, 1, spectralPoints };
+            try (StorageDataset ds = ic.createDatasetND("intensity",
+                    Precision.FLOAT64, shape, chunks,
+                    Compression.ZLIB, 6)) {
+                ds.writeAll(intensityCube);
             }
         }
     }
 
-    /** Read an image cube from an HDF5 file. */
-    public static MSImage readFrom(Hdf5Group studyGroup) {
+    /** Read an image cube from a storage file.
+     *
+     *  <p>v0.7 M44: parameter type relaxed to {@link StorageGroup}.</p> */
+    public static MSImage readFrom(StorageGroup studyGroup) {
         if (!studyGroup.hasChild("image_cube")) return null;
-        try (Hdf5Group ic = studyGroup.openGroup("image_cube")) {
-            int width = (int) ic.readIntegerAttribute("width", 0);
-            int height = (int) ic.readIntegerAttribute("height", 0);
-            int spectralPoints = (int) ic.readIntegerAttribute("spectral_points", 0);
+        try (StorageGroup ic = studyGroup.openGroup("image_cube")) {
+            int width = ((Number) ic.getAttribute("width")).intValue();
+            int height = ((Number) ic.getAttribute("height")).intValue();
+            int spectralPoints = ((Number) ic.getAttribute("spectral_points")).intValue();
             double pixelSizeX = Double.parseDouble(
-                    ic.hasAttribute("pixel_size_x") ? ic.readStringAttribute("pixel_size_x") : "0");
+                    ic.hasAttribute("pixel_size_x")
+                            ? (String) ic.getAttribute("pixel_size_x") : "0");
             double pixelSizeY = Double.parseDouble(
-                    ic.hasAttribute("pixel_size_y") ? ic.readStringAttribute("pixel_size_y") : "0");
+                    ic.hasAttribute("pixel_size_y")
+                            ? (String) ic.getAttribute("pixel_size_y") : "0");
             String scanPattern = ic.hasAttribute("scan_pattern")
-                    ? ic.readStringAttribute("scan_pattern") : null;
+                    ? (String) ic.getAttribute("scan_pattern") : null;
 
             double[] cube;
-            try (Hdf5Dataset ds = ic.openDataset("intensity")) {
-                cube = (double[]) ds.readData();
+            try (StorageDataset ds = ic.openDataset("intensity")) {
+                // v0.7 M44: route through the storage protocol.
+                cube = (double[]) ds.readAll();
             }
             return new MSImage(width, height, spectralPoints,
                     pixelSizeX, pixelSizeY, scanPattern, cube);

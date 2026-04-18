@@ -128,7 +128,10 @@ public class SpectralDataset implements
                                 for (String rn : names.split(",")) {
                                     String name = rn.strip();
                                     if (!name.isEmpty() && msRunsGroup.hasChild(name)) {
-                                        AcquisitionRun run = AcquisitionRun.readFrom(msRunsGroup, name);
+                                        // v0.7 M44: AcquisitionRun.readFrom takes
+                                        // StorageGroup; wrap the raw Hdf5Group.
+                                        AcquisitionRun run = AcquisitionRun.readFrom(
+                                                Hdf5Provider.adapterForGroup(msRunsGroup), name);
                                         run.setPersistenceContext(path, name);
                                         runs.put(name, run);
                                     }
@@ -188,7 +191,9 @@ public class SpectralDataset implements
                             AcquisitionRun run = runs.get(i);
                             if (i > 0) names.append(",");
                             names.append(run.name());
-                            run.writeTo(msRunsGroup);
+                            // v0.7 M44: writeTo takes StorageGroup; wrap the
+                            // raw Hdf5Group via the provider adapter.
+                            run.writeTo(Hdf5Provider.adapterForGroup(msRunsGroup));
                             runMap.put(run.name(), run);
                         }
                         msRunsGroup.setStringAttribute("_run_names", names.toString());

@@ -5,10 +5,11 @@
  */
 package com.dtwthalion.mpgo;
 
+import com.dtwthalion.mpgo.Enums.Compression;
 import com.dtwthalion.mpgo.Enums.Polarity;
 import com.dtwthalion.mpgo.Enums.Precision;
-import com.dtwthalion.mpgo.hdf5.Hdf5Dataset;
-import com.dtwthalion.mpgo.hdf5.Hdf5Group;
+import com.dtwthalion.mpgo.providers.StorageDataset;
+import com.dtwthalion.mpgo.providers.StorageGroup;
 
 /**
  * Compressed-domain query index for spectra in an acquisition run.
@@ -93,10 +94,13 @@ public class SpectrumIndex {
         return out;
     }
 
-    /** Write this index to an HDF5 group (creates spectrum_index/ subgroup). */
-    public void writeTo(Hdf5Group runGroup) {
-        try (Hdf5Group idx = runGroup.createGroup("spectrum_index")) {
-            idx.setIntegerAttribute("count", count);
+    /** Write this index to a storage group (creates spectrum_index/ subgroup).
+     *
+     *  <p>v0.7 M44: parameter type relaxed to {@link StorageGroup} so the
+     *  index can be written through any provider (HDF5, SQLite, Memory).</p> */
+    public void writeTo(StorageGroup runGroup) {
+        try (StorageGroup idx = runGroup.createGroup("spectrum_index")) {
+            idx.setAttribute("count", (long) count);
 
             writeDataset(idx, "offsets", Precision.INT64, offsets);
             writeDataset(idx, "lengths", Precision.UINT32, lengths);
@@ -109,10 +113,12 @@ public class SpectrumIndex {
         }
     }
 
-    /** Read spectrum index from an existing run group. */
-    public static SpectrumIndex readFrom(Hdf5Group runGroup) {
-        try (Hdf5Group idx = runGroup.openGroup("spectrum_index")) {
-            int count = (int) idx.readIntegerAttribute("count", 0);
+    /** Read spectrum index from an existing run group.
+     *
+     *  <p>v0.7 M44: parameter type relaxed to {@link StorageGroup}.</p> */
+    public static SpectrumIndex readFrom(StorageGroup runGroup) {
+        try (StorageGroup idx = runGroup.openGroup("spectrum_index")) {
+            int count = ((Number) idx.getAttribute("count")).intValue();
 
             long[] offsets = readLongs(idx, "offsets");
             int[] lengths = readInts(idx, "lengths");
@@ -129,29 +135,30 @@ public class SpectrumIndex {
         }
     }
 
-    private static void writeDataset(Hdf5Group group, String name,
+    private static void writeDataset(StorageGroup group, String name,
                                      Precision precision, Object data) {
         int len = java.lang.reflect.Array.getLength(data);
-        try (Hdf5Dataset ds = group.createDataset(name, precision, len, 0, 0)) {
-            ds.writeData(data);
+        try (StorageDataset ds = group.createDataset(name, precision, len, 0,
+                Compression.NONE, 0)) {
+            ds.writeAll(data);
         }
     }
 
-    private static double[] readDoubles(Hdf5Group group, String name) {
-        try (Hdf5Dataset ds = group.openDataset(name)) {
-            return (double[]) ds.readData();
+    private static double[] readDoubles(StorageGroup group, String name) {
+        try (StorageDataset ds = group.openDataset(name)) {
+            return (double[]) ds.readAll();
         }
     }
 
-    private static int[] readInts(Hdf5Group group, String name) {
-        try (Hdf5Dataset ds = group.openDataset(name)) {
-            return (int[]) ds.readData();
+    private static int[] readInts(StorageGroup group, String name) {
+        try (StorageDataset ds = group.openDataset(name)) {
+            return (int[]) ds.readAll();
         }
     }
 
-    private static long[] readLongs(Hdf5Group group, String name) {
-        try (Hdf5Dataset ds = group.openDataset(name)) {
-            return (long[]) ds.readData();
+    private static long[] readLongs(StorageGroup group, String name) {
+        try (StorageDataset ds = group.openDataset(name)) {
+            return (long[]) ds.readAll();
         }
     }
 }
