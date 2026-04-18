@@ -1,0 +1,96 @@
+# Storage Providers
+
+MPEG-O separates the data model from the storage backend. The
+`mpeg_o.providers` package (and its Objective-C / Java equivalents)
+defines a protocol contract — `StorageProvider`, `StorageGroup`,
+`StorageDataset` — that every backend implements. Four providers
+ship in v0.7 Python.
+
+## Feature matrix
+
+| Provider | URL schemes | Chunking | Compression | N-D datasets | Compound with VL strings | Attributes | Transactions |
+|---|---|---|---|---|---|---|---|
+| **HDF5** (`Hdf5Provider`) | `file://`, bare paths, `http(s)://`, `s3://` (via h5py) | Yes (native HDF5 chunking) | Yes (zlib, LZ4 via `hdf5plugin`, Numpress-delta) | Yes (native rank; M45 adds the protocol surface) | Yes (native HDF5 compound) | Strings, ints, floats, arrays | No (HDF5 has no transactional model) |
+| **Memory** (`MemoryProvider`) | `memory://<name>` | No (chunk hint stored but ignored) | No | Yes (in-memory ndarray) | Yes (in-memory structured ndarray) | Any Python object | No |
+| **SQLite** (`SqliteProvider`) | `sqlite://<path>`, `.db`/`.sqlite` paths | No (chunk hint accepted, ignored) | No | Yes (flat BLOB + `shape_json`) | Yes (row-of-dicts as JSON) | Strings, ints, floats | Yes (`BEGIN` / `COMMIT` / `ROLLBACK`) |
+| **Zarr** (`ZarrProvider`, v0.7 M46) | `zarr:///<path>`, `zarr+memory://<name>`, `zarr+s3://bucket/key` | Yes (native zarr chunks) | Yes (Blosc wrappers for zlib and LZ4 via `numcodecs`) | Yes (native N-D) | Yes (sub-group + JSON-rows attribute) | JSON-serialisable types | No |
+
+Legend
+
+- **Chunking** — honors `chunk_size` / `chunks` arguments to
+  `create_dataset` / `create_dataset_nd`.
+- **Compression** — honors the `compression` / `compression_level`
+  arguments.
+- **Compound with VL strings** — can store records with variable-length
+  string fields (identifications, quantifications, provenance).
+- **Attributes** — types accepted by `set_attribute`.
+- **Transactions** — supports `begin_transaction` / `commit_transaction`
+  / `rollback_transaction`.
+
+## Canonical-bytes parity
+
+Every provider's `StorageDataset.read_canonical_bytes()` produces the
+same little-endian byte stream for the same data, regardless of backend
+(M43). The canonical form drives signatures and encryption so signed /
+encrypted datasets verify identically whichever provider wrote them.
+
+Cross-backend test coverage:
+
+- `python/tests/test_canonical_bytes_cross_backend.py` — HDF5, Memory,
+  SQLite.
+- `python/tests/test_zarr_provider.py::test_compound_canonical_bytes_matches_hdf5`
+  — adds Zarr as the fourth provider.
+
+## URL scheme routing
+
+```python
+from mpeg_o.providers import open_provider
+
+# HDF5 (default for bare paths and file:// URLs)
+p = open_provider("/path/to/file.mpgo", mode="r")
+p = open_provider("file:///path/to/file.mpgo", mode="r")
+
+# Memory
+p = open_provider("memory://pipeline-state", mode="w")
+
+# SQLite
+p = open_provider("sqlite:///path/to/file.db", mode="w")
+
+# Zarr (v0.7 M46)
+p = open_provider("zarr:///path/to/store.zarr", mode="w")      # directory
+p = open_provider("zarr+memory://scratch", mode="w")           # in-memory
+p = open_provider("zarr+s3://bucket/key.zarr", mode="r")       # S3 via fsspec
+```
+
+Explicit override via `provider="<name>"` bypasses URL detection.
+
+## v0.7 → v0.8 roadmap
+
+| Provider | Python | Java | ObjC |
+|---|---|---|---|
+| HDF5 | v0.6 | v0.6 | v0.6 |
+| Memory | v0.6 | v0.6 | v0.6 |
+| SQLite | v0.7 M41 | v0.7 M41 | v0.7 M41 |
+| Zarr | **v0.7 M46** | v0.8 | v0.8 |
+
+Java and ObjC ZarrProvider ports are deferred to v0.8 — the Python
+reference exists first to stress-test the abstraction (HANDOFF.md
+M46 non-deliverable). Abstraction leaks found during Zarr
+implementation were fixed inline; no v0.8 follow-up bugs were filed.
+
+## Writing a new provider
+
+1. Subclass `StorageProvider`, `StorageGroup`, `StorageDataset` in
+   `python/src/mpeg_o/providers/<name>.py`.
+2. Add a `[project.entry-points."mpeg_o.providers"]` entry in
+   `python/pyproject.toml`.
+3. Make `python/tests/test_zarr_provider.py` (or a peer) pass against
+   your backend. The contract tests cover group/attribute/primitive/
+   compound/N-D round-trips plus canonical-bytes parity.
+4. Cross-language parity: once the Python impl is stable, port to
+   Java (`java/src/main/java/com/dtwthalion/mpgo/providers/`) and
+   Objective-C (`objc/Source/Providers/`). Both mirror the Python
+   class and method shapes.
+
+See `docs/api-review-v0.7.md` §Appendix B for the Gap items the
+abstraction absorbed during M39 → M46.
