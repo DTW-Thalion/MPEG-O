@@ -78,29 +78,73 @@ def _dataset_canonical_bytes(dataset: h5py.Dataset) -> bytes:
     return _Hdf5Dataset(dataset).read_canonical_bytes()
 
 
-def sign_dataset(dataset: h5py.Dataset, key: bytes) -> str:
-    """Sign ``dataset`` with a canonical (v2) HMAC-SHA256 signature.
+def sign_dataset(
+    dataset: h5py.Dataset,
+    key: bytes,
+    *,
+    algorithm: str = "hmac-sha256",
+) -> str:
+    """Sign ``dataset`` with a canonical (v2) signature.
 
-    The resulting attribute string carries a ``v2:`` prefix. Use
-    :func:`verify_dataset` to validate; it transparently falls back to
-    the v0.2 unprefixed native-bytes path for legacy files.
+    The resulting attribute string carries a ``v2:`` prefix for
+    HMAC-SHA256 (default). Post-quantum signature algorithms (M49)
+    will reserve a ``v3:`` prefix. Use :func:`verify_dataset` to
+    validate; it transparently falls back to the v0.2 unprefixed
+    native-bytes path for legacy files.
+
+    v0.7 M48: ``algorithm`` is the catalog identifier
+    (``"hmac-sha256"`` active; ``"ml-dsa-87"`` reserved). Unsupported
+    or unknown identifiers raise
+    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError`.
     """
+    from . import cipher_suite
+    cipher_suite.validate_key(algorithm, key)
+    if algorithm != "hmac-sha256":
+        raise cipher_suite.UnsupportedAlgorithmError(
+            f"{algorithm}: signature path not yet implemented "
+            f"(M49 target)"
+        )
     mac_b64 = hmac_sha256_b64(_dataset_canonical_bytes(dataset), key)
     prefixed = SIGNATURE_V2_PREFIX + mac_b64
     _write_vl_string_attr(dataset, SIGNATURE_ATTR, prefixed)
     return prefixed
 
 
-def verify_dataset(dataset: h5py.Dataset, key: bytes) -> bool:
+def verify_dataset(
+    dataset: h5py.Dataset,
+    key: bytes,
+    *,
+    algorithm: str = "hmac-sha256",
+) -> bool:
     """Verify the stored ``@mpgo_signature`` against ``key``.
 
     Accepts both the v0.3 ``v2:`` canonical layout and the v0.2 native
     layout; the prefix distinguishes the two. Uses timing-safe
     comparison via :func:`hmac.compare_digest`.
+
+    v0.7 M48: the ``algorithm`` parameter mirrors :func:`sign_dataset`.
+    A ``"v3:"`` prefix encountered during verification raises
+    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError` — M49 will
+    activate ML-DSA-87 verification.
     """
+    from . import cipher_suite
+    cipher_suite.validate_key(algorithm, key)
+    if algorithm != "hmac-sha256":
+        raise cipher_suite.UnsupportedAlgorithmError(
+            f"{algorithm}: signature path not yet implemented "
+            f"(M49 target)"
+        )
     stored = _read_vl_string_attr(dataset, SIGNATURE_ATTR)
     if stored is None:
         return False
+    if stored.startswith("v3:"):
+        # Reserved for M49. Fail the verify cleanly rather than
+        # silently passing — forcing callers to upgrade to a PQC
+        # build to read PQC-signed files.
+        raise cipher_suite.UnsupportedAlgorithmError(
+            "v3: signature prefix reserved for post-quantum "
+            "algorithms (M49); this build cannot verify it"
+        )
     if stored.startswith(SIGNATURE_V2_PREFIX):
         payload = stored[len(SIGNATURE_V2_PREFIX):]
         expected = hmac_sha256_b64(_dataset_canonical_bytes(dataset), key)

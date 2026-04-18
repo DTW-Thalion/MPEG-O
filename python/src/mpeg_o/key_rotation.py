@@ -225,14 +225,30 @@ def _unpack_blob(raw: bytes) -> SealedBlob:
     )
 
 
-def _wrap_dek(dek: bytes, kek: bytes, *, legacy_v1: bool = False) -> bytes:
+def _wrap_dek(
+    dek: bytes,
+    kek: bytes,
+    *,
+    legacy_v1: bool = False,
+    algorithm: str = "aes-256-gcm",
+) -> bytes:
     """Wrap a DEK under a KEK. Default v0.7+ output is v1.2
-    (algorithm_id=AES-256-GCM); pass ``legacy_v1=True`` to emit the
-    60-byte v1.1 layout for cross-version regression fixtures."""
-    if len(dek) != AES_KEY_LEN or len(kek) != AES_KEY_LEN:
-        raise KeyRotationError("DEK and KEK must both be 32 bytes")
-    blob = encrypt_bytes(dek, kek)
+    (AES-256-GCM); pass ``legacy_v1=True`` to emit the 60-byte v1.1
+    layout for cross-version regression fixtures.
+
+    ``algorithm`` selects the wrap primitive (v0.7 M48). Only
+    ``"aes-256-gcm"`` is live; ``"ml-kem-1024"`` is reserved for M49.
+    """
+    from . import cipher_suite
+    cipher_suite.validate_key(algorithm, kek)
+    cipher_suite.validate_key(algorithm, dek)
+    blob = encrypt_bytes(dek, kek, algorithm=algorithm)
     if legacy_v1:
+        if algorithm != "aes-256-gcm":
+            raise KeyRotationError(
+                "v1.1 legacy layout is AES-256-GCM only; "
+                f"refusing to emit v1.1 for algorithm={algorithm!r}"
+            )
         return _pack_blob_v1(blob)
     return _pack_blob_v2(
         _WK_ALG_AES_256_GCM,
@@ -241,10 +257,15 @@ def _wrap_dek(dek: bytes, kek: bytes, *, legacy_v1: bool = False) -> bytes:
     )
 
 
-def _unwrap_dek(wrapped: bytes, kek: bytes) -> bytes:
-    if len(kek) != AES_KEY_LEN:
-        raise KeyRotationError("KEK must be 32 bytes")
-    return decrypt_bytes(_unpack_blob(wrapped), kek)
+def _unwrap_dek(
+    wrapped: bytes,
+    kek: bytes,
+    *,
+    algorithm: str = "aes-256-gcm",
+) -> bytes:
+    from . import cipher_suite
+    cipher_suite.validate_key(algorithm, kek)
+    return decrypt_bytes(_unpack_blob(wrapped), kek, algorithm=algorithm)
 
 
 def _write_wrapped_dataset(ki: h5py.Group, wrapped: bytes) -> None:
@@ -283,40 +304,57 @@ def has_envelope_encryption(f: h5py.File) -> bool:
 
 
 def enable_envelope_encryption(
-    f: h5py.File, kek: bytes, *, kek_id: str
+    f: h5py.File,
+    kek: bytes,
+    *,
+    kek_id: str,
+    algorithm: str = "aes-256-gcm",
 ) -> bytes:
     """Generate a fresh DEK, wrap it under ``kek``, and persist key_info.
 
     Returns the plaintext DEK so callers can use it to encrypt signal
     channels. Subsequent reads must unwrap via :func:`unwrap_dek` using
     the same KEK.
+
+    ``algorithm`` selects the wrap cipher suite (v0.7 M48). Default is
+    AES-256-GCM; reserved values land in M49.
     """
-    if len(kek) != AES_KEY_LEN:
-        raise KeyRotationError(f"KEK must be {AES_KEY_LEN} bytes")
+    from . import cipher_suite
+    cipher_suite.validate_key(algorithm, kek)
     dek = os.urandom(AES_KEY_LEN)
-    wrapped = _wrap_dek(dek, kek)
+    wrapped = _wrap_dek(dek, kek, algorithm=algorithm)
 
     ki = _key_info_group(f, create=True)
     assert ki is not None  # create=True guarantees this
     _write_wrapped_dataset(ki, wrapped)
     _set_string_attr(ki, "kek_id", kek_id)
-    _set_string_attr(ki, "kek_algorithm", KEK_ALGORITHM)
+    _set_string_attr(ki, "kek_algorithm", algorithm)
     _set_string_attr(ki, "wrapped_at", _iso8601_now())
     _set_string_attr(ki, "key_history_json", "[]")
     return dek
 
 
-def unwrap_dek(f: h5py.File, kek: bytes) -> bytes:
+def unwrap_dek(
+    f: h5py.File,
+    kek: bytes,
+    *,
+    algorithm: str = "aes-256-gcm",
+) -> bytes:
     """Unwrap and return the DEK using the given KEK.
 
     Raises :class:`KeyRotationError` (or a cryptography ``InvalidTag``)
     when the KEK does not authenticate the wrapped blob.
+
+    ``algorithm`` selects the wrap cipher suite (v0.7 M48). Pass the
+    same value the writer used; a wrong algorithm fails cleanly via
+    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError` or
+    authentication failure.
     """
     ki = _key_info_group(f, create=False)
     if ki is None or "dek_wrapped" not in ki:
         raise KeyRotationError("/protection/key_info/dek_wrapped missing")
     wrapped = _read_wrapped_dataset(ki)
-    return _unwrap_dek(wrapped, kek)
+    return _unwrap_dek(wrapped, kek, algorithm=algorithm)
 
 
 def rotate_key(
@@ -325,13 +363,15 @@ def rotate_key(
     old_kek: bytes,
     new_kek: bytes,
     new_kek_id: str,
+    algorithm: str = "aes-256-gcm",
 ) -> None:
     """Re-wrap the DEK under ``new_kek`` and append the old entry to history.
 
     Signal datasets are not touched, so the cost is O(1) in file size.
+    ``algorithm`` threads through to :func:`_wrap_dek` (v0.7 M48).
     """
-    dek = unwrap_dek(f, old_kek)       # authenticates the old KEK
-    wrapped = _wrap_dek(dek, new_kek)
+    dek = unwrap_dek(f, old_kek, algorithm=algorithm)       # authenticates the old KEK
+    wrapped = _wrap_dek(dek, new_kek, algorithm=algorithm)
 
     ki = _key_info_group(f, create=False)
     assert ki is not None              # unwrap_dek already checked

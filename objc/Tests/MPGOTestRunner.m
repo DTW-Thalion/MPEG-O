@@ -33,6 +33,7 @@ extern void testMilestone39(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
+extern void testCipherSuite(void);
 
 int main(int argc, const char *argv[])
 {
@@ -164,6 +165,10 @@ int main(int argc, const char *argv[])
         START_SET("M43: canonical bytes cross-backend")
             testCanonicalBytesCrossBackend();
         END_SET("M43: canonical bytes cross-backend")
+
+        START_SET("M48: cipher suite catalog")
+            testCipherSuite();
+        END_SET("M48: cipher suite catalog")
     }
     return 0;
 }

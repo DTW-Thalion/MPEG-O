@@ -37,6 +37,12 @@ AES_IV_LEN = 12
 AES_TAG_LEN = 16
 ALGORITHM_NAME = "AES-256-GCM"
 
+# v0.7 M48: default algorithm identifier used by the cipher_suite
+# catalog. Pre-v0.7 code hardcoded the constants above; new code paths
+# go through :mod:`mpeg_o.cipher_suite` so the algorithm is a
+# parameter, not an invariant.
+DEFAULT_ENCRYPTION_ALGORITHM = "aes-256-gcm"
+
 
 def _aesgcm():  # type: ignore[no-untyped-def]
     try:
@@ -58,34 +64,73 @@ class SealedBlob:
     tag: bytes
 
 
-def encrypt_bytes(plaintext: bytes, key: bytes, iv: bytes | None = None) -> SealedBlob:
-    """Encrypt ``plaintext`` with AES-256-GCM. Returns ciphertext/iv/tag tuple.
+def encrypt_bytes(
+    plaintext: bytes,
+    key: bytes,
+    iv: bytes | None = None,
+    *,
+    algorithm: str = DEFAULT_ENCRYPTION_ALGORITHM,
+) -> SealedBlob:
+    """Encrypt ``plaintext`` with the named AEAD cipher.
+    Returns ciphertext/iv/tag tuple.
 
-    If ``iv`` is ``None`` a random 12-byte nonce is generated. Tests that need
-    cross-implementation parity should pass a fixed ``iv``.
+    v0.7 M48: the algorithm is a parameter, not an invariant. Key and
+    nonce lengths come from :mod:`mpeg_o.cipher_suite`. Passing an
+    unsupported algorithm raises
+    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError`.
+
+    Default ``algorithm="aes-256-gcm"`` preserves pre-v0.7 behaviour
+    exactly. If ``iv`` is ``None`` a random nonce of the cipher's
+    required length is generated. Tests that need cross-implementation
+    parity should pass a fixed ``iv``.
     """
-    if len(key) != AES_KEY_LEN:
-        raise ValueError(f"AES-256-GCM key must be {AES_KEY_LEN} bytes, got {len(key)}")
+    from . import cipher_suite
+    cipher_suite.validate_key(algorithm, key)
+    nonce_len = cipher_suite.nonce_length(algorithm)
+    tag_len = cipher_suite.tag_length(algorithm)
     if iv is None:
         import os
-        iv = os.urandom(AES_IV_LEN)
-    if len(iv) != AES_IV_LEN:
-        raise ValueError(f"AES-256-GCM IV must be {AES_IV_LEN} bytes, got {len(iv)}")
-
+        iv = os.urandom(nonce_len)
+    if len(iv) != nonce_len:
+        raise ValueError(
+            f"{algorithm}: IV must be {nonce_len} bytes, got {len(iv)}"
+        )
+    # v0.7: only AES-256-GCM is a live AEAD; other AEADs land in M49.
+    if algorithm != "aes-256-gcm":  # pragma: no cover - caught by validate_key
+        raise cipher_suite.UnsupportedAlgorithmError(
+            f"{algorithm}: AEAD path not yet implemented"
+        )
     AESGCM = _aesgcm()
     ct_with_tag = AESGCM(key).encrypt(iv, plaintext, associated_data=None)
-    ciphertext, tag = ct_with_tag[:-AES_TAG_LEN], ct_with_tag[-AES_TAG_LEN:]
+    ciphertext, tag = ct_with_tag[:-tag_len], ct_with_tag[-tag_len:]
     return SealedBlob(ciphertext=ciphertext, iv=iv, tag=tag)
 
 
-def decrypt_bytes(blob: SealedBlob, key: bytes) -> bytes:
-    """Decrypt an AES-256-GCM sealed blob. Raises on authentication failure."""
-    if len(key) != AES_KEY_LEN:
-        raise ValueError(f"AES-256-GCM key must be {AES_KEY_LEN} bytes, got {len(key)}")
-    if len(blob.iv) != AES_IV_LEN or len(blob.tag) != AES_TAG_LEN:
-        raise ValueError("AES-256-GCM IV/tag length mismatch")
+def decrypt_bytes(
+    blob: SealedBlob,
+    key: bytes,
+    *,
+    algorithm: str = DEFAULT_ENCRYPTION_ALGORITHM,
+) -> bytes:
+    """Decrypt a sealed blob with the named AEAD cipher. Raises on
+    authentication failure. Key / IV / tag lengths dispatched via
+    :mod:`mpeg_o.cipher_suite` (v0.7 M48)."""
+    from . import cipher_suite
+    cipher_suite.validate_key(algorithm, key)
+    nonce_len = cipher_suite.nonce_length(algorithm)
+    tag_len = cipher_suite.tag_length(algorithm)
+    if len(blob.iv) != nonce_len or len(blob.tag) != tag_len:
+        raise ValueError(
+            f"{algorithm}: IV/tag length mismatch "
+            f"(iv {len(blob.iv)}≠{nonce_len}, tag {len(blob.tag)}≠{tag_len})"
+        )
+    if algorithm != "aes-256-gcm":  # pragma: no cover
+        raise cipher_suite.UnsupportedAlgorithmError(
+            f"{algorithm}: AEAD path not yet implemented"
+        )
     AESGCM = _aesgcm()
-    return AESGCM(key).decrypt(blob.iv, blob.ciphertext + blob.tag, associated_data=None)
+    return AESGCM(key).decrypt(blob.iv, blob.ciphertext + blob.tag,
+                                 associated_data=None)
 
 
 # ---------------------------------------------- channel-level helpers ---
