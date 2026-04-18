@@ -4,8 +4,18 @@ Feature flags are declared on the HDF5 root group as the
 `@mpeg_o_features` attribute, which holds a JSON array of strings.
 Files written by libMPGO v0.2+ always emit the full set of supported
 features so downstream readers can detect capabilities at a glance.
-v0.3.0 extends the v0.2 set with compound per-run provenance, canonical
-byte-order signatures, and LZ4 / Numpress-delta compression codecs.
+Later versions layer additional features on top:
+
+- **v0.3.0** — compound per-run provenance, canonical byte-order
+  signatures, LZ4 / Numpress-delta compression codecs.
+- **v0.4.0** — envelope encryption + key rotation, anonymization.
+- **v0.7.0** — versioned wrapped-key blob format (`wrapped_key_v2`).
+
+The on-disk `mpeg_o_format_version` attribute is **"1.2"** for files
+written by v0.7+ writers (was `"1.1"` in v0.2 through v0.6). Readers
+treat the major/minor parts as documented in `docs/format-spec.md §1`
+— the minor bump is backward-compatible; v0.6 readers parse a v0.7
+file unless it carries a required flag they don't recognise.
 
 ## Semantics
 
@@ -69,3 +79,37 @@ documented here so implementers know what to expect.
 |------------------------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
 | `opt_key_rotation`           | optional  | M25 (v0.4)   | Envelope encryption: a DEK wraps signal data, a KEK wraps the DEK. `/protection/key_info/` holds the 60-byte `dek_wrapped` dataset (32 cipher + 12 IV + 16 tag), `@kek_id`, `@kek_algorithm`, `@wrapped_at`, and `@key_history_json`. Rotation re-wraps without re-encrypting data. |
 | `opt_anonymized`             | optional  | M28 (v0.4)   | The file has been through the anonymization pipeline. A ProvenanceRecord documents which policies ran, how many spectra/values were affected, and the timestamp. |
+
+## v0.7 flags
+
+| Flag                 | Required? | Since        | Semantics                                                                                          |
+|----------------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
+| `wrapped_key_v2`     | optional  | M47 (v0.7)   | `/protection/key_info/dek_wrapped` uses the versioned v1.2 envelope: `[magic "MW" (2) \| version 0x02 (1) \| algorithm_id (2, BE) \| ciphertext_len (4, BE) \| metadata_len (2, BE) \| metadata \| ciphertext]`. Algorithm IDs: `0x0000 = AES-256-GCM` (default), `0x0001 = ML-KEM-1024` (reserved for M49). For AES-GCM the metadata section is `[iv (12) \| tag (16)]` and ciphertext holds the 32-byte wrapped DEK. Writers emit v1.2 when this flag is present; readers that see the flag accept both v1.1 (60-byte legacy) and v1.2 blobs. v1.1-only readers silently read pre-v0.7 files that lack the flag. Binding decision 38. |
+
+Algorithm discriminators reserved in v0.7 but first-shipped in v0.8+:
+
+- `0x0001` — ML-KEM-1024 (post-quantum key encapsulation, M49)
+- `0x0002` — reserved
+
+`docs/format-spec.md §10b` specifies the v1.2 blob layout byte-by-byte.
+
+## v0.7 storage + crypto surface (non-flag)
+
+Some v0.7 additions are API-level and don't carry a feature flag —
+they apply uniformly to every file regardless of when the file was
+written:
+
+- **`StorageDataset.read_canonical_bytes()` (M43)** — byte-level
+  protocol method consumed by signatures + encryption. Canonical
+  stream is little-endian across backends and hosts, so a signed
+  dataset verifies identically whether it was written via
+  `Hdf5Provider`, `SqliteProvider`, `MemoryProvider`, or `ZarrProvider`.
+- **`CipherSuite` catalog (M48)** — static allow-list of algorithms
+  (`aes-256-gcm`, `hmac-sha256`, plus reserved PQC identifiers).
+  `encrypt_bytes(..., algorithm=...)` / `sign_dataset(..., algorithm=...)`
+  / `enable_envelope_encryption(..., algorithm=...)` pass through the
+  catalog's validation. No on-disk change relative to the default.
+- **`create_dataset_nd` on Memory / SQLite / Zarr (M45/M46)** — full
+  N-D support via flat BLOB + `@__shape_<name>__` attribute on the
+  Hdf5/Sqlite/Zarr adapters so byte-level parity with HDF5's native
+  rank survives the backend swap.

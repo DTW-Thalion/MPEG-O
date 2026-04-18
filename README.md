@@ -39,9 +39,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **v0.5.0 — Normative reference. 836 assertions passing.** | `objc/` |
-| **Python (`mpeg-o`)**     | **v0.5.0 — Full parity with ObjC and Java. 120 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.mpgo`)** | **v0.5.0 — Full parity with ObjC and Python. 62 tests, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **v0.7.0 — Normative reference. 1057 assertions passing.** | `objc/` |
+| **Python (`mpeg-o`)**     | **v0.7.0 — Full parity with ObjC and Java. 284 tests passing.** | `python/` |
+| **Java (`com.dtwthalion.mpgo`)** | **v0.7.0 — Full parity with ObjC and Python. 179 tests, JDK 17, Maven.** | `java/` |
 
 ### v0.1.0-alpha capabilities
 
@@ -91,6 +91,32 @@ v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2
 * **nmrML writer (M29)** — serializes `NMRSpectrum` + FID to nmrML XML with acquisition parameters and base64 spectrum arrays. Round-trips through the existing nmrML reader.
 * **Thermo RAW stub (M29)** — `MPGOThermoRawReader` / `mpeg_o.importers.thermo_raw` stub; returns not-implemented error with SDK guidance. See `docs/vendor-formats.md`.
 
+### v0.5.0 capabilities (additions to v0.4)
+
+* **Three-language parity** — Java implementation (`com.dtwthalion.mpgo`, JDK 17 + Maven) reaches full behavioural parity with the Objective-C reference and Python reader/writer. Every cross-language round-trip test in the matrix passes byte-for-byte, driven by shared format fixtures.
+* **Canonical byte-order signatures across languages** — `v2:` HMAC-SHA256 signatures (Appendix B in `docs/format-spec.md`) verify identically whether produced by Objective-C, Python, or Java, validating the canonical little-endian byte layout at the implementation level.
+* **Compound metadata round-trip across languages** — identifications / quantifications / dataset-level provenance round-trip through all three languages (native compound datasets in HDF5; Python / Java write a JSON attribute mirror so JHI5 1.10's missing VL-in-compound support doesn't block interop).
+
+### v0.6.0 / v0.6.1 capabilities (additions to v0.5)
+
+* **Storage provider abstraction (M39)** — `StorageProvider` / `StorageGroup` / `StorageDataset` (`MPGOStorageProtocols.h` in ObjC; `com.dtwthalion.mpgo.providers` in Java; `mpeg_o.providers` in Python). `open_provider("scheme://...")` resolves the right backend by URL scheme. `Hdf5Provider` wraps the existing layer; `MemoryProvider` ships alongside as a transient-state backend that proves the contract by construction.
+* **SQLiteProvider (M41, v0.6.1)** — fourth-backend validation: the full group/dataset/attribute/compound tree stored as SQLite rows. Uses the standard-library `sqlite3` module, no extra deps.
+* **Native Thermo RAW import (M35)** — `MPGOThermoRawReader` shells out to `ThermoRawFileParser` and ingests the resulting mzML. See `docs/vendor-formats.md`.
+* **ROS3 cloud reads (M42, v0.6.1)** — `SpectralDataset.open("s3://...")` streams HDF5 metadata + chunks directly over S3 / HTTPS via libhdf5's ROS3 VFD.
+* **Full API documentation (M38, v0.6.1)** — Sphinx HTML docs, Javadoc HTML, and an expanded ObjC gsdoc landing page all exposed under `docs/api/`.
+* **Appendix B gap closures (v0.6.1)** — six cross-language polish items from the v0.6 API review: primitive-row compound read normalisation (`read_rows`), delete_attribute, capability-query methods, unified `open()` dispatch, attribute-names listing, `provider_name()` / docstrings converged.
+
+### v0.7.0 capabilities (additions to v0.6.1)
+
+* **Byte-level storage protocol (M43)** — `StorageDataset.read_canonical_bytes()` / `-readCanonicalBytesAtOffset:count:error:` — the protocol-native path for signatures and encryption. Canonical byte stream is little-endian regardless of backend or host endianness; every provider (HDF5, Memory, SQLite, Zarr) returns bit-equal bytes for the same logical data. Binding decision 37.
+* **AcquisitionRun + MSImage protocol-native access (M44)** — the hot-path spectrum slice read goes through `StorageDataset` instead of reaching for `h5py.Dataset` / `MPGOHDF5Dataset` / `Hdf5Dataset` directly. `AcquisitionRun`'s instance state now holds only protocol types across all three languages.
+* **Full-rank N-D datasets (M45)** — `create_dataset_nd` completes on Memory and SQLite providers using a flat-BLOB + `@__shape_<name>__` attribute pattern that preserves rank through the protocol. Hdf5Provider gets the same pattern; v0.8 may add native `H5Screate_simple` storage as an optimisation.
+* **ZarrProvider Python reference (M46, stretch)** — fourth storage backend, validates the abstraction against zarr 2.18+. URL schemes: `zarr:///path/to/store.zarr` (directory), `zarr+memory://<name>`, `zarr+s3://bucket/key` (via fsspec). Canonical-bytes parity verified against HDF5. Java + ObjC ports deferred to v0.8 per binding decision 41.
+* **Versioned wrapped-key blob format (M47)** — `[magic "MW" | version 0x02 | algorithm_id | ct_len | md_len | metadata | ciphertext]`, replacing the fixed 60-byte AES-GCM-only v1.1 blob. v1.1 blobs remain readable by v0.7+ indefinitely (binding decision 38). Reserved algorithm IDs for ML-KEM-1024, ML-DSA-87, SHAKE-256. Feature flag: `wrapped_key_v2`.
+* **Crypto algorithm agility (M48)** — `CipherSuite` static catalog (AEAD / KEM / MAC / Signature / Hash / XOF). `encrypt_bytes(..., algorithm=...)`, `sign_dataset(..., algorithm=...)`, `enable_envelope_encryption(..., algorithm=...)` gained opt-in `algorithm=` parameters; default remains AES-256-GCM / HMAC-SHA256 for backward compat. Binding decision 39 — fixed allow-list, not plugin-registered.
+* **Cross-language compound byte-parity harness (M51, stretch)** — three new dumper CLIs (`python -m mpeg_o.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `MpgoDumpIdentifications`) emit identifications / quantifications / provenance as byte-identical canonical JSON. `test_compound_writer_parity.py` pairwise-diffs the three outputs; any divergence fails the test. Caught + fixed a Java `H5T_NATIVE_UINT64` precision-probe bug on the way in.
+* **Cross-language polish (M50)** — six independent sub-items: unified `open()` docs, ObjC `-readRowsWithError:` made @required, Java typed importer exception hierarchy, Java `@since` audit, cross-language error-domain mapping appendix (`docs/api-review-v0.7.md` §C), Appendix B Gap 7 cross-references.
+
 ## Python Installation
 
 ```bash
@@ -109,6 +135,7 @@ Individual extras:
 | `import`  | `lxml`                                      | mzML / nmrML importers (`mpeg_o.importers`)           |
 | `cloud`   | `fsspec`, `s3fs`, `aiohttp`                 | `s3://` / `http(s)://` / `gs://` / `az://` open paths |
 | `codecs`  | `hdf5plugin>=4.0`                           | LZ4 signal-channel compression                        |
+| `zarr`    | `zarr>=2.18,<3`                             | `ZarrProvider` — `zarr://`, `zarr+s3://`, `zarr+memory://` URLs (v0.7 M46) |
 
 ### Python quick start
 
@@ -204,11 +231,18 @@ works on both Debian/Ubuntu's apt packages and source builds against
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Full class hierarchy, protocols, and HDF5 container mapping
 - [`WORKPLAN.md`](WORKPLAN.md) — Milestone plan with acceptance criteria
+- [`HANDOFF.md`](HANDOFF.md) — Active development handoff (v0.7 milestone status, binding decisions, gotchas)
 - [`docs/architectural-primitives.md`](docs/architectural-primitives.md) — Background analysis: the six primitives, five container philosophies, and the case for an MPEG-G-derived multi-omics standard
 - [`docs/primitives.md`](docs/primitives.md) — The six data primitives specification
 - [`docs/container-design.md`](docs/container-design.md) — HDF5 container layout
 - [`docs/class-hierarchy.md`](docs/class-hierarchy.md) — UML-style class descriptions
 - [`docs/ontology-mapping.md`](docs/ontology-mapping.md) — CV annotation and BFO/PSI-MS/nmrCV mapping
+- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.mpgo` format specification (v1.2)
+- [`docs/feature-flags.md`](docs/feature-flags.md) — Feature-flag registry
+- [`docs/providers.md`](docs/providers.md) — Storage provider feature matrix (HDF5 / Memory / SQLite / Zarr)
+- [`docs/migration-guide.md`](docs/migration-guide.md) — Migration guide from mzML / nmrML and inter-version migration notes
+- [`docs/api-review-v0.7.md`](docs/api-review-v0.7.md) — Cross-language API review (v0.7 appendices A, B, C)
+- [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`)
 
 ## License
 
