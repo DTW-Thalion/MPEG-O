@@ -101,6 +101,29 @@
                 </configuration>
             </plugin>
             <plugin>
+                <!-- v0.7 M51: the compound-parity dumper
+                     com.dtwthalion.mpgo.tools.DumpIdentifications is
+                     intended to be run via `mvn exec:java`. System-
+                     scoped deps (jhdf5) need to be force-included on
+                     the exec classpath so the tool can open HDF5
+                     files the same way Surefire does. -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <includeProjectDependencies>true</includeProjectDependencies>
+                    <includePluginDependencies>false</includePluginDependencies>
+                    <classpathScope>runtime</classpathScope>
+                    <includeSystemScope>true</includeSystemScope>
+                    <systemProperties>
+                        <systemProperty>
+                            <key>java.library.path</key>
+                            <value>${hdf5.native.path}</value>
+                        </systemProperty>
+                    </systemProperties>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <version>3.6.3</version>

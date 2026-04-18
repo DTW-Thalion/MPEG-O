@@ -439,6 +439,13 @@ public class Hdf5Group implements AutoCloseable {
             return Precision.INT64;
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT32))
             return Precision.UINT32;
+        // v0.7 M51: Python writes spectrum_index/offsets as NumPy
+        // uint64, which HDF5 stores as H5T_NATIVE_UINT64. Treat it as
+        // 64-bit integer on read (no signed/unsigned distinction in
+        // Precision — matches the ObjC fix in commit 303e324 that
+        // added H5T_NATIVE_UINT64 → MPGOPrecisionInt64 mapping).
+        if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT64))
+            return Precision.INT64;
         // Check for compound with size == 16 (complex128)
         if ((int) H5.H5Tget_class(htid) == HDF5Constants.H5T_COMPOUND
                 && H5.H5Tget_size(htid) == 16) {
