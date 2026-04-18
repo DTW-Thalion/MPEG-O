@@ -381,4 +381,7 @@
 - (id)nativeHandle { return _file; }
 - (void)close { [_file close]; _open = NO; }
 
+- (BOOL)supportsChunking    { return YES; }
+- (BOOL)supportsCompression { return YES; }
+
 @end

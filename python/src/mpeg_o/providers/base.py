@@ -306,6 +306,24 @@ class StorageProvider(ABC):
     @abstractmethod
     def close(self) -> None: ...
 
+    # ── Capabilities (Appendix B Gap 3) ──────────────────────────
+
+    def supports_chunking(self) -> bool:
+        """Returns True if the backend honors ``chunk_size`` in
+        :meth:`StorageGroup.create_dataset`. HDF5 returns True; Memory
+        and SQLite return False (chunk_size is accepted for interface
+        compatibility but silently ignored).
+
+        Callers that depend on chunked I/O for streaming large datasets
+        can query this to degrade gracefully."""
+        return False
+
+    def supports_compression(self) -> bool:
+        """Returns True if the backend honors ``compression`` /
+        ``compression_level``. HDF5 returns True (zlib + LZ4); Memory
+        and SQLite return False."""
+        return False
+
     def native_handle(self) -> Any:
         """Return the underlying native storage handle — ``h5py.File``
         for :class:`Hdf5Provider`, ``None`` for :class:`MemoryProvider`.

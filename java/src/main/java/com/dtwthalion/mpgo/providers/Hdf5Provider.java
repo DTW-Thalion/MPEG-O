@@ -78,6 +78,9 @@ public final class Hdf5Provider implements StorageProvider {
     @Override
     public Object nativeHandle() { return file; }
 
+    @Override public boolean supportsChunking() { return true; }
+    @Override public boolean supportsCompression() { return true; }
+
     @Override
     public void close() {
         if (file != null) file.close();
