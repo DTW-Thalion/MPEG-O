@@ -32,6 +32,7 @@ extern void testMilestone29(void);
 extern void testMilestone39(void);
 extern void testMilestone49(void);
 extern void testMilestone52(void);
+extern void testMilestone53(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
@@ -184,6 +185,10 @@ int main(int argc, const char *argv[])
         START_SET("M52: ObjC ZarrProvider")
             testMilestone52();
         END_SET("M52: ObjC ZarrProvider")
+
+        START_SET("M53: ObjC Bruker TDF reader")
+            testMilestone53();
+        END_SET("M53: ObjC Bruker TDF reader")
     }
     return 0;
 }

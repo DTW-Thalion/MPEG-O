@@ -35,6 +35,7 @@ MPGOTests_OBJC_FILES = \
 	TestMilestone39.m \
 	TestMilestone49.m \
 	TestMilestone52.m \
+	TestMilestone53.m \
 	TestSqliteProvider.m \
 	TestCloudAccess.m \
 	TestCanonicalBytesCrossBackend.m \

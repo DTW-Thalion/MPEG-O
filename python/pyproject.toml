@@ -41,8 +41,14 @@ zarr = ["zarr>=2.18,<3"]
 # under $HOME/_oqs on first import if missing. See docs/pqc.md for
 # the platform matrix (Python/ObjC: liboqs; Java: Bouncy Castle).
 pqc = ["liboqs-python>=0.14,<1"]
-test = ["pytest>=7", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0", "zarr>=2.18,<3", "liboqs-python>=0.14,<1"]
-all = ["mpeg-o[crypto,import,cloud,codecs,zarr,pqc]"]
+# v0.8 M53: Bruker timsTOF TDF importer. opentimspy wraps the open-source
+# libtimsdata decoder (ZSTD-compressed frames + scan-to-ion mapping) — no
+# proprietary Bruker SDK is involved. The bridge package bundles the
+# prebuilt libtimsdata.so / libtimsdata.dll / libtimsdata.dylib so pip
+# install is the whole story.
+bruker = ["opentimspy>=1.0", "opentims-bruker-bridge>=1.0"]
+test = ["pytest>=7", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0", "zarr>=2.18,<3", "liboqs-python>=0.14,<1", "opentimspy>=1.0", "opentims-bruker-bridge>=1.0"]
+all = ["mpeg-o[crypto,import,cloud,codecs,zarr,pqc,bruker]"]
 
 [project.urls]
 Homepage = "https://github.com/DTW-Thalion/MPEG-O"

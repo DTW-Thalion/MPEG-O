@@ -56,6 +56,7 @@ libMPGO_HEADER_FILES = \
 	Import/MPGOMzMLReader.h \
 	Import/MPGONmrMLReader.h \
 	Import/MPGOThermoRawReader.h \
+	Import/MPGOBrukerTDFReader.h \
 	Export/MPGOMzMLWriter.h \
 	Export/MPGONmrMLWriter.h \
 	Export/MPGOISAExporter.h \
@@ -114,6 +115,7 @@ libMPGO_OBJC_FILES = \
 	Import/MPGOMzMLReader.m \
 	Import/MPGONmrMLReader.m \
 	Import/MPGOThermoRawReader.m \
+	Import/MPGOBrukerTDFReader.m \
 	Export/MPGOMzMLWriter.m \
 	Export/MPGONmrMLWriter.m \
 	Export/MPGOISAExporter.m \
