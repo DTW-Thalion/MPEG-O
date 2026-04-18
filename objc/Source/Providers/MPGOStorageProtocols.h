@@ -184,6 +184,19 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
  *  Byte-level callers (signatures, encryption) use this. */
 - (id)nativeHandle;
 
+@optional
+/** YES if the backend honors ``chunkSize`` in
+ *  ``-createDatasetNamed:precision:length:chunkSize:...``. Defaults
+ *  to NO via the adapter pattern — only ``MPGOHDF5Provider`` returns
+ *  YES. Memory and SQLite accept the argument for interface
+ *  compatibility but silently ignore it. Appendix B Gap 3. */
+- (BOOL)supportsChunking;
+
+/** YES if the backend honors ``compression`` / ``compressionLevel``.
+ *  Only ``MPGOHDF5Provider`` returns YES (zlib + LZ4). Appendix B
+ *  Gap 3. */
+- (BOOL)supportsCompression;
+
 @end
 
 #endif  /* MPGO_STORAGE_PROTOCOLS_H */

@@ -281,6 +281,12 @@ class Hdf5Provider(StorageProvider):
         except Exception:
             pass
 
+    def supports_chunking(self) -> bool:
+        return True
+
+    def supports_compression(self) -> bool:
+        return True
+
     def native_handle(self) -> h5py.File:
         """Underlying h5py.File — escape hatch for byte-level code
         (signature hashing, encryption, native compression filters)."""

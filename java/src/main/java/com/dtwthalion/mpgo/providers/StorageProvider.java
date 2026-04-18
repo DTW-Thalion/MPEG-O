@@ -63,6 +63,20 @@ public interface StorageProvider extends AutoCloseable {
      *  specific backend.</p> */
     default Object nativeHandle() { return null; }
 
+    // ── Capabilities (Appendix B Gap 3) ──────────────────────────
+
+    /** {@code true} if the backend honors {@code chunkSize} in
+     *  {@link StorageGroup#createDataset}. Defaults to {@code false}
+     *  — only {@link Hdf5Provider} returns {@code true}. Memory and
+     *  SQLite accept {@code chunkSize} for interface compatibility but
+     *  silently ignore it. */
+    default boolean supportsChunking() { return false; }
+
+    /** {@code true} if the backend honors {@code compression} /
+     *  {@code compressionLevel}. Defaults to {@code false}. Only
+     *  {@link Hdf5Provider} returns {@code true} (zlib + LZ4). */
+    default boolean supportsCompression() { return false; }
+
     @Override
     void close();
 }
