@@ -32,6 +32,7 @@ extern void testMilestone29(void);
 extern void testMilestone39(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
+extern void testCanonicalBytesCrossBackend(void);
 
 int main(int argc, const char *argv[])
 {
@@ -159,6 +160,10 @@ int main(int argc, const char *argv[])
         START_SET("Cloud access (ROS3 / S3)")
             testCloudAccess();
         END_SET("Cloud access (ROS3 / S3)")
+
+        START_SET("M43: canonical bytes cross-backend")
+            testCanonicalBytesCrossBackend();
+        END_SET("M43: canonical bytes cross-backend")
     }
     return 0;
 }

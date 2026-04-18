@@ -7,6 +7,9 @@ package com.dtwthalion.mpgo.providers;
 
 import com.dtwthalion.mpgo.Enums.Precision;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -118,6 +121,141 @@ public interface StorageDataset extends AutoCloseable {
             "unexpected compound readAll() return type "
             + (raw == null ? "null" : raw.getClass().getName())
             + " for dataset '" + name() + "'");
+    }
+
+    /** Return the dataset contents as a byte stream in the MPGO
+     *  canonical layout (v0.7 M43).
+     *
+     *  <p>Semantics:</p>
+     *  <ul>
+     *    <li>Primitive numeric: little-endian packed values.</li>
+     *    <li>Compound: rows in storage order; fields in declaration
+     *        order. VL strings as {@code u32_le(length) || utf-8_bytes}.
+     *        Numeric fields little-endian.</li>
+     *  </ul>
+     *
+     *  <p>Signatures and encryption consume this so a signed or
+     *  encrypted dataset verifies identically regardless of which
+     *  provider wrote it. Default implementation handles
+     *  {@code Hdf5DatasetAdapter}'s native arrays and
+     *  {@code SqliteDataset}'s list-of-maps; providers with a
+     *  zero-copy fast path may override. */
+    default byte[] readCanonicalBytes() {
+        Object raw = readAll();
+        List<CompoundField> fields = compoundFields();
+        if (fields == null) {
+            return canonicalisePrimitive(raw, precision());
+        }
+        // Compound dispatch — rows may be List<Object[]> (HDF5) or
+        // List<Map<String,Object>> (SQLite, Memory). Normalise via
+        // readRows() and walk.
+        return canonicaliseCompoundRows(readRows(), fields);
+    }
+
+    /** @since 0.7 — helper exposed for providers that want to override
+     *  {@link #readCanonicalBytes()} but share the compound path. */
+    static byte[] canonicaliseCompoundRows(List<Map<String, Object>> rows,
+                                            List<CompoundField> fields) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            for (Map<String, Object> row : rows) {
+                for (CompoundField f : fields) {
+                    Object v = row.get(f.name());
+                    writeCanonicalField(out, v, f.kind());
+                }
+            }
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("canonical compound emit failed", e);
+        }
+        return out.toByteArray();
+    }
+
+    private static void writeCanonicalField(java.io.ByteArrayOutputStream out,
+                                             Object value,
+                                             CompoundField.Kind kind)
+            throws java.io.IOException {
+        // CompoundField.Kind only declares UINT32, INT64, FLOAT64,
+        // VL_STRING — the four types MPGO compound schemas actually
+        // use (format-spec §6). Extending this switch requires a
+        // matching enum addition.
+        switch (kind) {
+            case VL_STRING -> {
+                byte[] bytes;
+                if (value == null) {
+                    bytes = new byte[0];
+                } else if (value instanceof byte[] b) {
+                    bytes = b;
+                } else {
+                    bytes = value.toString().getBytes(StandardCharsets.UTF_8);
+                }
+                ByteBuffer lb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+                lb.putInt(bytes.length);
+                out.write(lb.array());
+                if (bytes.length > 0) out.write(bytes);
+            }
+            case FLOAT64 -> {
+                double d = ((Number) value).doubleValue();
+                ByteBuffer lb = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+                lb.putDouble(d);
+                out.write(lb.array());
+            }
+            case UINT32 -> {
+                int i = ((Number) value).intValue();
+                ByteBuffer lb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+                lb.putInt(i);
+                out.write(lb.array());
+            }
+            case INT64 -> {
+                long l = ((Number) value).longValue();
+                ByteBuffer lb = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
+                lb.putLong(l);
+                out.write(lb.array());
+            }
+        }
+    }
+
+    /** @since 0.7 — helper for the primitive canonical path. */
+    static byte[] canonicalisePrimitive(Object raw, Precision p) {
+        if (p == null) {
+            throw new IllegalStateException(
+                "canonicalisePrimitive called with null precision");
+        }
+        return switch (p) {
+            case FLOAT64 -> {
+                double[] a = (double[]) raw;
+                ByteBuffer bb = ByteBuffer.allocate(a.length * 8)
+                        .order(ByteOrder.LITTLE_ENDIAN);
+                for (double d : a) bb.putDouble(d);
+                yield bb.array();
+            }
+            case FLOAT32 -> {
+                float[] a = (float[]) raw;
+                ByteBuffer bb = ByteBuffer.allocate(a.length * 4)
+                        .order(ByteOrder.LITTLE_ENDIAN);
+                for (float d : a) bb.putFloat(d);
+                yield bb.array();
+            }
+            case INT32, UINT32 -> {
+                int[] a = (int[]) raw;
+                ByteBuffer bb = ByteBuffer.allocate(a.length * 4)
+                        .order(ByteOrder.LITTLE_ENDIAN);
+                for (int i : a) bb.putInt(i);
+                yield bb.array();
+            }
+            case INT64 -> {
+                long[] a = (long[]) raw;
+                ByteBuffer bb = ByteBuffer.allocate(a.length * 8)
+                        .order(ByteOrder.LITTLE_ENDIAN);
+                for (long l : a) bb.putLong(l);
+                yield bb.array();
+            }
+            case COMPLEX128 -> {
+                // Compound-typed in HDF5, but stored as byte[] in Java
+                // (native packing). Caller is responsible for
+                // little-endian packing upstream.
+                yield (byte[]) raw;
+            }
+        };
     }
 
     // ── Attributes ───────────────────────────────────────────────

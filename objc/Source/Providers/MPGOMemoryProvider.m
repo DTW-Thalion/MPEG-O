@@ -1,5 +1,6 @@
 #import "MPGOMemoryProvider.h"
 #import "MPGOProviderRegistry.h"
+#import "MPGOCanonicalBytes.h"
 #import "HDF5/MPGOHDF5Errors.h"
 
 #pragma mark - Forward decls
@@ -243,6 +244,23 @@
         return nil;
     }
     return (NSArray *)_data;
+}
+
+- (NSData *)readCanonicalBytes:(NSError **)error
+{
+    if (_fields != nil) {
+        NSArray *rows = (NSArray *)_data;
+        return [MPGOCanonicalBytes canonicalBytesForCompoundRows:rows
+                                                            fields:_fields];
+    }
+    if (_data == nil) return [NSData data];
+    if (![_data isKindOfClass:[NSData class]]) {
+        if (error) *error = MPGOMakeError(MPGOErrorDatasetRead,
+            @"MemDataset._data is not NSData");
+        return nil;
+    }
+    return [MPGOCanonicalBytes canonicalBytesForNumericData:(NSData *)_data
+                                                   precision:_precision];
 }
 
 - (id)readSliceAtOffset:(NSUInteger)offset count:(NSUInteger)count error:(NSError **)error

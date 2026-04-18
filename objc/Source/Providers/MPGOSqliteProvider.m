@@ -22,6 +22,7 @@
 
 #import "MPGOSqliteProvider.h"
 #import "MPGOProviderRegistry.h"
+#import "MPGOCanonicalBytes.h"
 #import "HDF5/MPGOHDF5Errors.h"   /* MPGOMakeError, MPGOErrorDomain */
 #import "Providers/MPGOCompoundField.h"
 
@@ -291,6 +292,25 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
         return nil;
     }
     return [self readAll:error];
+}
+
+- (NSData *)readCanonicalBytes:(NSError **)error
+{
+    if (_fields != nil) {
+        NSArray<NSDictionary<NSString *, id> *> *rows = [self readRows:error];
+        if (!rows) return nil;
+        return [MPGOCanonicalBytes canonicalBytesForCompoundRows:rows
+                                                            fields:_fields];
+    }
+    id raw = [self readAll:error];
+    if (![raw isKindOfClass:[NSData class]]) {
+        if (error) *error = MPGOMakeError(MPGOErrorDatasetRead,
+            @"SqliteDataset.readCanonicalBytes: primitive readAll: "
+            @"did not return NSData");
+        return nil;
+    }
+    return [MPGOCanonicalBytes canonicalBytesForNumericData:(NSData *)raw
+                                                   precision:_precision];
 }
 
 - (id)readSliceAtOffset:(NSUInteger)offset
