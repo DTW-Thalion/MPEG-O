@@ -240,8 +240,10 @@ byte[] unwrapped = EncryptionManager.unwrapKey(
 
 ```objc
 #import <MPGOPostQuantumCrypto.h>
+#import <MPGOKeyRotationManager.h>
+#import <MPGOSignatureManager.h>
 
-// Primitives (scope of v0.8 M49 on the ObjC side)
+// Primitives
 MPGOPQCKeyPair *kp = [MPGOPostQuantumCrypto kemKeygenWithError:&err];
 MPGOPQCKemEncapResult *r =
     [MPGOPostQuantumCrypto kemEncapsulateWithPublicKey:kp.publicKey
@@ -259,14 +261,30 @@ BOOL ok = [MPGOPostQuantumCrypto sigVerifyWithPublicKey:sk.publicKey
                                                 message:msg
                                               signature:sig
                                                   error:&err];
-```
 
-> **Scope note — ObjC dataset/envelope integration.** Primitive PQC
-> round-trips and cipher-suite catalog activation ship for ObjC in
-> v0.8 M49. Full dataset-level `v3:` signing via
-> `MPGOSignatureManager` and ML-KEM-1024 envelope wrapping via
-> `MPGOKeyRotationManager` follow in M49.1; cross-language
-> conformance (M54) covers the parity validation.
+// Dataset signing (v3) — MPGOSignatureManager algorithm-parameterized
+[MPGOSignatureManager signDataset:@"/payload"
+                           inFile:path
+                          withKey:sk.privateKey
+                        algorithm:@"ml-dsa-87"
+                            error:&err];
+[MPGOSignatureManager verifyDataset:@"/payload"
+                             inFile:path
+                            withKey:sk.publicKey
+                          algorithm:@"ml-dsa-87"
+                              error:&err];
+
+// Envelope wrap — MPGOKeyRotationManager algorithm-parameterized
+MPGOKeyRotationManager *mgr =
+    [MPGOKeyRotationManager managerWithFile:f];
+NSData *dek = [mgr enableEnvelopeEncryptionWithKEK:kp.publicKey
+                                              kekId:@"kem-1"
+                                          algorithm:@"ml-kem-1024"
+                                              error:&err];
+NSData *dekRead = [mgr unwrapDEKWithKEK:kp.privateKey
+                               algorithm:@"ml-kem-1024"
+                                   error:&err];
+```
 
 ---
 

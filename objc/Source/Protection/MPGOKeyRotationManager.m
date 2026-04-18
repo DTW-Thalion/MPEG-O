@@ -1,9 +1,12 @@
 #import "MPGOKeyRotationManager.h"
 #import "MPGOEncryptionManager.h"
+#import "MPGOPostQuantumCrypto.h"
+#import "MPGOCipherSuite.h"
 #import "HDF5/MPGOHDF5File.h"
 #import "HDF5/MPGOHDF5Group.h"
 #import "HDF5/MPGOHDF5Dataset.h"
 #import "HDF5/MPGOHDF5Errors.h"
+#import "HDF5/MPGOFeatureFlags.h"
 #import "ValueClasses/MPGOEnums.h"
 
 // v1.1 wrapped DEK layout (legacy): 32 ciphertext bytes + 12-byte IV
@@ -29,7 +32,15 @@ static const NSUInteger MPGO_KR_V12_HEADER_LEN = 11;
 static const uint16_t   MPGO_WK_ALG_AES_256_GCM = 0x0000;
 static const uint16_t   MPGO_WK_ALG_ML_KEM_1024 = 0x0001;  // reserved (M49)
 
-static NSString *const kKEKAlgorithm = @"aes-256-gcm";
+static NSString *const kKEKAlgorithmAES  = @"aes-256-gcm";
+static NSString *const kKEKAlgorithmMLKEM = @"ml-kem-1024";
+
+// v0.8 M49.1: ML-KEM-1024 envelope blob. Metadata = kem_ct(1568) ||
+// aes_iv(12) || aes_tag(16) = 1596 bytes. Ciphertext = AES-GCM wrapped
+// DEK = 32 bytes. Total blob length = 11 + 1596 + 32 = 1639 bytes.
+static const NSUInteger MPGO_MLKEM_CT_LEN       = 1568;
+static const NSUInteger MPGO_MLKEM_METADATA_LEN = 1596;  // = 1568 + 12 + 16
+static const NSUInteger MPGO_MLKEM_BLOB_LEN     = 1639;  // = 11 + 1596 + 32
 
 static void wkPutBE16(uint8_t *p, uint16_t v)
 {
@@ -221,6 +232,130 @@ static NSString *iso8601Now(void)
     return [self wrapDEK:dek withKEK:kek legacyV1:NO error:error];
 }
 
+// v0.8 M49.1: wrap the DEK under ML-KEM-1024. `publicKey` must be the
+// 1568-byte ML-KEM encapsulation public key. Returns a v1.2 blob with
+// algorithm_id=0x0001. Always emits the AEAD-inner-wrap chain
+// (encapsulate → AES-256-GCM wrap under shared secret).
+- (NSData *)wrapDEKWithMLKEMPublicKey:(NSData *)publicKey
+                                   dek:(NSData *)dek
+                                 error:(NSError **)error
+{
+    if (dek.length != MPGO_KR_DEK_LEN) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"wrapDEK (ML-KEM): DEK must be 32 bytes (got %lu)",
+            (unsigned long)dek.length);
+        return nil;
+    }
+    if (![MPGOCipherSuite validatePublicKey:publicKey
+                                   algorithm:kKEKAlgorithmMLKEM
+                                       error:error]) {
+        return nil;
+    }
+    MPGOPQCKemEncapResult *enc =
+        [MPGOPostQuantumCrypto kemEncapsulateWithPublicKey:publicKey
+                                                     error:error];
+    if (!enc) return nil;
+
+    // Wrap the DEK under the 32-byte shared secret with AES-256-GCM.
+    NSData *iv = nil, *tag = nil;
+    NSData *cipher =
+        [MPGOEncryptionManager encryptData:dek
+                                    withKey:enc.sharedSecret
+                                         iv:&iv
+                                    authTag:&tag
+                                      error:error];
+    if (!cipher
+        || iv.length != MPGO_KR_IV_LEN
+        || tag.length != MPGO_KR_TAG_LEN) {
+        return nil;
+    }
+    NSMutableData *metadata = [NSMutableData dataWithCapacity:MPGO_MLKEM_METADATA_LEN];
+    [metadata appendData:enc.ciphertext];  // 1568
+    [metadata appendData:iv];              //   12
+    [metadata appendData:tag];             //   16
+    NSAssert(metadata.length == MPGO_MLKEM_METADATA_LEN,
+             @"ML-KEM metadata length mismatch");
+    return [MPGOKeyRotationManager packBlobV2:MPGO_WK_ALG_ML_KEM_1024
+                                    ciphertext:cipher
+                                      metadata:metadata
+                                         error:error];
+}
+
+// v0.8 M49.1: inverse of -wrapDEKWithMLKEMPublicKey:. `privateKey` is
+// the 3168-byte ML-KEM decapsulation key.
+- (NSData *)unwrapMLKEMBlob:(NSData *)wrapped
+          withPrivateKey:(NSData *)privateKey
+                   error:(NSError **)error
+{
+    if (![MPGOCipherSuite validatePrivateKey:privateKey
+                                    algorithm:kKEKAlgorithmMLKEM
+                                        error:error]) {
+        return nil;
+    }
+    uint16_t alg = 0;
+    NSData *md = nil, *ct = nil;
+    if (![MPGOKeyRotationManager unpackBlobV2:wrapped
+                                    algorithmId:&alg
+                                       metadata:&md
+                                     ciphertext:&ct
+                                          error:error]) {
+        return nil;
+    }
+    if (alg != MPGO_WK_ALG_ML_KEM_1024) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"ML-KEM unwrap: expected algorithm_id=0x0001, got 0x%04x",
+            alg);
+        return nil;
+    }
+    if (md.length != MPGO_MLKEM_METADATA_LEN) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"ML-KEM metadata must be %lu bytes (kem_ct || iv || tag); "
+            @"got %lu",
+            (unsigned long)MPGO_MLKEM_METADATA_LEN,
+            (unsigned long)md.length);
+        return nil;
+    }
+    if (ct.length != MPGO_KR_DEK_LEN) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"ML-KEM wrapped DEK ciphertext must be %lu bytes; got %lu",
+            (unsigned long)MPGO_KR_DEK_LEN, (unsigned long)ct.length);
+        return nil;
+    }
+    NSData *kemCt = [md subdataWithRange:NSMakeRange(0, MPGO_MLKEM_CT_LEN)];
+    NSData *iv    = [md subdataWithRange:
+        NSMakeRange(MPGO_MLKEM_CT_LEN, MPGO_KR_IV_LEN)];
+    NSData *tag   = [md subdataWithRange:
+        NSMakeRange(MPGO_MLKEM_CT_LEN + MPGO_KR_IV_LEN, MPGO_KR_TAG_LEN)];
+
+    NSData *sharedSecret =
+        [MPGOPostQuantumCrypto kemDecapsulateWithPrivateKey:privateKey
+                                                  ciphertext:kemCt
+                                                       error:error];
+    if (!sharedSecret) return nil;
+
+    return [MPGOEncryptionManager decryptData:ct
+                                       withKey:sharedSecret
+                                            iv:iv
+                                       authTag:tag
+                                         error:error];
+}
+
+// Ensure opt_pqc_preview is present on the root feature list. Idempotent.
+- (BOOL)markPQCPreviewOnRootWithError:(NSError **)error
+{
+    MPGOHDF5Group *root = [_file rootGroup];
+    NSArray<NSString *> *features = [MPGOFeatureFlags featuresForRoot:root];
+    NSString *flag = [MPGOFeatureFlags featurePQCPreview];
+    if ([features containsObject:flag]) return YES;
+    NSMutableArray *updated = [features mutableCopy] ?: [NSMutableArray array];
+    [updated addObject:flag];
+    NSString *version = [MPGOFeatureFlags formatVersionForRoot:root] ?: @"1.2";
+    return [MPGOFeatureFlags writeFormatVersion:version
+                                        features:updated
+                                          toRoot:root
+                                           error:error];
+}
+
 // Inverse of wrapDEK:. Dispatches on blob length: exactly 60 bytes
 // ⇒ v1.1 legacy, anything else ⇒ v1.2. Returns the 32-byte plaintext
 // DEK or nil on auth failure / malformed input / unsupported algorithm.
@@ -354,19 +489,38 @@ static NSString *iso8601Now(void)
                                       kekId:(NSString *)kekId
                                       error:(NSError **)error
 {
-    if (kek.length != MPGO_KR_DEK_LEN) {
-        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
-            @"enableEnvelopeEncryption: KEK must be 32 bytes");
-        return nil;
-    }
-    // Fresh random DEK via the same CSPRNG path MPGOEncryptionManager uses
-    // to generate its IVs: request an encryption of the zero vector, which
-    // simply returns the plaintext back XOR-free and yields random IV/tag
-    // state. For DEK we just call arc4random_buf.
+    return [self enableEnvelopeEncryptionWithKEK:kek
+                                           kekId:kekId
+                                       algorithm:kKEKAlgorithmAES
+                                           error:error];
+}
+
+- (NSData *)enableEnvelopeEncryptionWithKEK:(NSData *)kek
+                                      kekId:(NSString *)kekId
+                                   algorithm:(NSString *)algorithm
+                                       error:(NSError **)error
+{
+    // Fresh random DEK — AES-256 regardless of the wrap algorithm
+    // (HANDOFF binding #43).
     NSMutableData *dek = [NSMutableData dataWithLength:MPGO_KR_DEK_LEN];
     arc4random_buf(dek.mutableBytes, MPGO_KR_DEK_LEN);
 
-    NSData *wrapped = [self wrapDEK:dek withKEK:kek error:error];
+    NSData *wrapped = nil;
+    if ([algorithm isEqualToString:kKEKAlgorithmAES]) {
+        if (kek.length != MPGO_KR_DEK_LEN) {
+            if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+                @"enableEnvelopeEncryption: AES KEK must be 32 bytes");
+            return nil;
+        }
+        wrapped = [self wrapDEK:dek withKEK:kek error:error];
+    } else if ([algorithm isEqualToString:kKEKAlgorithmMLKEM]) {
+        wrapped = [self wrapDEKWithMLKEMPublicKey:kek dek:dek error:error];
+    } else {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"enableEnvelopeEncryption: algorithm %@ not supported",
+            algorithm);
+        return nil;
+    }
     if (!wrapped) return nil;
 
     MPGOHDF5Group *ki = [self keyInfoGroupCreatingIfNeeded:YES error:error];
@@ -374,14 +528,27 @@ static NSString *iso8601Now(void)
     if (![self writeWrappedBlob:wrapped group:ki error:error]) return nil;
 
     if (![ki setStringAttribute:@"kek_id" value:(kekId ?: @"") error:error]) return nil;
-    if (![ki setStringAttribute:@"kek_algorithm" value:kKEKAlgorithm error:error]) return nil;
+    if (![ki setStringAttribute:@"kek_algorithm" value:algorithm error:error]) return nil;
     if (![ki setStringAttribute:@"wrapped_at" value:iso8601Now() error:error]) return nil;
     if (![ki setStringAttribute:@"key_history_json" value:@"[]" error:error]) return nil;
+
+    if ([algorithm isEqualToString:kKEKAlgorithmMLKEM]) {
+        if (![self markPQCPreviewOnRootWithError:error]) return nil;
+    }
 
     return [dek copy];
 }
 
 - (NSData *)unwrapDEKWithKEK:(NSData *)kek error:(NSError **)error
+{
+    return [self unwrapDEKWithKEK:kek
+                         algorithm:kKEKAlgorithmAES
+                             error:error];
+}
+
+- (NSData *)unwrapDEKWithKEK:(NSData *)kek
+                    algorithm:(NSString *)algorithm
+                        error:(NSError **)error
 {
     MPGOHDF5Group *ki = [self keyInfoGroupCreatingIfNeeded:NO error:error];
     if (!ki) {
@@ -391,7 +558,18 @@ static NSString *iso8601Now(void)
     }
     NSData *wrapped = [self readWrappedBlobWithLength:ki error:error];
     if (!wrapped) return nil;
-    return [self unwrapBlob:wrapped withKEK:kek error:error];
+
+    if ([algorithm isEqualToString:kKEKAlgorithmAES]) {
+        return [self unwrapBlob:wrapped withKEK:kek error:error];
+    }
+    if ([algorithm isEqualToString:kKEKAlgorithmMLKEM]) {
+        return [self unwrapMLKEMBlob:wrapped
+                      withPrivateKey:kek
+                               error:error];
+    }
+    if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+        @"unwrapDEK: algorithm %@ not supported", algorithm);
+    return nil;
 }
 
 - (BOOL)rotateToKEK:(NSData *)newKEK
@@ -399,12 +577,43 @@ static NSString *iso8601Now(void)
              oldKEK:(NSData *)oldKEK
               error:(NSError **)error
 {
-    // Recover the DEK with the old KEK; reject the rotation if the old
-    // KEK doesn't authenticate the wrapped blob.
-    NSData *dek = [self unwrapDEKWithKEK:oldKEK error:error];
+    return [self rotateToKEK:newKEK
+                       kekId:newKEKId
+                      oldKEK:oldKEK
+                oldAlgorithm:kKEKAlgorithmAES
+                newAlgorithm:kKEKAlgorithmAES
+                       error:error];
+}
+
+- (BOOL)rotateToKEK:(NSData *)newKEK
+              kekId:(NSString *)newKEKId
+             oldKEK:(NSData *)oldKEK
+        oldAlgorithm:(NSString *)oldAlgorithm
+        newAlgorithm:(NSString *)newAlgorithm
+              error:(NSError **)error
+{
+    // Recover the DEK under the old algorithm/KEK — authenticates the
+    // rotation source.
+    NSData *dek = [self unwrapDEKWithKEK:oldKEK
+                                algorithm:oldAlgorithm
+                                    error:error];
     if (!dek) return NO;
 
-    NSData *wrapped = [self wrapDEK:dek withKEK:newKEK error:error];
+    NSData *wrapped = nil;
+    if ([newAlgorithm isEqualToString:kKEKAlgorithmAES]) {
+        if (newKEK.length != MPGO_KR_DEK_LEN) {
+            if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+                @"rotateToKEK: AES KEK must be 32 bytes");
+            return NO;
+        }
+        wrapped = [self wrapDEK:dek withKEK:newKEK error:error];
+    } else if ([newAlgorithm isEqualToString:kKEKAlgorithmMLKEM]) {
+        wrapped = [self wrapDEKWithMLKEMPublicKey:newKEK dek:dek error:error];
+    } else {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"rotateToKEK: algorithm %@ not supported", newAlgorithm);
+        return NO;
+    }
     if (!wrapped) return NO;
 
     MPGOHDF5Group *ki = [self keyInfoGroupCreatingIfNeeded:NO error:error];
@@ -414,6 +623,8 @@ static NSString *iso8601Now(void)
     // key history before clobbering them.
     NSString *oldKekId = [self readCurrentKEKId:ki] ?: @"";
     NSString *oldWrappedAt = [self readWrappedAt:ki] ?: @"";
+    NSString *oldAlgAttr =
+        [ki stringAttributeNamed:@"kek_algorithm" error:NULL] ?: oldAlgorithm;
     NSString *historyJson =
         [ki stringAttributeNamed:@"key_history_json" error:NULL] ?: @"[]";
     NSData *hJsonData = [historyJson dataUsingEncoding:NSUTF8StringEncoding];
@@ -425,21 +636,22 @@ static NSString *iso8601Now(void)
     [entries addObject:@{
         @"timestamp":     oldWrappedAt,
         @"kek_id":        oldKekId,
-        @"kek_algorithm": kKEKAlgorithm,
+        @"kek_algorithm": oldAlgAttr,
     }];
     NSData *newHistoryData =
         [NSJSONSerialization dataWithJSONObject:entries options:0 error:NULL];
     NSString *newHistoryJson =
         [[NSString alloc] initWithData:newHistoryData encoding:NSUTF8StringEncoding];
 
-    // Overwrite dek_wrapped with the freshly wrapped blob.
     if (![self writeWrappedBlob:wrapped group:ki error:error]) return NO;
-
-    // setStringAttribute deletes-and-recreates so these updates are idempotent.
     if (![ki setStringAttribute:@"kek_id" value:(newKEKId ?: @"") error:error]) return NO;
-    if (![ki setStringAttribute:@"kek_algorithm" value:kKEKAlgorithm error:error]) return NO;
+    if (![ki setStringAttribute:@"kek_algorithm" value:newAlgorithm error:error]) return NO;
     if (![ki setStringAttribute:@"wrapped_at" value:iso8601Now() error:error]) return NO;
     if (![ki setStringAttribute:@"key_history_json" value:newHistoryJson error:error]) return NO;
+
+    if ([newAlgorithm isEqualToString:kKEKAlgorithmMLKEM]) {
+        if (![self markPQCPreviewOnRootWithError:error]) return NO;
+    }
 
     return YES;
 }

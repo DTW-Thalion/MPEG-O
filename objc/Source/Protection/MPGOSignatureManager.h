@@ -64,6 +64,41 @@
               withKey:(NSData *)hmacKey
                 error:(NSError **)error;
 
+/**
+ * Sign a dataset with an explicit cipher-suite algorithm selector
+ * (v0.8 M49.1).
+ *
+ * For ``algorithm=@"hmac-sha256"``, ``key`` is the 32-byte HMAC
+ * secret and the stored attribute is ``"v2:" + base64(mac)``. For
+ * ``algorithm=@"ml-dsa-87"``, ``key`` is the 4896-byte ML-DSA-87
+ * signing <b>private</b> key and the stored attribute is
+ * ``"v3:" + base64(signature)``; the enclosing file gains the
+ * ``opt_pqc_preview`` feature flag.
+ *
+ * @since 0.8
+ */
++ (BOOL)signDataset:(NSString *)datasetPath
+             inFile:(NSString *)filePath
+            withKey:(NSData *)key
+           algorithm:(NSString *)algorithm
+              error:(NSError **)error;
+
+/**
+ * Verify a signed dataset with an explicit cipher-suite algorithm
+ * selector. ``algorithm`` must match the stored prefix — a ``v3:``
+ * attribute rejects ``algorithm=@"hmac-sha256"`` and vice-versa.
+ *
+ * For ``algorithm=@"ml-dsa-87"``, ``key`` is the 2592-byte
+ * verification public key.
+ *
+ * @since 0.8
+ */
++ (BOOL)verifyDataset:(NSString *)datasetPath
+               inFile:(NSString *)filePath
+              withKey:(NSData *)key
+            algorithm:(NSString *)algorithm
+                error:(NSError **)error;
+
 #pragma mark - Provenance signing
 
 /** Sign the `@provenance_json` attribute on the given run group.

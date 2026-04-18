@@ -13,10 +13,23 @@
  */
 #import <Foundation/Foundation.h>
 #import "Testing.h"
+#import <unistd.h>
 
 #import "Protection/MPGOCipherSuite.h"
 #import "Protection/MPGOPostQuantumCrypto.h"
+#import "Protection/MPGOKeyRotationManager.h"
+#import "Protection/MPGOSignatureManager.h"
 #import "HDF5/MPGOFeatureFlags.h"
+#import "HDF5/MPGOHDF5File.h"
+#import "HDF5/MPGOHDF5Group.h"
+#import "HDF5/MPGOHDF5Dataset.h"
+#import "ValueClasses/MPGOEnums.h"
+
+static NSString *m49TempPath(NSString *suffix)
+{
+    return [NSString stringWithFormat:@"/tmp/mpgo_test_m49_%d_%@.mpgo",
+            (int)getpid(), suffix];
+}
 
 void testMilestone49(void)
 {
@@ -143,4 +156,119 @@ void testMilestone49(void)
                                                        signature:sig
                                                            error:&err];
     PASS(!badOk, "M49: verify fails on tampered message");
+
+    // ── M49.1: ML-KEM envelope via MPGOKeyRotationManager ──
+
+    NSString *envPath = m49TempPath(@"envelope");
+    unlink([envPath fileSystemRepresentation]);
+
+    err = nil;
+    MPGOHDF5File *envFile = [MPGOHDF5File createAtPath:envPath error:&err];
+    PASS(envFile != nil, "M49.1: create file for ML-KEM envelope");
+    MPGOKeyRotationManager *mgr =
+        [MPGOKeyRotationManager managerWithFile:envFile];
+    MPGOPQCKeyPair *envKp = [MPGOPostQuantumCrypto kemKeygenWithError:&err];
+
+    err = nil;
+    NSData *dek = [mgr enableEnvelopeEncryptionWithKEK:envKp.publicKey
+                                                  kekId:@"kem-1"
+                                              algorithm:@"ml-kem-1024"
+                                                  error:&err];
+    PASS(dek != nil && dek.length == 32,
+         "M49.1: enableEnvelopeEncryption with ml-kem-1024 returns DEK");
+    PASS([mgr hasEnvelopeEncryption],
+         "M49.1: envelope encryption is active on the file");
+    [envFile close];
+
+    // Reopen and round-trip the DEK with the private key.
+    err = nil;
+    MPGOHDF5File *envRe = [MPGOHDF5File openAtPath:envPath error:&err];
+    MPGOKeyRotationManager *mgr2 =
+        [MPGOKeyRotationManager managerWithFile:envRe];
+    NSData *dek2 = [mgr2 unwrapDEKWithKEK:envKp.privateKey
+                                 algorithm:@"ml-kem-1024"
+                                     error:&err];
+    PASS(dek2 != nil && [dek2 isEqualToData:dek],
+         "M49.1: ML-KEM unwrap round-trips the DEK");
+
+    // Wrong private key must fail (AES-GCM tag mismatch downstream).
+    err = nil;
+    MPGOPQCKeyPair *wrongKp =
+        [MPGOPostQuantumCrypto kemKeygenWithError:&err];
+    NSError *wrongErr = nil;
+    NSData *dekWrong = [mgr2 unwrapDEKWithKEK:wrongKp.privateKey
+                                     algorithm:@"ml-kem-1024"
+                                         error:&wrongErr];
+    PASS(dekWrong == nil, "M49.1: ML-KEM unwrap fails with wrong private key");
+
+    // opt_pqc_preview is now on the root feature list.
+    NSArray<NSString *> *features =
+        [MPGOFeatureFlags featuresForRoot:[envRe rootGroup]];
+    PASS([features containsObject:[MPGOFeatureFlags featurePQCPreview]],
+         "M49.1: opt_pqc_preview flag set on ML-KEM-wrapped file");
+    [envRe close];
+
+    // ── M49.1: v3 dataset signatures via MPGOSignatureManager ──
+
+    NSString *sigPath = m49TempPath(@"v3sig");
+    unlink([sigPath fileSystemRepresentation]);
+
+    err = nil;
+    MPGOHDF5File *sigFile = [MPGOHDF5File createAtPath:sigPath error:&err];
+    PASS(sigFile != nil, "M49.1: create file for v3 signatures");
+    MPGOHDF5Dataset *ds =
+        [[sigFile rootGroup] createDatasetNamed:@"payload"
+                                       precision:MPGOPrecisionFloat64
+                                          length:64
+                                       chunkSize:0
+                                compressionLevel:0
+                                           error:&err];
+    double vals[64];
+    for (int i = 0; i < 64; i++) vals[i] = (double)i;
+    NSData *payload = [NSData dataWithBytes:vals length:sizeof(vals)];
+    PASS([ds writeData:payload error:&err], "M49.1: write payload dataset");
+    [sigFile close];
+
+    MPGOPQCKeyPair *sigKp2 =
+        [MPGOPostQuantumCrypto sigKeygenWithError:&err];
+    err = nil;
+    BOOL signed_ = [MPGOSignatureManager signDataset:@"/payload"
+                                              inFile:sigPath
+                                             withKey:sigKp2.privateKey
+                                           algorithm:@"ml-dsa-87"
+                                               error:&err];
+    PASS(signed_, "M49.1: signDataset with ml-dsa-87 succeeds");
+
+    err = nil;
+    BOOL verified = [MPGOSignatureManager verifyDataset:@"/payload"
+                                                  inFile:sigPath
+                                                 withKey:sigKp2.publicKey
+                                               algorithm:@"ml-dsa-87"
+                                                   error:&err];
+    PASS(verified, "M49.1: verifyDataset with ml-dsa-87 succeeds");
+
+    // Algorithm mismatch on verify must refuse, not silently pass.
+    err = nil;
+    NSData *hmacKey = [NSMutableData dataWithLength:32];
+    BOOL crossed = [MPGOSignatureManager verifyDataset:@"/payload"
+                                                 inFile:sigPath
+                                                withKey:hmacKey
+                                              algorithm:@"hmac-sha256"
+                                                  error:&err];
+    PASS(!crossed, "M49.1: verify with hmac-sha256 on v3 attribute is rejected");
+    PASS(err != nil && [err.localizedDescription rangeOfString:@"v3"].location != NSNotFound,
+         "M49.1: cross-algorithm mismatch error mentions v3");
+
+    // opt_pqc_preview is set on the signed file.
+    MPGOHDF5File *sigReopen =
+        [MPGOHDF5File openReadOnlyAtPath:sigPath error:&err];
+    NSArray<NSString *> *sigFeatures =
+        [MPGOFeatureFlags featuresForRoot:[sigReopen rootGroup]];
+    PASS([sigFeatures containsObject:[MPGOFeatureFlags featurePQCPreview]],
+         "M49.1: opt_pqc_preview flag set on v3-signed file");
+    [sigReopen close];
+
+    // Cleanup tmp files.
+    unlink([envPath fileSystemRepresentation]);
+    unlink([sigPath fileSystemRepresentation]);
 }
