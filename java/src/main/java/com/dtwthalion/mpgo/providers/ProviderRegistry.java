@@ -54,6 +54,8 @@ public final class ProviderRegistry {
         // classpath in tests before maven-resources copies it).
         out.putIfAbsent("hdf5", Hdf5Provider.class);
         out.putIfAbsent("memory", MemoryProvider.class);
+        out.putIfAbsent("sqlite", SqliteProvider.class);
+        out.putIfAbsent("zarr", ZarrProvider.class);
         out.putAll(OVERRIDES);
         return out;
     }

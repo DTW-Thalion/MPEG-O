@@ -71,12 +71,26 @@ Explicit override via `provider="<name>"` bypasses URL detection.
 | HDF5 | v0.6 | v0.6 | v0.6 |
 | Memory | v0.6 | v0.6 | v0.6 |
 | SQLite | v0.7 M41 | v0.7 M41 | v0.7 M41 |
-| Zarr | **v0.7 M46** | v0.8 | v0.8 |
+| Zarr | v0.7 M46 | **v0.8 M52** | **v0.8 M52** |
 
-Java and ObjC ZarrProvider ports are deferred to v0.8 — the Python
-reference exists first to stress-test the abstraction (HANDOFF.md
-M46 non-deliverable). Abstraction leaks found during Zarr
-implementation were fixed inline; no v0.8 follow-up bugs were filed.
+Java and ObjC ZarrProvider ports shipped in v0.8 M52 as
+self-contained Zarr v2 DirectoryStore implementations — no external
+zarr library dependency. The on-disk layout matches the Python
+reference, so all three can cross-read one another's stores
+(HANDOFF M52 acceptance). Full cross-language parity matrix
+validation happens in M54; M52 ships per-language round-trip tests.
+
+Scope of the v0.8 Java + ObjC ZarrProviders:
+
+- URL schemes: `zarr:///abs/path` and bare local paths.
+  `zarr+memory://` and `zarr+s3://` remain Python-only through v0.8.
+- Compression: NONE only. Reading a Python-authored compressed
+  Zarr store raises `UnsupportedOperationException` / equivalent.
+- Primitive dtypes: float64, float32, int64, int32, uint32
+  (little-endian).
+- Compound datasets: the Python convention (sub-group +
+  `_mpgo_kind="compound"` + `_mpgo_schema` + `_mpgo_rows` JSON
+  attrs) is honored verbatim by all three languages.
 
 ## Writing a new provider
 

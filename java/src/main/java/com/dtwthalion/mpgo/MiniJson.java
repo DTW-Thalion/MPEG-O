@@ -83,6 +83,23 @@ public final class MiniJson {
         return sb.toString();
     }
 
+    /** Alias of {@link #encode} with a naming convention that matches
+     *  the Python {@code json.dumps} / ObjC {@code NSJSONSerialization}
+     *  counterparts used by the ZarrProvider family. @since 0.8 */
+    public static String serialise(Object v) { return encode(v); }
+
+    /** Generic parse entry point — returns the value as a nested
+     *  {@code Map} / {@code List} / {@code Number} / {@code Boolean} /
+     *  {@code String} / {@code null}. Complements the type-specific
+     *  {@link #parseArrayOfObjects}, {@link #parseStringMap}, and
+     *  {@link #parseArrayOfStrings} helpers. @since 0.8 */
+    public static Object parse(String blob) {
+        if (blob == null || blob.isEmpty()) return null;
+        Parser p = new Parser(blob);
+        p.skipWhitespace();
+        return p.parseValue();
+    }
+
     /** Quote a string as a JSON string literal (adds the quotes). */
     public static String quote(String s) {
         StringBuilder sb = new StringBuilder();
