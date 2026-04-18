@@ -323,19 +323,17 @@ the full milestone history.
 
 ### Milestone 19 — mzML Writer
 
-- [ ] **Chromatogram emission in the mzML writer.**
-      `MPGOMzMLWriter` currently emits only `<spectrumList>`; a
-      `<chromatogramList>` is never written. Blocked on
-      `MPGOAcquisitionRun` growing a first-class chromatogram API
-      (today the type exists via `MPGOChromatogram` but is not stored
-      on a run). Once the run model exposes chromatograms, both the
-      ObjC writer and `mpeg_o.exporters.mzml` should walk that list
-      into a second `<index name="chromatogram">` block inside the
-      existing `<indexList>`. Touches:
-      `objc/Source/Export/MPGOMzMLWriter.m`,
-      `python/src/mpeg_o/exporters/mzml.py`,
-      `objc/Tests/TestMilestone19.m`,
-      `python/tests/test_mzml_writer.py`.
+- [x] **Chromatogram emission in the mzML writer.** *Shipped with
+      M24 (v0.4.0) once `MPGOAcquisitionRun.chromatograms` became a
+      first-class property.* All three mzML writers now walk
+      `run.chromatograms` into a `<chromatogramList>` followed by a
+      second `<index name="chromatogram">` entry inside the
+      `<indexList>`:
+      `objc/Source/Export/MPGOMzMLWriter.m:293`,
+      `python/src/mpeg_o/exporters/mzml.py:217`,
+      `java/src/main/java/com/dtwthalion/mpgo/exporters/MzMLWriter.java:176`.
+      Round-trip covered by `TestMilestone24.m` and
+      `test_milestone24_chromatograms.py`.
 
 - [ ] **Direct byte-for-byte parity test between the ObjC and Python
       mzML writers.** Both implementations currently share the same
