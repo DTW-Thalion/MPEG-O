@@ -204,6 +204,13 @@ cleanup:
     else if (H5Tequal(htype, H5T_NATIVE_DOUBLE) > 0) precision = MPGOPrecisionFloat64;
     else if (H5Tequal(htype, H5T_NATIVE_INT32)  > 0) precision = MPGOPrecisionInt32;
     else if (H5Tequal(htype, H5T_NATIVE_INT64)  > 0) precision = MPGOPrecisionInt64;
+    // H5T_NATIVE_UINT64 and H5T_NATIVE_INT64 are bit-identical on disk for
+    // non-negative values; the format-spec writes spectrum_index/offsets
+    // as uint64[N] (§ 6), so Python emits the native uint64 type while the
+    // ObjC writer historically emitted int64. Treat either type as Int64
+    // here so readers can round-trip cross-language fixtures without an
+    // accidental float64 type conversion silently corrupting the bytes.
+    else if (H5Tequal(htype, H5T_NATIVE_UINT64) > 0) precision = MPGOPrecisionInt64;
     else if (H5Tequal(htype, H5T_NATIVE_UINT32) > 0) precision = MPGOPrecisionUInt32;
     else if (H5Tget_class(htype) == H5T_COMPOUND && H5Tget_size(htype) == 2 * sizeof(double)) {
         precision = MPGOPrecisionComplex128;

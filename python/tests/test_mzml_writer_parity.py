@@ -160,23 +160,6 @@ def _normalise(blob: bytes) -> bytes:
 
 
 @skip_if_no_cli
-@pytest.mark.xfail(
-    reason=(
-        "Byte-parity harness surfaces a real writer divergence on "
-        "SpectralDataset.write_minimal fixtures: the ObjC MpgoToMzML CLI "
-        "emits only the first <spectrum> element despite "
-        "run.spectrumIndex.count correctly reporting 3. Python writes "
-        "all 3. The harness itself is correct (ObjC reader sees 3 via "
-        "MpgoVerify); the bug is in the interaction between the reader "
-        "and MPGOMzMLWriter's spectrum loop — likely a field-length "
-        "mismatch that causes spectrumAtIndex:i error: to return nil "
-        "for i>=1 and the writer's "
-        "`if (![spec isKindOfClass:[MPGOMassSpectrum class]]) continue;` "
-        "guard silently skips them. Separate bug to chase — the harness "
-        "lands so the divergence does not regress unnoticed."
-    ),
-    strict=True,
-)
 def test_objc_python_mzml_writer_parity(tmp_path: Path) -> None:
     """Both writers, same input, structural parity."""
     mpgo = _fixture_dataset(tmp_path)
