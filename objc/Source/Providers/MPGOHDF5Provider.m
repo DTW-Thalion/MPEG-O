@@ -28,12 +28,17 @@
 
 @interface MPGOHDF5DatasetAdapter : NSObject <MPGOStorageDataset>
 - (instancetype)initWithDataset:(MPGOHDF5Dataset *)ds name:(NSString *)name;
+/** v0.7 M45: reconstructed rank for flattened N-D datasets. nil for
+ *  genuine 1-D datasets. Set by the group adapter on create / open. */
+@property (nonatomic, strong, nullable) NSArray<NSNumber *> *ndShape;
 @end
 
 @implementation MPGOHDF5DatasetAdapter {
     MPGOHDF5Dataset *_ds;
     NSString *_name;
 }
+
+@synthesize ndShape = _ndShape;
 
 - (instancetype)initWithDataset:(MPGOHDF5Dataset *)ds name:(NSString *)name
 {
@@ -44,8 +49,15 @@
 
 - (NSString *)name { return _name; }
 - (MPGOPrecision)precision { return _ds.precision; }
-- (NSUInteger)length { return _ds.length; }
-- (NSArray<NSNumber *> *)shape { return @[@(_ds.length)]; }
+- (NSUInteger)length {
+    // Axis-0 size for N-D datasets, element count for 1-D.
+    if (_ndShape.count > 0) return [_ndShape[0] unsignedIntegerValue];
+    return _ds.length;
+}
+- (NSArray<NSNumber *> *)shape {
+    if (_ndShape) return _ndShape;
+    return @[@(_ds.length)];
+}
 - (NSArray<NSNumber *> *)chunks { return nil; }
 - (NSArray<MPGOCompoundField *> *)compoundFields { return nil; }
 
@@ -153,7 +165,36 @@
 - (id<MPGOStorageDataset>)openDatasetNamed:(NSString *)name error:(NSError **)error
 {
     MPGOHDF5Dataset *d = [_group openDatasetNamed:name error:error];
-    return d ? [[MPGOHDF5DatasetAdapter alloc] initWithDataset:d name:name] : nil;
+    if (!d) return nil;
+    MPGOHDF5DatasetAdapter *adapter =
+        [[MPGOHDF5DatasetAdapter alloc] initWithDataset:d name:name];
+
+    // v0.7 M45: if the parent group carries @__shape_<name>__, this
+    // is a flattened N-D dataset. Parse the JSON-ish shape string and
+    // attach to the adapter so shape() reports the full rank.
+    NSString *shapeAttr = [NSString stringWithFormat:@"__shape_%@__", name];
+    if ([_group hasAttributeNamed:shapeAttr]) {
+        NSString *s = [_group stringAttributeNamed:shapeAttr error:NULL];
+        if (s) {
+            NSString *inner = [s stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            if ([inner hasPrefix:@"["]) inner = [inner substringFromIndex:1];
+            if ([inner hasSuffix:@"]"]) {
+                inner = [inner substringToIndex:inner.length - 1];
+            }
+            if (inner.length > 0) {
+                NSArray<NSString *> *parts = [inner componentsSeparatedByString:@","];
+                NSMutableArray<NSNumber *> *nd = [NSMutableArray arrayWithCapacity:parts.count];
+                for (NSString *p in parts) {
+                    [nd addObject:@([[p stringByTrimmingCharactersInSet:
+                        [NSCharacterSet whitespaceCharacterSet]]
+                        longLongValue])];
+                }
+                adapter.ndShape = nd;
+            }
+        }
+    }
+    return adapter;
 }
 
 - (id<MPGOStorageDataset>)createDatasetNamed:(NSString *)name
@@ -192,11 +233,48 @@
                         compressionLevel:compressionLevel
                                    error:error];
     }
-    if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
-            @"MPGOHDF5Provider does not yet implement N-D datasets "
-            @"(shape=%@); use MPGOHDF5Group directly for image cubes",
-            shape);
-    return nil;
+
+    // v0.7 M45: rank ≥ 2. Stored as a flat 1-D HDF5 dataset plus a
+    // @__shape_<name>__ attribute on the parent group recording the
+    // original rank and dims. Matches SqliteProvider's layout so
+    // canonical bytes stay bit-identical across backends; native
+    // H5Screate_simple(rank, dims, null) storage is a v0.8
+    // optimisation (M44 MSImage refactor scope).
+    NSUInteger total = 1;
+    for (NSNumber *n in shape) total *= [n unsignedIntegerValue];
+
+    NSUInteger chunkSize = 0;
+    if (chunks.count > 0) {
+        NSUInteger chunkTotal = 1;
+        for (NSNumber *c in chunks) chunkTotal *= [c unsignedIntegerValue];
+        chunkSize = MIN(chunkTotal, total);
+    }
+
+    MPGOHDF5Dataset *ds =
+        [_group createDatasetNamed:name
+                          precision:precision
+                             length:total
+                          chunkSize:chunkSize
+                        compression:compression
+                   compressionLevel:compressionLevel
+                              error:error];
+    if (!ds) return nil;
+
+    NSMutableString *sb = [NSMutableString stringWithString:@"["];
+    for (NSUInteger i = 0; i < shape.count; i++) {
+        if (i > 0) [sb appendString:@","];
+        [sb appendFormat:@"%lu", (unsigned long)[shape[i] unsignedIntegerValue]];
+    }
+    [sb appendString:@"]"];
+
+    NSString *shapeAttr = [NSString stringWithFormat:@"__shape_%@__", name];
+    [_group setStringAttribute:shapeAttr value:sb error:error];
+
+    MPGOHDF5DatasetAdapter *adapter =
+        [[MPGOHDF5DatasetAdapter alloc] initWithDataset:ds
+                                                    name:name];
+    adapter.ndShape = shape;
+    return adapter;
 }
 
 - (id<MPGOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
