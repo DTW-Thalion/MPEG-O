@@ -138,7 +138,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-04-17</p>
+        <p><b>Date:</b> Generated at 2026-04-18</p>
 
             <div>
         </div>
@@ -181,7 +181,14 @@
         + (NSData*) <b>dataForSpectrum:</b> (<a rel="gsdoc" href="MPGONMRSpectrum.html#class$MPGONMRSpectrum">MPGONMRSpectrum</a>*)spectrum<b> fid:</b> (<a rel="gsdoc" href="MPGOFreeInductionDecay.html#class$MPGOFreeInductionDecay">MPGOFreeInductionDecay</a>*)fid<b> sweepWidthPPM:</b> (double)sweepWidthPPM<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Serialize a single NMR <var>spectrum</var> (+
+            optional FID) to an in-memory nmrML XML blob. The
+            spectrum&apos;s ``chemicalShiftArray`` becomes the
+            ``&lt;xAxis&gt;`` and ``intensityArray``
+            the ``&lt;yAxis&gt;``. ``fid`` may be <code>nil</code>;
+            if present it is written as ``&lt;fidData&gt;`` in
+            base64 complex128. ``sweepWidthPPM`` is required for
+            the ``&lt;sweepWidth&gt;`` cvParam; pass 0 to omit.
           
         </div>
         <hr class="method-separator">

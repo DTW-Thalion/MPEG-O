@@ -138,7 +138,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-04-17</p>
+        <p><b>Date:</b> Generated at 2026-04-18</p>
 
             <div>
           <hr class="section-separator">
@@ -169,7 +169,26 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          SAX-based nmrML parser (v1.0+). Consumes an nmrML
+          document and produces: - zero or more
+          MPGOFreeInductionDecay objects (one
+          per &lt;fidData&gt;) - an MPGOSpectralDataset with a
+          single NMR acquisition run containing every parsed
+          &lt;spectrum1D&gt; as an MPGONMRSpectrum
+          Parsed elements: - &lt;acquisitionParameterSet&gt; /
+          cvParam: spectrometer frequency (NMR:1000001),
+          nucleus (NMR:1000002), number of scans (NMR:1000003),
+          dwell time (NMR:1000004), sweep width (NMR:1400014) -
+          &lt;fidData&gt;: base64-encoded float64
+          complex (interleaved real+imag) - &lt;spectrum1D&gt;
+          with
+          &lt;xAxis&gt;/&lt;yAxis&gt;/&lt;spectrumDataArray&gt;:
+          base64 chemical shift + intensity arrays Not
+          thread-safe. Returns <code>nil</code> with
+          NSError on malformed input. API status: Stable.
+          Cross-language equivalents: Python:
+          mpeg_o.importers.nmrml Java:
+          com.dtwthalion.mpgo.importers.NmrMLReader
         
         </div>
         <p class="global_method_index">

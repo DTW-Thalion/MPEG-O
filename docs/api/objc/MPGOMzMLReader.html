@@ -138,7 +138,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-04-17</p>
+        <p><b>Date:</b> Generated at 2026-04-18</p>
 
             <div>
           <hr class="section-separator">
@@ -169,7 +169,31 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          SAX-based mzML 1.1 parser. Consumes an mzML
+          document and produces a populated
+          MPGOSpectralDataset containing one
+          MPGOAcquisitionRun per &lt;run&gt;
+          element. Chromatograms appear as extra spectra
+          carrying the MPGOChromatogram class tag. What is
+          parsed: - &lt;spectrum&gt; elements with
+          cvParam-driven metadata (MS level, polarity,
+          scan start time, scan window, precursor m/z &amp;
+          charge) - &lt;binaryDataArray&gt; payloads decoded
+          via MPGOBase64, typed via MPGOCVTermMapper, packaged as
+          MPGOSignalArray - &lt;chromatogram&gt;
+          elements with time + intensity arrays -
+          &lt;dataProcessing&gt; as
+          MPGOProvenanceRecord chain (best-effort)
+          What is ignored (v0.2): - spectrumRef / sourceFileRef
+          cross-references - softwareList (captured as
+          provenance agent names only) - fileDescription
+          except for the list of source files On malformed input
+          the reader returns <code>nil</code> and populates `error`
+          with a descriptive NSError in the
+          `MPGOMzMLReaderErrorDomain`. Not
+          thread-safe. API status: Stable. Cross-language
+          equivalents: Python: mpeg_o.importers.mzml Java:
+          com.dtwthalion.mpgo.importers.MzMLReader
         
         </div>
         <p class="global_method_index">

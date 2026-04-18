@@ -138,7 +138,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-04-17</p>
+        <p><b>Date:</b> Generated at 2026-04-18</p>
 
             <div>
           <hr class="section-separator">
@@ -289,7 +289,10 @@
         - (id) <b>readAll:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Full read. Primitive datasets return NSData of length
+            * sizeof(element); compound datasets return
+            NSArray&lt;NSDictionary *&gt; where
+            each dict maps field name to boxed value.
           
         </div>
         <hr class="method-separator">
@@ -329,7 +332,9 @@
         - (BOOL) <b>writeAll:</b> (id)data<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Write. For primitives, ``data`` is NSData of length
+            * sizeof(element); for compound, an
+            NSArray&lt;NSDictionary *&gt;.
           
         </div>
         <hr class="method-separator">

@@ -70,7 +70,7 @@
 /** v0.4 M24: chromatogram traces associated with this run (TIC / XIC /
  *  SRM). Empty by default so v0.3 files read back as zero-chromatogram
  *  runs without a schema bump. Persisted under
- *  ``<run>/chromatograms/`` with concatenated ``time_values`` +
+ *  ``&lt;run&gt;/chromatograms/`` with concatenated ``time_values`` +
  *  ``intensity_values`` datasets and a ``chromatogram_index/`` subgroup
  *  of parallel metadata arrays. */
 @property (readonly, copy) NSArray<MPGOChromatogram *> *chromatograms;

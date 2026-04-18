@@ -25,16 +25,16 @@
  *                      kek_algorithm string)
  *
  * Usage:
- *   MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+ *   MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&amp;err];
  *   MPGOKeyRotationManager *mgr = [MPGOKeyRotationManager managerWithFile:f];
  *   NSData *dek = [mgr enableEnvelopeEncryptionWithKEK:kek1
  *                                                kekId:@"kek-1"
- *                                                error:&err];
+ *                                                error:&amp;err];
  *   // ... write data using `dek` as the per-dataset AES-GCM key ...
  *   // Later, rotate:
- *   [mgr rotateToKEK:kek2 kekId:@"kek-2" oldKEK:kek1 error:&err];
+ *   [mgr rotateToKEK:kek2 kekId:@"kek-2" oldKEK:kek1 error:&amp;err];
  *   // Later still, read:
- *   NSData *recovered = [mgr unwrapDEKWithKEK:kek2 error:&err];
+ *   NSData *recovered = [mgr unwrapDEKWithKEK:kek2 error:&amp;err];
  *
  * API status: Stable.
  *
@@ -83,7 +83,7 @@
 
 /**
  * Returns the list of historical KEK rotations as
- * ``NSArray<NSDictionary *>`` where each dict has keys
+ * ``NSArray&lt;NSDictionary *&gt;`` where each dict has keys
  * ``timestamp``, ``kek_id``, ``kek_algorithm``. The newest entry is
  * last; the currently-active KEK is *not* in history (it's live on
  * the group attributes).

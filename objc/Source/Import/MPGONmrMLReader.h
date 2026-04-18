@@ -18,17 +18,17 @@
  * SAX-based nmrML parser (v1.0+). Consumes an nmrML document and
  * produces:
  *
- *   - zero or more MPGOFreeInductionDecay objects (one per <fidData>)
+ *   - zero or more MPGOFreeInductionDecay objects (one per &lt;fidData&gt;)
  *   - an MPGOSpectralDataset with a single NMR acquisition run
- *     containing every parsed <spectrum1D> as an MPGONMRSpectrum
+ *     containing every parsed &lt;spectrum1D&gt; as an MPGONMRSpectrum
  *
  * Parsed elements:
- *   - <acquisitionParameterSet> / cvParam: spectrometer frequency
+ *   - &lt;acquisitionParameterSet&gt; / cvParam: spectrometer frequency
  *     (NMR:1000001), nucleus (NMR:1000002), number of scans
  *     (NMR:1000003), dwell time (NMR:1000004), sweep width
  *     (NMR:1400014)
- *   - <fidData>: base64-encoded float64 complex (interleaved real+imag)
- *   - <spectrum1D> with <xAxis>/<yAxis>/<spectrumDataArray>: base64
+ *   - &lt;fidData&gt;: base64-encoded float64 complex (interleaved real+imag)
+ *   - &lt;spectrum1D&gt; with &lt;xAxis&gt;/&lt;yAxis&gt;/&lt;spectrumDataArray&gt;: base64
  *     chemical shift + intensity arrays
  *
  * Not thread-safe. Returns nil with NSError on malformed input.

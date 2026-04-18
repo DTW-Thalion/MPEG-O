@@ -37,11 +37,11 @@
 
 /** Serialize a single NMR spectrum (+ optional FID) to an in-memory
  *  nmrML XML blob. The spectrum's ``chemicalShiftArray`` becomes the
- *  ``<xAxis>`` and ``intensityArray`` the ``<yAxis>``.
+ *  ``&lt;xAxis&gt;`` and ``intensityArray`` the ``&lt;yAxis&gt;``.
  *
- *  ``fid`` may be nil; if present it is written as ``<fidData>`` in
- *  base64 complex128. ``sweepWidthPPM`` is required for the ``<sweepWidth>``
- *  cvParam; pass 0 to omit.
+ *  ``fid`` may be nil; if present it is written as ``&lt;fidData&gt;`` in
+ *  base64 complex128. ``sweepWidthPPM`` is required for the
+ *  ``&lt;sweepWidth&gt;`` cvParam; pass 0 to omit.
  */
 + (NSData *)dataForSpectrum:(MPGONMRSpectrum *)spectrum
                         fid:(MPGOFreeInductionDecay *)fid
