@@ -168,6 +168,35 @@ may activate ML-DSA-87 signatures behind the `pqc_preview` feature flag.
 
 ---
 
+## 5.3 Compound round-trip verification (M51)
+
+Dataset-wide identifications, quantifications, and provenance records
+are readable byte-identically across the three language implementations.
+The harness:
+
+1. Python writes a 5-identification / 3-quantification / 7-provenance
+   fixture via `SpectralDataset.write_minimal`.
+2. Three dumpers — `python -m mpeg_o.tools.dump_identifications`,
+   `objc/Tools/obj/MpgoDumpIdentifications`, and
+   `com.dtwthalion.mpgo.tools.DumpIdentifications` (invoked via
+   `java/run-tool.sh`) — emit the same deterministic JSON to stdout.
+3. `python/tests/test_compound_writer_parity.py` diffs the three outputs
+   pairwise; any non-zero diff fails the test.
+
+Format: sorted keys, tight inner JSON, one record per line, LF endings,
+C99 `%.17g` floats. Implementations live in
+`mpeg_o/tools/_canonical_json.py`,
+`com/dtwthalion/mpgo/tools/CanonicalJson.java`, and the static helpers
+in `objc/Tools/MpgoDumpIdentifications.m`.
+
+The 9-way interop grid (3 writers × 3 dumpers) called out in HANDOFF.md
+M51 ships with the read direction only (1 writer × 3 dumpers); Java
+and ObjC write-fixture CLIs are v0.8 work. The read direction is the
+one that produced the uint64-probe bug (commit 303e324) and its Java
+analog fixed during M51 wiring — the bug pattern M51 exists to catch.
+
+---
+
 ## 6. Cross-References
 
 - Normative API table: `docs/api-review-v0.6.md` (unchanged in v0.7).
