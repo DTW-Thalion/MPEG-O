@@ -669,7 +669,6 @@ class SqliteProvider(StorageProvider):
 
     # ── StorageProvider contract ─────────────────────────────────────────
 
-    @property
     def provider_name(self) -> str:
         return "sqlite"
 

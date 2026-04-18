@@ -105,6 +105,12 @@ class _Dataset(StorageDataset):
     def set_attribute(self, name: str, value: Any) -> None:
         self._attrs[name] = value
 
+    def delete_attribute(self, name: str) -> None:
+        self._attrs.pop(name, None)
+
+    def attribute_names(self) -> list[str]:
+        return list(self._attrs.keys())
+
     def _default_dtype(self) -> np.dtype:
         if self._fields is not None:
             return _compound_dtype(self._fields)
@@ -250,7 +256,6 @@ class MemoryProvider(StorageProvider):
             raise ValueError(f"unknown mode: {mode}")
         return cls(url, _STORES[url])
 
-    @property
     def provider_name(self) -> str:
         return "memory"
 

@@ -499,6 +499,45 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
     return YES;
 }
 
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error
+{
+    if (_readOnly) {
+        if (error) *error = MPGOMakeError(MPGOErrorAttributeWrite,
+            @"SQLite provider opened read-only");
+        return NO;
+    }
+    sqlite3_stmt *stmt = NULL;
+    sqlite3_prepare_v2(_db,
+        "DELETE FROM dataset_attributes WHERE dataset_id = ? AND name = ?",
+        -1, &stmt, NULL);
+    sqlite3_bind_int64(stmt, 1, _datasetId);
+    sqlite3_bind_text(stmt, 2, [name UTF8String], -1, SQLITE_TRANSIENT);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) {
+        if (error) *error = MPGOMakeError(MPGOErrorAttributeWrite,
+            @"SQLite step error %d: %s", rc, sqlite3_errmsg(_db));
+        return NO;
+    }
+    sqlite3_exec(_db, "COMMIT; BEGIN", NULL, NULL, NULL);
+    return YES;
+}
+
+- (NSArray<NSString *> *)attributeNames
+{
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    sqlite3_stmt *stmt = NULL;
+    sqlite3_prepare_v2(_db,
+        "SELECT name FROM dataset_attributes WHERE dataset_id = ? ORDER BY name",
+        -1, &stmt, NULL);
+    sqlite3_bind_int64(stmt, 1, _datasetId);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        [names addObject:[NSString stringWithUTF8String:(const char *)sqlite3_column_text(stmt, 0)]];
+    }
+    sqlite3_finalize(stmt);
+    return names;
+}
+
 @end
 
 // ══════════════════════════════════════════════════════════════

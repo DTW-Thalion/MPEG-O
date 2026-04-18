@@ -146,6 +146,14 @@ class StorageDataset(ABC):
     @abstractmethod
     def set_attribute(self, name: str, value: Any) -> None: ...
 
+    @abstractmethod
+    def delete_attribute(self, name: str) -> None:
+        """Remove an attribute. No-op if absent. Appendix B Gap 8."""
+
+    @abstractmethod
+    def attribute_names(self) -> list[str]:
+        """List attribute names; empty list if none. Appendix B Gap 8."""
+
     # ── Lifecycle ───────────────────────────────────────────────────
 
     def close(self) -> None:
@@ -280,11 +288,14 @@ class StorageProvider(ABC):
         ``mode`` mirrors h5py semantics: ``"r"`` read-only, ``"r+"``
         read/write existing, ``"w"`` create/truncate, ``"a"`` append."""
 
-    @property
     @abstractmethod
     def provider_name(self) -> str:
         """Short identifier used for logging and registry lookup
-        (``"hdf5"``, ``"memory"``, ``"zarr"``, …)."""
+        (``"hdf5"``, ``"memory"``, ``"zarr"``, …).
+
+        Exposed as a method (not a property) to mirror the ObjC
+        ``-providerName`` selector and Java ``providerName()`` getter.
+        Appendix B Gap 5 — Provisional storage-provider convergence."""
 
     @abstractmethod
     def root_group(self) -> StorageGroup: ...

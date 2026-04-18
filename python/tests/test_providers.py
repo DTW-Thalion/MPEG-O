@@ -82,11 +82,11 @@ def test_register_overrides_builtin() -> None:
 def test_open_by_url_scheme_resolves(tmp_path: Path) -> None:
     p = tmp_path / "scheme.h5"
     prov = open_provider(f"file://{p}", mode="w")
-    assert prov.provider_name == "hdf5"
+    assert prov.provider_name() == "hdf5"
     prov.close()
 
     prov2 = open_provider("memory://scheme-test", mode="w")
-    assert prov2.provider_name == "memory"
+    assert prov2.provider_name() == "memory"
     MemoryProvider.discard_store("memory://scheme-test")
 
 
@@ -284,7 +284,7 @@ def test_spectral_dataset_open_wires_provider(tmp_path: Path) -> None:
 
     with SpectralDataset.open(path) as ds:
         assert ds.provider is not None
-        assert ds.provider.provider_name == "hdf5"
+        assert ds.provider.provider_name() == "hdf5"
         # ds.file is the same h5py.File as provider.native_handle()
         assert ds.provider.native_handle() is ds.file
 

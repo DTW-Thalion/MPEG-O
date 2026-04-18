@@ -229,6 +229,8 @@ public final class MemoryProvider implements StorageProvider {
         @Override public boolean hasAttribute(String n) { return attrs.containsKey(n); }
         @Override public Object getAttribute(String n) { return attrs.get(n); }
         @Override public void setAttribute(String n, Object v) { attrs.put(n, v); }
+        @Override public void deleteAttribute(String n) { attrs.remove(n); }
+        @Override public List<String> attributeNames() { return new ArrayList<>(attrs.keySet()); }
 
         private static Object slicePrimitive(Object src, int offset, int count) {
             if (src instanceof double[] a) {
