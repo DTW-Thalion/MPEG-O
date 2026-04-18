@@ -5,8 +5,6 @@
  */
 package com.dtwthalion.mpgo;
 
-import hdf.hdf5lib.HDF5Constants;
-
 /**
  * Enumerations mirroring the ObjC {@code MPGOEnums.h} integer values.
  *
@@ -26,37 +24,37 @@ public final class Enums {
 
     private Enums() {}
 
-    /** Numeric precision of a signal buffer. */
+    /** Numeric precision of a signal buffer.
+     *
+     * <p><b>Appendix B Gap 7:</b> this enum used to hold a
+     * {@code HDF5Constants.H5T_NATIVE_*} id per constant, which made
+     * the HDF5 JNI wrapper a load-time dependency of every consumer,
+     * including non-HDF5 providers such as SQLite. The HDF5 type ids
+     * have moved to {@code Hdf5Group.hdf5TypeFor(Precision)} so this
+     * enum no longer pulls in the native library.</p>
+     */
     public enum Precision {
         /** 32-bit IEEE 754 single-precision float (4 bytes). */
-        FLOAT32(4, HDF5Constants.H5T_NATIVE_FLOAT),
+        FLOAT32(4),
         /** 64-bit IEEE 754 double-precision float (8 bytes). */
-        FLOAT64(8, HDF5Constants.H5T_NATIVE_DOUBLE),
+        FLOAT64(8),
         /** Signed 32-bit integer (4 bytes). */
-        INT32(4, HDF5Constants.H5T_NATIVE_INT32),
+        INT32(4),
         /** Signed 64-bit integer (8 bytes). */
-        INT64(8, HDF5Constants.H5T_NATIVE_INT64),
+        INT64(8),
         /** Unsigned 32-bit integer stored as signed {@code int} (4 bytes). */
-        UINT32(4, HDF5Constants.H5T_NATIVE_UINT32),
+        UINT32(4),
         /** 128-bit complex: two {@code double} values per element (16 bytes). */
-        COMPLEX128(16, -1);  // compound type, built at runtime
+        COMPLEX128(16);
 
         private final int elementSize;
-        private final long nativeTypeId;
 
-        Precision(int elementSize, long nativeTypeId) {
+        Precision(int elementSize) {
             this.elementSize = elementSize;
-            this.nativeTypeId = nativeTypeId;
         }
 
         /** @return size in bytes of a single element at this precision. */
         public int elementSize() { return elementSize; }
-
-        /** @return native HDF5 type id, or -1 if synthesized at runtime. */
-        public long nativeTypeId() { return nativeTypeId; }
-
-        /** @return {@code true} if backed by a builtin HDF5 type. */
-        public boolean isBuiltin() { return nativeTypeId >= 0; }
     }
 
     /** Compression algorithm applied to a signal buffer. */

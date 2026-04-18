@@ -70,7 +70,7 @@ public class Hdf5Dataset implements AutoCloseable {
         } catch (HDF5LibraryException e) {
             throw new Hdf5Errors.DatasetWriteException("H5Dwrite failed: " + e.getMessage());
         } finally {
-            if (!precision.isBuiltin() && htype >= 0)
+            if (precision == Precision.COMPLEX128 && htype >= 0)
                 try { H5.H5Tclose(htype); } catch (Exception ignored) {}
             file.unlockForWriting();
         }
@@ -102,7 +102,7 @@ public class Hdf5Dataset implements AutoCloseable {
         } catch (HDF5LibraryException e) {
             throw new Hdf5Errors.DatasetReadException("H5Dread failed: " + e.getMessage());
         } finally {
-            if (!precision.isBuiltin() && htype >= 0)
+            if (precision == Precision.COMPLEX128 && htype >= 0)
                 try { H5.H5Tclose(htype); } catch (Exception ignored) {}
             file.unlockForReading();
         }
@@ -149,7 +149,7 @@ public class Hdf5Dataset implements AutoCloseable {
         } finally {
             if (mspace >= 0) try { H5.H5Sclose(mspace); } catch (Exception ignored) {}
             if (fspace >= 0) try { H5.H5Sclose(fspace); } catch (Exception ignored) {}
-            if (!precision.isBuiltin() && htype >= 0)
+            if (precision == Precision.COMPLEX128 && htype >= 0)
                 try { H5.H5Tclose(htype); } catch (Exception ignored) {}
             file.unlockForReading();
         }

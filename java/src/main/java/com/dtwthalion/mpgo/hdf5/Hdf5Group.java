@@ -187,7 +187,7 @@ public class Hdf5Group implements AutoCloseable {
             throw new Hdf5Errors.DatasetCreateException(
                     "H5Dcreate failed for '" + name + "': " + e.getMessage());
         } finally {
-            if (!precision.isBuiltin() && htype >= 0)
+            if (precision == Precision.COMPLEX128 && htype >= 0)
                 try { H5.H5Tclose(htype); } catch (Exception ignored) {}
             if (plist >= 0) try { H5.H5Pclose(plist); } catch (Exception ignored) {}
             if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ignored) {}
@@ -402,16 +402,28 @@ public class Hdf5Group implements AutoCloseable {
     /**
      * Build the HDF5 type id for a given Precision. For COMPLEX128, creates
      * a compound type {double re; double im;} — caller must close if not builtin.
+     *
+     * <p>Appendix B Gap 7: HDF5Constants references live here rather
+     * than on Precision itself so non-HDF5 providers (SQLite) can load
+     * Precision without pulling the HDF5 JNI classes onto the
+     * classpath.</p>
      */
     static long hdf5TypeFor(Precision precision) throws HDF5LibraryException {
-        if (precision.isBuiltin()) {
-            return precision.nativeTypeId();
-        }
-        // COMPLEX128: compound {double re, double im}
-        long tid = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, 16);
-        H5.H5Tinsert(tid, "re", 0, HDF5Constants.H5T_NATIVE_DOUBLE);
-        H5.H5Tinsert(tid, "im", 8, HDF5Constants.H5T_NATIVE_DOUBLE);
-        return tid;
+        return switch (precision) {
+            case FLOAT32 -> HDF5Constants.H5T_NATIVE_FLOAT;
+            case FLOAT64 -> HDF5Constants.H5T_NATIVE_DOUBLE;
+            case INT32   -> HDF5Constants.H5T_NATIVE_INT32;
+            case INT64   -> HDF5Constants.H5T_NATIVE_INT64;
+            case UINT32  -> HDF5Constants.H5T_NATIVE_UINT32;
+            case COMPLEX128 -> {
+                // Compound {double re; double im} — caller is responsible
+                // for H5Tclose() on the returned non-builtin id.
+                long tid = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, 16);
+                H5.H5Tinsert(tid, "re", 0, HDF5Constants.H5T_NATIVE_DOUBLE);
+                H5.H5Tinsert(tid, "im", 8, HDF5Constants.H5T_NATIVE_DOUBLE);
+                yield tid;
+            }
+        };
     }
 
     static Precision precisionFromType(long htid) throws HDF5LibraryException {
