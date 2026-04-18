@@ -39,9 +39,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **v0.7.0 — Normative reference. 1057 assertions passing.** | `objc/` |
-| **Python (`mpeg-o`)**     | **v0.7.0 — Full parity with ObjC and Java. 284 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.mpgo`)** | **v0.7.0 — Full parity with ObjC and Python. 179 tests, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **v0.8.0 — Normative reference. 1133 assertions passing.** | `objc/` |
+| **Python (`mpeg-o`)**     | **v0.8.0 — Full parity with ObjC and Java. 341 tests passing.** | `python/` |
+| **Java (`com.dtwthalion.mpgo`)** | **v0.8.0 — Full parity with ObjC and Python. 207 tests, JDK 17, Maven.** | `java/` |
 
 ### v0.1.0-alpha capabilities
 
@@ -116,6 +116,18 @@ v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2
 * **Crypto algorithm agility (M48)** — `CipherSuite` static catalog (AEAD / KEM / MAC / Signature / Hash / XOF). `encrypt_bytes(..., algorithm=...)`, `sign_dataset(..., algorithm=...)`, `enable_envelope_encryption(..., algorithm=...)` gained opt-in `algorithm=` parameters; default remains AES-256-GCM / HMAC-SHA256 for backward compat. Binding decision 39 — fixed allow-list, not plugin-registered.
 * **Cross-language compound byte-parity harness (M51, stretch)** — three new dumper CLIs (`python -m mpeg_o.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `MpgoDumpIdentifications`) emit identifications / quantifications / provenance as byte-identical canonical JSON. `test_compound_writer_parity.py` pairwise-diffs the three outputs; any divergence fails the test. Caught + fixed a Java `H5T_NATIVE_UINT64` precision-probe bug on the way in.
 * **Cross-language polish (M50)** — six independent sub-items: unified `open()` docs, ObjC `-readRowsWithError:` made @required, Java typed importer exception hierarchy, Java `@since` audit, cross-language error-domain mapping appendix (`docs/api-review-v0.7.md` §C), Appendix B Gap 7 cross-references.
+
+### v0.8.0 capabilities (additions to v0.7.0)
+
+* **Post-quantum crypto (M49 + M49.1)** — ML-KEM-1024 (FIPS 203) envelope key-wrap and ML-DSA-87 (FIPS 204) dataset signatures. New `v3:` signature-attribute prefix and `opt_pqc_preview` feature flag. Python and Objective-C use [`liboqs`](https://github.com/open-quantum-safe/liboqs) (via `liboqs-python` and direct C linkage); Java uses Bouncy Castle 1.80+. Library-choice rationale and wire-format reference: [`docs/pqc.md`](docs/pqc.md). Opt-in via `pip install 'mpeg-o[pqc]'`; AES-256-GCM + HMAC-SHA256 remain the defaults.
+* **Java + Objective-C `ZarrProvider` ports (M52)** — self-contained Zarr v2 DirectoryStore implementations. No external zarr library dependency; on-disk layout matches the Python reference (v0.7 M46) so all three languages cross-read one another's stores. Compound datasets use the Python convention (sub-group + `_mpgo_kind="compound"` + `_mpgo_schema` + `_mpgo_rows` JSON attrs). In-memory (`zarr+memory://`) and S3 (`zarr+s3://`) schemes remain Python-only through v0.8.
+* **Bruker timsTOF `.d` importer (M53)** — SQLite metadata reads natively in every language (uses `java.sql` in Java, `libsqlite3` in ObjC, stdlib `sqlite3` in Python). Binary frame decompression uses [`opentimspy`](https://pypi.org/project/opentimspy/) + `opentims-bruker-bridge` in Python and subprocesses into the Python helper from Java / ObjC — no proprietary Bruker SDK involved. New **`inv_ion_mobility` signal channel** preserves the 2-D timsTOF geometry per-peak. Install with `pip install 'mpeg-o[bruker]'`. Details: [`docs/vendor-formats.md`](docs/vendor-formats.md).
+* **Cross-language PQC conformance matrix (M54 + M54.1)** — 32-cell verification matrix across all three languages and four providers: primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` dataset signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence on the same file, v0.7 classical backward-compat. New `com.dtwthalion.mpgo.tools.PQCTool` (Java) and `MpgoPQCTool` (ObjC) CLIs drive the Python pytest harness. Python `sign_storage_dataset` / `verify_storage_dataset` provider-agnostic helpers let PQC signatures ride any storage backend for free.
+* **v1.0 API stability audit (M55)** — every public API classified Stable / Provisional / Deprecated across the three languages in new [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md). Deprecation ledger identifies five APIs scheduled for removal at v1.0 (file-path intensity-channel helpers, `nativeHandle()`, v1 HMAC fallback). Comprehensive [`CHANGELOG.md`](CHANGELOG.md) covering v0.1-alpha through v0.8.
+
+### Format compatibility
+
+Every version's files remain readable by later versions. v0.8 readers open v0.1-v0.7 files without ceremony; v0.7-and-earlier readers open v0.8 files unless those files carry the `opt_pqc_preview` flag and the reader is asked to verify a `v3:` signature or unwrap an ML-KEM-1024 envelope — both operations raise a clean `UnsupportedAlgorithmError`. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
 
 ## Python Installation
 

@@ -1,12 +1,14 @@
 # MPEG-O v0.8 — PQC + Multi-Backend Parity + Vendor Import
 
-> **Status:** v0.7.0 is **complete** (51 milestones, M49 PQC deferred).
-> ObjC 1057 assertions, Python 284 tests, Java 179 tests. Four storage
-> providers: HDF5, Memory, SQLite, Zarr (Python-only). CipherSuite
-> catalog in place with reserved PQC algorithm IDs. This session
-> executes **Milestones 49, 40, 52–57** to deliver PQC cryptography,
-> package publishing, multi-language Zarr parity, Bruker TDF import,
-> and v1.0 preparation.
+> **Status:** v0.8.0 is **complete and released (2026-04-18)** — all
+> milestones M49, M49.1, M52, M53, M54, M54.1, M55, M56 shipped.
+> ObjC 1133 assertions, Python 341 tests, Java 207 tests. Four
+> storage providers in every language: HDF5, Memory, SQLite, Zarr.
+> Post-quantum crypto active (ML-KEM-1024 + ML-DSA-87). Bruker
+> timsTOF `.d` importer with opentimspy binary extraction.
+> 32-cell cross-language PQC conformance matrix passes.
+>
+> Next cycle — v0.9: see the **Deferred to v0.9+** section below.
 
 ---
 

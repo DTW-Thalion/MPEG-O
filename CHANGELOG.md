@@ -11,7 +11,7 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — v0.8.0 (candidate)
+## [v0.8.0] — 2026-04-18
 
 ### Added
 - **M49** Post-quantum crypto: ML-KEM-1024 (FIPS 203) envelope
