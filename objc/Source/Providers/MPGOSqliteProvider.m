@@ -283,6 +283,16 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
     return [self readSliceAtOffset:0 count:NSUIntegerMax error:error];
 }
 
+- (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error
+{
+    if (_fields == nil) {
+        if (error) *error = MPGOMakeError(MPGOErrorDatasetRead,
+            @"readRows: is only valid for compound datasets");
+        return nil;
+    }
+    return [self readAll:error];
+}
+
 - (id)readSliceAtOffset:(NSUInteger)offset
                   count:(NSUInteger)count
                   error:(NSError **)error

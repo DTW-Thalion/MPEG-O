@@ -63,6 +63,13 @@
     return [_ds writeData:(NSData *)data error:error];
 }
 
+- (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error
+{
+    if (error) *error = MPGOMakeError(MPGOErrorDatasetRead,
+        @"readRows: is only valid for compound datasets");
+    return nil;
+}
+
 - (BOOL)hasAttributeNamed:(NSString *)name { (void)name; return NO; }
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error
 {
@@ -295,6 +302,11 @@
                             datasetNamed:_name
                                   fields:_fields
                                    error:error];
+}
+
+- (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error
+{
+    return [self readAll:error];
 }
 
 - (BOOL)hasAttributeNamed:(NSString *)name { (void)name; return NO; }

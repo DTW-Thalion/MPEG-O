@@ -233,7 +233,17 @@
 - (NSUInteger)length { return _shape.count > 0 ? [_shape[0] unsignedIntegerValue] : 0; }
 - (NSArray<MPGOCompoundField *> *)compoundFields { return _fields; }
 
-- (id)readAll:(NSError **)error { return _data; }
+- (id)readAll:(NSError **)error { (void)error; return _data; }
+
+- (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error
+{
+    if (_fields == nil) {
+        if (error) *error = MPGOMakeError(MPGOErrorDatasetRead,
+            @"readRows: is only valid for compound datasets");
+        return nil;
+    }
+    return (NSArray *)_data;
+}
 
 - (id)readSliceAtOffset:(NSUInteger)offset count:(NSUInteger)count error:(NSError **)error
 {
