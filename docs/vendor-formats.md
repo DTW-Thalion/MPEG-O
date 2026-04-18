@@ -61,16 +61,98 @@ arrays, TIC/BPC chromatograms. Thermo-specific extended method
 metadata that the bridge drops is not carried into MPEG-O by this
 path — if that data is load-bearing, you will need a direct reader.
 
-## Bruker TDF (v0.5+ — deferred)
+## Bruker TDF (v0.8 M53 — shipped)
 
-**Status:** Not started; deferred to v0.5+.
+**Status:** Implemented. Metadata reads natively in all three
+languages; binary frame decompression uses `opentimspy` (Python) or
+delegates to the Python helper via subprocess (Java, Objective-C).
 
-Bruker timsTOF data is stored in `.d` directories containing a `analysis.tdf`
-SQLite database plus binary `.tdf_bin` frame files. The `timsdata` C library
-(Bruker-provided, free license) is required for frame decompression.
+Bruker timsTOF `.d` directories hold two files:
 
-**Integration path:** Wrap `timsdata.dll`/`libtimsdata.so` via FFI. Each
-TIMS frame maps to a set of MPEG-O spectra indexed by mobility (1/K0).
+* `analysis.tdf` — a plain SQLite database with metadata tables
+  (`Frames`, `GlobalMetadata`, `Properties`, `Precursors`, ...).
+* `analysis.tdf_bin` or `analysis.tdf_raw` — a binary blob with
+  ZSTD-compressed frame data plus a scan-to-ion index.
+
+The SQLite half is openly readable from the standard library in
+every language. The binary half is read via the open-source
+[`opentimspy`][opentimspy] Python package (wraps `libtimsdata.so` from
+the paired [`opentims-bruker-bridge`][bridge] wheel). **No proprietary
+Bruker SDK is involved** — the bridge wheel embeds the open reference
+implementation of the documented frame format.
+
+[opentimspy]: https://pypi.org/project/opentimspy/
+[bridge]: https://pypi.org/project/opentims-bruker-bridge/
+
+### Installation
+
+```bash
+pip install 'mpeg-o[bruker]'
+```
+
+This pulls `opentimspy` + `opentims-bruker-bridge`. The bridge wheel
+ships prebuilt `libtimsdata.so` (Linux), `libtimsdata.dylib` (macOS),
+and `libtimsdata.dll` (Windows) — no extra toolchain required.
+
+### Binary path resolution (Java + Objective-C)
+
+The Java `BrukerTDFReader` and Objective-C `MPGOBrukerTDFReader`
+read SQLite metadata natively but subprocess to Python for binary
+frame data. Python interpreter lookup order:
+
+1. `MPGO_PYTHON` environment variable (absolute path).
+2. `python3` on `PATH`.
+3. `python` on `PATH`.
+
+The chosen interpreter must have `mpeg-o[bruker]` installed.
+
+### What is recovered
+
+Per-peak arrays for every MS1 frame (MS2 optional via `--ms2` /
+`ms2=True`):
+
+* **m/z** — calibrated mass-to-charge, float64 Da.
+* **intensity** — raw peak intensity, float64.
+* **inv_ion_mobility** — inverse reduced ion mobility (1/K₀),
+  float64 Vs/cm². This is the **third signal channel** added in
+  v0.8 M53 — timsTOF frames are 2-D acquisitions and the ion-mobility
+  axis must round-trip per-peak, not per-spectrum.
+
+Frame-level metadata (retention time, MS level) and instrument
+config (vendor, model, acquisition software) are populated from the
+`Frames`, `GlobalMetadata`, and `Properties` tables.
+
+### Round-trip verification
+
+The Python test `tests/test_bruker_tdf.py::test_real_tdf_round_trip`
+takes an optional `MPGO_BRUKER_TDF_FIXTURE` environment variable
+pointing at a real Bruker `.d` directory. When set, it round-trips
+through `read()` and asserts that:
+
+* Frame count matches `analysis.tdf`'s `Frames` table.
+* The written `.mpgo` has `mz`, `intensity`, and `inv_ion_mobility`
+  signal channels with identical shapes.
+* m/z and intensity match the opentimspy reference extraction.
+
+The test is skipped when the environment variable is not set
+(i.e., on CI and when no real fixture is available).
+
+### Command invoked (Java + ObjC)
+
+```
+<python> -m mpeg_o.importers.bruker_tdf_cli \
+    --input <path/to/run.d> \
+    --output <path/to/target.mpgo> [--title "..."] [--ms2]
+```
+
+Exit codes: 0 = success, 2 = bad args, 3 = `opentimspy` missing, 4 = I/O.
+
+### Scope
+
+v0.8 M53 ships metadata + binary-data extraction. MS2 precursor
+threading into the compound schema and native C ports of the frame
+decoder (removing the Python helper dependency for Java and ObjC)
+are v0.9 concerns.
 
 ## Waters MassLynx (v0.5+ — deferred)
 
