@@ -17,6 +17,8 @@ import java.util.List;
  * Supports native numeric fields plus variable-length string fields.
  * Owns the compound type id and every auxiliary VL string type id;
  * all are released in {@link #close()}.
+ *
+ * @since 0.6
  */
 public class Hdf5CompoundType implements AutoCloseable {
 

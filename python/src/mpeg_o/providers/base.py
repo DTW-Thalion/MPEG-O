@@ -343,9 +343,16 @@ class StorageProvider(ABC):
             p.open("/path", mode="w")
 
         Every concrete Python provider detects which style is in use
-        by inspecting the first positional argument. This matches the
-        Java {@code provider.open(path, mode)} instance-method idiom
-        and the ObjC {@code -openURL:mode:error:} selector."""
+        by inspecting the first positional argument.
+
+        **Cross-language note (M50.1):** Java and ObjC are factory-only
+        — ``StorageProvider.open(pathOrUrl, mode)`` in Java always
+        returns the same instance it was called on (the pattern is
+        ``new Hdf5Provider().open(...)``), and ObjC's
+        ``-openURL:mode:error:`` is a plain instance method. The Python
+        dual-style dispatch is a Pythonic ergonomic convenience; callers
+        targeting multiple languages should use ``Provider.open(path)``
+        uniformly so the call site reads the same across languages."""
 
     @abstractmethod
     def provider_name(self) -> str:

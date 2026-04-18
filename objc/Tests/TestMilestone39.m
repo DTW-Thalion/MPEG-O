@@ -124,4 +124,53 @@ void testMilestone39(void)
     NSArray *known = [[MPGOProviderRegistry sharedRegistry] knownProviderNames];
     PASS([known containsObject:@"hdf5"], "M39: registry knows hdf5");
     PASS([known containsObject:@"memory"], "M39: registry knows memory");
+
+    // M50.2: every provider's primitive + compound dataset must
+    // respond to -readRows: now that the selector is @required on
+    // the MPGOStorageDataset protocol. The compile-time requirement
+    // catches omissions, but a runtime test guards against silent
+    // @optional regressions on custom providers loaded via +load.
+    for (NSString *providerName in @[@"memory", @"hdf5"]) {
+        id<MPGOStorageProvider> p = nil;
+        NSString *url = [providerName isEqualToString:@"memory"]
+            ? [NSString stringWithFormat:@"memory://m50-%d", (int)getpid()]
+            : m39HDF5Path(@"readrows.mpgo");
+        p = [[MPGOProviderRegistry sharedRegistry]
+                openURL:url
+                   mode:MPGOStorageOpenModeCreate
+               provider:providerName
+                  error:nil];
+        PASS(p != nil, "M50.2: provider %s opens", providerName.UTF8String);
+        id<MPGOStorageGroup> root = [p rootGroupWithError:nil];
+
+        MPGOCompoundField *field = [MPGOCompoundField
+                fieldWithName:@"f" kind:MPGOCompoundFieldKindFloat64];
+        id<MPGOStorageDataset> cds =
+            [root createCompoundDatasetNamed:@"m50_rr"
+                                      fields:@[field]
+                                       count:1
+                                       error:nil];
+        PASS([(NSObject *)cds respondsToSelector:@selector(readRows:)],
+            "M50.2: %s compound dataset responds to readRows:",
+            providerName.UTF8String);
+
+        id<MPGOStorageDataset> prim =
+            [root createDatasetNamed:@"m50_rr_prim"
+                            precision:MPGOPrecisionFloat64
+                               length:1
+                            chunkSize:0
+                          compression:MPGOCompressionNone
+                     compressionLevel:0
+                                error:nil];
+        PASS([(NSObject *)prim respondsToSelector:@selector(readRows:)],
+            "M50.2: %s primitive dataset responds to readRows:",
+            providerName.UTF8String);
+
+        [p close];
+        if ([providerName isEqualToString:@"memory"]) {
+            [MPGOMemoryProvider discardStore:url];
+        } else {
+            unlink([url fileSystemRepresentation]);
+        }
+    }
 }

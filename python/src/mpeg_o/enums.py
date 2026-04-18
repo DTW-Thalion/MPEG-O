@@ -32,6 +32,13 @@ class Precision(IntEnum):
 
     Cross-language: ObjC ``MPGOPrecision`` · Java
     ``Enums.Precision``.
+
+    Appendix B Gap 7: ``Precision`` is a pure enum. The HDF5 type
+    mapping (``H5T_NATIVE_DOUBLE`` &c.) lives in
+    ``mpeg_o.providers.hdf5`` so non-HDF5 providers (SQLite, Memory,
+    future Zarr) can import ``Precision`` without pulling HDF5
+    dependencies onto their classpath. See v0.6.1 Appendix B gap 7
+    in ``docs/api-review-v0.6.md`` for the motivating bug.
     """
 
     FLOAT32 = 0

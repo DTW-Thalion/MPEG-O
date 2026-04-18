@@ -79,7 +79,7 @@ public final class ThermoRawReader {
             }
             if (rc != 0) {
                 String head = output.length() > 500 ? output.substring(0, 500) : output;
-                throw new IOException("ThermoRawFileParser exited " + rc
+                throw new ThermoRawException("ThermoRawFileParser exited " + rc
                         + ": " + head.trim());
             }
 
@@ -94,16 +94,16 @@ public final class ThermoRawReader {
                            .findFirst().orElse(null);
                 }
                 if (mzml == null) {
-                    throw new IOException(
+                    throw new ThermoRawException(
                             "ThermoRawFileParser produced no mzML in " + tmpDir);
                 }
             }
 
             try {
                 return MzMLReader.read(mzml.toString());
-            } catch (Exception e) {
-                throw new IOException("MzMLReader failed on ThermoRawFileParser "
-                        + "output: " + e.getMessage(), e);
+            } catch (MzMLParseException e) {
+                throw new ThermoRawException("MzMLReader failed on "
+                        + "ThermoRawFileParser output: " + e.getMessage(), e);
             }
         } finally {
             deleteRecursively(tmpDir);

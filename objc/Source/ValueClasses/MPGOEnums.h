@@ -19,6 +19,16 @@ typedef NS_ENUM(NSUInteger, MPGOSamplingMode) {
     MPGOSamplingModeNonUniform
 };
 
+/**
+ * Numeric precision of a signal buffer.
+ *
+ * Appendix B Gap 7: MPGOPrecision is a pure enum. The HDF5 type
+ * mapping (H5T_NATIVE_DOUBLE &c.) lives in the HDF5 provider layer
+ * so non-HDF5 providers (SQLite, in-memory, future Zarr) can use
+ * this enum without pulling the HDF5 library onto the link graph.
+ * Cross-language equivalents: Python mpeg_o.enums.Precision, Java
+ * com.dtwthalion.mpgo.Enums.Precision.
+ */
 typedef NS_ENUM(NSUInteger, MPGOPrecision) {
     MPGOPrecisionFloat32 = 0,
     MPGOPrecisionFloat64,

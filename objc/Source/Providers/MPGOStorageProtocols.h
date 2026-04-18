@@ -75,19 +75,18 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
  *  for compound, an NSArray&lt;NSDictionary *&gt;. */
 - (BOOL)writeAll:(id)data error:(NSError **)error;
 
-@optional
-
 /** Backend-agnostic compound read. Returns
  *  NSArray&lt;NSDictionary *&gt; for compound datasets, nil + NSError
  *  for primitives.
  *
- *  Default implementation (provided by MPGOStorageProtocols.m) just
- *  calls ``-readAll:`` — ObjC compound readers already return the
- *  NSDictionary shape universally, so there is no conversion step.
- *  Appendix B Gap 2. */
+ *  ObjC compound readers already return the NSDictionary shape
+ *  universally, so most implementations are a trivial forwarder to
+ *  ``-readAll:``. Appendix B Gap 2 introduced the method as
+ *  ``@optional`` in v0.6.1; v0.7 M50.2 promotes it to ``@required``
+ *  so custom provider implementations that omit it fail at compile
+ *  time rather than silently at runtime via
+ *  ``doesNotRecognizeSelector:``. */
 - (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error;
-
-@required
 
 - (BOOL)hasAttributeNamed:(NSString *)name;
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error;

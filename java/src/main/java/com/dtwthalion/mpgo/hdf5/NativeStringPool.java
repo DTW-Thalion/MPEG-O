@@ -23,6 +23,8 @@ import java.util.List;
  * pointers. This pool hands out those pointers. {@link #close()} must
  * run after the {@code H5Dwrite} call so the native memory stays valid
  * for the duration of the write.</p>
+ *
+ * @since 0.6
  */
 public final class NativeStringPool implements AutoCloseable {
 
