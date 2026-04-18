@@ -132,7 +132,33 @@ public final class Hdf5Provider implements StorageProvider {
                 int len = (int) readDatasetLength(delegate.getGroupId(), name);
                 return new Hdf5CompoundDatasetAdapter(delegate, name, schema, len);
             }
-            return new Hdf5DatasetAdapter(delegate.openDataset(name), name);
+            Hdf5Dataset ds = delegate.openDataset(name);
+            // v0.7 M45: if the group carries a @__shape_<name>__
+            // attribute, it's a flattened N-D dataset — reconstruct
+            // the shape for the adapter.
+            long[] ndShape = null;
+            String shapeAttr = "__shape_" + name + "__";
+            if (delegate.hasAttribute(shapeAttr)) {
+                try {
+                    String s = delegate.readStringAttribute(shapeAttr);
+                    ndShape = parseShapeJson(s);
+                } catch (Exception ignored) { /* fall through to 1-D */ }
+            }
+            return new Hdf5DatasetAdapter(ds, name, ndShape);
+        }
+
+        private static long[] parseShapeJson(String s) {
+            // Minimal parser: "[a,b,c]" → long[]{a,b,c}.
+            String inner = s.trim();
+            if (inner.startsWith("[")) inner = inner.substring(1);
+            if (inner.endsWith("]")) inner = inner.substring(0, inner.length() - 1);
+            if (inner.isEmpty()) return new long[0];
+            String[] parts = inner.split(",");
+            long[] out = new long[parts.length];
+            for (int i = 0; i < parts.length; i++) {
+                out[i] = Long.parseLong(parts[i].trim());
+            }
+            return out;
         }
 
         @Override
@@ -146,6 +172,59 @@ public final class Hdf5Provider implements StorageProvider {
                                               chunkSize, compression,
                                               compressionLevel);
             return new Hdf5DatasetAdapter(ds, name);
+        }
+
+        /** v0.7 M45: N-D datasets. Stored as a flat 1-D HDF5 dataset
+         *  plus a {@code @shape_json} attribute recording the original
+         *  rank and per-axis lengths. This matches the SqliteProvider
+         *  layout so canonical bytes stay bit-identical across
+         *  backends; native H5Screate_simple(rank, dims, null) storage
+         *  is a v0.8 optimisation (M44 MSImage refactor scope). */
+        @Override
+        public StorageDataset createDatasetND(String name, Precision precision,
+                                                long[] shape, long[] chunks,
+                                                Compression compression,
+                                                int compressionLevel) {
+            if (shape == null) {
+                throw new IllegalArgumentException("shape must be non-null");
+            }
+            if (shape.length == 1) {
+                int chunkSize = (chunks != null && chunks.length == 1)
+                        ? (int) chunks[0] : 0;
+                return createDataset(name, precision, shape[0], chunkSize,
+                                       compression, compressionLevel);
+            }
+            long total = 1;
+            for (long s : shape) total *= s;
+            int chunkSize = 0;
+            if (chunks != null && chunks.length > 0) {
+                // Flatten the chunk hint similarly. HDF5's 1-D chunking
+                // doesn't capture multi-axis locality, so this is
+                // advisory only.
+                long chunkTotal = 1;
+                for (long c : chunks) chunkTotal *= c;
+                chunkSize = (int) Math.min(chunkTotal, total);
+            }
+            Hdf5Dataset ds = (compression == Compression.NONE && chunkSize <= 0)
+                    ? delegate.createDataset(name, precision, (int) total, 0, 0)
+                    : delegate.createDataset(name, precision, (int) total,
+                                              chunkSize, compression,
+                                              compressionLevel);
+            // Persist the full shape via @shape_json so the read-side
+            // adapter can reconstruct rank and dims.
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < shape.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(shape[i]);
+            }
+            sb.append(']');
+            delegate.openGroup("."); // no-op; placeholder for future
+            // Store on the dataset itself (Hdf5Dataset doesn't expose
+            // attribute setters today; store on the PARENT group under
+            // a __shape_<name>__ key). v0.8 will migrate to native
+            // H5Screate_simple once MSImage-native-read is deprecated.
+            delegate.setStringAttribute("__shape_" + name + "__", sb.toString());
+            return new Hdf5DatasetAdapter(ds, name, shape);
         }
 
         @Override
@@ -206,15 +285,30 @@ public final class Hdf5Provider implements StorageProvider {
     static final class Hdf5DatasetAdapter implements StorageDataset {
         private final Hdf5Dataset delegate;
         private final String name;
+        private final long[] ndShape;  // v0.7 M45: null ⇒ 1-D
 
         Hdf5DatasetAdapter(Hdf5Dataset delegate, String name) {
+            this(delegate, name, null);
+        }
+
+        /** v0.7 M45: N-D variant. {@code ndShape} preserves the full
+         *  rank through the adapter; the underlying HDF5 dataset is
+         *  stored as a flat 1-D BLOB for maximum backend compatibility
+         *  (matches SqliteProvider's layout). Full-rank HDF5
+         *  {@code H5Screate_simple(rank, dims, null)} storage is a
+         *  v0.8 optimisation — see M44's MSImage refactor. */
+        Hdf5DatasetAdapter(Hdf5Dataset delegate, String name, long[] ndShape) {
             this.delegate = delegate;
             this.name = name;
+            this.ndShape = ndShape == null ? null : ndShape.clone();
         }
 
         @Override public String name() { return name; }
         @Override public Precision precision() { return delegate.getPrecision(); }
-        @Override public long[] shape() { return new long[]{ delegate.getLength() }; }
+        @Override public long[] shape() {
+            if (ndShape != null) return ndShape.clone();
+            return new long[]{ delegate.getLength() };
+        }
         @Override public List<CompoundField> compoundFields() { return null; }
 
         @Override public Object readAll() { return delegate.readData(); }

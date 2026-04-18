@@ -36,7 +36,8 @@ MPGOTests_OBJC_FILES = \
 	TestSqliteProvider.m \
 	TestCloudAccess.m \
 	TestCanonicalBytesCrossBackend.m \
-	TestCipherSuite.m
+	TestCipherSuite.m \
+	TestNdDatasetCrossBackend.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

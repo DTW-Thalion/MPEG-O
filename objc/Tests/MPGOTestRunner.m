@@ -34,6 +34,7 @@ extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
 extern void testCipherSuite(void);
+extern void testNdDatasetCrossBackend(void);
 
 int main(int argc, const char *argv[])
 {
@@ -169,6 +170,10 @@ int main(int argc, const char *argv[])
         START_SET("M48: cipher suite catalog")
             testCipherSuite();
         END_SET("M48: cipher suite catalog")
+
+        START_SET("M45: N-D dataset cross-backend")
+            testNdDatasetCrossBackend();
+        END_SET("M45: N-D dataset cross-backend")
     }
     return 0;
 }
