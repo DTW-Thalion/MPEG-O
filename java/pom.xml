@@ -12,7 +12,7 @@
 
     <groupId>com.dtwthalion</groupId>
     <artifactId>mpgo</artifactId>
-    <version>0.7.0</version>
+    <version>0.8.0</version>
     <packaging>jar</packaging>
 
     <name>MPEG-O</name>
@@ -139,7 +139,7 @@
                 <version>3.6.3</version>
                 <configuration>
                     <source>17</source>
-                    <doctitle>MPEG-O Java API (v0.7.0)</doctitle>
+                    <doctitle>MPEG-O Java API (v0.8.0)</doctitle>
                     <windowtitle>MPEG-O Java API</windowtitle>
                     <show>protected</show>
                     <failOnWarnings>false</failOnWarnings>
