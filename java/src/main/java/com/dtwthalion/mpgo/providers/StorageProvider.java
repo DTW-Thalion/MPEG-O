@@ -60,7 +60,14 @@ public interface StorageProvider extends AutoCloseable {
      *  <p>Escape hatch for byte-level code (signatures, encryption,
      *  native compression filters) that cannot be expressed through
      *  the protocol. Any caller that invokes this is pinned to a
-     *  specific backend.</p> */
+     *  specific backend.</p>
+     *
+     *  @deprecated Scheduled for removal at v1.0. M43-M45 eliminated
+     *              every internal caller; external callers should
+     *              migrate to the StorageGroup / StorageDataset
+     *              protocol. See {@code docs/api-stability-v0.8.md} §6.
+     */
+    @Deprecated(since = "0.8", forRemoval = true)
     default Object nativeHandle() { return null; }
 
     // ── Capabilities (Appendix B Gap 3) ──────────────────────────

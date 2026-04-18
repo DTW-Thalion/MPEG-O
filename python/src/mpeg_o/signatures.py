@@ -27,6 +27,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import warnings
 from typing import Any
 
 import h5py
@@ -167,6 +168,17 @@ def verify_dataset(
         payload = stored[len(SIGNATURE_V2_PREFIX):]
         expected = hmac_sha256_b64(canonical, key)
     else:
+        # v0.2 legacy path — unprefixed base64 HMAC over the native
+        # byte layout. Scheduled for removal at v1.0 per
+        # docs/api-stability-v0.8.md §6.
+        warnings.warn(
+            "verifying an unprefixed v1 HMAC signature — the v0.2 "
+            "native-byte fallback is scheduled for removal at v1.0. "
+            "Re-sign with algorithm='hmac-sha256' (emits v2: prefix) "
+            "or 'ml-dsa-87' (v3:) to stay compatible.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         payload = stored
         expected = hmac_sha256_b64(_dataset_native_bytes(dataset), key)
     return hmac.compare_digest(payload, expected)
