@@ -412,3 +412,54 @@ Milestones 31–36 are tracked in `HANDOFF.md`. Summary:
 - [x] **M34** Java protection: encrypt, sign, key rotation, anonymize (50 tests)
 - [x] **M35** Java advanced: thread safety, LZ4, Numpress-delta (62 tests)
 - [x] **M36** Three-way conformance + v0.5.0 release (62 tests)
+
+---
+
+## v0.6.0 and v0.6.1 (SHIPPED 2026-04-17 / 2026-04-17)
+
+Milestones 37–42 and follow-up slices live in `HANDOFF.md`
+(historical record section). Summary:
+
+- [x] **M37** Java compound dataset I/O + JSON parsing
+- [x] **M38** Thermo `.raw` import via ThermoRawFileParser delegation
+- [x] **M39** Storage / Transport provider abstraction (all three languages)
+- [ ] **M40** PyPI + Maven Central publishing *(deferred — external
+      infrastructure gated)*
+- [x] **M41** API review checkpoint (three-language parity)
+- [x] **M42** v0.6.0 release — tag pushed
+- [x] **v0.6.1** SQLite provider + Appendix B gap resolutions + full
+      API docs (Sphinx / Javadoc / autogsdoc) + ObjC cloud-native ROS3
+      reads
+
+End-of-v0.6.1 test counts: ObjC 1002 assertions, Python 219, Java 152.
+
+---
+
+## v0.7.0 — Storage & Crypto Abstraction Hardening (PLANNED)
+
+Full milestone block lives in `HANDOFF.md` (`## v0.7 Milestone Block`).
+Summary:
+
+**Track A — Storage abstraction (close remaining HDF5 couplings)**
+- [ ] **M43** Storage byte-level protocol (`read_canonical_bytes`)
+- [ ] **M44** Run / Image protocol-native access (drop `h5py.Group`
+      from `AcquisitionRun` / `MSImage`)
+- [ ] **M45** `create_dataset_nd` completion across all providers
+- [ ] **M46** ZarrProvider Python reference implementation *(stretch)*
+
+**Track B — Crypto agility (PQC-ready abstraction)**
+- [ ] **M47** Crypto algorithm discriminator in on-disk format
+      (versioned wrapped-key blob; v1.2 format bump)
+- [ ] **M48** Algorithm-parameter API generalization (`CipherSuite`
+      catalog)
+- [ ] **M49** PQC preview mode — ML-KEM-1024 + ML-DSA-87 *(stretch,
+      gated on liboqs / Bouncy Castle PQC maturity)*
+
+**Track C — Cross-language consistency polish (v0.6.1 review findings)**
+- [ ] **M50** Consistency hardening (six independent sub-items:
+      `open()` docs, ObjC `readRows:` required, Java typed exceptions,
+      `@since` audit, error-domain mapping, Gap 7 cross-refs)
+- [ ] **M51** Cross-language byte-parity for compound writes
+
+**v0.7.0 minimum cut:** M43, M44, M45, M47, M48, M50 (must-have).
+M46, M51 stretch; M49 deferred to v0.8+.
