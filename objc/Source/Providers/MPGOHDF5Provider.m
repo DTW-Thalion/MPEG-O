@@ -79,6 +79,16 @@
     return NO;
 }
 
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error
+{
+    (void)name;
+    if (error) *error = MPGOMakeError(MPGOErrorAttributeWrite,
+            @"dataset-level attributes not exposed via MPGOHDF5Dataset");
+    return NO;
+}
+
+- (NSArray<NSString *> *)attributeNames { return @[]; }
+
 @end
 
 // ──────────────────────────────────────────────────────────────
@@ -302,6 +312,16 @@
             @"compound-dataset attributes not yet routed");
     return NO;
 }
+
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error
+{
+    (void)name;
+    if (error) *error = MPGOMakeError(MPGOErrorAttributeWrite,
+            @"compound-dataset attributes not yet routed");
+    return NO;
+}
+
+- (NSArray<NSString *> *)attributeNames { return @[]; }
 
 @end
 

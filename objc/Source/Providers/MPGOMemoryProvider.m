@@ -281,10 +281,20 @@
 
 - (BOOL)setAttributeValue:(id)value forName:(NSString *)name error:(NSError **)error
 {
+    (void)error;
     if (value == nil) [_attrs removeObjectForKey:name];
     else              _attrs[name] = value;
     return YES;
 }
+
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error
+{
+    (void)error;
+    [_attrs removeObjectForKey:name];
+    return YES;
+}
+
+- (NSArray<NSString *> *)attributeNames { return _attrs.allKeys; }
 
 @end
 

@@ -21,7 +21,7 @@ def test_provider_name_and_registration():
     providers = discover_providers()
     assert "sqlite" in providers
     p = providers["sqlite"]()
-    assert p.provider_name == "sqlite"
+    assert p.provider_name() == "sqlite"
 
 
 def test_open_create_close(tmp_path):
@@ -40,7 +40,7 @@ def test_open_as_classmethod(tmp_path):
     path = str(tmp_path / "t.mpgo.sqlite")
     p = SqliteProvider.open(path, mode="w")
     assert p.is_open()
-    assert p.provider_name == "sqlite"
+    assert p.provider_name() == "sqlite"
     p.close()
 
 

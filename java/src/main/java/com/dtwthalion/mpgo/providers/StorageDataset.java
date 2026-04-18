@@ -67,6 +67,15 @@ public interface StorageDataset extends AutoCloseable {
 
     void setAttribute(String name, Object value);
 
+    /** Remove an attribute. No-op if the attribute does not exist.
+     *  Appendix B Gap 8 — added for parity with Python ABC and ObjC
+     *  {@code -deleteAttributeNamed:error:}. */
+    void deleteAttribute(String name);
+
+    /** List attribute names. Returns an empty list if there are no
+     *  attributes. Appendix B Gap 8. */
+    List<String> attributeNames();
+
     // ── Lifecycle ────────────────────────────────────────────────
 
     @Override

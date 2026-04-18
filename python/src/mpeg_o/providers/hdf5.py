@@ -130,6 +130,13 @@ class _Dataset(StorageDataset):
     def set_attribute(self, name: str, value: Any) -> None:
         self._ds.attrs[name] = value
 
+    def delete_attribute(self, name: str) -> None:
+        if name in self._ds.attrs:
+            del self._ds.attrs[name]
+
+    def attribute_names(self) -> list[str]:
+        return list(self._ds.attrs.keys())
+
 
 class _Group(StorageGroup):
     def __init__(self, grp: h5py.Group):
@@ -259,7 +266,6 @@ class Hdf5Provider(StorageProvider):
             path_or_url = path_or_url[len("file://"):]
         return cls(h5py.File(path_or_url, mode=mode, **kwargs))
 
-    @property
     def provider_name(self) -> str:
         return "hdf5"
 

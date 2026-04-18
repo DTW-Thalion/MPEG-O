@@ -72,6 +72,8 @@ typedef NS_ENUM(NSInteger, MPGOStorageOpenMode) {
 - (BOOL)setAttributeValue:(id)value
                   forName:(NSString *)name
                     error:(NSError **)error;
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error;
+- (NSArray<NSString *> *)attributeNames;
 
 @optional
 - (void)close;

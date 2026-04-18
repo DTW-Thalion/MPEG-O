@@ -226,6 +226,11 @@ public final class Hdf5Provider implements StorageProvider {
             throw new UnsupportedOperationException(
                     "dataset-level attributes not yet exposed via Hdf5Dataset");
         }
+        @Override public void deleteAttribute(String n) {
+            throw new UnsupportedOperationException(
+                    "dataset-level attributes not yet exposed via Hdf5Dataset");
+        }
+        @Override public List<String> attributeNames() { return List.of(); }
 
         @Override public void close() { delegate.close(); }
     }
@@ -302,6 +307,11 @@ public final class Hdf5Provider implements StorageProvider {
             throw new UnsupportedOperationException(
                     "compound-dataset attributes not yet routed");
         }
+        @Override public void deleteAttribute(String n) {
+            throw new UnsupportedOperationException(
+                    "compound-dataset attributes not yet routed");
+        }
+        @Override public List<String> attributeNames() { return List.of(); }
 
         @Override public void close() { /* no per-dataset handle retained */ }
 
