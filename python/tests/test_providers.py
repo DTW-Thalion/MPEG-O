@@ -90,6 +90,38 @@ def test_open_by_url_scheme_resolves(tmp_path: Path) -> None:
     MemoryProvider.discard_store("memory://scheme-test")
 
 
+def test_open_dual_style_hdf5(tmp_path: Path) -> None:
+    """Appendix B Gap 1: both factory and instance-mutation styles work."""
+    p1 = tmp_path / "factory.h5"
+    prov1 = Hdf5Provider.open(str(p1), mode="w")
+    assert prov1.is_open()
+    prov1.close()
+
+    p2 = tmp_path / "instance.h5"
+    prov2 = Hdf5Provider()
+    assert not prov2.is_open()
+    returned = prov2.open(str(p2), mode="w")
+    assert returned is prov2  # instance-mutation returns self
+    assert prov2.is_open()
+    prov2.close()
+
+
+def test_open_dual_style_memory() -> None:
+    """Appendix B Gap 1: MemoryProvider supports both call styles."""
+    prov1 = MemoryProvider.open("memory://gap1-factory", mode="w")
+    assert prov1.is_open()
+    prov1.close()
+    MemoryProvider.discard_store("memory://gap1-factory")
+
+    prov2 = MemoryProvider()
+    assert not prov2.is_open()
+    returned = prov2.open("memory://gap1-instance", mode="w")
+    assert returned is prov2
+    assert prov2.is_open()
+    prov2.close()
+    MemoryProvider.discard_store("memory://gap1-instance")
+
+
 # ── Group + attribute round-trip ─────────────────────────────────────
 
 

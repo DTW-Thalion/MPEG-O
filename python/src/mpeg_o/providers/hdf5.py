@@ -244,27 +244,45 @@ class Hdf5Provider(StorageProvider):
       Java:        ``com.dtwthalion.mpgo.providers.Hdf5Provider``
     """
 
-    def __init__(self, file: h5py.File):
+    def __init__(self, file: h5py.File | None = None):
         self._file = file
 
-    @classmethod
-    def open(cls, path_or_url: str, *, mode: str = "r", **kwargs
-             ) -> "Hdf5Provider":
+    def open(self_or_path, path_or_url=None, *, mode: str = "r",  # type: ignore[override]
+             **kwargs) -> "Hdf5Provider":
+        """Open an HDF5 file under this provider. Supports both factory
+        and instance call styles per Appendix B Gap 1 — see
+        :class:`mpeg_o.providers.base.StorageProvider.open`."""
+        # Dispatch: classmethod call passes the class as first arg;
+        # instance call passes self. Detect by whether first arg is
+        # a string (= path) or a provider instance.
+        if isinstance(self_or_path, str):
+            # Factory style: Hdf5Provider.open("/path", mode="w")
+            actual_path = self_or_path
+            instance = Hdf5Provider()
+        else:
+            # Instance style: p = Hdf5Provider(); p.open("/path", mode="w")
+            actual_path = path_or_url
+            instance = self_or_path
+        if actual_path is None:
+            raise TypeError("open() requires a path or URL")
+
         # Accept fsspec URLs too: h5py can take a file-like object from
         # fsspec. That makes Hdf5Provider usable over S3/HTTP transports
         # without any extra wiring.
-        if "://" in path_or_url and not path_or_url.startswith("file://"):
+        if "://" in actual_path and not actual_path.startswith("file://"):
             try:
                 import fsspec  # type: ignore[import-not-found]
             except ImportError as e:  # pragma: no cover
                 raise ImportError(
                     "Opening HDF5 over a URL scheme requires fsspec "
                     "(pip install 'mpeg-o[cloud]')") from e
-            f = fsspec.open(path_or_url, mode="rb" if mode == "r" else mode).open()
-            return cls(h5py.File(f, mode=mode, **kwargs))
-        if path_or_url.startswith("file://"):
-            path_or_url = path_or_url[len("file://"):]
-        return cls(h5py.File(path_or_url, mode=mode, **kwargs))
+            f = fsspec.open(actual_path, mode="rb" if mode == "r" else mode).open()
+            instance._file = h5py.File(f, mode=mode, **kwargs)
+            return instance
+        if actual_path.startswith("file://"):
+            actual_path = actual_path[len("file://"):]
+        instance._file = h5py.File(actual_path, mode=mode, **kwargs)
+        return instance
 
     def provider_name(self) -> str:
         return "hdf5"

@@ -600,11 +600,12 @@ class SqliteProvider(StorageProvider):
         * ``"w"``        — create or truncate.
         * ``"a"``        — read/write; create if absent.
 
-        Implementation note: this method intentionally does NOT use
-        ``@classmethod`` so that the instance-mutating call style works.
-        When called as ``SqliteProvider.open(path)``, Python passes the
-        path string as the first positional argument; we detect this via
-        ``isinstance`` and construct a new instance accordingly.
+        Implementation note: per Appendix B Gap 1, this method
+        intentionally does NOT use ``@classmethod`` so that the
+        instance-mutating call style works. When called as
+        ``SqliteProvider.open(path)``, Python passes the path string as
+        the first positional argument; we detect this via ``isinstance``
+        and construct a new instance accordingly.
         """
         del kwargs
         if isinstance(self_or_path, SqliteProvider):

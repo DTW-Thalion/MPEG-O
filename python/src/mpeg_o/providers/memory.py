@@ -234,16 +234,28 @@ class MemoryProvider(StorageProvider):
       Java:        ``com.dtwthalion.mpgo.providers.MemoryProvider``
     """
 
-    def __init__(self, url: str, root: _MemoryRoot):
+    def __init__(self, url: str | None = None, root: _MemoryRoot | None = None):
         self._url = url
         self._root = root
-        self._open = True
+        self._open = root is not None
 
-    @classmethod
-    def open(cls, path_or_url: str, *, mode: str = "r", **kwargs
-             ) -> "MemoryProvider":
+    def open(self_or_path, path_or_url=None, *, mode: str = "r",  # type: ignore[override]
+             **kwargs) -> "MemoryProvider":
+        """Open a MemoryProvider. Supports both factory
+        (``MemoryProvider.open(url, mode="w")``) and instance
+        (``p = MemoryProvider(); p.open(url, mode="w")``) styles per
+        Appendix B Gap 1."""
         del kwargs
-        url = _normalise_url(path_or_url)
+        if isinstance(self_or_path, str):
+            actual_path = self_or_path
+            instance = MemoryProvider()
+        else:
+            actual_path = path_or_url
+            instance = self_or_path
+        if actual_path is None:
+            raise TypeError("open() requires a path or URL")
+
+        url = _normalise_url(actual_path)
         if mode == "w":
             _STORES[url] = _MemoryRoot()
         elif mode == "r":
@@ -254,7 +266,10 @@ class MemoryProvider(StorageProvider):
             _STORES.setdefault(url, _MemoryRoot())
         else:
             raise ValueError(f"unknown mode: {mode}")
-        return cls(url, _STORES[url])
+        instance._url = url
+        instance._root = _STORES[url]
+        instance._open = True
+        return instance
 
     def provider_name(self) -> str:
         return "memory"
