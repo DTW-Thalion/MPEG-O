@@ -6,13 +6,52 @@
 #import "HDF5/MPGOHDF5Errors.h"
 #import "ValueClasses/MPGOEnums.h"
 
-// Wrapped DEK layout is 32 ciphertext bytes + 12-byte IV + 16-byte tag.
-static const NSUInteger MPGO_KR_DEK_LEN     = 32;
-static const NSUInteger MPGO_KR_IV_LEN      = 12;
-static const NSUInteger MPGO_KR_TAG_LEN     = 16;
-static const NSUInteger MPGO_KR_WRAPPED_LEN = 60;
+// v1.1 wrapped DEK layout (legacy): 32 ciphertext bytes + 12-byte IV
+// + 16-byte tag = 60 bytes total. v0.7 M47 default is the v1.2
+// versioned blob (see packBlobV2 below for the layout).
+static const NSUInteger MPGO_KR_DEK_LEN      = 32;
+static const NSUInteger MPGO_KR_IV_LEN       = 12;
+static const NSUInteger MPGO_KR_TAG_LEN      = 16;
+static const NSUInteger MPGO_KR_V11_LEN      = 60;
+// v1.2 versioned blob:
+//   +0  2  magic        = 0x4D 0x57 ("MW" — MPGO Wrap)
+//   +2  1  version      = 0x02
+//   +3  2  algorithm_id (big-endian)
+//                0x0000 = AES-256-GCM
+//                0x0001 = ML-KEM-1024  (reserved, M49)
+//   +5  4  ciphertext_len (big-endian)
+//   +9  2  metadata_len   (big-endian)
+//  +11  M  metadata  (AES-GCM: IV ‖ tag, M=28)
+//  +11+M C  ciphertext
+// Readers dispatch on total length: exactly 60 bytes ⇒ v1.1,
+// anything else ⇒ v1.2.
+static const NSUInteger MPGO_KR_V12_HEADER_LEN = 11;
+static const uint16_t   MPGO_WK_ALG_AES_256_GCM = 0x0000;
+static const uint16_t   MPGO_WK_ALG_ML_KEM_1024 = 0x0001;  // reserved (M49)
 
 static NSString *const kKEKAlgorithm = @"aes-256-gcm";
+
+static void wkPutBE16(uint8_t *p, uint16_t v)
+{
+    p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t)(v & 0xFF);
+}
+
+static void wkPutBE32(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16);
+    p[2] = (uint8_t)(v >> 8);  p[3] = (uint8_t)(v & 0xFF);
+}
+
+static uint16_t wkGetBE16(const uint8_t *p)
+{
+    return (uint16_t)((p[0] << 8) | p[1]);
+}
+
+static uint32_t wkGetBE32(const uint8_t *p)
+{
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16)
+         | ((uint32_t)p[2] << 8)  | (uint32_t)p[3];
+}
 
 static NSString *iso8601Now(void)
 {
@@ -59,9 +98,90 @@ static NSString *iso8601Now(void)
     return [prot createGroupNamed:@"key_info" error:error];
 }
 
+// Pack a v1.2 wrapped-key blob. Public so M51 parity tooling and the
+// M49 PQC preview can emit PQC-algorithm-id blobs.
++ (NSData *)packBlobV2:(uint16_t)algorithmId
+             ciphertext:(NSData *)ciphertext
+               metadata:(NSData *)metadata
+                  error:(NSError **)error
+{
+    if (metadata.length > 0xFFFF) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"v1.2 wrapped-key metadata exceeds 64 KB");
+        return nil;
+    }
+    NSUInteger totalLen = MPGO_KR_V12_HEADER_LEN + metadata.length
+                         + ciphertext.length;
+    NSMutableData *out = [NSMutableData dataWithLength:totalLen];
+    uint8_t *p = out.mutableBytes;
+    p[0] = 'M'; p[1] = 'W';
+    p[2] = 0x02;  // version
+    wkPutBE16(p + 3, algorithmId);
+    wkPutBE32(p + 5, (uint32_t)ciphertext.length);
+    wkPutBE16(p + 9, (uint16_t)metadata.length);
+    memcpy(p + MPGO_KR_V12_HEADER_LEN, metadata.bytes, metadata.length);
+    memcpy(p + MPGO_KR_V12_HEADER_LEN + metadata.length,
+           ciphertext.bytes, ciphertext.length);
+    return out;
+}
+
+// Parse a v1.2 wrapped-key blob. Returns NO + populated NSError on
+// malformed input. On success, algorithmId + metadata + ciphertext
+// are filled.
++ (BOOL)unpackBlobV2:(NSData *)blob
+          algorithmId:(uint16_t *)outAlgorithmId
+             metadata:(NSData **)outMetadata
+           ciphertext:(NSData **)outCiphertext
+                error:(NSError **)error
+{
+    if (blob.length < MPGO_KR_V12_HEADER_LEN) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"v1.2 wrapped-key blob too short (%lu bytes)",
+            (unsigned long)blob.length);
+        return NO;
+    }
+    const uint8_t *p = blob.bytes;
+    if (p[0] != 'M' || p[1] != 'W') {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"v1.2 wrapped-key blob: bad magic");
+        return NO;
+    }
+    if (p[2] != 0x02) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"v1.2 wrapped-key blob: unknown version 0x%02x", p[2]);
+        return NO;
+    }
+    uint16_t alg    = wkGetBE16(p + 3);
+    uint32_t ctLen  = wkGetBE32(p + 5);
+    uint16_t mdLen  = wkGetBE16(p + 9);
+    if (blob.length != (NSUInteger)(MPGO_KR_V12_HEADER_LEN + mdLen + ctLen)) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"v1.2 wrapped-key blob length mismatch: "
+            @"header declares metadata=%u ciphertext=%u but payload is %lu",
+            mdLen, ctLen,
+            (unsigned long)(blob.length - MPGO_KR_V12_HEADER_LEN));
+        return NO;
+    }
+    if (outAlgorithmId) *outAlgorithmId = alg;
+    if (outMetadata) {
+        *outMetadata = [blob subdataWithRange:
+            NSMakeRange(MPGO_KR_V12_HEADER_LEN, mdLen)];
+    }
+    if (outCiphertext) {
+        *outCiphertext = [blob subdataWithRange:
+            NSMakeRange(MPGO_KR_V12_HEADER_LEN + mdLen, ctLen)];
+    }
+    return YES;
+}
+
 // Wrap a 32-byte plaintext (the DEK) under the given KEK using AES-256-GCM.
-// Returns a 60-byte NSData: [32 ciphertext | 12 iv | 16 tag].
-- (NSData *)wrapDEK:(NSData *)dek withKEK:(NSData *)kek error:(NSError **)error
+// v0.7 M47: default output is the v1.2 versioned blob (71 bytes for
+// AES-GCM). Pass legacyV1=YES to emit the v1.1 60-byte layout for
+// backward-compat fixture generation.
+- (NSData *)wrapDEK:(NSData *)dek
+            withKEK:(NSData *)kek
+            legacyV1:(BOOL)legacyV1
+              error:(NSError **)error
 {
     if (dek.length != MPGO_KR_DEK_LEN || kek.length != MPGO_KR_DEK_LEN) {
         if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
@@ -78,25 +198,74 @@ static NSString *iso8601Now(void)
     if (!cipher || iv.length != MPGO_KR_IV_LEN || tag.length != MPGO_KR_TAG_LEN) {
         return nil;
     }
-    NSMutableData *out = [NSMutableData dataWithCapacity:MPGO_KR_WRAPPED_LEN];
-    [out appendData:cipher];
-    [out appendData:iv];
-    [out appendData:tag];
-    return out;
+    if (legacyV1) {
+        NSMutableData *out = [NSMutableData dataWithCapacity:MPGO_KR_V11_LEN];
+        [out appendData:cipher];
+        [out appendData:iv];
+        [out appendData:tag];
+        return out;
+    }
+    NSMutableData *metadata = [NSMutableData dataWithCapacity:
+        MPGO_KR_IV_LEN + MPGO_KR_TAG_LEN];
+    [metadata appendData:iv];
+    [metadata appendData:tag];
+    return [MPGOKeyRotationManager packBlobV2:MPGO_WK_ALG_AES_256_GCM
+                                    ciphertext:cipher
+                                      metadata:metadata
+                                         error:error];
 }
 
-// Inverse of wrapDEK:. Returns the 32-byte plaintext DEK or nil on auth failure.
+// Convenience: v1.2 wrap (default for v0.7+).
+- (NSData *)wrapDEK:(NSData *)dek withKEK:(NSData *)kek error:(NSError **)error
+{
+    return [self wrapDEK:dek withKEK:kek legacyV1:NO error:error];
+}
+
+// Inverse of wrapDEK:. Dispatches on blob length: exactly 60 bytes
+// ⇒ v1.1 legacy, anything else ⇒ v1.2. Returns the 32-byte plaintext
+// DEK or nil on auth failure / malformed input / unsupported algorithm.
 - (NSData *)unwrapBlob:(NSData *)wrapped withKEK:(NSData *)kek error:(NSError **)error
 {
-    if (wrapped.length != MPGO_KR_WRAPPED_LEN) {
-        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
-            @"unwrapDEK: wrapped blob must be exactly 60 bytes");
-        return nil;
+    NSData *cipher, *iv, *tag;
+    if (wrapped.length == MPGO_KR_V11_LEN) {
+        // v1.1 legacy path.
+        cipher = [wrapped subdataWithRange:NSMakeRange(0, MPGO_KR_DEK_LEN)];
+        iv     = [wrapped subdataWithRange:NSMakeRange(MPGO_KR_DEK_LEN, MPGO_KR_IV_LEN)];
+        tag    = [wrapped subdataWithRange:NSMakeRange(MPGO_KR_DEK_LEN + MPGO_KR_IV_LEN,
+                                                         MPGO_KR_TAG_LEN)];
+    } else {
+        uint16_t alg = 0;
+        NSData *md = nil, *ct = nil;
+        if (![MPGOKeyRotationManager unpackBlobV2:wrapped
+                                        algorithmId:&alg
+                                           metadata:&md
+                                         ciphertext:&ct
+                                              error:error]) {
+            return nil;
+        }
+        if (alg != MPGO_WK_ALG_AES_256_GCM) {
+            if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+                @"v1.2 wrapped-key blob uses algorithm_id=0x%04x which "
+                @"this build does not support (enable pqc_preview for "
+                @"ML-KEM-1024 in M49+)", alg);
+            return nil;
+        }
+        if (md.length != MPGO_KR_IV_LEN + MPGO_KR_TAG_LEN) {
+            if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+                @"v1.2 AES-GCM metadata must be 28 bytes; got %lu",
+                (unsigned long)md.length);
+            return nil;
+        }
+        if (ct.length != MPGO_KR_DEK_LEN) {
+            if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+                @"v1.2 AES-GCM ciphertext must be 32 bytes; got %lu",
+                (unsigned long)ct.length);
+            return nil;
+        }
+        cipher = ct;
+        iv     = [md subdataWithRange:NSMakeRange(0, MPGO_KR_IV_LEN)];
+        tag    = [md subdataWithRange:NSMakeRange(MPGO_KR_IV_LEN, MPGO_KR_TAG_LEN)];
     }
-    NSData *cipher = [wrapped subdataWithRange:NSMakeRange(0, MPGO_KR_DEK_LEN)];
-    NSData *iv     = [wrapped subdataWithRange:NSMakeRange(MPGO_KR_DEK_LEN, MPGO_KR_IV_LEN)];
-    NSData *tag    = [wrapped subdataWithRange:NSMakeRange(MPGO_KR_DEK_LEN + MPGO_KR_IV_LEN,
-                                                             MPGO_KR_TAG_LEN)];
     return [MPGOEncryptionManager decryptData:cipher
                                        withKey:kek
                                             iv:iv
@@ -114,7 +283,11 @@ static NSString *iso8601Now(void)
 }
 
 // Write (or overwrite) the wrapped blob at /protection/key_info/dek_wrapped.
-// Deletes any existing dataset first so rotation works in place.
+// v0.7 M47: blob length now varies (v1.1 = 60 bytes, v1.2 AES-GCM =
+// 71 bytes, v1.2 ML-KEM = 1579 bytes). Pad to int32 boundary and
+// store the real byte length in @dek_wrapped_bytes so readers can
+// recover it precisely; pre-v0.7 readers default to 60 bytes and
+// tolerate the extra padding harmlessly.
 - (BOOL)writeWrappedBlob:(NSData *)blob
                   group:(MPGOHDF5Group *)keyInfo
                   error:(NSError **)error
@@ -122,17 +295,39 @@ static NSString *iso8601Now(void)
     if ([keyInfo hasChildNamed:@"dek_wrapped"]) {
         if (![keyInfo deleteChildNamed:@"dek_wrapped" error:error]) return NO;
     }
-    // 60 bytes = 15 int32 lanes. Precision choice is irrelevant; we
-    // treat the dataset as an opaque byte blob on the read side.
+    NSUInteger padded = ((blob.length + 3) / 4) * 4;
+    NSMutableData *padBuf = [NSMutableData dataWithLength:padded];
+    memcpy(padBuf.mutableBytes, blob.bytes, blob.length);
     MPGOHDF5Dataset *ds =
         [keyInfo createDatasetNamed:@"dek_wrapped"
                            precision:MPGOPrecisionInt32
-                              length:MPGO_KR_WRAPPED_LEN / sizeof(int32_t)
+                              length:padded / sizeof(int32_t)
                            chunkSize:0
                     compressionLevel:0
                                error:error];
     if (!ds) return NO;
-    return [ds writeData:blob error:error];
+    if (![ds writeData:padBuf error:error]) return NO;
+    return [keyInfo setIntegerAttribute:@"dek_wrapped_bytes"
+                                   value:(int64_t)blob.length
+                                   error:error];
+}
+
+// Read the wrapped blob with v0.7+ length awareness. Pre-v0.7 files
+// lack @dek_wrapped_bytes and are always exactly 60 bytes.
+- (NSData *)readWrappedBlobWithLength:(MPGOHDF5Group *)keyInfo
+                                 error:(NSError **)error
+{
+    NSData *raw = [self readWrappedBlob:keyInfo error:error];
+    if (!raw) return nil;
+    BOOL exists = NO;
+    int64_t declared = [keyInfo integerAttributeNamed:@"dek_wrapped_bytes"
+                                                  exists:&exists
+                                                   error:NULL];
+    if (!exists) declared = MPGO_KR_V11_LEN;
+    if (declared <= 0 || (NSUInteger)declared > raw.length) {
+        return raw;  // sentinel / corruption: hand back the raw bytes.
+    }
+    return [raw subdataWithRange:NSMakeRange(0, (NSUInteger)declared)];
 }
 
 - (NSString *)readCurrentKEKId:(MPGOHDF5Group *)keyInfo
@@ -194,7 +389,7 @@ static NSString *iso8601Now(void)
             @"unwrapDEK: /protection/key_info missing");
         return nil;
     }
-    NSData *wrapped = [self readWrappedBlob:ki error:error];
+    NSData *wrapped = [self readWrappedBlobWithLength:ki error:error];
     if (!wrapped) return nil;
     return [self unwrapBlob:wrapped withKEK:kek error:error];
 }

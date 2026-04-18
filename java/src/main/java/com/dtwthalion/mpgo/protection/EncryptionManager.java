@@ -130,42 +130,179 @@ public final class EncryptionManager {
     }
 
     // ------------------------------------------------------------ key wrap
+    //
+    // v0.7 M47: versioned wrapped-key blob format v1.2.
+    //
+    //   +0   2  magic       = 0x4D 0x57 ("MW" — MPGO Wrap)
+    //   +2   1  version     = 0x02
+    //   +3   2  algorithm_id (big-endian)
+    //               0x0000 = AES-256-GCM
+    //               0x0001 = ML-KEM-1024  (reserved, M49)
+    //   +5   4  ciphertext_len (big-endian)
+    //   +9   2  metadata_len   (big-endian)
+    //  +11   M  metadata  (AES-GCM: IV ‖ tag, M=28)
+    //  +11+M C  ciphertext
+    //
+    // Readers dispatch on blob length: exactly 60 bytes ⇒ v1.1 legacy,
+    // anything else ⇒ v1.2. Binding decision 38: v1.1 remains readable
+    // indefinitely.
+
+    private static final byte[] WK_MAGIC = { 'M', 'W' };
+    private static final byte WK_VERSION_V2 = 0x02;
+    private static final int WK_ALG_AES_256_GCM = 0x0000;
+    /** Reserved for M49 PQC preview; emit only behind {@code pqc_preview}. */
+    public static final int WK_ALG_ML_KEM_1024 = 0x0001;
+    private static final int WK_HEADER_LEN = 11;
+    private static final int V11_BLOB_LEN = KEY_BYTES + IV_BYTES + TAG_BYTES; // 60
 
     /**
      * Wrap a data-encryption key (DEK) with a key-encryption key (KEK).
+     * Emits the v1.2 versioned AES-256-GCM blob (71 bytes).
      *
      * @param dek 32-byte data-encryption key
      * @param kek 32-byte key-encryption key
-     * @return 60-byte blob: ciphertext(32) || iv(12) || tag(16)
+     * @return v1.2 wrapped blob (71 bytes for AES-256-GCM).
      */
     public static byte[] wrapKey(byte[] dek, byte[] kek) {
+        return wrapKey(dek, kek, /* legacyV1= */ false);
+    }
+
+    /**
+     * Wrap a DEK with an explicit version selector.
+     * @param legacyV1 when {@code true}, emits the 60-byte v1.1 layout
+     *                 for regression fixtures; callers targeting
+     *                 production should use {@link #wrapKey(byte[], byte[])}.
+     * @since 0.7
+     */
+    public static byte[] wrapKey(byte[] dek, byte[] kek, boolean legacyV1) {
         if (dek.length != KEY_BYTES) {
             throw new IllegalArgumentException("DEK must be 32 bytes");
         }
         EncryptResult er = encrypt(dek, kek);
-        byte[] blob = new byte[KEY_BYTES + IV_BYTES + TAG_BYTES]; // 60
-        System.arraycopy(er.ciphertext(), 0, blob, 0, KEY_BYTES);
-        System.arraycopy(er.iv(), 0, blob, KEY_BYTES, IV_BYTES);
-        System.arraycopy(er.tag(), 0, blob, KEY_BYTES + IV_BYTES, TAG_BYTES);
-        return blob;
+        if (legacyV1) {
+            byte[] blob = new byte[V11_BLOB_LEN];
+            System.arraycopy(er.ciphertext(), 0, blob, 0, KEY_BYTES);
+            System.arraycopy(er.iv(), 0, blob, KEY_BYTES, IV_BYTES);
+            System.arraycopy(er.tag(), 0, blob, KEY_BYTES + IV_BYTES, TAG_BYTES);
+            return blob;
+        }
+        byte[] metadata = new byte[IV_BYTES + TAG_BYTES];
+        System.arraycopy(er.iv(), 0, metadata, 0, IV_BYTES);
+        System.arraycopy(er.tag(), 0, metadata, IV_BYTES, TAG_BYTES);
+        return packBlobV2(WK_ALG_AES_256_GCM, er.ciphertext(), metadata);
     }
 
     /**
-     * Unwrap a DEK from a 60-byte blob using a KEK.
+     * Pack a v1.2 wrapped-key blob. Public for cross-language interop
+     * tests (M51) and for algorithm-specific wrappers introduced in M48.
+     * @since 0.7
+     */
+    public static byte[] packBlobV2(int algorithmId, byte[] ciphertext,
+                                    byte[] metadata) {
+        if (ciphertext.length < 0 || ciphertext.length > 0x7FFFFFFF) {
+            throw new IllegalArgumentException("ciphertext too large");
+        }
+        if (metadata.length > 0xFFFF) {
+            throw new IllegalArgumentException("metadata > 64 KB");
+        }
+        byte[] out = new byte[WK_HEADER_LEN + metadata.length + ciphertext.length];
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(out)
+                .order(java.nio.ByteOrder.BIG_ENDIAN);
+        bb.put(WK_MAGIC);
+        bb.put(WK_VERSION_V2);
+        bb.putShort((short) (algorithmId & 0xFFFF));
+        bb.putInt(ciphertext.length);
+        bb.putShort((short) (metadata.length & 0xFFFF));
+        bb.put(metadata);
+        bb.put(ciphertext);
+        return out;
+    }
+
+    /** Parsed v1.2 wrapped-key blob fields. @since 0.7 */
+    public record WrappedBlobV2(int algorithmId, byte[] metadata,
+                                 byte[] ciphertext) {}
+
+    /**
+     * Unpack a v1.2 wrapped-key blob.
+     * @throws IllegalArgumentException if the magic or layout is malformed.
+     * @since 0.7
+     */
+    public static WrappedBlobV2 unpackBlobV2(byte[] blob) {
+        if (blob.length < WK_HEADER_LEN) {
+            throw new IllegalArgumentException(
+                    "v1.2 wrapped-key blob too short: " + blob.length);
+        }
+        if (blob[0] != WK_MAGIC[0] || blob[1] != WK_MAGIC[1]) {
+            throw new IllegalArgumentException(
+                    "v1.2 wrapped-key blob: bad magic");
+        }
+        if (blob[2] != WK_VERSION_V2) {
+            throw new IllegalArgumentException(
+                    "v1.2 wrapped-key blob: unknown version "
+                    + (blob[2] & 0xFF));
+        }
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(blob, 3, 8)
+                .order(java.nio.ByteOrder.BIG_ENDIAN);
+        int algorithmId = bb.getShort() & 0xFFFF;
+        int ctLen = bb.getInt();
+        int mdLen = bb.getShort() & 0xFFFF;
+        if (blob.length != WK_HEADER_LEN + mdLen + ctLen) {
+            throw new IllegalArgumentException(
+                    "v1.2 wrapped-key blob length mismatch: header declares "
+                    + "metadata=" + mdLen + " ciphertext=" + ctLen
+                    + " but payload is " + (blob.length - WK_HEADER_LEN)
+                    + " bytes");
+        }
+        byte[] metadata = Arrays.copyOfRange(blob, WK_HEADER_LEN,
+                WK_HEADER_LEN + mdLen);
+        byte[] ciphertext = Arrays.copyOfRange(blob, WK_HEADER_LEN + mdLen,
+                blob.length);
+        return new WrappedBlobV2(algorithmId, metadata, ciphertext);
+    }
+
+    /**
+     * Unwrap a DEK from a wrapped-key blob. Dispatches on blob length:
+     * exactly 60 bytes ⇒ v1.1 legacy; anything else ⇒ v1.2 versioned.
      *
-     * @param wrappedBlob 60-byte blob produced by {@link #wrapKey}
-     * @param kek         32-byte key-encryption key
-     * @return 32-byte DEK
+     * @param wrappedBlob the blob produced by {@link #wrapKey}.
+     * @param kek 32-byte key-encryption key.
+     * @return 32-byte DEK.
+     * @throws IllegalArgumentException if the blob uses a reserved
+     *         algorithm id (e.g. ML-KEM-1024 without the {@code pqc_preview}
+     *         build profile enabled in M49).
      */
     public static byte[] unwrapKey(byte[] wrappedBlob, byte[] kek) {
-        if (wrappedBlob.length != KEY_BYTES + IV_BYTES + TAG_BYTES) {
-            throw new IllegalArgumentException("Wrapped blob must be 60 bytes");
+        if (wrappedBlob.length == V11_BLOB_LEN) {
+            // v1.1 legacy path.
+            byte[] ciphertext = Arrays.copyOfRange(wrappedBlob, 0, KEY_BYTES);
+            byte[] iv = Arrays.copyOfRange(wrappedBlob, KEY_BYTES,
+                    KEY_BYTES + IV_BYTES);
+            byte[] tag = Arrays.copyOfRange(wrappedBlob, KEY_BYTES + IV_BYTES,
+                    KEY_BYTES + IV_BYTES + TAG_BYTES);
+            return decrypt(ciphertext, iv, tag, kek);
         }
-        byte[] ciphertext = Arrays.copyOfRange(wrappedBlob, 0, KEY_BYTES);
-        byte[] iv = Arrays.copyOfRange(wrappedBlob, KEY_BYTES, KEY_BYTES + IV_BYTES);
-        byte[] tag = Arrays.copyOfRange(wrappedBlob, KEY_BYTES + IV_BYTES,
-                KEY_BYTES + IV_BYTES + TAG_BYTES);
-        return decrypt(ciphertext, iv, tag, kek);
+        WrappedBlobV2 parsed = unpackBlobV2(wrappedBlob);
+        if (parsed.algorithmId() != WK_ALG_AES_256_GCM) {
+            throw new IllegalArgumentException(
+                    "v1.2 wrapped-key blob uses algorithm_id="
+                    + String.format("0x%04X", parsed.algorithmId())
+                    + " which this build does not support "
+                    + "(enable 'pqc_preview' for ML-KEM-1024 in M49+)");
+        }
+        if (parsed.metadata().length != IV_BYTES + TAG_BYTES) {
+            throw new IllegalArgumentException(
+                    "v1.2 AES-GCM metadata must be 28 bytes; got "
+                    + parsed.metadata().length);
+        }
+        if (parsed.ciphertext().length != KEY_BYTES) {
+            throw new IllegalArgumentException(
+                    "v1.2 AES-GCM ciphertext must be 32 bytes; got "
+                    + parsed.ciphertext().length);
+        }
+        byte[] iv = Arrays.copyOfRange(parsed.metadata(), 0, IV_BYTES);
+        byte[] tag = Arrays.copyOfRange(parsed.metadata(), IV_BYTES,
+                IV_BYTES + TAG_BYTES);
+        return decrypt(parsed.ciphertext(), iv, tag, kek);
     }
 
     // ------------------------------------------------------------ test key
