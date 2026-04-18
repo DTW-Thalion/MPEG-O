@@ -25,6 +25,8 @@ public final class SignatureManager {
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final int KEY_BYTES = 32;
     private static final String V2_PREFIX = "v2:";
+    /** Post-quantum signature prefix (ML-DSA-87). @since 0.8 */
+    public static final String V3_PREFIX = "v3:";
 
     private SignatureManager() {}
 
@@ -61,6 +63,77 @@ public final class SignatureManager {
             actual = Base64.getDecoder().decode(signature);
         }
         return MessageDigest.isEqual(expected, actual);
+    }
+
+    // -------------------------------------------------- algorithm-dispatched
+
+    /**
+     * Sign {@code data} with the named signature algorithm. v0.8 M49.
+     *
+     * <ul>
+     *   <li>{@code "hmac-sha256"} — {@code key} is a 32-byte HMAC
+     *       secret; output is {@code "v2:" + base64(hmac)}.</li>
+     *   <li>{@code "ml-dsa-87"} — {@code key} is the 4896-byte
+     *       ML-DSA-87 signing key; output is
+     *       {@code "v3:" + base64(signature)}.</li>
+     * </ul>
+     *
+     * @throws CipherSuite.UnsupportedAlgorithmException for unknown
+     *         algorithm names.
+     * @since 0.8
+     */
+    public static String sign(byte[] data, byte[] key, String algorithm) {
+        if ("hmac-sha256".equals(algorithm)) {
+            CipherSuite.validateKey(algorithm, key);
+            return sign(data, key);
+        }
+        if ("ml-dsa-87".equals(algorithm)) {
+            CipherSuite.validatePrivateKey(algorithm, key);
+            byte[] sig = PostQuantumCrypto.sigSign(key, data);
+            return V3_PREFIX + Base64.getEncoder().encodeToString(sig);
+        }
+        throw new CipherSuite.UnsupportedAlgorithmException(
+            algorithm + ": signature path not implemented");
+    }
+
+    /**
+     * Verify {@code signature} against {@code data}. Accepts v2: HMAC
+     * and v3: ML-DSA-87. The algorithm parameter must match the
+     * stored prefix — mismatches raise
+     * {@link CipherSuite.UnsupportedAlgorithmException} so callers do
+     * not silently pass verification of a file signed with a different
+     * primitive.
+     *
+     * @param data       original bytes
+     * @param signature  stored signature string (with prefix)
+     * @param key        HMAC key (32 bytes) or ML-DSA-87 public key
+     *                   (2592 bytes), depending on {@code algorithm}.
+     * @since 0.8
+     */
+    public static boolean verify(byte[] data, String signature, byte[] key,
+                                  String algorithm) {
+        if (signature != null && signature.startsWith(V3_PREFIX)) {
+            if (!"ml-dsa-87".equals(algorithm)) {
+                throw new CipherSuite.UnsupportedAlgorithmException(
+                    "stored signature is v3 (ml-dsa-87) but caller "
+                    + "passed algorithm=" + algorithm);
+            }
+            CipherSuite.validatePublicKey(algorithm, key);
+            byte[] sig = Base64.getDecoder().decode(
+                signature.substring(V3_PREFIX.length()));
+            return PostQuantumCrypto.sigVerify(key, data, sig);
+        }
+        if ("ml-dsa-87".equals(algorithm)) {
+            throw new CipherSuite.UnsupportedAlgorithmException(
+                "stored signature is not v3 (ml-dsa-87) — pass "
+                + "algorithm=\"hmac-sha256\" to verify legacy signatures");
+        }
+        if ("hmac-sha256".equals(algorithm)) {
+            CipherSuite.validateKey(algorithm, key);
+            return verify(data, signature, key);
+        }
+        throw new CipherSuite.UnsupportedAlgorithmException(
+            algorithm + ": verification path not implemented");
     }
 
     // ----------------------------------------------------------------- hmac

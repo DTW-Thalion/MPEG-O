@@ -7,19 +7,20 @@
 typedef struct {
     const char            *algorithm;
     MPGOCipherCategory     category;
-    NSInteger              keySize;    // -1 = variable, 0 = N/A
+    NSInteger              keySize;    // -1 = variable, 0 = N/A; for KEM/Sig: public-key size
     NSInteger              nonceSize;
     NSInteger              tagSize;
     MPGOCipherStatus       status;
+    NSInteger              privateKeySize;  // v0.8 M49: KEM/Sig only, 0 for symmetric
 } CatalogEntry;
 
 static const CatalogEntry kCatalog[] = {
-    { "aes-256-gcm", MPGOCipherCategoryAEAD,      32,  12,  16, MPGOCipherStatusActive   },
-    { "ml-kem-1024", MPGOCipherCategoryKEM,    1568,   0,   0, MPGOCipherStatusReserved },
-    { "hmac-sha256", MPGOCipherCategoryMAC,       -1,   0,  32, MPGOCipherStatusActive   },
-    { "ml-dsa-87",   MPGOCipherCategorySignature, 4864, 0, 4627, MPGOCipherStatusReserved },
-    { "sha-256",     MPGOCipherCategoryHash,       0,   0,  32, MPGOCipherStatusActive   },
-    { "shake256",    MPGOCipherCategoryXOF,        0,   0,   0, MPGOCipherStatusReserved },
+    { "aes-256-gcm", MPGOCipherCategoryAEAD,      32,  12,  16, MPGOCipherStatusActive,   0    },
+    { "ml-kem-1024", MPGOCipherCategoryKEM,    1568,   0,   0, MPGOCipherStatusActive,   3168 },
+    { "hmac-sha256", MPGOCipherCategoryMAC,       -1,   0,  32, MPGOCipherStatusActive,   0    },
+    { "ml-dsa-87",   MPGOCipherCategorySignature, 2592, 0, 4627, MPGOCipherStatusActive,  4896 },
+    { "sha-256",     MPGOCipherCategoryHash,       0,   0,  32, MPGOCipherStatusActive,   0    },
+    { "shake256",    MPGOCipherCategoryXOF,        0,   0,   0, MPGOCipherStatusReserved, 0    },
 };
 static const size_t kCatalogCount = sizeof(kCatalog) / sizeof(kCatalog[0]);
 
@@ -85,8 +86,14 @@ static const CatalogEntry *findEntry(NSString *algorithm)
     if (e->status != MPGOCipherStatusActive) {
         if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
             @"'%@' is in the catalog but reserved — this build does "
-            @"not ship the primitive (M49 will activate ML-KEM-1024 / "
-            @"ML-DSA-87)", algorithm);
+            @"not ship the primitive", algorithm);
+        return NO;
+    }
+    if (e->category == MPGOCipherCategoryKEM ||
+        e->category == MPGOCipherCategorySignature) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"'%@' is asymmetric — use +validatePublicKey: or "
+            @"+validatePrivateKey: instead of +validateKey:", algorithm);
         return NO;
     }
     if (e->keySize < 0) {
@@ -105,6 +112,86 @@ static const CatalogEntry *findEntry(NSString *algorithm)
         return NO;
     }
     return YES;
+}
+
++ (BOOL)validatePublicKey:(NSData *)key
+                algorithm:(NSString *)algorithm
+                    error:(NSError **)error
+{
+    const CatalogEntry *e = findEntry(algorithm);
+    if (!e || e->status != MPGOCipherStatusActive) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"'%@' is not an active catalog entry", algorithm);
+        return NO;
+    }
+    if (e->category != MPGOCipherCategoryKEM &&
+        e->category != MPGOCipherCategorySignature) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"'%@' is symmetric; use +validateKey: instead", algorithm);
+        return NO;
+    }
+    if ((NSInteger)key.length != e->keySize) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"%@: public key must be %ld bytes (got %lu)",
+            algorithm, (long)e->keySize, (unsigned long)key.length);
+        return NO;
+    }
+    return YES;
+}
+
++ (BOOL)validatePrivateKey:(NSData *)key
+                 algorithm:(NSString *)algorithm
+                     error:(NSError **)error
+{
+    const CatalogEntry *e = findEntry(algorithm);
+    if (!e || e->status != MPGOCipherStatusActive) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"'%@' is not an active catalog entry", algorithm);
+        return NO;
+    }
+    if (e->category != MPGOCipherCategoryKEM &&
+        e->category != MPGOCipherCategorySignature) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"'%@' is symmetric; use +validateKey: instead", algorithm);
+        return NO;
+    }
+    if (e->privateKeySize <= 0) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"%@: catalog entry is missing privateKeySize", algorithm);
+        return NO;
+    }
+    if ((NSInteger)key.length != e->privateKeySize) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"%@: private key must be %ld bytes (got %lu)",
+            algorithm, (long)e->privateKeySize, (unsigned long)key.length);
+        return NO;
+    }
+    return YES;
+}
+
++ (NSInteger)publicKeySize:(NSString *)algorithm
+{
+    const CatalogEntry *e = findEntry(algorithm);
+    if (!e || (e->category != MPGOCipherCategoryKEM &&
+               e->category != MPGOCipherCategorySignature)) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"'%@' has no public key (not KEM/Signature)",
+                           algorithm];
+    }
+    return e->keySize;
+}
+
++ (NSInteger)privateKeySize:(NSString *)algorithm
+{
+    const CatalogEntry *e = findEntry(algorithm);
+    if (!e || (e->category != MPGOCipherCategoryKEM &&
+               e->category != MPGOCipherCategorySignature) ||
+        e->privateKeySize <= 0) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"'%@' has no private key (not KEM/Signature)",
+                           algorithm];
+    }
+    return e->privateKeySize;
 }
 
 + (NSArray<NSString *> *)allAlgorithms

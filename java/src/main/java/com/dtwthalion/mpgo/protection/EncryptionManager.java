@@ -185,10 +185,20 @@ public final class EncryptionManager {
     private static final byte[] WK_MAGIC = { 'M', 'W' };
     private static final byte WK_VERSION_V2 = 0x02;
     private static final int WK_ALG_AES_256_GCM = 0x0000;
-    /** Reserved for M49 PQC preview; emit only behind {@code pqc_preview}. */
+    /** v0.8 M49: ML-KEM-1024 envelope. Writes set the
+     *  {@code opt_pqc_preview} feature flag on the enclosing file. */
     public static final int WK_ALG_ML_KEM_1024 = 0x0001;
     private static final int WK_HEADER_LEN = 11;
     private static final int V11_BLOB_LEN = KEY_BYTES + IV_BYTES + TAG_BYTES; // 60
+
+    /** ML-KEM-1024 ciphertext length (FIPS 203). @since 0.8 */
+    public static final int MLKEM_CT_LEN = 1568;
+    /** ML-KEM envelope metadata = kem_ct || aes_iv || aes_tag. @since 0.8 */
+    public static final int MLKEM_METADATA_LEN =
+            MLKEM_CT_LEN + IV_BYTES + TAG_BYTES;  // 1596
+    /** Total on-disk ML-KEM wrapped-key blob size. @since 0.8 */
+    public static final int MLKEM_BLOB_LEN =
+            WK_HEADER_LEN + MLKEM_METADATA_LEN + KEY_BYTES;  // 1639
 
     /**
      * Wrap a data-encryption key (DEK) with a key-encryption key (KEK).
@@ -215,34 +225,104 @@ public final class EncryptionManager {
 
     /**
      * Wrap a DEK with an explicit version selector and cipher suite.
-     * v0.7 M48: the algorithm identifier is validated via
-     * {@link CipherSuite}. Reserved suites
-     * ({@code "ml-kem-1024"}, M49 target) raise
-     * {@link CipherSuite.UnsupportedAlgorithmException}.
+     * v0.8 M49: adds {@code algorithm="ml-kem-1024"} for post-quantum
+     * key encapsulation. {@code kek} is interpreted per algorithm —
+     * 32-byte symmetric for AES-GCM, 1568-byte ML-KEM public key for
+     * ML-KEM.
      *
      * @since 0.7
      */
     public static byte[] wrapKey(byte[] dek, byte[] kek, boolean legacyV1,
                                    String algorithm) {
-        CipherSuite.validateKey(algorithm, kek);
-        CipherSuite.validateKey(algorithm, dek);
-        if (legacyV1 && !"aes-256-gcm".equals(algorithm)) {
-            throw new IllegalArgumentException(
-                "v1.1 legacy layout is AES-256-GCM only; refusing to "
-                + "emit v1.1 for algorithm=" + algorithm);
+        // DEK is always symmetric AES-256 (HANDOFF binding #43).
+        CipherSuite.validateKey("aes-256-gcm", dek);
+
+        if ("aes-256-gcm".equals(algorithm)) {
+            CipherSuite.validateKey(algorithm, kek);
+            EncryptResult er = encrypt(dek, kek, algorithm);
+            if (legacyV1) {
+                byte[] blob = new byte[V11_BLOB_LEN];
+                System.arraycopy(er.ciphertext(), 0, blob, 0, KEY_BYTES);
+                System.arraycopy(er.iv(), 0, blob, KEY_BYTES, IV_BYTES);
+                System.arraycopy(er.tag(), 0, blob, KEY_BYTES + IV_BYTES, TAG_BYTES);
+                return blob;
+            }
+            byte[] metadata = new byte[IV_BYTES + TAG_BYTES];
+            System.arraycopy(er.iv(), 0, metadata, 0, IV_BYTES);
+            System.arraycopy(er.tag(), 0, metadata, IV_BYTES, TAG_BYTES);
+            return packBlobV2(WK_ALG_AES_256_GCM, er.ciphertext(), metadata);
         }
-        EncryptResult er = encrypt(dek, kek, algorithm);
-        if (legacyV1) {
-            byte[] blob = new byte[V11_BLOB_LEN];
-            System.arraycopy(er.ciphertext(), 0, blob, 0, KEY_BYTES);
-            System.arraycopy(er.iv(), 0, blob, KEY_BYTES, IV_BYTES);
-            System.arraycopy(er.tag(), 0, blob, KEY_BYTES + IV_BYTES, TAG_BYTES);
-            return blob;
+
+        if ("ml-kem-1024".equals(algorithm)) {
+            if (legacyV1) {
+                throw new IllegalArgumentException(
+                    "v1.1 legacy layout is AES-256-GCM only; refusing "
+                    + "to emit v1.1 for algorithm=\"ml-kem-1024\"");
+            }
+            CipherSuite.validatePublicKey(algorithm, kek);
+            PostQuantumCrypto.KemEncapResult r =
+                    PostQuantumCrypto.kemEncapsulate(kek);
+            // Shared secret is 32 bytes (AES-256 width) — wrap the DEK
+            // under it with AES-256-GCM.
+            EncryptResult er = encrypt(dek, r.sharedSecret(), "aes-256-gcm");
+            byte[] metadata = new byte[MLKEM_METADATA_LEN];
+            System.arraycopy(r.ciphertext(), 0, metadata, 0, MLKEM_CT_LEN);
+            System.arraycopy(er.iv(), 0, metadata, MLKEM_CT_LEN, IV_BYTES);
+            System.arraycopy(er.tag(), 0, metadata,
+                    MLKEM_CT_LEN + IV_BYTES, TAG_BYTES);
+            return packBlobV2(WK_ALG_ML_KEM_1024, er.ciphertext(), metadata);
         }
-        byte[] metadata = new byte[IV_BYTES + TAG_BYTES];
-        System.arraycopy(er.iv(), 0, metadata, 0, IV_BYTES);
-        System.arraycopy(er.tag(), 0, metadata, IV_BYTES, TAG_BYTES);
-        return packBlobV2(WK_ALG_AES_256_GCM, er.ciphertext(), metadata);
+
+        throw new CipherSuite.UnsupportedAlgorithmException(
+            algorithm + ": wrap path not implemented");
+    }
+
+    /**
+     * Unwrap a DEK from a wrapped-key blob with an explicit cipher
+     * suite selector. Distinct from the blob-length-dispatched
+     * {@link #unwrapKey(byte[], byte[])} to support ML-KEM-1024
+     * (where the reader must already know it's holding the
+     * decapsulation private key, not a symmetric AES KEK).
+     *
+     * @since 0.8
+     */
+    public static byte[] unwrapKey(byte[] wrappedBlob, byte[] kek,
+                                    String algorithm) {
+        if ("aes-256-gcm".equals(algorithm)) {
+            CipherSuite.validateKey(algorithm, kek);
+            return unwrapKey(wrappedBlob, kek);
+        }
+        if ("ml-kem-1024".equals(algorithm)) {
+            CipherSuite.validatePrivateKey(algorithm, kek);
+            WrappedBlobV2 parsed = unpackBlobV2(wrappedBlob);
+            if (parsed.algorithmId() != WK_ALG_ML_KEM_1024) {
+                throw new IllegalArgumentException(
+                    "expected ML-KEM-1024 algorithm_id=0x0001, got "
+                    + String.format("0x%04X", parsed.algorithmId()));
+            }
+            if (parsed.metadata().length != MLKEM_METADATA_LEN) {
+                throw new IllegalArgumentException(
+                    "ML-KEM-1024 metadata must be " + MLKEM_METADATA_LEN
+                    + " bytes (kem_ct || iv || tag); got "
+                    + parsed.metadata().length);
+            }
+            if (parsed.ciphertext().length != KEY_BYTES) {
+                throw new IllegalArgumentException(
+                    "ML-KEM-1024 wrapped DEK must be " + KEY_BYTES
+                    + " bytes; got " + parsed.ciphertext().length);
+            }
+            byte[] kemCt = Arrays.copyOfRange(parsed.metadata(),
+                    0, MLKEM_CT_LEN);
+            byte[] iv = Arrays.copyOfRange(parsed.metadata(),
+                    MLKEM_CT_LEN, MLKEM_CT_LEN + IV_BYTES);
+            byte[] tag = Arrays.copyOfRange(parsed.metadata(),
+                    MLKEM_CT_LEN + IV_BYTES, MLKEM_METADATA_LEN);
+            byte[] sharedSecret = PostQuantumCrypto.kemDecapsulate(kek, kemCt);
+            return decrypt(parsed.ciphertext(), iv, tag, sharedSecret,
+                    "aes-256-gcm");
+        }
+        throw new CipherSuite.UnsupportedAlgorithmException(
+            algorithm + ": unwrap path not implemented");
     }
 
     /**

@@ -48,11 +48,25 @@ and ML-DSA-87 per binding decision 40. M49 fills in the implementations.
 
 ## Binding Decisions — All Prior (1–41) Active, Plus:
 
-42. **PQC via platform crypto.** ObjC/Python: OpenSSL 3.5+ (via
-    `cryptography` >= 44.0 for Python, direct `libssl` for ObjC).
-    Java: Bouncy Castle 1.79+ (`org.bouncycastle:bcprov-jdk18on`).
-    No liboqs dependency in the default build. liboqs is an optional
-    fallback documented but not required.
+42. **PQC library choice — REVISED in M49.** The original plan
+    specified OpenSSL 3.5 for Python/ObjC and Bouncy Castle for
+    Java. Empirical check at M49 kickoff (2026-04-18):
+    * Python `cryptography` 46.0.7 does not expose ML-KEM / ML-DSA
+      (only classical asymmetric primitives). The bundled OpenSSL
+      3.5.6 has the algorithms but the Python FFI layer does not
+      bind `EVP_PKEY_CTX_new_from_name`.
+    * Ubuntu 24.04 LTS is stuck on `libssl-dev 3.0.13`; no apt
+      route to 3.5.
+    Revised binding (2026-04-18, user-approved):
+    * **Python + ObjC: liboqs** (PyPI `liboqs-python>=0.14` for
+      Python; direct C API for ObjC). liboqs 0.14+ ships the
+      formally-verified ML-KEM from PQCP's mlkem-native.
+    * **Java: Bouncy Castle** `bcprov-jdk18on:1.80` (unchanged
+      from original plan — BC 1.79+ is production PQC on the JVM).
+    This split is documented in `docs/pqc.md` and does not affect
+    the wire format — all three languages emit byte-identical
+    ML-KEM-1024 ciphertexts, ML-DSA-87 signatures, and v1.2
+    wrapped-key blobs.
 43. **PQC key encapsulation for DEK wrapping.** ML-KEM-1024 replaces
     AES-256-GCM key wrapping in the envelope model. The DEK itself
     (symmetric AES-256) is unchanged — AES-256 is already

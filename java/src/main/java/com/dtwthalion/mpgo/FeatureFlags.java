@@ -32,6 +32,10 @@ public final class FeatureFlags {
     public static final String OPT_CANONICAL_SIGNATURES = "opt_canonical_signatures";
     public static final String OPT_KEY_ROTATION = "opt_key_rotation";
     public static final String OPT_ANONYMIZED = "opt_anonymized";
+    /** v0.8 M49: file uses post-quantum crypto (ML-KEM-1024 and/or
+     *  ML-DSA-87). Opt-flag — a reader without PQC can still open the
+     *  file and read unencrypted datasets. @since 0.8 */
+    public static final String OPT_PQC_PREVIEW = "opt_pqc_preview";
 
     private static final Set<String> REQUIRED = Set.of(
         BASE_V1, COMPOUND_IDENTIFICATIONS, COMPOUND_QUANTIFICATIONS,
@@ -41,7 +45,7 @@ public final class FeatureFlags {
     private static final Set<String> KNOWN_OPTIONAL = Set.of(
         OPT_COMPOUND_HEADERS, OPT_NATIVE_2D_NMR, OPT_NATIVE_MSIMAGE_CUBE,
         OPT_DATASET_ENCRYPTION, OPT_DIGITAL_SIGNATURES, OPT_CANONICAL_SIGNATURES,
-        OPT_KEY_ROTATION, OPT_ANONYMIZED
+        OPT_KEY_ROTATION, OPT_ANONYMIZED, OPT_PQC_PREVIEW
     );
 
     private final String formatVersion;

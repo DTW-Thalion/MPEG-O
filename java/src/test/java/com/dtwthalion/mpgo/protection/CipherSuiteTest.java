@@ -25,12 +25,15 @@ class CipherSuiteTest {
 
     @Test
     void reservedEntriesRegisteredButNotSupported() {
-        for (String alg : new String[]{"ml-kem-1024", "ml-dsa-87", "shake256"}) {
-            assertTrue(CipherSuite.isRegistered(alg),
-                    alg + " should be in the catalog");
-            assertFalse(CipherSuite.isSupported(alg),
-                    alg + " must report NOT supported until M49");
-        }
+        // After v0.8 M49, only shake256 is still reserved.
+        assertTrue(CipherSuite.isRegistered("shake256"));
+        assertFalse(CipherSuite.isSupported("shake256"),
+                "shake256 must still be reserved");
+        // ml-kem-1024 and ml-dsa-87 became active in M49.
+        assertTrue(CipherSuite.isSupported("ml-kem-1024"),
+                "ml-kem-1024 must be active after M49");
+        assertTrue(CipherSuite.isSupported("ml-dsa-87"),
+                "ml-dsa-87 must be active after M49");
     }
 
     @Test
@@ -87,10 +90,21 @@ class CipherSuiteTest {
 
     @Test
     void validateKeyReservedAlgorithmRaises() {
+        // shake256 remains reserved in v0.8.
         CipherSuite.UnsupportedAlgorithmException thrown = assertThrows(
                 CipherSuite.UnsupportedAlgorithmException.class,
-                () -> CipherSuite.validateKey("ml-kem-1024", new byte[1568]));
+                () -> CipherSuite.validateKey("shake256", new byte[32]));
         assertTrue(thrown.getMessage().contains("RESERVED"));
+    }
+
+    @Test
+    void validateKeyRejectsAsymmetricAlgorithms() {
+        // validateKey is symmetric-only — asymmetric entries must route
+        // through validatePublicKey / validatePrivateKey.
+        assertThrows(CipherSuite.InvalidKeyException.class,
+                () -> CipherSuite.validateKey("ml-kem-1024", new byte[32]));
+        assertThrows(CipherSuite.InvalidKeyException.class,
+                () -> CipherSuite.validateKey("ml-dsa-87", new byte[32]));
     }
 
     @Test
@@ -114,9 +128,11 @@ class CipherSuiteTest {
     }
 
     @Test
-    void encryptRejectsReservedAlgorithm() {
+    void encryptRejectsAsymmetricAlgorithm() {
+        // ml-kem-1024 is KEM (not AEAD); encrypt must refuse it via
+        // validateKey's asymmetric-rejection guard.
         byte[] key = new byte[32];
-        assertThrows(CipherSuite.UnsupportedAlgorithmException.class,
+        assertThrows(RuntimeException.class,
                 () -> EncryptionManager.encrypt("hello".getBytes(), key,
                                                   "ml-kem-1024"));
     }

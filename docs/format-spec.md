@@ -271,16 +271,33 @@ offset  len  field
 2       1    version       = 0x02
 3       2    algorithm_id  (big-endian)
                0x0000 = AES-256-GCM
-               0x0001 = ML-KEM-1024 (reserved for M49)
+               0x0001 = ML-KEM-1024 (v0.8 M49 — active; FIPS 203)
                0x0002 = reserved
 5       4    ciphertext_len (big-endian, u32)
 9       2    metadata_len   (big-endian, u16)
-11      M    metadata       (algorithm-specific; for AES-GCM: 12-byte IV ∥ 16-byte tag)
-11+M    C    ciphertext     (for AES-GCM: 32-byte wrapped DEK)
+11      M    metadata       (algorithm-specific — see below)
+11+M    C    ciphertext     (algorithm-specific — see below)
 ```
 
+Algorithm-specific metadata/ciphertext layouts:
+
+| `algorithm_id` | metadata                                        | ciphertext          | total blob |
+|----------------|-------------------------------------------------|---------------------|-----------:|
+| `0x0000` AES-GCM  | `iv(12) \|\| tag(16)` = 28                    | wrapped DEK = 32    | 71 bytes   |
+| `0x0001` ML-KEM-1024 (v0.8) | `kem_ct(1568) \|\| aes_iv(12) \|\| aes_tag(16)` = 1596 | AES-GCM-wrapped DEK = 32 | 1639 bytes |
+
+For ML-KEM-1024 the outer envelope contains a classical KEM + AEAD
+construction: `ML_KEM.encapsulate(recipient_pk) → (kem_ct,
+shared_secret)`, then `shared_secret` (32 bytes) is used as the AES-
+256-GCM key to wrap the DEK. Decryption reverses the chain; AES-GCM
+authenticates end-to-end (ML-KEM decapsulation on its own is
+unauthenticated). See `docs/pqc.md` for the full story including the
+language-specific library choices (Python/ObjC use liboqs;
+Java uses Bouncy Castle).
+
 Total length = `11 + metadata_len + ciphertext_len`. For AES-256-GCM
-this equals 11 + 28 + 32 = **71 bytes**. The `@dek_wrapped_bytes`
+this equals 11 + 28 + 32 = **71 bytes**; for ML-KEM-1024 it equals
+11 + 1596 + 32 = **1639 bytes**. The `@dek_wrapped_bytes`
 attribute records the exact length so readers can avoid relying on
 dataset-size probes through storage adapters that pad to a fixed
 width.
@@ -493,6 +510,23 @@ Signatures without the `v2:` prefix are treated as v0.2 native-byte
 HMACs and verified by hashing `H5Dread` output in the dataset's
 native type. This is how the v0.2 `signed.mpgo` reference fixture
 continues to verify under v0.3 readers.
+
+### 10.2b v3 post-quantum signatures (v0.8 M49)
+
+ML-DSA-87 (FIPS 204) signatures are stored as:
+
+```
+"v3:" + base64(ml_dsa_87_signature_bytes)
+```
+
+The signature covers the same canonical little-endian byte stream
+as v2, so a file can carry either flavor without format changes
+beyond the prefix. A reader that sees a `v3:` prefix but does not
+support PQC raises `UnsupportedAlgorithmError` — it does not
+silently pass verification. The presence of any v3 signature on a
+file causes `opt_pqc_preview` to be added to the root feature
+list; see `docs/pqc.md` and `docs/feature-flags.md §v0.8` for the
+full story.
 
 ### 10.3 Cross-language parity
 

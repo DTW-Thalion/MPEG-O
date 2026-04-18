@@ -21,16 +21,16 @@ void testCipherSuite(void)
     PASS([MPGOCipherSuite isSupported:@"sha-256"],
          "M48: sha-256 is supported");
 
-    // ── Reserved entries ──
+    // ── Reserved vs active (post-M49) ──
     PASS([MPGOCipherSuite isRegistered:@"ml-kem-1024"]
-         && ![MPGOCipherSuite isSupported:@"ml-kem-1024"],
-         "M48: ml-kem-1024 is registered but reserved");
+         && [MPGOCipherSuite isSupported:@"ml-kem-1024"],
+         "M48/M49: ml-kem-1024 is now active");
     PASS([MPGOCipherSuite isRegistered:@"ml-dsa-87"]
-         && ![MPGOCipherSuite isSupported:@"ml-dsa-87"],
-         "M48: ml-dsa-87 is registered but reserved");
+         && [MPGOCipherSuite isSupported:@"ml-dsa-87"],
+         "M48/M49: ml-dsa-87 is now active");
     PASS([MPGOCipherSuite isRegistered:@"shake256"]
          && ![MPGOCipherSuite isSupported:@"shake256"],
-         "M48: shake256 is registered but reserved");
+         "M48/M49: shake256 still reserved");
 
     // ── Unknown ──
     PASS(![MPGOCipherSuite isRegistered:@"chacha20-poly1305"],
@@ -72,15 +72,15 @@ void testCipherSuite(void)
                                   error:&err],
          "M48: HMAC rejects empty key");
 
-    // ── validateKey: reserved / unknown ──
+    // ── validateKey: asymmetric (M49) / unknown ──
     err = nil;
     PASS(![MPGOCipherSuite validateKey:zeros(1568)
                               algorithm:@"ml-kem-1024"
                                   error:&err],
-         "M48: reserved algorithm rejected by validateKey:");
+         "M49: asymmetric algorithm rejected by validateKey:");
     PASS(err != nil
-         && [err.localizedDescription containsString:@"reserved"],
-         "M48: reserved-error message mentions 'reserved'");
+         && [err.localizedDescription containsString:@"asymmetric"],
+         "M49: asymmetric-rejection error mentions 'asymmetric'");
     err = nil;
     PASS(![MPGOCipherSuite validateKey:zeros(32)
                               algorithm:@"chacha20-poly1305"

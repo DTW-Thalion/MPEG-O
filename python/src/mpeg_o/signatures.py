@@ -35,6 +35,7 @@ import numpy as np
 SIGNATURE_ATTR = "mpgo_signature"
 PROVENANCE_SIGNATURE_ATTR = "provenance_signature"
 SIGNATURE_V2_PREFIX = "v2:"
+SIGNATURE_V3_PREFIX = "v3:"  # ML-DSA-87, v0.8 M49
 
 
 def hmac_sha256(data: bytes, key: bytes) -> bytes:
@@ -84,28 +85,34 @@ def sign_dataset(
     *,
     algorithm: str = "hmac-sha256",
 ) -> str:
-    """Sign ``dataset`` with a canonical (v2) signature.
+    """Sign ``dataset`` with a canonical signature.
 
-    The resulting attribute string carries a ``v2:`` prefix for
-    HMAC-SHA256 (default). Post-quantum signature algorithms (M49)
-    will reserve a ``v3:`` prefix. Use :func:`verify_dataset` to
-    validate; it transparently falls back to the v0.2 unprefixed
-    native-bytes path for legacy files.
+    For ``algorithm="hmac-sha256"`` (default) ``key`` is a shared secret
+    and the output is ``"v2:" + base64(hmac)``. For
+    ``algorithm="ml-dsa-87"`` (v0.8 M49) ``key`` is the 4896-byte
+    ML-DSA-87 signing private key and the output is
+    ``"v3:" + base64(signature)``. Use :func:`verify_dataset` to
+    validate; it dispatches on the stored prefix.
 
-    v0.7 M48: ``algorithm`` is the catalog identifier
-    (``"hmac-sha256"`` active; ``"ml-dsa-87"`` reserved). Unsupported
-    or unknown identifiers raise
-    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError`.
+    v0.8 M49: ML-DSA-87 requires the ``[pqc]`` optional extra (Python /
+    ObjC backend is ``liboqs``; Java uses Bouncy Castle — see
+    :file:`docs/pqc.md`).
     """
     from . import cipher_suite
-    cipher_suite.validate_key(algorithm, key)
-    if algorithm != "hmac-sha256":
+    canonical = _dataset_canonical_bytes(dataset)
+    if algorithm == "hmac-sha256":
+        cipher_suite.validate_key(algorithm, key)
+        mac_b64 = hmac_sha256_b64(canonical, key)
+        prefixed = SIGNATURE_V2_PREFIX + mac_b64
+    elif algorithm == "ml-dsa-87":
+        cipher_suite.validate_private_key(algorithm, key)
+        from . import pqc
+        sig = pqc.sig_sign(key, canonical)
+        prefixed = SIGNATURE_V3_PREFIX + base64.b64encode(sig).decode("ascii")
+    else:
         raise cipher_suite.UnsupportedAlgorithmError(
-            f"{algorithm}: signature path not yet implemented "
-            f"(M49 target)"
+            f"{algorithm}: signature path not yet implemented"
         )
-    mac_b64 = hmac_sha256_b64(_dataset_canonical_bytes(dataset), key)
-    prefixed = SIGNATURE_V2_PREFIX + mac_b64
     _write_vl_string_attr(dataset, SIGNATURE_ATTR, prefixed)
     return prefixed
 
@@ -118,36 +125,47 @@ def verify_dataset(
 ) -> bool:
     """Verify the stored ``@mpgo_signature`` against ``key``.
 
-    Accepts both the v0.3 ``v2:`` canonical layout and the v0.2 native
-    layout; the prefix distinguishes the two. Uses timing-safe
-    comparison via :func:`hmac.compare_digest`.
+    Accepts v0.2 unprefixed HMAC (native-bytes path), v0.3 ``v2:``
+    canonical HMAC, and v0.8 ``v3:`` ML-DSA-87 signatures. Uses
+    timing-safe comparison for HMAC; ML-DSA verification itself runs
+    in constant time via liboqs.
 
-    v0.7 M48: the ``algorithm`` parameter mirrors :func:`sign_dataset`.
-    A ``"v3:"`` prefix encountered during verification raises
-    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError` — M49 will
-    activate ML-DSA-87 verification.
+    The ``algorithm`` keyword tells the verifier what key shape to
+    expect. If the on-disk prefix does not match, raises
+    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError` so callers
+    don't silently pass verification of a file encrypted with a
+    different algorithm. For ML-DSA-87, ``key`` is the 2592-byte
+    verification public key.
     """
     from . import cipher_suite
-    cipher_suite.validate_key(algorithm, key)
-    if algorithm != "hmac-sha256":
-        raise cipher_suite.UnsupportedAlgorithmError(
-            f"{algorithm}: signature path not yet implemented "
-            f"(M49 target)"
-        )
     stored = _read_vl_string_attr(dataset, SIGNATURE_ATTR)
     if stored is None:
         return False
-    if stored.startswith("v3:"):
-        # Reserved for M49. Fail the verify cleanly rather than
-        # silently passing — forcing callers to upgrade to a PQC
-        # build to read PQC-signed files.
+
+    canonical = _dataset_canonical_bytes(dataset)
+
+    if stored.startswith(SIGNATURE_V3_PREFIX):
+        if algorithm != "ml-dsa-87":
+            raise cipher_suite.UnsupportedAlgorithmError(
+                f"stored signature is v3 (ml-dsa-87) but caller "
+                f"passed algorithm={algorithm!r}"
+            )
+        cipher_suite.validate_public_key(algorithm, key)
+        from . import pqc
+        sig = base64.b64decode(stored[len(SIGNATURE_V3_PREFIX):])
+        return pqc.sig_verify(key, canonical, sig)
+
+    # Reject caller passing "ml-dsa-87" against a non-v3 stored blob —
+    # saves a confusing empty-verify return.
+    if algorithm == "ml-dsa-87":
         raise cipher_suite.UnsupportedAlgorithmError(
-            "v3: signature prefix reserved for post-quantum "
-            "algorithms (M49); this build cannot verify it"
+            "stored signature is not v3 (ml-dsa-87) — pass "
+            "algorithm='hmac-sha256' to verify legacy signatures"
         )
+    cipher_suite.validate_key(algorithm, key)
     if stored.startswith(SIGNATURE_V2_PREFIX):
         payload = stored[len(SIGNATURE_V2_PREFIX):]
-        expected = hmac_sha256_b64(_dataset_canonical_bytes(dataset), key)
+        expected = hmac_sha256_b64(canonical, key)
     else:
         payload = stored
         expected = hmac_sha256_b64(_dataset_native_bytes(dataset), key)

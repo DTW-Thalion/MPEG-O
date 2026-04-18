@@ -194,10 +194,12 @@ def _unpack_blob_v2(raw: bytes) -> tuple[int, bytes, bytes]:
     return algorithm_id, metadata, ciphertext
 
 
-def _unpack_blob(raw: bytes) -> SealedBlob:
-    """Dispatch wrapped-key blob parsing on length (v1.1 legacy = 60
-    bytes; anything else = v1.2). Returns a SealedBlob suitable for
-    :func:`decrypt_bytes`; AES-256-GCM only at this layer."""
+def _unpack_aes_gcm_blob(raw: bytes) -> SealedBlob:
+    """Dispatch AES-256-GCM wrapped-key blob parsing on length (v1.1
+    legacy = 60 bytes; anything else = v1.2 AES-GCM envelope). Returns
+    a SealedBlob suitable for :func:`decrypt_bytes`. Raises
+    :class:`UnsupportedWrappedBlobError` if the blob declares a non-AES
+    algorithm (the caller should retry via the ML-KEM unwrap path)."""
     if len(raw) == WRAPPED_BLOB_LEN:
         # v1.1 legacy — pre-v0.7 files.
         return _unpack_blob_v1(raw)
@@ -225,6 +227,75 @@ def _unpack_blob(raw: bytes) -> SealedBlob:
     )
 
 
+def _unpack_blob(raw: bytes) -> SealedBlob:
+    """Legacy alias kept for external callers / tests. Prefer
+    :func:`_unpack_aes_gcm_blob` in new code (it names the AES-GCM
+    constraint explicitly)."""
+    return _unpack_aes_gcm_blob(raw)
+
+
+# ML-KEM-1024 envelope blob layout (v0.8 M49). Inside the v1.2 frame:
+#
+#   algorithm_id = 0x0001
+#   metadata     = kem_ct(1568) || aes_iv(12) || aes_tag(16)     = 1596 bytes
+#   ciphertext   = aes_wrapped_dek(32)                            = 32 bytes
+#
+# Total on-disk payload = 11 (header) + 1596 + 32 = 1639 bytes. The
+# receiver decapsulates kem_ct with their ML-KEM private key, uses the
+# resulting 32-byte shared secret as the AES-256 KEK, and AES-GCM
+# unwraps the DEK.
+_MLKEM_CT_LEN = 1568
+_MLKEM_METADATA_LEN = _MLKEM_CT_LEN + AES_IV_LEN + AES_TAG_LEN  # 1596
+
+
+def _pack_ml_kem_blob(
+    kem_ct: bytes, aes_iv: bytes, aes_tag: bytes, wrapped_dek: bytes
+) -> bytes:
+    if len(kem_ct) != _MLKEM_CT_LEN:
+        raise KeyRotationError(
+            f"ML-KEM-1024 ciphertext must be {_MLKEM_CT_LEN} bytes "
+            f"(got {len(kem_ct)})"
+        )
+    if len(aes_iv) != AES_IV_LEN or len(aes_tag) != AES_TAG_LEN:
+        raise KeyRotationError(
+            "ML-KEM wrap: AES-GCM metadata has wrong lengths"
+        )
+    if len(wrapped_dek) != AES_KEY_LEN:
+        raise KeyRotationError(
+            f"ML-KEM wrap: wrapped DEK must be {AES_KEY_LEN} bytes "
+            f"(got {len(wrapped_dek)})"
+        )
+    return _pack_blob_v2(
+        _WK_ALG_ML_KEM_1024,
+        ciphertext=wrapped_dek,
+        metadata=kem_ct + aes_iv + aes_tag,
+    )
+
+
+def _unpack_ml_kem_blob(raw: bytes) -> tuple[bytes, bytes, bytes, bytes]:
+    """Return ``(kem_ct, aes_iv, aes_tag, wrapped_dek)`` from a v1.2
+    ML-KEM-1024 envelope blob."""
+    alg, md, ct = _unpack_blob_v2(raw)
+    if alg != _WK_ALG_ML_KEM_1024:
+        raise UnsupportedWrappedBlobError(
+            f"expected ML-KEM-1024 algorithm_id=0x0001, got 0x{alg:04x}"
+        )
+    if len(md) != _MLKEM_METADATA_LEN:
+        raise KeyRotationError(
+            f"ML-KEM-1024 metadata must be {_MLKEM_METADATA_LEN} bytes "
+            f"(kem_ct || iv || tag); got {len(md)}"
+        )
+    if len(ct) != AES_KEY_LEN:
+        raise KeyRotationError(
+            f"ML-KEM-1024 wrapped-DEK ciphertext must be {AES_KEY_LEN} "
+            f"bytes; got {len(ct)}"
+        )
+    kem_ct = md[:_MLKEM_CT_LEN]
+    aes_iv = md[_MLKEM_CT_LEN:_MLKEM_CT_LEN + AES_IV_LEN]
+    aes_tag = md[_MLKEM_CT_LEN + AES_IV_LEN:]
+    return kem_ct, aes_iv, aes_tag, ct
+
+
 def _wrap_dek(
     dek: bytes,
     kek: bytes,
@@ -236,24 +307,50 @@ def _wrap_dek(
     (AES-256-GCM); pass ``legacy_v1=True`` to emit the 60-byte v1.1
     layout for cross-version regression fixtures.
 
-    ``algorithm`` selects the wrap primitive (v0.7 M48). Only
-    ``"aes-256-gcm"`` is live; ``"ml-kem-1024"`` is reserved for M49.
+    ``algorithm`` selects the wrap primitive. Supported in v0.8 M49:
+
+    * ``"aes-256-gcm"`` — ``kek`` is a 32-byte symmetric key.
+    * ``"ml-kem-1024"`` — ``kek`` is a 1568-byte ML-KEM encapsulation
+      public key. Encapsulation yields a 32-byte shared secret which
+      is used as an AES-256 KEK to wrap the DEK.
     """
     from . import cipher_suite
-    cipher_suite.validate_key(algorithm, kek)
-    cipher_suite.validate_key(algorithm, dek)
-    blob = encrypt_bytes(dek, kek, algorithm=algorithm)
-    if legacy_v1:
-        if algorithm != "aes-256-gcm":
+    # The DEK itself is always a symmetric AES-256 key, regardless of
+    # the wrap algorithm. HANDOFF binding #43 — AES-256 stays quantum-
+    # resistant under Grover.
+    cipher_suite.validate_key("aes-256-gcm", dek)
+
+    if algorithm == "aes-256-gcm":
+        cipher_suite.validate_key(algorithm, kek)
+        blob = encrypt_bytes(dek, kek, algorithm=algorithm)
+        if legacy_v1:
+            return _pack_blob_v1(blob)
+        return _pack_blob_v2(
+            _WK_ALG_AES_256_GCM,
+            ciphertext=bytes(blob.ciphertext),
+            metadata=bytes(blob.iv) + bytes(blob.tag),
+        )
+
+    if algorithm == "ml-kem-1024":
+        if legacy_v1:
             raise KeyRotationError(
                 "v1.1 legacy layout is AES-256-GCM only; "
-                f"refusing to emit v1.1 for algorithm={algorithm!r}"
+                "refusing to emit v1.1 for algorithm='ml-kem-1024'"
             )
-        return _pack_blob_v1(blob)
-    return _pack_blob_v2(
-        _WK_ALG_AES_256_GCM,
-        ciphertext=bytes(blob.ciphertext),
-        metadata=bytes(blob.iv) + bytes(blob.tag),
+        cipher_suite.validate_public_key(algorithm, kek)
+        from . import pqc
+        kem_ct, shared_secret = pqc.kem_encapsulate(kek)
+        # shared_secret is 32 bytes (AES-256 width by construction)
+        sealed = encrypt_bytes(dek, shared_secret, algorithm="aes-256-gcm")
+        return _pack_ml_kem_blob(
+            kem_ct=kem_ct,
+            aes_iv=bytes(sealed.iv),
+            aes_tag=bytes(sealed.tag),
+            wrapped_dek=bytes(sealed.ciphertext),
+        )
+
+    raise cipher_suite.UnsupportedAlgorithmError(
+        f"{algorithm!r}: wrap path not implemented"
     )
 
 
@@ -264,8 +361,24 @@ def _unwrap_dek(
     algorithm: str = "aes-256-gcm",
 ) -> bytes:
     from . import cipher_suite
-    cipher_suite.validate_key(algorithm, kek)
-    return decrypt_bytes(_unpack_blob(wrapped), kek, algorithm=algorithm)
+
+    if algorithm == "aes-256-gcm":
+        cipher_suite.validate_key(algorithm, kek)
+        return decrypt_bytes(
+            _unpack_aes_gcm_blob(wrapped), kek, algorithm=algorithm
+        )
+
+    if algorithm == "ml-kem-1024":
+        cipher_suite.validate_private_key(algorithm, kek)
+        from . import pqc
+        kem_ct, aes_iv, aes_tag, wrapped_dek = _unpack_ml_kem_blob(wrapped)
+        shared_secret = pqc.kem_decapsulate(kek, kem_ct)
+        sealed = SealedBlob(ciphertext=wrapped_dek, iv=aes_iv, tag=aes_tag)
+        return decrypt_bytes(sealed, shared_secret, algorithm="aes-256-gcm")
+
+    raise cipher_suite.UnsupportedAlgorithmError(
+        f"{algorithm!r}: unwrap path not implemented"
+    )
 
 
 def _write_wrapped_dataset(ki: h5py.Group, wrapped: bytes) -> None:
@@ -303,6 +416,57 @@ def has_envelope_encryption(f: h5py.File) -> bool:
     return ki is not None and "dek_wrapped" in ki
 
 
+def _validate_kek_for_wrap(algorithm: str, kek: bytes) -> None:
+    """Validate ``kek`` for use as a *writer-side* KEK under ``algorithm``
+    (AES symmetric key for AES-GCM, ML-KEM public key for ML-KEM-1024)."""
+    from . import cipher_suite
+    if algorithm == "aes-256-gcm":
+        cipher_suite.validate_key(algorithm, kek)
+    elif algorithm == "ml-kem-1024":
+        cipher_suite.validate_public_key(algorithm, kek)
+    else:
+        raise cipher_suite.UnsupportedAlgorithmError(
+            f"{algorithm!r}: wrap path not implemented"
+        )
+
+
+def _validate_kek_for_unwrap(algorithm: str, kek: bytes) -> None:
+    """Validate ``kek`` for use as a *reader-side* KEK under ``algorithm``."""
+    from . import cipher_suite
+    if algorithm == "aes-256-gcm":
+        cipher_suite.validate_key(algorithm, kek)
+    elif algorithm == "ml-kem-1024":
+        cipher_suite.validate_private_key(algorithm, kek)
+    else:
+        raise cipher_suite.UnsupportedAlgorithmError(
+            f"{algorithm!r}: unwrap path not implemented"
+        )
+
+
+def _mark_pqc_preview(f: h5py.File) -> None:
+    """Append ``opt_pqc_preview`` to the root ``@mpeg_o_features`` list
+    if it's not already present. No-op on files without the feature
+    index (pre-v0.2 layout)."""
+    from .feature_flags import OPT_PQC_PREVIEW
+    if "mpeg_o_features" not in f.attrs:
+        return
+    raw = f.attrs["mpeg_o_features"]
+    if isinstance(raw, bytes):
+        decoded = raw.decode("utf-8", errors="replace")
+    else:
+        decoded = str(raw)
+    try:
+        features = json.loads(decoded)
+        if not isinstance(features, list):
+            features = []
+    except json.JSONDecodeError:
+        features = []
+    if OPT_PQC_PREVIEW in features:
+        return
+    features.append(OPT_PQC_PREVIEW)
+    f.attrs["mpeg_o_features"] = json.dumps(features)
+
+
 def enable_envelope_encryption(
     f: h5py.File,
     kek: bytes,
@@ -314,13 +478,16 @@ def enable_envelope_encryption(
 
     Returns the plaintext DEK so callers can use it to encrypt signal
     channels. Subsequent reads must unwrap via :func:`unwrap_dek` using
-    the same KEK.
+    the same KEK shape.
 
-    ``algorithm`` selects the wrap cipher suite (v0.7 M48). Default is
-    AES-256-GCM; reserved values land in M49.
+    ``algorithm`` selects the wrap cipher suite:
+
+    * ``"aes-256-gcm"`` — ``kek`` is a 32-byte symmetric key.
+    * ``"ml-kem-1024"`` — ``kek`` is a 1568-byte ML-KEM *public* key.
+      This writes the ``opt_pqc_preview`` feature flag onto the file
+      (v0.8 M49).
     """
-    from . import cipher_suite
-    cipher_suite.validate_key(algorithm, kek)
+    _validate_kek_for_wrap(algorithm, kek)
     dek = os.urandom(AES_KEY_LEN)
     wrapped = _wrap_dek(dek, kek, algorithm=algorithm)
 
@@ -331,6 +498,8 @@ def enable_envelope_encryption(
     _set_string_attr(ki, "kek_algorithm", algorithm)
     _set_string_attr(ki, "wrapped_at", _iso8601_now())
     _set_string_attr(ki, "key_history_json", "[]")
+    if algorithm == "ml-kem-1024":
+        _mark_pqc_preview(f)
     return dek
 
 
@@ -343,13 +512,11 @@ def unwrap_dek(
     """Unwrap and return the DEK using the given KEK.
 
     Raises :class:`KeyRotationError` (or a cryptography ``InvalidTag``)
-    when the KEK does not authenticate the wrapped blob.
-
-    ``algorithm`` selects the wrap cipher suite (v0.7 M48). Pass the
-    same value the writer used; a wrong algorithm fails cleanly via
-    :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError` or
-    authentication failure.
+    when the KEK does not authenticate the wrapped blob. For
+    ``algorithm="ml-kem-1024"`` pass the 3168-byte decapsulation
+    *private* key.
     """
+    _validate_kek_for_unwrap(algorithm, kek)
     ki = _key_info_group(f, create=False)
     if ki is None or "dek_wrapped" not in ki:
         raise KeyRotationError("/protection/key_info/dek_wrapped missing")
@@ -364,20 +531,28 @@ def rotate_key(
     new_kek: bytes,
     new_kek_id: str,
     algorithm: str = "aes-256-gcm",
+    new_algorithm: str | None = None,
 ) -> None:
     """Re-wrap the DEK under ``new_kek`` and append the old entry to history.
 
     Signal datasets are not touched, so the cost is O(1) in file size.
-    ``algorithm`` threads through to :func:`_wrap_dek` (v0.7 M48).
+
+    v0.8 M49: ``new_algorithm`` may differ from ``algorithm`` to migrate
+    a file from classical AES-256-GCM to ML-KEM-1024 (or back). When
+    ``new_algorithm`` is omitted, the wrap stays on the same primitive.
     """
+    if new_algorithm is None:
+        new_algorithm = algorithm
     dek = unwrap_dek(f, old_kek, algorithm=algorithm)       # authenticates the old KEK
-    wrapped = _wrap_dek(dek, new_kek, algorithm=algorithm)
+    _validate_kek_for_wrap(new_algorithm, new_kek)
+    wrapped = _wrap_dek(dek, new_kek, algorithm=new_algorithm)
 
     ki = _key_info_group(f, create=False)
     assert ki is not None              # unwrap_dek already checked
 
     old_kek_id = _get_string_attr(ki, "kek_id")
     old_wrapped_at = _get_string_attr(ki, "wrapped_at")
+    old_algorithm = _get_string_attr(ki, "kek_algorithm", algorithm)
     history_json = _get_string_attr(ki, "key_history_json", "[]")
     try:
         entries = json.loads(history_json)
@@ -388,14 +563,16 @@ def rotate_key(
     entries.append({
         "timestamp": old_wrapped_at,
         "kek_id": old_kek_id,
-        "kek_algorithm": KEK_ALGORITHM,
+        "kek_algorithm": old_algorithm,
     })
 
     _write_wrapped_dataset(ki, wrapped)
     _set_string_attr(ki, "kek_id", new_kek_id)
-    _set_string_attr(ki, "kek_algorithm", KEK_ALGORITHM)
+    _set_string_attr(ki, "kek_algorithm", new_algorithm)
     _set_string_attr(ki, "wrapped_at", _iso8601_now())
     _set_string_attr(ki, "key_history_json", json.dumps(entries))
+    if new_algorithm == "ml-kem-1024":
+        _mark_pqc_preview(f)
 
 
 def key_history(f: h5py.File) -> list[dict[str, Any]]:

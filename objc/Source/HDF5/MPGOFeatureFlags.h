@@ -39,6 +39,7 @@
 + (NSString *)featureCanonicalSignatures;      // @"opt_canonical_signatures" (M18)
 + (NSString *)featureKeyRotation;              // @"opt_key_rotation" (M25)
 + (NSString *)featureAnonymized;               // @"opt_anonymized" (M28)
++ (NSString *)featurePQCPreview;               // @"opt_pqc_preview" (v0.8 M49)
 
 #pragma mark - Read
 
