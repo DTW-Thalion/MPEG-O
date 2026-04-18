@@ -1,7 +1,4 @@
 libMPGO/stamp_html &: \
-	libMPGO/ClassesTOC.gsdoc \
-	libMPGO/ConstantsTOC.gsdoc \
-	libMPGO/FunctionsTOC.gsdoc \
 	libMPGO/MPGOAccessPolicy.gsdoc \
 	libMPGO/MPGOAcquisitionRun.gsdoc \
 	libMPGO/MPGOAnonymizer.gsdoc \
@@ -60,8 +57,5 @@ libMPGO/stamp_html &: \
 	libMPGO/MPGOTransitionList.gsdoc \
 	libMPGO/MPGOValueRange.gsdoc \
 	libMPGO/MPGOVerifier.gsdoc \
-	libMPGO/ProtocolsTOC.gsdoc \
-	libMPGO/TypesTOC.gsdoc \
-	libMPGO/libMPGO.gsdoc \
 	libMPGO/libMPGO.igsdoc
 	$(ECHO_AUTOGSDOC)$(AUTOGSDOC) $(INTERNAL_AGSDOCFLAGS) $(AGSDOC_FILES)$(END_ECHO)
