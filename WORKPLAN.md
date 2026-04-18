@@ -335,48 +335,41 @@ the full milestone history.
       Round-trip covered by `TestMilestone24.m` and
       `test_milestone24_chromatograms.py`.
 
-- [ ] **Direct byte-for-byte parity test between the ObjC and Python
-      mzML writers.** Both implementations currently share the same
-      XML template and are individually round-trip-tested through
-      their respective readers, but no test runs both writers on the
-      same input and diffs the bytes. The minimum delta is a tiny
-      `objc/Tools/MpgoToMzML.m` CLI (modelled on `MpgoVerify` and
-      `MpgoSign`) that takes a `.mpgo` path and writes an `.mzML` to
-      a second path; the Python side then adds a test that invokes
-      it via subprocess, calls `mpeg_o.exporters.mzml.write_dataset`
-      on the same input, and asserts byte-for-byte equality (or a
-      structural compare if any intentional formatting differences
-      remain). Touches: `objc/Tools/MpgoToMzML.m` (new),
-      `objc/Tools/GNUmakefile`,
-      `python/tests/test_mzml_writer.py`.
+- [x] **Direct byte-for-byte parity test between the ObjC and Python
+      mzML writers.** *Shipped.* `objc/Tools/MpgoToMzML.m` is a minimal
+      CLI modelled on `MpgoVerify` / `MpgoSign`, and
+      `python/tests/test_mzml_writer_parity.py` drives both writers
+      on the same fixture and structurally diffs the output (masking
+      indexListOffset, fileChecksum, and absolute-byte offset
+      attributes that encode file state). The harness surfaced a
+      real ObjC-writer divergence that is currently marked
+      `xfail(strict=True)` — on `SpectralDataset.write_minimal`
+      fixtures the ObjC writer only emits the first `<spectrum>`
+      despite `run.spectrumIndex.count` correctly reporting 3. Bug
+      is in the interaction between the reader and
+      `MPGOMzMLWriter`'s spectrum loop; infrastructure is in place
+      to lock the fix in when it lands.
 
 ### Milestone 20 — Cloud-Native Access
 
-- [ ] **Objective-C cloud-native `.mpgo` access.**
-      M20 shipped a Python-only cloud path because `h5py` can consume
-      any Python file-like object (fsspec's range-request stream
-      satisfies that interface). `libhdf5` reads exclusively through
-      Virtual File Drivers, and the default `sec2` VFD is POSIX-only,
-      so the ObjC reference implementation has no equivalent entry
-      point. The options, in rough order of preference:
-
-      1. **Link against libhdf5 built with the `ROS3` VFD
-         (`--with-ros3-vfd` + libcurl).** S3-only, but the smallest
-         delta: `MPGOHDF5File openAtPath:` grows an `openS3URL:`
-         variant that sets `H5Pset_fapl_ros3` before `H5Fopen`. The
-         CI job needs a libhdf5 rebuild (the apt package ships
-         without ROS3), and the test harness can reuse the existing
-         M20 threading HTTP server if we teach it the S3 API subset
-         ROS3 probes (or adopt `moto`).
-      2. **Custom VFD wrapping libcurl / NSURLSession.** Covers
-         HTTP, S3, GCS, Azure via one driver, but writing a VFD is
-         non-trivial (hundreds of lines of seek/cache plumbing) and
-         every MPGO deployment would need the driver registered.
-      3. **Download-then-open fallback.** Stage the whole file in
-         `/tmp` before `openAtPath:`. Simple to implement but
-         defeats M20's "individual spectrum does not download full
-         file" acceptance criterion; suitable only as a last-resort
-         compatibility path.
+- [x] **Objective-C cloud-native `.mpgo` access.** *Shipped via
+      option 1 (ROS3 VFD).* Apt's `libhdf5-dev` on modern Debian /
+      Ubuntu ships `H5Pset_fapl_ros3` enabled — the WORKPLAN's
+      original assumption that a libhdf5 rebuild would be required
+      is stale, so the CI-rebuild subtask is obviated.
+      `MPGOHDF5File` grows `+openS3URL:region:accessKeyId:
+      secretAccessKey:sessionToken:error:` plus an `+isS3Supported`
+      capability probe; `s3://` canonical URLs are translated to
+      `https://bucket.s3.region.amazonaws.com/key` internally before
+      being passed to `H5Fopen` with a ROS3-configured FAPL.
+      `objc/check-deps.sh` probes the linked `libhdf5.so` for
+      `H5Pset_fapl_ros3` and reports ROS3 availability in the
+      pre-build check. `objc/Tests/TestCloudAccess.m` covers
+      `+isS3Supported` and the unresolvable-bucket error path (no
+      network required). Options 2 (custom VFD) and 3
+      (download-then-open fallback) remain deferred — option 1
+      covers S3 and any S3-compatible endpoint (MinIO, LocalStack,
+      etc.) which is the overwhelmingly common cloud topology.
 
       The on-disk `.mpgo` layout is unchanged by any of these, so
       the milestone is a *transport* concern, not a *format* one.

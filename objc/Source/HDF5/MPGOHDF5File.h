@@ -30,6 +30,45 @@
 /** Open an existing HDF5 file at path read-only. */
 + (instancetype)openReadOnlyAtPath:(NSString *)path error:(NSError **)error;
 
+/**
+ * Open a remote .mpgo file hosted on S3 (or any S3-compatible endpoint
+ * — MinIO, LocalStack, etc.) read-only via libhdf5's ROS3 VFD.
+ *
+ * WORKPLAN v0.3 deferred follow-up (M20). Requires libhdf5 to have
+ * been built with --with-ros3-vfd (apt's libhdf5 ships it enabled;
+ * custom builds may not — use +isS3Supported to probe at runtime).
+ *
+ * @param url S3 URL in either canonical form (``s3://bucket/key``) or
+ *            virtual-hosted style HTTPS (``https://bucket.s3.region.amazonaws.com/key``).
+ *            The canonical form is translated to a region-aware HTTPS URL
+ *            internally.
+ * @param awsRegion e.g. ``@"us-east-1"``. Pass nil to fall back to the
+ *                  ``AWS_REGION`` environment variable or ``us-east-1``.
+ * @param accessKeyId AWS access key; pass nil for anonymous (public
+ *                    bucket) access. Prefer the ``AWS_ACCESS_KEY_ID``
+ *                    env var when building credentials at deploy time.
+ * @param secretAccessKey AWS secret; pass nil for anonymous access.
+ * @param sessionToken  Optional STS session token; pass nil if not using
+ *                      temporary credentials.
+ * @param error populated on failure.
+ *
+ * Security: credentials are passed through as-is to libhdf5 which
+ * stores them in the file-access property list for the lifetime of
+ * the opened handle. Do not pass credentials a caller would not
+ * otherwise feel comfortable exposing to the HDF5 process.
+ */
++ (instancetype)openS3URL:(NSString *)url
+                    region:(NSString *)awsRegion
+              accessKeyId:(NSString *)accessKeyId
+          secretAccessKey:(NSString *)secretAccessKey
+             sessionToken:(NSString *)sessionToken
+                     error:(NSError **)error;
+
+/** Returns YES if the linked libhdf5 was built with ROS3 VFD support.
+ *  NO means +openS3URL: will fail with MPGOErrorFileOpen and callers
+ *  should fall back to the download-then-open path. */
++ (BOOL)isS3Supported;
+
 /** The root group ("/") of this file. Lazily constructed. */
 - (MPGOHDF5Group *)rootGroup;
 

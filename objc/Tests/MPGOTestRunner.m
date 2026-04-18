@@ -31,6 +31,7 @@ extern void testMilestone28(void);
 extern void testMilestone29(void);
 extern void testMilestone39(void);
 extern void testSqliteProvider(void);
+extern void testCloudAccess(void);
 
 int main(int argc, const char *argv[])
 {
@@ -154,6 +155,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 41: SQLite storage provider")
             testSqliteProvider();
         END_SET("Milestone 41: SQLite storage provider")
+
+        START_SET("Cloud access (ROS3 / S3)")
+            testCloudAccess();
+        END_SET("Cloud access (ROS3 / S3)")
     }
     return 0;
 }

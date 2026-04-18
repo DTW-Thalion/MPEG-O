@@ -116,6 +116,20 @@ for cand in /usr/include/hdf5.h \
 done
 if [ -n "$hdf5_hdr" ]; then
     ok "libhdf5 headers ($hdf5_hdr)"
+    # Probe libhdf5 for ROS3 VFD (cloud-native .mpgo access). Apt's
+    # libhdf5 ships ROS3 enabled; custom builds may not.
+    hdf5_lib=""
+    for cand in /usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so \
+                /usr/lib/libhdf5.so \
+                /usr/local/lib/libhdf5.so; do
+        if [ -f "$cand" ]; then hdf5_lib="$cand"; break; fi
+    done
+    if [ -n "$hdf5_lib" ] && command -v nm >/dev/null 2>&1 &&
+        nm -D "$hdf5_lib" 2>/dev/null | grep -q " H5Pset_fapl_ros3"; then
+        say "       ROS3 VFD: available (cloud-native S3 reads supported)"
+    else
+        note "libhdf5 built without ROS3 VFD — +openS3URL: will fail"
+    fi
 else
     fail "libhdf5 headers not found (install libhdf5-dev)"
 fi
