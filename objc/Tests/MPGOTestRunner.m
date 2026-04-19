@@ -33,6 +33,7 @@ extern void testMilestone39(void);
 extern void testMilestone49(void);
 extern void testMilestone52(void);
 extern void testMilestone53(void);
+extern void testImzMLReader(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
@@ -189,6 +190,10 @@ int main(int argc, const char *argv[])
         START_SET("M53: ObjC Bruker TDF reader")
             testMilestone53();
         END_SET("M53: ObjC Bruker TDF reader")
+
+        START_SET("M59: ObjC imzML reader")
+            testImzMLReader();
+        END_SET("M59: ObjC imzML reader")
     }
     return 0;
 }
