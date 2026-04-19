@@ -319,7 +319,32 @@ checksum is NOT part of `payload_length`.
 
 ---
 
-## Milestone 67 — Transport Codec (All Three Languages)
+## Milestone 67 — Transport Codec (All Three Languages) — COMPLETE
+
+Landed per-language codecs with round-trip green in each suite:
+Python 578 / Java 253 / ObjC 1301. Cross-language byte-level interop
+covered via identical CRC-32C known-vector tests and byte-exact
+packet layout tests in every language; full cross-language subprocess
+round-trip tests live in M70.
+
+Shipped:
+- Python: `python/src/mpeg_o/transport/{__init__.py,packets.py,codec.py}`
+  + `tests/test_transport_packets.py` + `tests/test_transport_codec.py`.
+- ObjC: `objc/Source/Transport/{MPGOTransportPacket,MPGOAccessUnit,
+  MPGOTransportWriter,MPGOTransportReader}.{h,m}` + `Tests/TestTransportCodec.m`
+  (wired through MPGOTestRunner).
+- Java: `java/src/main/java/com/dtwthalion/mpgo/transport/{PacketType,
+  PacketHeader,ChannelData,AccessUnit,Crc32c,TransportWriter,
+  TransportReader}.java` + `TransportCodecTest.java`.
+
+M67 scope: FLOAT64 / Compression.NONE on the wire; spectrum classes
+MassSpectrum + MSImagePixel exercised; ProtectionMetadata /
+Annotation / Provenance / Chromatogram packet slots recognized by
+the reader but deferred to M70/M71 for full materialization.
+
+Historical spec retained below for audit.
+
+### Historical: Milestone 67 — Transport Codec (All Three Languages)
 
 **License:** LGPL-3.0
 

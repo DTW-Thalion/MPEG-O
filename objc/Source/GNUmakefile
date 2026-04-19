@@ -73,7 +73,11 @@ libMPGO_HEADER_FILES = \
 	Providers/MPGOHDF5Provider.h \
 	Providers/MPGOMemoryProvider.h \
 	Providers/MPGOSqliteProvider.h \
-	Providers/MPGOZarrProvider.h
+	Providers/MPGOZarrProvider.h \
+	Transport/MPGOTransportPacket.h \
+	Transport/MPGOAccessUnit.h \
+	Transport/MPGOTransportWriter.h \
+	Transport/MPGOTransportReader.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -137,7 +141,11 @@ libMPGO_OBJC_FILES = \
 	Providers/MPGOHDF5Provider.m \
 	Providers/MPGOMemoryProvider.m \
 	Providers/MPGOSqliteProvider.m \
-	Providers/MPGOZarrProvider.m
+	Providers/MPGOZarrProvider.m \
+	Transport/MPGOTransportPacket.m \
+	Transport/MPGOAccessUnit.m \
+	Transport/MPGOTransportWriter.m \
+	Transport/MPGOTransportReader.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 

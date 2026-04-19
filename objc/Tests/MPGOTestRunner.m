@@ -45,6 +45,7 @@ extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
 extern void testCipherSuite(void);
 extern void testNdDatasetCrossBackend(void);
+extern void testTransportCodec(void);
 
 int main(int argc, const char *argv[])
 {
@@ -224,6 +225,10 @@ int main(int argc, const char *argv[])
         START_SET("mzTab writer (v0.9+)")
             testMzTabWriter();
         END_SET("mzTab writer (v0.9+)")
+
+        START_SET("M67: transport codec (v0.10)")
+            testTransportCodec();
+        END_SET("M67: transport codec (v0.10)")
     }
     return 0;
 }
