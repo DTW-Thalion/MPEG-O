@@ -33,7 +33,11 @@ from mpeg_o import SpectralDataset
 from mpeg_o.exporters import mzml as mzml_writer
 from mpeg_o.importers import mzml as mzml_reader
 
-from _provider_matrix import PROVIDERS as _PROVIDERS, maybe_skip_provider as _maybe_skip_provider
+from _provider_matrix import (
+    PROVIDERS as _PROVIDERS,
+    maybe_skip_provider as _maybe_skip_provider,
+    provider_url as _provider_url,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -243,11 +247,17 @@ def zlib_compressed_mzml(tmp_path: Path) -> tuple[Path, Path]:
 # Round-trip helpers.
 # --------------------------------------------------------------------------- #
 
-def _import_export(mzml_path: Path, mpgo_path: Path, out_mzml: Path) -> tuple:
-    """mzML → .mpgo → mzML. Returns (original_result, roundtrip_result)."""
+def _import_export(
+    mzml_path: Path,
+    mpgo_url: str,
+    out_mzml: Path,
+    *,
+    provider: str = "hdf5",
+) -> tuple:
+    """mzML → .mpgo (on ``provider``) → mzML. Returns (original, roundtrip)."""
     original = mzml_reader.read(mzml_path)
-    original.to_mpgo(mpgo_path)
-    with SpectralDataset.open(mpgo_path) as ds:
+    original.to_mpgo(mpgo_url, provider=provider)
+    with SpectralDataset.open(mpgo_url) as ds:
         mzml_writer.write_dataset(ds, out_mzml, zlib_compression=False)
     roundtrip = mzml_reader.read(out_mzml)
     return original, roundtrip
@@ -260,9 +270,9 @@ def _import_export(mzml_path: Path, mpgo_path: Path, out_mzml: Path) -> tuple:
 @pytest.mark.parametrize("provider", _PROVIDERS)
 def test_mzml_full_roundtrip_synthetic(provider: str, tiny_synthetic_mzml: Path, tmp_path: Path) -> None:
     _maybe_skip_provider(provider)
-    mpgo = tmp_path / "rt.mpgo"
+    mpgo = _provider_url(provider, tmp_path, "rt")
     out = tmp_path / "rt.mzML"
-    original, roundtrip = _import_export(tiny_synthetic_mzml, mpgo, out)
+    original, roundtrip = _import_export(tiny_synthetic_mzml, mpgo, out, provider=provider)
 
     assert len(roundtrip.ms_spectra) == len(original.ms_spectra) == 3
 
@@ -288,9 +298,9 @@ def test_mzml_roundtrip_pinned_psi_reference(
     """
     _maybe_skip_provider(provider)
     src = downloaded_fixture("tiny_pwiz_mzml")
-    mpgo = tmp_path / "psi.mpgo"
+    mpgo = _provider_url(provider, tmp_path, "psi")
     out = tmp_path / "psi.mzML"
-    original, roundtrip = _import_export(src, mpgo, out)
+    original, roundtrip = _import_export(src, mpgo, out, provider=provider)
     assert len(roundtrip.ms_spectra) == len(original.ms_spectra)
     assert len(roundtrip.ms_spectra) > 0
 

@@ -23,10 +23,35 @@ Variable-length strings inside **compound datasets** use
 from __future__ import annotations
 
 import json
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Sequence, Union
 
 import h5py
 import numpy as np
+
+# v0.9 M64.5: the IO helpers below accept either a raw h5py object
+# (legacy, byte-parity path) or a StorageGroup / StorageDataset from
+# the provider abstraction. For HDF5-backed providers we unwrap back
+# to h5py so on-disk layout is unchanged. For Memory/SQLite/Zarr the
+# protocol methods are used.
+from .providers.base import StorageDataset, StorageGroup
+
+
+# Any object the helpers know how to read/write against.
+_IOTarget = Union[h5py.HLObject, StorageGroup, StorageDataset]
+
+
+def _unwrap_to_h5py(obj: _IOTarget) -> h5py.HLObject | None:
+    """Return the native h5py object for HDF5-backed StorageGroup /
+    StorageDataset values; ``None`` for non-HDF5 providers. Leaves a
+    raw h5py input unchanged."""
+    if isinstance(obj, (StorageGroup, StorageDataset)):
+        # Hdf5Provider's _Group / _Dataset expose the underlying h5py
+        # object as ``_grp`` / ``_ds`` respectively. Non-HDF5 providers
+        # don't have these attributes.
+        native = getattr(obj, "_grp", None) or getattr(obj, "_ds", None)
+        return native
+    return obj
+
 
 # ------------------------------------------------------------------ attrs ---
 
@@ -36,12 +61,18 @@ def _as_bytes(value: str) -> bytes:
     return value.encode("utf-8") if value else b""
 
 
-def write_fixed_string_attr(obj: h5py.HLObject, name: str, value: str) -> None:
+def write_fixed_string_attr(obj: _IOTarget, name: str, value: str) -> None:
     """Write a fixed-length NULLTERM string attribute matching ObjC layout.
 
     If the attribute already exists it is deleted and recreated, because the
-    size of an existing attribute cannot be changed in place.
+    size of an existing attribute cannot be changed in place. Non-HDF5
+    providers store the value via :meth:`StorageGroup.set_attribute`
+    (byte layout is provider-specific there).
     """
+    native = _unwrap_to_h5py(obj)
+    if native is None:
+        obj.set_attribute(name, value)
+        return
     data = _as_bytes(value)
     size = len(data) + 1  # reserve the byte h5py insists on for NULLTERM
     tid = h5py.h5t.C_S1.copy()
@@ -49,23 +80,29 @@ def write_fixed_string_attr(obj: h5py.HLObject, name: str, value: str) -> None:
     tid.set_strpad(h5py.h5t.STR_NULLTERM)
     space = h5py.h5s.create(h5py.h5s.SCALAR)
     nbytes = name.encode("utf-8")
-    if h5py.h5a.exists(obj.id, nbytes):
-        h5py.h5a.delete(obj.id, nbytes)
-    aid = h5py.h5a.create(obj.id, nbytes, tid, space)
+    if h5py.h5a.exists(native.id, nbytes):
+        h5py.h5a.delete(native.id, nbytes)
+    aid = h5py.h5a.create(native.id, nbytes, tid, space)
     padded = data + b"\x00"
     buf = np.frombuffer(padded, dtype="|S%d" % size).copy()
     aid.write(buf)
     aid.close()
 
 
-def read_string_attr(obj: h5py.HLObject, name: str, default: str | None = None) -> str | None:
+def read_string_attr(obj: _IOTarget, name: str, default: str | None = None) -> str | None:
     """Read a string attribute, tolerating bytes / numpy scalar forms.
 
     Returns ``default`` if the attribute is absent.
     """
-    if name not in obj.attrs:
-        return default
-    raw = obj.attrs[name]
+    native = _unwrap_to_h5py(obj)
+    if native is None:
+        if not obj.has_attribute(name):
+            return default
+        raw = obj.get_attribute(name)
+    else:
+        if name not in native.attrs:
+            return default
+        raw = native.attrs[name]
     if isinstance(raw, bytes):
         return raw.decode("utf-8")
     if isinstance(raw, np.bytes_):
@@ -84,14 +121,23 @@ def read_string_attr_from_scalar(value: Any) -> str:
     return str(value)
 
 
-def write_int_attr(obj: h5py.HLObject, name: str, value: int, dtype: str = "<i8") -> None:
-    obj.attrs.create(name, np.array(value, dtype=dtype))
+def write_int_attr(obj: _IOTarget, name: str, value: int, dtype: str = "<i8") -> None:
+    native = _unwrap_to_h5py(obj)
+    if native is None:
+        obj.set_attribute(name, int(value))
+        return
+    native.attrs.create(name, np.array(value, dtype=dtype))
 
 
-def read_int_attr(obj: h5py.HLObject, name: str, default: int | None = None) -> int | None:
-    if name not in obj.attrs:
+def read_int_attr(obj: _IOTarget, name: str, default: int | None = None) -> int | None:
+    native = _unwrap_to_h5py(obj)
+    if native is None:
+        if not obj.has_attribute(name):
+            return default
+        return int(obj.get_attribute(name))
+    if name not in native.attrs:
         return default
-    return int(obj.attrs[name])
+    return int(native.attrs[name])
 
 
 # ------------------------------------------------------ signal channels ---
@@ -116,14 +162,14 @@ def _lz4_filter_kwargs() -> dict[str, Any]:
 
 
 def write_signal_channel(
-    group: h5py.Group,
+    group: _IOTarget,
     name: str,
     data: np.ndarray,
     chunk_size: int = DEFAULT_SIGNAL_CHUNK,
     compression_level: int = 6,
     *,
     compression: str = "gzip",
-) -> h5py.Dataset:
+) -> Any:
     """Write a 1-D signal channel with the chosen compression codec.
 
     ``compression`` selects one of:
@@ -132,7 +178,8 @@ def write_signal_channel(
       ``MPGOCompressionZlib`` default with ``compression_level``
       mapping to the deflate level.
     - ``"lz4"`` — HDF5 filter 32004 via ``hdf5plugin``. Raises
-      ``RuntimeError`` when the plugin isn't installed.
+      ``RuntimeError`` when the plugin isn't installed (HDF5 only —
+      non-HDF5 providers fall back to no compression).
     - ``"none"`` — chunked but uncompressed.
 
     Chunk size is clamped to ``len(data)`` when the dataset is shorter
@@ -141,26 +188,61 @@ def write_signal_channel(
     if data.ndim != 1:
         raise ValueError(f"signal channel {name!r} must be 1-D, got shape={data.shape}")
     length = data.shape[0]
+    native = _unwrap_to_h5py(group)
+    if native is None:
+        # Non-HDF5 provider: use the StorageGroup protocol.
+        from .enums import Compression, Precision
+        precision = _precision_from_dtype(data.dtype)
+        codec = {
+            "gzip": Compression.ZLIB,
+            "lz4": Compression.LZ4,
+            "none": Compression.NONE,
+        }.get(compression, Compression.ZLIB)
+        chunk = min(chunk_size, length) if length else 0
+        ds = group.create_dataset(
+            name, precision, length,
+            chunk_size=chunk,
+            compression=codec,
+            compression_level=compression_level,
+        )
+        if length:
+            ds.write(np.ascontiguousarray(data))
+        return ds
+    # HDF5 legacy fast path — byte-parity preserved.
     if length == 0:
-        return group.create_dataset(name, data=data)
+        return native.create_dataset(name, data=data)
     chunks = (min(chunk_size, length),)
     if compression == "gzip":
-        return group.create_dataset(
+        return native.create_dataset(
             name, data=data, chunks=chunks,
             compression="gzip", compression_opts=compression_level,
         )
     if compression == "lz4":
-        return group.create_dataset(
+        return native.create_dataset(
             name, data=data, chunks=chunks, **_lz4_filter_kwargs(),
         )
     if compression == "none":
-        return group.create_dataset(name, data=data, chunks=chunks)
+        return native.create_dataset(name, data=data, chunks=chunks)
     raise ValueError(f"unknown compression codec {compression!r}")
 
 
-def read_signal_channel(group: h5py.Group, name: str) -> np.ndarray:
+def _precision_from_dtype(dt: np.dtype) -> Any:
+    """Map a numpy dtype to the Precision enum used by StorageGroup."""
+    from .enums import Precision
+    by_str = {
+        "<f4": Precision.FLOAT32, "<f8": Precision.FLOAT64,
+        "<i4": Precision.INT32,  "<i8": Precision.INT64,
+        "<u4": Precision.UINT32,
+    }
+    return by_str.get(dt.str, Precision.FLOAT64)
+
+
+def read_signal_channel(group: _IOTarget, name: str) -> np.ndarray:
     """Read a signal channel into a numpy array."""
-    return group[name][()]
+    native = _unwrap_to_h5py(group)
+    if native is None:
+        return np.asarray(group.open_dataset(name).read())
+    return native[name][()]
 
 
 # ----------------------------------------------------- compound datasets ---
@@ -178,14 +260,14 @@ def vl_str() -> np.dtype:
 
 
 def write_compound_dataset(
-    group: h5py.Group,
+    group: _IOTarget,
     name: str,
     records: Sequence[dict[str, Any]],
     fields: Sequence[tuple[str, Any]],
     compression_level: int = 6,
     *,
     align: bool = True,
-) -> h5py.Dataset:
+) -> Any:
     """Write a 1-D compound dataset.
 
     ``fields`` is an ordered sequence of ``(name, numpy_dtype)`` pairs. Use
@@ -198,6 +280,30 @@ def write_compound_dataset(
     densely packed compound to a padded one by field name, so the
     alignment must be correct on disk.
     """
+    native = _unwrap_to_h5py(group)
+    if native is None:
+        # Non-HDF5 provider: translate field tuples to CompoundField
+        # descriptors and route through StorageGroup.
+        from .providers.base import CompoundField, CompoundFieldKind
+        compound_fields: list[CompoundField] = []
+        for fname, ftype in fields:
+            if h5py.check_string_dtype(ftype) is not None:
+                kind = CompoundFieldKind.VL_STRING
+            else:
+                dt_str = np.dtype(ftype).str
+                if dt_str == "<u4":
+                    kind = CompoundFieldKind.UINT32
+                elif dt_str == "<i8":
+                    kind = CompoundFieldKind.INT64
+                elif dt_str == "<f8":
+                    kind = CompoundFieldKind.FLOAT64
+                else:
+                    kind = CompoundFieldKind.FLOAT64
+            compound_fields.append(CompoundField(name=fname, kind=kind))
+        ds = group.create_compound_dataset(name, compound_fields, len(records))
+        if records:
+            ds.write(list(records))
+        return ds
     dtype = np.dtype([(fname, ftype) for fname, ftype in fields], align=align)
     arr = np.zeros(len(records), dtype=dtype)
     for i, rec in enumerate(records):
@@ -207,10 +313,10 @@ def write_compound_dataset(
     chunks: tuple[int, ...] | None
     if n == 0:
         chunks = None
-        ds = group.create_dataset(name, data=arr, dtype=dtype)
+        ds = native.create_dataset(name, data=arr, dtype=dtype)
     else:
         chunks = (min(DEFAULT_INDEX_CHUNK, n),)
-        ds = group.create_dataset(
+        ds = native.create_dataset(
             name,
             data=arr,
             dtype=dtype,
@@ -221,10 +327,13 @@ def write_compound_dataset(
     return ds
 
 
-def read_compound_dataset(group: h5py.Group, name: str) -> list[dict[str, Any]]:
+def read_compound_dataset(group: _IOTarget, name: str) -> list[dict[str, Any]]:
     """Read a compound dataset into a list of dicts. Bytes VL strings are
     decoded to ``str``."""
-    ds = group[name]
+    native = _unwrap_to_h5py(group)
+    if native is None:
+        return list(group.open_dataset(name).read_rows())
+    ds = native[name]
     arr = ds[()]
     out: list[dict[str, Any]] = []
     for row in arr:
@@ -258,13 +367,13 @@ VERSION_ATTR = "mpeg_o_format_version"
 LEGACY_VERSION_ATTR = "mpeg_o_version"
 
 
-def write_feature_flags(root: h5py.Group, version: str, features: Iterable[str]) -> None:
+def write_feature_flags(root: _IOTarget, version: str, features: Iterable[str]) -> None:
     """Write ``@mpeg_o_format_version`` and ``@mpeg_o_features`` on ``/``."""
     write_fixed_string_attr(root, VERSION_ATTR, version)
     write_fixed_string_attr(root, FEATURES_ATTR, json.dumps(list(features)))
 
 
-def read_feature_flags(root: h5py.Group) -> tuple[str, list[str]]:
+def read_feature_flags(root: _IOTarget) -> tuple[str, list[str]]:
     """Read the pair with v0.1 legacy fallback.
 
     Returns ``("1.0.0", [])`` for files that carry only ``@mpeg_o_version``.
@@ -287,6 +396,9 @@ def read_feature_flags(root: h5py.Group) -> tuple[str, list[str]]:
     return (version or "1.0.0"), [str(f) for f in features]
 
 
-def is_legacy_v1(root: h5py.Group) -> bool:
+def is_legacy_v1(root: _IOTarget) -> bool:
     """A file is v0.1-legacy when it has no ``@mpeg_o_features`` attribute."""
-    return FEATURES_ATTR not in root.attrs
+    native = _unwrap_to_h5py(root)
+    if native is None:
+        return not root.has_attribute(FEATURES_ATTR)
+    return FEATURES_ATTR not in native.attrs

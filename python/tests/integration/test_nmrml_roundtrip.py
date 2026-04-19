@@ -41,7 +41,11 @@ from mpeg_o.importers import nmrml as nmrml_reader
 from mpeg_o.nmr_spectrum import NMRSpectrum
 from mpeg_o.signal_array import SignalArray
 
-from _provider_matrix import PROVIDERS as _PROVIDERS, maybe_skip_provider as _maybe_skip_provider
+from _provider_matrix import (
+    PROVIDERS as _PROVIDERS,
+    maybe_skip_provider as _maybe_skip_provider,
+    provider_url as _provider_url,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -128,8 +132,8 @@ def test_nmrml_full_roundtrip(provider: str, synthetic_nmrml, tmp_path: Path) ->
         original.nmr_spectra[0].mz_or_chemical_shift, expected_cs, rtol=1e-9, atol=0,
     )
 
-    mpgo = tmp_path / "rt.nmrml.mpgo"
-    original.to_mpgo(mpgo)
+    mpgo = _provider_url(provider, tmp_path, "rt.nmrml")
+    original.to_mpgo(mpgo, provider=provider)
 
     with SpectralDataset.open(mpgo) as ds:
         run = ds.ms_runs["nmr_run"]  # write_minimal places NMR runs in ms_runs (see test_importers)

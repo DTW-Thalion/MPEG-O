@@ -250,40 +250,33 @@ class AcquisitionRun:
 
     @classmethod
     def open(cls, group: StorageGroup | "h5py.Group", name: str) -> "AcquisitionRun":
-        """Open a run from a storage-provider group (v0.7 M44).
+        """Open a run from a storage-provider group (v0.7 M44, v0.9 M64.5).
 
         Accepts either a :class:`StorageGroup` (protocol path) or an
         :class:`h5py.Group` (legacy path — wrapped transparently via
-        :class:`~mpeg_o.providers.hdf5._Group`). The constructor
-        preserves the storage-provider type on the ``group`` field so
-        hot-path spectrum reads route through
-        :meth:`StorageDataset.read` without touching h5py directly.
+        :class:`~mpeg_o.providers.hdf5._Group`). v0.9 M64.5 made every
+        cold-path read route through the StorageGroup protocol so
+        Memory / SQLite / Zarr backends work without touching h5py.
         """
-        # v0.7 M44: allow both shapes. Cold-path attribute helpers
-        # still use the h5py wrapper, so retain the native handle for
-        # them.
         sgroup = _wrap_hdf5_group(group)
-        h5group = _native_h5py(sgroup)
 
-        mode_raw = io.read_int_attr(h5group, "acquisition_mode", default=0) or 0
+        mode_raw = io.read_int_attr(sgroup, "acquisition_mode", default=0) or 0
         spectrum_class = io.read_string_attr(
-            h5group, "spectrum_class", default="MPGOMassSpectrum"
+            sgroup, "spectrum_class", default="MPGOMassSpectrum"
         ) or "MPGOMassSpectrum"
-        nucleus = io.read_string_attr(h5group, "nucleus_type", default="") or ""
-        prov = io.read_string_attr(h5group, "provenance_json", default="") or ""
+        nucleus = io.read_string_attr(sgroup, "nucleus_type", default="") or ""
+        prov = io.read_string_attr(sgroup, "provenance_json", default="") or ""
 
-        idx = SpectrumIndex.read(h5group["spectrum_index"])
+        idx = SpectrumIndex.read(sgroup.open_group("spectrum_index"))
 
-        sig_group = h5group["signal_channels"]
+        sig_group = sgroup.open_group("signal_channels")
         channel_names_raw = io.read_string_attr(
             sig_group, "channel_names", default="mz,intensity"
         ) or "mz,intensity"
         channel_names = tuple(c for c in channel_names_raw.split(",") if c)
 
-        cfg_group = h5group.get("instrument_config")
-        if cfg_group is None:
-            config = InstrumentConfig()
-        else:
+        if sgroup.has_child("instrument_config"):
+            cfg_group = sgroup.open_group("instrument_config")
             config = InstrumentConfig(
                 manufacturer=io.read_string_attr(cfg_group, "manufacturer", "") or "",
                 model=io.read_string_attr(cfg_group, "model", "") or "",
@@ -292,6 +285,8 @@ class AcquisitionRun:
                 analyzer_type=io.read_string_attr(cfg_group, "analyzer_type", "") or "",
                 detector_type=io.read_string_attr(cfg_group, "detector_type", "") or "",
             )
+        else:
+            config = InstrumentConfig()
 
         # M21: detect Numpress-delta channels via the
         # ``<chName>_numpress_fixed_point`` attribute on the
@@ -300,13 +295,13 @@ class AcquisitionRun:
         numpress_channels: dict[str, np.ndarray] = {}
         for chName in channel_names:
             scale_attr = f"{chName}_numpress_fixed_point"
-            if scale_attr in sig_group.attrs:
+            if sig_group.has_attribute(scale_attr):
                 from ._numpress import decode as _np_decode
                 ds_name = f"{chName}_values"
-                if ds_name not in sig_group:
+                if not sig_group.has_child(ds_name):
                     continue
-                raw = sig_group[ds_name][()]
-                scale = int(sig_group.attrs[scale_attr])
+                raw = sig_group.open_dataset(ds_name).read()
+                scale = int(sig_group.get_attribute(scale_attr))
                 numpress_channels[chName] = _np_decode(raw, scale)
 
         return cls(
@@ -319,7 +314,7 @@ class AcquisitionRun:
             instrument_config=config,
             nucleus_type=nucleus,
             provenance_json=prov,
-            chromatograms=_read_chromatograms(h5group),
+            chromatograms=_read_chromatograms(sgroup),
             _numpress_channels=numpress_channels,
         )
 
@@ -620,26 +615,29 @@ def _safe_json_dict(value: str | dict) -> dict[str, object]:
 # ----------------------------------------------------- M24 chromatograms ---
 
 
-def _read_chromatograms(run_group: h5py.Group) -> list[Chromatogram]:
+def _read_chromatograms(run_group) -> list[Chromatogram]:
     """Read ``<run>/chromatograms/`` into a list of :class:`Chromatogram`.
 
-    Returns an empty list when the group is absent (v0.3 backward compat).
+    Accepts either an ``h5py.Group`` or a :class:`StorageGroup`
+    (v0.9 M64.5). Returns an empty list when the group is absent
+    (v0.3 backward compat).
     """
-    if "chromatograms" not in run_group:
+    sgroup = _wrap_hdf5_group(run_group)
+    if not sgroup.has_child("chromatograms"):
         return []
-    g = run_group["chromatograms"]
-    count = int(g.attrs.get("count", 0))
+    g = sgroup.open_group("chromatograms")
+    count = int(io.read_int_attr(g, "count", default=0) or 0)
     if count <= 0:
         return []
-    time_all = g["time_values"][()]
-    int_all  = g["intensity_values"][()]
-    idx = g["chromatogram_index"]
-    offsets       = idx["offsets"][()]
-    lengths       = idx["lengths"][()]
-    types         = idx["types"][()]
-    target_mzs    = idx["target_mzs"][()]
-    precursor_mzs = idx["precursor_mzs"][()]
-    product_mzs   = idx["product_mzs"][()]
+    time_all = np.asarray(g.open_dataset("time_values").read())
+    int_all  = np.asarray(g.open_dataset("intensity_values").read())
+    idx = g.open_group("chromatogram_index")
+    offsets       = np.asarray(idx.open_dataset("offsets").read())
+    lengths       = np.asarray(idx.open_dataset("lengths").read())
+    types         = np.asarray(idx.open_dataset("types").read())
+    target_mzs    = np.asarray(idx.open_dataset("target_mzs").read())
+    precursor_mzs = np.asarray(idx.open_dataset("precursor_mzs").read())
+    product_mzs   = np.asarray(idx.open_dataset("product_mzs").read())
 
     from .signal_array import SignalArray
 
@@ -662,17 +660,63 @@ def _read_chromatograms(run_group: h5py.Group) -> list[Chromatogram]:
 
 
 def write_chromatograms_to_run_group(
-    run_group: h5py.Group, chromatograms: list[Chromatogram]
+    run_group, chromatograms: list[Chromatogram]
 ) -> None:
     """Write ``chromatograms`` under ``<run>/chromatograms/``.
 
     Does nothing when the list is empty so v0.3 readers continue to see
-    the absence of the group. Layout mirrors the ObjC writer for byte
-    parity in the cross-compat tests.
+    the absence of the group. v0.9 M64.5: the ``run_group`` argument
+    accepts either an ``h5py.Group`` or a
+    :class:`~mpeg_o.providers.base.StorageGroup`. The HDF5 path keeps
+    the legacy byte layout; non-HDF5 providers route through
+    :meth:`StorageGroup.create_dataset` so the same logical data lands
+    in Memory / SQLite / Zarr backends.
     """
     if not chromatograms:
         return
-    g = run_group.create_group("chromatograms")
+    native = getattr(run_group, "_grp", None)
+    if isinstance(run_group, StorageGroup) and native is None:
+        # Non-HDF5 provider — write through the protocol.
+        from . import _hdf5_io as _io
+        from .enums import Precision
+        g = run_group.create_group("chromatograms")
+        _io.write_int_attr(g, "count", len(chromatograms))
+        total = sum(len(c.time_array) for c in chromatograms)
+        time_all = np.empty(total, dtype="<f8")
+        int_all  = np.empty(total, dtype="<f8")
+        offsets  = np.empty(len(chromatograms), dtype="<i8")
+        lengths  = np.empty(len(chromatograms), dtype="<u4")
+        types    = np.empty(len(chromatograms), dtype="<i4")
+        targets  = np.empty(len(chromatograms), dtype="<f8")
+        precs    = np.empty(len(chromatograms), dtype="<f8")
+        prods    = np.empty(len(chromatograms), dtype="<f8")
+        cursor = 0
+        for i, c in enumerate(chromatograms):
+            n = len(c.time_array)
+            time_all[cursor:cursor+n] = c.time_array.data.astype("<f8", copy=False)
+            int_all [cursor:cursor+n] = c.intensity_array.data.astype("<f8", copy=False)
+            offsets[i] = cursor
+            lengths[i] = n
+            types[i]   = int(c.chromatogram_type)
+            targets[i] = c.target_mz
+            precs[i]   = c.precursor_mz
+            prods[i]   = c.product_mz
+            cursor += n
+        g.create_dataset("time_values", Precision.FLOAT64, total).write(time_all)
+        g.create_dataset("intensity_values", Precision.FLOAT64, total).write(int_all)
+        idx = g.create_group("chromatogram_index")
+        n_chrom = len(chromatograms)
+        idx.create_dataset("offsets",       Precision.INT64,   n_chrom).write(offsets)
+        idx.create_dataset("lengths",       Precision.UINT32,  n_chrom).write(lengths)
+        idx.create_dataset("types",         Precision.INT32,   n_chrom).write(types)
+        idx.create_dataset("target_mzs",    Precision.FLOAT64, n_chrom).write(targets)
+        idx.create_dataset("precursor_mzs", Precision.FLOAT64, n_chrom).write(precs)
+        idx.create_dataset("product_mzs",   Precision.FLOAT64, n_chrom).write(prods)
+        return
+
+    # HDF5 fast path (preserves byte parity with pre-M64.5 files).
+    target = native if native is not None else run_group
+    g = target.create_group("chromatograms")
     g.attrs["count"] = np.int64(len(chromatograms))
 
     total = sum(len(c.time_array) for c in chromatograms)

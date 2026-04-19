@@ -114,7 +114,19 @@ class ImportResult:
             )
         return runs
 
-    def to_mpgo(self, path: str | Path, features: list[str] | None = None) -> Path:
+    def to_mpgo(
+        self,
+        path: str | Path,
+        features: list[str] | None = None,
+        *,
+        provider: str = "hdf5",
+    ) -> Path:
+        """Persist the parsed result as a ``.mpgo`` container.
+
+        v0.9 M64.5: ``provider`` selects the storage backend
+        (``"hdf5"``, ``"memory"``, ``"sqlite"``, ``"zarr"``). Passed
+        through to :meth:`SpectralDataset.write_minimal` unchanged.
+        """
         runs = self.build_runs()
         return SpectralDataset.write_minimal(
             path,
@@ -125,6 +137,7 @@ class ImportResult:
             quantifications=self.quantifications or None,
             provenance=self.provenance or None,
             features=features,
+            provider=provider,
         )
 
 

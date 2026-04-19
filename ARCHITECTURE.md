@@ -163,22 +163,26 @@ cloud access and ObjC ROS3 are deferred to v0.7+ (see
 
 ### Caller refactor status
 
-v0.6 ships the abstraction, both providers, **and the top-level
-entry-point refactor**:
+v0.6 shipped the abstraction and the entry-point refactor for HDF5;
+v0.9 M64.5 phase A wired bulk reads + writes through the protocol so
+Memory / SQLite / Zarr backends round-trip end-to-end:
 
 | Class | Status |
 |---|---|
-| `SpectralDataset.open` / `.create` / `.write_minimal` | **Provider-aware** — construct `Hdf5Provider` internally, exposed on `dataset.provider` |
-| `Hdf5Provider.native_handle()` | Returns underlying `h5py.File` / `Hdf5File` / `MPGOHDF5File` for byte-level code |
-| `AcquisitionRun`, `MSImage` signal-channel and cube writes | **Still native** — use `dataset.provider.native_handle()` |
-| `SignatureManager`, `EncryptionManager`, `KeyRotationManager`, `Anonymizer` | **Still native** — operate on HDF5 bytes directly |
-| Compound metadata write helpers | Native for now; port to `StorageGroup` covered in v0.7 |
+| `SpectralDataset.open` | **Provider-aware** — URL scheme dispatches to MemoryProvider / SqliteProvider / ZarrProvider; bare paths default to HDF5 (M64.5) |
+| `SpectralDataset.write_minimal` | **Provider-aware** — `provider=` kwarg picks backend; HDF5 fast path keeps legacy byte layout (M64.5) |
+| `_write_run` / `_write_identifications` / `_write_quantifications` / `_write_provenance` | **Provider-aware** via the StorageGroup protocol; HDF5 helpers in `_hdf5_io.py` dispatch on isinstance for byte parity (M64.5) |
+| `AcquisitionRun.open` + `_read_chromatograms` + `write_chromatograms_to_run_group` | **Provider-aware** — cold-path attribute and dataset reads go through StorageGroup primitives (M64.5) |
+| `Hdf5Provider.native_handle()` | Returns underlying `h5py.File` / `Hdf5File` / `MPGOHDF5File` for byte-level code that hasn't been ported yet |
+| `MSImage` cube writes | **Still native** — use `dataset.provider.native_handle()` (M64.5 phase B candidate) |
+| `SignatureManager`, `EncryptionManager`, `KeyRotationManager`, `Anonymizer` | **Still native** — operate on HDF5 bytes directly (M64.5 phase B) |
 
-The data model's *identity* now flows through the protocol; byte-level
-code paths continue to use HDF5 directly through the `native_handle()`
-escape hatch. A non-HDF5 provider (Zarr, SQLite) will trigger the
-next round of refactoring in v0.7 when the specific codec and
-encryption constraints of that backend become concrete.
+**Cross-provider proof.** `python/tests/integration/test_mzml_roundtrip.py`
+and `test_nmrml_roundtrip.py` parametrize over all four providers
+and round-trip mzML / nmrML through `Memory`, `SQLite`, `Zarr`
+backends in CI. The remaining "Still native" rows are tracked under
+HANDOFF M64.5 phase B; they are out of scope for v0.9.0 but unblock
+the M61 / M62 cross-provider matrices once they ship.
 
 ---
 
