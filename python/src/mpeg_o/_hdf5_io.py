@@ -283,22 +283,32 @@ def write_compound_dataset(
     native = _unwrap_to_h5py(group)
     if native is None:
         # Non-HDF5 provider: translate field tuples to CompoundField
-        # descriptors and route through StorageGroup.
+        # descriptors and route through StorageGroup. ``ftype`` may be
+        # an h5py vl-string dtype (from io.vl_str()), a numpy dtype,
+        # or a dtype string like ``"<u4"``; check_string_dtype only
+        # accepts an actual dtype, so coerce first.
         from .providers.base import CompoundField, CompoundFieldKind
         compound_fields: list[CompoundField] = []
         for fname, ftype in fields:
-            if h5py.check_string_dtype(ftype) is not None:
+            try:
+                dt = np.dtype(ftype)
+            except TypeError:
+                dt = None
+            is_vl_string = (dt is not None
+                              and h5py.check_string_dtype(dt) is not None)
+            if is_vl_string:
                 kind = CompoundFieldKind.VL_STRING
-            else:
-                dt_str = np.dtype(ftype).str
-                if dt_str == "<u4":
+            elif dt is not None:
+                if dt.str == "<u4":
                     kind = CompoundFieldKind.UINT32
-                elif dt_str == "<i8":
+                elif dt.str == "<i8":
                     kind = CompoundFieldKind.INT64
-                elif dt_str == "<f8":
+                elif dt.str == "<f8":
                     kind = CompoundFieldKind.FLOAT64
                 else:
                     kind = CompoundFieldKind.FLOAT64
+            else:
+                kind = CompoundFieldKind.FLOAT64
             compound_fields.append(CompoundField(name=fname, kind=kind))
         ds = group.create_compound_dataset(name, compound_fields, len(records))
         if records:

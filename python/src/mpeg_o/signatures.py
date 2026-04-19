@@ -268,6 +268,8 @@ def verify_storage_dataset(
     @since 0.8 (v0.8 M54.1)
     """
     from . import cipher_suite
+    if not dataset.has_attribute(SIGNATURE_ATTR):
+        return False
     stored = dataset.get_attribute(SIGNATURE_ATTR)
     if stored is None:
         return False
