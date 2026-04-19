@@ -137,33 +137,56 @@ def decrypt_bytes(
 
 
 def read_encrypted_channel(
-    channels_group: h5py.Group, channel: str, key: bytes, dtype: str = "<f8"
+    channels_group, channel: str, key: bytes, dtype: str = "<f8"
 ) -> np.ndarray:
     """Decrypt one encrypted signal channel from a ``signal_channels`` group.
 
     The plaintext is interpreted as an array of ``dtype`` (default
     little-endian float64, matching the ObjC writer). Raises ``KeyError`` if
     the channel is not encrypted in this group.
+
+    v0.9 M64.5 phase B: ``channels_group`` may be an ``h5py.Group``
+    (legacy fast path) or a :class:`StorageGroup`. The HDF5-backed
+    StorageGroup unwraps to the native h5py path; non-HDF5 providers
+    route through the protocol's ``open_dataset().read()`` and
+    ``get_attribute`` primitives.
     """
+    from .providers.base import StorageGroup
     enc_name = f"{channel}_values_encrypted"
-    if enc_name not in channels_group:
+
+    if isinstance(channels_group, StorageGroup) and getattr(channels_group, "_grp", None) is None:
+        # Non-HDF5 provider path.
+        if not channels_group.has_child(enc_name):
+            raise KeyError(f"channel {channel!r} is not encrypted under this group")
+        padded = np.asarray(channels_group.open_dataset(enc_name).read())
+        padded_bytes = padded.tobytes()
+        attr_name = f"{channel}_ciphertext_bytes"
+        if channels_group.has_attribute(attr_name):
+            ciphertext_bytes = int(channels_group.get_attribute(attr_name))
+        else:
+            ciphertext_bytes = len(padded_bytes)
+        ciphertext = padded_bytes[:ciphertext_bytes]
+        iv_arr  = np.asarray(channels_group.open_dataset(f"{channel}_iv").read())
+        tag_arr = np.asarray(channels_group.open_dataset(f"{channel}_tag").read())
+        iv = iv_arr.tobytes()[:AES_IV_LEN]
+        tag = tag_arr.tobytes()[:AES_TAG_LEN]
+        plaintext = decrypt_bytes(SealedBlob(ciphertext, iv, tag), key)
+        return np.frombuffer(plaintext, dtype=dtype).copy()
+
+    # HDF5 fast path (legacy byte parity).
+    native = getattr(channels_group, "_grp", channels_group)
+    if enc_name not in native:
         raise KeyError(f"channel {channel!r} is not encrypted under this group")
-
-    padded = channels_group[enc_name][()]
-    # The ObjC writer packs raw bytes into an int32 dataset. h5py returns a
-    # numpy int32 array; take its raw bytes.
+    padded = native[enc_name][()]
     padded_bytes = padded.tobytes()
-
     ciphertext_bytes = int(io.read_int_attr(
-        channels_group, f"{channel}_ciphertext_bytes", default=len(padded_bytes)
+        native, f"{channel}_ciphertext_bytes", default=len(padded_bytes)
     ) or len(padded_bytes))
     ciphertext = padded_bytes[:ciphertext_bytes]
-
-    iv_arr = channels_group[f"{channel}_iv"][()]
-    tag_arr = channels_group[f"{channel}_tag"][()]
+    iv_arr = native[f"{channel}_iv"][()]
+    tag_arr = native[f"{channel}_tag"][()]
     iv = iv_arr.tobytes()[:AES_IV_LEN]
     tag = tag_arr.tobytes()[:AES_TAG_LEN]
-
     plaintext = decrypt_bytes(SealedBlob(ciphertext, iv, tag), key)
     return np.frombuffer(plaintext, dtype=dtype).copy()
 
@@ -172,7 +195,7 @@ def read_encrypted_channel(
 
 
 def _encrypt_intensity_in_signal_group(
-    sig: h5py.Group, key: bytes
+    sig, key: bytes
 ) -> None:
     """Encrypt the ``intensity_values`` dataset inside an open signal_channels group.
 
@@ -181,47 +204,66 @@ def _encrypt_intensity_in_signal_group(
     :meth:`~mpeg_o.acquisition_run.AcquisitionRun.encrypt_with_key`
     (group API, which avoids re-opening the file).
 
+    v0.9 M64.5 phase B: ``sig`` may be an ``h5py.Group`` or a
+    :class:`StorageGroup`; non-HDF5 providers route through
+    StorageGroup primitives.
+
     Idempotent: returns silently if ``intensity_values_encrypted`` already
     exists. Callers are responsible for key-length validation.
     """
-    # Idempotency: already encrypted — return silently
-    if "intensity_values_encrypted" in sig:
+    from .enums import Precision
+    from .providers.base import StorageGroup
+
+    if isinstance(sig, StorageGroup) and getattr(sig, "_grp", None) is None:
+        # Non-HDF5 provider path.
+        if sig.has_child("intensity_values_encrypted"):
+            return
+        if not sig.has_child("intensity_values"):
+            raise KeyError("intensity_values not found in signal_channels group")
+        plain_arr = np.asarray(sig.open_dataset("intensity_values").read()).astype("<f8", copy=False)
+        original_count = int(plain_arr.shape[0])
+        plaintext = plain_arr.tobytes()
+        blob = encrypt_bytes(plaintext, key)
+        ct = blob.ciphertext
+        remainder = len(ct) % 4
+        if remainder:
+            ct = ct + b"\x00" * (4 - remainder)
+        ct_arr = np.frombuffer(ct, dtype="<i4").copy()
+        iv_arr = np.frombuffer(blob.iv, dtype="<i4").copy()
+        tag_arr = np.frombuffer(blob.tag, dtype="<i4").copy()
+        sig.create_dataset("intensity_values_encrypted", Precision.INT32, ct_arr.size).write(ct_arr)
+        sig.create_dataset("intensity_iv", Precision.INT32, iv_arr.size).write(iv_arr)
+        sig.create_dataset("intensity_tag", Precision.INT32, tag_arr.size).write(tag_arr)
+        sig.set_attribute("intensity_ciphertext_bytes", int(len(blob.ciphertext)))
+        sig.set_attribute("intensity_original_count", int(original_count))
+        sig.set_attribute("intensity_algorithm", ALGORITHM_NAME)
+        sig.delete_child("intensity_values")
         return
 
-    if "intensity_values" not in sig:
+    # HDF5 fast path (legacy byte parity).
+    native = getattr(sig, "_grp", sig)
+    if "intensity_values_encrypted" in native:
+        return
+    if "intensity_values" not in native:
         raise KeyError("intensity_values not found in signal_channels group")
-
-    # Read plaintext as float64 array, record element count
-    plain_arr = sig["intensity_values"][()].astype("<f8", copy=False)
+    plain_arr = native["intensity_values"][()].astype("<f8", copy=False)
     original_count = int(plain_arr.shape[0])
     plaintext = plain_arr.tobytes()
-
-    # Encrypt
     blob = encrypt_bytes(plaintext, key)
-
-    # Pad ciphertext to 4-byte boundary and store as int32 array
     ct = blob.ciphertext
     remainder = len(ct) % 4
     if remainder:
         ct = ct + b"\x00" * (4 - remainder)
     ct_arr = np.frombuffer(ct, dtype="<i4").copy()
-
-    # Store IV as 3 × int32 (12 bytes) and tag as 4 × int32 (16 bytes)
     iv_arr = np.frombuffer(blob.iv, dtype="<i4").copy()
     tag_arr = np.frombuffer(blob.tag, dtype="<i4").copy()
-
-    # Write encrypted datasets
-    sig.create_dataset("intensity_values_encrypted", data=ct_arr)
-    sig.create_dataset("intensity_iv", data=iv_arr)
-    sig.create_dataset("intensity_tag", data=tag_arr)
-
-    # Write scalar attributes on signal_channels group
-    sig.attrs["intensity_ciphertext_bytes"] = np.int64(len(blob.ciphertext))
-    sig.attrs["intensity_original_count"] = np.int64(original_count)
-    sig.attrs["intensity_algorithm"] = ALGORITHM_NAME
-
-    # Remove plaintext dataset
-    del sig["intensity_values"]
+    native.create_dataset("intensity_values_encrypted", data=ct_arr)
+    native.create_dataset("intensity_iv", data=iv_arr)
+    native.create_dataset("intensity_tag", data=tag_arr)
+    native.attrs["intensity_ciphertext_bytes"] = np.int64(len(blob.ciphertext))
+    native.attrs["intensity_original_count"] = np.int64(original_count)
+    native.attrs["intensity_algorithm"] = ALGORITHM_NAME
+    del native["intensity_values"]
 
 
 def encrypt_intensity_channel_in_run(
@@ -266,14 +308,15 @@ def encrypt_intensity_channel_in_run(
 
 
 def encrypt_intensity_channel_in_group(
-    signal_channels_group: h5py.Group, key: bytes
+    signal_channels_group, key: bytes
 ) -> None:
     """Encrypt the intensity_values dataset inside an already-open signal_channels group.
 
-    Use this variant when the caller already holds an open h5py file handle
-    (e.g. via :class:`~mpeg_o.spectral_dataset.SpectralDataset`) and cannot
-    open the file a second time. Semantics are identical to
-    :func:`encrypt_intensity_channel_in_run`.
+    Use this variant when the caller already holds an open file handle
+    (e.g. via :class:`~mpeg_o.spectral_dataset.SpectralDataset`) and
+    cannot open the file a second time. v0.9 M64.5 phase B: accepts
+    either an ``h5py.Group`` or a :class:`StorageGroup` so non-HDF5
+    providers also encrypt in place.
 
     Raises ``ValueError`` if ``key`` is not 32 bytes, ``KeyError`` if
     ``intensity_values`` is absent.

@@ -174,15 +174,21 @@ Memory / SQLite / Zarr backends round-trip end-to-end:
 | `_write_run` / `_write_identifications` / `_write_quantifications` / `_write_provenance` | **Provider-aware** via the StorageGroup protocol; HDF5 helpers in `_hdf5_io.py` dispatch on isinstance for byte parity (M64.5) |
 | `AcquisitionRun.open` + `_read_chromatograms` + `write_chromatograms_to_run_group` | **Provider-aware** — cold-path attribute and dataset reads go through StorageGroup primitives (M64.5) |
 | `Hdf5Provider.native_handle()` | Returns underlying `h5py.File` / `Hdf5File` / `MPGOHDF5File` for byte-level code that hasn't been ported yet |
-| `MSImage` cube writes | **Still native** — use `dataset.provider.native_handle()` (M64.5 phase B candidate) |
-| `SignatureManager`, `EncryptionManager`, `KeyRotationManager`, `Anonymizer` | **Still native** — operate on HDF5 bytes directly (M64.5 phase B) |
+| `EncryptionManager` (`encrypt_intensity_channel_in_group` + `read_encrypted_channel`) | **Provider-aware** — both helpers dispatch via isinstance: HDF5 keeps the legacy multi-dataset rewrite path, non-HDF5 routes through StorageGroup `create_dataset` / `open_dataset` / `delete_child` (M64.5 phase B) |
+| `SignatureManager` (`sign_dataset` / `verify_dataset`) | **Provider-aware** — h5py callers go through the legacy fast path; `StorageDataset` callers delegate to the M54.1 `sign_storage_dataset` / `verify_storage_dataset` siblings (M64.5 phase B) |
+| `Anonymizer.anonymize` | **Provider-aware** — accepts a `provider=` kwarg passed through to `write_minimal` (M64.5 phase B) |
+| `MSImage` cube writes | **Still native** — use `dataset.provider.native_handle()` (M64.5 phase C candidate) |
+| `KeyRotationManager` (`enable_envelope_encryption` / `unwrap_dek` / `rotate_key` / `key_history`) | **Still native** — operates on `h5py.File`; envelope key wrap + multi-step rotation is the largest remaining surface (M64.5 phase C) |
 
 **Cross-provider proof.** `python/tests/integration/test_mzml_roundtrip.py`
-and `test_nmrml_roundtrip.py` parametrize over all four providers
-and round-trip mzML / nmrML through `Memory`, `SQLite`, `Zarr`
-backends in CI. The remaining "Still native" rows are tracked under
-HANDOFF M64.5 phase B; they are out of scope for v0.9.0 but unblock
-the M61 / M62 cross-provider matrices once they ship.
+and `test_nmrml_roundtrip.py` parametrize over all four providers and
+round-trip mzML / nmrML through `Memory`, `SQLite`, `Zarr` backends
+in CI. `python/tests/security/test_protection_cross_provider.py`
+extends the same matrix to encrypt-then-decrypt and sign-then-verify
+paths, proving the protection classes are correct across backends
+(12 cells, all green). The remaining `MSImage` cube writes and
+`KeyRotationManager` are scoped for M64.5 phase C and are not on the
+v0.9.0 release blocker list.
 
 ---
 
