@@ -26,6 +26,7 @@ __pycache__/
 *.pyc
 python/dist/
 python/build/
+python/tests/fixtures/_generated/
 
 # Maven build output
 java/target/
