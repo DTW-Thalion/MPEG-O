@@ -60,6 +60,9 @@
 - (BOOL)writeToGroup:(MPGOHDF5Group *)parent error:(NSError **)error;
 + (instancetype)readFromGroup:(MPGOHDF5Group *)parent error:(NSError **)error;
 
+/** v0.9 M64.5-objc-java: storage-protocol read for cross-provider support. */
++ (instancetype)readFromStorageGroup:(id)parent error:(NSError **)error;
+
 @end
 
 #endif

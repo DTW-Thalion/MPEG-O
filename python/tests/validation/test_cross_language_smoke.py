@@ -229,17 +229,15 @@ def test_java_mpgo_verify_matches_python(python_mpgo: Path) -> None:
 
 _JAVA_TEST_PROVIDERS = ("hdf5", "memory", "sqlite", "zarr")
 
-# Non-HDF5 cross-language interop has inherent limits today:
+# Non-HDF5 cross-language interop has one inherent limit:
 #   - memory: in-process only by design (separate JVM can't see the
 #     Python _STORES dict)
-#   - sqlite: Python writes spectrum_index columns as FLOAT64; Java
-#     reads them as INT64 → class cast exception. Real bug, v1.0+.
-#   - zarr: Python Zarr compresses (blosc/zlib); Java ZarrProvider
-#     doesn't implement compressed-chunk reads yet (v0.8 comment).
+# v0.9 fixes (commit "fix(crosslang)..."): SQLite now passes after
+# mapping Python's uint64 offsets to INT64 in _precision_from_dtype;
+# Java Zarr now reads compressed chunks (blosc/zlib) via the
+# JBlosc + Inflater path.
 _CROSSLANG_XFAIL_REASONS = {
     "memory": "in-process-only by design; separate Java process can't see Python memory stores",
-    "sqlite": "spectrum_index column dtype mismatch (float64 vs int64) — TODO v1.0",
-    "zarr":   "Java ZarrProvider doesn't read blosc/zlib-compressed chunks yet",
 }
 
 
@@ -330,23 +328,43 @@ def test_java_reads_python_4_provider_matrix(
 
 def test_objc_rejects_non_hdf5_url_cleanly(tmp_path: Path) -> None:
     """ObjC's high-level SpectralDataset entry points detect non-HDF5
-    URL schemes (memory:// / sqlite:// / zarr://) and return a clear
-    error rather than crashing. v0.9 M64.5-objc-java documented this
-    scope limit; the full ObjC StorageGroup-protocol read/write path
-    is a v1.0+ item."""
+    URL schemes. A non-existent memory store still surfaces a clean
+    error (empty registry, nothing to route to)."""
     objc = _resolve_objc_verify()
     if objc is None:
         pytest.skip("ObjC MpgoVerify binary not built")
     binary, env = objc
-    # ObjC's MpgoVerify calls [MPGOSpectralDataset readFromFilePath:].
-    # For a memory:// URL the new detection should surface a clean
-    # error without touching disk.
     proc = subprocess.run(
         [str(binary), "memory://does-not-exist"],
         capture_output=True, text=True, env=env, timeout=15,
     )
-    assert proc.returncode != 0, "ObjC should reject non-HDF5 URL"
-    err = (proc.stderr or "").lower()
-    # Accept either the explicit routing-not-implemented message or a
-    # generic "failed to open" — either is a clean error path.
-    assert "failed to open" in err or "not yet implemented" in err
+    assert proc.returncode != 0, "ObjC should reject non-existent memory store"
+
+
+# --------------------------------------------------------------------------- #
+# v0.9 M64.5-objc-java: ObjC reads Python-written SQLite / Zarr via URL dispatch.
+# Memory remains in-process-only. HDF5 is already covered above.
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.parametrize("provider", ["sqlite", "zarr"])
+def test_objc_reads_python_non_hdf5(provider: str, tmp_path: Path) -> None:
+    """Python writes through a non-HDF5 provider; ObjC's new
+    readViaProviderURL path reads the same summary."""
+    objc = _resolve_objc_verify()
+    if objc is None:
+        pytest.skip("ObjC MpgoVerify binary not built")
+    binary, env = objc
+    url, expected = _python_writes_on_provider(provider, tmp_path)
+    proc = subprocess.run(
+        [str(binary), url],
+        capture_output=True, text=True, env=env, timeout=30,
+    )
+    if proc.returncode != 0:
+        pytest.fail(f"ObjC MpgoVerify on {provider} URL exit {proc.returncode}: "
+                    f"{proc.stderr.strip()}")
+    objc_summary = json.loads(proc.stdout.strip())
+    assert objc_summary == expected, (
+        f"ObjC read of Python-written {provider} diverges:\n"
+        f"  ObjC:     {objc_summary}\n"
+        f"  Expected: {expected}"
+    )

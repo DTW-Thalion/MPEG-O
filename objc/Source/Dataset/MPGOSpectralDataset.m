@@ -15,6 +15,7 @@
 #import "Protection/MPGOEncryptionManager.h"
 #import "Protection/MPGOAccessPolicy.h"
 #import "Providers/MPGOStorageProtocols.h"
+#import "Providers/MPGOProviderRegistry.h"
 #import "Providers/MPGOHDF5Provider.h"
 #import <hdf5.h>
 
@@ -101,15 +102,13 @@ static BOOL isNonHdf5ProviderURL(NSString *url) {
         || [url hasPrefix:@"zarr://"];
 }
 
-static NSError *makeProviderRoutingError(NSString *url) {
+static NSError *makeProviderWriteNotImplementedError(NSString *url) {
     NSString *msg = [NSString stringWithFormat:
-        @"ObjC SpectralDataset URL routing for scheme '%@' is not yet "
-        @"implemented (v0.9 M64.5 scope limit: only HDF5 read/write is "
-        @"wired through the high-level MPGOSpectralDataset entry points). "
-        @"Use MPGOProviderRegistry + AcquisitionRun.readFromGroup: directly, "
-        @"or drive Memory/SQLite/Zarr .mpgo files through the Python / Java "
-        @"implementations which already have full URL-scheme dispatch.",
-        [url componentsSeparatedByString:@"://"].firstObject ?: url];
+        @"ObjC SpectralDataset *write* via URL '%@' not implemented "
+        @"in v0.9 (read is supported via +readViaProviderURL:). "
+        @"Produce non-HDF5 .mpgo files through Python / Java which "
+        @"have the full write-side caller refactor.",
+        url];
     return [NSError errorWithDomain:@"MPGOSpectralDatasetErrorDomain"
                                 code:999
                             userInfo:@{NSLocalizedDescriptionKey: msg}];
@@ -120,7 +119,7 @@ static NSError *makeProviderRoutingError(NSString *url) {
 - (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error
 {
     if (isNonHdf5ProviderURL(path)) {
-        if (error) *error = makeProviderRoutingError(path);
+        if (error) *error = makeProviderWriteNotImplementedError(path);
         return NO;
     }
     // M39: route through MPGOHDF5Provider. writeToFilePath: is a
@@ -244,11 +243,101 @@ static NSError *makeProviderRoutingError(NSString *url) {
 
 #pragma mark - HDF5 read
 
++ (instancetype)readViaProviderURL:(NSString *)url error:(NSError **)error
+{
+    // v0.9 M64.5-objc-java: read a non-HDF5 .mpgo by routing through
+    // the provider registry. Metadata (idents/quants/prov) comes from
+    // the JSON mirror attributes; runs are reconstructed via
+    // +[MPGOAcquisitionRun readFromStorageGroup:].
+    id<MPGOStorageProvider> prov = [[MPGOProviderRegistry sharedRegistry]
+        openURL:url mode:MPGOStorageOpenModeRead provider:nil error:error];
+    if (!prov) return nil;
+    id<MPGOStorageGroup> root = [prov rootGroupWithError:error];
+    if (!root) return nil;
+
+    NSString *title = @"", *isaId = @"";
+    NSMutableDictionary *msRuns = [NSMutableDictionary dictionary];
+    NSArray *idents = @[], *quants = @[], *provRecs = @[];
+
+    if ([root hasChildNamed:@"study"]) {
+        id<MPGOStorageGroup> study = [root openGroupNamed:@"study" error:error];
+        if (!study) return nil;
+
+        id titleObj = [study attributeValueForName:@"title" error:NULL];
+        if ([titleObj isKindOfClass:[NSString class]]) title = titleObj;
+        id isaObj = [study attributeValueForName:@"isa_investigation_id" error:NULL];
+        if ([isaObj isKindOfClass:[NSString class]]) isaId = isaObj;
+
+        if ([study hasChildNamed:@"ms_runs"]) {
+            id<MPGOStorageGroup> ms = [study openGroupNamed:@"ms_runs" error:NULL];
+            id namesObj = [ms attributeValueForName:@"_run_names" error:NULL];
+            if ([namesObj isKindOfClass:[NSString class]]) {
+                for (NSString *rn in [(NSString *)namesObj componentsSeparatedByString:@","]) {
+                    if (rn.length == 0) continue;
+                    MPGOAcquisitionRun *run = [MPGOAcquisitionRun readFromStorageGroup:ms
+                                                                                   name:rn
+                                                                                  error:NULL];
+                    if (run) msRuns[rn] = run;
+                }
+            }
+        }
+
+        id iObj = [study attributeValueForName:@"identifications_json" error:NULL];
+        if ([iObj isKindOfClass:[NSString class]]) {
+            NSArray *plists = [NSJSONSerialization
+                JSONObjectWithData:[(NSString *)iObj dataUsingEncoding:NSUTF8StringEncoding]
+                           options:0 error:NULL];
+            NSMutableArray *arr = [NSMutableArray array];
+            for (NSDictionary *d in plists) {
+                id rec = [MPGOIdentification fromPlist:d];
+                if (rec) [arr addObject:rec];
+            }
+            idents = arr;
+        }
+        id qObj = [study attributeValueForName:@"quantifications_json" error:NULL];
+        if ([qObj isKindOfClass:[NSString class]]) {
+            NSArray *plists = [NSJSONSerialization
+                JSONObjectWithData:[(NSString *)qObj dataUsingEncoding:NSUTF8StringEncoding]
+                           options:0 error:NULL];
+            NSMutableArray *arr = [NSMutableArray array];
+            for (NSDictionary *d in plists) {
+                id rec = [MPGOQuantification fromPlist:d];
+                if (rec) [arr addObject:rec];
+            }
+            quants = arr;
+        }
+        id pObj = [study attributeValueForName:@"provenance_json" error:NULL];
+        if ([pObj isKindOfClass:[NSString class]]) {
+            NSArray *plists = [NSJSONSerialization
+                JSONObjectWithData:[(NSString *)pObj dataUsingEncoding:NSUTF8StringEncoding]
+                           options:0 error:NULL];
+            NSMutableArray *arr = [NSMutableArray array];
+            for (NSDictionary *d in plists) {
+                id rec = [MPGOProvenanceRecord fromPlist:d];
+                if (rec) [arr addObject:rec];
+            }
+            provRecs = arr;
+        }
+    }
+
+    MPGOSpectralDataset *ds = [[self alloc] initWithTitle:title
+                                        isaInvestigationId:isaId
+                                                    msRuns:msRuns
+                                                   nmrRuns:@{}
+                                           identifications:idents
+                                           quantifications:quants
+                                         provenanceRecords:provRecs
+                                               transitions:nil];
+    ds->_filePath = [url copy];
+    // _file / _provider stay nil — the provider instance was transient;
+    // close() is a no-op for provider-backed datasets in v0.9.
+    return ds;
+}
+
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error
 {
     if (isNonHdf5ProviderURL(path)) {
-        if (error) *error = makeProviderRoutingError(path);
-        return nil;
+        return [self readViaProviderURL:path error:error];
     }
     // M39: route through MPGOHDF5Provider; the native handle is the
     // MPGOHDF5File previously obtained directly.

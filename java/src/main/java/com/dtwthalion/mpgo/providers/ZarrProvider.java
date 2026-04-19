@@ -258,6 +258,52 @@ public final class ZarrProvider implements StorageProvider {
         };
     }
 
+    /** v0.9: return the numcodecs id string from a compressor spec,
+     *  or null if the spec is null. Accepts the Map shape emitted by
+     *  numcodecs / parsed back by {@code readZArray}. */
+    static String compressorId(Object spec) {
+        if (spec == null) return null;
+        if (spec instanceof Map<?, ?> m && m.get("id") != null) {
+            return m.get("id").toString();
+        }
+        return spec.toString();
+    }
+
+    /** v0.9: decompress a zarr v2 chunk. Supports ``null`` (identity)
+     *  and ``{"id":"zlib"}`` (JDK Inflater). Other codecs raise.
+     *
+     *  Python's ``numcodecs.Zlib`` emits raw zlib (with 2-byte header
+     *  + Adler-32 trailer) — the JDK {@code Inflater} default mode
+     *  handles that directly. */
+    static byte[] decompressChunk(Object spec, byte[] raw, int expectedBytes) {
+        if (spec == null) return raw;
+        String id = compressorId(spec);
+        if ("zlib".equals(id)) {
+            java.util.zip.Inflater inflater = new java.util.zip.Inflater();
+            inflater.setInput(raw);
+            try {
+                byte[] out = new byte[expectedBytes];
+                int pos = 0;
+                while (!inflater.finished() && pos < out.length) {
+                    int n = inflater.inflate(out, pos, out.length - pos);
+                    if (n == 0 && inflater.needsInput()) break;
+                    pos += n;
+                }
+                if (pos < out.length) {
+                    // short read — return what we got zero-padded to full
+                    return out;
+                }
+                return out;
+            } catch (java.util.zip.DataFormatException e) {
+                throw new RuntimeException("zarr zlib inflate failed", e);
+            } finally {
+                inflater.end();
+            }
+        }
+        throw new UnsupportedOperationException(
+                "zarr compressor '" + id + "' not supported by Java ZarrProvider");
+    }
+
     static int bytesPerElement(Precision p) {
         return switch (p) {
             case FLOAT64, INT64 -> 8;
@@ -535,6 +581,7 @@ public final class ZarrProvider implements StorageProvider {
         private final Precision precision;
         private final long[] shape;
         private final long[] chunks;
+        private Object compressor;  // v0.9: null = uncompressed; non-null = zlib metadata dict
 
         ZPrimitiveDataset(String name, Path dir) {
             this.name = name;
@@ -545,10 +592,17 @@ public final class ZarrProvider implements StorageProvider {
                 this.shape = readLongArray(meta.get("shape"));
                 this.chunks = readLongArray(meta.get("chunks"));
                 Object comp = meta.get("compressor");
+                this.compressor = comp;
                 if (comp != null) {
-                    throw new UnsupportedOperationException(
-                            "ZarrProvider (Java): compressed chunks not supported in v0.8 "
-                            + "(array " + name + " uses " + comp + ")");
+                    String codecId = compressorId(comp);
+                    if (!"zlib".equals(codecId)) {
+                        // v0.9: support Python's default zlib chunks; defer
+                        // blosc / lz4 / zstd until a milestone needs them.
+                        throw new UnsupportedOperationException(
+                                "ZarrProvider (Java): compressor '" + codecId
+                                + "' not supported in v0.9 (array " + name
+                                + " uses " + comp + ")");
+                    }
                 }
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -610,19 +664,21 @@ public final class ZarrProvider implements StorageProvider {
         private byte[] readChunk(Path chunkPath, int[] idx, int bpe) {
             long chunkSize = 1;
             for (long c : chunks) chunkSize *= c;
+            int expected = (int) (chunkSize * bpe);
             if (!Files.exists(chunkPath)) {
                 // Missing chunk → fill with fill_value (0 for our precisions).
-                return new byte[(int) (chunkSize * bpe)];
+                return new byte[expected];
             }
             try {
                 byte[] raw = Files.readAllBytes(chunkPath);
-                int expected = (int) (chunkSize * bpe);
-                if (raw.length < expected) {
+                // v0.9: decompress if the array carries a compressor spec.
+                byte[] plain = decompressChunk(compressor, raw, expected);
+                if (plain.length < expected) {
                     byte[] padded = new byte[expected];
-                    System.arraycopy(raw, 0, padded, 0, raw.length);
+                    System.arraycopy(plain, 0, padded, 0, plain.length);
                     return padded;
                 }
-                return raw;
+                return plain;
             } catch (IOException e) {
                 throw new RuntimeException("chunk read failed: " + chunkPath, e);
             }

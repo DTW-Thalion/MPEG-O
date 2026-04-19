@@ -409,6 +409,78 @@
 
 #pragma mark - HDF5 read
 
++ (instancetype)readFromStorageGroup:(id)parent
+                                 name:(NSString *)name
+                                error:(NSError **)error
+{
+    id<MPGOStorageGroup> par = (id<MPGOStorageGroup>)parent;
+    if (![par hasChildNamed:name]) return nil;
+    id<MPGOStorageGroup> runGroup = [par openGroupNamed:name error:error];
+    if (!runGroup) return nil;
+
+    id modeObj = [runGroup attributeValueForName:@"acquisition_mode" error:NULL];
+    MPGOAcquisitionMode mode = (MPGOAcquisitionMode)
+        ([modeObj respondsToSelector:@selector(longLongValue)]
+            ? [modeObj longLongValue] : 0);
+    id classObj = [runGroup attributeValueForName:@"spectrum_class" error:NULL];
+    NSString *className = [classObj isKindOfClass:[NSString class]]
+        ? (NSString *)classObj : @"MPGOMassSpectrum";
+    id nucObj = [runGroup attributeValueForName:@"nucleus_type" error:NULL];
+    NSString *nucleus = [nucObj isKindOfClass:[NSString class]] ? nucObj : nil;
+
+    MPGOSpectrumIndex *idx = [MPGOSpectrumIndex readFromStorageGroup:runGroup error:error];
+    if (!idx) return nil;
+
+    // signal_channels: read channel_names attr; full signal read is
+    // deferred to HDF5-only paths for v0.9.
+    NSArray<NSString *> *channelNames = @[];
+    if ([runGroup hasChildNamed:@"signal_channels"]) {
+        id<MPGOStorageGroup> sc = [runGroup openGroupNamed:@"signal_channels" error:NULL];
+        id names = [sc attributeValueForName:@"channel_names" error:NULL];
+        if ([names isKindOfClass:[NSString class]]) {
+            channelNames = [(NSString *)names componentsSeparatedByString:@","];
+        }
+    }
+
+    // Provenance via the JSON mirror (compound-dataset decode is HDF5-only).
+    NSMutableArray<MPGOProvenanceRecord *> *provenance = [NSMutableArray array];
+    id provObj = [runGroup attributeValueForName:@"provenance_json" error:NULL];
+    if ([provObj isKindOfClass:[NSString class]] && [(NSString *)provObj length] > 0) {
+        NSData *jdata = [(NSString *)provObj dataUsingEncoding:NSUTF8StringEncoding];
+        NSArray *plists = [NSJSONSerialization JSONObjectWithData:jdata options:0 error:NULL];
+        for (NSDictionary *p in plists) {
+            MPGOProvenanceRecord *r = [MPGOProvenanceRecord fromPlist:p];
+            if (r) [provenance addObject:r];
+        }
+    }
+
+    // Default InstrumentConfig; non-HDF5 writers don't persist it today.
+    MPGOInstrumentConfig *cfg = [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+                                                                             model:@""
+                                                                      serialNumber:@""
+                                                                        sourceType:@""
+                                                                      analyzerType:@""
+                                                                      detectorType:@""];
+
+    MPGOAcquisitionRun *run = [[self alloc] init];
+    run->_acquisitionMode      = mode;
+    run->_instrumentConfig     = cfg;
+    run->_spectrumIndex        = idx;
+    run->_storageSignalGroup   = nil;
+    run->_storageDatasets      = nil;
+    run->_channelNames         = [channelNames copy];
+    run->_spectrumClassName    = [className copy];
+    run->_nucleusType          = [nucleus copy];
+    run->_spectrometerFrequencyMHz = 0.0;
+    run->_inMemorySpectra      = nil;
+    run->_streamPosition       = 0;
+    run->_provenance           = provenance;
+    run->_numpressChannels     = nil;
+    run->_signalCompression    = MPGOCompressionNone;
+    run->_chromatograms        = @[];
+    return run;
+}
+
 + (instancetype)readFromGroup:(MPGOHDF5Group *)parent name:(NSString *)name error:(NSError **)error
 {
     MPGOHDF5Group *runGroup = [parent openGroupNamed:name error:error];

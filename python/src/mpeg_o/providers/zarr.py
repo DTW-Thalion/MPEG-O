@@ -534,18 +534,26 @@ def _dtype_to_precision(dtype: np.dtype) -> Precision | None:
 
 def _compressor_for(compression: Compression, level: int) -> Any:
     """Map the MPEG-O compression enum onto a numcodecs codec. Zarr 2
-    uses None to disable compression."""
+    uses None to disable compression.
+
+    v0.9: ZLIB chunks use raw ``numcodecs.Zlib`` rather than
+    ``Blosc(cname='zlib')`` so the Java ``ZarrProvider`` (which has
+    a JDK-builtin Inflater but no Blosc binding) can decode the same
+    files. Compression ratio is comparable; we lose Blosc's parallel
+    decode but gain cross-language portability — the right trade for
+    the v0.9 cross-language matrix.
+    """
     if compression in (Compression.NONE, None):
         return None
     try:
-        from numcodecs import Blosc, Zstd
+        from numcodecs import Blosc, Zlib
     except ImportError:  # pragma: no cover
         return None
     if compression == Compression.ZLIB:
-        # Zarr 2's default is Blosc; use zlib via Blosc wrapper for
-        # closer parity with HDF5's gzip filter.
-        return Blosc(cname="zlib", clevel=max(1, min(level, 9)))
+        return Zlib(level=max(1, min(level, 9)))
     if compression == Compression.LZ4:
+        # Blosc(cname=lz4) stays — LZ4 is opt-in (HDF5 filter 32004
+        # equivalent) and the Java reader doesn't claim LZ4 support.
         return Blosc(cname="lz4", clevel=max(1, min(level, 9)))
     return None
 
