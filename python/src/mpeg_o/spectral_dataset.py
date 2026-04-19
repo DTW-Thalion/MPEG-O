@@ -28,6 +28,7 @@ from .enums import EncryptionLevel
 from .feature_flags import FeatureFlags
 from .identification import Identification
 from .providers import StorageProvider, open_provider
+from .providers.base import StorageGroup
 from .providers.hdf5 import Hdf5Provider
 from .provenance import ProvenanceRecord
 from .quantification import Quantification
@@ -76,7 +77,11 @@ class SpectralDataset:
     """
 
     path: Path
-    file: h5py.File
+    # ``file`` is the legacy h5py handle. v0.9 M64.5: when the dataset
+    # was opened via a non-HDF5 provider (memory/sqlite/zarr) this is
+    # ``None`` and call sites must use :attr:`provider` instead. New
+    # code paths route through the StorageGroup protocol.
+    file: h5py.File | None
     feature_flags: FeatureFlags
     title: str
     isa_investigation_id: str
@@ -150,8 +155,22 @@ class SpectralDataset:
                 fileobj.close()
                 raise
 
-        p = Path(path)
+        # v0.9 M64.5: URL scheme detection routes non-HDF5 providers
+        # (``memory://...``, ``sqlite://...``, ``dir://...``) through
+        # the storage protocol. Bare paths still open via HDF5 for
+        # byte-parity with pre-M64.5 files.
+        path_str = str(path)
         mode = "r+" if writable else "r"
+        if "://" in path_str and not path_str.startswith("file://"):
+            provider = open_provider(path_str, mode=mode)
+            try:
+                return cls._from_provider(Path(path_str), provider,
+                                           thread_safe=thread_safe)
+            except Exception:
+                provider.close()
+                raise
+
+        p = Path(path)
         provider = Hdf5Provider.open(str(p), mode=mode)
         f = provider.native_handle()
         try:
@@ -160,6 +179,67 @@ class SpectralDataset:
         except Exception:
             provider.close()
             raise
+
+    @classmethod
+    def _from_provider(
+        cls,
+        path: Path,
+        provider: StorageProvider,
+        *,
+        thread_safe: bool = False,
+    ) -> "SpectralDataset":
+        """Open-side constructor for non-HDF5 providers.
+
+        Reads everything through the :class:`StorageGroup` protocol so
+        Memory / SQLite / Zarr backends work without touching h5py.
+        """
+        root = provider.root_group()
+        version, features = io.read_feature_flags(root)
+        flags = FeatureFlags.from_iterable(version, features)
+        encrypted = io.read_string_attr(root, "encrypted", default="") or ""
+        if not root.has_child("study"):
+            raise ValueError(f"{path}: missing /study group; not an .mpgo file")
+        study = root.open_group("study")
+        title = io.read_string_attr(study, "title", default="") or ""
+        isa = io.read_string_attr(study, "isa_investigation_id", default="") or ""
+
+        ms_runs: dict[str, AcquisitionRun] = {}
+        if study.has_child("ms_runs"):
+            ms_group = study.open_group("ms_runs")
+            names = _split_run_names(
+                io.read_string_attr(ms_group, "_run_names", default="") or ""
+            )
+            for name in names:
+                if ms_group.has_child(name):
+                    run = AcquisitionRun.open(ms_group.open_group(name), name)
+                    run._set_persistence_context(str(path), name)
+                    ms_runs[name] = run
+
+        nmr_runs: dict[str, AcquisitionRun] = {}
+        if study.has_child("nmr_runs"):
+            nmr_group = study.open_group("nmr_runs")
+            names = _split_run_names(
+                io.read_string_attr(nmr_group, "_run_names", default="") or ""
+            )
+            for name in names:
+                if nmr_group.has_child(name):
+                    run = AcquisitionRun.open(nmr_group.open_group(name), name)
+                    run._set_persistence_context(str(path), name)
+                    nmr_runs[name] = run
+
+        return cls(
+            path=path,
+            file=None,  # non-HDF5 providers don't expose h5py.File
+            feature_flags=flags,
+            title=title,
+            isa_investigation_id=isa,
+            ms_runs=ms_runs,
+            nmr_runs=nmr_runs,
+            encrypted_algorithm=encrypted,
+            _remote_fileobj=None,
+            _lock=(RWLock() if thread_safe else None),
+            provider=provider,
+        )
 
     @classmethod
     def _from_open_file(
@@ -288,10 +368,28 @@ class SpectralDataset:
             merged.setdefault(k, v)
         return merged
 
+    def _study_target(self) -> Any:
+        """Return the IO target representing ``/study``.
+
+        For HDF5-backed datasets this is the raw ``h5py.Group``; for
+        provider-backed datasets it is a :class:`StorageGroup`. The
+        helpers in :mod:`_hdf5_io` accept either form.
+        """
+        if self.file is not None:
+            return self.file["study"]
+        assert self.provider is not None  # invariant: file or provider is set
+        return self.provider.root_group().open_group("study")
+
+    def _study_has_child(self, name: str) -> bool:
+        if self.file is not None:
+            return name in self.file["study"]
+        assert self.provider is not None
+        return self.provider.root_group().open_group("study").has_child(name)
+
     def identifications(self) -> list[Identification]:
         with self.read_lock():
-            study = self.file["study"]
-            if "identifications" in study:
+            study = self._study_target()
+            if self._study_has_child("identifications"):
                 return [
                     Identification(
                         run_name=r["run_name"],
@@ -307,8 +405,8 @@ class SpectralDataset:
 
     def quantifications(self) -> list[Quantification]:
         with self.read_lock():
-            study = self.file["study"]
-            if "quantifications" in study:
+            study = self._study_target()
+            if self._study_has_child("quantifications"):
                 return [
                     Quantification(
                         chemical_entity=r["chemical_entity"],
@@ -323,8 +421,8 @@ class SpectralDataset:
 
     def provenance(self) -> list[ProvenanceRecord]:
         with self.read_lock():
-            study = self.file["study"]
-            if "provenance" in study:
+            study = self._study_target()
+            if self._study_has_child("provenance"):
                 out: list[ProvenanceRecord] = []
                 for r in io.read_compound_dataset(study, "provenance"):
                     out.append(
@@ -386,11 +484,20 @@ class SpectralDataset:
         quantifications: list[Quantification] | None = None,
         provenance: list[ProvenanceRecord] | None = None,
         features: list[str] | None = None,
+        provider: str | StorageProvider = "hdf5",
     ) -> Path:
         """Write a minimal v1.1 ``.mpgo`` file from in-memory data.
 
-        This is the simplest write path — enough to round-trip through the
-        Python reader and to feed the ``mpgo-verify`` ObjC CLI in M16.9.
+        Parameters
+        ----------
+        provider
+            v0.9 M64.5: which storage backend to write through. The
+            string ``"hdf5"`` (default) keeps byte-for-byte parity with
+            pre-M64.5 files. Other values dispatch through
+            :func:`open_provider` — ``"memory"``, ``"sqlite"``,
+            ``"zarr"``, or any registered backend. A pre-opened
+            :class:`StorageProvider` may also be passed; the caller
+            owns its lifecycle in that case.
         """
         p = Path(path)
         feature_list = features or [
@@ -401,9 +508,48 @@ class SpectralDataset:
             "compound_per_run_provenance",
             "opt_compound_headers",
         ]
-        with h5py.File(p, "w") as f:
-            io.write_feature_flags(f, "1.1", feature_list)
-            study = f.create_group("study")
+
+        # HDF5 fast path keeps the legacy byte layout (fixed-length
+        # string attrs, padded compound types) so existing tests and
+        # cross-language readers continue to round-trip bit-for-bit.
+        if isinstance(provider, str) and provider in ("hdf5", "h5", "h5py"):
+            with h5py.File(p, "w") as f:
+                io.write_feature_flags(f, "1.1", feature_list)
+                study = f.create_group("study")
+                io.write_fixed_string_attr(study, "title", title)
+                io.write_fixed_string_attr(study, "isa_investigation_id", isa_investigation_id)
+
+                ms_group = study.create_group("ms_runs")
+                io.write_fixed_string_attr(ms_group, "_run_names", ",".join(runs.keys()))
+                for rname, run in runs.items():
+                    _write_run(ms_group, rname, run)
+
+                nmr_group = study.create_group("nmr_runs")
+                io.write_fixed_string_attr(nmr_group, "_run_names", "")
+
+                if identifications:
+                    _write_identifications(study, identifications)
+                if quantifications:
+                    _write_quantifications(study, quantifications)
+                if provenance:
+                    _write_provenance(study, provenance)
+            return p
+
+        # Provider-driven write path — Memory / SQLite / Zarr / future.
+        # Use the raw ``path`` string rather than ``Path(path)`` because
+        # ``Path("memory://x")`` collapses ``//`` → ``/``, breaking the
+        # MemoryProvider URL convention.
+        owns_provider = False
+        if isinstance(provider, str):
+            url = str(path)
+            sp = open_provider(url, provider=provider, mode="w")
+            owns_provider = True
+        else:
+            sp = provider
+        try:
+            root = sp.root_group()
+            io.write_feature_flags(root, "1.1", feature_list)
+            study = root.create_group("study")
             io.write_fixed_string_attr(study, "title", title)
             io.write_fixed_string_attr(study, "isa_investigation_id", isa_investigation_id)
 
@@ -421,6 +567,9 @@ class SpectralDataset:
                 _write_quantifications(study, quantifications)
             if provenance:
                 _write_provenance(study, provenance)
+        finally:
+            if owns_provider:
+                sp.close()
         return p
 
 
