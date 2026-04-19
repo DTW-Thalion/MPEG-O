@@ -64,6 +64,7 @@ libMPGO_HEADER_FILES = \
 	Export/MPGOMzMLWriter.h \
 	Export/MPGONmrMLWriter.h \
 	Export/MPGOImzMLWriter.h \
+	Export/MPGOMzTabWriter.h \
 	Export/MPGOISAExporter.h \
 	Providers/MPGOCompoundField.h \
 	Providers/MPGOStorageProtocols.h \
@@ -128,6 +129,7 @@ libMPGO_OBJC_FILES = \
 	Export/MPGOMzMLWriter.m \
 	Export/MPGONmrMLWriter.m \
 	Export/MPGOImzMLWriter.m \
+	Export/MPGOMzTabWriter.m \
 	Export/MPGOISAExporter.m \
 	Providers/MPGOCompoundField.m \
 	Providers/MPGOProviderRegistry.m \

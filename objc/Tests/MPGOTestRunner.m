@@ -39,6 +39,7 @@ extern void testStress(void);
 extern void testWatersMassLynxReader(void);
 extern void testWriteMinimal(void);
 extern void testImzMLWriter(void);
+extern void testMzTabWriter(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
@@ -219,6 +220,10 @@ int main(int argc, const char *argv[])
         START_SET("imzML writer (v0.9+)")
             testImzMLWriter();
         END_SET("imzML writer (v0.9+)")
+
+        START_SET("mzTab writer (v0.9+)")
+            testMzTabWriter();
+        END_SET("mzTab writer (v0.9+)")
     }
     return 0;
 }

@@ -9,6 +9,6 @@ SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations
 
-from . import imzml, isa, mzml, nmrml
+from . import imzml, isa, mzml, mztab, nmrml
 
-__all__ = ["imzml", "isa", "mzml", "nmrml"]
+__all__ = ["imzml", "isa", "mzml", "mztab", "nmrml"]
