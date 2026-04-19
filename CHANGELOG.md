@@ -11,7 +11,54 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [v0.9.0] — 2026-04-19
+## [v0.9.1] — 2026-04-19
+
+Patch on top of v0.9.0 (commit `228eeb5`). Closes the remaining
+v1.0 exporter gaps surfaced by M64 xfails and migrates the Zarr
+on-disk format from v2 to v3.
+
+### Added
+- **mzTab exporter** across Python + ObjC + Java (commit
+  `3c67ba9`). Both proteomics 1.0 (MTD + PSH/PSM + PRH/PRT) and
+  metabolomics 2.0.0-M (MTD + SMH/SML) dialects supported. Output
+  round-trips through the reader bit-identically.
+- **imzML exporter** across Python + ObjC + Java (commit
+  `ff0f201`). Continuous + processed modes; rejects divergent mz
+  axis in continuous mode; UUID normalisation. Same commit fixes
+  an importer cv-accession misclassification: `MS:1000030`/
+  `MS:1000031` are vendor / instrument-model fields, not IMS mode.
+- **nmrML spectrum1D** XSD gap closed via interleaved `(x,y)`
+  encoding (commit `6b26f2e`).
+- **mzML + ISA-Tab** validation closure and nmrML wrapper
+  improvements (commit `65c3666`).
+- Unit-level coverage for the new writers (commit `2f35bd2`).
+- **v1.0 gap audit** doc covering the exporter + importer xfails
+  surfaced by M64 (commit `4f17789`).
+
+### Changed
+- **Zarr v2 → v3 on-disk migration** across all three language
+  providers (commits `391a7d2` + `da13fed`). Each node is now a
+  single `zarr.json` file (`node_type: group | array`) with
+  attributes nested inside; array chunks live under a `c/` prefix
+  (`c/0/1/2`); dtypes use canonical names (`float64`, `int32`,
+  ...). Compression on read accepts the `gzip` codec written by
+  zarr-python's `GzipCodec`.
+  - Python uses zarr-python 3.x (`LocalStore`, `FsspecStore`,
+    `MemoryStore`, `create_array(compressors=...)`).
+  - Java + ObjC self-contained writers/readers updated to emit and
+    parse v3 layout byte-for-byte against zarr-python output.
+  - No backward-compat shim — pre-deployment, no v2 stores in the
+    wild. Read side does still accept legacy v2 dtype strings
+    (`<f8`, `<i4`, ...) for safety.
+
+### Test counts
+- Python 586 pass / 11 skip / 4 xfail
+- Objective-C 1271 PASS
+- Java 245 pass
+
+---
+
+## [v0.9.0] — 2026-04-19 (commit `228eeb5`)
 
 ### Added
 - **M57** Integration test infrastructure + fixture management
@@ -30,33 +77,8 @@ leading `0.` means the public API is still stabilising; see
 - **M63** Waters MassLynx `.raw` importer (Python + ObjC + Java),
   delegation pattern through `MassLynxRawReader` where SDK present,
   open-source fallback otherwise.
-- **M64** Cross-tool validation + nightly stress CI; closed
-  several v1.0 exporter gaps surfaced by xfails.
-- **mzML, nmrML, ISA-Tab, imzML, mzTab exporters** (the latter
-  two new in v0.9). Every format MPEG-O reads, it can now write.
-  - **nmrML** spectrum1D XSD gap closed via interleaved `(x,y)`
-    encoding (M64 follow-up).
-  - **imzML** exporter across all three languages (commit
-    `ff0f201`); fixed an importer cv-accession misclassification
-    (`MS:1000030`/`MS:1000031` are vendor / instrument-model, not
-    IMS mode).
-  - **mzTab** exporter across all three languages (commit
-    `3c67ba9`), round-trips bit-identically through the reader.
-
-### Changed
-- **Zarr v2 → v3 on-disk migration** across all three language
-  providers. Each node is now a single `zarr.json` file
-  (`node_type: group | array`) with attributes nested inside;
-  array chunks live under a `c/` prefix (`c/0/1/2`); dtypes use
-  canonical names (`float64`, `int32`, ...). Compression on read
-  accepts the `gzip` codec written by zarr-python's `GzipCodec`.
-  - Python uses zarr-python 3.x (`LocalStore`, `FsspecStore`,
-    `MemoryStore`, `create_array(compressors=...)`).
-  - Java + ObjC self-contained writers/readers updated to emit and
-    parse v3 layout byte-for-byte against zarr-python output.
-  - No backward-compat shim — pre-deployment, no v2 stores in the
-    wild. Read side does still accept legacy v2 dtype strings
-    (`<f8`, `<i4`, ...) for safety.
+- **M64** Cross-tool validation (PSI XSD, pyteomics, pymzml,
+  isatools) + nightly stress CI.
 - **M64.5** caller-refactor across all three languages so
   `SpectralDataset.open` / `write_minimal` dispatch on URL scheme
   (HDF5 / Memory / SQLite / Zarr). Phase A (Python), phase B
@@ -65,16 +87,18 @@ leading `0.` means the public API is still stabilising; see
   follow-up landed `ProviderRegistry.open` and
   `+readViaProviderURL:` paths. 39 of 39 cross-provider cells
   pass; the remaining `memory`-as-cross-process xfail is by design.
-- **Performance**: instrumented all three languages, shipped three
-  targeted optimisations, dropped 5.6 MB of dead-weight from the
-  ObjC harness, and brought Java index-format parity. Pure-C
-  baseline now exists; ObjC sits at ~1.3× over raw C (documented
-  in `tools/perf/`).
 
-### Test counts
-- Python 586 pass / 11 skip / 4 xfail (was 341)
-- Objective-C 1271 PASS (was 656)
-- Java 245 pass (was 207)
+### Performance
+- 3-language profiling harness + pure-C libhdf5 baseline; three
+  targeted optimisations (ObjC `writeMinimal` fast path, chunk-size
+  tuning, concat improvement); ObjC harness fairness fix +
+  Java index parity. ObjC sits at ~1.3× over raw C — documented
+  in `tools/perf/ANALYSIS.md`.
+
+### Test counts at v0.9.0
+- Python 555 pass / 7 xfail (3 documenting v1.0 exporter defects)
+- Objective-C 1202 PASS
+- Java 232 pass
 
 ---
 
