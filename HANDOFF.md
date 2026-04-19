@@ -926,7 +926,6 @@ on-disk file; it only takes the corresponding non-HDF5 cells back to
 | FIPS compliance mode | Algorithm allow-list lockdown |
 | Streaming transport | MPEG-G Part 2 real-time protocol |
 | ParquetProvider | Columnar alternative backend |
-| Zarr v3 migration | Update from v2 → v3 format |
 | Raman/IR support | New Spectrum subclasses |
 | DBMS transport | Postgres/MySQL blob storage |
 | v1.0 API freeze | After production feedback on v0.9 |

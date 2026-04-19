@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-pytest.importorskip("zarr", minversion="2.18")
+pytest.importorskip("zarr", minversion="3.0")
 
 from mpeg_o.enums import Compression, Precision  # noqa: E402
 from mpeg_o.providers import (  # noqa: E402

@@ -73,10 +73,12 @@ the source (`@since`, `@Deprecated`, `MPGO_DEPRECATED_MSG`,
 | Zarr (file + memory) | **Provisional** (Python) | **Stable** (v0.8 M52, local paths only) | **Stable** (v0.8 M52, local paths only) |
 
 **Provisional note on Python Zarr:** `zarr+memory://` and `zarr+s3://`
-remain Python-only through v0.9. Java and ObjC implementations will
-either gain the alternative stores in v0.9 or the extra schemes will
-be marked unsupported in v1.0 — the classification will firm up once
-the Zarr v3 transition lands (see HANDOFF v0.9 deferrals).
+remain Python-only. Java and ObjC implementations will either gain
+the alternative stores in a later release or the extra schemes will
+be marked unsupported in v1.0. The on-disk format migrated from Zarr
+v2 to v3 in v0.9 — pre-deployment, no migration shim was required;
+the read side still accepts legacy v2 dtype strings (`<f8`, `<i4`, …)
+for safety.
 
 ---
 

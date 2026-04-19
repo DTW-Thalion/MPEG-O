@@ -74,18 +74,27 @@ Explicit override via `provider="<name>"` bypasses URL detection.
 | Zarr | v0.7 M46 | **v0.8 M52** | **v0.8 M52** |
 
 Java and ObjC ZarrProvider ports shipped in v0.8 M52 as
-self-contained Zarr v2 DirectoryStore implementations — no external
-zarr library dependency. The on-disk layout matches the Python
+self-contained LocalStore implementations — no external zarr
+library dependency. The on-disk layout matches the Python
 reference, so all three can cross-read one another's stores
 (HANDOFF M52 acceptance). Full cross-language parity matrix
 validation happens in M54; M52 ships per-language round-trip tests.
 
-Scope of the v0.8 Java + ObjC ZarrProviders:
+The on-disk format is **Zarr v3** (migrated from v2 in v0.9):
+each node is a directory with a single `zarr.json` metadata file
+(`node_type` is `"group"` or `"array"`), array chunks live under a
+`c/` prefix with one path segment per axis (`c/0/1/2`), and dtypes
+use canonical names (`float64`, `int32`, ...) rather than
+numpy-style shorthand (`<f8`, `<i4`, ...). zarr-python 3.x writes
+this format directly via `LocalStore` / `FsspecStore`.
+
+Scope of the Java + ObjC ZarrProviders:
 
 - URL schemes: `zarr:///abs/path` and bare local paths.
-  `zarr+memory://` and `zarr+s3://` remain Python-only through v0.8.
-- Compression: NONE only. Reading a Python-authored compressed
-  Zarr store raises `UnsupportedOperationException` / equivalent.
+  `zarr+memory://` and `zarr+s3://` remain Python-only.
+- Compression: write side emits uncompressed chunks. Read side
+  accepts the `gzip` codec entry written by zarr-python's
+  `GzipCodec`; other codecs raise.
 - Primitive dtypes: float64, float32, int64, int32, uint32
   (little-endian).
 - Compound datasets: the Python convention (sub-group +

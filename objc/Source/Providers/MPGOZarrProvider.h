@@ -1,17 +1,20 @@
 /*
- * MPGOZarrProvider.h — Zarr v2 storage provider (v0.8 M52).
+ * MPGOZarrProvider.h — Zarr v3 storage provider.
  *
- * Self-contained DirectoryStore implementation; no external zarr C
- * library required. The on-disk layout matches the Python
+ * Self-contained LocalStore implementation; no external zarr C
+ * library required. The on-disk layout is the Zarr v3 convention
+ * (single ``zarr.json`` per node, ``c/N1/N2/...`` chunk paths,
+ * canonical dtype names) and matches the Python
  * ``mpeg_o.providers.zarr.ZarrProvider`` and the Java
  * ``com.dtwthalion.mpgo.providers.ZarrProvider``, so all three can
- * cross-read one another's stores (M52 acceptance).
+ * cross-read one another's stores byte-for-byte.
  *
- * Scope of this v0.8 port:
+ * Scope:
  *   * URL schemes: zarr:///abs/path, bare local paths.
- *     (zarr+memory://, zarr+s3:// are Python-only; v0.9.)
- *   * Compression: NONE only. Compressed chunks from Python-authored
- *     stores raise an "unsupported codec" error on read.
+ *     (zarr+memory://, zarr+s3:// remain Python-only.)
+ *   * Compression: write side emits uncompressed chunks. Read side
+ *     accepts the ``gzip`` codec entry written by zarr-python's
+ *     GzipCodec; other codecs raise.
  *   * Primitive types: float64, float32, int64, int32, uint32.
  *   * Byte order: little-endian (canonical).
  *
@@ -19,7 +22,7 @@
  * the Python / Java providers emit: ``_mpgo_kind=compound``,
  * ``_mpgo_schema=[{name,kind}]``, ``_mpgo_rows=[{...}]``.
  *
- * API status: Provisional (v0.8 M52).
+ * API status: Provisional.
  *
  * Cross-language equivalents:
  *   Python: mpeg_o.providers.zarr.ZarrProvider
