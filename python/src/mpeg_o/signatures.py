@@ -81,7 +81,7 @@ def _dataset_canonical_bytes(dataset: h5py.Dataset) -> bytes:
 
 
 def sign_dataset(
-    dataset: h5py.Dataset,
+    dataset: Any,
     key: bytes,
     *,
     algorithm: str = "hmac-sha256",
@@ -95,10 +95,18 @@ def sign_dataset(
     ``"v3:" + base64(signature)``. Use :func:`verify_dataset` to
     validate; it dispatches on the stored prefix.
 
+    v0.9 M64.5 phase B: ``dataset`` may be either an ``h5py.Dataset``
+    (legacy fast path) or a :class:`StorageDataset` from any provider.
+    Non-h5py inputs delegate to :func:`sign_storage_dataset` so the
+    same signature ends up on Memory / SQLite / Zarr backends.
+
     v0.8 M49: ML-DSA-87 requires the ``[pqc]`` optional extra (Python /
     ObjC backend is ``liboqs``; Java uses Bouncy Castle — see
     :file:`docs/pqc.md`).
     """
+    from .providers.base import StorageDataset
+    if isinstance(dataset, StorageDataset):
+        return sign_storage_dataset(dataset, key, algorithm=algorithm)
     from . import cipher_suite
     canonical = _dataset_canonical_bytes(dataset)
     if algorithm == "hmac-sha256":
@@ -119,7 +127,7 @@ def sign_dataset(
 
 
 def verify_dataset(
-    dataset: h5py.Dataset,
+    dataset: Any,
     key: bytes,
     *,
     algorithm: str = "hmac-sha256",
@@ -131,6 +139,10 @@ def verify_dataset(
     timing-safe comparison for HMAC; ML-DSA verification itself runs
     in constant time via liboqs.
 
+    v0.9 M64.5 phase B: ``dataset`` may be either an ``h5py.Dataset``
+    or a :class:`StorageDataset`; non-h5py inputs delegate to
+    :func:`verify_storage_dataset`.
+
     The ``algorithm`` keyword tells the verifier what key shape to
     expect. If the on-disk prefix does not match, raises
     :class:`~mpeg_o.cipher_suite.UnsupportedAlgorithmError` so callers
@@ -138,6 +150,9 @@ def verify_dataset(
     different algorithm. For ML-DSA-87, ``key`` is the 2592-byte
     verification public key.
     """
+    from .providers.base import StorageDataset
+    if isinstance(dataset, StorageDataset):
+        return verify_storage_dataset(dataset, key, algorithm=algorithm)
     from . import cipher_suite
     stored = _read_vl_string_attr(dataset, SIGNATURE_ATTR)
     if stored is None:

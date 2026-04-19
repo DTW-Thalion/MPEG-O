@@ -459,11 +459,11 @@ class AcquisitionRun:
                 "context; call via a run obtained from SpectralDataset.open"
             )
         from .encryption import encrypt_intensity_channel_in_group
-        # v0.7 M44: the in-place intensity encrypter still uses h5py
-        # group mutation (multi-dataset rewrite). Route via native
-        # handle; a protocol-native rewrite is a v0.8 follow-up.
-        h5group = _native_h5py(self.group)
-        sig_group = h5group["signal_channels"]
+        # v0.9 M64.5 phase B: the in-place encrypter now accepts either
+        # h5py.Group or StorageGroup, so route through the protocol —
+        # works on Memory / SQLite / Zarr backends without
+        # _native_h5py.
+        sig_group = self.group.open_group("signal_channels")
         encrypt_intensity_channel_in_group(sig_group, key)
 
     def decrypt_with_key(self, key: bytes) -> bytes:
@@ -482,9 +482,9 @@ class AcquisitionRun:
                 "context; call via a run obtained from SpectralDataset.open"
             )
         from .encryption import read_encrypted_channel
-        # v0.7 M44: cold-path, same rationale as encrypt_with_key.
-        h5group = _native_h5py(self.group)
-        sig_group = h5group["signal_channels"]
+        # v0.9 M64.5 phase B: read_encrypted_channel accepts both h5py
+        # and StorageGroup; no native unwrap needed.
+        sig_group = self.group.open_group("signal_channels")
         arr = read_encrypted_channel(sig_group, "intensity", key, dtype="<f8")
         return arr.tobytes()
 

@@ -92,10 +92,16 @@ def anonymize(
     source: SpectralDataset,
     output_path: str | Path,
     policy: AnonymizationPolicy,
+    *,
+    provider: str = "hdf5",
 ) -> AnonymizationResult:
     """Apply ``policy`` to ``source`` and write a new ``.mpgo`` to ``output_path``.
 
-    The source dataset must be open for reading. The original is not modified.
+    The source dataset must be open for reading. The original is not
+    modified. v0.9 M64.5 phase B: the optional ``provider`` kwarg is
+    threaded through to :meth:`SpectralDataset.write_minimal` so the
+    anonymized output can land on any registered backend
+    (``"hdf5"`` / ``"memory"`` / ``"sqlite"`` / ``"zarr"``).
     """
     result = AnonymizationResult(output_path=Path(output_path))
     identifications = source.identifications()
@@ -255,6 +261,7 @@ def anonymize(
         identifications=new_ids if not policy.redact_saav_spectra else _filter_ids(new_ids, new_runs),
         provenance=[prov],
         features=features,
+        provider=provider,
     )
 
     return result
