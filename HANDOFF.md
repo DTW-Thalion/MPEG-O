@@ -1,20 +1,16 @@
 # MPEG-O v0.10 — Streaming Transport Protocol
 
-> **Status:** v0.9.0 is **ready** (tag pending). ObjC 1133+
-> assertions, Python 341+ tests, Java 207+ tests. Four storage
-> providers, seven importers, five exporters, PQC crypto,
-> integration + stress + security test suites.
+> **Status:** v0.9.0 and v0.9.1 tagged and pushed. Four storage
+> providers (HDF5, Memory, SQLite, Zarr v3), seven importers, five
+> exporters plus imzML and mzTab exporters, PQC crypto, integration +
+> stress + security test suites. Three exporter xfails from M64
+> (mzML `<activation>`, nmrML version attr, ISA-Tab PUBLICATIONS)
+> closed in 65c3666 / 6b26f2e; Zarr v3 migration landed in 391a7d2.
 >
-> Three xfailed exporter defects remain from v0.9:
-> 1. mzML export: precursor/activation cvParam incomplete
-> 2. nmrML export: version attribute mismatch
-> 3. ISA-Tab export: PUBLICATIONS section missing
->
-> This session first fixes those defects and tags v0.9.0, then
-> implements **the MPEG-G Part 2 equivalent: a streaming transport
-> format** with bidirectional conversion to/from the file format,
-> selective network access, and real-time acquisition simulation.
-> Milestones 65–72.
+> This session implements **the MPEG-G Part 2 equivalent: a streaming
+> transport format** with bidirectional conversion to/from the file
+> format, selective network access, and real-time acquisition
+> simulation. Milestones 66–72. M65 complete.
 
 ---
 
@@ -111,7 +107,17 @@ releases.
 
 ---
 
-## Milestone 65 — Exporter Defect Fixes + v0.9.0 Tag
+## Milestone 65 — Exporter Defect Fixes + v0.9.0 Tag — COMPLETE
+
+Fixes shipped in commits 65c3666 (mzML activation + isolation-window
+cvParams, ISA-Tab PUBLICATIONS) and 6b26f2e (nmrML spectrum1D XSD
+closure). v0.9.0 tagged at 228eeb5; v0.9.1 follow-up tagged at
+fd0c06c carrying the exporter closures plus imzML/mzTab exporters
+and Zarr v3 migration.
+
+Historical spec retained below for audit.
+
+### Historical: Milestone 65 — Exporter Defect Fixes + v0.9.0 Tag
 
 **License:** Apache-2.0 (exporters), LGPL-3.0 (tests)
 
