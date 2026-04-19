@@ -94,10 +94,31 @@ public final class FeatureFlags {
         return new FeatureFlags(version, flags);
     }
 
+    /** Read feature flags from any provider's root group (v0.9). */
+    public static FeatureFlags readFrom(com.dtwthalion.mpgo.providers.StorageGroup root) {
+        String version = "1.0.0";
+        Set<String> flags = new LinkedHashSet<>();
+        if (root.hasAttribute("mpeg_o_format_version")) {
+            Object v = root.getAttribute("mpeg_o_format_version");
+            if (v != null) version = v.toString();
+        }
+        if (root.hasAttribute("mpeg_o_features")) {
+            Object v = root.getAttribute("mpeg_o_features");
+            if (v != null) flags = parseJsonArray(v.toString());
+        }
+        return new FeatureFlags(version, flags);
+    }
+
     /** Write feature flags to an HDF5 root group. */
     public void writeTo(Hdf5Group root) {
         root.setStringAttribute("mpeg_o_format_version", formatVersion);
         root.setStringAttribute("mpeg_o_features", toJsonArray());
+    }
+
+    /** Write feature flags to any provider's root group (v0.9). */
+    public void writeTo(com.dtwthalion.mpgo.providers.StorageGroup root) {
+        root.setAttribute("mpeg_o_format_version", formatVersion);
+        root.setAttribute("mpeg_o_features", toJsonArray());
     }
 
     private String toJsonArray() {

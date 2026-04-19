@@ -92,10 +92,37 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
     return out;
 }
 
+#pragma mark - URL scheme routing (v0.9 M64.5)
+
+static BOOL isNonHdf5ProviderURL(NSString *url) {
+    if (url.length == 0) return NO;
+    return [url hasPrefix:@"memory://"]
+        || [url hasPrefix:@"sqlite://"]
+        || [url hasPrefix:@"zarr://"];
+}
+
+static NSError *makeProviderRoutingError(NSString *url) {
+    NSString *msg = [NSString stringWithFormat:
+        @"ObjC SpectralDataset URL routing for scheme '%@' is not yet "
+        @"implemented (v0.9 M64.5 scope limit: only HDF5 read/write is "
+        @"wired through the high-level MPGOSpectralDataset entry points). "
+        @"Use MPGOProviderRegistry + AcquisitionRun.readFromGroup: directly, "
+        @"or drive Memory/SQLite/Zarr .mpgo files through the Python / Java "
+        @"implementations which already have full URL-scheme dispatch.",
+        [url componentsSeparatedByString:@"://"].firstObject ?: url];
+    return [NSError errorWithDomain:@"MPGOSpectralDatasetErrorDomain"
+                                code:999
+                            userInfo:@{NSLocalizedDescriptionKey: msg}];
+}
+
 #pragma mark - HDF5 write
 
 - (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error
 {
+    if (isNonHdf5ProviderURL(path)) {
+        if (error) *error = makeProviderRoutingError(path);
+        return NO;
+    }
     // M39: route through MPGOHDF5Provider. writeToFilePath: is a
     // transactional create-write-close (handle isn't retained) so we
     // close the provider at the tail of the method.
@@ -219,6 +246,10 @@ static NSArray *decodePlistArray(NSString *json, Class cls, NSError **error)
 
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error
 {
+    if (isNonHdf5ProviderURL(path)) {
+        if (error) *error = makeProviderRoutingError(path);
+        return nil;
+    }
     // M39: route through MPGOHDF5Provider; the native handle is the
     // MPGOHDF5File previously obtained directly.
     MPGOHDF5Provider *p = [[MPGOHDF5Provider alloc] init];

@@ -191,6 +191,31 @@ round-trip). All 39 cross-provider cells pass on HDF5, Memory,
 SQLite, and Zarr. The caller refactor is now complete for v0.9.0;
 no rows in this table say "Still native".
 
+### Cross-language URL-scheme dispatch (v0.9 M64.5-objc-java)
+
+Python's `SpectralDataset.open(url)` detected URL schemes after
+M64.5 phase A; the v0.9 follow-up extends the same dispatch to the
+Java and ObjC entry points:
+
+| Language | `open(url)` | `create(url, ...)` | Notes |
+|---|---|---|---|
+| Python  | All 4 providers | All 4 providers | HDF5 fast path + StorageGroup path (M64.5 phase A) |
+| Java    | All 4 providers | All 4 providers | M64.5-objc-java: `ProviderRegistry.open` + JSON-attribute metadata path |
+| ObjC    | HDF5 only; non-HDF5 URL rejects with clear error | HDF5 only; same | Full ObjC cross-provider read/write path is a v1.0+ scope item — `MPGOAcquisitionRun` is HDF5-coupled and needs a parallel StorageGroup-protocol implementation. URL detection lives in `MPGOSpectralDataset.m` so non-HDF5 URLs now fail cleanly instead of opaquely. |
+
+**Cross-language cross-provider interop** is tested by
+`python/tests/validation/test_cross_language_smoke.py`:
+
+* HDF5: Python writes, ObjC + Java both read (3 tests, all pass)
+* 4-provider matrix on Java: HDF5 passes; Memory / SQLite / Zarr
+  xfail with specific documented limits (in-process-only,
+  float64/int64 dtype mismatch, Java compression gap)
+* ObjC non-HDF5 URL rejection: clean error path verified
+
+Real cross-language persistent-file interop today is HDF5-only;
+memory/sqlite/zarr interop is bounded by provider-level
+implementation gaps tracked as v1.0+ items.
+
 ---
 
 ## HDF5 Container Mapping
