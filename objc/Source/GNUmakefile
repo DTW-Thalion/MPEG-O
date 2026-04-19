@@ -63,6 +63,7 @@ libMPGO_HEADER_FILES = \
 	Import/MPGOWatersMassLynxReader.h \
 	Export/MPGOMzMLWriter.h \
 	Export/MPGONmrMLWriter.h \
+	Export/MPGOImzMLWriter.h \
 	Export/MPGOISAExporter.h \
 	Providers/MPGOCompoundField.h \
 	Providers/MPGOStorageProtocols.h \
@@ -126,6 +127,7 @@ libMPGO_OBJC_FILES = \
 	Import/MPGOWatersMassLynxReader.m \
 	Export/MPGOMzMLWriter.m \
 	Export/MPGONmrMLWriter.m \
+	Export/MPGOImzMLWriter.m \
 	Export/MPGOISAExporter.m \
 	Providers/MPGOCompoundField.m \
 	Providers/MPGOProviderRegistry.m \

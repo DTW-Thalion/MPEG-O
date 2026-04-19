@@ -313,13 +313,34 @@ public final class ImzMLReader {
             if (value == null) value = "";
 
             switch (acc) {
-                case "IMS:1000030": case "MS:1000030":
-                    mode = "continuous"; return;
-                case "IMS:1000031": case "MS:1000031":
-                    mode = "processed"; return;
-                case "IMS:1000042":
+                // imzML storage mode: only the IMS-namespaced forms are
+                // real. MS:1000030 = "vendor processing software",
+                // MS:1000031 = "instrument model" — unrelated terms.
+                case "IMS:1000030": mode = "continuous"; return;
+                case "IMS:1000031": mode = "processed"; return;
+                // Canonical IMS accessions (real-world imzML 1.1).
+                case "IMS:1000080":
                     if (!value.isEmpty()) uuidHex = normaliseUuid(value);
                     return;
+                case "IMS:1000042":
+                    if (!value.isEmpty()) {
+                        // Canonical max count of pixels x. Legacy MPGO
+                        // pre-v0.9 used IMS:1000042 for UUID with a
+                        // hex-string value; if the value isn't a plain
+                        // integer and we haven't seen a UUID yet, treat
+                        // it as the legacy UUID accession.
+                        try {
+                            gridMaxX = Integer.parseInt(value);
+                        } catch (NumberFormatException ignored) {
+                            if (uuidHex.isEmpty()) {
+                                String cand = normaliseUuid(value);
+                                if (cand.length() == 32) uuidHex = cand;
+                            }
+                        }
+                    }
+                    return;
+                case "IMS:1000043":
+                    if (!value.isEmpty()) gridMaxY = Integer.parseInt(value); return;
                 case "IMS:1000003":
                     if (!value.isEmpty()) gridMaxX = Integer.parseInt(value); return;
                 case "IMS:1000004":
