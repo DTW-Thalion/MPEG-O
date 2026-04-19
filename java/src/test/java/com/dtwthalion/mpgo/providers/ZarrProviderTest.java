@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * v0.8 M52 — Java ZarrProvider round-trip sanity tests.
+ * Java ZarrProvider round-trip sanity tests (v3 layout).
  *
  * <p>Cross-language parity (Python / ObjC fixtures readable by Java
  * and vice versa) lives in a follow-up harness; this suite covers the
@@ -40,8 +40,8 @@ public class ZarrProviderTest {
             assertTrue(p.supportsUrl(store.toString()));
             assertNotNull(p.rootGroup());
         }
-        // .zgroup should have been written on CREATE.
-        assertTrue(Files.exists(store.resolve(".zgroup")));
+        // zarr.json should have been written on CREATE.
+        assertTrue(Files.exists(store.resolve("zarr.json")));
     }
 
     @Test

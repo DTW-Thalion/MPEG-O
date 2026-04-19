@@ -296,7 +296,7 @@ class _ZarrGroup(StorageGroup):
         names: list[str] = []
         for entry in self._group:
             child = self._group[entry]
-            if isinstance(child, zarr.hierarchy.Group):
+            if isinstance(child, zarr.Group):
                 if child.attrs.get(_COMPOUND_KIND_ATTR) == _COMPOUND_KIND_VALUE:
                     names.append(entry)  # compound-as-dataset
                 else:
@@ -312,7 +312,7 @@ class _ZarrGroup(StorageGroup):
         if name not in self._group:
             raise KeyError(f"group '{name}' not found in '{self._name}'")
         child = self._group[name]
-        if not isinstance(child, zarr.hierarchy.Group):
+        if not isinstance(child, zarr.Group):
             raise KeyError(f"'{name}' is a dataset, not a group")
         if child.attrs.get(_COMPOUND_KIND_ATTR) == _COMPOUND_KIND_VALUE:
             raise KeyError(
@@ -335,7 +335,7 @@ class _ZarrGroup(StorageGroup):
         if name not in self._group:
             raise KeyError(f"dataset '{name}' not found in '{self._name}'")
         child = self._group[name]
-        if isinstance(child, zarr.hierarchy.Group):
+        if isinstance(child, zarr.Group):
             if child.attrs.get(_COMPOUND_KIND_ATTR) != _COMPOUND_KIND_VALUE:
                 raise KeyError(f"'{name}' is a group, not a dataset")
             fields = _schema_from_json(child.attrs[_COMPOUND_SCHEMA_ATTR])
@@ -350,14 +350,13 @@ class _ZarrGroup(StorageGroup):
                        compression_level: int = 6) -> StorageDataset:
         if name in self._group:
             raise ValueError(f"'{name}' already exists in '{self._name}'")
-        chunks = (chunk_size,) if chunk_size > 0 else None
-        compressor = _compressor_for(compression, compression_level)
-        arr = self._group.create_dataset(
-            name,
+        actual_chunks = (chunk_size,) if chunk_size > 0 else (length,)
+        arr = self._group.create_array(
+            name=name,
             shape=(length,),
-            chunks=chunks if chunks else True,
+            chunks=actual_chunks,
             dtype=precision.numpy_dtype(),
-            compressor=compressor,
+            compressors=_compressors_for(compression, compression_level),
             overwrite=False,
         )
         return _ZarrPrimitiveDataset(name, arr, self._group)
@@ -369,13 +368,13 @@ class _ZarrGroup(StorageGroup):
                            compression_level: int = 6) -> StorageDataset:
         if name in self._group:
             raise ValueError(f"'{name}' already exists in '{self._name}'")
-        compressor = _compressor_for(compression, compression_level)
-        arr = self._group.create_dataset(
-            name,
+        actual_chunks = tuple(chunks) if chunks else tuple(shape)
+        arr = self._group.create_array(
+            name=name,
             shape=tuple(shape),
-            chunks=tuple(chunks) if chunks else True,
+            chunks=actual_chunks,
             dtype=precision.numpy_dtype(),
-            compressor=compressor,
+            compressors=_compressors_for(compression, compression_level),
             overwrite=False,
         )
         return _ZarrPrimitiveDataset(name, arr, self._group)
@@ -469,7 +468,7 @@ class ZarrProvider(StorageProvider):
         return True
 
     def native_handle(self) -> Any:
-        """The underlying :class:`zarr.hierarchy.Group` — callers that
+        """The underlying :class:`zarr.Group` — callers that
         need zarr-specific APIs (consolidate_metadata, tree display)
         can reach for it."""
         return self._root
@@ -495,7 +494,13 @@ def _normalise_memory_url(url: str) -> str:
 def _store_for_url(url: str, mode: str) -> Any:
     """Dispatch a URL to a concrete zarr store. Mode is advisory for
     memory-backed stores (they always retain prior state unless mode
-    == 'w')."""
+    == 'w').
+
+    v1.0: targets zarr-python 3.x, which renamed the stores:
+      DirectoryStore -> LocalStore
+      FSStore        -> FsspecStore
+    The `zarr+memory://` convention still maps to MemoryStore.
+    """
     if url.startswith("zarr+memory://"):
         key = _normalise_memory_url(url)
         with _MEM_LOCK:
@@ -505,16 +510,16 @@ def _store_for_url(url: str, mode: str) -> Any:
     if url.startswith("zarr+s3://"):
         remainder = url[len("zarr+s3://"):]
         # Relies on s3fs being installed; surfacing ImportError is fine.
-        return zarr.storage.FSStore(f"s3://{remainder}")
+        return zarr.storage.FsspecStore.from_url(f"s3://{remainder}")
     if url.startswith("zarr://"):
         path = url[len("zarr://"):]
         # Triple-slash → absolute path: strip leading '//' that parse
         # artefacts may leave in.
         if path.startswith("//"):
             path = path[2:]
-        return zarr.storage.DirectoryStore(path)
+        return zarr.storage.LocalStore(path)
     # Bare path: assume local directory.
-    return zarr.storage.DirectoryStore(url)
+    return zarr.storage.LocalStore(url)
 
 
 # ── Dtype ↔ Precision mapping ─────────────────────────────────────────
@@ -532,30 +537,37 @@ def _dtype_to_precision(dtype: np.dtype) -> Precision | None:
     return _DTYPE_TO_PRECISION.get(dtype.name)
 
 
-def _compressor_for(compression: Compression, level: int) -> Any:
-    """Map the MPEG-O compression enum onto a numcodecs codec. Zarr 2
-    uses None to disable compression.
+def _compressors_for(compression: Compression, level: int) -> tuple | None:
+    """Map the MPEG-O compression enum onto a zarr v3 codec chain.
 
-    v0.9: ZLIB chunks use raw ``numcodecs.Zlib`` rather than
-    ``Blosc(cname='zlib')`` so the Java ``ZarrProvider`` (which has
-    a JDK-builtin Inflater but no Blosc binding) can decode the same
-    files. Compression ratio is comparable; we lose Blosc's parallel
-    decode but gain cross-language portability — the right trade for
-    the v0.9 cross-language matrix.
+    Returns a tuple suitable for ``create_array(compressors=...)`` in
+    zarr-python 3.x. ``None`` (not an empty tuple) disables compression
+    and makes the chunk-byte pipeline just the ``bytes`` codec.
+
+    v1.0: zarr-python 3 uses its own codec registry rooted in
+    :mod:`zarr.codecs`. The cross-language Java + ObjC providers
+    (self-contained, no zarr dependency) emit the same on-disk bytes
+    by calling the platform zlib/gzip directly, so any codec we pick
+    here must be one those readers can decode. ``GzipCodec`` is the
+    canonical ZLIB choice — it serialises as ``{"name": "gzip",
+    "configuration": {"level": N}}`` in the v3 ``zarr.json``.
     """
     if compression in (Compression.NONE, None):
         return None
-    try:
-        from numcodecs import Blosc, Zlib
-    except ImportError:  # pragma: no cover
-        return None
+    from zarr.codecs import GzipCodec
     if compression == Compression.ZLIB:
-        return Zlib(level=max(1, min(level, 9)))
+        return (GzipCodec(level=max(1, min(level, 9))),)
     if compression == Compression.LZ4:
-        # Blosc(cname=lz4) stays — LZ4 is opt-in (HDF5 filter 32004
-        # equivalent) and the Java reader doesn't claim LZ4 support.
-        return Blosc(cname="lz4", clevel=max(1, min(level, 9)))
+        # LZ4 is opt-in and the self-contained Java/ObjC readers
+        # don't claim LZ4 decode support. Fall back to gzip.
+        return (GzipCodec(level=max(1, min(level, 9))),)
     return None
+
+
+# Legacy name kept for any caller still importing the older helper.
+def _compressor_for(compression: Compression, level: int) -> Any:
+    codecs = _compressors_for(compression, level)
+    return codecs[0] if codecs else None
 
 
 # ── Attribute coercion (zarr attrs must be JSON-serialisable) ──────────

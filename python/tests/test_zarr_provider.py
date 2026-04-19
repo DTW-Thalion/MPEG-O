@@ -338,4 +338,6 @@ def test_native_handle_is_zarr_group(dir_url: str) -> None:
     import zarr
     with open_provider(dir_url, mode="w") as p:
         handle = p.native_handle()
-        assert isinstance(handle, zarr.hierarchy.Group)
+        # v1.0 zarr-python 3.x: Group moved from zarr.hierarchy.Group
+        # to the top-level zarr.Group export.
+        assert isinstance(handle, zarr.Group)
