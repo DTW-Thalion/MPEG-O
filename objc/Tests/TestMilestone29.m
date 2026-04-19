@@ -57,16 +57,20 @@ void testMilestone29(void)
         NSString *str = [[NSString alloc] initWithData:xml encoding:NSUTF8StringEncoding];
         PASS([str rangeOfString:@"<nmrML"].location != NSNotFound,
              "M29: output contains <nmrML> root");
-        PASS([str rangeOfString:@"NMR:1000001"].location != NSNotFound,
-             "M29: output contains spectrometer frequency cvParam");
+        // v0.9 M64 canonical nmrML: cvParams inside acquisitionParameterSet
+        // are no longer XSD-valid; spectrometer frequency + sweep width are
+        // now emitted as <irradiationFrequency> + <sweepWidth> elements
+        // inside DirectDimensionParameterSet.
+        PASS([str rangeOfString:@"<irradiationFrequency"].location != NSNotFound,
+             "M29: output contains <irradiationFrequency>");
         PASS([str rangeOfString:@"NMR:1000002"].location != NSNotFound,
-             "M29: output contains nucleus cvParam");
-        PASS([str rangeOfString:@"NMR:1400014"].location != NSNotFound,
-             "M29: output contains sweep width cvParam");
-        PASS([str rangeOfString:@"<spectrum1D>"].location != NSNotFound,
-             "M29: output contains <spectrum1D>");
-        PASS([str rangeOfString:@"<xAxis>"].location != NSNotFound,
-             "M29: output contains <xAxis>");
+             "M29: output contains NMR:1000002 (acquisition nucleus)");
+        PASS([str rangeOfString:@"<sweepWidth"].location != NSNotFound,
+             "M29: output contains <sweepWidth>");
+        PASS([str rangeOfString:@"<spectrum1D"].location != NSNotFound,
+             "M29: output contains <spectrum1D");
+        PASS([str rangeOfString:@"<xAxis"].location != NSNotFound,
+             "M29: output contains <xAxis (attribute-only)");
     }
 
     // ---- nmrML round-trip via reader ----

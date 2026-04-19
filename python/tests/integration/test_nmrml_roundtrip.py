@@ -196,7 +196,10 @@ def test_nmrml_writer_emits_sweep_width(tmp_path: Path) -> None:
     out = tmp_path / "sw.nmrML"
     nmrml_writer.write_spectrum(spec, out, sweep_width_ppm=12.5)
     text = out.read_text()
-    assert 'name="sweep width" value="12.5"' in text
+    # v0.9 M64 canonical form: sweep width is emitted as the
+    # <sweepWidth value="..."/> element inside DirectDimensionParameterSet
+    # rather than as a cvParam (matches nmrML XSD content model).
+    assert '<sweepWidth value="12.5"' in text
 
     re_read = nmrml_reader.read(out)
     assert re_read.nucleus_type == "1H"

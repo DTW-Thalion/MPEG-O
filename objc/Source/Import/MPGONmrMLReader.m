@@ -58,6 +58,8 @@ NSString *const MPGONmrMLReaderErrorDomain = @"MPGONmrMLReaderErrorDomain";
     // Current spectrum1D state
     NSData *_currentXAxisData;
     NSData *_currentYAxisData;
+    NSData *_currentInterleavedXY;  // v0.9 canonical single-array form
+    NSUInteger _current1DNumberOfDataPoints;
     NSUInteger _currentSpecIndex;
 }
 
@@ -282,6 +284,9 @@ didStartElement:(NSString *)elementName
         _inSpectrum1D = YES;
         _currentXAxisData = nil;
         _currentYAxisData = nil;
+        _currentInterleavedXY = nil;
+        NSString *n = attrs[@"numberOfDataPoints"];
+        _current1DNumberOfDataPoints = n ? (NSUInteger)[n integerValue] : 0;
         return;
     }
 
@@ -368,6 +373,7 @@ didStartElement:(NSString *)elementName
         }
         if (_inXAxis) _currentXAxisData = decoded;
         else if (_inYAxis) _currentYAxisData = decoded;
+        else if (_inSpectrum1D) _currentInterleavedXY = decoded;
         return;
     }
 
@@ -450,10 +456,52 @@ didStartElement:(NSString *)elementName
 - (void)finishSpectrum1D
 {
     if (_internalError) return;
-    if (!_currentXAxisData || !_currentYAxisData) return;
 
-    MPGOSignalArray *csArr = makeFloat64Array(_currentXAxisData);
-    MPGOSignalArray *inArr = makeFloat64Array(_currentYAxisData);
+    // v0.9 M64 canonical form: single <spectrumDataArray> directly
+    // under <spectrum1D> carrying interleaved (x,y) doubles.
+    // Detected by encodedLength == 2 * numberOfDataPoints * 8.
+    NSData *csData = _currentXAxisData;
+    NSData *inData = _currentYAxisData;
+    if (_currentInterleavedXY) {
+        NSUInteger totalDoubles = _currentInterleavedXY.length / sizeof(double);
+        NSUInteger n = _current1DNumberOfDataPoints;
+        const double *xy = (const double *)_currentInterleavedXY.bytes;
+        if (n > 0 && totalDoubles == 2 * n) {
+            NSMutableData *cs = [NSMutableData dataWithLength:n * sizeof(double)];
+            NSMutableData *it = [NSMutableData dataWithLength:n * sizeof(double)];
+            double *csp = (double *)cs.mutableBytes;
+            double *itp = (double *)it.mutableBytes;
+            for (NSUInteger i = 0; i < n; i++) {
+                csp[i] = xy[2*i    ];
+                itp[i] = xy[2*i + 1];
+            }
+            csData = cs;
+            inData = it;
+        } else if (n > 0 && totalDoubles == n) {
+            // y-only external nmrML — synthesize x-axis.
+            NSMutableData *cs = [NSMutableData dataWithLength:n * sizeof(double)];
+            double *csp = (double *)cs.mutableBytes;
+            for (NSUInteger i = 0; i < n; i++) csp[i] = (double)i;
+            csData = cs;
+            inData = _currentInterleavedXY;
+        } else if (totalDoubles % 2 == 0 && totalDoubles >= 2) {
+            NSUInteger half = totalDoubles / 2;
+            NSMutableData *cs = [NSMutableData dataWithLength:half * sizeof(double)];
+            NSMutableData *it = [NSMutableData dataWithLength:half * sizeof(double)];
+            double *csp = (double *)cs.mutableBytes;
+            double *itp = (double *)it.mutableBytes;
+            for (NSUInteger i = 0; i < half; i++) {
+                csp[i] = xy[2*i    ];
+                itp[i] = xy[2*i + 1];
+            }
+            csData = cs;
+            inData = it;
+        }
+    }
+    if (!csData || !inData) return;
+
+    MPGOSignalArray *csArr = makeFloat64Array(csData);
+    MPGOSignalArray *inArr = makeFloat64Array(inData);
     if (csArr.length != inArr.length) {
         [self failWithCode:MPGONmrMLReaderErrorArrayLengthMismatch
                    message:@"spectrum1D xAxis and yAxis have different lengths"];
@@ -474,6 +522,8 @@ didStartElement:(NSString *)elementName
 
     _currentXAxisData = nil;
     _currentYAxisData = nil;
+    _currentInterleavedXY = nil;
+    _current1DNumberOfDataPoints = 0;
 }
 
 - (void)parser:(NSXMLParser *)parser parseErrorOccurred:(NSError *)parseError

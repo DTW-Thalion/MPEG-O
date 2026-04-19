@@ -65,6 +65,7 @@ class _State:
         "in_spectrum_data_array", "current_array_compressed",
         "capturing_text", "text_buf",
         "current_x_axis", "current_y_axis", "current_index",
+        "current_number_of_data_points",
     )
 
     def __init__(self) -> None:
@@ -85,6 +86,7 @@ class _State:
         self.current_x_axis: np.ndarray | None = None
         self.current_y_axis: np.ndarray | None = None
         self.current_index = 0
+        self.current_number_of_data_points = 0
 
 
 # ------------------------------------------------------------------ parsing ---
@@ -142,6 +144,12 @@ def _handle_start(state: _State, tag: str, elem: Any) -> None:
         state.in_spectrum1d = True
         state.current_x_axis = None
         state.current_y_axis = None
+        try:
+            state.current_number_of_data_points = int(
+                attrs.get("numberOfDataPoints", "0") or "0"
+            )
+        except ValueError:
+            state.current_number_of_data_points = 0
         return
     if tag == "xAxis":
         state.in_x_axis = True
@@ -194,9 +202,37 @@ def _handle_end(state: _State, tag: str, elem: Any) -> None:
         raw = decode_base64("".join(state.text_buf), zlib_compressed=state.current_array_compressed)
         arr = np.frombuffer(raw, dtype="<f8").astype(np.float64, copy=True)
         if state.in_x_axis:
+            # Legacy form: <xAxis><spectrumDataArray>x_values</></>
             state.current_x_axis = arr
         elif state.in_y_axis:
+            # Legacy form: <yAxis><spectrumDataArray>y_values</></>
             state.current_y_axis = arr
+        elif state.in_spectrum1d:
+            # Canonical v0.9+ form: single <spectrumDataArray> directly
+            # inside <spectrum1D>. Interleaved (x,y) pairs → deinterleave;
+            # plain y-only (external nmrML) → generate x from 0..N-1.
+            if arr.size > 0 and arr.size % 2 == 0 and arr.size >= 2:
+                # Heuristic: if the array length matches 2 * N then
+                # it's interleaved (x,y) pairs. We can't always tell
+                # without numberOfDataPoints from the spectrum1D
+                # attribute, but even-length is necessary for pairs.
+                # When numberOfDataPoints is known, use it as the
+                # definitive tie-breaker.
+                n_attr = state.current_number_of_data_points
+                if n_attr > 0 and arr.size == 2 * n_attr:
+                    state.current_x_axis = arr[0::2].copy()
+                    state.current_y_axis = arr[1::2].copy()
+                elif n_attr > 0 and arr.size == n_attr:
+                    state.current_y_axis = arr
+                    state.current_x_axis = np.arange(n_attr, dtype=np.float64)
+                else:
+                    # Fall back: assume interleaved pairs when even.
+                    state.current_x_axis = arr[0::2].copy()
+                    state.current_y_axis = arr[1::2].copy()
+            else:
+                # Odd-length: must be y-only (external nmrML convention)
+                state.current_y_axis = arr
+                state.current_x_axis = np.arange(arr.size, dtype=np.float64)
         state.in_spectrum_data_array = False
         state.capturing_text = False
         state.text_buf.clear()
