@@ -32,10 +32,10 @@ crypto = ["cryptography>=41.0"]
 import = ["lxml"]
 cloud = ["fsspec", "s3fs", "aiohttp"]
 codecs = ["hdf5plugin>=4.0"]
-# v0.7 M46: ZarrProvider reference implementation. Pinned to zarr 2.x
-# because zarr-python 3 rewrites the storage API; v0.7's abstraction
-# targets the 2.18+ line. Bumping to zarr 3 is a v0.8 follow-up.
-zarr = ["zarr>=2.18,<3"]
+# v0.7 M46: ZarrProvider reference implementation. v0.9 migrated the
+# on-disk format from Zarr v2 to v3, so the dependency is pinned to
+# zarr-python 3.x.
+zarr = ["zarr>=3.0"]
 # v0.8 M49: post-quantum crypto (ML-KEM-1024 + ML-DSA-87) via liboqs.
 # Requires a system liboqs ≥ 0.14 — liboqs-python auto-builds one
 # under $HOME/_oqs on first import if missing. See docs/pqc.md for
@@ -47,7 +47,7 @@ pqc = ["liboqs-python>=0.14,<1"]
 # prebuilt libtimsdata.so / libtimsdata.dll / libtimsdata.dylib so pip
 # install is the whole story.
 bruker = ["opentimspy>=1.0", "opentims-bruker-bridge>=1.0"]
-test = ["pytest>=7", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0", "zarr>=2.18,<3", "liboqs-python>=0.14,<1", "opentimspy>=1.0", "opentims-bruker-bridge>=1.0"]
+test = ["pytest>=7", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0", "zarr>=3.0", "liboqs-python>=0.14,<1", "opentimspy>=1.0", "opentims-bruker-bridge>=1.0"]
 # v0.9 M57: integration test extras. pyimzML for M59 imzML imports;
 # pyteomics + pymzml for M64 cross-reader validation;
 # isatools is pinned because the API churns between minor releases.

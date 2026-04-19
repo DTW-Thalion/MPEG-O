@@ -3,17 +3,18 @@
 Validates that the v0.7 storage-provider abstraction
 (M43/M44/M45 refinements) generalises beyond HDF5. Zarr is the most
 mature alternative chunked-array container with a first-class Python
-binding (zarr-python ≥ 2.18).
+binding. Backed by zarr-python 3.x — on-disk format is **Zarr v3**
+(migrated from v2 in v0.9; pre-deployment, no shim was needed).
 
 URL schemes
 -----------
 * ``zarr:///path/to/store.zarr`` — directory store on the local
-  filesystem (delegates to :class:`zarr.storage.DirectoryStore`).
+  filesystem (delegates to :class:`zarr.storage.LocalStore`).
 * ``zarr+memory://<name>`` — in-memory store, keyed by ``<name>`` so
   two opens of the same URL share state (mirrors
   :class:`~mpeg_o.providers.memory.MemoryProvider`).
 * ``zarr+s3://bucket/key`` — cloud-backed store via fsspec
-  (delegates to :class:`zarr.storage.FSStore`).
+  (delegates to :class:`zarr.storage.FsspecStore`).
 
 Bare paths like ``/tmp/foo.zarr`` map to ``zarr:///tmp/foo.zarr``.
 
@@ -175,7 +176,7 @@ class _ZarrPrimitiveDataset(StorageDataset):
 
     def write(self, data: Any) -> None:
         arr = np.asarray(data)
-        # Zarr 2.x refuses dtype mismatches; coerce to the array's dtype.
+        # zarr-python refuses dtype mismatches; coerce to the array's dtype.
         if arr.dtype != self._array.dtype:
             arr = arr.astype(self._array.dtype)
         if arr.shape == self._array.shape:

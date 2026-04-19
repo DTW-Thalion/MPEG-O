@@ -11,6 +11,26 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [Unreleased] — v0.9 development
+
+### Changed
+- **Zarr v2 → v3 on-disk migration** across all three language
+  providers. Each node is now a single `zarr.json` file
+  (`node_type: group | array`) with attributes nested inside;
+  array chunks live under a `c/` prefix (`c/0/1/2`); dtypes use
+  canonical names (`float64`, `int32`, ...). Compression on read
+  accepts the `gzip` codec written by zarr-python's `GzipCodec`.
+  - Python uses zarr-python 3.x (`LocalStore`, `FsspecStore`,
+    `MemoryStore`, `create_array(compressors=...)`).
+  - Java + ObjC self-contained writers/readers updated to emit and
+    parse v3 layout byte-for-byte against zarr-python output.
+  - No backward-compat shim — pre-deployment, no v2 stores in the
+    wild. Read side does still accept legacy v2 dtype strings
+    (`<f8`, `<i4`, ...) for safety.
+  - Test counts unchanged: Python 586, ObjC 1271, Java 245.
+
+---
+
 ## [v0.8.0] — 2026-04-18
 
 ### Added
@@ -22,9 +42,10 @@ leading `0.` means the public API is still stabilising; see
   - **M49.1** ObjC dataset / envelope integration via
     `MPGOSignatureManager` + `MPGOKeyRotationManager`.
 - **M52** Java and Objective-C `ZarrProvider` ports. Self-contained
-  Zarr v2 DirectoryStore implementations — no external zarr library
-  dependency. Same on-disk layout as the Python reference so all
-  three languages cross-read one another's stores.
+  LocalStore implementations — no external zarr library dependency.
+  Same on-disk layout as the Python reference so all three languages
+  cross-read one another's stores. (On-disk format migrated from
+  Zarr v2 to v3 in v0.9; see Unreleased.)
 - **M53** Bruker timsTOF `.d` importer. SQLite metadata reads
   natively in every language; binary frame decompression uses
   `opentimspy` + `opentims-bruker-bridge` in Python and subprocesses

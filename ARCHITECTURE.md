@@ -200,8 +200,8 @@ Java and ObjC entry points:
 | Language | `open(url)` | `create(url, ...)` | Notes |
 |---|---|---|---|
 | Python  | All 4 providers | All 4 providers | HDF5 fast path + StorageGroup path (M64.5 phase A) |
-| Java    | All 4 providers | All 4 providers | M64.5-objc-java: `ProviderRegistry.open` + JSON-attribute metadata path. `ZarrProvider` gained zlib-chunk decompression via JDK `Inflater`. |
-| ObjC    | All 4 providers (read) | HDF5 only | v0.9 follow-up: `+readViaProviderURL:` uses `MPGOProviderRegistry` + new `MPGOAcquisitionRun readFromStorageGroup:` + new `MPGOSpectrumIndex readFromStorageGroup:` + JSON-attribute metadata. `MPGOZarrProvider` gained zlib-chunk decompression via libz. Write-side caller refactor is a v1.0+ item. |
+| Java    | All 4 providers | All 4 providers | M64.5-objc-java: `ProviderRegistry.open` + JSON-attribute metadata path. `ZarrProvider` reads gzip-compressed Zarr v3 chunks via JDK `GZIPInputStream`. |
+| ObjC    | All 4 providers (read) | HDF5 only | v0.9 follow-up: `+readViaProviderURL:` uses `MPGOProviderRegistry` + new `MPGOAcquisitionRun readFromStorageGroup:` + new `MPGOSpectrumIndex readFromStorageGroup:` + JSON-attribute metadata. `MPGOZarrProvider` reads gzip-compressed Zarr v3 chunks via libz. Write-side caller refactor is a v1.0+ item. |
 
 **Cross-language cross-provider interop** is tested by
 `python/tests/validation/test_cross_language_smoke.py` — 10 cells:
@@ -225,8 +225,9 @@ limit rather than an implementation gap. Persistent-file interop
 * Python SQLite `spectrum_index` UINT64 native support — v0.9
   maps `<u8` to INT64 at the provider boundary (byte-lossless
   because offsets are always < 2^63).
-* Java / ObjC Zarr blosc / lz4 decode — v0.9 handles raw zlib,
-  which is what Python defaults to.
+* Java / ObjC Zarr blosc / lz4 / zstd decode — v0.9 handles the
+  `gzip` codec written by zarr-python's default `GzipCodec`.
+  Python uses zarr-python's full codec catalog.
 
 ---
 
