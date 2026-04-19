@@ -41,16 +41,7 @@ from mpeg_o.importers import nmrml as nmrml_reader
 from mpeg_o.nmr_spectrum import NMRSpectrum
 from mpeg_o.signal_array import SignalArray
 
-_PROVIDERS = ["hdf5", "memory", "sqlite", "zarr"]
-_NATIVE_WRITE_ONLY = {"memory", "sqlite", "zarr"}
-
-
-def _maybe_skip_provider(provider: str) -> None:
-    if provider in _NATIVE_WRITE_ONLY:
-        pytest.skip(
-            f"provider '{provider}' not yet wired through "
-            "SpectralDataset.write_minimal — see ARCHITECTURE.md"
-        )
+from _provider_matrix import PROVIDERS as _PROVIDERS, maybe_skip_provider as _maybe_skip_provider
 
 
 # --------------------------------------------------------------------------- #
