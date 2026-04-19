@@ -463,3 +463,46 @@ Summary:
 
 **v0.7.0 minimum cut:** M43, M44, M45, M47, M48, M50 (must-have).
 M46, M51 stretch; M49 deferred to v0.8+.
+
+---
+
+## v0.9.0 — Integration Testing + Vendor Import Completion
+
+Shipped as commits on `main`; release tag pending user gate.
+
+- **M57** Test infra + fixtures (`e4f2ae4`) — markers, download
+  registry, synthetic generators, checksum pinning
+- **M58** Format round-trips (`d2b0de0`) — mzML / nmrML / Thermo /
+  Bruker TDF integration matrix
+- **M59** imzML importer (`f1fcce6` + `1753776`) — Python + Java +
+  ObjC with continuous/processed mode support
+- **M60** mzTab importer (`2fa6023`) — proteomics 1.0 + metabolomics
+  2.0.0-M
+- **M61** End-to-end workflow + security lifecycle (`c44365b`)
+- **M62** Stress + cross-provider benchmarks (`2aa4937` + `fa2a14f`)
+  — 31 stress cells, 3-language smoke
+- **M62.1** Cross-language cross-provider interop (`7d7f55d`) —
+  SQLite dtype parity, Java Zarr zlib, ObjC read-via-provider
+- **M63** Waters MassLynx importer (`50c2514`) — delegation pattern
+  mirroring Thermo
+- **M64** Cross-tool validation (this commit) — PSI XSD, pyteomics,
+  pymzml, isatools, backward-compat, nightly-stress CI
+- **M64.5** Caller refactor (`c00c3e0` + `73b7143` + `c3f69c9` +
+  `b932ed2`) — writer + reader + protection classes + KeyRotation +
+  MSImage all provider-aware; SpectralDataset URL-scheme dispatch
+  across Python / Java / ObjC
+
+### Performance analysis (parallel effort, not a milestone)
+
+- Instrumented all three languages (`tools/perf/`): cProfile
+  (Python), JFR (Java), phase-timing + pure-C baseline (ObjC)
+- Shipped three targeted optimisations (`122ace7`): ObjC
+  `writeMinimal` fast path, HDF5 chunk-size tuning, ObjC concat
+  improvement
+- Documented residual ObjC wrapper overhead (`b1a966b`) — at the
+  libhdf5 floor; call stacks validated across all three languages
+
+**v0.9.0 status:** Ready. Tag gated on user sign-off; commit log +
+test suite demonstrate all acceptance criteria except for three
+xfailed exporter-fidelity defects (mzML precursor/activation, nmrML
+version attribute, ISA-Tab PUBLICATIONS section) deferred to v1.0.
