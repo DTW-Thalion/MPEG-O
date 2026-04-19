@@ -112,7 +112,8 @@ public final class ProfileHarness {
             }
         }
 
-        Path outDir = Paths.get("/tmp/mpgo_profile_java");
+        Path outDir = Paths.get(System.getProperty("user.home"),
+                                 "mpgo_profile_java_out");
         Files.createDirectories(outDir);
 
         // Warm up — gives HotSpot time to compile hot methods.

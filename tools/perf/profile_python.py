@@ -34,9 +34,17 @@ from fixtures.generate import WrittenRun  # type: ignore[import-not-found]
 
 
 def build_written_run(n: int, peaks: int) -> WrittenRun:
-    mz_template = np.linspace(100.0, 1000.0, peaks, dtype=np.float64)
-    mz = np.tile(mz_template, n)
-    intensity = (1000.0 + ((np.arange(n * peaks) * 31) % 1000)).astype(np.float64)
+    # Matches Java StressTest.makeRun + ObjC TestStress.makeSpectrum —
+    # every spectrum gets varying values, not a repeating template, so
+    # libhdf5's zlib compressor sees the same working set in all three
+    # harnesses. Without this parity the Python file is ~13× smaller
+    # than the Java/ObjC ones and the benchmark is meaningless.
+    ii = np.repeat(np.arange(n, dtype=np.float64), peaks)
+    jj = np.tile(np.arange(peaks, dtype=np.float64), n)
+    mz = 100.0 + ii + jj * 0.1
+    ij = np.repeat(np.arange(n, dtype=np.int64), peaks) * 31 \
+         + np.tile(np.arange(peaks, dtype=np.int64), n)
+    intensity = (1000.0 + (ij % 1000).astype(np.float64))
     offsets = (np.arange(n, dtype=np.uint64) * peaks)
     lengths = np.full(n, peaks, dtype=np.uint32)
     rts = (np.arange(n, dtype=np.float64) * 0.06)

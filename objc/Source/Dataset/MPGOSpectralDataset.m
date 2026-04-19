@@ -364,22 +364,16 @@ static BOOL writeIndexArrayDS(MPGOHDF5Group *g, NSString *name,
         if (!writeIndexArrayDS(idxG, @"base_peak_intensities",
                                 MPGOPrecisionFloat64, run.basePeakIntensities, error)) return NO;
 
-        // Compound headers companion dataset (featureCompoundHeaders flag
-        // advertised above). Round-trip the index through MPGOSpectrumIndex
-        // so we reuse the existing compound-header writer without
-        // duplicating its schema here.
-        MPGOSpectrumIndex *sindex =
-            [[MPGOSpectrumIndex alloc] initWithOffsets:run.offsets
-                                               lengths:run.lengths
-                                        retentionTimes:run.retentionTimes
-                                              msLevels:run.msLevels
-                                            polarities:run.polarities
-                                          precursorMzs:run.precursorMzs
-                                      precursorCharges:run.precursorCharges
-                                   basePeakIntensities:run.basePeakIntensities];
-        [MPGOCompoundIO writeCompoundHeadersForIndex:sindex
-                                            intoGroup:idxG
-                                                error:NULL];
+        // v1.1 writeMinimal intentionally SKIPS the "opt_compound_headers"
+        // duplicate spectrum_index/headers compound dataset. That feature
+        // (added by MPGOCompoundIO writeCompoundHeadersForIndex:) writes
+        // the parallel index arrays again as a 56-byte-per-row compound,
+        // uncompressed + unchunked — ~5.6 MB on 100 K spectra. The parallel
+        // arrays are authoritative; the compound copy exists only for
+        // h5dump readability. Python's write_minimal doesn't emit it, and
+        // its absence is the single biggest file-size difference between
+        // the ObjC and Python minimal paths. Callers that need h5dump-
+        // friendly compound headers should use the object-mode writer.
 
         // signal_channels — pre-flattened NSData buffers, written
         // straight through with no per-spectrum concat.

@@ -268,6 +268,88 @@ array creates under one `H5P` property list — v1.0 format concern.
 At 100 K the ObjC `writeMinimal` path is now **within 25% of Java**
 rather than 50% behind object-mode, and under 3.5× Python.
 
+## Deeper dive — what was hiding the real ObjC parity
+
+The first-cut numbers reported "ObjC writeMinimal 554 ms vs Python
+162 ms at 100 K" — a 3.4× gap that looked like a real language-level
+problem. Two hidden fairness issues explained the entire gap:
+
+### Issue 1 — harness data pattern (13× file-size skew)
+
+Python's harness used `np.tile(mz_template, n)` — every one of the
+100 K spectra got the **same** 16-element m/z template, making the
+1.6 M-element signal channel a tiled repeat pattern that zlib
+compresses to 4 % of its raw size. The Java and ObjC harnesses
+generated per-spectrum-varying values (`mz[j] = 100 + i + j*0.1`),
+which zlib compresses to 16 %. Same format, same compressor — 4× less
+work for Python's libhdf5 to do.
+
+Fixing the Python harness to generate the same varying pattern:
+
+| Metric | Python before | Python after |
+|--------|--------------:|-------------:|
+| 100 K file size | 0.63 MB | **2.94 MB** |
+| 100 K write time | 162 ms | **516 ms** |
+| 100 K ratio vs ObjC | 3.4× faster | 1.03× faster |
+
+### Issue 2 — ObjC writeMinimal wrote a 5.6 MB duplicate
+
+The first cut of `+writeMinimalToPath:` emitted
+`spectrum_index/headers` — a compound dataset that duplicates the
+parallel 1-D index arrays in a single 56-byte-per-row compound
+dtype, uncompressed and unchunked, for h5dump readability. Python's
+`write_minimal` doesn't emit it; neither does Java. 100 K spectra =
+5.6 MB of dead weight + ~45 ms of extra write time.
+
+Dropping it (the parallel arrays are authoritative):
+
+| Metric | ObjC before | ObjC after |
+|--------|-------------|------------|
+| 100 K file size | 8.49 MB | **2.89 MB** (matches Python byte-for-byte region) |
+| 100 K writeMinimal | 554 ms | **501 ms** |
+
+### Apples-to-apples final — 100 K spectra, matched data
+
+| Lang | Build (ms) | Write (ms) | Read (ms) | Total (ms) | File (MB) |
+|------|-----------:|-----------:|----------:|-----------:|----------:|
+| Python | 21.6 | 516.3 | 55.0 | 592.9 | 2.94 |
+| Java | 17.2 | **441.5** | 39.4 | **498.1** | 7.33* |
+| ObjC | **11.7** | 501.5 | **35.1** | 548.3 | 2.89 |
+
+*Java writes the 8 index arrays **contiguous + uncompressed**
+(`chunkSize=0` in `SpectrumIndex.writeDataset`). That's ~4.8 MB
+extra on disk but skips a zlib pass on the index data. Java's write
+edge is entirely that format choice, not a language-level advantage —
+Python and ObjC both choose compressed indexes.
+
+### What ObjC actually does fastest
+
+- **Build phase**: ObjC 11.7 ms vs Python 21.6 ms — the compiled
+  advantage shows when assembling the in-memory buffers.
+- **Read phase**: ObjC 35.1 ms vs Python 55.0 ms, Java 39.4 ms. Same
+  workload across all three.
+
+**Per-megabyte-written** (real throughput, not affected by the
+index-compression choice):
+
+| Lang | ms / MB |
+|------|--------:|
+| Java | 60.2 |
+| Python | 175.6 |
+| ObjC | **173.5** |
+
+Java actually writes less compressed work per MB, which is why it
+leads. ObjC and Python are within 1% of each other on raw
+write throughput, and ObjC wins everywhere that doesn't involve the
+zlib index-compression choice.
+
+### The bottom line
+
+The original "ObjC is 2× slower" claim was entirely workload artifact.
+With fair data + format parity, ObjC `writeMinimal` is at **parity
+with Python** and **within 12% of Java** on writes, and **faster
+than both** on build and read.
+
 ## Reproducing
 
 ```bash

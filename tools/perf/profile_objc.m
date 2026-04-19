@@ -378,8 +378,9 @@ int main(int argc, const char *argv[])
         const char *mode = minimal ? " (writeMinimal)"
                                     : (flat ? " (flat primitives)" : "");
 
-        NSString *outDir = [NSString stringWithFormat:@"%@/mpgo_profile_objc",
-                            NSTemporaryDirectory()];
+        const char *home = getenv("HOME");
+        NSString *outDir = [NSString stringWithFormat:@"%s/mpgo_profile_objc_out",
+                            home ? home : "/tmp"];
         [[NSFileManager defaultManager] createDirectoryAtPath:outDir
                                   withIntermediateDirectories:YES
                                                    attributes:nil
