@@ -100,6 +100,7 @@ public final class NmrMLReader {
         private String nucleus = null;
         private int numberOfScans = 1;
         private double dwellTimeSeconds = 0;
+        private double sweepWidthPPM = 0;
 
         // FID
         private String fidBase64 = null;
@@ -109,16 +110,28 @@ public final class NmrMLReader {
         // Spectrum data
         private String xAxisBase64 = null;
         private String yAxisBase64 = null;
+        // v0.9 M64: canonical nmrML form stores spectrum1D as a single
+        // <spectrumDataArray> with interleaved (x,y) doubles +
+        // attribute-only <xAxis>. Detect via encodedLength ==
+        // 2 * numberOfDataPoints * 8.
+        private String spectrumXYBase64 = null;
+        private int spectrum1DNumberOfDataPoints = 0;
         private String spectrumByteFormat = "float64";
         private boolean spectrumCompressed = false;
 
         // Parse state
         private final StringBuilder textBuf = new StringBuilder();
         private boolean inFidData = false;
+        private boolean inSpectrum1D = false;
         private boolean inXAxis = false;
         private boolean inYAxis = false;
         private boolean inSpectrumDataArray = false;
         private boolean inAcquisitionParameterSet = false;
+        // v0.9 M64: DirectDimensionParameterSet carries the canonical
+        // acquisitionNucleus/sweepWidth/irradiationFrequency triplet in
+        // modern nmrML. Track it so the reader prefers these over the
+        // legacy cvParam-in-acquisitionParameterSet form.
+        private boolean inDirectDimensionParameterSet = false;
 
         @Override
         public void startElement(String uri, String localName, String qName,
@@ -166,6 +179,32 @@ public final class NmrMLReader {
                     String comp = atts.getValue("compressed");
                     fidCompressed = "true".equalsIgnoreCase(comp) || "zlib".equalsIgnoreCase(comp);
                 }
+                case "spectrum1D" -> {
+                    inSpectrum1D = true;
+                    String n = atts.getValue("numberOfDataPoints");
+                    if (n != null) {
+                        try {
+                            spectrum1DNumberOfDataPoints = Integer.parseInt(n);
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+                case "DirectDimensionParameterSet" -> inDirectDimensionParameterSet = true;
+                case "sweepWidth" -> {
+                    if (inDirectDimensionParameterSet) {
+                        String v = atts.getValue("value");
+                        if (v != null) {
+                            try { sweepWidthPPM = Double.parseDouble(v); } catch (NumberFormatException ignored) {}
+                        }
+                    }
+                }
+                case "irradiationFrequency" -> {
+                    if (inDirectDimensionParameterSet) {
+                        String v = atts.getValue("value");
+                        if (v != null) {
+                            try { spectrometerFrequencyHz = Double.parseDouble(v); } catch (NumberFormatException ignored) {}
+                        }
+                    }
+                }
                 case "xAxis" -> inXAxis = true;
                 case "yAxis" -> inYAxis = true;
                 case "spectrumDataArray" -> {
@@ -174,7 +213,10 @@ public final class NmrMLReader {
                     if (bf != null) spectrumByteFormat = bf;
                     String comp = atts.getValue("compressed");
                     boolean isCompressed = "true".equalsIgnoreCase(comp) || "zlib".equalsIgnoreCase(comp);
-                    if (inXAxis || inYAxis) {
+                    // Canonical (v0.9) form: inside spectrum1D but not in
+                    // legacy xAxis/yAxis wrappers. Legacy form: inside
+                    // xAxis or yAxis wrapper.
+                    if (inXAxis || inYAxis || inSpectrum1D) {
                         spectrumCompressed = isCompressed;
                     }
                 }
@@ -199,11 +241,14 @@ public final class NmrMLReader {
                         String b64 = textBuf.toString().strip();
                         if (inXAxis) xAxisBase64 = b64;
                         else if (inYAxis) yAxisBase64 = b64;
+                        else if (inSpectrum1D) spectrumXYBase64 = b64;
                         inSpectrumDataArray = false;
                     }
                 }
                 case "xAxis" -> inXAxis = false;
                 case "yAxis" -> inYAxis = false;
+                case "spectrum1D" -> inSpectrum1D = false;
+                case "DirectDimensionParameterSet" -> inDirectDimensionParameterSet = false;
             }
         }
 
@@ -211,15 +256,48 @@ public final class NmrMLReader {
             // Convert frequency from Hz to MHz
             double freqMHz = spectrometerFrequencyHz / 1.0e6;
 
-            // Decode spectrum data
+            // Decode spectrum data — try canonical interleaved (x,y)
+            // single-array form first, then fall back to legacy
+            // xAxis/yAxis wrappers for older files.
             double[] chemicalShift = new double[0];
             double[] intensity = new double[0];
 
-            if (xAxisBase64 != null && !xAxisBase64.isEmpty()) {
-                chemicalShift = decodeFloat64Array(xAxisBase64, spectrumCompressed);
-            }
-            if (yAxisBase64 != null && !yAxisBase64.isEmpty()) {
-                intensity = decodeFloat64Array(yAxisBase64, spectrumCompressed);
+            if (spectrumXYBase64 != null && !spectrumXYBase64.isEmpty()) {
+                double[] xy = decodeFloat64Array(spectrumXYBase64, spectrumCompressed);
+                int n = spectrum1DNumberOfDataPoints;
+                if (n > 0 && xy.length == 2 * n) {
+                    // Interleaved (x, y) pairs.
+                    chemicalShift = new double[n];
+                    intensity = new double[n];
+                    for (int i = 0; i < n; i++) {
+                        chemicalShift[i] = xy[2*i];
+                        intensity[i]     = xy[2*i + 1];
+                    }
+                } else if (n > 0 && xy.length == n) {
+                    // y-only from external nmrML (generate stub x).
+                    intensity = xy;
+                    chemicalShift = new double[n];
+                    for (int i = 0; i < n; i++) chemicalShift[i] = i;
+                } else if (xy.length % 2 == 0 && xy.length >= 2) {
+                    int half = xy.length / 2;
+                    chemicalShift = new double[half];
+                    intensity = new double[half];
+                    for (int i = 0; i < half; i++) {
+                        chemicalShift[i] = xy[2*i];
+                        intensity[i]     = xy[2*i + 1];
+                    }
+                } else {
+                    intensity = xy;
+                    chemicalShift = new double[xy.length];
+                    for (int i = 0; i < xy.length; i++) chemicalShift[i] = i;
+                }
+            } else {
+                if (xAxisBase64 != null && !xAxisBase64.isEmpty()) {
+                    chemicalShift = decodeFloat64Array(xAxisBase64, spectrumCompressed);
+                }
+                if (yAxisBase64 != null && !yAxisBase64.isEmpty()) {
+                    intensity = decodeFloat64Array(yAxisBase64, spectrumCompressed);
+                }
             }
 
             // Build channels map

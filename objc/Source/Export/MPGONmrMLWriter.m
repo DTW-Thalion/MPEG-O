@@ -69,89 +69,100 @@ static NSString *fmtD(double v) { return [NSString stringWithFormat:@"%.15g", v]
     emit(out, @"    </instrumentConfiguration>\n");
     emit(out, @"  </instrumentConfigurationList>\n");
 
-    // acquisitionParameterSet — numberOfSteadyStateScans required.
+    // Strict XSD element order per AcquisitionParameterSet[1D]Type:
+    //   softwareRef, sampleContainer, sampleAcquisitionTemperature,
+    //   spinningRate, relaxationDelay, pulseSequence,
+    //   DirectDimensionParameterSet
     emit(out, @"  <acquisition>\n");
     emit(out, @"    <acquisition1D>\n");
     emit(out, @"      <acquisitionParameterSet numberOfScans=\"1\""
               @" numberOfSteadyStateScans=\"0\">\n");
     emit(out, @"        <softwareRef ref=\"mpeg_o\"/>\n");
+    emit(out, @"        <sampleContainer cvRef=\"nmrCV\""
+              @" accession=\"NMR:1400128\" name=\"tube\"/>\n");
+    emit(out, @"        <sampleAcquisitionTemperature value=\"298.0\""
+              @" unitAccession=\"UO:0000012\" unitName=\"kelvin\" unitCvRef=\"UO\"/>\n");
+    emit(out, @"        <spinningRate value=\"0.0\""
+              @" unitAccession=\"UO:0000106\" unitName=\"hertz\" unitCvRef=\"UO\"/>\n");
+    emit(out, @"        <relaxationDelay value=\"1.0\""
+              @" unitAccession=\"UO:0000010\" unitName=\"second\" unitCvRef=\"UO\"/>\n");
+    emit(out, @"        <pulseSequence/>\n");
 
-    // nucleus
-    emit(out, [NSString stringWithFormat:
-        @"        <acquisitionNucleus name=\"%@\"/>\n",
-        spectrum.nucleusType ?: @""]);
-
-    // spectrometer frequency in Hz → we store in MHz, nmrML expects Hz
     double freqHz = spectrum.spectrometerFrequencyMHz * 1.0e6;
+    double sweepValue = (sweepWidthPPM > 0.0) ? sweepWidthPPM : 10.0;
+    NSUInteger nPointsHint = spectrum.intensityArray.length;
+    NSString *nucleus = spectrum.nucleusType ?: @"1H";
+    if (nucleus.length == 0) nucleus = @"1H";
+
     emit(out, [NSString stringWithFormat:
-        @"        <cvParam cvRef=\"nmrCV\" accession=\"NMR:1000001\""
-        @" name=\"spectrometer frequency\" value=\"%@\"/>\n",
+        @"        <DirectDimensionParameterSet decoupled=\"false\""
+        @" numberOfDataPoints=\"%lu\">\n",
+        (unsigned long)nPointsHint]);
+    emit(out, [NSString stringWithFormat:
+        @"          <acquisitionNucleus cvRef=\"nmrCV\""
+        @" accession=\"NMR:1000002\" name=\"%@\"/>\n",
+        nucleus]);
+    emit(out, @"          <effectiveExcitationField value=\"0.0\""
+              @" unitAccession=\"UO:0000228\" unitName=\"tesla\" unitCvRef=\"UO\"/>\n");
+    emit(out, [NSString stringWithFormat:
+        @"          <sweepWidth value=\"%@\""
+        @" unitAccession=\"UO:0000169\" unitName=\"parts per million\" unitCvRef=\"UO\"/>\n",
+        fmtD(sweepValue)]);
+    emit(out, @"          <pulseWidth value=\"10.0\""
+              @" unitAccession=\"UO:0000029\" unitName=\"microsecond\" unitCvRef=\"UO\"/>\n");
+    emit(out, [NSString stringWithFormat:
+        @"          <irradiationFrequency value=\"%@\""
+        @" unitAccession=\"UO:0000106\" unitName=\"hertz\" unitCvRef=\"UO\"/>\n",
         fmtD(freqHz)]);
-
-    // nucleus as cvParam too
-    emit(out, [NSString stringWithFormat:
-        @"        <cvParam cvRef=\"nmrCV\" accession=\"NMR:1000002\""
-        @" name=\"acquisition nucleus\" value=\"%@\"/>\n",
-        spectrum.nucleusType ?: @""]);
-
-    if (sweepWidthPPM > 0.0) {
-        emit(out, [NSString stringWithFormat:
-            @"        <cvParam cvRef=\"nmrCV\" accession=\"NMR:1400014\""
-            @" name=\"sweep width\" value=\"%@\"/>\n",
-            fmtD(sweepWidthPPM)]);
-    }
-
-    if (fid) {
-        emit(out, [NSString stringWithFormat:
-            @"        <cvParam cvRef=\"nmrCV\" accession=\"NMR:1000004\""
-            @" name=\"dwell time\" value=\"%@\"/>\n",
-            fmtD(fid.dwellTimeSeconds)]);
-    }
+    emit(out, @"          <irradiationFrequencyOffset value=\"0.0\""
+              @" unitAccession=\"UO:0000106\" unitName=\"hertz\" unitCvRef=\"UO\"/>\n");
+    emit(out, @"          <samplingStrategy cvRef=\"nmrCV\""
+              @" accession=\"NMR:1400285\" name=\"uniform sampling\"/>\n");
+    emit(out, @"        </DirectDimensionParameterSet>\n");
 
     emit(out, @"      </acquisitionParameterSet>\n");
 
-    // fidData
+    // fidData — required by XSD; emit empty placeholder when no FID supplied.
     if (fid) {
         NSString *fidB64 = [MPGOBase64 encodeData:fid.buffer zlibDeflate:NO];
         emit(out, [NSString stringWithFormat:
-            @"      <fidData compressed=\"false\" byteFormat=\"float64\""
-            @" encodedLength=\"%lu\">\n",
-            (unsigned long)fidB64.length]);
-        emit(out, [NSString stringWithFormat:@"        %@\n", fidB64]);
-        emit(out, @"      </fidData>\n");
+            @"      <fidData compressed=\"false\" byteFormat=\"Complex128\""
+            @" encodedLength=\"%lu\">%@</fidData>\n",
+            (unsigned long)fidB64.length, fidB64]);
+    } else {
+        emit(out, @"      <fidData compressed=\"false\" byteFormat=\"Complex128\""
+                  @" encodedLength=\"0\"></fidData>\n");
     }
 
     emit(out, @"    </acquisition1D>\n");
     emit(out, @"  </acquisition>\n");
 
-    // spectrum1D
-    emit(out, @"  <spectrumList>\n");
-    emit(out, @"    <spectrum1D>\n");
-
-    // xAxis = chemical shift
+    // Canonical spectrum1D: single <spectrumDataArray> with interleaved
+    // (x,y) doubles + attribute-only <xAxis>. Reader detects the
+    // interleaved form by encodedLength == 2*numberOfDataPoints*8.
     NSData *xBuf = spectrum.chemicalShiftArray.buffer;
-    NSString *xB64 = [MPGOBase64 encodeData:xBuf zlibDeflate:NO];
-    emit(out, @"      <xAxis>\n");
-    emit(out, [NSString stringWithFormat:
-        @"        <spectrumDataArray compressed=\"false\""
-        @" encodedLength=\"%lu\">\n",
-        (unsigned long)xB64.length]);
-    emit(out, [NSString stringWithFormat:@"          %@\n", xB64]);
-    emit(out, @"        </spectrumDataArray>\n");
-    emit(out, @"      </xAxis>\n");
-
-    // yAxis = intensity
     NSData *yBuf = spectrum.intensityArray.buffer;
-    NSString *yB64 = [MPGOBase64 encodeData:yBuf zlibDeflate:NO];
-    emit(out, @"      <yAxis>\n");
-    emit(out, [NSString stringWithFormat:
-        @"        <spectrumDataArray compressed=\"false\""
-        @" encodedLength=\"%lu\">\n",
-        (unsigned long)yB64.length]);
-    emit(out, [NSString stringWithFormat:@"          %@\n", yB64]);
-    emit(out, @"        </spectrumDataArray>\n");
-    emit(out, @"      </yAxis>\n");
+    NSUInteger nPoints = spectrum.intensityArray.length;
+    NSMutableData *xy = [NSMutableData dataWithLength:nPoints * 2 * sizeof(double)];
+    const double *xp = xBuf.bytes;
+    const double *yp = yBuf.bytes;
+    double *xyp = xy.mutableBytes;
+    for (NSUInteger i = 0; i < nPoints; i++) {
+        xyp[2*i    ] = xp[i];
+        xyp[2*i + 1] = yp[i];
+    }
+    NSString *xyB64 = [MPGOBase64 encodeData:xy zlibDeflate:NO];
 
+    emit(out, @"  <spectrumList>\n");
+    emit(out, [NSString stringWithFormat:
+        @"    <spectrum1D id=\"s1\" numberOfDataPoints=\"%lu\">\n",
+        (unsigned long)nPoints]);
+    emit(out, [NSString stringWithFormat:
+        @"      <spectrumDataArray compressed=\"false\" byteFormat=\"Complex128\""
+        @" encodedLength=\"%lu\">%@</spectrumDataArray>\n",
+        (unsigned long)xyB64.length, xyB64]);
+    emit(out, @"      <xAxis unitAccession=\"UO:0000169\""
+              @" unitName=\"parts per million\" unitCvRef=\"UO\"/>\n");
     emit(out, @"    </spectrum1D>\n");
     emit(out, @"  </spectrumList>\n");
     emit(out, @"</nmrML>\n");

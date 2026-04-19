@@ -78,39 +78,69 @@ public final class NmrMLWriter {
         sb.append("    </instrumentConfiguration>\n");
         sb.append("  </instrumentConfigurationList>\n");
 
-        // acquisition — numberOfSteadyStateScans is required by the XSD.
+        // Strict XSD element order per AcquisitionParameterSet[1D]Type.
         sb.append("  <acquisition>\n");
         sb.append("    <acquisition1D>\n");
         sb.append("      <acquisitionParameterSet numberOfScans=\"1\"" +
                   " numberOfSteadyStateScans=\"0\">\n");
         sb.append("        <softwareRef ref=\"mpeg_o\"/>\n");
-        sb.append("        <acquisitionNucleus name=\"").append(escapeXml(nucleus)).append("\"/>\n");
-        sb.append("        <cvParam cvRef=\"nmrCV\" accession=\"NMR:1000001\"" +
-                  " name=\"spectrometer frequency\" value=\"").append(freqHz).append("\"/>\n");
-        sb.append("        <cvParam cvRef=\"nmrCV\" accession=\"NMR:1000002\"" +
-                  " name=\"acquisition nucleus\" value=\"").append(escapeXml(nucleus)).append("\"/>\n");
+        sb.append("        <sampleContainer cvRef=\"nmrCV\"" +
+                  " accession=\"NMR:1400128\" name=\"tube\"/>\n");
+        sb.append("        <sampleAcquisitionTemperature value=\"298.0\"" +
+                  " unitAccession=\"UO:0000012\" unitName=\"kelvin\" unitCvRef=\"UO\"/>\n");
+        sb.append("        <spinningRate value=\"0.0\"" +
+                  " unitAccession=\"UO:0000106\" unitName=\"hertz\" unitCvRef=\"UO\"/>\n");
+        sb.append("        <relaxationDelay value=\"1.0\"" +
+                  " unitAccession=\"UO:0000010\" unitName=\"second\" unitCvRef=\"UO\"/>\n");
+        sb.append("        <pulseSequence/>\n");
+
+        String effectiveNucleus = nucleus == null || nucleus.isEmpty() ? "1H" : nucleus;
+        double sweepValue = 10.0; // placeholder when writer has no sweep info
+        int nPoints = intensity.length;
+        sb.append("        <DirectDimensionParameterSet decoupled=\"false\"" +
+                  " numberOfDataPoints=\"").append(nPoints).append("\">\n");
+        sb.append("          <acquisitionNucleus cvRef=\"nmrCV\"" +
+                  " accession=\"NMR:1000002\" name=\"").append(escapeXml(effectiveNucleus))
+          .append("\"/>\n");
+        sb.append("          <effectiveExcitationField value=\"0.0\"" +
+                  " unitAccession=\"UO:0000228\" unitName=\"tesla\" unitCvRef=\"UO\"/>\n");
+        sb.append("          <sweepWidth value=\"").append(sweepValue).append("\"" +
+                  " unitAccession=\"UO:0000169\" unitName=\"parts per million\"" +
+                  " unitCvRef=\"UO\"/>\n");
+        sb.append("          <pulseWidth value=\"10.0\"" +
+                  " unitAccession=\"UO:0000029\" unitName=\"microsecond\" unitCvRef=\"UO\"/>\n");
+        sb.append("          <irradiationFrequency value=\"").append(freqHz).append("\"" +
+                  " unitAccession=\"UO:0000106\" unitName=\"hertz\" unitCvRef=\"UO\"/>\n");
+        sb.append("          <irradiationFrequencyOffset value=\"0.0\"" +
+                  " unitAccession=\"UO:0000106\" unitName=\"hertz\" unitCvRef=\"UO\"/>\n");
+        sb.append("          <samplingStrategy cvRef=\"nmrCV\"" +
+                  " accession=\"NMR:1400285\" name=\"uniform sampling\"/>\n");
+        sb.append("        </DirectDimensionParameterSet>\n");
         sb.append("      </acquisitionParameterSet>\n");
+        sb.append("      <fidData compressed=\"false\" byteFormat=\"Complex128\"" +
+                  " encodedLength=\"0\"></fidData>\n");
         sb.append("    </acquisition1D>\n");
         sb.append("  </acquisition>\n");
 
-        // spectrumList
+        // Canonical spectrum1D: single <spectrumDataArray> with interleaved
+        // (x,y) doubles + attribute-only <xAxis>. Reader detects the
+        // interleaved form via encodedLength == 2 * numberOfDataPoints * 8.
+        double[] xy = new double[nPoints * 2];
+        for (int i = 0; i < nPoints; i++) {
+            xy[2*i    ] = chemicalShift[i];
+            xy[2*i + 1] = intensity[i];
+        }
+        String xyBase64 = encodeArray(xy);
+
         sb.append("  <spectrumList>\n");
-        sb.append("    <spectrum1D>\n");
-
-        sb.append("      <xAxis>\n");
-        sb.append("        <spectrumDataArray compressed=\"false\" encodedLength=\"")
-          .append(csBase64.length()).append("\">");
-        sb.append(csBase64);
+        sb.append("    <spectrum1D id=\"s1\" numberOfDataPoints=\"")
+          .append(nPoints).append("\">\n");
+        sb.append("      <spectrumDataArray compressed=\"false\" byteFormat=\"Complex128\"" +
+                  " encodedLength=\"").append(xyBase64.length()).append("\">");
+        sb.append(xyBase64);
         sb.append("</spectrumDataArray>\n");
-        sb.append("      </xAxis>\n");
-
-        sb.append("      <yAxis>\n");
-        sb.append("        <spectrumDataArray compressed=\"false\" encodedLength=\"")
-          .append(intBase64.length()).append("\">");
-        sb.append(intBase64);
-        sb.append("</spectrumDataArray>\n");
-        sb.append("      </yAxis>\n");
-
+        sb.append("      <xAxis unitAccession=\"UO:0000169\"" +
+                  " unitName=\"parts per million\" unitCvRef=\"UO\"/>\n");
         sb.append("    </spectrum1D>\n");
         sb.append("  </spectrumList>\n");
 

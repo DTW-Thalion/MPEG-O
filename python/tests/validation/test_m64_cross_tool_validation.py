@@ -148,15 +148,6 @@ def test_mzml_export_validates_against_psi_xsd(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.requires_network
-@pytest.mark.xfail(
-    reason="nmrML <spectrum1D> content-model requires y-only "
-           "<spectrumDataArray> + axis metadata, but our data model "
-           "stores explicit chemical_shift + intensity arrays. Wrapper "
-           "sections (cvList, fileDescription, softwareList, "
-           "instrumentConfigurationList, acquisition) now validate; "
-           "only spectrum1D is deferred to v1.0 (data-model bridge).",
-    strict=False,
-)
 def test_nmrml_export_validates_against_xsd(tmp_path: Path) -> None:
     """Validate our nmrML writer output against the upstream nmrML XSD.
 

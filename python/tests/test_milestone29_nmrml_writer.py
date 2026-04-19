@@ -33,14 +33,22 @@ def test_nmrml_writer_produces_valid_xml() -> None:
     blob = spectrum_to_bytes(spec, sweep_width_ppm=10.0)
     text = blob.decode("utf-8")
     assert "<nmrML" in text
-    assert "NMR:1000001" in text
+    # v0.9 M64 canonical form: spectrometer frequency is emitted
+    # via <irradiationFrequency>, sweep width via <sweepWidth>, in
+    # DirectDimensionParameterSet. The cvParam forms were dropped
+    # because the XSD doesn't allow cvParams at the AcquisitionParameterSet
+    # level. NMR:1000002 (acquisition nucleus) stays as CVTermType attrs.
     assert "NMR:1000002" in text
-    assert "NMR:1400014" in text
+    assert "<irradiationFrequency" in text
+    assert "<sweepWidth" in text
     # v0.9 M64: <spectrum1D> now carries the required numberOfDataPoints
-    # attribute per nmrML XSD; match with a looser prefix check.
+    # attribute per nmrML XSD; match with a looser prefix check. The
+    # writer now emits canonical single-<spectrumDataArray> (interleaved
+    # x,y pairs) + attribute-only <xAxis> instead of the legacy
+    # <xAxis><spectrumDataArray/></xAxis> + <yAxis> wrappers.
     assert "<spectrum1D" in text
-    assert "<xAxis>" in text
-    assert "<yAxis>" in text
+    assert "<spectrumDataArray" in text
+    assert "<xAxis" in text
 
 
 def test_nmrml_write_to_disk(tmp_path: Path) -> None:
