@@ -27,6 +27,7 @@ __pycache__/
 python/dist/
 python/build/
 python/tests/fixtures/_generated/
+python/tests/stress/benchmark_results.json
 
 # Maven build output
 java/target/
