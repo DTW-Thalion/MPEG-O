@@ -1,0 +1,36 @@
+jdk.ExecutionSample {
+  startTime = 09:48:28.588
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    tools.perf.ProfileHarness.makeRun(int, int) line: 60
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 72
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.ExecutionSample {
+  startTime = 09:48:29.126
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    tools.perf.ProfileHarness.makeRun(int, int) line: 58
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 72
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.ExecutionSample {
+  startTime = 09:48:29.606
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    java.util.Objects.requireNonNull(Object) line: 209
+    java.util.ImmutableCollections$MapN.get(Object) line: 1232
+    java.util.ImmutableCollections$AbstractImmutableMap.getOrDefault(Object, Object) line: 1090
+    com.dtwthalion.mpgo.AcquisitionRun.objectAtIndex(int) line: 128
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 91
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+

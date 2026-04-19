@@ -1,4 +1,5 @@
 #import "MPGOSpectralDataset.h"
+#import "MPGOWrittenRun.h"
 #import "MPGOIdentification.h"
 #import "MPGOQuantification.h"
 #import "MPGOProvenanceRecord.h"
@@ -11,6 +12,7 @@
 #import "HDF5/MPGOHDF5Group.h"
 #import "HDF5/MPGOHDF5Dataset.h"
 #import "HDF5/MPGOHDF5Errors.h"
+#import "HDF5/MPGOHDF5Types.h"
 #import "HDF5/MPGOFeatureFlags.h"
 #import "Protection/MPGOEncryptionManager.h"
 #import "Protection/MPGOAccessPolicy.h"
@@ -238,6 +240,198 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
     }
 
     _filePath = [path copy];
+    return [f close];
+}
+
+#pragma mark - HDF5 write (flat-buffer fast path)
+
+/* Write an index array as a 1-D HDF5 dataset matching what
+ * MPGOSpectrumIndex -writeToGroup:error: emits (same precision,
+ * chunkSize=1024, compression level 6). The format is load-bearing:
+ * readers — including Java and Python — depend on exactly this
+ * layout. */
+static BOOL writeIndexArrayDS(MPGOHDF5Group *g, NSString *name,
+                               MPGOPrecision p, NSData *data,
+                               NSError **error)
+{
+    if (!data) return YES;
+    NSUInteger n = data.length / MPGOPrecisionElementSize(p);
+    MPGOHDF5Dataset *ds = [g createDatasetNamed:name
+                                       precision:p
+                                          length:n
+                                       chunkSize:4096
+                                compressionLevel:6
+                                           error:error];
+    if (!ds) return NO;
+    return [ds writeData:data error:error];
+}
+
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                    msRuns:(NSDictionary<NSString *, MPGOWrittenRun *> *)runs
+            identifications:(NSArray *)identifications
+            quantifications:(NSArray *)quantifications
+          provenanceRecords:(NSArray *)provenance
+                      error:(NSError **)error
+{
+    MPGOHDF5Provider *p = [[MPGOHDF5Provider alloc] init];
+    if (![p openURL:path mode:MPGOStorageOpenModeCreate error:error]) return NO;
+    MPGOHDF5File *f = (MPGOHDF5File *)[p nativeHandle];
+    if (!f) return NO;
+    MPGOHDF5Group *root = [f rootGroup];
+
+    // Same feature-flag set as -writeToFilePath: so readers can't tell
+    // the two paths apart.
+    NSArray *features = @[
+        [MPGOFeatureFlags featureBaseV1],
+        [MPGOFeatureFlags featureCompoundIdentifications],
+        [MPGOFeatureFlags featureCompoundQuantifications],
+        [MPGOFeatureFlags featureCompoundProvenance],
+        [MPGOFeatureFlags featureCompoundPerRunProvenance],
+        [MPGOFeatureFlags featureCompoundHeaders],
+        [MPGOFeatureFlags featureNative2DNMR],
+        [MPGOFeatureFlags featureNativeMSImageCube],
+    ];
+    if (![MPGOFeatureFlags writeFormatVersion:kMPGOFormatVersion
+                                      features:features
+                                        toRoot:root
+                                         error:error]) return NO;
+
+    MPGOHDF5Group *study = [root createGroupNamed:@"study" error:error];
+    if (!study) return NO;
+    if (![study setStringAttribute:@"title" value:(title ?: @"") error:error]) return NO;
+    if (![study setStringAttribute:@"isa_investigation_id"
+                              value:(isaId ?: @"") error:error]) return NO;
+
+    MPGOHDF5Group *msRunsGroup = [study createGroupNamed:@"ms_runs" error:error];
+    if (!msRunsGroup) return NO;
+    NSArray *msNames = [[runs allKeys] sortedArrayUsingSelector:@selector(compare:)];
+    if (![msRunsGroup setStringAttribute:@"_run_names"
+                                    value:[msNames componentsJoinedByString:@","]
+                                    error:error]) return NO;
+
+    for (NSString *runName in msNames) {
+        MPGOWrittenRun *run = runs[runName];
+
+        MPGOHDF5Group *runGroup = [msRunsGroup createGroupNamed:runName error:error];
+        if (!runGroup) return NO;
+
+        NSUInteger spectrumCount = run.offsets.length / sizeof(int64_t);
+        if (![runGroup setIntegerAttribute:@"acquisition_mode"
+                                     value:run.acquisitionMode error:error]) return NO;
+        if (![runGroup setIntegerAttribute:@"spectrum_count"
+                                     value:(int64_t)spectrumCount error:error]) return NO;
+        if (![runGroup setStringAttribute:@"spectrum_class"
+                                    value:run.spectrumClassName error:error]) return NO;
+        if (run.nucleusType.length > 0) {
+            if (![runGroup setStringAttribute:@"nucleus_type"
+                                        value:run.nucleusType error:error]) return NO;
+        }
+
+        // instrument_config subgroup — writeMinimal callers don't ship
+        // instrument metadata; emit the same empty-string skeleton that
+        // Python's write_minimal does so readers don't distinguish
+        // writer.
+        MPGOHDF5Group *cfg =
+            [runGroup createGroupNamed:@"instrument_config" error:error];
+        if (!cfg) return NO;
+        for (NSString *fieldName in @[@"manufacturer", @"model", @"serial_number",
+                                       @"source_type", @"analyzer_type",
+                                       @"detector_type"]) {
+            if (![cfg setStringAttribute:fieldName value:@"" error:error]) return NO;
+        }
+
+        // spectrum_index — same layout as MPGOSpectrumIndex -writeToGroup:.
+        MPGOHDF5Group *idxG = [runGroup createGroupNamed:@"spectrum_index" error:error];
+        if (!idxG) return NO;
+        if (![idxG setIntegerAttribute:@"count"
+                                 value:(int64_t)spectrumCount error:error]) return NO;
+        if (!writeIndexArrayDS(idxG, @"offsets",
+                                MPGOPrecisionInt64, run.offsets, error)) return NO;
+        if (!writeIndexArrayDS(idxG, @"lengths",
+                                MPGOPrecisionUInt32, run.lengths, error)) return NO;
+        if (!writeIndexArrayDS(idxG, @"retention_times",
+                                MPGOPrecisionFloat64, run.retentionTimes, error)) return NO;
+        if (!writeIndexArrayDS(idxG, @"ms_levels",
+                                MPGOPrecisionInt32, run.msLevels, error)) return NO;
+        if (!writeIndexArrayDS(idxG, @"polarities",
+                                MPGOPrecisionInt32, run.polarities, error)) return NO;
+        if (!writeIndexArrayDS(idxG, @"precursor_mzs",
+                                MPGOPrecisionFloat64, run.precursorMzs, error)) return NO;
+        if (!writeIndexArrayDS(idxG, @"precursor_charges",
+                                MPGOPrecisionInt32, run.precursorCharges, error)) return NO;
+        if (!writeIndexArrayDS(idxG, @"base_peak_intensities",
+                                MPGOPrecisionFloat64, run.basePeakIntensities, error)) return NO;
+
+        // Compound headers companion dataset (featureCompoundHeaders flag
+        // advertised above). Round-trip the index through MPGOSpectrumIndex
+        // so we reuse the existing compound-header writer without
+        // duplicating its schema here.
+        MPGOSpectrumIndex *sindex =
+            [[MPGOSpectrumIndex alloc] initWithOffsets:run.offsets
+                                               lengths:run.lengths
+                                        retentionTimes:run.retentionTimes
+                                              msLevels:run.msLevels
+                                            polarities:run.polarities
+                                          precursorMzs:run.precursorMzs
+                                      precursorCharges:run.precursorCharges
+                                   basePeakIntensities:run.basePeakIntensities];
+        [MPGOCompoundIO writeCompoundHeadersForIndex:sindex
+                                            intoGroup:idxG
+                                                error:NULL];
+
+        // signal_channels — pre-flattened NSData buffers, written
+        // straight through with no per-spectrum concat.
+        MPGOHDF5Group *channels =
+            [runGroup createGroupNamed:@"signal_channels" error:error];
+        if (!channels) return NO;
+        NSArray *channelNames = run.channelData.allKeys;
+        NSString *namesJoined = [channelNames componentsJoinedByString:@","];
+        if (![channels setStringAttribute:@"channel_names"
+                                    value:namesJoined error:error]) return NO;
+
+        for (NSString *chName in channelNames) {
+            NSData *buf = run.channelData[chName];
+            NSUInteger total = buf.length / sizeof(double);
+            NSString *dsName = [chName stringByAppendingString:@"_values"];
+            MPGOHDF5Dataset *ds =
+                [channels createDatasetNamed:dsName
+                                   precision:MPGOPrecisionFloat64
+                                      length:total
+                                   chunkSize:65536
+                                 compression:MPGOCompressionZlib
+                            compressionLevel:6
+                                       error:error];
+            if (!ds) return NO;
+            if (![ds writeData:buf error:error]) return NO;
+        }
+    }
+
+    // Empty nmr_runs group for byte-parity with -writeToFilePath:.
+    MPGOHDF5Group *nmrRunsGroup = [study createGroupNamed:@"nmr_runs" error:error];
+    if (!nmrRunsGroup) return NO;
+    if (![nmrRunsGroup setStringAttribute:@"_run_names" value:@"" error:error]) return NO;
+
+    if (identifications.count > 0) {
+        if (![MPGOCompoundIO writeIdentifications:identifications
+                                         intoGroup:study
+                                      datasetNamed:@"identifications"
+                                             error:error]) return NO;
+    }
+    if (quantifications.count > 0) {
+        if (![MPGOCompoundIO writeQuantifications:quantifications
+                                         intoGroup:study
+                                      datasetNamed:@"quantifications"
+                                             error:error]) return NO;
+    }
+    if (provenance.count > 0) {
+        if (![MPGOCompoundIO writeProvenance:provenance
+                                    intoGroup:study
+                                 datasetNamed:@"provenance"
+                                        error:error]) return NO;
+    }
+
     return [f close];
 }
 

@@ -83,7 +83,7 @@ static BOOL writeArray(MPGOHDF5Group *g, NSString *name, MPGOPrecision p,
     MPGOHDF5Dataset *ds = [g createDatasetNamed:name
                                        precision:p
                                           length:n
-                                       chunkSize:1024
+                                       chunkSize:4096
                                 compressionLevel:6
                                            error:error];
     if (!ds) return NO;

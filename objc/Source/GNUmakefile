@@ -38,6 +38,7 @@ libMPGO_HEADER_FILES = \
 	Dataset/MPGOProvenanceRecord.h \
 	Dataset/MPGOTransitionList.h \
 	Dataset/MPGOSpectralDataset.h \
+	Dataset/MPGOWrittenRun.h \
 	Dataset/MPGOCompoundIO.h \
 	Image/MPGOMSImage.h \
 	Protection/MPGOAccessPolicy.h \
@@ -100,6 +101,7 @@ libMPGO_OBJC_FILES = \
 	Dataset/MPGOProvenanceRecord.m \
 	Dataset/MPGOTransitionList.m \
 	Dataset/MPGOSpectralDataset.m \
+	Dataset/MPGOWrittenRun.m \
 	Dataset/MPGOCompoundIO.m \
 	Image/MPGOMSImage.m \
 	Protection/MPGOAccessPolicy.m \

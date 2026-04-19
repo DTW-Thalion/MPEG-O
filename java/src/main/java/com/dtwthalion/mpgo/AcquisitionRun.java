@@ -43,7 +43,7 @@ public class AcquisitionRun implements
         com.dtwthalion.mpgo.protocols.Encryptable,
         AutoCloseable {
 
-    private static final int CHUNK_SIZE = 16384;
+    private static final int CHUNK_SIZE = 65536;
     private static final int COMPRESSION_LEVEL = 6;
 
     private final String name;
