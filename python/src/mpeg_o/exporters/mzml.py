@@ -28,7 +28,7 @@ import numpy as np
 from ..spectral_dataset import SpectralDataset
 
 
-_PRELUDE = (
+_PRELUDE_HEAD = (
     '<?xml version="1.0" encoding="UTF-8"?>\n'
     '<indexedmzML xmlns="http://psi.hupo.org/ms/mzml"'
     ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
@@ -55,11 +55,10 @@ _PRELUDE = (
     '        <cvParam cvRef="MS" accession="MS:1000799" name="custom unreleased software tool" value="mpeg-o"/>\n'
     '      </software>\n'
     '    </softwareList>\n'
-    '    <instrumentConfigurationList count="1">\n'
-    '      <instrumentConfiguration id="IC1">\n'
-    '        <cvParam cvRef="MS" accession="MS:1000031" name="instrument model" value=""/>\n'
-    '      </instrumentConfiguration>\n'
-    '    </instrumentConfigurationList>\n'
+)
+
+
+_PRELUDE_TAIL = (
     '    <dataProcessingList count="1">\n'
     '      <dataProcessing id="dp_export">\n'
     '        <processingMethod order="0" softwareRef="mpeg_o">\n'
@@ -68,6 +67,36 @@ _PRELUDE = (
     '      </dataProcessing>\n'
     '    </dataProcessingList>\n'
 )
+
+
+def _instrument_configuration(cfg) -> str:
+    """Build the ``<instrumentConfigurationList>`` block from an
+    ``InstrumentConfig``. Emits the ``MS:1000031`` instrument model
+    cvParam populated from ``cfg.model`` (or empty string when
+    absent) so the section validates even when the source dataset
+    doesn't carry full instrument metadata. ``cfg`` may be ``None``.
+    """
+    model = _xml_escape(getattr(cfg, "model", "") or "") if cfg else ""
+    manufacturer = _xml_escape(getattr(cfg, "manufacturer", "") or "") if cfg else ""
+    serial = _xml_escape(getattr(cfg, "serial_number", "") or "") if cfg else ""
+    parts = [
+        '    <instrumentConfigurationList count="1">\n',
+        '      <instrumentConfiguration id="IC1">\n',
+        f'        <cvParam cvRef="MS" accession="MS:1000031" name="instrument model" value="{model}"/>\n',
+    ]
+    if manufacturer:
+        parts.append(
+            f'        <userParam name="manufacturer" value="{manufacturer}" type="xsd:string"/>\n'
+        )
+    if serial:
+        parts.append(
+            f'        <userParam name="serial number" value="{serial}" type="xsd:string"/>\n'
+        )
+    parts.extend([
+        '      </instrumentConfiguration>\n',
+        '    </instrumentConfigurationList>\n',
+    ])
+    return "".join(parts)
 
 
 def _xml_escape(s: str) -> str:
@@ -138,7 +167,9 @@ def dataset_to_bytes(
         total += len(b)
         return offset_at_start
 
-    emit(_PRELUDE)
+    emit(_PRELUDE_HEAD)
+    emit(_instrument_configuration(getattr(chosen_run, "instrument_config", None)))
+    emit(_PRELUDE_TAIL)
     emit(f'    <run id="{_xml_escape(chosen_name)}" defaultInstrumentConfigurationRef="IC1">\n')
     emit(f'      <spectrumList count="{n}" defaultDataProcessingRef="dp_export">\n')
 
@@ -190,6 +221,15 @@ def dataset_to_bytes(
                      f' value="{int(spec.precursor_charge)}"/>\n')
             emit('                </selectedIon>\n')
             emit('              </selectedIonList>\n')
+            # PSI mzML 1.1 XSD requires <activation> after <selectedIonList>.
+            # MPEG-O doesn't yet carry the fragmentation method in its
+            # spectrum_index (v1.0 data-model extension — see
+            # docs/v1.0-gaps.md), so emit a conservative CID placeholder;
+            # external validators and pyteomics accept this.
+            emit('              <activation>\n')
+            emit('                <cvParam cvRef="MS" accession="MS:1000133"'
+                 ' name="collision-induced dissociation" value=""/>\n')
+            emit('              </activation>\n')
             emit('            </precursor>\n')
             emit('          </precursorList>\n')
 

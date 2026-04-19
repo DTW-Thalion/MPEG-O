@@ -37,9 +37,11 @@ static NSString *fmtD(double v) { return [NSString stringWithFormat:@"%.15g", v]
     NSMutableData *out = [NSMutableData data];
 
     emit(out, @"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+    // nmrML XSD requires a version attribute on the root element.
     emit(out, @"<nmrML xmlns=\"http://nmrml.org/schema\""
               @" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-              @" xsi:schemaLocation=\"http://nmrml.org/schema http://nmrml.org/schema/v1.0/nmrML.xsd\">\n");
+              @" xsi:schemaLocation=\"http://nmrml.org/schema http://nmrml.org/schema/v1.0/nmrML.xsd\""
+              @" version=\"1.1.0\">\n");
 
     // cvList
     emit(out, @"  <cvList>\n");
@@ -47,10 +49,32 @@ static NSString *fmtD(double v) { return [NSString stringWithFormat:@"%.15g", v]
               @" version=\"1.1.0\" URI=\"http://nmrml.org/cv/v1.1.0/nmrCV.owl\"/>\n");
     emit(out, @"  </cvList>\n");
 
-    // acquisitionParameterSet
+    // nmrML XSD requires <fileDescription> between <cvList> and <acquisition>.
+    emit(out, @"  <fileDescription>\n");
+    emit(out, @"    <fileContent>\n");
+    emit(out, @"      <cvParam cvRef=\"nmrCV\" accession=\"NMR:1000002\""
+              @" name=\"acquisition nucleus\" value=\"\"/>\n");
+    emit(out, @"    </fileContent>\n");
+    emit(out, @"  </fileDescription>\n");
+
+    // softwareList + instrumentConfigurationList before <acquisition>.
+    emit(out, @"  <softwareList>\n");
+    emit(out, @"    <software id=\"mpeg_o\" version=\"0.9.0\""
+              @" cvRef=\"nmrCV\" accession=\"NMR:1400217\" name=\"custom software\"/>\n");
+    emit(out, @"  </softwareList>\n");
+    emit(out, @"  <instrumentConfigurationList>\n");
+    emit(out, @"    <instrumentConfiguration id=\"IC1\">\n");
+    emit(out, @"      <cvParam cvRef=\"nmrCV\" accession=\"NMR:1400255\""
+              @" name=\"nmr instrument\" value=\"\"/>\n");
+    emit(out, @"    </instrumentConfiguration>\n");
+    emit(out, @"  </instrumentConfigurationList>\n");
+
+    // acquisitionParameterSet — numberOfSteadyStateScans required.
     emit(out, @"  <acquisition>\n");
     emit(out, @"    <acquisition1D>\n");
-    emit(out, @"      <acquisitionParameterSet numberOfScans=\"1\">\n");
+    emit(out, @"      <acquisitionParameterSet numberOfScans=\"1\""
+              @" numberOfSteadyStateScans=\"0\">\n");
+    emit(out, @"        <softwareRef ref=\"mpeg_o\"/>\n");
 
     // nucleus
     emit(out, [NSString stringWithFormat:

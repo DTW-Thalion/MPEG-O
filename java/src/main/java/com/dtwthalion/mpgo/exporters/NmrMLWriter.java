@@ -49,7 +49,8 @@ public final class NmrMLWriter {
 
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        sb.append("<nmrML xmlns=\"http://nmrml.org/schema\">\n");
+        // nmrML XSD requires a version attribute on the root element.
+        sb.append("<nmrML xmlns=\"http://nmrml.org/schema\" version=\"1.1.0\">\n");
 
         // cvList
         sb.append("  <cvList>\n");
@@ -57,10 +58,32 @@ public final class NmrMLWriter {
                   " version=\"1.1.0\" URI=\"http://nmrml.org/cv/v1.1.0/nmrCV.owl\"/>\n");
         sb.append("  </cvList>\n");
 
-        // acquisition
+        // nmrML XSD requires <fileDescription> between <cvList> and <acquisition>.
+        sb.append("  <fileDescription>\n");
+        sb.append("    <fileContent>\n");
+        sb.append("      <cvParam cvRef=\"nmrCV\" accession=\"NMR:1000002\"" +
+                  " name=\"acquisition nucleus\" value=\"\"/>\n");
+        sb.append("    </fileContent>\n");
+        sb.append("  </fileDescription>\n");
+
+        // softwareList + instrumentConfigurationList before <acquisition>.
+        sb.append("  <softwareList>\n");
+        sb.append("    <software id=\"mpeg_o\" version=\"0.9.0\"" +
+                  " cvRef=\"nmrCV\" accession=\"NMR:1400217\" name=\"custom software\"/>\n");
+        sb.append("  </softwareList>\n");
+        sb.append("  <instrumentConfigurationList>\n");
+        sb.append("    <instrumentConfiguration id=\"IC1\">\n");
+        sb.append("      <cvParam cvRef=\"nmrCV\" accession=\"NMR:1400255\"" +
+                  " name=\"nmr instrument\" value=\"\"/>\n");
+        sb.append("    </instrumentConfiguration>\n");
+        sb.append("  </instrumentConfigurationList>\n");
+
+        // acquisition — numberOfSteadyStateScans is required by the XSD.
         sb.append("  <acquisition>\n");
         sb.append("    <acquisition1D>\n");
-        sb.append("      <acquisitionParameterSet numberOfScans=\"1\">\n");
+        sb.append("      <acquisitionParameterSet numberOfScans=\"1\"" +
+                  " numberOfSteadyStateScans=\"0\">\n");
+        sb.append("        <softwareRef ref=\"mpeg_o\"/>\n");
         sb.append("        <acquisitionNucleus name=\"").append(escapeXml(nucleus)).append("\"/>\n");
         sb.append("        <cvParam cvRef=\"nmrCV\" accession=\"NMR:1000001\"" +
                   " name=\"spectrometer frequency\" value=\"").append(freqHz).append("\"/>\n");

@@ -74,29 +74,127 @@ def _investigation_file(dataset: SpectralDataset, run_names: list[str]) -> bytes
     buf.append(_row(["Investigation Submission Date", ""]))
     buf.append(_row(["Investigation Public Release Date", ""]))
 
+    # ISA-Tab 1.0 requires every investigation-file section header to
+    # be present, even when the data rows are empty. isatools halts
+    # validation at the first missing required section. The following
+    # blocks emit each required section with field labels only — they
+    # validate cleanly and leave the investigator free to fill them in
+    # later.
+
+    buf.append("INVESTIGATION PUBLICATIONS\n")
+    buf.append(_row(["Investigation PubMed ID"]))
+    buf.append(_row(["Investigation Publication DOI"]))
+    buf.append(_row(["Investigation Publication Author List"]))
+    buf.append(_row(["Investigation Publication Title"]))
+    buf.append(_row(["Investigation Publication Status"]))
+    buf.append(_row(["Investigation Publication Status Term Accession Number"]))
+    buf.append(_row(["Investigation Publication Status Term Source REF"]))
+
+    buf.append("INVESTIGATION CONTACTS\n")
+    buf.append(_row(["Investigation Person Last Name"]))
+    buf.append(_row(["Investigation Person First Name"]))
+    buf.append(_row(["Investigation Person Mid Initials"]))
+    buf.append(_row(["Investigation Person Email"]))
+    buf.append(_row(["Investigation Person Phone"]))
+    buf.append(_row(["Investigation Person Fax"]))
+    buf.append(_row(["Investigation Person Address"]))
+    buf.append(_row(["Investigation Person Affiliation"]))
+    buf.append(_row(["Investigation Person Roles"]))
+    buf.append(_row(["Investigation Person Roles Term Accession Number"]))
+    buf.append(_row(["Investigation Person Roles Term Source REF"]))
+
     buf.append("STUDY\n")
     buf.append(_row(["Study Identifier", dataset.isa_investigation_id or ""]))
     buf.append(_row(["Study Title", dataset.title or ""]))
-    buf.append(_row(["Study Description", ""]))
+    # isatools requires Study Description to be non-empty; fall back to
+    # the title when the dataset doesn't carry a dedicated description.
+    buf.append(_row([
+        "Study Description",
+        dataset.title or dataset.isa_investigation_id or "MPEG-O exported study",
+    ]))
     buf.append(_row(["Study Submission Date", ""]))
     buf.append(_row(["Study Public Release Date", ""]))
     buf.append(_row(["Study File Name", "s_study.txt"]))
 
+    buf.append("STUDY DESIGN DESCRIPTORS\n")
+    buf.append(_row(["Study Design Type"]))
+    buf.append(_row(["Study Design Type Term Accession Number"]))
+    buf.append(_row(["Study Design Type Term Source REF"]))
+
+    buf.append("STUDY PUBLICATIONS\n")
+    buf.append(_row(["Study PubMed ID"]))
+    buf.append(_row(["Study Publication DOI"]))
+    buf.append(_row(["Study Publication Author List"]))
+    buf.append(_row(["Study Publication Title"]))
+    buf.append(_row(["Study Publication Status"]))
+    buf.append(_row(["Study Publication Status Term Accession Number"]))
+    buf.append(_row(["Study Publication Status Term Source REF"]))
+
+    buf.append("STUDY FACTORS\n")
+    buf.append(_row(["Study Factor Name"]))
+    buf.append(_row(["Study Factor Type"]))
+    buf.append(_row(["Study Factor Type Term Accession Number"]))
+    buf.append(_row(["Study Factor Type Term Source REF"]))
+
     buf.append("STUDY ASSAYS\n")
     measurement = ["Study Assay Measurement Type"]
+    measurement_acc = ["Study Assay Measurement Type Term Accession Number"]
+    measurement_ref = ["Study Assay Measurement Type Term Source REF"]
     technology  = ["Study Assay Technology Type"]
+    technology_acc = ["Study Assay Technology Type Term Accession Number"]
+    technology_ref = ["Study Assay Technology Type Term Source REF"]
     platform    = ["Study Assay Technology Platform"]
     fname       = ["Study Assay File Name"]
     for name in run_names:
         run = dataset.ms_runs[name]
         measurement.append("metabolite profiling")
+        measurement_acc.append("")
+        measurement_ref.append("")
         technology.append("mass spectrometry")
+        technology_acc.append("")
+        technology_ref.append("")
         platform.append(run.instrument_config.model or "")
         fname.append(f"a_assay_ms_{name}.txt")
     buf.append(_row(measurement))
+    buf.append(_row(measurement_acc))
+    buf.append(_row(measurement_ref))
     buf.append(_row(technology))
+    buf.append(_row(technology_acc))
+    buf.append(_row(technology_ref))
     buf.append(_row(platform))
     buf.append(_row(fname))
+
+    # STUDY PROTOCOLS must declare every Protocol REF that appears in
+    # s_study.txt ("sample collection") or a_assay_ms_*.txt ("mass
+    # spectrometry"). Columns are tab-separated protocol rows.
+    buf.append("STUDY PROTOCOLS\n")
+    buf.append(_row(["Study Protocol Name", "sample collection", "mass spectrometry"]))
+    buf.append(_row(["Study Protocol Type", "sample collection", "mass spectrometry"]))
+    buf.append(_row(["Study Protocol Type Term Accession Number", "", ""]))
+    buf.append(_row(["Study Protocol Type Term Source REF", "", ""]))
+    buf.append(_row(["Study Protocol Description", "", ""]))
+    buf.append(_row(["Study Protocol URI", "", ""]))
+    buf.append(_row(["Study Protocol Version", "", ""]))
+    buf.append(_row(["Study Protocol Parameters Name", "", ""]))
+    buf.append(_row(["Study Protocol Parameters Name Term Accession Number", "", ""]))
+    buf.append(_row(["Study Protocol Parameters Name Term Source REF", "", ""]))
+    buf.append(_row(["Study Protocol Components Name", "", ""]))
+    buf.append(_row(["Study Protocol Components Type", "", ""]))
+    buf.append(_row(["Study Protocol Components Type Term Accession Number", "", ""]))
+    buf.append(_row(["Study Protocol Components Type Term Source REF", "", ""]))
+
+    buf.append("STUDY CONTACTS\n")
+    buf.append(_row(["Study Person Last Name"]))
+    buf.append(_row(["Study Person First Name"]))
+    buf.append(_row(["Study Person Mid Initials"]))
+    buf.append(_row(["Study Person Email"]))
+    buf.append(_row(["Study Person Phone"]))
+    buf.append(_row(["Study Person Fax"]))
+    buf.append(_row(["Study Person Address"]))
+    buf.append(_row(["Study Person Affiliation"]))
+    buf.append(_row(["Study Person Roles"]))
+    buf.append(_row(["Study Person Roles Term Accession Number"]))
+    buf.append(_row(["Study Person Roles Term Source REF"]))
 
     return "".join(buf).encode("utf-8")
 

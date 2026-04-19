@@ -59,33 +59,120 @@ static NSData *buildInvestigationFile(MPGOSpectralDataset *dataset,
     appendRow(buf, @[@"Investigation Submission Date", @""]);
     appendRow(buf, @[@"Investigation Public Release Date", @""]);
 
-    // STUDY — one study per dataset (simplification: a single study
-    // holding all acquisition runs as assays).
+    // ISA-Tab 1.0 requires every investigation-file section header
+    // to be present, even when data rows are empty. isatools halts
+    // validation at the first missing required section.
+    [buf appendString:@"INVESTIGATION PUBLICATIONS\n"];
+    appendRow(buf, @[@"Investigation PubMed ID"]);
+    appendRow(buf, @[@"Investigation Publication DOI"]);
+    appendRow(buf, @[@"Investigation Publication Author List"]);
+    appendRow(buf, @[@"Investigation Publication Title"]);
+    appendRow(buf, @[@"Investigation Publication Status"]);
+    appendRow(buf, @[@"Investigation Publication Status Term Accession Number"]);
+    appendRow(buf, @[@"Investigation Publication Status Term Source REF"]);
+
+    [buf appendString:@"INVESTIGATION CONTACTS\n"];
+    appendRow(buf, @[@"Investigation Person Last Name"]);
+    appendRow(buf, @[@"Investigation Person First Name"]);
+    appendRow(buf, @[@"Investigation Person Mid Initials"]);
+    appendRow(buf, @[@"Investigation Person Email"]);
+    appendRow(buf, @[@"Investigation Person Phone"]);
+    appendRow(buf, @[@"Investigation Person Fax"]);
+    appendRow(buf, @[@"Investigation Person Address"]);
+    appendRow(buf, @[@"Investigation Person Affiliation"]);
+    appendRow(buf, @[@"Investigation Person Roles"]);
+    appendRow(buf, @[@"Investigation Person Roles Term Accession Number"]);
+    appendRow(buf, @[@"Investigation Person Roles Term Source REF"]);
+
+    // STUDY
+    NSString *studyDesc = dataset.title ?: (dataset.isaInvestigationId ?: @"MPEG-O exported study");
     [buf appendString:@"STUDY\n"];
     appendRow(buf, @[@"Study Identifier", dataset.isaInvestigationId ?: @""]);
     appendRow(buf, @[@"Study Title", dataset.title ?: @""]);
-    appendRow(buf, @[@"Study Description", @""]);
+    appendRow(buf, @[@"Study Description", studyDesc]);
     appendRow(buf, @[@"Study Submission Date", @""]);
     appendRow(buf, @[@"Study Public Release Date", @""]);
     appendRow(buf, @[@"Study File Name", @"s_study.txt"]);
 
+    [buf appendString:@"STUDY DESIGN DESCRIPTORS\n"];
+    appendRow(buf, @[@"Study Design Type"]);
+    appendRow(buf, @[@"Study Design Type Term Accession Number"]);
+    appendRow(buf, @[@"Study Design Type Term Source REF"]);
+
+    [buf appendString:@"STUDY PUBLICATIONS\n"];
+    appendRow(buf, @[@"Study PubMed ID"]);
+    appendRow(buf, @[@"Study Publication DOI"]);
+    appendRow(buf, @[@"Study Publication Author List"]);
+    appendRow(buf, @[@"Study Publication Title"]);
+    appendRow(buf, @[@"Study Publication Status"]);
+    appendRow(buf, @[@"Study Publication Status Term Accession Number"]);
+    appendRow(buf, @[@"Study Publication Status Term Source REF"]);
+
+    [buf appendString:@"STUDY FACTORS\n"];
+    appendRow(buf, @[@"Study Factor Name"]);
+    appendRow(buf, @[@"Study Factor Type"]);
+    appendRow(buf, @[@"Study Factor Type Term Accession Number"]);
+    appendRow(buf, @[@"Study Factor Type Term Source REF"]);
+
     [buf appendString:@"STUDY ASSAYS\n"];
     NSMutableArray *measurementRow   = [NSMutableArray arrayWithObject:@"Study Assay Measurement Type"];
+    NSMutableArray *measurementAcc   = [NSMutableArray arrayWithObject:@"Study Assay Measurement Type Term Accession Number"];
+    NSMutableArray *measurementRef   = [NSMutableArray arrayWithObject:@"Study Assay Measurement Type Term Source REF"];
     NSMutableArray *technologyRow    = [NSMutableArray arrayWithObject:@"Study Assay Technology Type"];
+    NSMutableArray *technologyAcc    = [NSMutableArray arrayWithObject:@"Study Assay Technology Type Term Accession Number"];
+    NSMutableArray *technologyRef    = [NSMutableArray arrayWithObject:@"Study Assay Technology Type Term Source REF"];
     NSMutableArray *platformRow      = [NSMutableArray arrayWithObject:@"Study Assay Technology Platform"];
     NSMutableArray *fileNameRow      = [NSMutableArray arrayWithObject:@"Study Assay File Name"];
     for (NSString *runName in runNames) {
         MPGOAcquisitionRun *run = dataset.msRuns[runName];
-        (void)run;
         [measurementRow addObject:@"metabolite profiling"];
+        [measurementAcc addObject:@""];
+        [measurementRef addObject:@""];
         [technologyRow  addObject:@"mass spectrometry"];
+        [technologyAcc  addObject:@""];
+        [technologyRef  addObject:@""];
         [platformRow    addObject:run.instrumentConfig.model ?: @""];
         [fileNameRow    addObject:[NSString stringWithFormat:@"a_assay_ms_%@.txt", runName]];
     }
     appendRow(buf, measurementRow);
+    appendRow(buf, measurementAcc);
+    appendRow(buf, measurementRef);
     appendRow(buf, technologyRow);
+    appendRow(buf, technologyAcc);
+    appendRow(buf, technologyRef);
     appendRow(buf, platformRow);
     appendRow(buf, fileNameRow);
+
+    // STUDY PROTOCOLS — must declare every Protocol REF used in the
+    // study + assay files ("sample collection" and "mass spectrometry").
+    [buf appendString:@"STUDY PROTOCOLS\n"];
+    appendRow(buf, @[@"Study Protocol Name", @"sample collection", @"mass spectrometry"]);
+    appendRow(buf, @[@"Study Protocol Type", @"sample collection", @"mass spectrometry"]);
+    appendRow(buf, @[@"Study Protocol Type Term Accession Number", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Type Term Source REF", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Description", @"", @""]);
+    appendRow(buf, @[@"Study Protocol URI", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Version", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Parameters Name", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Parameters Name Term Accession Number", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Parameters Name Term Source REF", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Components Name", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Components Type", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Components Type Term Accession Number", @"", @""]);
+    appendRow(buf, @[@"Study Protocol Components Type Term Source REF", @"", @""]);
+
+    [buf appendString:@"STUDY CONTACTS\n"];
+    appendRow(buf, @[@"Study Person Last Name"]);
+    appendRow(buf, @[@"Study Person First Name"]);
+    appendRow(buf, @[@"Study Person Mid Initials"]);
+    appendRow(buf, @[@"Study Person Email"]);
+    appendRow(buf, @[@"Study Person Phone"]);
+    appendRow(buf, @[@"Study Person Fax"]);
+    appendRow(buf, @[@"Study Person Address"]);
+    appendRow(buf, @[@"Study Person Affiliation"]);
+    appendRow(buf, @[@"Study Person Roles"]);
+    appendRow(buf, @[@"Study Person Roles Term Accession Number"]);
+    appendRow(buf, @[@"Study Person Roles Term Source REF"]);
 
     return [buf dataUsingEncoding:NSUTF8StringEncoding];
 }

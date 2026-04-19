@@ -11,6 +11,7 @@
 #import "Dataset/MPGOSpectralDataset.h"
 #import "Run/MPGOAcquisitionRun.h"
 #import "Run/MPGOSpectrumIndex.h"
+#import "Run/MPGOInstrumentConfig.h"
 #import "Spectra/MPGOMassSpectrum.h"
 #import "Spectra/MPGOChromatogram.h"
 #import "ValueClasses/MPGOEnums.h"
@@ -150,12 +151,31 @@ static NSString *precisionName(BOOL useFloat32)
         @"      </software>\n"
         @"    </softwareList>\n");
 
-    appendUTF8(body,
-        @"    <instrumentConfigurationList count=\"1\">\n"
-        @"      <instrumentConfiguration id=\"IC1\">\n"
-        @"        <cvParam cvRef=\"MS\" accession=\"MS:1000031\" name=\"instrument model\" value=\"\"/>\n"
-        @"      </instrumentConfiguration>\n"
-        @"    </instrumentConfigurationList>\n");
+    // Populate <instrumentConfiguration> from the run's MPGOInstrumentConfig
+    // when present. Model → MS:1000031 cvParam; manufacturer + serial number
+    // as userParams (no stable PSI-MS accession for every vendor).
+    MPGOInstrumentConfig *cfg = chosenRun.instrumentConfig;
+    NSString *model = cfg.model ? xmlEscape(cfg.model) : @"";
+    NSString *manuf = cfg.manufacturer ? xmlEscape(cfg.manufacturer) : @"";
+    NSString *serial = cfg.serialNumber ? xmlEscape(cfg.serialNumber) : @"";
+    appendUTF8(body, @"    <instrumentConfigurationList count=\"1\">\n");
+    appendUTF8(body, @"      <instrumentConfiguration id=\"IC1\">\n");
+    NSString *mdl = [NSString stringWithFormat:
+        @"        <cvParam cvRef=\"MS\" accession=\"MS:1000031\" name=\"instrument model\" value=\"%@\"/>\n",
+        model];
+    appendUTF8(body, mdl);
+    if (manuf.length > 0) {
+        NSString *m = [NSString stringWithFormat:
+            @"        <userParam name=\"manufacturer\" value=\"%@\" type=\"xsd:string\"/>\n", manuf];
+        appendUTF8(body, m);
+    }
+    if (serial.length > 0) {
+        NSString *s = [NSString stringWithFormat:
+            @"        <userParam name=\"serial number\" value=\"%@\" type=\"xsd:string\"/>\n", serial];
+        appendUTF8(body, s);
+    }
+    appendUTF8(body, @"      </instrumentConfiguration>\n");
+    appendUTF8(body, @"    </instrumentConfigurationList>\n");
 
     appendUTF8(body,
         @"    <dataProcessingList count=\"1\">\n"
@@ -242,6 +262,14 @@ static NSString *precisionName(BOOL useFloat32)
             }
             appendUTF8(body, @"                </selectedIon>\n");
             appendUTF8(body, @"              </selectedIonList>\n");
+            // PSI mzML 1.1 XSD requires <activation> after <selectedIonList>.
+            // MPEG-O doesn't yet carry the fragmentation method in its
+            // spectrum_index (v1.0 data-model extension — see
+            // docs/v1.0-gaps.md), so emit a conservative CID placeholder.
+            appendUTF8(body, @"              <activation>\n");
+            appendUTF8(body, @"                <cvParam cvRef=\"MS\" accession=\"MS:1000133\""
+                            @" name=\"collision-induced dissociation\" value=\"\"/>\n");
+            appendUTF8(body, @"              </activation>\n");
             appendUTF8(body, @"            </precursor>\n");
             appendUTF8(body, @"          </precursorList>\n");
         }

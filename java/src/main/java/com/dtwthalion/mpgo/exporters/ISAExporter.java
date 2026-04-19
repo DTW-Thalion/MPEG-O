@@ -68,13 +68,64 @@ public final class ISAExporter {
         sb.append("Investigation Description\t\n");
         sb.append("Investigation Submission Date\t\n");
         sb.append("Investigation Public Release Date\t\n");
+
+        // ISA-Tab 1.0 requires every section header to be present, even
+        // when data rows are empty. isatools halts at the first missing
+        // required section.
+        sb.append("INVESTIGATION PUBLICATIONS\n");
+        sb.append("Investigation PubMed ID\n");
+        sb.append("Investigation Publication DOI\n");
+        sb.append("Investigation Publication Author List\n");
+        sb.append("Investigation Publication Title\n");
+        sb.append("Investigation Publication Status\n");
+        sb.append("Investigation Publication Status Term Accession Number\n");
+        sb.append("Investigation Publication Status Term Source REF\n");
+
+        sb.append("INVESTIGATION CONTACTS\n");
+        sb.append("Investigation Person Last Name\n");
+        sb.append("Investigation Person First Name\n");
+        sb.append("Investigation Person Mid Initials\n");
+        sb.append("Investigation Person Email\n");
+        sb.append("Investigation Person Phone\n");
+        sb.append("Investigation Person Fax\n");
+        sb.append("Investigation Person Address\n");
+        sb.append("Investigation Person Affiliation\n");
+        sb.append("Investigation Person Roles\n");
+        sb.append("Investigation Person Roles Term Accession Number\n");
+        sb.append("Investigation Person Roles Term Source REF\n");
+
+        // STUDY. isatools requires Study Description to be non-empty;
+        // fall back to title or id when the dataset carries nothing.
+        String studyDesc = title != null && !title.isEmpty() ? title
+                : (id != null && !id.isEmpty() ? id : "MPEG-O exported study");
         sb.append("STUDY\n");
         sb.append("Study Identifier\t").append(escapeCell(id)).append('\n');
         sb.append("Study Title\t").append(escapeCell(title)).append('\n');
-        sb.append("Study Description\t\n");
+        sb.append("Study Description\t").append(escapeCell(studyDesc)).append('\n');
         sb.append("Study Submission Date\t\n");
         sb.append("Study Public Release Date\t\n");
         sb.append("Study File Name\ts_study.txt\n");
+
+        sb.append("STUDY DESIGN DESCRIPTORS\n");
+        sb.append("Study Design Type\n");
+        sb.append("Study Design Type Term Accession Number\n");
+        sb.append("Study Design Type Term Source REF\n");
+
+        sb.append("STUDY PUBLICATIONS\n");
+        sb.append("Study PubMed ID\n");
+        sb.append("Study Publication DOI\n");
+        sb.append("Study Publication Author List\n");
+        sb.append("Study Publication Title\n");
+        sb.append("Study Publication Status\n");
+        sb.append("Study Publication Status Term Accession Number\n");
+        sb.append("Study Publication Status Term Source REF\n");
+
+        sb.append("STUDY FACTORS\n");
+        sb.append("Study Factor Name\n");
+        sb.append("Study Factor Type\n");
+        sb.append("Study Factor Type Term Accession Number\n");
+        sb.append("Study Factor Type Term Source REF\n");
+
         sb.append("STUDY ASSAYS\n");
 
         // Measurement type row
@@ -104,6 +155,53 @@ public final class ISAExporter {
             sb.append('\t').append("a_assay_ms_").append(escapeCell(run)).append(".txt");
         }
         sb.append('\n');
+
+        // Add Measurement/Technology Term Accession + REF columns that
+        // isatools expects alongside the Type rows (empty strings are
+        // valid; just the header must exist).
+        sb.append("Study Assay Measurement Type Term Accession Number");
+        for (int i = 0; i < runNames.size(); i++) sb.append('\t');
+        sb.append('\n');
+        sb.append("Study Assay Measurement Type Term Source REF");
+        for (int i = 0; i < runNames.size(); i++) sb.append('\t');
+        sb.append('\n');
+        sb.append("Study Assay Technology Type Term Accession Number");
+        for (int i = 0; i < runNames.size(); i++) sb.append('\t');
+        sb.append('\n');
+        sb.append("Study Assay Technology Type Term Source REF");
+        for (int i = 0; i < runNames.size(); i++) sb.append('\t');
+        sb.append('\n');
+
+        // STUDY PROTOCOLS — declare every Protocol REF used in the
+        // study + assay files ("sample collection" + "mass spectrometry").
+        sb.append("STUDY PROTOCOLS\n");
+        sb.append("Study Protocol Name\tsample collection\tmass spectrometry\n");
+        sb.append("Study Protocol Type\tsample collection\tmass spectrometry\n");
+        sb.append("Study Protocol Type Term Accession Number\t\t\n");
+        sb.append("Study Protocol Type Term Source REF\t\t\n");
+        sb.append("Study Protocol Description\t\t\n");
+        sb.append("Study Protocol URI\t\t\n");
+        sb.append("Study Protocol Version\t\t\n");
+        sb.append("Study Protocol Parameters Name\t\t\n");
+        sb.append("Study Protocol Parameters Name Term Accession Number\t\t\n");
+        sb.append("Study Protocol Parameters Name Term Source REF\t\t\n");
+        sb.append("Study Protocol Components Name\t\t\n");
+        sb.append("Study Protocol Components Type\t\t\n");
+        sb.append("Study Protocol Components Type Term Accession Number\t\t\n");
+        sb.append("Study Protocol Components Type Term Source REF\t\t\n");
+
+        sb.append("STUDY CONTACTS\n");
+        sb.append("Study Person Last Name\n");
+        sb.append("Study Person First Name\n");
+        sb.append("Study Person Mid Initials\n");
+        sb.append("Study Person Email\n");
+        sb.append("Study Person Phone\n");
+        sb.append("Study Person Fax\n");
+        sb.append("Study Person Address\n");
+        sb.append("Study Person Affiliation\n");
+        sb.append("Study Person Roles\n");
+        sb.append("Study Person Roles Term Accession Number\n");
+        sb.append("Study Person Roles Term Source REF\n");
 
         writeFile(dir.resolve("i_investigation.txt"), sb.toString());
     }

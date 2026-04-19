@@ -39,11 +39,17 @@ def _export_first_nmr_spectrum(ds: SpectralDataset, out: Path) -> Path:
     """
     for run in ds.nmr_runs.values():
         if len(run) > 0:
-            return nmrml_exporter.write_spectrum(run[0], out)
+            freq = float(getattr(run, "spectrometer_frequency_mhz", 0.0) or 0.0)
+            return nmrml_exporter.write_spectrum(
+                run[0], out, spectrometer_frequency_mhz=freq
+            )
     for run in ds.ms_runs.values():
         if (getattr(run, "spectrum_class", "") == "MPGONMRSpectrum"
                 and len(run) > 0):
-            return nmrml_exporter.write_spectrum(run[0], out)
+            freq = float(getattr(run, "spectrometer_frequency_mhz", 0.0) or 0.0)
+            return nmrml_exporter.write_spectrum(
+                run[0], out, spectrometer_frequency_mhz=freq
+            )
     raise RuntimeError("dataset has no NMR spectrum to export")
 
 
@@ -95,12 +101,6 @@ def _resolve_schema(cache_dir: Path, name: str, urls: tuple[str, ...]) -> Path |
 # ---------------------------------------------------------------------------
 
 @pytest.mark.requires_network
-@pytest.mark.xfail(
-    reason="mzML exporter omits required <precursor>/<activation> child "
-           "for MS2 spectra (deferred to v1.0). Test logs the XSD error "
-           "so the defect stays visible.",
-    strict=False,
-)
 def test_mzml_export_validates_against_psi_xsd(
     synth_fixture, tmp_path: Path
 ) -> None:
@@ -148,6 +148,15 @@ def test_mzml_export_validates_against_psi_xsd(
 # ---------------------------------------------------------------------------
 
 @pytest.mark.requires_network
+@pytest.mark.xfail(
+    reason="nmrML <spectrum1D> content-model requires y-only "
+           "<spectrumDataArray> + axis metadata, but our data model "
+           "stores explicit chemical_shift + intensity arrays. Wrapper "
+           "sections (cvList, fileDescription, softwareList, "
+           "instrumentConfigurationList, acquisition) now validate; "
+           "only spectrum1D is deferred to v1.0 (data-model bridge).",
+    strict=False,
+)
 def test_nmrml_export_validates_against_xsd(tmp_path: Path) -> None:
     """Validate our nmrML writer output against the upstream nmrML XSD.
 
@@ -173,16 +182,10 @@ def test_nmrml_export_validates_against_xsd(tmp_path: Path) -> None:
 
     schema = etree.XMLSchema(etree.parse(str(xsd_path)))
     tree = etree.parse(str(out))
-    # nmrML is a more speculative schema than mzML (fewer tools in
-    # the wild strictly validate against it); accept well-formed
-    # XML as the floor and XSD validation as the goal. If the
-    # schema is too strict for a synthetic fixture, treat the
-    # failure as xfail rather than a block — worth logging but
-    # not blocking the release.
     if not schema.validate(tree):
         errs = list(schema.error_log)[:5]
-        pytest.xfail(
-            "synthetic nmrML doesn't fully validate against XSD:\n"
+        pytest.fail(
+            "nmrML export failed XSD validation:\n"
             + "\n".join(f"  {e.line}: {e.message}" for e in errs)
         )
 
@@ -239,14 +242,6 @@ def test_mzml_readable_by_pymzml(synth_fixture, tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.requires_isatools
-@pytest.mark.xfail(
-    reason="ISA-Tab exporter emits a minimal investigation file — "
-           "isatools validator requires INVESTIGATION PUBLICATIONS and "
-           "a few other canonical sections that our exporter doesn't "
-           "populate. Deferred to v1.0 (ISA-Tab round-trip milestone). "
-           "Test runs so the defect stays visible in CI output.",
-    strict=False,
-)
 def test_isatab_export_validates_with_isatools(
     synth_fixture, tmp_path: Path
 ) -> None:
