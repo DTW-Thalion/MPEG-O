@@ -27,17 +27,19 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 /**
- * Zarr v2 storage provider — v0.8 M52.
+ * Zarr v3 storage provider.
  *
- * <p>Self-contained DirectoryStore implementation — no external zarr
- * library required. The on-disk layout is the Zarr v2 convention
- * (<a href="https://zarr.readthedocs.io/en/stable/spec/v2.html">spec</a>):
- * each group is a directory containing a {@code .zgroup} metadata
- * file, each array is a directory with a {@code .zarray} metadata
- * file plus one chunk file per chunk index, and attributes live in
- * sibling {@code .zattrs} files. Matches the on-disk layout the
- * Python {@code mpeg_o.providers.zarr.ZarrProvider} produces, so
- * Python, Java, and Objective-C can cross-read one another's stores.</p>
+ * <p>Self-contained LocalStore implementation — no external zarr
+ * library required. The on-disk layout is the Zarr v3 convention
+ * (<a href="https://zarr-specs.readthedocs.io/en/latest/v3/core/v3.0.html">spec</a>):
+ * each node (group or array) is a directory containing a single
+ * {@code zarr.json} metadata file that encodes {@code node_type},
+ * shape, data type, chunk grid, codec chain, and user attributes.
+ * Array chunks live under a {@code c/} prefix directory with one
+ * path segment per axis (e.g. {@code c/0/1/2}). Matches the
+ * on-disk layout the Python {@code mpeg_o.providers.zarr.ZarrProvider}
+ * produces via {@code zarr-python} 3.x, so Python, Java, and
+ * Objective-C can cross-read one another's stores byte for byte.</p>
  *
  * <p>Compound datasets (HDF5-style records) have no native Zarr
  * representation. This provider (like the Python reference) stores
@@ -49,13 +51,14 @@ import java.util.stream.Stream;
  *   <li>{@code _mpgo_count  = number}</li>
  * </ul>
  *
- * <p>Scope of this v0.8 port:</p>
+ * <p>Scope of this port:</p>
  * <ul>
  *   <li>URL schemes: {@code zarr:///abs/path}, bare paths. In-memory
- *       and cloud (S3) stores are Python-only today; v0.9.</li>
- *   <li>Compression: only {@link Compression#NONE} is written and
- *       expected on read. Compressed chunks in Python-authored stores
- *       raise {@link UnsupportedOperationException}.</li>
+ *       and cloud (S3) stores are Python-only today.</li>
+ *   <li>Compression: read-side accepts the {@code gzip} codec
+ *       emitted by zarr-python's {@code GzipCodec}. Write-side
+ *       emits uncompressed stores (no {@code gzip} entry in the
+ *       codec chain).</li>
  *   <li>Primitive types: {@link Precision#FLOAT64}, {@link
  *       Precision#FLOAT32}, {@link Precision#INT64}, {@link
  *       Precision#INT32}, {@link Precision#UINT32}.</li>
@@ -63,13 +66,12 @@ import java.util.stream.Stream;
  *       transcript used by signatures and encryption).</li>
  * </ul>
  *
- * <p>API status: Provisional (v0.8 M52).</p>
- *
  * <p>Cross-language equivalents: Python {@code
  * mpeg_o.providers.zarr.ZarrProvider}, Objective-C {@code
  * MPGOZarrProvider}.</p>
  *
  * @since 0.8
+ * @implNote Zarr v3 format (migrated from v2 in v0.9+).
  */
 public final class ZarrProvider implements StorageProvider {
 
@@ -103,7 +105,7 @@ public final class ZarrProvider implements StorageProvider {
                     writeZGroup(rootDir);
                 }
                 case READ -> {
-                    if (!Files.exists(rootDir.resolve(".zgroup"))) {
+                    if (!isGroupDir(rootDir)) {
                         throw new IllegalArgumentException(
                                 "zarr store not found: " + rootDir);
                     }
@@ -112,7 +114,7 @@ public final class ZarrProvider implements StorageProvider {
                     if (!Files.exists(rootDir)) {
                         Files.createDirectories(rootDir);
                     }
-                    if (!Files.exists(rootDir.resolve(".zgroup"))) {
+                    if (!isGroupDir(rootDir)) {
                         writeZGroup(rootDir);
                     }
                 }
@@ -140,7 +142,7 @@ public final class ZarrProvider implements StorageProvider {
     public boolean supportsChunking() { return true; }
 
     @Override
-    public boolean supportsCompression() { return false; /* not in v0.8 */ }
+    public boolean supportsCompression() { return false; /* read-only for gzip */ }
 
     @Override
     public Object nativeHandle() { return rootDir; }
@@ -163,145 +165,213 @@ public final class ZarrProvider implements StorageProvider {
         if (raw.startsWith("zarr+memory://") || raw.startsWith("zarr+s3://")) {
             throw new UnsupportedOperationException(
                     "ZarrProvider (Java): in-memory and S3 stores are "
-                    + "Python-only in v0.8 (M52 scope). Got: " + url);
+                    + "Python-only today. Got: " + url);
         }
         return Paths.get(raw);
     }
 
-    // ── Zarr v2 metadata writers ─────────────────────────────────────────
+    // ── Zarr v3 metadata writers ─────────────────────────────────────────
 
     private static final String KIND_ATTR   = "_mpgo_kind";
     private static final String SCHEMA_ATTR = "_mpgo_schema";
     private static final String ROWS_ATTR   = "_mpgo_rows";
     private static final String COUNT_ATTR  = "_mpgo_count";
     private static final String COMPOUND_KIND = "compound";
+    private static final String ZARR_JSON   = "zarr.json";
+
+    @SuppressWarnings("unchecked")
+    static Map<String, Object> readMeta(Path dir) throws IOException {
+        Path p = dir.resolve(ZARR_JSON);
+        if (!Files.exists(p)) return null;
+        Object parsed = MiniJson.parse(Files.readString(p));
+        if (parsed instanceof Map<?, ?> m) {
+            return new LinkedHashMap<>((Map<String, Object>) m);
+        }
+        return null;
+    }
+
+    static void writeMeta(Path dir, Map<String, Object> meta) throws IOException {
+        Files.writeString(dir.resolve(ZARR_JSON), MiniJson.serialise(meta),
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+    }
 
     static void writeZGroup(Path dir) throws IOException {
-        Files.writeString(dir.resolve(".zgroup"), "{\"zarr_format\":2}",
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("zarr_format", 3);
+        meta.put("node_type", "group");
+        meta.put("attributes", new LinkedHashMap<>());
+        writeMeta(dir, meta);
     }
 
     static void writeZArray(Path dir, long[] shape, long[] chunks,
                              Precision precision) throws IOException {
-        String dtype = dtypeFor(precision);
-        StringBuilder sb = new StringBuilder();
-        sb.append("{");
-        sb.append("\"chunks\":").append(jsonLongArray(chunks)).append(",");
-        sb.append("\"compressor\":null,");
-        sb.append("\"dtype\":\"").append(dtype).append("\",");
-        sb.append("\"fill_value\":0,");
-        sb.append("\"filters\":null,");
-        sb.append("\"order\":\"C\",");
-        sb.append("\"shape\":").append(jsonLongArray(shape)).append(",");
-        sb.append("\"zarr_format\":2");
-        sb.append("}");
-        Files.writeString(dir.resolve(".zarray"), sb.toString(),
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        Map<String, Object> bytesCodec = new LinkedHashMap<>();
+        bytesCodec.put("name", "bytes");
+        Map<String, Object> bytesCfg = new LinkedHashMap<>();
+        bytesCfg.put("endian", "little");
+        bytesCodec.put("configuration", bytesCfg);
+
+        Map<String, Object> chunkGridCfg = new LinkedHashMap<>();
+        chunkGridCfg.put("chunk_shape", longArrayToList(chunks));
+        Map<String, Object> chunkGrid = new LinkedHashMap<>();
+        chunkGrid.put("name", "regular");
+        chunkGrid.put("configuration", chunkGridCfg);
+
+        Map<String, Object> keyEncCfg = new LinkedHashMap<>();
+        keyEncCfg.put("separator", "/");
+        Map<String, Object> keyEnc = new LinkedHashMap<>();
+        keyEnc.put("name", "default");
+        keyEnc.put("configuration", keyEncCfg);
+
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("zarr_format", 3);
+        meta.put("node_type", "array");
+        meta.put("shape", longArrayToList(shape));
+        meta.put("data_type", dtypeFor(precision));
+        meta.put("chunk_grid", chunkGrid);
+        meta.put("chunk_key_encoding", keyEnc);
+        meta.put("fill_value", 0);
+        meta.put("codecs", List.of(bytesCodec));
+        meta.put("attributes", new LinkedHashMap<>());
+        writeMeta(dir, meta);
     }
 
-    static Map<String, Object> readZArray(Path dir) throws IOException {
-        String raw = Files.readString(dir.resolve(".zarray"));
-        Object parsed = MiniJson.parse(raw);
-        if (!(parsed instanceof Map<?, ?> m)) {
-            throw new IOException("malformed .zarray: " + dir);
-        }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> out = (Map<String, Object>) m;
+    static List<Long> longArrayToList(long[] arr) {
+        List<Long> out = new ArrayList<>(arr.length);
+        for (long v : arr) out.add(v);
         return out;
     }
 
-    static void writeZAttrs(Path dir, Map<String, Object> attrs) throws IOException {
-        if (attrs.isEmpty()) {
-            Files.deleteIfExists(dir.resolve(".zattrs"));
-            return;
+    static Map<String, Object> readZArray(Path dir) throws IOException {
+        Map<String, Object> meta = readMeta(dir);
+        if (meta == null) {
+            throw new IOException("malformed zarr.json at: " + dir);
         }
-        String json = MiniJson.serialise(attrs);
-        Files.writeString(dir.resolve(".zattrs"), json,
-                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        return meta;
     }
 
+    /** Attributes live inside the node's zarr.json under "attributes". */
+    static void writeZAttrs(Path dir, Map<String, Object> attrs) throws IOException {
+        Map<String, Object> meta = readMeta(dir);
+        if (meta == null) return;
+        meta.put("attributes", attrs == null ? new LinkedHashMap<>() : attrs);
+        writeMeta(dir, meta);
+    }
+
+    @SuppressWarnings("unchecked")
     static Map<String, Object> readZAttrs(Path dir) throws IOException {
-        Path p = dir.resolve(".zattrs");
-        if (!Files.exists(p)) return new LinkedHashMap<>();
-        Object parsed = MiniJson.parse(Files.readString(p));
-        if (parsed instanceof Map<?, ?> m) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> cast = (Map<String, Object>) m;
-            return new LinkedHashMap<>(cast);
+        Map<String, Object> meta = readMeta(dir);
+        if (meta == null) return new LinkedHashMap<>();
+        Object attrs = meta.get("attributes");
+        if (attrs instanceof Map<?, ?> m) {
+            return new LinkedHashMap<>((Map<String, Object>) m);
         }
         return new LinkedHashMap<>();
+    }
+
+    static boolean isGroupDir(Path dir) {
+        try {
+            Map<String, Object> meta = readMeta(dir);
+            return meta != null && "group".equals(meta.get("node_type"));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    static boolean isArrayDir(Path dir) {
+        try {
+            Map<String, Object> meta = readMeta(dir);
+            return meta != null && "array".equals(meta.get("node_type"));
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     // ── Dtype mapping ───────────────────────────────────────────────────
 
     static String dtypeFor(Precision p) {
+        // v3: canonical type names (no endian prefix).
         return switch (p) {
-            case FLOAT64 -> "<f8";
-            case FLOAT32 -> "<f4";
-            case INT64   -> "<i8";
-            case INT32   -> "<i4";
-            case UINT32  -> "<u4";
+            case FLOAT64 -> "float64";
+            case FLOAT32 -> "float32";
+            case INT64   -> "int64";
+            case INT32   -> "int32";
+            case UINT32  -> "uint32";
             case COMPLEX128 -> throw new UnsupportedOperationException(
                     "ZarrProvider: complex128 not supported");
         };
     }
 
     static Precision precisionFor(String dtype) {
+        // Accept both v3 canonical + v2 numpy-style for any mixed-age
+        // stores in the wild.
         return switch (dtype) {
-            case "<f8", "|f8", "float64" -> Precision.FLOAT64;
-            case "<f4", "|f4", "float32" -> Precision.FLOAT32;
-            case "<i8", "|i8", "int64"   -> Precision.INT64;
-            case "<i4", "|i4", "int32"   -> Precision.INT32;
-            case "<u4", "|u4", "uint32"  -> Precision.UINT32;
+            case "float64", "<f8", "|f8" -> Precision.FLOAT64;
+            case "float32", "<f4", "|f4" -> Precision.FLOAT32;
+            case "int64",   "<i8", "|i8" -> Precision.INT64;
+            case "int32",   "<i4", "|i4" -> Precision.INT32;
+            case "uint32",  "<u4", "|u4" -> Precision.UINT32;
             default -> throw new UnsupportedOperationException(
                     "ZarrProvider: unsupported dtype " + dtype);
         };
     }
 
-    /** v0.9: return the numcodecs id string from a compressor spec,
-     *  or null if the spec is null. Accepts the Map shape emitted by
-     *  numcodecs / parsed back by {@code readZArray}. */
-    static String compressorId(Object spec) {
+    /** Return the v3 codec name from a codec entry map, or null. */
+    static String codecName(Object spec) {
         if (spec == null) return null;
-        if (spec instanceof Map<?, ?> m && m.get("id") != null) {
-            return m.get("id").toString();
+        if (spec instanceof Map<?, ?> m && m.get("name") != null) {
+            return m.get("name").toString();
         }
         return spec.toString();
     }
 
-    /** v0.9: decompress a zarr v2 chunk. Supports ``null`` (identity)
-     *  and ``{"id":"zlib"}`` (JDK Inflater). Other codecs raise.
-     *
-     *  Python's ``numcodecs.Zlib`` emits raw zlib (with 2-byte header
-     *  + Adler-32 trailer) — the JDK {@code Inflater} default mode
-     *  handles that directly. */
+    /** Walk a v3 {@code codecs} array. The first entry must be the
+     *  required {@code "bytes"} codec. Returns the trailing compression
+     *  codec entry (if any) for use by {@link #decompressChunk}. Throws
+     *  if an unsupported compression codec is present. */
+    @SuppressWarnings("unchecked")
+    static Object compressionCodecFromCodecs(List<Object> codecs,
+                                              String arrayName) {
+        if (codecs == null || codecs.isEmpty()) return null;
+        Object compression = null;
+        for (Object entry : codecs) {
+            String n = codecName(entry);
+            if ("bytes".equals(n)) continue;
+            if ("gzip".equals(n)) {
+                compression = entry;
+                continue;
+            }
+            throw new UnsupportedOperationException(
+                    "ZarrProvider (Java): codec '" + n
+                    + "' not supported (array " + arrayName + ")");
+        }
+        return compression;
+    }
+
+    /** Decompress a v3 chunk. Supports ``null`` (identity) and
+     *  the {@code gzip} codec written by zarr-python's GzipCodec.
+     *  Other codecs raise. */
     static byte[] decompressChunk(Object spec, byte[] raw, int expectedBytes) {
         if (spec == null) return raw;
-        String id = compressorId(spec);
-        if ("zlib".equals(id)) {
-            java.util.zip.Inflater inflater = new java.util.zip.Inflater();
-            inflater.setInput(raw);
-            try {
+        String name = codecName(spec);
+        if ("gzip".equals(name)) {
+            try (java.util.zip.GZIPInputStream gz =
+                         new java.util.zip.GZIPInputStream(
+                                 new java.io.ByteArrayInputStream(raw))) {
                 byte[] out = new byte[expectedBytes];
                 int pos = 0;
-                while (!inflater.finished() && pos < out.length) {
-                    int n = inflater.inflate(out, pos, out.length - pos);
-                    if (n == 0 && inflater.needsInput()) break;
+                int n;
+                while (pos < out.length
+                        && (n = gz.read(out, pos, out.length - pos)) > 0) {
                     pos += n;
                 }
-                if (pos < out.length) {
-                    // short read — return what we got zero-padded to full
-                    return out;
-                }
                 return out;
-            } catch (java.util.zip.DataFormatException e) {
-                throw new RuntimeException("zarr zlib inflate failed", e);
-            } finally {
-                inflater.end();
+            } catch (IOException e) {
+                throw new RuntimeException("zarr gzip inflate failed", e);
             }
         }
         throw new UnsupportedOperationException(
-                "zarr compressor '" + id + "' not supported by Java ZarrProvider");
+                "zarr codec '" + name + "' not supported by Java ZarrProvider");
     }
 
     static int bytesPerElement(Precision p) {
@@ -325,16 +395,6 @@ public final class ZarrProvider implements StorageProvider {
     }
 
     // ── Helpers for chunked read/write ──────────────────────────────────
-
-    static String jsonLongArray(long[] a) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < a.length; i++) {
-            if (i > 0) sb.append(",");
-            sb.append(a[i]);
-        }
-        sb.append("]");
-        return sb.toString();
-    }
 
     static long[] readLongArray(Object obj) {
         if (obj instanceof List<?> l) {
@@ -395,13 +455,13 @@ public final class ZarrProvider implements StorageProvider {
         }
 
         private boolean isArray(Path p) {
-            return Files.exists(p.resolve(".zarray"));
+            return isArrayDir(p);
         }
 
         @Override
         public StorageGroup openGroup(String name) {
             Path p = dir.resolve(name);
-            if (!Files.isDirectory(p) || !Files.exists(p.resolve(".zgroup"))) {
+            if (!Files.isDirectory(p) || !isGroupDir(p)) {
                 throw new java.util.NoSuchElementException(
                         "group not found: " + name);
             }
@@ -459,7 +519,7 @@ public final class ZarrProvider implements StorageProvider {
                                              int compressionLevel) {
             if (compression != Compression.NONE && compression != null) {
                 throw new UnsupportedOperationException(
-                        "ZarrProvider (Java): compression not implemented in v0.8");
+                        "ZarrProvider (Java): writing compressed chunks not yet supported");
             }
             long[] shape = { length };
             long[] chunks = { chunkSize > 0 ? chunkSize : length };
@@ -483,7 +543,7 @@ public final class ZarrProvider implements StorageProvider {
                                                 int compressionLevel) {
             if (compression != Compression.NONE && compression != null) {
                 throw new UnsupportedOperationException(
-                        "ZarrProvider (Java): compression not implemented in v0.8");
+                        "ZarrProvider (Java): writing compressed chunks not yet supported");
             }
             Path p = dir.resolve(n);
             if (Files.exists(p)) {
@@ -581,29 +641,25 @@ public final class ZarrProvider implements StorageProvider {
         private final Precision precision;
         private final long[] shape;
         private final long[] chunks;
-        private Object compressor;  // v0.9: null = uncompressed; non-null = zlib metadata dict
+        private Object compressor;  // null = uncompressed; non-null = v3 codec entry (e.g. gzip)
 
+        @SuppressWarnings("unchecked")
         ZPrimitiveDataset(String name, Path dir) {
             this.name = name;
             this.dir = dir;
             try {
                 Map<String, Object> meta = readZArray(dir);
-                this.precision = precisionFor((String) meta.get("dtype"));
+                this.precision = precisionFor((String) meta.get("data_type"));
                 this.shape = readLongArray(meta.get("shape"));
-                this.chunks = readLongArray(meta.get("chunks"));
-                Object comp = meta.get("compressor");
-                this.compressor = comp;
-                if (comp != null) {
-                    String codecId = compressorId(comp);
-                    if (!"zlib".equals(codecId)) {
-                        // v0.9: support Python's default zlib chunks; defer
-                        // blosc / lz4 / zstd until a milestone needs them.
-                        throw new UnsupportedOperationException(
-                                "ZarrProvider (Java): compressor '" + codecId
-                                + "' not supported in v0.9 (array " + name
-                                + " uses " + comp + ")");
-                    }
-                }
+
+                Map<String, Object> cg =
+                        (Map<String, Object>) meta.get("chunk_grid");
+                Map<String, Object> cgCfg =
+                        (Map<String, Object>) cg.get("configuration");
+                this.chunks = readLongArray(cgCfg.get("chunk_shape"));
+
+                this.compressor = compressionCodecFromCodecs(
+                        (List<Object>) meta.get("codecs"), name);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -641,8 +697,7 @@ public final class ZarrProvider implements StorageProvider {
         private void writeChunksIntoBuffer(ByteBuffer out, int[] idx, int dim,
                                              int[] chunkCounts, int bpe) {
             if (dim == shape.length) {
-                Path chunkPath = dir.resolve(chunkFileName(idx));
-                byte[] chunkBytes = readChunk(chunkPath, idx, bpe);
+                byte[] chunkBytes = readChunk(chunkPath(idx), idx, bpe);
                 copyChunkIntoBuffer(out, idx, chunkBytes, bpe);
                 return;
             }
@@ -652,13 +707,10 @@ public final class ZarrProvider implements StorageProvider {
             }
         }
 
-        private String chunkFileName(int[] idx) {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < idx.length; i++) {
-                if (i > 0) sb.append(".");
-                sb.append(idx[i]);
-            }
-            return sb.toString();
+        private Path chunkPath(int[] idx) {
+            Path p = dir.resolve("c");
+            for (int i : idx) p = p.resolve(Integer.toString(i));
+            return p;
         }
 
         private byte[] readChunk(Path chunkPath, int[] idx, int bpe) {
@@ -671,7 +723,7 @@ public final class ZarrProvider implements StorageProvider {
             }
             try {
                 byte[] raw = Files.readAllBytes(chunkPath);
-                // v0.9: decompress if the array carries a compressor spec.
+                // decompress if the codec chain includes a compression entry.
                 byte[] plain = decompressChunk(compressor, raw, expected);
                 if (plain.length < expected) {
                     byte[] padded = new byte[expected];
@@ -789,7 +841,9 @@ public final class ZarrProvider implements StorageProvider {
                 fillChunkBytes(flat, sub, 0, logicalSize, origin, chunkBytes, bpe);
 
                 try {
-                    Files.write(dir.resolve(chunkFileName(idx)), chunkBytes,
+                    Path path = chunkPath(idx);
+                    Files.createDirectories(path.getParent());
+                    Files.write(path, chunkBytes,
                             StandardOpenOption.CREATE,
                             StandardOpenOption.TRUNCATE_EXISTING);
                 } catch (IOException e) {

@@ -39,14 +39,16 @@ static NSString *const kZ_COMPOUND_KIND = @"compound";
 // Utilities
 // ─────────────────────────────────────────────────────────────────────────
 
+// v1.0 Zarr v3: data_type is a plain type name ("float64", "int64", …)
+// not the v2 numpy-style "<f8" dtype string.
 static NSString *zDtypeFor(MPGOPrecision p)
 {
     switch (p) {
-        case MPGOPrecisionFloat64: return @"<f8";
-        case MPGOPrecisionFloat32: return @"<f4";
-        case MPGOPrecisionInt64:   return @"<i8";
-        case MPGOPrecisionInt32:   return @"<i4";
-        case MPGOPrecisionUInt32:  return @"<u4";
+        case MPGOPrecisionFloat64: return @"float64";
+        case MPGOPrecisionFloat32: return @"float32";
+        case MPGOPrecisionInt64:   return @"int64";
+        case MPGOPrecisionInt32:   return @"int32";
+        case MPGOPrecisionUInt32:  return @"uint32";
         case MPGOPrecisionComplex128:
         default:
             [NSException raise:NSInvalidArgumentException
@@ -58,17 +60,24 @@ static NSString *zDtypeFor(MPGOPrecision p)
 
 static MPGOPrecision zPrecisionFor(NSString *dtype)
 {
-    if ([dtype isEqualToString:@"<f8"] || [dtype isEqualToString:@"|f8"] ||
-        [dtype isEqualToString:@"float64"])  return MPGOPrecisionFloat64;
-    if ([dtype isEqualToString:@"<f4"] || [dtype isEqualToString:@"|f4"] ||
-        [dtype isEqualToString:@"float32"])  return MPGOPrecisionFloat32;
-    if ([dtype isEqualToString:@"<i8"] || [dtype isEqualToString:@"|i8"] ||
-        [dtype isEqualToString:@"int64"])    return MPGOPrecisionInt64;
-    if ([dtype isEqualToString:@"<i4"] || [dtype isEqualToString:@"|i4"] ||
-        [dtype isEqualToString:@"int32"])    return MPGOPrecisionInt32;
-    if ([dtype isEqualToString:@"<u4"] || [dtype isEqualToString:@"|u4"] ||
-        [dtype isEqualToString:@"uint32"])   return MPGOPrecisionUInt32;
-    return MPGOPrecisionFloat64;  // caller should check dtype separately
+    // Accept both the v3 canonical names and the legacy v2
+    // numpy-style forms; real files in the wild carry either.
+    if ([dtype isEqualToString:@"float64"] ||
+        [dtype isEqualToString:@"<f8"] || [dtype isEqualToString:@"|f8"])
+        return MPGOPrecisionFloat64;
+    if ([dtype isEqualToString:@"float32"] ||
+        [dtype isEqualToString:@"<f4"] || [dtype isEqualToString:@"|f4"])
+        return MPGOPrecisionFloat32;
+    if ([dtype isEqualToString:@"int64"] ||
+        [dtype isEqualToString:@"<i8"] || [dtype isEqualToString:@"|i8"])
+        return MPGOPrecisionInt64;
+    if ([dtype isEqualToString:@"int32"] ||
+        [dtype isEqualToString:@"<i4"] || [dtype isEqualToString:@"|i4"])
+        return MPGOPrecisionInt32;
+    if ([dtype isEqualToString:@"uint32"] ||
+        [dtype isEqualToString:@"<u4"] || [dtype isEqualToString:@"|u4"])
+        return MPGOPrecisionUInt32;
+    return MPGOPrecisionFloat64;
 }
 
 static NSUInteger zBytesPerElement(MPGOPrecision p)
@@ -84,12 +93,15 @@ static NSUInteger zBytesPerElement(MPGOPrecision p)
     return 8;
 }
 
-static NSString *zChunkFileName(NSArray<NSNumber *> *idx)
+// v1.0 Zarr v3: chunk layout is "c/<i>/<j>/<k>" (forward-slash-separated
+// under a mandatory "c/" prefix) rather than v2's "i.j.k" dot-joined
+// sibling. The function returns a relative path so the caller can
+// just ``stringByAppendingPathComponent:`` onto the array's directory.
+static NSString *zChunkRelativePath(NSArray<NSNumber *> *idx)
 {
-    NSMutableString *s = [NSMutableString string];
-    for (NSUInteger i = 0; i < idx.count; i++) {
-        if (i > 0) [s appendString:@"."];
-        [s appendFormat:@"%@", idx[i]];
+    NSMutableString *s = [NSMutableString stringWithString:@"c"];
+    for (NSNumber *n in idx) {
+        [s appendFormat:@"/%@", n];
     }
     return s;
 }
@@ -168,67 +180,106 @@ static NSData *zReadFile(NSString *path, NSError **error)
     return [NSData dataWithContentsOfFile:path options:0 error:error];
 }
 
+// v1.0 Zarr v3: a single ``zarr.json`` per node carries metadata +
+// attributes. node_type is "group" or "array"; attributes live under
+// the "attributes" key. The old v2 .zgroup / .zarray / .zattrs
+// siblings are gone.
+
+static NSString *zMetaPath(NSString *dir)
+{
+    return [dir stringByAppendingPathComponent:@"zarr.json"];
+}
+
+static NSMutableDictionary *zReadMeta(NSString *dir, NSError **error)
+{
+    NSData *d = zReadFile(zMetaPath(dir), error);
+    if (!d) return nil;
+    id obj = [NSJSONSerialization JSONObjectWithData:d options:0 error:error];
+    if (![obj isKindOfClass:[NSDictionary class]]) return nil;
+    return [NSMutableDictionary dictionaryWithDictionary:obj];
+}
+
+static BOOL zWriteMeta(NSString *dir, NSDictionary *meta, NSError **error)
+{
+    NSData *d = [NSJSONSerialization dataWithJSONObject:meta
+                                                 options:NSJSONWritingSortedKeys
+                                                   error:error];
+    if (!d) return NO;
+    return zWriteFile(zMetaPath(dir), d, error);
+}
+
 static BOOL zWriteZGroup(NSString *dir, NSError **error)
 {
-    NSData *d = [@"{\"zarr_format\":2}" dataUsingEncoding:NSUTF8StringEncoding];
-    return zWriteFile([dir stringByAppendingPathComponent:@".zgroup"], d, error);
+    NSDictionary *meta = @{
+        @"zarr_format": @(3),
+        @"node_type":   @"group",
+        @"attributes":  @{},
+    };
+    return zWriteMeta(dir, meta, error);
 }
 
 static BOOL zWriteZArray(NSString *dir, NSArray<NSNumber *> *shape,
                            NSArray<NSNumber *> *chunks, MPGOPrecision p,
                            NSError **error)
 {
-    NSDictionary *meta = @{
-        @"chunks":       chunks,
-        @"compressor":   [NSNull null],
-        @"dtype":        zDtypeFor(p),
-        @"fill_value":   @(0),
-        @"filters":      [NSNull null],
-        @"order":        @"C",
-        @"shape":        shape,
-        @"zarr_format":  @(2),
+    // v3 codec chain: always-first ``bytes`` codec (endian), plus an
+    // optional compression codec appended at write-time via
+    // ``zUpdateMetaCodecs``. Initial write = uncompressed.
+    NSDictionary *bytesCodec = @{
+        @"name":          @"bytes",
+        @"configuration": @{@"endian": @"little"},
     };
-    NSData *d = [NSJSONSerialization dataWithJSONObject:meta
-                                                 options:NSJSONWritingSortedKeys
-                                                   error:error];
-    if (!d) return NO;
-    return zWriteFile([dir stringByAppendingPathComponent:@".zarray"], d, error);
+    NSDictionary *meta = @{
+        @"zarr_format": @(3),
+        @"node_type":   @"array",
+        @"shape":       shape,
+        @"data_type":   zDtypeFor(p),
+        @"chunk_grid":  @{
+            @"name":          @"regular",
+            @"configuration": @{@"chunk_shape": chunks},
+        },
+        @"chunk_key_encoding": @{
+            @"name":          @"default",
+            @"configuration": @{@"separator": @"/"},
+        },
+        @"fill_value":  @(0),
+        @"codecs":      @[bytesCodec],
+        @"attributes":  @{},
+    };
+    return zWriteMeta(dir, meta, error);
 }
 
 static NSDictionary *zReadZArray(NSString *dir, NSError **error)
 {
-    NSData *d = zReadFile([dir stringByAppendingPathComponent:@".zarray"], error);
-    if (!d) return nil;
-    return [NSJSONSerialization JSONObjectWithData:d options:0 error:error];
+    return zReadMeta(dir, error);
 }
+
+// Attributes live inside zarr.json under the "attributes" key in v3,
+// so "read attrs" and "write attrs" both round-trip via zarr.json.
 
 static NSMutableDictionary *zReadZAttrs(NSString *dir)
 {
     NSError *err = nil;
-    NSData *d = zReadFile([dir stringByAppendingPathComponent:@".zattrs"], &err);
-    if (!d) return [NSMutableDictionary dictionary];
-    id obj = [NSJSONSerialization JSONObjectWithData:d options:0 error:&err];
-    if (![obj isKindOfClass:[NSDictionary class]]) {
+    NSDictionary *meta = zReadMeta(dir, &err);
+    if (!meta) return [NSMutableDictionary dictionary];
+    id attrs = meta[@"attributes"];
+    if (![attrs isKindOfClass:[NSDictionary class]]) {
         return [NSMutableDictionary dictionary];
     }
-    return [NSMutableDictionary dictionaryWithDictionary:obj];
+    return [NSMutableDictionary dictionaryWithDictionary:attrs];
 }
 
 static BOOL zWriteZAttrs(NSString *dir, NSDictionary *attrs, NSError **error)
 {
-    NSString *path = [dir stringByAppendingPathComponent:@".zattrs"];
-    NSFileManager *fm = [NSFileManager defaultManager];
-    if (attrs.count == 0) {
-        if ([fm fileExistsAtPath:path]) {
-            [fm removeItemAtPath:path error:NULL];
-        }
-        return YES;
+    NSError *localErr = nil;
+    NSMutableDictionary *meta = zReadMeta(dir, &localErr);
+    if (!meta) {
+        // No metadata yet — caller shouldn't be writing attrs.
+        if (error) *error = localErr;
+        return NO;
     }
-    NSData *d = [NSJSONSerialization dataWithJSONObject:attrs
-                                                 options:NSJSONWritingSortedKeys
-                                                   error:error];
-    if (!d) return NO;
-    return zWriteFile(path, d, error);
+    meta[@"attributes"] = attrs ?: @{};
+    return zWriteMeta(dir, meta, error);
 }
 
 static NSArray *zSchemaToList(NSArray<MPGOCompoundField *> *fields)
@@ -290,8 +341,8 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
 
 - (NSData *)readChunkAt:(NSArray<NSNumber *> *)idx bytesPerElement:(NSUInteger)bpe
 {
-    NSString *fname = zChunkFileName(idx);
-    NSString *path = [self.dir stringByAppendingPathComponent:fname];
+    NSString *rel = zChunkRelativePath(idx);
+    NSString *path = [self.dir stringByAppendingPathComponent:rel];
     NSUInteger chunkBytes = self.chunkElements * bpe;
     NSError *err = nil;
     NSData *raw = zReadFile(path, &err);
@@ -452,7 +503,15 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
     free(logicalSize);
     free(sub);
 
-    NSString *path = [self.dir stringByAppendingPathComponent:zChunkFileName(idx)];
+    // v3 chunk layout: c/0/1/2 under the array directory.
+    NSString *rel = zChunkRelativePath(idx);
+    NSString *path = [self.dir stringByAppendingPathComponent:rel];
+    // Ensure intermediate "c/<i>/<j>" directories exist.
+    NSString *parent = [path stringByDeletingLastPathComponent];
+    [[NSFileManager defaultManager] createDirectoryAtPath:parent
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:NULL];
     [buf writeToFile:path atomically:YES];
 }
 
@@ -721,8 +780,18 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
 
 - (BOOL)isArrayDir:(NSString *)p
 {
-    return [[NSFileManager defaultManager] fileExistsAtPath:
-        [p stringByAppendingPathComponent:@".zarray"]];
+    // v3: single zarr.json with node_type == "array".
+    NSError *err = nil;
+    NSDictionary *meta = zReadMeta(p, &err);
+    return [meta[@"node_type"] isEqualToString:@"array"];
+}
+
+// True when the directory has a v3 zarr.json with node_type == "group".
+static BOOL zIsGroupDir(NSString *p)
+{
+    NSError *err = nil;
+    NSDictionary *meta = zReadMeta(p, &err);
+    return [meta[@"node_type"] isEqualToString:@"group"];
 }
 
 - (NSArray<NSString *> *)childNames
@@ -752,8 +821,7 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
 - (id<MPGOStorageGroup>)openGroupNamed:(NSString *)n error:(NSError **)error
 {
     NSString *p = [self childPath:n];
-    if (![[NSFileManager defaultManager] fileExistsAtPath:
-            [p stringByAppendingPathComponent:@".zgroup"]]) {
+    if (!zIsGroupDir(p)) {
         if (error) *error = MPGOMakeError(MPGOErrorGroupOpen,
             @"Zarr: group %@ not found", n);
         return nil;
@@ -823,28 +891,42 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
         if (!meta) {
             if (error) *error = err; return nil;
         }
-        id comp = meta[@"compressor"];
-        if (comp && ![comp isKindOfClass:[NSNull class]]) {
-            // v0.9 M64.5-objc-java: support zlib-compressed chunks so
-            // ObjC can read Python-written zarr .mpgo. Non-zlib codecs
-            // (blosc / lz4 / zstd) still rejected.
-            NSString *codecId = nil;
-            if ([comp isKindOfClass:[NSDictionary class]]) {
-                codecId = [(NSDictionary *)comp objectForKey:@"id"];
-            }
-            if (![codecId isEqualToString:@"zlib"]) {
+        // v3 codec chain lives under "codecs". The always-first
+        // "bytes" codec is metadata-only; any subsequent codec is a
+        // byte-bytes transform. ObjC reader accepts "bytes" + optional
+        // "gzip"; other codecs surface as an error.
+        NSArray *codecs = meta[@"codecs"];
+        id compressor = nil;
+        if ([codecs isKindOfClass:[NSArray class]]) {
+            for (NSDictionary *c in codecs) {
+                NSString *name = [c isKindOfClass:[NSDictionary class]]
+                                 ? c[@"name"] : nil;
+                if ([name isEqualToString:@"bytes"]) continue;
+                if ([name isEqualToString:@"gzip"]) {
+                    compressor = c;
+                    continue;
+                }
                 if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,
-                    @"Zarr (ObjC): compressor '%@' not supported in v0.9 "
-                    @"(array %@ uses %@)", codecId ?: @"(unknown)", n, comp);
+                    @"Zarr (ObjC): codec '%@' not supported in v1.0 (array %@)",
+                    name ?: @"(unknown)", n);
                 return nil;
+            }
+        }
+        // v3 shape + chunk layout.
+        NSArray *chunkShape = nil;
+        id cg = meta[@"chunk_grid"];
+        if ([cg isKindOfClass:[NSDictionary class]]) {
+            id cfg = cg[@"configuration"];
+            if ([cfg isKindOfClass:[NSDictionary class]]) {
+                chunkShape = cfg[@"chunk_shape"];
             }
         }
         _ZPrimitiveDataset *ds = [[_ZPrimitiveDataset alloc] init];
         ds.name = n; ds.dir = p;
-        ds.precision = zPrecisionFor(meta[@"dtype"]);
+        ds.precision = zPrecisionFor(meta[@"data_type"]);
         ds.shape = meta[@"shape"];
-        ds.chunks = meta[@"chunks"];
-        ds.compressor = comp;
+        ds.chunks = chunkShape;
+        ds.compressor = compressor;
         return ds;
     }
     if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,
@@ -1018,7 +1100,8 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
     }
     self.rootDir = [self pathForURL:url];
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *zgroup = [self.rootDir stringByAppendingPathComponent:@".zgroup"];
+    // v3: marker file is zarr.json at the root.
+    NSString *rootMeta = zMetaPath(self.rootDir);
     switch (mode) {
         case MPGOStorageOpenModeCreate: {
             if ([fm fileExistsAtPath:self.rootDir]) {
@@ -1032,7 +1115,7 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
             break;
         }
         case MPGOStorageOpenModeRead: {
-            if (![fm fileExistsAtPath:zgroup]) {
+            if (![fm fileExistsAtPath:rootMeta]) {
                 if (error) *error = MPGOMakeError(MPGOErrorFileOpen,
                     @"Zarr store not found: %@", self.rootDir);
                 return NO;
@@ -1047,7 +1130,7 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
                                     attributes:nil
                                          error:error]) return NO;
             }
-            if (![fm fileExistsAtPath:zgroup]) {
+            if (![fm fileExistsAtPath:rootMeta]) {
                 if (!zWriteZGroup(self.rootDir, error)) return NO;
             }
             break;
