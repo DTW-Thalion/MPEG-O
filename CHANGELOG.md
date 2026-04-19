@@ -11,7 +11,37 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — v0.9 development
+## [v0.9.0] — 2026-04-19
+
+### Added
+- **M57** Integration test infrastructure + fixture management
+  (`download.py`, pinned source URLs, in-repo fallbacks).
+- **M58** Cross-tool round-trip integration tests: mzML, nmrML,
+  Thermo `.raw`, Bruker `.d`.
+- **M59** imzML + `.ibd` importer. Python reference, then
+  Objective-C + Java for three-language parity.
+- **M60** mzTab importer (proteomics 1.0 + metabolomics 2.0.0-M)
+  across Python + ObjC + Java.
+- **M61** End-to-end workflow + security-lifecycle test matrix
+  (84 cross-provider cells: encryption, signature, anonymization).
+- **M62** Stress + cross-provider benchmark suite (31 stress-marked
+  cells); cross-language stress + validation suites for all three
+  languages.
+- **M63** Waters MassLynx `.raw` importer (Python + ObjC + Java),
+  delegation pattern through `MassLynxRawReader` where SDK present,
+  open-source fallback otherwise.
+- **M64** Cross-tool validation + nightly stress CI; closed
+  several v1.0 exporter gaps surfaced by xfails.
+- **mzML, nmrML, ISA-Tab, imzML, mzTab exporters** (the latter
+  two new in v0.9). Every format MPEG-O reads, it can now write.
+  - **nmrML** spectrum1D XSD gap closed via interleaved `(x,y)`
+    encoding (M64 follow-up).
+  - **imzML** exporter across all three languages (commit
+    `ff0f201`); fixed an importer cv-accession misclassification
+    (`MS:1000030`/`MS:1000031` are vendor / instrument-model, not
+    IMS mode).
+  - **mzTab** exporter across all three languages (commit
+    `3c67ba9`), round-trips bit-identically through the reader.
 
 ### Changed
 - **Zarr v2 → v3 on-disk migration** across all three language
@@ -27,7 +57,24 @@ leading `0.` means the public API is still stabilising; see
   - No backward-compat shim — pre-deployment, no v2 stores in the
     wild. Read side does still accept legacy v2 dtype strings
     (`<f8`, `<i4`, ...) for safety.
-  - Test counts unchanged: Python 586, ObjC 1271, Java 245.
+- **M64.5** caller-refactor across all three languages so
+  `SpectralDataset.open` / `write_minimal` dispatch on URL scheme
+  (HDF5 / Memory / SQLite / Zarr). Phase A (Python), phase B
+  (provider-aware Encryption/Signature/Anonymizer), phase C
+  (KeyRotationManager + MSImage cube cross-provider). Java + ObjC
+  follow-up landed `ProviderRegistry.open` and
+  `+readViaProviderURL:` paths. 39 of 39 cross-provider cells
+  pass; the remaining `memory`-as-cross-process xfail is by design.
+- **Performance**: instrumented all three languages, shipped three
+  targeted optimisations, dropped 5.6 MB of dead-weight from the
+  ObjC harness, and brought Java index-format parity. Pure-C
+  baseline now exists; ObjC sits at ~1.3× over raw C (documented
+  in `tools/perf/`).
+
+### Test counts
+- Python 586 pass / 11 skip / 4 xfail (was 341)
+- Objective-C 1271 PASS (was 656)
+- Java 245 pass (was 207)
 
 ---
 
