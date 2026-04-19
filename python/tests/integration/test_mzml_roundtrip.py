@@ -33,19 +33,7 @@ from mpeg_o import SpectralDataset
 from mpeg_o.exporters import mzml as mzml_writer
 from mpeg_o.importers import mzml as mzml_reader
 
-# All four providers parametrize; non-HDF5 entries skip with a clear
-# reason until write_minimal becomes provider-aware.
-_PROVIDERS = ["hdf5", "memory", "sqlite", "zarr"]
-_NATIVE_WRITE_ONLY = {"memory", "sqlite", "zarr"}
-
-
-def _maybe_skip_provider(provider: str) -> None:
-    if provider in _NATIVE_WRITE_ONLY:
-        pytest.skip(
-            f"provider '{provider}' write path not yet wired through "
-            "SpectralDataset.write_minimal — see ARCHITECTURE.md "
-            "'Caller refactor status'"
-        )
+from _provider_matrix import PROVIDERS as _PROVIDERS, maybe_skip_provider as _maybe_skip_provider
 
 
 # --------------------------------------------------------------------------- #

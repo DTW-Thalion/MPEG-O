@@ -73,24 +73,35 @@
   M58 (Format            M59 (imzML          M60 (mzTab
    round-trips)           importer)            importer)
        |                  |                    |
-       v                  v                    |
+       |                  |                    |
+       +------------------+--------+-----------+
+                                   |
+                                   v
+                       M64.5 (Caller refactor:
+                        provider-aware writers)
+                                   |
+       +---------------------------+----------+
+       v                  v                   |
   M61 (E2E workflows    M63 (Waters           |
-   + security)            MassLynx)            |
-       |                  |                    |
-       v                  |                    |
-  M62 (Stress +           |                    |
-   cross-provider)        |                    |
-       |                  |                    |
-       +--------+---------+--------------------+
+   + security)            MassLynx)           |
+       |                  |                   |
+       v                  |                   |
+  M62 (Stress +           |                   |
+   cross-provider)        |                   |
+       |                  |                   |
+       +--------+---------+-------------------+
                 |
                 v
            M64 (Cross-tool validation + v0.9.0)
 ```
 
-M57 is prerequisite for everything. M58-M60 are independent.
-M61 depends on M58 (uses format round-trip infrastructure).
-M62 depends on M61 (uses workflow fixtures). M63 is independent.
-M64 is the release gate.
+M57 is prerequisite for everything. M58-M60 are independent and ship
+their cross-provider matrices with `not-yet-wired` skips. M64.5 is the
+**caller-refactor gate** that wires every convenience writer through
+the StorageProvider abstraction so those matrices actually run; it
+must complete before M61/M62 to avoid wasted matrix work. M61 depends
+on M58 (uses format round-trip infrastructure). M62 depends on M61
+(uses workflow fixtures). M63 is independent. M64 is the release gate.
 
 ---
 
@@ -689,6 +700,166 @@ git push origin v0.9.0
 
 ---
 
+## Milestone 64.5 — Caller Refactor: Provider-Aware Convenience Writers
+
+**License:** LGPL-3.0
+
+### Why
+
+`v0.6` shipped the `StorageProvider` abstraction and *read*-side
+provider awareness on `SpectralDataset.open`. Bulk write paths were
+explicitly deferred — `ARCHITECTURE.md` "Caller refactor status"
+table lists them as "Still native — use
+`dataset.provider.native_handle()`". As of v0.8 the deferral remains:
+every convenience writer opens `h5py.File` directly. That makes the
+4-provider parametrize matrices in M58/M61/M62 collapse to HDF5-only,
+even though Memory/SQLite/Zarr providers are fully implemented at the
+storage layer (proven by `test_canonical_bytes_cross_backend.py`).
+
+M64.5 closes the gap: every writer routes through the
+`StorageProvider` protocol, the matrix tests light up across all four
+backends, and the v0.9.0 release legitimately delivers what the v0.8
+docs already advertise ("4-provider cross-lang parity").
+
+### Binding decisions (M64.5)
+
+53. **Default provider stays HDF5.** Every writer accepts a new
+    `provider=` kwarg whose default is HDF5 so existing callers and
+    on-disk semantics are preserved bit-for-bit.
+54. **Native handle escape hatch is deprecated, not removed.** Code
+    that genuinely needs HDF5-specific features (chunking layout,
+    SWMR, fsspec routing) can still call
+    `provider.native_handle()`; the escape hatch is documented as a
+    no-go for new write paths but kept for cloud/streaming code.
+55. **Cross-backend canonical bytes are the contract.**
+    `read_canonical_bytes` already produces identical output across
+    HDF5/Memory/SQLite/Zarr. Writers are correct iff a write through
+    any provider produces the same canonical bytes when re-read
+    through any other compatible provider.
+56. **One commit per writer family**, mirroring the M-series
+    convention. Suggested commit boundaries align with §"Refactor
+    targets" below so each lands its own checkpoint.
+
+### Refactor targets
+
+| # | Writer | Source file | Currently native because… |
+|---|---|---|---|
+| 1 | `SpectralDataset.write_minimal` | `spectral_dataset.py:378` | Opens `h5py.File(p, "w")` directly; calls `_write_run` / `_write_identifications` / `_write_quantifications` / `_write_provenance` against `h5py.Group`. |
+| 2 | `_write_run` (signal channels) | `spectral_dataset.py:458` | Bulk writes to `parent.create_dataset` with HDF5-specific chunk + zlib kwargs. |
+| 3 | `_write_identifications` / `_write_quantifications` / `_write_provenance` | `spectral_dataset.py:529 / 559 / 586` | Build numpy structured arrays and pass to HDF5 compound dataset API. |
+| 4 | `AcquisitionRun.encrypt_with_key` / `decrypt_with_key` | `acquisition_run.py` | Reads/writes signal channel bytes via `h5py.Dataset`. |
+| 5 | `AcquisitionRun` write-back of NumPress / LZ4-compressed channels | `acquisition_run.py` (`_numpress_channels`, `_signal_cache`) | Codec round-trip writes through HDF5 chunked datasets. |
+| 6 | `MSImage` cube writes | `ms_image.py` | `create_dataset_nd` is provider-aware but bulk image-cube writes still use `h5py.Group.create_dataset`. |
+| 7 | `EncryptionManager` | `encryption.py` (referenced by `dataset.encrypt_with_key`) | AES-GCM ciphertext written back via raw HDF5; needs `StorageDataset.write` + canonical-bytes path. |
+| 8 | `SignatureManager.sign_dataset` (HMAC v2 + ML-DSA-87 v3) | `protection/signature.py` | Reads canonical bytes (provider-aware) but writes signature attribute via `h5py`. |
+| 9 | `KeyRotationManager.rotate_keys` | `protection/key_rotation.py` | Re-encrypts signal channels in place; same HDF5 dependency as #4 + #7. |
+| 10 | `Anonymizer.anonymize` | `anonymization.py` | Reads source via provider, but writes the anonymized output via `SpectralDataset.write_minimal` — inherits #1's HDF5 lock-in. |
+| 11 | `StreamWriter` | `stream_writer.py` | Streaming append-only writer; currently `h5py.File`-only. |
+| 12 | Encrypted-attribute helpers | `encryption.py`, `protection/*.py` | Several read/write attribute helpers reach for `h5py.AttributeManager`. |
+
+### Deliverables
+
+**`src/mpeg_o/spectral_dataset.py`**
+
+* `SpectralDataset.write_minimal(path, ..., provider="hdf5")` — new
+  kwarg accepting either a string (registered provider name) or a
+  pre-opened `StorageProvider`. When a string is given, the writer
+  uses `open_provider(path, provider=provider, mode="w")`. When a
+  provider object is given, the caller owns its lifecycle.
+* `_write_run` / `_write_identifications` / `_write_quantifications`
+  / `_write_provenance` accept a `StorageGroup` instead of an
+  `h5py.Group`. Compound datasets go through
+  `group.create_compound_dataset(name, fields, n)`; signal channels
+  through `group.create_dataset(name, precision, n).write(buf)`.
+  Chunking + compression hints are passed via the
+  `StorageGroup.create_dataset` `compression=` / `chunks=` kwargs
+  that `base.py` already accepts.
+
+**`src/mpeg_o/providers/base.py`**
+
+* Audit `StorageGroup.create_dataset` / `create_compound_dataset`
+  signatures to confirm every kwarg the HDF5 writer relies on
+  (chunking, compression level, fill value) is part of the protocol.
+  Add any missing parameters; default-implement them no-op for
+  Memory if the backend can't honour them.
+
+**`src/mpeg_o/{providers/memory.py, providers/sqlite.py, providers/zarr.py}`**
+
+* Implement any newly-required `create_dataset` / write parameters.
+* Confirm `write_canonical_bytes` round-trips through each backend
+  for all 4 spectrum-channel codecs (raw, zlib, NumPress-delta, LZ4).
+
+**`src/mpeg_o/{acquisition_run.py, ms_image.py}`**
+
+* Replace `self.group.create_dataset(...)` calls with
+  `self.storage_group.create_dataset(...)`. Preserve the
+  `provider.native_handle()` escape only behind a `_legacy_h5py=True`
+  internal kwarg that the deprecated streaming path keeps using.
+
+**`src/mpeg_o/{encryption.py, protection/signature.py,
+protection/key_rotation.py, anonymization.py}`**
+
+* Move bulk byte writes to `StorageDataset.write_canonical_bytes`
+  (or equivalent helper to be added). Signature/HMAC value storage
+  goes through `StorageGroup.set_attribute(name, value)` (already in
+  the protocol).
+* `Anonymizer.anonymize(out_path, *, provider="hdf5")` — surface the
+  same kwarg as `write_minimal` so callers can pin output backend.
+
+**Tests — provider matrix unblock**
+
+* `python/tests/integration/_provider_matrix.py` ships in M58 with
+  `WRITE_PROVIDERS_WIRED = False`. Flip to `True` here. The 4-provider
+  parametrize matrices in M58/M61/M62 stop skipping with
+  *"not yet wired through SpectralDataset.write_minimal"* and run
+  natively across HDF5/Memory/SQLite/Zarr.
+* New test:
+  `tests/integration/test_writer_canonical_bytes_cross_provider.py`
+  — write the same logical .mpgo through each of the 4 providers,
+  read back through each of the 4, assert canonical bytes match
+  across all 16 cells. Target ~3 minutes runtime.
+* Cross-language: at least one M64.5 test exports an .mpgo via
+  Memory provider in Python, hands the resulting in-memory store to
+  the ObjC `mpgo-verify` CLI via stdin or temp file. (Only worth
+  doing if Memory provider exposes a serialize-to-bytes path; if
+  not, defer to M64-style cross-tool validation.)
+
+### Acceptance
+
+- [ ] `SpectralDataset.write_minimal(provider="memory" | "sqlite" |
+      "zarr")` produces a readable .mpgo whose canonical bytes match
+      the HDF5 reference for the same input.
+- [ ] All four protection classes (Encryption, Signature,
+      KeyRotation, Anonymization) operate against any of the 4
+      providers, verified by per-provider tests.
+- [ ] M58/M61/M62 4-provider parametrize matrices stop skipping for
+      Memory/SQLite/Zarr after `WRITE_PROVIDERS_WIRED = True` is
+      flipped.
+- [ ] Existing 356-test suite stays green at every step.
+- [ ] `ARCHITECTURE.md` "Caller refactor status" table updated:
+      every row except the legacy streaming path shows
+      "**Provider-aware**".
+- [ ] Sphinx doc build (`python/docs/`) regenerated; docstrings
+      updated to describe the new `provider=` kwarg.
+
+### Scheduling note
+
+M64.5 is logically a v0.9 sub-milestone. The dependency graph above
+places it **before M61** so the security/anonymization/stress
+matrices (which expand the parametrize to ~80 test cases combined)
+land already-wired, not as 60+ new skips. If schedule pressure
+forces M61/M62 to run first, plan a follow-up pass after M64.5 to
+delete the skip helpers and re-baseline counts.
+
+### Rollback
+
+Each writer-family commit can be reverted independently. The
+`provider="hdf5"` default means a partial rollback never breaks an
+on-disk file; it only takes the corresponding non-HDF5 cells back to
+"skipped".
+
+---
+
 ## Known Gotchas
 
 **Inherited (1–45):** All prior gotchas active.
@@ -735,10 +906,13 @@ git push origin v0.9.0
 3. **M58:** Format conversion round-trip tests. **Pause.**
 4. **M59:** imzML importer + tests. **Pause.**
 5. **M60:** mzTab importer + tests. **Pause.**
-6. **M61:** E2E workflows + security tests. **Pause.**
-7. **M62:** Stress tests + benchmarks. **Pause.**
-8. **M63:** Waters MassLynx importer. **Pause.**
-9. **M64:** Cross-tool validation + v0.9.0 release.
+6. **M64.5:** Caller refactor — provider-aware writers. **Pause.**
+   (Run before M61/M62 so the security + stress matrices ship
+   already-wired across all 4 providers.)
+7. **M61:** E2E workflows + security tests. **Pause.**
+8. **M62:** Stress tests + benchmarks. **Pause.**
+9. **M63:** Waters MassLynx importer. **Pause.**
+10. **M64:** Cross-tool validation + v0.9.0 release.
 
 **CI must be green before any milestone is complete.**
 
