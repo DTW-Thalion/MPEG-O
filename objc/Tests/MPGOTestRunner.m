@@ -34,6 +34,7 @@ extern void testMilestone49(void);
 extern void testMilestone52(void);
 extern void testMilestone53(void);
 extern void testImzMLReader(void);
+extern void testMzTabReader(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
@@ -194,6 +195,10 @@ int main(int argc, const char *argv[])
         START_SET("M59: ObjC imzML reader")
             testImzMLReader();
         END_SET("M59: ObjC imzML reader")
+
+        START_SET("M60: ObjC mzTab reader")
+            testMzTabReader();
+        END_SET("M60: ObjC mzTab reader")
     }
     return 0;
 }
