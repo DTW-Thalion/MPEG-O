@@ -88,8 +88,19 @@ class _Dataset(StorageDataset):
             return self._data[offset:]
         return self._data[offset: offset + count]
 
-    def write(self, data: np.ndarray) -> None:
-        arr = np.asarray(data)
+    def write(self, data: np.ndarray | list) -> None:
+        # Compound datasets accept a list-of-dicts (per the storage
+        # protocol contract); coerce into a structured array using
+        # the dataset's compound dtype so :meth:`read_rows` round-trips.
+        if self._fields is not None and isinstance(data, list):
+            dt = _compound_dtype(self._fields)
+            arr = np.zeros(len(data), dtype=dt)
+            for i, rec in enumerate(data):
+                for f in self._fields:
+                    if f.name in rec:
+                        arr[i][f.name] = rec[f.name]
+        else:
+            arr = np.asarray(data)
         if arr.shape != self._shape and arr.shape[0] != self._shape[0]:
             raise ValueError(
                 f"dataset '{self._name}' expects shape {self._shape}, "

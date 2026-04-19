@@ -180,11 +180,14 @@ def anonymize(
             offsets[out_i] = cursor
             lengths[out_i] = n_pts
             rts[out_i] = float(spec.scan_time_seconds)
-            mls[out_i] = int(spec.ms_level)
-            pols[out_i] = int(spec.polarity)
-            pmzs[out_i] = float(spec.precursor_mz)
-            pcs[out_i] = int(spec.precursor_charge)
-            bps[out_i] = float(run.index.base_peak_intensities[src_i])
+            # NMRSpectrum doesn't carry MS-level / polarity / precursor
+            # fields; fall back to 0 so the anonymizer works on every
+            # spectrum class.
+            mls[out_i]  = int(getattr(spec, "ms_level", 0))
+            pols[out_i] = int(getattr(spec, "polarity", 0))
+            pmzs[out_i] = float(getattr(spec, "precursor_mz", 0.0))
+            pcs[out_i]  = int(getattr(spec, "precursor_charge", 0))
+            bps[out_i]  = float(run.index.base_peak_intensities[src_i])
             cursor += n_pts
 
         channel_data = {
