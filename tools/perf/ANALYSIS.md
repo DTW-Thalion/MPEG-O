@@ -429,6 +429,94 @@ is the interpreter tax on the non-libhdf5 code (attribute writes,
 per-dataset dispatch, group management). Java 505 vs ObjC 509 is
 within noise; they're at parity on the write floor.
 
+## Why ObjC retains a residual ~1.3× overhead above raw C
+
+After format parity and the writeMinimal fix, ObjC's read phase at
+100 K sits at **~34 ms vs raw-C 17 ms = ~2.0×**, and writeMinimal at
+**509 ms vs raw-C 504 ms = ~1.01×**. Decomposing the read gap with
+`tools/perf/profile_read_detail.m`:
+
+```
+Phase                                Time      per call   Wrapper tax
+───────────────────────────────────────────────────────────────────────
+A.  raw-C H5Dread (1 ch, reuse)      17.1 ms   17.1 us    (baseline)
+B.  MPGOHDF5Dataset wrapper (1 ch)   17.4 ms   17.4 us    +0.3 us
+B2. hand-coded reuse-spaces path     16.5 ms   16.5 us    (best case)
+C0. readFromFilePath (8 idx arrays)   6.9 ms   ──         format work
+C1. full objectAtIndex loop (2 ch)   27.4 ms   27.4 us    2nd ch + alloc
+```
+
+The **per-call wrapper overhead is 0.3 µs on 17.1 µs = ~2%**. Above
+the libhdf5 layer there's almost nothing to squeeze. The remaining
+gap breaks into three pieces, each of which is either *unavoidable
+mandatory work* or *a fair apples-to-apples comparison issue*:
+
+### 1. The 2nd channel read is the single biggest cost (~12 ms of 21 ms gap)
+
+`MPGOMassSpectrum` is contractually two-channel (mz + intensity). The
+raw-C baseline harness reads only `mz_values` because that's all it
+needs for a perf floor. An apples-to-apples raw-C harness that also
+reads `intensity_values` would land at roughly 2× the current 17 ms —
+maybe 28-30 ms with chunk-cache adjacency savings — at which point
+ObjC's 34 ms is **~1.1-1.2× raw C**.
+
+We can't drop this cost without breaking the spectrum abstraction.
+Every real consumer of `MPGOMassSpectrum` needs both arrays.
+
+### 2. Eager spectrum_index loading (~3-4 ms)
+
+`readFromFilePath` loads all 8 parallel index arrays — but random-
+access workloads only need `offsets` and `lengths`. The other six
+(`retention_times`, `ms_levels`, `polarities`, `precursor_mzs`,
+`precursor_charges`, `base_peak_intensities`) are only used by
+`indicesInRetentionTimeRange:` / `indicesForMsLevel:` queries.
+
+Lazy-loading them would save ~3.7 ms at 100 K but is a medium-
+complexity refactor. See `tools/perf/PROPOSAL_read_path.md` for the
+full option analysis — deferred since the absolute savings don't
+change the ratio substantially and the existing behavior is
+predictable.
+
+### 3. Object allocation is essentially free (~2 ms)
+
+Allocating `MPGOMassSpectrum` + 2× `MPGOSignalArray` + 2× `NSData` per
+spectrum costs ~2 µs per sample × 1000 = ~2 ms of the 100K-sample
+loop. That's the cost of the API shape — ObjC users iterate over
+`id<MPGOIndexable>` returning typed objects, not raw buffers. The
+alternative (lower-level C-style iteration) would break every
+existing caller.
+
+### Summary
+
+| Source of overhead | Amount | Nature |
+|---|---:|---|
+| 2nd channel read (intensity) | ~12 ms | Mandatory — API contract |
+| Eager spectrum_index (6 extra arrays) | ~3-4 ms | Optimizable but deferred |
+| Object allocation (MassSpectrum + wrappers) | ~2 ms | API shape |
+| MPGOHDF5Dataset wrapper (per-call native-call overhead) | ~0.3 ms | At the libhdf5 floor |
+| **Total residual vs single-channel raw C** | **~18 ms** | |
+
+Put differently: **ObjC at 34 ms** vs **an apples-to-apples raw C
+baseline at ~28-30 ms** is **~1.15× overhead** — exactly where a
+thin binding should land. The "2×" headline is a comparison
+artifact; the 2nd-channel read is work raw-C's baseline skipped,
+not work ObjC does redundantly.
+
+### What we're not pursuing, and why
+
+- **Lazy `MPGOSignalArray`** (~8 ms potential): Goodhart's law. The
+  benchmark reads only `.length` so lazy I/O would hide the cost,
+  but real peak-picking code reads `.data` and would pay the same
+  cost later. Would make the benchmark prettier without helping any
+  user. Declined.
+- **Lazy spectrum_index sub-arrays** (~3-4 ms): net-positive for
+  random-access workloads, but redistributes cost for query
+  workloads. Deferred; the API and call stacks are correct as-is
+  and the absolute numbers are healthy.
+
+The API and call stacks are validated. Further optimization is
+below the return-on-investment line for v1.x.
+
 ## Reproducing
 
 ```bash
