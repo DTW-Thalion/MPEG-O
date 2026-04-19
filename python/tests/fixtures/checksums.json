@@ -1,3 +1,8 @@
 {
+  "bsa_digest_mzml": "b335d4fa6909f923d77ea63181ce6c93d9015450cb98f57c1bf1667ed4c41199",
+  "imzml_continuous": "04237b10d61db093d2c5529f380d676d400383e8cbe55b3fe0e09bb97ae2ea8e",
+  "imzml_continuous_ibd": "e8f2fefb1a0b6947b9ad78c773d20c1381f7728e060010c8d2f174ac414ff099",
+  "imzml_processed": "066671590f01d4820b7ac5bd1f669d23dca04a91e40c08a35f7d0c6d6c729480",
+  "imzml_processed_ibd": "1a5410dd26e844f714b53db7506d8474a40af37323bf19396df68ea7733ded9a",
   "tiny_pwiz_mzml": "711ac14b666f14817c208bd4d39b738e96ac827574c4639d8f8f6eebbfde9c83"
 }
