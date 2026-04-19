@@ -36,10 +36,14 @@ import pytest
 
 from mpeg_o import SpectralDataset
 from mpeg_o.axis_descriptor import AxisDescriptor
+from mpeg_o.encoding_spec import EncodingSpec
 from mpeg_o.exporters import nmrml as nmrml_writer
 from mpeg_o.importers import nmrml as nmrml_reader
 from mpeg_o.nmr_spectrum import NMRSpectrum
 from mpeg_o.signal_array import SignalArray
+
+
+_ENC = EncodingSpec()
 
 from _provider_matrix import (
     PROVIDERS as _PROVIDERS,
@@ -203,6 +207,70 @@ def test_nmrml_writer_emits_sweep_width(tmp_path: Path) -> None:
 
     re_read = nmrml_reader.read(out)
     assert re_read.nucleus_type == "1H"
+
+
+def test_nmrml_reader_handles_canonical_interleaved_xy(tmp_path: Path) -> None:
+    """v0.9 M64: round-trip through the canonical single-<spectrumDataArray>
+    interleaved form restores both chemical_shift and intensity losslessly."""
+    cs = np.array([0.5, 1.5, 2.5, 3.5, 4.5], dtype=np.float64)
+    it = np.array([10.0, 20.0, 30.0, 20.0, 10.0], dtype=np.float64)
+    spec = NMRSpectrum(
+        signal_arrays={
+            "chemical_shift": SignalArray(data=cs, encoding=_ENC),
+            "intensity":      SignalArray(data=it, encoding=_ENC),
+        },
+        nucleus_type="1H",
+    )
+    out = tmp_path / "canon.nmrML"
+    nmrml_writer.write_spectrum(spec, out, sweep_width_ppm=10.0)
+
+    re_read = nmrml_reader.read(out)
+    # NMR spectra land in nmr_spectra, not ms_spectra.
+    assert len(re_read.nmr_spectra) == 1
+    # Reader must deinterleave (x,y) pairs from the single
+    # <spectrumDataArray> and hand back both axes lossless.
+    got_cs = re_read.nmr_spectra[0].mz_or_chemical_shift
+    got_it = re_read.nmr_spectra[0].intensity
+    np.testing.assert_allclose(got_cs, cs, rtol=0, atol=0)
+    np.testing.assert_allclose(got_it, it, rtol=0, atol=0)
+
+
+def test_nmrml_reader_handles_y_only_external_form(tmp_path: Path) -> None:
+    """v0.9 M64: when an external nmrML carries a y-only <spectrumDataArray>
+    (encodedLength == numberOfDataPoints × 8), the reader synthesizes a
+    0..N-1 stub for chemical_shift so the ImportResult shape is
+    consistent with our two-channel model."""
+    # Construct a y-only external nmrML by hand — mimics what real-world
+    # tools (mnova, topspin) emit.
+    y_values = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0, 2.0], dtype="<f8")
+    y_b64 = base64.b64encode(y_values.tobytes()).decode("ascii")
+    text = f"""<?xml version="1.0" encoding="UTF-8"?>
+<nmrML xmlns="http://nmrml.org/schema" version="1.1.0">
+  <cvList><cv id="nmrCV" fullName="x" version="1.1.0"/></cvList>
+  <acquisition><acquisition1D>
+    <acquisitionParameterSet numberOfScans="1" numberOfSteadyStateScans="0">
+      <acquisitionNucleus name="1H"/>
+    </acquisitionParameterSet>
+    <fidData compressed="false" byteFormat="Complex128" encodedLength="0"></fidData>
+  </acquisition1D></acquisition>
+  <spectrumList>
+    <spectrum1D id="s1" numberOfDataPoints="{len(y_values)}">
+      <spectrumDataArray compressed="false" byteFormat="float64"
+                          encodedLength="{len(y_b64)}">{y_b64}</spectrumDataArray>
+      <xAxis unitAccession="UO:0000169" unitName="parts per million" unitCvRef="UO"/>
+    </spectrum1D>
+  </spectrumList>
+</nmrML>
+"""
+    src = tmp_path / "yonly.nmrML"
+    src.write_text(text)
+    result = nmrml_reader.read(src)
+    assert len(result.nmr_spectra) == 1
+    spec = result.nmr_spectra[0]
+    np.testing.assert_allclose(spec.intensity, y_values, rtol=0, atol=0)
+    # chemical_shift is the 0..N-1 synthetic stub; just verify the length
+    # matches so the two-channel contract holds.
+    assert len(spec.mz_or_chemical_shift) == len(y_values)
 
 
 # --------------------------------------------------------------------------- #

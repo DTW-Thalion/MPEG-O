@@ -95,6 +95,20 @@ void testMilestone19(void)
         PASS(xml != nil && xml.length > 0, "writer produces non-empty mzML");
         PASS(err == nil, "no error on write");
 
+        // v0.9 M64: writer must emit required XSD sections + activation
+        // + populated <instrumentConfiguration>. Assert the output shape
+        // so regressions surface at the unit-test layer.
+        NSString *xmlStr = [[NSString alloc] initWithData:xml
+                                                 encoding:NSUTF8StringEncoding];
+        PASS([xmlStr rangeOfString:@"<softwareList"].location != NSNotFound,
+             "v0.9 M64: mzML output carries <softwareList>");
+        PASS([xmlStr rangeOfString:@"<instrumentConfigurationList"].location != NSNotFound,
+             "v0.9 M64: mzML output carries <instrumentConfigurationList>");
+        PASS([xmlStr rangeOfString:@"<dataProcessingList"].location != NSNotFound,
+             "v0.9 M64: mzML output carries <dataProcessingList>");
+        PASS([xmlStr rangeOfString:@"MS:1000031"].location != NSNotFound,
+             "v0.9 M64: <instrumentConfiguration> carries MS:1000031 cvParam");
+
         // Parse back with MPGOMzMLReader.
         err = nil;
         MPGOSpectralDataset *round =
