@@ -3,6 +3,7 @@
 #import "HDF5/MPGOHDF5Group.h"
 #import "HDF5/MPGOHDF5Dataset.h"
 #import "HDF5/MPGOHDF5Errors.h"
+#import "Providers/MPGOStorageProtocols.h"
 #import "HDF5/MPGOHDF5Types.h"
 
 @implementation MPGOSpectrumIndex
@@ -124,6 +125,40 @@ static NSData *readArray(MPGOHDF5Group *g, NSString *name, NSError **error)
     NSData *pmz     = readArray(g, @"precursor_mzs", error);
     NSData *pc      = readArray(g, @"precursor_charges", error);
     NSData *bp      = readArray(g, @"base_peak_intensities", error);
+    if (!offsets || !lengths || !rts || !ml || !pol || !pmz || !pc || !bp) return nil;
+    return [[self alloc] initWithOffsets:offsets
+                                 lengths:lengths
+                          retentionTimes:rts
+                                msLevels:ml
+                              polarities:pol
+                            precursorMzs:pmz
+                        precursorCharges:pc
+                     basePeakIntensities:bp];
+}
+
+static NSData *readStorageArray(id<MPGOStorageGroup> g, NSString *name, NSError **error)
+{
+    id<MPGOStorageDataset> ds = [g openDatasetNamed:name error:error];
+    if (!ds) return nil;
+    id val = [ds readAll:error];
+    if ([val isKindOfClass:[NSData class]]) return val;
+    return nil;
+}
+
++ (instancetype)readFromStorageGroup:(id)parent error:(NSError **)error
+{
+    id<MPGOStorageGroup> par = (id<MPGOStorageGroup>)parent;
+    if (![par hasChildNamed:@"spectrum_index"]) return nil;
+    id<MPGOStorageGroup> g = [par openGroupNamed:@"spectrum_index" error:error];
+    if (!g) return nil;
+    NSData *offsets = readStorageArray(g, @"offsets", error);
+    NSData *lengths = readStorageArray(g, @"lengths", error);
+    NSData *rts     = readStorageArray(g, @"retention_times", error);
+    NSData *ml      = readStorageArray(g, @"ms_levels", error);
+    NSData *pol     = readStorageArray(g, @"polarities", error);
+    NSData *pmz     = readStorageArray(g, @"precursor_mzs", error);
+    NSData *pc      = readStorageArray(g, @"precursor_charges", error);
+    NSData *bp      = readStorageArray(g, @"base_peak_intensities", error);
     if (!offsets || !lengths || !rts || !ml || !pol || !pmz || !pc || !bp) return nil;
     return [[self alloc] initWithOffsets:offsets
                                  lengths:lengths

@@ -5,6 +5,28 @@
 #import "MPGOProviderRegistry.h"
 #import "HDF5/MPGOHDF5Errors.h"
 #import "ValueClasses/MPGOEnums.h"
+#import <zlib.h>
+
+// v0.9 M64.5-objc-java: JDK-style Inflater over libz. Python's
+// numcodecs.Zlib emits raw zlib (2-byte header + Adler32 trailer),
+// which libz's default inflate handles directly.
+static NSData *zInflate(NSData *in, NSUInteger expectedBytes)
+{
+    if (in.length == 0) return nil;
+    z_stream strm = {0};
+    if (inflateInit(&strm) != Z_OK) return nil;
+    NSMutableData *out = [NSMutableData dataWithLength:expectedBytes];
+    strm.next_in = (Bytef *)in.bytes;
+    strm.avail_in = (uInt)in.length;
+    strm.next_out = out.mutableBytes;
+    strm.avail_out = (uInt)expectedBytes;
+    int rc = inflate(&strm, Z_FINISH);
+    NSUInteger produced = expectedBytes - strm.avail_out;
+    inflateEnd(&strm);
+    if (rc != Z_STREAM_END && produced == 0) return nil;
+    if (produced < expectedBytes) out.length = produced;
+    return out;
+}
 
 // Reserved-attribute prefix (matches Python / Java).
 static NSString *const kZ_KIND_ATTR   = @"_mpgo_kind";
@@ -240,6 +262,7 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
 @property (nonatomic, assign) MPGOPrecision precision;
 @property (nonatomic, copy) NSArray<NSNumber *> *shape;
 @property (nonatomic, copy) NSArray<NSNumber *> *chunks;
+@property (nonatomic, strong) id compressor;  // v0.9: nil = uncompressed; NSDictionary{id=zlib,level=…}
 @end
 
 @implementation _ZPrimitiveDataset
@@ -274,6 +297,12 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
     NSData *raw = zReadFile(path, &err);
     if (!raw) {
         return [NSMutableData dataWithLength:chunkBytes];  // fill_value=0
+    }
+    // v0.9: decompress if a compressor is set.
+    if (self.compressor && ![self.compressor isKindOfClass:[NSNull class]]) {
+        NSData *plain = zInflate(raw, chunkBytes);
+        if (!plain) return [NSMutableData dataWithLength:chunkBytes];
+        raw = plain;
     }
     if (raw.length >= chunkBytes) return [raw subdataWithRange:NSMakeRange(0, chunkBytes)];
     NSMutableData *padded = [NSMutableData dataWithLength:chunkBytes];
@@ -796,16 +825,26 @@ static NSArray<MPGOCompoundField *> *zSchemaFromList(NSArray *list)
         }
         id comp = meta[@"compressor"];
         if (comp && ![comp isKindOfClass:[NSNull class]]) {
-            if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,
-                @"Zarr (ObjC): compressed chunks not supported in v0.8 "
-                @"(array %@ uses %@)", n, comp);
-            return nil;
+            // v0.9 M64.5-objc-java: support zlib-compressed chunks so
+            // ObjC can read Python-written zarr .mpgo. Non-zlib codecs
+            // (blosc / lz4 / zstd) still rejected.
+            NSString *codecId = nil;
+            if ([comp isKindOfClass:[NSDictionary class]]) {
+                codecId = [(NSDictionary *)comp objectForKey:@"id"];
+            }
+            if (![codecId isEqualToString:@"zlib"]) {
+                if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,
+                    @"Zarr (ObjC): compressor '%@' not supported in v0.9 "
+                    @"(array %@ uses %@)", codecId ?: @"(unknown)", n, comp);
+                return nil;
+            }
         }
         _ZPrimitiveDataset *ds = [[_ZPrimitiveDataset alloc] init];
         ds.name = n; ds.dir = p;
         ds.precision = zPrecisionFor(meta[@"dtype"]);
         ds.shape = meta[@"shape"];
         ds.chunks = meta[@"chunks"];
+        ds.compressor = comp;
         return ds;
     }
     if (error) *error = MPGOMakeError(MPGOErrorDatasetOpen,

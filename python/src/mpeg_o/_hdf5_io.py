@@ -227,11 +227,22 @@ def write_signal_channel(
 
 
 def _precision_from_dtype(dt: np.dtype) -> Any:
-    """Map a numpy dtype to the Precision enum used by StorageGroup."""
+    """Map a numpy dtype to the Precision enum used by StorageGroup.
+
+    v0.9: ``<u8`` (uint64) maps to INT64 because the Precision enum
+    has no UINT64 entry and .mpgo spectrum_index offsets are always
+    non-negative and < 2^63, so the on-disk byte layout is identical.
+    This keeps offsets readable as INT64 columns by the Java
+    ``SqliteProvider`` (which rejected the prior FLOAT64 fallback with
+    ``class [D cannot be cast to class [J``). Python's
+    ``SpectrumIndex.read`` already reinterprets the int64 back as
+    ``<u8`` via ``astype``.
+    """
     from .enums import Precision
     by_str = {
         "<f4": Precision.FLOAT32, "<f8": Precision.FLOAT64,
         "<i4": Precision.INT32,  "<i8": Precision.INT64,
+        "<u8": Precision.INT64,  # v0.9: uint64 → int64 (see docstring)
         "<u4": Precision.UINT32,
     }
     return by_str.get(dt.str, Precision.FLOAT64)

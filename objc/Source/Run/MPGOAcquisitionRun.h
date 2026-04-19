@@ -99,6 +99,17 @@
                          name:(NSString *)name
                         error:(NSError **)error;
 
+/** v0.9 M64.5-objc-java: storage-protocol read for cross-provider
+ *  Memory/SQLite/Zarr datasets. Returns a read-only AcquisitionRun
+ *  whose spectrumIndex / channelNames / provenance reflect the
+ *  on-disk metadata; lazy spectrum materialisation is NOT wired
+ *  (signal-channel reads on non-HDF5 providers are a v1.0+ item).
+ *  ``parent`` is an ``id<MPGOStorageGroup>`` — typed as ``id`` to
+ *  keep the header HDF5-free. */
++ (instancetype)readFromStorageGroup:(id)parent
+                                 name:(NSString *)name
+                                error:(NSError **)error;
+
 #pragma mark - Random access
 
 /** v0.2: returns whatever MPGOSpectrum subclass the run holds. */
