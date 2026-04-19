@@ -1,11 +1,21 @@
 # MPEG-O Test Fixtures
 
 This directory contains fixture management code (`download.py`,
-`generate.py`) and a SHA-256 manifest (`checksums.json`). Per binding
-decision 48 (HANDOFF.md), no fixture larger than 1 MB is committed
-to the repo: large reference files live in
-`$XDG_CACHE_HOME/mpgo-test-fixtures/` (default `~/.cache/mpgo-test-fixtures/`)
-and are pulled on demand.
+`generate.py`) and a SHA-256 manifest (`checksums.json`).
+
+Per binding decision 48 (HANDOFF.md), no *new* fixture > 1 MB is
+committed to the repo. Three small reference files predate that
+rule and live under `objc/Tests/Fixtures/` (where the ObjC test
+suite expects them); the Python downloader exposes them via
+`in_repo_path` entries so a single `download.py` API resolves
+both in-repo and network-fetched sources. Larger fixtures live in
+`$XDG_CACHE_HOME/mpgo-test-fixtures/` (default
+`~/.cache/mpgo-test-fixtures/`) and are pulled on demand.
+
+| Source     | Files                                                                    |
+|------------|--------------------------------------------------------------------------|
+| In-repo    | `tiny_pwiz_mzml`, `onemin_mzml`, `bmse000325_nmrml`                      |
+| Network    | `bsa_digest_mzml`, `imzml_continuous{,_ibd}`, `imzml_processed{,_ibd}`   |
 
 ## Quick start
 

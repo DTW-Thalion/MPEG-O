@@ -50,90 +50,114 @@ def _xdg_cache_home() -> Path:
 
 
 CACHE_ROOT = _xdg_cache_home() / "mpgo-test-fixtures"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 @dataclass(frozen=True)
 class FixtureSpec:
+    """A fixture that the test suite may load.
+
+    Either ``url`` (network-fetched into :data:`CACHE_ROOT`) or
+    ``in_repo_path`` (a path relative to the repo root) must be set
+    — never both. URL fixtures get a SHA-256 pin in
+    ``checksums.json``; in-repo fixtures resolve immediately and
+    track integrity through git.
+    """
     name: str
     url: str | None
     relpath: str
     description: str
     required: bool = True
     notes: str = ""
+    in_repo_path: str | None = None
 
 
 # Registry of fixtures consumed by the integration / stress / validation
 # suites. URL stability matters more than recency — prefer GitHub raw
 # from upstream PSI/HUPO repos and stable archive FTP paths over
-# project pages whose layout changes.
+# project pages whose layout changes. v0.9 follow-up to M61 pinned
+# every previously-TBD slot to a verified source.
 FIXTURES: list[FixtureSpec] = [
+    # Tiny mzML reference (in-repo since v0.4 + GitHub mirror for nightly CI).
     FixtureSpec(
         name="tiny_pwiz_mzml",
         url="https://raw.githubusercontent.com/HUPO-PSI/mzML/master/examples/tiny.pwiz.1.1.mzML",
         relpath="mzml/tiny.pwiz.1.1.mzML",
-        description="Tiny PSI reference mzML produced by ProteoWizard. ~12 KB.",
+        description="Tiny PSI reference mzML produced by ProteoWizard (~25 KB).",
         required=True,
+        in_repo_path="objc/Tests/Fixtures/tiny.pwiz.1.1.mzML",
     ),
+    # 1-minute mzML run committed in-repo by the ObjC suite.
+    FixtureSpec(
+        name="onemin_mzml",
+        url=None,
+        relpath="mzml/1min.mzML",
+        description="1-minute MS run (~318 KB) — covers RT-range queries and the chromatogram path.",
+        required=True,
+        in_repo_path="objc/Tests/Fixtures/1min.mzML",
+    ),
+    # Real BSA tryptic digest mzML from the pymzML test corpus
+    # (gzip-compressed, ~5.5 MB; GitHub-hosted). Used by the BSA
+    # proteomics workflow when network-gated tests run.
     FixtureSpec(
         name="bsa_digest_mzml",
-        url=None,  # PXD000561 file URL — pin during M58 with verified checksum.
-        relpath="mzml/bsa_digest.mzML",
+        url="https://raw.githubusercontent.com/pymzml/pymzML/dev/tests/data/BSA1.mzML.gz",
+        relpath="mzml/BSA1.mzML.gz",
         description=(
-            "BSA tryptic digest from PRIDE PXD000561 (or equivalent). "
-            "~15 MB. Used by the BSA proteomics pipeline workflow."
+            "BSA tryptic digest from the pymzML test corpus (~5.5 MB, gzipped). "
+            "Larger BSA fixture than tiny_pwiz_mzml; for nightly-CI BSA pipeline tests."
         ),
         required=False,
-        notes="Set url to a stable PRIDE archive URL before nightly CI.",
     ),
+    # BMRB nmrML reference committed in-repo (~180 KB).
     FixtureSpec(
-        name="mtbls1_nmr",
-        url=None,  # MetaboLights ftp URL — pin during M58.
-        relpath="nmrml/mtbls1_sample.nmrML",
-        description="One MTBLS1 1H NMR sample, ~5 MB.",
-        required=False,
+        name="bmse000325_nmrml",
+        url=None,
+        relpath="nmrml/bmse000325.nmrML",
+        description="BMRB bmse000325 1H NMR (~180 KB) — real-world nmrML structure.",
+        required=True,
+        in_repo_path="objc/Tests/Fixtures/bmse000325.nmrML",
     ),
-    FixtureSpec(
-        name="bmrb_glucose",
-        url=None,  # BMRB bmse000297 — pin during M58.
-        relpath="nmrml/bmse000297.nmrML",
-        description="BMRB metabolomics reference glucose entry, ~200 KB.",
-        required=False,
-    ),
-    FixtureSpec(
-        name="opentims_test_d",
-        url=None,  # ships with opentims-bruker-bridge package; resolve via import in M58.
-        relpath="bruker/opentims_test.d.tar.gz",
-        description="opentims-bruker-bridge bundled test .d directory, ~50 MB.",
-        required=False,
-    ),
+    # imzml.org reference suite — pinned to the pyimzML test corpus
+    # on GitHub (Apache-2.0 licensed). Both modes + their .ibd
+    # companions; total ~1 MB.
     FixtureSpec(
         name="imzml_continuous",
-        url=None,  # imzml.org example files — verify URL during M59.
-        relpath="imzml/example_continuous.imzML",
-        description="imzml.org continuous-mode reference imzML.",
+        url="https://raw.githubusercontent.com/alexandrovteam/pyimzML/master/tests/data/Example_Continuous.imzML",
+        relpath="imzml/Example_Continuous.imzML",
+        description="Continuous-mode reference imzML (~24 KB) from the pyimzML test corpus.",
         required=False,
     ),
     FixtureSpec(
         name="imzml_continuous_ibd",
-        url=None,
-        relpath="imzml/example_continuous.ibd",
-        description="Companion .ibd for example_continuous.imzML.",
+        url="https://raw.githubusercontent.com/alexandrovteam/pyimzML/master/tests/data/Example_Continuous.ibd",
+        relpath="imzml/Example_Continuous.ibd",
+        description="Companion .ibd (~336 KB) for Example_Continuous.imzML.",
         required=False,
     ),
     FixtureSpec(
         name="imzml_processed",
-        url=None,
-        relpath="imzml/example_processed.imzML",
-        description="imzml.org processed-mode reference imzML.",
+        url="https://raw.githubusercontent.com/alexandrovteam/pyimzML/master/tests/data/Example_Processed.imzML",
+        relpath="imzml/Example_Processed.imzML",
+        description="Processed-mode reference imzML (~24 KB) from the pyimzML test corpus.",
         required=False,
     ),
     FixtureSpec(
         name="imzml_processed_ibd",
-        url=None,
-        relpath="imzml/example_processed.ibd",
-        description="Companion .ibd for example_processed.imzML.",
+        url="https://raw.githubusercontent.com/alexandrovteam/pyimzML/master/tests/data/Example_Processed.ibd",
+        relpath="imzml/Example_Processed.ibd",
+        description="Companion .ibd (~605 KB) for Example_Processed.imzML.",
         required=False,
     ),
+    # Optional fixtures intentionally NOT pinned:
+    #  - BMRB nmrML files are not first-class FTP entries; we ship
+    #    bmse000325.nmrML in-repo via objc/Tests/Fixtures/.
+    #  - MetaboLights MTBLS1 paths are dataset-specific and require
+    #    per-file URL pinning; defer to a milestone that needs it.
+    #  - opentims-bruker-bridge bundles its test .d as a Python
+    #    package resource; resolve via importlib in the milestone
+    #    that needs it (see tests/test_bruker_tdf.py +
+    #    MPGO_BRUKER_TDF_FIXTURE).
 ]
 
 
@@ -148,6 +172,10 @@ def save_checksums(checksums: dict[str, str]) -> None:
 
 
 def cache_path(spec: FixtureSpec) -> Path:
+    """Return the path the fixture lives at — in-repo for committed
+    files, in :data:`CACHE_ROOT` for network-fetched files."""
+    if spec.in_repo_path is not None:
+        return _REPO_ROOT / spec.in_repo_path
     return CACHE_ROOT / spec.relpath
 
 
@@ -173,14 +201,23 @@ def _download(url: str, dest: Path) -> None:
 
 
 def fetch(spec: FixtureSpec, *, pin: bool = False) -> Path:
-    """Download ``spec`` if absent, then verify its checksum.
+    """Resolve ``spec`` to a path, fetching from the network if needed.
 
-    If ``pin`` is true (or no checksum is recorded yet) the computed
-    SHA-256 is written back to ``checksums.json``.
+    In-repo fixtures resolve immediately (no SHA pin — git tracks
+    integrity). Network fixtures download into :data:`CACHE_ROOT` on
+    first use; the SHA-256 is auto-pinned in ``checksums.json``.
+    Subsequent calls verify the recorded hash.
     """
+    dest = cache_path(spec)
+    if spec.in_repo_path is not None:
+        if not dest.is_file():
+            raise FileNotFoundError(
+                f"in-repo fixture '{spec.name}' not found at {dest} — "
+                f"run from a checked-out repo"
+            )
+        return dest
     if spec.url is None:
         raise RuntimeError(f"fixture '{spec.name}' has no URL pinned yet ({spec.notes or 'set spec.url'})")
-    dest = cache_path(spec)
     if not dest.is_file():
         _download(spec.url, dest)
     digest = _sha256_of(dest)
@@ -219,11 +256,15 @@ def _by_name(name: str) -> FixtureSpec:
 def cmd_list(_: argparse.Namespace) -> int:
     checksums = load_checksums()
     for spec in FIXTURES:
-        present = "[cached]" if cache_path(spec).is_file() else "[absent]"
-        pinned = "pinned" if spec.name in checksums else "unpinned"
-        url_state = "url-set" if spec.url else "url-TBD"
+        present = "[present]" if cache_path(spec).is_file() else "[absent ]"
+        if spec.in_repo_path is not None:
+            source = "in-repo "
+            pinned = "n/a   "
+        else:
+            source = "network "
+            pinned = "pinned" if spec.name in checksums else "unpin "
         flag = "req" if spec.required else "opt"
-        print(f"  {spec.name:28s} {present} {pinned:8s} {url_state:8s} {flag} -- {spec.description}")
+        print(f"  {spec.name:24s} {present} {source} {pinned} {flag} -- {spec.description}")
     return 0
 
 
