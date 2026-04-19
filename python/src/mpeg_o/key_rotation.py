@@ -107,19 +107,43 @@ def _iso8601_now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _key_info_group(f: h5py.File, create: bool = False) -> h5py.Group | None:
-    """Return ``/protection/key_info``, creating the path if ``create``."""
-    if "protection" not in f:
+def _root_group(target: Any):
+    """Return a StorageGroup for the rotation target.
+
+    Accepts: ``h5py.File`` (legacy), :class:`StorageProvider`,
+    :class:`SpectralDataset` (uses its provider). v0.9 M64.5 phase C.
+    """
+    from .providers.base import StorageGroup, StorageProvider
+    from .providers.hdf5 import _Group as _Hdf5Group
+    from .spectral_dataset import SpectralDataset
+    if isinstance(target, StorageGroup):
+        return target
+    if isinstance(target, StorageProvider):
+        return target.root_group()
+    if isinstance(target, SpectralDataset):
+        if target.provider is None:
+            raise TypeError("SpectralDataset has no attached provider")
+        return target.provider.root_group()
+    # Assume h5py.File / h5py.Group.
+    return _Hdf5Group(target)
+
+
+def _key_info_group(target: Any, create: bool = False):
+    """Return ``/protection/key_info`` as a StorageGroup, creating the
+    path if ``create``. Accepts the same target shapes as
+    :func:`_root_group`."""
+    root = _root_group(target)
+    if not root.has_child("protection"):
         if not create:
             return None
-        prot = f.create_group("protection")
+        prot = root.create_group("protection")
     else:
-        prot = f["protection"]
-    if "key_info" not in prot:
+        prot = root.open_group("protection")
+    if not prot.has_child("key_info"):
         if not create:
             return None
         return prot.create_group("key_info")
-    return prot["key_info"]
+    return prot.open_group("key_info")
 
 
 def _pack_blob_v1(blob: SealedBlob) -> bytes:
@@ -381,27 +405,81 @@ def _unwrap_dek(
     )
 
 
-def _write_wrapped_dataset(ki: h5py.Group, wrapped: bytes) -> None:
-    if "dek_wrapped" in ki:
-        del ki["dek_wrapped"]
-    ki.create_dataset(
-        "dek_wrapped",
-        data=np.frombuffer(wrapped, dtype="<u1").copy(),
-    )
+def _native_h5_from(ki):
+    """Extract the underlying h5py.Group if ``ki`` is h5py-backed.
+
+    Accepts raw h5py.Group (returns it directly) or an HDF5-backed
+    StorageGroup (unwraps via the ``_grp`` attribute). Returns
+    ``None`` for non-HDF5 StorageGroup inputs so callers dispatch
+    onto the protocol path.
+    """
+    from .providers.base import StorageGroup
+    if isinstance(ki, StorageGroup):
+        return getattr(ki, "_grp", None)
+    # Assume raw h5py object.
+    return ki
 
 
-def _read_wrapped_dataset(ki: h5py.Group) -> bytes:
-    return bytes(np.asarray(ki["dek_wrapped"][()], dtype="<u1").tobytes())
+def _write_wrapped_dataset(ki, wrapped: bytes) -> None:
+    """Write the wrapped DEK blob.
+
+    HDF5 fast path keeps the legacy uint8 layout for byte parity
+    with ObjC / Java readers and pre-M64.5 files. Non-HDF5 providers
+    pack the bytes into a UINT32 array because the storage protocol
+    has no UINT8 precision (the byte length is preserved verbatim;
+    only the on-disk dtype differs across backends).
+    """
+    from .enums import Precision
+    native = _native_h5_from(ki)
+    if native is not None:
+        if "dek_wrapped" in native:
+            del native["dek_wrapped"]
+        native.create_dataset(
+            "dek_wrapped",
+            data=np.frombuffer(wrapped, dtype="<u1").copy(),
+        )
+        return
+    # Storage-protocol path: pack into UINT32 (pad to multiple of 4).
+    if ki.has_child("dek_wrapped"):
+        ki.delete_child("dek_wrapped")
+    pad = (-len(wrapped)) % 4
+    blob = wrapped + b"\x00" * pad
+    arr = np.frombuffer(blob, dtype="<u4").copy()
+    ds = ki.create_dataset("dek_wrapped", Precision.UINT32, arr.size)
+    ds.write(arr)
+    ki.set_attribute("dek_wrapped_byte_length", int(len(wrapped)))
 
 
-def _set_string_attr(ki: h5py.Group, name: str, value: str) -> None:
-    ki.attrs[name] = np.bytes_(value.encode("utf-8"))
+def _read_wrapped_dataset(ki) -> bytes:
+    native = _native_h5_from(ki)
+    if native is not None:
+        return bytes(np.asarray(native["dek_wrapped"][()], dtype="<u1").tobytes())
+    arr = np.asarray(ki.open_dataset("dek_wrapped").read())
+    raw = arr.tobytes()
+    if ki.has_attribute("dek_wrapped_byte_length"):
+        n = int(ki.get_attribute("dek_wrapped_byte_length"))
+        return raw[:n]
+    return raw
 
 
-def _get_string_attr(ki: h5py.Group, name: str, default: str = "") -> str:
-    if name not in ki.attrs:
-        return default
-    raw = ki.attrs[name]
+def _set_string_attr(ki, name: str, value: str) -> None:
+    native = _native_h5_from(ki)
+    if native is not None:
+        native.attrs[name] = np.bytes_(value.encode("utf-8"))
+        return
+    ki.set_attribute(name, value)
+
+
+def _get_string_attr(ki, name: str, default: str = "") -> str:
+    native = _native_h5_from(ki)
+    if native is not None:
+        if name not in native.attrs:
+            return default
+        raw = native.attrs[name]
+    else:
+        if not ki.has_attribute(name):
+            return default
+        raw = ki.get_attribute(name)
     if isinstance(raw, bytes):
         return raw.decode("utf-8", errors="replace")
     return str(raw)
@@ -410,10 +488,19 @@ def _get_string_attr(ki: h5py.Group, name: str, default: str = "") -> str:
 # ---------------------------------------------------------------- public API
 
 
-def has_envelope_encryption(f: h5py.File) -> bool:
-    """True iff ``/protection/key_info/dek_wrapped`` is present."""
+def has_envelope_encryption(f: Any) -> bool:
+    """True iff ``/protection/key_info/dek_wrapped`` is present.
+
+    v0.9 M64.5 phase C: ``f`` may be ``h5py.File``, a
+    :class:`StorageProvider`, or a :class:`SpectralDataset`.
+    """
     ki = _key_info_group(f, create=False)
-    return ki is not None and "dek_wrapped" in ki
+    if ki is None:
+        return False
+    native = _native_h5_from(ki)
+    if native is not None:
+        return "dek_wrapped" in native
+    return ki.has_child("dek_wrapped")
 
 
 def _validate_kek_for_wrap(algorithm: str, kek: bytes) -> None:
@@ -443,14 +530,21 @@ def _validate_kek_for_unwrap(algorithm: str, kek: bytes) -> None:
         )
 
 
-def _mark_pqc_preview(f: h5py.File) -> None:
+def _mark_pqc_preview(f: Any) -> None:
     """Append ``opt_pqc_preview`` to the root ``@mpeg_o_features`` list
     if it's not already present. No-op on files without the feature
     index (pre-v0.2 layout)."""
     from .feature_flags import OPT_PQC_PREVIEW
-    if "mpeg_o_features" not in f.attrs:
-        return
-    raw = f.attrs["mpeg_o_features"]
+    root = _root_group(f)
+    native = _native_h5_from(root)
+    if native is not None:
+        if "mpeg_o_features" not in native.attrs:
+            return
+        raw = native.attrs["mpeg_o_features"]
+    else:
+        if not root.has_attribute("mpeg_o_features"):
+            return
+        raw = root.get_attribute("mpeg_o_features")
     if isinstance(raw, bytes):
         decoded = raw.decode("utf-8", errors="replace")
     else:
@@ -464,11 +558,14 @@ def _mark_pqc_preview(f: h5py.File) -> None:
     if OPT_PQC_PREVIEW in features:
         return
     features.append(OPT_PQC_PREVIEW)
-    f.attrs["mpeg_o_features"] = json.dumps(features)
+    if native is not None:
+        native.attrs["mpeg_o_features"] = json.dumps(features)
+    else:
+        root.set_attribute("mpeg_o_features", json.dumps(features))
 
 
 def enable_envelope_encryption(
-    f: h5py.File,
+    f: Any,
     kek: bytes,
     *,
     kek_id: str,
@@ -504,7 +601,7 @@ def enable_envelope_encryption(
 
 
 def unwrap_dek(
-    f: h5py.File,
+    f: Any,
     kek: bytes,
     *,
     algorithm: str = "aes-256-gcm",
@@ -518,14 +615,18 @@ def unwrap_dek(
     """
     _validate_kek_for_unwrap(algorithm, kek)
     ki = _key_info_group(f, create=False)
-    if ki is None or "dek_wrapped" not in ki:
+    if ki is None:
+        raise KeyRotationError("/protection/key_info/dek_wrapped missing")
+    native = _native_h5_from(ki)
+    has = ("dek_wrapped" in native) if native is not None else ki.has_child("dek_wrapped")
+    if not has:
         raise KeyRotationError("/protection/key_info/dek_wrapped missing")
     wrapped = _read_wrapped_dataset(ki)
     return _unwrap_dek(wrapped, kek, algorithm=algorithm)
 
 
 def rotate_key(
-    f: h5py.File,
+    f: Any,
     *,
     old_kek: bytes,
     new_kek: bytes,
@@ -575,7 +676,7 @@ def rotate_key(
         _mark_pqc_preview(f)
 
 
-def key_history(f: h5py.File) -> list[dict[str, Any]]:
+def key_history(f: Any) -> list[dict[str, Any]]:
     """Return the list of prior (timestamp, kek_id, kek_algorithm) entries."""
     ki = _key_info_group(f, create=False)
     if ki is None:

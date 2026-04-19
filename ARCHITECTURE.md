@@ -177,18 +177,19 @@ Memory / SQLite / Zarr backends round-trip end-to-end:
 | `EncryptionManager` (`encrypt_intensity_channel_in_group` + `read_encrypted_channel`) | **Provider-aware** — both helpers dispatch via isinstance: HDF5 keeps the legacy multi-dataset rewrite path, non-HDF5 routes through StorageGroup `create_dataset` / `open_dataset` / `delete_child` (M64.5 phase B) |
 | `SignatureManager` (`sign_dataset` / `verify_dataset`) | **Provider-aware** — h5py callers go through the legacy fast path; `StorageDataset` callers delegate to the M54.1 `sign_storage_dataset` / `verify_storage_dataset` siblings (M64.5 phase B) |
 | `Anonymizer.anonymize` | **Provider-aware** — accepts a `provider=` kwarg passed through to `write_minimal` (M64.5 phase B) |
-| `MSImage` cube writes | **Still native** — use `dataset.provider.native_handle()` (M64.5 phase C candidate) |
-| `KeyRotationManager` (`enable_envelope_encryption` / `unwrap_dek` / `rotate_key` / `key_history`) | **Still native** — operates on `h5py.File`; envelope key wrap + multi-step rotation is the largest remaining surface (M64.5 phase C) |
+| `KeyRotationManager` (`enable_envelope_encryption` / `unwrap_dek` / `rotate_key` / `key_history` / `has_envelope_encryption`) | **Provider-aware** — accepts `h5py.File`, `StorageProvider`, or `SpectralDataset`. HDF5 keeps the legacy uint8 `dek_wrapped` layout; non-HDF5 providers pack the wrapped blob into a UINT32 array with a companion `dek_wrapped_byte_length` attribute (the protocol has no UINT8 precision). Internal helpers route via the new `_native_h5_from()` shim (M64.5 phase C) |
+| MSImage cube `create_dataset_nd` | **Provider-aware** — every shipping provider implements rank-3 `create_dataset_nd` for `[height, width, spectral_points]` cubes; cross-provider parity proven by `tests/integration/test_msimage_cube_cross_provider.py`. A higher-level MSImage *writer* on top of `SpectralDataset.write_minimal` is a v1.0+ item but not blocked by the protocol (M64.5 phase C) |
 
-**Cross-provider proof.** `python/tests/integration/test_mzml_roundtrip.py`
-and `test_nmrml_roundtrip.py` parametrize over all four providers and
-round-trip mzML / nmrML through `Memory`, `SQLite`, `Zarr` backends
-in CI. `python/tests/security/test_protection_cross_provider.py`
-extends the same matrix to encrypt-then-decrypt and sign-then-verify
-paths, proving the protection classes are correct across backends
-(12 cells, all green). The remaining `MSImage` cube writes and
-`KeyRotationManager` are scoped for M64.5 phase C and are not on the
-v0.9.0 release blocker list.
+**Cross-provider proof.** Five integration matrices exercise the
+4-provider grid in CI: `test_mzml_roundtrip.py` (8 cells),
+`test_nmrml_roundtrip.py` (3 cells),
+`test_protection_cross_provider.py` (12 cells: encrypt+decrypt,
+wrong-key, sign+verify), `test_key_rotation_cross_provider.py`
+(12 cells: wrap, wrong-KEK, rotate+history), and
+`test_msimage_cube_cross_provider.py` (4 cells: `[h,w,sp]` cube
+round-trip). All 39 cross-provider cells pass on HDF5, Memory,
+SQLite, and Zarr. The caller refactor is now complete for v0.9.0;
+no rows in this table say "Still native".
 
 ---
 
