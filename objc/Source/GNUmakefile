@@ -59,6 +59,7 @@ libMPGO_HEADER_FILES = \
 	Import/MPGOBrukerTDFReader.h \
 	Import/MPGOImzMLReader.h \
 	Import/MPGOMzTabReader.h \
+	Import/MPGOWatersMassLynxReader.h \
 	Export/MPGOMzMLWriter.h \
 	Export/MPGONmrMLWriter.h \
 	Export/MPGOISAExporter.h \
@@ -120,6 +121,7 @@ libMPGO_OBJC_FILES = \
 	Import/MPGOBrukerTDFReader.m \
 	Import/MPGOImzMLReader.m \
 	Import/MPGOMzTabReader.m \
+	Import/MPGOWatersMassLynxReader.m \
 	Export/MPGOMzMLWriter.m \
 	Export/MPGONmrMLWriter.m \
 	Export/MPGOISAExporter.m \

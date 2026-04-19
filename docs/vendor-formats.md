@@ -154,14 +154,77 @@ threading into the compound schema and native C ports of the frame
 decoder (removing the Python helper dependency for Java and ObjC)
 are v0.9 concerns.
 
-## Waters MassLynx (v0.5+ — deferred)
+## Waters MassLynx (v0.9 M63 — delegation pattern)
 
-**Status:** Not started; deferred to v0.5+.
+**Status:** Implemented via delegation, in all three languages. No
+proprietary code ships with MPEG-O; the converter is resolved at
+runtime exactly like the Thermo integration.
 
-Waters MassLynx raw data lives in `.raw` directories (confusingly, same
-extension as Thermo but a directory, not a file). The format is
-undocumented; the community `masslynxreader` Python package provides
-partial read support.
+Waters MassLynx raw data lives in `.raw` **directories** (same
+extension as Thermo but a directory, not a file — a common source of
+confusion). The format is undocumented; access requires Waters'
+`MassLynxRaw` SDK or a community CLI wrapper. MPEG-O delegates to
+a user-installed `masslynxraw` command (or `MassLynxRaw.exe` on
+Windows / via Mono), which emits mzML; MPEG-O then parses the mzML
+with its existing reader.
 
-**Integration path:** Use `masslynxreader` for Python; C/ObjC would need
-a port or FFI bridge.
+### Installation
+
+Waters tooling is less standardised than Thermo's; the most common
+deployment patterns are:
+
+| Method | Command / path | Notes |
+|---|---|---|
+| **Community `masslynxraw` wrapper** | `pip install masslynxraw` then `masslynxraw -i <raw-dir> -o <out>` | Python wrapper; invokes the SDK via cffi. Requires the Waters SDK installed separately. |
+| **Waters Connect API** | Vendor-provided MSI/DMG | Ships a `MassLynxRaw.exe` or equivalent CLI. |
+| **In-house scripts** | Any argv-compatible `-i <raw-dir> -o <out-dir>` CLI | Pass an explicit `converter=` argument; MPEG-O invokes it verbatim. |
+
+### Binary resolution order
+
+Same pattern as Thermo:
+
+1. Explicit `converter=` argument (Python / Java) or
+   `converter:` kwarg (ObjC).
+2. `MASSLYNXRAW` environment variable.
+3. `masslynxraw` on `PATH` (native).
+4. `MassLynxRaw.exe` on `PATH` — invoked via `mono` on non-Windows.
+
+When resolution fails, all three implementations raise a
+`FileNotFoundError` / `IOException` / `NSError` with a pointer to
+this document.
+
+### API
+
+| Language | Entry point |
+|---|---|
+| Python | `mpeg_o.importers.waters_masslynx.read(raw_dir, *, converter=None)` |
+| ObjC | `+[MPGOWatersMassLynxReader readFromDirectoryPath:converter:error:]` |
+| Java | `WatersMassLynxReader.read(String dirPath, String converter)` |
+
+### CLI contract
+
+MPEG-O invokes the converter with:
+
+```
+<converter> -i <input-raw-dir> -o <output-dir>
+```
+
+and expects an `.mpgo`-ready mzML in the output directory, named
+`<basename>.mzML` where `<basename>` is the `.raw` directory name with
+its trailing `.raw` stripped. If the converter uses different flags,
+wrap it with a small shim that accepts the MPEG-O contract.
+
+### Testing without Waters tooling
+
+The test suites ship a POSIX shell **mock converter** that emits a
+fixed-size stub mzML. This proves the delegation pipeline
+(resolver → subprocess → output parse) end-to-end without installing
+the vendor SDK:
+
+* Python: `tests/integration/test_waters_masslynx.py::test_mock_converter_roundtrip`
+* ObjC: `Tests/TestWatersMassLynxReader.m` (the "mock converter" set)
+* Java: `WatersMassLynxReaderTest.mockConverter_roundTrip`
+
+Set `MPGO_MASSLYNX_FIXTURE` to a real Waters `.raw` directory and
+ensure `masslynxraw` is on PATH to exercise the vendor-tooling path
+in nightly CI.

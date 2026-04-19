@@ -36,6 +36,7 @@ extern void testMilestone53(void);
 extern void testImzMLReader(void);
 extern void testMzTabReader(void);
 extern void testStress(void);
+extern void testWatersMassLynxReader(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
@@ -204,6 +205,10 @@ int main(int argc, const char *argv[])
         START_SET("M62: ObjC stress + concurrency")
             testStress();
         END_SET("M62: ObjC stress + concurrency")
+
+        START_SET("M63: ObjC Waters MassLynx reader")
+            testWatersMassLynxReader();
+        END_SET("M63: ObjC Waters MassLynx reader")
     }
     return 0;
 }
