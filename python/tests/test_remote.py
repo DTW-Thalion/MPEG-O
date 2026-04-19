@@ -298,12 +298,15 @@ def test_http_remote_random_access_benchmark(large_mpgo: Path) -> None:
     assert len(values) == 10
     assert elapsed < 2.0, f"10-spectrum random access took {elapsed:.2f}s"
     # The handoff acceptance criterion is "individual spectrum does
-    # not download full file". Ten random spectra with an HDF5 chunk
-    # size of 16384 elements should touch a small subset of the
-    # signal-channel chunks plus the metadata / spectrum_index
-    # datasets. We assert a generous 60% ceiling to accommodate
-    # HDF5's chunk cache + fsspec's block quantisation.
-    assert served < 0.60 * file_size, (
+    # not download full file". Ten random spectra with the current
+    # HDF5 signal chunk size (DEFAULT_SIGNAL_CHUNK = 65536 elements
+    # = 512 KB per chunk) should touch a bounded subset of chunks
+    # plus metadata / spectrum_index. We assert an 80% ceiling to
+    # accommodate HDF5's chunk cache, fsspec's block quantisation,
+    # and the per-chunk decompression. The prior 60% target assumed
+    # a 16384-element chunk; the larger default trades bandwidth for
+    # write throughput.
+    assert served < 0.80 * file_size, (
         f"served {served} bytes of {file_size}; "
         f"lazy read path may be pulling too much"
     )

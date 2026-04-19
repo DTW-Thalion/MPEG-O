@@ -6,6 +6,7 @@
 #import "ValueClasses/MPGOEnums.h"
 
 @class MPGOAcquisitionRun;
+@class MPGOWrittenRun;
 @class MPGONMRSpectrum;
 @class MPGOIdentification;
 @class MPGOQuantification;
@@ -55,6 +56,27 @@
 
 - (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error;
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error;
+
+/** Flat-buffer fast path. Bypasses per-spectrum object construction
+ *  and the write-time channel concat that -writeToFilePath:error:
+ *  performs when given an MPGOAcquisitionRun of MPGOMassSpectrum
+ *  objects. Callers that already have flat buffers (e.g. importers
+ *  reading mzML in bulk, numerical producers) pass MPGOWrittenRun
+ *  instances and skip both costs.
+ *
+ *  Writes the same on-disk layout as -writeToFilePath:, so readers
+ *  don't distinguish files produced by the two paths. Mirrors Python
+ *  +[SpectralDataset write_minimal] and gives the ObjC implementation
+ *  parity with Python's fastest write API. v1.1.
+ */
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                    msRuns:(NSDictionary<NSString *, MPGOWrittenRun *> *)runs
+            identifications:(nullable NSArray *)identifications
+            quantifications:(nullable NSArray *)quantifications
+          provenanceRecords:(nullable NSArray *)provenance
+                      error:(NSError * _Nullable * _Nullable)error;
 
 /** Release the underlying HDF5 file handle. After this call, any
  *  further lazy hyperslab reads on contained runs will fail. Required

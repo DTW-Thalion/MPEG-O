@@ -1,0 +1,860 @@
+jdk.NativeMethodSample {
+  startTime = 09:48:28.608
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    jdk.internal.loader.NativeLibraries.load(NativeLibraries$NativeLibraryImpl, String, boolean, boolean, boolean)
+    jdk.internal.loader.NativeLibraries$NativeLibraryImpl.open() line: 388
+    jdk.internal.loader.NativeLibraries.loadLibrary(Class, String, boolean) line: 232
+    jdk.internal.loader.NativeLibraries.loadLibrary(Class, File) line: 174
+    jdk.internal.loader.NativeLibraries.findFromPaths(String[], Class, String) line: 315
+    jdk.internal.loader.NativeLibraries.loadLibrary(Class, String) line: 287
+    java.lang.ClassLoader.loadLibrary(Class, String) line: 2427
+    java.lang.Runtime.loadLibrary0(Class, String) line: 818
+    java.lang.System.loadLibrary(String) line: 2006
+    hdf.hdf5lib.H5.loadH5Lib() line: 357
+    hdf.hdf5lib.H5.<clinit>() line: 292
+    hdf.hdf5lib.HDF5Constants.<clinit>() line: 27
+    com.dtwthalion.mpgo.hdf5.Hdf5CompoundIO$FieldKind.<clinit>() line: 31
+    com.dtwthalion.mpgo.providers.Hdf5Provider$1.<clinit>() line: 475
+    com.dtwthalion.mpgo.providers.Hdf5Provider.open(String, StorageProvider$Mode) line: 60
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 303
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.628
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.648
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.667
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.688
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.708
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.728
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.748
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.768
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.788
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.808
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.829
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.849
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.869
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.890
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.911
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.931
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.951
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.972
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:28.992
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5._H5Dclose(long)
+    hdf.hdf5lib.H5.H5Dclose(long) line: 2526
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.close() line: 164
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.close() line: 390
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 366
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.012
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.032
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.052
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 122
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.152
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.172
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.192
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.212
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.232
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.252
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.273
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.293
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.313
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.333
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.353
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.373
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.393
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.413
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.433
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.453
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.473
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.493
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.513
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5._H5Dclose(long)
+    hdf.hdf5lib.H5.H5Dclose(long) line: 2526
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.close() line: 164
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.close() line: 390
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 366
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.533
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.553
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dwrite_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object, boolean) line: 3759
+    hdf.hdf5lib.H5.H5Dwrite(long, long, long, long, long, Object) line: 3688
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.writeData(Object) line: 68
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.writeAll(Object) line: 375
+    com.dtwthalion.mpgo.AcquisitionRun.writeSignalChannels(StorageGroup) line: 365
+    com.dtwthalion.mpgo.AcquisitionRun.writeTo(StorageGroup) line: 290
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List, FeatureFlags) line: 323
+    com.dtwthalion.mpgo.SpectralDataset.create(String, String, String, List, List, List, List) line: 285
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 76
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+
+jdk.NativeMethodSample {
+  startTime = 09:48:29.593
+  sampledThread = "main" (javaThreadId = 1)
+  state = "STATE_RUNNABLE"
+  stackTrace = [
+    hdf.hdf5lib.H5.H5Dread_double(long, long, long, long, long, double[], boolean)
+    hdf.hdf5lib.H5.H5Dread(long, long, long, long, long, Object, boolean) line: 3030
+    hdf.hdf5lib.H5.H5Dread(long, long, long, long, long, Object) line: 2952
+    com.dtwthalion.mpgo.hdf5.Hdf5Dataset.readData() line: 98
+    com.dtwthalion.mpgo.providers.Hdf5Provider$Hdf5DatasetAdapter.readAll() line: 371
+    com.dtwthalion.mpgo.AcquisitionRun.readSignalChannels(StorageGroup) line: 386
+    com.dtwthalion.mpgo.AcquisitionRun.readFrom(StorageGroup, String) line: 326
+    com.dtwthalion.mpgo.SpectralDataset.open(String) line: 139
+    tools.perf.ProfileHarness.workload(Path, int, int, long[]) line: 85
+    tools.perf.ProfileHarness.main(String[]) line: 130
+  ]
+}
+

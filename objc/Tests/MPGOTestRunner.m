@@ -37,6 +37,7 @@ extern void testImzMLReader(void);
 extern void testMzTabReader(void);
 extern void testStress(void);
 extern void testWatersMassLynxReader(void);
+extern void testWriteMinimal(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
@@ -209,6 +210,10 @@ int main(int argc, const char *argv[])
         START_SET("M63: ObjC Waters MassLynx reader")
             testWatersMassLynxReader();
         END_SET("M63: ObjC Waters MassLynx reader")
+
+        START_SET("writeMinimal flat-buffer fast path")
+            testWriteMinimal();
+        END_SET("writeMinimal flat-buffer fast path")
     }
     return 0;
 }

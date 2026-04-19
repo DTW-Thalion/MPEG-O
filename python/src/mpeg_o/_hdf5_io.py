@@ -142,8 +142,8 @@ def read_int_attr(obj: _IOTarget, name: str, default: int | None = None) -> int 
 
 # ------------------------------------------------------ signal channels ---
 
-DEFAULT_SIGNAL_CHUNK = 16384
-DEFAULT_INDEX_CHUNK = 1024
+DEFAULT_SIGNAL_CHUNK = 65536
+DEFAULT_INDEX_CHUNK = 4096
 
 
 def _lz4_filter_kwargs() -> dict[str, Any]:
