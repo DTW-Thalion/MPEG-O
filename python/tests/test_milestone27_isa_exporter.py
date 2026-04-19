@@ -153,3 +153,74 @@ def test_write_bundle_to_disk(tmp_path: Path) -> None:
     assert (out / "s_study.txt").is_file()
     assert (out / "a_assay_ms_run_0001.txt").is_file()
     assert (out / "investigation.json").is_file()
+
+
+def test_investigation_tsv_has_all_required_isatab_sections(
+    tmp_path: Path,
+) -> None:
+    """v0.9 M64: investigation file must include every header the
+    ISA-Tab spec requires. Previously only 4 of 11 were emitted, so
+    isatools halted at the first missing section."""
+    ds = _make_dataset(tmp_path, with_chromatograms=False)
+    try:
+        bundle = bundle_for_dataset(ds)
+    finally:
+        ds.close()
+    inv = bundle["i_investigation.txt"].decode()
+    for section in (
+        "ONTOLOGY SOURCE REFERENCE",
+        "INVESTIGATION",
+        "INVESTIGATION PUBLICATIONS",
+        "INVESTIGATION CONTACTS",
+        "STUDY",
+        "STUDY DESIGN DESCRIPTORS",
+        "STUDY PUBLICATIONS",
+        "STUDY FACTORS",
+        "STUDY ASSAYS",
+        "STUDY PROTOCOLS",
+        "STUDY CONTACTS",
+    ):
+        assert f"{section}\n" in inv, (
+            f"investigation file missing required section: {section}"
+        )
+
+
+def test_study_protocols_declares_every_protocol_ref_used(
+    tmp_path: Path,
+) -> None:
+    """STUDY PROTOCOLS must declare every Protocol REF used in study
+    and assay files. 'sample collection' (s_study.txt) and 'mass
+    spectrometry' (a_assay_ms_*.txt) are both in use. isatools raises
+    error 1007 'Missing Protocol declaration' otherwise."""
+    import re
+    ds = _make_dataset(tmp_path, with_chromatograms=False)
+    try:
+        bundle = bundle_for_dataset(ds)
+    finally:
+        ds.close()
+    inv = bundle["i_investigation.txt"].decode()
+    match = re.search(r"STUDY PROTOCOLS\n(.*?)(?=\nSTUDY |\Z)", inv, re.DOTALL)
+    assert match is not None, "STUDY PROTOCOLS section missing"
+    block = match.group(1)
+    assert "sample collection" in block, (
+        "STUDY PROTOCOLS must declare 'sample collection'"
+    )
+    assert "mass spectrometry" in block, (
+        "STUDY PROTOCOLS must declare 'mass spectrometry'"
+    )
+
+
+def test_study_description_is_never_empty(tmp_path: Path) -> None:
+    """isatools rejects empty Study Description with error 4003. The
+    exporter now falls back to title / identifier so the row always
+    carries a non-empty value."""
+    import re
+    ds = _make_dataset(tmp_path, with_chromatograms=False)
+    try:
+        bundle = bundle_for_dataset(ds)
+    finally:
+        ds.close()
+    inv = bundle["i_investigation.txt"].decode()
+    match = re.search(r"^Study Description\t([^\t\n]*)$", inv, re.MULTILINE)
+    assert match is not None, "Study Description row missing"
+    assert match.group(1).strip(), "Study Description must not be empty"

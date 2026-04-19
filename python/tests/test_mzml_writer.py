@@ -95,6 +95,86 @@ def test_indexed_mzml_offsets_point_at_spectrum_tag(tmp_path: Path) -> None:
     assert snippet == b"<spectrum"
 
 
+def test_writer_emits_activation_block_for_ms2_spectra(tmp_path: Path) -> None:
+    """v0.9 M64: <precursor> must include <activation> for MS2 spectra —
+    PSI mzML 1.1 XSD requires it. We emit a conservative CID cvParam
+    placeholder (MS:1000133) when the fragmentation method isn't stored
+    in the data model."""
+    out = tmp_path / "ms2.mpgo"
+    # Build a dataset with one MS1 + one MS2 spectrum.
+    SpectralDataset.write_minimal(
+        out, title="ms2 test", isa_investigation_id="MPGO:ms2",
+        runs={"run1": WrittenRun(
+            spectrum_class="MPGOMassSpectrum",
+            acquisition_mode=int(AcquisitionMode.MS1_DDA),
+            channel_data={
+                "mz": np.array([100.0, 200.0, 300.0, 150.0, 250.0], dtype=np.float64),
+                "intensity": np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float64),
+            },
+            offsets=np.array([0, 3], dtype=np.uint64),
+            lengths=np.array([3, 2], dtype=np.uint32),
+            retention_times=np.array([0.5, 1.0]),
+            ms_levels=np.array([1, 2], dtype=np.int32),
+            polarities=np.array([1, 1], dtype=np.int32),
+            precursor_mzs=np.array([0.0, 250.0]),
+            precursor_charges=np.array([0, 2], dtype=np.int32),
+            base_peak_intensities=np.array([3.0, 5.0]),
+        )},
+    )
+    with SpectralDataset.open(out) as ds:
+        blob = mzml_writer.dataset_to_bytes(ds)
+    text = blob.decode("utf-8")
+    # MS2 spectrum must carry a precursor block; the block must include
+    # <activation> (required child per PSI mzML 1.1 XSD). The MS1
+    # spectrum must NOT have a precursor block.
+    assert "<precursor>" in text, "MS2 spectrum must emit <precursor>"
+    assert "<activation>" in text, (
+        "<precursor> must include <activation> child per mzML 1.1 XSD"
+    )
+    assert "MS:1000133" in text, (
+        "activation must carry a CID cvParam (collision-induced dissociation) placeholder"
+    )
+
+
+def test_writer_populates_instrument_configuration_from_dataset(
+    tmp_path: Path,
+) -> None:
+    """v0.9 M64: <instrumentConfiguration> cvParam and userParams reflect
+    the dataset's InstrumentConfig rather than emitting an empty block.
+    write_minimal callers that don't set instrument metadata get an
+    empty cvParam value — the block is still XSD-valid."""
+    out = tmp_path / "ic.mpgo"
+    SpectralDataset.write_minimal(
+        out, title="ic test", isa_investigation_id="MPGO:ic",
+        runs={"run1": WrittenRun(
+            spectrum_class="MPGOMassSpectrum",
+            acquisition_mode=int(AcquisitionMode.MS1_DDA),
+            channel_data={
+                "mz": np.array([100.0, 200.0], dtype=np.float64),
+                "intensity": np.array([1.0, 2.0], dtype=np.float64),
+            },
+            offsets=np.array([0], dtype=np.uint64),
+            lengths=np.array([2], dtype=np.uint32),
+            retention_times=np.array([0.5]),
+            ms_levels=np.array([1], dtype=np.int32),
+            polarities=np.array([1], dtype=np.int32),
+            precursor_mzs=np.array([0.0]),
+            precursor_charges=np.array([0], dtype=np.int32),
+            base_peak_intensities=np.array([2.0]),
+        )},
+    )
+    with SpectralDataset.open(out) as ds:
+        blob = mzml_writer.dataset_to_bytes(ds)
+    text = blob.decode("utf-8")
+    # The instrument-model cvParam is always emitted (XSD-required); the
+    # value may be empty when the dataset doesn't carry instrument data.
+    assert '<cvParam cvRef="MS" accession="MS:1000031" name="instrument model"' in text
+    # Required per-file sections must all be present.
+    assert "<softwareList" in text
+    assert "<instrumentConfigurationList" in text
+    assert "<dataProcessingList" in text
+
+
 def test_writer_refuses_dataset_without_ms_run(tmp_path: Path) -> None:
     out = tmp_path / "empty.mpgo"
     # Build a valid .mpgo with a single NMR-class run so there is no

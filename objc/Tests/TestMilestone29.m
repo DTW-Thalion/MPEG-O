@@ -71,6 +71,23 @@ void testMilestone29(void)
              "M29: output contains <spectrum1D");
         PASS([str rangeOfString:@"<xAxis"].location != NSNotFound,
              "M29: output contains <xAxis (attribute-only)");
+        // v0.9 M64 XSD-required wrapper sections:
+        PASS([str rangeOfString:@"version=\"1.1.0\""].location != NSNotFound,
+             "M29: <nmrML> carries version='1.1.0' attr (XSD-required)");
+        PASS([str rangeOfString:@"<fileDescription>"].location != NSNotFound,
+             "M29: <fileDescription> required before <acquisition>");
+        PASS([str rangeOfString:@"<softwareList>"].location != NSNotFound,
+             "M29: <softwareList> required before <acquisition>");
+        PASS([str rangeOfString:@"<instrumentConfigurationList>"].location != NSNotFound,
+             "M29: <instrumentConfigurationList> required before <acquisition>");
+        PASS([str rangeOfString:@"<DirectDimensionParameterSet"].location != NSNotFound,
+             "M29: <DirectDimensionParameterSet> required inside acquisition1D");
+        PASS([str rangeOfString:@"<sampleContainer"].location != NSNotFound,
+             "M29: <sampleContainer> required in acquisitionParameterSet");
+        PASS([str rangeOfString:@"byteFormat="].location != NSNotFound,
+             "M29: BinaryDataArrayType byteFormat attr required by XSD");
+        PASS([str rangeOfString:@"numberOfDataPoints="].location != NSNotFound,
+             "M29: <spectrum1D> numberOfDataPoints attr required by XSD");
     }
 
     // ---- nmrML round-trip via reader ----

@@ -99,6 +99,23 @@ class ImportExportTest {
             MzMLWriter.write(readRun, outMzml);
         }
 
+        // v0.9 M64: Java writer now emits every XSD-required wrapper
+        // section and the instrument model cvParam inside
+        // <instrumentConfiguration>. Assert the output shape so
+        // regressions surface at the unit-test layer (not only when
+        // external XSD validators run).
+        String written = Files.readString(Path.of(outMzml));
+        assertTrue(written.contains("<softwareList"),
+                "v0.9 M64: mzML export must emit <softwareList>");
+        assertTrue(written.contains("<instrumentConfigurationList"),
+                "v0.9 M64: mzML export must emit <instrumentConfigurationList>");
+        assertTrue(written.contains("<dataProcessingList"),
+                "v0.9 M64: mzML export must emit <dataProcessingList>");
+        assertTrue(written.contains("MS:1000031"),
+                "v0.9 M64: instrument model cvParam (MS:1000031) required");
+        assertTrue(written.contains("defaultInstrumentConfigurationRef=\"IC1\""),
+                "v0.9 M64: <run> must reference IC1 via defaultInstrumentConfigurationRef");
+
         // Re-read the written mzML
         AcquisitionRun reImported = MzMLReader.read(outMzml);
         assertNotNull(reImported);
@@ -209,18 +226,45 @@ class ImportExportTest {
         String outPath = tempDir.resolve("roundtrip.nmrML").toString();
         NmrMLWriter.write(run, outPath);
 
+        // v0.9 M64: nmrML writer now emits every XSD-required wrapper
+        // section + canonical spectrum1D with single interleaved (x,y)
+        // <spectrumDataArray>. Assert the output shape so any regression
+        // against the XSD content model surfaces here.
+        String written = Files.readString(Path.of(outPath));
+        assertTrue(written.contains("version=\"1.1.0\""),
+                "v0.9 M64: <nmrML> must carry version='1.1.0' attribute");
+        assertTrue(written.contains("<fileDescription>"),
+                "v0.9 M64: <fileDescription> required by nmrML XSD");
+        assertTrue(written.contains("<softwareList>"),
+                "v0.9 M64: <softwareList> required before <acquisition>");
+        assertTrue(written.contains("<instrumentConfigurationList>"),
+                "v0.9 M64: <instrumentConfigurationList> required before <acquisition>");
+        assertTrue(written.contains("<DirectDimensionParameterSet"),
+                "v0.9 M64: <DirectDimensionParameterSet> required inside acquisition1D");
+        assertTrue(written.contains("<sampleContainer"),
+                "v0.9 M64: <sampleContainer> required in acquisitionParameterSet");
+        assertTrue(written.contains("<sweepWidth"),
+                "v0.9 M64: <sweepWidth> replaces the legacy cvParam form");
+        assertTrue(written.contains("<irradiationFrequency"),
+                "v0.9 M64: <irradiationFrequency> replaces the legacy cvParam form");
+        assertTrue(written.contains("numberOfDataPoints=\"" + points + "\""),
+                "v0.9 M64: <spectrum1D> must carry numberOfDataPoints attribute");
+        assertTrue(written.contains("byteFormat="),
+                "v0.9 M64: BinaryDataArrayType byteFormat attribute required");
+
         // Read back
         NmrMLReader.NmrMLResult result = NmrMLReader.read(outPath);
         assertNotNull(result.run());
 
-        // Verify arrays
+        // Verify arrays — interleaved (x,y) round-trips losslessly.
         double[] readCs = result.run().channels().get("chemical_shift");
         double[] readInt = result.run().channels().get("intensity");
-        if (readCs != null) {
-            assertEquals(points, readCs.length);
-            assertArrayEquals(chemShift, readCs, 1e-10);
-            assertArrayEquals(intensity, readInt, 1e-10);
-        }
+        assertNotNull(readCs, "chemical_shift array must round-trip");
+        assertNotNull(readInt, "intensity array must round-trip");
+        assertEquals(points, readCs.length);
+        assertEquals(points, readInt.length);
+        assertArrayEquals(chemShift, readCs, 1e-10);
+        assertArrayEquals(intensity, readInt, 1e-10);
     }
 
     // ── ISA ─────────────────────────────────────────────────────────
@@ -256,6 +300,41 @@ class ImportExportTest {
         String invest = Files.readString(outDir.resolve("i_investigation.txt"));
         assertTrue(invest.contains("Investigation Identifier\tISA-001"));
         assertTrue(invest.contains("Investigation Title\tISA Test"));
+
+        // v0.9 M64: every ISA-Tab investigation file must include all 11
+        // required section headers. isatools halts at the first missing
+        // required section — previously only 4 of 11 were emitted.
+        for (String section : new String[] {
+                "ONTOLOGY SOURCE REFERENCE\n",
+                "INVESTIGATION\n",
+                "INVESTIGATION PUBLICATIONS\n",
+                "INVESTIGATION CONTACTS\n",
+                "STUDY\n",
+                "STUDY DESIGN DESCRIPTORS\n",
+                "STUDY PUBLICATIONS\n",
+                "STUDY FACTORS\n",
+                "STUDY ASSAYS\n",
+                "STUDY PROTOCOLS\n",
+                "STUDY CONTACTS\n",
+        }) {
+            assertTrue(invest.contains(section),
+                    "investigation file missing required section: " + section.trim());
+        }
+        // STUDY PROTOCOLS must declare every Protocol REF used downstream.
+        int protocolsStart = invest.indexOf("STUDY PROTOCOLS\n");
+        int protocolsEnd = invest.indexOf("STUDY CONTACTS\n", protocolsStart);
+        String protocolBlock = invest.substring(protocolsStart, protocolsEnd);
+        assertTrue(protocolBlock.contains("sample collection"),
+                "STUDY PROTOCOLS must declare 'sample collection'");
+        assertTrue(protocolBlock.contains("mass spectrometry"),
+                "STUDY PROTOCOLS must declare 'mass spectrometry'");
+        // Study Description must be non-empty — isatools rejects empty (4003).
+        int descIdx = invest.indexOf("Study Description\t");
+        int descEnd = invest.indexOf('\n', descIdx);
+        String descValue = invest.substring(
+                descIdx + "Study Description\t".length(), descEnd).strip();
+        assertFalse(descValue.isEmpty(),
+                "Study Description must be non-empty (isatools requires)");
 
         String study = Files.readString(outDir.resolve("s_study.txt"));
         assertTrue(study.contains("src_run_0001"));

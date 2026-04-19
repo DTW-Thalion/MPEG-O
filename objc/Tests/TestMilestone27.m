@@ -116,6 +116,47 @@ void testMilestone27(void)
         PASS([inv rangeOfString:@"mass spectrometry"].location != NSNotFound,
              "M27: investigation TSV names the technology type");
 
+        // v0.9 M64: ISA-Tab requires all 11 section headers; previously
+        // the exporter emitted only 4 of 11. isatools halts at the first
+        // missing required section.
+        NSArray *requiredSections = @[
+            @"ONTOLOGY SOURCE REFERENCE\n",
+            @"INVESTIGATION\n",
+            @"INVESTIGATION PUBLICATIONS\n",
+            @"INVESTIGATION CONTACTS\n",
+            @"STUDY\n",
+            @"STUDY DESIGN DESCRIPTORS\n",
+            @"STUDY PUBLICATIONS\n",
+            @"STUDY FACTORS\n",
+            @"STUDY ASSAYS\n",
+            @"STUDY PROTOCOLS\n",
+            @"STUDY CONTACTS\n",
+        ];
+        for (NSString *section in requiredSections) {
+            NSString *msg = [NSString stringWithFormat:
+                @"M27 v0.9: investigation file carries '%@'",
+                [section stringByTrimmingCharactersInSet:
+                    NSCharacterSet.whitespaceAndNewlineCharacterSet]];
+            PASS([inv rangeOfString:section].location != NSNotFound,
+                 "%s", [msg UTF8String]);
+        }
+
+        // STUDY PROTOCOLS must declare every Protocol REF used in the
+        // s_study.txt + a_assay_ms_*.txt files.
+        NSRange protocolsStart = [inv rangeOfString:@"STUDY PROTOCOLS\n"];
+        NSRange contactsStart = [inv rangeOfString:@"STUDY CONTACTS\n"];
+        if (protocolsStart.location != NSNotFound
+            && contactsStart.location != NSNotFound) {
+            NSString *protocolBlock =
+                [inv substringWithRange:NSMakeRange(
+                    protocolsStart.location,
+                    contactsStart.location - protocolsStart.location)];
+            PASS([protocolBlock rangeOfString:@"sample collection"].location != NSNotFound,
+                 "M27 v0.9: STUDY PROTOCOLS declares 'sample collection'");
+            PASS([protocolBlock rangeOfString:@"mass spectrometry"].location != NSNotFound,
+                 "M27 v0.9: STUDY PROTOCOLS declares 'mass spectrometry'");
+        }
+
         NSString *study = [[NSString alloc] initWithData:bundle[@"s_study.txt"]
                                                    encoding:NSUTF8StringEncoding];
         PASS([study rangeOfString:@"sample_run_0001"].location != NSNotFound,
