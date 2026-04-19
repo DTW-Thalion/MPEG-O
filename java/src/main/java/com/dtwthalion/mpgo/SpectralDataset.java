@@ -95,13 +95,19 @@ public class SpectralDataset implements
 
     // ── Open (read) ─────────────────────────────────────────────────
 
-    /** Open an existing .mpgo file for reading. M39: routes through a
-     *  fresh {@link Hdf5Provider}. The resulting SpectralDataset exposes
-     *  that provider via {@link #provider()}; legacy byte-level code
-     *  continues to access the native {@link Hdf5File}. */
-    public static SpectralDataset open(String path) {
+    /** Open an existing .mpgo file for reading. v0.9 M64.5 (Java):
+     *  a URL scheme ({@code memory://}, {@code sqlite://},
+     *  {@code zarr://}) dispatches to the matching StorageProvider
+     *  and reads the whole dataset through the protocol
+     *  (StorageGroup-based); bare paths (and {@code file://} URLs)
+     *  stay on the HDF5 fast path for byte parity with pre-M64.5
+     *  files and the cross-language smoke suite. */
+    public static SpectralDataset open(String pathOrUrl) {
+        if (pathOrUrl != null && isNonHdf5Url(pathOrUrl)) {
+            return openViaProvider(pathOrUrl);
+        }
         Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
-                .open(path, StorageProvider.Mode.READ);
+                .open(pathOrUrl, StorageProvider.Mode.READ);
         Hdf5File file = (Hdf5File) provider.nativeHandle();
         try (Hdf5Group root = file.rootGroup()) {
             FeatureFlags flags = FeatureFlags.readFrom(root);
@@ -132,7 +138,7 @@ public class SpectralDataset implements
                                         // StorageGroup; wrap the raw Hdf5Group.
                                         AcquisitionRun run = AcquisitionRun.readFrom(
                                                 Hdf5Provider.adapterForGroup(msRunsGroup), name);
-                                        run.setPersistenceContext(path, name);
+                                        run.setPersistenceContext(pathOrUrl, name);
                                         runs.put(name, run);
                                     }
                                 }
@@ -151,6 +157,122 @@ public class SpectralDataset implements
         }
     }
 
+    // ── URL-scheme detection (v0.9 M64.5) ───────────────────────────
+
+    private static final java.util.regex.Pattern NON_HDF5_URL =
+            java.util.regex.Pattern.compile("^(memory|sqlite|zarr)://.*");
+
+    private static boolean isNonHdf5Url(String pathOrUrl) {
+        return NON_HDF5_URL.matcher(pathOrUrl).matches();
+    }
+
+    // ── Provider-aware read path (v0.9 M64.5) ───────────────────────
+
+    private static SpectralDataset openViaProvider(String url) {
+        StorageProvider provider = com.dtwthalion.mpgo.providers
+                .ProviderRegistry.open(url, StorageProvider.Mode.READ);
+        try (com.dtwthalion.mpgo.providers.StorageGroup root =
+                provider.rootGroup()) {
+            FeatureFlags flags = FeatureFlags.readFrom(root);
+            String title = null, isaId = null;
+            Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
+            List<Identification> idents = List.of();
+            List<Quantification> quants = List.of();
+            List<ProvenanceRecord> prov = List.of();
+
+            if (root.hasChild("study")) {
+                try (com.dtwthalion.mpgo.providers.StorageGroup study =
+                        root.openGroup("study")) {
+                    if (study.hasAttribute("title")) {
+                        Object v = study.getAttribute("title");
+                        title = v != null ? v.toString() : null;
+                    }
+                    if (study.hasAttribute("isa_investigation_id")) {
+                        Object v = study.getAttribute("isa_investigation_id");
+                        isaId = v != null ? v.toString() : null;
+                    }
+                    if (study.hasChild("ms_runs")) {
+                        try (com.dtwthalion.mpgo.providers.StorageGroup ms =
+                                study.openGroup("ms_runs")) {
+                            if (ms.hasAttribute("_run_names")) {
+                                Object names = ms.getAttribute("_run_names");
+                                String csv = names != null ? names.toString() : "";
+                                for (String rn : csv.split(",")) {
+                                    String name = rn.strip();
+                                    if (!name.isEmpty() && ms.hasChild(name)) {
+                                        AcquisitionRun run =
+                                                AcquisitionRun.readFrom(ms, name);
+                                        run.setPersistenceContext(url, name);
+                                        runs.put(name, run);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    idents = readIdentificationsFromJson(study);
+                    quants = readQuantificationsFromJson(study);
+                    prov = readProvenanceFromJson(study);
+                }
+            }
+            return new SpectralDataset(provider, null, flags, title, isaId, runs,
+                    idents, quants, prov);
+        }
+    }
+
+    private static SpectralDataset createViaProvider(
+            String url, String title, String isaInvestigationId,
+            List<AcquisitionRun> runs,
+            List<Identification> identifications,
+            List<Quantification> quantifications,
+            List<ProvenanceRecord> provenanceRecords,
+            FeatureFlags featureFlags) {
+        StorageProvider provider = com.dtwthalion.mpgo.providers
+                .ProviderRegistry.open(url, StorageProvider.Mode.CREATE);
+        try (com.dtwthalion.mpgo.providers.StorageGroup root =
+                provider.rootGroup()) {
+            featureFlags.writeTo(root);
+            try (com.dtwthalion.mpgo.providers.StorageGroup study =
+                    root.createGroup("study")) {
+                if (title != null) study.setAttribute("title", title);
+                if (isaInvestigationId != null)
+                    study.setAttribute("isa_investigation_id", isaInvestigationId);
+
+                Map<String, AcquisitionRun> runMap = new LinkedHashMap<>();
+                if (runs != null && !runs.isEmpty()) {
+                    try (com.dtwthalion.mpgo.providers.StorageGroup ms =
+                            study.createGroup("ms_runs")) {
+                        StringBuilder names = new StringBuilder();
+                        for (int i = 0; i < runs.size(); i++) {
+                            AcquisitionRun run = runs.get(i);
+                            if (i > 0) names.append(",");
+                            names.append(run.name());
+                            run.writeTo(ms);
+                            runMap.put(run.name(), run);
+                        }
+                        ms.setAttribute("_run_names", names.toString());
+                    }
+                }
+                if (identifications != null && !identifications.isEmpty()) {
+                    study.setAttribute("identifications_json",
+                            buildIdentificationsJson(identifications));
+                }
+                if (quantifications != null && !quantifications.isEmpty()) {
+                    study.setAttribute("quantifications_json",
+                            buildQuantificationsJson(quantifications));
+                }
+                if (provenanceRecords != null && !provenanceRecords.isEmpty()) {
+                    study.setAttribute("provenance_json",
+                            buildProvenanceJson(provenanceRecords));
+                }
+                return new SpectralDataset(provider, null, featureFlags,
+                        title, isaInvestigationId, runMap,
+                        identifications != null ? identifications : List.of(),
+                        quantifications != null ? quantifications : List.of(),
+                        provenanceRecords != null ? provenanceRecords : List.of());
+            }
+        }
+    }
+
     // ── Create (write) ──────────────────────────────────────────────
 
     /** Create a new .mpgo file with the given content. */
@@ -165,15 +287,20 @@ public class SpectralDataset implements
                 FeatureFlags.defaultCurrent());
     }
 
-    public static SpectralDataset create(String path, String title,
+    public static SpectralDataset create(String pathOrUrl, String title,
                                           String isaInvestigationId,
                                           List<AcquisitionRun> runs,
                                           List<Identification> identifications,
                                           List<Quantification> quantifications,
                                           List<ProvenanceRecord> provenanceRecords,
                                           FeatureFlags featureFlags) {
+        if (pathOrUrl != null && isNonHdf5Url(pathOrUrl)) {
+            return createViaProvider(pathOrUrl, title, isaInvestigationId,
+                    runs, identifications, quantifications, provenanceRecords,
+                    featureFlags);
+        }
         Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
-                .open(path, StorageProvider.Mode.CREATE);
+                .open(pathOrUrl, StorageProvider.Mode.CREATE);
         Hdf5File file = (Hdf5File) provider.nativeHandle();
         try (Hdf5Group root = file.rootGroup()) {
             featureFlags.writeTo(root);
@@ -374,6 +501,83 @@ public class SpectralDataset implements
             return out;
         }
         return List.of();
+    }
+
+    // ── StorageGroup-based JSON metadata (v0.9 M64.5) ───────────────
+
+    private static List<Identification> readIdentificationsFromJson(
+            com.dtwthalion.mpgo.providers.StorageGroup study) {
+        if (!study.hasAttribute("identifications_json")) return List.of();
+        Object v = study.getAttribute("identifications_json");
+        return v != null ? parseIdentificationsJson(v.toString()) : List.of();
+    }
+
+    private static List<Quantification> readQuantificationsFromJson(
+            com.dtwthalion.mpgo.providers.StorageGroup study) {
+        if (!study.hasAttribute("quantifications_json")) return List.of();
+        Object v = study.getAttribute("quantifications_json");
+        return v != null ? parseQuantificationsJson(v.toString()) : List.of();
+    }
+
+    private static List<ProvenanceRecord> readProvenanceFromJson(
+            com.dtwthalion.mpgo.providers.StorageGroup study) {
+        if (!study.hasAttribute("provenance_json")) return List.of();
+        Object v = study.getAttribute("provenance_json");
+        return v != null ? parseProvenanceJson(v.toString()) : List.of();
+    }
+
+    static String buildIdentificationsJson(List<Identification> idents) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < idents.size(); i++) {
+            if (i > 0) json.append(',');
+            Identification id = idents.get(i);
+            json.append('{')
+                .append("\"run_name\":").append(MiniJson.quote(id.runName()))
+                .append(",\"spectrum_index\":").append(id.spectrumIndex())
+                .append(",\"chemical_entity\":").append(MiniJson.quote(id.chemicalEntity()))
+                .append(",\"confidence_score\":").append(id.confidenceScore())
+                .append(",\"evidence_chain\":").append(
+                        id.evidenceChainJson() == null || id.evidenceChainJson().isEmpty()
+                                ? "[]" : id.evidenceChainJson())
+                .append('}');
+        }
+        json.append(']');
+        return json.toString();
+    }
+
+    static String buildQuantificationsJson(List<Quantification> quants) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < quants.size(); i++) {
+            if (i > 0) json.append(',');
+            Quantification q = quants.get(i);
+            json.append('{')
+                .append("\"chemical_entity\":").append(MiniJson.quote(q.chemicalEntity()))
+                .append(",\"sample_ref\":").append(MiniJson.quote(q.sampleRef()))
+                .append(",\"abundance\":").append(q.abundance());
+            if (q.normalizationMethod() != null) {
+                json.append(",\"normalization_method\":").append(MiniJson.quote(q.normalizationMethod()));
+            }
+            json.append('}');
+        }
+        json.append(']');
+        return json.toString();
+    }
+
+    static String buildProvenanceJson(List<ProvenanceRecord> records) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < records.size(); i++) {
+            if (i > 0) json.append(',');
+            ProvenanceRecord r = records.get(i);
+            json.append('{')
+                .append("\"timestamp_unix\":").append(r.timestampUnix())
+                .append(",\"software\":").append(MiniJson.quote(r.software()))
+                .append(",\"parameters\":").append(nonEmptyJson(r.parametersJson(), "{}"))
+                .append(",\"input_refs\":").append(nonEmptyJson(r.inputRefsJson(), "[]"))
+                .append(",\"output_refs\":").append(nonEmptyJson(r.outputRefsJson(), "[]"))
+                .append('}');
+        }
+        json.append(']');
+        return json.toString();
     }
 
     // ── JSON parsing (attribute fallback path) ──────────────────────

@@ -337,17 +337,34 @@ public class AcquisitionRun implements
         try (StorageGroup sc = runGroup.createGroup("signal_channels")) {
             StringBuilder channelNames = new StringBuilder();
             boolean first = true;
+            // v0.9 M64.5: some providers (ZarrProvider Java v0.8) don't
+            // implement compression. Probe on the first channel and
+            // reuse the decision for the rest so the loop is
+            // consistent rather than half-compressed/half-not.
+            Compression codec = Compression.ZLIB;
             for (var entry : channels.entrySet()) {
                 if (!first) channelNames.append(",");
                 channelNames.append(entry.getKey());
-                first = false;
 
                 String dsName = entry.getKey() + "_values";
                 double[] data = entry.getValue();
-                try (StorageDataset ds = sc.createDataset(dsName, Precision.FLOAT64,
-                        data.length, CHUNK_SIZE, Compression.ZLIB, COMPRESSION_LEVEL)) {
-                    ds.writeAll(data);
+                StorageDataset ds;
+                try {
+                    ds = sc.createDataset(dsName, Precision.FLOAT64,
+                            data.length, CHUNK_SIZE, codec, COMPRESSION_LEVEL);
+                } catch (UnsupportedOperationException e) {
+                    if (codec != Compression.NONE) {
+                        codec = Compression.NONE;
+                        ds = sc.createDataset(dsName, Precision.FLOAT64,
+                                data.length, CHUNK_SIZE, codec, 0);
+                    } else {
+                        throw e;
+                    }
                 }
+                try (StorageDataset closeMe = ds) {
+                    closeMe.writeAll(data);
+                }
+                first = false;
             }
             sc.setAttribute("channel_names", channelNames.toString());
         }

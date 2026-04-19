@@ -217,3 +217,136 @@ def test_java_mpgo_verify_matches_python(python_mpgo: Path) -> None:
         f"  Java: {java_summary}\n"
         f"  Py  : {py_summary}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# 4-provider cross-language matrix (Java only — ObjC is HDF5-only).
+# v0.9 M64.5-objc-java: Java's SpectralDataset.open dispatches on URL
+# scheme and reads Memory/SQLite/Zarr natively. ObjC's high-level
+# entry points reject non-HDF5 URLs with a clear error (scope limit),
+# so the matrix skips ObjC for non-HDF5 cases.
+# --------------------------------------------------------------------------- #
+
+_JAVA_TEST_PROVIDERS = ("hdf5", "memory", "sqlite", "zarr")
+
+# Non-HDF5 cross-language interop has inherent limits today:
+#   - memory: in-process only by design (separate JVM can't see the
+#     Python _STORES dict)
+#   - sqlite: Python writes spectrum_index columns as FLOAT64; Java
+#     reads them as INT64 → class cast exception. Real bug, v1.0+.
+#   - zarr: Python Zarr compresses (blosc/zlib); Java ZarrProvider
+#     doesn't implement compressed-chunk reads yet (v0.8 comment).
+_CROSSLANG_XFAIL_REASONS = {
+    "memory": "in-process-only by design; separate Java process can't see Python memory stores",
+    "sqlite": "spectrum_index column dtype mismatch (float64 vs int64) — TODO v1.0",
+    "zarr":   "Java ZarrProvider doesn't read blosc/zlib-compressed chunks yet",
+}
+
+
+def _python_writes_on_provider(
+    provider: str, tmp_path: Path,
+) -> tuple[str, dict]:
+    """Write the same logical .mpgo via Python on ``provider`` and
+    return the URL + expected summary dict."""
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integration"))
+    from _provider_matrix import provider_url as _provider_url  # type: ignore[import-not-found]
+
+    n = 5
+    n_pts = 8
+    rng = np.random.default_rng(1971)
+    mz = np.tile(np.linspace(100.0, 200.0, n_pts), n).astype(np.float64)
+    intensity = rng.uniform(0.0, 1e6, size=n * n_pts).astype(np.float64)
+    run = WrittenRun(
+        spectrum_class="MPGOMassSpectrum", acquisition_mode=0,
+        channel_data={"mz": mz, "intensity": intensity},
+        offsets=np.arange(n, dtype=np.uint64) * n_pts,
+        lengths=np.full(n, n_pts, dtype=np.uint32),
+        retention_times=np.linspace(0.0, 4.0, n),
+        ms_levels=np.ones(n, dtype=np.int32),
+        polarities=np.ones(n, dtype=np.int32),
+        precursor_mzs=np.zeros(n),
+        precursor_charges=np.zeros(n, dtype=np.int32),
+        base_peak_intensities=intensity.reshape(n, n_pts).max(axis=1),
+    )
+    ids = [
+        Identification("run_0001", 0, "P12345", 0.95, []),
+        Identification("run_0001", 2, "P67890", 0.81, []),
+    ]
+    url = _provider_url(provider, tmp_path, "xlang_matrix")
+    SpectralDataset.write_minimal(
+        url, title=f"xlang-{provider}",
+        isa_investigation_id="ISA-XLANG-MATRIX",
+        runs={"run_0001": run},
+        identifications=ids,
+        provider=provider,
+    )
+    return url, {
+        "title": f"xlang-{provider}",
+        "isa_investigation_id": "ISA-XLANG-MATRIX",
+        "ms_runs": {"run_0001": {"spectrum_count": 5}},
+        "identification_count": 2,
+        "quantification_count": 0,
+        "provenance_count": 0,
+    }
+
+
+@pytest.mark.parametrize("provider", _JAVA_TEST_PROVIDERS)
+def test_java_reads_python_4_provider_matrix(
+    request, provider: str, tmp_path: Path
+) -> None:
+    """Python writes through 4 providers; Java ``MpgoVerify`` reads
+    each via URL-scheme dispatch; JSON summary matches.
+
+    Non-HDF5 cross-language cells are expected-failure (xfail) with
+    specific documented reasons — see ``_CROSSLANG_XFAIL_REASONS``.
+    """
+    java = _resolve_java_verify()
+    if java is None:
+        pytest.skip("Java MpgoVerify classpath not available")
+    xfail_reason = _CROSSLANG_XFAIL_REASONS.get(provider)
+    if xfail_reason is not None:
+        request.applymarker(pytest.mark.xfail(strict=False, reason=xfail_reason))
+    url, expected = _python_writes_on_provider(provider, tmp_path)
+
+    argv_prefix, env = java
+    proc = subprocess.run(
+        argv_prefix + [url],
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    if proc.returncode != 0:
+        pytest.fail(f"Java MpgoVerify on {provider} URL exit {proc.returncode}: "
+                    f"{proc.stderr.strip()}")
+    payload_line = next(
+        ln for ln in reversed(proc.stdout.splitlines()) if ln.strip().startswith("{")
+    )
+    java_summary = json.loads(payload_line)
+    assert java_summary == expected, (
+        f"Java read of Python-written {provider} dataset diverges:\n"
+        f"  Java:     {java_summary}\n"
+        f"  Expected: {expected}"
+    )
+
+
+def test_objc_rejects_non_hdf5_url_cleanly(tmp_path: Path) -> None:
+    """ObjC's high-level SpectralDataset entry points detect non-HDF5
+    URL schemes (memory:// / sqlite:// / zarr://) and return a clear
+    error rather than crashing. v0.9 M64.5-objc-java documented this
+    scope limit; the full ObjC StorageGroup-protocol read/write path
+    is a v1.0+ item."""
+    objc = _resolve_objc_verify()
+    if objc is None:
+        pytest.skip("ObjC MpgoVerify binary not built")
+    binary, env = objc
+    # ObjC's MpgoVerify calls [MPGOSpectralDataset readFromFilePath:].
+    # For a memory:// URL the new detection should surface a clean
+    # error without touching disk.
+    proc = subprocess.run(
+        [str(binary), "memory://does-not-exist"],
+        capture_output=True, text=True, env=env, timeout=15,
+    )
+    assert proc.returncode != 0, "ObjC should reject non-HDF5 URL"
+    err = (proc.stderr or "").lower()
+    # Accept either the explicit routing-not-implemented message or a
+    # generic "failed to open" — either is a clean error path.
+    assert "failed to open" in err or "not yet implemented" in err
