@@ -1,13 +1,14 @@
-"""mzML / exporter subpackage (Apache-2.0).
+"""Exporter subpackage (Apache-2.0).
 
-As of M19 the subpackage ships an indexed-mzML writer in
-:mod:`mpeg_o.exporters.mzml`. Future milestones will add chromatogram,
-MSImage, and nmrML exporters here.
+- mzML (M19): indexed-mzML writer
+- nmrML (M29): 1D spectrum writer
+- ISA-Tab (M27): study bundle writer
+- imzML (v0.9+): MS imaging writer (.imzML + .ibd pair)
 
 SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations
 
-from . import mzml
+from . import imzml, isa, mzml, nmrml
 
-__all__ = ["mzml"]
+__all__ = ["imzml", "isa", "mzml", "nmrml"]

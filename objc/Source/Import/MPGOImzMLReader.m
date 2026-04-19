@@ -37,6 +37,31 @@ NSString *const MPGOImzMLReaderErrorDomain = @"MPGOImzMLReaderErrorDomain";
 - (NSData *)intensityArray { return _intensityArray; }
 - (NSUInteger)mzCount { return _mzArray.length / sizeof(double); }
 
+- (nullable instancetype)initWithX:(NSInteger)x
+                                  y:(NSInteger)y
+                                  z:(NSInteger)z
+                            mzArray:(NSData *)mzArray
+                     intensityArray:(NSData *)intensityArray
+                              error:(NSError **)error
+{
+    if (!mzArray || mzArray.length == 0 || mzArray.length % 8 != 0) {
+        if (error) *error = [NSError errorWithDomain:MPGOImzMLReaderErrorDomain
+            code:MPGOImzMLReaderErrorMissingMetadata userInfo:@{
+            NSLocalizedDescriptionKey: @"mzArray must be non-empty and a multiple of 8 bytes"
+        }];
+        return nil;
+    }
+    if (!intensityArray || intensityArray.length == 0
+        || intensityArray.length != mzArray.length) {
+        if (error) *error = [NSError errorWithDomain:MPGOImzMLReaderErrorDomain
+            code:MPGOImzMLReaderErrorMissingMetadata userInfo:@{
+            NSLocalizedDescriptionKey: @"intensityArray must be non-empty and match mzArray length"
+        }];
+        return nil;
+    }
+    return [self initWithX:x y:y z:z mz:mzArray intensity:intensityArray];
+}
+
 @end
 
 #pragma mark - Import value object
@@ -116,13 +141,23 @@ NSString *const MPGOImzMLReaderErrorDomain = @"MPGOImzMLReaderErrorDomain";
 
 #pragma mark - CV term constants
 
+// imzML storage mode accessions. Only the IMS-namespaced forms are
+// real: MS:1000030 = "vendor processing software", MS:1000031 =
+// "instrument model" — completely unrelated terms that would
+// false-positive on every well-formed mzML/imzML file otherwise.
 static NSString *const kCVContinuous30 = @"IMS:1000030";
-static NSString *const kCVContinuousMS = @"MS:1000030";
 static NSString *const kCVProcessed31  = @"IMS:1000031";
-static NSString *const kCVProcessedMS  = @"MS:1000031";
-static NSString *const kCVUUID         = @"IMS:1000042";
-static NSString *const kCVMaxX         = @"IMS:1000003";
-static NSString *const kCVMaxY         = @"IMS:1000004";
+// Canonical IMS accessions (real-world imzML 1.1, pyimzML test corpus,
+// MPGO writer output v0.9+).
+static NSString *const kCVUUID         = @"IMS:1000080";
+static NSString *const kCVMaxX         = @"IMS:1000042";
+static NSString *const kCVMaxY         = @"IMS:1000043";
+// Legacy MPGO synthetic-fixture accessions (pre-v0.9): kept for
+// backward-compat with any old test files. Importer handler probes
+// both canonical + legacy.
+static NSString *const kCVUUIDLegacy   = @"IMS:1000042";
+static NSString *const kCVMaxXLegacy   = @"IMS:1000003";
+static NSString *const kCVMaxYLegacy   = @"IMS:1000004";
 static NSString *const kCVMaxZ         = @"IMS:1000005";
 static NSString *const kCVPixelSizeX   = @"IMS:1000046";
 static NSString *const kCVPixelSizeY   = @"IMS:1000047";
@@ -300,15 +335,28 @@ static NSString *normaliseUUID(NSString *value) {
     NSString *acc = attrs[@"accession"] ?: @"";
     NSString *value = attrs[@"value"] ?: @"";
 
-    if ([acc isEqualToString:kCVContinuous30] || [acc isEqualToString:kCVContinuousMS]) {
+    if ([acc isEqualToString:kCVContinuous30]) {
         _state.mode = @"continuous";
-    } else if ([acc isEqualToString:kCVProcessed31] || [acc isEqualToString:kCVProcessedMS]) {
+    } else if ([acc isEqualToString:kCVProcessed31]) {
         _state.mode = @"processed";
     } else if ([acc isEqualToString:kCVUUID] && value.length > 0) {
         _state.uuidHex = normaliseUUID(value);
     } else if ([acc isEqualToString:kCVMaxX] && value.length > 0) {
         _state.gridMaxX = value.integerValue;
     } else if ([acc isEqualToString:kCVMaxY] && value.length > 0) {
+        _state.gridMaxY = value.integerValue;
+    } else if ([acc isEqualToString:kCVUUIDLegacy] && value.length > 0
+               && _state.uuidHex.length == 0) {
+        // Legacy MPGO pre-v0.9 fallback: only consume IMS:1000042 as
+        // UUID when IMS:1000080 hasn't appeared yet AND the value
+        // normalises to a 32-hex-char UUID. Real imzML uses
+        // IMS:1000042 for "max count of pixels x" with an integer
+        // value, never a UUID.
+        NSString *cand = normaliseUUID(value);
+        if (cand.length == 32) _state.uuidHex = cand;
+    } else if ([acc isEqualToString:kCVMaxXLegacy] && value.length > 0) {
+        _state.gridMaxX = value.integerValue;
+    } else if ([acc isEqualToString:kCVMaxYLegacy] && value.length > 0) {
         _state.gridMaxY = value.integerValue;
     } else if ([acc isEqualToString:kCVMaxZ] && value.length > 0) {
         _state.gridMaxZ = value.integerValue;

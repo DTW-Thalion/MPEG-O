@@ -41,6 +41,7 @@ MPGOTests_OBJC_FILES = \
 	TestStress.m \
 	TestWatersMassLynxReader.m \
 	TestWriteMinimal.m \
+	TestImzMLWriter.m \
 	TestSqliteProvider.m \
 	TestCloudAccess.m \
 	TestCanonicalBytesCrossBackend.m \

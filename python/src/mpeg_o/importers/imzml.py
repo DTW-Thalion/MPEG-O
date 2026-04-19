@@ -60,11 +60,14 @@ class ImzMLBinaryError(ValueError):
     """
 
 
-# Continuous = MS:1000030 (imaging CV pre-rename) and IMS:1000030 once
-# the imaging extension was ratified. Both accessions occur in the
-# wild; accept either.
-_CONTINUOUS_ACCESSIONS = frozenset({"IMS:1000030", "MS:1000030"})
-_PROCESSED_ACCESSIONS = frozenset({"IMS:1000031", "MS:1000031"})
+# imzML storage mode accessions. Only the IMS-namespaced forms are
+# used — the MS-namespaced forms at the same numeric suffix are
+# UNRELATED terms (MS:1000030 = "vendor processing software",
+# MS:1000031 = "instrument model") and must not be matched here, or
+# they collide with every MS:1000031 cvParam emitted elsewhere in the
+# file.
+_CONTINUOUS_ACCESSIONS = frozenset({"IMS:1000030"})
+_PROCESSED_ACCESSIONS = frozenset({"IMS:1000031"})
 
 
 @dataclass(slots=True)
@@ -249,6 +252,7 @@ def read(imzml_path: str | Path, ibd_path: str | Path | None = None) -> ImzMLImp
     in_spectrum = False
     in_binary_array = False
     in_position = False
+    in_scan_settings = False  # v0.9 M64: disambiguate IMS:1000042 by context
     array_kind = ""  # "mz" or "intensity"
 
     for event, elem in iterparse(str(imzml), events=("start", "end")):
@@ -262,6 +266,8 @@ def read(imzml_path: str | Path, ibd_path: str | Path | None = None) -> ImzMLImp
                 array_kind = ""
             elif tag == "scan":
                 in_position = True
+            elif tag == "scanSettings":
+                in_scan_settings = True
             continue
 
         # event == "end"
@@ -270,6 +276,8 @@ def read(imzml_path: str | Path, ibd_path: str | Path | None = None) -> ImzMLImp
                 spectra_stubs.append(current)
             current = None
             in_spectrum = False
+        elif tag == "scanSettings":
+            in_scan_settings = False
         elif tag == "binaryDataArray":
             in_binary_array = False
             array_kind = ""
@@ -282,14 +290,30 @@ def read(imzml_path: str | Path, ibd_path: str | Path | None = None) -> ImzMLImp
                 state_mode = "continuous"
             elif accession in _PROCESSED_ACCESSIONS:
                 state_mode = "processed"
-            elif accession == "IMS:1000042" and value:  # universally unique identifier
+            elif accession == "IMS:1000080" and value:  # canonical UUID accession
                 state_uuid = _normalise_uuid(value)
-            elif accession == "IMS:1000003" and value:  # max count of pixels x
+            elif accession == "IMS:1000042" and in_scan_settings and value:
+                # canonical max count of pixels x (inside scanSettings)
                 grid_max[0] = int(value)
-            elif accession == "IMS:1000004" and value:  # max count of pixels y
+            elif accession == "IMS:1000043" and value:  # canonical max count of pixels y
                 grid_max[1] = int(value)
-            elif accession == "IMS:1000005" and value:  # max count of pixels z
+            elif accession == "IMS:1000003" and value:  # legacy UUID-adjacent accession
+                # Seen in the wild + our pre-0.9 synthetic fixtures as
+                # a placeholder for max count of pixels x. Accept for
+                # round-trip with older MPGO outputs.
+                grid_max[0] = int(value)
+            elif accession == "IMS:1000004" and value:  # legacy max count of pixels y
+                grid_max[1] = int(value)
+            elif accession == "IMS:1000005" and value:  # legacy max count of pixels z
                 grid_max[2] = int(value)
+            elif accession == "IMS:1000042" and value and state_uuid == "":
+                # Legacy MPGO pre-0.9 synthetic fixtures used IMS:1000042
+                # for UUID (outside scanSettings). Accept as fallback when
+                # the canonical IMS:1000080 hasn't been seen yet and the
+                # value looks like a UUID hex string (dashes + braces OK).
+                candidate = _normalise_uuid(value)
+                if len(candidate) == 32:
+                    state_uuid = candidate
             elif accession == "IMS:1000046" and value:  # pixel size x
                 pixel_size[0] = float(value)
             elif accession == "IMS:1000047" and value:  # pixel size y

@@ -32,6 +32,22 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, strong) NSData *intensityArray;
 @property (nonatomic, readonly) NSUInteger mzCount;
 
+/**
+ * v0.9+: public initializer for callers that construct pixel spectra
+ * from in-memory buffers (e.g. MPGOImzMLWriter, tests). The importer
+ * itself uses a private init; this one accepts equal-length float64
+ * mz + intensity NSData buffers and derives mzCount.
+ *
+ * Returns nil + error when mzArray / intensityArray aren't both
+ * non-zero multiples of 8 bytes, or when their element counts differ.
+ */
+- (nullable instancetype)initWithX:(NSInteger)x
+                                  y:(NSInteger)y
+                                  z:(NSInteger)z
+                            mzArray:(NSData *)mzArray
+                     intensityArray:(NSData *)intensityArray
+                              error:(NSError * _Nullable * _Nullable)error;
+
 @end
 
 /**

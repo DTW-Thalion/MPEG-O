@@ -38,6 +38,7 @@ extern void testMzTabReader(void);
 extern void testStress(void);
 extern void testWatersMassLynxReader(void);
 extern void testWriteMinimal(void);
+extern void testImzMLWriter(void);
 extern void testSqliteProvider(void);
 extern void testCloudAccess(void);
 extern void testCanonicalBytesCrossBackend(void);
@@ -214,6 +215,10 @@ int main(int argc, const char *argv[])
         START_SET("writeMinimal flat-buffer fast path")
             testWriteMinimal();
         END_SET("writeMinimal flat-buffer fast path")
+
+        START_SET("imzML writer (v0.9+)")
+            testImzMLWriter();
+        END_SET("imzML writer (v0.9+)")
     }
     return 0;
 }
