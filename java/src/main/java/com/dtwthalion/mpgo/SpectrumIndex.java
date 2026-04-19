@@ -135,12 +135,32 @@ public class SpectrumIndex {
         }
     }
 
+    // Format parity: Python and ObjC chunk + zlib-compress the 8
+    // parallel index datasets (offsets, lengths, retention_times,
+    // ms_levels, polarities, precursor_mzs, precursor_charges,
+    // base_peak_intensities). Previously Java wrote them contiguous +
+    // uncompressed (chunkSize=0, Compression.NONE) which saved a
+    // zlib pass but inflated files by ~4.8 MB at 100 K spectra and
+    // broke bit-level parity with the other two writers.
+    private static final int INDEX_CHUNK_SIZE = 4096;
+
     private static void writeDataset(StorageGroup group, String name,
                                      Precision precision, Object data) {
         int len = java.lang.reflect.Array.getLength(data);
-        try (StorageDataset ds = group.createDataset(name, precision, len, 0,
-                Compression.NONE, 0)) {
-            ds.writeAll(data);
+        // ZarrProvider (Java v0.8) throws UnsupportedOperationException
+        // on compressed datasets — probe and fall back to contiguous
+        // uncompressed for providers that don't implement zlib. HDF5
+        // and Memory providers take the compressed path.
+        StorageDataset ds;
+        try {
+            ds = group.createDataset(name, precision, len,
+                    INDEX_CHUNK_SIZE, Compression.ZLIB, 6);
+        } catch (UnsupportedOperationException e) {
+            ds = group.createDataset(name, precision, len,
+                    0, Compression.NONE, 0);
+        }
+        try (StorageDataset closeMe = ds) {
+            closeMe.writeAll(data);
         }
     }
 

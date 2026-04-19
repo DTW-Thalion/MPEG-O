@@ -350,6 +350,85 @@ With fair data + format parity, ObjC `writeMinimal` is at **parity
 with Python** and **within 12% of Java** on writes, and **faster
 than both** on build and read.
 
+## The native floor — pure-C libhdf5 baseline
+
+To settle "why is Java writing less compressed work than ObjC", I
+wrote `tools/perf/profile_raw_c.c` — the same writeMinimal workload
+against libhdf5 directly, no binding layer. This is the lower bound
+any language can reach for this workload; anything below it would
+mean skipping HDF5 work.
+
+Then I fixed the last remaining format divergence: Java's
+`SpectrumIndex.writeDataset` was passing `chunkSize=0,
+Compression.NONE` while Python and ObjC passed `chunkSize=4096,
+zlib 6`. That's why the Java file was 7.3 MB vs Python/ObjC 2.9 MB —
+not compression performance, just a format bug. Fixed it.
+
+### All-four comparison at 100 000 spectra (full parity)
+
+| Implementation | Write (ms) | vs C baseline | Read (ms) | vs C baseline | File (MB) |
+|----------------|-----------:|--------------:|----------:|--------------:|----------:|
+| **Raw C** (libhdf5 direct) | **503.5** | **1.00×** (floor) | **16.8** | **1.00×** | 2.89 |
+| ObjC writeMinimal | 509 | 1.01× | 38.1 | 2.27× | 2.89 |
+| Java | 505 | 1.00× | 44.4 | 2.64× | 2.89 |
+| Python writeMinimal | 513 | 1.02× | 54.0 | 3.21× | 2.94 |
+
+### At 10 000 spectra
+
+| Implementation | Write (ms) | Read (ms) | vs C read |
+|----------------|-----------:|----------:|----------:|
+| **Raw C** | **53.2** | **2.6** | 1.00× |
+| ObjC writeMinimal | 52.0 | 4.7 | 1.81× |
+| Java | 51.8 | 5.9 | 2.27× |
+| Python | 56.0 | 8.9 | 3.42× |
+
+### What this actually tells us
+
+**All three wrappers are at the libhdf5 write floor.** The
+per-language spread on write (501-516 ms at 100K) is inside the
+variance of libhdf5's own internal timing (run-to-run noise is
+~5 ms). Write time is bounded by `H5Z_deflate` + `H5Dwrite`
+native calls; none of the three languages can go faster unless
+they skip compression.
+
+**Read time is where the wrapper layer shows up.** Raw C reads in
+16.8 ms at 100 K; every wrapper adds per-call overhead:
+
+- **ObjC** reaches 2.27× raw C — the thinnest wrapper. Direct
+  C-ABI link to libhdf5, ARC retain/release amortised across the
+  sampled loop, one `[_file lockForReading]` pair per call.
+- **Java** at 2.64× pays for JNI boxing/unboxing, per-call
+  `Object[]`/`double[]` array copies, and JHDF5's
+  `H5.H5Dread` synchronisation.
+- **Python** at 3.21× pays for h5py's `__getitem__` dispatch
+  into `_fast_reader`, numpy array construction per slice, and
+  interpreter overhead on the per-sample loop.
+
+The "compiled vs interpreted" intuition **is real** — it shows up
+exactly where it should, above the native library layer. Below
+that layer all three implementations are identical pass-through.
+
+### Why Java looked fastest on write in the earlier measurements
+
+With full format parity (Java's index arrays now chunked + zlib-
+compressed like Python/ObjC), Java's write edge evaporates: it's
+now 505 ms vs ObjC 509 ms — a 0.8% difference, well inside the
+~±5 ms libhdf5 noise floor. The earlier 60 ms gap was **100%**
+the uncompressed-index format choice, not a language advantage.
+
+### What about the 5 ms per-run variance?
+
+5 runs of each harness at 100 K (matched data + format):
+
+- Python: 512, 513, 513, 516, 516 ms — median 513 ms
+- Java:   503, 505, 505, 505, 508 ms — median 505 ms
+- ObjC:   501, 506, 509, 509, 512 ms — median 509 ms
+
+Python's 8 ms gap above Java/ObjC shows as >± observed noise — that
+is the interpreter tax on the non-libhdf5 code (attribute writes,
+per-dataset dispatch, group management). Java 505 vs ObjC 509 is
+within noise; they're at parity on the write floor.
+
 ## Reproducing
 
 ```bash
