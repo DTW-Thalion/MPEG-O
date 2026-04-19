@@ -41,32 +41,73 @@ def spectrum_to_bytes(
     *,
     fid: "FreeInductionDecay | None" = None,
     sweep_width_ppm: float = 0.0,
+    spectrometer_frequency_mhz: float = 0.0,
 ) -> bytes:
-    """Build an nmrML byte blob from ``spectrum`` + optional ``fid``."""
+    """Build an nmrML byte blob from ``spectrum`` + optional ``fid``.
+
+    ``spectrometer_frequency_mhz`` is threaded through from the
+    parent :class:`AcquisitionRun`; nmrML stores frequency in Hz.
+    Pass 0.0 (the default) to omit the cvParam entirely.
+    """
     parts: list[str] = []
 
     def emit(s: str) -> None:
         parts.append(s)
 
     emit('<?xml version="1.0" encoding="UTF-8"?>\n')
+    # nmrML XSD requires a version attribute on the root element.
     emit('<nmrML xmlns="http://nmrml.org/schema"'
          ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
          ' xsi:schemaLocation="http://nmrml.org/schema'
-         ' http://nmrml.org/schema/v1.0/nmrML.xsd">\n')
+         ' http://nmrml.org/schema/v1.0/nmrML.xsd"'
+         ' version="1.1.0">\n')
 
     emit('  <cvList>\n')
     emit('    <cv id="nmrCV" fullName="nmrML Controlled Vocabulary"'
          ' version="1.1.0" URI="http://nmrml.org/cv/v1.1.0/nmrCV.owl"/>\n')
     emit('  </cvList>\n')
 
+    # nmrML XSD requires <fileDescription> between <cvList> and
+    # <acquisition>. Minimal valid content is a single <fileContent>
+    # cvParam from the nmrCV; "1D NMR spectrum" (NMR:1000002) covers
+    # the default spectrum1D case emitted below.
+    emit('  <fileDescription>\n')
+    emit('    <fileContent>\n')
+    emit('      <cvParam cvRef="nmrCV" accession="NMR:1000002"'
+         ' name="acquisition nucleus" value=""/>\n')
+    emit('    </fileContent>\n')
+    emit('  </fileDescription>\n')
+
+    # XSD expects softwareList before <acquisition>. nmrML's
+    # software element requires cvRef/accession/name (a controlled-
+    # vocabulary descriptor), not the mzML-style free-form
+    # attributes. NMR:1400217 is the nmrCV term for "custom software".
+    emit('  <softwareList>\n')
+    emit('    <software id="mpeg_o" version="0.9.0"'
+         ' cvRef="nmrCV" accession="NMR:1400217" name="custom software"/>\n')
+    emit('  </softwareList>\n')
+
+    # instrumentConfigurationList is required by the XSD between
+    # softwareList and acquisition.
+    emit('  <instrumentConfigurationList>\n')
+    emit('    <instrumentConfiguration id="IC1">\n')
+    emit('      <cvParam cvRef="nmrCV" accession="NMR:1400255"'
+         ' name="nmr instrument" value=""/>\n')
+    emit('    </instrumentConfiguration>\n')
+    emit('  </instrumentConfigurationList>\n')
+
     emit('  <acquisition>\n')
     emit('    <acquisition1D>\n')
-    emit('      <acquisitionParameterSet numberOfScans="1">\n')
-
+    # numberOfSteadyStateScans is required by the XSD (zero is fine).
+    emit('      <acquisitionParameterSet numberOfScans="1"'
+         ' numberOfSteadyStateScans="0">\n')
+    # nmrML element order inside acquisitionParameterSet:
+    #   (contactRefList | softwareRef | sampleContainer | ...) first,
+    # then acquisitionNucleus. We have no contact or sample info, so
+    # emit a softwareRef pointing at our software entry.
+    emit('        <softwareRef ref="mpeg_o"/>\n')
     nucleus = spectrum.nucleus_type if hasattr(spectrum, "nucleus_type") else ""
-    freq_mhz = 0.0
-    if hasattr(spectrum, "signal_arrays") and "chemical_shift" in spectrum.signal_arrays:
-        pass  # freq comes from the run, not the spectrum
+    freq_mhz = float(spectrometer_frequency_mhz)
     emit(f'        <acquisitionNucleus name="{nucleus}"/>\n')
 
     # spectrometer frequency: stored in MHz, nmrML expects Hz
@@ -86,6 +127,9 @@ def spectrum_to_bytes(
 
     emit('      </acquisitionParameterSet>\n')
 
+    # <fidData> is REQUIRED by the XSD inside <acquisition1D>. Emit an
+    # empty placeholder when the caller didn't pass a FID; pyteomics and
+    # other readers tolerate an empty base64 block.
     if fid is not None:
         fid_b64 = base64.b64encode(
             np.ascontiguousarray(fid.data, dtype="<f8").tobytes()
@@ -94,18 +138,22 @@ def spectrum_to_bytes(
              f' encodedLength="{len(fid_b64)}">\n')
         emit(f'        {fid_b64}\n')
         emit('      </fidData>\n')
+    else:
+        emit('      <fidData compressed="false" byteFormat="float64"'
+             ' encodedLength="0"></fidData>\n')
 
     emit('    </acquisition1D>\n')
     emit('  </acquisition>\n')
-
-    # spectrum1D
-    emit('  <spectrumList>\n')
-    emit('    <spectrum1D>\n')
 
     cs_data = spectrum.signal_arrays["chemical_shift"].data
     int_data = spectrum.signal_arrays["intensity"].data
     x_b64 = _encode(cs_data)
     y_b64 = _encode(int_data)
+    n_points = int(len(cs_data))
+
+    # spectrum1D — numberOfDataPoints is REQUIRED by the XSD.
+    emit('  <spectrumList>\n')
+    emit(f'    <spectrum1D numberOfDataPoints="{n_points}">\n')
 
     emit('      <xAxis>\n')
     emit(f'        <spectrumDataArray compressed="false"'
@@ -134,8 +182,14 @@ def write_spectrum(
     *,
     fid: "FreeInductionDecay | None" = None,
     sweep_width_ppm: float = 0.0,
+    spectrometer_frequency_mhz: float = 0.0,
 ) -> Path:
-    blob = spectrum_to_bytes(spectrum, fid=fid, sweep_width_ppm=sweep_width_ppm)
+    blob = spectrum_to_bytes(
+        spectrum,
+        fid=fid,
+        sweep_width_ppm=sweep_width_ppm,
+        spectrometer_frequency_mhz=spectrometer_frequency_mhz,
+    )
     out = Path(path)
     out.write_bytes(blob)
     return out

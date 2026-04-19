@@ -69,8 +69,46 @@ public final class MzMLWriter {
         sb.append("    </fileContent>\n");
         sb.append("  </fileDescription>\n");
 
-        // run
-        sb.append("  <run id=\"").append(escapeXml(run.name())).append("\">\n");
+        // softwareList (required by XSD when later sections reference a softwareRef)
+        sb.append("  <softwareList count=\"1\">\n");
+        sb.append("    <software id=\"mpeg_o\" version=\"0.9.0\">\n");
+        sb.append("      <cvParam cvRef=\"MS\" accession=\"MS:1000799\"");
+        sb.append(" name=\"custom unreleased software tool\" value=\"mpeg-o\"/>\n");
+        sb.append("    </software>\n");
+        sb.append("  </softwareList>\n");
+
+        // instrumentConfigurationList — populated from InstrumentConfig where present.
+        InstrumentConfig cfg = run.instrumentConfig();
+        String model = cfg != null && cfg.model() != null ? escapeXml(cfg.model()) : "";
+        String manuf = cfg != null && cfg.manufacturer() != null ? escapeXml(cfg.manufacturer()) : "";
+        String serial = cfg != null && cfg.serialNumber() != null ? escapeXml(cfg.serialNumber()) : "";
+        sb.append("  <instrumentConfigurationList count=\"1\">\n");
+        sb.append("    <instrumentConfiguration id=\"IC1\">\n");
+        sb.append("      <cvParam cvRef=\"MS\" accession=\"MS:1000031\" name=\"instrument model\" value=\"")
+          .append(model).append("\"/>\n");
+        if (!manuf.isEmpty()) {
+            sb.append("      <userParam name=\"manufacturer\" value=\"").append(manuf)
+              .append("\" type=\"xsd:string\"/>\n");
+        }
+        if (!serial.isEmpty()) {
+            sb.append("      <userParam name=\"serial number\" value=\"").append(serial)
+              .append("\" type=\"xsd:string\"/>\n");
+        }
+        sb.append("    </instrumentConfiguration>\n");
+        sb.append("  </instrumentConfigurationList>\n");
+
+        // dataProcessingList (referenced by spectrumList/chromatogramList via defaultDataProcessingRef).
+        sb.append("  <dataProcessingList count=\"1\">\n");
+        sb.append("    <dataProcessing id=\"dp\">\n");
+        sb.append("      <processingMethod order=\"0\" softwareRef=\"mpeg_o\">\n");
+        sb.append("        <cvParam cvRef=\"MS\" accession=\"MS:1000544\" name=\"Conversion to mzML\"/>\n");
+        sb.append("      </processingMethod>\n");
+        sb.append("    </dataProcessing>\n");
+        sb.append("  </dataProcessingList>\n");
+
+        // run — IC1 default so every spectrum inherits the instrument config we just wrote.
+        sb.append("  <run id=\"").append(escapeXml(run.name()))
+          .append("\" defaultInstrumentConfigurationRef=\"IC1\">\n");
 
         // spectrumList
         SpectrumIndex idx = run.spectrumIndex();
@@ -135,6 +173,14 @@ public final class MzMLWriter {
                       .append(precCharge).append("\"/>\n");
                 }
                 sb.append("          </selectedIon></selectedIonList>\n");
+                // PSI mzML 1.1 XSD requires <activation> after <selectedIonList>.
+                // Fragmentation method is not yet carried in the MPEG-O data
+                // model (v1.0 extension — see docs/v1.0-gaps.md); emit a
+                // conservative CID placeholder so the output validates.
+                sb.append("          <activation>\n");
+                sb.append("            <cvParam cvRef=\"MS\" accession=\"MS:1000133\"");
+                sb.append(" name=\"collision-induced dissociation\" value=\"\"/>\n");
+                sb.append("          </activation>\n");
                 sb.append("        </precursor></precursorList>\n");
             }
 

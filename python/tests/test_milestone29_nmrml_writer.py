@@ -36,7 +36,9 @@ def test_nmrml_writer_produces_valid_xml() -> None:
     assert "NMR:1000001" in text
     assert "NMR:1000002" in text
     assert "NMR:1400014" in text
-    assert "<spectrum1D>" in text
+    # v0.9 M64: <spectrum1D> now carries the required numberOfDataPoints
+    # attribute per nmrML XSD; match with a looser prefix check.
+    assert "<spectrum1D" in text
     assert "<xAxis>" in text
     assert "<yAxis>" in text
 
