@@ -37,6 +37,19 @@ OPT_ANONYMIZED = "opt_anonymized"
 # ML-KEM-wrapped DEKs).
 OPT_PQC_PREVIEW = "opt_pqc_preview"
 
+# v1.0: per-AU encryption of signal channels — one AES-GCM op per
+# spectrum per channel. Replaces the v0.x channel-granular
+# encryption layout with ``<channel>_segments`` compound datasets.
+# See ``docs/format-spec.md`` §9.1 and
+# ``docs/transport-encryption-design.md``.
+OPT_PER_AU_ENCRYPTION = "opt_per_au_encryption"
+
+# v1.0: additionally encrypts the AU semantic header fields
+# (ms_level, polarity, RT, precursor m/z, etc.). Requires
+# OPT_PER_AU_ENCRYPTION. Server-side filtering is disabled when
+# this flag is set.
+OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers"
+
 
 @dataclass(frozen=True, slots=True)
 class FeatureFlags:

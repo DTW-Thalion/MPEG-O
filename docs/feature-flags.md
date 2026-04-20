@@ -108,7 +108,7 @@ Algorithm discriminators:
 | Flag                       | Required? | Since | Semantics |
 |----------------------------|-----------|-------|-----------|
 | `opt_per_au_encryption`    | optional  | v1.0  | Signal channels encrypt per-spectrum (per-Access-Unit) instead of channel-granular. Replaces the v0.x `<channel>_values_encrypted`/`_iv`/`_tag` layout with a single compound `<channel>_segments` dataset — one row per spectrum carrying `{offset, length, iv[12], tag[16], ciphertext}`. Required for streaming encrypted datasets through transport. See `docs/transport-encryption-design.md`. |
-| `opt_encrypted_au_headers` | optional  | v1.0  | Additionally encrypts the AU semantic filter fields (`ms_level`, `polarity`, `retention_time`, `precursor_mz`, `precursor_charge`, `ion_mobility`, `base_peak_intensity`, and pixel coords for MSImage). Requires `opt_per_au_encryption`. Disables server-side filtering — clients filter after decrypt. On disk, the plaintext `spectrum_index/*` arrays are omitted and replaced by `spectrum_index/au_header_segments` (one encrypted 35-byte row per spectrum). |
+| `opt_encrypted_au_headers` | optional  | v1.0  | Additionally encrypts the AU semantic filter fields (`ms_level`, `polarity`, `retention_time`, `precursor_mz`, `precursor_charge`, `ion_mobility`, `base_peak_intensity`, and pixel coords for MSImage). Requires `opt_per_au_encryption`. Disables server-side filtering — clients filter after decrypt. On disk, the plaintext `spectrum_index/*` arrays are omitted and replaced by `spectrum_index/au_header_segments` (one encrypted 36-byte row per spectrum). |
 
 ## v0.7 storage + crypto surface (non-flag)
 
