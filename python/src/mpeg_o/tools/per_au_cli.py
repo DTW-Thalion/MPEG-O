@@ -8,10 +8,11 @@ cross-language conformance harness (``tests/integration/
 test_per_au_cross_language.py``) drives this via subprocess.
 
 Usage:
-    python -m mpeg_o.tools.per_au_cli encrypt  <in.mpgo> <out.mpgo> <key-file> [--headers]
-    python -m mpeg_o.tools.per_au_cli decrypt  <in.mpgo> <out.mpad> <key-file>
-    python -m mpeg_o.tools.per_au_cli send     <in.mpgo> <out.mots> [--provider NAME]
-    python -m mpeg_o.tools.per_au_cli recv     <in.mots> <out.mpgo>
+    python -m mpeg_o.tools.per_au_cli encrypt   <in.mpgo> <out.mpgo> <key-file> [--headers]
+    python -m mpeg_o.tools.per_au_cli decrypt   <in.mpgo> <out.mpad> <key-file>
+    python -m mpeg_o.tools.per_au_cli send      <in.mpgo> <out.mots> [--provider NAME]
+    python -m mpeg_o.tools.per_au_cli recv      <in.mots> <out.mpgo>
+    python -m mpeg_o.tools.per_au_cli transcode <in.mpgo> <out.mpgo> <key-file> [--headers] [--rekey <new-key-file>]
 
 Decryption writes an "MPAD" binary dump compatible with the Java and
 Objective-C sides (see ``PerAUCli.java`` Javadoc for the byte
@@ -119,6 +120,94 @@ def _do_recv(args: argparse.Namespace) -> int:
     return 0
 
 
+def _do_transcode(args: argparse.Namespace) -> int:
+    """Migrate a file to opt_per_au_encryption. Three sources supported:
+
+    1. Plaintext .mpgo (no encryption): copies + calls encrypt_per_au.
+    2. opt_per_au_encryption already present: decrypts then re-encrypts
+       (useful for rotating the DEK via --rekey or toggling --headers).
+    3. v0.x opt_dataset_encryption: prints a migration hint and exits
+       non-zero; users must first decrypt channels via the v0.x API.
+    """
+    from mpeg_o.feature_flags import OPT_DATASET_ENCRYPTION
+    from mpeg_o.providers.registry import open_provider
+    from mpeg_o import _hdf5_io as io
+
+    key = _read_key(args.key)
+    new_key = _read_key(args.rekey) if args.rekey else key
+
+    with open_provider(args.input, mode="r") as sp:
+        root = sp.root_group()
+        _, features = io.read_feature_flags(root)
+
+    if OPT_DATASET_ENCRYPTION in features:
+        raise SystemExit(
+            f"{args.input} carries opt_dataset_encryption (v0.x). "
+            "Decrypt channels via v0.x `SpectralDataset.decrypt()` first, "
+            "then transcode the plaintext result."
+        )
+
+    shutil.copyfile(args.input, args.output)
+    if "opt_per_au_encryption" in features:
+        # Re-encrypt path: decrypt → overwrite with fresh IVs + new key.
+        plain = decrypt_per_au(args.output, key)
+        # Rewrite channels as plaintext values datasets so the
+        # encrypt_per_au helper finds them.
+        import h5py
+        with h5py.File(args.output, "a") as f:
+            for run_name, run in plain.items():
+                sig = f[f"study/ms_runs/{run_name}/signal_channels"]
+                for ch, data in run.items():
+                    if ch == "__au_headers__":
+                        continue
+                    seg_name = f"{ch}_segments"
+                    if seg_name in sig:
+                        del sig[seg_name]
+                    if f"{ch}_values" in sig:
+                        del sig[f"{ch}_values"]
+                    sig.create_dataset(f"{ch}_values", data=data)
+                    # Drop the per-channel metadata left by the v1.0 writer.
+                    for attr in (f"{ch}_algorithm", f"{ch}_wrapped_dek",
+                                  f"{ch}_kek_algorithm"):
+                        if attr in sig.attrs:
+                            del sig.attrs[attr]
+                # If the source had opt_encrypted_au_headers, reconstruct
+                # the six plaintext index arrays so encrypt_per_au can
+                # read them back.
+                if run.get("__au_headers__"):
+                    idx = f[f"study/ms_runs/{run_name}/spectrum_index"]
+                    if "au_header_segments" in idx:
+                        del idx["au_header_segments"]
+                    hdrs = run["__au_headers__"]
+                    idx.create_dataset("retention_times",
+                        data=np.array([h["retention_time"] for h in hdrs],
+                                      dtype="<f8"))
+                    idx.create_dataset("ms_levels",
+                        data=np.array([h["ms_level"] for h in hdrs],
+                                      dtype="<i4"))
+                    idx.create_dataset("polarities",
+                        data=np.array([h["polarity"] for h in hdrs],
+                                      dtype="<i4"))
+                    idx.create_dataset("precursor_mzs",
+                        data=np.array([h["precursor_mz"] for h in hdrs],
+                                      dtype="<f8"))
+                    idx.create_dataset("precursor_charges",
+                        data=np.array([h["precursor_charge"] for h in hdrs],
+                                      dtype="<i4"))
+                    idx.create_dataset("base_peak_intensities",
+                        data=np.array([h["base_peak_intensity"] for h in hdrs],
+                                      dtype="<f8"))
+            # Drop v1.0 feature flags so encrypt_per_au reintroduces them.
+            current = bytes(f.attrs["mpeg_o_features"]).decode("utf-8")
+            kept = [x for x in json.loads(current)
+                     if x not in ("opt_per_au_encryption",
+                                   "opt_encrypted_au_headers")]
+            f.attrs["mpeg_o_features"] = json.dumps(kept)
+
+    encrypt_per_au(args.output, new_key, encrypt_headers=args.headers)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="cmd", required=True)
@@ -146,6 +235,15 @@ def main(argv: list[str] | None = None) -> int:
     rcv.add_argument("input")
     rcv.add_argument("output")
     rcv.set_defaults(func=_do_recv)
+
+    tc = subs.add_parser("transcode")
+    tc.add_argument("input")
+    tc.add_argument("output")
+    tc.add_argument("key")
+    tc.add_argument("--headers", action="store_true")
+    tc.add_argument("--rekey", default=None,
+                     help="re-wrap DEK with a new key (path to 32-byte key file)")
+    tc.set_defaults(func=_do_transcode)
 
     args = parser.parse_args(argv)
     return args.func(args)
