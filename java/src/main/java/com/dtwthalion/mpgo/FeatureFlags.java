@@ -36,6 +36,10 @@ public final class FeatureFlags {
      *  ML-DSA-87). Opt-flag — a reader without PQC can still open the
      *  file and read unencrypted datasets. @since 0.8 */
     public static final String OPT_PQC_PREVIEW = "opt_pqc_preview";
+    /** v1.0: channels encrypted per Access Unit. @since 1.0 */
+    public static final String OPT_PER_AU_ENCRYPTION = "opt_per_au_encryption";
+    /** v1.0: AU semantic header encrypted. @since 1.0 */
+    public static final String OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers";
 
     private static final Set<String> REQUIRED = Set.of(
         BASE_V1, COMPOUND_IDENTIFICATIONS, COMPOUND_QUANTIFICATIONS,
@@ -45,7 +49,8 @@ public final class FeatureFlags {
     private static final Set<String> KNOWN_OPTIONAL = Set.of(
         OPT_COMPOUND_HEADERS, OPT_NATIVE_2D_NMR, OPT_NATIVE_MSIMAGE_CUBE,
         OPT_DATASET_ENCRYPTION, OPT_DIGITAL_SIGNATURES, OPT_CANONICAL_SIGNATURES,
-        OPT_KEY_ROTATION, OPT_ANONYMIZED, OPT_PQC_PREVIEW
+        OPT_KEY_ROTATION, OPT_ANONYMIZED, OPT_PQC_PREVIEW,
+        OPT_PER_AU_ENCRYPTION, OPT_ENCRYPTED_AU_HEADERS
     );
 
     private final String formatVersion;
