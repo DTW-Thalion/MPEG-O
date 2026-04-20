@@ -52,6 +52,7 @@ extern void testTransportServer(void);
 extern void testTransportConformance(void);
 extern void testSelectiveAccess(void);
 extern void testPerAUEncryption(void);
+extern void testPerAUFile(void);
 
 int main(int argc, const char *argv[])
 {
@@ -259,6 +260,10 @@ int main(int argc, const char *argv[])
         START_SET("v1.0: per-AU encryption primitives")
             testPerAUEncryption();
         END_SET("v1.0: per-AU encryption primitives")
+
+        START_SET("v1.0: per-AU encryption file round-trip")
+            testPerAUFile();
+        END_SET("v1.0: per-AU encryption file round-trip")
     }
     return 0;
 }
