@@ -84,7 +84,8 @@ libMPGO_HEADER_FILES = \
 	Transport/MPGOAcquisitionSimulator.h \
 	Transport/MPGOAUFilter.h \
 	Transport/MPGOTransportServer.h \
-	Transport/MPGOProtectionMetadata.h
+	Transport/MPGOProtectionMetadata.h \
+	Transport/MPGOEncryptedTransport.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -159,7 +160,8 @@ libMPGO_OBJC_FILES = \
 	Transport/MPGOAcquisitionSimulator.m \
 	Transport/MPGOAUFilter.m \
 	Transport/MPGOTransportServer.m \
-	Transport/MPGOProtectionMetadata.m
+	Transport/MPGOProtectionMetadata.m \
+	Transport/MPGOEncryptedTransport.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
 

@@ -35,9 +35,13 @@ typedef NS_ENUM(uint8_t, MPGOTransportPacketType) {
 };
 
 typedef NS_OPTIONS(uint16_t, MPGOTransportPacketFlag) {
-    MPGOTransportPacketFlagEncrypted   = 1 << 0,
-    MPGOTransportPacketFlagCompressed  = 1 << 1,
-    MPGOTransportPacketFlagHasChecksum = 1 << 2
+    MPGOTransportPacketFlagEncrypted       = 1 << 0,
+    MPGOTransportPacketFlagCompressed      = 1 << 1,
+    MPGOTransportPacketFlagHasChecksum     = 1 << 2,
+    // v1.0: set in addition to ENCRYPTED when the AU's semantic
+    // header fields are AES-GCM encrypted (transport-spec §4.3.3).
+    // Readers MUST reject EncryptedHeader without Encrypted.
+    MPGOTransportPacketFlagEncryptedHeader = 1 << 3
 };
 
 /** 24-byte packet header as a plain value object. */

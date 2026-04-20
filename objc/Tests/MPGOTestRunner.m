@@ -53,6 +53,7 @@ extern void testTransportConformance(void);
 extern void testSelectiveAccess(void);
 extern void testPerAUEncryption(void);
 extern void testPerAUFile(void);
+extern void testEncryptedTransport(void);
 
 int main(int argc, const char *argv[])
 {
@@ -264,6 +265,10 @@ int main(int argc, const char *argv[])
         START_SET("v1.0: per-AU encryption file round-trip")
             testPerAUFile();
         END_SET("v1.0: per-AU encryption file round-trip")
+
+        START_SET("v1.0: encrypted transport emission")
+            testEncryptedTransport();
+        END_SET("v1.0: encrypted transport emission")
     }
     return 0;
 }
