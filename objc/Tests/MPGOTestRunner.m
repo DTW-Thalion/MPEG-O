@@ -50,6 +50,7 @@ extern void testTransportClient(void);
 extern void testAcquisitionSimulator(void);
 extern void testTransportServer(void);
 extern void testTransportConformance(void);
+extern void testSelectiveAccess(void);
 
 int main(int argc, const char *argv[])
 {
@@ -249,6 +250,10 @@ int main(int argc, const char *argv[])
         START_SET("M70: bidirectional conformance (v0.10)")
             testTransportConformance();
         END_SET("M70: bidirectional conformance (v0.10)")
+
+        START_SET("M71: selective access + protection metadata (v0.10)")
+            testSelectiveAccess();
+        END_SET("M71: selective access + protection metadata (v0.10)")
     }
     return 0;
 }
