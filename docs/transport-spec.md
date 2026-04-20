@@ -246,8 +246,8 @@ spectrum_class:      uint8               # plaintext — needed for dispatch
 n_channels:          uint8               # plaintext — needed for parsing
 IV_header:           bytes[12]
 TAG_header:          bytes[16]
-encrypted_semantic_header: bytes[35]
-    # AES-GCM plaintext =
+encrypted_semantic_header: bytes[36]
+    # AES-GCM plaintext (36 bytes: 1+1+1+8+8+1+8+8) =
     #   acquisition_mode(u8) || ms_level(u8) || polarity(u8)
     #   || retention_time(f64) || precursor_mz(f64)
     #   || precursor_charge(u8) || ion_mobility(f64)

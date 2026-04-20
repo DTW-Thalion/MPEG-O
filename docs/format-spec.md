@@ -510,7 +510,7 @@ with:
 spectrum_index/au_header_segments   HDF5 compound, one row per spectrum
     iv         uint8[12]
     tag        uint8[16]
-    ciphertext uint8[35]     fixed-length plaintext:
+    ciphertext uint8[36]     fixed-length plaintext (36 bytes):
         acquisition_mode(u8) || ms_level(u8) || polarity(u8)
         || retention_time(f64) || precursor_mz(f64)
         || precursor_charge(u8) || ion_mobility(f64)

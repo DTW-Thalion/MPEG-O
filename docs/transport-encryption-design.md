@@ -149,7 +149,8 @@ spectrum_class:      uint8         # plaintext — needed for dispatch
 n_channels:          uint8         # plaintext — needed for parsing
 IV_header:           bytes[12]
 TAG_header:          bytes[16]
-encrypted_semantic_header: bytes[35]
+encrypted_semantic_header: bytes[36]
+    # 36 = 1+1+1+8+8+1+8+8
     = AES-GCM(plaintext = acquisition_mode || ms_level || polarity ||
                           retention_time || precursor_mz ||
                           precursor_charge || ion_mobility ||
@@ -241,7 +242,7 @@ spectrum_index/
     au_header_segments      compound dataset, one row per spectrum:
         iv:  uint8[12]
         tag: uint8[16]
-        ciphertext: uint8[35]   fixed 35-byte plaintext
+        ciphertext: uint8[36]   fixed 36-byte plaintext (1+1+1+8+8+1+8+8)
     @wrapped_dek           same key as channels (or separate key
                            for header-only decryption, see §7)
 ```

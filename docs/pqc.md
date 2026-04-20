@@ -314,7 +314,7 @@ without any special casing: the KEM (ML-KEM-1024 or classical
 RSA-OAEP) wraps the DEK once per run, exactly as in the wire-format
 section above; the DEK then drives **per-Access-Unit**
 AES-256-GCM operations for each spectrum's channel bytes (and,
-when `opt_encrypted_au_headers` is set, for each AU's 35-byte
+when `opt_encrypted_au_headers` is set, for each AU's 36-byte
 semantic header). `ProtectionMetadata` on the transport wire
 carries the same wrapped DEK bytes the `<channel>_wrapped_dek`
 attribute would hold on disk. See
