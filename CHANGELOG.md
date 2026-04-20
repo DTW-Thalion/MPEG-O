@@ -11,6 +11,93 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [v0.10.0] — 2026-04-20
+
+Transport layer (M66–M72) plus the v1.0 per-Access-Unit encryption
+stack. Three-language parity remains the rule — every surface shipped
+here lands in Python, Objective-C, and Java before the tag.
+
+### Added
+
+- **Transport codec (M67)** — `.mots` streams for the MPEG-O wire
+  format defined in `docs/transport-spec.md` §3. 24-byte packet
+  headers, little-endian, `{StreamHeader, DatasetHeader, AccessUnit,
+  ProtectionMetadata, Annotation, Provenance, Chromatogram,
+  EndOfDataset, EndOfStream}` packet types. Python / ObjC / Java all
+  parse the same byte stream.
+
+- **Transport client + server (M68 / M68.5)** — WebSocket push
+  endpoints (libwebsockets for ObjC, `websockets` for Python,
+  Java-WebSocket for Java). Streams .mpgo datasets as `.mots` over
+  the wire with optional CRC-32C per packet.
+
+- **Acquisition simulator (M69)** — replays a fixture at wall-clock
+  pace to exercise client/server scheduling.
+
+- **Bidirectional conformance (M70)** — cross-language matrix test
+  that any pair of {Python, ObjC, Java} writers and readers can
+  exchange streams byte-for-byte.
+
+- **Selective access + protection metadata (M71)** — per-packet
+  AUFilter + ProtectionMetadata fields (cipher_suite, kek_algorithm,
+  wrapped_dek, signature_algorithm, public_key).
+
+- **Per-Access-Unit encryption (v1.0 scope)** — `opt_per_au_encryption`
+  feature flag with the `<channel>_segments` VL_BYTES compound layout
+  from `format-spec.md` §9.1. Each spectrum is a separate AES-256-GCM
+  op with fresh IV + AAD = `dataset_id || au_sequence || channel_name`;
+  ciphertext cannot be replayed against a different AU or envelope.
+  Optional `opt_encrypted_au_headers` flag additionally encrypts the
+  36-byte semantic header into `spectrum_index/au_header_segments`.
+
+  Shipped as five phases across all three languages:
+    - **Phase A** — per-AU primitives (AAD helpers, `ChannelSegment` /
+      `HeaderSegment` / `AUHeaderPlaintext`, pack / unpack, round-trip).
+    - **Phase B** — `VL_BYTES` compound-field kind + HDF5 provider
+      wiring. The Java side uses a native hvl_t raw-buffer pool
+      because JHI5 1.10 doesn't marshal VL-in-compound directly.
+    - **Phase C** — file-level encrypt/decrypt orchestrator
+      (`PerAUFile` / `MPGOPerAUFile` / `encrypt_per_au`). All I/O
+      flows through the StorageProvider abstraction — any backend
+      with VL_BYTES compound support works.
+    - **Phase D** — encrypted transport writer + reader. Ciphertext
+      passes through the wire unmodified (server never decrypts in
+      transit, per `transport-spec.md` §6.2).
+    - **Phase E** — cross-language conformance harness
+      (`tests/integration/test_per_au_cross_language.py`) drives the
+      `per_au_cli` tool in all three languages via subprocess and
+      byte-compares a canonical MPAD decryption dump. 38/38 passing
+      across every encrypt × decrypt × headers combination.
+
+- **`per_au_cli transcode` subcommand** — migrate plaintext or
+  existing v1.0-encrypted files to a fresh DEK / `--headers` setting.
+  v0.x `opt_dataset_encryption` inputs fail loud with a migration
+  hint (decrypt via v0.x API first).
+
+- **Java HDF5 write durability fix** — `Hdf5File.close()` now calls
+  `H5Fflush` before `H5Fclose` so writes persist even when child
+  group handles leaked up the call stack. Caught by the cross-
+  language test where Java encryption of a Python-created fixture
+  silently dropped changes.
+
+### Changed
+
+- `FeatureFlags`: added `opt_per_au_encryption` and
+  `opt_encrypted_au_headers` to the known-optional set.
+- `CompoundField.Kind`: added `VL_BYTES` (bumps the enum from 4 to 5
+  members in all three languages).
+
+### Metrics
+
+| Language   | Tests |
+| ---------- | ----: |
+| Python     |   682 |
+| ObjC       |  1430 |
+| Java       |   298 |
+| Cross-lang |    38 |
+
+---
+
 ## [v0.9.1] — 2026-04-19
 
 Patch on top of v0.9.0 (commit `228eeb5`). Closes the remaining
