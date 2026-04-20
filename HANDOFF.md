@@ -502,7 +502,47 @@ encoding/decoding.
 
 ---
 
-## Milestone 68 — Network Transport Layer (WebSocket Server)
+## Milestone 68 — Network Transport Layer (WebSocket Server) — COMPLETE
+
+Shipped Python server + Python/Java/ObjC clients. Test counts:
+Python 588 / Java 256 / ObjC 1313.
+
+- **Python** `mpeg_o.transport.server.TransportServer` +
+  `mpeg_o.transport.client.TransportClient`: asyncio + `websockets`
+  library. Full server-side filtering (ms_level, rt range,
+  precursor m/z range, polarity, dataset_id, max_au cap). StreamHeader,
+  DatasetHeaders, EndOfDataset, and EndOfStream always emitted so
+  filtered streams still produce a valid container skeleton.
+  `mpeg_o.tools.transport_server_cli` provides
+  `python -m mpeg_o.tools.transport_server_cli <path> --port 0` which
+  prints `PORT=<n>` on stdout (used by Java and ObjC tests to spawn a
+  server subprocess).
+- **Java** `com.dtwthalion.mpgo.transport.TransportClient` via
+  `org.java-websocket:Java-WebSocket 1.5.7`. `fetchPackets(filters)`
+  collects all records; `streamToFile` materializes through the
+  existing offline `TransportReader`. Tests spawn the Python server
+  subprocess to validate full + filtered streams and end-to-end
+  materialization.
+- **ObjC** `MPGOTransportClient` via `libwebsockets-dev` 4.3.3.
+  Synchronous blocking API (`fetchPacketsWithFilters:timeout:error:`
+  runs a private `lws_service` loop until EndOfStream / close /
+  timeout). `opaque_user_data` carries a `(__bridge void *)` back to
+  the Objective-C instance in the C callback. Tests spawn the Python
+  server subprocess via NSTask; NSTask is allowed to read the
+  server's stdout until `PORT=<n>` appears.
+
+Acceptance checklist satisfied in Python (server) and all three
+language clients: full stream, ms_level filter, RT-range filter,
+precursor m/z filter, combined filters, max_au cap, no-match case,
+concurrent clients, graceful shutdown.
+
+Deferred to M71: encrypted transport + selective-access performance
+benchmarks. Deferred to follow-up: `wss://` TLS support in the ObjC
+client (libwebsockets has SSL but currently untested here).
+
+Historical spec retained below for audit.
+
+### Historical: Milestone 68 — Network Transport Layer (WebSocket Server)
 
 **License:** LGPL-3.0
 

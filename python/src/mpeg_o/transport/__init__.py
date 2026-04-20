@@ -35,8 +35,10 @@ from .codec import (
     file_to_transport,
     transport_to_file,
 )
+from .filters import AUFilter
 
 __all__ = [
+    "AUFilter",
     "HEADER_MAGIC",
     "HEADER_SIZE",
     "VERSION",
@@ -51,3 +53,15 @@ __all__ = [
     "file_to_transport",
     "transport_to_file",
 ]
+
+
+def __getattr__(name: str):
+    # v0.10 M68: lazy re-export of server / client so importing
+    # ``mpeg_o.transport`` works without ``websockets`` installed.
+    if name in ("TransportServer", "serving"):
+        from .server import TransportServer, serving
+        return {"TransportServer": TransportServer, "serving": serving}[name]
+    if name == "TransportClient":
+        from .client import TransportClient
+        return TransportClient
+    raise AttributeError(f"module 'mpeg_o.transport' has no attribute {name!r}")

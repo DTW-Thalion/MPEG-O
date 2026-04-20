@@ -76,6 +76,13 @@
             <artifactId>bcprov-jdk18on</artifactId>
             <version>1.80</version>
         </dependency>
+
+        <!-- v0.10 M68: streaming transport over WebSocket. -->
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.5.7</version>
+        </dependency>
     </dependencies>
 
     <profiles>
