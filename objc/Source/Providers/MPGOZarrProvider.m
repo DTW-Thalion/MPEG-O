@@ -1004,6 +1004,18 @@ static BOOL zIsGroupDir(NSString *p)
                                                  count:(NSUInteger)count
                                                  error:(NSError **)error
 {
+    // v1.0 parity gap: Zarr compound storage is JSON-backed; VL_BYTES
+    // needs base64 transport which is a follow-up. Fail loud instead
+    // of silently corrupting.
+    for (MPGOCompoundField *f in fields) {
+        if (f.kind == MPGOCompoundFieldKindVLBytes) {
+            if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
+                @"MPGOZarrProvider does not yet support VL_BYTES "
+                @"compound fields (needed for per-AU encryption). "
+                @"Use HDF5 / Memory providers for encrypted datasets.");
+            return nil;
+        }
+    }
     NSString *p = [self childPath:n];
     if ([[NSFileManager defaultManager] fileExistsAtPath:p]) {
         if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,

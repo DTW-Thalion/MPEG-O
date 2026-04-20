@@ -58,6 +58,20 @@
 - (hid_t)typeId    { return _typeId; }
 - (size_t)totalSize { return _totalSize; }
 
+- (BOOL)addVariableLengthBytesFieldNamed:(NSString *)name
+                                 atOffset:(size_t)offset
+{
+    if (_closed || _typeId < 0) return NO;
+    hid_t vlBytes = H5Tvlen_create(H5T_NATIVE_UCHAR);
+    if (vlBytes < 0) return NO;
+    if (H5Tinsert(_typeId, [name UTF8String], offset, vlBytes) < 0) {
+        H5Tclose(vlBytes);
+        return NO;
+    }
+    [_auxTypeIds addObject:@(vlBytes)];
+    return YES;
+}
+
 - (void)close
 {
     if (_closed) return;

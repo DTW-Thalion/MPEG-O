@@ -962,6 +962,19 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
             @"'%@' already exists in '%@'", name, _name);
         return nil;
     }
+    // v1.0 parity gap: SQLite compound rows are JSON-backed; VL_BYTES
+    // needs base64 transport which is a follow-up. Fail loud instead
+    // of silently corrupting — callers use HDF5 / Memory for per-AU
+    // encryption until this lands.
+    for (MPGOCompoundField *f in fields) {
+        if (f.kind == MPGOCompoundFieldKindVLBytes) {
+            if (error) *error = MPGOMakeError(MPGOErrorDatasetCreate,
+                @"MPGOSqliteProvider does not yet support VL_BYTES "
+                @"compound fields (needed for per-AU encryption). "
+                @"Use HDF5 / Memory providers for encrypted datasets.");
+            return nil;
+        }
+    }
 
     // Serialize fields to JSON: [{"name":"...","kind":"..."},...]
     NSMutableArray *fdArr = [NSMutableArray arrayWithCapacity:fields.count];

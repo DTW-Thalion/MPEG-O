@@ -13,6 +13,12 @@ typedef NS_ENUM(NSInteger, MPGOCompoundFieldKind) {
     MPGOCompoundFieldKindInt64    = 1,
     MPGOCompoundFieldKindFloat64  = 2,
     MPGOCompoundFieldKindVLString = 3,
+    /* v1.0: variable-length byte buffer. Used by the per-AU
+     * encryption <channel>_segments compound (ciphertext column)
+     * and for fixed-length inline IV / TAG / semantic-header
+     * blobs. Providers serialise values as NSData; on read a row's
+     * value comes back as NSData. */
+    MPGOCompoundFieldKindVLBytes  = 4,
 };
 
 /**

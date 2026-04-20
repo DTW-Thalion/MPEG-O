@@ -592,6 +592,7 @@ static size_t fieldByteSize(MPGOCompoundFieldKind kind)
         case MPGOCompoundFieldKindInt64:    return 8;
         case MPGOCompoundFieldKindFloat64:  return 8;
         case MPGOCompoundFieldKindVLString: return sizeof(char *);
+        case MPGOCompoundFieldKindVLBytes:  return sizeof(hvl_t);
     }
     return 0;
 }
@@ -628,11 +629,17 @@ static size_t fieldByteSize(MPGOCompoundFieldKind kind)
                 [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
             case MPGOCompoundFieldKindVLString:
                 [t addVariableLengthStringFieldNamed:f.name atOffset:off]; break;
+            case MPGOCompoundFieldKindVLBytes:
+                [t addVariableLengthBytesFieldNamed:f.name atOffset:off]; break;
         }
     }
 
     uint8_t *buf = calloc(n > 0 ? n : 1, recSize);
     NSMutableArray *retained = [NSMutableArray array];
+    // Each VL_BYTES row writes an hvl_t that points at heap-allocated
+    // bytes. Record those pointers so we can free() them after
+    // H5Dwrite has copied the data out.
+    NSMutableArray *vlBytesAllocs = [NSMutableArray array];
     for (NSUInteger r = 0; r < n; r++) {
         NSDictionary *row = rows[r];
         uint8_t *base = buf + r * recSize;
@@ -663,6 +670,21 @@ static size_t fieldByteSize(MPGOCompoundFieldKind kind)
                     memcpy(base + off, &cstr, sizeof(char *));
                     break;
                 }
+                case MPGOCompoundFieldKindVLBytes: {
+                    NSData *d = [v isKindOfClass:[NSData class]] ? v : [NSData data];
+                    hvl_t hv;
+                    hv.len = d.length;
+                    if (d.length > 0) {
+                        void *p = malloc(d.length);
+                        memcpy(p, d.bytes, d.length);
+                        hv.p = p;
+                        [vlBytesAllocs addObject:[NSValue valueWithPointer:p]];
+                    } else {
+                        hv.p = NULL;
+                    }
+                    memcpy(base + off, &hv, sizeof(hvl_t));
+                    break;
+                }
             }
         }
     }
@@ -670,6 +692,11 @@ static size_t fieldByteSize(MPGOCompoundFieldKind kind)
     BOOL ok = writeCompoundDataset(parent.groupId, [name UTF8String],
                                     t.typeId, n, buf, error);
     free(buf);
+    for (NSValue *v in vlBytesAllocs) {
+        void *p = NULL;
+        [v getValue:&p];
+        if (p) free(p);
+    }
     [retained removeAllObjects];
     [t close];
     return ok;
@@ -705,6 +732,8 @@ static size_t fieldByteSize(MPGOCompoundFieldKind kind)
                 [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
             case MPGOCompoundFieldKindVLString:
                 [t addVariableLengthStringFieldNamed:f.name atOffset:off]; break;
+            case MPGOCompoundFieldKindVLBytes:
+                [t addVariableLengthBytesFieldNamed:f.name atOffset:off]; break;
         }
     }
 
@@ -741,6 +770,17 @@ static size_t fieldByteSize(MPGOCompoundFieldKind kind)
                 case MPGOCompoundFieldKindVLString: {
                     char *ptr; memcpy(&ptr, base + off, sizeof(char *));
                     row[f.name] = ptr ? [NSString stringWithUTF8String:ptr] : @"";
+                    break;
+                }
+                case MPGOCompoundFieldKindVLBytes: {
+                    hvl_t hv; memcpy(&hv, base + off, sizeof(hvl_t));
+                    if (hv.p && hv.len > 0) {
+                        // Copy ONTO the heap the bytes H5 malloc'd for us;
+                        // H5Dvlen_reclaim below will free hv.p.
+                        row[f.name] = [NSData dataWithBytes:hv.p length:hv.len];
+                    } else {
+                        row[f.name] = [NSData data];
+                    }
                     break;
                 }
             }
