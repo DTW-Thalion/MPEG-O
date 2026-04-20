@@ -49,6 +49,7 @@ libMPGO_HEADER_FILES = \
 	Protection/MPGOKeyRotationManager.h \
 	Protection/MPGOSignatureManager.h \
 	Protection/MPGOVerifier.h \
+	Protection/MPGOPerAUEncryption.h \
 	Query/MPGOQuery.h \
 	Query/MPGOStreamWriter.h \
 	Query/MPGOStreamReader.h \
@@ -123,6 +124,7 @@ libMPGO_OBJC_FILES = \
 	Protection/MPGOKeyRotationManager.m \
 	Protection/MPGOSignatureManager.m \
 	Protection/MPGOVerifier.m \
+	Protection/MPGOPerAUEncryption.m \
 	Query/MPGOQuery.m \
 	Query/MPGOStreamWriter.m \
 	Query/MPGOStreamReader.m \

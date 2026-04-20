@@ -51,6 +51,7 @@ extern void testAcquisitionSimulator(void);
 extern void testTransportServer(void);
 extern void testTransportConformance(void);
 extern void testSelectiveAccess(void);
+extern void testPerAUEncryption(void);
 
 int main(int argc, const char *argv[])
 {
@@ -254,6 +255,10 @@ int main(int argc, const char *argv[])
         START_SET("M71: selective access + protection metadata (v0.10)")
             testSelectiveAccess();
         END_SET("M71: selective access + protection metadata (v0.10)")
+
+        START_SET("v1.0: per-AU encryption primitives")
+            testPerAUEncryption();
+        END_SET("v1.0: per-AU encryption primitives")
     }
     return 0;
 }
