@@ -6,6 +6,7 @@
 #import "Dataset/MPGOWrittenRun.h"
 #import "ValueClasses/MPGOEnums.h"
 #import <string.h>
+#import <zlib.h>
 
 // ---------------------------------------------------------------- LE helpers
 
@@ -297,12 +298,38 @@ typedef struct {
             NSMutableDictionary<NSString *, NSMutableData *> *chans = rd[@"channels"];
             NSUInteger spectrumLength = 0;
             for (MPGOTransportChannelData *ch in au.channels) {
-                if (ch.compression != MPGOCompressionNone ||
-                    ch.precision != MPGOPrecisionFloat64) {
+                if (ch.precision != MPGOPrecisionFloat64) {
                     if (error) *error = [NSError errorWithDomain:MPGOTransportErrorDomain
                                                              code:MPGOTransportErrorUnexpectedPayload
                                                          userInfo:@{NSLocalizedDescriptionKey:
-                                         @"M67 supports only FLOAT64 + NONE on reader"}];
+                                         @"reader supports FLOAT64 precision only"}];
+                    return NO;
+                }
+                NSData *decoded = ch.data;
+                if (ch.compression == MPGOCompressionZlib) {
+                    // Allocate a generous output buffer. For
+                    // float64 payloads the decompressed size is
+                    // ch.nElements * 8 exactly.
+                    NSMutableData *out = [NSMutableData dataWithLength:(NSUInteger)ch.nElements * 8];
+                    uLongf destLen = out.length;
+                    int rc = uncompress((Bytef *)out.mutableBytes, &destLen,
+                                         (const Bytef *)ch.data.bytes, (uLong)ch.data.length);
+                    if (rc != Z_OK) {
+                        if (error) *error = [NSError errorWithDomain:MPGOTransportErrorDomain
+                                                                 code:MPGOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:@"zlib inflate failed: rc=%d",
+                                                 rc]}];
+                        return NO;
+                    }
+                    [out setLength:destLen];
+                    decoded = out;
+                } else if (ch.compression != MPGOCompressionNone) {
+                    if (error) *error = [NSError errorWithDomain:MPGOTransportErrorDomain
+                                                             code:MPGOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:@"unsupported compression on reader: %u",
+                                             (unsigned)ch.compression]}];
                     return NO;
                 }
                 NSMutableData *sink = chans[ch.name];
@@ -310,8 +337,8 @@ typedef struct {
                     sink = [NSMutableData data];
                     chans[ch.name] = sink;
                 }
-                [sink appendData:ch.data];
-                NSUInteger n = ch.data.length / 8;
+                [sink appendData:decoded];
+                NSUInteger n = decoded.length / 8;
                 if (spectrumLength != 0 && spectrumLength != n) {
                     if (error) *error = [NSError errorWithDomain:MPGOTransportErrorDomain
                                                              code:MPGOTransportErrorUnexpectedPayload

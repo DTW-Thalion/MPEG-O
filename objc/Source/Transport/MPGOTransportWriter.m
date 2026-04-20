@@ -12,6 +12,7 @@
 #import "ValueClasses/MPGOEnums.h"
 #import <time.h>
 #import <string.h>
+#import <zlib.h>
 
 // ---------------------------------------------------------------- helpers
 
@@ -257,9 +258,23 @@ static NSString *instrumentConfigJSON(MPGOInstrumentConfig *cfg)
     return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
 }
 
+static NSData *zlibDeflate(NSData *input)
+{
+    if (input.length == 0) return [NSData data];
+    uLongf destLen = compressBound((uLong)input.length);
+    NSMutableData *out = [NSMutableData dataWithLength:destLen];
+    int rc = compress2((Bytef *)out.mutableBytes, &destLen,
+                         (const Bytef *)input.bytes, (uLong)input.length,
+                         Z_DEFAULT_COMPRESSION);
+    if (rc != Z_OK) return nil;
+    [out setLength:destLen];
+    return out;
+}
+
 static MPGOAccessUnit *accessUnitFromSpectrum(MPGOSpectrum *spectrum,
                                                 MPGOAcquisitionRun *run,
-                                                NSArray<NSString *> *channelNames)
+                                                NSArray<NSString *> *channelNames,
+                                                BOOL useCompression)
 {
     uint8_t wireClass = wireFromSpectrumClassName(run.spectrumClassName);
     uint8_t msLevel = 0;
@@ -288,12 +303,21 @@ static MPGOAccessUnit *accessUnitFromSpectrum(MPGOSpectrum *spectrum,
             leFloat64 = [NSData data];
         }
         uint32_t nElements = (uint32_t)(leFloat64.length / 8);
+        NSData *payload = leFloat64;
+        uint8_t compressionCode = MPGOCompressionNone;
+        if (useCompression) {
+            NSData *compressed = zlibDeflate(leFloat64);
+            if (compressed) {
+                payload = compressed;
+                compressionCode = MPGOCompressionZlib;
+            }
+        }
         MPGOTransportChannelData *ch =
             [[MPGOTransportChannelData alloc] initWithName:cname
                                                   precision:MPGOPrecisionFloat64
-                                                compression:MPGOCompressionNone
+                                                compression:compressionCode
                                                   nElements:nElements
-                                                       data:leFloat64];
+                                                       data:payload];
         [channels addObject:ch];
     }
 
@@ -350,7 +374,7 @@ static MPGOAccessUnit *accessUnitFromSpectrum(MPGOSpectrum *spectrum,
         NSUInteger count = [run count];
         for (NSUInteger i = 0; i < count; i++) {
             MPGOSpectrum *sp = [run objectAtIndex:i];
-            MPGOAccessUnit *au = accessUnitFromSpectrum(sp, run, channelNames);
+            MPGOAccessUnit *au = accessUnitFromSpectrum(sp, run, channelNames, _useCompression);
             if (![self writeAccessUnit:au datasetId:did auSequence:(uint32_t)i error:error]) return NO;
         }
         if (![self writeEndOfDatasetWithDatasetId:did

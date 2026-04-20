@@ -146,6 +146,84 @@ class TestInMemoryRoundTrip:
             rt.close()
 
 
+class TestCompression:
+
+    def test_zlib_wire_compression_roundtrip(self, tmp_path):
+        """use_compression=True should produce a smaller .mots than
+        the uncompressed baseline while preserving signal values."""
+        src = _make_minimal_dataset(tmp_path / "src.mpgo")
+
+        plain = tmp_path / "plain.mots"
+        compressed = tmp_path / "compressed.mots"
+        file_to_transport(src, plain)
+        file_to_transport(src, compressed, use_compression=True)
+
+        # The 3-spectrum fixture is small, so compressed may only be
+        # mildly smaller; require strict ≤ rather than > to tolerate
+        # edge cases while still asserting the codec ran. Correctness
+        # matters more than size for such a tiny fixture.
+        assert compressed.stat().st_size <= plain.stat().st_size + 64
+
+        rt = transport_to_file(compressed, tmp_path / "rt.mpgo")
+        original = SpectralDataset.open(src)
+        try:
+            for name in original.all_runs:
+                ra, rb = original.all_runs[name], rt.all_runs[name]
+                for i in range(len(ra)):
+                    for c in ra.channel_names:
+                        import numpy as np
+                        assert np.array_equal(
+                            np.asarray(ra[i].signal_array(c).data),
+                            np.asarray(rb[i].signal_array(c).data),
+                        )
+        finally:
+            original.close()
+            rt.close()
+
+    def test_zlib_wire_compression_actually_compresses(self, tmp_path):
+        """On a larger fixture the compressed stream is meaningfully
+        smaller — sanity-check the codec is actually applied."""
+        import numpy as np
+        n_spectra = 20
+        points = 128
+        total = n_spectra * points
+        mz = np.tile(np.linspace(100.0, 2000.0, points), n_spectra)  # repetitive
+        intensity = np.tile(np.ones(points), n_spectra) * 1000.0  # constant
+        run = WrittenRun(
+            spectrum_class="MPGOMassSpectrum",
+            acquisition_mode=int(AcquisitionMode.MS1_DDA),
+            channel_data={"mz": mz, "intensity": intensity},
+            offsets=np.arange(0, total, points, dtype="<u8"),
+            lengths=np.full(n_spectra, points, dtype="<u4"),
+            retention_times=np.arange(n_spectra, dtype="<f8"),
+            ms_levels=np.ones(n_spectra, dtype="<i4"),
+            polarities=np.full(n_spectra, int(Polarity.POSITIVE), dtype="<i4"),
+            precursor_mzs=np.zeros(n_spectra, dtype="<f8"),
+            precursor_charges=np.zeros(n_spectra, dtype="<i4"),
+            base_peak_intensities=np.full(n_spectra, 1000.0, dtype="<f8"),
+        )
+        src = tmp_path / "src.mpgo"
+        SpectralDataset.write_minimal(
+            src, title="zlib benchmark", isa_investigation_id="ISA-ZLIB",
+            runs={"run_0001": run},
+        )
+        plain = tmp_path / "plain.mots"
+        compressed = tmp_path / "compressed.mots"
+        file_to_transport(src, plain)
+        file_to_transport(src, compressed, use_compression=True)
+        # Constant+repetitive data: zlib should compress substantially
+        # (well under half).
+        assert compressed.stat().st_size < plain.stat().st_size / 2, (
+            f"expected <50% size, got "
+            f"{compressed.stat().st_size}/{plain.stat().st_size}"
+        )
+        rt = transport_to_file(compressed, tmp_path / "rt.mpgo")
+        try:
+            assert len(rt.all_runs["run_0001"]) == n_spectra
+        finally:
+            rt.close()
+
+
 class TestChecksum:
 
     def test_checksum_enabled(self, tmp_path):

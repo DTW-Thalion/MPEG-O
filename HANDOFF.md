@@ -893,17 +893,24 @@ packet wire format across all three languages. Counts: Python 617
 
 **Scope deferred to v1.0**:
 
-- Full encrypted round-trip integration. The wire format is
-  stable (ProtectionMetadata + encrypted-flag AUs); the
-  deferred integration is the encryption-aware read path in
-  each language's TransportWriter that preserves ciphertext
-  channel bytes through `provider.read_canonical_bytes`
-  instead of decrypting then re-encrypting. Tests in HANDOFF
-  (`test_encrypted_au_decryptable_with_key`,
-  `test_pqc_encrypted_transport`) arrive with the v1.0
-  integration.
-- Compressed channel wire format (zlib / lz4 / numpress-delta)
-  preservation through the codec.
+- Full encrypted round-trip integration. The wire packet
+  (`ProtectionMetadata`) and the `PacketFlag.ENCRYPTED` bit are
+  stable, but the existing encryption subsystem encrypts whole
+  channels at run granularity (one AES-GCM ciphertext with
+  shared IV + tag per channel per run); the transport wire
+  carries signal data per Access Unit (one spectrum). Preserving
+  encrypted bytes through transport therefore requires either
+  (a) a new per-AU encryption mode in the encryption
+  subsystem, (b) a new transport packet type carrying
+  run-scoped encrypted blobs alongside plain AU skeletons, or
+  (c) transcoding (decrypt at source, re-encrypt at
+  destination) — which loses the "don't decrypt in transit"
+  property. None of those are small; all three touch the spec.
+  Deferred to v1.0 with an explicit design pass.
+- LZ4 and Numpress-delta wire codecs. ZLIB landed in M71.5
+  (opt-in `use_compression=True` on the writer, auto-handled
+  on read). The remaining two follow the same pattern but
+  need the Python + Java + ObjC codec modules wired through.
 - Bruker ion-mobility importer-specific integration.
 
 Historical spec retained below for audit.

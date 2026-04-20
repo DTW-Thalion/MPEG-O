@@ -233,14 +233,22 @@ public final class TransportReader implements AutoCloseable {
             int length = 0;
             Map<String, double[]> perAu = new LinkedHashMap<>();
             for (ChannelData ch : au.channels) {
-                if (ch.compression != Enums.Compression.NONE.ordinal()
-                        || ch.precision != Enums.Precision.FLOAT64.ordinal()) {
+                if (ch.precision != Enums.Precision.FLOAT64.ordinal()) {
                     throw new IllegalStateException(
-                            "M67 supports only FLOAT64 + NONE on reader");
+                            "reader supports FLOAT64 precision only");
                 }
-                int n = ch.data.length / 8;
+                byte[] raw;
+                if (ch.compression == Enums.Compression.NONE.ordinal()) {
+                    raw = ch.data;
+                } else if (ch.compression == Enums.Compression.ZLIB.ordinal()) {
+                    raw = zlibInflate(ch.data);
+                } else {
+                    throw new IllegalStateException(
+                            "reader supports NONE/ZLIB compression only, got " + ch.compression);
+                }
+                int n = raw.length / 8;
                 double[] arr = new double[n];
-                ByteBuffer buf = ByteBuffer.wrap(ch.data).order(ByteOrder.LITTLE_ENDIAN);
+                ByteBuffer buf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
                 for (int k = 0; k < n; k++) arr[k] = buf.getDouble();
                 perAu.put(ch.name, arr);
                 if (length != 0 && length != n) {
@@ -304,6 +312,29 @@ public final class TransportReader implements AutoCloseable {
             }
             return out;
         }
+    }
+
+    private static byte[] zlibInflate(byte[] input) {
+        java.util.zip.Inflater inf = new java.util.zip.Inflater();
+        inf.setInput(input);
+        byte[] buf = new byte[Math.max(64, input.length * 4)];
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            while (!inf.finished()) {
+                int n = inf.inflate(buf);
+                if (n == 0) {
+                    if (inf.needsInput() || inf.needsDictionary()) {
+                        throw new IllegalStateException("zlib underflow");
+                    }
+                }
+                out.write(buf, 0, n);
+            }
+        } catch (java.util.zip.DataFormatException e) {
+            throw new IllegalStateException("zlib inflate failed", e);
+        } finally {
+            inf.end();
+        }
+        return out.toByteArray();
     }
 
     private static int wireToPolarityInt(int wire) {
