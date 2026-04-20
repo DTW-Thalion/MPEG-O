@@ -51,7 +51,11 @@ class TransportClient:
         connection closes.
         """
         query = json.dumps({"type": "query", "filters": filters or {}})
-        async with websockets.connect(self._url) as ws:
+        # compression=None: not every peer negotiates permessage-deflate
+        # correctly. Disabling keeps wire-format interop simple — the
+        # packet payloads already support opt-in CRC-32C; compression
+        # is orthogonal and belongs at the packet level (§4.3).
+        async with websockets.connect(self._url, compression=None) as ws:
             await ws.send(query)
             async for message in ws:
                 if isinstance(message, str):
