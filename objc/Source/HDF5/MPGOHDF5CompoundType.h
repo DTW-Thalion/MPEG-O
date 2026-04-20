@@ -37,6 +37,14 @@
 - (BOOL)addVariableLengthStringFieldNamed:(NSString *)name
                                   atOffset:(size_t)offset;
 
+/** Insert a variable-length byte-buffer field (H5Tvlen_create on
+ *  H5T_NATIVE_UCHAR). v1.0 per-AU encryption uses this for the
+ *  ciphertext column and for IV / tag blobs. On the wire each row
+ *  is an ``hvl_t {size_t len; void *p;}``. The aux type id is
+ *  retained for cleanup on -close. */
+- (BOOL)addVariableLengthBytesFieldNamed:(NSString *)name
+                                 atOffset:(size_t)offset;
+
 /** The constructed H5T_COMPOUND id. Valid until -close is invoked. */
 @property (readonly) hid_t typeId;
 

@@ -13,6 +13,9 @@
 #import <string.h>
 
 #import "Protection/MPGOPerAUEncryption.h"
+#import "Providers/MPGOCompoundField.h"
+#import "Providers/MPGOStorageProtocols.h"
+#import "Providers/MPGOHDF5Provider.h"
 
 static NSData *makeKey(uint8_t byte)
 {
@@ -231,5 +234,76 @@ void testPerAUEncryption(void)
         MPGOAUHeaderPlaintext *r0 = backRows[0];
         PASS(r0.msLevel == 2 && r0.precursorMz == 500.25,
              "header row decrypt preserves fields");
+    }
+
+    // ── 8. VL_BYTES compound through provider abstraction ───────
+    {
+        NSString *path = [NSString stringWithFormat:@"/tmp/mpgo_vlbytes_%d.h5",
+                          (int)getpid()];
+        [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+
+        MPGOHDF5Provider *prov = [[MPGOHDF5Provider alloc] init];
+        NSError *err = nil;
+        BOOL opened = [prov openURL:path
+                                 mode:MPGOStorageOpenModeCreate
+                                error:&err];
+        PASS(opened, "HDF5 provider opens for create");
+
+        id<MPGOStorageGroup> root = [prov rootGroupWithError:&err];
+        NSArray *fields = @[
+            [MPGOCompoundField fieldWithName:@"offset" kind:MPGOCompoundFieldKindInt64],
+            [MPGOCompoundField fieldWithName:@"length" kind:MPGOCompoundFieldKindUInt32],
+            [MPGOCompoundField fieldWithName:@"iv" kind:MPGOCompoundFieldKindVLBytes],
+            [MPGOCompoundField fieldWithName:@"tag" kind:MPGOCompoundFieldKindVLBytes],
+            [MPGOCompoundField fieldWithName:@"ciphertext" kind:MPGOCompoundFieldKindVLBytes],
+        ];
+        id<MPGOStorageDataset> ds =
+            [root createCompoundDatasetNamed:@"segments"
+                                        fields:fields
+                                         count:2
+                                         error:&err];
+        PASS(ds != nil, "createCompoundDataset with VL_BYTES returns handle");
+
+        uint8_t ivA[12]; memset(ivA, 0x11, 12);
+        uint8_t tagA[16]; memset(tagA, 0x22, 16);
+        uint8_t ctA[32]; memset(ctA, 0x33, 32);
+        uint8_t ivB[12]; memset(ivB, 0x44, 12);
+        uint8_t tagB[16]; memset(tagB, 0x55, 16);
+        uint8_t ctB[48]; memset(ctB, 0x66, 48);
+        NSArray *rows = @[
+            @{@"offset": @(0), @"length": @(4),
+              @"iv": [NSData dataWithBytes:ivA length:12],
+              @"tag": [NSData dataWithBytes:tagA length:16],
+              @"ciphertext": [NSData dataWithBytes:ctA length:32]},
+            @{@"offset": @(4), @"length": @(6),
+              @"iv": [NSData dataWithBytes:ivB length:12],
+              @"tag": [NSData dataWithBytes:tagB length:16],
+              @"ciphertext": [NSData dataWithBytes:ctB length:48]},
+        ];
+        BOOL wrote = [ds writeAll:rows error:&err];
+        PASS(wrote, "writeAll with VL_BYTES rows succeeds");
+
+        NSArray<NSDictionary *> *back = [ds readRows:&err];
+        PASS(back.count == 2, "readRows returns 2 rows");
+        PASS([back[0][@"offset"] longLongValue] == 0
+             && [back[0][@"length"] unsignedIntValue] == 4,
+             "row 0 scalar fields preserved");
+        NSData *ivBack = back[0][@"iv"];
+        NSData *ctBack0 = back[0][@"ciphertext"];
+        PASS(ivBack.length == 12
+             && [ivBack isEqualToData:[NSData dataWithBytes:ivA length:12]],
+             "row 0 iv VL_BYTES preserved bit-for-bit");
+        PASS(ctBack0.length == 32
+             && [ctBack0 isEqualToData:[NSData dataWithBytes:ctA length:32]],
+             "row 0 ciphertext VL_BYTES preserved bit-for-bit");
+        NSData *ctBack1 = back[1][@"ciphertext"];
+        PASS(ctBack1.length == 48
+             && [ctBack1 isEqualToData:[NSData dataWithBytes:ctB length:48]],
+             "row 1 ciphertext (different length) preserved");
+
+        // MPGOHDF5Provider doesn't expose closeWithError: — rely on
+        // dealloc to close the file handle.
+        prov = nil;
+        [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
     }
 }
