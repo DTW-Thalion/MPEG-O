@@ -77,7 +77,8 @@ libMPGO_HEADER_FILES = \
 	Transport/MPGOTransportPacket.h \
 	Transport/MPGOAccessUnit.h \
 	Transport/MPGOTransportWriter.h \
-	Transport/MPGOTransportReader.h
+	Transport/MPGOTransportReader.h \
+	Transport/MPGOTransportClient.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -145,9 +146,10 @@ libMPGO_OBJC_FILES = \
 	Transport/MPGOTransportPacket.m \
 	Transport/MPGOAccessUnit.m \
 	Transport/MPGOTransportWriter.m \
-	Transport/MPGOTransportReader.m
+	Transport/MPGOTransportReader.m \
+	Transport/MPGOTransportClient.m
 
-libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
+libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/library.make

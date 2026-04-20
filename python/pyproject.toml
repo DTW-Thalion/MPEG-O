@@ -47,11 +47,15 @@ pqc = ["liboqs-python>=0.14,<1"]
 # prebuilt libtimsdata.so / libtimsdata.dll / libtimsdata.dylib so pip
 # install is the whole story.
 bruker = ["opentimspy>=1.0", "opentims-bruker-bridge>=1.0"]
-test = ["pytest>=7", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0", "zarr>=3.0", "liboqs-python>=0.14,<1", "opentimspy>=1.0", "opentims-bruker-bridge>=1.0"]
+test = ["pytest>=7", "pytest-asyncio>=0.23", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0", "zarr>=3.0", "liboqs-python>=0.14,<1", "opentimspy>=1.0", "opentims-bruker-bridge>=1.0", "websockets>=12.0"]
 # v0.9 M57: integration test extras. pyimzML for M59 imzML imports;
 # pyteomics + pymzml for M64 cross-reader validation;
 # isatools is pinned because the API churns between minor releases.
 integration = ["pyimzml>=1.5", "pyteomics>=4.6", "pymzml>=2.5", "isatools>=0.14,<1"]
+# v0.10 M68: streaming transport over WebSocket. The codec itself
+# (mpeg_o.transport.packets / .codec) has no network dependency;
+# only the TransportServer / TransportClient need ``websockets``.
+network = ["websockets>=12.0"]
 all = ["mpeg-o[crypto,import,cloud,codecs,zarr,pqc,bruker]"]
 
 [project.urls]
@@ -77,3 +81,4 @@ mpeg_o = ["py.typed"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+asyncio_mode = "strict"
