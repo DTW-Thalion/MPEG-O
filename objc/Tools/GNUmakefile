@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures MpgoVerify MpgoSign MpgoToMzML MpgoDumpIdentifications MpgoPQCTool
+TOOL_NAME = MakeFixtures MpgoVerify MpgoSign MpgoToMzML MpgoDumpIdentifications MpgoPQCTool MpgoSimulator
 
 MakeFixtures_OBJC_FILES = MakeFixtures.m
 MakeFixtures_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -25,6 +25,10 @@ MpgoDumpIdentifications_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 MpgoPQCTool_OBJC_FILES = MpgoPQCTool.m
 MpgoPQCTool_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 MpgoPQCTool_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+MpgoSimulator_OBJC_FILES = MpgoSimulator.m
+MpgoSimulator_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
+MpgoSimulator_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 ADDITIONAL_CPPFLAGS += -I../Source
 

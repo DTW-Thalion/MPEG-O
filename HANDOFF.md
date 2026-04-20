@@ -639,7 +639,51 @@ An empty `filters` object (or omitted) streams the entire dataset.
 
 ---
 
-## Milestone 69 — Acquisition Simulator
+## Milestone 69 — Acquisition Simulator — COMPLETE (3-language parity)
+
+Shipped AcquisitionSimulator in all three languages with equivalent
+APIs, CLI tools, and deterministic-under-seed semantics.
+
+Counts: Python 596 / Java 261 / ObjC 1324.
+
+**Python** — `mpeg_o.transport.simulator.AcquisitionSimulator`:
+synchronous `stream_to_writer(writer)` for offline fixture builds,
+async `stream(writer)` for paced real-time output. CLI
+`python -m mpeg_o.tools.simulator_cli <output.mots>` with flags
+`--scan-rate --duration --ms1-fraction --mz-min --mz-max --n-peaks
+--seed`. 8 tests.
+
+**Java** — `com.dtwthalion.mpgo.transport.AcquisitionSimulator`:
+`streamToWriter(writer)` plus `streamPaced(writer)` (blocking
+Thread.sleep pacing; lives on the caller's thread). CLI
+`java -cp <classpath> com.dtwthalion.mpgo.tools.SimulatorCli
+<output.mots> ...`. 5 JUnit tests.
+
+**ObjC** — `MPGOAcquisitionSimulator` in
+`objc/Source/Transport/`: `streamToWriter:error:` + paced variant.
+Uses POSIX `drand48_r` for reentrant deterministic RNG. CLI
+`MpgoSimulator` at `objc/Tools/` (new binary wired via
+`MpgoSimulator_OBJC_FILES` in `Tools/GNUmakefile`). 11 PASS
+assertions via `TestAcquisitionSimulator.m`.
+
+All three CLIs share flag names (`--scan-rate --duration
+--ms1-fraction --mz-min --mz-max --n-peaks --seed`) so scripts can
+switch between them transparently. Cross-language byte-identity
+under the same seed is NOT guaranteed (each language's RNG
+differs); within-language determinism IS guaranteed.
+
+**Known parity gap inherited from M68**: live streaming
+(simulator → WebSocket server → clients) is Python-only because
+Java and ObjC do not yet ship TransportServer. Each language's
+simulator is self-contained for the offline-fixture use case
+(simulator → .mots file → TransportReader → .mpgo). M68.5
+follow-up will add Java + ObjC TransportServer to close the
+live-streaming gap; tracked as a parity backfill in the Deferred
+section.
+
+Historical spec retained below for audit.
+
+### Historical: Milestone 69 — Acquisition Simulator
 
 **License:** LGPL-3.0
 
@@ -961,3 +1005,19 @@ vs `.mggts` (transport) convention.
 | htsget-style REST API | HTTP range-request protocol (formalized from MCP Server) |
 | Annotation overlay | External annotation files referencing spectra without modifying original |
 | v1.0 API freeze | After production feedback on streaming |
+
+### Parity backfill queue
+
+3-language parity is a binding decision (see the binding decisions
+section above). The following are known pre-existing asymmetries
+from milestones shipped before the parity rule was set, queued for
+backfill:
+
+- **M68.5** — Java + ObjC `TransportServer`. Python shipped
+  TransportServer in M68; Java + ObjC currently have clients only.
+  Expected deliverable: WebSocketServer wrapper in
+  `com.dtwthalion.mpgo.transport.TransportServer` (via
+  `org.java-websocket.server.WebSocketServer`); libwebsockets-based
+  ObjC `MPGOTransportServer`. Closes the live-streaming gap so
+  M69's simulator can feed a Java / ObjC server as well as the
+  Python one.

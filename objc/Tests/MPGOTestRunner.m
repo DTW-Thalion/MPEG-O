@@ -47,6 +47,7 @@ extern void testCipherSuite(void);
 extern void testNdDatasetCrossBackend(void);
 extern void testTransportCodec(void);
 extern void testTransportClient(void);
+extern void testAcquisitionSimulator(void);
 
 int main(int argc, const char *argv[])
 {
@@ -234,6 +235,10 @@ int main(int argc, const char *argv[])
         START_SET("M68: transport client (WebSocket, v0.10)")
             testTransportClient();
         END_SET("M68: transport client (WebSocket, v0.10)")
+
+        START_SET("M69: acquisition simulator (v0.10)")
+            testAcquisitionSimulator();
+        END_SET("M69: acquisition simulator (v0.10)")
     }
     return 0;
 }
