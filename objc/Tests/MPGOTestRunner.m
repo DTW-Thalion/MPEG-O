@@ -49,6 +49,7 @@ extern void testTransportCodec(void);
 extern void testTransportClient(void);
 extern void testAcquisitionSimulator(void);
 extern void testTransportServer(void);
+extern void testTransportConformance(void);
 
 int main(int argc, const char *argv[])
 {
@@ -244,6 +245,10 @@ int main(int argc, const char *argv[])
         START_SET("M68.5: transport server (v0.10)")
             testTransportServer();
         END_SET("M68.5: transport server (v0.10)")
+
+        START_SET("M70: bidirectional conformance (v0.10)")
+            testTransportConformance();
+        END_SET("M70: bidirectional conformance (v0.10)")
     }
     return 0;
 }
