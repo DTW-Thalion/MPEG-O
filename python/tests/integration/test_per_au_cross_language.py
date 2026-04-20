@@ -187,6 +187,54 @@ def test_file_level_round_trip(tmp_path, enc_lang, dec_lang, headers):
     )
 
 
+def test_transcode_plaintext_to_per_au(tmp_path):
+    """`transcode` on a plaintext fixture matches a direct `encrypt`
+    with the same key + headers setting (modulo IV randomness, which
+    we strip by byte-comparing the decrypted MPAD dump)."""
+    fx = _fixture_mpgo(tmp_path, "tc_fx.mpgo")
+    key = _key_file(tmp_path)
+
+    direct_enc = tmp_path / "tc_direct.mpgo"
+    via_transcode = tmp_path / "tc_via.mpgo"
+
+    _run_py("encrypt", str(fx), str(direct_enc), str(key), "--headers")
+    _run_py("transcode", str(fx), str(via_transcode), str(key), "--headers")
+
+    dump_direct = tmp_path / "tc_direct.mpad"
+    dump_via = tmp_path / "tc_via.mpad"
+    _run_py("decrypt", str(direct_enc), str(dump_direct), str(key))
+    _run_py("decrypt", str(via_transcode), str(dump_via), str(key))
+    assert dump_direct.read_bytes() == dump_via.read_bytes()
+
+
+def test_transcode_rekey_path(tmp_path):
+    """After transcoding with --rekey to a new key, the old key no
+    longer decrypts and the new key decrypts to the same plaintext."""
+    fx = _fixture_mpgo(tmp_path, "tc_fx2.mpgo")
+    key1 = _key_file(tmp_path)
+    key2 = tmp_path / "key2.bin"
+    key2.write_bytes(bytes([0xAB] * 32))
+
+    enc_v1 = tmp_path / "tc_v1.mpgo"
+    _run_py("encrypt", str(fx), str(enc_v1), str(key1))
+
+    enc_v2 = tmp_path / "tc_v2.mpgo"
+    _run_py("transcode", str(enc_v1), str(enc_v2), str(key1),
+             "--rekey", str(key2))
+
+    # Old key should not recover plaintext from v2.
+    with pytest.raises(subprocess.CalledProcessError):
+        _run_py("decrypt", str(enc_v2), str(tmp_path / "bad.mpad"),
+                 str(key1))
+
+    # New key should; plaintext equals the original.
+    dump_baseline = tmp_path / "baseline.mpad"
+    dump_rekeyed = tmp_path / "rekeyed.mpad"
+    _run_py("decrypt", str(enc_v1), str(dump_baseline), str(key1))
+    _run_py("decrypt", str(enc_v2), str(dump_rekeyed), str(key2))
+    assert dump_baseline.read_bytes() == dump_rekeyed.read_bytes()
+
+
 @pytest.mark.parametrize("send_lang,recv_lang",
                           [(s, r) for s in RUNNERS for r in RUNNERS])
 @pytest.mark.parametrize("headers", [False, True])
