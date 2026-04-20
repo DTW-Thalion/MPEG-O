@@ -68,7 +68,7 @@ little-endian.
 |      0 | `magic`          | `bytes[2]` | ASCII `"MO"` (0x4D 0x4F)                           |
 |      2 | `version`        | `uint8`    | `0x01` in this spec                                |
 |      3 | `packet_type`    | `uint8`    | See §3.2                                           |
-|      4 | `flags`          | `uint16`   | Bit 0: encrypted. Bit 1: compressed. Bit 2: has_checksum |
+|      4 | `flags`          | `uint16`   | Bit flags — see §3.1.1                             |
 |      6 | `dataset_id`     | `uint16`   | Identifies the AcquisitionRun (0 for stream-scope packets) |
 |      8 | `au_sequence`    | `uint32`   | Monotonic per `dataset_id`; 0 for non-AU packets   |
 |     12 | `payload_length` | `uint32`   | Bytes of payload following the header              |
@@ -76,6 +76,19 @@ little-endian.
 
 `HEADER_SIZE = 24`. Readers MUST validate `magic == "MO"` and reject
 the stream otherwise.
+
+### 3.1.1 Flag bits
+
+| Bit | Name                | Meaning                                                     |
+|----:|---------------------|-------------------------------------------------------------|
+|   0 | `ENCRYPTED`         | Channel data in this AU is AES-GCM encrypted (v1.0+)        |
+|   1 | `COMPRESSED`        | Reserved (packet-level compression; unused today)           |
+|   2 | `HAS_CHECKSUM`      | Payload is followed by a 4-byte CRC-32C (§3.3)              |
+|   3 | `ENCRYPTED_HEADER`  | AU semantic header is also AES-GCM encrypted (v1.0+)        |
+
+Readers MUST reject `ENCRYPTED_HEADER` without `ENCRYPTED` —
+encrypting the filter header while leaving channel data
+plaintext is not a meaningful mode.
 
 ### 3.2 Packet Types
 
@@ -159,6 +172,16 @@ indices.
 ### 4.3 AccessUnit (`0x03`)
 
 One AU carries exactly one spectrum (or one pixel of an MS image).
+The payload takes one of three forms selected by the packet-header
+flags:
+
+- **Plaintext** (neither `ENCRYPTED` nor `ENCRYPTED_HEADER`) —
+  §4.3.1.
+- **Encrypted channel data** (`ENCRYPTED` set) — §4.3.2.
+- **Fully encrypted** (`ENCRYPTED | ENCRYPTED_HEADER` set) —
+  §4.3.3.
+
+#### 4.3.1 Plaintext AU
 
 ```
 spectrum_class:      uint8        # 0=MassSpectrum, 1=NMRSpectrum,
@@ -176,8 +199,9 @@ n_channels:          uint8
 # Repeated n_channels times:
 channel_name_len:    uint16
 channel_name:        bytes[channel_name_len]      # e.g. "mz", "intensity"
-precision:           uint8        # 0=float32, 1=float64, 2=int32,
-                                  # 3=int64, 4=complex128
+precision:           uint8        # matches Precision enum: 0=float32,
+                                  # 1=float64, 2=int32, 3=int64,
+                                  # 4=uint32, 5=complex128
 compression:         uint8        # 0=none, 1=zlib, 2=lz4, 3=numpress_delta
 n_elements:          uint32
 data_length:         uint32       # compressed byte length
@@ -198,6 +222,64 @@ When `compression = 0` (`none`) the receiver decodes raw IEEE-754
 values of the declared precision. When nonzero, the receiver MUST
 apply the matching decoder (`zlib` / `lz4` / `numpress_delta`).
 `complex128` packs Re/Im as two consecutive float64s.
+
+#### 4.3.2 Encrypted-channel AU (`ENCRYPTED` set, v1.0+)
+
+Same layout as §4.3.1, except each channel's `data` field carries
+`[IV (12)] [TAG (16)] [ciphertext(plaintext-of-length n_elements ×
+precision_size)]` instead of the raw plaintext bytes. `data_length
+= 28 + ciphertext_bytes`.
+
+The filter header (`retention_time` through `base_peak_intensity`)
+remains plaintext; server-side filtering works keyless.
+
+Each channel's AES-GCM operation uses **authenticated data**
+`dataset_id (u16 LE) || au_sequence (u32 LE) || channel_name_utf8`.
+
+MSImagePixel fields (`pixel_x / pixel_y / pixel_z`) stay
+plaintext.
+
+#### 4.3.3 Fully-encrypted AU (`ENCRYPTED | ENCRYPTED_HEADER` set, v1.0+)
+
+```
+spectrum_class:      uint8               # plaintext — needed for dispatch
+n_channels:          uint8               # plaintext — needed for parsing
+IV_header:           bytes[12]
+TAG_header:          bytes[16]
+encrypted_semantic_header: bytes[35]
+    # AES-GCM plaintext =
+    #   acquisition_mode(u8) || ms_level(u8) || polarity(u8)
+    #   || retention_time(f64) || precursor_mz(f64)
+    #   || precursor_charge(u8) || ion_mobility(f64)
+    #   || base_peak_intensity(f64)
+    # AAD = dataset_id || au_sequence || "header"
+
+# Repeated n_channels times (§4.3.2 layout):
+(channel framing plaintext; data = IV || TAG || ciphertext)
+
+# MSImagePixel extension (spectrum_class == 4):
+IV_pixel:            bytes[12]
+TAG_pixel:           bytes[16]
+encrypted_pixel_xyz: bytes[12]
+    # AES-GCM plaintext = pixel_x(u32) || pixel_y(u32) || pixel_z(u32)
+    # AAD = dataset_id || au_sequence || "pixel"
+```
+
+Only `spectrum_class` and `n_channels` stay plaintext — the
+minimum a reader needs to parse without the key. Server-side
+filtering is **disabled** for streams carrying fully-encrypted
+AUs; clients pull the whole stream and filter after decrypt.
+
+#### 4.3.4 AAD summary
+
+| Envelope                   | AAD                                                          |
+|----------------------------|--------------------------------------------------------------|
+| channel (§4.3.2, §4.3.3)   | `dataset_id || au_sequence || channel_name`                  |
+| semantic header (§4.3.3)   | `dataset_id || au_sequence || "header"` (literal 6 bytes)    |
+| pixel xyz (§4.3.3)         | `dataset_id || au_sequence || "pixel"` (literal 5 bytes)     |
+
+Integrity check failures (bad tag) are fatal; the receiver
+rejects the stream.
 
 ### 4.4 ProtectionMetadata (`0x04`)
 
@@ -288,8 +370,10 @@ Empty payload (`payload_length = 0`). MUST be the final packet.
    `Annotation`, `Provenance`, `Chromatogram`, or `EndOfDataset`
    carrying that `dataset_id`.
 3. **ProtectionMetadata before encrypted AUs.** When any AU will
-   carry `flags & 0x01` (encrypted), a `ProtectionMetadata` packet
-   for that `dataset_id` MUST precede it.
+   carry `flags & 0x01` (`ENCRYPTED`) or `flags & 0x08`
+   (`ENCRYPTED_HEADER`), a `ProtectionMetadata` packet for that
+   `dataset_id` MUST precede it. `ENCRYPTED_HEADER` without
+   `ENCRYPTED` is illegal (§3.1.1).
 4. **Monotonic AU sequence per dataset.** Within one `dataset_id`,
    `au_sequence` MUST strictly increase. Gaps are permitted
    (e.g. after server-side filtering) but reordering is not.
