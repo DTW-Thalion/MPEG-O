@@ -10,8 +10,9 @@
  *   - ProtectionMetadata payload is parseable (cipher_suite,
  *     kek_algorithm, wrapped_dek, etc.).
  *
- * Full reader-side materialisation (ObjC stream → encrypted .mpgo)
- * is deferred to the v1.1 follow-up noted in MPGOEncryptedTransport.m.
+ * Also verifies the reader-side path: decode a stream back into a
+ * per-AU-encrypted .mpgo, decrypt with the same DEK, and confirm
+ * plaintext channels survive byte-for-byte.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -207,5 +208,54 @@ void testEncryptedTransport(void)
         PASS(nAU == 3 && allEncrypted && allEncryptedHeader,
              "all 3 AUs carry ENCRYPTED | ENCRYPTED_HEADER");
         rmFile(src);
+    }
+
+    // ── 3. Round-trip: write stream → read stream → decrypt ─────
+    for (int mode = 0; mode < 2; mode++) {
+        BOOL encryptHeaders = (mode == 1);
+        NSString *src = tmpPath(encryptHeaders ? @"rt_src_hdr.mpgo"
+                                               : @"rt_src_ch.mpgo");
+        NSString *dst = tmpPath(encryptHeaders ? @"rt_dst_hdr.mpgo"
+                                               : @"rt_dst_ch.mpgo");
+        rmFile(src); rmFile(dst);
+        NSError *err = nil;
+        PASS(buildAndEncryptFixture(src, encryptHeaders, &err),
+             "round-trip: encrypted fixture built");
+
+        NSMutableData *streamBuf = [NSMutableData data];
+        MPGOTransportWriter *writer =
+            [[MPGOTransportWriter alloc] initWithMutableData:streamBuf];
+        BOOL wrote = [MPGOEncryptedTransport writeEncryptedDataset:src
+                                                              writer:writer
+                                                        providerName:nil
+                                                               error:&err];
+        [writer close];
+        PASS(wrote, "round-trip: writeEncryptedDataset");
+
+        BOOL read = [MPGOEncryptedTransport readEncryptedToPath:dst
+                                                      fromStream:streamBuf
+                                                    providerName:nil
+                                                           error:&err];
+        PASS(read, "round-trip: readEncryptedToPath materialises file");
+        PASS([MPGOEncryptedTransport isPerAUEncryptedAtPath:dst
+                                                providerName:nil],
+             "round-trip: output file carries opt_per_au_encryption");
+
+        NSDictionary *srcPlain =
+            [MPGOPerAUFile decryptFilePath:src key:testKey()
+                              providerName:nil error:&err];
+        NSDictionary *dstPlain =
+            [MPGOPerAUFile decryptFilePath:dst key:testKey()
+                              providerName:nil error:&err];
+        PASS(srcPlain != nil && dstPlain != nil,
+             "round-trip: both files decrypt");
+        PASS([srcPlain[@"run_0001"][@"mz"]
+                isEqualToData:dstPlain[@"run_0001"][@"mz"]],
+             "round-trip: mz bytes survive transport");
+        PASS([srcPlain[@"run_0001"][@"intensity"]
+                isEqualToData:dstPlain[@"run_0001"][@"intensity"]],
+             "round-trip: intensity bytes survive transport");
+
+        rmFile(src); rmFile(dst);
     }
 }
