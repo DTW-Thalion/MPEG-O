@@ -307,9 +307,26 @@ entries. See the dedicated accessors:
 
 ---
 
+## Transport encryption composition (v1.0)
+
+Per-AU encryption (`opt_per_au_encryption`) composes with PQC
+without any special casing: the KEM (ML-KEM-1024 or classical
+RSA-OAEP) wraps the DEK once per run, exactly as in the wire-format
+section above; the DEK then drives **per-Access-Unit**
+AES-256-GCM operations for each spectrum's channel bytes (and,
+when `opt_encrypted_au_headers` is set, for each AU's 35-byte
+semantic header). `ProtectionMetadata` on the transport wire
+carries the same wrapped DEK bytes the `<channel>_wrapped_dek`
+attribute would hold on disk. See
+`docs/transport-encryption-design.md` for the full per-AU
+encryption design.
+
 ## Related docs
 
 * `docs/format-spec.md` § 10b — wrapped-key blob layout.
-* `docs/feature-flags.md` — the `opt_pqc_preview` feature.
+* `docs/format-spec.md` § 9.1 — per-AU encrypted channel layout.
+* `docs/feature-flags.md` — `opt_pqc_preview`, `opt_per_au_encryption`,
+  `opt_encrypted_au_headers`.
+* `docs/transport-encryption-design.md` — per-AU encryption spec.
 * `docs/migration-guide.md` — upgrading from classical to PQC.
 * `HANDOFF.md` — M49 acceptance criteria and binding decisions.

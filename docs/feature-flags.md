@@ -103,6 +103,13 @@ Algorithm discriminators:
 |----------------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
 | `opt_pqc_preview`    | optional  | M49 (v0.8)   | File uses post-quantum crypto: ML-KEM-1024 envelope wrapping (`algorithm_id=0x0001` in the v1.2 wrapped-key blob) and/or ML-DSA-87 dataset signatures (`v3:` prefix on `@mpgo_signature`). Set automatically whenever either primitive is used on writes. Readers without PQC support can still open the file and read unencrypted / classically-signed datasets; they raise `UnsupportedAlgorithmError` on PQC-specific operations. See `docs/pqc.md` for the full library-choice rationale (Python/ObjC use liboqs; Java uses Bouncy Castle). |
 
+## v1.0 flags
+
+| Flag                       | Required? | Since | Semantics |
+|----------------------------|-----------|-------|-----------|
+| `opt_per_au_encryption`    | optional  | v1.0  | Signal channels encrypt per-spectrum (per-Access-Unit) instead of channel-granular. Replaces the v0.x `<channel>_values_encrypted`/`_iv`/`_tag` layout with a single compound `<channel>_segments` dataset — one row per spectrum carrying `{offset, length, iv[12], tag[16], ciphertext}`. Required for streaming encrypted datasets through transport. See `docs/transport-encryption-design.md`. |
+| `opt_encrypted_au_headers` | optional  | v1.0  | Additionally encrypts the AU semantic filter fields (`ms_level`, `polarity`, `retention_time`, `precursor_mz`, `precursor_charge`, `ion_mobility`, `base_peak_intensity`, and pixel coords for MSImage). Requires `opt_per_au_encryption`. Disables server-side filtering — clients filter after decrypt. On disk, the plaintext `spectrum_index/*` arrays are omitted and replaced by `spectrum_index/au_header_segments` (one encrypted 35-byte row per spectrum). |
+
 ## v0.7 storage + crypto surface (non-flag)
 
 Some v0.7 additions are API-level and don't carry a feature flag —

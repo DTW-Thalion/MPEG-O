@@ -474,6 +474,58 @@ also list `compound_identifications`/`compound_quantifications` even
 after encryption, since those compound datasets will be restored on
 decrypt.
 
+### 9.1 Per-AU encryption (v1.0, `opt_per_au_encryption`)
+
+v0.x encryption (above) encrypts an entire channel as a single
+AES-GCM operation, which is incompatible with the per-Access-Unit
+streaming transport introduced in v0.10. v1.0 adds a
+per-spectrum encryption mode gated on the
+`opt_per_au_encryption` feature flag.
+
+New on-disk layout, one compound dataset per channel under
+`/study/ms_runs/<run>/signal_channels/`:
+
+```
+<channel>_segments          HDF5 compound, spectrum_count rows
+    offset     uint64        index into the plaintext element stream
+    length     uint32        plaintext element count
+    iv         uint8[12]     per-row AES-256-GCM IV
+    tag        uint8[16]     per-row GCM tag
+    ciphertext VL[uint8]     ciphertext bytes
+@<channel>_algorithm        "aes-256-gcm"
+@<channel>_wrapped_dek      VL uint8
+@<channel>_kek_algorithm    "rsa-oaep-sha256" | "ml-kem-1024" | …
+```
+
+Each row's AES-GCM operation uses authenticated data
+`dataset_id (u16 LE) || row_index (u32 LE) || channel_name_utf8`
+so ciphertext cannot be replayed against a different spectrum
+or channel.
+
+When `opt_encrypted_au_headers` is also set, the plaintext
+`spectrum_index/*` arrays from §4 are **omitted** and replaced
+with:
+
+```
+spectrum_index/au_header_segments   HDF5 compound, one row per spectrum
+    iv         uint8[12]
+    tag        uint8[16]
+    ciphertext uint8[35]     fixed-length plaintext:
+        acquisition_mode(u8) || ms_level(u8) || polarity(u8)
+        || retention_time(f64) || precursor_mz(f64)
+        || precursor_charge(u8) || ion_mobility(f64)
+        || base_peak_intensity(f64)
+@wrapped_dek                 same DEK as the channel segments
+```
+
+AAD for the header row = `dataset_id || row_index || "header"`.
+
+No v0.x back-compat: files using the v0.x channel-grained
+encryption layout cannot be opened by v1.0 encryption paths.
+The legacy decryption code remains for migration; see the
+`--transcode` flow described in
+`docs/transport-encryption-design.md` §6.
+
 ---
 
 ## 10. Digital signatures
