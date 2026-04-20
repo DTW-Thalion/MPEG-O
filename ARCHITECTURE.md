@@ -2,27 +2,28 @@
 
 MPEG-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data, specifically mass spectrometry and NMR spectroscopy.
 
-As of v0.5.0 there are three interoperable reference implementations:
+As of v0.10.0 there are three interoperable reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
   implementation. Every format guarantee in `docs/format-spec.md` is
-  rooted here. 836 assertions passing across M1–M30.
+  rooted here. 1430 assertions passing.
 - **Python (`mpeg-o` package)** (`python/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — a full reader/writer on top of
   `h5py` + `numpy` that mirrors the Objective-C class hierarchy
-  1-to-1. 120 tests passing. Cross-language parity is asserted at
-  every milestone: the Python reader opens every ObjC reference
-  fixture, the Python writer produces files the ObjC `MpgoVerify`
-  CLI decodes without
-  error, and `v2:` HMAC signatures plus Numpress-delta scale
-  factors are byte-identical between the two.
+  1-to-1. 682 tests passing.
 - **Java (`com.dtwthalion.mpgo`)** (`java/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
-  mirroring the ObjC/Python class hierarchy. 62 tests passing.
+  mirroring the ObjC/Python class hierarchy. 298 tests passing.
   Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
   crypto dependency). HDF5 via system `libhdf5-java` bindings.
-  Three-way cross-implementation conformance verified at every
-  milestone via CI.
+
+Three-way cross-implementation conformance is asserted at every
+milestone: Python drives ObjC and Java subprocesses through
+`tests/integration/` harnesses and compares byte-level artefacts.
+The v0.10 per-Access-Unit encryption stack in particular is covered
+by `test_per_au_cross_language.py` — 38/38 encrypt × decrypt × headers
+combinations pass, guaranteeing that any language pair can exchange
+encrypted files and transport streams bit-for-bit.
 
 All three implementations express the architecture in three layers:
 
@@ -57,6 +58,19 @@ typedef NS_ENUM(NSUInteger, MPGOEncryptionLevel) {
 ```
 
 This mirrors MPEG-G's hierarchy of protection scopes, enabling selective encryption — for example, encrypting quantitative intensity values while leaving m/z and scan metadata readable for indexing and search.
+
+**v0.10 per-Access-Unit encryption.** The `AccessUnit` level was
+realised in v0.10.0 as the `opt_per_au_encryption` feature flag, with
+the on-disk layout documented in `docs/format-spec.md` §9.1 and the
+wire semantics in `docs/transport-spec.md` §4.3 and `docs/transport-
+encryption-design.md`. Each spectrum is a separate AES-256-GCM
+operation with a fresh IV and AAD bound to `(dataset_id, au_sequence,
+channel_name | "header" | "pixel")`. The `<channel>_values` dataset
+is replaced by a `<channel>_segments` compound with VL_BYTES slots
+for `iv`, `tag`, and `ciphertext`. When `opt_encrypted_au_headers`
+is also set, the 36-byte semantic header travels encrypted in
+`spectrum_index/au_header_segments`. Transport peers carry the
+ciphertext verbatim — servers never decrypt in transit.
 
 ---
 
@@ -155,11 +169,34 @@ drop-in additions.
 
 ### Transport
 
-Transport is **orthogonal** to storage. Python's `Hdf5Provider.open`
-routes cloud URLs (`s3://…`, `http://…`) through `fsspec` so
-S3/HTTP access works without a separate transport class. Java
-cloud access and ObjC ROS3 are deferred to v0.7+ (see
-`HANDOFF.md`).
+Two orthogonal axes:
+
+1. **Storage transport** — Python's `Hdf5Provider.open` routes cloud
+   URLs (`s3://…`, `http://…`) through `fsspec`; ObjC adds ROS3 in
+   v0.7+. Memory / SQLite / Zarr backends are reached by URL scheme
+   (`memory://…`, `sqlite://…`, `zarr://…`).
+
+2. **Streaming transport (v0.10)** — the `.mots` wire format
+   documented in `docs/transport-spec.md`. 24-byte packet headers
+   carry nine packet types (StreamHeader, DatasetHeader, AccessUnit,
+   ProtectionMetadata, Annotation, Provenance, Chromatogram,
+   EndOfDataset, EndOfStream). `TransportWriter` / `TransportReader`
+   in all three languages produce / consume the same byte stream;
+   `TransportClient` / `TransportServer` wrap the codec in a
+   WebSocket frame. Encrypted AUs travel with the ciphertext
+   unmodified — the server never decrypts in transit, so selective-
+   access filtering is driven by plaintext AU filter fields (or
+   the ProtectionMetadata header) rather than the payload. See
+   `docs/transport-encryption-design.md` §6.
+
+### Transport ↔ file bidirectionality
+
+`TransportReader.materialize_to(path)` and the ObjC / Java
+equivalents write a `.mpgo` from a `.mots` stream; the inverse
+`TransportWriter.write_dataset(dataset)` emits the stream from a
+file. The bidirectional conformance test (M70) asserts that any
+writer × reader pair across {Python, ObjC, Java} produces
+byte-identical round trips.
 
 ### Caller refactor status
 

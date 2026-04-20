@@ -39,9 +39,15 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **v0.8.0 — Normative reference. 1133 assertions passing.** | `objc/` |
-| **Python (`mpeg-o`)**     | **v0.8.0 — Full parity with ObjC and Java. 341 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.mpgo`)** | **v0.8.0 — Full parity with ObjC and Python. 207 tests, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **v0.10.0 — Normative reference. 1430 assertions passing.** | `objc/` |
+| **Python (`mpeg-o`)**     | **v0.10.0 — Full parity with ObjC and Java. 682 tests passing.** | `python/` |
+| **Java (`com.dtwthalion.mpgo`)** | **v0.10.0 — Full parity with ObjC and Python. 298 tests, JDK 17, Maven.** | `java/` |
+
+A **cross-language conformance harness**
+(`python/tests/integration/test_per_au_cross_language.py`) drives
+the per-AU encryption CLI in all three languages via subprocess and
+byte-compares a canonical decryption dump — 38/38 encrypt × decrypt
+× headers combinations green as of v0.10.0.
 
 ### v0.1.0-alpha capabilities
 
@@ -125,9 +131,24 @@ v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2
 * **Cross-language PQC conformance matrix (M54 + M54.1)** — 32-cell verification matrix across all three languages and four providers: primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` dataset signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence on the same file, v0.7 classical backward-compat. New `com.dtwthalion.mpgo.tools.PQCTool` (Java) and `MpgoPQCTool` (ObjC) CLIs drive the Python pytest harness. Python `sign_storage_dataset` / `verify_storage_dataset` provider-agnostic helpers let PQC signatures ride any storage backend for free.
 * **v1.0 API stability audit (M55)** — every public API classified Stable / Provisional / Deprecated across the three languages in new [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md). Deprecation ledger identifies five APIs scheduled for removal at v1.0 (file-path intensity-channel helpers, `nativeHandle()`, v1 HMAC fallback). Comprehensive [`CHANGELOG.md`](CHANGELOG.md) covering v0.1-alpha through v0.8.
 
+### v0.9.x capabilities (additions to v0.8.0)
+
+* **Provider abstraction hardening** — SQLite and Zarr v3 backends in all three languages with byte-parity on compound records and canonical bytes. On-disk Zarr format migrated from v2 to v3. See [`docs/providers.md`](docs/providers.md).
+* **Exporter fidelity (v0.9.1)** — mzTab exporter (proteomics 1.0 + metabolomics 2.0.0-M dialects), imzML exporter (continuous + processed modes, UUID normalisation), nmrML `<spectrum1D>` content-model fix (interleaved `(x,y)` with auto-detect on read), and compound-per-entity extensions.
+
+### v0.10.0 capabilities (additions to v0.9.x)
+
+* **Streaming transport layer (M66–M72)** — `.mots` packet codec with 24-byte headers and nine packet types (StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, EndOfStream). Three-language parity in Python / ObjC / Java. Bidirectional conformance test matrix: any writer pairs with any reader. See [`docs/transport-spec.md`](docs/transport-spec.md).
+* **WebSocket client + server (M68 / M68.5)** — libwebsockets for ObjC, `websockets` for Python, Java-WebSocket for Java. Stream `.mpgo` datasets as `.mots` with optional CRC-32C per packet.
+* **Acquisition simulator (M69)** — replays a fixture at wall-clock pace to exercise client / server scheduling.
+* **Selective access + ProtectionMetadata (M71)** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`.
+* **Per-Access-Unit encryption (v1.0 scope)** — `opt_per_au_encryption` feature flag with the `<channel>_segments` VL_BYTES compound layout (see [`docs/format-spec.md`](docs/format-spec.md) §9.1). Each spectrum is a separate AES-256-GCM op with fresh IV and AAD = `dataset_id || au_sequence || channel_name`; ciphertext cannot be replayed against a different AU or envelope. Optional `opt_encrypted_au_headers` additionally encrypts the 36-byte semantic header into `spectrum_index/au_header_segments`. Full design in [`docs/transport-encryption-design.md`](docs/transport-encryption-design.md).
+* **Cross-language CLIs + conformance harness** — `per_au_cli` (Python), `PerAUCli` (Java), `MpgoPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" binary dump so the test harness can byte-compare decryption artefacts across every language pair. 38/38 combinations pass. The `transcode` subcommand supports `--rekey` for DEK rotation and refuses v0.x `opt_dataset_encryption` inputs with a migration hint.
+* **VL_BYTES compound field kind** — new across all three languages' provider abstraction. Java's HDF5 provider uses a native `hvl_t` raw-buffer pool backed by `sun.misc.Unsafe` because JHI5 1.10 doesn't marshal VL-in-compound directly.
+
 ### Format compatibility
 
-Every version's files remain readable by later versions. v0.8 readers open v0.1-v0.7 files without ceremony; v0.7-and-earlier readers open v0.8 files unless those files carry the `opt_pqc_preview` flag and the reader is asked to verify a `v3:` signature or unwrap an ML-KEM-1024 envelope — both operations raise a clean `UnsupportedAlgorithmError`. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
+Every version's files remain readable by later versions. v0.10 readers open v0.1–v0.9 files without ceremony; v0.9-and-earlier readers open v0.10 files unless those files carry `opt_per_au_encryption` (the VL_BYTES compound layout requires v0.10+ provider support) or an encrypted transport feature they don't recognise — in both cases the operation raises a clean `UnsupportedOperationError`. Pre-v0.10 readers can consume v0.10 `.mpgo` files that don't enable the per-AU encryption flag. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
 
 ## Python Installation
 
@@ -243,18 +264,22 @@ works on both Debian/Ubuntu's apt packages and source builds against
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Full class hierarchy, protocols, and HDF5 container mapping
 - [`WORKPLAN.md`](WORKPLAN.md) — Milestone plan with acceptance criteria
-- [`HANDOFF.md`](HANDOFF.md) — Active development handoff (v0.7 milestone status, binding decisions, gotchas)
+- [`HANDOFF.md`](HANDOFF.md) — Active development handoff (milestone status, binding decisions, gotchas)
 - [`docs/architectural-primitives.md`](docs/architectural-primitives.md) — Background analysis: the six primitives, five container philosophies, and the case for an MPEG-G-derived multi-omics standard
 - [`docs/primitives.md`](docs/primitives.md) — The six data primitives specification
 - [`docs/container-design.md`](docs/container-design.md) — HDF5 container layout
 - [`docs/class-hierarchy.md`](docs/class-hierarchy.md) — UML-style class descriptions
 - [`docs/ontology-mapping.md`](docs/ontology-mapping.md) — CV annotation and BFO/PSI-MS/nmrCV mapping
-- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.mpgo` format specification (v1.2)
+- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.mpgo` format specification (v1.2 container; per-AU encryption added in v0.10)
+- [`docs/transport-spec.md`](docs/transport-spec.md) — `.mots` streaming transport format (v0.10)
+- [`docs/transport-encryption-design.md`](docs/transport-encryption-design.md) — Per-AU encryption design (v1.0 scope, shipped in v0.10.0)
 - [`docs/feature-flags.md`](docs/feature-flags.md) — Feature-flag registry
-- [`docs/providers.md`](docs/providers.md) — Storage provider feature matrix (HDF5 / Memory / SQLite / Zarr)
-- [`docs/migration-guide.md`](docs/migration-guide.md) — Migration guide from mzML / nmrML and inter-version migration notes
+- [`docs/providers.md`](docs/providers.md) — Storage provider feature matrix (HDF5 / Memory / SQLite / Zarr) and compound-field-kind support
+- [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md) — Per-symbol stability classification across all three languages
+- [`docs/pqc.md`](docs/pqc.md) — Post-quantum crypto: ML-KEM-1024 + ML-DSA-87
+- [`docs/migration-guide.md`](docs/migration-guide.md) — Migration guide from mzML / nmrML and inter-version migration notes (includes v0.x → v0.10 per-AU encryption transcode)
 - [`docs/api-review-v0.7.md`](docs/api-review-v0.7.md) — Cross-language API review (v0.7 appendices A, B, C)
-- [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`)
+- [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`, Bruker `.d`)
 
 ## License
 

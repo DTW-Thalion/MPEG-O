@@ -186,6 +186,50 @@ MPGOSpectralDataset
       - gridSpectra       : NSArray<NSArray<MPGOMassSpectrum*>*>
 ```
 
+### Layer 3b — Transport + Per-AU Encryption (v0.10)
+
+Added in v0.10.0 across all three languages. Names shown are the
+ObjC surface; Python uses snake_case in `mpeg_o.transport` /
+`mpeg_o.encryption_per_au`, Java uses PascalCase in
+`com.dtwthalion.mpgo.transport` / `.protection`.
+
+**Transport codec + networking** (`MPGOTransport*`; see
+`docs/transport-spec.md`):
+
+```
+MPGOTransportPacketHeader  (24-byte wire header)
+MPGOTransportPacketRecord  (header + payload pair)
+MPGOTransportWriter        (.mots emission)
+MPGOTransportReader        (.mots parsing)
+MPGOTransportClient        (WebSocket push)
+MPGOTransportServer        (WebSocket accept + route)
+MPGOAccessUnit             (single-spectrum transport-level record)
+MPGOChannelData            (per-channel payload inside an AU)
+MPGOProtectionMetadata     (cipher_suite + wrapped_dek + signature_algorithm + public_key)
+MPGOAcquisitionSimulator   (replay fixtures at wall-clock pace)
+MPGOAUFilter               (selective access predicate)
+```
+
+**Per-AU encryption** (`MPGOPerAU*` /
+`com.dtwthalion.mpgo.protection.PerAU*` /
+`mpeg_o.encryption_per_au`; see
+`docs/transport-encryption-design.md`):
+
+```
+MPGOChannelSegment       (offset, length, iv, tag, ciphertext)
+MPGOHeaderSegment        (iv, tag, ciphertext[36])
+MPGOAUHeaderPlaintext    (acq_mode, ms_level, polarity, rt,
+                           precursor_mz, precursor_charge,
+                           ion_mobility, base_peak_intensity)
+MPGOPerAUEncryption      (AAD helpers + encrypt/decrypt with AAD)
+MPGOPerAUFile            (file-level orchestrator via StorageProvider)
+MPGOEncryptedTransport   (writer + reader for encrypted .mots streams)
+```
+
+All per-AU APIs are **class methods** (no instance state) on the
+manager classes. Segment / plaintext / metadata classes are value
+objects.
+
 ---
 
 ## Enumerations
@@ -244,5 +288,32 @@ typedef NS_ENUM(NSUInteger, MPGOEncryptionLevel) {
     MPGOEncryptionLevelDataset,
     MPGOEncryptionLevelDescriptorStream,
     MPGOEncryptionLevelAccessUnit
+    // v0.10: AccessUnit-level encryption is realised via
+    // opt_per_au_encryption + MPGOPerAUFile (see
+    // docs/transport-encryption-design.md) rather than a new enum
+    // case. The enum is kept for the v0.4 channel-granular mode that
+    // remains valid.
+};
+
+// v0.10 compound field kind catalog (docs/format-spec.md §6):
+typedef NS_ENUM(NSUInteger, MPGOCompoundFieldKind) {
+    MPGOCompoundFieldKindUInt32 = 0,
+    MPGOCompoundFieldKindInt64,
+    MPGOCompoundFieldKindFloat64,
+    MPGOCompoundFieldKindVLString,
+    MPGOCompoundFieldKindVLBytes   // added v0.10 for <channel>_segments
+};
+
+// v0.10 transport packet wire types (docs/transport-spec.md §3.2):
+typedef NS_ENUM(uint8_t, MPGOTransportPacketType) {
+    MPGOTransportPacketStreamHeader        = 0x01,
+    MPGOTransportPacketDatasetHeader       = 0x02,
+    MPGOTransportPacketAccessUnit          = 0x03,
+    MPGOTransportPacketProtectionMetadata  = 0x04,
+    MPGOTransportPacketAnnotation          = 0x05,
+    MPGOTransportPacketProvenance          = 0x06,
+    MPGOTransportPacketChromatogram        = 0x07,
+    MPGOTransportPacketEndOfDataset        = 0x08,
+    MPGOTransportPacketEndOfStream         = 0xFF
 };
 ```
