@@ -78,7 +78,8 @@ libMPGO_HEADER_FILES = \
 	Transport/MPGOAccessUnit.h \
 	Transport/MPGOTransportWriter.h \
 	Transport/MPGOTransportReader.h \
-	Transport/MPGOTransportClient.h
+	Transport/MPGOTransportClient.h \
+	Transport/MPGOAcquisitionSimulator.h
 
 libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOCVParam.m \
@@ -147,7 +148,8 @@ libMPGO_OBJC_FILES = \
 	Transport/MPGOAccessUnit.m \
 	Transport/MPGOTransportWriter.m \
 	Transport/MPGOTransportReader.m \
-	Transport/MPGOTransportClient.m
+	Transport/MPGOTransportClient.m \
+	Transport/MPGOAcquisitionSimulator.m
 
 libMPGO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
 
