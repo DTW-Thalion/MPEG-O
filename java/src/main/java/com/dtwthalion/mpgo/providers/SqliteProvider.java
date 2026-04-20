@@ -488,6 +488,9 @@ public final class SqliteProvider implements StorageProvider {
             case INT64 -> "int64";
             case FLOAT64 -> "float64";
             case VL_STRING -> "vl_string";
+            case VL_BYTES -> throw new UnsupportedOperationException(
+                "SQLite provider does not yet support VL_BYTES compound "
+                + "fields; use the HDF5 provider for opt_per_au_encryption");
         };
     }
 

@@ -28,6 +28,9 @@ public record CompoundField(String name, Kind kind) {
         /** 64-bit IEEE 754 floating-point field. */
         FLOAT64,
         /** Variable-length UTF-8 string field. */
-        VL_STRING
+        VL_STRING,
+        /** Variable-length raw byte blob. v1.0: carries IV / tag /
+         *  ciphertext for opt_per_au_encryption. */
+        VL_BYTES
     }
 }

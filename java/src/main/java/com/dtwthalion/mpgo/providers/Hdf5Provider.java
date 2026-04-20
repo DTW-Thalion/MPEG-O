@@ -434,9 +434,10 @@ public final class Hdf5Provider implements StorageProvider {
                         Object[] out = new Object[schema.fields.size()];
                         for (int i = 0; i < schema.fields.size(); i++) {
                             Hdf5CompoundIO.FieldKind k = schema.fields.get(i).kind();
-                            out[i] = k == Hdf5CompoundIO.FieldKind.VL_STRING
-                                    ? pool.addString((String) vals[i])
-                                    : vals[i];
+                            out[i] = switch (k) {
+                                case VL_STRING -> pool.addString((String) vals[i]);
+                                default -> vals[i];
+                            };
                         }
                         return out;
                     });
@@ -445,7 +446,11 @@ public final class Hdf5Provider implements StorageProvider {
 
         @Override
         public Object readAll() {
-            return Hdf5CompoundIO.readCompoundPrimitives(parent, name, schema);
+            boolean hasVlBytes = schema.fields.stream()
+                    .anyMatch(f -> f.kind() == Hdf5CompoundIO.FieldKind.VL_BYTES);
+            return hasVlBytes
+                    ? Hdf5CompoundIO.readCompoundFull(parent, name, schema)
+                    : Hdf5CompoundIO.readCompoundPrimitives(parent, name, schema);
         }
 
         @Override
@@ -477,6 +482,7 @@ public final class Hdf5Provider implements StorageProvider {
                 case INT64 -> CompoundField.Kind.INT64;
                 case FLOAT64 -> CompoundField.Kind.FLOAT64;
                 case VL_STRING -> CompoundField.Kind.VL_STRING;
+                case VL_BYTES -> CompoundField.Kind.VL_BYTES;
             };
         }
     }
@@ -505,7 +511,9 @@ public final class Hdf5Provider implements StorageProvider {
                     int cls = H5.H5Tget_class(mt);
                     long size = H5.H5Tget_size(mt);
                     Hdf5CompoundIO.FieldKind kind;
-                    if (cls == HDF5Constants.H5T_STRING
+                    if (cls == HDF5Constants.H5T_VLEN) {
+                        kind = Hdf5CompoundIO.FieldKind.VL_BYTES;
+                    } else if (cls == HDF5Constants.H5T_STRING
                             && H5.H5Tis_variable_str(mt)) {
                         kind = Hdf5CompoundIO.FieldKind.VL_STRING;
                     } else if (cls == HDF5Constants.H5T_INTEGER && size == 4) {
@@ -558,6 +566,7 @@ public final class Hdf5Provider implements StorageProvider {
                     case INT64 -> Hdf5CompoundIO.FieldKind.INT64;
                     case FLOAT64 -> Hdf5CompoundIO.FieldKind.FLOAT64;
                     case VL_STRING -> Hdf5CompoundIO.FieldKind.VL_STRING;
+                    case VL_BYTES -> Hdf5CompoundIO.FieldKind.VL_BYTES;
                 }))
                 .collect(Collectors.toList());
         // Package-private Schema constructor is reachable from this package's
