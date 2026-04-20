@@ -476,6 +476,17 @@ class SqliteGroup(StorageGroup):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         if self._read_only:
             raise IOError("provider opened in read-only mode")
+        # v1.0 parity gap: SqliteProvider stores compound rows as
+        # JSON, so raw bytes need base64 transport. Not yet wired;
+        # fail loud until it lands.
+        for f in fields:
+            if f.kind == CompoundFieldKind.VL_BYTES:
+                raise NotImplementedError(
+                    "SqliteProvider does not yet support VL_BYTES "
+                    "compound fields (needed for per-AU encryption). "
+                    "Use HDF5 or Memory providers for encrypted "
+                    "datasets until this lands."
+                )
         fields_json = _fields_to_json(fields)
         shape_json = json.dumps([count])
         cur = self._conn.execute(

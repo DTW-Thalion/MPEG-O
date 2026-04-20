@@ -126,6 +126,16 @@ def _rows_to_json(rows: list[dict[str, Any]],
                 out[f.name] = float(v) if v is not None else 0.0
             elif f.kind in (CompoundFieldKind.INT64, CompoundFieldKind.UINT32):
                 out[f.name] = int(v) if v is not None else 0
+            elif f.kind == CompoundFieldKind.VL_BYTES:
+                # v1.0 parity gap: Zarr compound is JSON-backed, so
+                # VL_BYTES needs base64 transport. Not yet wired;
+                # fail loud rather than silently corrupt on write.
+                raise NotImplementedError(
+                    "ZarrProvider does not yet support VL_BYTES compound "
+                    "fields (required for per-AU encryption). Use HDF5 "
+                    "or Memory providers for encrypted datasets until "
+                    "this lands."
+                )
             else:
                 out[f.name] = v
         coerced.append(out)

@@ -274,70 +274,121 @@ def decrypt_header_segments(
 
 
 # ---------------------------------------------------------------------
-# File-level encrypt / decrypt for .mpgo HDF5 files
+# File-level encrypt / decrypt via the StorageProvider abstraction
 # ---------------------------------------------------------------------
+#
+# Every access below goes through StorageGroup / StorageDataset so
+# the path is provider-agnostic: HDF5 + Memory are wired today,
+# SQLite + Zarr raise NotImplementedError at the VL_BYTES boundary
+# until their compound paths grow base64 transport.
 
 
-def _channel_names_of(sig_group) -> list[str]:
-    raw = sig_group.attrs.get("channel_names", "")
-    if isinstance(raw, bytes):
-        raw = raw.decode("utf-8")
-    return [c for c in raw.split(",") if c]
+def _split_channel_names(raw) -> list[str]:
+    if isinstance(raw, (bytes, bytearray)):
+        raw = bytes(raw).decode("utf-8")
+    if raw is None:
+        return []
+    return [c for c in str(raw).split(",") if c]
 
 
-def encrypt_per_au_file(
+def _get_str_attr(group, name: str) -> str:
+    if not group.has_attribute(name):
+        return ""
+    v = group.get_attribute(name)
+    if isinstance(v, (bytes, bytearray)):
+        return bytes(v).decode("utf-8")
+    return str(v) if v is not None else ""
+
+
+def _get_int_attr(group, name: str, default: int = 0) -> int:
+    if not group.has_attribute(name):
+        return default
+    v = group.get_attribute(name)
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+
+def encrypt_per_au(
     path: str,
     key: bytes,
     *,
     encrypt_headers: bool = False,
+    provider: str | None = None,
 ) -> None:
-    """Encrypt an existing plaintext .mpgo file in place with per-AU
-    AES-256-GCM.
+    """Encrypt an existing plaintext .mpgo at ``path`` in place with
+    per-AU AES-256-GCM.
 
-    For each MS run:
-    - Reads the plaintext ``<channel>_values`` datasets.
-    - Slices each spectrum from the run's
-      ``spectrum_index/{offsets,lengths}``.
-    - Encrypts each spectrum with a fresh IV, AAD =
+    Routes through :func:`mpeg_o.providers.open_provider` so any
+    backend that implements ``VL_BYTES`` compound fields works
+    uniformly. Today HDF5 + Memory are wired; SQLite + Zarr raise a
+    clear ``NotImplementedError`` at the compound-write boundary
+    until their JSON-backed compound paths grow base64 transport for
+    bytes.
+
+    Feature flags ``opt_per_au_encryption`` (and
+    ``opt_encrypted_au_headers`` when applicable) are set on the
+    root group via the same provider attribute API the rest of the
+    writer uses.
+
+    For each run the writer:
+
+    - Reads plaintext ``<channel>_values`` (float64), slices it per
+      spectrum using ``spectrum_index/{offsets,lengths}``, encrypts
+      each row with a fresh IV and AAD =
       ``dataset_id || au_sequence || channel_name``.
-    - Writes a compound ``<channel>_segments`` dataset (§9.1 layout).
-    - Deletes the plaintext ``<channel>_values`` dataset.
+    - Writes a ``<channel>_segments`` compound via the provider.
+    - Deletes the plaintext ``<channel>_values`` child.
 
-    If ``encrypt_headers=True``, also encrypts the per-spectrum
-    ``retention_time / ms_level / polarity / precursor_mz /
-    precursor_charge / ion_mobility / base_peak_intensity`` into
+    When ``encrypt_headers=True`` it additionally encrypts the six
+    semantic index arrays (retention_times, ms_levels, polarities,
+    precursor_mzs, precursor_charges, base_peak_intensities) into
     ``spectrum_index/au_header_segments`` and deletes the plaintext
-    index arrays. ``offsets`` and ``lengths`` remain plaintext (they
-    are structural, not semantic PHI).
-
-    Sets the ``opt_per_au_encryption`` feature flag on the root group
-    and ``opt_encrypted_au_headers`` when header encryption is
-    requested.
-
-    Raises ``FileNotFoundError``, ``ValueError`` (key length or bad
-    source layout).
+    children. ``offsets`` and ``lengths`` remain plaintext — they
+    are structural framing, not semantic PHI.
     """
     from . import _hdf5_io as io
-    import h5py
+    from .providers.registry import open_provider
 
     if len(key) != 32:
         raise ValueError(f"AES-256-GCM key must be 32 bytes, got {len(key)}")
 
-    with h5py.File(path, "r+") as f:
-        version, features = io.read_feature_flags(f)
+    sp = open_provider(path, provider=provider, mode="a")
+    try:
+        root = sp.root_group()
+        version, features = io.read_feature_flags(root)
         features_set = set(features)
 
+        study = root.open_group("study")
+        ms_runs = study.open_group("ms_runs")
+        run_names = [n for n in ms_runs.child_names()
+                      if not n.startswith("_") and ms_runs.has_child(n)]
+
         dataset_id_counter = 1
-        for run_name, run_group in f["study/ms_runs"].items():
-            sig = run_group["signal_channels"]
-            idx = run_group["spectrum_index"]
-            offsets = idx["offsets"][...]
-            lengths = idx["lengths"][...]
-            for cname in _channel_names_of(sig):
-                values_ds = f"{cname}_values"
-                if values_ds not in sig:
+        for run_name in run_names:
+            try:
+                run_group = ms_runs.open_group(run_name)
+            except KeyError:
+                continue
+            sig = run_group.open_group("signal_channels")
+            idx = run_group.open_group("spectrum_index")
+
+            offsets = np.asarray(idx.open_dataset("offsets").read(),
+                                    dtype="<u8")
+            lengths = np.asarray(idx.open_dataset("lengths").read(),
+                                    dtype="<u4")
+
+            channel_names = _split_channel_names(
+                _get_str_attr(sig, "channel_names")
+            )
+            for cname in channel_names:
+                values_name = f"{cname}_values"
+                if not sig.has_child(values_name):
                     continue
-                plaintext = sig[values_ds][...].astype("<f8", copy=False)
+                plaintext = np.asarray(
+                    sig.open_dataset(values_name).read()
+                ).astype("<f8", copy=False)
                 segments = encrypt_channel_to_segments(
                     plaintext, offsets, lengths,
                     dataset_id=dataset_id_counter,
@@ -345,80 +396,112 @@ def encrypt_per_au_file(
                     key=key,
                 )
                 io.write_channel_segments(sig, f"{cname}_segments", segments)
-                del sig[values_ds]
-                sig.attrs[f"{cname}_algorithm"] = "aes-256-gcm"
+                sig.delete_child(values_name)
+                sig.set_attribute(f"{cname}_algorithm", "aes-256-gcm")
 
             if encrypt_headers:
-                acquisition_mode = int(run_group.attrs.get(
-                    "acquisition_mode", 0
-                ))
+                acquisition_mode = _get_int_attr(run_group,
+                                                    "acquisition_mode", 0)
+                count = _get_int_attr(idx, "count", len(offsets))
                 rows = []
-                for i in range(int(idx.attrs.get("count", len(offsets)))):
+                ms_levels = np.asarray(idx.open_dataset("ms_levels").read())
+                polarities = np.asarray(idx.open_dataset("polarities").read())
+                rts = np.asarray(idx.open_dataset("retention_times").read())
+                pmzs = np.asarray(idx.open_dataset("precursor_mzs").read())
+                pcs = np.asarray(idx.open_dataset("precursor_charges").read())
+                bpis = np.asarray(
+                    idx.open_dataset("base_peak_intensities").read()
+                )
+                for i in range(count):
                     rows.append({
                         "acquisition_mode": acquisition_mode,
-                        "ms_level": int(idx["ms_levels"][i]),
-                        "polarity": int(idx["polarities"][i]),
-                        "retention_time": float(idx["retention_times"][i]),
-                        "precursor_mz": float(idx["precursor_mzs"][i]),
-                        "precursor_charge": int(idx["precursor_charges"][i]),
+                        "ms_level": int(ms_levels[i]),
+                        "polarity": int(polarities[i]),
+                        "retention_time": float(rts[i]),
+                        "precursor_mz": float(pmzs[i]),
+                        "precursor_charge": int(pcs[i]),
                         "ion_mobility": 0.0,
-                        "base_peak_intensity": float(
-                            idx["base_peak_intensities"][i]
-                        ),
+                        "base_peak_intensity": float(bpis[i]),
                     })
                 header_segs = encrypt_header_segments(
                     rows, dataset_id=dataset_id_counter, key=key,
                 )
-                io.write_au_header_segments(
-                    idx, "au_header_segments", header_segs
-                )
+                io.write_au_header_segments(idx, "au_header_segments",
+                                              header_segs)
                 for name in ("retention_times", "ms_levels", "polarities",
                               "precursor_mzs", "precursor_charges",
                               "base_peak_intensities"):
-                    if name in idx:
-                        del idx[name]
+                    if idx.has_child(name):
+                        idx.delete_child(name)
 
             dataset_id_counter += 1
 
         features_set.add("opt_per_au_encryption")
         if encrypt_headers:
             features_set.add("opt_encrypted_au_headers")
-        io.write_feature_flags(f, version, sorted(features_set))
+        io.write_feature_flags(root, version, sorted(features_set))
+    finally:
+        sp.close()
 
 
-def decrypt_per_au_file(path: str, key: bytes) -> dict[str, dict[str, np.ndarray]]:
-    """Read a per-AU-encrypted .mpgo and return the plaintext values.
+# Back-compat alias. Existing tests and external callers use this
+# name; the provider-routed implementation is the new canonical
+# entry point.
+encrypt_per_au_file = encrypt_per_au
 
-    Returns ``{run_name: {channel_name: float64_ndarray}}``. When
-    ``opt_encrypted_au_headers`` is set, also writes the decrypted
-    header fields into an ``"__au_headers__"`` subkey as a list of
-    dicts (one per spectrum).
 
-    The on-disk file is NOT modified — this is a read-only op.
+def decrypt_per_au(
+    path: str,
+    key: bytes,
+    *,
+    provider: str | None = None,
+) -> dict[str, dict[str, np.ndarray]]:
+    """Read-only: materialise the plaintext values of a per-AU
+    encrypted file. Returns ``{run_name: {channel_name: float64
+    ndarray}}``; when ``opt_encrypted_au_headers`` is set the result
+    also carries ``"__au_headers__"`` as a list of dicts.
+
+    Routes through :func:`mpeg_o.providers.open_provider` so the
+    file can live in any backend that supports ``VL_BYTES`` compound
+    reads.
     """
     from . import _hdf5_io as io
-    import h5py
+    from .providers.registry import open_provider
 
     if len(key) != 32:
         raise ValueError(f"AES-256-GCM key must be 32 bytes, got {len(key)}")
 
-    out: dict[str, dict] = {}
-    with h5py.File(path, "r") as f:
-        version, features = io.read_feature_flags(f)
+    sp = open_provider(path, provider=provider, mode="r")
+    try:
+        root = sp.root_group()
+        _, features = io.read_feature_flags(root)
         headers_encrypted = "opt_encrypted_au_headers" in features
         if "opt_per_au_encryption" not in features:
             raise ValueError(
                 f"file at {path!r} does not carry opt_per_au_encryption"
             )
 
+        study = root.open_group("study")
+        ms_runs = study.open_group("ms_runs")
+        run_names = [n for n in ms_runs.child_names()
+                      if not n.startswith("_") and ms_runs.has_child(n)]
+
+        out: dict[str, dict] = {}
         dataset_id_counter = 1
-        for run_name, run_group in f["study/ms_runs"].items():
-            sig = run_group["signal_channels"]
-            idx = run_group["spectrum_index"]
+        for run_name in run_names:
+            try:
+                run_group = ms_runs.open_group(run_name)
+            except KeyError:
+                continue
+            sig = run_group.open_group("signal_channels")
+            idx = run_group.open_group("spectrum_index")
             run_out: dict[str, Any] = {}
-            for cname in _channel_names_of(sig):
+            channel_names = _split_channel_names(
+                _get_str_attr(sig, "channel_names")
+            )
+            for cname in channel_names:
                 seg_name = f"{cname}_segments"
-                if seg_name not in sig:
+                if not sig.has_child(seg_name):
                     continue
                 segments = io.read_channel_segments(sig, seg_name)
                 run_out[cname] = decrypt_channel_from_segments(
@@ -428,7 +511,7 @@ def decrypt_per_au_file(path: str, key: bytes) -> dict[str, dict[str, np.ndarray
                     key=key,
                 )
 
-            if headers_encrypted and "au_header_segments" in idx:
+            if headers_encrypted and idx.has_child("au_header_segments"):
                 header_segs = io.read_au_header_segments(
                     idx, "au_header_segments"
                 )
@@ -441,4 +524,10 @@ def decrypt_per_au_file(path: str, key: bytes) -> dict[str, dict[str, np.ndarray
             out[run_name] = run_out
             dataset_id_counter += 1
 
-    return out
+        return out
+    finally:
+        sp.close()
+
+
+# Back-compat alias.
+decrypt_per_au_file = decrypt_per_au

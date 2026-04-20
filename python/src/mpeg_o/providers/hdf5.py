@@ -70,7 +70,8 @@ def _fields_from_dtype(dt: np.dtype) -> tuple[CompoundField, ...] | None:
 
 def _compound_dtype(fields: list[CompoundField]) -> np.dtype:
     items: list[tuple[str, Any]] = []
-    vl = h5py.string_dtype(encoding="utf-8")
+    vl_str = h5py.string_dtype(encoding="utf-8")
+    vl_bytes = h5py.vlen_dtype(np.uint8)
     for f in fields:
         if f.kind == CompoundFieldKind.UINT32:
             items.append((f.name, "<u4"))
@@ -79,7 +80,9 @@ def _compound_dtype(fields: list[CompoundField]) -> np.dtype:
         elif f.kind == CompoundFieldKind.FLOAT64:
             items.append((f.name, "<f8"))
         elif f.kind == CompoundFieldKind.VL_STRING:
-            items.append((f.name, vl))
+            items.append((f.name, vl_str))
+        elif f.kind == CompoundFieldKind.VL_BYTES:
+            items.append((f.name, vl_bytes))
         else:
             raise ValueError(f"unknown compound kind: {f.kind}")
     return np.dtype(items)
@@ -118,7 +121,29 @@ class _Dataset(StorageDataset):
             return self._ds[offset:]
         return self._ds[offset: offset + count]
 
-    def write(self, data: np.ndarray) -> None:
+    def write(self, data: np.ndarray | list) -> None:
+        # StorageDataset contract: primitive datasets take array-like;
+        # compound datasets take a list of dicts. The latter was
+        # previously handled only on Memory + SQLite + Zarr; HDF5
+        # needed list-of-dicts support too so the per-AU encryption
+        # writer could round-trip through the provider abstraction.
+        if (self._ds.dtype.fields is not None
+                and isinstance(data, list)):
+            dt = self._ds.dtype
+            arr = np.zeros(len(data), dtype=dt)
+            for i, rec in enumerate(data):
+                for fname in dt.fields:
+                    if fname in rec:
+                        val = rec[fname]
+                        subdt = dt.fields[fname][0]
+                        if subdt == h5py.vlen_dtype(np.uint8):
+                            arr[i][fname] = np.frombuffer(
+                                bytes(val), dtype=np.uint8
+                            )
+                        else:
+                            arr[i][fname] = val
+            self._ds[...] = arr
+            return
         self._ds[...] = data
 
     def has_attribute(self, name: str) -> bool:
