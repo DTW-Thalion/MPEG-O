@@ -64,7 +64,21 @@ public final class TransportWriter implements AutoCloseable {
     private void emit(PacketType type, byte[] payload, int datasetId, long auSequence)
             throws IOException {
         int flags = useChecksum ? PacketHeader.FLAG_HAS_CHECKSUM : 0;
-        PacketHeader h = new PacketHeader(type, flags, datasetId, auSequence,
+        emitRawPacket(type, flags, datasetId, auSequence, payload);
+    }
+
+    /** Emit a packet with arbitrary flag bits. Used by
+     *  {@link com.dtwthalion.mpgo.protection.EncryptedTransport} so it
+     *  can set FLAG_ENCRYPTED / FLAG_ENCRYPTED_HEADER on AUs.
+     *
+     *  @since 1.0
+     */
+    public void emitRawPacket(PacketType type, int flags, int datasetId,
+                                long auSequence, byte[] payload) throws IOException {
+        int finalFlags = useChecksum
+            ? (flags | PacketHeader.FLAG_HAS_CHECKSUM)
+            : flags;
+        PacketHeader h = new PacketHeader(type, finalFlags, datasetId, auSequence,
                 payload.length, nowNs());
         out.write(h.encode());
         out.write(payload);

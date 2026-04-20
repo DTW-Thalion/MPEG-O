@@ -28,6 +28,8 @@ public final class PacketHeader {
     public static final int FLAG_ENCRYPTED    = 0x0001;
     public static final int FLAG_COMPRESSED   = 0x0002;
     public static final int FLAG_HAS_CHECKSUM = 0x0004;
+    /** v1.0: payload carries encrypted AU semantic header. */
+    public static final int FLAG_ENCRYPTED_HEADER = 0x0008;
 
     public final PacketType packetType;
     public final int flags;
