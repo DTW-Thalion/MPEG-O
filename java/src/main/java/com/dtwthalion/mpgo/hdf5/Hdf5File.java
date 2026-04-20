@@ -140,6 +140,12 @@ public class Hdf5File implements AutoCloseable {
     public void close() {
         if (closed) return;
         try {
+            // Force a flush before close so pending metadata updates
+            // (new datasets, attribute writes) are written to the OS
+            // buffer even if child handles were leaked by caller code.
+            H5.H5Fflush(fileId, HDF5Constants.H5F_SCOPE_GLOBAL);
+        } catch (HDF5LibraryException ignored) {}
+        try {
             H5.H5Fclose(fileId);
         } catch (HDF5LibraryException e) {
             // best-effort close

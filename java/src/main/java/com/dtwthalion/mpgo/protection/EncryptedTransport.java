@@ -79,57 +79,57 @@ public final class EncryptedTransport {
             }
             boolean headersEncrypted = flags.has(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
 
-            StorageGroup study = root.openGroup("study");
-            StorageGroup msRuns = study.openGroup("ms_runs");
+            try (StorageGroup study = root.openGroup("study");
+                 StorageGroup msRuns = study.openGroup("ms_runs")) {
+                String title = attrStr(study, "title", "");
+                String isa = attrStr(study, "isa_investigation_id", "");
 
-            String title = attrStr(study, "title", "");
-            String isa = attrStr(study, "isa_investigation_id", "");
+                List<String> runNames = new ArrayList<>();
+                for (String n : msRuns.childNames()) {
+                    if (!n.startsWith("_") && msRuns.hasChild(n)) runNames.add(n);
+                }
 
-            List<String> runNames = new ArrayList<>();
-            for (String n : msRuns.childNames()) {
-                if (!n.startsWith("_") && msRuns.hasChild(n)) runNames.add(n);
-            }
+                List<String> features = new ArrayList<>(flags.features());
+                writer.writeStreamHeader("1.2", title, isa, features,
+                                          runNames.size());
 
-            List<String> features = new ArrayList<>(flags.features());
-            writer.writeStreamHeader("1.2", title, isa, features, runNames.size());
+                // ── ProtectionMetadata + DatasetHeader per run ──
+                int did = 1;
+                for (String runName : runNames) {
+                    try (StorageGroup run = msRuns.openGroup(runName);
+                         StorageGroup sig = run.openGroup("signal_channels")) {
+                        List<String> channelNames = splitNames(
+                            attrStr(sig, "channel_names", ""));
+                        String firstCh = channelNames.isEmpty()
+                            ? "intensity" : channelNames.get(0);
+                        String cipherSuite = attrStr(sig,
+                            firstCh + "_algorithm", "aes-256-gcm");
+                        String kek = attrStr(sig,
+                            firstCh + "_kek_algorithm", "");
+                        byte[] wrapped = attrBytes(sig,
+                            firstCh + "_wrapped_dek");
 
-            // ── ProtectionMetadata + DatasetHeader per run ─────────
-            int did = 1;
-            for (String runName : runNames) {
-                StorageGroup run = msRuns.openGroup(runName);
-                StorageGroup sig = run.openGroup("signal_channels");
-                List<String> channelNames = splitNames(
-                    attrStr(sig, "channel_names", ""));
-                String firstCh = channelNames.isEmpty()
-                    ? "intensity" : channelNames.get(0);
-                String cipherSuite = attrStr(sig,
-                    firstCh + "_algorithm", "aes-256-gcm");
-                String kek = attrStr(sig, firstCh + "_kek_algorithm", "");
-                byte[] wrapped = attrBytes(sig, firstCh + "_wrapped_dek");
+                        writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
+                            did, 0, encodeProtection(cipherSuite, kek, wrapped));
 
-                writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0, did, 0,
-                    encodeProtection(cipherSuite, kek, wrapped));
+                        long expectedAUs = firstChannelSegmentCount(sig, firstCh);
+                        int acqMode = intAttr(run, "acquisition_mode", 0);
+                        String spectrumClass = attrStr(run, "spectrum_class",
+                                                         "MPGOMassSpectrum");
+                        writer.writeDatasetHeader(did, runName, acqMode,
+                            spectrumClass, channelNames, "{}", expectedAUs);
+                    }
+                    did++;
+                }
 
-                long expectedAUs = firstChannelSegmentCount(sig, firstCh);
-                int acqMode = intAttr(run, "acquisition_mode", 0);
-                String spectrumClass = attrStr(run, "spectrum_class",
-                                                  "MPGOMassSpectrum");
-                writer.writeDatasetHeader(did, runName, acqMode, spectrumClass,
-                    channelNames, "{}", expectedAUs);
-                did++;
-            }
-
-            // ── AUs ───────────────────────────────────────────────
-            did = 1;
-            for (String runName : runNames) {
-                emitRunAUs(writer, msRuns, runName, did, headersEncrypted);
-                long n = firstChannelSegmentCount(
-                    msRuns.openGroup(runName).openGroup("signal_channels"),
-                    splitNames(attrStr(
-                        msRuns.openGroup(runName).openGroup("signal_channels"),
-                        "channel_names", "")).get(0));
-                writer.writeEndOfDataset(did, n);
-                did++;
+                // ── AUs ───────────────────────────────────────
+                did = 1;
+                for (String runName : runNames) {
+                    long n = emitRunAUs(writer, msRuns, runName, did,
+                                          headersEncrypted);
+                    writer.writeEndOfDataset(did, n);
+                    did++;
+                }
             }
             writer.writeEndOfStream();
         } finally {
@@ -137,12 +137,13 @@ public final class EncryptedTransport {
         }
     }
 
-    private static void emitRunAUs(TransportWriter writer, StorageGroup msRuns,
+    /** @return number of AU packets emitted for this run. */
+    private static long emitRunAUs(TransportWriter writer, StorageGroup msRuns,
                                      String runName, int datasetId,
                                      boolean headersEncrypted) throws IOException {
-        StorageGroup run = msRuns.openGroup(runName);
-        StorageGroup sig = run.openGroup("signal_channels");
-        StorageGroup idx = run.openGroup("spectrum_index");
+        try (StorageGroup run = msRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels");
+             StorageGroup idx = run.openGroup("spectrum_index")) {
         List<String> channelNames = splitNames(
             attrStr(sig, "channel_names", ""));
         int acqMode = intAttr(run, "acquisition_mode", 0);
@@ -200,6 +201,8 @@ public final class EncryptedTransport {
             }
             writer.emitRawPacket(PacketType.ACCESS_UNIT, flags, datasetId, i,
                                     payload);
+        }
+        return n;
         }
     }
 
@@ -463,24 +466,26 @@ public final class EncryptedTransport {
             StorageGroup root = sp.rootGroup();
             new FeatureFlags("1.1", features).writeTo(root);
 
-            StorageGroup study = root.createGroup("study");
-            study.setAttribute("title", title == null ? "" : title);
-            study.setAttribute("isa_investigation_id", isa == null ? "" : isa);
+            try (StorageGroup study = root.createGroup("study")) {
+                study.setAttribute("title", title == null ? "" : title);
+                study.setAttribute("isa_investigation_id",
+                                     isa == null ? "" : isa);
 
-            StorageGroup msRuns = study.createGroup("ms_runs");
-            StringBuilder runNamesJoined = new StringBuilder();
-            boolean first = true;
-            for (DatasetAccumulator acc : datasets.values()) {
-                if (!first) runNamesJoined.append(',');
-                runNamesJoined.append(acc.name);
-                first = false;
-            }
-            msRuns.setAttribute("_run_names", runNamesJoined.toString());
+                try (StorageGroup msRuns = study.createGroup("ms_runs")) {
+                    StringBuilder runNamesJoined = new StringBuilder();
+                    boolean first = true;
+                    for (DatasetAccumulator acc : datasets.values()) {
+                        if (!first) runNamesJoined.append(',');
+                        runNamesJoined.append(acc.name);
+                        first = false;
+                    }
+                    msRuns.setAttribute("_run_names", runNamesJoined.toString());
 
-            for (Map.Entry<Integer, DatasetAccumulator> e : datasets.entrySet()) {
-                DatasetAccumulator acc = e.getValue();
-                ProtectionMeta pm = protection.get(e.getKey());
-                materialiseRun(msRuns, acc, pm);
+                    for (Map.Entry<Integer, DatasetAccumulator> e : datasets.entrySet()) {
+                        materialiseRun(msRuns, e.getValue(),
+                                         protection.get(e.getKey()));
+                    }
+                }
             }
         } finally {
             sp.close();
@@ -490,7 +495,7 @@ public final class EncryptedTransport {
     private static void materialiseRun(StorageGroup msRuns,
                                          DatasetAccumulator acc,
                                          ProtectionMeta pm) {
-        StorageGroup run = msRuns.createGroup(acc.name);
+        try (StorageGroup run = msRuns.createGroup(acc.name)) {
         run.setAttribute("acquisition_mode", (long) acc.acquisitionMode);
         run.setAttribute("spectrum_class",
                           acc.spectrumClass == null
@@ -500,14 +505,15 @@ public final class EncryptedTransport {
             : acc.headerSegments.size();
         run.setAttribute("spectrum_count", (long) spectrumCount);
 
-        StorageGroup cfg = run.createGroup("instrument_config");
-        for (String f : new String[]{"manufacturer", "model", "serial_number",
-                                       "source_type", "analyzer_type",
-                                       "detector_type"}) {
-            cfg.setAttribute(f, "");
+        try (StorageGroup cfg = run.createGroup("instrument_config")) {
+            for (String f : new String[]{"manufacturer", "model", "serial_number",
+                                           "source_type", "analyzer_type",
+                                           "detector_type"}) {
+                cfg.setAttribute(f, "");
+            }
         }
 
-        StorageGroup sig = run.createGroup("signal_channels");
+        try (StorageGroup sig = run.createGroup("signal_channels")) {
         sig.setAttribute("channel_names", String.join(",", acc.channelNames));
         for (String cname : acc.channelNames) {
             List<ChannelSegment> segs = acc.channelSegments.get(cname);
@@ -522,31 +528,34 @@ public final class EncryptedTransport {
             }
         }
 
-        StorageGroup idx = run.createGroup("spectrum_index");
-        List<ChannelSegment> firstSegs = acc.channelSegments.get(acc.channelNames.get(0));
-        idx.setAttribute("count", (long) firstSegs.size());
-        writePrimitiveArray(idx, "offsets", Enums.Precision.INT64,
-            firstSegs.stream().mapToLong(ChannelSegment::offset).toArray());
-        writePrimitiveArray(idx, "lengths", Enums.Precision.UINT32,
-            firstSegs.stream().mapToInt(ChannelSegment::length).toArray());
+        try (StorageGroup idx = run.createGroup("spectrum_index")) {
+            List<ChannelSegment> firstSegs = acc.channelSegments.get(acc.channelNames.get(0));
+            idx.setAttribute("count", (long) firstSegs.size());
+            writePrimitiveArray(idx, "offsets", Enums.Precision.INT64,
+                firstSegs.stream().mapToLong(ChannelSegment::offset).toArray());
+            writePrimitiveArray(idx, "lengths", Enums.Precision.UINT32,
+                firstSegs.stream().mapToInt(ChannelSegment::length).toArray());
 
-        if (acc.usedEncryptedHeaders) {
-            PerAUFile.writeHeaderSegments(idx, "au_header_segments",
-                                             acc.headerSegments);
-        } else {
-            writePrimitiveArray(idx, "retention_times",
-                Enums.Precision.FLOAT64, toDoubleArr(acc.plaintextRts));
-            writePrimitiveArray(idx, "ms_levels",
-                Enums.Precision.INT32, toIntArr(acc.plaintextMsLevels));
-            writePrimitiveArray(idx, "polarities",
-                Enums.Precision.INT32, toIntArr(acc.plaintextPolarities));
-            writePrimitiveArray(idx, "precursor_mzs",
-                Enums.Precision.FLOAT64, toDoubleArr(acc.plaintextPmzs));
-            writePrimitiveArray(idx, "precursor_charges",
-                Enums.Precision.INT32, toIntArr(acc.plaintextPcs));
-            writePrimitiveArray(idx, "base_peak_intensities",
-                Enums.Precision.FLOAT64, toDoubleArr(acc.plaintextBpis));
+            if (acc.usedEncryptedHeaders) {
+                PerAUFile.writeHeaderSegments(idx, "au_header_segments",
+                                                 acc.headerSegments);
+            } else {
+                writePrimitiveArray(idx, "retention_times",
+                    Enums.Precision.FLOAT64, toDoubleArr(acc.plaintextRts));
+                writePrimitiveArray(idx, "ms_levels",
+                    Enums.Precision.INT32, toIntArr(acc.plaintextMsLevels));
+                writePrimitiveArray(idx, "polarities",
+                    Enums.Precision.INT32, toIntArr(acc.plaintextPolarities));
+                writePrimitiveArray(idx, "precursor_mzs",
+                    Enums.Precision.FLOAT64, toDoubleArr(acc.plaintextPmzs));
+                writePrimitiveArray(idx, "precursor_charges",
+                    Enums.Precision.INT32, toIntArr(acc.plaintextPcs));
+                writePrimitiveArray(idx, "base_peak_intensities",
+                    Enums.Precision.FLOAT64, toDoubleArr(acc.plaintextBpis));
+            }
         }
+        }  // run try-with-resources
+        }  // sig try-with-resources
     }
 
     private static void writePrimitiveArray(StorageGroup parent, String name,

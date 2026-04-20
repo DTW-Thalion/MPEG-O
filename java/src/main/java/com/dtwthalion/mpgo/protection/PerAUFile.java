@@ -70,13 +70,13 @@ public final class PerAUFile {
             StorageGroup root = sp.rootGroup();
             FeatureFlags flags = FeatureFlags.readFrom(root);
 
-            StorageGroup study = root.openGroup("study");
-            StorageGroup msRuns = study.openGroup("ms_runs");
-
-            int datasetId = 1;
-            for (String runName : runNames(msRuns)) {
-                encryptOneRun(msRuns, runName, datasetId, key, encryptHeaders);
-                datasetId++;
+            try (StorageGroup study = root.openGroup("study");
+                 StorageGroup msRuns = study.openGroup("ms_runs")) {
+                int datasetId = 1;
+                for (String runName : runNames(msRuns)) {
+                    encryptOneRun(msRuns, runName, datasetId, key, encryptHeaders);
+                    datasetId++;
+                }
             }
 
             List<String> updatedFeatures = new ArrayList<>(flags.features());
@@ -113,14 +113,14 @@ public final class PerAUFile {
             }
             boolean headersEncrypted = flags.has(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
 
-            StorageGroup study = root.openGroup("study");
-            StorageGroup msRuns = study.openGroup("ms_runs");
-
-            int datasetId = 1;
-            for (String runName : runNames(msRuns)) {
-                out.put(runName, decryptOneRun(msRuns, runName, datasetId, key,
-                                                 headersEncrypted));
-                datasetId++;
+            try (StorageGroup study = root.openGroup("study");
+                 StorageGroup msRuns = study.openGroup("ms_runs")) {
+                int datasetId = 1;
+                for (String runName : runNames(msRuns)) {
+                    out.put(runName, decryptOneRun(msRuns, runName, datasetId, key,
+                                                     headersEncrypted));
+                    datasetId++;
+                }
             }
             return out;
         } finally {
@@ -133,55 +133,56 @@ public final class PerAUFile {
     private static void encryptOneRun(StorageGroup msRuns, String runName,
                                         int datasetId, byte[] key,
                                         boolean encryptHeaders) {
-        StorageGroup run = msRuns.openGroup(runName);
-        StorageGroup sig = run.openGroup("signal_channels");
-        StorageGroup idx = run.openGroup("spectrum_index");
+        try (StorageGroup run = msRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels");
+             StorageGroup idx = run.openGroup("spectrum_index")) {
 
-        long[] offsets = readLongs(idx, "offsets");
-        int[] lengths = readInts(idx, "lengths");
+            long[] offsets = readLongs(idx, "offsets");
+            int[] lengths = readInts(idx, "lengths");
 
-        String rawNames = (String) sig.getAttribute("channel_names");
-        List<String> channelNames = splitNames(rawNames);
+            String rawNames = (String) sig.getAttribute("channel_names");
+            List<String> channelNames = splitNames(rawNames);
 
-        for (String cname : channelNames) {
-            String valuesName = cname + "_values";
-            if (!sig.hasChild(valuesName)) continue;
-            double[] values;
-            try (StorageDataset ds = sig.openDataset(valuesName)) {
-                values = (double[]) ds.readAll();
+            for (String cname : channelNames) {
+                String valuesName = cname + "_values";
+                if (!sig.hasChild(valuesName)) continue;
+                double[] values;
+                try (StorageDataset ds = sig.openDataset(valuesName)) {
+                    values = (double[]) ds.readAll();
+                }
+                byte[] bytes = doublesToLeBytes(values);
+                List<ChannelSegment> segs = PerAUEncryption.encryptChannelToSegments(
+                    bytes, offsets, lengths, datasetId, cname, key);
+                writeChannelSegments(sig, cname + "_segments", segs);
+                sig.deleteChild(valuesName);
+                sig.setAttribute(cname + "_algorithm", "aes-256-gcm");
             }
-            byte[] bytes = doublesToLeBytes(values);
-            List<ChannelSegment> segs = PerAUEncryption.encryptChannelToSegments(
-                bytes, offsets, lengths, datasetId, cname, key);
-            writeChannelSegments(sig, cname + "_segments", segs);
-            sig.deleteChild(valuesName);
-            sig.setAttribute(cname + "_algorithm", "aes-256-gcm");
-        }
 
-        if (encryptHeaders) {
-            int acqMode = ((Number) getAttrOr(run, "acquisition_mode", 0L)).intValue();
-            double[] rts = readDoubles(idx, "retention_times");
-            int[] msLevels = readInts(idx, "ms_levels");
-            int[] pols = readInts(idx, "polarities");
-            double[] pmzs = readDoubles(idx, "precursor_mzs");
-            int[] pcs = readInts(idx, "precursor_charges");
-            double[] bpis = readDoubles(idx, "base_peak_intensities");
+            if (encryptHeaders) {
+                int acqMode = ((Number) getAttrOr(run, "acquisition_mode", 0L)).intValue();
+                double[] rts = readDoubles(idx, "retention_times");
+                int[] msLevels = readInts(idx, "ms_levels");
+                int[] pols = readInts(idx, "polarities");
+                double[] pmzs = readDoubles(idx, "precursor_mzs");
+                int[] pcs = readInts(idx, "precursor_charges");
+                double[] bpis = readDoubles(idx, "base_peak_intensities");
 
-            List<AUHeaderPlaintext> rows = new ArrayList<>(rts.length);
-            for (int i = 0; i < rts.length; i++) {
-                rows.add(new AUHeaderPlaintext(acqMode, msLevels[i], pols[i],
-                                                 rts[i], pmzs[i], pcs[i], 0.0,
-                                                 bpis[i]));
-            }
-            List<HeaderSegment> segs =
-                PerAUEncryption.encryptHeaderSegments(rows, datasetId, key);
-            writeHeaderSegments(idx, "au_header_segments", segs);
+                List<AUHeaderPlaintext> rows = new ArrayList<>(rts.length);
+                for (int i = 0; i < rts.length; i++) {
+                    rows.add(new AUHeaderPlaintext(acqMode, msLevels[i], pols[i],
+                                                     rts[i], pmzs[i], pcs[i], 0.0,
+                                                     bpis[i]));
+                }
+                List<HeaderSegment> segs =
+                    PerAUEncryption.encryptHeaderSegments(rows, datasetId, key);
+                writeHeaderSegments(idx, "au_header_segments", segs);
 
-            for (String name : new String[]{"retention_times", "ms_levels",
-                                              "polarities", "precursor_mzs",
-                                              "precursor_charges",
-                                              "base_peak_intensities"}) {
-                if (idx.hasChild(name)) idx.deleteChild(name);
+                for (String name : new String[]{"retention_times", "ms_levels",
+                                                  "polarities", "precursor_mzs",
+                                                  "precursor_charges",
+                                                  "base_peak_intensities"}) {
+                    if (idx.hasChild(name)) idx.deleteChild(name);
+                }
             }
         }
     }
@@ -191,27 +192,29 @@ public final class PerAUFile {
     private static DecryptedRun decryptOneRun(StorageGroup msRuns, String runName,
                                                 int datasetId, byte[] key,
                                                 boolean headersEncrypted) {
-        StorageGroup run = msRuns.openGroup(runName);
-        StorageGroup sig = run.openGroup("signal_channels");
-        StorageGroup idx = run.openGroup("spectrum_index");
+        try (StorageGroup run = msRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels");
+             StorageGroup idx = run.openGroup("spectrum_index")) {
+            Map<String, byte[]> channels = new LinkedHashMap<>();
+            String rawNames = (String) sig.getAttribute("channel_names");
+            for (String cname : splitNames(rawNames)) {
+                String segName = cname + "_segments";
+                if (!sig.hasChild(segName)) continue;
+                List<ChannelSegment> segs = readChannelSegments(sig, segName);
+                channels.put(cname,
+                    PerAUEncryption.decryptChannelFromSegments(segs, datasetId,
+                                                                  cname, key));
+            }
 
-        Map<String, byte[]> channels = new LinkedHashMap<>();
-        String rawNames = (String) sig.getAttribute("channel_names");
-        for (String cname : splitNames(rawNames)) {
-            String segName = cname + "_segments";
-            if (!sig.hasChild(segName)) continue;
-            List<ChannelSegment> segs = readChannelSegments(sig, segName);
-            channels.put(cname,
-                PerAUEncryption.decryptChannelFromSegments(segs, datasetId,
-                                                              cname, key));
+            List<AUHeaderPlaintext> auHeaders = null;
+            if (headersEncrypted && idx.hasChild("au_header_segments")) {
+                List<HeaderSegment> segs = readHeaderSegments(idx,
+                                                                "au_header_segments");
+                auHeaders = PerAUEncryption.decryptHeaderSegments(segs, datasetId,
+                                                                     key);
+            }
+            return new DecryptedRun(channels, auHeaders);
         }
-
-        List<AUHeaderPlaintext> auHeaders = null;
-        if (headersEncrypted && idx.hasChild("au_header_segments")) {
-            List<HeaderSegment> segs = readHeaderSegments(idx, "au_header_segments");
-            auHeaders = PerAUEncryption.decryptHeaderSegments(segs, datasetId, key);
-        }
-        return new DecryptedRun(channels, auHeaders);
     }
 
     // ────────────────────────────────────────────── compound I/O helpers
