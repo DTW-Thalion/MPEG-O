@@ -317,6 +317,10 @@ def _compound_dtype(fields: tuple[CompoundField, ...]) -> np.dtype:
             items.append((f.name, "<f8"))
         elif f.kind == CompoundFieldKind.VL_STRING:
             items.append((f.name, object))
+        elif f.kind == CompoundFieldKind.VL_BYTES:
+            # v1.0: bytes blobs stored as Python bytes in an
+            # object-kind column (same mechanics as VL_STRING).
+            items.append((f.name, object))
         else:
             raise ValueError(f"unknown compound kind: {f.kind}")
     return np.dtype(items)

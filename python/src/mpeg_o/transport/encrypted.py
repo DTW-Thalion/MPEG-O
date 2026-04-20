@@ -36,40 +36,57 @@ from .packets import (
 )
 
 
-def is_per_au_encrypted(path: str | Path) -> bool:
-    """Return True if the file on disk carries ``opt_per_au_encryption``."""
-    import h5py
-    with h5py.File(str(path), "r") as f:
-        _, features = io.read_feature_flags(f)
+def is_per_au_encrypted(path: str | Path,
+                          *,
+                          provider: str | None = None) -> bool:
+    """Return True if the file on disk carries ``opt_per_au_encryption``.
+
+    Routes through :func:`mpeg_o.providers.open_provider` so any
+    backend works uniformly."""
+    from ..providers.registry import open_provider
+    sp = open_provider(str(path), provider=provider, mode="r")
+    try:
+        _, features = io.read_feature_flags(sp.root_group())
+    finally:
+        sp.close()
     return OPT_PER_AU_ENCRYPTION in features
 
 
 def write_encrypted_dataset(
     writer: TransportWriter,
     mpgo_path: str | Path,
+    *,
+    provider: str | None = None,
 ) -> None:
     """Emit a full transport stream from a per-AU-encrypted .mpgo
     file. Bypasses :class:`SpectralDataset.open` (which would refuse
     the file because the plaintext ``<channel>_values`` are absent)
-    and walks the HDF5 containers directly.
+    and walks the source via the StorageProvider abstraction so every
+    backend that supports VL_BYTES compound reads works.
 
     ProtectionMetadata is emitted after ``StreamHeader``; encrypted
     AUs carry the flag bits defined in ``docs/transport-spec.md``
     §3.1.1.
     """
-    import h5py
+    from ..providers.registry import open_provider
 
-    with h5py.File(str(mpgo_path), "r") as f:
-        _, features = io.read_feature_flags(f)
+    sp = open_provider(str(mpgo_path), provider=provider, mode="r")
+    try:
+        root = sp.root_group()
+        _, features = io.read_feature_flags(root)
         if OPT_PER_AU_ENCRYPTION not in features:
             raise ValueError(
                 f"{mpgo_path!r} does not carry opt_per_au_encryption"
             )
         headers_encrypted = OPT_ENCRYPTED_AU_HEADERS in features
 
-        title = io.read_string_attr(f["study"], "title") or ""
-        isa = io.read_string_attr(f["study"], "isa_investigation_id") or ""
-        run_items = list(f["study/ms_runs"].items())
+        study = root.open_group("study")
+        title = io.read_string_attr(study, "title") or ""
+        isa = io.read_string_attr(study, "isa_investigation_id") or ""
+        ms_runs = study.open_group("ms_runs")
+        run_items = [(n, ms_runs.open_group(n))
+                      for n in ms_runs.child_names()
+                      if not n.startswith("_") and ms_runs.has_child(n)]
 
         writer.write_stream_header(
             format_version="1.2",
@@ -85,7 +102,7 @@ def write_encrypted_dataset(
         # receiver is responsible for KEK unwrap via out-of-band
         # key management.
         for dataset_id, (run_name, run_group) in enumerate(run_items, start=1):
-            sig = run_group["signal_channels"]
+            sig = run_group.open_group("signal_channels")
             # Probe the first channel for the algorithm / wrapped DEK
             # metadata. All channels in a run share the same DEK in
             # the v1.0 design.
@@ -99,8 +116,8 @@ def write_encrypted_dataset(
             kek_algorithm = (io.read_string_attr(sig, f"{first_channel}_kek_algorithm")
                                or "")
             wrapped_dek_attr = f"{first_channel}_wrapped_dek"
-            if wrapped_dek_attr in sig.attrs:
-                wrapped_dek = bytes(sig.attrs[wrapped_dek_attr])
+            if sig.has_attribute(wrapped_dek_attr):
+                wrapped_dek = bytes(sig.get_attribute(wrapped_dek_attr))
             else:
                 wrapped_dek = b""
             _emit_protection_metadata(
@@ -133,8 +150,8 @@ def write_encrypted_dataset(
 
         # Emit AUs for each run
         for dataset_id, (run_name, run_group) in enumerate(run_items, start=1):
-            sig = run_group["signal_channels"]
-            idx = run_group["spectrum_index"]
+            sig = run_group.open_group("signal_channels")
+            idx = run_group.open_group("spectrum_index")
             channel_names = [
                 c for c in (io.read_string_attr(sig, "channel_names") or "").split(",")
                 if c
@@ -148,13 +165,16 @@ def write_encrypted_dataset(
                 header_segs = io.read_au_header_segments(idx, "au_header_segments")
             else:
                 header_segs = None
-                # Read plaintext index arrays for filter fields.
-                rts = idx["retention_times"][...] if "retention_times" in idx else None
-                ms_levels = idx["ms_levels"][...] if "ms_levels" in idx else None
-                polarities = idx["polarities"][...] if "polarities" in idx else None
-                precursor_mzs = idx["precursor_mzs"][...] if "precursor_mzs" in idx else None
-                precursor_charges = idx["precursor_charges"][...] if "precursor_charges" in idx else None
-                base_peak = idx["base_peak_intensities"][...] if "base_peak_intensities" in idx else None
+                # Read plaintext index arrays via the provider.
+                def _read_or_none(name):
+                    return (idx.open_dataset(name).read()
+                             if idx.has_child(name) else None)
+                rts = _read_or_none("retention_times")
+                ms_levels = _read_or_none("ms_levels")
+                polarities = _read_or_none("polarities")
+                precursor_mzs = _read_or_none("precursor_mzs")
+                precursor_charges = _read_or_none("precursor_charges")
+                base_peak = _read_or_none("base_peak_intensities")
 
             n = len(next(iter(channel_segments_by_name.values())))
             wire_class = _SPECTRUM_CLASS_TO_WIRE.get(spectrum_class, 0)
@@ -217,6 +237,8 @@ def write_encrypted_dataset(
                 final_au_sequence=n,
             )
         writer.write_end_of_stream()
+    finally:
+        sp.close()
 
 
 def _wire_polarity(raw: int) -> int:
@@ -281,9 +303,13 @@ def _emit_raw_au(
 def read_encrypted_to_file(
     stream_source,
     output_path: str | Path,
+    *,
+    provider: str | None = None,
 ) -> dict:
     """Materialise an encrypted transport stream into a new .mpgo
-    file preserving the encrypted ChannelData bytes verbatim.
+    file preserving the encrypted ChannelData bytes verbatim. Routes
+    through :func:`mpeg_o.providers.open_provider` so the output
+    can live in any backend that supports VL_BYTES compound writes.
 
     ``stream_source`` may be a ``BinaryIO`` or a path to a ``.mots``
     file. The output file is written with ``opt_per_au_encryption``
@@ -297,8 +323,7 @@ def read_encrypted_to_file(
     """
     from .codec import TransportReader
     from ..encryption_per_au import ChannelSegment, HeaderSegment
-
-    import h5py
+    from ..providers.registry import open_provider
 
     # Accumulate stream → in-memory structure, then emit .mpgo at the end.
     stream_meta: dict = {}
@@ -346,9 +371,11 @@ def read_encrypted_to_file(
     if any_encrypted_headers:
         features.add(OPT_ENCRYPTED_AU_HEADERS)
 
-    with h5py.File(str(output_path), "w") as f:
-        io.write_feature_flags(f, "1.1", sorted(features))
-        study = f.create_group("study")
+    sp_out = open_provider(str(output_path), provider=provider, mode="w")
+    try:
+        root = sp_out.root_group()
+        io.write_feature_flags(root, "1.1", sorted(features))
+        study = root.create_group("study")
         io.write_fixed_string_attr(study, "title", stream_meta.get("title", ""))
         io.write_fixed_string_attr(study, "isa_investigation_id",
                                      stream_meta.get("isa_investigation", ""))
@@ -356,6 +383,8 @@ def read_encrypted_to_file(
         names = ",".join(d["meta"]["name"] for _, d in sorted(datasets.items()))
         io.write_fixed_string_attr(ms_runs, "_run_names", names)
 
+        import numpy as np
+        from ..enums import Precision
         for did, d in sorted(datasets.items()):
             meta = d["meta"]
             run_group = ms_runs.create_group(meta["name"])
@@ -367,7 +396,6 @@ def read_encrypted_to_file(
                                 else len(next(iter(d["channel_segments"].values()))))
             io.write_fixed_string_attr(run_group, "spectrum_class",
                                          meta["spectrum_class"])
-            # instrument_config subgroup with empty strings
             cfg = run_group.create_group("instrument_config")
             for fname in ("manufacturer", "model", "serial_number",
                             "source_type", "analyzer_type", "detector_type"):
@@ -379,24 +407,30 @@ def read_encrypted_to_file(
             for cname in meta["channel_names"]:
                 segs = d["channel_segments"][cname]
                 io.write_channel_segments(sig, f"{cname}_segments", segs)
-                sig.attrs[f"{cname}_algorithm"] = "aes-256-gcm"
+                sig.set_attribute(f"{cname}_algorithm", "aes-256-gcm")
                 pm = protection.get(did)
                 if pm:
-                    sig.attrs[f"{cname}_wrapped_dek"] = pm["wrapped_dek"]
-                    sig.attrs[f"{cname}_kek_algorithm"] = pm["kek_algorithm"]
+                    sig.set_attribute(f"{cname}_wrapped_dek",
+                                         pm["wrapped_dek"])
+                    sig.set_attribute(f"{cname}_kek_algorithm",
+                                         pm["kek_algorithm"])
 
             idx = run_group.create_group("spectrum_index")
-            io.write_int_attr(idx, "count", len(segs))
-            # Offsets + lengths from the first channel's segments.
             first_segs = next(iter(d["channel_segments"].values()))
-            import numpy as np
+            io.write_int_attr(idx, "count", len(first_segs))
             offsets_arr = np.array([s.offset for s in first_segs], dtype="<u8")
             lengths_arr = np.array([s.length for s in first_segs], dtype="<u4")
-            idx.create_dataset("offsets", data=offsets_arr)
-            idx.create_dataset("lengths", data=lengths_arr)
+            ds_off = idx.create_dataset("offsets", Precision.INT64,
+                                           len(first_segs))
+            ds_off.write(offsets_arr)
+            ds_len = idx.create_dataset("lengths", Precision.UINT32,
+                                           len(first_segs))
+            ds_len.write(lengths_arr)
             if d["used_encrypted_headers"]:
                 io.write_au_header_segments(idx, "au_header_segments",
                                               d["header_segments"])
+    finally:
+        sp_out.close()
 
     return {
         "title": stream_meta.get("title", ""),

@@ -425,143 +425,131 @@ def is_legacy_v1(root: _IOTarget) -> bool:
     return FEATURES_ATTR not in native.attrs
 
 
-# ---------------------------------------------------------------------
-# v1.0 per-AU encryption: compound-dataset I/O
-# ---------------------------------------------------------------------
-# See docs/transport-encryption-design.md §5 + format-spec §9.1.
-# Layout:
-#   channel segments    — {offset u64, length u32, iv u8[12], tag u8[16],
-#                           ciphertext VL u8}
-#   au_header segments  — {iv u8[12], tag u8[16], ciphertext u8[36]}
-
-
-def _channel_segments_dtype():
-    return np.dtype([
-        ('offset', '<u8'),
-        ('length', '<u4'),
-        ('iv', 'u1', (12,)),
-        ('tag', 'u1', (16,)),
-        ('ciphertext', h5py.vlen_dtype(np.uint8)),
-    ])
-
-
-def _au_header_segments_dtype():
-    return np.dtype([
-        ('iv', 'u1', (12,)),
-        ('tag', 'u1', (16,)),
-        ('ciphertext', 'u1', (36,)),
-    ])
-
-
-def write_channel_segments(parent: _IOTarget, name: str, segments):
-    Write
 
 
 # ---------------------------------------------------------------------
-# v1.0 per-AU encryption: compound-dataset I/O
+# v1.0 per-AU encryption: compound-dataset I/O (provider-abstracted)
 # ---------------------------------------------------------------------
 # See docs/transport-encryption-design.md §5 + format-spec §9.1.
 # Layout:
-#   channel segments    - {offset u64, length u32, iv u8[12], tag u8[16],
-#                          ciphertext VL u8}
-#   au_header segments  - {iv u8[12], tag u8[16], ciphertext u8[36]}
+#   channel segments   - {offset INT64, length UINT32, iv VL_BYTES,
+#                         tag VL_BYTES, ciphertext VL_BYTES}
+#   au_header segments - {iv VL_BYTES, tag VL_BYTES, ciphertext VL_BYTES}
+#
+# IV + tag are always 12/16 bytes; ciphertext varies. Encoding all
+# three as VL_BYTES keeps the abstraction layer small: the provider
+# sees a uniform "variable-length byte column" kind, and every
+# backend that implements VL_BYTES gets per-AU encryption for free.
+# Fixed-size bytes does not need its own CompoundFieldKind.
 
 
-def _channel_segments_dtype():
-    return np.dtype([
-        ("offset", "<u8"),
-        ("length", "<u4"),
-        ("iv", "u1", (12,)),
-        ("tag", "u1", (16,)),
-        ("ciphertext", h5py.vlen_dtype(np.uint8)),
-    ])
+def _channel_segments_fields():
+    from .providers.base import CompoundField, CompoundFieldKind
+    return [
+        CompoundField(name="offset", kind=CompoundFieldKind.INT64),
+        CompoundField(name="length", kind=CompoundFieldKind.UINT32),
+        CompoundField(name="iv", kind=CompoundFieldKind.VL_BYTES),
+        CompoundField(name="tag", kind=CompoundFieldKind.VL_BYTES),
+        CompoundField(name="ciphertext", kind=CompoundFieldKind.VL_BYTES),
+    ]
 
 
-def _au_header_segments_dtype():
-    return np.dtype([
-        ("iv", "u1", (12,)),
-        ("tag", "u1", (16,)),
-        ("ciphertext", "u1", (36,)),
-    ])
+def _au_header_segments_fields():
+    from .providers.base import CompoundField, CompoundFieldKind
+    return [
+        CompoundField(name="iv", kind=CompoundFieldKind.VL_BYTES),
+        CompoundField(name="tag", kind=CompoundFieldKind.VL_BYTES),
+        CompoundField(name="ciphertext", kind=CompoundFieldKind.VL_BYTES),
+    ]
 
 
-def write_channel_segments(parent, name, segments):
-    """Write a ChannelSegment list as one compound HDF5 dataset.
+def _row_value_to_bytes(v) -> bytes:
+    """Normalise a VL_BYTES cell (``bytes``, numpy uint8 array, or
+    h5py ``hvl_t``) to Python ``bytes``."""
+    if isinstance(v, (bytes, bytearray)):
+        return bytes(v)
+    try:
+        return bytes(np.asarray(v, dtype=np.uint8).tobytes())
+    except Exception:
+        return bytes(v)
 
-    ``segments`` iterable of objects with attributes offset (int),
-    length (int), iv (12 bytes), tag (16 bytes), ciphertext (bytes).
-    See docs/format-spec.md §9.1.
+
+def write_channel_segments(parent_storage_group, name, segments):
+    """Write a ChannelSegment list to the ``<name>`` compound dataset
+    under ``parent_storage_group``. Routes through the provider
+    abstraction so every backend that supports VL_BYTES works; HDF5
+    + Memory are wired today, SQLite + Zarr raise NotImplementedError
+    until their JSON-based compound paths grow base64 transport.
     """
-    native = _unwrap_to_h5py(parent)
-    if native is None:
-        raise NotImplementedError(
-            "write_channel_segments: non-HDF5 providers not yet supported"
-        )
+    parent_storage_group.delete_child(name)
+    fields = _channel_segments_fields()
     rows = list(segments)
-    dtype = _channel_segments_dtype()
-    arr = np.empty(len(rows), dtype=dtype)
-    for i, seg in enumerate(rows):
-        arr[i]["offset"] = int(seg.offset)
-        arr[i]["length"] = int(seg.length)
-        arr[i]["iv"] = np.frombuffer(seg.iv, dtype=np.uint8)
-        arr[i]["tag"] = np.frombuffer(seg.tag, dtype=np.uint8)
-        arr[i]["ciphertext"] = np.frombuffer(bytes(seg.ciphertext), dtype=np.uint8)
-    if name in native:
-        del native[name]
-    return native.create_dataset(name, data=arr, dtype=dtype)
+    ds = parent_storage_group.create_compound_dataset(name, fields, len(rows))
+    ds.write([
+        {
+            "offset": int(seg.offset),
+            "length": int(seg.length),
+            "iv": bytes(seg.iv),
+            "tag": bytes(seg.tag),
+            "ciphertext": bytes(seg.ciphertext),
+        }
+        for seg in rows
+    ])
+    return ds
 
 
-def read_channel_segments(parent, name):
-    """Reverse of write_channel_segments."""
-    native = _unwrap_to_h5py(parent)
-    if native is None or name not in native:
-        raise KeyError(f"channel segments dataset {name!r} not found")
+def read_channel_segments(parent_storage_group, name):
+    """Inverse of write_channel_segments. Returns a list of
+    SimpleNamespace rows with ``.offset``, ``.length``, ``.iv``,
+    ``.tag``, ``.ciphertext`` (all Python bytes)."""
     from types import SimpleNamespace
-    arr = native[name][()]
+    if not parent_storage_group.has_child(name):
+        raise KeyError(f"channel segments dataset {name!r} not found")
+    ds = parent_storage_group.open_dataset(name)
+    arr = ds.read()
     rows = []
     for row in arr:
         rows.append(SimpleNamespace(
             offset=int(row["offset"]),
             length=int(row["length"]),
-            iv=bytes(row["iv"]),
-            tag=bytes(row["tag"]),
-            ciphertext=bytes(row["ciphertext"]),
+            iv=_row_value_to_bytes(row["iv"]),
+            tag=_row_value_to_bytes(row["tag"]),
+            ciphertext=_row_value_to_bytes(row["ciphertext"]),
         ))
     return rows
 
 
-def write_au_header_segments(parent, name, segments):
-    """Write HeaderSegment list as a compound dataset (fixed 36-byte
-    ciphertext per row)."""
-    native = _unwrap_to_h5py(parent)
-    if native is None:
-        raise NotImplementedError(
-            "write_au_header_segments: non-HDF5 providers not yet supported"
-        )
+def write_au_header_segments(parent_storage_group, name, segments):
+    """Write HeaderSegment list to ``<name>`` under
+    ``parent_storage_group``. Same VL_BYTES compound pattern as
+    write_channel_segments; ciphertext here is always 36 bytes."""
+    parent_storage_group.delete_child(name)
+    fields = _au_header_segments_fields()
     rows = list(segments)
-    dtype = _au_header_segments_dtype()
-    arr = np.empty(len(rows), dtype=dtype)
-    for i, seg in enumerate(rows):
-        arr[i]["iv"] = np.frombuffer(seg.iv, dtype=np.uint8)
-        arr[i]["tag"] = np.frombuffer(seg.tag, dtype=np.uint8)
-        arr[i]["ciphertext"] = np.frombuffer(bytes(seg.ciphertext), dtype=np.uint8)
-    if name in native:
-        del native[name]
-    return native.create_dataset(name, data=arr, dtype=dtype)
+    ds = parent_storage_group.create_compound_dataset(name, fields, len(rows))
+    ds.write([
+        {
+            "iv": bytes(seg.iv),
+            "tag": bytes(seg.tag),
+            "ciphertext": bytes(seg.ciphertext),
+        }
+        for seg in rows
+    ])
+    return ds
 
 
-def read_au_header_segments(parent, name):
-    """Reverse of write_au_header_segments."""
-    native = _unwrap_to_h5py(parent)
-    if native is None or name not in native:
-        raise KeyError(f"au_header segments dataset {name!r} not found")
+def read_au_header_segments(parent_storage_group, name):
+    """Inverse of write_au_header_segments."""
     from types import SimpleNamespace
-    arr = native[name][()]
+    if not parent_storage_group.has_child(name):
+        raise KeyError(f"au_header segments dataset {name!r} not found")
+    ds = parent_storage_group.open_dataset(name)
+    arr = ds.read()
     rows = []
     for row in arr:
         rows.append(SimpleNamespace(
-            iv=bytes(row["iv"]),
-            tag=bytes(row["tag"]),
-            ciphertext=bytes(row["ciphertext"]),
+            iv=_row_value_to_bytes(row["iv"]),
+            tag=_row_value_to_bytes(row["tag"]),
+            ciphertext=_row_value_to_bytes(row["ciphertext"]),
         ))
     return rows

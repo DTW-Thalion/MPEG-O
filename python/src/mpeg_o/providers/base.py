@@ -60,6 +60,12 @@ class CompoundFieldKind(Enum):
     INT64 = "int64"
     FLOAT64 = "float64"
     VL_STRING = "vl_string"
+    # v1.0: variable-length byte buffer. Used by the per-AU
+    # encryption ``<channel>_segments`` compound (ciphertext column)
+    # and for fixed-length inline IV / TAG / semantic-header blobs.
+    # Providers serialise each row's value as ``bytes``; on read the
+    # value comes back as ``bytes``.
+    VL_BYTES = "vl_bytes"
 
 
 @dataclass(frozen=True)
