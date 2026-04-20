@@ -423,3 +423,145 @@ def is_legacy_v1(root: _IOTarget) -> bool:
     if native is None:
         return not root.has_attribute(FEATURES_ATTR)
     return FEATURES_ATTR not in native.attrs
+
+
+# ---------------------------------------------------------------------
+# v1.0 per-AU encryption: compound-dataset I/O
+# ---------------------------------------------------------------------
+# See docs/transport-encryption-design.md §5 + format-spec §9.1.
+# Layout:
+#   channel segments    — {offset u64, length u32, iv u8[12], tag u8[16],
+#                           ciphertext VL u8}
+#   au_header segments  — {iv u8[12], tag u8[16], ciphertext u8[36]}
+
+
+def _channel_segments_dtype():
+    return np.dtype([
+        ('offset', '<u8'),
+        ('length', '<u4'),
+        ('iv', 'u1', (12,)),
+        ('tag', 'u1', (16,)),
+        ('ciphertext', h5py.vlen_dtype(np.uint8)),
+    ])
+
+
+def _au_header_segments_dtype():
+    return np.dtype([
+        ('iv', 'u1', (12,)),
+        ('tag', 'u1', (16,)),
+        ('ciphertext', 'u1', (36,)),
+    ])
+
+
+def write_channel_segments(parent: _IOTarget, name: str, segments):
+    Write
+
+
+# ---------------------------------------------------------------------
+# v1.0 per-AU encryption: compound-dataset I/O
+# ---------------------------------------------------------------------
+# See docs/transport-encryption-design.md §5 + format-spec §9.1.
+# Layout:
+#   channel segments    - {offset u64, length u32, iv u8[12], tag u8[16],
+#                          ciphertext VL u8}
+#   au_header segments  - {iv u8[12], tag u8[16], ciphertext u8[36]}
+
+
+def _channel_segments_dtype():
+    return np.dtype([
+        ("offset", "<u8"),
+        ("length", "<u4"),
+        ("iv", "u1", (12,)),
+        ("tag", "u1", (16,)),
+        ("ciphertext", h5py.vlen_dtype(np.uint8)),
+    ])
+
+
+def _au_header_segments_dtype():
+    return np.dtype([
+        ("iv", "u1", (12,)),
+        ("tag", "u1", (16,)),
+        ("ciphertext", "u1", (36,)),
+    ])
+
+
+def write_channel_segments(parent, name, segments):
+    """Write a ChannelSegment list as one compound HDF5 dataset.
+
+    ``segments`` iterable of objects with attributes offset (int),
+    length (int), iv (12 bytes), tag (16 bytes), ciphertext (bytes).
+    See docs/format-spec.md §9.1.
+    """
+    native = _unwrap_to_h5py(parent)
+    if native is None:
+        raise NotImplementedError(
+            "write_channel_segments: non-HDF5 providers not yet supported"
+        )
+    rows = list(segments)
+    dtype = _channel_segments_dtype()
+    arr = np.empty(len(rows), dtype=dtype)
+    for i, seg in enumerate(rows):
+        arr[i]["offset"] = int(seg.offset)
+        arr[i]["length"] = int(seg.length)
+        arr[i]["iv"] = np.frombuffer(seg.iv, dtype=np.uint8)
+        arr[i]["tag"] = np.frombuffer(seg.tag, dtype=np.uint8)
+        arr[i]["ciphertext"] = np.frombuffer(bytes(seg.ciphertext), dtype=np.uint8)
+    if name in native:
+        del native[name]
+    return native.create_dataset(name, data=arr, dtype=dtype)
+
+
+def read_channel_segments(parent, name):
+    """Reverse of write_channel_segments."""
+    native = _unwrap_to_h5py(parent)
+    if native is None or name not in native:
+        raise KeyError(f"channel segments dataset {name!r} not found")
+    from types import SimpleNamespace
+    arr = native[name][()]
+    rows = []
+    for row in arr:
+        rows.append(SimpleNamespace(
+            offset=int(row["offset"]),
+            length=int(row["length"]),
+            iv=bytes(row["iv"]),
+            tag=bytes(row["tag"]),
+            ciphertext=bytes(row["ciphertext"]),
+        ))
+    return rows
+
+
+def write_au_header_segments(parent, name, segments):
+    """Write HeaderSegment list as a compound dataset (fixed 36-byte
+    ciphertext per row)."""
+    native = _unwrap_to_h5py(parent)
+    if native is None:
+        raise NotImplementedError(
+            "write_au_header_segments: non-HDF5 providers not yet supported"
+        )
+    rows = list(segments)
+    dtype = _au_header_segments_dtype()
+    arr = np.empty(len(rows), dtype=dtype)
+    for i, seg in enumerate(rows):
+        arr[i]["iv"] = np.frombuffer(seg.iv, dtype=np.uint8)
+        arr[i]["tag"] = np.frombuffer(seg.tag, dtype=np.uint8)
+        arr[i]["ciphertext"] = np.frombuffer(bytes(seg.ciphertext), dtype=np.uint8)
+    if name in native:
+        del native[name]
+    return native.create_dataset(name, data=arr, dtype=dtype)
+
+
+def read_au_header_segments(parent, name):
+    """Reverse of write_au_header_segments."""
+    native = _unwrap_to_h5py(parent)
+    if native is None or name not in native:
+        raise KeyError(f"au_header segments dataset {name!r} not found")
+    from types import SimpleNamespace
+    arr = native[name][()]
+    rows = []
+    for row in arr:
+        rows.append(SimpleNamespace(
+            iv=bytes(row["iv"]),
+            tag=bytes(row["tag"]),
+            ciphertext=bytes(row["ciphertext"]),
+        ))
+    return rows
