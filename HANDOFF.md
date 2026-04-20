@@ -746,7 +746,48 @@ python -m mpeg_o.transport.client ws://localhost:9700 --output live.mpgo
 
 ---
 
-## Milestone 70 — Bidirectional Conversion Conformance
+## Milestone 70 — Bidirectional Conversion Conformance — COMPLETE (3-language parity)
+
+Shipped encode/decode CLIs + conformance tests in all three
+languages plus cross-language subprocess tests. Counts:
+Python 606 / Java 270 / ObjC 1339.
+
+**Encode/decode CLIs (new):**
+- Python: `python -m mpeg_o.tools.transport_encode_cli <in.mpgo> <out.mots>`
+  and `python -m mpeg_o.tools.transport_decode_cli`.
+- Java: `com.dtwthalion.mpgo.tools.TransportEncodeCli` /
+  `TransportDecodeCli`.
+- ObjC: `MpgoTransportEncode` / `MpgoTransportDecode` in
+  `objc/Tools/`.
+
+**In-language conformance (4 tests each):**
+- Single-run round-trip, multi-run round-trip, large-spectra
+  round-trip, CRC-32C-checksummed round-trip. Every signal sample
+  compared bit-for-bit; RT + precursor_mz compared to 1e-12.
+- Python: `tests/test_transport_conformance.py`.
+- Java: `TransportConformanceTest.java`.
+- ObjC: `TestTransportConformance.m`.
+
+**Cross-language conformance (Python drives, 6 tests):**
+- Python ↔ Java encode/decode exchange (both directions).
+- Python ↔ ObjC encode/decode exchange (both directions).
+- Java ↔ ObjC encode/decode exchange (Python orchestrates both
+  CLIs, verifies signal equality).
+- Tests skip automatically when `mvn compile` or `./build.sh`
+  has not been run — no hard dependency on all three toolchains.
+
+**Scope restrictions** (deferred to M71 as planned):
+- Compressed channel wire format (zlib / lz4 / numpress-delta) is
+  still FLOAT64 + NONE only. All in-language tests exercise the
+  uncompressed path; codec preservation follows M71.
+- Encrypted / signed dataset round-trips are M71 scope.
+- Bruker ion-mobility and MSImage-pixel round-trips: AU supports
+  the fields, but importer-specific integration tests land with
+  the M71 selective-access work.
+
+Historical spec retained below for audit.
+
+### Historical: Milestone 70 — Bidirectional Conversion Conformance
 
 **License:** LGPL-3.0
 
