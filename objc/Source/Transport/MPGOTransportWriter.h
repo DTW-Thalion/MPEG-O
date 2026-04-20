@@ -29,6 +29,11 @@ NS_ASSUME_NONNULL_BEGIN
  *  (sets MPGOTransportPacketFlagHasChecksum). Default NO. */
 @property (nonatomic) BOOL useChecksum;
 
+/** Compress each channel's float64 bytes with zlib on the wire,
+ *  setting ``MPGOCompressionZlib`` on the ChannelData. The reader
+ *  decompresses automatically regardless of this flag. Default NO. */
+@property (nonatomic) BOOL useCompression;
+
 - (instancetype)initWithOutputPath:(NSString *)path;
 - (instancetype)initWithMutableData:(NSMutableData *)data;
 

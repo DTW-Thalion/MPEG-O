@@ -36,6 +36,7 @@ public final class TransportWriter implements AutoCloseable {
     private final OutputStream out;
     private final boolean ownsStream;
     private boolean useChecksum = false;
+    private boolean useCompression = false;
 
     public TransportWriter(OutputStream out) {
         this.out = out;
@@ -48,6 +49,8 @@ public final class TransportWriter implements AutoCloseable {
     }
 
     public void setUseChecksum(boolean v) { this.useChecksum = v; }
+    public void setUseCompression(boolean v) { this.useCompression = v; }
+    public boolean useCompression() { return useCompression; }
 
     @Override
     public void close() throws IOException {
@@ -177,7 +180,7 @@ public final class TransportWriter implements AutoCloseable {
             int n = run.spectrumCount();
             List<String> channelNames = new ArrayList<>(run.channels().keySet());
             for (int i = 0; i < n; i++) {
-                AccessUnit au = spectrumToAccessUnit(run, i, channelNames);
+                AccessUnit au = spectrumToAccessUnit(run, i, channelNames, useCompression);
                 writeAccessUnit(id, i, au);
             }
             writeEndOfDataset(id, n);
@@ -217,6 +220,12 @@ public final class TransportWriter implements AutoCloseable {
 
     static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
                                               List<String> channelNames) {
+        return spectrumToAccessUnit(run, i, channelNames, false);
+    }
+
+    static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
+                                              List<String> channelNames,
+                                              boolean useCompression) {
         Spectrum sp = run.objectAtIndex(i);
         int wireClass = wireFromSpectrumClassName(run.spectrumClassName());
         int msLevel = 0;
@@ -239,13 +248,19 @@ public final class TransportWriter implements AutoCloseable {
             if (all == null) continue;
             int off = (int) idx.offsetAt(i);
             int len = idx.lengthAt(i);
-            byte[] data = new byte[len * 8];
-            ByteBuffer buf = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+            byte[] raw = new byte[len * 8];
+            ByteBuffer buf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
             for (int k = 0; k < len; k++) buf.putDouble(all[off + k]);
+            byte[] payload = raw;
+            int compressionCode = Enums.Compression.NONE.ordinal();
+            if (useCompression) {
+                payload = zlibDeflate(raw);
+                compressionCode = Enums.Compression.ZLIB.ordinal();
+            }
             channels.add(new ChannelData(cname,
                     Enums.Precision.FLOAT64.ordinal(),
-                    Enums.Compression.NONE.ordinal(),
-                    len, data));
+                    compressionCode,
+                    len, payload));
         }
 
         return new AccessUnit(
@@ -260,6 +275,20 @@ public final class TransportWriter implements AutoCloseable {
                 bpi,
                 channels,
                 0, 0, 0);
+    }
+
+    private static byte[] zlibDeflate(byte[] input) {
+        java.util.zip.Deflater def = new java.util.zip.Deflater();
+        def.setInput(input);
+        def.finish();
+        byte[] buf = new byte[Math.max(64, input.length)];
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        while (!def.finished()) {
+            int n = def.deflate(buf);
+            out.write(buf, 0, n);
+        }
+        def.end();
+        return out.toByteArray();
     }
 
     private static int wireFromSpectrumClassName(String name) {

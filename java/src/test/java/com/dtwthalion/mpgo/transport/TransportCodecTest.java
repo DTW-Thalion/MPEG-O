@@ -205,6 +205,38 @@ class TransportCodecTest {
     }
 
     @Test
+    void zlibCompressionRoundTrip(@TempDir Path dir) throws Exception {
+        try (SpectralDataset src = makeFixture(dir)) { /* close */ }
+        SpectralDataset src = SpectralDataset.open(dir.resolve("src.mpgo").toString());
+
+        ByteArrayOutputStream plain = new ByteArrayOutputStream();
+        ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+        try (TransportWriter tw = new TransportWriter(plain)) {
+            tw.writeDataset(src);
+        }
+        try (TransportWriter tw = new TransportWriter(compressed)) {
+            tw.setUseCompression(true);
+            tw.writeDataset(src);
+        }
+        src.close();
+
+        // Small fixture; compressed should at least not explode past
+        // plain + zlib overhead.
+        assertTrue(compressed.size() <= plain.size() + 128);
+
+        Path out = dir.resolve("rt_zlib.mpgo");
+        try (TransportReader tr = new TransportReader(compressed.toByteArray());
+             SpectralDataset rt = tr.materializeTo(out.toString())) {
+            AcquisitionRun run = rt.msRuns().get("run_0001");
+            assertNotNull(run);
+            assertEquals(3, run.spectrumCount());
+            // MS2 spectrum at index 1 should still have precursor_mz=500.25.
+            MassSpectrum s1 = (MassSpectrum) run.objectAtIndex(1);
+            assertEquals(500.25, s1.precursorMz(), 1e-9);
+        }
+    }
+
+    @Test
     void checksumCorruptionIsDetected(@TempDir Path dir) throws Exception {
         try (SpectralDataset src = makeFixture(dir)) { /* close */ }
         SpectralDataset src = SpectralDataset.open(dir.resolve("src.mpgo").toString());

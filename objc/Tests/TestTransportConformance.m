@@ -168,10 +168,40 @@ static BOOL roundTrip(NSUInteger nRuns, NSUInteger nSpectra,
     return eq;
 }
 
+static BOOL roundTripWithCompression(NSUInteger nRuns, NSUInteger nSpectra,
+                                       NSUInteger pointsPerSpectrum)
+{
+    NSString *src = tmp(@"src-zlib.mpgo");
+    NSString *mots = tmp(@"stream-zlib.mots");
+    NSString *rt = tmp(@"rt-zlib.mpgo");
+    rm(src); rm(mots); rm(rt);
+
+    NSError *err = nil;
+    if (!buildDataset(src, nRuns, nSpectra, pointsPerSpectrum, &err)) return NO;
+
+    MPGOSpectralDataset *source = [MPGOSpectralDataset readFromFilePath:src error:&err];
+    MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithOutputPath:mots];
+    tw.useCompression = YES;
+    if (![tw writeDataset:source error:&err]) { [tw close]; return NO; }
+    [tw close];
+
+    MPGOTransportReader *tr = [[MPGOTransportReader alloc] initWithInputPath:mots];
+    if (![tr writeMpgoToPath:rt error:&err]) return NO;
+
+    MPGOSpectralDataset *rtDs = [MPGOSpectralDataset readFromFilePath:rt error:&err];
+    BOOL eq = datasetsSignalEqual(source, rtDs);
+    rm(src); rm(mots); rm(rt);
+    return eq;
+}
+
 void testTransportConformance(void)
 {
     PASS(roundTrip(1, 5, 4, NO), "single run, 5 spectra × 4 pts: round-trip bit-equal");
     PASS(roundTrip(3, 4, 5, NO), "3 runs, 4 spectra × 5 pts: round-trip bit-equal");
     PASS(roundTrip(1, 20, 128, NO), "1 run × 20 spectra × 128 pts: round-trip bit-equal");
     PASS(roundTrip(1, 5, 4, YES), "round-trip with CRC-32C checksum: bit-equal");
+    PASS(roundTripWithCompression(1, 5, 4),
+         "round-trip with ZLIB wire compression: bit-equal");
+    PASS(roundTripWithCompression(1, 20, 128),
+         "round-trip with ZLIB wire compression + larger spectra: bit-equal");
 }

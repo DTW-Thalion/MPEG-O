@@ -5,15 +5,15 @@ packet sequence specified in ``docs/transport-spec.md``. The reader
 ingests a packet stream and materializes it back into a ``.mpgo``
 file via :meth:`SpectralDataset.write_minimal`.
 
-M67 scope:
+Scope:
 
-- Signal data is emitted and ingested as ``float64`` with
-  ``Compression.NONE``. Compressed-bytes preservation is deferred to
-  M70 conformance work (requires read-side integration of the
-  ``read_canonical_bytes`` path).
+- Signal data is emitted as ``float64``. On-wire compression via
+  ``Compression.ZLIB`` is opt-in (``TransportWriter(use_compression=True)``)
+  and handled automatically by :class:`TransportReader` regardless.
 - ProtectionMetadata / Annotation / Provenance / Chromatogram
-  packet slots are defined on the wire but the reader currently
-  skips them. Full materialization is M70/M71.
+  packet slots are defined on the wire but writer emission and
+  reader materialization of encrypted AUs remain v1.0 integration
+  items (the wire is stable as of M71).
 - Selective-access filtering lives in M68 (server) and M71 (filter
   enforcement).
 """
@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import struct
+import zlib
 from pathlib import Path
 from typing import BinaryIO, Iterator
 
@@ -78,6 +79,7 @@ class TransportWriter:
         output: BinaryIO | str | Path,
         *,
         use_checksum: bool = False,
+        use_compression: bool = False,
     ):
         self._owns_stream = isinstance(output, (str, Path))
         if self._owns_stream:
@@ -85,7 +87,12 @@ class TransportWriter:
         else:
             self._stream = output  # type: ignore[assignment]
         self._use_checksum = use_checksum
+        self._use_compression = use_compression
         self._stream_header_written = False
+
+    @property
+    def use_compression(self) -> bool:
+        return self._use_compression
 
     def __enter__(self) -> "TransportWriter":
         return self
@@ -210,7 +217,9 @@ class TransportWriter:
             )
         for i, (name, run) in enumerate(runs, start=1):
             for j, spectrum in enumerate(run):
-                au = _spectrum_to_access_unit(spectrum, run)
+                au = _spectrum_to_access_unit(
+                    spectrum, run, use_compression=self._use_compression
+                )
                 self.write_access_unit(dataset_id=i, au_sequence=j, au=au)
             self.write_end_of_dataset(dataset_id=i, final_au_sequence=len(run))
         self.write_end_of_stream()
@@ -228,7 +237,12 @@ def _instrument_config_json(run: AcquisitionRun) -> str:
     }, sort_keys=True)
 
 
-def _spectrum_to_access_unit(spectrum: Spectrum, run: AcquisitionRun) -> AccessUnit:
+def _spectrum_to_access_unit(
+    spectrum: Spectrum,
+    run: AcquisitionRun,
+    *,
+    use_compression: bool = False,
+) -> AccessUnit:
     wire_class = _SPECTRUM_CLASS_TO_WIRE.get(run.spectrum_class, 0)
     ms_level = 0
     polarity_wire = _POLARITY_TO_WIRE[Polarity.UNKNOWN]
@@ -244,12 +258,19 @@ def _spectrum_to_access_unit(spectrum: Spectrum, run: AcquisitionRun) -> AccessU
             continue
         sa = spectrum.signal_array(cname)
         arr = np.asarray(sa.data).astype("<f8", copy=False)
+        raw = arr.tobytes()
+        if use_compression:
+            payload = zlib.compress(raw)
+            compression = int(Compression.ZLIB)
+        else:
+            payload = raw
+            compression = int(Compression.NONE)
         channels.append(ChannelData(
             name=cname,
             precision=int(Precision.FLOAT64),
-            compression=int(Compression.NONE),
+            compression=compression,
             n_elements=int(arr.size),
-            data=arr.tobytes(),
+            data=payload,
         ))
 
     return AccessUnit(
@@ -479,17 +500,20 @@ def _decode_dataset_header(payload: bytes) -> dict:
 def _ingest_access_unit(rd: dict, au: AccessUnit) -> None:
     arr_by_name: dict[str, np.ndarray] = {}
     for ch in au.channels:
-        if ch.compression != int(Compression.NONE):
-            raise NotImplementedError(
-                f"compression {ch.compression} not yet supported "
-                "(M67 scope: NONE only; M70 adds codec preservation)"
-            )
         if ch.precision != int(Precision.FLOAT64):
             raise NotImplementedError(
-                f"precision {ch.precision} not yet supported "
-                "(M67 scope: FLOAT64 only)"
+                f"precision {ch.precision} not yet supported (FLOAT64 only)"
             )
-        arr_by_name[ch.name] = np.frombuffer(ch.data, dtype="<f8").copy()
+        if ch.compression == int(Compression.NONE):
+            raw = ch.data
+        elif ch.compression == int(Compression.ZLIB):
+            raw = zlib.decompress(ch.data)
+        else:
+            raise NotImplementedError(
+                f"compression {ch.compression} not yet supported "
+                "(current codec: NONE, ZLIB)"
+            )
+        arr_by_name[ch.name] = np.frombuffer(raw, dtype="<f8").copy()
 
     lengths = {len(a) for a in arr_by_name.values()}
     if len(lengths) > 1:
@@ -523,10 +547,13 @@ def file_to_transport(
     output: BinaryIO | str | Path,
     *,
     use_checksum: bool = False,
+    use_compression: bool = False,
 ) -> None:
     """Convert a ``.mpgo`` file to a transport stream."""
     with SpectralDataset.open(mpgo_path) as ds, \
-            TransportWriter(output, use_checksum=use_checksum) as tw:
+            TransportWriter(output,
+                              use_checksum=use_checksum,
+                              use_compression=use_compression) as tw:
         tw.write_dataset(ds)
 
 
