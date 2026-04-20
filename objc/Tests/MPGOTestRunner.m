@@ -48,6 +48,7 @@ extern void testNdDatasetCrossBackend(void);
 extern void testTransportCodec(void);
 extern void testTransportClient(void);
 extern void testAcquisitionSimulator(void);
+extern void testTransportServer(void);
 
 int main(int argc, const char *argv[])
 {
@@ -239,6 +240,10 @@ int main(int argc, const char *argv[])
         START_SET("M69: acquisition simulator (v0.10)")
             testAcquisitionSimulator();
         END_SET("M69: acquisition simulator (v0.10)")
+
+        START_SET("M68.5: transport server (v0.10)")
+            testTransportServer();
+        END_SET("M68.5: transport server (v0.10)")
     }
     return 0;
 }

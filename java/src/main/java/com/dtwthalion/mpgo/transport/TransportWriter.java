@@ -186,7 +186,7 @@ public final class TransportWriter implements AutoCloseable {
         writeEndOfStream();
     }
 
-    private static String instrumentConfigJson(InstrumentConfig cfg) {
+    static String instrumentConfigJson(InstrumentConfig cfg) {
         if (cfg == null) return "{}";
         // Minimal sorted-key JSON emitter to match Python / ObjC output
         // without pulling a full JSON library in.
@@ -215,8 +215,8 @@ public final class TransportWriter implements AutoCloseable {
         sb.append('"');
     }
 
-    private static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
-                                                     List<String> channelNames) {
+    static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
+                                              List<String> channelNames) {
         Spectrum sp = run.objectAtIndex(i);
         int wireClass = wireFromSpectrumClassName(run.spectrumClassName());
         int msLevel = 0;

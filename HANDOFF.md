@@ -1009,15 +1009,25 @@ vs `.mggts` (transport) convention.
 ### Parity backfill queue
 
 3-language parity is a binding decision (see the binding decisions
-section above). The following are known pre-existing asymmetries
-from milestones shipped before the parity rule was set, queued for
-backfill:
+section above). Pre-existing asymmetries are backfilled
+opportunistically; the list below tracks open items. COMPLETED
+entries are retained as audit trail until v1.0.
 
-- **M68.5** — Java + ObjC `TransportServer`. Python shipped
-  TransportServer in M68; Java + ObjC currently have clients only.
-  Expected deliverable: WebSocketServer wrapper in
-  `com.dtwthalion.mpgo.transport.TransportServer` (via
-  `org.java-websocket.server.WebSocketServer`); libwebsockets-based
-  ObjC `MPGOTransportServer`. Closes the live-streaming gap so
-  M69's simulator can feed a Java / ObjC server as well as the
-  Python one.
+- **M68.5 — COMPLETE** (Java + ObjC TransportServer). Shipped
+  `com.dtwthalion.mpgo.transport.TransportServer` via
+  `org.java-websocket.server.WebSocketServer`,
+  `MPGOTransportServer` via libwebsockets server mode, plus
+  matching CLI tools (`com.dtwthalion.mpgo.tools.TransportServerCli`
+  and `objc/Tools/MpgoTransportServer`). `MPGOAUFilter` /
+  `com.dtwthalion.mpgo.transport.AUFilter` mirror Python's
+  `AUFilter` for query parsing. All three servers implement the
+  same filter set (ms_level, rt range, precursor m/z, polarity,
+  dataset_id, max_au). Verified cross-language: Python client
+  against Java server and Python client against ObjC server both
+  return identical packet counts (14 packets / 10 AUs on the
+  minimal_ms fixture). Java 266 / ObjC 1335 test counts.
+  Incidental cleanup: Python client now uses `compression=None`
+  on `websockets.connect` — the packet-level CRC-32C field
+  handles integrity; permessage-deflate would duplicate the
+  concern and complicate cross-language interop with
+  Java-WebSocket's default handshake.
