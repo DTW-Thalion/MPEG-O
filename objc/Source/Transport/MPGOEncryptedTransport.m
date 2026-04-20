@@ -122,35 +122,6 @@ static NSData *encodeHeader(MPGOTransportPacketType type, uint16_t flags,
     return [h encode];
 }
 
-static BOOL emitPacket(MPGOTransportWriter *writer,
-                         MPGOTransportPacketType type,
-                         uint16_t flags,
-                         uint16_t datasetId,
-                         uint32_t auSeq,
-                         NSData *payload,
-                         NSError **error)
-{
-    (void)error;
-    // Bypass the TransportWriter's public emit to attach custom flags.
-    // We use performSelector against the private _emitPacketType: helper
-    // to preserve the public API surface; for simplicity here we just
-    // append to the writer's stream via public methods for well-known
-    // packet types, or via the helper for AUs with the ENCRYPTED flag.
-    //
-    // The MPGOTransportWriter API exposes writeStreamHeader/etc with
-    // fixed flag handling. For encrypted AUs we need PacketFlagEncrypted
-    // set. The writer's public writeAccessUnit: doesn't expose flag
-    // control, but the output stream is just NSOutputStream / NSMutableData.
-    // We implement the low-level emit by writing directly to the writer's
-    // data sink through a private helper declared in MPGOTransportWriter
-    // (if available) or via a fresh NSMutableData we own here.
-    (void)writer; (void)type; (void)flags; (void)datasetId; (void)auSeq;
-    (void)payload;
-    // Implementation moved inline where it's needed.
-    return YES;
-}
-
-
 // ---------------------------------------------------------------- writer
 
 // We need a writer that lets us set PacketFlagEncrypted (and
@@ -216,6 +187,28 @@ static BOOL emitPacket(MPGOTransportWriter *writer,
 }
 @end
 
+
+// ---------------------------------------------------------------- reader helpers
+
+@interface DatasetAccumulator : NSObject
+@property (nonatomic, copy) NSString *name;
+@property (nonatomic) uint8_t acquisitionMode;
+@property (nonatomic, copy) NSString *spectrumClass;
+@property (nonatomic, strong) NSMutableArray<NSString *> *channelNames;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray *> *channelSegments;
+@property (nonatomic, strong) NSMutableArray<MPGOHeaderSegment *> *headerSegments;
+@property (nonatomic) BOOL usedEncryptedHeaders;
+@end
+@implementation DatasetAccumulator
+@end
+
+@interface ProtectionMeta : NSObject
+@property (nonatomic, copy) NSString *cipherSuite;
+@property (nonatomic, copy) NSString *kekAlgorithm;
+@property (nonatomic, strong) NSData *wrappedDek;
+@end
+@implementation ProtectionMeta
+@end
 
 // ---------------------------------------------------------------- impl
 
@@ -520,27 +513,539 @@ static BOOL emitPacket(MPGOTransportWriter *writer,
     return ok;
 }
 
-// This file deliberately does NOT implement the reader-side
-// materialisation for v1.0: the ObjC transport API's
-// MPGOTransportReader already exposes the raw packet records, and the
-// receiver just needs to call MPGOPerAUFile.encryptFilePath:... in
-// practice. Cross-language conformance tests use Python as the
-// driver; ObjC → transport → file round-trips are covered by pairing
-// writeEncryptedDataset with either a Python client or with a direct
-// MPGOTransportReader iteration. A full native
-// readEncryptedToPath:fromStream: API is a follow-up.
+// ---------------------------------------------------------------- reader
+
+static DatasetAccumulator *makeAcc(NSString *name, uint8_t acqMode,
+                                      NSString *spectrumClass,
+                                      NSArray<NSString *> *channelNames)
+{
+    DatasetAccumulator *d = [[DatasetAccumulator alloc] init];
+    d.name = name;
+    d.acquisitionMode = acqMode;
+    d.spectrumClass = spectrumClass;
+    d.channelNames = [NSMutableArray arrayWithArray:channelNames];
+    d.channelSegments = [NSMutableDictionary dictionary];
+    for (NSString *c in channelNames) d.channelSegments[c] = [NSMutableArray array];
+    d.headerSegments = [NSMutableArray array];
+    d.usedEncryptedHeaders = NO;
+    return d;
+}
+
+
+// Parse a ProtectionMetadata payload: string cipher_suite, string
+// kek_algorithm, u32 wrapped_dek_len, wrapped_dek bytes, string
+// signature_algorithm, u32 public_key_len, public_key bytes.
+static ProtectionMeta *parseProtection(NSData *payload)
+{
+    const uint8_t *b = (const uint8_t *)payload.bytes;
+    NSUInteger len = payload.length;
+    NSUInteger off = 0;
+    ProtectionMeta *pm = [[ProtectionMeta alloc] init];
+    if (off + 2 > len) return pm;
+    uint16_t csLen = readU16LE(&b[off]); off += 2;
+    pm.cipherSuite = [[NSString alloc] initWithBytes:&b[off] length:csLen
+                                             encoding:NSUTF8StringEncoding];
+    off += csLen;
+    if (off + 2 > len) return pm;
+    uint16_t kekLen = readU16LE(&b[off]); off += 2;
+    pm.kekAlgorithm = [[NSString alloc] initWithBytes:&b[off] length:kekLen
+                                              encoding:NSUTF8StringEncoding];
+    off += kekLen;
+    if (off + 4 > len) return pm;
+    uint32_t wLen = readU32LE(&b[off]); off += 4;
+    pm.wrappedDek = [NSData dataWithBytes:&b[off] length:wLen];
+    off += wLen;
+    // signature_algorithm + public_key ignored at v1.0 (reserved).
+    return pm;
+}
+
+
+// Parse channel-data list given a payload cursor. Returns YES and
+// appends one MPGOChannelSegment per channel into
+// ``acc.channelSegments[cname]``. On ENCRYPTED AUs each channel's
+// ``data`` is IV(12) || TAG(16) || ciphertext.
+static BOOL parseEncryptedChannels(const uint8_t *buf, NSUInteger len,
+                                     NSUInteger *offsetInOut,
+                                     uint8_t nChannels,
+                                     DatasetAccumulator *acc,
+                                     NSUInteger spectrumLengthHint,
+                                     NSError **error)
+{
+    (void)spectrumLengthHint;
+    NSUInteger off = *offsetInOut;
+    for (uint8_t c = 0; c < nChannels; c++) {
+        if (off + 2 > len) { if (error) *error = makeErr(30, @"AU truncated: channel name len"); return NO; }
+        uint16_t nameLen = readU16LE(&buf[off]); off += 2;
+        if (off + nameLen > len) { if (error) *error = makeErr(30, @"AU truncated: channel name"); return NO; }
+        NSString *cname = [[NSString alloc] initWithBytes:&buf[off] length:nameLen
+                                                  encoding:NSUTF8StringEncoding];
+        off += nameLen;
+        if (off + 10 > len) { if (error) *error = makeErr(30, @"AU truncated: channel hdr"); return NO; }
+        uint8_t precision = buf[off++];
+        uint8_t compression = buf[off++];
+        uint32_t nElements = readU32LE(&buf[off]); off += 4;
+        uint32_t dataLen = readU32LE(&buf[off]); off += 4;
+        if (off + dataLen > len) { if (error) *error = makeErr(30, @"AU truncated: channel data"); return NO; }
+        if (dataLen < 28) { if (error) *error = makeErr(30, @"encrypted channel data shorter than IV+TAG"); return NO; }
+        NSData *iv = [NSData dataWithBytes:&buf[off] length:12];
+        NSData *tag = [NSData dataWithBytes:&buf[off + 12] length:16];
+        NSData *ciphertext = [NSData dataWithBytes:&buf[off + 28] length:dataLen - 28];
+        off += dataLen;
+        (void)precision; (void)compression;
+
+        NSMutableArray<MPGOChannelSegment *> *segs = acc.channelSegments[cname];
+        if (!segs) {
+            segs = [NSMutableArray array];
+            acc.channelSegments[cname] = segs;
+            if (![acc.channelNames containsObject:cname])
+                [acc.channelNames addObject:cname];
+        }
+        // offset = cumulative sum of prior lengths (reconstructed).
+        uint64_t prior = 0;
+        for (MPGOChannelSegment *s in segs) prior += s.length;
+        [segs addObject:[[MPGOChannelSegment alloc]
+            initWithOffset:prior
+                     length:nElements
+                         iv:iv
+                        tag:tag
+                 ciphertext:ciphertext]];
+    }
+    *offsetInOut = off;
+    return YES;
+}
+
+
+static BOOL ingestAU(MPGOTransportPacketRecord *record,
+                      DatasetAccumulator *acc,
+                      NSError **error)
+{
+    uint16_t flags = record.header.flags;
+    BOOL encHeader = (flags & MPGOTransportPacketFlagEncryptedHeader) != 0;
+    BOOL encChannel = (flags & MPGOTransportPacketFlagEncrypted) != 0;
+    if (!encChannel) {
+        if (error) *error = makeErr(30, @"ingestAU on plaintext AU");
+        return NO;
+    }
+    acc.usedEncryptedHeaders = encHeader;
+    const uint8_t *buf = (const uint8_t *)record.payload.bytes;
+    NSUInteger len = record.payload.length;
+    NSUInteger off = 0;
+
+    if (encHeader) {
+        // Wire: spectrum_class(u8) n_channels(u8) IV(12) TAG(16)
+        // encrypted_header(36) [channels...]
+        if (len < 1 + 1 + 12 + 16 + 36) {
+            if (error) *error = makeErr(30, @"encrypted-header AU too short");
+            return NO;
+        }
+        off++; // spectrum_class (already set on DatasetHeader)
+        uint8_t nChannels = buf[off++];
+        NSData *hdrIV = [NSData dataWithBytes:&buf[off] length:12]; off += 12;
+        NSData *hdrTag = [NSData dataWithBytes:&buf[off] length:16]; off += 16;
+        NSData *hdrCt = [NSData dataWithBytes:&buf[off] length:36]; off += 36;
+        [acc.headerSegments addObject:[[MPGOHeaderSegment alloc]
+            initWithIV:hdrIV tag:hdrTag ciphertext:hdrCt]];
+        if (!parseEncryptedChannels(buf, len, &off, nChannels, acc, 0, error))
+            return NO;
+    } else {
+        // Plaintext filter header followed by channels. Skip the
+        // 38-byte header prefix — we don't need it for reconstruction
+        // (the plaintext index arrays round-trip through the writer
+        // via the dataset header; for encrypted-channel-only mode the
+        // source file still carries plaintext spectrum_index, so the
+        // MATERIALISED file will re-derive retention_times etc.)
+        //
+        // Actually wait — on the receiver side we DON'T have the
+        // source's plaintext index arrays; they travel on the wire
+        // inside the AU fixed prefix. We need to capture them.
+        if (len < 38) {
+            if (error) *error = makeErr(30, @"plaintext-header AU too short");
+            return NO;
+        }
+        off++; // spectrum_class
+        uint8_t acq = buf[off++];
+        uint8_t msLevel = buf[off++];
+        uint8_t polarityWire = buf[off++];
+        double rt; memcpy(&rt, &buf[off], 8); off += 8;
+        double pmz; memcpy(&pmz, &buf[off], 8); off += 8;
+        uint8_t pc = buf[off++];
+        double ionMob; memcpy(&ionMob, &buf[off], 8); off += 8;
+        double bpi; memcpy(&bpi, &buf[off], 8); off += 8;
+        uint8_t nChannels = buf[off++];
+
+        // Stash plaintext filter values in a parallel array held on
+        // the accumulator under keys the writer can consume.
+        NSMutableArray *rts = acc.channelSegments[@"__rt__"]
+                                ?: ((acc.channelSegments[@"__rt__"] = [NSMutableArray array]));
+        NSMutableArray *msLevels = acc.channelSegments[@"__ms_level__"]
+                                ?: ((acc.channelSegments[@"__ms_level__"] = [NSMutableArray array]));
+        NSMutableArray *pols = acc.channelSegments[@"__polarity__"]
+                                ?: ((acc.channelSegments[@"__polarity__"] = [NSMutableArray array]));
+        NSMutableArray *pmzs = acc.channelSegments[@"__precursor_mz__"]
+                                ?: ((acc.channelSegments[@"__precursor_mz__"] = [NSMutableArray array]));
+        NSMutableArray *pcs = acc.channelSegments[@"__precursor_charge__"]
+                                ?: ((acc.channelSegments[@"__precursor_charge__"] = [NSMutableArray array]));
+        NSMutableArray *bpis = acc.channelSegments[@"__base_peak__"]
+                                ?: ((acc.channelSegments[@"__base_peak__"] = [NSMutableArray array]));
+        [(id)rts addObject:@(rt)];
+        [(id)msLevels addObject:@(msLevel)];
+        int32_t polInt = 0;
+        if (polarityWire == 0) polInt = 1;
+        else if (polarityWire == 1) polInt = -1;
+        [(id)pols addObject:@(polInt)];
+        [(id)pmzs addObject:@(pmz)];
+        [(id)pcs addObject:@(pc)];
+        [(id)bpis addObject:@(bpi)];
+        (void)acq; (void)ionMob;
+
+        if (!parseEncryptedChannels(buf, len, &off, nChannels, acc, 0, error))
+            return NO;
+    }
+    return YES;
+}
+
+
+static BOOL writeEncryptedFile(NSString *path,
+                                  NSString *providerName,
+                                  NSString *title,
+                                  NSString *isa,
+                                  NSArray<NSString *> *featureList,
+                                  NSDictionary<NSNumber *, ProtectionMeta *> *protection,
+                                  NSMutableDictionary<NSNumber *, DatasetAccumulator *> *datasets,
+                                  NSError **error)
+{
+    id<MPGOStorageProvider> sp =
+        [[MPGOProviderRegistry sharedRegistry] openURL:path
+                                                    mode:MPGOStorageOpenModeCreate
+                                                provider:providerName
+                                                   error:error];
+    if (!sp) return NO;
+    @try {
+        if (![sp.providerName isEqualToString:@"hdf5"]) {
+            if (error) *error = makeErr(4,
+                @"encrypted transport reader currently requires HDF5 provider");
+            return NO;
+        }
+        id<MPGOStorageGroup> root = [sp rootGroupWithError:error];
+        if (!root) return NO;
+
+        // Feature flags.
+        NSData *featuresJson =
+            [NSJSONSerialization dataWithJSONObject:featureList
+                                              options:0 error:error];
+        if (!featuresJson) return NO;
+        NSString *featuresStr = [[NSString alloc] initWithData:featuresJson
+                                                       encoding:NSUTF8StringEncoding];
+        if (![root setAttributeValue:@"1.1" forName:@"mpeg_o_format_version"
+                                error:error]) return NO;
+        if (![root setAttributeValue:featuresStr forName:@"mpeg_o_features"
+                                error:error]) return NO;
+
+        id<MPGOStorageGroup> study =
+            [root createGroupNamed:@"study" error:error];
+        if (!study) return NO;
+        if (![study setAttributeValue:(title ?: @"") forName:@"title"
+                                  error:error]) return NO;
+        if (![study setAttributeValue:(isa ?: @"")
+                                forName:@"isa_investigation_id"
+                                  error:error]) return NO;
+
+        id<MPGOStorageGroup> msRuns =
+            [study createGroupNamed:@"ms_runs" error:error];
+        if (!msRuns) return NO;
+        NSMutableArray *runNamesList = [NSMutableArray array];
+        NSArray *sortedDids = [datasets.allKeys sortedArrayUsingSelector:
+                                @selector(compare:)];
+        for (NSNumber *did in sortedDids) {
+            DatasetAccumulator *acc = datasets[did];
+            [runNamesList addObject:acc.name];
+        }
+        if (![msRuns setAttributeValue:[runNamesList componentsJoinedByString:@","]
+                                 forName:@"_run_names" error:error]) return NO;
+
+        for (NSNumber *didKey in sortedDids) {
+            DatasetAccumulator *acc = datasets[didKey];
+            id<MPGOStorageGroup> run =
+                [msRuns createGroupNamed:acc.name error:error];
+            if (!run) return NO;
+            if (![run setAttributeValue:@(acc.acquisitionMode)
+                                   forName:@"acquisition_mode" error:error]) return NO;
+            if (![run setAttributeValue:(acc.spectrumClass ?: @"MPGOMassSpectrum")
+                                   forName:@"spectrum_class" error:error]) return NO;
+            NSUInteger spectrumCount = acc.headerSegments.count;
+            if (spectrumCount == 0) {
+                spectrumCount = [acc.channelSegments[acc.channelNames.firstObject] count];
+            }
+            if (![run setAttributeValue:@((int64_t)spectrumCount)
+                                   forName:@"spectrum_count" error:error]) return NO;
+
+            // Empty instrument_config group (matches MPGOPerAUFile output).
+            id<MPGOStorageGroup> cfg = [run createGroupNamed:@"instrument_config" error:error];
+            if (!cfg) return NO;
+            for (NSString *f in @[@"manufacturer", @"model", @"serial_number",
+                                    @"source_type", @"analyzer_type", @"detector_type"]) {
+                [cfg setAttributeValue:@"" forName:f error:NULL];
+            }
+
+            id<MPGOStorageGroup> sig = [run createGroupNamed:@"signal_channels" error:error];
+            if (!sig) return NO;
+
+            // Only the "real" channel names — drop the internal "__rt__" etc.
+            NSMutableArray *realChannels = [NSMutableArray array];
+            for (NSString *c in acc.channelNames) {
+                if (![c hasPrefix:@"__"]) [realChannels addObject:c];
+            }
+            if (![sig setAttributeValue:[realChannels componentsJoinedByString:@","]
+                                   forName:@"channel_names" error:error]) return NO;
+
+            // Write each channel's segments compound via the provider
+            // (createCompoundDataset + writeAll).
+            ProtectionMeta *pm = protection[didKey];
+            NSArray<MPGOCompoundField *> *chFields = channelSegFields();
+            for (NSString *cname in realChannels) {
+                NSArray<MPGOChannelSegment *> *segs = acc.channelSegments[cname];
+                NSString *segName = [NSString stringWithFormat:@"%@_segments", cname];
+                id<MPGOStorageDataset> ds =
+                    [sig createCompoundDatasetNamed:segName
+                                               fields:chFields
+                                                count:segs.count
+                                                error:error];
+                if (!ds) return NO;
+                NSMutableArray *rows = [NSMutableArray arrayWithCapacity:segs.count];
+                for (MPGOChannelSegment *s in segs) {
+                    [rows addObject:@{
+                        @"offset": @(s.offset), @"length": @(s.length),
+                        @"iv": s.iv, @"tag": s.tag, @"ciphertext": s.ciphertext,
+                    }];
+                }
+                if (![ds writeAll:rows error:error]) return NO;
+                if (![sig setAttributeValue:(pm.cipherSuite ?: @"aes-256-gcm")
+                                       forName:[NSString stringWithFormat:@"%@_algorithm", cname]
+                                         error:error]) return NO;
+                if (pm && pm.wrappedDek.length > 0) {
+                    [sig setAttributeValue:pm.wrappedDek
+                                     forName:[NSString stringWithFormat:@"%@_wrapped_dek", cname]
+                                       error:NULL];
+                    [sig setAttributeValue:(pm.kekAlgorithm ?: @"")
+                                     forName:[NSString stringWithFormat:@"%@_kek_algorithm", cname]
+                                       error:NULL];
+                }
+            }
+
+            // Spectrum index: plaintext offsets + lengths from the
+            // first channel's segments; (plaintext-header mode only)
+            // retention_times / ms_levels / polarities / pmzs / pcs /
+            // bpis from the captured arrays; (encrypted-header mode)
+            // au_header_segments compound.
+            id<MPGOStorageGroup> idx = [run createGroupNamed:@"spectrum_index" error:error];
+            if (!idx) return NO;
+            NSArray<MPGOChannelSegment *> *firstSegs =
+                acc.channelSegments[realChannels.firstObject];
+            [idx setAttributeValue:@((int64_t)firstSegs.count)
+                             forName:@"count" error:NULL];
+
+            NSMutableData *offData = [NSMutableData data];
+            NSMutableData *lenData = [NSMutableData data];
+            for (MPGOChannelSegment *s in firstSegs) {
+                uint64_t o = s.offset; [offData appendBytes:&o length:8];
+                uint32_t l = s.length; [lenData appendBytes:&l length:4];
+            }
+            id<MPGOStorageDataset> offDs =
+                [idx createDatasetNamed:@"offsets"
+                                precision:MPGOPrecisionInt64
+                                   length:firstSegs.count
+                                chunkSize:0
+                              compression:MPGOCompressionNone
+                         compressionLevel:0
+                                    error:error];
+            if (!offDs) return NO;
+            [offDs writeAll:offData error:error];
+            id<MPGOStorageDataset> lenDs =
+                [idx createDatasetNamed:@"lengths"
+                                precision:MPGOPrecisionUInt32
+                                   length:firstSegs.count
+                                chunkSize:0
+                              compression:MPGOCompressionNone
+                         compressionLevel:0
+                                    error:error];
+            if (!lenDs) return NO;
+            [lenDs writeAll:lenData error:error];
+
+            if (acc.usedEncryptedHeaders) {
+                // Write au_header_segments compound; omit plaintext
+                // arrays since opt_encrypted_au_headers is set.
+                NSArray<MPGOCompoundField *> *hdrFields = headerSegFields();
+                id<MPGOStorageDataset> hdrDs =
+                    [idx createCompoundDatasetNamed:@"au_header_segments"
+                                               fields:hdrFields
+                                                count:acc.headerSegments.count
+                                                error:error];
+                if (!hdrDs) return NO;
+                NSMutableArray *rows = [NSMutableArray array];
+                for (MPGOHeaderSegment *s in acc.headerSegments) {
+                    [rows addObject:@{
+                        @"iv": s.iv, @"tag": s.tag, @"ciphertext": s.ciphertext,
+                    }];
+                }
+                if (![hdrDs writeAll:rows error:error]) return NO;
+            } else {
+                // Plaintext-header mode: write the six plaintext
+                // index arrays from the captured per-AU filter fields.
+                NSArray *rts = acc.channelSegments[@"__rt__"];
+                NSArray *msLevels = acc.channelSegments[@"__ms_level__"];
+                NSArray *pols = acc.channelSegments[@"__polarity__"];
+                NSArray *pmzs = acc.channelSegments[@"__precursor_mz__"];
+                NSArray *pcs = acc.channelSegments[@"__precursor_charge__"];
+                NSArray *bpis = acc.channelSegments[@"__base_peak__"];
+
+                NSMutableData *rtData = [NSMutableData data];
+                for (NSNumber *n in rts) { double v = n.doubleValue; [rtData appendBytes:&v length:8]; }
+                NSMutableData *msData = [NSMutableData data];
+                for (NSNumber *n in msLevels) { int32_t v = n.intValue; [msData appendBytes:&v length:4]; }
+                NSMutableData *polData = [NSMutableData data];
+                for (NSNumber *n in pols) { int32_t v = n.intValue; [polData appendBytes:&v length:4]; }
+                NSMutableData *pmzData = [NSMutableData data];
+                for (NSNumber *n in pmzs) { double v = n.doubleValue; [pmzData appendBytes:&v length:8]; }
+                NSMutableData *pcData = [NSMutableData data];
+                for (NSNumber *n in pcs) { int32_t v = n.intValue; [pcData appendBytes:&v length:4]; }
+                NSMutableData *bpiData = [NSMutableData data];
+                for (NSNumber *n in bpis) { double v = n.doubleValue; [bpiData appendBytes:&v length:8]; }
+
+                struct { NSString *name; MPGOPrecision prec; NSData *data; } plain[] = {
+                    {@"retention_times", MPGOPrecisionFloat64, rtData},
+                    {@"ms_levels", MPGOPrecisionInt32, msData},
+                    {@"polarities", MPGOPrecisionInt32, polData},
+                    {@"precursor_mzs", MPGOPrecisionFloat64, pmzData},
+                    {@"precursor_charges", MPGOPrecisionInt32, pcData},
+                    {@"base_peak_intensities", MPGOPrecisionFloat64, bpiData},
+                };
+                for (size_t i = 0; i < sizeof(plain) / sizeof(plain[0]); i++) {
+                    id<MPGOStorageDataset> pDs =
+                        [idx createDatasetNamed:plain[i].name
+                                        precision:plain[i].prec
+                                           length:firstSegs.count
+                                        chunkSize:0
+                                      compression:MPGOCompressionNone
+                                 compressionLevel:0
+                                            error:error];
+                    if (!pDs) return NO;
+                    [pDs writeAll:plain[i].data error:error];
+                }
+            }
+        }
+    }
+    @finally {
+        [sp close];
+    }
+    return YES;
+}
+
 
 + (BOOL)readEncryptedToPath:(NSString *)outputPath
                 fromStream:(NSData *)streamData
                providerName:(NSString *)providerName
                       error:(NSError **)error
 {
-    (void)outputPath; (void)streamData; (void)providerName;
-    if (error) *error = makeErr(10,
-        @"readEncryptedToPath:fromStream: is a v1.1 follow-up — use "
-        @"MPGOTransportReader + MPGOPerAUFile directly for now, or "
-        @"the Python reader as a driver in cross-language tests.");
-    return NO;
+    MPGOTransportReader *reader =
+        [[MPGOTransportReader alloc] initWithData:streamData];
+    NSArray<MPGOTransportPacketRecord *> *packets =
+        [reader readAllPacketsWithError:error];
+    if (!packets) return NO;
+
+    NSString *title = @"";
+    NSString *isa = @"";
+    NSMutableArray *features = [NSMutableArray array];
+    NSMutableDictionary<NSNumber *, DatasetAccumulator *> *datasets =
+        [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSNumber *, ProtectionMeta *> *protection =
+        [NSMutableDictionary dictionary];
+
+    for (MPGOTransportPacketRecord *rec in packets) {
+        MPGOTransportPacketType t = rec.header.packetType;
+        const uint8_t *b = (const uint8_t *)rec.payload.bytes;
+        NSUInteger len = rec.payload.length;
+        NSUInteger off = 0;
+
+        if (t == MPGOTransportPacketStreamHeader) {
+            if (off + 2 > len) continue;
+            uint16_t vl = readU16LE(&b[off]); off += 2 + vl;   // format_version
+            if (off + 2 > len) continue;
+            uint16_t tl = readU16LE(&b[off]); off += 2;
+            title = [[NSString alloc] initWithBytes:&b[off] length:tl encoding:NSUTF8StringEncoding];
+            off += tl;
+            if (off + 2 > len) continue;
+            uint16_t il = readU16LE(&b[off]); off += 2;
+            isa = [[NSString alloc] initWithBytes:&b[off] length:il encoding:NSUTF8StringEncoding];
+            off += il;
+            if (off + 2 > len) continue;
+            uint16_t nFeat = readU16LE(&b[off]); off += 2;
+            for (uint16_t i = 0; i < nFeat; i++) {
+                if (off + 2 > len) break;
+                uint16_t fl = readU16LE(&b[off]); off += 2;
+                NSString *fn = [[NSString alloc] initWithBytes:&b[off] length:fl
+                                                      encoding:NSUTF8StringEncoding];
+                off += fl;
+                [features addObject:fn];
+            }
+            // n_datasets follows but we discover it from DatasetHeaders.
+        } else if (t == MPGOTransportPacketProtectionMetadata) {
+            ProtectionMeta *pm = parseProtection(rec.payload);
+            protection[@(rec.header.datasetId)] = pm;
+        } else if (t == MPGOTransportPacketDatasetHeader) {
+            // dataset_id u16, name (str2), acq_mode u8, spectrum_class
+            // (str2), n_channels u8, channel_names (str2 × n), instr_json
+            // (str4), expected_au_count u32.
+            if (off + 2 > len) continue;
+            uint16_t did = readU16LE(&b[off]); off += 2;
+            if (off + 2 > len) continue;
+            uint16_t nl = readU16LE(&b[off]); off += 2;
+            NSString *runName = [[NSString alloc] initWithBytes:&b[off] length:nl
+                                                       encoding:NSUTF8StringEncoding];
+            off += nl;
+            if (off + 1 > len) continue;
+            uint8_t acq = b[off++];
+            if (off + 2 > len) continue;
+            uint16_t scLen = readU16LE(&b[off]); off += 2;
+            NSString *spectrumClass =
+                [[NSString alloc] initWithBytes:&b[off] length:scLen
+                                       encoding:NSUTF8StringEncoding];
+            off += scLen;
+            if (off + 1 > len) continue;
+            uint8_t nch = b[off++];
+            NSMutableArray *chNames = [NSMutableArray arrayWithCapacity:nch];
+            for (uint8_t i = 0; i < nch; i++) {
+                if (off + 2 > len) break;
+                uint16_t cl = readU16LE(&b[off]); off += 2;
+                [chNames addObject:[[NSString alloc] initWithBytes:&b[off]
+                                                              length:cl
+                                                            encoding:NSUTF8StringEncoding]];
+                off += cl;
+            }
+            // skip instrument_json + expected_au_count
+            datasets[@(did)] = makeAcc(runName, acq, spectrumClass, chNames);
+        } else if (t == MPGOTransportPacketAccessUnit) {
+            DatasetAccumulator *acc = datasets[@(rec.header.datasetId)];
+            if (!acc) {
+                if (error) *error = makeErr(30, @"AU for unknown dataset_id %u",
+                                              (unsigned)rec.header.datasetId);
+                return NO;
+            }
+            if (!ingestAU(rec, acc, error)) return NO;
+        }
+        // EndOfDataset / EndOfStream: skip.
+    }
+
+    NSMutableSet *featureSet = [NSMutableSet setWithArray:features];
+    [featureSet addObject:@"opt_per_au_encryption"];
+    BOOL anyHeaderEncrypted = NO;
+    for (NSNumber *k in datasets) {
+        if (datasets[k].usedEncryptedHeaders) { anyHeaderEncrypted = YES; break; }
+    }
+    if (anyHeaderEncrypted) [featureSet addObject:@"opt_encrypted_au_headers"];
+    NSArray *featureList = [featureSet.allObjects sortedArrayUsingSelector:@selector(compare:)];
+
+    return writeEncryptedFile(outputPath, providerName, title, isa,
+                                featureList, protection, datasets, error);
 }
 
 @end
