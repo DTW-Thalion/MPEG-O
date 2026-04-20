@@ -862,7 +862,53 @@ invokes `java -jar mpgo-tools.jar transport-encode ...` and
 
 ---
 
-## Milestone 71 — Selective Access + Encrypted Transport
+## Milestone 71 — Selective Access + Encrypted Transport — COMPLETE (3-language parity)
+
+Shipped selective-access performance tests and ProtectionMetadata
+packet wire format across all three languages. Counts: Python 617
+/ Java 279 / ObjC 1359.
+
+**Selective access** (6 tests × 3 langs = 18 tests):
+- 600-scan fixture spanning RT [0, 60s] with alternating MS1/MS2.
+- `rt_min=10, rt_max=12` delivers <5% of AUs (the htsget
+  contract from `docs/transport-spec.md` §7).
+- `ms_level=2` halves the stream (exactly 300 AUs on the 600-scan
+  fixture).
+- Combined `rt + ms_level` produces the intersection (~50% of
+  rt-only); `max_au=100` caps at exactly 100 AUs with
+  EndOfStream intact; impossible filter (ms_level=99) yields
+  skeleton-only (StreamHeader / DatasetHeader / EndOfDataset /
+  EndOfStream, zero AUs).
+
+**ProtectionMetadata packet** (wire round-trip, 3 langs):
+- Python helpers in `tests/test_transport_selective_access.py`;
+  Java `com.dtwthalion.mpgo.transport.ProtectionMetadata`;
+  ObjC `MPGOProtectionMetadata` (`objc/Source/Transport/`).
+- Tests exercise the AES-256-GCM + RSA-OAEP profile and the
+  PQC profile (ML-KEM-1024 + ML-DSA-87 with 1568-byte
+  wrapped_dek + 2592-byte public_key).
+- `PacketFlag.ENCRYPTED` travels on the AU packet header;
+  encode/decode round-trip verified in every language,
+  composable with `HAS_CHECKSUM`.
+
+**Scope deferred to v1.0**:
+
+- Full encrypted round-trip integration. The wire format is
+  stable (ProtectionMetadata + encrypted-flag AUs); the
+  deferred integration is the encryption-aware read path in
+  each language's TransportWriter that preserves ciphertext
+  channel bytes through `provider.read_canonical_bytes`
+  instead of decrypting then re-encrypting. Tests in HANDOFF
+  (`test_encrypted_au_decryptable_with_key`,
+  `test_pqc_encrypted_transport`) arrive with the v1.0
+  integration.
+- Compressed channel wire format (zlib / lz4 / numpress-delta)
+  preservation through the codec.
+- Bruker ion-mobility importer-specific integration.
+
+Historical spec retained below for audit.
+
+### Historical: Milestone 71 — Selective Access + Encrypted Transport
 
 **License:** LGPL-3.0
 
