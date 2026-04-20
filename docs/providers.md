@@ -4,16 +4,17 @@ MPEG-O separates the data model from the storage backend. The
 `mpeg_o.providers` package (and its Objective-C / Java equivalents)
 defines a protocol contract — `StorageProvider`, `StorageGroup`,
 `StorageDataset` — that every backend implements. Four providers
-ship in v0.7 Python.
+ship across all three language implementations (HDF5, Memory, SQLite,
+Zarr). Zarr stores use the v3 on-disk format as of v0.9.
 
 ## Feature matrix
 
-| Provider | URL schemes | Chunking | Compression | N-D datasets | Compound with VL strings | Attributes | Transactions |
-|---|---|---|---|---|---|---|---|
-| **HDF5** (`Hdf5Provider`) | `file://`, bare paths, `http(s)://`, `s3://` (via h5py) | Yes (native HDF5 chunking) | Yes (zlib, LZ4 via `hdf5plugin`, Numpress-delta) | Yes (native rank; M45 adds the protocol surface) | Yes (native HDF5 compound) | Strings, ints, floats, arrays | No (HDF5 has no transactional model) |
-| **Memory** (`MemoryProvider`) | `memory://<name>` | No (chunk hint stored but ignored) | No | Yes (in-memory ndarray) | Yes (in-memory structured ndarray) | Any Python object | No |
-| **SQLite** (`SqliteProvider`) | `sqlite://<path>`, `.db`/`.sqlite` paths | No (chunk hint accepted, ignored) | No | Yes (flat BLOB + `shape_json`) | Yes (row-of-dicts as JSON) | Strings, ints, floats | Yes (`BEGIN` / `COMMIT` / `ROLLBACK`) |
-| **Zarr** (`ZarrProvider`, v0.7 M46) | `zarr:///<path>`, `zarr+memory://<name>`, `zarr+s3://bucket/key` | Yes (native zarr chunks) | Yes (Blosc wrappers for zlib and LZ4 via `numcodecs`) | Yes (native N-D) | Yes (sub-group + JSON-rows attribute) | JSON-serialisable types | No |
+| Provider | URL schemes | Chunking | Compression | N-D datasets | Compound with VL strings | Compound with VL_BYTES (v0.10) | Attributes | Transactions |
+|---|---|---|---|---|---|---|---|---|
+| **HDF5** (`Hdf5Provider`) | `file://`, bare paths, `http(s)://`, `s3://` (via h5py) | Yes (native HDF5 chunking) | Yes (zlib, LZ4 via `hdf5plugin`, Numpress-delta) | Yes (native rank; M45 adds the protocol surface) | Yes (native HDF5 compound) | **Yes** (native `hvl_t`; Java uses a `NativeBytesPool` to pack slots) | Strings, ints, floats, arrays | No (HDF5 has no transactional model) |
+| **Memory** (`MemoryProvider`) | `memory://<name>` | No (chunk hint stored but ignored) | No | Yes (in-memory ndarray) | Yes (in-memory structured ndarray) | **Yes** (stores `bytes` objects verbatim) | Any Python object | No |
+| **SQLite** (`SqliteProvider`) | `sqlite://<path>`, `.db`/`.sqlite` paths | No (chunk hint accepted, ignored) | No | Yes (flat BLOB + `shape_json`) | Yes (row-of-dicts as JSON) | **No** (raises `NotImplementedError` at `create_compound_dataset`; use HDF5 for `opt_per_au_encryption`) | Strings, ints, floats | Yes (`BEGIN` / `COMMIT` / `ROLLBACK`) |
+| **Zarr** (`ZarrProvider`, v3 on-disk as of v0.9) | `zarr:///<path>`, `zarr+memory://<name>`, `zarr+s3://bucket/key` | Yes (native zarr chunks) | Yes (Blosc wrappers for zlib and LZ4 via `numcodecs`) | Yes (native N-D) | Yes (sub-group + JSON-rows attribute) | **No** (raises `NotImplementedError`; same rationale as SQLite — JSON-based compound path needs base64 transport for bytes) | JSON-serialisable types | No |
 
 Legend
 
@@ -23,6 +24,11 @@ Legend
   arguments.
 - **Compound with VL strings** — can store records with variable-length
   string fields (identifications, quantifications, provenance).
+- **Compound with VL_BYTES** — can store records with variable-length
+  byte fields. Required for `opt_per_au_encryption`
+  (`<channel>_segments` schema: `{offset INT64, length UINT32,
+  iv VL_BYTES, tag VL_BYTES, ciphertext VL_BYTES}`). SQLite and Zarr
+  fail loud at the boundary; use HDF5 for encrypted files.
 - **Attributes** — types accepted by `set_attribute`.
 - **Transactions** — supports `begin_transaction` / `commit_transaction`
   / `rollback_transaction`.

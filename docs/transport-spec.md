@@ -16,6 +16,17 @@ Transport streams use the `.mots` file extension (MPEG-O Transport
 Stream) when serialized to a file. This parallels MPEG-G's `.mgg`
 (file) vs `.mggts` (transport) convention.
 
+The codec, the WebSocket client / server, the acquisition simulator,
+bidirectional conformance, selective access, ProtectionMetadata, and
+the v1.0 per-Access-Unit encryption paths referenced throughout this
+document all shipped in the v0.10.0 release across the Python, ObjC,
+and Java reference implementations. The inline "v1.0" labels on
+encrypted variants denote the encryption feature level, not a future
+version; these variants are live and exercised by the cross-language
+conformance harness in `tests/integration/test_per_au_cross_language.py`.
+See `docs/transport-encryption-design.md` for the normative design
+notes and `docs/format-spec.md` §9.1 for the on-disk layout.
+
 ## 1. Design Goals
 
 1. **Bit-identical signal round-trip.** File → transport → file
@@ -81,10 +92,10 @@ the stream otherwise.
 
 | Bit | Name                | Meaning                                                     |
 |----:|---------------------|-------------------------------------------------------------|
-|   0 | `ENCRYPTED`         | Channel data in this AU is AES-GCM encrypted (v1.0+)        |
+|   0 | `ENCRYPTED`         | Channel data in this AU is AES-GCM encrypted (v0.10+)        |
 |   1 | `COMPRESSED`        | Reserved (packet-level compression; unused today)           |
 |   2 | `HAS_CHECKSUM`      | Payload is followed by a 4-byte CRC-32C (§3.3)              |
-|   3 | `ENCRYPTED_HEADER`  | AU semantic header is also AES-GCM encrypted (v1.0+)        |
+|   3 | `ENCRYPTED_HEADER`  | AU semantic header is also AES-GCM encrypted (v0.10+)        |
 
 Readers MUST reject `ENCRYPTED_HEADER` without `ENCRYPTED` —
 encrypting the filter header while leaving channel data
@@ -223,7 +234,7 @@ values of the declared precision. When nonzero, the receiver MUST
 apply the matching decoder (`zlib` / `lz4` / `numpress_delta`).
 `complex128` packs Re/Im as two consecutive float64s.
 
-#### 4.3.2 Encrypted-channel AU (`ENCRYPTED` set, v1.0+)
+#### 4.3.2 Encrypted-channel AU (`ENCRYPTED` set, v0.10+)
 
 Same layout as §4.3.1, except each channel's `data` field carries
 `[IV (12)] [TAG (16)] [ciphertext(plaintext-of-length n_elements ×
@@ -239,7 +250,7 @@ Each channel's AES-GCM operation uses **authenticated data**
 MSImagePixel fields (`pixel_x / pixel_y / pixel_z`) stay
 plaintext.
 
-#### 4.3.3 Fully-encrypted AU (`ENCRYPTED | ENCRYPTED_HEADER` set, v1.0+)
+#### 4.3.3 Fully-encrypted AU (`ENCRYPTED | ENCRYPTED_HEADER` set, v0.10+)
 
 ```
 spectrum_class:      uint8               # plaintext — needed for dispatch

@@ -1,13 +1,12 @@
-# MPEG-O `.mpgo` File Format Specification — v0.7.0
+# MPEG-O `.mpgo` File Format Specification — v0.10.0
 
 This document specifies the on-disk layout of an `.mpgo` file as written
-by libMPGO v0.7.0 (ObjC reference implementation). It is detailed enough
-for a reader implemented in a different language (Python, Java, Rust, Go)
-to open, validate, and fully decode a file without consulting the
-reference source. Three interoperable implementations (ObjC, Python, Java)
-read and write this format; a Python-only `ZarrProvider` ships in v0.7
-as an alternative chunked-array container backend with byte-parity on
-compound records and canonical bytes (see `docs/providers.md`).
+by libMPGO v0.10.0. It is detailed enough for a reader implemented in a
+different language (Python, Java, Rust, Go) to open, validate, and fully
+decode a file without consulting the reference source. Three
+interoperable implementations (ObjC, Python, Java) read and write this
+format; SQLite and Zarr ship as alternative chunked-array container
+backends (see `docs/providers.md`).
 
 Each point release is a strict superset of the previous release on
 disk:
@@ -20,6 +19,17 @@ disk:
   versioned wrapped-key blob (§10b) replaces the fixed 60-byte v1.1
   blob; `read_canonical_bytes` becomes the byte-level contract for
   signatures and encryption (§10c).
+- **v0.8** — post-quantum crypto preview (`opt_pqc_preview`:
+  ML-KEM-1024 for KEM, ML-DSA-87 for signatures); see `docs/pqc.md`.
+- **v0.9** — provider abstraction hardening: SQLite and Zarr v3
+  backends in all three languages.
+- **v0.10** — streaming transport layer (`.mots`; see
+  `docs/transport-spec.md`) and v1.0 per-Access-Unit encryption
+  (`opt_per_au_encryption`, optional `opt_encrypted_au_headers`).
+  Adds the `VL_BYTES` compound field kind and the
+  `<channel>_segments` / `spectrum_index/au_header_segments`
+  compound layouts (§9.1). The file format version remains `"1.2"`;
+  per-AU encryption is additive and feature-flagged.
 
 Every feature added after v0.2 is gated by a feature flag (see
 `docs/feature-flags.md`) so readers can detect capability support at
@@ -319,6 +329,23 @@ O(1) in file size.
 
 All compound datasets live directly under `/study/`. Fields use HDF5
 variable-length C strings (`H5Tvar_str`) where marked **VL**.
+
+**Supported compound field kinds** (provider capability floor, all
+three languages expose the same set):
+
+| Kind        | HDF5 mapping                                      | Added   |
+| ----------- | ------------------------------------------------- | ------- |
+| `UINT32`    | `H5T_NATIVE_UINT32`                               | v0.3    |
+| `INT64`     | `H5T_NATIVE_INT64`                                | v0.3    |
+| `FLOAT64`   | `H5T_NATIVE_DOUBLE`                               | v0.3    |
+| `VL_STRING` | `H5Tcopy(H5T_C_S1) + H5Tset_size(H5T_VARIABLE)`   | v0.3    |
+| `VL_BYTES`  | `H5Tvlen_create(H5T_NATIVE_UCHAR)` (hvl_t slot)   | v0.10   |
+
+`VL_BYTES` carries the {IV, tag, ciphertext} triplet of per-AU
+encryption (§9.1). Providers that can't serialise `hvl_t` inside a
+compound (SQLite + Zarr as of v0.10) raise
+`NotImplementedError`/`UnsupportedOperationException` at the
+`create_compound_dataset` boundary.
 
 ### 6.1 `identifications`
 
@@ -691,6 +718,31 @@ attribute so sealed files stay opaque without the key.
 A future release will remove the mirror once Java's HDF5 binding
 gains compound-with-VL read support, at which point every reader
 will go through the compound dataset directly.
+
+### 11.2 Per-AU encrypted layout (v0.10+)
+
+A v0.10 reader recognises a per-AU-encrypted file by
+`opt_per_au_encryption` in `@mpeg_o_features`. The channel layout
+under `signal_channels/` flips from plaintext `<channel>_values`
+to the `<channel>_segments` compound (§9.1) with VL_BYTES members
+for `iv` / `tag` / `ciphertext`. Pre-v0.10 readers without
+VL_BYTES compound support will refuse to open the file (the flag
+is non-optional when set).
+
+When `opt_encrypted_au_headers` is also present, the six plaintext
+index arrays (retention_times, ms_levels, polarities,
+precursor_mzs, precursor_charges, base_peak_intensities) are
+absent; the semantic header travels in the
+`spectrum_index/au_header_segments` compound instead. `offsets`
+and `lengths` remain plaintext because they frame the compound
+rows.
+
+Migration: `python -m mpeg_o.tools.per_au_cli transcode` rewrites
+a plaintext or previously-encrypted file through the v0.10 path,
+with optional `--rekey`. v0.x `opt_dataset_encryption` files must
+be decrypted via the v0.x `SpectralDataset.decrypt()` API first —
+channel-level AES-GCM cannot be converted in place (the plaintext
+must be materialised to re-slice per-spectrum).
 
 ---
 

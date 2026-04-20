@@ -106,6 +106,9 @@ for safety.
 | `MPGOEncryptionManager.encryptIntensityChannelInRun:atFilePath:...` | **Deprecated (v1.0 removal)** | v0.4 | Superseded by `-encryptWithKey:level:error:` on `MPGOAcquisitionRun`. Already carries `__attribute__((deprecated))`; hard-remove at v1.0. |
 | `MPGOEncryptionManager.decryptIntensityChannelInRun:...` | **Deprecated (v1.0 removal)** | v0.4 | Same. |
 | `MPGOEncryptionManager.isIntensityChannelEncryptedInRun:...` | **Deprecated (v1.0 removal)** | v0.4 | Migrate to `MPGOAcquisitionRun.accessPolicy`. |
+| `PerAUEncryption.{aadForChannel,aadForHeader,aadForPixel}` / `encryptWithAad` / `decryptWithAad` / `randomIv` | **Stable** | v0.10 (v1.0 scope) | Per-AU AES-256-GCM primitives; AAD-bound. Parallel names in Python (`mpeg_o.encryption_per_au`) and ObjC (`MPGOPerAUEncryption`). |
+| `PerAUEncryption.{encrypt,decrypt}ChannelToSegments` / `packAUHeaderPlaintext` / `{encrypt,decrypt}HeaderSegments` | **Stable** | v0.10 | Per-spectrum segment/header round-trips. |
+| `PerAUFile.{encryptFile,decryptFile}` / `MPGOPerAUFile` / `mpeg_o.encryption_per_au.{encrypt_per_au,decrypt_per_au}` | **Stable** | v0.10 | File-level orchestrator; routes through the StorageProvider abstraction. Supports `opt_per_au_encryption` + optional `opt_encrypted_au_headers`. |
 
 ### 3.3 Key rotation / envelope
 
@@ -152,6 +155,30 @@ for safety.
 | Bruker `.d` reader (`opentimspy` delegation) | **Stable** | v0.8 (M53) | Binary-extraction Python subprocess from Java / ObjC is expected to be replaced by a native port in v0.9. The public `read()` / `read_metadata()` surface stays stable. |
 | mzML / nmrML / ISA-Tab writers | **Stable** | v0.4 | |
 
+### 4.1 Transport (v0.10)
+
+All three languages expose a parallel surface — see
+`docs/transport-spec.md` for wire details and
+`docs/transport-encryption-design.md` for the encryption design.
+
+| API | Status | Since | Notes |
+|---|---|---|---|
+| `TransportWriter` / `TransportReader` (`.mots` codec) | **Stable** | v0.10 (M67) | Equivalent names in Python / ObjC / Java. |
+| `TransportWriter.emitRawPacket` (Java) / `-_writeRawPacketHeader` (ObjC) / writer internals (Python) | **Stable** | v0.10 | Lets `EncryptedTransport` set arbitrary flag bits on AU packets. |
+| `TransportClient` / `TransportServer` (WebSocket) | **Stable** | v0.10 (M68 / M68.5) | libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). |
+| `AcquisitionSimulator` | **Stable** | v0.10 (M69) | |
+| `AUFilter` / selective access APIs | **Stable** | v0.10 (M71) | |
+| `ProtectionMetadata` packet | **Stable** | v0.10 (M71) | Carries cipher_suite, kek_algorithm, wrapped_dek, signature_algorithm, public_key. |
+| `EncryptedTransport.{writeEncryptedDataset,readEncryptedToPath,isPerAUEncrypted}` (Java / ObjC) / `mpeg_o.transport.encrypted.{write_encrypted_dataset,read_encrypted_to_file}` (Python) | **Stable** | v0.10 | Ciphertext passes through the wire unmodified (server never decrypts in transit). |
+
+### 4.2 Per-AU CLIs (v0.10)
+
+| CLI | Language | Since | Notes |
+|---|---|---|---|
+| `python -m mpeg_o.tools.per_au_cli {encrypt,decrypt,send,recv,transcode}` | Python | v0.10 | `decrypt` emits a canonical "MPAD" binary dump (see that module's docstring) used by the cross-language conformance harness. |
+| `com.dtwthalion.mpgo.tools.PerAUCli` | Java | v0.10 | Same subcommand surface, same MPAD output. |
+| `MpgoPerAU` | ObjC | v0.10 | Same. |
+
 ---
 
 ## 5. Feature flags
@@ -171,6 +198,8 @@ for v1.0 planning:
 | `opt_anonymized` | Stable | optional | |
 | `wrapped_key_v2` | Stable | optional | Default on for v0.7+ files. Under consideration for promotion to `required` at v1.0 — every shipping reader supports it. |
 | `opt_pqc_preview` | **Provisional** | optional (v0.8) | New in v0.8; kept provisional through the v0.8 series so the PQC code-paths can be tuned based on real-world usage before freezing. |
+| `opt_per_au_encryption` | **Stable** | optional (v0.10) | Per-Access-Unit AES-256-GCM. Changes the `<channel>_values` layout to `<channel>_segments` compound with `VL_BYTES` slots. Pre-v0.10 readers without `VL_BYTES` compound support MUST refuse files that carry this flag. |
+| `opt_encrypted_au_headers` | **Stable** | optional (v0.10) | Additionally encrypts the 36-byte semantic header into `spectrum_index/au_header_segments`. Implies `opt_per_au_encryption`. |
 
 **v1.0 flag-promotion candidates:** `wrapped_key_v2` (every reader
 handles it), `opt_canonical_signatures` (every signer emits it). A

@@ -506,3 +506,76 @@ Shipped as commits on `main`; release tag pending user gate.
 test suite demonstrate all acceptance criteria except for three
 xfailed exporter-fidelity defects (mzML precursor/activation, nmrML
 version attribute, ISA-Tab PUBLICATIONS section) deferred to v1.0.
+
+## v0.10.0 — Streaming Transport + Per-AU Encryption (SHIPPED 2026-04-20)
+
+### Milestones M66–M72 (streaming transport layer)
+
+- [x] **M66** — Transport spec docs (`docs/transport-spec.md`,
+      packet types, wire format, flag bits, ordering rules).
+- [x] **M67** — Transport codec (`.mots` writer / reader) in all
+      three languages, CRC-32C optional, nine packet types.
+- [x] **M68** — WebSocket transport client (libwebsockets for ObjC,
+      `websockets` for Python, Java-WebSocket for Java).
+- [x] **M68.5** — Transport server (same library trio).
+- [x] **M69** — Acquisition simulator replays fixtures at
+      wall-clock pace.
+- [x] **M70** — Bidirectional conformance matrix: every pair of
+      writers × readers across {Python, ObjC, Java} round-trips
+      byte-identically.
+- [x] **M71** — Selective access (`AUFilter`) + ProtectionMetadata
+      packet with `cipher_suite`, `kek_algorithm`, `wrapped_dek`,
+      `signature_algorithm`, `public_key`.
+- [x] **M72** — Integration, CHANGELOG, architecture docs.
+
+### v1.0 per-AU encryption (shipped in v0.10.0)
+
+Five phases across all three languages:
+
+- [x] **Phase A** — per-AU primitives: AAD helpers
+      (`aad_for_channel` / `aad_for_header` / `aad_for_pixel`),
+      `ChannelSegment` / `HeaderSegment` / `AUHeaderPlaintext`
+      records, 36-byte semantic header pack / unpack,
+      `encrypt_channel_to_segments` / `decrypt_channel_from_segments`,
+      `encrypt_header_segments` / `decrypt_header_segments`.
+- [x] **Phase B** — `VL_BYTES` `CompoundField.Kind` on the
+      provider abstraction; HDF5 provider wiring (Java uses
+      `NativeBytesPool` backed by `sun.misc.Unsafe` to pack
+      `hvl_t` slots; SQLite / Zarr fail loud with
+      `NotImplementedError` at the compound-write boundary).
+- [x] **Phase C** — file-level `encrypt_per_au` / `decrypt_per_au`
+      orchestrator routed through `StorageProvider` for
+      backend-agnostic plaintext ↔ `<channel>_segments` rewrite.
+- [x] **Phase D** — `EncryptedTransport` writer + reader; emits /
+      consumes AU packets with `FLAG_ENCRYPTED` (+
+      `FLAG_ENCRYPTED_HEADER`) bits; ciphertext bytes pass through
+      the wire unmodified.
+- [x] **Phase E** — cross-language conformance harness
+      (`tests/integration/test_per_au_cross_language.py`) drives
+      `per_au_cli` / `PerAUCli` / `MpgoPerAU` via subprocess and
+      byte-compares a canonical "MPAD" decryption dump; 38/38
+      combinations passing across every encrypt × decrypt × headers
+      × language triple.
+
+### Tooling + migration
+
+- [x] `per_au_cli` / `PerAUCli` / `MpgoPerAU` CLIs with
+      `{encrypt, decrypt, send, recv, transcode}` subcommands.
+- [x] `transcode --rekey` for DEK rotation; clear migration hint
+      when the source carries v0.x `opt_dataset_encryption`.
+- [x] Java `Hdf5File.close()` flush-before-close durability fix
+      (required for writes on Python-created h5py files to
+      persist after handle leaks).
+
+### Release criteria
+
+- [x] 1430 ObjC assertions / 682 Python tests / 298 Java tests
+      pass; 38/38 cross-language conformance cells green.
+- [x] `CHANGELOG.md` v0.10.0 entry.
+- [x] Docs refreshed (`format-spec.md`, `transport-spec.md`,
+      `transport-encryption-design.md`, `feature-flags.md`,
+      `api-stability-v0.8.md`, `README.md`, `ARCHITECTURE.md`,
+      `HANDOFF.md`, this file).
+- [ ] Annotated `v0.10.0` tag (user-gated).
+
+**v0.10.0 status:** Ready. Tag gated on user sign-off.

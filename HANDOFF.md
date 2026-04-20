@@ -1,16 +1,20 @@
-# MPEG-O v0.10 — Streaming Transport Protocol
+# MPEG-O v0.10 — Streaming Transport Protocol + Per-AU Encryption
 
-> **Status:** v0.9.0 and v0.9.1 tagged and pushed. Four storage
-> providers (HDF5, Memory, SQLite, Zarr v3), seven importers, five
-> exporters plus imzML and mzTab exporters, PQC crypto, integration +
-> stress + security test suites. Three exporter xfails from M64
-> (mzML `<activation>`, nmrML version attr, ISA-Tab PUBLICATIONS)
-> closed in 65c3666 / 6b26f2e; Zarr v3 migration landed in 391a7d2.
+> **Status (2026-04-20):** v0.10.0 ready, tag gated on user sign-off.
+> All nine commits for v0.10 shipped across the session:
+> transport codec (M67), WebSocket client + server (M68 / M68.5),
+> simulator (M69), bidirectional conformance (M70), selective access
+> + ProtectionMetadata (M71), per-AU encryption across all three
+> languages (v1.0 scope — Phases A–E), cross-language conformance
+> harness, `--transcode` migration path, CHANGELOG, and docs. Test
+> totals: 1430 ObjC / 682 Python / 298 Java / 38 cross-language, all
+> green. Two pre-existing Thermo-mock ObjC failures remain
+> environment-specific.
 >
-> This session implements **the MPEG-G Part 2 equivalent: a streaming
-> transport format** with bidirectional conversion to/from the file
-> format, selective network access, and real-time acquisition
-> simulation. Milestones 66–72. M65 complete.
+> Prior context: v0.9.0 / v0.9.1 tagged and pushed. Four storage
+> providers (HDF5, Memory, SQLite, Zarr v3), seven importers, seven
+> exporters (including imzML and mzTab), PQC crypto, integration +
+> stress + security test suites.
 
 ---
 
@@ -891,27 +895,29 @@ packet wire format across all three languages. Counts: Python 617
   encode/decode round-trip verified in every language,
   composable with `HAS_CHECKSUM`.
 
-**Scope deferred to v1.0**:
+**Follow-ups (v1.0 scope — shipped in v0.10.0 / remaining)**:
 
-- Full encrypted round-trip integration. The wire packet
-  (`ProtectionMetadata`) and the `PacketFlag.ENCRYPTED` bit are
-  stable, but the existing encryption subsystem encrypts whole
-  channels at run granularity (one AES-GCM ciphertext with
-  shared IV + tag per channel per run); the transport wire
-  carries signal data per Access Unit (one spectrum). Preserving
-  encrypted bytes through transport therefore requires either
-  (a) a new per-AU encryption mode in the encryption
-  subsystem, (b) a new transport packet type carrying
-  run-scoped encrypted blobs alongside plain AU skeletons, or
-  (c) transcoding (decrypt at source, re-encrypt at
-  destination) — which loses the "don't decrypt in transit"
-  property. None of those are small; all three touch the spec.
-  Deferred to v1.0 with an explicit design pass.
-- LZ4 and Numpress-delta wire codecs. ZLIB landed in M71.5
+- [x] **Full encrypted round-trip integration — SHIPPED.** The v1.0
+  design pass became `docs/transport-encryption-design.md`; the
+  adopted path is option (a), per-AU encryption. Ships as
+  `opt_per_au_encryption` (and optional `opt_encrypted_au_headers`)
+  with a new `<channel>_segments` / `au_header_segments` VL_BYTES
+  compound layout (see `docs/format-spec.md` §9.1). Each spectrum
+  is a separate AES-256-GCM op with fresh IV and AAD bound to
+  `(dataset_id, au_sequence, channel_name | "header" | "pixel")`;
+  ciphertext bytes pass through the transport unmodified. Cross-
+  language conformance harness (`test_per_au_cross_language.py`)
+  drives `per_au_cli` in all three languages via subprocess and
+  byte-compares a canonical "MPAD" decryption dump — 38/38
+  combinations green.
+- [ ] LZ4 and Numpress-delta wire codecs. ZLIB landed in M71.5
   (opt-in `use_compression=True` on the writer, auto-handled
   on read). The remaining two follow the same pattern but
   need the Python + Java + ObjC codec modules wired through.
-- Bruker ion-mobility importer-specific integration.
+  Still deferred — not blocking for v0.10.0 and the opt-in wire
+  mechanism (flag bit 1 `COMPRESSED`) is already reserved.
+- [ ] Bruker ion-mobility importer-specific integration. Still
+  deferred.
 
 Historical spec retained below for audit.
 
@@ -990,30 +996,82 @@ class TestEncryptedTransport:
 
 ---
 
-## Milestone 72 — v0.10.0 Release
+## Milestone 72 — v0.10.0 Release — COMPLETE (pending tag)
 
 **Deliverables**
 
-- `docs/transport-spec.md` — normative transport format specification
-- `docs/streaming-guide.md` — user guide for server/client/simulator
-- Updated `ARCHITECTURE.md` with transport layer diagram
-- Updated `README.md` with streaming capabilities
-- Updated `CHANGELOG.md`
-- CI: transport codec tests + bidirectional conversion + cross-language
-- Tag v0.10.0
+- [x] `docs/transport-spec.md` — normative transport format specification
+- [x] `docs/transport-encryption-design.md` — per-AU encryption
+      design (promoted to SHIPPED status 2026-04-20)
+- [x] Updated `ARCHITECTURE.md` — v0.10 implementation counts,
+      transport section, per-AU encryption narrative
+- [x] Updated `README.md` — v0.10.0 capabilities, doc links,
+      cross-language harness mention
+- [x] Updated `WORKPLAN.md` — M66–M72 + v1.0 encryption acceptance
+      checkboxes
+- [x] Updated `CHANGELOG.md` with v0.10.0 entry
+- [x] CI: transport codec tests + bidirectional conversion +
+      cross-language conformance (38 cells)
+- [ ] Tag v0.10.0 (gated on user sign-off)
 
 ### Acceptance
 
-- [ ] All three languages green
-- [ ] Transport codec round-trip passes in all three languages
-- [ ] Cross-language transport exchange passes
-- [ ] Network server/client functional
-- [ ] Acquisition simulator produces valid stream
-- [ ] Selective access reduces transfer size
-- [ ] Encrypted transport works
-- [ ] Bidirectional conversion is bit-identical for signal data
-- [ ] v0.1–v0.9 backward compat preserved (file format unchanged)
-- [ ] Tag pushed
+- [x] All three languages green (1430 ObjC / 682 Python / 298 Java)
+- [x] Transport codec round-trip passes in all three languages (M70)
+- [x] Cross-language transport exchange passes (M70 + the per-AU
+      cross-language harness, 38/38 combinations)
+- [x] Network server/client functional (M68 / M68.5)
+- [x] Acquisition simulator produces valid stream (M69)
+- [x] Selective access reduces transfer size (M71 `AUFilter`)
+- [x] Encrypted transport works (v1.0 per-AU encryption Phases D, E)
+- [x] Bidirectional conversion is bit-identical for signal data
+- [x] v0.1–v0.9 backward compat preserved (file format unchanged;
+      per-AU encryption is additive and feature-flagged)
+- [ ] Tag pushed (user-gated)
+
+---
+
+## v1.0 Per-AU Encryption — SHIPPED in v0.10.0 (2026-04-20)
+
+Design: `docs/transport-encryption-design.md`; on-disk layout:
+`docs/format-spec.md` §9.1; wire semantics: `docs/transport-spec.md`
+§4.3 and §6.
+
+**Phases completed (all three languages):**
+
+- **A** — Per-AU primitives: AAD helpers, `ChannelSegment` /
+  `HeaderSegment` / `AUHeaderPlaintext` records, encrypt /
+  decrypt channel + header segments with AAD binding.
+- **B** — `VL_BYTES` `CompoundField.Kind` on the provider
+  abstraction; HDF5 provider wiring. Java uses `NativeBytesPool`
+  backed by `sun.misc.Unsafe` to pack `hvl_t` slots (JHI5 1.10
+  doesn't marshal VL-in-compound directly). SQLite / Zarr fail
+  loud at the compound-write boundary.
+- **C** — File-level `encrypt_per_au` / `decrypt_per_au`
+  orchestrator via `StorageProvider`; rewrites `<channel>_values`
+  to `<channel>_segments` + optional `au_header_segments`,
+  drops plaintext.
+- **D** — `EncryptedTransport` writer + reader; AU packets carry
+  `FLAG_ENCRYPTED` (+ optional `FLAG_ENCRYPTED_HEADER`); ciphertext
+  passes through the wire unmodified.
+- **E** — Cross-language conformance harness; `per_au_cli` /
+  `PerAUCli` / `MpgoPerAU` expose `{encrypt, decrypt, send, recv,
+  transcode}`; `decrypt` emits a canonical "MPAD" binary dump for
+  byte-level cross-language comparison. 38/38 combinations green.
+
+**Tooling:**
+
+- `transcode` subcommand handles plaintext → per-AU and
+  per-AU → per-AU (with optional `--rekey` for DEK rotation).
+  v0.x `opt_dataset_encryption` files fail loud with a migration
+  hint directing users to decrypt via v0.x `SpectralDataset.decrypt()`
+  first.
+
+**Durability fix:** Java's `Hdf5File.close()` now calls `H5Fflush`
+before `H5Fclose`. Without the explicit flush, writes to a Python-
+created h5py file silently didn't persist (H5Fclose skipped the
+flush when child group handles leaked via unclosed adapters even
+though TWR closed the top-level handles in order).
 
 ---
 

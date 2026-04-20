@@ -1,4 +1,4 @@
-# Migration Guide: mzML and nmrML to MPEG-O (v0.7)
+# Migration Guide: mzML and nmrML to MPEG-O (current: v0.10)
 
 ## Audience and prerequisites
 
@@ -461,7 +461,108 @@ Binding decision 37.
 
 ---
 
-## 7. See also
+## 7. Migrating from v0.7 to v0.8
+
+Additive: `opt_pqc_preview` enables ML-KEM-1024 envelope wrapping and
+ML-DSA-87 signatures alongside the classical AES-256-GCM + HMAC-SHA256
+defaults. Install with `pip install 'mpeg-o[pqc]'` (Python) or add the
+Bouncy Castle 1.80+ artefact (Java); ObjC links `liboqs` directly. No
+on-disk layout change is forced; the flag simply signals the reader
+that a `v3:` signature attribute or an ML-KEM-1024 wrapped key may be
+present. v0.7-and-earlier readers can still open v0.8 files that
+don't actually use PQC primitives. See `docs/pqc.md`.
+
+## 8. Migrating from v0.8 to v0.9
+
+Provider abstraction hardened across all three languages (SQLite and
+Zarr v3 backends complete). Zarr v2 stores migrate to v3 on write;
+reads of v2 stores remain supported. v0.9.1 shipped the mzTab and
+imzML exporters and fixed the last three M64 xfails (nmrML
+`<spectrum1D>` content model, mzML `<activation>`, ISA-Tab
+PUBLICATIONS). No new feature flags; no code changes required for
+existing callers.
+
+## 9. Migrating from v0.9 to v0.10 — streaming transport
+
+New in v0.10: the `.mots` streaming transport format
+(`docs/transport-spec.md`) with nine packet types and optional
+CRC-32C framing. The transport layer is additive — existing `.mpgo`
+files continue to open unchanged. `TransportWriter` /
+`TransportReader` plus `TransportClient` / `TransportServer` are new
+APIs; see `docs/api-stability-v0.8.md` §4.1 for the stable surface.
+
+## 10. Migrating to v1.0 per-AU encryption (`opt_per_au_encryption`)
+
+The v1.0 per-Access-Unit encryption flag shipped in v0.10.0. Three
+starting points:
+
+**a) Plaintext → per-AU encrypted.** Use the `transcode` subcommand
+of the per-AU CLI (or call `encrypt_per_au` / `PerAUFile.encryptFile`
+/ `+[MPGOPerAUFile encryptFilePath:...]` directly):
+
+```bash
+# Python
+python -m mpeg_o.tools.per_au_cli transcode input.mpgo output.mpgo key.bin --headers
+
+# Java
+java -cp ... com.dtwthalion.mpgo.tools.PerAUCli encrypt input.mpgo output.mpgo key.bin --headers
+
+# ObjC
+MpgoPerAU encrypt input.mpgo output.mpgo key.bin --headers
+```
+
+`--headers` additionally encrypts the 36-byte semantic header
+(retention time, ms level, polarity, precursor m/z, precursor
+charge, base peak intensity, ion mobility, acquisition mode). Drop
+the flag to keep those values plaintext so servers can filter AUs
+without the key.
+
+**b) Rotating the DEK on a per-AU encrypted file.** Use the same
+`transcode` subcommand with `--rekey`:
+
+```bash
+python -m mpeg_o.tools.per_au_cli transcode \
+  already_encrypted.mpgo rotated.mpgo old_key.bin --rekey new_key.bin --headers
+```
+
+The tool decrypts with the old key into a scratch layout (rewriting
+`<channel>_values` + plaintext `spectrum_index` arrays inside the
+output file before re-encrypting), then re-encrypts with the new key
+and fresh IVs. Old-key decryption of `rotated.mpgo` fails cleanly
+via AES-GCM tag mismatch.
+
+**c) v0.x `opt_dataset_encryption` → v1.0 per-AU.** The v0.x channel-
+level AES-GCM model shares a single IV + tag per channel per run;
+this cannot be converted in place to the per-spectrum layout without
+materialising the plaintext. Two-step migration:
+
+```python
+import numpy as np
+from mpeg_o import SpectralDataset
+# 1. Open with the v0.x API and decrypt into a plaintext scratch copy.
+with SpectralDataset.open("v0x_encrypted.mpgo") as src:
+    src.decrypt(key=dek)
+    src.save_as("plaintext_scratch.mpgo")
+# 2. Encrypt forward through the v1.0 path.
+import subprocess, sys
+subprocess.check_call([sys.executable, "-m", "mpeg_o.tools.per_au_cli",
+                        "transcode", "plaintext_scratch.mpgo",
+                        "v1_encrypted.mpgo", "key.bin", "--headers"])
+```
+
+The `transcode` CLI refuses `opt_dataset_encryption` inputs with a
+clear error message rather than silently doing the wrong thing.
+
+**Storage-backend caveat.** Per-AU encryption requires `VL_BYTES`
+compound field support. The HDF5 and Memory providers support it
+today; SQLite and Zarr raise `NotImplementedError` /
+`UnsupportedOperationException` at the `create_compound_dataset`
+boundary until their JSON-based compound paths grow base64
+transport for bytes. When using SQLite or Zarr containers, keep
+encryption at the v0.x channel level or copy into HDF5 before
+transcoding.
+
+## 11. See also
 
 - `docs/api-review-v0.7.md` — three-column parity map (Python / ObjC / Java)
   with stability markers for every public class and method, plus

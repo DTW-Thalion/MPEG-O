@@ -1,7 +1,10 @@
 # MPEG-O Transport Encryption — Design Proposal
 
-**Status:** APPROVED 2026-04-19. Ready for implementation (v1.0
-design freeze on this area).
+**Status:** SHIPPED in v0.10.0 (2026-04-20). This document is now a
+retrospective design note; the as-built surface matches every
+decision captured here. For the live on-disk layout see
+`docs/format-spec.md` §9.1; for the wire format see
+`docs/transport-spec.md` §4.3 and §6.
 
 **Signed off (user feedback 2026-04-19):**
 1. New compound layout; backward compatibility with v0.x
@@ -312,64 +315,64 @@ security implications, not a streaming-time default.
 
 ### 8.1 Spec updates (non-code)
 
-- [ ] `docs/format-spec.md` — add §5.5 "Per-AU encrypted
+- [x] `docs/format-spec.md` — add §5.5 "Per-AU encrypted
   channel layout" documenting `<channel>_segments` and
   `spectrum_index/au_header_segments`.
-- [ ] `docs/transport-spec.md` — add §4.5 (plaintext-header
+- [x] `docs/transport-spec.md` — add §4.5 (plaintext-header
   encrypted-channel AU), §4.6 (fully-encrypted AU), §4.7
   (AAD binding rule). Update §3.2 flag table.
-- [ ] `docs/feature-flags.md` — register
+- [x] `docs/feature-flags.md` — register
   `opt_per_au_encryption` and `opt_encrypted_au_headers`.
-- [ ] `docs/pqc.md` — add section "Transport encryption
+- [x] `docs/pqc.md` — add section "Transport encryption
   composition" describing the DEK-driven per-AU path.
 
 ### 8.2 Reference implementation (Python, first)
 
-- [ ] `mpeg_o.encryption.encrypt_per_au(dataset, key)` — new
+- [x] `mpeg_o.encryption.encrypt_per_au(dataset, key)` — new
   writer path, emits `<channel>_segments` and
   `au_header_segments` compounds. Deterministic ciphertext
   given (plaintext, key, IV).
-- [ ] `mpeg_o.encryption.decrypt_per_au_channel` /
+- [x] `mpeg_o.encryption.decrypt_per_au_channel` /
   `decrypt_per_au_header` — reader counterparts.
-- [ ] `mpeg_o.transport.codec.TransportWriter` — detect
+- [x] `mpeg_o.transport.codec.TransportWriter` — detect
   `opt_per_au_encryption` and `opt_encrypted_au_headers`;
   package encrypted segments into `ChannelData.data` bytes
   with AAD binding.
-- [ ] `mpeg_o.transport.codec.TransportReader` — honor
+- [x] `mpeg_o.transport.codec.TransportReader` — honor
   encrypted variants, materialize target file with the same
   flags and same DEK.
-- [ ] Tests: per-AU encrypt → stream → decrypt round-trip;
+- [x] Tests: per-AU encrypt → stream → decrypt round-trip;
   encrypted-headers round-trip; AAD tamper detection;
   ProtectionMetadata preservation; PQC variant.
-- [ ] Cross-backend (HDF5, SQLite, Zarr) encrypted round-trips.
+- [x] Cross-backend (HDF5, SQLite, Zarr) encrypted round-trips.
 
 ### 8.3 ObjC port
 
-- [ ] `MPGOEncryptionManager` — add `encryptPerAUWithKey:`.
-- [ ] `MPGOTransportWriter` / `MPGOTransportReader` — detect
+- [x] `MPGOEncryptionManager` — add `encryptPerAUWithKey:`.
+- [x] `MPGOTransportWriter` / `MPGOTransportReader` — detect
   flags and handle the three AU variants.
-- [ ] Tests: mirror Python coverage in `TestEncryptedTransport.m`.
+- [x] Tests: mirror Python coverage in `TestEncryptedTransport.m`.
 
 ### 8.4 Java port
 
-- [ ] `com.dtwthalion.mpgo.protection.EncryptionManager` —
+- [x] `com.dtwthalion.mpgo.protection.EncryptionManager` —
   add `encryptPerAU(key)`.
-- [ ] `TransportWriter` / `TransportReader` updates.
-- [ ] Tests: mirror Python coverage in
+- [x] `TransportWriter` / `TransportReader` updates.
+- [x] Tests: mirror Python coverage in
   `EncryptedTransportTest.java`.
 
 ### 8.5 Cross-language conformance
 
-- [ ] Python drives Java+ObjC subprocesses: encrypt in one
+- [x] Python drives Java+ObjC subprocesses: encrypt in one
   language, stream, materialize in another, decrypt, verify
   values.
-- [ ] PQC cross-language variant.
+- [x] PQC cross-language variant.
 
 ### 8.6 Release
 
-- [ ] `--transcode` migration path shipped and documented.
-- [ ] `CHANGELOG.md` v0.10.0 entry.
-- [ ] Tag v0.10.0 (user-gated per binding decision).
+- [x] `--transcode` migration path shipped and documented.
+- [x] `CHANGELOG.md` v0.10.0 entry.
+- [x] Tag v0.10.0 (user-gated per binding decision).
 
 ## 9. Sizing
 
