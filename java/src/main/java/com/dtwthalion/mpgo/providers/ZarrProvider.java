@@ -1064,6 +1064,9 @@ public final class ZarrProvider implements StorageProvider {
             case INT64 -> "int64";
             case FLOAT64 -> "float64";
             case VL_STRING -> "vl_string";
+            case VL_BYTES -> throw new UnsupportedOperationException(
+                "Zarr provider does not yet support VL_BYTES compound "
+                + "fields; use the HDF5 provider for opt_per_au_encryption");
         };
     }
 
@@ -1084,6 +1087,8 @@ public final class ZarrProvider implements StorageProvider {
                             : v.toString());
             case FLOAT64 -> v == null ? 0.0 : ((Number) v).doubleValue();
             case INT64, UINT32 -> v == null ? 0L : ((Number) v).longValue();
+            case VL_BYTES -> throw new UnsupportedOperationException(
+                "Zarr provider does not yet support VL_BYTES compound fields");
         };
     }
 

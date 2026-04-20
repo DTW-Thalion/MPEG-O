@@ -499,8 +499,8 @@ class ValueClassesTest {
         assertTrue(com.dtwthalion.mpgo.providers.StorageGroup.class.isInterface());
         assertTrue(com.dtwthalion.mpgo.providers.StorageDataset.class.isInterface());
 
-        // CompoundField.Kind has 4 members matching the spec.
-        assertEquals(4, com.dtwthalion.mpgo.providers.CompoundField.Kind.values().length);
+        // CompoundField.Kind: 4 v0.x primitives + VL_BYTES added in v1.0.
+        assertEquals(5, com.dtwthalion.mpgo.providers.CompoundField.Kind.values().length);
     }
 
     @Test

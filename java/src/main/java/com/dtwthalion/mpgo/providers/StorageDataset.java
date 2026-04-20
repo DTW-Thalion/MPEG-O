@@ -174,11 +174,14 @@ public interface StorageDataset extends AutoCloseable {
                                              Object value,
                                              CompoundField.Kind kind)
             throws java.io.IOException {
-        // CompoundField.Kind only declares UINT32, INT64, FLOAT64,
-        // VL_STRING — the four types MPGO compound schemas actually
-        // use (format-spec §6). Extending this switch requires a
-        // matching enum addition.
         switch (kind) {
+            case VL_BYTES -> {
+                byte[] bytes = value == null ? new byte[0] : (byte[]) value;
+                ByteBuffer lb = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+                lb.putInt(bytes.length);
+                out.write(lb.array());
+                if (bytes.length > 0) out.write(bytes);
+            }
             case VL_STRING -> {
                 byte[] bytes;
                 if (value == null) {

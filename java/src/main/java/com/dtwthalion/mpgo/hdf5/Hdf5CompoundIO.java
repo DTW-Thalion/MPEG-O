@@ -31,7 +31,9 @@ public final class Hdf5CompoundIO {
         UINT32(4, HDF5Constants.H5T_NATIVE_UINT32),
         INT64(8, HDF5Constants.H5T_NATIVE_INT64),
         FLOAT64(8, HDF5Constants.H5T_NATIVE_DOUBLE),
-        VL_STRING(8, -1);
+        VL_STRING(8, -1),
+        /** hvl_t on 64-bit: {size_t len; void* p} = 16 bytes. */
+        VL_BYTES(16, -1);
 
         final int byteSize;
         final long nativeType;
@@ -108,15 +110,21 @@ public final class Hdf5CompoundIO {
                                              RowPacker packer) {
         Hdf5File owner = parent.owningFile();
         owner.lockForWriting();
-        long strType = -1, ctype = -1, dspace = -1, dset = -1;
-        try (NativeStringPool pool = new NativeStringPool()) {
+        long strType = -1, vlBytesType = -1, ctype = -1, dspace = -1, dset = -1;
+        try (NativeStringPool pool = new NativeStringPool();
+             NativeBytesPool bytesPool = new NativeBytesPool()) {
             strType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
             H5.H5Tset_size(strType, HDF5Constants.H5T_VARIABLE);
+            vlBytesType = H5.H5Tvlen_create(HDF5Constants.H5T_NATIVE_UCHAR);
 
             ctype = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, schema.totalSize);
             for (int i = 0; i < schema.fields.size(); i++) {
                 Field f = schema.fields.get(i);
-                long t = f.kind() == FieldKind.VL_STRING ? strType : f.kind().nativeType;
+                long t = switch (f.kind()) {
+                    case VL_STRING -> strType;
+                    case VL_BYTES -> vlBytesType;
+                    default -> f.kind().nativeType;
+                };
                 H5.H5Tinsert(ctype, f.name(), schema.offsets[i], t);
             }
 
@@ -129,6 +137,14 @@ public final class Hdf5CompoundIO {
                     int off = base + schema.offsets[i];
                     switch (schema.fields.get(i).kind()) {
                         case VL_STRING -> buf.putLong(off, (Long) vals[i]);
+                        case VL_BYTES -> {
+                            byte[] b = (byte[]) vals[i];
+                            if (b == null) b = new byte[0];
+                            long addr = bytesPool.addBytes(b);
+                            // hvl_t = { size_t len; void* p } in native order.
+                            buf.putLong(off, b.length);
+                            buf.putLong(off + 8, addr);
+                        }
                         case UINT32 -> buf.putInt(off, ((Number) vals[i]).intValue());
                         case INT64 -> buf.putLong(off, ((Number) vals[i]).longValue());
                         case FLOAT64 -> buf.putDouble(off, ((Number) vals[i]).doubleValue());
@@ -157,6 +173,7 @@ public final class Hdf5CompoundIO {
             if (dset >= 0) try { H5.H5Dclose(dset); } catch (Exception ignored) {}
             if (dspace >= 0) try { H5.H5Sclose(dspace); } catch (Exception ignored) {}
             if (ctype >= 0) try { H5.H5Tclose(ctype); } catch (Exception ignored) {}
+            if (vlBytesType >= 0) try { H5.H5Tclose(vlBytesType); } catch (Exception ignored) {}
             if (strType >= 0) try { H5.H5Tclose(strType); } catch (Exception ignored) {}
             owner.unlockForWriting();
         }
@@ -229,10 +246,102 @@ public final class Hdf5CompoundIO {
         }
     }
 
+    // ── Read (full path — handles VL_BYTES; VL_STRING still "") ────
+
+    /** Read a compound dataset returning all fields. Primitive fields
+     *  decode normally; VL_STRING fields decode as {@code ""} (JHI5
+     *  limitation we haven't worked around on the read side);
+     *  VL_BYTES fields decode as real {@code byte[]} via hvl_t
+     *  walk + H5Dvlen_reclaim. */
+    public static List<Object[]> readCompoundFull(Hdf5Group parent,
+                                                    String datasetName,
+                                                    Schema schema) {
+        Hdf5File owner = parent.owningFile();
+        owner.lockForReading();
+        long dset = -1, memType = -1, strType = -1, vlBytesType = -1, fspace = -1;
+        byte[] buf = null;
+        int count = 0;
+        try {
+            dset = H5.H5Dopen(parent.getGroupId(), datasetName,
+                              HDF5Constants.H5P_DEFAULT);
+            if (dset < 0) return List.of();
+
+            fspace = H5.H5Dget_space(dset);
+            long[] dims = {0};
+            H5.H5Sget_simple_extent_dims(fspace, dims, null);
+            count = (int) dims[0];
+            if (count == 0) return List.of();
+
+            strType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+            H5.H5Tset_size(strType, HDF5Constants.H5T_VARIABLE);
+            vlBytesType = H5.H5Tvlen_create(HDF5Constants.H5T_NATIVE_UCHAR);
+
+            memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, schema.totalSize);
+            for (int i = 0; i < schema.fields.size(); i++) {
+                Field f = schema.fields.get(i);
+                long t = switch (f.kind()) {
+                    case VL_STRING -> strType;
+                    case VL_BYTES -> vlBytesType;
+                    default -> f.kind().nativeType;
+                };
+                H5.H5Tinsert(memType, f.name(), schema.offsets[i], t);
+            }
+
+            buf = new byte[schema.totalSize * count];
+            int rc = H5.H5Dread(dset, memType,
+                                HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+                                HDF5Constants.H5P_DEFAULT, buf);
+            if (rc < 0) return List.of();
+
+            ByteBuffer bb = ByteBuffer.wrap(buf).order(ByteOrder.nativeOrder());
+            List<Object[]> out = new ArrayList<>(count);
+            for (int row = 0; row < count; row++) {
+                Object[] rec = new Object[schema.fields.size()];
+                for (int i = 0; i < schema.fields.size(); i++) {
+                    Field f = schema.fields.get(i);
+                    int off = row * schema.totalSize + schema.offsets[i];
+                    rec[i] = switch (f.kind()) {
+                        case UINT32 -> bb.getInt(off);
+                        case INT64 -> bb.getLong(off);
+                        case FLOAT64 -> bb.getDouble(off);
+                        case VL_STRING -> "";
+                        case VL_BYTES -> {
+                            long len = bb.getLong(off);
+                            long addr = bb.getLong(off + 8);
+                            yield len == 0 || addr == 0
+                                ? new byte[0]
+                                : NativeBytesPool.readBytes(addr, len);
+                        }
+                    };
+                }
+                out.add(rec);
+            }
+            return out;
+        } catch (HDF5LibraryException e) {
+            return List.of();
+        } finally {
+            if (buf != null && memType >= 0 && fspace >= 0) {
+                try {
+                    H5.H5Dvlen_reclaim(memType, fspace, HDF5Constants.H5P_DEFAULT,
+                                       buf);
+                } catch (Exception ignored) {}
+            }
+            if (fspace >= 0) try { H5.H5Sclose(fspace); } catch (Exception ignored) {}
+            if (memType >= 0) try { H5.H5Tclose(memType); } catch (Exception ignored) {}
+            if (vlBytesType >= 0) try { H5.H5Tclose(vlBytesType); } catch (Exception ignored) {}
+            if (strType >= 0) try { H5.H5Tclose(strType); } catch (Exception ignored) {}
+            if (dset >= 0) try { H5.H5Dclose(dset); } catch (Exception ignored) {}
+            owner.unlockForReading();
+        }
+    }
+
     private static Schema primitiveProjection(Schema full) {
         List<Field> prims = new ArrayList<>();
         for (Field f : full.fields) {
-            if (f.kind() != FieldKind.VL_STRING) prims.add(f);
+            if (f.kind() != FieldKind.VL_STRING
+                    && f.kind() != FieldKind.VL_BYTES) {
+                prims.add(f);
+            }
         }
         return new Schema(prims);
     }
@@ -247,6 +356,7 @@ public final class Hdf5CompoundIO {
                     case INT64 -> 0L;
                     case FLOAT64 -> 0.0;
                     case VL_STRING -> "";
+                    case VL_BYTES -> new byte[0];
                 };
             }
             out.add(rec);
