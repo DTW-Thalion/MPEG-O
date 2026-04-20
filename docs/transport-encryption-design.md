@@ -1,313 +1,400 @@
 # MPEG-O Transport Encryption — Design Proposal
 
-**Status:** Draft for review (v0.10 blocker).
+**Status:** APPROVED 2026-04-19. Ready for implementation (v1.0
+design freeze on this area).
 
-This document proposes how the streaming transport format
-(`docs/transport-spec.md`) should carry encrypted data. It is not
-yet normative — v0.10 ships without the encrypted round-trip while
-this design is reviewed and implemented.
+**Signed off (user feedback 2026-04-19):**
+1. New compound layout; backward compatibility with v0.x
+   channel-grained encryption is **not** required.
+2. `opt_encrypted_au_headers` is in-scope for v1.0.
+3. `--transcode` opt-in is acceptable for migration scenarios.
+
+This document is the normative reference for how the streaming
+transport format (`docs/transport-spec.md`) carries encrypted
+data. Implementation follows in §9.
 
 ## 1. Problem
 
-The existing encryption subsystem (see `docs/format-spec.md` §10
-and `mpeg_o/encryption.py`, `MPGOEncryptionManager`,
-`com.dtwthalion.mpgo.protection.EncryptionManager`) encrypts at
-**channel granularity**:
+The v0.x encryption subsystem encrypts at **channel granularity**:
+one AES-256-GCM operation covers the entire `intensity_values`
+channel of a run; storage is `<channel>_values_encrypted` with a
+single shared IV + tag.
 
-- A single AES-256-GCM operation covers the entire
-  `intensity_values` channel of a run (hundreds of MB for a
-  60-minute LC-MS acquisition).
-- The ciphertext is stored in `<channel>_values_encrypted`, with
-  a single 12-byte IV and a single 16-byte GCM tag.
-- The tag authenticates the whole ciphertext; a receiver cannot
-  decrypt or validate any subset without holding the entire
-  channel.
+This is incompatible with the v0.10 transport format, which is
+per-Access-Unit:
 
-The transport format is **per-Access-Unit**. Each AU carries one
-spectrum's channel data. This is the "Access Unit = one spectrum"
-binding decision (HANDOFF binding decision 55) and is load-bearing
-for:
+- **Selective access** evaluates per-AU headers; filtering out
+  scans would break a whole-channel MAC.
+- **Real-time streaming** (M69 simulator, live acquisition) has
+  no notion of "complete channel" until the run ends.
+- **Multiplexing** — AUs from different runs may interleave.
 
-- **Selective access.** Server-side filtering evaluates per-AU
-  headers; filtered streams deliver only matching AUs.
-- **Real-time acquisition** (M69). The simulator emits one AU per
-  scan at wall-clock rate; a server-driven live acquisition has
-  no notion of a "complete channel" until the run ends.
-- **Multiplexing.** AUs from different runs may be interleaved on
-  the wire.
+v1.0 introduces **per-AU encryption** as a clean cut.
+v0.x-encrypted files are readable only via the legacy
+decryption path and cannot be streamed through transport without
+explicit transcoding (see §6).
 
-These two models are not compatible. A single AES-GCM block
-covering a whole channel cannot be partially delivered, and a
-filtered stream that omits spectra produces ciphertext the
-receiver cannot validate — the tag covers the bytes that weren't
-sent.
+## 2. Options considered
 
-## 2. Options
+Detailed in the v1 draft of this document (see commit 32963eb).
+Summary:
 
-### 2.1 Per-AU encryption (recommended)
+- **Per-AU encryption** — recommended, adopted below.
+- **Run-blob transport packet** — rejected: breaks selective
+  access and real-time streaming.
+- **Server-side transcoding** — rejected as a default mode
+  (violates the spec's "MUST NOT decode payloads" rule); kept
+  as an explicit `--transcode` opt-in for migration (see §6).
 
-Each AU's channel data is independently encrypted with its own IV
-and tag. One wrapped DEK is shared across the whole run (the key
-doesn't need rotation per spectrum), but each encryption operation
-produces a fresh IV.
+## 3. Adopted design
 
-**Wire:**
+Two independent, composable encryption modes:
 
-- `ProtectionMetadata` packet emitted once per stream, carrying
-  `cipher_suite`, `kek_algorithm`, `wrapped_dek`,
-  `signature_algorithm`, `public_key`.
-- Each encrypted AU sets `PacketFlag.ENCRYPTED` on its packet
-  header.
-- Each encrypted `ChannelData` prefixes its bytes with `[IV (12)]
-  [TAG (16)]` followed by ciphertext. Wire layout:
+- **`opt_per_au_encryption`** — channel data is AES-256-GCM
+  encrypted per Access Unit. One wrapped DEK per run; a fresh
+  IV per AU per channel. AU filter-header fields remain
+  plaintext; server-side filtering works keyless.
+- **`opt_encrypted_au_headers`** — the AU's semantic filter
+  fields are also AES-256-GCM encrypted per AU. Server-side
+  filtering is disabled when this flag is set; clients download
+  the full stream and filter locally after decryption.
 
-  ```
-  channel_name_len: uint16
-  channel_name:     bytes[channel_name_len]
-  precision:        uint8   # same enum as plaintext
-  compression:      uint8   # matches pre-encryption codec; decryption produces compressed bytes
-  n_elements:       uint32  # plaintext element count
-  data_length:      uint32  # 28 + ciphertext_bytes
-  data:             bytes[12 IV || 16 TAG || ciphertext]
-  ```
+Both flags may be set simultaneously. `opt_encrypted_au_headers`
+without `opt_per_au_encryption` is **not** a legal combination
+(channel data must be encrypted if headers are).
 
-- AU header's filter-key fields (RT, MS level, polarity,
-  precursor m/z, ion mobility, base peak intensity) remain **plaintext**
-  so server-side filtering works without keys. The design
-  assumes these scalar fields are not considered PHI; if they
-  are, a future revision can introduce an encrypted-headers mode.
+Rationale for separate flags: many deployments want channel-data
+confidentiality but need server-side filtering for bandwidth. A
+smaller but important subset (clinical PHI, competitive research)
+needs total opacity even at the cost of full-stream transfer.
 
-**File format change:** introduce `opt_per_au_encryption` feature
-flag. New files use the per-AU layout:
+## 4. Wire format
 
-- `signal_channels/<channel>_values_encrypted` is replaced by
-  `<channel>_encrypted_segments` — a compound dataset with
-  columns `offset: u64`, `length: u32`, `iv: [u8; 12]`,
-  `tag: [u8; 16]`, `ciphertext: VL[u8]`.
-- One row per spectrum (or per chunk for large spectra if
-  needed later).
-- `@<channel>_algorithm`, `@<channel>_wrapped_dek` attributes
-  remain at the channel group.
+### 4.1 ProtectionMetadata packet — unchanged from M71
 
-Existing files (channel-granularity encryption) remain readable;
-the transport layer refuses to stream them without transcoding
-authorization (see §3 for the boundary).
+Already shipped in all three languages. See
+`docs/transport-spec.md` §4.4. The `cipher_suite` field names
+`aes-256-gcm`; the `kek_algorithm` names the DEK-wrapping
+algorithm (e.g. `rsa-oaep-sha256`, `ml-kem-1024`).
 
-**Pros:**
-- Wire format stays simple; no new packet types.
-- Selective access preserved (filter evaluates plaintext AU
-  header; filtered stream still produces a valid encrypted
-  output file).
-- Real-time streaming viable.
-- MPEG-G style (per-Access-Unit crypto) — matches the spec's
-  conceptual model.
-- ~28 bytes overhead per spectrum per channel (negligible — a
-  10k-spectrum run gains ~560KB of IV+tag data).
+### 4.2 AU packet header flags
 
-**Cons:**
-- Requires a new encryption mode in Python/Java/ObjC encryption
-  managers.
-- New file format flag — back-compat for existing encrypted
-  files (channel-granularity) is read-only at the transport
-  boundary; writers writing new encrypted files opt into per-AU.
+Bit assignments on `PacketHeader.flags` for encrypted transport:
 
-### 2.2 Transport-level run-blob packet
+| Bit | Name                          | Meaning                                   |
+|----:|-------------------------------|-------------------------------------------|
+| 0   | `ENCRYPTED`                   | Channel data in this AU is encrypted      |
+| 2   | `HAS_CHECKSUM`                | (existing) CRC-32C follows payload        |
+| 3   | `ENCRYPTED_HEADER`            | AU semantic header is also encrypted      |
 
-Add `EncryptedChannelBlob` as a new packet type (0x09). Carries
-`dataset_id`, `channel_name`, `iv`, `tag`, `ciphertext` for an
-entire run's channel. Emit once per encrypted channel, before
-AUs. AUs remain plaintext in structure but signal channel data
-is empty / a reference to the blob.
+Bit 1 (`COMPRESSED`) is reserved for a future packet-level
+compression flag, unused today. Readers MUST reject `ENCRYPTED_HEADER`
+without `ENCRYPTED`.
 
-**Pros:**
-- No change to encryption subsystem.
-- File format unchanged.
+### 4.3 AU payload — plaintext header, plaintext channel
 
-**Cons:**
-- Selective access becomes all-or-nothing: if any spectrum is
-  filtered out, the blob's ciphertext is useless (the tag covers
-  the whole channel, including the filtered scans).
-- Real-time streaming impossible — must know the whole channel
-  before emitting.
-- Breaks HANDOFF binding decision 55 ("AU = one spectrum").
-- Receiver must buffer the entire blob before any spectrum is
-  accessible.
-
-### 2.3 Transcode (decrypt → re-encrypt)
-
-Server holds the key, decrypts on the way out, re-encrypts per-AU
-on the way in.
-
-**Pros:**
-- Works with existing file format.
-
-**Cons:**
-- **Violates the spec's non-negotiable rule** (`docs/transport-spec.md`
-  §6.2: "receiver MUST NOT decode channel payloads unless the
-  target container demands a different encoding").
-- Server needs the key — eliminates the encrypted-at-rest threat
-  model where the server is untrusted.
-- Key management becomes a deployment nightmare (who provisions
-  the server's key? rotates it?).
-- Rejected.
-
-## 3. Recommended Approach
-
-**Option 2.1 — per-AU encryption.** It's the only design that
-satisfies all three of: streaming contract, selective access, and
-the untrusted-server threat model.
-
-Introduced as a new file-format feature flag
-`opt_per_au_encryption` (v1.1 of the on-disk format). Transport
-refuses to stream channel-granularity-encrypted files without an
-explicit `--transcode` flag (which requires the server to hold
-the key and logs the transcode in `ProvenanceRecord`). Default
-behavior: error out with "source uses channel-granularity
-encryption; re-encrypt with `--per-au` mode or enable
-`--transcode`".
-
-## 4. Wire format details
-
-### 4.1 ProtectionMetadata packet — no change from M71
-
-Already defined in `docs/transport-spec.md` §4.4 and implemented
-in M71 across all three languages. No schema change.
-
-### 4.2 AU header — no change
-
-`PacketFlag.ENCRYPTED` (bit 0) already reserved and round-trips
-through the codec in all three languages (covered by M71 tests).
-
-### 4.3 ChannelData — encrypted variant
-
-When `PacketFlag.ENCRYPTED` is set on the enclosing AU, every
-`ChannelData` payload is laid out as:
+(Today's format, reproduced for completeness.)
 
 ```
-[IV: 12 bytes] [TAG: 16 bytes] [CIPHERTEXT: data_length - 28 bytes]
+spectrum_class:      uint8
+acquisition_mode:    uint8
+ms_level:            uint8
+polarity:            uint8
+retention_time:      float64
+precursor_mz:        float64
+precursor_charge:    uint8
+ion_mobility:        float64
+base_peak_intensity: float64
+n_channels:          uint8
+channels × n_channels  (ChannelData as in §4.3 of transport-spec)
+pixel_x / pixel_y / pixel_z: uint32  (if spectrum_class == 4)
 ```
 
-`n_elements` and `precision` describe the plaintext array. After
-decryption, the plaintext is the same bytes that a plaintext AU
-would carry (same `compression` applied post-decrypt). `compression`
-field describes the codec applied to the **plaintext**; the
-ciphertext itself is never recompressed.
+### 4.4 AU payload — plaintext header, encrypted channel (`ENCRYPTED` only)
 
-Rationale: putting IV + tag inline keeps the codec simple (no new
-packet type, no sidechannel). 28 bytes per channel per spectrum
-is acceptable overhead.
+```
+spectrum_class:      uint8   ┐
+acquisition_mode:    uint8   │
+ms_level:            uint8   │
+polarity:            uint8   │
+retention_time:      float64 │ plaintext filter header (38 bytes)
+precursor_mz:        float64 │ — server filters on these
+precursor_charge:    uint8   │
+ion_mobility:        float64 │
+base_peak_intensity: float64 │
+n_channels:          uint8   ┘
+channels × n_channels:
+    channel_name_len: uint16     ┐
+    channel_name:     bytes      │ plaintext channel framing
+    precision:        uint8      │
+    compression:      uint8      │
+    n_elements:       uint32     ┘
+    data_length:      uint32     # 28 + ciphertext_bytes
+    data:             bytes[data_length]
+          = IV[12] || TAG[16] || ciphertext(plaintext-of-length n_elements*precision_size)
+pixel_x / pixel_y / pixel_z: uint32  (if spectrum_class == 4, plaintext)
+```
 
-### 4.4 Ordering
+The AES-GCM authenticated data for each channel's
+encrypt/decrypt operation covers:
+- the channel's plaintext `channel_name` bytes
+- the `dataset_id` and `au_sequence` from the enclosing
+  PacketHeader (binds ciphertext to its stream position;
+  prevents cut-and-paste attacks)
 
-- `ProtectionMetadata` MUST precede any encrypted AU of the same
+### 4.5 AU payload — encrypted header + encrypted channel (`ENCRYPTED | ENCRYPTED_HEADER`)
+
+```
+spectrum_class:      uint8         # plaintext — needed for dispatch
+n_channels:          uint8         # plaintext — needed for parsing
+IV_header:           bytes[12]
+TAG_header:          bytes[16]
+encrypted_semantic_header: bytes[35]
+    = AES-GCM(plaintext = acquisition_mode || ms_level || polarity ||
+                          retention_time || precursor_mz ||
+                          precursor_charge || ion_mobility ||
+                          base_peak_intensity)
+channels × n_channels:
+    (as in §4.4 — encrypted channel layout)
+if spectrum_class == 4:
+    IV_pixel:  bytes[12]
+    TAG_pixel: bytes[16]
+    encrypted_pixel_xyz: bytes[12]   = AES-GCM(pixel_x || pixel_y || pixel_z)
+```
+
+Rationale for `spectrum_class` + `n_channels` staying plaintext:
+the reader must be able to parse the packet without the key
+(dispatch on spectrum_class, iterate through n_channels). These
+are structural framing bytes, not semantic PHI.
+
+When `ENCRYPTED_HEADER` is set the `PacketHeader`'s own filter
+hints (`dataset_id`, `au_sequence`) remain plaintext — they're
+routing metadata, not payload. Clients that require total
+dataset_id opacity use separate connections per dataset.
+
+### 4.6 Integrity binding
+
+Every AES-GCM operation in an encrypted AU uses the
+authenticated-data (AAD) parameter to bind ciphertext to
+context:
+
+- Channel encryption AAD = `dataset_id (u16 LE) || au_sequence
+  (u32 LE) || channel_name_utf8`.
+- Header encryption AAD = `dataset_id (u16 LE) || au_sequence
+  (u32 LE) || b"header"`.
+- Pixel encryption AAD = `dataset_id (u16 LE) || au_sequence
+  (u32 LE) || b"pixel"`.
+
+This prevents:
+- Swapping a channel's ciphertext into another AU with a
+  different sequence number.
+- Treating the pixel block as a header envelope or vice versa.
+
+### 4.7 Ordering
+
+- `ProtectionMetadata` MUST precede any encrypted AU for its
   `dataset_id`.
-- One `ProtectionMetadata` per dataset_id is allowed if different
-  runs in one stream use different keys.
+- Exactly one `ProtectionMetadata` per `dataset_id` is required
+  before encrypted AUs. Different `dataset_id`s MAY use
+  different keys; emit one ProtectionMetadata per key.
+- If neither `ENCRYPTED` nor `ENCRYPTED_HEADER` is set on a
+  given AU, the AU is plaintext and the ProtectionMetadata's
+  key is not required for that AU.
 
-## 5. API surface (per-language)
+## 5. File format (v1.0 on-disk layout)
 
-Each language adds:
+### 5.1 Feature flags
 
-- `encrypt_per_au(key)` — new method on `SpectralDataset` /
-  `MPGOSpectralDataset` / `SpectralDataset` (Java) that encrypts
-  channels in the new per-AU layout, setting
-  `opt_per_au_encryption`.
-- Writer detection: `TransportWriter` checks if the source
-  dataset has `opt_per_au_encryption`; if so, reads encrypted
-  segments directly from the compound dataset and packages them
-  into encrypted `ChannelData`.
-- Reader materialization: `TransportReader` detects
-  `ProtectionMetadata` + encrypted AUs, writes the per-AU
-  layout into the target file with the same wrapped DEK.
-- Transcode path: `TransportWriter(transcode_key=key)` decrypts
-  a channel-granularity-encrypted source, re-encrypts per-AU on
-  the way out. Logs to `ProvenanceRecord`. Explicit, guarded.
+- `opt_per_au_encryption` — indicates the file uses per-AU
+  encrypted channel segments.
+- `opt_encrypted_au_headers` — indicates the file additionally
+  encrypts AU semantic headers.
 
-## 6. Migration & back-compat
+Both are **optional** features (`opt_` prefix); readers that
+don't understand them may skip the file without failing, per the
+feature-flag convention in `docs/feature-flags.md`.
 
-- **Existing encrypted files** (`opt_dataset_encryption` without
-  `opt_per_au_encryption`): readable by the existing subsystem,
-  not streamable through transport except via `--transcode`.
-- **New encrypted files** (opt-in via `encrypt_per_au`): streamable
-  directly, selective access works, real-time compatible.
-- **Readers** ignore unknown opt features; a reader without
-  per-AU support reading a per-AU-encrypted file falls back to
-  whole-channel decryption if a legacy compatibility path is
-  provided, or errors out.
-- **Signature subsystem** needs review: v0.2's `v2:` signature
-  covers canonical plaintext bytes. Per-AU encryption doesn't
-  change signature semantics (the plaintext is still canonical).
+### 5.2 Per-run encrypted channel layout
 
-## 7. Open questions
+Replaces the v0.x `<channel>_values_encrypted` / `<channel>_iv`
+/ `<channel>_tag` / `@<channel>_ciphertext_bytes` / `@<channel>_algorithm`
+layout with a single compound dataset per channel:
 
-1. **Does `opt_per_au_encryption` also change the file format
-   layout** (new `<channel>_encrypted_segments` compound), or
-   can we keep the existing `<channel>_values_encrypted` layout
-   and concatenate per-spectrum ciphertext+IV+tag rows?
-   *Preference:* new compound layout for clarity; old layout
-   becomes "legacy channel-grained" encryption.
-2. **Granularity below per-spectrum?** For 100K-point spectra
-   (e.g. ion-mobility), per-spectrum crypto is still one AES-GCM
-   op over ~800KB. That's fine for current workloads; if future
-   cases need finer chunks, we can extend to per-chunk with an
-   extra `chunk_offset` column.
-3. **Header encryption.** The AU header fields (RT, MS level,
-   precursor m/z) are plaintext in this design so filtering works
-   keyless. If those fields are considered sensitive, a future
-   `opt_encrypted_au_headers` can introduce a keyed header
-   envelope. Out of scope for v1.0.
-4. **Key rotation** during a run? Current encryption has a
-   run-level wrapped DEK. Per-AU doesn't change this; the DEK is
-   still one per run.
-5. **Cipher suite migration.** ML-KEM-1024 + ML-DSA-87 (PQC,
-   M49) works unchanged — the KEM wraps the DEK, the DEK drives
-   per-AU AES-GCM.
+```
+signal_channels/
+    <channel>_segments      compound dataset, one row per spectrum:
+        offset:     uint64   — index into the plaintext (decompressed) flat stream
+        length:     uint32   — plaintext element count
+        iv:         uint8[12]
+        tag:        uint8[16]
+        ciphertext: VL[uint8]
+    @<channel>_algorithm    string  "aes-256-gcm"
+    @<channel>_wrapped_dek  VL[uint8]   wrapped via @kek_algorithm
+    @<channel>_kek_algorithm string    e.g. "ml-kem-1024"
+```
 
-## 8. Implementation sizing
+When `opt_encrypted_au_headers` is set, the `/spectrum_index`
+group is also encrypted per-spectrum:
 
-Per language, rough LOC estimate (non-test):
+```
+spectrum_index/
+    au_header_segments      compound dataset, one row per spectrum:
+        iv:  uint8[12]
+        tag: uint8[16]
+        ciphertext: uint8[35]   fixed 35-byte plaintext
+    @wrapped_dek           same key as channels (or separate key
+                           for header-only decryption, see §7)
+```
 
-- Encryption module extension (new per-AU mode): ~200–300 LOC
-  (compound read/write, IV generation, per-AU encrypt/decrypt
-  primitives).
-- `encrypt_per_au` entry point on SpectralDataset + HDF5 schema
-  plumbing: ~150 LOC.
-- TransportWriter encrypted path (detect + package): ~100 LOC.
-- TransportReader encrypted path (unpack + materialize): ~150
-  LOC.
-- Tests: ~200 LOC each (per-AU encrypt → transport → decrypt
-  round-trip; cross-provider matrix; PQC variant).
+The plaintext `/spectrum_index/*` arrays that M57 defined
+(offsets, lengths, retention_times, etc.) are **omitted** when
+`opt_encrypted_au_headers` is set. Readers without the key
+cannot enumerate the index. Readers with the key decrypt
+`au_header_segments` to reconstruct the index arrays.
 
-Total per language: ~800–900 LOC. Three languages plus
-cross-language conformance tests (Python drives): ~3000 LOC of
-implementation work, ~600 LOC of tests. Roughly two
-concentrated sessions if done per language sequentially.
+### 5.3 No v0.x backward compatibility
 
-## 9. Proposed plan
+v0.x-encrypted files (`@encrypted="aes-256-gcm"` at the root
+or run level, channel-grained `<channel>_values_encrypted`
+layout) are not readable by v1.0 encryption paths. They remain
+readable by the v0.x legacy decryption code, which stays in
+each language's codebase for migration, but does not participate
+in streaming.
 
-1. Review + sign off on this document (current step).
-2. Update `docs/format-spec.md` with the
-   `<channel>_encrypted_segments` layout and the
-   `opt_per_au_encryption` flag.
-3. Update `docs/transport-spec.md` §4.3 with the encrypted
-   ChannelData variant (`[IV][TAG][ciphertext]`), §5 with the
-   ProtectionMetadata-precedes-encrypted-AUs ordering rule
-   (already implicit, make it explicit), and add a §6.4
-   "encrypted round-trip contract".
-4. Python reference implementation (encrypt_per_au +
-   transport read/write paths + tests).
-5. ObjC port.
-6. Java port.
-7. Cross-language conformance tests (Python drives JVM + ObjC
-   subprocesses).
-8. Tag v0.10.0.
+## 6. Transcode migration path
 
-## 10. Not in scope for this design
+`--transcode <key>` on the transport writer decrypts v0.x
+channel-grained ciphertext on the way out using the provided
+key and re-encrypts per-AU with a fresh IV per spectrum per
+channel, using the **same** DEK (wrapped against the same KEK).
 
-- LZ4 / Numpress-delta on the wire (separate v1.0 item, same
-  pattern as ZLIB which landed in M71.5).
-- Ion-mobility importer-specific transport integration.
-- Chromatogram packet round-trip (stub exists; integration
-  test deferred).
-- Encryption of the AU header fields (deferred to v1.x
-  `opt_encrypted_au_headers`).
+The transcoded output:
+- Sets `opt_per_au_encryption` (and optionally
+  `opt_encrypted_au_headers` if requested).
+- Logs a `ProvenanceRecord` with `software =
+  "mpgo-transport-transcode v1.0"`, `input_refs = [old_file_sha]`,
+  `output_refs = [new_file_sha]`, `timestamp_unix = now`.
+- Carries the original `wrapped_dek` in `ProtectionMetadata`;
+  the receiver writes a v1.0 per-AU file with the same DEK so
+  existing key escrow continues to work.
+
+The server running the transcode holds the key for the duration
+of the operation. This is documented as an explicit opt-in with
+security implications, not a streaming-time default.
+
+## 7. Open items resolved
+
+1. ✅ **File layout**: new compound dataset; v0.x layout not
+   supported in v1.0.
+2. ✅ **AU header sensitivity**: `opt_encrypted_au_headers`
+   lands in v1.0. Server-side filtering is disabled when set.
+3. ✅ **`--transcode`**: acceptable migration opt-in with
+   provenance logging.
+4. 🟡 **Header-only decryption key**. Do we want a separate
+   wrapped DEK for the header segments so a filter server can
+   be granted header-only read without payload access? My read
+   is no — complexity outweighs the benefit, and users who
+   want that tier can run a proxy with full keys. **Proposed:
+   single DEK per run covers both header and channel
+   segments.** Flag for later if usage demands.
+5. 🟡 **Sub-spectrum crypto granularity**. For ion-mobility
+   spectra with >100K points, per-spectrum AES-GCM is one op
+   over ~800KB. Fine for current workloads. Leave
+   `<channel>_segments.chunk_offset: uint32` as a reserved
+   nullable column for a later extension; v1.0 writes one row
+   per full spectrum.
+6. ✅ **PQC composition**. ML-KEM-1024 + ML-DSA-87 (M49) works
+   unchanged: the KEM wraps the DEK, the DEK drives per-AU
+   AES-GCM.
+
+## 8. Implementation plan
+
+### 8.1 Spec updates (non-code)
+
+- [ ] `docs/format-spec.md` — add §5.5 "Per-AU encrypted
+  channel layout" documenting `<channel>_segments` and
+  `spectrum_index/au_header_segments`.
+- [ ] `docs/transport-spec.md` — add §4.5 (plaintext-header
+  encrypted-channel AU), §4.6 (fully-encrypted AU), §4.7
+  (AAD binding rule). Update §3.2 flag table.
+- [ ] `docs/feature-flags.md` — register
+  `opt_per_au_encryption` and `opt_encrypted_au_headers`.
+- [ ] `docs/pqc.md` — add section "Transport encryption
+  composition" describing the DEK-driven per-AU path.
+
+### 8.2 Reference implementation (Python, first)
+
+- [ ] `mpeg_o.encryption.encrypt_per_au(dataset, key)` — new
+  writer path, emits `<channel>_segments` and
+  `au_header_segments` compounds. Deterministic ciphertext
+  given (plaintext, key, IV).
+- [ ] `mpeg_o.encryption.decrypt_per_au_channel` /
+  `decrypt_per_au_header` — reader counterparts.
+- [ ] `mpeg_o.transport.codec.TransportWriter` — detect
+  `opt_per_au_encryption` and `opt_encrypted_au_headers`;
+  package encrypted segments into `ChannelData.data` bytes
+  with AAD binding.
+- [ ] `mpeg_o.transport.codec.TransportReader` — honor
+  encrypted variants, materialize target file with the same
+  flags and same DEK.
+- [ ] Tests: per-AU encrypt → stream → decrypt round-trip;
+  encrypted-headers round-trip; AAD tamper detection;
+  ProtectionMetadata preservation; PQC variant.
+- [ ] Cross-backend (HDF5, SQLite, Zarr) encrypted round-trips.
+
+### 8.3 ObjC port
+
+- [ ] `MPGOEncryptionManager` — add `encryptPerAUWithKey:`.
+- [ ] `MPGOTransportWriter` / `MPGOTransportReader` — detect
+  flags and handle the three AU variants.
+- [ ] Tests: mirror Python coverage in `TestEncryptedTransport.m`.
+
+### 8.4 Java port
+
+- [ ] `com.dtwthalion.mpgo.protection.EncryptionManager` —
+  add `encryptPerAU(key)`.
+- [ ] `TransportWriter` / `TransportReader` updates.
+- [ ] Tests: mirror Python coverage in
+  `EncryptedTransportTest.java`.
+
+### 8.5 Cross-language conformance
+
+- [ ] Python drives Java+ObjC subprocesses: encrypt in one
+  language, stream, materialize in another, decrypt, verify
+  values.
+- [ ] PQC cross-language variant.
+
+### 8.6 Release
+
+- [ ] `--transcode` migration path shipped and documented.
+- [ ] `CHANGELOG.md` v0.10.0 entry.
+- [ ] Tag v0.10.0 (user-gated per binding decision).
+
+## 9. Sizing
+
+Per language, rough estimate (non-test):
+
+- Encryption module extension (per-AU mode for channel + header):
+  ~300 LOC.
+- `encrypt_per_au` HDF5 / provider plumbing: ~150 LOC.
+- TransportWriter encrypted paths (three variants):
+  ~150 LOC.
+- TransportReader encrypted paths:
+  ~200 LOC.
+- `--transcode` path: ~100 LOC.
+- Tests: ~300 LOC.
+
+**Total per language: ~1200 LOC.** Three languages + cross-language
+conformance: ~4000 LOC across roughly three concentrated
+sessions.
+
+## 10. Not in scope
+
+- LZ4 / Numpress-delta wire codecs (same opt-in pattern as
+  M71.5's ZLIB; scheduled for a follow-up).
+- Ion-mobility + MSImage importer-specific encrypted-transport
+  integration tests (write the tests when the importers
+  themselves encrypt; deferred to v1.1).
+- Chromatogram packet encryption (chromatograms are run-scoped
+  aggregates; revisit when chromatogram packets ship with real
+  data instead of stubs).
