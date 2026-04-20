@@ -39,6 +39,10 @@ class PacketFlag(IntFlag):
     ENCRYPTED = 0x0001
     COMPRESSED = 0x0002
     HAS_CHECKSUM = 0x0004
+    # v1.0: set in addition to ENCRYPTED when the AU's semantic header
+    # fields are also AES-GCM encrypted. See transport-spec §4.3.3.
+    # Readers MUST reject ENCRYPTED_HEADER without ENCRYPTED.
+    ENCRYPTED_HEADER = 0x0008
 
 
 # -------------------------------------------------------------- CRC-32C
