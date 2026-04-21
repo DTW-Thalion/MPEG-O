@@ -36,6 +36,9 @@ the source (`@since`, `@Deprecated`, `MPGO_DEPRECATED_MSG`,
 | API | Status | Since | Notes |
 |---|---|---|---|
 | `MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`, `MPGOFreeInductionDecay`, `MPGOChromatogram` | **Stable** | v0.1 | Class hierarchy frozen. |
+| `MPGORamanSpectrum`, `MPGOIRSpectrum` (all languages) | **Stable** | v0.11 (M73) | `Spectrum` subclasses keyed by `wavenumber` + `intensity`. Raman: `excitationWavelengthNm`, `laserPowerMw`, `integrationTimeSec`. IR: `mode` (`MPGOIRMode`), `resolutionCmInv`, `numberOfScans`. |
+| `MPGORamanImage`, `MPGOIRImage` (all languages) | **Stable** | v0.11 (M73) | Rank-3 intensity cube + rank-1 shared wavenumber axis. HDF5 layout: `/study/raman_image_cube/` and `/study/ir_image_cube/` — see `docs/format-spec.md` §7a. |
+| `MPGOIRMode` enum (TRANSMITTANCE=0, ABSORBANCE=1) | **Stable** | v0.11 (M73) | Ordinal values are wire-stable; do not renumber. |
 | `AcquisitionRun.open(group, name)` | **Stable** | v0.4 | |
 | `MSImage` native-rank-3 cube layout (`opt_native_msimage_cube`) | **Stable** | v0.4 | |
 | `AcquisitionRun.encryptWithKey:level:error:` (ObjC) | **Stable** | v0.4 | Supersedes `MPGOEncryptionManager.encryptIntensityChannelInRun:atFilePath:...` (see §4.1). |
@@ -154,6 +157,9 @@ for safety.
 | Thermo `.raw` reader (delegation to ThermoRawFileParser) | **Stable** | v0.6 (M38) | |
 | Bruker `.d` reader (`opentimspy` delegation) | **Stable** | v0.8 (M53) | Binary-extraction Python subprocess from Java / ObjC is expected to be replaced by a native port in v0.9. The public `read()` / `read_metadata()` surface stays stable. |
 | mzML / nmrML / ISA-Tab writers | **Stable** | v0.4 | |
+| JCAMP-DX 5.01 reader (Raman / IR) | **Stable** | v0.11 (M73) | AFFN `##XYDATA=(X++(Y..Y))` only. Dispatch on `##DATA TYPE=` between `RamanSpectrum` / `IRSpectrum`. See `docs/vendor-formats.md`. |
+| JCAMP-DX 5.01 writer (Raman / IR) | **Stable** | v0.11 (M73) | `%.10g` AFFN deterministic output; verified bit-identical across Python / Java / ObjC by the cross-language harness. |
+| `MpgoJcampDxDump` CLI (ObjC) | **Stable** | v0.11 (M73) | Driver used by the Python↔ObjC conformance test; `docs/vendor-formats.md` documents the surface. |
 
 ### 4.1 Transport (v0.10)
 
@@ -200,6 +206,14 @@ for v1.0 planning:
 | `opt_pqc_preview` | **Provisional** | optional (v0.8) | New in v0.8; kept provisional through the v0.8 series so the PQC code-paths can be tuned based on real-world usage before freezing. |
 | `opt_per_au_encryption` | **Stable** | optional (v0.10) | Per-Access-Unit AES-256-GCM. Changes the `<channel>_values` layout to `<channel>_segments` compound with `VL_BYTES` slots. Pre-v0.10 readers without `VL_BYTES` compound support MUST refuse files that carry this flag. |
 | `opt_encrypted_au_headers` | **Stable** | optional (v0.10) | Additionally encrypts the 36-byte semantic header into `spectrum_index/au_header_segments`. Implies `opt_per_au_encryption`. |
+
+**v0.11 M73 note:** Raman / IR spectroscopy did **not** introduce
+any new feature flags. `MPGORamanSpectrum` / `MPGOIRSpectrum` are
+regular Spectrum subclasses (keyed on wavenumber/intensity);
+`MPGORamanImage` / `MPGOIRImage` reuse the same opt-in pattern as
+`opt_native_msimage_cube` but via dedicated HDF5 groups
+(`/study/raman_image_cube/`, `/study/ir_image_cube/`) — see
+`docs/format-spec.md` §7a.
 
 **v1.0 flag-promotion candidates:** `wrapped_key_v2` (every reader
 handles it), `opt_canonical_signatures` (every signer emits it). A

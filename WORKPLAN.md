@@ -580,3 +580,61 @@ Five phases across all three languages:
 - [x] Annotated `v0.10.0` tag pushed (`a609aa9` on commit `c9fe137`).
 
 **v0.10.0 status:** Shipped (tag `v0.10.0` → `a609aa9` on `c9fe137`).
+
+## v0.11.0 — Vibrational Spectroscopy (Raman + IR)
+
+### Milestone M73 — vibrational modalities
+
+- [x] **Four new domain classes per language:** `RamanSpectrum`,
+      `IRSpectrum`, `RamanImage`, `IRImage`. Raman carries
+      excitation / laser power / integration time; IR carries the
+      new `IRMode` enum (`TRANSMITTANCE=0` / `ABSORBANCE=1`),
+      spectral resolution, and scan count. Image classes hold
+      rank-3 intensity cubes with a shared rank-1 wavenumber axis.
+- [x] **HDF5 layout:** `/study/raman_image_cube/` and
+      `/study/ir_image_cube/` groups documented in
+      `docs/format-spec.md` §7a; chunking mirrors the MSImage
+      convention (`(tile_size, tile_size, spectral_points)` tiles,
+      `zlib -6`).
+- [x] **JCAMP-DX 5.01 AFFN reader + writer** in all three
+      languages (`##XYDATA=(X++(Y..Y))` dialect). Writers emit
+      LDRs in a fixed order with `%.10g` formatting — byte-identical
+      output for identical input; readers dispatch on
+      `##DATA TYPE=` with `##YUNITS=` fallback for the bare
+      `INFRARED SPECTRUM` variant. PAC / SQZ / DIF compression and
+      2-D NTUPLES are out of scope (the reader rejects unknown
+      types rather than guessing).
+- [x] **ObjC CLI `MpgoJcampDxDump`** — tiny subprocess driver
+      matching the existing CLI family so the Python conformance
+      harness can compare parses bit-for-bit.
+- [x] **Cross-language conformance test**
+      (`python/tests/integration/test_raman_ir_cross_language.py`)
+      — Python↔Java and Python↔ObjC JCAMP-DX round-trips plus a
+      deterministic-layout lock. 6 cells, all green. Skips on dev
+      boxes where the Java/ObjC sides aren't built.
+
+### Release criteria
+
+- [x] 1443 ObjC assertions / 695 Python tests / 307 Java tests
+      pass; 44/44 cross-language conformance cells green (38 per-AU
+      + 6 JCAMP-DX).
+- [x] `CHANGELOG.md` v0.11.0 entry.
+- [x] Docs refreshed (`format-spec.md` §7a, `vendor-formats.md`,
+      `class-hierarchy.md` Layer 3c, `README.md`,
+      `ARCHITECTURE.md`, `HANDOFF.md`, this file).
+- [x] M73 commit `f93180b` pushed to `origin/main`.
+- [ ] Annotated `v0.11.0` tag — pending user sign-off.
+
+**v0.11.0 status:** Implementation shipped on commit `f93180b`
+(2026-04-21); awaiting tag.
+
+### Deferred to v0.11.1 / v0.12.0
+
+- 2-D JCAMP-DX (NTUPLES / PAGE) for imaging cubes — ASCII cubes
+  are impractical at 10–100 MB per map; native HDF5 groups remain
+  the canonical form.
+- JCAMP-DX legacy compression (PAC / SQZ / DIF).
+- 2D-COS (2-D correlation spectroscopy) and hyperspectral-image
+  analysis primitives.
+- UV-Vis as a third vibrational-class `Spectrum` subclass (the
+  reader currently rejects `##DATA TYPE=UV/VIS SPECTRUM`).

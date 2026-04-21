@@ -1,15 +1,18 @@
 # MPEG-O Container Design
 
-> **Historical note (v0.10 update):** This document captures the
+> **Historical note (v0.11 update):** This document captures the
 > original v0.1–v0.2 container sketch and is retained for
 > architectural context. The **live on-disk format is
 > [`docs/format-spec.md`](format-spec.md)**, which is the normative
 > reference maintained per release. v0.3+ additions (envelope
 > encryption, key rotation, compound per-run provenance, Numpress /
 > LZ4 compression, chromatogram API, nmrML writer), v0.4 MS imaging
-> additions, v0.8 PQC, v0.9 provider abstraction, and the v0.10
+> additions, v0.8 PQC, v0.9 provider abstraction, the v0.10
 > per-Access-Unit encryption layout (`<channel>_segments` /
-> `spectrum_index/au_header_segments`) all live in format-spec.md.
+> `spectrum_index/au_header_segments`), and the v0.11 Raman / IR
+> spectroscopy layout (`/study/raman_image_cube/`,
+> `/study/ir_image_cube/` — see format-spec.md §7a) all live in
+> format-spec.md.
 
 MPEG-O files use the `.mpgo` extension and are valid HDF5 files. Any tool that reads HDF5 (h5py, h5dump, HDFView, matlab) can inspect them. MPEG-O adds semantic structure on top of HDF5's generic group/dataset/attribute model.
 

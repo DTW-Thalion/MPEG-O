@@ -1,35 +1,37 @@
 # MPEG-O Architecture
 
-MPEG-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data, specifically mass spectrometry and NMR spectroscopy.
+MPEG-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data: mass spectrometry, NMR, and vibrational spectroscopy (Raman + IR).
 
-As of v0.10.0 there are three interoperable reference implementations:
+As of v0.11.0 there are three interoperable reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
   implementation. Every format guarantee in `docs/format-spec.md` is
-  rooted here. 1430 assertions passing.
+  rooted here. 1443 assertions passing.
 - **Python (`mpeg-o` package)** (`python/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — a full reader/writer on top of
   `h5py` + `numpy` that mirrors the Objective-C class hierarchy
-  1-to-1. 682 tests passing.
+  1-to-1. 695 tests passing.
 - **Java (`com.dtwthalion.mpgo`)** (`java/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
-  mirroring the ObjC/Python class hierarchy. 298 tests passing.
+  mirroring the ObjC/Python class hierarchy. 307 tests passing.
   Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
   crypto dependency). HDF5 via system `libhdf5-java` bindings.
 
 Three-way cross-implementation conformance is asserted at every
 milestone: Python drives ObjC and Java subprocesses through
 `tests/integration/` harnesses and compares byte-level artefacts.
-The v0.10 per-Access-Unit encryption stack in particular is covered
-by `test_per_au_cross_language.py` — 38/38 encrypt × decrypt × headers
-combinations pass, guaranteeing that any language pair can exchange
-encrypted files and transport streams bit-for-bit.
+As of v0.11.0, 44 combinations pass — the v0.10 per-AU encryption
+matrix (`test_per_au_cross_language.py`, 38 cells) plus the
+JCAMP-DX Raman/IR conformance harness
+(`test_raman_ir_cross_language.py`, 6 cells). Any language pair
+can exchange encrypted files, transport streams, and vibrational
+spectra bit-for-bit.
 
 All three implementations express the architecture in three layers:
 
 1. **Layer 1 — Protocols**: capability interfaces
 2. **Layer 2 — Abstract base classes**: domain-agnostic primitives
-3. **Layer 3 — Concrete domain classes**: MS- and NMR-specific subclasses
+3. **Layer 3 — Concrete domain classes**: MS / NMR / Raman / IR subclasses
 
 ---
 
@@ -113,6 +115,10 @@ delegate to the relevant managers in v0.1; see "Implementation notes
 | `MPGOMassSpectrum` | `MPGOSpectrum` | `mzArray`, `intensityArray` (mandatory, equal length); `msLevel`, `polarity`, `scanWindow` (optional) |
 | `MPGONMRSpectrum` | `MPGOSpectrum` | `chemicalShiftArray`, `intensityArray`, `nucleusType`, `spectrometerFrequencyMHz` |
 | `MPGONMR2DSpectrum` | `MPGOSpectrum` | `intensityMatrix` (flattened row-major float64), `width`, `height`, `f1Axis`, `f2Axis`, `nucleusF1`, `nucleusF2` |
+| `MPGORamanSpectrum` (v0.11) | `MPGOSpectrum` | `wavenumberArray`, `intensityArray`, `excitationWavelengthNm`, `laserPowerMw`, `integrationTimeSec` |
+| `MPGOIRSpectrum` (v0.11) | `MPGOSpectrum` | `wavenumberArray`, `intensityArray`, `mode` (`MPGOIRMode` — transmittance/absorbance), `resolutionCmInv`, `numberOfScans` |
+| `MPGORamanImage` (v0.11) | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube` (float64[H][W][SP]), `wavenumbers` (float64[SP]), `excitationWavelengthNm`, `laserPowerMw` |
+| `MPGOIRImage` (v0.11) | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube`, `wavenumbers`, `mode`, `resolutionCmInv` |
 | `MPGOFreeInductionDecay` | `MPGOSignalArray` | Complex128 buffer (interleaved real/imag), `dwellTimeSeconds`, `scanCount`, `receiverGain` |
 | `MPGOChromatogram` | `MPGOSpectrum` | `timeArray`, `intensityArray`, `type` (TIC / XIC / SRM), `targetMz`, `precursorProductMz`, `productMz` |
 | `MPGOTransition` / `MPGOTransitionList` | `NSObject` | precursor → product m/z, collision energy, RT window |
@@ -422,11 +428,15 @@ snake_case module names.
 | `MPGOMassSpectrum`               | `MassSpectrum`                            | `mpeg_o.mass_spectrum`              |
 | `MPGONMRSpectrum`                | `NMRSpectrum`                             | `mpeg_o.nmr_spectrum`               |
 | `MPGONMR2DSpectrum`              | `NMR2DSpectrum`                           | `mpeg_o.nmr_2d`                     |
+| `MPGORamanSpectrum` (v0.11)      | `RamanSpectrum`                           | `mpeg_o.raman_spectrum`             |
+| `MPGOIRSpectrum` (v0.11)         | `IRSpectrum`                              | `mpeg_o.ir_spectrum`                |
 | `MPGOFreeInductionDecay`         | `FreeInductionDecay`                      | `mpeg_o.fid`                        |
 | `MPGOChromatogram`               | `Chromatogram`                            | `mpeg_o.chromatogram`               |
 | `MPGOAcquisitionRun`             | `AcquisitionRun` + `SpectrumIndex`        | `mpeg_o.acquisition_run`            |
 | `MPGOSpectralDataset`            | `SpectralDataset`                         | `mpeg_o.spectral_dataset`           |
 | `MPGOMSImage`                    | `MSImage`                                 | `mpeg_o.ms_image`                   |
+| `MPGORamanImage` (v0.11)         | `RamanImage`                              | `mpeg_o.raman_image`                |
+| `MPGOIRImage` (v0.11)            | `IRImage`                                 | `mpeg_o.ir_image`                   |
 | `MPGOIdentification`             | `Identification`                          | `mpeg_o.identification`             |
 | `MPGOQuantification`             | `Quantification`                          | `mpeg_o.quantification`             |
 | `MPGOProvenanceRecord`           | `ProvenanceRecord`                        | `mpeg_o.provenance`                 |
@@ -453,12 +463,16 @@ snake_case module names.
 | `MPGOMassSpectrum` | `MassSpectrum` | `com.dtwthalion.mpgo` |
 | `MPGONMRSpectrum` | `NMRSpectrum` | `com.dtwthalion.mpgo` |
 | `MPGONMR2DSpectrum` | `NMR2DSpectrum` | `com.dtwthalion.mpgo` |
+| `MPGORamanSpectrum` (v0.11) | `RamanSpectrum` | `com.dtwthalion.mpgo` |
+| `MPGOIRSpectrum` (v0.11) | `IRSpectrum` | `com.dtwthalion.mpgo` |
 | `MPGOFreeInductionDecay` | `FreeInductionDecay` | `com.dtwthalion.mpgo` |
 | `MPGOChromatogram` | `Chromatogram` | `com.dtwthalion.mpgo` |
 | `MPGOSpectrumIndex` | `SpectrumIndex` | `com.dtwthalion.mpgo` |
 | `MPGOAcquisitionRun` | `AcquisitionRun` | `com.dtwthalion.mpgo` |
 | `MPGOSpectralDataset` | `SpectralDataset` | `com.dtwthalion.mpgo` |
 | `MPGOMSImage` | `MSImage` | `com.dtwthalion.mpgo` |
+| `MPGORamanImage` (v0.11) | `RamanImage` | `com.dtwthalion.mpgo` |
+| `MPGOIRImage` (v0.11) | `IRImage` | `com.dtwthalion.mpgo` |
 | `MPGOFeatureFlags` | `FeatureFlags` | `com.dtwthalion.mpgo` |
 | `MPGOIdentification` | `Identification` | `com.dtwthalion.mpgo` (record) |
 | `MPGOQuantification` | `Quantification` | `com.dtwthalion.mpgo` (record) |

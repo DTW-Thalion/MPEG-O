@@ -5,7 +5,7 @@
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Java: 17+](https://img.shields.io/badge/java-17%2B-blue.svg)](https://www.java.com/)
 
-**MPEG-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS) and nuclear magnetic resonance (NMR) spectroscopy data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of analytical spectroscopy and spectrometry.
+**MPEG-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS), nuclear magnetic resonance (NMR), and vibrational spectroscopy (Raman + IR) data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of analytical spectroscopy and spectrometry.
 
 The standard is built around **six shared data primitives** and an **HDF5-based container** that mirrors the MPEG-G file model.
 
@@ -29,7 +29,7 @@ The standard is built around **six shared data primitives** and an **HDF5-based 
 | Dataset | `MPGOAcquisitionRun` |
 | Access Unit | `MPGOSpectrumIndex` entry + associated signal-channel slice |
 | Descriptor Streams | `/signal_channels/` HDF5 datasets (m/z, intensity, ion mobility, scan metadata) |
-| Data Classes | Acquisition modes (MS1, MS2, DIA, SRM, 1D-NMR, 2D-NMR, …) |
+| Data Classes | Acquisition modes (MS1, MS2, DIA, SRM, 1D-NMR, 2D-NMR, Raman, IR, …) |
 | Multi-level Protection | `MPGOEncryptable` protocol with per-dataset, per-stream, and per-AU encryption |
 | Compressed-domain Query | `MPGOQuery` scanning AU headers without decompressing signal data |
 
@@ -39,15 +39,17 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **v0.10.0 — Normative reference. 1430 assertions passing.** | `objc/` |
-| **Python (`mpeg-o`)**     | **v0.10.0 — Full parity with ObjC and Java. 682 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.mpgo`)** | **v0.10.0 — Full parity with ObjC and Python. 298 tests, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **v0.11.0 — Normative reference. 1443 assertions passing.** | `objc/` |
+| **Python (`mpeg-o`)**     | **v0.11.0 — Full parity with ObjC and Java. 695 tests passing.** | `python/` |
+| **Java (`com.dtwthalion.mpgo`)** | **v0.11.0 — Full parity with ObjC and Python. 307 tests, JDK 17, Maven.** | `java/` |
 
-A **cross-language conformance harness**
-(`python/tests/integration/test_per_au_cross_language.py`) drives
-the per-AU encryption CLI in all three languages via subprocess and
-byte-compares a canonical decryption dump — 38/38 encrypt × decrypt
-× headers combinations green as of v0.10.0.
+A **cross-language conformance harness** drives the per-AU
+encryption CLI and the JCAMP-DX bridge through small subprocess
+drivers in all three languages and byte-compares the artefacts —
+44 combinations green as of v0.11.0 (38 per-AU encrypt × decrypt
+× headers from v0.10 plus 6 JCAMP-DX Raman/IR from v0.11). See
+`python/tests/integration/test_per_au_cross_language.py` and
+`python/tests/integration/test_raman_ir_cross_language.py`.
 
 ### v0.1.0-alpha capabilities
 
@@ -146,9 +148,16 @@ v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2
 * **Cross-language CLIs + conformance harness** — `per_au_cli` (Python), `PerAUCli` (Java), `MpgoPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" binary dump so the test harness can byte-compare decryption artefacts across every language pair. 38/38 combinations pass. The `transcode` subcommand supports `--rekey` for DEK rotation and refuses v0.x `opt_dataset_encryption` inputs with a migration hint.
 * **VL_BYTES compound field kind** — new across all three languages' provider abstraction. Java's HDF5 provider uses a native `hvl_t` raw-buffer pool backed by `sun.misc.Unsafe` because JHI5 1.10 doesn't marshal VL-in-compound directly.
 
+### v0.11.0 capabilities (additions to v0.10.0)
+
+* **Vibrational spectroscopy (M73)** — Raman and IR become first-class modalities alongside MS and NMR. Four new domain classes per language: `RamanSpectrum` / `IRSpectrum` (keyed by `wavenumber` + `intensity`, with excitation/laser/integration and mode/resolution/scans metadata respectively) plus `RamanImage` / `IRImage` (rank-3 intensity cubes with a shared wavenumber axis). HDF5 layout: `/study/raman_image_cube/` and `/study/ir_image_cube/` mirror the existing MSImage tile chunking. See [`docs/format-spec.md`](docs/format-spec.md) §7a and [`docs/class-hierarchy.md`](docs/class-hierarchy.md) Layer 3c.
+* **JCAMP-DX 5.01 AFFN bridge** — native reader and writer in all three languages for the `##XYDATA=(X++(Y..Y))` dialect. Writers emit LDRs in a fixed order with `%.10g` formatting, producing byte-identical output for identical input. Readers dispatch on `##DATA TYPE=` (RAMAN SPECTRUM / INFRARED ABSORBANCE / INFRARED TRANSMITTANCE, with INFRARED SPECTRUM falling back to `##YUNITS=`). Compression variants (PAC / SQZ / DIF) and 2-D NTUPLES are intentionally out of scope. See [`docs/vendor-formats.md`](docs/vendor-formats.md).
+* **New `IRMode` enum** — `TRANSMITTANCE=0`, `ABSORBANCE=1`. Present in all three languages (Python: `mpeg_o.IRMode`, Java: `com.dtwthalion.mpgo.Enums.IRMode`, ObjC: `MPGOIRMode`).
+* **Cross-language JCAMP-DX conformance** — 6 new integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `MpgoJcampDxDump` joins the existing CLI family as the subprocess driver.
+
 ### Format compatibility
 
-Every version's files remain readable by later versions. v0.10 readers open v0.1–v0.9 files without ceremony; v0.9-and-earlier readers open v0.10 files unless those files carry `opt_per_au_encryption` (the VL_BYTES compound layout requires v0.10+ provider support) or an encrypted transport feature they don't recognise — in both cases the operation raises a clean `UnsupportedOperationError`. Pre-v0.10 readers can consume v0.10 `.mpgo` files that don't enable the per-AU encryption flag. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
+Every version's files remain readable by later versions. v0.11 readers open v0.1–v0.10 files without ceremony. v0.11 adds two new HDF5 groups (`raman_image_cube/`, `ir_image_cube/`) under `/study/`; pre-v0.11 readers silently ignore them (they don't match any known layout). `RamanSpectrum` and `IRSpectrum` persist through the generic `MPGOSpectrum` path with `@mpgo_class` attributes, so pre-v0.11 readers fall back to the `Spectrum` base class rather than failing. v0.10 transport and per-AU encryption behaviour is unchanged. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
 
 ## Python Installation
 
@@ -279,7 +288,7 @@ works on both Debian/Ubuntu's apt packages and source builds against
 - [`docs/pqc.md`](docs/pqc.md) — Post-quantum crypto: ML-KEM-1024 + ML-DSA-87
 - [`docs/migration-guide.md`](docs/migration-guide.md) — Migration guide from mzML / nmrML and inter-version migration notes (includes v0.x → v0.10 per-AU encryption transcode)
 - [`docs/api-review-v0.7.md`](docs/api-review-v0.7.md) — Cross-language API review (v0.7 appendices A, B, C)
-- [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`, Bruker `.d`)
+- [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`, Bruker `.d`, Waters MassLynx, JCAMP-DX Raman/IR)
 
 ## License
 
