@@ -11,6 +11,77 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [v0.11.0] — 2026-04-21
+
+Vibrational spectroscopy (M73): Raman and IR are now first-class
+modalities alongside MS and NMR. Three-language parity is
+preserved — every surface ships in Python, Objective-C, and Java
+and round-trips byte-for-byte between them.
+
+### Added
+
+- **Four new domain classes per language.**
+  `RamanSpectrum` and `IRSpectrum` extend the `Spectrum` base
+  (keyed by `"wavenumber"` + `"intensity"`). Raman carries
+  `excitationWavelengthNm`, `laserPowerMw`,
+  `integrationTimeSec`; IR carries `mode` (the new `IRMode` enum:
+  `TRANSMITTANCE=0`, `ABSORBANCE=1`), `resolutionCmInv`, and
+  `numberOfScans`.
+
+  `RamanImage` and `IRImage` hold rank-3 intensity cubes with a
+  shared rank-1 wavenumber axis. HDF5 layout documented in
+  `docs/format-spec.md` §7a — `/study/raman_image_cube/` and
+  `/study/ir_image_cube/` mirror the MSImage chunking convention
+  (`(tile_size, tile_size, spectral_points)` tiles, `zlib -6`).
+
+- **JCAMP-DX 5.01 AFFN reader + writer** (`##XYDATA=(X++(Y..Y))`).
+  All three writers emit LDRs in identical order with `%.10g`
+  formatting — byte-identical output for identical input. Readers
+  dispatch on `##DATA TYPE=` (`RAMAN SPECTRUM` /
+  `INFRARED ABSORBANCE` / `INFRARED TRANSMITTANCE`, with
+  `INFRARED SPECTRUM` falling back to `##YUNITS=`). Compression
+  variants (PAC / SQZ / DIF) and 2-D NTUPLES are deferred; the
+  reader rejects them rather than guessing. See
+  `docs/vendor-formats.md` for details.
+
+- **Cross-language conformance harness.**
+  `python/tests/integration/test_raman_ir_cross_language.py`
+  writes a Python JCAMP-DX file, feeds it to small subprocess
+  drivers built on the ObjC and Java readers
+  (`objc/Tools/MpgoJcampDxDump` + a `/tmp/` ad-hoc Java driver),
+  and compares the parsed arrays bit-for-bit. Tests skip on dev
+  boxes where the ObjC / Java sides are unbuilt and run in full
+  in CI. A companion test locks the LDR emission order so format
+  drift between implementations is caught in code review.
+
+- **ObjC CLI tool `MpgoJcampDxDump`** — tiny driver that reads a
+  `.jdx` via `MPGOJcampDxReader` and dumps `x,y` pairs + a
+  `CLASS=<tag>` trailer, matching the Java driver contract so
+  both subprocess drivers can share the Python-side parser.
+
+### Test totals
+
+- ObjC: 1443 tests (was 1430).
+- Python: 695 tests (was 682; 13 new M73 + 6 integration).
+- Java: 307 tests (was 298; 9 new M73).
+- Cross-language: 44 tests (was 38; 6 new JCAMP-DX conformance).
+
+### Removed from "Deferred to v1.0+"
+
+`Raman/IR support (new Spectrum subclasses)` — shipped here.
+
+### Scope — what's intentionally NOT in v0.11
+
+- 2-D JCAMP-DX (NTUPLES / PAGE). Imaging and 2-D NMR cubes are
+  stored natively in HDF5; ASCII cubes are impractical at 10–100
+  MB per map.
+- 2D-COS and hyperspectral imaging-specific analyses.
+- PAC / SQZ / DIF JCAMP-DX compression. Preserving bit-accurate
+  cross-implementation round-trips is worth more than the byte
+  savings at this stage.
+
+---
+
 ## [v0.10.0] — 2026-04-20
 
 Transport layer (M66–M72) plus the v1.0 per-Access-Unit encryption

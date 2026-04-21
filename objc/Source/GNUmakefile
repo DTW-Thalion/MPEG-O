@@ -28,6 +28,8 @@ libMPGO_HEADER_FILES = \
 	Spectra/MPGOMassSpectrum.h \
 	Spectra/MPGONMRSpectrum.h \
 	Spectra/MPGONMR2DSpectrum.h \
+	Spectra/MPGORamanSpectrum.h \
+	Spectra/MPGOIRSpectrum.h \
 	Spectra/MPGOFreeInductionDecay.h \
 	Spectra/MPGOChromatogram.h \
 	Run/MPGOInstrumentConfig.h \
@@ -41,6 +43,8 @@ libMPGO_HEADER_FILES = \
 	Dataset/MPGOWrittenRun.h \
 	Dataset/MPGOCompoundIO.h \
 	Image/MPGOMSImage.h \
+	Image/MPGORamanImage.h \
+	Image/MPGOIRImage.h \
 	Protection/MPGOAccessPolicy.h \
 	Protection/MPGOAnonymizer.h \
 	Protection/MPGOCipherSuite.h \
@@ -63,11 +67,13 @@ libMPGO_HEADER_FILES = \
 	Import/MPGOImzMLReader.h \
 	Import/MPGOMzTabReader.h \
 	Import/MPGOWatersMassLynxReader.h \
+	Import/MPGOJcampDxReader.h \
 	Export/MPGOMzMLWriter.h \
 	Export/MPGONmrMLWriter.h \
 	Export/MPGOImzMLWriter.h \
 	Export/MPGOMzTabWriter.h \
 	Export/MPGOISAExporter.h \
+	Export/MPGOJcampDxWriter.h \
 	Providers/MPGOCompoundField.h \
 	Providers/MPGOStorageProtocols.h \
 	Providers/MPGOProviderRegistry.h \
@@ -105,6 +111,8 @@ libMPGO_OBJC_FILES = \
 	Spectra/MPGOMassSpectrum.m \
 	Spectra/MPGONMRSpectrum.m \
 	Spectra/MPGONMR2DSpectrum.m \
+	Spectra/MPGORamanSpectrum.m \
+	Spectra/MPGOIRSpectrum.m \
 	Spectra/MPGOFreeInductionDecay.m \
 	Spectra/MPGOChromatogram.m \
 	Run/MPGOInstrumentConfig.m \
@@ -118,6 +126,8 @@ libMPGO_OBJC_FILES = \
 	Dataset/MPGOWrittenRun.m \
 	Dataset/MPGOCompoundIO.m \
 	Image/MPGOMSImage.m \
+	Image/MPGORamanImage.m \
+	Image/MPGOIRImage.m \
 	Protection/MPGOAccessPolicy.m \
 	Protection/MPGOAnonymizer.m \
 	Protection/MPGOCipherSuite.m \
@@ -140,11 +150,13 @@ libMPGO_OBJC_FILES = \
 	Import/MPGOImzMLReader.m \
 	Import/MPGOMzTabReader.m \
 	Import/MPGOWatersMassLynxReader.m \
+	Import/MPGOJcampDxReader.m \
 	Export/MPGOMzMLWriter.m \
 	Export/MPGONmrMLWriter.m \
 	Export/MPGOImzMLWriter.m \
 	Export/MPGOMzTabWriter.m \
 	Export/MPGOISAExporter.m \
+	Export/MPGOJcampDxWriter.m \
 	Providers/MPGOCompoundField.m \
 	Providers/MPGOProviderRegistry.m \
 	Providers/MPGOCanonicalBytes.m \

@@ -228,3 +228,59 @@ the vendor SDK:
 Set `MPGO_MASSLYNX_FIXTURE` to a real Waters `.raw` directory and
 ensure `masslynxraw` is on PATH to exercise the vendor-tooling path
 in nightly CI.
+
+## JCAMP-DX 5.01 (v0.11 M73 — vibrational spectra)
+
+**Status:** Native reader and writer in all three languages.
+No external dependency; the format is plain ASCII with a documented
+IUPAC spec.
+
+JCAMP-DX is the de-facto interchange format for 1-D vibrational
+spectra (Raman, IR, UV-Vis, NMR). M73 targets the AFFN
+`##XYDATA=(X++(Y..Y))` dialect at spec level 5.01 — the most
+interoperable subset. Compression variants (PAC / SQZ / DIF) are
+**not** implemented; they save bytes but preclude bit-accurate
+cross-implementation round-trips.
+
+### API
+
+| Language | Reader | Writer |
+|---|---|---|
+| Python | `mpeg_o.importers.jcamp_dx.read_spectrum(path)` | `mpeg_o.exporters.jcamp_dx.write_raman_spectrum` / `write_ir_spectrum` |
+| ObjC | `+[MPGOJcampDxReader readSpectrumFromPath:error:]` | `+[MPGOJcampDxWriter writeRamanSpectrum:...]` / `writeIRSpectrum:` |
+| Java | `JcampDxReader.readSpectrum(Path)` | `JcampDxWriter.writeRamanSpectrum` / `writeIRSpectrum` |
+
+The reader dispatches on `##DATA TYPE=`:
+`RAMAN SPECTRUM` → `RamanSpectrum`;
+`INFRARED ABSORBANCE` / `INFRARED TRANSMITTANCE` → `IRSpectrum`
+with the matching `MPGOIRMode`; `INFRARED SPECTRUM` falls back to
+`##YUNITS=` for mode detection (`ABSORBANCE` substring →
+absorbance, otherwise transmittance). Any other `DATA TYPE` is
+rejected.
+
+### Wire-level determinism
+
+All three writers emit LDRs in a fixed order with `%.10g`
+floating-point formatting. Given the same logical spectrum, the
+three writers produce byte-identical output. This is verified by
+`python/tests/integration/test_raman_ir_cross_language.py::test_jcamp_layout_is_deterministic`,
+which locks the LDR prefix so a drift between language
+implementations is caught in code review.
+
+The cross-language conformance harness additionally feeds a
+Python-generated `.jdx` to small subprocess drivers built on top
+of the ObjC (`objc/Tools/MpgoJcampDxDump`) and Java (compiled
+ad-hoc into `/tmp/mpgo_m73_driver/`) readers, then compares the
+parsed `(wavenumber, intensity)` arrays bit-for-bit. The tests
+skip on dev boxes where the ObjC/Java sides aren't built and run
+in full in CI.
+
+### What is NOT covered by M73
+
+* 2-D JCAMP-DX (`##NTUPLES=`, `##PAGE=`) for imaging / 2-D NMR —
+  ASCII cubes are impractical at 10–100 MB per map. Raman and IR
+  cubes are stored in native HDF5 groups (`docs/format-spec.md`
+  §7a) instead.
+* Legacy compression (PAC / SQZ / DIF).
+* UV-Vis / mass-spectrum `##DATA TYPE=` variants — the reader
+  rejects them explicitly rather than guessing.

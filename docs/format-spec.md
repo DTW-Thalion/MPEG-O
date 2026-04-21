@@ -440,6 +440,41 @@ Feature flag (opt_): `opt_native_msimage_cube`.
 
 ---
 
+## 7a. Vibrational imaging cubes (M73, v0.11)
+
+`/study/raman_image_cube/` is present when the dataset carries an
+`MPGORamanImage`, and `/study/ir_image_cube/` when it carries an
+`MPGOIRImage`. Both groups share the MSImage cube layout but add
+the modality-specific scalars and a shared wavenumber axis.
+
+```
+raman_image_cube/ (or ir_image_cube/)
+├── @width                     (int64)
+├── @height                    (int64)
+├── @spectral_points           (int64)
+├── @tile_size                 (int64)
+├── @pixel_size_x              (float64)
+├── @pixel_size_y              (float64)
+├── @scan_pattern              (VL string)
+├── @excitation_wavelength_nm  (float64)   ← raman_image_cube only
+├── @laser_power_mw            (float64)   ← raman_image_cube only
+├── @ir_mode                   (VL string) ← ir_image_cube only  ("ABSORBANCE" / "TRANSMITTANCE")
+├── @resolution_cm_inv         (float64)   ← ir_image_cube only
+├── intensity                  (float64[H][W][SP])
+└── wavenumbers                (float64[SP])
+```
+
+`intensity` is chunked at `(tile_size, tile_size, spectral_points)`
+with `zlib -6`, matching the MSImage convention so reading a
+`(tileSize × tileSize)` tile hits exactly one chunk. `wavenumbers`
+is a rank-1 companion that names the spectral axis and is
+identical across all pixels — store once, not per-pixel.
+
+The two groups are mutually exclusive per study; a file is either
+a Raman map or an IR map, not both.
+
+---
+
 ## 8. Native 2-D NMR
 
 An `MPGONMR2DSpectrum` group (written via the generic

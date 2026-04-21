@@ -155,11 +155,25 @@ MPGOSpectrum
 │     - nucleusType        : NSString         (e.g. "1H", "13C", "15N")
 │     - spectrometerFreq   : double           (MHz)
 │
-└── MPGONMR2DSpectrum
-      - intensityMatrix    : MPGOSignalArray  (2D, keyed "intensity_matrix")
-      - f1AxisDescriptor   : MPGOAxisDescriptor
-      - f2AxisDescriptor   : MPGOAxisDescriptor
-      - experimentType     : NSString         (e.g. "COSY", "HSQC", "NOESY")
+├── MPGONMR2DSpectrum
+│     - intensityMatrix    : MPGOSignalArray  (2D, keyed "intensity_matrix")
+│     - f1AxisDescriptor   : MPGOAxisDescriptor
+│     - f2AxisDescriptor   : MPGOAxisDescriptor
+│     - experimentType     : NSString         (e.g. "COSY", "HSQC", "NOESY")
+│
+├── MPGORamanSpectrum                                    ← v0.11 (M73)
+│     - wavenumberArray         : MPGOSignalArray  (keyed "wavenumber")
+│     - intensityArray          : MPGOSignalArray  (keyed "intensity")
+│     - excitationWavelengthNm  : double
+│     - laserPowerMw            : double
+│     - integrationTimeSec      : double
+│
+└── MPGOIRSpectrum                                       ← v0.11 (M73)
+      - wavenumberArray  : MPGOSignalArray  (keyed "wavenumber")
+      - intensityArray   : MPGOSignalArray  (keyed "intensity")
+      - mode             : MPGOIRMode       (Transmittance=0 / Absorbance=1)
+      - resolutionCmInv  : double
+      - numberOfScans    : NSUInteger
 
 MPGOSignalArray
 └── MPGOFreeInductionDecay
@@ -179,11 +193,28 @@ NSObject
       - transitions : NSArray<MPGOTransition*>
 
 MPGOSpectralDataset
-└── MPGOMSImage
-      - spatialDimensions : CGSize (or {width,height} struct)
-      - pixelSize         : CGSize
-      - scanPattern       : NSString
-      - gridSpectra       : NSArray<NSArray<MPGOMassSpectrum*>*>
+├── MPGOMSImage
+│     - spatialDimensions : CGSize (or {width,height} struct)
+│     - pixelSize         : CGSize
+│     - scanPattern       : NSString
+│     - gridSpectra       : NSArray<NSArray<MPGOMassSpectrum*>*>
+│
+├── MPGORamanImage                                       ← v0.11 (M73)
+│     - width, height, spectralPoints, tileSize   : NSUInteger
+│     - pixelSizeX, pixelSizeY                    : double
+│     - scanPattern                               : NSString
+│     - excitationWavelengthNm, laserPowerMw      : double
+│     - intensityCube                             : NSData (float64[H][W][SP])
+│     - wavenumbers                               : NSData (float64[SP])
+│
+└── MPGOIRImage                                          ← v0.11 (M73)
+      - width, height, spectralPoints, tileSize   : NSUInteger
+      - pixelSizeX, pixelSizeY                    : double
+      - scanPattern                               : NSString
+      - mode                                      : MPGOIRMode
+      - resolutionCmInv                           : double
+      - intensityCube                             : NSData (float64[H][W][SP])
+      - wavenumbers                               : NSData (float64[SP])
 ```
 
 ### Layer 3b — Transport + Per-AU Encryption (v0.10)
@@ -230,6 +261,30 @@ All per-AU APIs are **class methods** (no instance state) on the
 manager classes. Segment / plaintext / metadata classes are value
 objects.
 
+### Layer 3c — Vibrational spectroscopy (v0.11 / M73)
+
+Four concrete classes add Raman and IR support alongside the
+existing MS / NMR hierarchy. Python uses snake_case in
+`mpeg_o.{raman_spectrum,ir_spectrum,raman_image,ir_image}`; Java
+uses PascalCase in `com.dtwthalion.mpgo.{RamanSpectrum,IRSpectrum,
+RamanImage,IRImage}`.
+
+- **MPGORamanSpectrum / MPGOIRSpectrum** — `MPGOSpectrum`
+  subclasses keyed by `"wavenumber"` + `"intensity"`. Raman carries
+  excitation / laser / integration; IR carries mode (transmittance
+  vs absorbance, `MPGOIRMode` enum), spectral resolution, and
+  scan count.
+- **MPGORamanImage / MPGOIRImage** — spatial intensity cubes with
+  a shared `wavenumbers` axis. HDF5 layout is documented in
+  `docs/format-spec.md` §7a.
+- **JCAMP-DX 5.01 AFFN bridge** — `MPGOJcampDxReader` /
+  `MPGOJcampDxWriter` (plus `mpeg_o.importers/exporters.jcamp_dx`
+  and `com.dtwthalion.mpgo.{importers,exporters}.JcampDx*`). All
+  three writers emit byte-identical output for the same logical
+  spectrum and all three readers parse each other's output
+  bit-for-bit (see
+  `python/tests/integration/test_raman_ir_cross_language.py`).
+
 ---
 
 ## Enumerations
@@ -264,6 +319,11 @@ typedef NS_ENUM(NSInteger, MPGOPolarity) {
     MPGOPolarityUnknown  =  0,
     MPGOPolarityPositive = +1,
     MPGOPolarityNegative = -1
+};
+
+typedef NS_ENUM(NSUInteger, MPGOIRMode) {        // v0.11 / M73
+    MPGOIRModeTransmittance = 0,
+    MPGOIRModeAbsorbance    = 1
 };
 
 typedef NS_ENUM(NSUInteger, MPGOChromatogramType) {

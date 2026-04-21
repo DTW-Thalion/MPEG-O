@@ -11,6 +11,7 @@ FORMAT_VERSION = "1.1"
 from .enums import (
     AcquisitionMode,
     Compression,
+    IRMode,
     Polarity,
     Precision,
     SamplingMode,
@@ -35,12 +36,17 @@ from .feature_flags import FeatureFlags
 from .acquisition_run import AcquisitionRun, SpectrumIndex
 from .spectral_dataset import SpectralDataset, WrittenRun
 from .ms_image import MSImage
+from .raman_spectrum import RamanSpectrum
+from .ir_spectrum import IRSpectrum
+from .raman_image import RamanImage
+from .ir_image import IRImage
 
 __all__ = [
     "__version__",
     "FORMAT_VERSION",
     "AcquisitionMode",
     "Compression",
+    "IRMode",
     "Polarity",
     "Precision",
     "SamplingMode",
@@ -67,4 +73,8 @@ __all__ = [
     "SpectralDataset",
     "WrittenRun",
     "MSImage",
+    "RamanSpectrum",
+    "IRSpectrum",
+    "RamanImage",
+    "IRImage",
 ]

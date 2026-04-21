@@ -124,6 +124,17 @@ class AcquisitionMode(IntEnum):
     IMAGING = 6
 
 
+class IRMode(IntEnum):
+    """Infrared y-axis interpretation.
+
+    Cross-language: ObjC ``MPGOIRMode`` · Java
+    ``Enums.IRMode``.
+    """
+
+    TRANSMITTANCE = 0
+    ABSORBANCE = 1
+
+
 class EncryptionLevel(IntEnum):
     """Multi-level protection granularity (MPEG-G style).
 
