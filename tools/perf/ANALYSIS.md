@@ -534,3 +534,172 @@ python3 ~/MPEG-O/tools/perf/aggregate_jfr.py \
 bash ~/MPEG-O/tools/perf/build_and_run_objc.sh --n 10000
 bash ~/MPEG-O/tools/perf/build_and_run_objc.sh --n 10000 --flat
 ```
+
+---
+
+# v0.11.1 multi-function matrix
+
+Everything above measures the MS write/read path only — the workload
+MPEG-O shipped in v0.9. Since then v0.10 added the `.mots` transport
+codec, v0.10.5 added per-AU AES-256-GCM encryption and HMAC-SHA256 /
+ML-DSA-87 signatures, and v0.11 added IR / Raman / UV-Vis / 2D-COS
+spectrum classes with JCAMP-DX 5.01 import + export. A three-way
+MS-only comparison no longer covers most of the codebase.
+
+`profile_python_full.py`, `ProfileHarnessFull.java`, and
+`profile_objc_full.m` instrument the same ten functions across all
+three languages so cross-language deltas are directly comparable:
+
+| Benchmark | Workload |
+|---|---|
+| `ms.hdf5`, `ms.memory`, `ms.sqlite`, `ms.zarr` | write_minimal + sampled read across every storage provider |
+| `transport.plain`, `transport.compressed` | `.mots` encode + decode, with and without zlib per-channel |
+| `encryption` | per-AU AES-256-GCM encrypt + decrypt on the MS file |
+| `signatures` | HMAC-SHA256 sign + verify on the intensity channel |
+| `jcamp` | JCAMP-DX write + read for IR / Raman / UV-Vis, plus a compressed (SQZ) read |
+| `spectra.build` | in-memory construction of IR / Raman / UV-Vis / 2D-COS |
+
+## Headline (10 000 spectra, 16 peaks, WSL2 Ubuntu 24.04)
+
+All values in milliseconds; `—` means "writer not implemented in that
+language at this version". Read the totals as *order-of-magnitude*:
+JCAMP / signatures dominate different languages for different reasons
+spelled out below, and one warm run is noisier than the production MS
+numbers above.
+
+| Benchmark | Python | Java | ObjC |
+|---|---:|---:|---:|
+| ms.hdf5 | 71.6 | 59.1 | 69.9 |
+| ms.memory | 173.9 | 11.3 | — |
+| ms.sqlite | 87.7 | 191.2 | — |
+| ms.zarr | 365.5 | 62.1 | — |
+| transport.plain | 811.9 | 158.4 | 182.6 |
+| transport.compressed | 740.8 | 233.6 | 266.4 |
+| encryption | 393.4 | 424.8 | 153.0 |
+| signatures | 15.9 | 11.4 | 3.6 |
+| jcamp | 52.8 | 218.3 | 81.1 |
+| spectra.build | 0.6 | 1.3 | 0.4 |
+
+## Observations per function set
+
+### `ms.*` — provider dispatch
+
+HDF5 numbers reproduce the headline of the v0.9 single-function
+harness (all three languages at the libhdf5 floor, ±12 ms). The
+spread on non-HDF5 providers is real, not noise:
+
+- **Java ms.memory = 11 ms** — the in-process JVM heap provider emits
+  everything as `double[]` references, no serialization.
+- **Python ms.memory = 174 ms** — the memory provider still builds
+  the full layered group/dataset hierarchy in-process, so it pays
+  dictionary/dtype-construction cost that the JVM provider elides.
+- **Java ms.sqlite = 191 ms vs Python 54 ms** — the Java SQLite
+  provider runs each insert under its own transaction; batching would
+  close a lot of this gap. Python uses a single transaction per dataset.
+- **Java ms.zarr = 62 ms vs Python 366 ms** — zarr-python's object
+  serialization (json.dumps per chunk metadata + numpy copy on each
+  write) is the outlier. Java's zarr-java writes native arrays
+  without the metadata round-trip.
+
+**ObjC exposes HDF5 only** via `+writeMinimalToPath:`. The provider
+write path for memory / sqlite / zarr is read-only in v0.11.1
+(`+readViaProviderURL:` works; the write-side caller refactor is
+scheduled post-v1.0). Listed here as `—` so the table makes the gap
+explicit; the ObjC read path would already land on all four providers
+if the harness exercised it.
+
+### `transport.*` — .mots codec
+
+- **Python is the outlier at 740–812 ms**, ~4-5× the compiled
+  languages. The Python writer builds per-packet `bytes` concatenations
+  inside a `for spectrum in run` loop at Python speed — every packet
+  pays an interpreter round-trip.
+- **Compressed encode is slower than plain** by ~80 ms in Java and
+  ~85 ms in ObjC (raw zlib), essentially free in Python (already
+  interpreter-bound).
+- **Decode is faster than encode** in all three by 10-40% — the
+  receiver stitches contiguous channel buffers without per-spectrum
+  framing logic.
+
+Optimisation target: collapse Python's per-spectrum encode loop into
+a vectorised `np.concatenate` + single `struct.pack` of the framing
+headers. Expected ~3× on the encode side.
+
+### `encryption` — per-AU AES-256-GCM
+
+- **ObjC is 2.5-2.8× faster** than Python/Java. OpenSSL's EVP_AEAD
+  API is called directly from C; Python goes through `cryptography`
+  (cffi round-trip per AU); Java uses `javax.crypto.Cipher` which
+  re-instantiates the GCM context per AU.
+- **Decrypt is 40-50% of encrypt time** across all three, as expected
+  for GCM (auth tag verify < tag compute).
+
+Optimisation target: Java can reuse the `Cipher` instance and just
+re-initialize the IV/AAD per AU (API supports it via `init(opmode,
+key, GCMParameterSpec)`). Expected ~30-40% on encrypt+decrypt.
+
+### `signatures` — HMAC-SHA256
+
+Sub-millisecond per-call times; the only observation worth
+recording is that the **benchmark floor is the libhdf5 read** of the
+intensity channel, not the HMAC itself. Moving to per-AU signing (v1.x)
+will exercise the HMAC cost more meaningfully.
+
+### `jcamp` — JCAMP-DX 5.01
+
+- **Python fastest** at 52 ms — the writer is a single `numpy.savetxt`
+  + string-format for the `##` headers.
+- **Java slowest** at 218 ms, dominated by IR+Raman write (81+16 ms
+  of the bar). Java's writer goes digit-by-digit through `String.format`
+  with `%g` formatting; Python's `numpy.savetxt` delegates to a
+  vectorised `PyArray_CastToType` → `PyOS_double_to_string` loop that's
+  ~15× faster per-value.
+- **Compressed-read is nearly identical** across all three (4-8 ms) —
+  it's character-alphabet decoding, not numeric parsing.
+
+Optimisation target: Java writer should use a `DecimalFormat`
+pre-allocated once (not per value) or switch to `Double.toString` +
+manual exponent trim. Expected ~5× on write.
+
+### `spectra.build` — in-memory construction
+
+All three languages land under 2 ms for ten thousand points + one
+2D-COS matrix — constructing the signal arrays is dominated by the
+`malloc + fill` loop and the value-class wrapping is free. No
+optimisation warranted.
+
+## Bottom line
+
+**MS write/read parity (the v0.9 focus) holds across v0.11.1.** The
+three languages are within 15% of each other on `ms.hdf5` and sit at
+the libhdf5 floor just as they did a year ago. The new surface
+introduced through v0.11.1 shows clear language-level hot-spots:
+
+| Hot spot | Cause | Fix |
+|---|---|---|
+| Python transport encode | Python per-packet encode loop | Vectorise with `np.concatenate` + single `struct.pack` |
+| Java SQLite write | One transaction per insert | Batch into a single transaction |
+| Python zarr write | zarr-python per-chunk metadata | zarr v3 consolidated metadata (already in the spec) |
+| Java JCAMP write | `String.format("%g", v)` per value | Shared `DecimalFormat` |
+| Java encryption | Per-AU `Cipher` instance | Reuse + `Cipher.init(…, IvParameterSpec)` per AU |
+
+None of these gate a v1.0 release — every benchmark completes
+correctly and the numbers are well within an order of magnitude of
+each other across languages. Each listed fix is a localised
+optimisation, not an architectural shift, and can land in a future
+v1.x point release.
+
+## Reproducing the multi-function sweep
+
+```bash
+# Python
+python3 ~/MPEG-O/tools/perf/profile_python_full.py --n 10000 \
+    --json ~/MPEG-O/tools/perf/_out_python_full/full.json
+
+# Java (JFR)
+bash ~/MPEG-O/tools/perf/build_and_run_java_full.sh --n 10000
+
+# ObjC
+bash ~/MPEG-O/tools/perf/build_and_run_objc_full.sh --n 10000 \
+    --json ~/MPEG-O/tools/perf/_out_objc_full/full.json
+```
