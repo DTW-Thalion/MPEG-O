@@ -1,6 +1,7 @@
 # MPEG-O v0.10 — Streaming Transport Protocol + Per-AU Encryption
 
-> **Status (2026-04-20):** v0.10.0 ready, tag gated on user sign-off.
+> **Status (2026-04-20):** v0.10.0 shipped; tag `a609aa9` on commit
+> `c9fe137` pushed per user sign-off.
 > All nine commits for v0.10 shipped across the session:
 > transport codec (M67), WebSocket client + server (M68 / M68.5),
 > simulator (M69), bidirectional conformance (M70), selective access
@@ -996,7 +997,7 @@ class TestEncryptedTransport:
 
 ---
 
-## Milestone 72 — v0.10.0 Release — COMPLETE (pending tag)
+## Milestone 72 — v0.10.0 Release — SHIPPED
 
 **Deliverables**
 
@@ -1012,7 +1013,7 @@ class TestEncryptedTransport:
 - [x] Updated `CHANGELOG.md` with v0.10.0 entry
 - [x] CI: transport codec tests + bidirectional conversion +
       cross-language conformance (38 cells)
-- [ ] Tag v0.10.0 (gated on user sign-off)
+- [x] Tag v0.10.0 pushed as `a609aa9` on commit `c9fe137` (2026-04-20)
 
 ### Acceptance
 
@@ -1027,7 +1028,7 @@ class TestEncryptedTransport:
 - [x] Bidirectional conversion is bit-identical for signal data
 - [x] v0.1–v0.9 backward compat preserved (file format unchanged;
       per-AU encryption is additive and feature-flagged)
-- [ ] Tag pushed (user-gated)
+- [x] Tag pushed (`v0.10.0` → `a609aa9` on commit `c9fe137`)
 
 ---
 
@@ -1151,7 +1152,6 @@ vs `.mggts` (transport) convention.
 | M40 PyPI + Maven Central | Publish when ready for external users |
 | FIPS compliance mode | Algorithm allow-list lockdown |
 | ParquetProvider | Columnar alternative backend |
-| Zarr v3 migration | v2 → v3 format |
 | Raman/IR support | New Spectrum subclasses |
 | DBMS transport | Postgres/MySQL blob storage |
 | htsget-style REST API | HTTP range-request protocol (formalized from MCP Server) |
