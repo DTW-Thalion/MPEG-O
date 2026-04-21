@@ -19,6 +19,7 @@ import numpy as np
 from ..enums import IRMode
 from ..ir_spectrum import IRSpectrum
 from ..raman_spectrum import RamanSpectrum
+from ..uv_vis_spectrum import UVVisSpectrum
 
 
 def _format_xy(xs: np.ndarray, ys: np.ndarray) -> str:
@@ -107,4 +108,39 @@ def write_ir_spectrum(
     Path(path).write_text(body, encoding="utf-8")
 
 
-__all__ = ["write_raman_spectrum", "write_ir_spectrum"]
+def write_uv_vis_spectrum(
+    spectrum: UVVisSpectrum,
+    path: str | Path,
+    title: str = "",
+) -> None:
+    """Write ``spectrum`` to a JCAMP-DX 5.01 UV/VIS file at ``path``."""
+    xs = np.asarray(spectrum.wavelength_array.data, dtype=np.float64)
+    ys = np.asarray(spectrum.absorbance_array.data, dtype=np.float64)
+    if xs.shape != ys.shape:
+        raise ValueError(
+            f"wavelength/absorbance length mismatch: "
+            f"{xs.shape[0]} vs {ys.shape[0]}"
+        )
+    n = xs.shape[0]
+
+    parts = [
+        f"##TITLE={title}",
+        "##JCAMP-DX=5.01",
+        "##DATA TYPE=UV/VIS SPECTRUM",
+        "##ORIGIN=MPEG-O",
+        "##OWNER=",
+        "##XUNITS=NANOMETERS",
+        "##YUNITS=ABSORBANCE",
+        f"##FIRSTX={(xs[0] if n else 0.0):.10g}",
+        f"##LASTX={(xs[-1] if n else 0.0):.10g}",
+        f"##NPOINTS={n}",
+        "##XFACTOR=1",
+        "##YFACTOR=1",
+        f"##$PATH LENGTH CM={spectrum.path_length_cm:.10g}",
+        f"##$SOLVENT={spectrum.solvent}",
+    ]
+    body = "\n".join(parts) + "\n" + _format_xy(xs, ys) + "##END=\n"
+    Path(path).write_text(body, encoding="utf-8")
+
+
+__all__ = ["write_raman_spectrum", "write_ir_spectrum", "write_uv_vis_spectrum"]

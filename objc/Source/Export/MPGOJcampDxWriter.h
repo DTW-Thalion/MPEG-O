@@ -5,6 +5,7 @@
 
 @class MPGORamanSpectrum;
 @class MPGOIRSpectrum;
+@class MPGOUVVisSpectrum;
 
 /**
  * JCAMP-DX 5.01 writer for 1-D vibrational spectra.
@@ -34,6 +35,11 @@
                  toPath:(NSString *)path
                   title:(NSString *)title
                   error:(NSError **)error;
+
++ (BOOL)writeUVVisSpectrum:(MPGOUVVisSpectrum *)spec
+                    toPath:(NSString *)path
+                     title:(NSString *)title
+                     error:(NSError **)error;
 
 @end
 

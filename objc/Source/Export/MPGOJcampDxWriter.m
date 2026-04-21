@@ -1,6 +1,7 @@
 #import "MPGOJcampDxWriter.h"
 #import "Spectra/MPGORamanSpectrum.h"
 #import "Spectra/MPGOIRSpectrum.h"
+#import "Spectra/MPGOUVVisSpectrum.h"
 #import "Core/MPGOSignalArray.h"
 #import "HDF5/MPGOHDF5Errors.h"
 
@@ -108,6 +109,42 @@ static BOOL writeStringToPath(NSString *s, NSString *path, NSError **error)
     [out appendString:@"##YFACTOR=1\n"];
     [out appendFormat:@"##RESOLUTION=%.10g\n", spec.resolutionCmInv];
     [out appendFormat:@"##$NUMBER OF SCANS=%lu\n", (unsigned long)spec.numberOfScans];
+    appendXYDATA(out, xs, ys, n);
+    [out appendString:@"##END=\n"];
+
+    return writeStringToPath(out, path, error);
+}
+
++ (BOOL)writeUVVisSpectrum:(MPGOUVVisSpectrum *)spec
+                    toPath:(NSString *)path
+                     title:(NSString *)title
+                     error:(NSError **)error
+{
+    if (!spec || spec.wavelengthArray.length != spec.absorbanceArray.length) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"MPGOJcampDxWriter: invalid UV-Vis spectrum");
+        return NO;
+    }
+
+    NSUInteger n = spec.wavelengthArray.length;
+    const double *xs = spec.wavelengthArray.buffer.bytes;
+    const double *ys = spec.absorbanceArray.buffer.bytes;
+
+    NSMutableString *out = [NSMutableString string];
+    [out appendFormat:@"##TITLE=%@\n", title ?: @""];
+    [out appendString:@"##JCAMP-DX=5.01\n"];
+    [out appendString:@"##DATA TYPE=UV/VIS SPECTRUM\n"];
+    [out appendString:@"##ORIGIN=MPEG-O\n"];
+    [out appendString:@"##OWNER=\n"];
+    [out appendString:@"##XUNITS=NANOMETERS\n"];
+    [out appendString:@"##YUNITS=ABSORBANCE\n"];
+    [out appendFormat:@"##FIRSTX=%.10g\n", n > 0 ? xs[0] : 0.0];
+    [out appendFormat:@"##LASTX=%.10g\n",  n > 0 ? xs[n-1] : 0.0];
+    [out appendFormat:@"##NPOINTS=%lu\n", (unsigned long)n];
+    [out appendString:@"##XFACTOR=1\n"];
+    [out appendString:@"##YFACTOR=1\n"];
+    [out appendFormat:@"##$PATH LENGTH CM=%.10g\n", spec.pathLengthCm];
+    [out appendFormat:@"##$SOLVENT=%@\n",           spec.solvent ?: @""];
     appendXYDATA(out, xs, ys, n);
     [out appendString:@"##END=\n"];
 

@@ -55,6 +55,7 @@ extern void testPerAUEncryption(void);
 extern void testPerAUFile(void);
 extern void testEncryptedTransport(void);
 extern void testMilestone73(void);
+extern void testMilestone73_1(void);
 
 int main(int argc, const char *argv[])
 {
@@ -274,6 +275,10 @@ int main(int argc, const char *argv[])
         START_SET("M73: Raman / IR spectra + imaging (v0.11)")
             testMilestone73();
         END_SET("M73: Raman / IR spectra + imaging (v0.11)")
+
+        START_SET("M73.1: JCAMP-DX compression + UV-Vis + 2D-COS (v0.11.1)")
+            testMilestone73_1();
+        END_SET("M73.1: JCAMP-DX compression + UV-Vis + 2D-COS (v0.11.1)")
     }
     return 0;
 }

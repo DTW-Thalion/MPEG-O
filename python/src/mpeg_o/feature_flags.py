@@ -50,6 +50,11 @@ OPT_PER_AU_ENCRYPTION = "opt_per_au_encryption"
 # this flag is set.
 OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers"
 
+# v0.11.1 (M73.1): native storage of a 2D-COS spectrum pair
+# (synchronous + asynchronous correlation matrices) as two rank-2
+# HDF5 datasets sharing the spectral-variable axis scale.
+OPT_NATIVE_2D_COS = "opt_native_2d_cos"
+
 
 @dataclass(frozen=True, slots=True)
 class FeatureFlags:

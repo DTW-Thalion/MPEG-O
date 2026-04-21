@@ -5,49 +5,56 @@ import com.dtwthalion.mpgo.Enums.IRMode;
 import com.dtwthalion.mpgo.IRSpectrum;
 import com.dtwthalion.mpgo.RamanSpectrum;
 import com.dtwthalion.mpgo.Spectrum;
+import com.dtwthalion.mpgo.UVVisSpectrum;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * JCAMP-DX 5.01 reader for 1-D vibrational spectra. Dispatches on
- * {@code ##DATA TYPE=} and returns a {@link RamanSpectrum} or
- * {@link IRSpectrum}.
+ * JCAMP-DX 5.01 reader for 1-D vibrational and UV-Vis spectra.
  *
- * <p>Accepts the AFFN {@code ##XYDATA=(X++(Y..Y))} dialect emitted by
- * {@code JcampDxWriter} and the more permissive "one (X, Y) pair per
- * line" variant. PAC / SQZ / DIF compression is not supported in M73.</p>
+ * <p>Dispatches on {@code ##DATA TYPE=} and returns a
+ * {@link RamanSpectrum}, {@link IRSpectrum}, or {@link UVVisSpectrum}.</p>
  *
- * <p><b>API status:</b> Stable (v0.11, M73).</p>
+ * <p>Accepts two dialects of {@code ##XYDATA=(X++(Y..Y))}:</p>
+ * <ul>
+ *   <li><b>AFFN</b> (fast path) — one {@code (X, Y)} pair per line,
+ *       free-format decimals including scientific notation.</li>
+ *   <li><b>PAC / SQZ / DIF / DUP</b> (compressed) — JCAMP-DX 5.01 §5.9
+ *       character-encoded Y-stream. Delegated to
+ *       {@link JcampDxDecode#decode}. Requires {@code FIRSTX},
+ *       {@code LASTX}, and {@code NPOINTS} headers (equispaced X).</li>
+ * </ul>
  *
- * <p><b>Cross-language equivalents:</b><br>
- * Objective-C: {@code MPGOJcampDxReader} &middot;
- * Python: {@code mpeg_o.importers.jcamp_dx}</p>
+ * <p><b>API status:</b> Stable (v0.11.1 adds compression + UV-Vis).</p>
+ *
+ * <p><b>Cross-language equivalents:</b> Objective-C
+ * {@code MPGOJcampDxReader}, Python {@code mpeg_o.importers.jcamp_dx}.</p>
  *
  * @since 0.11
  */
 public final class JcampDxReader {
 
+    private static final Set<String> UV_VIS_DATA_TYPES = new HashSet<>(Arrays.asList(
+        "UV/VIS SPECTRUM", "UV-VIS SPECTRUM", "UV/VISIBLE SPECTRUM"
+    ));
+
     private JcampDxReader() {}
 
-    /**
-     * Parse {@code path} and return an appropriate spectrum subclass.
-     *
-     * @throws IOException if reading fails
-     * @throws IllegalArgumentException on malformed content or
-     *     unsupported {@code ##DATA TYPE=}
-     */
     public static Spectrum readSpectrum(Path path) throws IOException {
         String text = Files.readString(path, StandardCharsets.UTF_8);
         Map<String, String> ldrs = new HashMap<>();
-        List<Double> xs = new ArrayList<>();
-        List<Double> ys = new ArrayList<>();
+        List<String> bodyLines = new ArrayList<>();
         boolean inXYDATA = false;
 
         for (String raw : text.split("\\R")) {
@@ -68,8 +75,42 @@ public final class JcampDxReader {
                 }
                 continue;
             }
+            if (inXYDATA) bodyLines.add(raw);
+        }
 
-            if (inXYDATA) {
+        double xfactor = parseDouble(ldrs.getOrDefault("XFACTOR", "1"));
+        if (xfactor == 0.0) xfactor = 1.0;
+        double yfactor = parseDouble(ldrs.getOrDefault("YFACTOR", "1"));
+        if (yfactor == 0.0) yfactor = 1.0;
+
+        String body = String.join("\n", bodyLines);
+
+        double[] xs;
+        double[] ys;
+        if (JcampDxDecode.hasCompression(body)) {
+            if (!ldrs.containsKey("FIRSTX") || !ldrs.containsKey("LASTX")
+                    || !ldrs.containsKey("NPOINTS")) {
+                throw new IllegalArgumentException(
+                    "JCAMP-DX: compressed XYDATA requires FIRSTX / LASTX / NPOINTS");
+            }
+            double firstx = parseDouble(ldrs.get("FIRSTX"));
+            double lastx = parseDouble(ldrs.get("LASTX"));
+            int npoints = (int) parseDouble(ldrs.get("NPOINTS"));
+            if (npoints < 2) {
+                throw new IllegalArgumentException(
+                    "JCAMP-DX: NPOINTS must be >= 2 for compressed data");
+            }
+            double deltax = (lastx - firstx) / (npoints - 1);
+            JcampDxDecode.DecodedXY d = JcampDxDecode.decode(
+                bodyLines, firstx, deltax, xfactor, yfactor);
+            xs = d.xs;
+            ys = d.ys;
+        } else {
+            List<Double> xList = new ArrayList<>();
+            List<Double> yList = new ArrayList<>();
+            for (String raw : bodyLines) {
+                String line = raw.strip();
+                if (line.isEmpty()) continue;
                 String[] toks = line.split("\\s+");
                 List<Double> nums = new ArrayList<>(toks.length);
                 for (String t : toks) {
@@ -81,28 +122,35 @@ public final class JcampDxReader {
                     }
                 }
                 if (nums.size() >= 2) {
-                    xs.add(nums.get(0));
-                    ys.add(nums.get(1));
-                } else if (nums.size() == 1 && xs.size() == ys.size() + 1) {
-                    ys.add(nums.get(0));
+                    xList.add(nums.get(0) * xfactor);
+                    yList.add(nums.get(1) * yfactor);
+                } else if (nums.size() == 1 && xList.size() == yList.size() + 1) {
+                    yList.add(nums.get(0) * yfactor);
                 }
             }
+            xs = toArray(xList);
+            ys = toArray(yList);
         }
 
-        if (xs.size() != ys.size() || xs.isEmpty()) {
+        if (xs.length != ys.length || xs.length == 0) {
             throw new IllegalArgumentException("JCAMP-DX: empty or mismatched XYDATA");
         }
 
-        String dataType = ldrs.getOrDefault("DATA TYPE", "").toUpperCase();
-        double[] x = toArray(xs);
-        double[] y = toArray(ys);
+        String dataType = ldrs.getOrDefault("DATA TYPE", "").toUpperCase(Locale.ROOT);
+
+        if (UV_VIS_DATA_TYPES.contains(dataType)) {
+            return new UVVisSpectrum(
+                xs, ys, 0, 0.0,
+                parseDouble(ldrs.get("$PATH LENGTH CM")),
+                ldrs.getOrDefault("$SOLVENT", ""));
+        }
 
         if (dataType.equals("RAMAN SPECTRUM")) {
             return new RamanSpectrum(
-                    x, y, 0, 0.0,
-                    parseDouble(ldrs.get("$EXCITATION WAVELENGTH NM")),
-                    parseDouble(ldrs.get("$LASER POWER MW")),
-                    parseDouble(ldrs.get("$INTEGRATION TIME SEC")));
+                xs, ys, 0, 0.0,
+                parseDouble(ldrs.get("$EXCITATION WAVELENGTH NM")),
+                parseDouble(ldrs.get("$LASER POWER MW")),
+                parseDouble(ldrs.get("$INTEGRATION TIME SEC")));
         }
 
         if (dataType.equals("INFRARED ABSORBANCE")
@@ -114,18 +162,18 @@ public final class JcampDxReader {
             } else if (dataType.equals("INFRARED TRANSMITTANCE")) {
                 mode = IRMode.TRANSMITTANCE;
             } else {
-                String yUnits = ldrs.getOrDefault("YUNITS", "").toUpperCase();
+                String yUnits = ldrs.getOrDefault("YUNITS", "").toUpperCase(Locale.ROOT);
                 mode = yUnits.contains("ABSORB") ? IRMode.ABSORBANCE : IRMode.TRANSMITTANCE;
             }
             return new IRSpectrum(
-                    x, y, 0, 0.0,
-                    mode,
-                    parseDouble(ldrs.get("RESOLUTION")),
-                    (long) parseDouble(ldrs.get("$NUMBER OF SCANS")));
+                xs, ys, 0, 0.0,
+                mode,
+                parseDouble(ldrs.get("RESOLUTION")),
+                (long) parseDouble(ldrs.get("$NUMBER OF SCANS")));
         }
 
         throw new IllegalArgumentException(
-                "JCAMP-DX: unsupported DATA TYPE='" + ldrs.getOrDefault("DATA TYPE", "") + "'");
+            "JCAMP-DX: unsupported DATA TYPE='" + ldrs.getOrDefault("DATA TYPE", "") + "'");
     }
 
     private static double parseDouble(String v) {

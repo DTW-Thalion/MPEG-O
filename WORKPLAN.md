@@ -623,18 +623,53 @@ Five phases across all three languages:
       `class-hierarchy.md` Layer 3c, `README.md`,
       `ARCHITECTURE.md`, `HANDOFF.md`, this file).
 - [x] M73 commit `f93180b` pushed to `origin/main`.
-- [ ] Annotated `v0.11.0` tag — pending user sign-off.
+- [x] Annotated `v0.11.0` tag.
 
-**v0.11.0 status:** Implementation shipped on commit `f93180b`
-(2026-04-21); awaiting tag.
+**v0.11.0 status:** Shipped.
 
-### Deferred to v0.11.1 / v0.12.0
+## v0.11.1 — M73.1 JCAMP-DX compression + UV-Vis + 2D-COS (2026-04-21)
+
+Patch release completing the three items deferred from v0.11.0.
+Three-language parity preserved — every surface ships in Python,
+Objective-C, and Java.
+
+### Shipped
+
+- [x] **JCAMP-DX 5.01 PAC / SQZ / DIF / DUP compression reader** in
+      all three languages. `has_compression()` sentinel scan excludes
+      `e`/`E` so AFFN scientific notation doesn't false-trigger; a
+      dedicated decoder handles the full SQZ (`@`, `A-I`, `a-i`),
+      DIF (`%`, `J-R`, `j-r`), and DUP (`S-Z`, `s`) alphabets plus
+      the Y-check convention. X values reconstructed from `FIRSTX`
+      / `LASTX` / `NPOINTS`. Writers remain AFFN-only.
+- [x] **`UVVisSpectrum` class** — 1-D UV/visible absorption spectrum
+      keyed by `"wavelength"` (nm) + `"absorbance"`, with
+      `pathLengthCm` + `solvent` metadata. Reader dispatches
+      `UV/VIS SPECTRUM`, `UV-VIS SPECTRUM`, `UV/VISIBLE SPECTRUM`;
+      writer emits `##DATA TYPE=UV/VIS SPECTRUM` with NANOMETERS +
+      ABSORBANCE units and `##$PATH LENGTH CM` / `##$SOLVENT` LDRs.
+- [x] **`TwoDimensionalCorrelationSpectrum` class** — Noda 2D-COS
+      with rank-2 synchronous (in-phase) + asynchronous (quadrature)
+      correlation matrices sharing a single variable axis. Matrices
+      are row-major `float64`, size-by-size; construction validates
+      rank, shape match, and squareness. Gated behind new
+      `opt_native_2d_cos` feature flag.
+
+### Release criteria
+
+- [x] 1536 ObjC assertions / 765 Python tests / 331 Java tests pass.
+- [x] `CHANGELOG.md` v0.11.1 entry.
+- [x] Annotated `v0.11.1` tag.
+
+### Deferred to v0.12.0
 
 - 2-D JCAMP-DX (NTUPLES / PAGE) for imaging cubes — ASCII cubes
-  are impractical at 10–100 MB per map; native HDF5 groups remain
-  the canonical form.
-- JCAMP-DX legacy compression (PAC / SQZ / DIF).
-- 2D-COS (2-D correlation spectroscopy) and hyperspectral-image
-  analysis primitives.
-- UV-Vis as a third vibrational-class `Spectrum` subclass (the
-  reader currently rejects `##DATA TYPE=UV/VIS SPECTRUM`).
+  remain impractical at 10–100 MB per map; native HDF5 groups
+  remain the canonical form.
+- JCAMP-DX compressed-writer emission (reader is sufficient for
+  cross-vendor import; bit-accurate round-trips favour AFFN).
+- 2D-COS computation primitives (generalised decomposition,
+  statistical significance testing) — only the storage class is
+  shipped here.
+- Hyperspectral-image analysis primitives beyond the tile-chunk
+  cube already supported.

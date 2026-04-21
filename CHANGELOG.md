@@ -11,6 +11,61 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [v0.11.1] — 2026-04-21
+
+Patch release completing the three M73 items that landed as deferred
+notes in v0.11.0. All three languages gain the same surfaces and remain
+bit-identical on the round-trip path.
+
+### Added
+
+- **JCAMP-DX 5.01 PAC / SQZ / DIF / DUP compression reader** in all
+  three languages. Auto-detects compressed bodies via a sentinel-char
+  scan that excludes `e`/`E` (so AFFN scientific notation doesn't
+  false-trigger), then delegates to a per-language decoder:
+
+    - Python: `mpeg_o.importers._jcamp_decode.decode_xydata`
+    - Java: `com.dtwthalion.mpgo.importers.JcampDxDecode.decode`
+    - Objective-C: `MPGOJcampDxDecode +decodeLines:…`
+
+  Implements the full SQZ alphabet (`@`, `A–I`, `a–i`), DIF alphabet
+  (`%`, `J–R`, `j–r`), DUP alphabet (`S–Z`, `s`), the DIF Y-check
+  convention (repeated leading Y within 1e-9 of the previous line's
+  last Y is dropped), and X-reconstruction from `FIRSTX` / `LASTX` /
+  `NPOINTS`. Writers remain AFFN-only — bit-accurate round-trips are
+  worth more than the byte savings at this stage.
+
+- **`UVVisSpectrum` class** in all three languages — 1-D UV/visible
+  absorption spectrum keyed by `"wavelength"` (nm) + `"absorbance"`,
+  with `pathLengthCm` and `solvent` metadata. JCAMP-DX reader
+  dispatches `UV/VIS SPECTRUM`, `UV-VIS SPECTRUM`, and
+  `UV/VISIBLE SPECTRUM` to this class; writer emits `##DATA TYPE=UV/VIS
+  SPECTRUM` with `##XUNITS=NANOMETERS`, `##YUNITS=ABSORBANCE`, and
+  `##$PATH LENGTH CM` / `##$SOLVENT` custom LDRs.
+
+- **`TwoDimensionalCorrelationSpectrum` class** in all three
+  languages — Noda 2D-COS representation with rank-2 synchronous
+  (in-phase) and asynchronous (quadrature) correlation matrices
+  sharing a single variable axis (`nu_1 == nu_2`). Matrices are
+  row-major `float64`, size-by-size; construction validates rank,
+  matching shape, and squareness. Gated behind the new
+  `opt_native_2d_cos` feature flag.
+
+### Test totals
+
+- Python: 765 tests (was 695; 26 new for M73.1 = 20 compression/UV-Vis +
+  6 2D-COS + misc).
+- Java: 331 tests (was 307; 24 new for M73.1).
+- Objective-C: 1536 tests (was 1443; 45 new for M73.1).
+
+### Removed from "Deferred to v1.0+" / v0.11 scope
+
+- `PAC / SQZ / DIF JCAMP-DX compression` — shipped here (reader only).
+- `UVVisSpectrum / UV-Vis JCAMP-DX dispatch` — shipped here.
+- `2D-COS / TwoDimensionalCorrelationSpectrum class` — shipped here.
+
+---
+
 ## [v0.11.0] — 2026-04-21
 
 Vibrational spectroscopy (M73): Raman and IR are now first-class

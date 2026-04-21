@@ -4,6 +4,7 @@ package com.dtwthalion.mpgo.exporters;
 import com.dtwthalion.mpgo.Enums.IRMode;
 import com.dtwthalion.mpgo.IRSpectrum;
 import com.dtwthalion.mpgo.RamanSpectrum;
+import com.dtwthalion.mpgo.UVVisSpectrum;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -102,6 +103,38 @@ public final class JcampDxWriter {
           .append(String.format(Locale.ROOT, "##RESOLUTION=%.10g%n",
                   spectrum.resolutionCmInv()))
           .append("##$NUMBER OF SCANS=").append(spectrum.numberOfScans()).append('\n');
+        appendXYDATA(sb, xs, ys);
+        sb.append("##END=\n");
+        Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
+    }
+
+    public static void writeUVVisSpectrum(UVVisSpectrum spectrum,
+                                          Path path,
+                                          String title) throws IOException {
+        double[] xs = spectrum.wavelengthValues();
+        double[] ys = spectrum.absorbanceValues();
+        if (xs.length != ys.length) {
+            throw new IllegalArgumentException(
+                    "wavelength/absorbance length mismatch: "
+                            + xs.length + " vs " + ys.length);
+        }
+        int n = xs.length;
+        StringBuilder sb = new StringBuilder(256 + n * 32);
+        sb.append("##TITLE=").append(title != null ? title : "").append('\n')
+          .append("##JCAMP-DX=5.01\n")
+          .append("##DATA TYPE=UV/VIS SPECTRUM\n")
+          .append("##ORIGIN=MPEG-O\n")
+          .append("##OWNER=\n")
+          .append("##XUNITS=NANOMETERS\n")
+          .append("##YUNITS=ABSORBANCE\n")
+          .append(String.format(Locale.ROOT, "##FIRSTX=%.10g%n", n > 0 ? xs[0] : 0.0))
+          .append(String.format(Locale.ROOT, "##LASTX=%.10g%n", n > 0 ? xs[n - 1] : 0.0))
+          .append("##NPOINTS=").append(n).append('\n')
+          .append("##XFACTOR=1\n")
+          .append("##YFACTOR=1\n")
+          .append(String.format(Locale.ROOT, "##$PATH LENGTH CM=%.10g%n",
+                  spectrum.pathLengthCm()))
+          .append("##$SOLVENT=").append(spectrum.solvent()).append('\n');
         appendXYDATA(sb, xs, ys);
         sb.append("##END=\n");
         Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
