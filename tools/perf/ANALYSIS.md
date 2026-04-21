@@ -572,7 +572,7 @@ numbers above.
 | ms.hdf5 | 71.6 | 59.1 | 69.9 |
 | ms.memory | 173.9 | 11.3 | — |
 | ms.sqlite | 87.7 | 164.9 | — |
-| ms.zarr | 365.5 | 62.1 | — |
+| ms.zarr | 260.8 | 62.1 | — |
 | transport.plain | 590.8 | 158.4 | 182.6 |
 | transport.compressed | 519.7 | 233.6 | 266.4 |
 | encryption | 393.4 | 234.1 | 153.0 |
@@ -601,10 +601,15 @@ spread on non-HDF5 providers is real, not noise:
   isn't commit overhead (WAL+synchronous=NORMAL is already near-zero)
   — it's the per-dataset UPDATE pushing ~1.3 MB blobs through
   `packPrimitive`'s one-double-at-a-time `ByteBuffer.putDouble` loop.
-- **Java ms.zarr = 62 ms vs Python 366 ms** — zarr-python's object
-  serialization (json.dumps per chunk metadata + numpy copy on each
-  write) is the outlier. Java's zarr-java writes native arrays
-  without the metadata round-trip.
+- **Java ms.zarr = 62 ms vs Python 261 ms (was 366 ms)** — after
+  adding a lazy-materialization cache in `_ZarrPrimitiveDataset.read`,
+  sampled reads collapse N per-spectrum chunk-decompress round-trips
+  into one. read: 237 → 36 ms, total: 462 → 261 ms (~1.8× overall,
+  ~6.5× on the read phase). zarr-python 3.x runs every array access
+  through `asyncio.run_until_complete` even for single-chunk data,
+  and that per-call overhead now only hits once per dataset instead
+  of once per sampled spectrum. Write-side remains dominated by
+  zarr's per-array `zarr.json` flushes.
 
 **ObjC exposes HDF5 only** via `+writeMinimalToPath:`. The provider
 write path for memory / sqlite / zarr is read-only in v0.11.1
@@ -705,7 +710,7 @@ introduced through v0.11.1 shows clear language-level hot-spots:
 |---|---|---|
 | ~~Python transport encode~~ | ~~Python per-packet encode loop~~ | **Landed 2026-04-21:** bulk channel read + inlined struct pack; encode 1.7× faster |
 | Java SQLite write | One transaction per insert | Batch into a single transaction |
-| Python zarr write | zarr-python per-chunk metadata | zarr v3 consolidated metadata (already in the spec) |
+| ~~Python zarr read~~ | ~~per-call asyncio + chunk decode~~ | **Landed 2026-04-21:** lazy-materialize cache in primitive dataset; read 6.5× faster |
 | ~~Java JCAMP write~~ | ~~`String.format("%g", v)` per value~~ | **Landed 2026-04-21:** `Double.toString()`; write 2.3× faster |
 | ~~Java encryption~~ | ~~Per-AU `Cipher` instance~~ | **Landed 2026-04-21:** `ThreadLocal<Cipher>` + cached `SecretKeySpec`; ~38% faster |
 

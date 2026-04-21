@@ -150,14 +150,23 @@ def _rows_from_json(blob: str) -> list[dict[str, Any]]:
 
 
 class _ZarrPrimitiveDataset(StorageDataset):
-    """Thin wrapper around ``zarr.core.Array`` for primitive datasets."""
+    """Thin wrapper around ``zarr.core.Array`` for primitive datasets.
 
-    __slots__ = ("_name", "_array", "_parent")
+    Reads go through a lazy numpy materialization cache: the first
+    ``read()`` pulls the full decompressed array into a numpy buffer
+    (triggering one chunk-decode pass) and subsequent reads slice that
+    buffer. This matches the effective behaviour of h5py's chunk cache
+    and avoids the asyncio + gzip round-trip that zarr-python 3.x pays
+    per-call. Writes invalidate the cache.
+    """
+
+    __slots__ = ("_name", "_array", "_parent", "_materialized")
 
     def __init__(self, name: str, array: Any, parent: Any):
         self._name = name
         self._array = array
         self._parent = parent  # zarr.Group; kept for attribute writes
+        self._materialized: np.ndarray | None = None
 
     @property
     def name(self) -> str:
@@ -180,9 +189,12 @@ class _ZarrPrimitiveDataset(StorageDataset):
         return None
 
     def read(self, offset: int = 0, count: int = -1) -> np.ndarray:
-        # Zarr arrays support numpy-style slicing along axis 0.
-        end = self._array.shape[0] if count < 0 else offset + count
-        return np.asarray(self._array[offset:end])
+        if self._materialized is None:
+            # One async round-trip + decode for the whole array; future
+            # reads are pure numpy slices.
+            self._materialized = np.asarray(self._array[:])
+        end = self._materialized.shape[0] if count < 0 else offset + count
+        return self._materialized[offset:end]
 
     def write(self, data: Any) -> None:
         arr = np.asarray(data)
@@ -201,6 +213,7 @@ class _ZarrPrimitiveDataset(StorageDataset):
                     f"dataset '{self._name}' expects shape "
                     f"{self._array.shape}, got {arr.shape}") from e
             self._array[:] = arr
+        self._materialized = None  # invalidate after write
 
     def has_attribute(self, name: str) -> bool:
         return name in self._array.attrs
@@ -434,6 +447,8 @@ class ZarrProvider(StorageProvider):
     def __init__(self, url: str | None = None):
         self._url = url
         self._root: Any | None = None
+        self._store: Any | None = None
+        self._mode: str = "r"
         self._open = False
 
     def open(self_or_path, path_or_url=None, *, mode: str = "r",  # type: ignore[override]
@@ -452,7 +467,19 @@ class ZarrProvider(StorageProvider):
         store = _store_for_url(actual, mode)
         # zarr-python's mode strings: 'r', 'r+', 'a', 'w', 'w-'
         zmode = mode if mode in ("r", "r+", "a", "w", "w-") else "r"
-        instance._root = zarr.open_group(store=store, mode=zmode)
+        # Never auto-use consolidated metadata: cross-language tests
+        # modify files after Python consolidates them (e.g. Java adds
+        # a signature attr), and stale consolidated metadata hides
+        # those changes. Consolidation remains available to callers
+        # via ``native_handle()`` if they know the file is final.
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            root = zarr.open_group(
+                store=store, mode=zmode, use_consolidated=False)
+        instance._root = root
+        instance._store = store
+        instance._mode = zmode
         instance._url = actual
         instance._open = True
         return instance
@@ -471,6 +498,7 @@ class ZarrProvider(StorageProvider):
     def close(self) -> None:
         self._open = False
         self._root = None
+        self._store = None
 
     def supports_chunking(self) -> bool:
         return True
