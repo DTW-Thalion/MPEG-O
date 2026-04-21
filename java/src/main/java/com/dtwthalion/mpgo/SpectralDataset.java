@@ -228,6 +228,11 @@ public class SpectralDataset implements
             FeatureFlags featureFlags) {
         StorageProvider provider = com.dtwthalion.mpgo.providers
                 .ProviderRegistry.open(url, StorageProvider.Mode.CREATE);
+        // Batch all create-time writes into a single provider transaction so
+        // SQLite doesn't fsync per group/dataset/attribute. No-op for
+        // providers without explicit transactions (default StorageProvider
+        // impl).
+        provider.beginTransaction();
         try (com.dtwthalion.mpgo.providers.StorageGroup root =
                 provider.rootGroup()) {
             featureFlags.writeTo(root);
@@ -264,11 +269,13 @@ public class SpectralDataset implements
                     study.setAttribute("provenance_json",
                             buildProvenanceJson(provenanceRecords));
                 }
-                return new SpectralDataset(provider, null, featureFlags,
-                        title, isaInvestigationId, runMap,
+                SpectralDataset out = new SpectralDataset(provider, null,
+                        featureFlags, title, isaInvestigationId, runMap,
                         identifications != null ? identifications : List.of(),
                         quantifications != null ? quantifications : List.of(),
                         provenanceRecords != null ? provenanceRecords : List.of());
+                provider.commitTransaction();
+                return out;
             }
         }
     }

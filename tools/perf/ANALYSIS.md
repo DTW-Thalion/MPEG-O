@@ -571,7 +571,7 @@ numbers above.
 |---|---:|---:|---:|
 | ms.hdf5 | 71.6 | 59.1 | 69.9 |
 | ms.memory | 173.9 | 11.3 | — |
-| ms.sqlite | 87.7 | 191.2 | — |
+| ms.sqlite | 87.7 | 164.9 | — |
 | ms.zarr | 365.5 | 62.1 | — |
 | transport.plain | 590.8 | 158.4 | 182.6 |
 | transport.compressed | 519.7 | 233.6 | 266.4 |
@@ -593,9 +593,14 @@ spread on non-HDF5 providers is real, not noise:
 - **Python ms.memory = 174 ms** — the memory provider still builds
   the full layered group/dataset hierarchy in-process, so it pays
   dictionary/dtype-construction cost that the JVM provider elides.
-- **Java ms.sqlite = 191 ms vs Python 54 ms** — the Java SQLite
-  provider runs each insert under its own transaction; batching would
-  close a lot of this gap. Python uses a single transaction per dataset.
+- **Java ms.sqlite = 165 ms (was 191 ms) vs Python 54 ms** — after
+  plumbing `beginTransaction()` / `commitTransaction()` through
+  `SpectralDataset.createViaProvider` so `SqliteProvider` skips its
+  per-mutation `conn.commit()` under `batchMode`, the 35 per-op
+  commits collapse into one. ~14% speedup. Most of the remaining gap
+  isn't commit overhead (WAL+synchronous=NORMAL is already near-zero)
+  — it's the per-dataset UPDATE pushing ~1.3 MB blobs through
+  `packPrimitive`'s one-double-at-a-time `ByteBuffer.putDouble` loop.
 - **Java ms.zarr = 62 ms vs Python 366 ms** — zarr-python's object
   serialization (json.dumps per chunk metadata + numpy copy on each
   write) is the outlier. Java's zarr-java writes native arrays

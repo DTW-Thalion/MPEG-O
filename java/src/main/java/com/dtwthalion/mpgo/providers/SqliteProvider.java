@@ -88,9 +88,18 @@ public final class SqliteProvider implements StorageProvider {
     private Connection conn;
     private String path;
     private boolean readOnly;
+    // When true, mutating ops skip their per-call conn.commit() — the
+    // caller has opened an explicit batch via beginTransaction(). Flipped
+    // back off by commitTransaction() / rollbackTransaction().
+    private boolean batchMode;
 
     /** No-arg constructor for ServiceLoader. */
     public SqliteProvider() {}
+
+    /** Commit after a mutating op unless we're inside an explicit batch. */
+    void maybeCommit() throws SQLException {
+        if (!batchMode) conn.commit();
+    }
 
     // ── StorageProvider ──────────────────────────────────────────────────
 
@@ -125,7 +134,7 @@ public final class SqliteProvider implements StorageProvider {
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) throw new RuntimeException("root group '/' missing");
                 long rootId = rs.getLong(1);
-                return new SqliteGroup(conn, rootId, "/", readOnly);
+                return new SqliteGroup(this, rootId, "/", readOnly);
             }
         } catch (SQLException e) {
             throw new RuntimeException("Failed to fetch root group", e);
@@ -141,23 +150,23 @@ public final class SqliteProvider implements StorageProvider {
     @Override
     public void close() {
         if (conn != null) {
+            // Flush any batch the caller opened but never committed, so the
+            // SQLite driver's close-time rollback doesn't drop their writes.
+            try { conn.commit(); } catch (SQLException ignored) {}
             try { conn.close(); } catch (SQLException ignored) {}
             conn = null;
+            batchMode = false;
         }
     }
 
     // ── Transactions (Appendix B Gap 11) ──────────────────────────────────
 
-    /** The Java SqliteProvider runs in {@code autoCommit=false} mode
-     *  once {@code doOpen} switches it there, so every write already
-     *  sits in an implicit transaction. These overrides make the
-     *  commit / rollback boundaries explicit for callers that want
-     *  to batch. */
+    /** Opens an explicit batch: subsequent mutating ops suppress their
+     *  per-call commits until {@link #commitTransaction()} flushes them
+     *  as a single SQLite transaction. */
     @Override
     public void beginTransaction() {
-        // No-op: autoCommit=false means a transaction is already open
-        // after the previous commit. Documented here for API symmetry
-        // with Python's explicit BEGIN.
+        batchMode = true;
     }
 
     @Override
@@ -166,6 +175,7 @@ public final class SqliteProvider implements StorageProvider {
         try { conn.commit(); } catch (SQLException e) {
             throw new RuntimeException("commit failed: " + e.getMessage(), e);
         }
+        batchMode = false;
     }
 
     @Override
@@ -174,6 +184,7 @@ public final class SqliteProvider implements StorageProvider {
         try { conn.rollback(); } catch (SQLException e) {
             throw new RuntimeException("rollback failed: " + e.getMessage(), e);
         }
+        batchMode = false;
     }
 
     // ── Internal open logic ──────────────────────────────────────────────
@@ -667,13 +678,15 @@ public final class SqliteProvider implements StorageProvider {
      */
     static final class SqliteGroup implements StorageGroup {
 
+        private final SqliteProvider provider;
         private final Connection conn;
         private final long groupId;
         private final String groupName;
         private final boolean readOnly;
 
-        SqliteGroup(Connection conn, long groupId, String name, boolean readOnly) {
-            this.conn = conn;
+        SqliteGroup(SqliteProvider provider, long groupId, String name, boolean readOnly) {
+            this.provider = provider;
+            this.conn = provider.conn;
             this.groupId = groupId;
             this.groupName = name;
             this.readOnly = readOnly;
@@ -731,7 +744,7 @@ public final class SqliteProvider implements StorageProvider {
                 ResultSet rs = ps.executeQuery();
                 if (!rs.next()) throw new NoSuchElementException(
                         "group '" + name + "' not found in '" + groupName + "'");
-                return new SqliteGroup(conn, rs.getLong(1), name, readOnly);
+                return new SqliteGroup(provider, rs.getLong(1), name, readOnly);
             } catch (SQLException e) {
                 throw new RuntimeException("openGroup failed", e);
             }
@@ -747,10 +760,10 @@ public final class SqliteProvider implements StorageProvider {
                     Statement.RETURN_GENERATED_KEYS)) {
                 ps.setLong(1, groupId); ps.setString(2, name);
                 ps.executeUpdate();
-                conn.commit();
+                provider.maybeCommit();
                 ResultSet keys = ps.getGeneratedKeys();
                 keys.next();
-                return new SqliteGroup(conn, keys.getLong(1), name, readOnly);
+                return new SqliteGroup(provider, keys.getLong(1), name, readOnly);
             } catch (SQLException e) {
                 throw new RuntimeException("createGroup failed", e);
             }
@@ -771,7 +784,7 @@ public final class SqliteProvider implements StorageProvider {
                                 "DELETE FROM groups WHERE id = ?")) {
                             del.setLong(1, id); del.executeUpdate();
                         }
-                        conn.commit();
+                        provider.maybeCommit();
                         return;
                     }
                 }
@@ -786,7 +799,7 @@ public final class SqliteProvider implements StorageProvider {
                                 "DELETE FROM datasets WHERE id = ?")) {
                             del.setLong(1, id); del.executeUpdate();
                         }
-                        conn.commit();
+                        provider.maybeCommit();
                     }
                 }
             } catch (SQLException e) {
@@ -813,7 +826,7 @@ public final class SqliteProvider implements StorageProvider {
                 Precision prec = precName != null ? Precision.valueOf(precName) : null;
                 long[] shape = shapeFromJson(shapeJson);
                 List<CompoundField> fields = fieldsJson != null ? fieldsFromJson(fieldsJson) : null;
-                return new SqliteDataset(conn, dsId, name, prec, shape, fields, readOnly);
+                return new SqliteDataset(provider, dsId, name, prec, shape, fields, readOnly);
             } catch (SQLException e) {
                 throw new RuntimeException("openDataset failed", e);
             }
@@ -837,11 +850,11 @@ public final class SqliteProvider implements StorageProvider {
                 ps.setString(3, precision.name());
                 ps.setString(4, shapeJson);
                 ps.executeUpdate();
-                conn.commit();
+                provider.maybeCommit();
                 ResultSet keys = ps.getGeneratedKeys();
                 keys.next();
                 long dsId = keys.getLong(1);
-                return new SqliteDataset(conn, dsId, name, precision,
+                return new SqliteDataset(provider, dsId, name, precision,
                         new long[]{length}, null, readOnly);
             } catch (SQLException e) {
                 throw new RuntimeException("createDataset failed", e);
@@ -871,11 +884,11 @@ public final class SqliteProvider implements StorageProvider {
                 ps.setString(3, precision.name());
                 ps.setString(4, shapeJson);
                 ps.executeUpdate();
-                conn.commit();
+                provider.maybeCommit();
                 ResultSet keys = ps.getGeneratedKeys();
                 keys.next();
                 long dsId = keys.getLong(1);
-                return new SqliteDataset(conn, dsId, name, precision,
+                return new SqliteDataset(provider, dsId, name, precision,
                         shape.clone(), null, readOnly);
             } catch (SQLException e) {
                 throw new RuntimeException("createDatasetND failed", e);
@@ -900,11 +913,11 @@ public final class SqliteProvider implements StorageProvider {
                 ps.setString(3, shapeJson);
                 ps.setString(4, fieldsJson);
                 ps.executeUpdate();
-                conn.commit();
+                provider.maybeCommit();
                 ResultSet keys = ps.getGeneratedKeys();
                 keys.next();
                 long dsId = keys.getLong(1);
-                return new SqliteDataset(conn, dsId, name, null,
+                return new SqliteDataset(provider, dsId, name, null,
                         new long[]{count}, List.copyOf(fields), readOnly);
             } catch (SQLException e) {
                 throw new RuntimeException("createCompoundDataset failed", e);
@@ -951,7 +964,7 @@ public final class SqliteProvider implements StorageProvider {
                 ps.setString(3, enc[0]);
                 ps.setString(4, enc[1]);
                 ps.executeUpdate();
-                conn.commit();
+                provider.maybeCommit();
             } catch (SQLException e) {
                 throw new RuntimeException("setAttribute failed", e);
             }
@@ -964,7 +977,7 @@ public final class SqliteProvider implements StorageProvider {
                     "DELETE FROM group_attributes WHERE group_id = ? AND name = ?")) {
                 ps.setLong(1, groupId); ps.setString(2, name);
                 ps.executeUpdate();
-                conn.commit();
+                provider.maybeCommit();
             } catch (SQLException e) {
                 throw new RuntimeException("deleteAttribute failed", e);
             }
@@ -999,6 +1012,7 @@ public final class SqliteProvider implements StorageProvider {
      */
     static final class SqliteDataset implements StorageDataset {
 
+        private final SqliteProvider provider;
         private final Connection conn;
         private final long datasetId;
         private final String dsName;
@@ -1007,10 +1021,11 @@ public final class SqliteProvider implements StorageProvider {
         private final List<CompoundField> fields;
         private final boolean readOnly;
 
-        SqliteDataset(Connection conn, long datasetId, String name,
+        SqliteDataset(SqliteProvider provider, long datasetId, String name,
                        Precision precision, long[] shape,
                        List<CompoundField> fields, boolean readOnly) {
-            this.conn = conn;
+            this.provider = provider;
+            this.conn = provider.conn;
             this.datasetId = datasetId;
             this.dsName = name;
             this.precision = precision;
@@ -1084,7 +1099,7 @@ public final class SqliteProvider implements StorageProvider {
                         "UPDATE datasets SET compound_rows = ? WHERE id = ?")) {
                     ps.setString(1, json); ps.setLong(2, datasetId);
                     ps.executeUpdate();
-                    conn.commit();
+                    provider.maybeCommit();
                 } catch (SQLException e) {
                     throw new RuntimeException("writeAll (compound) failed", e);
                 }
@@ -1110,7 +1125,7 @@ public final class SqliteProvider implements StorageProvider {
                     ps.setString(2, newShapeJson);
                     ps.setLong(3, datasetId);
                     ps.executeUpdate();
-                    conn.commit();
+                    provider.maybeCommit();
                     shape = newShape;
                 } catch (SQLException e) {
                     throw new RuntimeException("writeAll (primitive) failed", e);
@@ -1158,7 +1173,7 @@ public final class SqliteProvider implements StorageProvider {
                 ps.setString(3, enc[0]);
                 ps.setString(4, enc[1]);
                 ps.executeUpdate();
-                conn.commit();
+                provider.maybeCommit();
             } catch (SQLException e) {
                 throw new RuntimeException("setAttribute failed", e);
             }
@@ -1171,7 +1186,7 @@ public final class SqliteProvider implements StorageProvider {
                     "DELETE FROM dataset_attributes WHERE dataset_id = ? AND name = ?")) {
                 ps.setLong(1, datasetId); ps.setString(2, name);
                 ps.executeUpdate();
-                conn.commit();
+                provider.maybeCommit();
             } catch (SQLException e) {
                 throw new RuntimeException("deleteAttribute failed", e);
             }
