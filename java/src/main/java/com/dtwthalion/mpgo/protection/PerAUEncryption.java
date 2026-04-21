@@ -48,6 +48,34 @@ public final class PerAUEncryption {
     private static final String GCM_ALGO = "AES/GCM/NoPadding";
     private static final SecureRandom RNG = new SecureRandom();
 
+    // Cipher.getInstance() resolves the provider and parses the
+    // transformation string — ~0.5-1 ms per call. At 10 K spectra ×
+    // 2 channels × (encrypt + decrypt) that's 40 K lookups. Cipher
+    // instances aren't thread-safe, so we cache one per thread and
+    // re-init() it per AU. Key bytes are held in a SecretKeySpec
+    // cache keyed by identity-of-bytes (keys are typically reused
+    // for a whole file).
+    private static final ThreadLocal<Cipher> GCM_CIPHER =
+        ThreadLocal.withInitial(() -> {
+            try { return Cipher.getInstance(GCM_ALGO); }
+            catch (GeneralSecurityException e) {
+                throw new RuntimeException(
+                    "AES/GCM/NoPadding cipher unavailable", e);
+            }
+        });
+    private static final ThreadLocal<byte[]> CACHED_KEY_BYTES =
+        new ThreadLocal<>();
+    private static final ThreadLocal<SecretKeySpec> CACHED_KEY_SPEC =
+        new ThreadLocal<>();
+
+    private static SecretKeySpec keySpec(byte[] key) {
+        if (key == CACHED_KEY_BYTES.get()) return CACHED_KEY_SPEC.get();
+        SecretKeySpec spec = new SecretKeySpec(key, "AES");
+        CACHED_KEY_BYTES.set(key);
+        CACHED_KEY_SPEC.set(spec);
+        return spec;
+    }
+
     private PerAUEncryption() {}
 
     // ---------------------------------------------------------- AAD
@@ -100,9 +128,8 @@ public final class PerAUEncryption {
                 "IV must be " + IV_BYTES + " bytes, got " + useIv.length);
         }
         try {
-            Cipher cipher = Cipher.getInstance(GCM_ALGO);
-            cipher.init(Cipher.ENCRYPT_MODE,
-                        new SecretKeySpec(key, "AES"),
+            Cipher cipher = GCM_CIPHER.get();
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec(key),
                         new GCMParameterSpec(TAG_BITS, useIv));
             if (aad != null) cipher.updateAAD(aad);
             byte[] combined = cipher.doFinal(plaintext);
@@ -134,9 +161,8 @@ public final class PerAUEncryption {
             byte[] combined = new byte[ciphertext.length + TAG_BYTES];
             System.arraycopy(ciphertext, 0, combined, 0, ciphertext.length);
             System.arraycopy(tag, 0, combined, ciphertext.length, TAG_BYTES);
-            Cipher cipher = Cipher.getInstance(GCM_ALGO);
-            cipher.init(Cipher.DECRYPT_MODE,
-                        new SecretKeySpec(key, "AES"),
+            Cipher cipher = GCM_CIPHER.get();
+            cipher.init(Cipher.DECRYPT_MODE, keySpec(key),
                         new GCMParameterSpec(TAG_BITS, iv));
             if (aad != null) cipher.updateAAD(aad);
             return cipher.doFinal(combined);
