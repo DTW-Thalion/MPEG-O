@@ -19,6 +19,7 @@ HEADER_SIZE = 24
 # uint16 flags, uint16 dataset_id, uint32 au_sequence, uint32
 # payload_length, uint64 timestamp_ns.
 _HEADER_FMT = "<2sBBHHIIQ"
+_HEADER_STRUCT = struct.Struct(_HEADER_FMT)
 
 
 class PacketType(IntEnum):
@@ -91,8 +92,7 @@ class PacketHeader:
     timestamp_ns: int = 0
 
     def to_bytes(self) -> bytes:
-        return struct.pack(
-            _HEADER_FMT,
+        return _HEADER_STRUCT.pack(
             HEADER_MAGIC,
             VERSION,
             int(self.packet_type) & 0xFF,
@@ -109,8 +109,8 @@ class PacketHeader:
             raise ValueError(
                 f"packet header needs {HEADER_SIZE} bytes, got {len(data)}"
             )
-        magic, version, ptype, flags, did, aus, plen, ts = struct.unpack_from(
-            _HEADER_FMT, data, 0
+        magic, version, ptype, flags, did, aus, plen, ts = _HEADER_STRUCT.unpack_from(
+            data, 0
         )
         if magic != HEADER_MAGIC:
             raise ValueError(f"invalid packet magic: {magic!r}")
@@ -120,6 +120,10 @@ class PacketHeader:
 
 
 # -------------------------------------------------------------- ChannelData
+
+
+_CHANNEL_NAMELEN_STRUCT = struct.Struct("<H")
+_CHANNEL_SUFFIX_STRUCT = struct.Struct("<BBII")
 
 
 @dataclass(slots=True)
@@ -139,27 +143,26 @@ class ChannelData:
 
     def to_bytes(self) -> bytes:
         name_bytes = self.name.encode("utf-8")
-        return (
-            struct.pack("<H", len(name_bytes))
-            + name_bytes
-            + struct.pack(
-                "<BBII",
+        return b"".join((
+            _CHANNEL_NAMELEN_STRUCT.pack(len(name_bytes)),
+            name_bytes,
+            _CHANNEL_SUFFIX_STRUCT.pack(
                 int(self.precision) & 0xFF,
                 int(self.compression) & 0xFF,
                 int(self.n_elements) & 0xFFFFFFFF,
                 len(self.data) & 0xFFFFFFFF,
-            )
-            + self.data
-        )
+            ),
+            self.data,
+        ))
 
     @classmethod
     def from_buffer(cls, buf: bytes, offset: int) -> tuple["ChannelData", int]:
-        (name_len,) = struct.unpack_from("<H", buf, offset)
+        (name_len,) = _CHANNEL_NAMELEN_STRUCT.unpack_from(buf, offset)
         offset += 2
         name = bytes(buf[offset:offset + name_len]).decode("utf-8")
         offset += name_len
-        precision, compression, n_elements, data_length = struct.unpack_from(
-            "<BBII", buf, offset
+        precision, compression, n_elements, data_length = _CHANNEL_SUFFIX_STRUCT.unpack_from(
+            buf, offset
         )
         offset += 10
         data = bytes(buf[offset:offset + data_length])
@@ -177,6 +180,8 @@ class ChannelData:
 # ms_level(u8) + polarity(u8) + retention_time(f64) + precursor_mz(f64) +
 # precursor_charge(u8) + ion_mobility(f64) + base_peak_intensity(f64) +
 # n_channels(u8). Total 38 bytes.
+_AU_PREFIX_STRUCT = struct.Struct("<BBBBddBddB")
+_AU_PIXEL_STRUCT = struct.Struct("<III")
 
 
 @dataclass(slots=True)
@@ -205,23 +210,21 @@ class AccessUnit:
     pixel_z: int = 0
 
     def to_bytes(self) -> bytes:
-        prefix = (
-            struct.pack(
-                "<BBBB",
-                int(self.spectrum_class) & 0xFF,
-                int(self.acquisition_mode) & 0xFF,
-                int(self.ms_level) & 0xFF,
-                int(self.polarity) & 0xFF,
-            )
-            + struct.pack("<dd", float(self.retention_time), float(self.precursor_mz))
-            + struct.pack("<B", int(self.precursor_charge) & 0xFF)
-            + struct.pack("<dd", float(self.ion_mobility), float(self.base_peak_intensity))
-            + struct.pack("<B", len(self.channels) & 0xFF)
+        prefix = _AU_PREFIX_STRUCT.pack(
+            int(self.spectrum_class) & 0xFF,
+            int(self.acquisition_mode) & 0xFF,
+            int(self.ms_level) & 0xFF,
+            int(self.polarity) & 0xFF,
+            float(self.retention_time),
+            float(self.precursor_mz),
+            int(self.precursor_charge) & 0xFF,
+            float(self.ion_mobility),
+            float(self.base_peak_intensity),
+            len(self.channels) & 0xFF,
         )
         body = prefix + b"".join(ch.to_bytes() for ch in self.channels)
         if self.spectrum_class == 4:
-            body += struct.pack(
-                "<III",
+            body += _AU_PIXEL_STRUCT.pack(
                 int(self.pixel_x) & 0xFFFFFFFF,
                 int(self.pixel_y) & 0xFFFFFFFF,
                 int(self.pixel_z) & 0xFFFFFFFF,
@@ -232,13 +235,13 @@ class AccessUnit:
     def from_bytes(cls, data: bytes) -> "AccessUnit":
         if len(data) < 38:
             raise ValueError(f"access unit payload too short: {len(data)}")
-        spectrum_class, acquisition_mode, ms_level, polarity = struct.unpack_from(
-            "<BBBB", data, 0
-        )
-        retention_time, precursor_mz = struct.unpack_from("<dd", data, 4)
-        (precursor_charge,) = struct.unpack_from("<B", data, 20)
-        ion_mobility, base_peak_intensity = struct.unpack_from("<dd", data, 21)
-        (n_channels,) = struct.unpack_from("<B", data, 37)
+        (
+            spectrum_class, acquisition_mode, ms_level, polarity,
+            retention_time, precursor_mz,
+            precursor_charge,
+            ion_mobility, base_peak_intensity,
+            n_channels,
+        ) = _AU_PREFIX_STRUCT.unpack_from(data, 0)
         offset = 38
         channels: list[ChannelData] = []
         for _ in range(n_channels):
@@ -248,7 +251,7 @@ class AccessUnit:
         if spectrum_class == 4:
             if len(data) - offset < 12:
                 raise ValueError("MSImagePixel AU missing pixel coordinates")
-            pixel_x, pixel_y, pixel_z = struct.unpack_from("<III", data, offset)
+            pixel_x, pixel_y, pixel_z = _AU_PIXEL_STRUCT.unpack_from(data, offset)
             offset += 12
         return cls(
             spectrum_class=spectrum_class,

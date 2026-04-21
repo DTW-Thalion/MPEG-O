@@ -33,17 +33,26 @@ from ..mass_spectrum import MassSpectrum
 from ..spectral_dataset import SpectralDataset, WrittenRun
 from ..spectrum import Spectrum
 from .packets import (
+    HEADER_MAGIC,
     HEADER_SIZE,
+    VERSION,
     AccessUnit,
     ChannelData,
     PacketFlag,
     PacketHeader,
     PacketType,
+    _AU_PIXEL_STRUCT,
+    _AU_PREFIX_STRUCT,
+    _CHANNEL_NAMELEN_STRUCT,
+    _CHANNEL_SUFFIX_STRUCT,
+    _HEADER_STRUCT,
     crc32c,
     now_ns,
     pack_string,
     unpack_string,
 )
+
+_CHECKSUM_STRUCT = struct.Struct("<I")
 
 # ---------------------------------------------------------- wire mappings
 
@@ -112,19 +121,23 @@ class TransportWriter:
         dataset_id: int = 0,
         au_sequence: int = 0,
     ) -> None:
+        # Inlined from PacketHeader.to_bytes to skip dataclass construct
+        # + method dispatch in the per-spectrum hot path. Same layout.
         flags = int(PacketFlag.HAS_CHECKSUM) if self._use_checksum else 0
-        header = PacketHeader(
-            packet_type=int(packet_type),
-            flags=flags,
-            dataset_id=dataset_id,
-            au_sequence=au_sequence,
-            payload_length=len(payload),
-            timestamp_ns=now_ns(),
+        header = _HEADER_STRUCT.pack(
+            HEADER_MAGIC,
+            VERSION,
+            int(packet_type) & 0xFF,
+            flags & 0xFFFF,
+            dataset_id & 0xFFFF,
+            au_sequence & 0xFFFFFFFF,
+            len(payload) & 0xFFFFFFFF,
+            now_ns() & 0xFFFFFFFFFFFFFFFF,
         )
-        self._stream.write(header.to_bytes())
-        self._stream.write(payload)
         if self._use_checksum:
-            self._stream.write(struct.pack("<I", crc32c(payload)))
+            self._stream.write(header + payload + _CHECKSUM_STRUCT.pack(crc32c(payload)))
+        else:
+            self._stream.write(header + payload)
 
     def write_stream_header(
         self,
@@ -216,13 +229,148 @@ class TransportWriter:
                 expected_au_count=len(run),
             )
         for i, (name, run) in enumerate(runs, start=1):
-            for j, spectrum in enumerate(run):
-                au = _spectrum_to_access_unit(
-                    spectrum, run, use_compression=self._use_compression
-                )
-                self.write_access_unit(dataset_id=i, au_sequence=j, au=au)
+            self._emit_run_access_units(dataset_id=i, run=run)
             self.write_end_of_dataset(dataset_id=i, final_au_sequence=len(run))
         self.write_end_of_stream()
+
+    def _emit_run_access_units(
+        self, *, dataset_id: int, run: AcquisitionRun
+    ) -> None:
+        """Hot path: emit AccessUnit packets for every spectrum in ``run``.
+
+        Bulk-reads each channel dataset once up-front and slices per AU.
+        Skips per-spectrum ``_materialize_spectrum`` (which was ~60% of
+        encode walltime through h5py hyperslab reads) and dataclass
+        constructions.
+        """
+        # Pre-compute everything stable across spectra once per run.
+        channel_names = list(run.channel_names)
+        channel_name_prefixes = [
+            _CHANNEL_NAMELEN_STRUCT.pack(len(nb)) + nb
+            for nb in (cn.encode("utf-8") for cn in channel_names)
+        ]
+        wire_class = _SPECTRUM_CLASS_TO_WIRE.get(run.spectrum_class, 0) & 0xFF
+        acq_mode = int(run.acquisition_mode) & 0xFF
+        is_ms_class = run.spectrum_class == "MPGOMassSpectrum"
+        is_pixel_class = wire_class == 4
+        use_compression = self._use_compression
+        compression_enum = int(Compression.ZLIB if use_compression else Compression.NONE) & 0xFF
+        precision_enum = int(Precision.FLOAT64) & 0xFF
+        unknown_polarity_wire = _POLARITY_TO_WIRE[Polarity.UNKNOWN]
+
+        # Bulk-read channel arrays once instead of per-spectrum.
+        index = run.index
+        total_count = int(index.offsets[-1] + index.lengths[-1]) if len(index.offsets) > 0 else 0
+        channel_arrays: list[tuple[int, np.ndarray] | None] = []
+        for ci, cname in enumerate(channel_names):
+            decoded = run._numpress_channels.get(cname)
+            if decoded is not None:
+                arr = np.ascontiguousarray(decoded, dtype="<f8")
+                channel_arrays.append((ci, arr))
+                continue
+            try:
+                ds = run._signal_dataset(cname)
+            except KeyError:
+                channel_arrays.append(None)
+                continue
+            arr = np.ascontiguousarray(np.asarray(ds.read(offset=0, count=total_count)), dtype="<f8")
+            channel_arrays.append((ci, arr))
+
+        # Index columns are numpy arrays already — slice per-i.
+        offsets = index.offsets
+        lengths = index.lengths
+        rts = index.retention_times
+        pmzs = index.precursor_mzs
+        pcs = index.precursor_charges
+        bpis = index.base_peak_intensities
+        ms_levels = index.ms_levels
+        polarities_wire = (
+            np.array(
+                [_POLARITY_TO_WIRE.get(Polarity(int(p)), 2) for p in index.polarities],
+                dtype="<i4",
+            )
+            if is_ms_class
+            else None
+        )
+
+        # Hoist method lookups out of the loop.
+        stream_write = self._stream.write
+        header_pack = _HEADER_STRUCT.pack
+        au_prefix_pack = _AU_PREFIX_STRUCT.pack
+        channel_suffix_pack = _CHANNEL_SUFFIX_STRUCT.pack
+        pixel_pack = _AU_PIXEL_STRUCT.pack
+        crc32c_ = crc32c
+        checksum_pack = _CHECKSUM_STRUCT.pack
+        zlib_compress = zlib.compress
+        use_checksum = self._use_checksum
+        flags = int(PacketFlag.HAS_CHECKSUM) if use_checksum else 0
+        ac_type = int(PacketType.ACCESS_UNIT) & 0xFF
+        now_ns_ = now_ns
+        did = dataset_id & 0xFFFF
+
+        n_spectra = len(run)
+        for j in range(n_spectra):
+            start = int(offsets[j])
+            length = int(lengths[j])
+            stop = start + length
+
+            # Channel data collection from pre-loaded arrays.
+            channel_chunks: list[bytes] = []
+            n_channels = 0
+            for slot in channel_arrays:
+                if slot is None:
+                    continue
+                ci, full_arr = slot
+                raw = full_arr[start:stop].tobytes()
+                payload_bytes = zlib_compress(raw) if use_compression else raw
+                channel_chunks.append(channel_name_prefixes[ci])
+                channel_chunks.append(channel_suffix_pack(
+                    precision_enum,
+                    compression_enum,
+                    length & 0xFFFFFFFF,
+                    len(payload_bytes) & 0xFFFFFFFF,
+                ))
+                channel_chunks.append(payload_bytes)
+                n_channels += 1
+
+            if is_ms_class:
+                ms_level = int(ms_levels[j])
+                polarity_wire = int(polarities_wire[j]) if polarities_wire is not None else unknown_polarity_wire
+            else:
+                ms_level = 0
+                polarity_wire = unknown_polarity_wire
+
+            au_prefix = au_prefix_pack(
+                wire_class,
+                acq_mode,
+                ms_level & 0xFF,
+                polarity_wire & 0xFF,
+                float(rts[j]),
+                float(pmzs[j]),
+                int(pcs[j]) & 0xFF,
+                0.0,
+                float(bpis[j]),
+                n_channels & 0xFF,
+            )
+            payload_parts = [au_prefix, *channel_chunks]
+            if is_pixel_class:
+                payload_parts.append(pixel_pack(0, 0, 0))
+            payload = b"".join(payload_parts)
+
+            header = header_pack(
+                HEADER_MAGIC,
+                VERSION,
+                ac_type,
+                flags & 0xFFFF,
+                did,
+                j & 0xFFFFFFFF,
+                len(payload) & 0xFFFFFFFF,
+                now_ns_() & 0xFFFFFFFFFFFFFFFF,
+            )
+            if use_checksum:
+                stream_write(header + payload + checksum_pack(crc32c_(payload)))
+            else:
+                stream_write(header + payload)
 
 
 def _instrument_config_json(run: AcquisitionRun) -> str:
@@ -391,7 +539,6 @@ class TransportReader:
                     raise ValueError(
                         f"AccessUnit before DatasetHeader for id {did}"
                     )
-                au = AccessUnit.from_bytes(payload)
                 prev = last_seq.get(did, -1)
                 if header.au_sequence <= prev:
                     raise ValueError(
@@ -399,7 +546,7 @@ class TransportReader:
                         f"prev={prev}, got={header.au_sequence}"
                     )
                 last_seq[did] = header.au_sequence
-                _ingest_access_unit(run_data[did], au)
+                _ingest_access_unit_bytes(run_data[did], payload)
             elif ptype == int(PacketType.END_OF_DATASET):
                 continue
             elif ptype == int(PacketType.END_OF_STREAM):
@@ -495,6 +642,81 @@ def _decode_dataset_header(payload: bytes) -> dict:
         "instrument_json": instrument_json,
         "expected_au_count": expected_au_count,
     }
+
+
+def _ingest_access_unit_bytes(rd: dict, payload: bytes) -> None:
+    """Parse an AU payload directly into ``rd``, skipping dataclass construction.
+
+    Equivalent to ``_ingest_access_unit(rd, AccessUnit.from_bytes(payload))`` but
+    avoids creating 1 AccessUnit + N ChannelData dataclasses per AU.
+    """
+    if len(payload) < 38:
+        raise ValueError(f"access unit payload too short: {len(payload)}")
+    (
+        _spectrum_class, _acq_mode, ms_level, polarity_wire,
+        retention_time, precursor_mz,
+        precursor_charge,
+        _ion_mobility, base_peak_intensity,
+        n_channels,
+    ) = _AU_PREFIX_STRUCT.unpack_from(payload, 0)
+
+    channel_map = rd["channels"]
+    offset = 38
+    length = 0
+    seen: dict[str, bool] = {}
+    for _ in range(n_channels):
+        (name_len,) = _CHANNEL_NAMELEN_STRUCT.unpack_from(payload, offset)
+        offset += 2
+        name = bytes(payload[offset:offset + name_len]).decode("utf-8")
+        offset += name_len
+        precision, compression, n_elements, data_length = _CHANNEL_SUFFIX_STRUCT.unpack_from(
+            payload, offset
+        )
+        offset += 10
+        data = bytes(payload[offset:offset + data_length])
+        offset += data_length
+        if precision != _FLOAT64_WIRE:
+            raise NotImplementedError(
+                f"precision {precision} not yet supported (FLOAT64 only)"
+            )
+        if compression == _COMPRESSION_NONE_WIRE:
+            raw = data
+        elif compression == _COMPRESSION_ZLIB_WIRE:
+            raw = zlib.decompress(data)
+        else:
+            raise NotImplementedError(
+                f"compression {compression} not yet supported "
+                "(current codec: NONE, ZLIB)"
+            )
+        arr = np.frombuffer(raw, dtype="<f8").copy()
+        seen[name] = True
+        if length == 0:
+            length = len(arr)
+        elif len(arr) != length:
+            raise ValueError(
+                f"channels in one AU have mismatched lengths: {length} vs {len(arr)}"
+            )
+        if name in channel_map:
+            channel_map[name].append(arr)
+
+    rd["offsets"].append(rd["running_offset"])
+    rd["lengths"].append(length)
+    rd["running_offset"] += length
+    for cname, buckets in channel_map.items():
+        if cname not in seen:
+            buckets.append(np.zeros(length, dtype="<f8"))
+
+    rd["retention_times"].append(retention_time)
+    rd["ms_levels"].append(ms_level)
+    rd["polarities"].append(int(_WIRE_TO_POLARITY.get(polarity_wire, Polarity.UNKNOWN)))
+    rd["precursor_mzs"].append(precursor_mz)
+    rd["precursor_charges"].append(precursor_charge)
+    rd["base_peak_intensities"].append(base_peak_intensity)
+
+
+_FLOAT64_WIRE = int(Precision.FLOAT64)
+_COMPRESSION_NONE_WIRE = int(Compression.NONE)
+_COMPRESSION_ZLIB_WIRE = int(Compression.ZLIB)
 
 
 def _ingest_access_unit(rd: dict, au: AccessUnit) -> None:
