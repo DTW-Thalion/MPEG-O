@@ -94,10 +94,10 @@ absent.
 
 | Job | What |
 |-----|------|
-| `objc-build-test` | GNUstep + libobjc2 + libMPGO + test runner (1202 tests) |
-| `python-test` | `tests/` default filter, Python 3.11 + 3.12 matrix |
-| `java-test` | Maven `verify`, JDK 17 (232 tests) |
-| `cross-compat` | Python smoke tests that subprocess into `MpgoVerify` + `MpgoSign` binaries |
+| `objc-build-test` | GNUstep + libobjc2 + libMPGO + test runner (307 tests as of v0.11.0) |
+| `python-test` | `tests/` default filter, Python 3.11 + 3.12 matrix (1443 tests as of v0.11.0) |
+| `java-test` | Maven `verify`, JDK 17 (695 tests as of v0.11.0) |
+| `cross-compat` | Python smoke tests that subprocess into `MpgoVerify` + `MpgoSign` binaries (44 combinations as of v0.11.0) |
 | `python-validation` | `tests/validation + tests/integration + tests/security` with `[integration]` extras installed |
 
 **Nightly (02:30 UTC):**
@@ -125,3 +125,15 @@ subprocess verification runs.
 The three xfails are v1.0 concerns deliberately — they represent
 real exporter defects that don't block v0.9 shipping. The tests run
 in CI and surface the error log so the defects stay visible.
+
+## v0.11 M73 — Raman/IR cross-language conformance
+
+`python/tests/integration/test_raman_ir_cross_language.py` adds a
+subprocess-driven harness that proves JCAMP-DX 5.01 AFFN output is
+bit-identical across the Python / Java / ObjC writers, and that each
+implementation's reader accepts every other's output. The ObjC CLI
+driver (`MpgoJcampDxDump`) ships under `objc/Tools/`; the Java driver
+is built ad-hoc into `/tmp/` per test run. Runtime resolution of
+`libMPGO.so.0` in the ObjC subprocess path uses an injected
+`LD_LIBRARY_PATH` pointing at `objc/Source/obj`. The harness
+contributes 6 tests to the 44 cross-compat-job total.

@@ -76,7 +76,20 @@ Synthesizing the primitives and mapping analysis, the following object-oriented 
 
 `MassSpectrum` extends `Spectrum` with mandatory m/z and intensity arrays, optional ion mobility array, MS level, polarity, and scan window. `NMRSpectrum` extends `Spectrum` with chemical shift and intensity arrays, nucleus type, and spectrometer frequency. `NMR2DSpectrum` extends `Spectrum` with a 2D intensity matrix indexed by F1 and F2 axis descriptors, plus experiment type annotation. `FreeInductionDecay` extends `SignalArray` with real and imaginary components, dwell time, number of scans, and receiver gain. `Chromatogram` holds paired time-intensity arrays with chromatogram type annotation (TIC, XIC, SRM). `MSImage` extends `SpectralDataset` with spatial dimensions, pixel sizes, scan pattern, and a grid-indexed spectrum collection. `TransitionList` holds precursor-product transition definitions with retention time windows. `Identification` links spectrum references to chemical entities with scores and evidence chains. `Quantification` records abundance values with sample references and normalization metadata.
 
-The design is intentionally **open for extension**: Raman spectroscopy, IR, or other spectroscopic techniques could extend the same `Spectrum` base class with their domain-specific signal arrays and metadata, making the hierarchy genuinely multi-technique rather than MS/NMR-specific.
+The design is intentionally **open for extension**, and the v0.11
+release (M73, 2026-04) proved the extension point by shipping Raman
+and IR as first-class modalities in all three reference
+implementations. `RamanSpectrum` and `IRSpectrum` both extend the
+same `Spectrum` base class with a shared `wavenumber` + `intensity`
+pair plus technique-specific metadata (Raman: excitation wavelength,
+laser power; IR: absorbance vs transmittance mode, resolution),
+while `RamanImage` and `IRImage` reuse the `MSImage` rank-3-cube
+pattern unchanged. No changes to the abstract base classes or
+interfaces were needed — the hierarchy absorbed two new
+spectroscopic techniques additively. UV-Vis, XRD, or other
+techniques would follow the same template: subclass `Spectrum` (or
+`MSImage` for hyperspectral) with a domain-specific x-axis and
+metadata payload.
 
 ---
 

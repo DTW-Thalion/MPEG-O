@@ -34,7 +34,7 @@ A named dictionary of SignalArrays that together describe a single spectral obse
 | `precursorInfo` | `NSDictionary` (optional) | For tandem MS: precursor m/z, charge, isolation window, activation |
 | `cvAnnotations` | `NSArray<MPGOCVParam>` | Spectrum-level CV parameters |
 
-Concrete subclasses (`MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`) add mandatory named arrays and domain-specific metadata.
+Concrete subclasses (`MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`, and — since v0.11 / M73 — `MPGORamanSpectrum` and `MPGOIRSpectrum`) add mandatory named arrays and domain-specific metadata.
 
 ---
 

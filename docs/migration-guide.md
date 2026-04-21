@@ -1,4 +1,4 @@
-# Migration Guide: mzML and nmrML to MPEG-O (current: v0.10)
+# Migration Guide: mzML and nmrML to MPEG-O (current: v0.11)
 
 ## Audience and prerequisites
 
@@ -562,7 +562,73 @@ transport for bytes. When using SQLite or Zarr containers, keep
 encryption at the v0.x channel level or copy into HDF5 before
 transcoding.
 
-## 11. See also
+## 11. Migrating from v0.10 to v0.11 — Raman and IR spectroscopy (M73)
+
+Additive: two new modalities joined MS and NMR as first-class
+citizens. No existing call changes; no feature flag was introduced.
+
+### 11.1 New classes (Python / Java / ObjC)
+
+| Concept | Python | Java | ObjC |
+|---|---|---|---|
+| Raman point spectrum | `mpeg_o.RamanSpectrum` | `com.dtwthalion.mpgo.RamanSpectrum` | `MPGORamanSpectrum` |
+| IR point spectrum | `mpeg_o.IRSpectrum` | `com.dtwthalion.mpgo.IRSpectrum` | `MPGOIRSpectrum` |
+| Raman hyperspectral cube | `mpeg_o.RamanImage` | `com.dtwthalion.mpgo.RamanImage` | `MPGORamanImage` |
+| IR hyperspectral cube | `mpeg_o.IRImage` | `com.dtwthalion.mpgo.IRImage` | `MPGOIRImage` |
+| IR mode enum | `mpeg_o.IRMode` | `com.dtwthalion.mpgo.IRMode` | `MPGOIRMode` |
+
+Both spectrum classes share the same shape: `wavenumber_array` +
+`intensity_array` (cm⁻¹ x, arbitrary y), plus modality-specific
+metadata — Raman carries `excitation_wavelength_nm`,
+`laser_power_mw`, `integration_time_sec`; IR carries `mode`
+(`TRANSMITTANCE` / `ABSORBANCE`), `resolution_cm_inv`,
+`number_of_scans`.
+
+### 11.2 HDF5 layout for hyperspectral cubes
+
+`RamanImage` / `IRImage` serialize to dedicated HDF5 groups per
+study: `/study/raman_image_cube/` and `/study/ir_image_cube/`. The
+layout mirrors `/study/msimage_cube/` — a rank-3 intensity cube
+with tile chunking and a rank-1 shared wavenumber axis as a sibling
+dataset. A study may carry **either** a Raman cube or an IR cube,
+not both (mutually exclusive per the format spec). See
+`docs/format-spec.md` §7a.
+
+### 11.3 JCAMP-DX import / export (point spectra)
+
+All three languages ship a JCAMP-DX 5.01 AFFN reader and writer:
+
+```python
+from mpeg_o.importers.jcampdx import read as read_jcampdx
+result = read_jcampdx("sample.jdx")
+result.to_mpgo("sample.mpgo")
+
+from mpeg_o.exporters.jcampdx import write as write_jcampdx
+write_jcampdx(spectrum, "out.jdx")
+```
+
+Dispatch on `##DATA TYPE=` between Raman and IR is automatic on
+read. The writer emits deterministic `%.10g` AFFN output — byte-
+identical across the three languages, proven by the cross-language
+conformance harness (`python/tests/integration/test_raman_ir_cross_language.py`).
+
+**Scope:** 1-D `##XYDATA=(X++(Y..Y))` only. Out of scope (tracked
+for v0.11.1 / v0.12.0): 2-D NTUPLES blocks, PAC/SQZ/DIF
+compressions, 2D-COS correlation maps, UV-Vis (`INFRARED SPECTRUM`
+only; UV-Vis `##DATA TYPE=UV/VIS SPECTRUM` is rejected). See
+`docs/vendor-formats.md` for the full import/export surface.
+
+### 11.4 What did NOT change in v0.11
+
+- No feature-flag additions (`base_v1` still covers both modalities).
+- No change to mzML / nmrML / ISA-Tab writers.
+- No change to existing MS / NMR classes.
+- No change to per-AU encryption, transport, or provider surfaces.
+
+v0.10 callers upgrade transparently; only codepaths that
+explicitly want Raman or IR need to reach for the new classes.
+
+## 12. See also
 
 - `docs/api-review-v0.7.md` — three-column parity map (Python / ObjC / Java)
   with stability markers for every public class and method, plus

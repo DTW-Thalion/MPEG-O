@@ -110,6 +110,25 @@ Algorithm discriminators:
 | `opt_per_au_encryption`    | optional  | v1.0  | Signal channels encrypt per-spectrum (per-Access-Unit) instead of channel-granular. Replaces the v0.x `<channel>_values_encrypted`/`_iv`/`_tag` layout with a single compound `<channel>_segments` dataset — one row per spectrum carrying `{offset, length, iv[12], tag[16], ciphertext}`. Required for streaming encrypted datasets through transport. See `docs/transport-encryption-design.md`. |
 | `opt_encrypted_au_headers` | optional  | v1.0  | Additionally encrypts the AU semantic filter fields (`ms_level`, `polarity`, `retention_time`, `precursor_mz`, `precursor_charge`, `ion_mobility`, `base_peak_intensity`, and pixel coords for MSImage). Requires `opt_per_au_encryption`. Disables server-side filtering — clients filter after decrypt. On disk, the plaintext `spectrum_index/*` arrays are omitted and replaced by `spectrum_index/au_header_segments` (one encrypted 36-byte row per spectrum). |
 
+## v0.11 (M73) — no new flags
+
+Raman and IR spectroscopy joined as first-class modalities in
+v0.11.0, but the release **did not introduce any feature flags**.
+
+- `RamanSpectrum` / `IRSpectrum` are regular `Spectrum` subclasses
+  covered by `base_v1`; they serialize into `ms_runs`-adjacent
+  groups (`raman_runs`, `ir_runs`) using the same parallel-array
+  layout as existing `MPGONMRSpectrum`.
+- `RamanImage` / `IRImage` use dedicated HDF5 groups
+  (`/study/raman_image_cube/`, `/study/ir_image_cube/`) with the
+  same rank-3 + chunked layout as `opt_native_msimage_cube` but are
+  detected by group presence rather than a feature flag. A study
+  may carry either a Raman cube or an IR cube, not both.
+- The JCAMP-DX 5.01 AFFN importer/exporter is an additive API
+  surface; files touched by it are indistinguishable at the
+  feature-flag level from hand-authored Raman/IR runs. See
+  `docs/vendor-formats.md` and `docs/format-spec.md` §7a.
+
 ## v0.7 storage + crypto surface (non-flag)
 
 Some v0.7 additions are API-level and don't carry a feature flag —
