@@ -575,7 +575,7 @@ numbers above.
 | ms.zarr | 365.5 | 62.1 | — |
 | transport.plain | 590.8 | 158.4 | 182.6 |
 | transport.compressed | 519.7 | 233.6 | 266.4 |
-| encryption | 393.4 | 424.8 | 153.0 |
+| encryption | 393.4 | 234.1 | 153.0 |
 | signatures | 15.9 | 11.4 | 3.6 |
 | jcamp | 52.8 | 167.6 | 81.1 |
 | spectra.build | 0.6 | 1.3 | 0.4 |
@@ -643,16 +643,21 @@ outside the codec scope.
 
 ### `encryption` — per-AU AES-256-GCM
 
-- **ObjC is 2.5-2.8× faster** than Python/Java. OpenSSL's EVP_AEAD
-  API is called directly from C; Python goes through `cryptography`
-  (cffi round-trip per AU); Java uses `javax.crypto.Cipher` which
-  re-instantiates the GCM context per AU.
+- **ObjC remains the leader at 153 ms** (OpenSSL EVP_AEAD direct from C).
+- **Java (was 425 ms, now 234 ms)** — still behind ObjC but now ahead
+  of Python. Python goes through `cryptography` (cffi round-trip per
+  AU).
 - **Decrypt is 40-50% of encrypt time** across all three, as expected
   for GCM (auth tag verify < tag compute).
 
-Optimisation target: Java can reuse the `Cipher` instance and just
-re-initialize the IV/AAD per AU (API supports it via `init(opmode,
-key, GCMParameterSpec)`). Expected ~30-40% on encrypt+decrypt.
+**Landed (2026-04-21):** `PerAUEncryption` now caches
+`Cipher.getInstance("AES/GCM/NoPadding")` in a `ThreadLocal<Cipher>`
+and caches `SecretKeySpec` by byte-array identity (same key material
+reused for the whole file, so `==` check is sufficient and skips a
+hash/bytes compare). Each AU only pays `cipher.init(mode, key, iv)` +
+AAD, not a fresh provider lookup + key-expansion. Encrypt dropped
+259 → 162 ms, decrypt 117 → 71 ms, combined 377 → 234 ms (~38%
+speedup). 32 encryption tests still pass.
 
 ### `signatures` — HMAC-SHA256
 
@@ -702,7 +707,7 @@ introduced through v0.11.1 shows clear language-level hot-spots:
 | Java SQLite write | One transaction per insert | Batch into a single transaction |
 | Python zarr write | zarr-python per-chunk metadata | zarr v3 consolidated metadata (already in the spec) |
 | ~~Java JCAMP write~~ | ~~`String.format("%g", v)` per value~~ | **Landed 2026-04-21:** `Double.toString()`; write 2.3× faster |
-| Java encryption | Per-AU `Cipher` instance | Reuse + `Cipher.init(…, IvParameterSpec)` per AU |
+| ~~Java encryption~~ | ~~Per-AU `Cipher` instance~~ | **Landed 2026-04-21:** `ThreadLocal<Cipher>` + cached `SecretKeySpec`; ~38% faster |
 
 None of these gate a v1.0 release — every benchmark completes
 correctly and the numbers are well within an order of magnitude of
