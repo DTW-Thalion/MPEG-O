@@ -312,7 +312,7 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 - [x] No non-deprecation warnings under `-Wall -Wextra` with clang.
 - [x] `docs/format-spec.md` and `docs/feature-flags.md` published.
 - [x] Reference `.mpgo` fixtures under `objc/Tests/Fixtures/mpgo/` committed.
-- [ ] Tag `v0.2.0` pushed to `DTW-Thalion/MPEG-O` *(user-gated per binding decision)*.
+- [x] Tag `v0.2.0` pushed to `DTW-Thalion/MPEG-O` (`61a3968`).
 
 ## v0.3 Deferred Follow-Ups
 
@@ -468,7 +468,7 @@ M46, M51 stretch; M49 deferred to v0.8+.
 
 ## v0.9.0 — Integration Testing + Vendor Import Completion
 
-Shipped as commits on `main`; release tag pending user gate.
+Shipped as commits on `main`; tag `v0.9.0` → `eaac284`.
 
 - **M57** Test infra + fixtures (`e4f2ae4`) — markers, download
   registry, synthetic generators, checksum pinning
@@ -502,10 +502,11 @@ Shipped as commits on `main`; release tag pending user gate.
 - Documented residual ObjC wrapper overhead (`b1a966b`) — at the
   libhdf5 floor; call stacks validated across all three languages
 
-**v0.9.0 status:** Ready. Tag gated on user sign-off; commit log +
-test suite demonstrate all acceptance criteria except for three
+**v0.9.0 status:** Shipped (tag `v0.9.0` → `eaac284`). The three
 xfailed exporter-fidelity defects (mzML precursor/activation, nmrML
-version attribute, ISA-Tab PUBLICATIONS section) deferred to v1.0.
+version attribute, ISA-Tab PUBLICATIONS section) were closed in the
+v0.9.1 follow-up (tag `v0.9.1` → `fa3ee21`) via commits `65c3666`
+and `6b26f2e`.
 
 ## v0.10.0 — Streaming Transport + Per-AU Encryption (SHIPPED 2026-04-20)
 
@@ -576,6 +577,6 @@ Five phases across all three languages:
       `transport-encryption-design.md`, `feature-flags.md`,
       `api-stability-v0.8.md`, `README.md`, `ARCHITECTURE.md`,
       `HANDOFF.md`, this file).
-- [ ] Annotated `v0.10.0` tag (user-gated).
+- [x] Annotated `v0.10.0` tag pushed (`a609aa9` on commit `c9fe137`).
 
-**v0.10.0 status:** Ready. Tag gated on user sign-off.
+**v0.10.0 status:** Shipped (tag `v0.10.0` → `a609aa9` on `c9fe137`).

@@ -120,7 +120,7 @@ subprocess verification runs.
 - [x] Every committed historical `.mpgo` fixture still readable
 - [x] Integration CI job added
 - [x] Nightly stress CI job added
-- [ ] Tag `v0.9.0` pushed — user-gated per binding decision
+- [x] Tag `v0.9.0` pushed (`eaac284`)
 
 The three xfails are v1.0 concerns deliberately — they represent
 real exporter defects that don't block v0.9 shipping. The tests run
