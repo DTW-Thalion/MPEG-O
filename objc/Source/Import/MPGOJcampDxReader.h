@@ -6,17 +6,24 @@
 @class MPGOSpectrum;
 
 /**
- * JCAMP-DX 5.01 reader for 1-D vibrational spectra. Dispatches on
- * `##DATA TYPE=` to return either an MPGORamanSpectrum or an
- * MPGOIRSpectrum; unknown data types return nil with an error.
+ * JCAMP-DX 5.01 reader for 1-D vibrational and UV-Vis spectra.
+ * Dispatches on `##DATA TYPE=` to return one of MPGORamanSpectrum,
+ * MPGOIRSpectrum, or MPGOUVVisSpectrum; unknown data types return nil
+ * with an error.
  *
- * Accepts the AFFN `##XYDATA=(X++(Y..Y))` dialect emitted by
- * MPGOJcampDxWriter and the more generic "one (X, Y) pair per line"
- * variant. PAC/SQZ/DIF compression is not supported in M73.
+ * Accepts both dialects of `##XYDATA=(X++(Y..Y))`:
+ *   - AFFN (fast path) — one (X, Y) pair per line, free-format decimals.
+ *   - PAC / SQZ / DIF / DUP — JCAMP-DX 5.01 §5.9 character-encoded
+ *     Y-stream (delegated to MPGOJcampDxDecode). Requires FIRSTX /
+ *     LASTX / NPOINTS.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.importers.jcamp_dx.read_spectrum
+ *   Java:   com.dtwthalion.mpgo.importers.JcampDxReader
  */
 @interface MPGOJcampDxReader : NSObject
 
-/** Returns an MPGORamanSpectrum, MPGOIRSpectrum, or nil on error. */
+/** Returns MPGORamanSpectrum, MPGOIRSpectrum, MPGOUVVisSpectrum, or nil. */
 + (MPGOSpectrum *)readSpectrumFromPath:(NSString *)path error:(NSError **)error;
 
 @end

@@ -38,6 +38,8 @@ from .spectral_dataset import SpectralDataset, WrittenRun
 from .ms_image import MSImage
 from .raman_spectrum import RamanSpectrum
 from .ir_spectrum import IRSpectrum
+from .uv_vis_spectrum import UVVisSpectrum
+from .two_dimensional_correlation_spectrum import TwoDimensionalCorrelationSpectrum
 from .raman_image import RamanImage
 from .ir_image import IRImage
 
@@ -75,6 +77,8 @@ __all__ = [
     "MSImage",
     "RamanSpectrum",
     "IRSpectrum",
+    "UVVisSpectrum",
+    "TwoDimensionalCorrelationSpectrum",
     "RamanImage",
     "IRImage",
 ]

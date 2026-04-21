@@ -30,6 +30,8 @@ libMPGO_HEADER_FILES = \
 	Spectra/MPGONMR2DSpectrum.h \
 	Spectra/MPGORamanSpectrum.h \
 	Spectra/MPGOIRSpectrum.h \
+	Spectra/MPGOUVVisSpectrum.h \
+	Spectra/MPGOTwoDimensionalCorrelationSpectrum.h \
 	Spectra/MPGOFreeInductionDecay.h \
 	Spectra/MPGOChromatogram.h \
 	Run/MPGOInstrumentConfig.h \
@@ -68,6 +70,7 @@ libMPGO_HEADER_FILES = \
 	Import/MPGOMzTabReader.h \
 	Import/MPGOWatersMassLynxReader.h \
 	Import/MPGOJcampDxReader.h \
+	Import/MPGOJcampDxDecode.h \
 	Export/MPGOMzMLWriter.h \
 	Export/MPGONmrMLWriter.h \
 	Export/MPGOImzMLWriter.h \
@@ -113,6 +116,8 @@ libMPGO_OBJC_FILES = \
 	Spectra/MPGONMR2DSpectrum.m \
 	Spectra/MPGORamanSpectrum.m \
 	Spectra/MPGOIRSpectrum.m \
+	Spectra/MPGOUVVisSpectrum.m \
+	Spectra/MPGOTwoDimensionalCorrelationSpectrum.m \
 	Spectra/MPGOFreeInductionDecay.m \
 	Spectra/MPGOChromatogram.m \
 	Run/MPGOInstrumentConfig.m \
@@ -151,6 +156,7 @@ libMPGO_OBJC_FILES = \
 	Import/MPGOMzTabReader.m \
 	Import/MPGOWatersMassLynxReader.m \
 	Import/MPGOJcampDxReader.m \
+	Import/MPGOJcampDxDecode.m \
 	Export/MPGOMzMLWriter.m \
 	Export/MPGONmrMLWriter.m \
 	Export/MPGOImzMLWriter.m \
