@@ -1,15 +1,23 @@
-# MPEG-O v0.10 — Streaming Transport Protocol + Per-AU Encryption
+# MPEG-O v0.11 — Vibrational Spectroscopy (Raman + IR)
 
-> **Status (2026-04-20):** v0.10.0 shipped; tag `a609aa9` on commit
-> `c9fe137` pushed per user sign-off.
-> All nine commits for v0.10 shipped across the session:
-> transport codec (M67), WebSocket client + server (M68 / M68.5),
-> simulator (M69), bidirectional conformance (M70), selective access
-> + ProtectionMetadata (M71), per-AU encryption across all three
-> languages (v1.0 scope — Phases A–E), cross-language conformance
-> harness, `--transcode` migration path, CHANGELOG, and docs. Test
-> totals: 1430 ObjC / 682 Python / 298 Java / 38 cross-language, all
-> green. Two pre-existing Thermo-mock ObjC failures remain
+> **Status (2026-04-21):** M73 implementation complete across all
+> three languages, awaiting user sign-off before tagging v0.11.0.
+> Four new domain classes per language (RamanSpectrum, IRSpectrum,
+> RamanImage, IRImage), JCAMP-DX 5.01 AFFN reader + writer with
+> byte-identical cross-language output, cross-language conformance
+> harness (6 tests, Python↔Java + Python↔ObjC green), new ObjC CLI
+> tool `MpgoJcampDxDump`. Test totals: 1443 ObjC / 695 Python / 307
+> Java / 44 cross-language, all green. HDF5 layout documented in
+> `docs/format-spec.md` §7a (`raman_image_cube` / `ir_image_cube`
+> groups); JCAMP-DX integration documented in
+> `docs/vendor-formats.md`.
+>
+> **Prior (2026-04-20):** v0.10.0 shipped; tag `a609aa9` on commit
+> `c9fe137` pushed per user sign-off. Transport codec (M67),
+> WebSocket client + server (M68 / M68.5), simulator (M69),
+> bidirectional conformance (M70), selective access +
+> ProtectionMetadata (M71), per-AU encryption (v1.0 scope — Phases
+> A–E). Two pre-existing Thermo-mock ObjC failures remain
 > environment-specific.
 >
 > Prior context: v0.9.0 / v0.9.1 tagged and pushed. Four storage
@@ -1132,14 +1140,17 @@ vs `.mggts` (transport) convention.
 
 ## Execution Checklist
 
-1. **M65:** Fix 3 exporter defects + tag v0.9.0. **Pause.**
-2. **M66:** Transport format spec document. **Pause.**
-3. **M67:** Transport codec (all three languages). **Pause.**
-4. **M68:** WebSocket server + client. **Pause.**
-5. **M69:** Acquisition simulator. **Pause.**
-6. **M70:** Bidirectional conversion conformance. **Pause.**
-7. **M71:** Selective access + encrypted transport. **Pause.**
-8. **M72:** Tag v0.10.0.
+1. **M65:** Fix 3 exporter defects + tag v0.9.0. **Complete.**
+2. **M66:** Transport format spec document. **Complete.**
+3. **M67:** Transport codec (all three languages). **Complete.**
+4. **M68:** WebSocket server + client. **Complete.**
+5. **M69:** Acquisition simulator. **Complete.**
+6. **M70:** Bidirectional conversion conformance. **Complete.**
+7. **M71:** Selective access + encrypted transport. **Complete.**
+8. **M72:** Tag v0.10.0. **Complete.**
+9. **M73:** Vibrational spectroscopy (Raman + IR) — 4 classes per
+   language, JCAMP-DX 5.01 AFFN reader/writer, cross-language
+   conformance. **Implementation complete — pending v0.11.0 tag.**
 
 **CI must be green before any milestone is complete.**
 
@@ -1152,7 +1163,6 @@ vs `.mggts` (transport) convention.
 | M40 PyPI + Maven Central | Publish when ready for external users |
 | FIPS compliance mode | Algorithm allow-list lockdown |
 | ParquetProvider | Columnar alternative backend |
-| Raman/IR support | New Spectrum subclasses |
 | DBMS transport | Postgres/MySQL blob storage |
 | htsget-style REST API | HTTP range-request protocol (formalized from MCP Server) |
 | Annotation overlay | External annotation files referencing spectra without modifying original |

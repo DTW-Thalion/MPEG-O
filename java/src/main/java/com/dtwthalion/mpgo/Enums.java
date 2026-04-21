@@ -143,6 +143,14 @@ public final class Enums {
         BIG_ENDIAN
     }
 
+    /** Infrared y-axis interpretation (transmittance vs. absorbance). */
+    public enum IRMode {
+        /** y-values are transmittance (fraction of incident light). */
+        TRANSMITTANCE,
+        /** y-values are absorbance (log10 of reciprocal transmittance). */
+        ABSORBANCE
+    }
+
     /** Multi-level protection granularity (MPEG-G style). */
     public enum EncryptionLevel {
         /** No encryption applied. */

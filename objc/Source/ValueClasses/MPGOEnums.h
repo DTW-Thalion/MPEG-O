@@ -80,4 +80,14 @@ typedef NS_ENUM(NSUInteger, MPGOEncryptionLevel) {
     MPGOEncryptionLevelAccessUnit
 };
 
+/**
+ * Mid-IR measurement mode. `absorbance = -log10(transmittance)`; the
+ * two are convertible so the exporter/importer preserves whichever
+ * the source specified.
+ */
+typedef NS_ENUM(NSUInteger, MPGOIRMode) {
+    MPGOIRModeTransmittance = 0,
+    MPGOIRModeAbsorbance
+};
+
 #endif /* MPGO_ENUMS_H */

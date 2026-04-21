@@ -54,6 +54,7 @@ extern void testSelectiveAccess(void);
 extern void testPerAUEncryption(void);
 extern void testPerAUFile(void);
 extern void testEncryptedTransport(void);
+extern void testMilestone73(void);
 
 int main(int argc, const char *argv[])
 {
@@ -269,6 +270,10 @@ int main(int argc, const char *argv[])
         START_SET("v1.0: encrypted transport emission")
             testEncryptedTransport();
         END_SET("v1.0: encrypted transport emission")
+
+        START_SET("M73: Raman / IR spectra + imaging (v0.11)")
+            testMilestone73();
+        END_SET("M73: Raman / IR spectra + imaging (v0.11)")
     }
     return 0;
 }

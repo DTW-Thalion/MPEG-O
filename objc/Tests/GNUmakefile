@@ -56,7 +56,8 @@ MPGOTests_OBJC_FILES = \
 	TestSelectiveAccess.m \
 	TestPerAUEncryption.m \
 	TestPerAUFile.m \
-	TestEncryptedTransport.m
+	TestEncryptedTransport.m \
+	TestMilestone73.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
