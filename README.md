@@ -39,14 +39,14 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **v0.11.0 — Normative reference. 1443 assertions passing.** | `objc/` |
-| **Python (`mpeg-o`)**     | **v0.11.0 — Full parity with ObjC and Java. 695 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.mpgo`)** | **v0.11.0 — Full parity with ObjC and Python. 307 tests, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **v0.11.1 — Normative reference. 1536 assertions passing.** | `objc/` |
+| **Python (`mpeg-o`)**     | **v0.11.1 — Full parity with ObjC and Java. 765 tests passing.** | `python/` |
+| **Java (`com.dtwthalion.mpgo`)** | **v0.11.1 — Full parity with ObjC and Python. 331 tests, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU
 encryption CLI and the JCAMP-DX bridge through small subprocess
 drivers in all three languages and byte-compares the artefacts —
-44 combinations green as of v0.11.0 (38 per-AU encrypt × decrypt
+44 combinations green as of v0.11.1 (38 per-AU encrypt × decrypt
 × headers from v0.10 plus 6 JCAMP-DX Raman/IR from v0.11). See
 `python/tests/integration/test_per_au_cross_language.py` and
 `python/tests/integration/test_raman_ir_cross_language.py`.
@@ -151,13 +151,19 @@ v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2
 ### v0.11.0 capabilities (additions to v0.10.0)
 
 * **Vibrational spectroscopy (M73)** — Raman and IR become first-class modalities alongside MS and NMR. Four new domain classes per language: `RamanSpectrum` / `IRSpectrum` (keyed by `wavenumber` + `intensity`, with excitation/laser/integration and mode/resolution/scans metadata respectively) plus `RamanImage` / `IRImage` (rank-3 intensity cubes with a shared wavenumber axis). HDF5 layout: `/study/raman_image_cube/` and `/study/ir_image_cube/` mirror the existing MSImage tile chunking. See [`docs/format-spec.md`](docs/format-spec.md) §7a and [`docs/class-hierarchy.md`](docs/class-hierarchy.md) Layer 3c.
-* **JCAMP-DX 5.01 AFFN bridge** — native reader and writer in all three languages for the `##XYDATA=(X++(Y..Y))` dialect. Writers emit LDRs in a fixed order with `%.10g` formatting, producing byte-identical output for identical input. Readers dispatch on `##DATA TYPE=` (RAMAN SPECTRUM / INFRARED ABSORBANCE / INFRARED TRANSMITTANCE, with INFRARED SPECTRUM falling back to `##YUNITS=`). Compression variants (PAC / SQZ / DIF) and 2-D NTUPLES are intentionally out of scope. See [`docs/vendor-formats.md`](docs/vendor-formats.md).
+* **JCAMP-DX 5.01 AFFN bridge** — native reader and writer in all three languages for the `##XYDATA=(X++(Y..Y))` dialect. Writers emit LDRs in a fixed order with `%.10g` formatting, producing byte-identical output for identical input. Readers dispatch on `##DATA TYPE=` (RAMAN SPECTRUM / INFRARED ABSORBANCE / INFRARED TRANSMITTANCE, with INFRARED SPECTRUM falling back to `##YUNITS=`). 2-D NTUPLES is intentionally out of scope. See [`docs/vendor-formats.md`](docs/vendor-formats.md). *(Compression variants added in v0.11.1.)*
 * **New `IRMode` enum** — `TRANSMITTANCE=0`, `ABSORBANCE=1`. Present in all three languages (Python: `mpeg_o.IRMode`, Java: `com.dtwthalion.mpgo.Enums.IRMode`, ObjC: `MPGOIRMode`).
 * **Cross-language JCAMP-DX conformance** — 6 new integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `MpgoJcampDxDump` joins the existing CLI family as the subprocess driver.
 
+### v0.11.1 capabilities (additions to v0.11.0)
+
+* **JCAMP-DX 5.01 compression reader (PAC / SQZ / DIF / DUP)** — all three languages now decode the full §5.9 compressed `##XYDATA` dialect. Auto-detected by a sentinel-char scan that excludes `e`/`E` so AFFN scientific notation doesn't false-trigger; delegates to `mpeg_o.importers._jcamp_decode` (Python), `com.dtwthalion.mpgo.importers.JcampDxDecode` (Java), or `MPGOJcampDxDecode` (ObjC). Writers remain AFFN-only — bit-accurate round-trips are worth more than the byte savings at this stage.
+* **`UVVisSpectrum` class** — 1-D UV/visible absorption spectrum keyed by `"wavelength"` (nm) + `"absorbance"`, with `pathLengthCm` + `solvent` metadata, in all three languages. JCAMP-DX reader dispatches `UV/VIS SPECTRUM`, `UV-VIS SPECTRUM`, and `UV/VISIBLE SPECTRUM` variants to this class; writer emits `##DATA TYPE=UV/VIS SPECTRUM` with `##XUNITS=NANOMETERS` + `##YUNITS=ABSORBANCE` and `##$PATH LENGTH CM` / `##$SOLVENT` custom LDRs.
+* **`TwoDimensionalCorrelationSpectrum` class** — Noda 2D-COS representation with rank-2 synchronous (in-phase) and asynchronous (quadrature) correlation matrices sharing a single variable axis (`nu_1 == nu_2`). Row-major `float64`, size-by-size; construction validates rank, matching shape, and squareness. Gated behind the new `opt_native_2d_cos` feature flag. Present in all three languages.
+
 ### Format compatibility
 
-Every version's files remain readable by later versions. v0.11 readers open v0.1–v0.10 files without ceremony. v0.11 adds two new HDF5 groups (`raman_image_cube/`, `ir_image_cube/`) under `/study/`; pre-v0.11 readers silently ignore them (they don't match any known layout). `RamanSpectrum` and `IRSpectrum` persist through the generic `MPGOSpectrum` path with `@mpgo_class` attributes, so pre-v0.11 readers fall back to the `Spectrum` base class rather than failing. v0.10 transport and per-AU encryption behaviour is unchanged. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
+Every version's files remain readable by later versions. v0.11 readers open v0.1–v0.10 files without ceremony. v0.11 adds two new HDF5 groups (`raman_image_cube/`, `ir_image_cube/`) under `/study/`; pre-v0.11 readers silently ignore them (they don't match any known layout). `RamanSpectrum`, `IRSpectrum`, `UVVisSpectrum`, and `TwoDimensionalCorrelationSpectrum` persist through the generic `MPGOSpectrum` path with `@mpgo_class` attributes, so pre-v0.11 readers fall back to the `Spectrum` base class rather than failing. v0.10 transport and per-AU encryption behaviour is unchanged. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
 
 ## Python Installation
 
@@ -288,7 +294,7 @@ works on both Debian/Ubuntu's apt packages and source builds against
 - [`docs/pqc.md`](docs/pqc.md) — Post-quantum crypto: ML-KEM-1024 + ML-DSA-87
 - [`docs/migration-guide.md`](docs/migration-guide.md) — Migration guide from mzML / nmrML and inter-version migration notes (includes v0.x → v0.10 per-AU encryption transcode)
 - [`docs/api-review-v0.7.md`](docs/api-review-v0.7.md) — Cross-language API review (v0.7 appendices A, B, C)
-- [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`, Bruker `.d`, Waters MassLynx, JCAMP-DX Raman/IR)
+- [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`, Bruker `.d`, Waters MassLynx, JCAMP-DX Raman/IR/UV-Vis incl. compressed dialects)
 
 ## License
 

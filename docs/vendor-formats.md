@@ -229,7 +229,7 @@ Set `MPGO_MASSLYNX_FIXTURE` to a real Waters `.raw` directory and
 ensure `masslynxraw` is on PATH to exercise the vendor-tooling path
 in nightly CI.
 
-## JCAMP-DX 5.01 (v0.11 M73 — vibrational spectra)
+## JCAMP-DX 5.01 (v0.11 M73 — vibrational spectra; v0.11.1 M73.1 adds compression + UV-Vis)
 
 **Status:** Native reader and writer in all three languages.
 No external dependency; the format is plain ASCII with a documented
@@ -238,25 +238,46 @@ IUPAC spec.
 JCAMP-DX is the de-facto interchange format for 1-D vibrational
 spectra (Raman, IR, UV-Vis, NMR). M73 targets the AFFN
 `##XYDATA=(X++(Y..Y))` dialect at spec level 5.01 — the most
-interoperable subset. Compression variants (PAC / SQZ / DIF) are
-**not** implemented; they save bytes but preclude bit-accurate
-cross-implementation round-trips.
+interoperable subset. Writers in all three languages emit AFFN only
+(bit-accurate round-trips over the byte savings). Readers in v0.11.1
+additionally decode the §5.9 compressed dialects (PAC / SQZ / DIF /
+DUP); see "Compressed-form reader" below.
 
 ### API
 
 | Language | Reader | Writer |
 |---|---|---|
-| Python | `mpeg_o.importers.jcamp_dx.read_spectrum(path)` | `mpeg_o.exporters.jcamp_dx.write_raman_spectrum` / `write_ir_spectrum` |
-| ObjC | `+[MPGOJcampDxReader readSpectrumFromPath:error:]` | `+[MPGOJcampDxWriter writeRamanSpectrum:...]` / `writeIRSpectrum:` |
-| Java | `JcampDxReader.readSpectrum(Path)` | `JcampDxWriter.writeRamanSpectrum` / `writeIRSpectrum` |
+| Python | `mpeg_o.importers.jcamp_dx.read_spectrum(path)` | `mpeg_o.exporters.jcamp_dx.write_raman_spectrum` / `write_ir_spectrum` / `write_uv_vis_spectrum` |
+| ObjC | `+[MPGOJcampDxReader readSpectrumFromPath:error:]` | `+[MPGOJcampDxWriter writeRamanSpectrum:...]` / `writeIRSpectrum:` / `writeUVVisSpectrum:` |
+| Java | `JcampDxReader.readSpectrum(Path)` | `JcampDxWriter.writeRamanSpectrum` / `writeIRSpectrum` / `writeUVVisSpectrum` |
 
 The reader dispatches on `##DATA TYPE=`:
 `RAMAN SPECTRUM` → `RamanSpectrum`;
 `INFRARED ABSORBANCE` / `INFRARED TRANSMITTANCE` → `IRSpectrum`
 with the matching `MPGOIRMode`; `INFRARED SPECTRUM` falls back to
 `##YUNITS=` for mode detection (`ABSORBANCE` substring →
-absorbance, otherwise transmittance). Any other `DATA TYPE` is
-rejected.
+absorbance, otherwise transmittance);
+`UV/VIS SPECTRUM` / `UV-VIS SPECTRUM` / `UV/VISIBLE SPECTRUM` →
+`UVVisSpectrum` (v0.11.1). Any other `DATA TYPE` is rejected.
+
+### Compressed-form reader (v0.11.1)
+
+The reader auto-detects SQZ / DIF / DUP / PAC bodies by scanning
+for compression sentinel chars (`@A-IJ-Ra-ij-rSTUVWXYZs`), excluding
+`e`/`E` so AFFN scientific notation (`1.2e-3`) doesn't false-trigger.
+On a compressed body, it delegates to a per-language decoder:
+
+| Language | Decoder |
+|---|---|
+| Python | `mpeg_o.importers._jcamp_decode.decode_xydata` |
+| ObjC | `+[MPGOJcampDxDecode decodeLines:firstx:deltax:xfactor:yfactor:outXs:outYs:error:]` |
+| Java | `com.dtwthalion.mpgo.importers.JcampDxDecode.decode` |
+
+Each decoder implements the full SQZ alphabet (`@`, `A-I`, `a-i`),
+DIF alphabet (`%`, `J-R`, `j-r`), DUP alphabet (`S-Z`, `s`), plus
+the DIF Y-check convention (the repeated leading Y of the next
+line, within 1e-9 of the previous line's last Y, is dropped) and
+X-reconstruction from `##FIRSTX=` / `##LASTX=` / `##NPOINTS=`.
 
 ### Wire-level determinism
 
@@ -275,12 +296,25 @@ parsed `(wavenumber, intensity)` arrays bit-for-bit. The tests
 skip on dev boxes where the ObjC/Java sides aren't built and run
 in full in CI.
 
-### What is NOT covered by M73
+### What is NOT covered
 
 * 2-D JCAMP-DX (`##NTUPLES=`, `##PAGE=`) for imaging / 2-D NMR —
   ASCII cubes are impractical at 10–100 MB per map. Raman and IR
   cubes are stored in native HDF5 groups (`docs/format-spec.md`
   §7a) instead.
-* Legacy compression (PAC / SQZ / DIF).
-* UV-Vis / mass-spectrum `##DATA TYPE=` variants — the reader
-  rejects them explicitly rather than guessing.
+* Compressed **writers** — all three languages emit AFFN only. A
+  compressed input can be round-tripped through the reader and
+  re-emitted as AFFN without loss.
+* Mass-spectrum `##DATA TYPE=` variants (`MASS SPECTRUM`) — the
+  reader rejects them explicitly. Mass spectra round-trip through
+  mzML.
+
+### M73.1 additions (v0.11.1)
+
+* PAC / SQZ / DIF / DUP compressed `##XYDATA=` reader in all three
+  languages.
+* `UVVisSpectrum` class and `UV/VIS SPECTRUM` / `UV-VIS SPECTRUM` /
+  `UV/VISIBLE SPECTRUM` reader dispatch.
+* `UVVisSpectrum` JCAMP-DX writer emitting `##DATA TYPE=UV/VIS
+  SPECTRUM` with `##XUNITS=NANOMETERS`, `##YUNITS=ABSORBANCE`, and
+  `##$PATH LENGTH CM` / `##$SOLVENT` custom LDRs.

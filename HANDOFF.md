@@ -1,16 +1,29 @@
 # MPEG-O v0.11 — Vibrational Spectroscopy (Raman + IR)
 
-> **Status (2026-04-21):** M73 implementation complete across all
-> three languages, awaiting user sign-off before tagging v0.11.0.
-> Four new domain classes per language (RamanSpectrum, IRSpectrum,
-> RamanImage, IRImage), JCAMP-DX 5.01 AFFN reader + writer with
-> byte-identical cross-language output, cross-language conformance
-> harness (6 tests, Python↔Java + Python↔ObjC green), new ObjC CLI
-> tool `MpgoJcampDxDump`. Test totals: 1443 ObjC / 695 Python / 307
-> Java / 44 cross-language, all green. HDF5 layout documented in
-> `docs/format-spec.md` §7a (`raman_image_cube` / `ir_image_cube`
-> groups); JCAMP-DX integration documented in
-> `docs/vendor-formats.md`.
+> **Status (2026-04-21):** v0.11.1 shipped and pushed (commit
+> `a96493d`, tag `v0.11.1`). Patch release closes the three M73
+> items that were deferred in v0.11.0:
+>
+> 1. JCAMP-DX 5.01 PAC / SQZ / DIF / DUP compression reader in all
+>    three languages (writers remain AFFN-only).
+> 2. `UVVisSpectrum` class with JCAMP-DX UV/VIS dispatch.
+> 3. `TwoDimensionalCorrelationSpectrum` (Noda 2D-COS) rank-2
+>    synchronous + asynchronous matrices, feature-flagged
+>    `opt_native_2d_cos`.
+>
+> Test totals: 1536 ObjC / 765 Python / 331 Java / 44 cross-language,
+> all green.
+>
+> **Prior (2026-04-21):** v0.11.0 tagged. M73 implementation complete
+> across all three languages. Four new domain classes per language
+> (RamanSpectrum, IRSpectrum, RamanImage, IRImage), JCAMP-DX 5.01
+> AFFN reader + writer with byte-identical cross-language output,
+> cross-language conformance harness (6 tests, Python↔Java +
+> Python↔ObjC green), new ObjC CLI tool `MpgoJcampDxDump`. Test
+> totals: 1443 ObjC / 695 Python / 307 Java / 44 cross-language, all
+> green. HDF5 layout documented in `docs/format-spec.md` §7a
+> (`raman_image_cube` / `ir_image_cube` groups); JCAMP-DX integration
+> documented in `docs/vendor-formats.md`.
 >
 > **Prior (2026-04-20):** v0.10.0 shipped; tag `a609aa9` on commit
 > `c9fe137` pushed per user sign-off. Transport codec (M67),
