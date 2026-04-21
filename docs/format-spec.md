@@ -475,6 +475,53 @@ a Raman map or an IR map, not both.
 
 ---
 
+## 7b. UV-Vis spectra (M73.1, v0.11.1)
+
+`MPGOUVVisSpectrum` is a plain `MPGOSpectrum` subclass — no new
+group layout is required. It rides the generic `Spectrum`
+persistence path, keyed by the following named signal arrays:
+
+```
+spec_NNNNNN/
+├── @mpgo_class = "MPGOUVVisSpectrum"
+├── @path_length_cm   (float64, optional)
+├── @solvent          (VL string, optional)
+└── arrays/
+    ├── wavelength    (float64[N], nm)
+    └── absorbance    (float64[N])
+```
+
+No feature flag — pre-v0.11.1 readers open the group as a generic
+`Spectrum` and retain the two channels unchanged.
+
+---
+
+## 7c. Two-dimensional correlation spectra (M73.1, v0.11.1)
+
+`MPGOTwoDimensionalCorrelationSpectrum` is an `MPGOSpectrum`
+subclass that carries a 1-D variable axis and two rank-2
+correlation matrices of equal size.
+
+```
+spec_NNNNNN/
+├── @mpgo_class = "MPGOTwoDimensionalCorrelationSpectrum"
+├── arrays/
+│   ├── variable_axis  (float64[N])
+│   ├── synchronous    (float64[N][N], row-major; in-phase, symmetric)
+│   └── asynchronous   (float64[N][N], row-major; quadrature, antisymmetric)
+```
+
+Both matrices share the single variable axis — `nu_1 == nu_2`, so
+no separate F1/F2 dimension scales are attached (differs from
+§8's native 2-D NMR layout). Construction validates squareness
+(`synchronous.shape == asynchronous.shape == (N, N)`).
+
+Feature flag (opt_): `opt_native_2d_cos`. Pre-v0.11.1 readers
+without the flag see the three arrays as opaque channels on a
+generic `Spectrum` and round-trip them unchanged.
+
+---
+
 ## 8. Native 2-D NMR
 
 An `MPGONMR2DSpectrum` group (written via the generic

@@ -168,12 +168,24 @@ MPGOSpectrum
 │     - laserPowerMw            : double
 │     - integrationTimeSec      : double
 │
-└── MPGOIRSpectrum                                       ← v0.11 (M73)
-      - wavenumberArray  : MPGOSignalArray  (keyed "wavenumber")
-      - intensityArray   : MPGOSignalArray  (keyed "intensity")
-      - mode             : MPGOIRMode       (Transmittance=0 / Absorbance=1)
-      - resolutionCmInv  : double
-      - numberOfScans    : NSUInteger
+├── MPGOIRSpectrum                                       ← v0.11 (M73)
+│     - wavenumberArray  : MPGOSignalArray  (keyed "wavenumber")
+│     - intensityArray   : MPGOSignalArray  (keyed "intensity")
+│     - mode             : MPGOIRMode       (Transmittance=0 / Absorbance=1)
+│     - resolutionCmInv  : double
+│     - numberOfScans    : NSUInteger
+│
+├── MPGOUVVisSpectrum                                    ← v0.11.1 (M73.1)
+│     - wavelengthArray    : MPGOSignalArray  (keyed "wavelength", nm)
+│     - absorbanceArray    : MPGOSignalArray  (keyed "absorbance")
+│     - pathLengthCm       : double           (nullable)
+│     - solvent            : NSString         (nullable)
+│
+└── MPGOTwoDimensionalCorrelationSpectrum                ← v0.11.1 (M73.1)
+      - variableAxis       : MPGOSignalArray  (keyed "variable_axis", float64[N])
+      - synchronousMatrix  : MPGOSignalArray  (keyed "synchronous", rank-2 float64[N×N])
+      - asynchronousMatrix : MPGOSignalArray  (keyed "asynchronous", rank-2 float64[N×N])
+      - (feature-flagged   : opt_native_2d_cos)
 
 MPGOSignalArray
 └── MPGOFreeInductionDecay
@@ -284,6 +296,34 @@ RamanImage,IRImage}`.
   spectrum and all three readers parse each other's output
   bit-for-bit (see
   `python/tests/integration/test_raman_ir_cross_language.py`).
+
+### Layer 3d — UV-Vis and 2D correlation (v0.11.1 / M73.1)
+
+Two additional `MPGOSpectrum` subclasses + JCAMP-DX compression
+reader support shipped in the v0.11.1 patch release. All three
+languages expose matching surfaces.
+
+- **MPGOUVVisSpectrum / UVVisSpectrum** — 1-D UV/visible absorption
+  spectrum keyed by `"wavelength"` (nm) + `"absorbance"`, with
+  optional `pathLengthCm` + `solvent` metadata. The JCAMP-DX
+  reader dispatches `UV/VIS SPECTRUM`, `UV-VIS SPECTRUM`, and
+  `UV/VISIBLE SPECTRUM` variants here. The JCAMP-DX writer emits
+  `##DATA TYPE=UV/VIS SPECTRUM` with `##XUNITS=NANOMETERS`,
+  `##YUNITS=ABSORBANCE`, and `##$PATH LENGTH CM` / `##$SOLVENT`
+  custom LDRs.
+- **MPGOTwoDimensionalCorrelationSpectrum /
+  TwoDimensionalCorrelationSpectrum** — Noda 2D-COS representation
+  with rank-2 synchronous (in-phase, symmetric) and asynchronous
+  (quadrature, antisymmetric) correlation matrices sharing a single
+  variable axis. Row-major `float64[N×N]`; construction validates
+  rank, shape match, and squareness. Persistence is gated behind
+  the `opt_native_2d_cos` feature flag (see
+  `docs/feature-flags.md`).
+- **JCAMP-DX 5.01 compression reader** — readers in all three
+  languages now decode §5.9 PAC / SQZ / DIF / DUP bodies, with the
+  full SQZ (`@`, `A-I`, `a-i`), DIF (`%`, `J-R`, `j-r`), and DUP
+  (`S-Z`, `s`) alphabets plus the DIF Y-check convention. Writers
+  remain AFFN-only. See `docs/vendor-formats.md`.
 
 ---
 

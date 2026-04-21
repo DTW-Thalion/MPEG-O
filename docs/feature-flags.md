@@ -129,6 +129,18 @@ v0.11.0, but the release **did not introduce any feature flags**.
   feature-flag level from hand-authored Raman/IR runs. See
   `docs/vendor-formats.md` and `docs/format-spec.md` §7a.
 
+## v0.11.1 flags (M73.1)
+
+| Flag                 | Required? | Since        | Semantics                                                                                          |
+|----------------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
+| `opt_native_2d_cos`  | optional  | M73.1 (v0.11.1) | File contains one or more `TwoDimensionalCorrelationSpectrum` objects. Each is serialised as an `MPGOSpectrum` subclass carrying three named signal arrays — `variable_axis` (rank-1 float64 of length N), `synchronous` (rank-2 float64 row-major N×N, in-phase), and `asynchronous` (rank-2 float64 row-major N×N, quadrature). The `opt_` prefix means pre-v0.11.1 readers ignore the class-specific attributes and fall back to the generic `Spectrum` deserialiser; they see the arrays as opaque named channels and round-trip them unchanged. |
+
+`UVVisSpectrum` did **not** introduce a new flag — like Raman / IR
+spectra it rides the `base_v1` parallel-array layout keyed on
+`"wavelength"` + `"absorbance"`. The JCAMP-DX compression reader
+(PAC / SQZ / DIF / DUP) is an ingest-time concern with no on-disk
+consequence.
+
 ## v0.7 storage + crypto surface (non-flag)
 
 Some v0.7 additions are API-level and don't carry a feature flag —
