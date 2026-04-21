@@ -573,8 +573,8 @@ numbers above.
 | ms.memory | 173.9 | 11.3 | — |
 | ms.sqlite | 87.7 | 191.2 | — |
 | ms.zarr | 365.5 | 62.1 | — |
-| transport.plain | 811.9 | 158.4 | 182.6 |
-| transport.compressed | 740.8 | 233.6 | 266.4 |
+| transport.plain | 590.8 | 158.4 | 182.6 |
+| transport.compressed | 519.7 | 233.6 | 266.4 |
 | encryption | 393.4 | 424.8 | 153.0 |
 | signatures | 15.9 | 11.4 | 3.6 |
 | jcamp | 52.8 | 167.6 | 81.1 |
@@ -624,6 +624,17 @@ if the harness exercised it.
 Optimisation target: collapse Python's per-spectrum encode loop into
 a vectorised `np.concatenate` + single `struct.pack` of the framing
 headers. Expected ~3× on the encode side.
+
+**Landed (2026-04-21):** `TransportWriter._emit_run_access_units`
+bulk-reads channel datasets once per run (was 20 000 h5py hyperslab
+calls per 10K-spectrum run), slices per-AU from in-memory arrays, and
+inlines the header/prefix packing with pre-compiled `struct.Struct`
+instances to skip dataclass constructions. `TransportReader.read_to_dataset`
+got the symmetric inlined parse path (`_ingest_access_unit_bytes`).
+Encode dropped from ~431 ms to ~250 ms (~1.7×); total `transport.plain`
+812 → 591 ms, `transport.compressed` 741 → 520 ms. Remaining decode
+time is in `SpectralDataset.write_minimal` rebuilding the output file,
+outside the codec scope.
 
 ### `encryption` — per-AU AES-256-GCM
 
@@ -682,7 +693,7 @@ introduced through v0.11.1 shows clear language-level hot-spots:
 
 | Hot spot | Cause | Fix |
 |---|---|---|
-| Python transport encode | Python per-packet encode loop | Vectorise with `np.concatenate` + single `struct.pack` |
+| ~~Python transport encode~~ | ~~Python per-packet encode loop~~ | **Landed 2026-04-21:** bulk channel read + inlined struct pack; encode 1.7× faster |
 | Java SQLite write | One transaction per insert | Batch into a single transaction |
 | Python zarr write | zarr-python per-chunk metadata | zarr v3 consolidated metadata (already in the spec) |
 | ~~Java JCAMP write~~ | ~~`String.format("%g", v)` per value~~ | **Landed 2026-04-21:** `Double.toString()`; write 2.3× faster |
