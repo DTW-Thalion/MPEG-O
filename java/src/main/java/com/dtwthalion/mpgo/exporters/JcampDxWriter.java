@@ -30,10 +30,20 @@ public final class JcampDxWriter {
     private JcampDxWriter() {}
 
     private static void appendXYDATA(StringBuilder out, double[] xs, double[] ys) {
+        // Per-value String.format was ~75% of this writer's runtime on
+        // n=10K. Double.toString is native and guarantees shortest
+        // round-trip — strictly more precision than the old "%.10g".
         out.append("##XYDATA=(X++(Y..Y))\n");
         for (int i = 0; i < xs.length; i++) {
-            out.append(String.format(Locale.ROOT, "%.10g %.10g%n", xs[i], ys[i]));
+            out.append(Double.toString(xs[i]))
+               .append(' ')
+               .append(Double.toString(ys[i]))
+               .append('\n');
         }
+    }
+
+    private static void appendScalar(StringBuilder out, String ldr, double value) {
+        out.append(ldr).append(Double.toString(value)).append('\n');
     }
 
     public static void writeRamanSpectrum(RamanSpectrum spectrum,
@@ -54,18 +64,15 @@ public final class JcampDxWriter {
           .append("##ORIGIN=MPEG-O\n")
           .append("##OWNER=\n")
           .append("##XUNITS=1/CM\n")
-          .append("##YUNITS=ARBITRARY UNITS\n")
-          .append(String.format(Locale.ROOT, "##FIRSTX=%.10g%n", n > 0 ? xs[0] : 0.0))
-          .append(String.format(Locale.ROOT, "##LASTX=%.10g%n", n > 0 ? xs[n - 1] : 0.0))
-          .append("##NPOINTS=").append(n).append('\n')
+          .append("##YUNITS=ARBITRARY UNITS\n");
+        appendScalar(sb, "##FIRSTX=", n > 0 ? xs[0] : 0.0);
+        appendScalar(sb, "##LASTX=",  n > 0 ? xs[n - 1] : 0.0);
+        sb.append("##NPOINTS=").append(n).append('\n')
           .append("##XFACTOR=1\n")
-          .append("##YFACTOR=1\n")
-          .append(String.format(Locale.ROOT, "##$EXCITATION WAVELENGTH NM=%.10g%n",
-                  spectrum.excitationWavelengthNm()))
-          .append(String.format(Locale.ROOT, "##$LASER POWER MW=%.10g%n",
-                  spectrum.laserPowerMw()))
-          .append(String.format(Locale.ROOT, "##$INTEGRATION TIME SEC=%.10g%n",
-                  spectrum.integrationTimeSec()));
+          .append("##YFACTOR=1\n");
+        appendScalar(sb, "##$EXCITATION WAVELENGTH NM=", spectrum.excitationWavelengthNm());
+        appendScalar(sb, "##$LASER POWER MW=",           spectrum.laserPowerMw());
+        appendScalar(sb, "##$INTEGRATION TIME SEC=",     spectrum.integrationTimeSec());
         appendXYDATA(sb, xs, ys);
         sb.append("##END=\n");
         Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
@@ -94,15 +101,14 @@ public final class JcampDxWriter {
           .append("##ORIGIN=MPEG-O\n")
           .append("##OWNER=\n")
           .append("##XUNITS=1/CM\n")
-          .append("##YUNITS=").append(yUnits).append('\n')
-          .append(String.format(Locale.ROOT, "##FIRSTX=%.10g%n", n > 0 ? xs[0] : 0.0))
-          .append(String.format(Locale.ROOT, "##LASTX=%.10g%n", n > 0 ? xs[n - 1] : 0.0))
-          .append("##NPOINTS=").append(n).append('\n')
+          .append("##YUNITS=").append(yUnits).append('\n');
+        appendScalar(sb, "##FIRSTX=", n > 0 ? xs[0] : 0.0);
+        appendScalar(sb, "##LASTX=",  n > 0 ? xs[n - 1] : 0.0);
+        sb.append("##NPOINTS=").append(n).append('\n')
           .append("##XFACTOR=1\n")
-          .append("##YFACTOR=1\n")
-          .append(String.format(Locale.ROOT, "##RESOLUTION=%.10g%n",
-                  spectrum.resolutionCmInv()))
-          .append("##$NUMBER OF SCANS=").append(spectrum.numberOfScans()).append('\n');
+          .append("##YFACTOR=1\n");
+        appendScalar(sb, "##RESOLUTION=", spectrum.resolutionCmInv());
+        sb.append("##$NUMBER OF SCANS=").append(spectrum.numberOfScans()).append('\n');
         appendXYDATA(sb, xs, ys);
         sb.append("##END=\n");
         Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
@@ -126,15 +132,14 @@ public final class JcampDxWriter {
           .append("##ORIGIN=MPEG-O\n")
           .append("##OWNER=\n")
           .append("##XUNITS=NANOMETERS\n")
-          .append("##YUNITS=ABSORBANCE\n")
-          .append(String.format(Locale.ROOT, "##FIRSTX=%.10g%n", n > 0 ? xs[0] : 0.0))
-          .append(String.format(Locale.ROOT, "##LASTX=%.10g%n", n > 0 ? xs[n - 1] : 0.0))
-          .append("##NPOINTS=").append(n).append('\n')
+          .append("##YUNITS=ABSORBANCE\n");
+        appendScalar(sb, "##FIRSTX=", n > 0 ? xs[0] : 0.0);
+        appendScalar(sb, "##LASTX=",  n > 0 ? xs[n - 1] : 0.0);
+        sb.append("##NPOINTS=").append(n).append('\n')
           .append("##XFACTOR=1\n")
-          .append("##YFACTOR=1\n")
-          .append(String.format(Locale.ROOT, "##$PATH LENGTH CM=%.10g%n",
-                  spectrum.pathLengthCm()))
-          .append("##$SOLVENT=").append(spectrum.solvent()).append('\n');
+          .append("##YFACTOR=1\n");
+        appendScalar(sb, "##$PATH LENGTH CM=", spectrum.pathLengthCm());
+        sb.append("##$SOLVENT=").append(spectrum.solvent()).append('\n');
         appendXYDATA(sb, xs, ys);
         sb.append("##END=\n");
         Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);

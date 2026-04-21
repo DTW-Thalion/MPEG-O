@@ -577,7 +577,7 @@ numbers above.
 | transport.compressed | 740.8 | 233.6 | 266.4 |
 | encryption | 393.4 | 424.8 | 153.0 |
 | signatures | 15.9 | 11.4 | 3.6 |
-| jcamp | 52.8 | 218.3 | 81.1 |
+| jcamp | 52.8 | 167.6 | 81.1 |
 | spectra.build | 0.6 | 1.3 | 0.4 |
 
 ## Observations per function set
@@ -649,17 +649,22 @@ will exercise the HMAC cost more meaningfully.
 
 - **Python fastest** at 52 ms — the writer is a single `numpy.savetxt`
   + string-format for the `##` headers.
-- **Java slowest** at 218 ms, dominated by IR+Raman write (81+16 ms
-  of the bar). Java's writer goes digit-by-digit through `String.format`
-  with `%g` formatting; Python's `numpy.savetxt` delegates to a
-  vectorised `PyArray_CastToType` → `PyOS_double_to_string` loop that's
-  ~15× faster per-value.
+- **Java** originally 218 ms, dominated by IR+Raman write. The writer
+  went digit-by-digit through `String.format("%.10g%n", v)` for every
+  XYDATA value. Python's `numpy.savetxt` delegates to a vectorised
+  `PyArray_CastToType` → `PyOS_double_to_string` loop that's ~15×
+  faster per-value.
 - **Compressed-read is nearly identical** across all three (4-8 ms) —
   it's character-alphabet decoding, not numeric parsing.
 
-Optimisation target: Java writer should use a `DecimalFormat`
-pre-allocated once (not per value) or switch to `Double.toString` +
-manual exponent trim. Expected ~5× on write.
+**Landed (2026-04-21):** `JcampDxWriter` now uses `Double.toString()` —
+native, shortest-round-trip, same precision guarantee as `%.10g`. Write
+time on 10 000-point spectra dropped from ~97 ms (IR+Raman+UV-Vis
+combined) to ~42 ms, ~2.3× faster; total `jcamp` benchmark went from
+218 ms to 167 ms. Remaining bench time is dominated by read-side
+parsing (`Double.parseDouble` in `JcampDxReader`), not the writer.
+Round-trip tests (Milestone73 / Milestone73_1) still pass at 1e-9
+tolerance.
 
 ### `spectra.build` — in-memory construction
 
@@ -680,7 +685,7 @@ introduced through v0.11.1 shows clear language-level hot-spots:
 | Python transport encode | Python per-packet encode loop | Vectorise with `np.concatenate` + single `struct.pack` |
 | Java SQLite write | One transaction per insert | Batch into a single transaction |
 | Python zarr write | zarr-python per-chunk metadata | zarr v3 consolidated metadata (already in the spec) |
-| Java JCAMP write | `String.format("%g", v)` per value | Shared `DecimalFormat` |
+| ~~Java JCAMP write~~ | ~~`String.format("%g", v)` per value~~ | **Landed 2026-04-21:** `Double.toString()`; write 2.3× faster |
 | Java encryption | Per-AU `Cipher` instance | Reuse + `Cipher.init(…, IvParameterSpec)` per AU |
 
 None of these gate a v1.0 release — every benchmark completes
