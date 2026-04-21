@@ -435,34 +435,83 @@ End-of-v0.6.1 test counts: ObjC 1002 assertions, Python 219, Java 152.
 
 ---
 
-## v0.7.0 — Storage & Crypto Abstraction Hardening (PLANNED)
+## v0.7.0 — Storage & Crypto Abstraction Hardening (SHIPPED 2026-04-18)
 
 Full milestone block lives in `HANDOFF.md` (`## v0.7 Milestone Block`).
 Summary:
 
 **Track A — Storage abstraction (close remaining HDF5 couplings)**
-- [ ] **M43** Storage byte-level protocol (`read_canonical_bytes`)
-- [ ] **M44** Run / Image protocol-native access (drop `h5py.Group`
+- [x] **M43** Storage byte-level protocol (`read_canonical_bytes`)
+- [x] **M44** Run / Image protocol-native access (drop `h5py.Group`
       from `AcquisitionRun` / `MSImage`)
-- [ ] **M45** `create_dataset_nd` completion across all providers
-- [ ] **M46** ZarrProvider Python reference implementation *(stretch)*
+- [x] **M45** `create_dataset_nd` completion across all providers
+- [x] **M46** ZarrProvider Python reference implementation (Java + ObjC
+      ports land in v0.8 M52)
 
 **Track B — Crypto agility (PQC-ready abstraction)**
-- [ ] **M47** Crypto algorithm discriminator in on-disk format
-      (versioned wrapped-key blob; v1.2 format bump)
-- [ ] **M48** Algorithm-parameter API generalization (`CipherSuite`
-      catalog)
-- [ ] **M49** PQC preview mode — ML-KEM-1024 + ML-DSA-87 *(stretch,
-      gated on liboqs / Bouncy Castle PQC maturity)*
+- [x] **M47** Crypto algorithm discriminator in on-disk format —
+      wrapped-key blob v1.2 (`"MW" | version | algorithm_id | ct_len |
+      md_len | metadata | ciphertext`); format version bumps 1.1 → 1.2.
+- [x] **M48** Algorithm-parameter API generalization — `CipherSuite`
+      catalog with `algorithm=` kwarg threaded through encryption /
+      signing / wrapping; reserves ML-KEM-1024 + ML-DSA-87 IDs for M49.
+- [ ] **M49** PQC preview mode — *deferred to v0.8.0 (shipped there).*
 
 **Track C — Cross-language consistency polish (v0.6.1 review findings)**
-- [ ] **M50** Consistency hardening (six independent sub-items:
-      `open()` docs, ObjC `readRows:` required, Java typed exceptions,
-      `@since` audit, error-domain mapping, Gap 7 cross-refs)
-- [ ] **M51** Cross-language byte-parity for compound writes
+- [x] **M50** Consistency hardening (six Appendix-B gap resolutions:
+      dual-style `open()`, required `readRows()`, capability queries,
+      `provider_name` shape, precision decoupling, attribute del/enum).
+- [x] **M51** Cross-language byte-parity for compound writes —
+      9-cell interop grid (Python × Java × ObjC writers/readers all
+      byte-identical).
 
-**v0.7.0 minimum cut:** M43, M44, M45, M47, M48, M50 (must-have).
-M46, M51 stretch; M49 deferred to v0.8+.
+### Release criteria
+- [x] ObjC 1057 assertions / Python 284 tests / Java 179 tests pass.
+- [x] `CHANGELOG.md` v0.7.0 entry.
+- [x] Annotated `v0.7.0` tag pushed to `DTW-Thalion/MPEG-O`.
+
+**v0.7.0 status:** Shipped.
+
+---
+
+## v0.8.0 — PQC Preview + Bruker TDF + Cross-language PQC Conformance (SHIPPED 2026-04-18)
+
+- [x] **M49** Post-quantum crypto preview — ML-KEM-1024 (FIPS 203)
+      envelope key-wrap + ML-DSA-87 (FIPS 204) dataset signatures.
+      New `v3:` signature-attribute prefix; `opt_pqc_preview` feature
+      flag auto-set whenever either primitive runs. Python + ObjC use
+      liboqs; Java uses Bouncy Castle 1.80+. Rationale: `docs/pqc.md`.
+  - [x] **M49.1** ObjC dataset / envelope integration via
+        `MPGOSignatureManager` + `MPGOKeyRotationManager`.
+- [x] **M52** Java + ObjC `ZarrProvider` ports — self-contained
+      LocalStore implementations, no external zarr library dependency.
+      Cross-reads Python `zarr-python` stores byte-for-byte. (On-disk
+      format migrated v2 → v3 in v0.9.1; see below.)
+- [x] **M53** Bruker timsTOF `.d` importer in all three languages.
+      SQLite metadata reads natively per-language; binary frame
+      decompression uses `opentimspy` + `opentims-bruker-bridge`
+      (Python) with Java/ObjC subprocess-delegating to the Python
+      helper. New `inv_ion_mobility` signal channel preserves the 2-D
+      timsTOF geometry per-peak. Details: `docs/vendor-formats.md`.
+- [x] **M54 + M54.1** 32-cell cross-language × cross-provider PQC
+      conformance matrix: primitive ML-DSA / ML-KEM, v3 signatures on
+      HDF5 / Zarr / SQLite, v2+v3 coexistence, v0.7 backward-compat.
+      New Java `PQCTool` + ObjC `MpgoPQCTool` CLIs drive the harness;
+      new Python `sign_storage_dataset` / `verify_storage_dataset`
+      provider-agnostic helpers.
+
+### Release criteria
+- [x] `CipherSuite` catalog: `ml-kem-1024` + `ml-dsa-87` graduate
+      `reserved → active`; ML-DSA-87 public-key size corrected
+      4864 → 2592 bytes (FIPS 204 §4).
+- [x] `validate_key()` rejects asymmetric algorithms with explicit
+      redirect to `validate_public_key` / `validate_private_key`.
+- [x] Python + ObjC provider `read_canonical_bytes` round-trips on
+      signed datasets across all four shipping providers.
+- [x] `CHANGELOG.md` v0.8.0 entry; `docs/pqc.md` + `docs/api-stability-v0.8.md`.
+- [x] Annotated `v0.8.0` tag pushed.
+
+**v0.8.0 status:** Shipped.
 
 ---
 
@@ -505,8 +554,44 @@ Shipped as commits on `main`; tag `v0.9.0` → `eaac284`.
 **v0.9.0 status:** Shipped (tag `v0.9.0` → `eaac284`). The three
 xfailed exporter-fidelity defects (mzML precursor/activation, nmrML
 version attribute, ISA-Tab PUBLICATIONS section) were closed in the
-v0.9.1 follow-up (tag `v0.9.1` → `fa3ee21`) via commits `65c3666`
-and `6b26f2e`.
+v0.9.1 follow-up (see next block).
+
+## v0.9.1 — Exporter Fidelity + Zarr v3 Migration (SHIPPED 2026-04-19)
+
+Patch release closing the v1.0 exporter gaps surfaced by M64 xfails
+and migrating the Zarr on-disk format to v3.
+
+- [x] **mzTab exporter** across Python + ObjC + Java (`3c67ba9`) —
+      proteomics 1.0 (MTD + PSH/PSM + PRH/PRT) + metabolomics 2.0.0-M
+      (MTD + SMH/SML). Round-trips bit-identically through the reader.
+- [x] **imzML exporter** across Python + ObjC + Java (`ff0f201`) —
+      continuous + processed modes; rejects divergent mz axis in
+      continuous mode; UUID normalisation. Same commit corrects the
+      importer's cv-accession classification for `MS:1000030` /
+      `MS:1000031` (vendor / instrument-model, not IMS mode).
+- [x] **nmrML `<spectrum1D>` XSD gap** closed via interleaved `(x,y)`
+      encoding (`6b26f2e`); reader auto-detects interleaved vs y-only.
+- [x] **mzML + ISA-Tab validator closure** + nmrML wrapper improvements
+      (`65c3666`) — eleven `docs/v1.0-gaps.md` "Fix status" rows
+      flipped to ✅; only `activation_method` / `isolation_window`
+      data-model extension remains open (v1.0 item).
+- [x] **v1.0 gap audit document** (`docs/v1.0-gaps.md`) covering all
+      exporter + importer xfails surfaced by M64 (`4f17789`).
+- [x] **Zarr v2 → v3 on-disk migration** across all three languages
+      (`391a7d2` + `da13fed`). Single `zarr.json` per node, nested
+      attributes, `c/` chunk prefix, canonical dtype names. Python
+      uses zarr-python 3.x; Java + ObjC self-contained writers updated
+      to emit and parse v3 byte-for-byte against the Python reference.
+      No backward-compat shim — pre-deployment, no v2 stores in the
+      wild. Read side still accepts legacy v2 dtype strings for safety.
+- [x] Unit-level coverage for the new writers (`2f35bd2`).
+
+### Release criteria
+- [x] Python 586 pass / 11 skip / 4 xfail; ObjC 1271 PASS; Java 245 pass.
+- [x] `CHANGELOG.md` v0.9.1 entry.
+- [x] Annotated `v0.9.1` tag pushed (`fa3ee21`).
+
+**v0.9.1 status:** Shipped.
 
 ## v0.10.0 — Streaming Transport + Per-AU Encryption (SHIPPED 2026-04-20)
 
@@ -673,3 +758,150 @@ Objective-C, and Java.
   shipped here.
 - Hyperspectral-image analysis primitives beyond the tile-chunk
   cube already supported.
+
+---
+
+## Cross-language parity audit (2026-04-21, post-v0.11.1)
+
+Direct inventory of the Python / Java / ObjC source trees against the
+three-language-parity rule (Python, Java, ObjC all expose the same
+classes **and** CLI tools; each stands alone). Verified by file-system
+enumeration of `python/src/mpeg_o/`,
+`java/src/main/java/com/dtwthalion/mpgo/`, and `objc/Source/` +
+`objc/Tools/` at commit `4dfa103`.
+
+### Domain model — full parity
+
+All 13 spectrum / image classes present in every language:
+`Spectrum`, `MassSpectrum`, `NMRSpectrum`, `NMR2DSpectrum`,
+`FreeInductionDecay`, `Chromatogram`, `RamanSpectrum` (v0.11.0),
+`IRSpectrum` (v0.11.0), `UVVisSpectrum` (v0.11.1),
+`TwoDimensionalCorrelationSpectrum` (v0.11.1), `MSImage`,
+`RamanImage` (v0.11.0), `IRImage` (v0.11.0). Shared base / run /
+dataset / identification / quantification / transition-list /
+instrument-config / provenance all present in every language.
+
+### Importers — full parity (8 readers per language)
+
+`mzML`, `nmrML`, `mzTab`, `imzML`, `Thermo .raw` (delegation),
+`Bruker .d` TDF, `Waters .raw` MassLynx (delegation), `JCAMP-DX 5.01`
+(with AFFN + PAC / SQZ / DIF / DUP decoder).
+
+### Exporters — full parity (6 writers per language)
+
+`mzML`, `nmrML`, `mzTab`, `imzML` (shipped v0.9.1), `ISA-Tab`,
+`JCAMP-DX` (AFFN-only; compressed writer deferred to v0.12.0).
+
+### Providers — full parity (4 backends per language)
+
+`HDF5`, `Memory`, `SQLite`, `Zarr v3`. All four support
+`read_canonical_bytes`, `create_dataset_nd`, VL_BYTES compound for
+per-AU encryption.
+
+### Protection — full parity
+
+`CipherSuite` catalog, `EncryptionManager`, `PerAUEncryption` +
+`PerAUFile` (v1.0), `KeyRotationManager`, `SignatureManager` (HMAC +
+`v3:` PQC prefix), `PostQuantumCrypto` (ML-KEM-1024 + ML-DSA-87),
+`AccessPolicy`, `Anonymizer`, `Verifier`.
+
+### Transport — full parity
+
+`.mots` codec (9 packet types), `TransportClient`, `TransportServer`,
+`AcquisitionSimulator`, `EncryptedTransport`, `AUFilter`,
+`ProtectionMetadata`.
+
+### CLI tools
+
+Core parity (6 tools, every language):
+`per_au_cli` / `PerAUCli` / `MpgoPerAU`,
+`simulator_cli` / `SimulatorCli` / `MpgoSimulator`,
+`transport_encode_cli` / `TransportEncodeCli` / `MpgoTransportEncode`,
+`transport_decode_cli` / `TransportDecodeCli` / `MpgoTransportDecode`,
+`transport_server_cli` / `TransportServerCli` / `MpgoTransportServer`,
+`dump_identifications` / `DumpIdentifications` / `MpgoDumpIdentifications`.
+
+Documented asymmetries (intentional, test-harness plumbing):
+
+| Tool | Python | Java | ObjC | Rationale |
+|------|:------:|:----:|:----:|-----------|
+| `MakeFixtures` | — | — | ✓ | Fixture generator consumed by Python/Java test suites. |
+| `MpgoJcampDxDump` | — | — | ✓ | ObjC subprocess driver for the Python JCAMP-DX conformance harness. |
+| `MpgoToMzML` | — | — | ✓ | Byte-parity driver for `test_mzml_writer_parity.py`. |
+| `MpgoSign` | — | — | ✓ | Signing CLI (Python + Java use library API via tests). |
+| `MpgoVerify` / `mpgo-verify` | module only | ✓ | ✓ | CLI parity polish candidate (v0.12.0). |
+| `MpgoPQCTool` / `mpgo-pqc` | module only | ✓ | ✓ | CLI parity polish candidate (v0.12.0). |
+| `CanonicalJson` | ✓ (internal) | ✓ | — | Used by test harness; ObjC equivalent is `MPGOCanonicalBytes`. |
+| `bruker_tdf_cli` | ✓ | — | — | Python bridge wrapping `opentimspy`; Java/ObjC subprocess into the Python helper. |
+
+### Open v1.0 data-model gap
+
+**`activation_method` + `isolation_window` in `MassSpectrum`** — the
+only remaining "must-fix for v1.0" item from `docs/v1.0-gaps.md`.
+Fields exist nowhere in the on-disk format today; fix requires a
+format bump, a new compound schema column in `spectrum_index`, and
+reader + writer changes in all three languages.
+
+---
+
+## v0.12.0 — Planned
+
+Scope accumulated from v0.11.1 deferred notes + the single remaining
+v1.0 data-model gap + CLI parity polish. Three-language parity rule
+holds for every line item.
+
+### Must-have
+
+- [ ] **M74** `activation_method` + `isolation_window` data-model
+      extension. `MassSpectrum` gains an `ActivationMethod` enum
+      (`CID / HCD / ETD / UVPD / ECD / EThcD / none`) + an
+      `IsolationWindow` value class (`target_mz`, `lower_offset`,
+      `upper_offset`). `spectrum_index` compound gains two columns.
+      mzML reader populates from cvParams inside `<precursor>`; mzML
+      writer emits `<activation>` with the preserved method plus a
+      complete `<isolationWindow>` block. Closes the last v1.0 gap
+      from `docs/v1.0-gaps.md`. Format version bump to 1.3;
+      `opt_ms2_activation_detail` feature flag on new files.
+- [ ] **M75** Python CLI parity polish — add `mpgo-verify`,
+      `mpgo-sign`, `mpgo-pqc` console_scripts to `pyproject.toml`
+      backed by the existing `verifier.py` / `signatures.py` /
+      `pqc.py` modules. Brings Python up to Java + ObjC CLI surface
+      for the three protection tools.
+
+### Nice-to-have
+
+- [ ] **M76** JCAMP-DX compressed-writer emission (PAC / SQZ / DIF)
+      in all three languages. AFFN remains the default for bit-accurate
+      round-trips; compressed output is opt-in via a writer flag.
+      Gates on a cross-language byte-parity conformance test for each
+      compression form.
+- [ ] **M77** 2D-COS computation primitives — generalised
+      synchronous / asynchronous decomposition from a perturbation
+      series (Noda's Hilbert-transform approach), plus a statistical
+      significance test. Ships as library API in all three languages
+      with a shared reference fixture. Output format already defined
+      by `TwoDimensionalCorrelationSpectrum` (v0.11.1).
+- [ ] **M78** Round out mzTab PEH/PEP + SFH/SMF/SEH/SME — requires
+      new `Feature` value class beside `Identification` and
+      `Quantification` (flagged "deferred further" in
+      `docs/v1.0-gaps.md`). Three-language parity for the value class
+      + importer + exporter.
+
+### Deferred further (not v0.12 scope)
+
+- 2-D JCAMP-DX (NTUPLES / PAGE) — ASCII cubes impractical at
+  10–100 MB; native HDF5 groups remain canonical.
+- Hyperspectral-image analysis primitives beyond tile-chunk cubes.
+- mzML `<softwareList>` / `<dataProcessingList>` content-chain
+  emission (provenance is already stored; this is pure XML
+  restructuring for reviewer-facing completeness).
+
+### Release criteria (v0.12.0)
+
+- [ ] M74 + M75 shipped; M76–M78 shipped or re-deferred explicitly.
+- [ ] All three test suites green; cross-language conformance matrix
+      extended to cover M74 round-trip (mzML → MPGO → mzML preserves
+      activation + isolation).
+- [ ] `CHANGELOG.md` v0.12.0 entry; `docs/v1.0-gaps.md` "Must-fix for
+      v1.0" list empty.
+- [ ] Annotated `v0.12.0` tag.
