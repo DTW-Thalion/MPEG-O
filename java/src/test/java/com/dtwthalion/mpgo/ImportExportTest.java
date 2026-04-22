@@ -49,6 +49,40 @@ class ImportExportTest {
     }
 
     @Test
+    void mzmlMs2ActivationAndIsolationRoundTrip() throws Exception {
+        // M74: parse a fixture that carries MS2 precursor activation + an
+        // isolation window, and confirm the data propagates through
+        // MzMLReader, AcquisitionRun, and SpectrumIndex accessors. Gates
+        // that the SRM <product><isolationWindow> inside <chromatogram>
+        // does NOT leak into the spectrum's precursor isolation state.
+        String path = getFixturePath("tiny.pwiz.1.1.mzML");
+        AcquisitionRun run = MzMLReader.read(path);
+        assertNotNull(run);
+
+        SpectrumIndex idx = run.spectrumIndex();
+        assertNotNull(idx.activationMethods(),
+            "M74: activation_methods column must be populated when any "
+            + "spectrum carried a recognised activation cvParam");
+        assertNotNull(idx.isolationTargetMzs(),
+            "M74: isolation_target_mzs column must be populated alongside");
+        boolean found = false;
+        for (int i = 0; i < idx.count(); i++) {
+            if (idx.msLevelAt(i) == 2
+                    && idx.activationMethodAt(i) == ActivationMethod.CID) {
+                IsolationWindow iw = idx.isolationWindowAt(i);
+                if (iw != null && Math.abs(iw.targetMz() - 445.3) < 1e-6) {
+                    assertEquals(0.5, iw.lowerOffset(), 1e-6);
+                    assertEquals(0.5, iw.upperOffset(), 1e-6);
+                    found = true;
+                    break;
+                }
+            }
+        }
+        assertTrue(found,
+            "M74: expected MS2/CID row with isolation target 445.3 (±0.5)");
+    }
+
+    @Test
     void mzmlMalformedThrowsMzMLParseException() throws Exception {
         // M50.3: MzMLReader throws MzMLParseException (specific) —
         // not bare Exception — so callers can catch parse failures

@@ -76,6 +76,40 @@
 + (BOOL)isSelectedReactionMonitoringAccession:(NSString *)acc
 { return [acc isEqualToString:@"MS:1001473"]; }
 
+#pragma mark - M74: MS/MS activation-method accessions
+
++ (MPGOActivationMethod)activationMethodForAccession:(NSString *)acc
+{
+    if ([acc isEqualToString:@"MS:1000133"]) return MPGOActivationMethodCID;
+    if ([acc isEqualToString:@"MS:1000422"]) return MPGOActivationMethodHCD;
+    if ([acc isEqualToString:@"MS:1000598"]) return MPGOActivationMethodETD;
+    if ([acc isEqualToString:@"MS:1000250"]) return MPGOActivationMethodECD;
+    if ([acc isEqualToString:@"MS:1003246"]) return MPGOActivationMethodUVPD;
+    if ([acc isEqualToString:@"MS:1003181"]) return MPGOActivationMethodEThcD;
+    return MPGOActivationMethodNone;
+}
+
++ (BOOL)isActivationMethodAccession:(NSString *)acc
+{
+    return [acc isEqualToString:@"MS:1000133"]
+        || [acc isEqualToString:@"MS:1000422"]
+        || [acc isEqualToString:@"MS:1000598"]
+        || [acc isEqualToString:@"MS:1000250"]
+        || [acc isEqualToString:@"MS:1003246"]
+        || [acc isEqualToString:@"MS:1003181"];
+}
+
+#pragma mark - M74: isolation-window cvParam accessions
+
++ (BOOL)isIsolationWindowTargetMzAccession:(NSString *)acc
+{ return [acc isEqualToString:@"MS:1000827"]; }
+
++ (BOOL)isIsolationWindowLowerOffsetAccession:(NSString *)acc
+{ return [acc isEqualToString:@"MS:1000828"]; }
+
++ (BOOL)isIsolationWindowUpperOffsetAccession:(NSString *)acc
+{ return [acc isEqualToString:@"MS:1000829"]; }
+
 #pragma mark - nmrCV (Milestone 13)
 
 + (BOOL)isSpectrometerFrequencyAccession:(NSString *)acc

@@ -13,7 +13,7 @@ API status: Stable.
 """
 from __future__ import annotations
 
-from ..enums import Compression, Precision
+from ..enums import ActivationMethod, Compression, Precision
 
 # ----- PSI-MS: precision -----
 PRECISION_ACCESSIONS: dict[str, Precision] = {
@@ -53,6 +53,25 @@ TOTAL_ION_CHROMATOGRAM = "MS:1000235"
 SELECTED_REACTION_MONITORING = "MS:1001473"
 
 MINUTES_UNIT = "UO:0000031"  # scan start time minute unit
+
+# ----- PSI-MS: MS/MS activation method (M74) -----
+ACTIVATION_METHOD_ACCESSIONS: dict[str, ActivationMethod] = {
+    "MS:1000133": ActivationMethod.CID,    # collision-induced dissociation
+    "MS:1000422": ActivationMethod.HCD,    # beam-type CID (HCD)
+    "MS:1000598": ActivationMethod.ETD,    # electron-transfer dissociation
+    "MS:1000250": ActivationMethod.ECD,    # electron-capture dissociation
+    "MS:1003246": ActivationMethod.UVPD,   # ultraviolet photodissociation
+    "MS:1003181": ActivationMethod.EThcD,  # EThcD
+}
+
+def activation_method_for(accession: str) -> ActivationMethod | None:
+    """(M74) Return the ActivationMethod for a PSI-MS accession, or None."""
+    return ACTIVATION_METHOD_ACCESSIONS.get(accession)
+
+# ----- PSI-MS: isolation window (M74) -----
+ISOLATION_TARGET_MZ = "MS:1000827"    # isolation window target m/z
+ISOLATION_LOWER_OFFSET = "MS:1000828"  # isolation window lower offset
+ISOLATION_UPPER_OFFSET = "MS:1000829"  # isolation window upper offset
 
 # ----- nmrCV -----
 NMR_SPECTROMETER_FREQUENCY = "NMR:1000001"

@@ -14,6 +14,7 @@
 #import "ValueClasses/MPGOAxisDescriptor.h"
 #import "ValueClasses/MPGOValueRange.h"
 #import "ValueClasses/MPGOEnums.h"
+#import "ValueClasses/MPGOIsolationWindow.h"
 #import "Spectra/MPGOSpectrum.h"
 #import "Spectra/MPGOMassSpectrum.h"
 #import "Spectra/MPGOChromatogram.h"
@@ -75,6 +76,15 @@ NSString *const MPGOMzMLReaderErrorDomain = @"MPGOMzMLReaderErrorDomain";
     NSInteger _scanWindowDepth;
     NSInteger _scanDepth;
     NSInteger _precursorDepth;
+    NSInteger _activationDepth;       // M74
+    NSInteger _isolationWindowDepth;  // M74
+
+    // M74: per-spectrum activation + isolation window being accumulated
+    MPGOActivationMethod _activationMethod;
+    double _isolationTargetMz;
+    double _isolationLowerOffset;
+    double _isolationUpperOffset;
+    BOOL _anyActivationDetail;
 }
 
 @synthesize dataset = _dataset;
@@ -208,6 +218,11 @@ NSString *const MPGOMzMLReaderErrorDomain = @"MPGOMzMLReaderErrorDomain";
     _scanWinLow = 0.0;
     _scanWinHigh = 0.0;
     _hasScanWin = NO;
+    // M74
+    _activationMethod = MPGOActivationMethodNone;
+    _isolationTargetMz = 0.0;
+    _isolationLowerOffset = 0.0;
+    _isolationUpperOffset = 0.0;
     [_specArrays removeAllObjects];
 }
 
@@ -313,10 +328,12 @@ didStartElement:(NSString *)elementName
         return;
     }
 
-    if ([elementName isEqualToString:@"precursor"])     { _precursorDepth++;   return; }
-    if ([elementName isEqualToString:@"selectedIon"])   { _selectedIonDepth++; return; }
-    if ([elementName isEqualToString:@"scan"])          { _scanDepth++;        return; }
-    if ([elementName isEqualToString:@"scanWindow"])    { _scanWindowDepth++;  return; }
+    if ([elementName isEqualToString:@"precursor"])       { _precursorDepth++;      return; }
+    if ([elementName isEqualToString:@"selectedIon"])     { _selectedIonDepth++;    return; }
+    if ([elementName isEqualToString:@"scan"])            { _scanDepth++;           return; }
+    if ([elementName isEqualToString:@"scanWindow"])      { _scanWindowDepth++;     return; }
+    if ([elementName isEqualToString:@"activation"])      { _activationDepth++;     return; }
+    if ([elementName isEqualToString:@"isolationWindow"]) { _isolationWindowDepth++; return; }
 
     if ([elementName isEqualToString:@"cvParam"]) {
         [self handleCVParamWithAttributes:attrs];
@@ -356,6 +373,31 @@ didStartElement:(NSString *)elementName
             [acc isEqualToString:@"MS:1000576"]) {
             _binCompression = [MPGOCVTermMapper compressionForAccession:acc];
             return;
+        }
+        return;
+    }
+
+    // 2a. (M74) Inside <precursor><activation>: dissociation method cvParams.
+    // Gate on _precursorDepth so <product> siblings (SRM) are ignored.
+    if (_activationDepth > 0 && _precursorDepth > 0 && _inSpectrum) {
+        if ([MPGOCVTermMapper isActivationMethodAccession:acc]) {
+            _activationMethod = [MPGOCVTermMapper activationMethodForAccession:acc];
+            _anyActivationDetail = YES;
+        }
+        return;
+    }
+
+    // 2b. (M74) Inside <precursor><isolationWindow>: target m/z + offsets.
+    if (_isolationWindowDepth > 0 && _precursorDepth > 0 && _inSpectrum) {
+        if ([MPGOCVTermMapper isIsolationWindowTargetMzAccession:acc]) {
+            _isolationTargetMz = [value doubleValue];
+            _anyActivationDetail = YES;
+        } else if ([MPGOCVTermMapper isIsolationWindowLowerOffsetAccession:acc]) {
+            _isolationLowerOffset = [value doubleValue];
+            _anyActivationDetail = YES;
+        } else if ([MPGOCVTermMapper isIsolationWindowUpperOffsetAccession:acc]) {
+            _isolationUpperOffset = [value doubleValue];
+            _anyActivationDetail = YES;
         }
         return;
     }
@@ -486,10 +528,12 @@ didStartElement:(NSString *)elementName
         return;
     }
 
-    if ([elementName isEqualToString:@"precursor"])     { _precursorDepth--;   return; }
-    if ([elementName isEqualToString:@"selectedIon"])   { _selectedIonDepth--; return; }
-    if ([elementName isEqualToString:@"scan"])          { _scanDepth--;        return; }
-    if ([elementName isEqualToString:@"scanWindow"])    { _scanWindowDepth--;  return; }
+    if ([elementName isEqualToString:@"precursor"])       { _precursorDepth--;      return; }
+    if ([elementName isEqualToString:@"selectedIon"])     { _selectedIonDepth--;    return; }
+    if ([elementName isEqualToString:@"scan"])            { _scanDepth--;           return; }
+    if ([elementName isEqualToString:@"scanWindow"])      { _scanWindowDepth--;     return; }
+    if ([elementName isEqualToString:@"activation"])      { _activationDepth--;     return; }
+    if ([elementName isEqualToString:@"isolationWindow"]) { _isolationWindowDepth--; return; }
 }
 
 #pragma mark - Element finishers
@@ -543,6 +587,17 @@ didStartElement:(NSString *)elementName
         win = [MPGOValueRange rangeWithMinimum:_scanWinLow maximum:_scanWinHigh];
     }
 
+    // M74: build an IsolationWindow only when any of the three offsets was
+    // reported. All-zero means "no window" and we pass nil to match Python/Java.
+    MPGOIsolationWindow *iso = nil;
+    if (_isolationTargetMz != 0.0 ||
+        _isolationLowerOffset != 0.0 ||
+        _isolationUpperOffset != 0.0) {
+        iso = [MPGOIsolationWindow windowWithTargetMz:_isolationTargetMz
+                                          lowerOffset:_isolationLowerOffset
+                                          upperOffset:_isolationUpperOffset];
+    }
+
     NSError *err = nil;
     MPGOMassSpectrum *spec =
         [[MPGOMassSpectrum alloc] initWithMzArray:mz
@@ -550,6 +605,8 @@ didStartElement:(NSString *)elementName
                                           msLevel:_msLevel
                                          polarity:_polarity
                                        scanWindow:win
+                                 activationMethod:_activationMethod
+                                  isolationWindow:iso
                                     indexPosition:_specIndex
                                   scanTimeSeconds:_scanTime
                                       precursorMz:_precursorMz

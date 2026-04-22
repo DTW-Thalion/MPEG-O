@@ -110,6 +110,12 @@ public class MzMLReader {
         private final List<Double> precursorMzs = new ArrayList<>();
         private final List<Integer> precursorCharges = new ArrayList<>();
         private final List<Double> basePeakIntensities = new ArrayList<>();
+        // (M74) Per-spectrum activation + isolation accumulators.
+        private final List<Integer> activationMethodsList = new ArrayList<>();
+        private final List<Double> isolationTargetMzsList = new ArrayList<>();
+        private final List<Double> isolationLowerOffsetsList = new ArrayList<>();
+        private final List<Double> isolationUpperOffsetsList = new ArrayList<>();
+        private boolean anyActivationDetail = false;
 
         // Chromatogram accumulation
         private final List<Chromatogram> chromatograms = new ArrayList<>();
@@ -122,6 +128,8 @@ public class MzMLReader {
         private int selectedIonDepth;
         private int scanDepth;
         private int scanWindowDepth;
+        private int activationDepth;      // M74
+        private int isolationWindowDepth; // M74
         private int specDefaultLen;
         private int chromDefaultLen;
 
@@ -134,6 +142,11 @@ public class MzMLReader {
         private double curScanWinLow = 0;
         private double curScanWinHigh = 0;
         private boolean hasScanWin = false;
+        // M74: activation + isolation for the spectrum currently being parsed
+        private ActivationMethod curActivation = ActivationMethod.NONE;
+        private double curIsolationTargetMz = 0;
+        private double curIsolationLowerOffset = 0;
+        private double curIsolationUpperOffset = 0;
 
         // Binary array state
         private Precision curPrecision = Precision.FLOAT64;
@@ -180,6 +193,10 @@ public class MzMLReader {
                     curMsLevel = 1; curPolarity = 0; curScanTime = 0;
                     curPrecursorMz = 0; curPrecursorCharge = 0; curBasePeak = 0;
                     curScanWinLow = 0; curScanWinHigh = 0; hasScanWin = false;
+                    curActivation = ActivationMethod.NONE;
+                    curIsolationTargetMz = 0;
+                    curIsolationLowerOffset = 0;
+                    curIsolationUpperOffset = 0;
                     specArrays.clear();
                 }
                 case "chromatogram" -> {
@@ -195,6 +212,8 @@ public class MzMLReader {
                 case "selectedIon" -> selectedIonDepth++;
                 case "scan" -> scanDepth++;
                 case "scanWindow" -> scanWindowDepth++;
+                case "activation" -> activationDepth++;
+                case "isolationWindow" -> isolationWindowDepth++;
                 case "binaryDataArray" -> {
                     inBinaryDataArray = true;
                     curPrecision = Precision.FLOAT64;
@@ -245,6 +264,33 @@ public class MzMLReader {
                     curPrecursorMz = Double.parseDouble(val);
                 if (CVTermMapper.MS_CHARGE_STATE.equals(acc) && val != null)
                     curPrecursorCharge = Integer.parseInt(val);
+                return;
+            }
+
+            // (M74) <precursor><activation>: dissociation method. Gate on
+            // precursorDepth so SRM <product> siblings are not mistaken for
+            // precursor activation.
+            if (inSpectrum && precursorDepth > 0 && activationDepth > 0) {
+                ActivationMethod m = CVTermMapper.activationMethodFor(acc);
+                if (m != null) {
+                    curActivation = m;
+                    anyActivationDetail = true;
+                }
+                return;
+            }
+
+            // (M74) <precursor><isolationWindow>: target m/z + offsets.
+            if (inSpectrum && precursorDepth > 0 && isolationWindowDepth > 0) {
+                if (CVTermMapper.MS_ISOLATION_WINDOW_TARGET_MZ.equals(acc) && val != null) {
+                    curIsolationTargetMz = Double.parseDouble(val);
+                    anyActivationDetail = true;
+                } else if (CVTermMapper.MS_ISOLATION_WINDOW_LOWER_OFFSET.equals(acc) && val != null) {
+                    curIsolationLowerOffset = Double.parseDouble(val);
+                    anyActivationDetail = true;
+                } else if (CVTermMapper.MS_ISOLATION_WINDOW_UPPER_OFFSET.equals(acc) && val != null) {
+                    curIsolationUpperOffset = Double.parseDouble(val);
+                    anyActivationDetail = true;
+                }
                 return;
             }
 
@@ -306,6 +352,8 @@ public class MzMLReader {
                 case "selectedIon" -> selectedIonDepth--;
                 case "scan" -> scanDepth--;
                 case "scanWindow" -> scanWindowDepth--;
+                case "activation" -> activationDepth--;
+                case "isolationWindow" -> isolationWindowDepth--;
             }
         }
 
@@ -322,6 +370,13 @@ public class MzMLReader {
             precursorMzs.add(curPrecursorMz);
             precursorCharges.add(curPrecursorCharge);
             basePeakIntensities.add(curBasePeak);
+            // (M74) Per-spectrum activation + isolation. The arrays are
+            // always kept in lockstep with the other per-spectrum columns;
+            // buildRun decides whether to pass them to SpectrumIndex.
+            activationMethodsList.add(curActivation.intValue());
+            isolationTargetMzsList.add(curIsolationTargetMz);
+            isolationLowerOffsetsList.add(curIsolationLowerOffset);
+            isolationUpperOffsetsList.add(curIsolationUpperOffset);
         }
 
         private void finishChromatogram() {
@@ -352,13 +407,26 @@ public class MzMLReader {
                 pos += lengths[i];
             }
 
+            // (M74) Schema-gating: emit the four optional columns only when
+            // at least one spectrum carried activation or isolation data.
+            int[] m74Methods = null;
+            double[] m74Target = null;
+            double[] m74Lower = null;
+            double[] m74Upper = null;
+            if (anyActivationDetail) {
+                m74Methods = activationMethodsList.stream().mapToInt(Integer::intValue).toArray();
+                m74Target  = isolationTargetMzsList.stream().mapToDouble(Double::doubleValue).toArray();
+                m74Lower   = isolationLowerOffsetsList.stream().mapToDouble(Double::doubleValue).toArray();
+                m74Upper   = isolationUpperOffsetsList.stream().mapToDouble(Double::doubleValue).toArray();
+            }
             SpectrumIndex index = new SpectrumIndex(specCount, offsets, lengths,
                     retentionTimes.stream().mapToDouble(Double::doubleValue).toArray(),
                     msLevels.stream().mapToInt(Integer::intValue).toArray(),
                     polarities.stream().mapToInt(Integer::intValue).toArray(),
                     precursorMzs.stream().mapToDouble(Double::doubleValue).toArray(),
                     precursorCharges.stream().mapToInt(Integer::intValue).toArray(),
-                    basePeakIntensities.stream().mapToDouble(Double::doubleValue).toArray());
+                    basePeakIntensities.stream().mapToDouble(Double::doubleValue).toArray(),
+                    m74Methods, m74Target, m74Lower, m74Upper);
 
             Map<String, double[]> channels = new LinkedHashMap<>();
             channels.put("mz", allMz);

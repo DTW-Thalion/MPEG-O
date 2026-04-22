@@ -9,6 +9,7 @@
 #import "Run/MPGOSpectrumIndex.h"
 #import "Dataset/MPGOSpectralDataset.h"
 #import "ValueClasses/MPGOEnums.h"
+#import "ValueClasses/MPGOIsolationWindow.h"
 #import <math.h>
 #import <unistd.h>
 #import <zlib.h>
@@ -357,4 +358,89 @@ void testMzMLReader(void)
                    (unsigned long)count, dt * 1000.0);
         }
     }
+}
+
+// M74: verify reader pulls activation method + isolation window from
+// tiny.pwiz.1.1.mzML and surfaces them through the run's SpectrumIndex.
+void testMzMLReaderM74(void)
+{
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSArray *candidates = @[
+        @"Fixtures/tiny.pwiz.1.1.mzML",
+        @"../Fixtures/tiny.pwiz.1.1.mzML",
+        @"Tests/Fixtures/tiny.pwiz.1.1.mzML",
+        @"../Tests/Fixtures/tiny.pwiz.1.1.mzML",
+    ];
+    NSString *tinyPath = nil;
+    for (NSString *p in candidates) {
+        if ([fm fileExistsAtPath:p]) { tinyPath = p; break; }
+    }
+    if (!tinyPath) {
+        printf("    [skip] tiny.pwiz.1.1.mzML not found (M74 test non-fatal)\n");
+        return;
+    }
+
+    NSError *err = nil;
+    MPGOSpectralDataset *ds =
+        [MPGOMzMLReader readFromFilePath:tinyPath error:&err];
+    PASS(ds != nil, "tiny.pwiz.1.1.mzML parses for M74 check");
+    MPGOAcquisitionRun *run = [ds.msRuns.allValues firstObject];
+    PASS(run != nil, "run present");
+
+    MPGOSpectrumIndex *idx = run.spectrumIndex;
+    PASS(idx.hasActivationDetail, "index has M74 activation-detail columns");
+
+    // tiny.pwiz.1.1.mzML: MS2 scans 2 and 4 both use CID with target 445.3
+    // and 0.5/0.5 offsets. Find the first MS2 and verify.
+    NSInteger ms2Found = -1;
+    for (NSUInteger i = 0; i < idx.count; i++) {
+        if ([idx msLevelAt:i] == 2) { ms2Found = (NSInteger)i; break; }
+    }
+    PASS(ms2Found >= 0, "at least one MS2 present");
+    if (ms2Found >= 0) {
+        NSUInteger i = (NSUInteger)ms2Found;
+        PASS([idx activationMethodAt:i] == MPGOActivationMethodCID,
+             "MS2 activation method is CID");
+        MPGOIsolationWindow *iw = [idx isolationWindowAt:i];
+        PASS(iw != nil, "MS2 isolation window present");
+        PASS(iw != nil && fabs(iw.targetMz - 445.3) < 1e-9,
+             "MS2 isolation target m/z = 445.3");
+        PASS(iw != nil && fabs(iw.lowerOffset - 0.5) < 1e-9,
+             "MS2 isolation lower offset = 0.5");
+        PASS(iw != nil && fabs(iw.upperOffset - 0.5) < 1e-9,
+             "MS2 isolation upper offset = 0.5");
+    }
+
+    // MS1 rows should round-trip as None/no-window.
+    NSInteger ms1Found = -1;
+    for (NSUInteger i = 0; i < idx.count; i++) {
+        if ([idx msLevelAt:i] == 1) { ms1Found = (NSInteger)i; break; }
+    }
+    if (ms1Found >= 0) {
+        NSUInteger i = (NSUInteger)ms1Found;
+        PASS([idx activationMethodAt:i] == MPGOActivationMethodNone,
+             "MS1 activation method is None");
+        PASS([idx isolationWindowAt:i] == nil,
+             "MS1 isolation window is nil");
+    }
+
+    // Full round-trip through .mpgo: M74 columns must survive.
+    NSString *path = mpath(@"m74_roundtrip");
+    unlink([path fileSystemRepresentation]);
+    PASS([ds writeToFilePath:path error:&err], "M74 write to .mpgo");
+    MPGOSpectralDataset *back =
+        [MPGOSpectralDataset readFromFilePath:path error:&err];
+    PASS(back != nil, "M74 .mpgo reads back");
+    MPGOAcquisitionRun *backRun = [back.msRuns.allValues firstObject];
+    MPGOSpectrumIndex *backIdx = backRun.spectrumIndex;
+    PASS(backIdx.hasActivationDetail, "M74 columns survive round-trip");
+    if (ms2Found >= 0) {
+        NSUInteger i = (NSUInteger)ms2Found;
+        PASS([backIdx activationMethodAt:i] == MPGOActivationMethodCID,
+             "post-round-trip MS2 activation method still CID");
+        MPGOIsolationWindow *iw = [backIdx isolationWindowAt:i];
+        PASS(iw && fabs(iw.targetMz - 445.3) < 1e-9,
+             "post-round-trip isolation target survives");
+    }
+    unlink([path fileSystemRepresentation]);
 }

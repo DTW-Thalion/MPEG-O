@@ -70,6 +70,22 @@
 + (BOOL)isTotalIonChromatogramAccession:(NSString *)acc;     // MS:1000235
 + (BOOL)isSelectedReactionMonitoringAccession:(NSString *)acc;// MS:1001473
 
+#pragma mark - M74: MS/MS activation-method accessions
+
+/** Resolve a PSI-MS activation-method accession to a value from the
+ *  MPGOActivationMethod enum. Returns MPGOActivationMethodNone for any
+ *  accession that is not a recognised activation method.
+ *  Caller can distinguish "unknown" from an explicit NONE by checking
+ *  +isActivationMethodAccession: first. */
++ (MPGOActivationMethod)activationMethodForAccession:(NSString *)acc;
++ (BOOL)isActivationMethodAccession:(NSString *)acc;
+
+#pragma mark - M74: isolation-window cvParam accessions
+
++ (BOOL)isIsolationWindowTargetMzAccession:(NSString *)acc;  // MS:1000827
++ (BOOL)isIsolationWindowLowerOffsetAccession:(NSString *)acc; // MS:1000828
++ (BOOL)isIsolationWindowUpperOffsetAccession:(NSString *)acc; // MS:1000829
+
 #pragma mark - nmrCV accessions (Milestone 13)
 
 + (BOOL)isSpectrometerFrequencyAccession:(NSString *)acc; // NMR:1000001
