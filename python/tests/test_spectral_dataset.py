@@ -10,7 +10,9 @@ import pytest
 
 from mpeg_o import (
     AcquisitionRun,
+    ActivationMethod,
     Identification,
+    IsolationWindow,
     MassSpectrum,
     NMRSpectrum,
     ProvenanceRecord,
@@ -162,3 +164,82 @@ def test_write_minimal_round_trip(tmp_path: Path) -> None:
         got_prov = ds.provenance()
         assert got_prov[0].software == "mpeg-o-py/0.3.0a1"
         assert got_prov[0].parameters == {"run": "test"}
+
+
+# --------------------------------------------------------------- M74 (Slice B)
+
+def test_spectrum_index_round_trip_without_m74_columns(tmp_path: Path) -> None:
+    """Legacy path: WrittenRun leaves the four M74 fields None, so the
+    writer omits the columns and the reader sees ``None`` on the
+    SpectrumIndex M74 fields."""
+    out = tmp_path / "no_m74.mpgo"
+    SpectralDataset.write_minimal(
+        out, title="no m74", isa_investigation_id="MPGO:no_m74",
+        runs={"run_0001": _make_run(n_spectra=3, points_per=4)},
+    )
+    with SpectralDataset.open(out) as ds:
+        run = ds.ms_runs["run_0001"]
+        idx = run.index
+        assert idx.activation_methods is None
+        assert idx.isolation_target_mzs is None
+        assert idx.isolation_lower_offsets is None
+        assert idx.isolation_upper_offsets is None
+        assert idx.activation_method_at(0) is ActivationMethod.NONE
+        assert idx.isolation_window_at(0) is None
+
+
+def test_spectrum_index_round_trip_with_m74_columns(tmp_path: Path) -> None:
+    """M74 path: WrittenRun supplies all four parallel arrays, writer
+    emits the columns, and the reader reconstructs per-spectrum
+    activation methods and isolation windows."""
+    out = tmp_path / "with_m74.mpgo"
+    run = _make_run(n_spectra=3, points_per=4)
+    # Spectrum 0 is MS1 (NONE sentinel); 1 and 2 are MS2 with HCD + CID.
+    run.activation_methods = np.array(
+        [int(ActivationMethod.NONE),
+         int(ActivationMethod.HCD),
+         int(ActivationMethod.CID)], dtype=np.int32)
+    run.isolation_target_mzs = np.array([0.0, 500.0, 750.5], dtype=np.float64)
+    run.isolation_lower_offsets = np.array([0.0, 1.0, 0.5], dtype=np.float64)
+    run.isolation_upper_offsets = np.array([0.0, 2.0, 0.75], dtype=np.float64)
+
+    SpectralDataset.write_minimal(
+        out, title="with m74", isa_investigation_id="MPGO:m74",
+        runs={"run_0001": run},
+    )
+    with SpectralDataset.open(out) as ds:
+        r = ds.ms_runs["run_0001"]
+        idx = r.index
+        assert idx.activation_methods is not None
+        assert idx.isolation_target_mzs is not None
+        assert idx.isolation_lower_offsets is not None
+        assert idx.isolation_upper_offsets is not None
+
+        assert idx.activation_method_at(0) is ActivationMethod.NONE
+        assert idx.activation_method_at(1) is ActivationMethod.HCD
+        assert idx.activation_method_at(2) is ActivationMethod.CID
+
+        assert idx.isolation_window_at(0) is None  # all-zero sentinel
+        w1 = idx.isolation_window_at(1)
+        assert isinstance(w1, IsolationWindow)
+        assert w1.target_mz == pytest.approx(500.0)
+        assert w1.lower_offset == pytest.approx(1.0)
+        assert w1.upper_offset == pytest.approx(2.0)
+        w2 = idx.isolation_window_at(2)
+        assert w2 is not None
+        assert w2.target_mz == pytest.approx(750.5)
+        assert w2.width == pytest.approx(1.25)
+
+
+def test_written_run_rejects_partial_m74_population(tmp_path: Path) -> None:
+    """All-or-nothing: populating some but not all of the four M74
+    arrays is a schema error."""
+    out = tmp_path / "partial_m74.mpgo"
+    run = _make_run(n_spectra=2, points_per=4)
+    run.activation_methods = np.array([0, 0], dtype=np.int32)
+    # Deliberately omit the isolation_* trio.
+    with pytest.raises(ValueError, match="M74 columns"):
+        SpectralDataset.write_minimal(
+            out, title="partial m74", isa_investigation_id="MPGO:part",
+            runs={"run_0001": run},
+        )

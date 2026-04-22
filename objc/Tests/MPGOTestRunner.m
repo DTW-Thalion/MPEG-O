@@ -5,6 +5,7 @@ extern void testValueRange(void);
 extern void testIsolationWindow(void);
 extern void testActivationMethodEnum(void);
 extern void testMassSpectrumActivationAndIsolationFields(void);
+extern void testSpectrumIndexM74RoundTrip(void);
 extern void testEncodingSpec(void);
 extern void testAxisDescriptor(void);
 extern void testCVParam(void);
@@ -78,6 +79,10 @@ int main(int argc, const char *argv[])
         START_SET("MPGOMassSpectrum M74 fields")
             testMassSpectrumActivationAndIsolationFields();
         END_SET("MPGOMassSpectrum M74 fields")
+
+        START_SET("MPGOSpectrumIndex M74 round-trip")
+            testSpectrumIndexM74RoundTrip();
+        END_SET("MPGOSpectrumIndex M74 round-trip")
 
         START_SET("MPGOEncodingSpec")
             testEncodingSpec();
