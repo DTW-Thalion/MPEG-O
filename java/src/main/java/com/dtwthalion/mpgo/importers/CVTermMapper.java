@@ -62,6 +62,37 @@ public final class CVTermMapper {
     // Unit accessions
     public static final String UO_MINUTE = "UO:0000031";
 
+    // M74: MS/MS activation-method accessions
+    public static final String MS_CID   = "MS:1000133";
+    public static final String MS_HCD   = "MS:1000422";
+    public static final String MS_ETD   = "MS:1000598";
+    public static final String MS_ECD   = "MS:1000250";
+    public static final String MS_UVPD  = "MS:1003246";
+    public static final String MS_ETHCD = "MS:1003181";
+
+    // M74: isolation-window cvParam accessions
+    public static final String MS_ISOLATION_WINDOW_TARGET_MZ  = "MS:1000827";
+    public static final String MS_ISOLATION_WINDOW_LOWER_OFFSET = "MS:1000828";
+    public static final String MS_ISOLATION_WINDOW_UPPER_OFFSET = "MS:1000829";
+
+    /**
+     * (M74) Resolve a PSI-MS activation-method accession to the matching
+     * {@link ActivationMethod} constant, or {@code null} if the accession
+     * does not name a recognised activation method.
+     */
+    public static ActivationMethod activationMethodFor(String accession) {
+        if (accession == null) return null;
+        return switch (accession) {
+            case MS_CID   -> ActivationMethod.CID;
+            case MS_HCD   -> ActivationMethod.HCD;
+            case MS_ETD   -> ActivationMethod.ETD;
+            case MS_ECD   -> ActivationMethod.ECD;
+            case MS_UVPD  -> ActivationMethod.UVPD;
+            case MS_ETHCD -> ActivationMethod.EThcD;
+            default       -> null;
+        };
+    }
+
     // nmrCV
     public static final String NMR_FREQ = "NMR:1000001";
     public static final String NMR_NUCLEUS = "NMR:1000002";

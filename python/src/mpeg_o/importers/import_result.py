@@ -35,6 +35,13 @@ class ImportedSpectrum:
     polarity: int = 0  # Polarity enum value
     precursor_mz: float = 0.0
     precursor_charge: int = 0
+    # M74: MS/MS activation + isolation. `activation_method` is an
+    # ActivationMethod IntEnum value (NONE=0 for MS1 or unreported).
+    # `isolation_*` are raw mzML fields; zero sentinel means MS1.
+    activation_method: int = 0
+    isolation_target_mz: float = 0.0
+    isolation_lower_offset: float = 0.0
+    isolation_upper_offset: float = 0.0
 
 
 @dataclass(slots=True)
@@ -174,6 +181,28 @@ def _pack_run(
         dtype=np.float64,
     )
 
+    # M74 schema-gating: emit the four optional spectrum_index columns when
+    # at least one spectrum carries activation metadata or a non-zero
+    # isolation offset. Writer will store zero sentinels for the rest
+    # (MS1 / unreported), matching the "all-or-nothing" on-disk schema.
+    any_m74 = any(
+        s.activation_method != 0
+        or s.isolation_target_mz != 0.0
+        or s.isolation_lower_offset != 0.0
+        or s.isolation_upper_offset != 0.0
+        for s in spectra
+    )
+    if any_m74:
+        activation_methods = _col("activation_method", np.int32)
+        isolation_target_mzs = _col("isolation_target_mz", np.float64)
+        isolation_lower_offsets = _col("isolation_lower_offset", np.float64)
+        isolation_upper_offsets = _col("isolation_upper_offset", np.float64)
+    else:
+        activation_methods = None
+        isolation_target_mzs = None
+        isolation_lower_offsets = None
+        isolation_upper_offsets = None
+
     return WrittenRun(
         spectrum_class=spectrum_class,
         acquisition_mode=acquisition_mode,
@@ -186,6 +215,10 @@ def _pack_run(
         precursor_mzs=_col("precursor_mz", np.float64),
         precursor_charges=_col("precursor_charge", np.int32),
         base_peak_intensities=base_peaks,
+        activation_methods=activation_methods,
+        isolation_target_mzs=isolation_target_mzs,
+        isolation_lower_offsets=isolation_lower_offsets,
+        isolation_upper_offsets=isolation_upper_offsets,
         nucleus_type=nucleus_type,
         chromatograms=list(chromatograms or []),
     )

@@ -8,6 +8,7 @@
 #import "Core/MPGOSignalArray.h"
 #import "ValueClasses/MPGOEncodingSpec.h"
 #import "ValueClasses/MPGOValueRange.h"
+#import "ValueClasses/MPGOIsolationWindow.h"
 #import "Dataset/MPGOProvenanceRecord.h"
 #import "Dataset/MPGOCompoundIO.h"
 #import "Core/MPGONumpress.h"
@@ -125,6 +126,36 @@
     int32_t  *pcp = pc.mutableBytes;
     double   *bpp = bp.mutableBytes;
 
+    // M74: scan once to see if any MS spectrum carries activation/isolation
+    // detail. If so, build four parallel optional columns; otherwise pass nil
+    // so the index reflects the legacy (no opt_ms2_activation_detail) layout.
+    BOOL anyM74 = NO;
+    for (NSUInteger i = 0; i < n; i++) {
+        MPGOSpectrum *s = spectra[i];
+        if (![s isKindOfClass:[MPGOMassSpectrum class]]) continue;
+        MPGOMassSpectrum *ms = (MPGOMassSpectrum *)s;
+        if (ms.activationMethod != MPGOActivationMethodNone ||
+            ms.isolationWindow != nil) { anyM74 = YES; break; }
+    }
+    NSMutableData *actM = nil;
+    NSMutableData *isoT = nil;
+    NSMutableData *isoL = nil;
+    NSMutableData *isoU = nil;
+    int32_t *actMp = NULL;
+    double  *isoTp = NULL;
+    double  *isoLp = NULL;
+    double  *isoUp = NULL;
+    if (anyM74) {
+        actM = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+        isoT = [NSMutableData dataWithLength:n * sizeof(double)];
+        isoL = [NSMutableData dataWithLength:n * sizeof(double)];
+        isoU = [NSMutableData dataWithLength:n * sizeof(double)];
+        actMp = actM.mutableBytes;
+        isoTp = isoT.mutableBytes;
+        isoLp = isoL.mutableBytes;
+        isoUp = isoU.mutableBytes;
+    }
+
     NSString *firstChannel = _channelNames.firstObject;
     uint64_t cursor = 0;
     for (NSUInteger i = 0; i < n; i++) {
@@ -147,6 +178,20 @@
             NSUInteger m = inA.length;
             for (NSUInteger j = 0; j < m; j++) if (intP[j] > maxI) maxI = intP[j];
             bpp[i] = maxI;
+
+            if (anyM74) {
+                actMp[i] = (int32_t)ms.activationMethod;
+                MPGOIsolationWindow *iw = ms.isolationWindow;
+                if (iw) {
+                    isoTp[i] = iw.targetMz;
+                    isoLp[i] = iw.lowerOffset;
+                    isoUp[i] = iw.upperOffset;
+                } else {
+                    isoTp[i] = 0.0;
+                    isoLp[i] = 0.0;
+                    isoUp[i] = 0.0;
+                }
+            }
         } else {
             // NMR or other non-MS spectra: sentinel values.
             mlp[i] = 0;
@@ -160,6 +205,13 @@
                 for (NSUInteger j = 0; j < m; j++) if (intP[j] > maxI) maxI = intP[j];
             }
             bpp[i] = maxI;
+
+            if (anyM74) {
+                actMp[i] = (int32_t)MPGOActivationMethodNone;
+                isoTp[i] = 0.0;
+                isoLp[i] = 0.0;
+                isoUp[i] = 0.0;
+            }
         }
 
         cursor += primary.length;
@@ -171,7 +223,11 @@
                                            polarities:pol
                                          precursorMzs:pmz
                                      precursorCharges:pc
-                                  basePeakIntensities:bp];
+                                  basePeakIntensities:bp
+                                    activationMethods:actM
+                                   isolationTargetMzs:isoT
+                                isolationLowerOffsets:isoL
+                                isolationUpperOffsets:isoU];
 }
 
 #pragma mark - HDF5 write

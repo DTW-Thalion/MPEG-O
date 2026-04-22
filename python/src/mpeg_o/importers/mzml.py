@@ -21,7 +21,7 @@ from xml.etree.ElementTree import iterparse
 
 import numpy as np
 
-from ..enums import Polarity, Precision
+from ..enums import ActivationMethod, Polarity, Precision
 from . import cv_term_mapper as cv
 from ._base64_zlib import decode as decode_base64
 from .import_result import ImportResult, ImportedChromatogram, ImportedSpectrum
@@ -82,6 +82,10 @@ class _State:
         "bin_text",
         "spec_arrays",
         "in_precursor", "in_selected_ion", "in_scan", "in_scan_window",
+        "in_activation", "in_isolation_window",
+        "activation_method",
+        "isolation_target_mz", "isolation_lower_offset", "isolation_upper_offset",
+        "any_activation_detail",
         "in_chromatogram", "chrom_type", "chrom_target_mz",
         "chrom_precursor_mz", "chrom_product_mz",
     )
@@ -109,6 +113,17 @@ class _State:
         self.in_selected_ion = 0
         self.in_scan = 0
         self.in_scan_window = 0
+        # M74: activation + isolation-window containers
+        self.in_activation = 0
+        self.in_isolation_window = 0
+        self.activation_method = ActivationMethod.NONE
+        self.isolation_target_mz = 0.0
+        self.isolation_lower_offset = 0.0
+        self.isolation_upper_offset = 0.0
+        # Document-level flag: at least one spectrum had non-default
+        # activation or isolation data. Used by import_result to decide
+        # whether to emit the optional spectrum_index columns.
+        self.any_activation_detail = False
         self.in_chromatogram = False
         # M24
         self.chrom_type = 0
@@ -125,6 +140,10 @@ class _State:
         self.scan_time = 0.0
         self.precursor_mz = 0.0
         self.precursor_charge = 0
+        self.activation_method = ActivationMethod.NONE
+        self.isolation_target_mz = 0.0
+        self.isolation_lower_offset = 0.0
+        self.isolation_upper_offset = 0.0
         self.spec_arrays.clear()
 
     def reset_chromatogram(self) -> None:
@@ -206,6 +225,12 @@ def _handle_start(state: _State, tag: str, elem: Any) -> None:
     if tag == "scanWindow":
         state.in_scan_window += 1
         return
+    if tag == "activation":
+        state.in_activation += 1
+        return
+    if tag == "isolationWindow":
+        state.in_isolation_window += 1
+        return
     if tag == "cvParam":
         _handle_cv_param(state, attrs)
 
@@ -237,6 +262,32 @@ def _handle_cv_param(state: _State, attrs: dict[str, str]) -> None:
             return
         if acc == cv.CHARGE_STATE:
             state.precursor_charge = _to_int(value)
+            return
+        return
+
+    # 2a. (M74) inside <precursor><activation>: dissociation method cvParams.
+    # Gate on `in_precursor` so <product> siblings (SRM) are ignored.
+    if state.in_activation and state.in_precursor and state.in_spectrum:
+        method = cv.activation_method_for(acc)
+        if method is not None:
+            state.activation_method = method
+            state.any_activation_detail = True
+        return
+
+    # 2b. (M74) inside <precursor><isolationWindow>: target m/z + offsets.
+    # Gate on `in_precursor` so <product><isolationWindow> is ignored.
+    if state.in_isolation_window and state.in_precursor and state.in_spectrum:
+        if acc == cv.ISOLATION_TARGET_MZ:
+            state.isolation_target_mz = _to_float(value)
+            state.any_activation_detail = True
+            return
+        if acc == cv.ISOLATION_LOWER_OFFSET:
+            state.isolation_lower_offset = _to_float(value)
+            state.any_activation_detail = True
+            return
+        if acc == cv.ISOLATION_UPPER_OFFSET:
+            state.isolation_upper_offset = _to_float(value)
+            state.any_activation_detail = True
             return
         return
 
@@ -310,6 +361,12 @@ def _handle_end(state: _State, tag: str, elem: Any) -> None:
     if tag == "scanWindow":
         state.in_scan_window -= 1
         return
+    if tag == "activation":
+        state.in_activation -= 1
+        return
+    if tag == "isolationWindow":
+        state.in_isolation_window -= 1
+        return
 
 
 def _finish_bin_array(state: _State) -> None:
@@ -345,6 +402,10 @@ def _finish_spectrum(state: _State) -> None:
             polarity=int(state.polarity),
             precursor_mz=state.precursor_mz,
             precursor_charge=state.precursor_charge,
+            activation_method=int(state.activation_method),
+            isolation_target_mz=state.isolation_target_mz,
+            isolation_lower_offset=state.isolation_lower_offset,
+            isolation_upper_offset=state.isolation_upper_offset,
         ))
     state.reset_spectrum()
 
