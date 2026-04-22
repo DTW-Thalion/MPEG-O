@@ -39,131 +39,114 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **v0.11.1 — Normative reference. 1536 assertions passing.** | `objc/` |
-| **Python (`mpeg-o`)**     | **v0.11.1 — Full parity with ObjC and Java. 765 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.mpgo`)** | **v0.11.1 — Full parity with ObjC and Python. 331 tests, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **Normative reference — full M74 suite passing.** | `objc/` |
+| **Python (`mpeg-o`)**     | **Full parity with ObjC and Java — 777 tests passing.** | `python/` |
+| **Java (`com.dtwthalion.mpgo`)** | **Full parity with ObjC and Python — 342 tests, JDK 17, Maven.** | `java/` |
 
-A **cross-language conformance harness** drives the per-AU
-encryption CLI and the JCAMP-DX bridge through small subprocess
-drivers in all three languages and byte-compares the artefacts —
-44 combinations green as of v0.11.1 (38 per-AU encrypt × decrypt
-× headers from v0.10 plus 6 JCAMP-DX Raman/IR from v0.11). See
+A **cross-language conformance harness** drives the per-AU encryption CLI and
+the JCAMP-DX bridge through small subprocess drivers in all three languages
+and byte-compares the artefacts — 44+ combinations green (per-AU encrypt ×
+decrypt × headers and JCAMP-DX Raman/IR). See
 `python/tests/integration/test_per_au_cross_language.py` and
 `python/tests/integration/test_raman_ir_cross_language.py`.
 
-### v0.1.0-alpha capabilities
+## Features
 
-* **Foundation** — five capability protocols (`MPGOIndexable`, `MPGOStreamable`, `MPGOCVAnnotatable`, `MPGOProvenanceable`, `MPGOEncryptable`) plus the immutable value classes `MPGOValueRange`, `MPGOEncodingSpec`, `MPGOAxisDescriptor`, `MPGOCVParam`.
-* **HDF5 wrappers** — thin Cocoa wrappers over the libhdf5 C API (`MPGOHDF5File`, `MPGOHDF5Group`, `MPGOHDF5Dataset`, `MPGOHDF5Errors`, `MPGOHDF5Types`) supporting `float32` / `float64` / `int32` / `int64` / `uint32` / `complex128` (compound), chunked storage, and zlib compression. Hyperslab partial reads, automatic runtime ABI detection, and `NSError` out-parameters on every fallible call.
-* **Signal arrays** — `MPGOSignalArray` is the atomic typed-buffer unit, conforms to `MPGOCVAnnotatable`, and round-trips through HDF5 with axis descriptors and JSON-encoded CV annotations.
-* **Spectrum classes** — `MPGOSpectrum` base plus `MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`, `MPGOFreeInductionDecay` (Complex128-backed), and `MPGOChromatogram` (TIC/XIC/SRM).
-* **Acquisition runs** — `MPGOAcquisitionRun` conforms to `MPGOIndexable` + `MPGOStreamable`. Writing channelizes every spectrum into contiguous `mz_values` + `intensity_values` datasets; reading is lazy and uses HDF5 hyperslab selection so a random-access spectrum read only touches its own chunks. `MPGOSpectrumIndex` carries seven parallel scan-metadata arrays (offsets, lengths, RT, MS level, polarity, precursor m/z, base peak) for compressed-domain queries.
-* **Spectral datasets** — `MPGOSpectralDataset` is the root `.mpgo` container object. Holds named MS runs, named NMR-spectrum collections, identifications, quantifications, W3C PROV provenance records, and SRM/MRM transition lists. Multi-run round-trip and provenance lookup by input ref are first-class.
-* **MS imaging** — `MPGOMSImage` stores a 3-D `[height, width, spectralPoints]` HDF5 dataset with tile-aligned chunking; tile reads (default 32×32 pixels) hit exactly the chunks they need.
-* **Selective encryption** — `MPGOEncryptionManager` (AES-256-GCM via OpenSSL) encrypts an acquisition run's intensity channel in place while leaving `mz_values` and the spectrum index readable as plaintext. Wrong keys fail cleanly via GCM tag mismatch — never partial bytes. `MPGOAccessPolicy` persists JSON-encoded subject/stream/key-id metadata under `/protection/access_policies` independently of any key store.
-* **Query + streaming** — `MPGOQuery` builds compressed-domain predicates (RT range, MS level, polarity, precursor m/z range, base peak threshold) over an in-memory index without touching signal channels; a 10k-spectrum scan runs in ~0.2 ms in CI. `MPGOStreamWriter` / `MPGOStreamReader` provide incremental write + sequential read over runs of arbitrary size.
+All features below are available today in the current release of MPEG-O across
+the three implementation streams unless flagged otherwise. For the
+release-by-release narrative (*which version introduced what*), see
+[`docs/version-history.md`](docs/version-history.md).
 
-Continuous integration runs every push on `ubuntu-latest` with **clang + libobjc2 + gnustep-base built from source** (the `gnustep-2.0` non-fragile ABI), then exercises the full test suite.
+### Domain modalities
 
-### v0.2.0 capabilities (additions to v0.1)
+* **Mass spectrometry** — MS¹ / MS² / DIA / SRM spectra as `MassSpectrum`, with `mz_values` + `intensity_values` signal channels and a parallel `SpectrumIndex` carrying offsets, lengths, RT, MS level, polarity, precursor m/z, base peak, isolation-window bounds, activation method and energy, and ion-mobility values (`inv_ion_mobility` for timsTOF).
+* **NMR** — 1-D `NMRSpectrum` with `chemical_shift_values` + `intensity_values`, native rank-2 `NMR2DSpectrum` (F1/F2 dimension scales via `H5DSattach_scale`), and complex128-backed `FreeInductionDecay` (FID).
+* **Vibrational spectroscopy** — `RamanSpectrum` / `IRSpectrum` keyed by `wavenumber` + `intensity` with laser / excitation / integration-time (Raman) or mode / resolution / scan-count (IR) metadata. `RamanImage` / `IRImage` rank-3 cubes mirror MS-imaging tile chunking.
+* **UV/Visible** — `UVVisSpectrum` keyed by `wavelength` (nm) + `absorbance`, with `pathLengthCm` + `solvent` metadata.
+* **2D correlation spectroscopy (2D-COS)** — `TwoDimensionalCorrelationSpectrum` holds synchronous + asynchronous rank-2 correlation matrices over a shared variable axis; gated behind `opt_native_2d_cos`.
+* **Chromatograms** — TIC / XIC / SRM traces persist as `Chromatogram` with a parallel-array chromatogram index, round-tripped via `<chromatogramList>` + `<index name="chromatogram">` in the mzML writer.
+* **MS imaging** — `MSImage` stores a 3-D `[height, width, spectralPoints]` HDF5 dataset with tile-aligned chunking (default 32×32 pixel tiles); inherits identifications / quantifications / provenance / access-policy from `SpectralDataset`.
 
-* **mzML import** — `MPGOMzMLReader` is a SAX parser (`NSXMLParser`) that consumes PSI-MS mzML 1.1 files, decodes base64 binary arrays (with optional zlib inflate), maps CV accessions via `MPGOCVTermMapper`, and produces an `MPGOSpectralDataset` with a populated MS run. Tested against the canonical `tiny.pwiz.1.1.mzML` and `1min.mzML` fixtures from HUPO-PSI.
-* **nmrML import** — `MPGONmrMLReader` handles nmrML 1.0+ including vendor-realistic files: element-based acquisition parameters, int32/int64 FID payloads widened to complex128 on import, dimension scale extraction. Validated against `bmse000325.nmrML` from the BMRB via the nmrML project.
-* **Modality-agnostic runs** — `MPGOAcquisitionRun` now accepts any `MPGOSpectrum` subclass. Signal channel serialization is name-driven (`<channel>_values`), so MS runs are binary-compatible with v0.1 while NMR runs produce `chemical_shift_values` + `intensity_values`. Runs formally conform to `<MPGOProvenanceable>` + `<MPGOEncryptable>` with per-run provenance chains, protocol-based encrypt/decrypt delegating to `MPGOEncryptionManager`.
-* **Native HDF5 compound types** — identifications, quantifications, and dataset-level provenance migrate from JSON string attributes to native HDF5 compound datasets with variable-length C strings. Spectrum index carries an optional rank-1 `headers` compound dataset for `h5dump` readability alongside the parallel 1-D arrays. `MPGOHDF5CompoundType` wraps `H5Tcreate(H5T_COMPOUND, ...)` with VL string helpers.
-* **Feature flags + format version** — every v0.2 file carries `@mpeg_o_format_version = "1.1"` and a JSON array `@mpeg_o_features` on the root group. `MPGOFeatureFlags` provides the registry; `opt_`-prefixed features are informational while non-prefixed features are required.
-* **Dataset-level encryption** — `MPGOSpectralDataset` conforms to `<MPGOEncryptable>` end-to-end. A single `encryptWithKey:level:error:` call encrypts every run's intensity channel, seals the compound identification/quantification datasets, and writes the `@encrypted` root marker and `@access_policy_json`. `-closeFile` releases the HDF5 handle so the encryption manager can reopen read-write.
-* **MSImage inheritance** — `MPGOMSImage` inherits from `MPGOSpectralDataset`, so image datasets carry identifications/quantifications/provenance/access-policy for free. The 3-D cube lives at `/study/image_cube/` with spatial metadata (`pixelSizeX/Y`, `scanPattern`); v0.1 `/image_cube/` layout remains readable via auto-detection.
-* **Native 2-D NMR** — `MPGONMR2DSpectrum` writes a proper rank-2 HDF5 dataset (`intensity_matrix_2d`) with F1/F2 dimension scales attached via `H5DSattach_scale`. Readers prefer the native 2-D form and fall back to the v0.1 flattened 1-D array.
-* **HMAC-SHA256 digital signatures** — `MPGOSignatureManager` signs HDF5 dataset bytes and provenance chains; `MPGOVerifier` reports Valid/Invalid/NotSigned/Error. 1M-element float64 sign + verify runs in ~15 ms combined.
-* **Format specification** — [`docs/format-spec.md`](docs/format-spec.md) documents every group, dataset, attribute, and compound type in enough detail for a conforming Python/Rust/Go reader. [`docs/feature-flags.md`](docs/feature-flags.md) is the feature string registry. Reference `.mpgo` fixtures under `objc/Tests/Fixtures/mpgo/` (generated by `objc/Tools/MakeFixtures`) provide canonical smoke-test files.
+### The six data primitives
 
-v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2.0 code — the readers detect the absence of `@mpeg_o_features` and dispatch to JSON fallback paths.
+* **SignalArray** — atomic typed-buffer unit conforming to `CVAnnotatable`; round-trips with axis descriptors and CV annotations. Supports `float32` / `float64` / `int32` / `int64` / `uint32` / `complex128`.
+* **Spectrum** — named dictionary of SignalArrays with coordinate axes and CV metadata; specialized by MS / NMR / Raman / IR / UV-Vis / 2D-COS subclasses and persisted through the generic path with `@mpgo_class` attributes.
+* **AcquisitionRun** — ordered, indexable, streamable collection of Spectrum objects sharing an instrument configuration and provenance chain. Accepts any Spectrum subclass; signal-channel serialization is name-driven. Conforms to `Indexable` + `Streamable` + `Provenanceable` + `Encryptable` with per-run provenance chains.
+* **CVAnnotation** — controlled-vocabulary parameter (ontology reference + accession + value + unit) attachable to any annotatable object. PSI-MS / nmrCV / Unimod accessions mapped via `CVTermMapper`.
+* **Identification** — link from a spectrum (or region) to a chemical entity, with confidence score and evidence chain. Persisted as a native HDF5 compound dataset.
+* **ProvenanceRecord** — W3C PROV-compatible record (input entities → activity → output entities). Persists both as a compound dataset at `/study/provenance` and per-run at `<run>/provenance/steps`.
 
-### v0.3.0 capabilities (additions to v0.2)
+### Container, storage providers, and I/O
 
-* **Python `mpeg-o` package** — a full reader/writer for the `.mpgo` format built on `h5py` + `numpy`, mirroring the ObjC class hierarchy 1-to-1. Ships an editable layout under `python/src/mpeg_o/` with `importers/` (mzML + nmrML), `exporters/` (mzML), and `_numpress` codec helpers. PyPI name: **`mpeg-o`** (import as `mpeg_o`). Requires Python 3.11+. Every v0.2 reference fixture (`minimal_ms`, `full_ms`, `nmr_1d`, `encrypted`, `signed`) is loaded byte-compatibly by the Python reader, and a new `MpgoVerify` + `MpgoSign` ObjC CLI pair tests the other direction (Python-written files decoded by the ObjC reference reader).
-* **Compound per-run provenance** — `MPGOAcquisitionRun` persists its provenance chain as a compound HDF5 dataset at `/study/ms_runs/<run>/provenance/steps`, reusing the 5-field type from dataset-level `/study/provenance`. The legacy `@provenance_json` mirror is kept in place so the v0.2 signature manager continues to work. Feature flag: `compound_per_run_provenance`.
-* **Canonical byte-order signatures** — `MPGOSignatureManager` now hashes a canonical little-endian byte stream (atomic numeric datasets via LE memory types, compound datasets field-by-field with VL strings emitted as `u32_le(len) || bytes`). Signatures carry a `"v2:"` prefix; v0.2 native-byte signatures remain verifiable via an automatic fallback path. Cross-language byte-identical MACs between ObjC and Python by construction. Feature flag: `opt_canonical_signatures`.
-* **mzML writer** — `MPGOMzMLWriter` + `mpeg_o.exporters.mzml` emit indexed-mzML from a `SpectralDataset`, with byte-correct `<indexList>` offsets per spectrum and optional zlib compression of binary arrays. Licensed Apache-2.0 alongside the import layer.
-* **Cloud-native access (Python)** — `SpectralDataset.open("s3://bucket/file.mpgo")` routes URLs through `fsspec`. HTTP, S3, GCS, and Azure backends are supported through fsspec plugins; the reader pulls only the HDF5 metadata and a handful of chunks per touched spectrum. Benchmark: 10 random spectra from a 15 MB remote file in ~50 ms, ~24% of file bytes transferred.
-* **LZ4 + Numpress-delta compression** — optional signal-channel codecs. LZ4 via HDF5 filter 32004 (plugin-gated, skipped cleanly at runtime when unavailable) is ~35× faster on write / ~2× faster on read than zlib. Numpress-delta is a clean-room implementation of Teleman et al. 2014 (*MCP* 13(6)) with sub-ppm relative error for typical m/z data. Both codecs are cross-language byte-identical between ObjC and Python.
+* **`.mpgo` HDF5 container** — root `SpectralDataset` holds named MS runs, NMR/Raman/IR/UV-Vis spectrum collections, identifications, quantifications, PROV provenance records, and SRM/MRM transition lists. Fully specified in [`docs/format-spec.md`](docs/format-spec.md); current container version is **1.3** (legacy files at 1.1 still round-trip).
+* **Feature flags** — root-level `@mpeg_o_format_version` + JSON `@mpeg_o_features`. `opt_`-prefixed flags are informational; unprefixed flags are required. Registry at [`docs/feature-flags.md`](docs/feature-flags.md).
+* **Storage-provider abstraction** — `StorageProvider` / `StorageGroup` / `StorageDataset` protocols. Four interchangeable backends: **HDF5** (reference), **Memory** (transient), **SQLite** (full group/dataset/attribute/compound tree as rows), **Zarr v3** (on-disk + in-memory + S3). `open_provider("scheme://...")` dispatches by URL scheme.
+* **Byte-level canonical bytes** — `read_canonical_bytes()` returns a little-endian byte stream regardless of backend or host endianness; every provider returns bit-equal bytes for the same logical data — the protocol-native path for signatures and encryption.
+* **Full-rank N-D datasets** — `create_dataset_nd` works across all providers via a flat-BLOB + `@__shape_<name>__` attribute pattern.
+* **VL_BYTES compound field kind** — variable-length byte segments in compound rows across all providers; Java's HDF5 provider uses a native `hvl_t` raw-buffer pool to work around JHI5 1.10's marshalling gap.
+* **Cloud-native access** — Python `SpectralDataset.open("s3://bucket/run.mpgo")` routes through `fsspec` (HTTP / S3 / GCS / Azure); alternatively stream HDF5 metadata + chunks directly over S3 / HTTPS via libhdf5's **ROS3 VFD**. Benchmark: 10 random spectra from a 15 MB remote file in ~50 ms, ~24% of bytes transferred.
+* **Thread safety** — `HDF5File` carries a `pthread_rwlock_t` serializing writes and allowing concurrent reads; Python side opt-in via `SpectralDataset.open(..., thread_safe=True)` with a writer-preferring `RWLock`. Degrades to exclusive locking on non-threadsafe libhdf5 builds.
+* **Chunked + compressed storage** — zlib via HDF5, plus optional **LZ4** (filter 32004; ~35× faster write / ~2× faster read than zlib) and **Numpress-delta** (sub-ppm relative error for m/z). Both cross-language byte-identical between ObjC and Python. LZ4 skips cleanly at runtime when the plugin isn't loadable.
+* **Streaming + query** — `StreamWriter` / `StreamReader` for incremental write + sequential read over runs of arbitrary size. `Query` evaluates compressed-domain predicates (RT range, MS level, polarity, precursor m/z range, base peak threshold) over the in-memory index without touching signal channels; a 10k-spectrum scan runs in ~0.2 ms in CI.
 
-### v0.4.0 capabilities (additions to v0.3)
+### Importers
 
-* **Thread safety (M23)** — `MPGOHDF5File` carries a `pthread_rwlock_t` that serializes writes and allows concurrent reads. Python side: opt-in `SpectralDataset.open(..., thread_safe=True)` with a writer-preferring `RWLock`. Degrades to exclusive locking on non-threadsafe libhdf5 builds.
-* **Chromatogram API (M24)** — `MPGOAcquisitionRun.chromatograms` persists TIC/XIC/SRM traces under `<run>/chromatograms/` with a parallel-array chromatogram index. mzML writer emits `<chromatogramList>` + `<index name="chromatogram">` with byte-correct offsets; reader parses them back.
-* **Envelope encryption + key rotation (M25)** — DEK encrypts data, KEK wraps DEK. `/protection/key_info/` stores the 60-byte wrapped DEK blob + KEK metadata. Rotation re-wraps in O(1) without touching signal datasets. Feature flag: `opt_key_rotation`.
-* **ISA-Tab / ISA-JSON export (M27)** — `MPGOISAExporter` / `mpeg_o.exporters.isa` produces investigation/study/assay TSV files + ISA-JSON from a `SpectralDataset`. Licensed Apache-2.0.
-* **Spectral anonymization (M28)** — policy-based pipeline (SAAV redaction, intensity masking, m/z coarsening, rare-metabolite suppression, metadata stripping) that reads a dataset and writes a new `.mpgo`. Audit trail via provenance record. Feature flag: `opt_anonymized`.
-* **nmrML writer (M29)** — serializes `NMRSpectrum` + FID to nmrML XML with acquisition parameters and base64 spectrum arrays. Round-trips through the existing nmrML reader.
-* **Thermo RAW stub (M29)** — `MPGOThermoRawReader` / `mpeg_o.importers.thermo_raw` stub; returns not-implemented error with SDK guidance. See `docs/vendor-formats.md`.
+* **mzML 1.1** — SAX-parsed, base64 + zlib-aware, CV-mapped; populates activation method, isolation window, ion mobility, and chromatograms.
+* **nmrML 1.0+** — element-based acquisition parameters, int32/int64 FID payloads widened to complex128 on import, dimension-scale extraction. Validated against BMRB `bmse000325.nmrML`.
+* **JCAMP-DX 5.01** — AFFN `##XYDATA=(X++(Y..Y))` plus the full §5.9 **compressed dialect (PAC / SQZ / DIF / DUP)**. Reader auto-detects compression via a sentinel-char scan that excludes `e`/`E` so AFFN scientific notation doesn't false-trigger. Dispatches on `##DATA TYPE=` to Raman, IR (transmittance + absorbance), and UV/Vis. 2-D NTUPLES is intentionally out of scope.
+* **Bruker timsTOF `.d`** — SQLite metadata reads natively in every language (`java.sql`, `libsqlite3`, stdlib `sqlite3`); binary frame decompression via `opentimspy` + `opentims-bruker-bridge` (Python native; Java / ObjC subprocess the Python helper). `inv_ion_mobility` channel preserves the 2-D timsTOF geometry per-peak. Install with `pip install 'mpeg-o[bruker]'`.
+* **Thermo `.raw`** — shells out to `ThermoRawFileParser` and ingests the resulting mzML.
 
-### v0.5.0 capabilities (additions to v0.4)
+### Exporters
 
-* **Three-language parity** — Java implementation (`com.dtwthalion.mpgo`, JDK 17 + Maven) reaches full behavioural parity with the Objective-C reference and Python reader/writer. Every cross-language round-trip test in the matrix passes byte-for-byte, driven by shared format fixtures.
-* **Canonical byte-order signatures across languages** — `v2:` HMAC-SHA256 signatures (Appendix B in `docs/format-spec.md`) verify identically whether produced by Objective-C, Python, or Java, validating the canonical little-endian byte layout at the implementation level.
-* **Compound metadata round-trip across languages** — identifications / quantifications / dataset-level provenance round-trip through all three languages (native compound datasets in HDF5; Python / Java write a JSON attribute mirror so JHI5 1.10's missing VL-in-compound support doesn't block interop).
+* **mzML (indexed)** — `MzMLWriter` emits indexed-mzML with byte-correct `<indexList>` offsets per spectrum, optional zlib compression of binary arrays, and `<chromatogramList>` with a byte-correct chromatogram index. Licensed Apache-2.0. PSI-MS CV accessions for activation method and isolation window (MS:1000133 CID, MS:1000422 HCD, MS:1000598 ETD, MS:1000250 ECD, MS:1003246 UVPD, MS:1003181 EThcD; MS:1000827/828/829 for isolation window).
+* **nmrML** — serializes `NMRSpectrum` + FID with acquisition parameters and base64 spectrum arrays; round-trips through the reader.
+* **JCAMP-DX 5.01 (AFFN)** — writer emits LDRs in fixed order with `%.10g` formatting, producing byte-identical output across the three languages for identical input. Compression variants remain read-only for now (bit-accurate round-trips > byte savings at this stage).
+* **imzML** — continuous + processed modes, UUID normalisation.
+* **mzTab** — proteomics 1.0 and metabolomics 2.0.0-M dialects.
+* **ISA-Tab / ISA-JSON** — investigation/study/assay TSV files + ISA-JSON from a `SpectralDataset`. Licensed Apache-2.0.
 
-### v0.6.0 / v0.6.1 capabilities (additions to v0.5)
+### Streaming transport (`.mots`)
 
-* **Storage provider abstraction (M39)** — `StorageProvider` / `StorageGroup` / `StorageDataset` (`MPGOStorageProtocols.h` in ObjC; `com.dtwthalion.mpgo.providers` in Java; `mpeg_o.providers` in Python). `open_provider("scheme://...")` resolves the right backend by URL scheme. `Hdf5Provider` wraps the existing layer; `MemoryProvider` ships alongside as a transient-state backend that proves the contract by construction.
-* **SQLiteProvider (M41, v0.6.1)** — fourth-backend validation: the full group/dataset/attribute/compound tree stored as SQLite rows. Uses the standard-library `sqlite3` module, no extra deps.
-* **Native Thermo RAW import (M35)** — `MPGOThermoRawReader` shells out to `ThermoRawFileParser` and ingests the resulting mzML. See `docs/vendor-formats.md`.
-* **ROS3 cloud reads (M42, v0.6.1)** — `SpectralDataset.open("s3://...")` streams HDF5 metadata + chunks directly over S3 / HTTPS via libhdf5's ROS3 VFD.
-* **Full API documentation (M38, v0.6.1)** — Sphinx HTML docs, Javadoc HTML, and an expanded ObjC gsdoc landing page all exposed under `docs/api/`.
-* **Appendix B gap closures (v0.6.1)** — six cross-language polish items from the v0.6 API review: primitive-row compound read normalisation (`read_rows`), delete_attribute, capability-query methods, unified `open()` dispatch, attribute-names listing, `provider_name()` / docstrings converged.
+* **Packet codec** — 24-byte headers, nine packet types: StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, EndOfStream. Three-language parity; bidirectional conformance matrix (any writer × any reader). Optional CRC-32C per packet. See [`docs/transport-spec.md`](docs/transport-spec.md).
+* **WebSocket client + server** — libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). Stream `.mpgo` as `.mots` over `ws://` / `wss://`.
+* **Acquisition simulator** — replays a fixture at wall-clock pace to exercise client/server scheduling.
+* **Selective access** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`.
 
-### v0.7.0 capabilities (additions to v0.6.1)
+### Protection: encryption, integrity, and key management
 
-* **Byte-level storage protocol (M43)** — `StorageDataset.read_canonical_bytes()` / `-readCanonicalBytesAtOffset:count:error:` — the protocol-native path for signatures and encryption. Canonical byte stream is little-endian regardless of backend or host endianness; every provider (HDF5, Memory, SQLite, Zarr) returns bit-equal bytes for the same logical data. Binding decision 37.
-* **AcquisitionRun + MSImage protocol-native access (M44)** — the hot-path spectrum slice read goes through `StorageDataset` instead of reaching for `h5py.Dataset` / `MPGOHDF5Dataset` / `Hdf5Dataset` directly. `AcquisitionRun`'s instance state now holds only protocol types across all three languages.
-* **Full-rank N-D datasets (M45)** — `create_dataset_nd` completes on Memory and SQLite providers using a flat-BLOB + `@__shape_<name>__` attribute pattern that preserves rank through the protocol. Hdf5Provider gets the same pattern; v0.8 may add native `H5Screate_simple` storage as an optimisation.
-* **ZarrProvider Python reference (M46, stretch)** — fourth storage backend, validates the abstraction against the Zarr spec. URL schemes: `zarr:///path/to/store.zarr` (directory), `zarr+memory://<name>`, `zarr+s3://bucket/key` (via fsspec). Canonical-bytes parity verified against HDF5. Java + ObjC ports deferred to v0.8 per binding decision 41. (Migrated to the Zarr v3 on-disk format in v0.9.)
-* **Versioned wrapped-key blob format (M47)** — `[magic "MW" | version 0x02 | algorithm_id | ct_len | md_len | metadata | ciphertext]`, replacing the fixed 60-byte AES-GCM-only v1.1 blob. v1.1 blobs remain readable by v0.7+ indefinitely (binding decision 38). Reserved algorithm IDs for ML-KEM-1024, ML-DSA-87, SHAKE-256. Feature flag: `wrapped_key_v2`.
-* **Crypto algorithm agility (M48)** — `CipherSuite` static catalog (AEAD / KEM / MAC / Signature / Hash / XOF). `encrypt_bytes(..., algorithm=...)`, `sign_dataset(..., algorithm=...)`, `enable_envelope_encryption(..., algorithm=...)` gained opt-in `algorithm=` parameters; default remains AES-256-GCM / HMAC-SHA256 for backward compat. Binding decision 39 — fixed allow-list, not plugin-registered.
-* **Cross-language compound byte-parity harness (M51, stretch)** — three new dumper CLIs (`python -m mpeg_o.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `MpgoDumpIdentifications`) emit identifications / quantifications / provenance as byte-identical canonical JSON. `test_compound_writer_parity.py` pairwise-diffs the three outputs; any divergence fails the test. Caught + fixed a Java `H5T_NATIVE_UINT64` precision-probe bug on the way in.
-* **Cross-language polish (M50)** — six independent sub-items: unified `open()` docs, ObjC `-readRowsWithError:` made @required, Java typed importer exception hierarchy, Java `@since` audit, cross-language error-domain mapping appendix (`docs/api-review-v0.7.md` §C), Appendix B Gap 7 cross-references.
+* **Classical AEAD** — AES-256-GCM via OpenSSL / JCE / cryptography library. Wrong keys fail cleanly via GCM tag mismatch, never partial bytes.
+* **Selective dataset encryption** — encrypts an acquisition run's intensity channel in place while leaving `mz_values` and the spectrum index readable as plaintext. Whole-dataset seal via `encryptWithKey:level:error:` also encrypts compound identification/quantification datasets.
+* **Envelope encryption + key rotation** — DEK encrypts data, KEK wraps DEK. `/protection/key_info/` stores the wrapped-DEK blob + KEK metadata. Rotation re-wraps in O(1) without touching signal datasets.
+* **Versioned wrapped-key blob** — `[magic "MW" | version 0x02 | algorithm_id | ct_len | md_len | metadata | ciphertext]`. v1.1 blobs remain readable indefinitely.
+* **Crypto algorithm agility** — `CipherSuite` static catalog (AEAD / KEM / MAC / Signature / Hash / XOF). `encrypt_bytes`, `sign_dataset`, `enable_envelope_encryption` all take opt-in `algorithm=` parameters. Fixed allow-list, not plugin-registered.
+* **Per-Access-Unit encryption** — `opt_per_au_encryption` with the `<channel>_segments` VL_BYTES compound layout (see [`docs/format-spec.md`](docs/format-spec.md) §9.1). Each spectrum is a separate AES-256-GCM op with fresh IV and AAD = `dataset_id || au_sequence || channel_name`; ciphertext can't be replayed against a different AU or envelope. Optional `opt_encrypted_au_headers` also encrypts the 36-byte semantic header.
+* **HMAC-SHA256 signatures (`v2:`)** — canonical little-endian byte stream hashed field-by-field (VL strings as `u32_le(len) || bytes`). Cross-language byte-identical by construction. v0.2 native-byte signatures verified via automatic fallback.
+* **Post-quantum signatures + KEM (`v3:`)** — ML-KEM-1024 (FIPS 203) envelope key-wrap and ML-DSA-87 (FIPS 204) dataset signatures. Python + ObjC via [`liboqs`](https://github.com/open-quantum-safe/liboqs); Java via Bouncy Castle 1.80+. Opt-in via `pip install 'mpeg-o[pqc]'`; classical AES-256-GCM + HMAC-SHA256 remain the defaults. Feature flag: `opt_pqc_preview`. See [`docs/pqc.md`](docs/pqc.md).
+* **Access policy** — `AccessPolicy` persists JSON-encoded subject/stream/key-id metadata under `/protection/access_policies` independently of any key store.
+* **Spectral anonymization** — policy-based pipeline (SAAV redaction, intensity masking, m/z coarsening, rare-metabolite suppression, metadata stripping). Audit trail via provenance record. Feature flag: `opt_anonymized`.
 
-### v0.8.0 capabilities (additions to v0.7.0)
+### Cross-language conformance
 
-* **Post-quantum crypto (M49 + M49.1)** — ML-KEM-1024 (FIPS 203) envelope key-wrap and ML-DSA-87 (FIPS 204) dataset signatures. New `v3:` signature-attribute prefix and `opt_pqc_preview` feature flag. Python and Objective-C use [`liboqs`](https://github.com/open-quantum-safe/liboqs) (via `liboqs-python` and direct C linkage); Java uses Bouncy Castle 1.80+. Library-choice rationale and wire-format reference: [`docs/pqc.md`](docs/pqc.md). Opt-in via `pip install 'mpeg-o[pqc]'`; AES-256-GCM + HMAC-SHA256 remain the defaults.
-* **Java + Objective-C `ZarrProvider` ports (M52)** — self-contained LocalStore implementations. No external zarr library dependency; on-disk layout matches the Python reference (v0.7 M46) so all three languages cross-read one another's stores. Compound datasets use the Python convention (sub-group + `_mpgo_kind="compound"` + `_mpgo_schema` + `_mpgo_rows` JSON attrs). In-memory (`zarr+memory://`) and S3 (`zarr+s3://`) schemes remain Python-only. (On-disk format migrated from Zarr v2 to v3 in v0.9.)
-* **Bruker timsTOF `.d` importer (M53)** — SQLite metadata reads natively in every language (uses `java.sql` in Java, `libsqlite3` in ObjC, stdlib `sqlite3` in Python). Binary frame decompression uses [`opentimspy`](https://pypi.org/project/opentimspy/) + `opentims-bruker-bridge` in Python and subprocesses into the Python helper from Java / ObjC — no proprietary Bruker SDK involved. New **`inv_ion_mobility` signal channel** preserves the 2-D timsTOF geometry per-peak. Install with `pip install 'mpeg-o[bruker]'`. Details: [`docs/vendor-formats.md`](docs/vendor-formats.md).
-* **Cross-language PQC conformance matrix (M54 + M54.1)** — 32-cell verification matrix across all three languages and four providers: primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` dataset signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence on the same file, v0.7 classical backward-compat. New `com.dtwthalion.mpgo.tools.PQCTool` (Java) and `MpgoPQCTool` (ObjC) CLIs drive the Python pytest harness. Python `sign_storage_dataset` / `verify_storage_dataset` provider-agnostic helpers let PQC signatures ride any storage backend for free.
-* **v1.0 API stability audit (M55)** — every public API classified Stable / Provisional / Deprecated across the three languages in new [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md). Deprecation ledger identifies five APIs scheduled for removal at v1.0 (file-path intensity-channel helpers, `nativeHandle()`, v1 HMAC fallback). Comprehensive [`CHANGELOG.md`](CHANGELOG.md) covering v0.1-alpha through v0.8.
+* **Three-language parity** — Objective-C (GNUstep) normative reference, Python (`mpeg-o`, Python 3.11+), Java (`com.dtwthalion.mpgo`, JDK 17 + Maven). Every cross-language round-trip test passes byte-for-byte, driven by shared format fixtures.
+* **Compound byte-parity harness** — three dumper CLIs (Python `python -m mpeg_o.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `MpgoDumpIdentifications`) emit identifications / quantifications / provenance as byte-identical canonical JSON; pairwise-diffed in CI.
+* **Per-AU encryption CLIs** — `per_au_cli` (Python), `PerAUCli` (Java), `MpgoPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" dump for byte-compare; `transcode --rekey` rotates DEKs.
+* **PQC conformance matrix** — 32-cell verification across languages × providers (primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence).
+* **JCAMP-DX conformance** — 6 integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `MpgoJcampDxDump`.
+* **API stability audit** — every public API classified Stable / Provisional / Deprecated in [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md).
 
-### v0.9.x capabilities (additions to v0.8.0)
+### Foundation
 
-* **Provider abstraction hardening** — SQLite and Zarr v3 backends in all three languages with byte-parity on compound records and canonical bytes. On-disk Zarr format migrated from v2 to v3. See [`docs/providers.md`](docs/providers.md).
-* **Exporter fidelity (v0.9.1)** — mzTab exporter (proteomics 1.0 + metabolomics 2.0.0-M dialects), imzML exporter (continuous + processed modes, UUID normalisation), nmrML `<spectrum1D>` content-model fix (interleaved `(x,y)` with auto-detect on read), and compound-per-entity extensions.
-
-### v0.10.0 capabilities (additions to v0.9.x)
-
-* **Streaming transport layer (M66–M72)** — `.mots` packet codec with 24-byte headers and nine packet types (StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, EndOfStream). Three-language parity in Python / ObjC / Java. Bidirectional conformance test matrix: any writer pairs with any reader. See [`docs/transport-spec.md`](docs/transport-spec.md).
-* **WebSocket client + server (M68 / M68.5)** — libwebsockets for ObjC, `websockets` for Python, Java-WebSocket for Java. Stream `.mpgo` datasets as `.mots` with optional CRC-32C per packet.
-* **Acquisition simulator (M69)** — replays a fixture at wall-clock pace to exercise client / server scheduling.
-* **Selective access + ProtectionMetadata (M71)** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`.
-* **Per-Access-Unit encryption (v1.0 scope)** — `opt_per_au_encryption` feature flag with the `<channel>_segments` VL_BYTES compound layout (see [`docs/format-spec.md`](docs/format-spec.md) §9.1). Each spectrum is a separate AES-256-GCM op with fresh IV and AAD = `dataset_id || au_sequence || channel_name`; ciphertext cannot be replayed against a different AU or envelope. Optional `opt_encrypted_au_headers` additionally encrypts the 36-byte semantic header into `spectrum_index/au_header_segments`. Full design in [`docs/transport-encryption-design.md`](docs/transport-encryption-design.md).
-* **Cross-language CLIs + conformance harness** — `per_au_cli` (Python), `PerAUCli` (Java), `MpgoPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" binary dump so the test harness can byte-compare decryption artefacts across every language pair. 38/38 combinations pass. The `transcode` subcommand supports `--rekey` for DEK rotation and refuses v0.x `opt_dataset_encryption` inputs with a migration hint.
-* **VL_BYTES compound field kind** — new across all three languages' provider abstraction. Java's HDF5 provider uses a native `hvl_t` raw-buffer pool backed by `sun.misc.Unsafe` because JHI5 1.10 doesn't marshal VL-in-compound directly.
-
-### v0.11.0 capabilities (additions to v0.10.0)
-
-* **Vibrational spectroscopy (M73)** — Raman and IR become first-class modalities alongside MS and NMR. Four new domain classes per language: `RamanSpectrum` / `IRSpectrum` (keyed by `wavenumber` + `intensity`, with excitation/laser/integration and mode/resolution/scans metadata respectively) plus `RamanImage` / `IRImage` (rank-3 intensity cubes with a shared wavenumber axis). HDF5 layout: `/study/raman_image_cube/` and `/study/ir_image_cube/` mirror the existing MSImage tile chunking. See [`docs/format-spec.md`](docs/format-spec.md) §7a and [`docs/class-hierarchy.md`](docs/class-hierarchy.md) Layer 3c.
-* **JCAMP-DX 5.01 AFFN bridge** — native reader and writer in all three languages for the `##XYDATA=(X++(Y..Y))` dialect. Writers emit LDRs in a fixed order with `%.10g` formatting, producing byte-identical output for identical input. Readers dispatch on `##DATA TYPE=` (RAMAN SPECTRUM / INFRARED ABSORBANCE / INFRARED TRANSMITTANCE, with INFRARED SPECTRUM falling back to `##YUNITS=`). 2-D NTUPLES is intentionally out of scope. See [`docs/vendor-formats.md`](docs/vendor-formats.md). *(Compression variants added in v0.11.1.)*
-* **New `IRMode` enum** — `TRANSMITTANCE=0`, `ABSORBANCE=1`. Present in all three languages (Python: `mpeg_o.IRMode`, Java: `com.dtwthalion.mpgo.Enums.IRMode`, ObjC: `MPGOIRMode`).
-* **Cross-language JCAMP-DX conformance** — 6 new integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `MpgoJcampDxDump` joins the existing CLI family as the subprocess driver.
-
-### v0.11.1 capabilities (additions to v0.11.0)
-
-* **JCAMP-DX 5.01 compression reader (PAC / SQZ / DIF / DUP)** — all three languages now decode the full §5.9 compressed `##XYDATA` dialect. Auto-detected by a sentinel-char scan that excludes `e`/`E` so AFFN scientific notation doesn't false-trigger; delegates to `mpeg_o.importers._jcamp_decode` (Python), `com.dtwthalion.mpgo.importers.JcampDxDecode` (Java), or `MPGOJcampDxDecode` (ObjC). Writers remain AFFN-only — bit-accurate round-trips are worth more than the byte savings at this stage.
-* **`UVVisSpectrum` class** — 1-D UV/visible absorption spectrum keyed by `"wavelength"` (nm) + `"absorbance"`, with `pathLengthCm` + `solvent` metadata, in all three languages. JCAMP-DX reader dispatches `UV/VIS SPECTRUM`, `UV-VIS SPECTRUM`, and `UV/VISIBLE SPECTRUM` variants to this class; writer emits `##DATA TYPE=UV/VIS SPECTRUM` with `##XUNITS=NANOMETERS` + `##YUNITS=ABSORBANCE` and `##$PATH LENGTH CM` / `##$SOLVENT` custom LDRs.
-* **`TwoDimensionalCorrelationSpectrum` class** — Noda 2D-COS representation with rank-2 synchronous (in-phase) and asynchronous (quadrature) correlation matrices sharing a single variable axis (`nu_1 == nu_2`). Row-major `float64`, size-by-size; construction validates rank, matching shape, and squareness. Gated behind the new `opt_native_2d_cos` feature flag. Present in all three languages.
+* **Capability protocols** — `Indexable`, `Streamable`, `CVAnnotatable`, `Provenanceable`, `Encryptable` and the immutable value classes `ValueRange`, `EncodingSpec`, `AxisDescriptor`, `CVParam` — the vocabulary every domain class implements.
+* **HDF5 layer** — thin wrappers over the libhdf5 C API supporting hyperslab partial reads, chunked storage, zlib compression, compound types with VL strings, and `Error` out-parameters on every fallible call. Runtime ABI auto-detection across `gnustep-1.8` legacy and `gnustep-2.0` non-fragile.
 
 ### Format compatibility
 
-Every version's files remain readable by later versions. v0.11 readers open v0.1–v0.10 files without ceremony. v0.11 adds two new HDF5 groups (`raman_image_cube/`, `ir_image_cube/`) under `/study/`; pre-v0.11 readers silently ignore them (they don't match any known layout). `RamanSpectrum`, `IRSpectrum`, `UVVisSpectrum`, and `TwoDimensionalCorrelationSpectrum` persist through the generic `MPGOSpectrum` path with `@mpgo_class` attributes, so pre-v0.11 readers fall back to the `Spectrum` base class rather than failing. v0.10 transport and per-AU encryption behaviour is unchanged. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
+Every version's files remain readable by later versions. Readers open v0.1–v0.11 files without ceremony. The current container version is 1.3; legacy v0.2 files at 1.1 and v0.10 per-AU-encrypted files still round-trip. Vibrational-spectroscopy and UV/Vis groups under `/study/` are silently ignored by pre-v0.11 readers (they don't match any known layout); `RamanSpectrum`, `IRSpectrum`, `UVVisSpectrum`, and `TwoDimensionalCorrelationSpectrum` persist through the generic Spectrum path with `@mpgo_class` attributes, so pre-v0.11 readers fall back to the base class rather than failing. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
+
+### Continuous integration
+
+Runs every push on `ubuntu-latest` with **clang + libobjc2 + gnustep-base built from source** (the `gnustep-2.0` non-fragile ABI), then exercises the full test suite across all three languages.
 
 ## Python Installation
 
@@ -280,12 +263,13 @@ works on both Debian/Ubuntu's apt packages and source builds against
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Full class hierarchy, protocols, and HDF5 container mapping
 - [`WORKPLAN.md`](WORKPLAN.md) — Milestone plan with acceptance criteria
 - [`HANDOFF.md`](HANDOFF.md) — Active development handoff (milestone status, binding decisions, gotchas)
+- [`docs/version-history.md`](docs/version-history.md) — Release-by-release feature narrative (v0.1.0-alpha → present)
 - [`docs/architectural-primitives.md`](docs/architectural-primitives.md) — Background analysis: the six primitives, five container philosophies, and the case for an MPEG-G-derived multi-omics standard
 - [`docs/primitives.md`](docs/primitives.md) — The six data primitives specification
 - [`docs/container-design.md`](docs/container-design.md) — HDF5 container layout
 - [`docs/class-hierarchy.md`](docs/class-hierarchy.md) — UML-style class descriptions
 - [`docs/ontology-mapping.md`](docs/ontology-mapping.md) — CV annotation and BFO/PSI-MS/nmrCV mapping
-- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.mpgo` format specification (v1.2 container; per-AU encryption added in v0.10)
+- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.mpgo` format specification (v1.3 container)
 - [`docs/transport-spec.md`](docs/transport-spec.md) — `.mots` streaming transport format (v0.10)
 - [`docs/transport-encryption-design.md`](docs/transport-encryption-design.md) — Per-AU encryption design (v1.0 scope, shipped in v0.10.0)
 - [`docs/feature-flags.md`](docs/feature-flags.md) — Feature-flag registry
