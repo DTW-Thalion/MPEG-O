@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .enums import Polarity
+from .enums import ActivationMethod, Polarity
+from .isolation_window import IsolationWindow
 from .signal_array import SignalArray
 from .spectrum import Spectrum
 from .value_range import ValueRange
@@ -22,6 +23,12 @@ class MassSpectrum(Spectrum):
         Ion polarity.
     scan_window : ValueRange or None, default None
         m/z range covered by the scan. ``None`` if not reported.
+    activation_method : ActivationMethod, default ActivationMethod.NONE
+        Precursor activation method for MS2+ scans. ``NONE`` for MS1
+        and for MS2 scans whose activation was not reported.
+    isolation_window : IsolationWindow or None, default None
+        Precursor isolation window for MS2+ scans. ``None`` for MS1
+        and when the window was not reported.
     *plus all base :class:`Spectrum` parameters (signal_arrays, axes,
     index_position, scan_time_seconds, precursor_mz, precursor_charge)*
 
@@ -43,6 +50,8 @@ class MassSpectrum(Spectrum):
     ms_level: int = 1
     polarity: Polarity = Polarity.UNKNOWN
     scan_window: ValueRange | None = None
+    activation_method: ActivationMethod = ActivationMethod.NONE
+    isolation_window: IsolationWindow | None = None
 
     @property
     def mz_array(self) -> SignalArray:

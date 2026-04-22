@@ -5,6 +5,7 @@ TEST_TOOL_NAME = MPGOTests
 MPGOTests_OBJC_FILES = \
 	MPGOTestRunner.m \
 	TestValueRange.m \
+	TestIsolationWindow.m \
 	TestEncodingSpec.m \
 	TestAxisDescriptor.m \
 	TestCVParam.m \

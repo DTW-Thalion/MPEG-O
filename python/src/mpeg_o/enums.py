@@ -147,3 +147,24 @@ class EncryptionLevel(IntEnum):
     DATASET = 2
     DESCRIPTOR_STREAM = 3
     ACCESS_UNIT = 4
+
+
+class ActivationMethod(IntEnum):
+    """MS/MS precursor activation (dissociation) method.
+
+    Stored as ``int32`` in the optional ``activation_methods`` column of
+    ``spectrum_index`` (see ``opt_ms2_activation_detail``). ``NONE`` is
+    the sentinel for MS1 scans and for MS2+ scans whose activation method
+    was not reported by the source instrument.
+
+    Cross-language: ObjC ``MPGOActivationMethod`` · Java
+    ``Enums.ActivationMethod``.
+    """
+
+    NONE = 0
+    CID = 1
+    HCD = 2
+    ETD = 3
+    UVPD = 4
+    ECD = 5
+    EThcD = 6

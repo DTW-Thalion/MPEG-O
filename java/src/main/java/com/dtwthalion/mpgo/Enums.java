@@ -164,4 +164,55 @@ public final class Enums {
         /** Protection spans a single access unit (finest granularity). */
         ACCESS_UNIT
     }
+
+    /**
+     * MS/MS precursor activation (dissociation) method.
+     *
+     * <p>Stored as {@code int32} in the optional {@code activation_methods}
+     * column of {@code spectrum_index} (gated by feature flag
+     * {@code opt_ms2_activation_detail}). {@link #NONE} is the sentinel
+     * for MS1 scans and for MS2+ scans whose activation method was not
+     * reported by the source instrument.</p>
+     */
+    public enum ActivationMethod {
+        /** No activation (MS1 or not reported). */
+        NONE(0),
+        /** Collision-induced dissociation. */
+        CID(1),
+        /** Higher-energy collisional dissociation. */
+        HCD(2),
+        /** Electron-transfer dissociation. */
+        ETD(3),
+        /** Ultraviolet photodissociation. */
+        UVPD(4),
+        /** Electron-capture dissociation. */
+        ECD(5),
+        /** Electron-transfer and higher-energy collision dissociation. */
+        EThcD(6);
+
+        private final int value;
+        ActivationMethod(int value) { this.value = value; }
+
+        /** @return the integer on-disk representation of this activation method. */
+        public int intValue() { return value; }
+
+        /**
+         * Resolve an integer on-disk value to an {@link ActivationMethod}
+         * constant.
+         *
+         * @param v integer value read from the file
+         * @return the matching constant, or {@link #NONE} if unrecognised
+         */
+        public static ActivationMethod fromInt(int v) {
+            return switch (v) {
+                case 1 -> CID;
+                case 2 -> HCD;
+                case 3 -> ETD;
+                case 4 -> UVPD;
+                case 5 -> ECD;
+                case 6 -> EThcD;
+                default -> NONE;
+            };
+        }
+    }
 }

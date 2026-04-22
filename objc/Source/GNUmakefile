@@ -15,6 +15,7 @@ libMPGO_HEADER_FILES = \
 	ValueClasses/MPGOAxisDescriptor.h \
 	ValueClasses/MPGOEncodingSpec.h \
 	ValueClasses/MPGOValueRange.h \
+	ValueClasses/MPGOIsolationWindow.h \
 	ValueClasses/MPGOEnums.h \
 	HDF5/MPGOHDF5Errors.h \
 	HDF5/MPGOHDF5Types.h \
@@ -101,6 +102,7 @@ libMPGO_OBJC_FILES = \
 	ValueClasses/MPGOAxisDescriptor.m \
 	ValueClasses/MPGOEncodingSpec.m \
 	ValueClasses/MPGOValueRange.m \
+	ValueClasses/MPGOIsolationWindow.m \
 	HDF5/MPGOHDF5Errors.m \
 	HDF5/MPGOHDF5Types.m \
 	HDF5/MPGOHDF5File.m \

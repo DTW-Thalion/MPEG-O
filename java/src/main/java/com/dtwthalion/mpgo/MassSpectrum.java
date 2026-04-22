@@ -5,13 +5,14 @@
  */
 package com.dtwthalion.mpgo;
 
+import com.dtwthalion.mpgo.Enums.ActivationMethod;
 import com.dtwthalion.mpgo.Enums.Polarity;
 
 import java.util.Map;
 
 /**
  * A mass spectrum: m/z + intensity arrays plus MS level, polarity,
- * and an optional scan window.
+ * scan window, and optional precursor activation / isolation metadata.
  *
  * <p><b>API status:</b> Stable.</p>
  *
@@ -25,9 +26,11 @@ public class MassSpectrum extends Spectrum {
     private final int msLevel;
     private final Polarity polarity;
     private final ValueRange scanWindow; // nullable
+    private final ActivationMethod activationMethod;
+    private final IsolationWindow isolationWindow; // nullable
 
     /**
-     * Primary constructor.
+     * Full constructor including M74 activation and isolation fields.
      *
      * @param mzValues          raw m/z values (wrapped into a {@link SignalArray})
      * @param intensityValues   raw intensity values (wrapped into a {@link SignalArray})
@@ -38,12 +41,16 @@ public class MassSpectrum extends Spectrum {
      * @param msLevel           MS level (1, 2, 3, ...)
      * @param polarity          ion polarity
      * @param scanWindow        m/z range covered by the scan; {@code null} if not reported
+     * @param activationMethod  MS2+ activation method; {@link ActivationMethod#NONE} for MS1
+     * @param isolationWindow   MS2+ isolation window; {@code null} for MS1 or when not reported
      */
     public MassSpectrum(double[] mzValues, double[] intensityValues,
                         int indexPosition, double scanTimeSeconds,
                         double precursorMz, int precursorCharge,
                         int msLevel, Polarity polarity,
-                        ValueRange scanWindow) {
+                        ValueRange scanWindow,
+                        ActivationMethod activationMethod,
+                        IsolationWindow isolationWindow) {
         super(Map.of(
             "mz", SignalArray.ofDoubles(mzValues),
             "intensity", SignalArray.ofDoubles(intensityValues)
@@ -52,6 +59,24 @@ public class MassSpectrum extends Spectrum {
         this.msLevel = msLevel;
         this.polarity = polarity;
         this.scanWindow = scanWindow;
+        this.activationMethod = activationMethod == null
+            ? ActivationMethod.NONE : activationMethod;
+        this.isolationWindow = isolationWindow;
+    }
+
+    /**
+     * Backward-compatible constructor (pre-M74): defaults
+     * {@code activationMethod} to {@link ActivationMethod#NONE} and
+     * {@code isolationWindow} to {@code null}.
+     */
+    public MassSpectrum(double[] mzValues, double[] intensityValues,
+                        int indexPosition, double scanTimeSeconds,
+                        double precursorMz, int precursorCharge,
+                        int msLevel, Polarity polarity,
+                        ValueRange scanWindow) {
+        this(mzValues, intensityValues, indexPosition, scanTimeSeconds,
+             precursorMz, precursorCharge, msLevel, polarity, scanWindow,
+             ActivationMethod.NONE, null);
     }
 
     /** Returns the {@code "mz"} {@link SignalArray}. */
@@ -76,4 +101,16 @@ public class MassSpectrum extends Spectrum {
      * m/z range covered by the scan, or {@code null} if not reported.
      */
     public ValueRange scanWindow() { return scanWindow; }
+
+    /**
+     * MS2+ activation method; {@link ActivationMethod#NONE} for MS1 or
+     * when the activation method was not reported by the source.
+     */
+    public ActivationMethod activationMethod() { return activationMethod; }
+
+    /**
+     * MS2+ precursor isolation window, or {@code null} for MS1 or when
+     * no isolation window was reported.
+     */
+    public IsolationWindow isolationWindow() { return isolationWindow; }
 }

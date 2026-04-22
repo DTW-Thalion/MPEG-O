@@ -10,6 +10,7 @@ FORMAT_VERSION = "1.1"
 
 from .enums import (
     AcquisitionMode,
+    ActivationMethod,
     Compression,
     IRMode,
     Polarity,
@@ -17,6 +18,7 @@ from .enums import (
     SamplingMode,
 )
 from .value_range import ValueRange
+from .isolation_window import IsolationWindow
 from .cv_param import CVParam
 from .axis_descriptor import AxisDescriptor
 from .encoding_spec import EncodingSpec
@@ -47,12 +49,14 @@ __all__ = [
     "__version__",
     "FORMAT_VERSION",
     "AcquisitionMode",
+    "ActivationMethod",
     "Compression",
     "IRMode",
     "Polarity",
     "Precision",
     "SamplingMode",
     "ValueRange",
+    "IsolationWindow",
     "CVParam",
     "AxisDescriptor",
     "EncodingSpec",
