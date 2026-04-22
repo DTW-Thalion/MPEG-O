@@ -852,16 +852,22 @@ holds for every line item.
 
 ### Must-have
 
-- [ ] **M74** `activation_method` + `isolation_window` data-model
+- [x] **M74** `activation_method` + `isolation_window` data-model
       extension. `MassSpectrum` gains an `ActivationMethod` enum
       (`CID / HCD / ETD / UVPD / ECD / EThcD / none`) + an
       `IsolationWindow` value class (`target_mz`, `lower_offset`,
-      `upper_offset`). `spectrum_index` compound gains two columns.
-      mzML reader populates from cvParams inside `<precursor>`; mzML
-      writer emits `<activation>` with the preserved method plus a
-      complete `<isolationWindow>` block. Closes the last v1.0 gap
-      from `docs/v1.0-gaps.md`. Format version bump to 1.3;
-      `opt_ms2_activation_detail` feature flag on new files.
+      `upper_offset`). `spectrum_index` compound gains four parallel
+      columns. mzML reader populates from cvParams inside
+      `<precursor>`; mzML writer emits `<activation>` with the
+      preserved method plus a complete `<isolationWindow>` block.
+      Closes the last v1.0 gap from `docs/v1.0-gaps.md`. Format
+      version bumps to `1.3` only when any run carries the optional
+      columns; `opt_ms2_activation_detail` feature flag advertises
+      the extension. *Shipped 2026-04-22 across all three languages
+      as five sequential slices: A (enum + value class, `beb2bc7`),
+      B (spectrum_index schema, `736ecef`), C (mzML reader,
+      `9340007`), D (mzML writer, `c502d68`), E (feature flag +
+      format bump + round-trip tests, `e96105f`).*
 - [ ] **M75** Python CLI parity polish — add `mpgo-verify`,
       `mpgo-sign`, `mpgo-pqc` console_scripts to `pyproject.toml`
       backed by the existing `verifier.py` / `signatures.py` /

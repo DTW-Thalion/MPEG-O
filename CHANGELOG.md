@@ -11,6 +11,62 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [Unreleased] — v0.12.0 work-in-progress
+
+Accumulating scope for v0.12.0. The first must-have milestone (M74)
+has landed; M75 and the three nice-to-haves remain open.
+
+### Added
+
+- **M74 — `activation_method` + `isolation_window` data-model
+  extension (2026-04-22).** Closes the last "must-fix for v1.0" item
+  in `docs/v1.0-gaps.md`. Shipped as five sequential slices across
+  Python / Java / Objective-C:
+
+    - `ActivationMethod` enum — `NONE / CID / HCD / ETD / UVPD / ECD
+      / EThcD`, int32-stable across all three languages.
+    - `IsolationWindow` value class — `target_mz`, `lower_offset`,
+      `upper_offset`, plus `lower_bound`, `upper_bound`, `width`
+      derived accessors.
+    - `MassSpectrum` gains `activation_method` + `isolation_window`
+      fields; the legacy initializer still works and defaults them to
+      `NONE` / `None` for backward compatibility.
+    - `spectrum_index` compound gains four parallel optional columns
+      (`activation_methods` int32, `isolation_target_mzs` /
+      `isolation_lower_offsets` / `isolation_upper_offsets` float64).
+      All-or-nothing: the writer refuses partial population.
+    - mzML reader maps PSI-MS activation accessions (MS:1000133 CID,
+      MS:1000422 HCD, MS:1000598 ETD, MS:1000250 ECD, MS:1003246
+      UVPD, MS:1003181 EThcD) and reconstructs `IsolationWindow`
+      from MS:1000827 / 828 / 829.
+    - mzML writer emits the preserved method inside `<activation>`
+      and a complete `<isolationWindow>` block in the XSD-required
+      order (`isolationWindow` → `selectedIonList` → `activation`).
+    - `opt_ms2_activation_detail` feature flag registered in all
+      three languages; the writer bumps `@mpeg_o_format_version`
+      from `1.1` to `1.3` only on files that actually carry the
+      columns, so legacy-content files keep byte-parity with earlier
+      releases.
+
+  Commits: `beb2bc7` (A) · `736ecef` (B) · `9340007` (C) · `c502d68`
+  (D) · `e96105f` (E).
+
+### Test totals (post-M74)
+
+- Python: 777 tests (was 765 at v0.11.1; +12 for M74).
+- Java: 342 tests (was 331 at v0.11.1; +11 for M74).
+- Objective-C: full M74 Slice A–E tests green (pre-existing M29
+  Thermo mock-binary failures unrelated).
+
+### Docs
+
+- `docs/v1.0-gaps.md` — "Must-fix for v1.0" list now empty; status
+  table row for activation/isolation flipped to ✅; mzML writer
+  defect table updated to show item #2 shipped.
+- `WORKPLAN.md` — M74 checkbox ticked with the five shipped commits.
+
+---
+
 ## [v0.11.1] — 2026-04-21
 
 Patch release completing the three M73 items that landed as deferred
