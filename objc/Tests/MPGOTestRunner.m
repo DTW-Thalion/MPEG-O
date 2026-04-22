@@ -27,6 +27,7 @@ extern void testMilestone14(void);
 extern void testMilestone17(void);
 extern void testMilestone18(void);
 extern void testMilestone19(void);
+extern void testMilestone19M74(void);
 extern void testMilestone21(void);
 extern void testMilestone23(void);
 extern void testMilestone24(void);
@@ -168,6 +169,10 @@ int main(int argc, const char *argv[])
         START_SET("Milestone 19: mzML writer + indexedmzML")
             testMilestone19();
         END_SET("Milestone 19: mzML writer + indexedmzML")
+
+        START_SET("Milestone 19 M74: writer activation + isolation")
+            testMilestone19M74();
+        END_SET("Milestone 19 M74: writer activation + isolation")
 
         START_SET("Milestone 21: LZ4 + Numpress-delta codecs")
             testMilestone21();

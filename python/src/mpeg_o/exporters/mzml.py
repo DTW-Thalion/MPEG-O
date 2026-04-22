@@ -25,6 +25,8 @@ from typing import Iterable
 
 import numpy as np
 
+from ..enums import ActivationMethod
+from ..importers.cv_term_mapper import activation_accession_for
 from ..spectral_dataset import SpectralDataset
 
 
@@ -209,8 +211,34 @@ def dataset_to_bytes(
         emit('          </scanList>\n')
 
         if spec.precursor_mz > 0.0 or int(spec.ms_level) > 1:
+            # M74: consult the index directly so we see activation method
+            # and isolation window even when the cached Spectrum returned
+            # from `chosen_run[i]` carries the legacy defaults.
+            activation = chosen_run.index.activation_method_at(i)
+            iso_window = chosen_run.index.isolation_window_at(i)
+
             emit('          <precursorList count="1">\n')
             emit('            <precursor>\n')
+            # mzML 1.1 XSD puts <isolationWindow> (optional) before
+            # <selectedIonList>. Only emit when the index carries a
+            # non-zero window — MS1 scans and MS2 scans whose source
+            # file never reported isolation keep the legacy shape.
+            if iso_window is not None:
+                emit('              <isolationWindow>\n')
+                emit(f'                <cvParam cvRef="MS" accession="MS:1000827"'
+                     f' name="isolation window target m/z"'
+                     f' value="{_fmt_double(float(iso_window.target_mz))}"'
+                     f' unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>\n')
+                emit(f'                <cvParam cvRef="MS" accession="MS:1000828"'
+                     f' name="isolation window lower offset"'
+                     f' value="{_fmt_double(float(iso_window.lower_offset))}"'
+                     f' unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>\n')
+                emit(f'                <cvParam cvRef="MS" accession="MS:1000829"'
+                     f' name="isolation window upper offset"'
+                     f' value="{_fmt_double(float(iso_window.upper_offset))}"'
+                     f' unitCvRef="MS" unitAccession="MS:1000040" unitName="m/z"/>\n')
+                emit('              </isolationWindow>\n')
+
             emit('              <selectedIonList count="1">\n')
             emit('                <selectedIon>\n')
             emit(f'                  <cvParam cvRef="MS" accession="MS:1000744" name="selected ion m/z"'
@@ -221,14 +249,15 @@ def dataset_to_bytes(
                      f' value="{int(spec.precursor_charge)}"/>\n')
             emit('                </selectedIon>\n')
             emit('              </selectedIonList>\n')
-            # PSI mzML 1.1 XSD requires <activation> after <selectedIonList>.
-            # MPEG-O doesn't yet carry the fragmentation method in its
-            # spectrum_index (v1.0 data-model extension — see
-            # docs/v1.0-gaps.md), so emit a conservative CID placeholder;
-            # external validators and pyteomics accept this.
+            # mzML 1.1 XSD requires an <activation> element inside every
+            # <precursor>. Populate the method cvParam only for MS2+ scans
+            # whose activation method is known; skip otherwise so
+            # consumers don't misread MS1 noise as a CID placeholder.
             emit('              <activation>\n')
-            emit('                <cvParam cvRef="MS" accession="MS:1000133"'
-                 ' name="collision-induced dissociation" value=""/>\n')
+            if int(spec.ms_level) >= 2 and activation != ActivationMethod.NONE:
+                accession, name = activation_accession_for(activation)
+                emit(f'                <cvParam cvRef="MS" accession="{accession}"'
+                     f' name="{name}" value=""/>\n')
             emit('              </activation>\n')
             emit('            </precursor>\n')
             emit('          </precursorList>\n')

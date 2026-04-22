@@ -68,6 +68,29 @@ def activation_method_for(accession: str) -> ActivationMethod | None:
     """(M74) Return the ActivationMethod for a PSI-MS accession, or None."""
     return ACTIVATION_METHOD_ACCESSIONS.get(accession)
 
+
+# Reverse of ACTIVATION_METHOD_ACCESSIONS with human-readable names for
+# the name=".." attribute of an mzML cvParam. NONE is deliberately absent
+# — callers gate emission of the activation cvParam on ms_level>=2 and
+# method != NONE.
+_ACTIVATION_EXPORT: dict[ActivationMethod, tuple[str, str]] = {
+    ActivationMethod.CID:   ("MS:1000133", "collision-induced dissociation"),
+    ActivationMethod.HCD:   ("MS:1000422", "beam-type collision-induced dissociation"),
+    ActivationMethod.ETD:   ("MS:1000598", "electron transfer dissociation"),
+    ActivationMethod.ECD:   ("MS:1000250", "electron capture dissociation"),
+    ActivationMethod.UVPD:  ("MS:1003246", "ultraviolet photodissociation"),
+    ActivationMethod.EThcD: ("MS:1003181", "electron transfer/higher-energy collision dissociation"),
+}
+
+
+def activation_accession_for(method: ActivationMethod) -> tuple[str, str] | None:
+    """(M74) Return ``(accession, name)`` for an ActivationMethod, or
+    ``None`` when ``method`` is :attr:`ActivationMethod.NONE`. Used by
+    the mzML writer to emit ``<activation>`` cvParams symmetrically to
+    the reader."""
+    return _ACTIVATION_EXPORT.get(method)
+
+
 # ----- PSI-MS: isolation window (M74) -----
 ISOLATION_TARGET_MZ = "MS:1000827"    # isolation window target m/z
 ISOLATION_LOWER_OFFSET = "MS:1000828"  # isolation window lower offset

@@ -80,6 +80,16 @@
 + (MPGOActivationMethod)activationMethodForAccession:(NSString *)acc;
 + (BOOL)isActivationMethodAccession:(NSString *)acc;
 
+/** Reverse of +activationMethodForAccession: for the mzML writer. Returns
+ *  the PSI-MS accession for a concrete MPGOActivationMethod, or nil for
+ *  MPGOActivationMethodNone. Callers gate emission of the `<activation>`
+ *  cvParam on a non-nil return here (and ms_level >= 2). */
++ (NSString *)activationAccessionForMethod:(MPGOActivationMethod)method;
+
+/** Human-readable name paired with +activationAccessionForMethod:, used
+ *  as the `name=".."` attribute in the emitted cvParam. */
++ (NSString *)activationNameForMethod:(MPGOActivationMethod)method;
+
 #pragma mark - M74: isolation-window cvParam accessions
 
 + (BOOL)isIsolationWindowTargetMzAccession:(NSString *)acc;  // MS:1000827

@@ -99,6 +99,34 @@
         || [acc isEqualToString:@"MS:1003181"];
 }
 
++ (NSString *)activationAccessionForMethod:(MPGOActivationMethod)method
+{
+    switch (method) {
+        case MPGOActivationMethodCID:   return @"MS:1000133";
+        case MPGOActivationMethodHCD:   return @"MS:1000422";
+        case MPGOActivationMethodETD:   return @"MS:1000598";
+        case MPGOActivationMethodECD:   return @"MS:1000250";
+        case MPGOActivationMethodUVPD:  return @"MS:1003246";
+        case MPGOActivationMethodEThcD: return @"MS:1003181";
+        case MPGOActivationMethodNone:  return nil;
+    }
+    return nil;
+}
+
++ (NSString *)activationNameForMethod:(MPGOActivationMethod)method
+{
+    switch (method) {
+        case MPGOActivationMethodCID:   return @"collision-induced dissociation";
+        case MPGOActivationMethodHCD:   return @"beam-type collision-induced dissociation";
+        case MPGOActivationMethodETD:   return @"electron transfer dissociation";
+        case MPGOActivationMethodECD:   return @"electron capture dissociation";
+        case MPGOActivationMethodUVPD:  return @"ultraviolet photodissociation";
+        case MPGOActivationMethodEThcD: return @"electron transfer/higher-energy collision dissociation";
+        case MPGOActivationMethodNone:  return nil;
+    }
+    return nil;
+}
+
 #pragma mark - M74: isolation-window cvParam accessions
 
 + (BOOL)isIsolationWindowTargetMzAccession:(NSString *)acc

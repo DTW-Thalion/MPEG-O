@@ -19,6 +19,7 @@
 #import "Spectra/MPGOMassSpectrum.h"
 #import "ValueClasses/MPGOEncodingSpec.h"
 #import "ValueClasses/MPGOEnums.h"
+#import "ValueClasses/MPGOIsolationWindow.h"
 #import "Export/MPGOMzMLWriter.h"
 #import "Import/MPGOMzMLReader.h"
 
@@ -192,4 +193,147 @@ void testMilestone19(void)
         PASS([peek isEqualToString:@"<spectrum"],
              "first offset points at the <spectrum tag");
     }
+}
+
+// M74 Slice D: writer emits real activation method + isolation window from
+// the run's SpectrumIndex instead of a hardcoded CID placeholder, and
+// round-trips via MPGOMzMLReader.
+void testMilestone19M74(void)
+{
+    NSUInteger nPts = 4;
+    MPGOEncodingSpec *enc =
+        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
+                       compressionAlgorithm:MPGOCompressionZlib
+                                  byteOrder:MPGOByteOrderLittleEndian];
+
+    double mz1[] = {100.0, 101.0, 102.0, 103.0};
+    double in1[] = {10.0, 20.0, 30.0, 40.0};
+    MPGOSignalArray *mz1A =
+        [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz1 length:sizeof(mz1)]
+                                          length:nPts encoding:enc axis:nil];
+    MPGOSignalArray *in1A =
+        [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in1 length:sizeof(in1)]
+                                          length:nPts encoding:enc axis:nil];
+    NSError *err = nil;
+    MPGOMassSpectrum *ms1 =
+        [[MPGOMassSpectrum alloc] initWithMzArray:mz1A
+                                   intensityArray:in1A
+                                          msLevel:1
+                                         polarity:MPGOPolarityPositive
+                                       scanWindow:nil
+                                 activationMethod:MPGOActivationMethodNone
+                                  isolationWindow:nil
+                                    indexPosition:0
+                                  scanTimeSeconds:0.0
+                                      precursorMz:0.0
+                                  precursorCharge:0
+                                            error:&err];
+    PASS(ms1 != nil, "M74: MS1 spectrum built");
+
+    double mz2[] = {200.0, 201.0, 202.0, 203.0};
+    double in2[] = {11.0, 22.0, 33.0, 44.0};
+    MPGOSignalArray *mz2A =
+        [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz2 length:sizeof(mz2)]
+                                          length:nPts encoding:enc axis:nil];
+    MPGOSignalArray *in2A =
+        [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in2 length:sizeof(in2)]
+                                          length:nPts encoding:enc axis:nil];
+    MPGOIsolationWindow *iw =
+        [MPGOIsolationWindow windowWithTargetMz:445.3
+                                     lowerOffset:0.5
+                                     upperOffset:0.5];
+    MPGOMassSpectrum *ms2 =
+        [[MPGOMassSpectrum alloc] initWithMzArray:mz2A
+                                   intensityArray:in2A
+                                          msLevel:2
+                                         polarity:MPGOPolarityPositive
+                                       scanWindow:nil
+                                 activationMethod:MPGOActivationMethodHCD
+                                  isolationWindow:iw
+                                    indexPosition:1
+                                  scanTimeSeconds:1.5
+                                      precursorMz:445.3
+                                  precursorCharge:2
+                                            error:&err];
+    PASS(ms2 != nil, "M74: MS2 spectrum built with HCD + isolation window");
+
+    MPGOInstrumentConfig *cfg =
+        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+                                                     model:@""
+                                              serialNumber:@""
+                                                sourceType:@""
+                                              analyzerType:@""
+                                              detectorType:@""];
+    MPGOAcquisitionRun *run =
+        [[MPGOAcquisitionRun alloc] initWithSpectra:@[ms1, ms2]
+                                    acquisitionMode:MPGOAcquisitionModeMS1DDA
+                                   instrumentConfig:cfg];
+    PASS(run.spectrumIndex.hasActivationDetail,
+         "M74: index carries activation-detail columns");
+    PASS([run.spectrumIndex activationMethodAt:1] == MPGOActivationMethodHCD,
+         "M74: index records HCD at position 1");
+
+    MPGOSpectralDataset *ds =
+        [[MPGOSpectralDataset alloc] initWithTitle:@"m74-writer"
+                                isaInvestigationId:@""
+                                            msRuns:@{@"run_0001": run}
+                                           nmrRuns:@{}
+                                   identifications:@[]
+                                   quantifications:@[]
+                                 provenanceRecords:@[]
+                                       transitions:nil];
+
+    NSData *xml = [MPGOMzMLWriter dataForDataset:ds
+                                 zlibCompression:NO
+                                           error:&err];
+    PASS(xml != nil && xml.length > 0, "M74: writer produces output");
+
+    NSString *s = [[NSString alloc] initWithData:xml encoding:NSUTF8StringEncoding];
+
+    // HCD accession present, CID placeholder gone.
+    PASS([s rangeOfString:@"MS:1000422"].location != NSNotFound,
+         "M74 writer emits MS:1000422 (HCD)");
+    PASS([s rangeOfString:@"MS:1000133"].location == NSNotFound,
+         "M74 writer no longer emits MS:1000133 (CID placeholder)");
+
+    // Isolation-window cvParams present.
+    PASS([s rangeOfString:@"MS:1000827"].location != NSNotFound,
+         "M74 writer emits MS:1000827 (isolation target m/z)");
+    PASS([s rangeOfString:@"MS:1000828"].location != NSNotFound,
+         "M74 writer emits MS:1000828 (isolation lower offset)");
+    PASS([s rangeOfString:@"MS:1000829"].location != NSNotFound,
+         "M74 writer emits MS:1000829 (isolation upper offset)");
+
+    // XSD ordering: <isolationWindow> must appear before <selectedIonList>
+    // inside the MS2 precursor block.
+    NSRange iwRange = [s rangeOfString:@"<isolationWindow>"];
+    NSRange silRange = [s rangeOfString:@"<selectedIonList"];
+    PASS(iwRange.location != NSNotFound && silRange.location != NSNotFound,
+         "M74 writer emits both isolationWindow and selectedIonList");
+    PASS(iwRange.location < silRange.location,
+         "M74 writer emits isolationWindow before selectedIonList");
+
+    // Re-parse through the reader and confirm the round-trip.
+    MPGOSpectralDataset *round = [MPGOMzMLReader readFromData:xml error:&err];
+    PASS(round != nil, "M74: writer output re-parses");
+    MPGOAcquisitionRun *backRun = [round.msRuns.allValues firstObject];
+    MPGOSpectrumIndex *backIdx = backRun.spectrumIndex;
+    PASS(backIdx.hasActivationDetail,
+         "M74: round-tripped index carries activation-detail columns");
+    PASS([backIdx activationMethodAt:1] == MPGOActivationMethodHCD,
+         "M74: round-tripped MS2 activation method is HCD");
+    MPGOIsolationWindow *backIw = [backIdx isolationWindowAt:1];
+    PASS(backIw != nil, "M74: round-tripped isolation window present");
+    PASS(backIw && fabs(backIw.targetMz - 445.3) < 1e-9,
+         "M74: round-tripped isolation target = 445.3");
+    PASS(backIw && fabs(backIw.lowerOffset - 0.5) < 1e-9,
+         "M74: round-tripped isolation lower offset = 0.5");
+    PASS(backIw && fabs(backIw.upperOffset - 0.5) < 1e-9,
+         "M74: round-tripped isolation upper offset = 0.5");
+
+    // MS1 row must not have emitted activation or isolation metadata.
+    PASS([backIdx activationMethodAt:0] == MPGOActivationMethodNone,
+         "M74: round-tripped MS1 activation method is None");
+    PASS([backIdx isolationWindowAt:0] == nil,
+         "M74: round-tripped MS1 has no isolation window");
 }
