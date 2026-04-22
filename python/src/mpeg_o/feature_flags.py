@@ -55,6 +55,14 @@ OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers"
 # HDF5 datasets sharing the spectral-variable axis scale.
 OPT_NATIVE_2D_COS = "opt_native_2d_cos"
 
+# v0.12.0 (M74): spectrum_index carries four optional parallel columns
+# recording MS/MS activation method and precursor isolation window
+# (activation_methods, isolation_target_mzs, isolation_lower_offsets,
+# isolation_upper_offsets). Files that set this flag are written with
+# format version "1.3"; pre-M74 readers that ignore the flag still
+# parse the base columns.
+OPT_MS2_ACTIVATION_DETAIL = "opt_ms2_activation_detail"
+
 
 @dataclass(frozen=True, slots=True)
 class FeatureFlags:

@@ -231,6 +231,46 @@ def test_spectrum_index_round_trip_with_m74_columns(tmp_path: Path) -> None:
         assert w2.width == pytest.approx(1.25)
 
 
+def test_m74_file_bumps_format_version_and_advertises_flag(
+    tmp_path: Path,
+) -> None:
+    """Slice E: writing a dataset with M74 columns must bump
+    ``@mpeg_o_format_version`` from ``"1.1"`` to ``"1.3"`` and include
+    ``opt_ms2_activation_detail`` in ``@mpeg_o_features``. A dataset
+    without M74 columns keeps the legacy ``"1.1"`` layout."""
+    # Legacy: no M74 columns => format 1.1, flag absent
+    legacy_path = tmp_path / "legacy.mpgo"
+    SpectralDataset.write_minimal(
+        legacy_path, title="legacy", isa_investigation_id="MPGO:legacy",
+        runs={"run_0001": _make_run(n_spectra=2, points_per=4)},
+    )
+    with SpectralDataset.open(legacy_path) as ds:
+        assert ds.feature_flags.version == "1.1"
+        assert "opt_ms2_activation_detail" not in ds.feature_flags.features
+
+    # M74: any run with activation_methods => format 1.3 + flag
+    m74_path = tmp_path / "m74.mpgo"
+    run = _make_run(n_spectra=2, points_per=4)
+    run.activation_methods = np.array(
+        [int(ActivationMethod.NONE), int(ActivationMethod.HCD)],
+        dtype=np.int32,
+    )
+    run.isolation_target_mzs = np.array([0.0, 445.3], dtype=np.float64)
+    run.isolation_lower_offsets = np.array([0.0, 0.5], dtype=np.float64)
+    run.isolation_upper_offsets = np.array([0.0, 0.5], dtype=np.float64)
+    SpectralDataset.write_minimal(
+        m74_path, title="m74", isa_investigation_id="MPGO:m74",
+        runs={"run_0001": run},
+    )
+    with SpectralDataset.open(m74_path) as ds:
+        assert ds.feature_flags.version == "1.3"
+        assert "opt_ms2_activation_detail" in ds.feature_flags.features
+        # Columns still round-trip.
+        idx = ds.ms_runs["run_0001"].index
+        assert idx.activation_methods is not None
+        assert idx.activation_method_at(1) is ActivationMethod.HCD
+
+
 def test_written_run_rejects_partial_m74_population(tmp_path: Path) -> None:
     """All-or-nothing: populating some but not all of the four M74
     arrays is a schema error."""

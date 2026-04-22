@@ -24,6 +24,24 @@
 // v0.2 format version emitted by this writer.
 static NSString *const kMPGOFormatVersion = @"1.1";
 
+// v0.12 M74: version bumped when the file carries
+// opt_ms2_activation_detail (i.e. any run's spectrum_index has the
+// four optional activation/isolation columns).
+static NSString *const kMPGOFormatVersionM74 = @"1.3";
+
+/** v0.12 M74 Slice E: scan the ms_runs dict for any run whose
+ *  spectrum_index carries the four optional activation/isolation
+ *  columns. When present, the writer upgrades the feature flag list
+ *  with opt_ms2_activation_detail and bumps the on-disk format version
+ *  to 1.3. Returns NO when every run has the legacy layout. */
+static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
+{
+    for (MPGOAcquisitionRun *run in [msRuns objectEnumerator]) {
+        if (run.spectrumIndex.hasActivationDetail) return YES;
+    }
+    return NO;
+}
+
 @implementation MPGOSpectralDataset
 {
     MPGOHDF5File     *_file;       // retained while alive for lazy reads
@@ -138,7 +156,7 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
     // compound-form per-run provenance when any run carries records, and
     // the flag advertises that capability to future readers even when the
     // current in-memory dataset happens to have no provenance to persist.
-    NSArray *features = @[
+    NSMutableArray *features = [@[
         [MPGOFeatureFlags featureBaseV1],
         [MPGOFeatureFlags featureCompoundIdentifications],
         [MPGOFeatureFlags featureCompoundQuantifications],
@@ -147,8 +165,13 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
         [MPGOFeatureFlags featureCompoundHeaders],
         [MPGOFeatureFlags featureNative2DNMR],
         [MPGOFeatureFlags featureNativeMSImageCube],
-    ];
-    if (![MPGOFeatureFlags writeFormatVersion:kMPGOFormatVersion
+    ] mutableCopy];
+    BOOL anyM74 = datasetRunsHaveActivationDetail(_msRuns);
+    if (anyM74) {
+        [features addObject:[MPGOFeatureFlags featureMS2ActivationDetail]];
+    }
+    NSString *formatVersion = anyM74 ? kMPGOFormatVersionM74 : kMPGOFormatVersion;
+    if (![MPGOFeatureFlags writeFormatVersion:formatVersion
                                       features:features
                                         toRoot:root
                                          error:error]) return NO;

@@ -17,6 +17,7 @@
 + (NSString *)featureKeyRotation             { return @"opt_key_rotation"; }
 + (NSString *)featureAnonymized              { return @"opt_anonymized"; }
 + (NSString *)featurePQCPreview              { return @"opt_pqc_preview"; }
++ (NSString *)featureMS2ActivationDetail     { return @"opt_ms2_activation_detail"; }
 
 + (NSString *)formatVersionForRoot:(MPGOHDF5Group *)root
 {

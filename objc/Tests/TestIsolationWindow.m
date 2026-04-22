@@ -5,9 +5,13 @@
 #import "ValueClasses/MPGOEncodingSpec.h"
 #import "Spectra/MPGOMassSpectrum.h"
 #import "Core/MPGOSignalArray.h"
+#import "Run/MPGOAcquisitionRun.h"
+#import "Run/MPGOInstrumentConfig.h"
 #import "Run/MPGOSpectrumIndex.h"
+#import "Dataset/MPGOSpectralDataset.h"
 #import "HDF5/MPGOHDF5File.h"
 #import "HDF5/MPGOHDF5Group.h"
+#import "HDF5/MPGOFeatureFlags.h"
 #import <unistd.h>
 
 static MPGOSignalArray *float64Array(const double *src, NSUInteger n)
@@ -242,4 +246,142 @@ void testSpectrumIndexM74RoundTrip(void)
         [g close];
         unlink([path fileSystemRepresentation]);
     }
+}
+
+// -------- M74 Slice E: feature flag + format version bump --------
+//
+// Writing a dataset whose runs carry the four optional M74 columns must
+// advertise `opt_ms2_activation_detail` in @mpeg_o_features and bump
+// @mpeg_o_format_version from "1.1" to "1.3". Legacy datasets (no M74
+// columns) must keep the original "1.1" layout so existing byte-parity
+// tests survive.
+
+static MPGOMassSpectrum *m74SliceEMakeSpec(int msLevel,
+                                             MPGOActivationMethod m,
+                                             MPGOIsolationWindow *iw,
+                                             NSUInteger idxPos)
+{
+    double mzVals[] = {100.0, 101.0, 102.0};
+    double inVals[] = {10.0, 20.0, 30.0};
+    MPGOSignalArray *mz = float64Array(mzVals, 3);
+    MPGOSignalArray *in = float64Array(inVals, 3);
+    NSError *err = nil;
+    return [[MPGOMassSpectrum alloc] initWithMzArray:mz
+                                      intensityArray:in
+                                             msLevel:msLevel
+                                            polarity:MPGOPolarityPositive
+                                          scanWindow:nil
+                                    activationMethod:m
+                                     isolationWindow:iw
+                                       indexPosition:idxPos
+                                     scanTimeSeconds:(double)idxPos
+                                         precursorMz:(iw ? iw.targetMz : 0.0)
+                                     precursorCharge:(iw ? 2 : 0)
+                                               error:&err];
+}
+
+static MPGOAcquisitionRun *m74SliceEMakeRun(BOOL withM74)
+{
+    MPGOInstrumentConfig *cfg =
+        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+                                                     model:@""
+                                              serialNumber:@""
+                                                sourceType:@""
+                                              analyzerType:@""
+                                              detectorType:@""];
+    MPGOMassSpectrum *ms1 =
+        m74SliceEMakeSpec(1, MPGOActivationMethodNone, nil, 0);
+    NSArray *spectra;
+    if (withM74) {
+        MPGOIsolationWindow *iw =
+            [MPGOIsolationWindow windowWithTargetMz:445.3
+                                         lowerOffset:0.5
+                                         upperOffset:0.5];
+        MPGOMassSpectrum *ms2 =
+            m74SliceEMakeSpec(2, MPGOActivationMethodHCD, iw, 1);
+        spectra = @[ms1, ms2];
+    } else {
+        spectra = @[ms1];
+    }
+    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+                                      instrumentConfig:cfg];
+}
+
+void testSpectralDatasetM74FeatureFlag(void)
+{
+    NSString *legacyPath = [NSString stringWithFormat:
+        @"/tmp/mpgo_test_m74sliceE_legacy_%d.mpgo", (int)getpid()];
+    NSString *m74Path = [NSString stringWithFormat:
+        @"/tmp/mpgo_test_m74sliceE_m74_%d.mpgo", (int)getpid()];
+    unlink([legacyPath fileSystemRepresentation]);
+    unlink([m74Path fileSystemRepresentation]);
+
+    // ---- Legacy dataset: no M74 content, keeps format "1.1" ----
+    @autoreleasepool {
+        MPGOSpectralDataset *ds =
+            [[MPGOSpectralDataset alloc] initWithTitle:@"legacy"
+                                    isaInvestigationId:@""
+                                                msRuns:@{@"run_0001": m74SliceEMakeRun(NO)}
+                                               nmrRuns:@{}
+                                       identifications:@[]
+                                       quantifications:@[]
+                                     provenanceRecords:@[]
+                                           transitions:nil];
+        NSError *err = nil;
+        PASS([ds writeToFilePath:legacyPath error:&err],
+             "Slice E: legacy dataset writes");
+
+        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:legacyPath error:&err];
+        MPGOHDF5Group *root = [f rootGroup];
+        NSString *version = [MPGOFeatureFlags formatVersionForRoot:root];
+        NSArray *features = [MPGOFeatureFlags featuresForRoot:root];
+        PASS([version isEqualToString:@"1.1"],
+             "Slice E: legacy file keeps format version 1.1");
+        PASS(![features containsObject:@"opt_ms2_activation_detail"],
+             "Slice E: legacy file does not advertise opt_ms2_activation_detail");
+        [f close];
+    }
+
+    // ---- M74 dataset: activation column present, bumps to "1.3" ----
+    @autoreleasepool {
+        MPGOSpectralDataset *ds =
+            [[MPGOSpectralDataset alloc] initWithTitle:@"m74"
+                                    isaInvestigationId:@""
+                                                msRuns:@{@"run_0001": m74SliceEMakeRun(YES)}
+                                               nmrRuns:@{}
+                                       identifications:@[]
+                                       quantifications:@[]
+                                     provenanceRecords:@[]
+                                           transitions:nil];
+        NSError *err = nil;
+        PASS([ds writeToFilePath:m74Path error:&err],
+             "Slice E: M74 dataset writes");
+
+        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:m74Path error:&err];
+        MPGOHDF5Group *root = [f rootGroup];
+        NSString *version = [MPGOFeatureFlags formatVersionForRoot:root];
+        NSArray *features = [MPGOFeatureFlags featuresForRoot:root];
+        PASS([version isEqualToString:@"1.3"],
+             "Slice E: M74 file bumps format version to 1.3");
+        PASS([features containsObject:[MPGOFeatureFlags featureMS2ActivationDetail]],
+             "Slice E: M74 file advertises opt_ms2_activation_detail");
+        PASS([MPGOFeatureFlags root:root
+                    supportsFeature:[MPGOFeatureFlags featureMS2ActivationDetail]],
+             "Slice E: root:supportsFeature: returns YES for M74 flag");
+        [f close];
+
+        // Round-trip: reading back must preserve M74 columns + index.
+        MPGOSpectralDataset *rt =
+            [MPGOSpectralDataset readFromFilePath:m74Path error:&err];
+        PASS(rt != nil, "Slice E: M74 file reads back via full dataset reader");
+        MPGOAcquisitionRun *run = rt.msRuns[@"run_0001"];
+        PASS(run.spectrumIndex.hasActivationDetail,
+             "Slice E: round-tripped run preserves M74 columns");
+        PASS([run.spectrumIndex activationMethodAt:1] == MPGOActivationMethodHCD,
+             "Slice E: round-tripped index records HCD at position 1");
+    }
+
+    unlink([legacyPath fileSystemRepresentation]);
+    unlink([m74Path fileSystemRepresentation]);
 }

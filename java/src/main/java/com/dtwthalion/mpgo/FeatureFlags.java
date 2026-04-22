@@ -40,6 +40,12 @@ public final class FeatureFlags {
     public static final String OPT_PER_AU_ENCRYPTION = "opt_per_au_encryption";
     /** v1.0: AU semantic header encrypted. @since 1.0 */
     public static final String OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers";
+    /** v0.12.0 M74: {@code spectrum_index} carries four optional
+     *  parallel columns recording MS/MS activation method and precursor
+     *  isolation window. Files that set this flag are written with
+     *  format version {@code "1.3"}; pre-M74 readers that ignore the
+     *  flag still parse the base columns. @since 0.12 */
+    public static final String OPT_MS2_ACTIVATION_DETAIL = "opt_ms2_activation_detail";
 
     private static final Set<String> REQUIRED = Set.of(
         BASE_V1, COMPOUND_IDENTIFICATIONS, COMPOUND_QUANTIFICATIONS,
@@ -50,7 +56,8 @@ public final class FeatureFlags {
         OPT_COMPOUND_HEADERS, OPT_NATIVE_2D_NMR, OPT_NATIVE_MSIMAGE_CUBE,
         OPT_DATASET_ENCRYPTION, OPT_DIGITAL_SIGNATURES, OPT_CANONICAL_SIGNATURES,
         OPT_KEY_ROTATION, OPT_ANONYMIZED, OPT_PQC_PREVIEW,
-        OPT_PER_AU_ENCRYPTION, OPT_ENCRYPTED_AU_HEADERS
+        OPT_PER_AU_ENCRYPTION, OPT_ENCRYPTED_AU_HEADERS,
+        OPT_MS2_ACTIVATION_DETAIL
     );
 
     private final String formatVersion;
