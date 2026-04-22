@@ -225,6 +225,78 @@ def test_mass_spectrum_has_typed_fields():
     assert not hasattr(ms, "run_name")
 
 
+def test_activation_method_integer_values_match_objc():
+    """M74: values persist as int32 in spectrum_index; must match ObjC."""
+    from mpeg_o import ActivationMethod
+    assert ActivationMethod.NONE == 0
+    assert ActivationMethod.CID == 1
+    assert ActivationMethod.HCD == 2
+    assert ActivationMethod.ETD == 3
+    assert ActivationMethod.UVPD == 4
+    assert ActivationMethod.ECD == 5
+    assert ActivationMethod.EThcD == 6
+
+
+def test_isolation_window_bounds_and_width():
+    from mpeg_o import IsolationWindow
+    w = IsolationWindow(target_mz=500.0, lower_offset=1.0, upper_offset=2.0)
+    assert w.target_mz == 500.0
+    assert w.lower_offset == 1.0
+    assert w.upper_offset == 2.0
+    assert w.lower_bound == pytest.approx(499.0)
+    assert w.upper_bound == pytest.approx(502.0)
+    assert w.width == pytest.approx(3.0)
+
+
+def test_isolation_window_is_frozen():
+    from mpeg_o import IsolationWindow
+    w = IsolationWindow(target_mz=500.0, lower_offset=1.0, upper_offset=1.0)
+    with pytest.raises(Exception):
+        w.target_mz = 600.0  # type: ignore[misc]
+
+
+def test_isolation_window_equality():
+    from mpeg_o import IsolationWindow
+    a = IsolationWindow(target_mz=500.0, lower_offset=0.5, upper_offset=0.5)
+    b = IsolationWindow(target_mz=500.0, lower_offset=0.5, upper_offset=0.5)
+    c = IsolationWindow(target_mz=500.0, lower_offset=0.5, upper_offset=1.0)
+    assert a == b
+    assert a != c
+    assert hash(a) == hash(b)
+
+
+def test_mass_spectrum_has_activation_and_isolation_fields():
+    from mpeg_o.mass_spectrum import MassSpectrum
+    from mpeg_o.signal_array import SignalArray
+    from mpeg_o.enums import ActivationMethod, Polarity
+    from mpeg_o.isolation_window import IsolationWindow
+    import numpy as np
+
+    mz = SignalArray(data=np.array([100.0, 200.0]))
+    intensity = SignalArray(data=np.array([1.0, 2.0]))
+
+    # MS1 defaults: activation_method=NONE, isolation_window=None.
+    ms1 = MassSpectrum(signal_arrays={"mz": mz, "intensity": intensity}, axes=[])
+    assert ms1.activation_method is ActivationMethod.NONE
+    assert ms1.isolation_window is None
+
+    # MS2 populates both fields.
+    iw = IsolationWindow(target_mz=500.0, lower_offset=1.0, upper_offset=1.0)
+    ms2 = MassSpectrum(
+        signal_arrays={"mz": mz, "intensity": intensity},
+        axes=[],
+        ms_level=2,
+        polarity=Polarity.POSITIVE,
+        precursor_mz=500.0,
+        precursor_charge=2,
+        activation_method=ActivationMethod.HCD,
+        isolation_window=iw,
+    )
+    assert ms2.activation_method is ActivationMethod.HCD
+    assert ms2.isolation_window is iw
+    assert ms2.isolation_window.target_mz == 500.0
+
+
 def test_signal_array_is_cv_annotatable():
     import numpy as np
     from mpeg_o.signal_array import SignalArray

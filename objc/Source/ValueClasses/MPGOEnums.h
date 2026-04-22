@@ -90,4 +90,26 @@ typedef NS_ENUM(NSUInteger, MPGOIRMode) {
     MPGOIRModeAbsorbance
 };
 
+/**
+ * MS/MS precursor activation (dissociation) method.
+ *
+ * Stored as int32 in the optional `activation_methods` column of
+ * `spectrum_index` (gated by feature flag `opt_ms2_activation_detail`).
+ * `None` is the sentinel for MS1 scans and for MS2+ scans whose
+ * activation method was not reported by the source instrument.
+ *
+ * Cross-language equivalents:
+ *   Python: mpeg_o.enums.ActivationMethod
+ *   Java:   com.dtwthalion.mpgo.Enums.ActivationMethod
+ */
+typedef NS_ENUM(NSInteger, MPGOActivationMethod) {
+    MPGOActivationMethodNone  = 0,
+    MPGOActivationMethodCID   = 1,
+    MPGOActivationMethodHCD   = 2,
+    MPGOActivationMethodETD   = 3,
+    MPGOActivationMethodUVPD  = 4,
+    MPGOActivationMethodECD   = 5,
+    MPGOActivationMethodEThcD = 6
+};
+
 #endif /* MPGO_ENUMS_H */

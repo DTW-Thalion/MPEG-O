@@ -576,4 +576,66 @@ class ValueClassesTest {
             assertEquals(3, run.count());
         }
     }
+
+    @Test
+    void activationMethodIntegerValuesMatchObjC() {
+        // M74: values persist as int32 in spectrum_index; must match ObjC.
+        assertEquals(0, Enums.ActivationMethod.NONE.intValue());
+        assertEquals(1, Enums.ActivationMethod.CID.intValue());
+        assertEquals(2, Enums.ActivationMethod.HCD.intValue());
+        assertEquals(3, Enums.ActivationMethod.ETD.intValue());
+        assertEquals(4, Enums.ActivationMethod.UVPD.intValue());
+        assertEquals(5, Enums.ActivationMethod.ECD.intValue());
+        assertEquals(6, Enums.ActivationMethod.EThcD.intValue());
+    }
+
+    @Test
+    void activationMethodFromInt() {
+        assertEquals(Enums.ActivationMethod.HCD, Enums.ActivationMethod.fromInt(2));
+        assertEquals(Enums.ActivationMethod.EThcD, Enums.ActivationMethod.fromInt(6));
+        // Unknown integer falls back to NONE (forward-compat).
+        assertEquals(Enums.ActivationMethod.NONE, Enums.ActivationMethod.fromInt(99));
+    }
+
+    @Test
+    void isolationWindowBoundsAndWidth() {
+        IsolationWindow w = new IsolationWindow(500.0, 1.0, 2.0);
+        assertEquals(500.0, w.targetMz(), 1e-12);
+        assertEquals(1.0, w.lowerOffset(), 1e-12);
+        assertEquals(2.0, w.upperOffset(), 1e-12);
+        assertEquals(499.0, w.lowerBound(), 1e-12);
+        assertEquals(502.0, w.upperBound(), 1e-12);
+        assertEquals(3.0, w.width(), 1e-12);
+    }
+
+    @Test
+    void isolationWindowEquality() {
+        IsolationWindow a = new IsolationWindow(500.0, 0.5, 0.5);
+        IsolationWindow b = new IsolationWindow(500.0, 0.5, 0.5);
+        IsolationWindow c = new IsolationWindow(500.0, 0.5, 1.0);
+        assertEquals(a, b);
+        assertNotEquals(a, c);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void massSpectrumHasActivationAndIsolationFields() {
+        double[] mz = { 100.0, 200.0 };
+        double[] intensity = { 1.0, 2.0 };
+
+        // Backward-compatible constructor defaults new fields.
+        MassSpectrum ms1 = new MassSpectrum(mz, intensity,
+            0, 0.0, 0.0, 0, 1, Enums.Polarity.POSITIVE, null);
+        assertEquals(Enums.ActivationMethod.NONE, ms1.activationMethod());
+        assertNull(ms1.isolationWindow());
+
+        // Full constructor populates both.
+        IsolationWindow iw = new IsolationWindow(500.0, 1.0, 1.0);
+        MassSpectrum ms2 = new MassSpectrum(mz, intensity,
+            1, 1.5, 500.0, 2, 2, Enums.Polarity.POSITIVE, null,
+            Enums.ActivationMethod.HCD, iw);
+        assertEquals(Enums.ActivationMethod.HCD, ms2.activationMethod());
+        assertSame(iw, ms2.isolationWindow());
+        assertEquals(500.0, ms2.isolationWindow().targetMz(), 1e-12);
+    }
 }

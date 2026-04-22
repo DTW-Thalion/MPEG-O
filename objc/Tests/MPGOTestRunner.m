@@ -2,6 +2,9 @@
 #import "Testing.h"
 
 extern void testValueRange(void);
+extern void testIsolationWindow(void);
+extern void testActivationMethodEnum(void);
+extern void testMassSpectrumActivationAndIsolationFields(void);
 extern void testEncodingSpec(void);
 extern void testAxisDescriptor(void);
 extern void testCVParam(void);
@@ -63,6 +66,18 @@ int main(int argc, const char *argv[])
         START_SET("MPGOValueRange")
             testValueRange();
         END_SET("MPGOValueRange")
+
+        START_SET("MPGOIsolationWindow")
+            testIsolationWindow();
+        END_SET("MPGOIsolationWindow")
+
+        START_SET("MPGOActivationMethod")
+            testActivationMethodEnum();
+        END_SET("MPGOActivationMethod")
+
+        START_SET("MPGOMassSpectrum M74 fields")
+            testMassSpectrumActivationAndIsolationFields();
+        END_SET("MPGOMassSpectrum M74 fields")
 
         START_SET("MPGOEncodingSpec")
             testEncodingSpec();
