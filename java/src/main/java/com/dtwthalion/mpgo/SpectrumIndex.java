@@ -5,6 +5,7 @@
  */
 package com.dtwthalion.mpgo;
 
+import com.dtwthalion.mpgo.Enums.ActivationMethod;
 import com.dtwthalion.mpgo.Enums.Compression;
 import com.dtwthalion.mpgo.Enums.Polarity;
 import com.dtwthalion.mpgo.Enums.Precision;
@@ -39,11 +40,47 @@ public class SpectrumIndex {
     private final double[] precursorMzs;
     private final int[] precursorCharges;
     private final double[] basePeakIntensities;
+    // M74 (v0.11): optional parallel columns. Non-null iff the file was
+    // written with the opt_ms2_activation_detail feature flag set.
+    // All four are null-or-all-populated (enforced by constructors).
+    private final int[] activationMethods;
+    private final double[] isolationTargetMzs;
+    private final double[] isolationLowerOffsets;
+    private final double[] isolationUpperOffsets;
 
+    /** Pre-M74 legacy constructor; defaults the four M74 columns to null. */
     public SpectrumIndex(int count, long[] offsets, int[] lengths,
                          double[] retentionTimes, int[] msLevels, int[] polarities,
                          double[] precursorMzs, int[] precursorCharges,
                          double[] basePeakIntensities) {
+        this(count, offsets, lengths, retentionTimes, msLevels, polarities,
+             precursorMzs, precursorCharges, basePeakIntensities,
+             null, null, null, null);
+    }
+
+    /** Full (M74) constructor. The four activation / isolation arrays
+     *  must be either all-null (no M74 columns on disk) or all non-null
+     *  with length equal to {@code count}. */
+    public SpectrumIndex(int count, long[] offsets, int[] lengths,
+                         double[] retentionTimes, int[] msLevels, int[] polarities,
+                         double[] precursorMzs, int[] precursorCharges,
+                         double[] basePeakIntensities,
+                         int[] activationMethods,
+                         double[] isolationTargetMzs,
+                         double[] isolationLowerOffsets,
+                         double[] isolationUpperOffsets) {
+        boolean anyNull = activationMethods == null
+                || isolationTargetMzs == null
+                || isolationLowerOffsets == null
+                || isolationUpperOffsets == null;
+        boolean allNull = activationMethods == null
+                && isolationTargetMzs == null
+                && isolationLowerOffsets == null
+                && isolationUpperOffsets == null;
+        if (anyNull && !allNull) {
+            throw new IllegalArgumentException(
+                "M74 columns must be all-null or all-populated");
+        }
         this.count = count;
         this.offsets = offsets;
         this.lengths = lengths;
@@ -53,6 +90,10 @@ public class SpectrumIndex {
         this.precursorMzs = precursorMzs;
         this.precursorCharges = precursorCharges;
         this.basePeakIntensities = basePeakIntensities;
+        this.activationMethods = activationMethods;
+        this.isolationTargetMzs = isolationTargetMzs;
+        this.isolationLowerOffsets = isolationLowerOffsets;
+        this.isolationUpperOffsets = isolationUpperOffsets;
     }
 
     public int count() { return count; }
@@ -73,6 +114,34 @@ public class SpectrumIndex {
     public double precursorMzAt(int i) { return precursorMzs[i]; }
     public int precursorChargeAt(int i) { return precursorCharges[i]; }
     public double basePeakIntensityAt(int i) { return basePeakIntensities[i]; }
+
+    /** (M74) Optional parallel columns; {@code null} when the file
+     *  was written without {@code opt_ms2_activation_detail}. */
+    public int[] activationMethods() { return activationMethods; }
+    public double[] isolationTargetMzs() { return isolationTargetMzs; }
+    public double[] isolationLowerOffsets() { return isolationLowerOffsets; }
+    public double[] isolationUpperOffsets() { return isolationUpperOffsets; }
+
+    /** (M74) Returns the activation method at spectrum {@code i};
+     *  {@link ActivationMethod#NONE} when the M74 column is absent or
+     *  the stored value is 0. */
+    public ActivationMethod activationMethodAt(int i) {
+        if (activationMethods == null) return ActivationMethod.NONE;
+        return ActivationMethod.fromInt(activationMethods[i]);
+    }
+
+    /** (M74) Returns the isolation window at spectrum {@code i}, or
+     *  {@code null} when the M74 columns are absent or the stored
+     *  target+offsets are all zero (MS1 sentinel). */
+    public IsolationWindow isolationWindowAt(int i) {
+        if (isolationTargetMzs == null || isolationLowerOffsets == null
+                || isolationUpperOffsets == null) return null;
+        double t = isolationTargetMzs[i];
+        double l = isolationLowerOffsets[i];
+        double u = isolationUpperOffsets[i];
+        if (t == 0.0 && l == 0.0 && u == 0.0) return null;
+        return new IsolationWindow(t, l, u);
+    }
 
     /**
      * @return indices whose retention time lies within
@@ -110,6 +179,15 @@ public class SpectrumIndex {
             writeDataset(idx, "precursor_mzs", Precision.FLOAT64, precursorMzs);
             writeDataset(idx, "precursor_charges", Precision.INT32, precursorCharges);
             writeDataset(idx, "base_peak_intensities", Precision.FLOAT64, basePeakIntensities);
+            // M74 schema-gating: emit the four optional columns only
+            // when they were supplied. Constructor already enforces
+            // all-or-nothing, so checking one covers all four.
+            if (activationMethods != null) {
+                writeDataset(idx, "activation_methods", Precision.INT32, activationMethods);
+                writeDataset(idx, "isolation_target_mzs", Precision.FLOAT64, isolationTargetMzs);
+                writeDataset(idx, "isolation_lower_offsets", Precision.FLOAT64, isolationLowerOffsets);
+                writeDataset(idx, "isolation_upper_offsets", Precision.FLOAT64, isolationUpperOffsets);
+            }
         }
     }
 
@@ -129,9 +207,27 @@ public class SpectrumIndex {
             int[] precursorCharges = readInts(idx, "precursor_charges");
             double[] basePeakIntensities = readDoubles(idx, "base_peak_intensities");
 
+            // M74 schema-gating: probe for the four optional columns.
+            // Present-all or absent-all is the contract; partial
+            // presence indicates a malformed file and is flagged.
+            boolean hasAct = idx.hasChild("activation_methods");
+            boolean hasTgt = idx.hasChild("isolation_target_mzs");
+            boolean hasLo = idx.hasChild("isolation_lower_offsets");
+            boolean hasHi = idx.hasChild("isolation_upper_offsets");
+            if (hasAct != hasTgt || hasAct != hasLo || hasAct != hasHi) {
+                throw new IllegalStateException(
+                    "spectrum_index is malformed: partial M74 columns present");
+            }
+            int[] activationMethods = hasAct ? readInts(idx, "activation_methods") : null;
+            double[] isolationTargetMzs = hasAct ? readDoubles(idx, "isolation_target_mzs") : null;
+            double[] isolationLowerOffsets = hasAct ? readDoubles(idx, "isolation_lower_offsets") : null;
+            double[] isolationUpperOffsets = hasAct ? readDoubles(idx, "isolation_upper_offsets") : null;
+
             return new SpectrumIndex(count, offsets, lengths, retentionTimes,
                     msLevels, polarities, precursorMzs, precursorCharges,
-                    basePeakIntensities);
+                    basePeakIntensities,
+                    activationMethods, isolationTargetMzs,
+                    isolationLowerOffsets, isolationUpperOffsets);
         }
     }
 

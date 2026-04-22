@@ -605,4 +605,124 @@ class SpectralDatasetTest {
                 .getResource("mpgo/" + name).getFile();
         return resource;
     }
+
+    // ── M74 (Slice B): SpectrumIndex activation/isolation columns ──
+
+    private SpectrumIndex makeLegacyIndex(int n, int points) {
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        double[] rt = new double[n];
+        int[] ms = new int[n];
+        int[] pol = new int[n];
+        double[] pmz = new double[n];
+        int[] pc = new int[n];
+        double[] bpi = new double[n];
+        for (int i = 0; i < n; i++) {
+            offsets[i] = (long) i * points;
+            lengths[i] = points;
+            rt[i] = i * 0.25;
+            ms[i] = 1;
+            pol[i] = 1;
+            bpi[i] = 1000.0;
+        }
+        return new SpectrumIndex(n, offsets, lengths, rt, ms, pol, pmz, pc, bpi);
+    }
+
+    @Test
+    void spectrumIndexLegacyRoundTripOmitsM74Columns() {
+        String path = tempDir.resolve("m74_legacy.mpgo").toString();
+        int n = 4, points = 6;
+        SpectrumIndex idx = makeLegacyIndex(n, points);
+        double[] mz = new double[n * points];
+        double[] intensity = new double[n * points];
+        for (int i = 0; i < mz.length; i++) { mz[i] = 100 + i; intensity[i] = i; }
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mz);
+        channels.put("intensity", intensity);
+        AcquisitionRun run = new AcquisitionRun("run_0001",
+                AcquisitionMode.MS1_DDA, idx,
+                new InstrumentConfig("", "", "", "", "", ""),
+                channels, List.of(), List.of(), null, 0);
+        try (SpectralDataset ds = SpectralDataset.create(path, "legacy",
+                "MPGO:legacy", List.of(run), List.of(), List.of(), List.of())) {
+            assertNotNull(ds);
+        }
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            SpectrumIndex got = ds.msRuns().get("run_0001").spectrumIndex();
+            assertNull(got.activationMethods());
+            assertNull(got.isolationTargetMzs());
+            assertNull(got.isolationLowerOffsets());
+            assertNull(got.isolationUpperOffsets());
+            assertEquals(ActivationMethod.NONE, got.activationMethodAt(0));
+            assertNull(got.isolationWindowAt(0));
+        }
+    }
+
+    @Test
+    void spectrumIndexM74RoundTripPreservesColumns() {
+        String path = tempDir.resolve("m74_full.mpgo").toString();
+        int n = 3, points = 4;
+        SpectrumIndex legacy = makeLegacyIndex(n, points);
+        int[] acts = { ActivationMethod.NONE.intValue(),
+                       ActivationMethod.HCD.intValue(),
+                       ActivationMethod.CID.intValue() };
+        double[] tgt = { 0.0, 500.0, 750.5 };
+        double[] lo  = { 0.0, 1.0, 0.5 };
+        double[] hi  = { 0.0, 2.0, 0.75 };
+        SpectrumIndex idx = new SpectrumIndex(legacy.count(), legacy.offsets(),
+                legacy.lengths(), legacy.retentionTimes(), legacy.msLevels(),
+                legacy.polarities(), legacy.precursorMzs(),
+                legacy.precursorCharges(), legacy.basePeakIntensities(),
+                acts, tgt, lo, hi);
+
+        double[] mz = new double[n * points];
+        double[] intensity = new double[n * points];
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mz);
+        channels.put("intensity", intensity);
+        AcquisitionRun run = new AcquisitionRun("run_0001",
+                AcquisitionMode.MS2_DDA, idx,
+                new InstrumentConfig("", "", "", "", "", ""),
+                channels, List.of(), List.of(), null, 0);
+        try (SpectralDataset ds = SpectralDataset.create(path, "m74",
+                "MPGO:m74", List.of(run), List.of(), List.of(), List.of())) {
+            assertNotNull(ds);
+        }
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            SpectrumIndex got = ds.msRuns().get("run_0001").spectrumIndex();
+            assertNotNull(got.activationMethods());
+            assertNotNull(got.isolationTargetMzs());
+            assertNotNull(got.isolationLowerOffsets());
+            assertNotNull(got.isolationUpperOffsets());
+            assertEquals(ActivationMethod.NONE, got.activationMethodAt(0));
+            assertEquals(ActivationMethod.HCD,  got.activationMethodAt(1));
+            assertEquals(ActivationMethod.CID,  got.activationMethodAt(2));
+            assertNull(got.isolationWindowAt(0));
+            IsolationWindow w1 = got.isolationWindowAt(1);
+            assertNotNull(w1);
+            assertEquals(500.0, w1.targetMz(), 1e-12);
+            assertEquals(1.0, w1.lowerOffset(), 1e-12);
+            assertEquals(2.0, w1.upperOffset(), 1e-12);
+            IsolationWindow w2 = got.isolationWindowAt(2);
+            assertNotNull(w2);
+            assertEquals(1.25, w2.width(), 1e-12);
+        }
+    }
+
+    @Test
+    void spectrumIndexRejectsPartialM74Arrays() {
+        int n = 2;
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        double[] rt = new double[n];
+        int[] ms = new int[n];
+        int[] pol = new int[n];
+        double[] pmz = new double[n];
+        int[] pc = new int[n];
+        double[] bpi = new double[n];
+        int[] acts = new int[n];  // only activation supplied
+        assertThrows(IllegalArgumentException.class, () ->
+            new SpectrumIndex(n, offsets, lengths, rt, ms, pol, pmz, pc, bpi,
+                              acts, null, null, null));
+    }
 }

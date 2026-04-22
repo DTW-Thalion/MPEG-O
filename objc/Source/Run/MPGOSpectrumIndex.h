@@ -6,6 +6,7 @@
 
 @class MPGOValueRange;
 @class MPGOHDF5Group;
+@class MPGOIsolationWindow;
 
 /**
  * Per-spectrum offsets, lengths, and queryable scan metadata for one
@@ -40,12 +41,26 @@
 - (uint8_t)precursorChargeAt:(NSUInteger)index;
 - (double)basePeakIntensityAt:(NSUInteger)index;
 
+/** (M74) Activation method for spectrum `index`. Returns
+ *  `MPGOActivationMethodNone` when the file was written without the
+ *  `opt_ms2_activation_detail` feature flag (M74 columns absent). */
+- (MPGOActivationMethod)activationMethodAt:(NSUInteger)index;
+
+/** (M74) Isolation window for spectrum `index`, or `nil` when the
+ *  M74 columns are absent or the stored target+offsets are all zero
+ *  (MS1 sentinel). */
+- (MPGOIsolationWindow *)isolationWindowAt:(NSUInteger)index;
+
+/** (M74) YES when all four optional parallel columns are present. */
+@property (readonly) BOOL hasActivationDetail;
+
 /** Indices whose retention time falls within [range.minimum, range.maximum]. */
 - (NSIndexSet *)indicesInRetentionTimeRange:(MPGOValueRange *)range;
 - (NSIndexSet *)indicesForMsLevel:(uint8_t)msLevel;
 
 #pragma mark - Construction
 
+/** Pre-M74 initializer; delegates to the full form with nil M74 columns. */
 - (instancetype)initWithOffsets:(NSData *)offsets
                         lengths:(NSData *)lengths
                  retentionTimes:(NSData *)retentionTimes
@@ -54,6 +69,23 @@
                    precursorMzs:(NSData *)precursorMzs
                precursorCharges:(NSData *)precursorCharges
              basePeakIntensities:(NSData *)basePeakIntensities;
+
+/** (M74) Designated initializer. The four trailing `NSData *` arguments
+ *  must all be nil (legacy file) or all non-nil (M74 columns present
+ *  — writer emits them when the `opt_ms2_activation_detail` flag is
+ *  set by the author). Mixed nil/non-nil is rejected. */
+- (instancetype)initWithOffsets:(NSData *)offsets
+                        lengths:(NSData *)lengths
+                 retentionTimes:(NSData *)retentionTimes
+                       msLevels:(NSData *)msLevels
+                     polarities:(NSData *)polarities
+                   precursorMzs:(NSData *)precursorMzs
+               precursorCharges:(NSData *)precursorCharges
+             basePeakIntensities:(NSData *)basePeakIntensities
+               activationMethods:(NSData *)activationMethods
+             isolationTargetMzs:(NSData *)isolationTargetMzs
+          isolationLowerOffsets:(NSData *)isolationLowerOffsets
+          isolationUpperOffsets:(NSData *)isolationUpperOffsets;
 
 #pragma mark - HDF5
 

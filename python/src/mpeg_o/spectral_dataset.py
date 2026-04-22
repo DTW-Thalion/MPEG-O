@@ -590,6 +590,13 @@ class WrittenRun:
     precursor_mzs: np.ndarray
     precursor_charges: np.ndarray
     base_peak_intensities: np.ndarray
+    # v0.11 M74: optional parallel per-spectrum arrays. Writer emits the
+    # four datasets only when all four are non-None (schema-gating per
+    # the opt_ms2_activation_detail feature flag).
+    activation_methods: np.ndarray | None = None
+    isolation_target_mzs: np.ndarray | None = None
+    isolation_lower_offsets: np.ndarray | None = None
+    isolation_upper_offsets: np.ndarray | None = None
     nucleus_type: str = ""
     provenance_records: list[ProvenanceRecord] = field(default_factory=list)
     # v0.3 M21: signal compression codec. Valid values are the strings
@@ -635,7 +642,7 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
 
     idx = g.create_group("spectrum_index")
     io.write_int_attr(idx, "count", int(run.offsets.shape[0]))
-    for dname, data, dtype in [
+    columns: list[tuple[str, np.ndarray, str]] = [
         ("offsets", run.offsets, "<u8"),
         ("lengths", run.lengths, "<u4"),
         ("retention_times", run.retention_times, "<f8"),
@@ -644,7 +651,26 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
         ("precursor_mzs", run.precursor_mzs, "<f8"),
         ("precursor_charges", run.precursor_charges, "<i4"),
         ("base_peak_intensities", run.base_peak_intensities, "<f8"),
-    ]:
+    ]
+    # M74 schema-gating: only emit the four optional columns when all
+    # four are supplied. The opt_ms2_activation_detail feature flag is
+    # the author-level gate; this block translates that gate into
+    # physical column presence on disk.
+    m74_cols = (run.activation_methods, run.isolation_target_mzs,
+                run.isolation_lower_offsets, run.isolation_upper_offsets)
+    if all(c is not None for c in m74_cols):
+        columns += [
+            ("activation_methods", run.activation_methods, "<i4"),
+            ("isolation_target_mzs", run.isolation_target_mzs, "<f8"),
+            ("isolation_lower_offsets", run.isolation_lower_offsets, "<f8"),
+            ("isolation_upper_offsets", run.isolation_upper_offsets, "<f8"),
+        ]
+    elif any(c is not None for c in m74_cols):
+        raise ValueError(
+            "WrittenRun M74 columns must be either all-None or all-set; "
+            "partial population is not a valid schema state."
+        )
+    for dname, data, dtype in columns:
         io.write_signal_channel(idx, dname, data.astype(dtype, copy=False),
                                 chunk_size=io.DEFAULT_INDEX_CHUNK)
 

@@ -13,8 +13,15 @@ from . import _hdf5_io as io
 from .access_policy import AccessPolicy
 from .axis_descriptor import AxisDescriptor
 from .chromatogram import Chromatogram
-from .enums import AcquisitionMode, ChromatogramType, EncryptionLevel, Polarity
+from .enums import (
+    AcquisitionMode,
+    ActivationMethod,
+    ChromatogramType,
+    EncryptionLevel,
+    Polarity,
+)
 from .instrument_config import InstrumentConfig
+from .isolation_window import IsolationWindow
 from .mass_spectrum import MassSpectrum
 from .nmr_spectrum import NMRSpectrum
 from .protocols import Indexable, Streamable, Provenanceable
@@ -88,6 +95,20 @@ class SpectrumIndex:
         Precursor charge state for each spectrum (0 for MS1).
     base_peak_intensities : numpy.ndarray
         Base-peak intensity for each spectrum.
+    activation_methods : numpy.ndarray | None
+        (M74, optional) Activation method int value per spectrum; see
+        :class:`~mpeg_o.enums.ActivationMethod`. Present only when the
+        file was written with the ``opt_ms2_activation_detail`` feature
+        flag; absent columns indicate MS1-only or legacy files.
+    isolation_target_mzs : numpy.ndarray | None
+        (M74, optional) Target m/z of the isolation window per spectrum.
+        Zero when no isolation applied.
+    isolation_lower_offsets : numpy.ndarray | None
+        (M74, optional) Lower offset of the isolation window per
+        spectrum. Zero when no isolation applied.
+    isolation_upper_offsets : numpy.ndarray | None
+        (M74, optional) Upper offset of the isolation window per
+        spectrum. Zero when no isolation applied.
 
     Notes
     -----
@@ -107,6 +128,10 @@ class SpectrumIndex:
     precursor_mzs: np.ndarray
     precursor_charges: np.ndarray
     base_peak_intensities: np.ndarray
+    activation_methods: np.ndarray | None = None
+    isolation_target_mzs: np.ndarray | None = None
+    isolation_lower_offsets: np.ndarray | None = None
+    isolation_upper_offsets: np.ndarray | None = None
 
     @property
     def count(self) -> int:
@@ -148,6 +173,31 @@ class SpectrumIndex:
         """Return base-peak intensity of spectrum ``index``."""
         return float(self.base_peak_intensities[index])
 
+    def activation_method_at(self, index: int) -> ActivationMethod:
+        """Return :class:`~mpeg_o.enums.ActivationMethod` of spectrum
+        ``index``. Returns ``ActivationMethod.NONE`` when the M74
+        column is absent (legacy file or MS1-only run)."""
+        if self.activation_methods is None:
+            return ActivationMethod.NONE
+        return ActivationMethod(int(self.activation_methods[index]))
+
+    def isolation_window_at(self, index: int) -> IsolationWindow | None:
+        """Return :class:`~mpeg_o.isolation_window.IsolationWindow` of
+        spectrum ``index``, or ``None`` when the M74 columns are absent
+        or the stored target+offsets are all zero (MS1 sentinel)."""
+        if (self.isolation_target_mzs is None
+                or self.isolation_lower_offsets is None
+                or self.isolation_upper_offsets is None):
+            return None
+        target = float(self.isolation_target_mzs[index])
+        lower = float(self.isolation_lower_offsets[index])
+        upper = float(self.isolation_upper_offsets[index])
+        if target == 0.0 and lower == 0.0 and upper == 0.0:
+            return None
+        return IsolationWindow(target_mz=target,
+                                lower_offset=lower,
+                                upper_offset=upper)
+
     # ------------------------------------------------------------------ #
     # Range queries                                                        #
     # ------------------------------------------------------------------ #
@@ -178,10 +228,35 @@ class SpectrumIndex:
                 ds = idx_group.open_dataset(name)
                 arr = ds.read()
                 return np.asarray(arr).astype(dtype, copy=False)
+
+            def present(name: str) -> bool:
+                return idx_group.has_child(name)
         else:
             # Legacy h5py.Group path.
             def col(name: str, dtype: str) -> np.ndarray:
                 return idx_group[name][()].astype(dtype, copy=False)
+
+            def present(name: str) -> bool:
+                return name in idx_group
+
+        # M74 schema-gating: load the four optional parallel columns only
+        # when the writer emitted them (gated by opt_ms2_activation_detail).
+        activation_methods = (
+            col("activation_methods", "<i4")
+            if present("activation_methods") else None
+        )
+        isolation_target_mzs = (
+            col("isolation_target_mzs", "<f8")
+            if present("isolation_target_mzs") else None
+        )
+        isolation_lower_offsets = (
+            col("isolation_lower_offsets", "<f8")
+            if present("isolation_lower_offsets") else None
+        )
+        isolation_upper_offsets = (
+            col("isolation_upper_offsets", "<f8")
+            if present("isolation_upper_offsets") else None
+        )
 
         return cls(
             offsets=col("offsets", "<u8"),
@@ -192,6 +267,10 @@ class SpectrumIndex:
             precursor_mzs=col("precursor_mzs", "<f8"),
             precursor_charges=col("precursor_charges", "<i4"),
             base_peak_intensities=col("base_peak_intensities", "<f8"),
+            activation_methods=activation_methods,
+            isolation_target_mzs=isolation_target_mzs,
+            isolation_lower_offsets=isolation_lower_offsets,
+            isolation_upper_offsets=isolation_upper_offsets,
         )
 
 
