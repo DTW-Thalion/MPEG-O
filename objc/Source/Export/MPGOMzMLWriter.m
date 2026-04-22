@@ -16,7 +16,9 @@
 #import "Spectra/MPGOChromatogram.h"
 #import "ValueClasses/MPGOEnums.h"
 #import "ValueClasses/MPGOValueRange.h"
+#import "ValueClasses/MPGOIsolationWindow.h"
 #import "Import/MPGOBase64.h"
+#import "Import/MPGOCVTermMapper.h"
 
 #pragma mark - Helpers
 
@@ -246,8 +248,44 @@ static NSString *precisionName(BOOL useFloat32)
         appendUTF8(body, @"          </scanList>\n");
 
         if (ms.precursorMz > 0.0 || ms.msLevel > 1) {
+            // M74: consult the spectrum index for activation method +
+            // isolation window so the writer emits real metadata when
+            // the source file carried it (opt_ms2_activation_detail
+            // flag) rather than a CID placeholder. `spectrumAtIndex:`
+            // returns an MPGOMassSpectrum built from the legacy init
+            // path and so does not carry these fields.
+            MPGOActivationMethod activation =
+                [chosenRun.spectrumIndex activationMethodAt:i];
+            MPGOIsolationWindow *isoWindow =
+                [chosenRun.spectrumIndex isolationWindowAt:i];
+
             appendUTF8(body, @"          <precursorList count=\"1\">\n");
             appendUTF8(body, @"            <precursor>\n");
+            // mzML 1.1 XSD puts <isolationWindow> (optional) before
+            // <selectedIonList>. Skip entirely when the index carries
+            // no stored window.
+            if (isoWindow) {
+                appendUTF8(body, @"              <isolationWindow>\n");
+                NSString *tgt = [NSString stringWithFormat:
+                    @"                <cvParam cvRef=\"MS\" accession=\"MS:1000827\""
+                    @" name=\"isolation window target m/z\" value=\"%@\""
+                    @" unitCvRef=\"MS\" unitAccession=\"MS:1000040\" unitName=\"m/z\"/>\n",
+                    fmtDouble(isoWindow.targetMz)];
+                appendUTF8(body, tgt);
+                NSString *lo = [NSString stringWithFormat:
+                    @"                <cvParam cvRef=\"MS\" accession=\"MS:1000828\""
+                    @" name=\"isolation window lower offset\" value=\"%@\""
+                    @" unitCvRef=\"MS\" unitAccession=\"MS:1000040\" unitName=\"m/z\"/>\n",
+                    fmtDouble(isoWindow.lowerOffset)];
+                appendUTF8(body, lo);
+                NSString *hi = [NSString stringWithFormat:
+                    @"                <cvParam cvRef=\"MS\" accession=\"MS:1000829\""
+                    @" name=\"isolation window upper offset\" value=\"%@\""
+                    @" unitCvRef=\"MS\" unitAccession=\"MS:1000040\" unitName=\"m/z\"/>\n",
+                    fmtDouble(isoWindow.upperOffset)];
+                appendUTF8(body, hi);
+                appendUTF8(body, @"              </isolationWindow>\n");
+            }
             appendUTF8(body, @"              <selectedIonList count=\"1\">\n");
             appendUTF8(body, @"                <selectedIon>\n");
             NSString *pmz = [NSString stringWithFormat:
@@ -262,14 +300,26 @@ static NSString *precisionName(BOOL useFloat32)
             }
             appendUTF8(body, @"                </selectedIon>\n");
             appendUTF8(body, @"              </selectedIonList>\n");
-            // PSI mzML 1.1 XSD requires <activation> after <selectedIonList>.
-            // MPEG-O doesn't yet carry the fragmentation method in its
-            // spectrum_index (v1.0 data-model extension — see
-            // docs/v1.0-gaps.md), so emit a conservative CID placeholder.
-            appendUTF8(body, @"              <activation>\n");
-            appendUTF8(body, @"                <cvParam cvRef=\"MS\" accession=\"MS:1000133\""
-                            @" name=\"collision-induced dissociation\" value=\"\"/>\n");
-            appendUTF8(body, @"              </activation>\n");
+            // PSI mzML 1.1 XSD requires <activation> inside every
+            // <precursor>. Populate the method cvParam only when the
+            // index carries a known ActivationMethod; otherwise emit the
+            // element empty so consumers can distinguish "unknown" from
+            // a fabricated CID.
+            NSString *actAcc =
+                [MPGOCVTermMapper activationAccessionForMethod:activation];
+            NSString *actName =
+                [MPGOCVTermMapper activationNameForMethod:activation];
+            if (ms.msLevel >= 2 && actAcc && actName) {
+                appendUTF8(body, @"              <activation>\n");
+                NSString *ap = [NSString stringWithFormat:
+                    @"                <cvParam cvRef=\"MS\" accession=\"%@\""
+                    @" name=\"%@\" value=\"\"/>\n",
+                    actAcc, actName];
+                appendUTF8(body, ap);
+                appendUTF8(body, @"              </activation>\n");
+            } else {
+                appendUTF8(body, @"              <activation/>\n");
+            }
             appendUTF8(body, @"            </precursor>\n");
             appendUTF8(body, @"          </precursorList>\n");
         }

@@ -169,6 +169,71 @@ class ImportExportTest {
     }
 
     @Test
+    void mzmlWriterEmitsM74ActivationAndIsolation() throws Exception {
+        // (M74 Slice D) MzMLWriter must consult the SpectrumIndex for
+        // activation method + isolation window rather than emitting a
+        // CID placeholder. Build a run with one MS1 + one MS2/HCD
+        // spectrum, write mzML, and verify:
+        //   - HCD accession (MS:1000422) appears for MS2
+        //   - CID (MS:1000133) does NOT leak in (proves data-driven emit)
+        //   - isolation-window cvParams (MS:1000827/828/829) appear
+        //   - re-read through MzMLReader restores the same enum + offsets
+        SpectrumIndex idx = new SpectrumIndex(
+            2,
+            new long[]{0, 3},
+            new int[]{3, 2},
+            new double[]{0.5, 1.0},
+            new int[]{1, 2},
+            new int[]{1, 1},
+            new double[]{0.0, 445.3},
+            new int[]{0, 2},
+            new double[]{3.0, 5.0},
+            new int[]{
+                ActivationMethod.NONE.intValue(),
+                ActivationMethod.HCD.intValue()
+            },
+            new double[]{0.0, 445.3},
+            new double[]{0.0, 0.5},
+            new double[]{0.0, 0.5}
+        );
+        Map<String, double[]> ch = new LinkedHashMap<>();
+        ch.put("mz", new double[]{100, 200, 300, 150, 250});
+        ch.put("intensity", new double[]{1, 2, 3, 4, 5});
+
+        AcquisitionRun run = new AcquisitionRun(
+            "m74_run", AcquisitionMode.MS2_DDA,
+            idx, null, ch, List.of(), List.of(), null, 0);
+
+        String outPath = tempDir.resolve("m74.mzML").toString();
+        MzMLWriter.write(run, outPath, false);
+
+        String xml = Files.readString(Path.of(outPath));
+        assertTrue(xml.contains("accession=\"MS:1000422\""),
+            "M74: HCD accession must appear for MS2 spectrum");
+        assertFalse(xml.contains("accession=\"MS:1000133\""),
+            "M74: CID placeholder must not leak into output");
+        assertTrue(xml.contains("accession=\"MS:1000827\""),
+            "M74: isolation window target m/z cvParam required");
+        assertTrue(xml.contains("accession=\"MS:1000828\""),
+            "M74: isolation window lower offset cvParam required");
+        assertTrue(xml.contains("accession=\"MS:1000829\""),
+            "M74: isolation window upper offset cvParam required");
+
+        AcquisitionRun reRead = MzMLReader.read(outPath);
+        assertNotNull(reRead);
+        SpectrumIndex reIdx = reRead.spectrumIndex();
+        assertEquals(ActivationMethod.NONE, reIdx.activationMethodAt(0),
+            "MS1 must stay at NONE after round-trip");
+        assertEquals(ActivationMethod.HCD, reIdx.activationMethodAt(1),
+            "MS2 activation must round-trip as HCD");
+        IsolationWindow iw = reIdx.isolationWindowAt(1);
+        assertNotNull(iw, "MS2 isolation window must round-trip");
+        assertEquals(445.3, iw.targetMz(), 1e-6);
+        assertEquals(0.5, iw.lowerOffset(), 1e-6);
+        assertEquals(0.5, iw.upperOffset(), 1e-6);
+    }
+
+    @Test
     void mzmlChromatogramRoundTrip() throws Exception {
         // Create a run with chromatograms, write mzML, read back
         SpectrumIndex idx = new SpectrumIndex(1,

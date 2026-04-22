@@ -3,6 +3,7 @@ package com.dtwthalion.mpgo.exporters;
 
 import com.dtwthalion.mpgo.*;
 import com.dtwthalion.mpgo.Enums.*;
+import com.dtwthalion.mpgo.importers.CVTermMapper;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -164,7 +165,32 @@ public final class MzMLWriter {
 
             // precursorList (MS2+)
             if (msLevel >= 2 && precMz > 0) {
+                // M74: consult the index for activation method + isolation
+                // window so the writer emits real metadata when the source
+                // file carried it (opt_ms2_activation_detail flag), rather
+                // than a CID placeholder.
+                ActivationMethod activation = idx.activationMethodAt(i);
+                IsolationWindow isoWindow = idx.isolationWindowAt(i);
+
                 sb.append("        <precursorList count=\"1\"><precursor>\n");
+                // mzML 1.1 XSD puts <isolationWindow> (optional) before
+                // <selectedIonList>. Skip entirely when no window is stored.
+                if (isoWindow != null) {
+                    sb.append("          <isolationWindow>\n");
+                    sb.append("            <cvParam cvRef=\"MS\" accession=\"MS:1000827\"");
+                    sb.append(" name=\"isolation window target m/z\" value=\"")
+                      .append(isoWindow.targetMz())
+                      .append("\" unitCvRef=\"MS\" unitAccession=\"MS:1000040\" unitName=\"m/z\"/>\n");
+                    sb.append("            <cvParam cvRef=\"MS\" accession=\"MS:1000828\"");
+                    sb.append(" name=\"isolation window lower offset\" value=\"")
+                      .append(isoWindow.lowerOffset())
+                      .append("\" unitCvRef=\"MS\" unitAccession=\"MS:1000040\" unitName=\"m/z\"/>\n");
+                    sb.append("            <cvParam cvRef=\"MS\" accession=\"MS:1000829\"");
+                    sb.append(" name=\"isolation window upper offset\" value=\"")
+                      .append(isoWindow.upperOffset())
+                      .append("\" unitCvRef=\"MS\" unitAccession=\"MS:1000040\" unitName=\"m/z\"/>\n");
+                    sb.append("          </isolationWindow>\n");
+                }
                 sb.append("          <selectedIonList count=\"1\"><selectedIon>\n");
                 sb.append("            <cvParam cvRef=\"MS\" accession=\"MS:1000744\" name=\"selected ion m/z\" value=\"")
                   .append(precMz).append("\"/>\n");
@@ -173,14 +199,21 @@ public final class MzMLWriter {
                       .append(precCharge).append("\"/>\n");
                 }
                 sb.append("          </selectedIon></selectedIonList>\n");
-                // PSI mzML 1.1 XSD requires <activation> after <selectedIonList>.
-                // Fragmentation method is not yet carried in the MPEG-O data
-                // model (v1.0 extension — see docs/v1.0-gaps.md); emit a
-                // conservative CID placeholder so the output validates.
-                sb.append("          <activation>\n");
-                sb.append("            <cvParam cvRef=\"MS\" accession=\"MS:1000133\"");
-                sb.append(" name=\"collision-induced dissociation\" value=\"\"/>\n");
-                sb.append("          </activation>\n");
+                // PSI mzML 1.1 XSD requires <activation> inside every
+                // <precursor>. Populate the method cvParam only when the
+                // index carries a known ActivationMethod (MS2+ with the
+                // opt_ms2_activation_detail flag); otherwise emit the
+                // element empty so consumers can distinguish "unknown"
+                // from a fabricated value.
+                String[] pair = CVTermMapper.activationAccessionFor(activation);
+                if (activation != null && activation != ActivationMethod.NONE && pair != null) {
+                    sb.append("          <activation>\n");
+                    sb.append("            <cvParam cvRef=\"MS\" accession=\"").append(pair[0])
+                      .append("\" name=\"").append(pair[1]).append("\" value=\"\"/>\n");
+                    sb.append("          </activation>\n");
+                } else {
+                    sb.append("          <activation/>\n");
+                }
                 sb.append("        </precursor></precursorList>\n");
             }
 

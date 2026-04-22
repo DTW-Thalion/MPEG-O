@@ -93,6 +93,26 @@ public final class CVTermMapper {
         };
     }
 
+    /**
+     * (M74) Two-element ``[accession, name]`` pair for emitting an
+     * {@code <activation>} cvParam from an ActivationMethod, or
+     * {@code null} for {@link ActivationMethod#NONE}. Callers gate
+     * emission of the cvParam on ms_level &gt;= 2 and a non-null
+     * return here.
+     */
+    public static String[] activationAccessionFor(ActivationMethod method) {
+        if (method == null) return null;
+        return switch (method) {
+            case CID   -> new String[]{MS_CID,   "collision-induced dissociation"};
+            case HCD   -> new String[]{MS_HCD,   "beam-type collision-induced dissociation"};
+            case ETD   -> new String[]{MS_ETD,   "electron transfer dissociation"};
+            case ECD   -> new String[]{MS_ECD,   "electron capture dissociation"};
+            case UVPD  -> new String[]{MS_UVPD,  "ultraviolet photodissociation"};
+            case EThcD -> new String[]{MS_ETHCD, "electron transfer/higher-energy collision dissociation"};
+            default    -> null;
+        };
+    }
+
     // nmrCV
     public static final String NMR_FREQ = "NMR:1000001";
     public static final String NMR_NUCLEUS = "NMR:1000002";
