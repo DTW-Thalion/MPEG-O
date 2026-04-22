@@ -291,7 +291,30 @@ public class SpectralDataset implements
                                           List<ProvenanceRecord> provenanceRecords) {
         return create(path, title, isaInvestigationId, runs,
                 identifications, quantifications, provenanceRecords,
-                FeatureFlags.defaultCurrent());
+                autoFeatureFlags(runs));
+    }
+
+    /** M74 Slice E: default feature flags upgraded with
+     *  {@code opt_ms2_activation_detail} + format version bumped to
+     *  {@code "1.3"} whenever any run's {@link SpectrumIndex} carries
+     *  the four optional activation/isolation columns. Files without
+     *  M74 content keep the legacy 1.1 layout so existing byte-parity
+     *  tests continue to pass. */
+    private static FeatureFlags autoFeatureFlags(List<AcquisitionRun> runs) {
+        FeatureFlags base = FeatureFlags.defaultCurrent();
+        if (runs == null) return base;
+        boolean anyM74 = false;
+        for (AcquisitionRun r : runs) {
+            if (r.spectrumIndex() != null
+                    && r.spectrumIndex().activationMethods() != null) {
+                anyM74 = true;
+                break;
+            }
+        }
+        if (!anyM74) return base;
+        java.util.Set<String> withFlag = new java.util.LinkedHashSet<>(base.features());
+        withFlag.add(FeatureFlags.OPT_MS2_ACTIVATION_DETAIL);
+        return new FeatureFlags("1.3", withFlag);
     }
 
     public static SpectralDataset create(String pathOrUrl, String title,

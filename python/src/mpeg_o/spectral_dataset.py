@@ -509,12 +509,25 @@ class SpectralDataset:
             "opt_compound_headers",
         ]
 
+        # M74 Slice E: if any run carries the four optional
+        # activation/isolation columns, advertise the
+        # opt_ms2_activation_detail feature flag and bump the format
+        # version to 1.3 so readers know to look for them. Files without
+        # M74 content keep the legacy 1.1 layout so existing byte-parity
+        # tests continue to pass.
+        any_m74 = any(
+            run.activation_methods is not None for run in runs.values()
+        )
+        if features is None and any_m74:
+            feature_list = feature_list + ["opt_ms2_activation_detail"]
+        format_version = "1.3" if any_m74 else "1.1"
+
         # HDF5 fast path keeps the legacy byte layout (fixed-length
         # string attrs, padded compound types) so existing tests and
         # cross-language readers continue to round-trip bit-for-bit.
         if isinstance(provider, str) and provider in ("hdf5", "h5", "h5py"):
             with h5py.File(p, "w") as f:
-                io.write_feature_flags(f, "1.1", feature_list)
+                io.write_feature_flags(f, format_version, feature_list)
                 study = f.create_group("study")
                 io.write_fixed_string_attr(study, "title", title)
                 io.write_fixed_string_attr(study, "isa_investigation_id", isa_investigation_id)
@@ -548,7 +561,7 @@ class SpectralDataset:
             sp = provider
         try:
             root = sp.root_group()
-            io.write_feature_flags(root, "1.1", feature_list)
+            io.write_feature_flags(root, format_version, feature_list)
             study = root.create_group("study")
             io.write_fixed_string_attr(study, "title", title)
             io.write_fixed_string_attr(study, "isa_investigation_id", isa_investigation_id)

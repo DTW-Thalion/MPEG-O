@@ -710,6 +710,65 @@ class SpectralDatasetTest {
     }
 
     @Test
+    void m74FileBumpsFormatVersionAndAdvertisesFlag() {
+        // Slice E: when SpectralDataset.create() is called with a run
+        // whose SpectrumIndex carries M74 columns, the writer must bump
+        // @mpeg_o_format_version from "1.1" to "1.3" and include
+        // opt_ms2_activation_detail in @mpeg_o_features. Legacy runs
+        // (no M74 columns) keep the original "1.1" layout.
+
+        // Legacy path: no M74 columns => version 1.1, flag absent.
+        String legacyPath = tempDir.resolve("slice_e_legacy.mpgo").toString();
+        int n = 2, points = 4;
+        SpectrumIndex legacy = makeLegacyIndex(n, points);
+        AcquisitionRun legacyRun = new AcquisitionRun("run_0001",
+                AcquisitionMode.MS1_DDA, legacy,
+                new InstrumentConfig("", "", "", "", "", ""),
+                Map.of("mz", new double[n * points],
+                       "intensity", new double[n * points]),
+                List.of(), List.of(), null, 0);
+        try (SpectralDataset ds = SpectralDataset.create(legacyPath, "legacy",
+                "MPGO:legacy", List.of(legacyRun), List.of(), List.of(), List.of())) {
+            assertNotNull(ds);
+        }
+        try (SpectralDataset ds = SpectralDataset.open(legacyPath)) {
+            assertEquals("1.1", ds.featureFlags().formatVersion());
+            assertFalse(ds.featureFlags().has(FeatureFlags.OPT_MS2_ACTIVATION_DETAIL));
+        }
+
+        // M74 path: run has activation/isolation columns => version 1.3 + flag.
+        String m74Path = tempDir.resolve("slice_e_m74.mpgo").toString();
+        SpectrumIndex base = makeLegacyIndex(n, points);
+        int[] acts = { ActivationMethod.NONE.intValue(),
+                       ActivationMethod.HCD.intValue() };
+        double[] tgt = { 0.0, 445.3 };
+        double[] lo  = { 0.0, 0.5 };
+        double[] hi  = { 0.0, 0.5 };
+        SpectrumIndex m74Idx = new SpectrumIndex(base.count(), base.offsets(),
+                base.lengths(), base.retentionTimes(), base.msLevels(),
+                base.polarities(), base.precursorMzs(),
+                base.precursorCharges(), base.basePeakIntensities(),
+                acts, tgt, lo, hi);
+        AcquisitionRun m74Run = new AcquisitionRun("run_0001",
+                AcquisitionMode.MS2_DDA, m74Idx,
+                new InstrumentConfig("", "", "", "", "", ""),
+                Map.of("mz", new double[n * points],
+                       "intensity", new double[n * points]),
+                List.of(), List.of(), null, 0);
+        try (SpectralDataset ds = SpectralDataset.create(m74Path, "m74",
+                "MPGO:m74", List.of(m74Run), List.of(), List.of(), List.of())) {
+            assertNotNull(ds);
+        }
+        try (SpectralDataset ds = SpectralDataset.open(m74Path)) {
+            assertEquals("1.3", ds.featureFlags().formatVersion());
+            assertTrue(ds.featureFlags().has(FeatureFlags.OPT_MS2_ACTIVATION_DETAIL));
+            SpectrumIndex got = ds.msRuns().get("run_0001").spectrumIndex();
+            assertNotNull(got.activationMethods());
+            assertEquals(ActivationMethod.HCD, got.activationMethodAt(1));
+        }
+    }
+
+    @Test
     void spectrumIndexRejectsPartialM74Arrays() {
         int n = 2;
         long[] offsets = new long[n];

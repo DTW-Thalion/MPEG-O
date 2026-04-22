@@ -40,6 +40,7 @@
 + (NSString *)featureKeyRotation;              // @"opt_key_rotation" (M25)
 + (NSString *)featureAnonymized;               // @"opt_anonymized" (M28)
 + (NSString *)featurePQCPreview;               // @"opt_pqc_preview" (v0.8 M49)
++ (NSString *)featureMS2ActivationDetail;      // @"opt_ms2_activation_detail" (v0.12 M74)
 
 #pragma mark - Read
 
