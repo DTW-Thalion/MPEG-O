@@ -1,0 +1,23 @@
+MTD	mzTab-version	1.0
+MTD	mzTab-mode	Summary
+MTD	mzTab-type	Identification
+MTD	mzTab-ID	mpgo-export
+MTD	title	M78 conformance (proteomics)
+MTD	software[1]	[MS, MS:1000799, custom unreleased software tool, mpeg-o]
+MTD	ms_run[1]-location	file://run_a.mzML
+MTD	assay[1]-sample_ref	S1
+MTD	assay[1]-quantification_reagent	[MS, MS:1002038, unlabeled sample, S1]
+MTD	assay[1]-ms_run_ref	ms_run[1]
+MTD	assay[2]-sample_ref	S2
+MTD	assay[2]-quantification_reagent	[MS, MS:1002038, unlabeled sample, S2]
+MTD	assay[2]-ms_run_ref	ms_run[1]
+
+PSH	sequence	PSM_ID	accession	unique	database	database_version	search_engine	search_engine_score[1]	modifications	retention_time	charge	exp_mass_to_charge	calc_mass_to_charge	spectra_ref	pre	post	start	end
+PSM		1	P12345	null	null	null	[MS, MS:1001083, mascot, ]	78.5	null	null	null	null	null	ms_run[1]:index=42	null	null	null	null
+
+PRH	accession	description	taxid	species	database	database_version	search_engine	best_search_engine_score[1]	ambiguity_members	modifications	protein_coverage	protein_abundance_assay[1]	protein_abundance_assay[2]
+PRT	P12345		null	null	null	null	null	null	null	null	null	1e+06	2.5e+06
+
+PEH	sequence	accession	unique	database	database_version	search_engine	best_search_engine_score[1]	modifications	retention_time	charge	mass_to_charge	uri	spectra_ref	peptide_abundance_assay[1]	peptide_abundance_assay[2]
+PEP	AAAAPEPTIDER	null	null	null	null	null	null	null	302.5	2	615.329	null	ms_run[1]:scan=42	1.5e+06	2.25e+06
+PEP	QWERTYK	null	null	null	null	null	null	null	450.1	1	412.201	null	ms_run[1]:scan=51	800000	null

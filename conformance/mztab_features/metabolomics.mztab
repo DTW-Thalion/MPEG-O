@@ -1,0 +1,28 @@
+MTD	mzTab-version	2.0.0-M
+MTD	mzTab-mode	Summary
+MTD	mzTab-type	Identification
+MTD	title	M78 conformance (metabolomics)
+MTD	software[1]	[MS, MS:1000799, custom unreleased software tool, mpeg-o]
+MTD	ms_run[1]-location	file://metabolomics.mzML
+MTD	assay[1]-sample_ref	sample_a
+MTD	assay[1]-quantification_reagent	[MS, MS:1002038, unlabeled sample, sample_a]
+MTD	assay[1]-ms_run_ref	ms_run[1]
+MTD	study_variable[1]-description	sample_a
+MTD	study_variable[1]-assay_refs	assay[1]
+MTD	assay[2]-sample_ref	sample_b
+MTD	assay[2]-quantification_reagent	[MS, MS:1002038, unlabeled sample, sample_b]
+MTD	assay[2]-ms_run_ref	ms_run[1]
+MTD	study_variable[2]-description	sample_b
+MTD	study_variable[2]-assay_refs	assay[2]
+
+SMH	SML_ID	SMF_ID_REFS	database_identifier	chemical_formula	smiles	inchi	chemical_name	uri	theoretical_neutral_mass	adduct_ions	reliability	best_id_confidence_measure	best_id_confidence_value	abundance_study_variable[1]	abundance_variation_study_variable[1]	abundance_study_variable[2]	abundance_variation_study_variable[2]
+SML	1	null	CHEBI:15377	null	null	null	null	null	null	null	1	[MS, MS:1001090, null, ]	1	null	null	null	null
+SML	2	null	CHEBI:16865	null	null	null	null	null	null	null	1	[MS, MS:1001090, null, ]	0.5	null	null	null	null
+
+SFH	SMF_ID	SME_ID_REFS	SME_ID_REF_ambiguity_code	adduct_ion	isotopomer	exp_mass_to_charge	charge	retention_time_in_seconds	retention_time_in_seconds_start	retention_time_in_seconds_end	abundance_assay[1]	abundance_assay[2]
+SMF	smf_1	sme_1	null	[M+H]1+	null	181.071	1	85.3	null	null	12000	11000
+SMF	smf_2	sme_2	null	[M+Na]1+	null	147.053	1	210.9	null	null	3300	null
+
+SEH	SME_ID	evidence_input_id	database_identifier	chemical_formula	smiles	inchi	chemical_name	uri	derivatized_form	adduct_ion	exp_mass_to_charge	charge	calc_mass_to_charge	spectra_ref	identification_method	ms_level	id_confidence_measure[1]	rank
+SME	sme_1	null	CHEBI:15377	C6H12O6	null	null	glucose	null	null	null	null	null	null	ms_run[1]:index=0	null	null	1	1
+SME	sme_2	null	CHEBI:16865	null	null	null	glutamate	null	null	null	null	null	null	ms_run[1]:index=0	null	null	0.5	2

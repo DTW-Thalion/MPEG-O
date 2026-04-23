@@ -23,9 +23,11 @@ Mapping into MPEG-O records
 |---------------|------------------------------|---------------------------------------------------------------|
 | PSM           | :class:`Identification`     | ``run_name`` from ``spectra_ref``; score from best search engine score |
 | PRT           | :class:`Quantification`     | one record per ``protein_abundance_assay[N]`` column           |
-| PEP           | (skipped for v0.9)          | peptide-level quantification deferred                          |
+| PEP           | :class:`Feature`            | peptide-level feature (v0.12.0 M78)                            |
 | SML           | :class:`Identification`     | metabolite annotation; ``run_name='metabolomics'`` placeholder |
 | SML abundance | :class:`Quantification`     | one record per ``abundance_study_variable[N]`` column          |
+| SMF           | :class:`Feature`            | small-molecule feature row (v0.12.0 M78)                       |
+| SME           | :class:`Identification`     | small-molecule evidence row (v0.12.0 M78)                      |
 | MTD           | :class:`ProvenanceRecord`   | software, search engine and ms_run locations                   |
 
 Cross-language equivalents
@@ -43,6 +45,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
+from ..feature import Feature
 from ..identification import Identification
 from ..provenance import ProvenanceRecord
 from ..quantification import Quantification
@@ -73,6 +76,7 @@ class MzTabImport:
     search_engines: list[str] = field(default_factory=list)
     identifications: list[Identification] = field(default_factory=list)
     quantifications: list[Quantification] = field(default_factory=list)
+    features: list[Feature] = field(default_factory=list)
     provenance: list[ProvenanceRecord] = field(default_factory=list)
     source_path: str = ""
 
@@ -193,9 +197,18 @@ def read(path: str | Path) -> MzTabImport:
                 state.sml_header = cols
             elif prefix == "SML" and state.sml_header is not None:
                 _handle_sml(state, cols)
-            # Other prefixes (PEH/PEP, SFH/SMF/SEH/SME) are ignored
-            # for v0.9; peptide-level quant + small-molecule features
-            # land in v1.0+.
+            elif prefix == "PEH":
+                state.pep_header = cols
+            elif prefix == "PEP" and state.pep_header is not None:
+                _handle_pep(state, cols)
+            elif prefix == "SFH":
+                state.smf_header = cols
+            elif prefix == "SMF" and state.smf_header is not None:
+                _handle_smf(state, cols)
+            elif prefix == "SEH":
+                state.sme_header = cols
+            elif prefix == "SME" and state.sme_header is not None:
+                _handle_sme(state, cols)
 
     if not state.version:
         raise MzTabParseError(f"{p}: missing MTD mzTab-version line")
@@ -211,6 +224,7 @@ def read(path: str | Path) -> MzTabImport:
         search_engines=state.search_engines,
         identifications=state.identifications,
         quantifications=state.quantifications,
+        features=state.features,
         provenance=[prov] if prov else [],
         source_path=str(p),
     )
@@ -233,8 +247,13 @@ class _ParserState:
     psm_header: list[str] | None = None
     prt_header: list[str] | None = None
     sml_header: list[str] | None = None
+    pep_header: list[str] | None = None
+    smf_header: list[str] | None = None
+    sme_header: list[str] | None = None
+    study_variable_assays: dict[int, str] = field(default_factory=dict)
     identifications: list[Identification] = field(default_factory=list)
     quantifications: list[Quantification] = field(default_factory=list)
+    features: list[Feature] = field(default_factory=list)
 
 
 _MTD_KEY_MS_RUN_LOCATION_RE = re.compile(r"^ms_run\[(\d+)\]-location$")
@@ -461,6 +480,212 @@ def _build_provenance(state: _ParserState, source: Path) -> ProvenanceRecord | N
         input_refs=[str(source)] + list(state.ms_run_locations.values()),
         output_refs=[],
     )
+
+
+# --------------------------------------------------------------------------- #
+# PEP / SMF / SME section handlers (v0.12.0 M78).
+# --------------------------------------------------------------------------- #
+
+_PEP_ACCESSION = "accession"
+_PEP_SEQUENCE = "sequence"
+_PEP_CHARGE = "charge"
+_PEP_MASS_TO_CHARGE = "mass_to_charge"
+_PEP_RETENTION_TIME = "retention_time"
+_PEP_SPECTRA_REF = "spectra_ref"
+_PEP_ABUNDANCE_ASSAY_RE = re.compile(r"^peptide_abundance_assay\[(\d+)\]$")
+_PEP_ABUNDANCE_SV_RE = re.compile(r"^peptide_abundance_study_variable\[(\d+)\]$")
+
+
+def _handle_pep(state: _ParserState, cols: list[str]) -> None:
+    """mzTab 1.0 PEP row — one peptide feature per row."""
+    header = state.pep_header
+    assert header is not None
+    name_to_idx = {name: i for i, name in enumerate(header)}
+    assay_cols = _column_indices(header, _PEP_ABUNDANCE_ASSAY_RE)
+    sv_cols = _column_indices(header, _PEP_ABUNDANCE_SV_RE)
+
+    sequence = _safe_get(cols, name_to_idx.get(_PEP_SEQUENCE, -1))
+    accession = _safe_get(cols, name_to_idx.get(_PEP_ACCESSION, -1))
+    # Prefer the peptide sequence as the chemical entity; fall back to
+    # the linked protein accession so every PEP row survives.
+    entity = sequence or accession
+    if not entity:
+        return
+
+    spectra_ref = _safe_get(cols, name_to_idx.get(_PEP_SPECTRA_REF, -1))
+    run_name = "imported"
+    if (m := _SPECTRA_REF_RE.match(spectra_ref)):
+        run_name = _resolve_run_name(state, int(m.group(1)))
+
+    charge = _to_int(_safe_get(cols, name_to_idx.get(_PEP_CHARGE, -1))) or 0
+    mz = _to_float(_safe_get(cols, name_to_idx.get(_PEP_MASS_TO_CHARGE, -1))) or 0.0
+    rt = _to_float(_safe_get(cols, name_to_idx.get(_PEP_RETENTION_TIME, -1))) or 0.0
+
+    abundances: dict[str, float] = {}
+    for col_idx, assay_idx in assay_cols:
+        v = _to_float(_safe_get(cols, col_idx))
+        if v is None:
+            continue
+        sample_ref = state.assay_to_sample.get(assay_idx, f"assay_{assay_idx}")
+        abundances[sample_ref] = v
+    for col_idx, sv_idx in sv_cols:
+        v = _to_float(_safe_get(cols, col_idx))
+        if v is None:
+            continue
+        sample_ref = state.study_variables.get(sv_idx, f"study_variable_{sv_idx}")
+        abundances[sample_ref] = v
+
+    evidence_refs: list[str] = []
+    if spectra_ref:
+        evidence_refs.append(spectra_ref)
+
+    feature_id = f"pep_{len(state.features) + 1}"
+    state.features.append(Feature(
+        feature_id=feature_id,
+        run_name=run_name,
+        chemical_entity=entity,
+        retention_time_seconds=rt,
+        exp_mass_to_charge=mz,
+        charge=charge,
+        adduct_ion="",
+        abundances=abundances,
+        evidence_refs=evidence_refs,
+    ))
+
+
+_SMF_ID = "SMF_ID"
+_SMF_SME_REFS = "SME_ID_REFS"
+_SMF_ADDUCT = "adduct_ion"
+_SMF_EXP_MZ = "exp_mass_to_charge"
+_SMF_CHARGE = "charge"
+_SMF_RT = "retention_time_in_seconds"
+_SMF_ABUNDANCE_ASSAY_RE = re.compile(r"^abundance_assay\[(\d+)\]$")
+
+
+def _handle_smf(state: _ParserState, cols: list[str]) -> None:
+    """mzTab-M 2.0.0-M SMF row — one small-molecule feature per row."""
+    header = state.smf_header
+    assert header is not None
+    name_to_idx = {name: i for i, name in enumerate(header)}
+    assay_cols = _column_indices(header, _SMF_ABUNDANCE_ASSAY_RE)
+
+    smf_id = _safe_get(cols, name_to_idx.get(_SMF_ID, -1))
+    if not smf_id:
+        return
+
+    # Resolve chemical entity via the first SME_ID_REF if present;
+    # otherwise fall back to the SMF_ID string.
+    sme_refs_raw = _safe_get(cols, name_to_idx.get(_SMF_SME_REFS, -1))
+    sme_refs = [r for r in sme_refs_raw.split("|") if r and r.lower() != "null"]
+
+    adduct = _safe_get(cols, name_to_idx.get(_SMF_ADDUCT, -1))
+    if adduct.lower() == "null":
+        adduct = ""
+    mz = _to_float(_safe_get(cols, name_to_idx.get(_SMF_EXP_MZ, -1))) or 0.0
+    rt = _to_float(_safe_get(cols, name_to_idx.get(_SMF_RT, -1))) or 0.0
+    charge = _to_int(_safe_get(cols, name_to_idx.get(_SMF_CHARGE, -1))) or 0
+
+    abundances: dict[str, float] = {}
+    for col_idx, assay_idx in assay_cols:
+        v = _to_float(_safe_get(cols, col_idx))
+        if v is None:
+            continue
+        sample_ref = state.assay_to_sample.get(assay_idx, f"assay_{assay_idx}")
+        abundances[sample_ref] = v
+
+    # Entity resolution happens lazily in _handle_sme when evidence
+    # rows arrive; keep a placeholder referencing the SME ids so the
+    # Feature stays linkable.
+    entity = sme_refs[0] if sme_refs else smf_id
+
+    state.features.append(Feature(
+        feature_id=f"smf_{smf_id}",
+        run_name="metabolomics",
+        chemical_entity=entity,
+        retention_time_seconds=rt,
+        exp_mass_to_charge=mz,
+        charge=charge,
+        adduct_ion=adduct,
+        abundances=abundances,
+        evidence_refs=sme_refs,
+    ))
+
+
+_SME_ID = "SME_ID"
+_SME_DB_ID = "database_identifier"
+_SME_NAME = "chemical_name"
+_SME_FORMULA = "chemical_formula"
+_SME_EXP_MZ = "exp_mass_to_charge"
+_SME_CHARGE = "charge"
+_SME_SPECTRA_REF = "spectra_ref"
+_SME_RANK = "rank"
+
+
+def _handle_sme(state: _ParserState, cols: list[str]) -> None:
+    """mzTab-M 2.0.0-M SME row — per-feature annotation evidence.
+
+    Emits one :class:`Identification` per evidence row so downstream
+    consumers keep annotation + rank data after round-trip.
+    """
+    header = state.sme_header
+    assert header is not None
+    name_to_idx = {name: i for i, name in enumerate(header)}
+
+    sme_id = _safe_get(cols, name_to_idx.get(_SME_ID, -1))
+    if not sme_id:
+        return
+
+    db_id = _safe_get(cols, name_to_idx.get(_SME_DB_ID, -1))
+    chem_name = _safe_get(cols, name_to_idx.get(_SME_NAME, -1))
+    formula = _safe_get(cols, name_to_idx.get(_SME_FORMULA, -1))
+    entity = db_id or chem_name or formula or sme_id
+
+    rank = _to_int(_safe_get(cols, name_to_idx.get(_SME_RANK, -1))) or 1
+    # mzTab-M rank 1 is the best; map rank → confidence as 1/rank so
+    # the winning evidence gets 1.0 and weaker alternatives get < 1.0.
+    confidence = 1.0 / float(rank) if rank > 0 else 0.0
+
+    spectra_ref = _safe_get(cols, name_to_idx.get(_SME_SPECTRA_REF, -1))
+    run_name = "metabolomics"
+    spectrum_index = 0
+    if (m := _SPECTRA_REF_RE.match(spectra_ref)):
+        run_name = _resolve_run_name(state, int(m.group(1)))
+        locator = m.group(2)
+        if "=" in locator:
+            try:
+                spectrum_index = int(locator.split("=", 1)[1])
+            except ValueError:
+                spectrum_index = 0
+
+    evidence: list[str] = [f"SME_ID={sme_id}"]
+    if chem_name and chem_name != entity:
+        evidence.append(f"name={chem_name}")
+    if formula and formula != entity:
+        evidence.append(f"formula={formula}")
+
+    state.identifications.append(Identification(
+        run_name=run_name,
+        spectrum_index=spectrum_index,
+        chemical_entity=entity,
+        confidence_score=confidence,
+        evidence_chain=evidence,
+    ))
+
+    # Back-fill features that referenced this SME so their
+    # chemical_entity gets upgraded from the placeholder ID.
+    for i, feat in enumerate(state.features):
+        if sme_id in feat.evidence_refs and feat.chemical_entity == sme_id:
+            state.features[i] = Feature(
+                feature_id=feat.feature_id,
+                run_name=feat.run_name,
+                chemical_entity=entity,
+                retention_time_seconds=feat.retention_time_seconds,
+                exp_mass_to_charge=feat.exp_mass_to_charge,
+                charge=feat.charge,
+                adduct_ion=feat.adduct_ion,
+                abundances=feat.abundances,
+                evidence_refs=feat.evidence_refs,
+            )
 
 
 __all__ = ["MzTabImport", "MzTabParseError", "read"]
