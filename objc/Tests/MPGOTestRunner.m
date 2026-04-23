@@ -64,6 +64,7 @@ extern void testEncryptedTransport(void);
 extern void testMilestone73(void);
 extern void testMilestone73_1(void);
 extern void testM76JcampConformance(void);
+extern void testMilestone77(void);
 
 int main(int argc, const char *argv[])
 {
@@ -319,6 +320,10 @@ int main(int argc, const char *argv[])
         START_SET("M76: JCAMP-DX compressed writer cross-language byte-parity")
             testM76JcampConformance();
         END_SET("M76: JCAMP-DX compressed writer cross-language byte-parity")
+
+        START_SET("M77: 2D-COS compute primitives (v0.12.0)")
+            testMilestone77();
+        END_SET("M77: 2D-COS compute primitives (v0.12.0)")
     }
     return 0;
 }
