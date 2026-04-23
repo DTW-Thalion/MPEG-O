@@ -11,10 +11,14 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — v0.12.0 work-in-progress
+## [v0.12.0] — 2026-04-23
 
-Accumulating scope for v0.12.0. All five milestones have landed:
-must-haves M74 + M75, plus nice-to-haves M76, M77, and M78.
+All five milestones landed: must-haves M74 + M75, plus nice-to-haves
+M76, M77, and M78. With M74, the "Must-fix for v1.0" list in
+`docs/v1.0-gaps.md` is empty; with M78, the "deferred further" mzTab
+Feature item is also closed. The remaining v1.0 follow-ups are
+scope-expansion only (mzML `<softwareList>` / `<dataProcessingList>`
+provenance chain, hyperspectral analysis primitives).
 
 ### Added
 
@@ -551,7 +555,7 @@ on-disk format from v2 to v3.
   LocalStore implementations — no external zarr library dependency.
   Same on-disk layout as the Python reference so all three languages
   cross-read one another's stores. (On-disk format migrated from
-  Zarr v2 to v3 in v0.9; see Unreleased.)
+  Zarr v2 to v3 in v0.9.1; see the v0.9.1 entry above.)
 - **M53** Bruker timsTOF `.d` importer. SQLite metadata reads
   natively in every language; binary frame decompression uses
   `opentimspy` + `opentims-bruker-bridge` in Python and subprocesses

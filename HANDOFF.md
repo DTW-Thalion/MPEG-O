@@ -1,6 +1,25 @@
-# MPEG-O v0.11 — Vibrational Spectroscopy (Raman + IR)
+# MPEG-O — Release Status
 
-> **Status (2026-04-21):** v0.11.1 shipped and pushed (commit
+> **Status (2026-04-23):** v0.12.0 shipped and pushed (commit
+> `62ec5b2`, tag `v0.12.0`). Minor release rounding out multi-omics
+> file-format fidelity: M74 (MS/MS activation_method + isolation_window
+> data model across mzML reader + writer + spectrum_index schema, format
+> bumped to 1.3 on files carrying the new columns), M75 (Python CLI
+> parity — `mpgo-verify`, `mpgo-sign`, `mpgo-pqc` console_scripts),
+> M76 (JCAMP-DX compressed writer — PAC / SQZ / DIF, opt-in with
+> cross-language byte-parity), M77 (2D-COS computation primitives,
+> float-tolerance cross-language), M78 (mzTab PEH/PEP + SFH/SMF +
+> SEH/SME round-trip; new `Feature` value class).
+>
+> `docs/v1.0-gaps.md`: **Must-fix for v1.0** empty (closed by M74);
+> **Nice-to-have for v1.0** empty (both shipped v0.9.1); only scope-
+> expansion follow-ups remain. v0.12.0 is the last work release before
+> v1.0.
+>
+> Test totals: **1704/0** ObjC / **875** Python / **373** Java, all
+> green.
+>
+> **Prior (2026-04-21):** v0.11.1 shipped and pushed (commit
 > `a96493d`, tag `v0.11.1`). Patch release closes the three M73
 > items that were deferred in v0.11.0:
 >
