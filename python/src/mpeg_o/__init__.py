@@ -5,8 +5,8 @@ main entry point.
 """
 from __future__ import annotations
 
-__version__ = "0.4.0"
-FORMAT_VERSION = "1.1"
+__version__ = "1.0.0"
+FORMAT_VERSION = "1.3"
 
 from .enums import (
     AcquisitionMode,
