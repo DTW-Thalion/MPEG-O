@@ -1,11 +1,15 @@
 #import "MPGOJcampDxWriter.h"
+#import "MPGOJcampDxEncode.h"
 #import "Spectra/MPGORamanSpectrum.h"
 #import "Spectra/MPGOIRSpectrum.h"
 #import "Spectra/MPGOUVVisSpectrum.h"
 #import "Core/MPGOSignalArray.h"
 #import "HDF5/MPGOHDF5Errors.h"
+#import <math.h>
 
 @implementation MPGOJcampDxWriter
+
+// ── Shared helpers ─────────────────────────────────────────────
 
 static void appendXYDATA(NSMutableString *out,
                          const double *xs, const double *ys, NSUInteger n)
@@ -19,16 +23,6 @@ static void appendXYDATA(NSMutableString *out,
     }
 }
 
-static NSArray<NSNumber *> *float64Values(MPGOSignalArray *arr)
-{
-    NSMutableArray *out = [NSMutableArray arrayWithCapacity:arr.length];
-    const double *p = arr.buffer.bytes;
-    for (NSUInteger i = 0; i < arr.length; i++) {
-        [out addObject:@(p[i])];
-    }
-    return out;
-}
-
 static BOOL writeStringToPath(NSString *s, NSString *path, NSError **error)
 {
     return [s writeToFile:path
@@ -37,9 +31,118 @@ static BOOL writeStringToPath(NSString *s, NSString *path, NSError **error)
                      error:error];
 }
 
+static BOOL verifyEquispaced(const double *xs, NSUInteger n,
+                              double firstx, double deltax,
+                              NSError **error)
+{
+    double maxAbs = 0.0;
+    for (NSUInteger i = 0; i < n; i++) {
+        double expected = firstx + (double)i * deltax;
+        double a = fabs(expected);
+        if (a > maxAbs) maxAbs = a;
+    }
+    double tol = 1e-9 * maxAbs;
+    if (tol < 1e-9) tol = 1e-9;
+    for (NSUInteger i = 0; i < n; i++) {
+        double expected = firstx + (double)i * deltax;
+        if (fabs(xs[i] - expected) > tol) {
+            if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+                @"MPGOJcampDxWriter: compressed encoding requires equispaced X");
+            return NO;
+        }
+    }
+    return YES;
+}
+
+static NSString *buildCompressedDocument(const double *xs, const double *ys, NSUInteger n,
+                                          MPGOJcampDxEncoding mode,
+                                          NSString *title,
+                                          NSString *dataType,
+                                          NSString *xUnits,
+                                          NSString *yUnits,
+                                          NSArray<NSString *> *tailLdrs,
+                                          NSError **error)
+{
+    if (n < 2) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"MPGOJcampDxWriter: compressed encoding requires NPOINTS >= 2");
+        return nil;
+    }
+    double firstx = xs[0];
+    double deltax = (xs[n - 1] - xs[0]) / (double)(n - 1);
+    if (!verifyEquispaced(xs, n, firstx, deltax, error)) {
+        return nil;
+    }
+
+    double yfactor = MPGOJcampChooseYFactor(ys, n, 7);
+    NSString *body = MPGOJcampEncodeXYData(ys, n, firstx, deltax, yfactor, mode);
+
+    NSMutableString *out = [NSMutableString string];
+    [out appendFormat:@"##TITLE=%@\n", title ?: @""];
+    [out appendString:@"##JCAMP-DX=5.01\n"];
+    [out appendFormat:@"##DATA TYPE=%@\n", dataType];
+    [out appendString:@"##ORIGIN=MPEG-O\n"];
+    [out appendString:@"##OWNER=\n"];
+    [out appendFormat:@"##XUNITS=%@\n", xUnits];
+    [out appendFormat:@"##YUNITS=%@\n", yUnits];
+    [out appendFormat:@"##FIRSTX=%@\n", MPGOJcampFormatG10(xs[0])];
+    [out appendFormat:@"##LASTX=%@\n",  MPGOJcampFormatG10(xs[n - 1])];
+    [out appendFormat:@"##NPOINTS=%lu\n", (unsigned long)n];
+    [out appendString:@"##XFACTOR=1\n"];
+    [out appendFormat:@"##YFACTOR=%@\n", MPGOJcampFormatG10(yfactor)];
+    for (NSString *ldr in tailLdrs) {
+        [out appendFormat:@"%@\n", ldr];
+    }
+    [out appendString:@"##XYDATA=(X++(Y..Y))\n"];
+    [out appendString:body];
+    [out appendString:@"##END=\n"];
+    return out;
+}
+
+// ── AFFN (existing M73 path) ───────────────────────────────────
+
 + (BOOL)writeRamanSpectrum:(MPGORamanSpectrum *)spec
                     toPath:(NSString *)path
                      title:(NSString *)title
+                     error:(NSError **)error
+{
+    return [self writeRamanSpectrum:spec
+                             toPath:path
+                              title:title
+                           encoding:MPGOJcampDxEncodingAFFN
+                              error:error];
+}
+
++ (BOOL)writeIRSpectrum:(MPGOIRSpectrum *)spec
+                 toPath:(NSString *)path
+                  title:(NSString *)title
+                  error:(NSError **)error
+{
+    return [self writeIRSpectrum:spec
+                          toPath:path
+                           title:title
+                        encoding:MPGOJcampDxEncodingAFFN
+                           error:error];
+}
+
++ (BOOL)writeUVVisSpectrum:(MPGOUVVisSpectrum *)spec
+                    toPath:(NSString *)path
+                     title:(NSString *)title
+                     error:(NSError **)error
+{
+    return [self writeUVVisSpectrum:spec
+                             toPath:path
+                              title:title
+                           encoding:MPGOJcampDxEncodingAFFN
+                              error:error];
+}
+
+// ── AFFN + compressed dispatch (M76) ───────────────────────────
+
++ (BOOL)writeRamanSpectrum:(MPGORamanSpectrum *)spec
+                    toPath:(NSString *)path
+                     title:(NSString *)title
+                  encoding:(MPGOJcampDxEncoding)encoding
                      error:(NSError **)error
 {
     if (!spec || spec.wavenumberArray.length != spec.intensityArray.length) {
@@ -52,31 +155,47 @@ static BOOL writeStringToPath(NSString *s, NSString *path, NSError **error)
     const double *xs = spec.wavenumberArray.buffer.bytes;
     const double *ys = spec.intensityArray.buffer.bytes;
 
-    NSMutableString *out = [NSMutableString string];
-    [out appendFormat:@"##TITLE=%@\n", title ?: @""];
-    [out appendString:@"##JCAMP-DX=5.01\n"];
-    [out appendString:@"##DATA TYPE=RAMAN SPECTRUM\n"];
-    [out appendString:@"##ORIGIN=MPEG-O\n"];
-    [out appendString:@"##OWNER=\n"];
-    [out appendString:@"##XUNITS=1/CM\n"];
-    [out appendString:@"##YUNITS=ARBITRARY UNITS\n"];
-    [out appendFormat:@"##FIRSTX=%.10g\n", n > 0 ? xs[0] : 0.0];
-    [out appendFormat:@"##LASTX=%.10g\n",  n > 0 ? xs[n-1] : 0.0];
-    [out appendFormat:@"##NPOINTS=%lu\n", (unsigned long)n];
-    [out appendString:@"##XFACTOR=1\n"];
-    [out appendString:@"##YFACTOR=1\n"];
-    [out appendFormat:@"##$EXCITATION WAVELENGTH NM=%.10g\n", spec.excitationWavelengthNm];
-    [out appendFormat:@"##$LASER POWER MW=%.10g\n",          spec.laserPowerMw];
-    [out appendFormat:@"##$INTEGRATION TIME SEC=%.10g\n",    spec.integrationTimeSec];
-    appendXYDATA(out, xs, ys, n);
-    [out appendString:@"##END=\n"];
+    if (encoding == MPGOJcampDxEncodingAFFN) {
+        NSMutableString *out = [NSMutableString string];
+        [out appendFormat:@"##TITLE=%@\n", title ?: @""];
+        [out appendString:@"##JCAMP-DX=5.01\n"];
+        [out appendString:@"##DATA TYPE=RAMAN SPECTRUM\n"];
+        [out appendString:@"##ORIGIN=MPEG-O\n"];
+        [out appendString:@"##OWNER=\n"];
+        [out appendString:@"##XUNITS=1/CM\n"];
+        [out appendString:@"##YUNITS=ARBITRARY UNITS\n"];
+        [out appendFormat:@"##FIRSTX=%.10g\n", n > 0 ? xs[0] : 0.0];
+        [out appendFormat:@"##LASTX=%.10g\n",  n > 0 ? xs[n-1] : 0.0];
+        [out appendFormat:@"##NPOINTS=%lu\n", (unsigned long)n];
+        [out appendString:@"##XFACTOR=1\n"];
+        [out appendString:@"##YFACTOR=1\n"];
+        [out appendFormat:@"##$EXCITATION WAVELENGTH NM=%.10g\n", spec.excitationWavelengthNm];
+        [out appendFormat:@"##$LASER POWER MW=%.10g\n",          spec.laserPowerMw];
+        [out appendFormat:@"##$INTEGRATION TIME SEC=%.10g\n",    spec.integrationTimeSec];
+        appendXYDATA(out, xs, ys, n);
+        [out appendString:@"##END=\n"];
+        return writeStringToPath(out, path, error);
+    }
 
-    return writeStringToPath(out, path, error);
+    NSArray<NSString *> *tail = @[
+        [NSString stringWithFormat:@"##$EXCITATION WAVELENGTH NM=%@",
+                MPGOJcampFormatG10(spec.excitationWavelengthNm)],
+        [NSString stringWithFormat:@"##$LASER POWER MW=%@",
+                MPGOJcampFormatG10(spec.laserPowerMw)],
+        [NSString stringWithFormat:@"##$INTEGRATION TIME SEC=%@",
+                MPGOJcampFormatG10(spec.integrationTimeSec)],
+    ];
+    NSString *doc = buildCompressedDocument(xs, ys, n, encoding,
+            title, @"RAMAN SPECTRUM", @"1/CM", @"ARBITRARY UNITS",
+            tail, error);
+    if (!doc) return NO;
+    return writeStringToPath(doc, path, error);
 }
 
 + (BOOL)writeIRSpectrum:(MPGOIRSpectrum *)spec
                  toPath:(NSString *)path
                   title:(NSString *)title
+               encoding:(MPGOJcampDxEncoding)encoding
                   error:(NSError **)error
 {
     if (!spec || spec.wavenumberArray.length != spec.intensityArray.length) {
@@ -94,30 +213,43 @@ static BOOL writeStringToPath(NSString *s, NSString *path, NSError **error)
     NSString *yUnits = (spec.mode == MPGOIRModeAbsorbance)
         ? @"ABSORBANCE" : @"TRANSMITTANCE";
 
-    NSMutableString *out = [NSMutableString string];
-    [out appendFormat:@"##TITLE=%@\n", title ?: @""];
-    [out appendString:@"##JCAMP-DX=5.01\n"];
-    [out appendFormat:@"##DATA TYPE=%@\n", dataType];
-    [out appendString:@"##ORIGIN=MPEG-O\n"];
-    [out appendString:@"##OWNER=\n"];
-    [out appendString:@"##XUNITS=1/CM\n"];
-    [out appendFormat:@"##YUNITS=%@\n", yUnits];
-    [out appendFormat:@"##FIRSTX=%.10g\n", n > 0 ? xs[0] : 0.0];
-    [out appendFormat:@"##LASTX=%.10g\n",  n > 0 ? xs[n-1] : 0.0];
-    [out appendFormat:@"##NPOINTS=%lu\n", (unsigned long)n];
-    [out appendString:@"##XFACTOR=1\n"];
-    [out appendString:@"##YFACTOR=1\n"];
-    [out appendFormat:@"##RESOLUTION=%.10g\n", spec.resolutionCmInv];
-    [out appendFormat:@"##$NUMBER OF SCANS=%lu\n", (unsigned long)spec.numberOfScans];
-    appendXYDATA(out, xs, ys, n);
-    [out appendString:@"##END=\n"];
+    if (encoding == MPGOJcampDxEncodingAFFN) {
+        NSMutableString *out = [NSMutableString string];
+        [out appendFormat:@"##TITLE=%@\n", title ?: @""];
+        [out appendString:@"##JCAMP-DX=5.01\n"];
+        [out appendFormat:@"##DATA TYPE=%@\n", dataType];
+        [out appendString:@"##ORIGIN=MPEG-O\n"];
+        [out appendString:@"##OWNER=\n"];
+        [out appendString:@"##XUNITS=1/CM\n"];
+        [out appendFormat:@"##YUNITS=%@\n", yUnits];
+        [out appendFormat:@"##FIRSTX=%.10g\n", n > 0 ? xs[0] : 0.0];
+        [out appendFormat:@"##LASTX=%.10g\n",  n > 0 ? xs[n-1] : 0.0];
+        [out appendFormat:@"##NPOINTS=%lu\n", (unsigned long)n];
+        [out appendString:@"##XFACTOR=1\n"];
+        [out appendString:@"##YFACTOR=1\n"];
+        [out appendFormat:@"##RESOLUTION=%.10g\n", spec.resolutionCmInv];
+        [out appendFormat:@"##$NUMBER OF SCANS=%lu\n", (unsigned long)spec.numberOfScans];
+        appendXYDATA(out, xs, ys, n);
+        [out appendString:@"##END=\n"];
+        return writeStringToPath(out, path, error);
+    }
 
-    return writeStringToPath(out, path, error);
+    NSArray<NSString *> *tail = @[
+        [NSString stringWithFormat:@"##RESOLUTION=%@",
+                MPGOJcampFormatG10(spec.resolutionCmInv)],
+        [NSString stringWithFormat:@"##$NUMBER OF SCANS=%lu",
+                (unsigned long)spec.numberOfScans],
+    ];
+    NSString *doc = buildCompressedDocument(xs, ys, n, encoding,
+            title, dataType, @"1/CM", yUnits, tail, error);
+    if (!doc) return NO;
+    return writeStringToPath(doc, path, error);
 }
 
 + (BOOL)writeUVVisSpectrum:(MPGOUVVisSpectrum *)spec
                     toPath:(NSString *)path
                      title:(NSString *)title
+                  encoding:(MPGOJcampDxEncoding)encoding
                      error:(NSError **)error
 {
     if (!spec || spec.wavelengthArray.length != spec.absorbanceArray.length) {
@@ -130,25 +262,37 @@ static BOOL writeStringToPath(NSString *s, NSString *path, NSError **error)
     const double *xs = spec.wavelengthArray.buffer.bytes;
     const double *ys = spec.absorbanceArray.buffer.bytes;
 
-    NSMutableString *out = [NSMutableString string];
-    [out appendFormat:@"##TITLE=%@\n", title ?: @""];
-    [out appendString:@"##JCAMP-DX=5.01\n"];
-    [out appendString:@"##DATA TYPE=UV/VIS SPECTRUM\n"];
-    [out appendString:@"##ORIGIN=MPEG-O\n"];
-    [out appendString:@"##OWNER=\n"];
-    [out appendString:@"##XUNITS=NANOMETERS\n"];
-    [out appendString:@"##YUNITS=ABSORBANCE\n"];
-    [out appendFormat:@"##FIRSTX=%.10g\n", n > 0 ? xs[0] : 0.0];
-    [out appendFormat:@"##LASTX=%.10g\n",  n > 0 ? xs[n-1] : 0.0];
-    [out appendFormat:@"##NPOINTS=%lu\n", (unsigned long)n];
-    [out appendString:@"##XFACTOR=1\n"];
-    [out appendString:@"##YFACTOR=1\n"];
-    [out appendFormat:@"##$PATH LENGTH CM=%.10g\n", spec.pathLengthCm];
-    [out appendFormat:@"##$SOLVENT=%@\n",           spec.solvent ?: @""];
-    appendXYDATA(out, xs, ys, n);
-    [out appendString:@"##END=\n"];
+    if (encoding == MPGOJcampDxEncodingAFFN) {
+        NSMutableString *out = [NSMutableString string];
+        [out appendFormat:@"##TITLE=%@\n", title ?: @""];
+        [out appendString:@"##JCAMP-DX=5.01\n"];
+        [out appendString:@"##DATA TYPE=UV/VIS SPECTRUM\n"];
+        [out appendString:@"##ORIGIN=MPEG-O\n"];
+        [out appendString:@"##OWNER=\n"];
+        [out appendString:@"##XUNITS=NANOMETERS\n"];
+        [out appendString:@"##YUNITS=ABSORBANCE\n"];
+        [out appendFormat:@"##FIRSTX=%.10g\n", n > 0 ? xs[0] : 0.0];
+        [out appendFormat:@"##LASTX=%.10g\n",  n > 0 ? xs[n-1] : 0.0];
+        [out appendFormat:@"##NPOINTS=%lu\n", (unsigned long)n];
+        [out appendString:@"##XFACTOR=1\n"];
+        [out appendString:@"##YFACTOR=1\n"];
+        [out appendFormat:@"##$PATH LENGTH CM=%.10g\n", spec.pathLengthCm];
+        [out appendFormat:@"##$SOLVENT=%@\n",           spec.solvent ?: @""];
+        appendXYDATA(out, xs, ys, n);
+        [out appendString:@"##END=\n"];
+        return writeStringToPath(out, path, error);
+    }
 
-    return writeStringToPath(out, path, error);
+    NSArray<NSString *> *tail = @[
+        [NSString stringWithFormat:@"##$PATH LENGTH CM=%@",
+                MPGOJcampFormatG10(spec.pathLengthCm)],
+        [NSString stringWithFormat:@"##$SOLVENT=%@", spec.solvent ?: @""],
+    ];
+    NSString *doc = buildCompressedDocument(xs, ys, n, encoding,
+            title, @"UV/VIS SPECTRUM", @"NANOMETERS", @"ABSORBANCE",
+            tail, error);
+    if (!doc) return NO;
+    return writeStringToPath(doc, path, error);
 }
 
 @end

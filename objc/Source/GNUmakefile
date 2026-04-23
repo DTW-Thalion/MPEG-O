@@ -78,6 +78,8 @@ libMPGO_HEADER_FILES = \
 	Export/MPGOMzTabWriter.h \
 	Export/MPGOISAExporter.h \
 	Export/MPGOJcampDxWriter.h \
+	Export/MPGOJcampDxEncoding.h \
+	Export/MPGOJcampDxEncode.h \
 	Providers/MPGOCompoundField.h \
 	Providers/MPGOStorageProtocols.h \
 	Providers/MPGOProviderRegistry.h \
@@ -165,6 +167,7 @@ libMPGO_OBJC_FILES = \
 	Export/MPGOMzTabWriter.m \
 	Export/MPGOISAExporter.m \
 	Export/MPGOJcampDxWriter.m \
+	Export/MPGOJcampDxEncode.m \
 	Providers/MPGOCompoundField.m \
 	Providers/MPGOProviderRegistry.m \
 	Providers/MPGOCanonicalBytes.m \
