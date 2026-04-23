@@ -13,8 +13,8 @@ leading `0.` means the public API is still stabilising; see
 
 ## [Unreleased] — v0.12.0 work-in-progress
 
-Accumulating scope for v0.12.0. Both must-have milestones (M74, M75)
-have landed, plus two nice-to-haves (M76, M77); only M78 remains open.
+Accumulating scope for v0.12.0. All five milestones have landed:
+must-haves M74 + M75, plus nice-to-haves M76, M77, and M78.
 
 ### Added
 
@@ -164,23 +164,72 @@ have landed, plus two nice-to-haves (M76, M77); only M78 remains open.
   unit tests) · `2dfe27d` (B: `conformance/two_d_cos/` fixtures +
   Python conformance gate) · `6f4f115` (C: Java `TwoDCos` + 13
   unit tests + conformance, 359/359 suite) · `2f02ffa` (D: ObjC
-  `MPGOTwoDCos` + 27 new pass() cases, 1664/0 suite) · this docs
-  flip (E).
+  `MPGOTwoDCos` + 27 new pass() cases, 1664/0 suite) · `9e4b367`
+  (E: docs flip).
 
-### Test totals (post-M77)
+- **M78 — mzTab PEH/PEP + SFH/SMF + SEH/SME support (2026-04-23).**
+  Closes the last "deferred further" item called out in
+  `docs/v1.0-gaps.md`. A new `Feature` value class ships beside
+  `Identification` and `Quantification` in all three languages, and
+  the mzTab importer + exporter round-trips peptide-level features
+  (mzTab-P 1.0) and small-molecule features + evidence
+  (mzTab-M 2.0.0-M):
 
-- Python: 811 tests collected (M75 brought +13, M76 brought +37
-  unit + 3 conformance, M77 brought +15 unit + 1 conformance).
-- Java: 359 tests (+13 unit + 1 conformance over M76).
-- Objective-C: 1664 passed / 0 failed (+27 over M76).
+    - **`Feature` value class.** Nine fields —  `feature_id`,
+      `run_name`, `chemical_entity`, `retention_time_seconds`,
+      `exp_mass_to_charge`, `charge`, `adduct_ion`, `abundances`
+      (sample→abundance map), `evidence_refs` (list of spectrum or
+      SME refs). Immutable across all three languages: Python
+      `dataclass(frozen=True)`, Java `record` with compact-constructor
+      null-coercion + `Map.copyOf` / `List.copyOf` defensive copies,
+      Objective-C `MPGOFeature` with readonly copy properties.
+    - **Reader.** Parses PEH/PEP rows into `Feature` records
+      (sequence, charge, m/z, RT, spectra_ref, per-assay or
+      per-study-variable abundance columns) and SFH/SMF rows with
+      adduct + SME_ID_REFS. SEH/SME parsing then back-fills the
+      feature's `chemical_entity` from `SME_ID` placeholder to the
+      SME row's `database_identifier`, `chemical_name`, or
+      `chemical_formula` (first non-null).
+    - **Writer.** Emits PEH/PEP after PRH/PRT (1.0 branch) and
+      SFH/SMF after SMH/SML (2.0.0-M branch). SEH/SME is gated on
+      `features present && (idents with SME_ID tag OR plain idents)`
+      so plain-SML metabolomics round-trips stay unchanged from
+      pre-M78. Rank ↔ confidence mapping is symmetric: reader
+      converts rank N → confidence `1/N`; writer converts
+      confidence c → `max(1, round(1/c))` for the emitted rank
+      column.
+    - **Cross-language conformance fixture.**
+      `conformance/mztab_features/{proteomics,metabolomics}.mztab`
+      with the Python, Java, and Objective-C suites each reading it
+      and asserting identical feature counts, adducts, charges, m/z
+      values (float-tolerance), and SME-derived confidence scores.
+      Byte-level parity is intentionally not required — Java
+      `Double.toString` vs Python `{:g}` differ on some edge values,
+      but both round-trip through parsing at `1e-3` float tolerance.
+
+  Commits: `9b76096` (A+B: Python `Feature` + reader/writer +
+  conformance fixture, 11 new unit tests + 3 conformance) ·
+  `c1286f0` (C: Java `Feature` record + reader/writer, 373/0 suite;
+  +4 value-class + 7 writer + 3 conformance) · `073335f` (D: ObjC
+  `MPGOFeature` + reader/writer, 1704/0 suite; +3 value-class + 7
+  writer + 3 conformance) · this docs flip (E).
+
+### Test totals (post-M78)
+
+- Python: 875 tests collected (M78 adds +11 unit + 3 conformance
+  over M77; remaining delta from intervening M74/M75/M76/M77
+  scaffold that landed beyond the core parity lines).
+- Java: 373 tests (+14 over M77).
+- Objective-C: 1704 passed / 0 failed (+40 over M77).
 
 ### Docs
 
 - `docs/v1.0-gaps.md` — "Must-fix for v1.0" list now empty; status
   table row for activation/isolation flipped to ✅; mzML writer
-  defect table updated to show item #2 shipped.
-- `WORKPLAN.md` — M74, M75, M76, and M77 checkboxes ticked with
-  their shipped commits.
+  defect table updated to show item #2 shipped; "deferred further"
+  mzTab Feature item also now shipped.
+- `WORKPLAN.md` — M74, M75, M76, M77, and M78 checkboxes all ticked
+  with their shipped commits.
 
 ---
 

@@ -924,11 +924,19 @@ holds for every line item.
       `conformance/two_d_cos/{dynamic,sync,async}.csv` fixture, not
       byte-parity — BLAS accumulation order differs across
       implementations.)*
-- [ ] **M78** Round out mzTab PEH/PEP + SFH/SMF/SEH/SME — requires
+- [x] **M78** Round out mzTab PEH/PEP + SFH/SMF/SEH/SME — requires
       new `Feature` value class beside `Identification` and
       `Quantification` (flagged "deferred further" in
       `docs/v1.0-gaps.md`). Three-language parity for the value class
-      + importer + exporter.
+      + importer + exporter. *(Shipped: Python `Feature` +
+      PEH/PEP/SFH/SMF/SEH/SME emission + back-fill; Java `Feature`
+      record + round-trip; ObjC `MPGOFeature` + reader/writer
+      parity. Rank↔confidence mapping (rank N ↔ confidence 1/N) with
+      gating rule "SEH/SME only when features present" preserves
+      plain-SML round-trips. Shared fixtures at
+      `conformance/mztab_features/{proteomics,metabolomics}.mztab`;
+      cross-language gate is float-tolerance on
+      `exp_mass_to_charge` and `retention_time_in_seconds`.)*
 
 ### Deferred further (not v0.12 scope)
 
