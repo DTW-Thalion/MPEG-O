@@ -8,6 +8,7 @@
 
 #import <Foundation/Foundation.h>
 
+@class MPGOFeature;
 @class MPGOIdentification;
 @class MPGOQuantification;
 
@@ -34,6 +35,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, copy) NSArray<NSString *> *searchEngines;
 @property (nonatomic, readonly, copy) NSArray<MPGOIdentification *> *identifications;
 @property (nonatomic, readonly, copy) NSArray<MPGOQuantification *> *quantifications;
+@property (nonatomic, readonly, copy) NSArray<MPGOFeature *> *features;
 @property (nonatomic, readonly, copy) NSString *sourcePath;
 
 @property (nonatomic, readonly) BOOL isMetabolomics;

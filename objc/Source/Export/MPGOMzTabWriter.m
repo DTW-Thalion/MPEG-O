@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "MPGOMzTabWriter.h"
+#import "Dataset/MPGOFeature.h"
 #import "Dataset/MPGOIdentification.h"
 #import "Dataset/MPGOQuantification.h"
 
@@ -12,18 +13,25 @@
     NSUInteger _nPSM;
     NSUInteger _nPRT;
     NSUInteger _nSML;
+    NSUInteger _nPEP;
+    NSUInteger _nSMF;
+    NSUInteger _nSME;
 }
 - (instancetype)initWithPath:(NSString *)p
                      version:(NSString *)v
                          psm:(NSUInteger)psm
                          prt:(NSUInteger)prt
                          sml:(NSUInteger)sml
+                         pep:(NSUInteger)pep
+                         smf:(NSUInteger)smf
+                         sme:(NSUInteger)sme
 {
     self = [super init];
     if (self) {
         _path = [p copy];
         _version = [v copy];
         _nPSM = psm; _nPRT = prt; _nSML = sml;
+        _nPEP = pep; _nSMF = smf; _nSME = sme;
     }
     return self;
 }
@@ -32,6 +40,9 @@
 - (NSUInteger)nPSMRows { return _nPSM; }
 - (NSUInteger)nPRTRows { return _nPRT; }
 - (NSUInteger)nSMLRows { return _nSML; }
+- (NSUInteger)nPEPRows { return _nPEP; }
+- (NSUInteger)nSMFRows { return _nSMF; }
+- (NSUInteger)nSMERows { return _nSME; }
 @end
 
 
@@ -47,12 +58,76 @@ static NSString *EscapeTSV(NSString *v) {
     return s;
 }
 
+/** %g-ish formatting; mirrors Python `f"{v:g}"` and Java fmt(). */
+static NSString *Fmt(double v) {
+    if (v == 0.0) return @"0";
+    return [NSString stringWithFormat:@"%g", v];
+}
+
+static NSString *LookupSampleByIndex(NSDictionary<NSString *, NSNumber *> *sampleIdx, NSInteger k) {
+    for (NSString *key in sampleIdx) {
+        if ([sampleIdx[key] integerValue] == k) return key;
+    }
+    return nil;
+}
+
+static NSString *BuildSmeRow(NSString *smeId,
+                              MPGOIdentification *ident,
+                              NSDictionary<NSString *, NSNumber *> *runIdx)
+{
+    NSString *name = @"";
+    NSString *formula = @"";
+    for (NSString *e in ident.evidenceChain) {
+        if ([e hasPrefix:@"name="]) name = [e substringFromIndex:[@"name=" length]];
+        else if ([e hasPrefix:@"formula="]) formula = [e substringFromIndex:[@"formula=" length]];
+    }
+    NSInteger rank = 1;
+    double score = ident.confidenceScore;
+    if (score > 0) {
+        double inferred = score <= 1.0 ? 1.0 / score : 1.0;
+        rank = MAX(1, (NSInteger)round(inferred));
+    }
+    NSNumber *riNum = runIdx[ident.runName];
+    NSInteger ri = riNum ? riNum.integerValue : 1;
+    NSString *spectraRef = [NSString stringWithFormat:@"ms_run[%ld]:index=%lu",
+                            (long)ri, (unsigned long)ident.spectrumIndex];
+    return [NSString stringWithFormat:
+        @"SME\t%@\tnull\t%@\t%@\tnull\tnull\t%@\tnull\tnull\tnull"
+        @"\tnull\tnull\tnull\t%@\tnull\tnull\t%@\t%ld",
+        EscapeTSV(smeId),
+        EscapeTSV(ident.chemicalEntity),
+        formula.length == 0 ? @"null" : EscapeTSV(formula),
+        name.length == 0 ? @"null" : EscapeTSV(name),
+        EscapeTSV(spectraRef),
+        Fmt(score),
+        (long)rank];
+}
+
 
 @implementation MPGOMzTabWriter
 
 + (nullable MPGOMzTabWriteResult *)writeToPath:(NSString *)path
                                 identifications:(NSArray<MPGOIdentification *> *)idents
                                 quantifications:(NSArray<MPGOQuantification *> *)quants
+                                         version:(NSString *)version
+                                           title:(NSString *)title
+                                    description:(NSString *)description
+                                          error:(NSError **)error
+{
+    return [self writeToPath:path
+             identifications:idents
+             quantifications:quants
+                    features:@[]
+                     version:version
+                       title:title
+                 description:description
+                       error:error];
+}
+
++ (nullable MPGOMzTabWriteResult *)writeToPath:(NSString *)path
+                                identifications:(NSArray<MPGOIdentification *> *)idents
+                                quantifications:(NSArray<MPGOQuantification *> *)quants
+                                        features:(NSArray<MPGOFeature *> *)features
                                          version:(NSString *)version
                                            title:(NSString *)title
                                     description:(NSString *)description
@@ -66,21 +141,35 @@ static NSString *EscapeTSV(NSString *v) {
     }
     idents = idents ?: @[];
     quants = quants ?: @[];
+    NSArray<MPGOFeature *> *feats = features ?: @[];
 
-    // Stable run-name → index mapping.
+    // Stable run-name → index mapping (idents + features).
     NSMutableDictionary<NSString *, NSNumber *> *runIdx = [NSMutableDictionary dictionary];
     for (MPGOIdentification *ident in idents) {
         if (runIdx[ident.runName] == nil) {
             runIdx[ident.runName] = @(runIdx.count + 1);
         }
     }
+    for (MPGOFeature *f in feats) {
+        if (runIdx[f.runName] == nil) {
+            runIdx[f.runName] = @(runIdx.count + 1);
+        }
+    }
 
-    // Stable sample → assay index mapping.
+    // Stable sample → assay index mapping (quants + feature abundances).
     NSMutableDictionary<NSString *, NSNumber *> *sampleIdx = [NSMutableDictionary dictionary];
     for (MPGOQuantification *q in quants) {
         NSString *s = q.sampleRef ?: @"sample";
         if (sampleIdx[s] == nil) {
             sampleIdx[s] = @(sampleIdx.count + 1);
+        }
+    }
+    for (MPGOFeature *f in feats) {
+        for (NSString *s in f.abundances) {
+            NSString *key = s.length == 0 ? @"sample" : s;
+            if (sampleIdx[key] == nil) {
+                sampleIdx[key] = @(sampleIdx.count + 1);
+            }
         }
     }
 
@@ -116,7 +205,7 @@ static NSString *EscapeTSV(NSString *v) {
         ^NSComparisonResult(NSString *a, NSString *b) {
             return [sampleIdx[a] compare:sampleIdx[b]];
         }];
-    if (quants.count > 0) {
+    if (quants.count > 0 || feats.count > 0) {
         for (NSString *s in sampleNames) {
             NSNumber *i = sampleIdx[s];
             [lines addObject:[NSString stringWithFormat:
@@ -137,9 +226,10 @@ static NSString *EscapeTSV(NSString *v) {
 
     [lines addObject:@""];  // blank separator
 
-    NSUInteger nPSM = 0, nPRT = 0, nSML = 0;
+    NSUInteger nPSM = 0, nPRT = 0, nSML = 0, nPEP = 0, nSMF = 0, nSME = 0;
 
     if ([version isEqualToString:@"1.0"]) {
+        // ── PSH + PSM ─────────────────────────────────────────────
         if (idents.count > 0) {
             [lines addObject:@"PSH\tsequence\tPSM_ID\taccession\tunique\tdatabase\tdatabase_version"
                              @"\tsearch_engine\tsearch_engine_score[1]\tmodifications"
@@ -150,12 +240,12 @@ static NSString *EscapeTSV(NSString *v) {
                 NSString *se = @"[MS, MS:1001083, mascot, ]";
                 if (ident.evidenceChain.count > 0) se = ident.evidenceChain.firstObject;
                 NSString *row = [NSString stringWithFormat:
-                    @"PSM\t\t%lu\t%@\tnull\tnull\tnull\t%@\t%g\tnull\tnull\tnull\tnull\tnull"
+                    @"PSM\t\t%lu\t%@\tnull\tnull\tnull\t%@\t%@\tnull\tnull\tnull\tnull\tnull"
                     @"\tms_run[%@]:index=%lu\tnull\tnull\tnull\tnull",
                     (unsigned long)psmId++,
                     EscapeTSV(ident.chemicalEntity),
                     EscapeTSV(se),
-                    ident.confidenceScore,
+                    Fmt(ident.confidenceScore),
                     runIdx[ident.runName],
                     (unsigned long)ident.spectrumIndex];
                 [lines addObject:row];
@@ -164,8 +254,8 @@ static NSString *EscapeTSV(NSString *v) {
             [lines addObject:@""];
         }
 
+        // ── PRH + PRT ─────────────────────────────────────────────
         if (quants.count > 0) {
-            // Group quants by chemicalEntity → {assayIdx → abundance}.
             NSMutableDictionary<NSString *, NSMutableDictionary<NSNumber *, NSNumber *> *> *grouped =
                 [NSMutableDictionary dictionary];
             for (MPGOQuantification *q in quants) {
@@ -192,16 +282,54 @@ static NSString *EscapeTSV(NSString *v) {
                 [row appendString:@"\t\tnull\tnull\tnull\tnull\tnull\tnull\tnull\tnull\tnull"];
                 for (NSUInteger k = 1; k <= nAssays; k++) {
                     NSNumber *v = ab[@(k)];
-                    [row appendFormat:@"\t%@",
-                        v ? [NSString stringWithFormat:@"%g", v.doubleValue] : @"null"];
+                    [row appendFormat:@"\t%@", v ? Fmt(v.doubleValue) : @"null"];
                 }
                 [lines addObject:row];
                 nPRT++;
             }
             [lines addObject:@""];
         }
+
+        // ── PEH + PEP (peptide features, M78) ─────────────────────
+        if (feats.count > 0) {
+            NSUInteger nAssays = sampleIdx.count;
+            NSMutableString *peh = [NSMutableString stringWithString:
+                @"PEH\tsequence\taccession\tunique\tdatabase\tdatabase_version"
+                @"\tsearch_engine\tbest_search_engine_score[1]\tmodifications"
+                @"\tretention_time\tcharge\tmass_to_charge\turi\tspectra_ref"];
+            for (NSUInteger k = 1; k <= nAssays; k++) {
+                [peh appendFormat:@"\tpeptide_abundance_assay[%lu]", (unsigned long)k];
+            }
+            [lines addObject:peh];
+
+            for (MPGOFeature *f in feats) {
+                NSNumber *riNum = runIdx[f.runName];
+                NSInteger ri = riNum ? riNum.integerValue : 1;
+                NSString *ref;
+                if (f.evidenceRefs.count == 0) {
+                    ref = [NSString stringWithFormat:@"ms_run[%ld]:index=0", (long)ri];
+                } else {
+                    ref = f.evidenceRefs.firstObject;
+                }
+                NSMutableString *row = [NSMutableString stringWithFormat:
+                    @"PEP\t%@\tnull\tnull\tnull\tnull\tnull\tnull\tnull\t%@\t%ld\t%@\tnull\t%@",
+                    EscapeTSV(f.chemicalEntity),
+                    Fmt(f.retentionTimeSeconds),
+                    (long)f.charge,
+                    Fmt(f.expMassToCharge),
+                    EscapeTSV(ref)];
+                for (NSUInteger k = 1; k <= nAssays; k++) {
+                    NSString *sample = LookupSampleByIndex(sampleIdx, k);
+                    NSNumber *v = sample ? f.abundances[sample] : nil;
+                    [row appendFormat:@"\t%@", v ? Fmt(v.doubleValue) : @"null"];
+                }
+                [lines addObject:row];
+                nPEP++;
+            }
+            [lines addObject:@""];
+        }
     } else {
-        // Metabolomics: SMH/SML combines identification + abundance per entity.
+        // Metabolomics: SMH + SML.
         NSMutableDictionary<NSString *, NSMutableDictionary<NSNumber *, NSNumber *> *> *entityQuants =
             [NSMutableDictionary dictionary];
         for (MPGOQuantification *q in quants) {
@@ -242,19 +370,96 @@ static NSString *EscapeTSV(NSString *v) {
                 double confVal = conf ? conf.doubleValue : 0.0;
                 NSMutableString *row = [NSMutableString stringWithFormat:
                     @"SML\t%lu\tnull\t%@\tnull\tnull\tnull\tnull\tnull\tnull\tnull\t1"
-                    @"\t[MS, MS:1001090, null, ]\t%g",
-                    (unsigned long)smlId++, EscapeTSV(entity), confVal];
+                    @"\t[MS, MS:1001090, null, ]\t%@",
+                    (unsigned long)smlId++, EscapeTSV(entity), Fmt(confVal)];
                 NSDictionary<NSNumber *, NSNumber *> *ab = entityQuants[entity];
                 for (NSUInteger k = 1; k <= nSV; k++) {
                     NSNumber *v = ab[@(k)];
-                    [row appendFormat:@"\t%@",
-                        v ? [NSString stringWithFormat:@"%g", v.doubleValue] : @"null"];
+                    [row appendFormat:@"\t%@", v ? Fmt(v.doubleValue) : @"null"];
                     [row appendString:@"\tnull"];
                 }
                 [lines addObject:row];
                 nSML++;
             }
             [lines addObject:@""];
+        }
+
+        // ── SFH + SMF (small-molecule features, M78) ──────────────
+        if (feats.count > 0) {
+            NSUInteger nAssays = sampleIdx.count;
+            NSMutableString *sfh = [NSMutableString stringWithString:
+                @"SFH\tSMF_ID\tSME_ID_REFS\tSME_ID_REF_ambiguity_code\tadduct_ion"
+                @"\tisotopomer\texp_mass_to_charge\tcharge"
+                @"\tretention_time_in_seconds\tretention_time_in_seconds_start"
+                @"\tretention_time_in_seconds_end"];
+            for (NSUInteger k = 1; k <= nAssays; k++) {
+                [sfh appendFormat:@"\tabundance_assay[%lu]", (unsigned long)k];
+            }
+            [lines addObject:sfh];
+
+            for (MPGOFeature *f in feats) {
+                NSString *smeRefs = f.evidenceRefs.count == 0
+                    ? @"null" : [f.evidenceRefs componentsJoinedByString:@"|"];
+                NSString *adduct = (f.adductIon.length == 0) ? @"null" : EscapeTSV(f.adductIon);
+                NSMutableString *row = [NSMutableString stringWithFormat:
+                    @"SMF\t%@\t%@\tnull\t%@\tnull\t%@\t%ld\t%@\tnull\tnull",
+                    EscapeTSV(f.featureId),
+                    EscapeTSV(smeRefs),
+                    adduct,
+                    Fmt(f.expMassToCharge),
+                    (long)f.charge,
+                    Fmt(f.retentionTimeSeconds)];
+                for (NSUInteger k = 1; k <= nAssays; k++) {
+                    NSString *sample = LookupSampleByIndex(sampleIdx, k);
+                    NSNumber *v = sample ? f.abundances[sample] : nil;
+                    [row appendFormat:@"\t%@", v ? Fmt(v.doubleValue) : @"null"];
+                }
+                [lines addObject:row];
+                nSMF++;
+            }
+            [lines addObject:@""];
+
+            // ── SEH + SME (small-molecule evidence, M78) ──────────
+            NSMutableArray<MPGOIdentification *> *smeIdents = [NSMutableArray array];
+            NSMutableArray<MPGOIdentification *> *plainIdents = [NSMutableArray array];
+            for (MPGOIdentification *ident in idents) {
+                BOOL tagged = NO;
+                for (NSString *e in ident.evidenceChain) {
+                    if ([e hasPrefix:@"SME_ID="]) { tagged = YES; break; }
+                }
+                if (tagged) [smeIdents addObject:ident];
+                else [plainIdents addObject:ident];
+            }
+            if (smeIdents.count > 0 || plainIdents.count > 0) {
+                [lines addObject:
+                    @"SEH\tSME_ID\tevidence_input_id\tdatabase_identifier\tchemical_formula"
+                    @"\tsmiles\tinchi\tchemical_name\turi\tderivatized_form\tadduct_ion"
+                    @"\texp_mass_to_charge\tcharge\tcalc_mass_to_charge\tspectra_ref"
+                    @"\tidentification_method\tms_level\tid_confidence_measure[1]\trank"];
+                NSUInteger emitted = 0;
+                for (MPGOIdentification *ident in smeIdents) {
+                    NSString *smeId = nil;
+                    for (NSString *e in ident.evidenceChain) {
+                        if ([e hasPrefix:@"SME_ID="]) {
+                            smeId = [e substringFromIndex:[@"SME_ID=" length]];
+                            break;
+                        }
+                    }
+                    if (smeId == nil) smeId = [NSString stringWithFormat:@"sme_%lu",
+                                                (unsigned long)(emitted + 1)];
+                    [lines addObject:BuildSmeRow(smeId, ident, runIdx)];
+                    emitted++;
+                    nSME++;
+                }
+                for (MPGOIdentification *ident in plainIdents) {
+                    NSString *smeId = [NSString stringWithFormat:@"sme_%lu",
+                                        (unsigned long)(emitted + 1)];
+                    [lines addObject:BuildSmeRow(smeId, ident, runIdx)];
+                    emitted++;
+                    nSME++;
+                }
+                [lines addObject:@""];
+            }
         }
     }
 
@@ -265,7 +470,8 @@ static NSString *EscapeTSV(NSString *v) {
     if (!ok) { if (error) *error = ioErr; return nil; }
 
     return [[MPGOMzTabWriteResult alloc] initWithPath:path version:version
-                                                   psm:nPSM prt:nPRT sml:nSML];
+                                                   psm:nPSM prt:nPRT sml:nSML
+                                                   pep:nPEP smf:nSMF sme:nSME];
 }
 
 @end

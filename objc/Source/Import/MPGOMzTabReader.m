@@ -4,6 +4,7 @@
  */
 
 #import "MPGOMzTabReader.h"
+#import "Dataset/MPGOFeature.h"
 #import "Dataset/MPGOIdentification.h"
 #import "Dataset/MPGOQuantification.h"
 
@@ -22,6 +23,7 @@ NSString *const MPGOMzTabReaderErrorDomain = @"MPGOMzTabReaderErrorDomain";
                    searchEngines:(NSArray *)searchEngines
                  identifications:(NSArray *)identifications
                  quantifications:(NSArray *)quantifications
+                        features:(NSArray *)features
                       sourcePath:(NSString *)sourcePath
 {
     if ((self = [super init])) {
@@ -34,6 +36,7 @@ NSString *const MPGOMzTabReaderErrorDomain = @"MPGOMzTabReaderErrorDomain";
         _searchEngines = [searchEngines copy] ?: @[];
         _identifications = [identifications copy] ?: @[];
         _quantifications = [quantifications copy] ?: @[];
+        _features = [features copy] ?: @[];
         _sourcePath = [sourcePath copy] ?: @"";
     }
     return self;
@@ -97,10 +100,14 @@ NSString *const MPGOMzTabReaderErrorDomain = @"MPGOMzTabReaderErrorDomain";
     NSMutableArray<NSString *> *searchEngines = [NSMutableArray array];
     NSMutableArray<MPGOIdentification *> *identifications = [NSMutableArray array];
     NSMutableArray<MPGOQuantification *> *quantifications = [NSMutableArray array];
+    NSMutableArray<MPGOFeature *> *features = [NSMutableArray array];
 
     NSArray<NSString *> *psmHeader = nil;
     NSArray<NSString *> *prtHeader = nil;
     NSArray<NSString *> *smlHeader = nil;
+    NSArray<NSString *> *pepHeader = nil;
+    NSArray<NSString *> *smfHeader = nil;
+    NSArray<NSString *> *smeHeader = nil;
 
     NSRegularExpression *msRunRegex = [NSRegularExpression regularExpressionWithPattern:@"^ms_run\\[(\\d+)\\]-location$" options:0 error:NULL];
     NSRegularExpression *assayRegex = [NSRegularExpression regularExpressionWithPattern:@"^assay\\[(\\d+)\\]-sample_ref$" options:0 error:NULL];
@@ -111,6 +118,9 @@ NSString *const MPGOMzTabReaderErrorDomain = @"MPGOMzTabReaderErrorDomain";
     NSRegularExpression *prtAbundanceRegex = [NSRegularExpression regularExpressionWithPattern:@"^protein_abundance_assay\\[(\\d+)\\]$" options:0 error:NULL];
     NSRegularExpression *smlAbundanceRegex = [NSRegularExpression regularExpressionWithPattern:@"^abundance_study_variable\\[(\\d+)\\]$" options:0 error:NULL];
     NSRegularExpression *psmScoreColRegex = [NSRegularExpression regularExpressionWithPattern:@"^search_engine_score\\[\\d+\\]$" options:0 error:NULL];
+    NSRegularExpression *pepAssayRegex = [NSRegularExpression regularExpressionWithPattern:@"^peptide_abundance_assay\\[(\\d+)\\]$" options:0 error:NULL];
+    NSRegularExpression *pepSVRegex = [NSRegularExpression regularExpressionWithPattern:@"^peptide_abundance_study_variable\\[(\\d+)\\]$" options:0 error:NULL];
+    NSRegularExpression *smfAssayRegex = [NSRegularExpression regularExpressionWithPattern:@"^abundance_assay\\[(\\d+)\\]$" options:0 error:NULL];
 
     NSArray<NSString *> *lines = [text componentsSeparatedByString:@"\n"];
     for (NSString *raw in lines) {
@@ -255,6 +265,203 @@ NSString *const MPGOMzTabReaderErrorDomain = @"MPGOMzTabReaderErrorDomain";
                                                                         normalizationMethod:@""];
                 [quantifications addObject:q];
             }
+        } else if ([prefix isEqualToString:@"PEH"]) {
+            pepHeader = cols;
+        } else if ([prefix isEqualToString:@"PEP"] && pepHeader) {
+            NSInteger seqIdx = [pepHeader indexOfObject:@"sequence"];
+            NSInteger accIdx = [pepHeader indexOfObject:@"accession"];
+            NSInteger chargeIdx = [pepHeader indexOfObject:@"charge"];
+            NSInteger mzIdx = [pepHeader indexOfObject:@"mass_to_charge"];
+            NSInteger rtIdx = [pepHeader indexOfObject:@"retention_time"];
+            NSInteger refIdx = [pepHeader indexOfObject:@"spectra_ref"];
+
+            NSString *sequence = (seqIdx != NSNotFound && seqIdx < (NSInteger)cols.count) ? cols[seqIdx] : @"";
+            NSString *accession = (accIdx != NSNotFound && accIdx < (NSInteger)cols.count) ? cols[accIdx] : @"";
+            NSString *entity = sequence.length > 0 ? sequence : accession;
+            if (entity.length == 0) continue;
+
+            NSString *ref = (refIdx != NSNotFound && refIdx < (NSInteger)cols.count) ? cols[refIdx] : @"";
+            NSString *runName = @"imported";
+            NSTextCheckingResult *rm = [spectraRefRegex firstMatchInString:ref options:0 range:NSMakeRange(0, ref.length)];
+            if (rm) {
+                NSInteger runIdxVal = [[ref substringWithRange:[rm rangeAtIndex:1]] integerValue];
+                runName = [self resolveRunNameForMsRun:runIdxVal msRunLocations:msRunLocations];
+            }
+
+            NSInteger charge = 0;
+            if (chargeIdx != NSNotFound && chargeIdx < (NSInteger)cols.count) {
+                charge = [cols[chargeIdx] integerValue];
+            }
+            double mz = (mzIdx != NSNotFound && mzIdx < (NSInteger)cols.count) ? [cols[mzIdx] doubleValue] : 0.0;
+            double rt = (rtIdx != NSNotFound && rtIdx < (NSInteger)cols.count) ? [cols[rtIdx] doubleValue] : 0.0;
+
+            NSMutableDictionary<NSString *, NSNumber *> *abundances = [NSMutableDictionary dictionary];
+            for (NSUInteger i = 0; i < pepHeader.count && i < cols.count; i++) {
+                NSString *colName = pepHeader[i];
+                NSString *raw_v = cols[i];
+                if (raw_v.length == 0 || [raw_v isEqualToString:@"null"] || [raw_v isEqualToString:@"NA"]) continue;
+                NSTextCheckingResult *am = [pepAssayRegex firstMatchInString:colName options:0 range:NSMakeRange(0, colName.length)];
+                if (am) {
+                    NSInteger assayIdxVal = [[colName substringWithRange:[am rangeAtIndex:1]] integerValue];
+                    NSString *sampleRef = assayToSample[@(assayIdxVal)] ?: [NSString stringWithFormat:@"assay_%ld", (long)assayIdxVal];
+                    abundances[sampleRef] = @([raw_v doubleValue]);
+                    continue;
+                }
+                NSTextCheckingResult *sm = [pepSVRegex firstMatchInString:colName options:0 range:NSMakeRange(0, colName.length)];
+                if (sm) {
+                    NSInteger svIdxVal = [[colName substringWithRange:[sm rangeAtIndex:1]] integerValue];
+                    NSString *sampleRef = studyVariables[@(svIdxVal)] ?: [NSString stringWithFormat:@"study_variable_%ld", (long)svIdxVal];
+                    abundances[sampleRef] = @([raw_v doubleValue]);
+                }
+            }
+
+            NSMutableArray<NSString *> *evidenceRefs = [NSMutableArray array];
+            if (ref.length > 0 && ![ref isEqualToString:@"null"]) [evidenceRefs addObject:ref];
+
+            NSString *featureId = [NSString stringWithFormat:@"pep_%lu", (unsigned long)(features.count + 1)];
+            MPGOFeature *feat = [[MPGOFeature alloc] initWithFeatureId:featureId
+                                                               runName:runName
+                                                        chemicalEntity:entity
+                                                  retentionTimeSeconds:rt
+                                                       expMassToCharge:mz
+                                                                charge:charge
+                                                             adductIon:@""
+                                                            abundances:abundances
+                                                          evidenceRefs:evidenceRefs];
+            [features addObject:feat];
+        } else if ([prefix isEqualToString:@"SFH"]) {
+            smfHeader = cols;
+        } else if ([prefix isEqualToString:@"SMF"] && smfHeader) {
+            NSInteger idIdx = [smfHeader indexOfObject:@"SMF_ID"];
+            NSInteger smeRefsIdx = [smfHeader indexOfObject:@"SME_ID_REFS"];
+            NSInteger adductIdx = [smfHeader indexOfObject:@"adduct_ion"];
+            NSInteger mzIdx = [smfHeader indexOfObject:@"exp_mass_to_charge"];
+            NSInteger chargeIdx = [smfHeader indexOfObject:@"charge"];
+            NSInteger rtIdx = [smfHeader indexOfObject:@"retention_time_in_seconds"];
+
+            NSString *smfId = (idIdx != NSNotFound && idIdx < (NSInteger)cols.count) ? cols[idIdx] : @"";
+            if (smfId.length == 0) continue;
+
+            NSString *smeRefsRaw = (smeRefsIdx != NSNotFound && smeRefsIdx < (NSInteger)cols.count) ? cols[smeRefsIdx] : @"";
+            NSMutableArray<NSString *> *smeRefs = [NSMutableArray array];
+            if (smeRefsRaw.length > 0 && ![smeRefsRaw.lowercaseString isEqualToString:@"null"]) {
+                for (NSString *part in [smeRefsRaw componentsSeparatedByString:@"|"]) {
+                    if (part.length > 0 && ![part.lowercaseString isEqualToString:@"null"]) {
+                        [smeRefs addObject:part];
+                    }
+                }
+            }
+
+            NSString *adduct = (adductIdx != NSNotFound && adductIdx < (NSInteger)cols.count) ? cols[adductIdx] : @"";
+            if ([adduct.lowercaseString isEqualToString:@"null"]) adduct = @"";
+            double mz = (mzIdx != NSNotFound && mzIdx < (NSInteger)cols.count) ? [cols[mzIdx] doubleValue] : 0.0;
+            double rt = (rtIdx != NSNotFound && rtIdx < (NSInteger)cols.count) ? [cols[rtIdx] doubleValue] : 0.0;
+            NSInteger charge = 0;
+            if (chargeIdx != NSNotFound && chargeIdx < (NSInteger)cols.count) {
+                charge = [cols[chargeIdx] integerValue];
+            }
+
+            NSMutableDictionary<NSString *, NSNumber *> *abundances = [NSMutableDictionary dictionary];
+            for (NSUInteger i = 0; i < smfHeader.count && i < cols.count; i++) {
+                NSString *colName = smfHeader[i];
+                NSString *raw_v = cols[i];
+                if (raw_v.length == 0 || [raw_v isEqualToString:@"null"] || [raw_v isEqualToString:@"NA"]) continue;
+                NSTextCheckingResult *am = [smfAssayRegex firstMatchInString:colName options:0 range:NSMakeRange(0, colName.length)];
+                if (!am) continue;
+                NSInteger assayIdxVal = [[colName substringWithRange:[am rangeAtIndex:1]] integerValue];
+                NSString *sampleRef = assayToSample[@(assayIdxVal)] ?: [NSString stringWithFormat:@"assay_%ld", (long)assayIdxVal];
+                abundances[sampleRef] = @([raw_v doubleValue]);
+            }
+
+            NSString *entity = smeRefs.count > 0 ? smeRefs.firstObject : smfId;
+            NSString *featureId = [NSString stringWithFormat:@"smf_%@", smfId];
+            MPGOFeature *feat = [[MPGOFeature alloc] initWithFeatureId:featureId
+                                                               runName:@"metabolomics"
+                                                        chemicalEntity:entity
+                                                  retentionTimeSeconds:rt
+                                                       expMassToCharge:mz
+                                                                charge:charge
+                                                             adductIon:adduct
+                                                            abundances:abundances
+                                                          evidenceRefs:smeRefs];
+            [features addObject:feat];
+        } else if ([prefix isEqualToString:@"SEH"]) {
+            smeHeader = cols;
+        } else if ([prefix isEqualToString:@"SME"] && smeHeader) {
+            NSInteger idIdx = [smeHeader indexOfObject:@"SME_ID"];
+            NSInteger dbIdx = [smeHeader indexOfObject:@"database_identifier"];
+            NSInteger nameIdx = [smeHeader indexOfObject:@"chemical_name"];
+            NSInteger formulaIdx = [smeHeader indexOfObject:@"chemical_formula"];
+            NSInteger refIdx = [smeHeader indexOfObject:@"spectra_ref"];
+            NSInteger rankIdx = [smeHeader indexOfObject:@"rank"];
+
+            NSString *smeId = (idIdx != NSNotFound && idIdx < (NSInteger)cols.count) ? cols[idIdx] : @"";
+            if (smeId.length == 0) continue;
+
+            NSString *db = (dbIdx != NSNotFound && dbIdx < (NSInteger)cols.count) ? cols[dbIdx] : @"";
+            NSString *chemName = (nameIdx != NSNotFound && nameIdx < (NSInteger)cols.count) ? cols[nameIdx] : @"";
+            NSString *formula = (formulaIdx != NSNotFound && formulaIdx < (NSInteger)cols.count) ? cols[formulaIdx] : @"";
+
+            NSString *entity = smeId;
+            if (db.length > 0 && ![db.lowercaseString isEqualToString:@"null"]) entity = db;
+            else if (chemName.length > 0 && ![chemName.lowercaseString isEqualToString:@"null"]) entity = chemName;
+            else if (formula.length > 0 && ![formula.lowercaseString isEqualToString:@"null"]) entity = formula;
+
+            NSInteger rank = 1;
+            if (rankIdx != NSNotFound && rankIdx < (NSInteger)cols.count) {
+                NSInteger parsed = [cols[rankIdx] integerValue];
+                if (parsed > 0) rank = parsed;
+            }
+            double confidence = rank > 0 ? 1.0 / (double)rank : 0.0;
+
+            NSString *runName = @"metabolomics";
+            NSUInteger spectrumIndex = 0;
+            NSString *ref = (refIdx != NSNotFound && refIdx < (NSInteger)cols.count) ? cols[refIdx] : @"";
+            NSTextCheckingResult *rm = [spectraRefRegex firstMatchInString:ref options:0 range:NSMakeRange(0, ref.length)];
+            if (rm) {
+                NSInteger runIdxVal = [[ref substringWithRange:[rm rangeAtIndex:1]] integerValue];
+                runName = [self resolveRunNameForMsRun:runIdxVal msRunLocations:msRunLocations];
+                NSString *locator = [ref substringWithRange:[rm rangeAtIndex:2]];
+                NSRange eq = [locator rangeOfString:@"="];
+                if (eq.location != NSNotFound) {
+                    spectrumIndex = (NSUInteger)[[locator substringFromIndex:eq.location + 1] integerValue];
+                }
+            }
+
+            NSMutableArray<NSString *> *evidence = [NSMutableArray array];
+            [evidence addObject:[NSString stringWithFormat:@"SME_ID=%@", smeId]];
+            if (chemName.length > 0 && ![chemName isEqualToString:entity] && ![chemName.lowercaseString isEqualToString:@"null"]) {
+                [evidence addObject:[NSString stringWithFormat:@"name=%@", chemName]];
+            }
+            if (formula.length > 0 && ![formula isEqualToString:entity] && ![formula.lowercaseString isEqualToString:@"null"]) {
+                [evidence addObject:[NSString stringWithFormat:@"formula=%@", formula]];
+            }
+
+            MPGOIdentification *ident = [[MPGOIdentification alloc] initWithRunName:runName
+                                                                       spectrumIndex:spectrumIndex
+                                                                      chemicalEntity:entity
+                                                                     confidenceScore:confidence
+                                                                       evidenceChain:evidence];
+            [identifications addObject:ident];
+
+            // Back-fill features referencing this SME so their chemicalEntity
+            // gets upgraded from the placeholder SME_ID.
+            for (NSUInteger fi = 0; fi < features.count; fi++) {
+                MPGOFeature *f = features[fi];
+                if ([f.evidenceRefs containsObject:smeId] && [f.chemicalEntity isEqualToString:smeId]) {
+                    MPGOFeature *upgraded = [[MPGOFeature alloc]
+                        initWithFeatureId:f.featureId
+                                  runName:f.runName
+                           chemicalEntity:entity
+                     retentionTimeSeconds:f.retentionTimeSeconds
+                          expMassToCharge:f.expMassToCharge
+                                   charge:f.charge
+                                adductIon:f.adductIon
+                               abundances:f.abundances
+                             evidenceRefs:f.evidenceRefs];
+                    features[fi] = upgraded;
+                }
+            }
         }
     }
 
@@ -274,6 +481,7 @@ NSString *const MPGOMzTabReaderErrorDomain = @"MPGOMzTabReaderErrorDomain";
                                        searchEngines:searchEngines
                                      identifications:identifications
                                      quantifications:quantifications
+                                            features:features
                                           sourcePath:path];
 }
 
