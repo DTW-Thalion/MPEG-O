@@ -14,7 +14,7 @@ leading `0.` means the public API is still stabilising; see
 ## [Unreleased] — v0.12.0 work-in-progress
 
 Accumulating scope for v0.12.0. Both must-have milestones (M74, M75)
-have landed, plus one nice-to-have (M76); M77 and M78 remain open.
+have landed, plus two nice-to-haves (M76, M77); only M78 remains open.
 
 ### Added
 
@@ -115,20 +115,72 @@ have landed, plus one nice-to-have (M76); M77 and M78 remain open.
   `4787aa2` (D: ObjC writer, `MPGOJcampDxEncoding` NS_ENUM, 3/3
   conformance, 1637/0 suite) · this docs flip (E).
 
-### Test totals (post-M76)
+- **M77 — 2D-COS computation primitives (2026-04-23).** Noda's
+  generalised synchronous / asynchronous decomposition from a
+  perturbation series (Hilbert-transform approach) ships as a shared
+  library API in all three languages. The output value class,
+  `TwoDimensionalCorrelationSpectrum`, was added in v0.11.1; M77
+  fills in the missing *compute* side.
 
-- Python: 845 tests (M75 brought +13, M76 brought +37 unit + 3
-  conformance).
-- Java: 345 tests (+3 conformance; AFFN path unchanged).
-- Objective-C: 1637 passed / 0 failed (+3 conformance).
+    - **API surface.** Three functions per language, identical
+      semantics: `hilbert_noda_matrix(m)` returns the discrete
+      `(m, m)` transform with `N[j, k] = 1 / (π · (k − j))` (zero
+      on diagonal, antisymmetric); `compute(dynamic_spectra,
+      reference=None, …)` returns a
+      `TwoDimensionalCorrelationSpectrum` containing synchronous
+      `Φ = (1/(m−1)) · Ãᵀ · Ã` and asynchronous
+      `Ψ = (1/(m−1)) · Ãᵀ · N · Ã` matrices, with `Ã = A −
+      reference` mean-centered dynamic spectra; reference defaults
+      to the column-wise mean (classical mean-centered 2D-COS) and
+      accepts an explicit baseline for difference 2D-COS.
+      `disrelation_spectrum(sync, async)` returns `|Φ|/(|Φ|+|Ψ|)`
+      element-wise in `[0, 1]` as the significance metric, NaN
+      where both matrices vanish.
+    - **Cross-language parity.** Python
+      (`mpeg_o.analysis.two_d_cos`) uses NumPy BLAS; Java
+      (`com.dtwthalion.mpgo.analysis.TwoDCos`) and Objective-C
+      (`Analysis/MPGOTwoDCos`) use plain nested loops with the
+      Hilbert-Noda weight folded into the asynchronous multiply.
+      Because BLAS accumulation order differs across
+      implementations, the conformance gate is float-tolerance
+      (`rtol=1e-9, atol=1e-12`) rather than byte-parity.
+    - **Shared reference fixture.** `conformance/two_d_cos/` ships
+      `dynamic.csv` (24×16 perturbation series built from drifting
+      Gaussian bands) plus `sync.csv` and `async.csv` from the
+      Python reference implementation. A regenerator
+      (`generate.py`) is committed alongside for when reference
+      semantics intentionally change. All three languages run the
+      same fixture through their own compute path and assert
+      closeness to the shared expected matrices; 3/3 language
+      gates are green.
+    - **Structural invariants verified per language.** Synchronous
+      matrix is symmetric; asynchronous matrix is antisymmetric;
+      constant perturbation yields zero sync + async (sanity);
+      pure-sinusoid 2×2 case exhibits the expected
+      synchronous-autocorrelation / asynchronous-phase-offset
+      pattern.
+
+  Commits: `df321d5` (A: Python `mpeg_o.analysis.two_d_cos` + 15
+  unit tests) · `2dfe27d` (B: `conformance/two_d_cos/` fixtures +
+  Python conformance gate) · `6f4f115` (C: Java `TwoDCos` + 13
+  unit tests + conformance, 359/359 suite) · `2f02ffa` (D: ObjC
+  `MPGOTwoDCos` + 27 new pass() cases, 1664/0 suite) · this docs
+  flip (E).
+
+### Test totals (post-M77)
+
+- Python: 811 tests collected (M75 brought +13, M76 brought +37
+  unit + 3 conformance, M77 brought +15 unit + 1 conformance).
+- Java: 359 tests (+13 unit + 1 conformance over M76).
+- Objective-C: 1664 passed / 0 failed (+27 over M76).
 
 ### Docs
 
 - `docs/v1.0-gaps.md` — "Must-fix for v1.0" list now empty; status
   table row for activation/isolation flipped to ✅; mzML writer
   defect table updated to show item #2 shipped.
-- `WORKPLAN.md` — M74, M75, and M76 checkboxes ticked with their
-  shipped commits.
+- `WORKPLAN.md` — M74, M75, M76, and M77 checkboxes ticked with
+  their shipped commits.
 
 ---
 

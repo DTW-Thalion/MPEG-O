@@ -903,12 +903,27 @@ holds for every line item.
       significant digits of integer-scaled Y precision; rounding is
       explicit half-away-from-zero so all three languages agree on
       `.5` ties.*
-- [ ] **M77** 2D-COS computation primitives — generalised
+- [x] **M77** 2D-COS computation primitives — generalised
       synchronous / asynchronous decomposition from a perturbation
       series (Noda's Hilbert-transform approach), plus a statistical
       significance test. Ships as library API in all three languages
       with a shared reference fixture. Output format already defined
-      by `TwoDimensionalCorrelationSpectrum` (v0.11.1).
+      by `TwoDimensionalCorrelationSpectrum` (v0.11.1). *(Python
+      [df321d5], fixture [2dfe27d], Java [6f4f115], ObjC [2f02ffa].
+      API: `hilbert_noda_matrix(m)` / `compute(dynamic_spectra,
+      reference=None, …)` / `disrelation_spectrum(sync, async)` in
+      each language. Reference defaults to column-wise mean
+      (standard mean-centered 2D-COS); explicit-reference mode
+      enables difference 2D-COS. Synchronous Φ = (1/(m−1)) Ãᵀ Ã is
+      symmetric; asynchronous Ψ = (1/(m−1)) Ãᵀ N Ã is antisymmetric
+      where N is the discrete Hilbert-Noda matrix
+      N[j,k] = 1/(π(k−j)). Statistical significance: disrelation
+      spectrum |Φ|/(|Φ|+|Ψ|) ∈ [0,1], NaN where both matrices
+      vanish. Cross-language gate is float-tolerance
+      (rtol=1e-9, atol=1e-12) on a shared
+      `conformance/two_d_cos/{dynamic,sync,async}.csv` fixture, not
+      byte-parity — BLAS accumulation order differs across
+      implementations.)*
 - [ ] **M78** Round out mzTab PEH/PEP + SFH/SMF/SEH/SME — requires
       new `Feature` value class beside `Identification` and
       `Quantification` (flagged "deferred further" in
