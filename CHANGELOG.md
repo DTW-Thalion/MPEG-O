@@ -13,8 +13,8 @@ leading `0.` means the public API is still stabilising; see
 
 ## [Unreleased] — v0.12.0 work-in-progress
 
-Accumulating scope for v0.12.0. The two must-have milestones (M74,
-M75) have landed; the three nice-to-haves remain open.
+Accumulating scope for v0.12.0. Both must-have milestones (M74, M75)
+have landed, plus one nice-to-have (M76); M77 and M78 remain open.
 
 ### Added
 
@@ -72,20 +72,63 @@ M75) have landed; the three nice-to-haves remain open.
 
   Commit: `e9f2d2b`.
 
-### Test totals (post-M75)
+- **M76 — JCAMP-DX compressed-writer emission (2026-04-23).** The
+  JCAMP-DX 5.01 §5.9 compression dialects (PAC / SQZ / DIF) become
+  an opt-in writer mode in all three languages. AFFN stays the
+  default for bit-accurate round-trips; compressed output is
+  selected via a keyword (`encoding="pac"`), enum
+  (`JcampDxEncoding.PAC`), or NS_ENUM (`MPGOJcampDxEncodingPAC`)
+  value on the existing `write*Spectrum` surfaces:
 
-- Python: 805 tests (includes +13 new CLI-parity tests in
-  `python/tests/test_m75_cli_parity.py`).
-- Java: 342 tests (unchanged; M75 is Python-only scope).
-- Objective-C: unchanged (M75 is Python-only scope).
+    - **Byte-parity across languages.** A single reference encoder
+      lives in Python (`mpeg_o.exporters._jcamp_encode`) and is
+      mirrored verbatim in Java (`JcampDxEncode`) and Objective-C
+      (`MPGOJcampDxEncode`). Rounding is explicit half-away-from-zero
+      (portable across Python / Java / C); YFACTOR is chosen as
+      `10 ** (ceil(log10(max_abs)) - 7)` for ~7 significant digits of
+      integer-scaled Y precision; lines break every 10 Y values.
+    - **Explicit Y-check on every non-first line.** The compressed
+      decoder unconditionally drops any line-start value equal to
+      the previous line's last Y within 1e-9 (the JCAMP-DX Y-check
+      rule). Plateaus at the line boundary would silently steal data
+      points without a prepended sentinel, so the encoder emits an
+      explicit SQZ (or PAC) of the previous last Y on every line
+      N > 0 for all three modes.
+    - **Python reader PAC detection.** `has_compression()` now also
+      matches the `\d[+\-]\d` digit-sign-digit adjacency that
+      distinguishes a PAC body. Scientific notation is safe because
+      the character before a `+`/`-` is always `e`/`E`, never a
+      digit.
+    - **Cross-language conformance gate.** `conformance/jcamp_dx/`
+      ships three golden `.jdx` fixtures (one per compressed mode)
+      plus a `generate.py` regenerator. Python
+      (`test_m76_jcamp_conformance.py`), Java
+      (`JcampDxM76ConformanceTest`), and Objective-C
+      (`TestM76JcampConformance`) each re-run the writer in-process
+      and assert byte-for-byte equality against the same bytes.
+      All 9 checks (3 modes × 3 languages) are green.
+
+  Commits: `9437a1b` (A: Python encoder + reader fix + 37 unit
+  tests) · `de377d6` (B: conformance fixtures + regenerator +
+  Python conformance test) · `d889b19` (C: Java writer,
+  `JcampDxEncoding` enum, 3/3 conformance, 345/345 suite) ·
+  `4787aa2` (D: ObjC writer, `MPGOJcampDxEncoding` NS_ENUM, 3/3
+  conformance, 1637/0 suite) · this docs flip (E).
+
+### Test totals (post-M76)
+
+- Python: 845 tests (M75 brought +13, M76 brought +37 unit + 3
+  conformance).
+- Java: 345 tests (+3 conformance; AFFN path unchanged).
+- Objective-C: 1637 passed / 0 failed (+3 conformance).
 
 ### Docs
 
 - `docs/v1.0-gaps.md` — "Must-fix for v1.0" list now empty; status
   table row for activation/isolation flipped to ✅; mzML writer
   defect table updated to show item #2 shipped.
-- `WORKPLAN.md` — M74 and M75 checkboxes ticked with their shipped
-  commits.
+- `WORKPLAN.md` — M74, M75, and M76 checkboxes ticked with their
+  shipped commits.
 
 ---
 
