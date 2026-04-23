@@ -1,6 +1,15 @@
 # MPEG-O — Release Status
 
-> **Status (2026-04-23):** v0.12.0 shipped and pushed (commit
+> **Status (2026-04-23):** **v1.0.0 shipped.** First stable release.
+> API is SemVer-stable from this tag forward. Pure promote from
+> v0.12.0 — no new code, just version-metadata bumps
+> (`pyproject.toml` 0.8.0 → 1.0.0 + `Production/Stable` classifier;
+> `pom.xml` 0.8.0 → 1.0.0) and the CHANGELOG `[v1.0.0]` entry.
+> `docs/v1.0-gaps.md` Must-fix and Nice-to-have lists are both empty;
+> the only deferred items are scope-expansion (mzML provenance chain,
+> hyperspectral primitives) and external publishing (M40, v1.0.1).
+>
+> **Prior (2026-04-23):** v0.12.0 shipped and pushed (commit
 > `62ec5b2`, tag `v0.12.0`). Minor release rounding out multi-omics
 > file-format fidelity: M74 (MS/MS activation_method + isolation_window
 > data model across mzML reader + writer + spectrum_index schema, format

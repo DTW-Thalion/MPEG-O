@@ -12,7 +12,7 @@
 
     <groupId>com.dtwthalion</groupId>
     <artifactId>mpgo</artifactId>
-    <version>0.8.0</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>MPEG-O</name>

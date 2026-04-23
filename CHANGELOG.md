@@ -11,6 +11,40 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [v1.0.0] — 2026-04-23
+
+First stable release. API is SemVer-stable from this tag forward —
+breaking changes require a major-version bump; the per-symbol
+stability map in `docs/api-stability-v0.8.md` is now in effect.
+
+No new code in this tag relative to `v0.12.0`: it is a pure promote
+signalling that `docs/v1.0-gaps.md` is clear of both must-fix and
+nice-to-have items. The cumulative feature surface is catalogued in
+the v0.1.0 → v0.12.0 entries below; [`docs/version-history.md`](docs/version-history.md)
+presents the same material as a release-by-release narrative.
+
+### Changed
+
+- `python/pyproject.toml` — `version` 0.8.0 → 1.0.0; classifier
+  `Development Status :: 3 - Alpha` → `5 - Production/Stable`.
+  (The metadata version had been frozen at 0.8.0 since that release;
+  publishing to PyPI was not gated and the shipped tags remained the
+  source of truth for each release.)
+- `java/pom.xml` — `version` 0.8.0 → 1.0.0.
+
+### Not in scope for v1.0.0
+
+- **M40 PyPI + Maven Central publishing** — continues to require
+  external account + API-token setup; will land in v1.0.1 once the
+  namespaces are claimed.
+- **mzML `<softwareList>` / `<dataProcessingList>`** content-chain
+  emission — explicitly deferred past v1.0 in `docs/v1.0-gaps.md`
+  (reviewer-facing XML restructure, not a functional defect).
+- **Hyperspectral-image analysis primitives** — scope expansion
+  beyond tile-chunk cubes; post-v1.0.
+
+---
+
 ## [v0.12.0] — 2026-04-23
 
 All five milestones landed: must-haves M74 + M75, plus nice-to-haves

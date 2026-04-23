@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mpeg-o"
-version = "0.8.0"
+version = "1.0.0"
 description = "Python reader/writer for the MPEG-O multi-omics data standard"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,7 +12,7 @@ license = { text = "LGPL-3.0-or-later" }
 authors = [{ name = "DTW-Thalion" }]
 keywords = ["mass-spectrometry", "NMR", "multi-omics", "HDF5", "mzML", "bioinformatics"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
     "Operating System :: OS Independent",

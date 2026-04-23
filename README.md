@@ -39,9 +39,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — full v0.12.0 suite passing (1704/0).** | `objc/` |
-| **Python (`mpeg-o`)**     | **Full parity with ObjC and Java — 875 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.mpgo`)** | **Full parity with ObjC and Python — 373 tests, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **Normative reference — v1.0.0, full suite passing (1704/0).** | `objc/` |
+| **Python (`mpeg-o`)**     | **v1.0.0 — full parity with ObjC and Java, 875 tests passing.** | `python/` |
+| **Java (`com.dtwthalion.mpgo`)** | **v1.0.0 — full parity with ObjC and Python, 373 tests, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages
