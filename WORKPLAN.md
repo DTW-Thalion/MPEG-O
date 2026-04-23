@@ -868,11 +868,16 @@ holds for every line item.
       B (spectrum_index schema, `736ecef`), C (mzML reader,
       `9340007`), D (mzML writer, `c502d68`), E (feature flag +
       format bump + round-trip tests, `e96105f`).*
-- [ ] **M75** Python CLI parity polish — add `mpgo-verify`,
+- [x] **M75** Python CLI parity polish — add `mpgo-verify`,
       `mpgo-sign`, `mpgo-pqc` console_scripts to `pyproject.toml`
       backed by the existing `verifier.py` / `signatures.py` /
       `pqc.py` modules. Brings Python up to Java + ObjC CLI surface
-      for the three protection tools.
+      for the three protection tools. *Shipped 2026-04-23 as commit
+      `e9f2d2b`, with 13 new CLI-parity tests in
+      `python/tests/test_m75_cli_parity.py` exercising console-script
+      entry-point resolution, HMAC sign/verify round-trip, and PQC
+      sig/KEM/HDF5 round-trips against the ObjC/Java subcommand
+      grammar 1:1.*
 
 ### Nice-to-have
 
