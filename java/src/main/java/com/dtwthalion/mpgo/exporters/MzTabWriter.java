@@ -5,6 +5,7 @@
  */
 package com.dtwthalion.mpgo.exporters;
 
+import com.dtwthalion.mpgo.Feature;
 import com.dtwthalion.mpgo.Identification;
 import com.dtwthalion.mpgo.Quantification;
 
@@ -21,9 +22,10 @@ import java.util.Map;
 /**
  * mzTab exporter — v0.9+. Reverses {@link
  * com.dtwthalion.mpgo.importers.MzTabReader}: takes identifications +
- * quantifications and emits a mzTab file. Both proteomics 1.0
- * (PSH/PSM + PRH/PRT sections) and metabolomics 2.0.0-M (SMH/SML)
- * dialects are supported.
+ * quantifications (plus optional {@link Feature} rows) and emits a
+ * mzTab file. Both proteomics 1.0 (PSH/PSM + PRH/PRT + PEH/PEP) and
+ * metabolomics 2.0.0-M (SMH/SML + SFH/SMF + SEH/SME) dialects are
+ * supported.
  *
  * <p><b>Cross-language equivalents:</b><br>
  * Python: {@code mpeg_o.exporters.mztab} &middot;
@@ -39,15 +41,32 @@ public final class MzTabWriter {
         String version,
         int nPSMRows,
         int nPRTRows,
-        int nSMLRows
+        int nSMLRows,
+        int nPEPRows,
+        int nSMFRows,
+        int nSMERows
     ) {}
 
     private MzTabWriter() {}
+
+    /** Backwards-compat overload (no features). */
+    public static WriteResult write(
+        Path path,
+        List<Identification> identifications,
+        List<Quantification> quantifications,
+        String version,
+        String title,
+        String description
+    ) {
+        return write(path, identifications, quantifications, List.of(),
+                     version, title, description);
+    }
 
     public static WriteResult write(
         Path path,
         List<Identification> identifications,
         List<Quantification> quantifications,
+        List<Feature> features,
         String version,
         String title,
         String description
@@ -58,18 +77,28 @@ public final class MzTabWriter {
         }
         List<Identification> idents = identifications == null ? List.of() : identifications;
         List<Quantification> quants = quantifications == null ? List.of() : quantifications;
+        List<Feature> feats = features == null ? List.of() : features;
 
-        // Stable run-name → index mapping.
+        // Stable run-name → index mapping (idents + features).
         Map<String, Integer> runIdx = new LinkedHashMap<>();
         for (Identification id : idents) {
             runIdx.putIfAbsent(id.runName(), runIdx.size() + 1);
         }
+        for (Feature f : feats) {
+            runIdx.putIfAbsent(f.runName(), runIdx.size() + 1);
+        }
 
-        // Stable sample → assay index mapping.
+        // Stable sample → assay index mapping (quants + feature abundances).
         Map<String, Integer> sampleIdx = new LinkedHashMap<>();
         for (Quantification q : quants) {
             String s = q.sampleRef() != null ? q.sampleRef() : "sample";
             sampleIdx.putIfAbsent(s, sampleIdx.size() + 1);
+        }
+        for (Feature f : feats) {
+            for (String s : f.abundances().keySet()) {
+                sampleIdx.putIfAbsent(s.isEmpty() ? "sample" : s,
+                                       sampleIdx.size() + 1);
+            }
         }
 
         List<String> lines = new ArrayList<>();
@@ -95,7 +124,7 @@ public final class MzTabWriter {
                 e.getValue(), e.getKey()));
         }
 
-        if (!quants.isEmpty()) {
+        if (!quants.isEmpty() || !feats.isEmpty()) {
             for (var e : sampleIdx.entrySet()) {
                 int i = e.getValue();
                 String sample = e.getKey();
@@ -115,7 +144,7 @@ public final class MzTabWriter {
 
         lines.add("");  // blank separator
 
-        int nPSM = 0, nPRT = 0, nSML = 0;
+        int nPSM = 0, nPRT = 0, nSML = 0, nPEP = 0, nSMF = 0, nSME = 0;
 
         if ("1.0".equals(version)) {
             // ── PSH + PSM ────────────────────────────────────────
@@ -176,6 +205,42 @@ public final class MzTabWriter {
                 }
                 lines.add("");
             }
+
+            // ── PEH + PEP (peptide features, M78) ────────────────
+            if (!feats.isEmpty()) {
+                int nAssays = sampleIdx.size();
+                StringBuilder peh = new StringBuilder(
+                    "PEH\tsequence\taccession\tunique\tdatabase\tdatabase_version"
+                    + "\tsearch_engine\tbest_search_engine_score[1]\tmodifications"
+                    + "\tretention_time\tcharge\tmass_to_charge\turi\tspectra_ref");
+                for (int k = 1; k <= nAssays; k++) {
+                    peh.append("\tpeptide_abundance_assay[").append(k).append("]");
+                }
+                lines.add(peh.toString());
+
+                for (Feature f : feats) {
+                    int ri = runIdx.getOrDefault(f.runName(), 1);
+                    String ref = f.evidenceRefs().isEmpty()
+                        ? String.format("ms_run[%d]:index=0", ri)
+                        : f.evidenceRefs().get(0);
+                    StringBuilder row = new StringBuilder(String.format(
+                        "PEP\t%s\tnull\tnull\tnull\tnull\tnull\tnull\tnull\t%s\t%d\t%s\tnull\t%s",
+                        escapeTsv(f.chemicalEntity()),
+                        fmt(f.retentionTimeSeconds()),
+                        f.charge(),
+                        fmt(f.expMassToCharge()),
+                        escapeTsv(ref)));
+                    // Per-assay abundance column ordering from sampleIdx.
+                    for (int k = 1; k <= nAssays; k++) {
+                        String sample = lookupSampleByIndex(sampleIdx, k);
+                        Double v = sample == null ? null : f.abundances().get(sample);
+                        row.append("\t").append(v == null ? "null" : fmt(v));
+                    }
+                    lines.add(row.toString());
+                    nPEP++;
+                }
+                lines.add("");
+            }
         } else {
             // Metabolomics: SMH + SML.
             Map<String, Map<Integer, Double>> entityQuants = new LinkedHashMap<>();
@@ -225,6 +290,79 @@ public final class MzTabWriter {
                 }
                 lines.add("");
             }
+
+            // ── SFH + SMF (small-molecule features, M78) ─────────
+            if (!feats.isEmpty()) {
+                int nAssays = sampleIdx.size();
+                StringBuilder sfh = new StringBuilder(
+                    "SFH\tSMF_ID\tSME_ID_REFS\tSME_ID_REF_ambiguity_code\tadduct_ion"
+                    + "\tisotopomer\texp_mass_to_charge\tcharge"
+                    + "\tretention_time_in_seconds\tretention_time_in_seconds_start"
+                    + "\tretention_time_in_seconds_end");
+                for (int k = 1; k <= nAssays; k++) {
+                    sfh.append("\tabundance_assay[").append(k).append("]");
+                }
+                lines.add(sfh.toString());
+
+                for (Feature f : feats) {
+                    String smeRefs = f.evidenceRefs().isEmpty()
+                        ? "null" : String.join("|", f.evidenceRefs());
+                    String adduct = (f.adductIon() == null || f.adductIon().isEmpty())
+                        ? "null" : escapeTsv(f.adductIon());
+                    StringBuilder row = new StringBuilder(String.format(
+                        "SMF\t%s\t%s\tnull\t%s\tnull\t%s\t%d\t%s\tnull\tnull",
+                        escapeTsv(f.featureId()),
+                        escapeTsv(smeRefs),
+                        adduct,
+                        fmt(f.expMassToCharge()),
+                        f.charge(),
+                        fmt(f.retentionTimeSeconds())));
+                    for (int k = 1; k <= nAssays; k++) {
+                        String sample = lookupSampleByIndex(sampleIdx, k);
+                        Double v = sample == null ? null : f.abundances().get(sample);
+                        row.append("\t").append(v == null ? "null" : fmt(v));
+                    }
+                    lines.add(row.toString());
+                    nSMF++;
+                }
+                lines.add("");
+
+                // ── SEH + SME (small-molecule evidence, M78) ─────
+                List<Identification> smeIdents = new ArrayList<>();
+                List<Identification> plainIdents = new ArrayList<>();
+                for (Identification id : idents) {
+                    boolean tagged = false;
+                    for (String e : id.evidenceChain()) {
+                        if (e.startsWith("SME_ID=")) { tagged = true; break; }
+                    }
+                    if (tagged) smeIdents.add(id); else plainIdents.add(id);
+                }
+                if (!smeIdents.isEmpty() || !plainIdents.isEmpty()) {
+                    lines.add(
+                        "SEH\tSME_ID\tevidence_input_id\tdatabase_identifier\tchemical_formula"
+                        + "\tsmiles\tinchi\tchemical_name\turi\tderivatized_form\tadduct_ion"
+                        + "\texp_mass_to_charge\tcharge\tcalc_mass_to_charge\tspectra_ref"
+                        + "\tidentification_method\tms_level\tid_confidence_measure[1]\trank");
+                    int emitted = 0;
+                    for (Identification id : smeIdents) {
+                        String smeId = null;
+                        for (String e : id.evidenceChain()) {
+                            if (e.startsWith("SME_ID=")) { smeId = e.substring("SME_ID=".length()); break; }
+                        }
+                        if (smeId == null) smeId = "sme_" + (emitted + 1);
+                        lines.add(buildSmeRow(smeId, id, runIdx));
+                        emitted++;
+                        nSME++;
+                    }
+                    for (Identification id : plainIdents) {
+                        String smeId = "sme_" + (emitted + 1);
+                        lines.add(buildSmeRow(smeId, id, runIdx));
+                        emitted++;
+                        nSME++;
+                    }
+                    lines.add("");
+                }
+            }
         }
 
         String text = String.join("\n", lines) + "\n";
@@ -234,10 +372,46 @@ public final class MzTabWriter {
             throw new UncheckedIOException("Failed to write mzTab: " + path, e);
         }
 
-        return new WriteResult(path, version, nPSM, nPRT, nSML);
+        return new WriteResult(path, version, nPSM, nPRT, nSML, nPEP, nSMF, nSME);
     }
 
     // ── helpers ────────────────────────────────────────────────
+
+    private static String lookupSampleByIndex(Map<String, Integer> sampleIdx, int k) {
+        for (var e : sampleIdx.entrySet()) {
+            if (e.getValue() == k) return e.getKey();
+        }
+        return null;
+    }
+
+    private static String buildSmeRow(String smeId, Identification id,
+                                       Map<String, Integer> runIdx)
+    {
+        String name = "";
+        String formula = "";
+        for (String e : id.evidenceChain()) {
+            if (e.startsWith("name=")) name = e.substring("name=".length());
+            else if (e.startsWith("formula=")) formula = e.substring("formula=".length());
+        }
+        int rank = 1;
+        double score = id.confidenceScore();
+        if (score > 0) {
+            double inferred = score <= 1.0 ? 1.0 / score : 1.0;
+            rank = Math.max(1, (int) Math.round(inferred));
+        }
+        int ri = runIdx.getOrDefault(id.runName(), 1);
+        String spectraRef = String.format("ms_run[%d]:index=%d", ri, id.spectrumIndex());
+        return String.format(
+            "SME\t%s\tnull\t%s\t%s\tnull\tnull\t%s\tnull\tnull\tnull"
+            + "\tnull\tnull\tnull\t%s\tnull\tnull\t%s\t%d",
+            escapeTsv(smeId),
+            escapeTsv(id.chemicalEntity()),
+            formula.isEmpty() ? "null" : escapeTsv(formula),
+            name.isEmpty() ? "null" : escapeTsv(name),
+            escapeTsv(spectraRef),
+            fmt(score),
+            rank);
+    }
 
     private static String escapeTsv(String value) {
         if (value == null) return "";
@@ -246,12 +420,8 @@ public final class MzTabWriter {
 
     /** %g-ish formatting; mirrors Python's {@code f"{v:g}"}. */
     private static String fmt(double v) {
-        // Java's %g defaults to 6 significant digits and leaves trailing
-        // zeros that Python's :g trims. Go via Double.toString for
-        // round-trip-friendly output.
         if (v == 0.0) return "0";
         String s = Double.toString(v);
-        // Strip trailing ".0" so integers come out clean ("10" not "10.0").
         if (s.endsWith(".0")) return s.substring(0, s.length() - 2);
         return s;
     }

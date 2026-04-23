@@ -4,6 +4,7 @@
  */
 package com.dtwthalion.mpgo.importers;
 
+import com.dtwthalion.mpgo.Feature;
 import com.dtwthalion.mpgo.Identification;
 import com.dtwthalion.mpgo.Quantification;
 
@@ -54,6 +55,7 @@ public final class MzTabReader {
         List<String> searchEngines,
         List<Identification> identifications,
         List<Quantification> quantifications,
+        List<Feature> features,
         String sourcePath
     ) {
         public boolean isMetabolomics() { return version.endsWith("-M"); }
@@ -74,6 +76,9 @@ public final class MzTabReader {
     private static final Pattern PRT_ABUND_RE = Pattern.compile("^protein_abundance_assay\\[(\\d+)\\]$");
     private static final Pattern SML_ABUND_RE = Pattern.compile("^abundance_study_variable\\[(\\d+)\\]$");
     private static final Pattern PSM_SCORE_COL_RE = Pattern.compile("^search_engine_score\\[\\d+\\]$");
+    private static final Pattern PEP_ASSAY_RE = Pattern.compile("^peptide_abundance_assay\\[(\\d+)\\]$");
+    private static final Pattern PEP_SV_RE = Pattern.compile("^peptide_abundance_study_variable\\[(\\d+)\\]$");
+    private static final Pattern SMF_ASSAY_RE = Pattern.compile("^abundance_assay\\[(\\d+)\\]$");
 
     private MzTabReader() {}
 
@@ -93,10 +98,14 @@ public final class MzTabReader {
         List<String> searchEngines = new ArrayList<>();
         List<Identification> identifications = new ArrayList<>();
         List<Quantification> quantifications = new ArrayList<>();
+        List<Feature> features = new ArrayList<>();
 
         List<String> psmHeader = null;
         List<String> prtHeader = null;
         List<String> smlHeader = null;
+        List<String> pepHeader = null;
+        List<String> smfHeader = null;
+        List<String> smeHeader = null;
 
         try (BufferedReader br = Files.newBufferedReader(path)) {
             String raw;
@@ -156,6 +165,27 @@ public final class MzTabReader {
                                        identifications, quantifications);
                         }
                         break;
+                    case "PEH": pepHeader = List.of(cols); break;
+                    case "PEP":
+                        if (pepHeader != null) {
+                            handlePep(pepHeader, cols, msRunLocations,
+                                       assayToSample, studyVariables,
+                                       features);
+                        }
+                        break;
+                    case "SFH": smfHeader = List.of(cols); break;
+                    case "SMF":
+                        if (smfHeader != null) {
+                            handleSmf(smfHeader, cols, assayToSample, features);
+                        }
+                        break;
+                    case "SEH": smeHeader = List.of(cols); break;
+                    case "SME":
+                        if (smeHeader != null) {
+                            handleSme(smeHeader, cols, msRunLocations,
+                                       identifications, features);
+                        }
+                        break;
                     default:
                         break;
                 }
@@ -178,6 +208,7 @@ public final class MzTabReader {
             List.copyOf(searchEngines),
             List.copyOf(identifications),
             List.copyOf(quantifications),
+            List.copyOf(features),
             path.toString()
         );
     }
@@ -320,6 +351,180 @@ public final class MzTabReader {
             int svIdx = Integer.parseInt(m.group(1));
             String sampleRef = studyVariables.getOrDefault(svIdx, "study_variable_" + svIdx);
             quantsOut.add(new Quantification(entity, sampleRef, v, ""));
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    // M78 handlers: PEP / SMF / SME.
+    // ────────────────────────────────────────────────────────────────────
+
+    private static void handlePep(List<String> header, String[] cols,
+                                    Map<Integer, String> msRunLocations,
+                                    Map<Integer, String> assayToSample,
+                                    Map<Integer, String> studyVariables,
+                                    List<Feature> out)
+    {
+        int seqIdx = indexOf(header, "sequence");
+        int accIdx = indexOf(header, "accession");
+        int chargeIdx = indexOf(header, "charge");
+        int mzIdx = indexOf(header, "mass_to_charge");
+        int rtIdx = indexOf(header, "retention_time");
+        int refIdx = indexOf(header, "spectra_ref");
+
+        String sequence = safeGet(cols, seqIdx);
+        String accession = safeGet(cols, accIdx);
+        String entity = !sequence.isEmpty() ? sequence : accession;
+        if (entity.isEmpty()) return;
+
+        String ref = safeGet(cols, refIdx);
+        String runName = "imported";
+        Matcher m = SPECTRA_REF_RE.matcher(ref);
+        if (m.matches()) {
+            runName = resolveRunName(Integer.parseInt(m.group(1)), msRunLocations);
+        }
+
+        int charge = 0;
+        try { charge = Integer.parseInt(safeGet(cols, chargeIdx)); }
+        catch (NumberFormatException ignored) { charge = 0; }
+        double mz = safeDouble(safeGet(cols, mzIdx));
+        double rt = safeDouble(safeGet(cols, rtIdx));
+
+        Map<String, Double> abundances = new LinkedHashMap<>();
+        for (int i = 0; i < header.size() && i < cols.length; i++) {
+            Matcher mm = PEP_ASSAY_RE.matcher(header.get(i));
+            if (mm.matches()) {
+                Double v = parseAbundance(cols[i]);
+                if (v == null) continue;
+                int assayIdx = Integer.parseInt(mm.group(1));
+                abundances.put(assayToSample.getOrDefault(assayIdx, "assay_" + assayIdx), v);
+                continue;
+            }
+            mm = PEP_SV_RE.matcher(header.get(i));
+            if (mm.matches()) {
+                Double v = parseAbundance(cols[i]);
+                if (v == null) continue;
+                int svIdx = Integer.parseInt(mm.group(1));
+                abundances.put(studyVariables.getOrDefault(svIdx, "study_variable_" + svIdx), v);
+            }
+        }
+
+        List<String> evidenceRefs = new ArrayList<>();
+        if (!ref.isEmpty() && !"null".equals(ref)) evidenceRefs.add(ref);
+
+        String featureId = "pep_" + (out.size() + 1);
+        out.add(new Feature(featureId, runName, entity, rt, mz, charge, "",
+                            abundances, evidenceRefs));
+    }
+
+    private static void handleSmf(List<String> header, String[] cols,
+                                    Map<Integer, String> assayToSample,
+                                    List<Feature> out)
+    {
+        int idIdx = indexOf(header, "SMF_ID");
+        int smeRefsIdx = indexOf(header, "SME_ID_REFS");
+        int adductIdx = indexOf(header, "adduct_ion");
+        int mzIdx = indexOf(header, "exp_mass_to_charge");
+        int chargeIdx = indexOf(header, "charge");
+        int rtIdx = indexOf(header, "retention_time_in_seconds");
+
+        String smfId = safeGet(cols, idIdx);
+        if (smfId.isEmpty()) return;
+
+        String smeRefsRaw = safeGet(cols, smeRefsIdx);
+        List<String> smeRefs = new ArrayList<>();
+        if (!smeRefsRaw.isEmpty() && !"null".equalsIgnoreCase(smeRefsRaw)) {
+            for (String part : smeRefsRaw.split("\\|")) {
+                if (!part.isEmpty() && !"null".equalsIgnoreCase(part)) smeRefs.add(part);
+            }
+        }
+
+        String adduct = safeGet(cols, adductIdx);
+        if ("null".equalsIgnoreCase(adduct)) adduct = "";
+        double mz = safeDouble(safeGet(cols, mzIdx));
+        double rt = safeDouble(safeGet(cols, rtIdx));
+        int charge = 0;
+        try { charge = Integer.parseInt(safeGet(cols, chargeIdx)); }
+        catch (NumberFormatException ignored) { charge = 0; }
+
+        Map<String, Double> abundances = new LinkedHashMap<>();
+        for (int i = 0; i < header.size() && i < cols.length; i++) {
+            Matcher mm = SMF_ASSAY_RE.matcher(header.get(i));
+            if (!mm.matches()) continue;
+            Double v = parseAbundance(cols[i]);
+            if (v == null) continue;
+            int assayIdx = Integer.parseInt(mm.group(1));
+            abundances.put(assayToSample.getOrDefault(assayIdx, "assay_" + assayIdx), v);
+        }
+
+        String entity = smeRefs.isEmpty() ? smfId : smeRefs.get(0);
+        out.add(new Feature("smf_" + smfId, "metabolomics", entity,
+                            rt, mz, charge, adduct, abundances, smeRefs));
+    }
+
+    private static void handleSme(List<String> header, String[] cols,
+                                    Map<Integer, String> msRunLocations,
+                                    List<Identification> identsOut,
+                                    List<Feature> features)
+    {
+        int idIdx = indexOf(header, "SME_ID");
+        int dbIdx = indexOf(header, "database_identifier");
+        int nameIdx = indexOf(header, "chemical_name");
+        int formulaIdx = indexOf(header, "chemical_formula");
+        int refIdx = indexOf(header, "spectra_ref");
+        int rankIdx = indexOf(header, "rank");
+
+        String smeId = safeGet(cols, idIdx);
+        if (smeId.isEmpty()) return;
+
+        String db = safeGet(cols, dbIdx);
+        String chemName = safeGet(cols, nameIdx);
+        String formula = safeGet(cols, formulaIdx);
+        String entity = !db.isEmpty() && !"null".equalsIgnoreCase(db) ? db
+            : (!chemName.isEmpty() && !"null".equalsIgnoreCase(chemName) ? chemName
+               : (!formula.isEmpty() && !"null".equalsIgnoreCase(formula) ? formula : smeId));
+
+        int rank = 1;
+        try { rank = Integer.parseInt(safeGet(cols, rankIdx)); }
+        catch (NumberFormatException ignored) { rank = 1; }
+        double confidence = rank > 0 ? 1.0 / (double) rank : 0.0;
+
+        String runName = "metabolomics";
+        int spectrumIndex = 0;
+        String ref = safeGet(cols, refIdx);
+        Matcher m = SPECTRA_REF_RE.matcher(ref);
+        if (m.matches()) {
+            runName = resolveRunName(Integer.parseInt(m.group(1)), msRunLocations);
+            String locator = m.group(2);
+            int eq = locator.indexOf('=');
+            if (eq >= 0) {
+                try { spectrumIndex = Integer.parseInt(locator.substring(eq + 1)); }
+                catch (NumberFormatException ignored) { spectrumIndex = 0; }
+            }
+        }
+
+        List<String> evidence = new ArrayList<>();
+        evidence.add("SME_ID=" + smeId);
+        if (!chemName.isEmpty() && !chemName.equals(entity) && !"null".equalsIgnoreCase(chemName)) {
+            evidence.add("name=" + chemName);
+        }
+        if (!formula.isEmpty() && !formula.equals(entity) && !"null".equalsIgnoreCase(formula)) {
+            evidence.add("formula=" + formula);
+        }
+
+        identsOut.add(new Identification(runName, spectrumIndex, entity, confidence, evidence));
+
+        // Back-fill features that referenced this SME so their
+        // chemicalEntity gets upgraded from the placeholder SME_ID.
+        for (int i = 0; i < features.size(); i++) {
+            Feature f = features.get(i);
+            if (f.evidenceRefs().contains(smeId) && f.chemicalEntity().equals(smeId)) {
+                features.set(i, new Feature(
+                    f.featureId(), f.runName(), entity,
+                    f.retentionTimeSeconds(), f.expMassToCharge(),
+                    f.charge(), f.adductIon(),
+                    f.abundances(), f.evidenceRefs()
+                ));
+            }
         }
     }
 }
