@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from ..feature import Feature
 from ..identification import Identification
 from ..provenance import ProvenanceRecord
 from ..quantification import Quantification
@@ -38,6 +39,9 @@ class WriteResult:
     n_psm_rows: int
     n_prt_rows: int
     n_sml_rows: int
+    n_pep_rows: int = 0
+    n_smf_rows: int = 0
+    n_sme_rows: int = 0
 
 
 # --------------------------------------------------------------------------- #
@@ -51,22 +55,27 @@ def write_dataset(
     version: str = "1.0",
     title: str = "",
     description: str = "",
+    features: Iterable[Feature] | None = None,
 ) -> WriteResult:
     """Write ``dataset``'s identifications + quantifications as mzTab.
 
     ``identifications`` / ``quantifications`` are method accessors on
     :class:`SpectralDataset`; call them here so the writer's caller
     doesn't need to know. ``provenance`` may be a list *or* a method,
-    depending on how the dataset was constructed.
+    depending on how the dataset was constructed. ``features`` is
+    optional — :class:`SpectralDataset` does not yet store feature
+    rows, so callers must thread them in explicitly.
     """
     ids = _maybe_call(dataset, "identifications")
     qts = _maybe_call(dataset, "quantifications")
     pvs = _maybe_call(dataset, "provenance")
+    feats = list(features or _maybe_call(dataset, "features"))
     return write(
         path,
         identifications=list(ids),
         quantifications=list(qts),
         provenance=list(pvs),
+        features=feats,
         version=version,
         title=title or getattr(dataset, "title", "") or "",
         description=description,
@@ -93,6 +102,7 @@ def write(
     identifications: Iterable[Identification] = (),
     quantifications: Iterable[Quantification] = (),
     provenance: Iterable[ProvenanceRecord] = (),
+    features: Iterable[Feature] = (),
     version: str = "1.0",
     title: str = "",
     description: str = "",
@@ -104,6 +114,7 @@ def write(
         identifications=identifications,
         quantifications=quantifications,
         provenance=provenance,
+        features=features,
         version=version,
         title=title,
         description=description,
@@ -116,9 +127,13 @@ def write(
     n_psm = sum(1 for ln in text.splitlines() if ln.startswith("PSM\t"))
     n_prt = sum(1 for ln in text.splitlines() if ln.startswith("PRT\t"))
     n_sml = sum(1 for ln in text.splitlines() if ln.startswith("SML\t"))
+    n_pep = sum(1 for ln in text.splitlines() if ln.startswith("PEP\t"))
+    n_smf = sum(1 for ln in text.splitlines() if ln.startswith("SMF\t"))
+    n_sme = sum(1 for ln in text.splitlines() if ln.startswith("SME\t"))
     return WriteResult(
         path=out, version=version,
         n_psm_rows=n_psm, n_prt_rows=n_prt, n_sml_rows=n_sml,
+        n_pep_rows=n_pep, n_smf_rows=n_smf, n_sme_rows=n_sme,
     )
 
 
@@ -127,6 +142,7 @@ def dataset_to_bytes(
     identifications: Iterable[Identification] = (),
     quantifications: Iterable[Quantification] = (),
     provenance: Iterable[ProvenanceRecord] = (),
+    features: Iterable[Feature] = (),
     version: str = "1.0",
     title: str = "",
     description: str = "",
@@ -159,6 +175,7 @@ def dataset_to_bytes(
     idents = list(identifications)
     quants = list(quantifications)
     provs = list(provenance)
+    feats = list(features)
 
     lines: list[str] = []
     # Run names referenced downstream (PSM/SML). Also seed from the
@@ -178,6 +195,8 @@ def dataset_to_bytes(
     # Pre-resolve indices so MTD ms_run lines come out in stable order.
     for ident in idents:
         _run_index(ident.run_name)
+    for feat in feats:
+        _run_index(feat.run_name)
 
     # Sample indices for quantification assays.
     sample_to_idx: dict[str, int] = {}
@@ -187,6 +206,9 @@ def dataset_to_bytes(
         return sample_to_idx[s]
     for q in quants:
         _sample_index(q.sample_ref or "sample")
+    for feat in feats:
+        for sample in feat.abundances.keys():
+            _sample_index(sample or "sample")
 
     # ── MTD ───────────────────────────────────────────────────────────
     lines.append(f"MTD\tmzTab-version\t{version}")
@@ -212,7 +234,7 @@ def dataset_to_bytes(
     # The reader parses ``assay[N]-sample_ref`` (proteomics) and
     # ``study_variable[N]-description`` (metabolomics) so it can
     # round-trip the original sample label.
-    if quants:
+    if quants or feats:
         for sample, idx in sorted(sample_to_idx.items(), key=lambda kv: kv[1]):
             lines.append(f"MTD\tassay[{idx}]-sample_ref\t{_escape_tsv(sample)}")
             lines.append(f"MTD\tassay[{idx}]-quantification_reagent\t"
@@ -229,7 +251,7 @@ def dataset_to_bytes(
 
     lines.append("")  # blank separator
 
-    n_psm = n_prt = n_sml = 0
+    n_psm = n_prt = n_sml = n_pep = n_smf = n_sme = 0
 
     if version == "1.0":
         # ── PSH + PSM (proteomics identifications) ─────────────────────
@@ -303,6 +325,49 @@ def dataset_to_bytes(
                 n_prt += 1
             lines.append("")
 
+        # ── PEH + PEP (proteomics peptide features, M78) ───────────────
+        if feats:
+            n_assays = len(sample_to_idx)
+            peh = [
+                "PEH", "sequence", "accession", "unique",
+                "database", "database_version", "search_engine",
+                "best_search_engine_score[1]",
+                "modifications", "retention_time",
+                "charge", "mass_to_charge", "uri", "spectra_ref",
+            ]
+            for k in range(1, n_assays + 1):
+                peh.append(f"peptide_abundance_assay[{k}]")
+            lines.append("\t".join(peh))
+            for feat in feats:
+                run_idx = _run_index(feat.run_name)
+                spectra_ref = feat.evidence_refs[0] if feat.evidence_refs else (
+                    f"ms_run[{run_idx}]:index=0"
+                )
+                row = [
+                    "PEP",
+                    _escape_tsv(feat.chemical_entity),
+                    "null",
+                    "null",
+                    "null", "null",
+                    "null",
+                    "null",
+                    "null",
+                    f"{float(feat.retention_time_seconds):g}",
+                    str(int(feat.charge)),
+                    f"{float(feat.exp_mass_to_charge):g}",
+                    "null",
+                    _escape_tsv(spectra_ref),
+                ]
+                for k in range(1, n_assays + 1):
+                    sample = next(
+                        (s for s, idx in sample_to_idx.items() if idx == k), None
+                    )
+                    v = feat.abundances.get(sample) if sample else None
+                    row.append(f"{v:g}" if v is not None else "null")
+                lines.append("\t".join(row))
+                n_pep += 1
+            lines.append("")
+
     else:  # 2.0.0-M metabolomics
         # ── SMH + SML ──────────────────────────────────────────────────
         entity_quants: dict[str, dict[int, float]] = {}
@@ -354,6 +419,113 @@ def dataset_to_bytes(
                     row.append("null")  # variation placeholder
                 lines.append("\t".join(row))
                 n_sml += 1
+            lines.append("")
+
+        # ── SFH + SMF (small-molecule features, M78) ───────────────────
+        if feats:
+            n_assays = len(sample_to_idx)
+            sfh = [
+                "SFH", "SMF_ID", "SME_ID_REFS", "SME_ID_REF_ambiguity_code",
+                "adduct_ion", "isotopomer",
+                "exp_mass_to_charge", "charge",
+                "retention_time_in_seconds",
+                "retention_time_in_seconds_start",
+                "retention_time_in_seconds_end",
+            ]
+            for k in range(1, n_assays + 1):
+                sfh.append(f"abundance_assay[{k}]")
+            lines.append("\t".join(sfh))
+            for feat in feats:
+                sme_refs = "|".join(feat.evidence_refs) if feat.evidence_refs else "null"
+                row = [
+                    "SMF",
+                    _escape_tsv(feat.feature_id),
+                    _escape_tsv(sme_refs),
+                    "null",
+                    _escape_tsv(feat.adduct_ion) if feat.adduct_ion else "null",
+                    "null",
+                    f"{float(feat.exp_mass_to_charge):g}",
+                    str(int(feat.charge)),
+                    f"{float(feat.retention_time_seconds):g}",
+                    "null",
+                    "null",
+                ]
+                for k in range(1, n_assays + 1):
+                    sample = next(
+                        (s for s, idx in sample_to_idx.items() if idx == k), None
+                    )
+                    v = feat.abundances.get(sample) if sample else None
+                    row.append(f"{v:g}" if v is not None else "null")
+                lines.append("\t".join(row))
+                n_smf += 1
+            lines.append("")
+
+        # ── SEH + SME (small-molecule evidence, M78) ───────────────────
+        # Only emit when features are also present; plain SML-only
+        # exports keep their annotations in the SML section so the
+        # round-trip doesn't double-count identifications.
+        sme_idents = [i for i in idents if any(e.startswith("SME_ID=") for e in i.evidence_chain)]
+        plain_idents = [i for i in idents if i not in sme_idents]
+        if feats and (sme_idents or plain_idents):
+            seh = [
+                "SEH", "SME_ID", "evidence_input_id",
+                "database_identifier", "chemical_formula",
+                "smiles", "inchi", "chemical_name", "uri",
+                "derivatized_form", "adduct_ion",
+                "exp_mass_to_charge", "charge", "calc_mass_to_charge",
+                "spectra_ref", "identification_method", "ms_level",
+                "id_confidence_measure[1]", "rank",
+            ]
+            lines.append("\t".join(seh))
+            emitted = 0
+
+            def _sme_row(sme_id: str, ident: Identification) -> None:
+                nonlocal emitted
+                # Derive display name / formula from evidence if present.
+                name = ""
+                formula = ""
+                for e in ident.evidence_chain:
+                    if e.startswith("name="):
+                        name = e[5:]
+                    elif e.startswith("formula="):
+                        formula = e[8:]
+                rank = 1
+                score = float(ident.confidence_score)
+                if score > 0:
+                    inferred = 1.0 / score if score <= 1.0 else 1.0
+                    rank = max(1, round(inferred))
+                spectra_ref = (
+                    f"ms_run[{_run_index(ident.run_name)}]:index="
+                    f"{int(ident.spectrum_index)}"
+                )
+                row = [
+                    "SME", _escape_tsv(sme_id),
+                    "null",
+                    _escape_tsv(ident.chemical_entity),
+                    _escape_tsv(formula) if formula else "null",
+                    "null", "null",
+                    _escape_tsv(name) if name else "null",
+                    "null", "null", "null",
+                    "null", "null", "null",
+                    _escape_tsv(spectra_ref),
+                    "null", "null",
+                    f"{score:g}",
+                    str(rank),
+                ]
+                lines.append("\t".join(row))
+                emitted += 1
+
+            for ident in sme_idents:
+                sme_id = next(
+                    (e[len("SME_ID="):] for e in ident.evidence_chain
+                     if e.startswith("SME_ID=")),
+                    f"sme_{emitted + 1}",
+                )
+                _sme_row(sme_id, ident)
+            for ident in plain_idents:
+                _sme_row(f"sme_{emitted + 1}", ident)
+
+            n_sme = emitted
             lines.append("")
 
     # trailing newline after the last row for POSIX-clean files

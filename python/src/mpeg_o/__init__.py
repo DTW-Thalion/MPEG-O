@@ -32,6 +32,7 @@ from .fid import FreeInductionDecay
 from .chromatogram import Chromatogram
 from .identification import Identification
 from .quantification import Quantification
+from .feature import Feature
 from .provenance import ProvenanceRecord
 from .transition_list import Transition, TransitionList
 from .feature_flags import FeatureFlags
@@ -70,6 +71,7 @@ __all__ = [
     "Chromatogram",
     "Identification",
     "Quantification",
+    "Feature",
     "ProvenanceRecord",
     "Transition",
     "TransitionList",
