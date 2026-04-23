@@ -13,8 +13,8 @@ leading `0.` means the public API is still stabilising; see
 
 ## [Unreleased] — v0.12.0 work-in-progress
 
-Accumulating scope for v0.12.0. The first must-have milestone (M74)
-has landed; M75 and the three nice-to-haves remain open.
+Accumulating scope for v0.12.0. The two must-have milestones (M74,
+M75) have landed; the three nice-to-haves remain open.
 
 ### Added
 
@@ -51,19 +51,41 @@ has landed; M75 and the three nice-to-haves remain open.
   Commits: `beb2bc7` (A) · `736ecef` (B) · `9340007` (C) · `c502d68`
   (D) · `e96105f` (E).
 
-### Test totals (post-M74)
+- **M75 — Python CLI parity polish (2026-04-23).** Three new
+  `console_scripts` registered in `python/pyproject.toml` close the
+  last CLI-surface gap with the Java (`com.dtwthalion.mpgo.tools.*`)
+  and Objective-C (`objc/Tools/Mpgo*`) tool families:
 
-- Python: 777 tests (was 765 at v0.11.1; +12 for M74).
-- Java: 342 tests (was 331 at v0.11.1; +11 for M74).
-- Objective-C: full M74 Slice A–E tests green (pre-existing M29
-  Thermo mock-binary failures unrelated).
+    - `mpgo-sign` — HMAC-SHA256 canonical-byte signer. Mirrors ObjC
+      `MpgoSign`. Exit: 0 signed / 1 I/O or dataset-missing / 2 usage.
+    - `mpgo-verify` — canonical HMAC verifier backed by
+      `mpeg_o.verifier.Verifier`. Stdout prints
+      `VerificationStatus.name` (`VALID` / `INVALID` / `NOT_SIGNED` /
+      `ERROR`); exit code = `int(status)` (0 / 1 / 2 / 3).
+    - `mpgo-pqc` — post-quantum CLI mirroring the ObjC `MpgoPQCTool`
+      and Java `PQCTool` subcommand grammar 1:1 across 10 verbs:
+      `sig-keygen` / `sig-sign` / `sig-verify` / `kem-keygen` /
+      `kem-encaps` / `kem-decaps` / `hdf5-sign` / `hdf5-verify` /
+      `provider-sign` / `provider-verify`. Gated on the `[pqc]`
+      extra (liboqs-python); verify subcommands return 0 valid / 1
+      invalid / 2 error.
+
+  Commit: `e9f2d2b`.
+
+### Test totals (post-M75)
+
+- Python: 805 tests (includes +13 new CLI-parity tests in
+  `python/tests/test_m75_cli_parity.py`).
+- Java: 342 tests (unchanged; M75 is Python-only scope).
+- Objective-C: unchanged (M75 is Python-only scope).
 
 ### Docs
 
 - `docs/v1.0-gaps.md` — "Must-fix for v1.0" list now empty; status
   table row for activation/isolation flipped to ✅; mzML writer
   defect table updated to show item #2 shipped.
-- `WORKPLAN.md` — M74 checkbox ticked with the five shipped commits.
+- `WORKPLAN.md` — M74 and M75 checkboxes ticked with their shipped
+  commits.
 
 ---
 
