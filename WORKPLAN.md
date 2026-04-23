@@ -949,10 +949,11 @@ holds for every line item.
 
 ### Release criteria (v0.12.0)
 
-- [ ] M74 + M75 shipped; M76–M78 shipped or re-deferred explicitly.
-- [ ] All three test suites green; cross-language conformance matrix
+- [x] M74 + M75 shipped; M76–M78 shipped or re-deferred explicitly.
+      *(All five shipped.)*
+- [x] All three test suites green; cross-language conformance matrix
       extended to cover M74 round-trip (mzML → MPGO → mzML preserves
-      activation + isolation).
-- [ ] `CHANGELOG.md` v0.12.0 entry; `docs/v1.0-gaps.md` "Must-fix for
-      v1.0" list empty.
-- [ ] Annotated `v0.12.0` tag.
+      activation + isolation). *(Python 875, Java 373, ObjC 1704/0.)*
+- [x] `CHANGELOG.md` v0.12.0 entry; `docs/v1.0-gaps.md` "Must-fix for
+      v1.0" list empty. *(Both flipped 2026-04-23.)*
+- [x] Annotated `v0.12.0` tag. *(Tagged + pushed 2026-04-23.)*
