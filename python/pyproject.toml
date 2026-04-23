@@ -69,6 +69,15 @@ memory = "mpeg_o.providers.memory:MemoryProvider"
 sqlite = "mpeg_o.providers.sqlite:SqliteProvider"
 zarr = "mpeg_o.providers.zarr:ZarrProvider"
 
+# v0.12 M75: console_scripts for the three protection tools, giving
+# Python parity with the Java (com.dtwthalion.mpgo.tools.*) and ObjC
+# (objc/Tools/Mpgo*) CLI family. mpgo-pqc additionally mirrors the
+# subcommand grammar of its peers 1:1.
+[project.scripts]
+mpgo-sign = "mpeg_o.tools.mpgo_sign_cli:main"
+mpgo-verify = "mpeg_o.tools.mpgo_verify_cli:main"
+mpgo-pqc = "mpeg_o.tools.mpgo_pqc_cli:main"
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 
