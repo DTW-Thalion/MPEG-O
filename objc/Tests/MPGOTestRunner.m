@@ -63,6 +63,7 @@ extern void testPerAUFile(void);
 extern void testEncryptedTransport(void);
 extern void testMilestone73(void);
 extern void testMilestone73_1(void);
+extern void testM76JcampConformance(void);
 
 int main(int argc, const char *argv[])
 {
@@ -314,6 +315,10 @@ int main(int argc, const char *argv[])
         START_SET("M73.1: JCAMP-DX compression + UV-Vis + 2D-COS (v0.11.1)")
             testMilestone73_1();
         END_SET("M73.1: JCAMP-DX compression + UV-Vis + 2D-COS (v0.11.1)")
+
+        START_SET("M76: JCAMP-DX compressed writer cross-language byte-parity")
+            testM76JcampConformance();
+        END_SET("M76: JCAMP-DX compressed writer cross-language byte-parity")
     }
     return 0;
 }
