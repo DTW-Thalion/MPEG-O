@@ -127,6 +127,14 @@ v0.1 `.mpgo` files written by libMPGO v0.1.0-alpha remain fully readable by v0.2
 * **M77 2D-COS computation primitives** — generalised synchronous / asynchronous decomposition from a perturbation series using Noda's Hilbert-transform approach, plus a disrelation-spectrum statistical significance test. API (`hilbert_noda_matrix` / `compute` / `disrelation_spectrum`) ships in all three languages against a shared `conformance/two_d_cos/` fixture. Cross-language gate is float-tolerance (rtol=1e-9, atol=1e-12) rather than byte-parity — BLAS accumulation order differs across implementations.
 * **M78 mzTab PEH/PEP + SFH/SMF + SEH/SME round-trip** — new `Feature` value class beside `Identification` and `Quantification` in all three languages, carrying `feature_id`, `run_name`, `chemical_entity`, `retention_time_seconds`, `exp_mass_to_charge`, `charge`, `adduct_ion`, `abundances`, and `evidence_refs`. The mzTab reader parses peptide-level PEH/PEP rows (1.0) and small-molecule feature SFH/SMF rows (2.0.0-M); subsequent SEH/SME parsing back-fills the feature's `chemical_entity` from the SME placeholder to `database_identifier` / `chemical_name` / `chemical_formula`. The writer emits those sections with an inverse rank↔confidence mapping (rank N ↔ confidence 1/N). SEH/SME emission is gated on features being present, so plain-SML metabolomics round-trips stay byte-identical with pre-M78 output. Closes the "deferred further" mzTab Feature item in `docs/v1.0-gaps.md`.
 
+## v1.0.0 — First stable release
+
+Pure promote from v0.12.0. No new code; v1.0.0 signals that the public API is SemVer-stable from this tag forward and that `docs/v1.0-gaps.md` Must-fix and Nice-to-have lists are both empty.
+
+* **Package metadata** — `python/pyproject.toml` version 0.8.0 → 1.0.0 with classifier `Development Status :: 5 - Production/Stable`; `java/pom.xml` version 0.8.0 → 1.0.0. (Both files had remained frozen at 0.8.0 through v0.9.0–v0.12.0; git tags were the source of truth for each release.)
+* **Not in this tag** — M40 PyPI + Maven Central publishing continues to wait on external account / API-token setup (planned for v1.0.1); mzML `<softwareList>` / `<dataProcessingList>` provenance-chain emission and hyperspectral-image analysis primitives are both scope-expansion, explicitly deferred past v1.0 in `docs/v1.0-gaps.md`.
+* **Format version** — container format remains at `1.3` (v0.12.0 M74 bump). No on-disk schema change in v1.0.0.
+
 ## Format compatibility
 
 Every version's files remain readable by later versions. v0.11 readers open

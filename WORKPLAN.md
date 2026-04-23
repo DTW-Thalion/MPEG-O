@@ -957,3 +957,27 @@ holds for every line item.
 - [x] `CHANGELOG.md` v0.12.0 entry; `docs/v1.0-gaps.md` "Must-fix for
       v1.0" list empty. *(Both flipped 2026-04-23.)*
 - [x] Annotated `v0.12.0` tag. *(Tagged + pushed 2026-04-23.)*
+
+## v1.0.0 — First stable release (SHIPPED 2026-04-23)
+
+Pure promote from v0.12.0. No new code; v1.0.0 signals SemVer-stable
+public API and that `docs/v1.0-gaps.md` Must-fix and Nice-to-have
+lists are both empty.
+
+### Changed
+
+- `python/pyproject.toml` — `version` 0.8.0 → 1.0.0; classifier
+  `Development Status :: 3 - Alpha` → `5 - Production/Stable`.
+- `java/pom.xml` — `version` 0.8.0 → 1.0.0.
+- `CHANGELOG.md` — new `[v1.0.0]` entry above the v0.12.0 block.
+- `HANDOFF.md` / `README.md` / `docs/version-history.md` — status
+  rows refreshed.
+
+### Deferred past v1.0.0
+
+- **M40 PyPI + Maven Central publishing** — wait on external account
+  / API-token setup; target v1.0.1.
+- **mzML `<softwareList>` / `<dataProcessingList>`** content-chain
+  emission — reviewer-facing XML restructure.
+- **Hyperspectral-image analysis primitives** — scope expansion
+  beyond tile-chunk cubes.
