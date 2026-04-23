@@ -881,11 +881,28 @@ holds for every line item.
 
 ### Nice-to-have
 
-- [ ] **M76** JCAMP-DX compressed-writer emission (PAC / SQZ / DIF)
+- [x] **M76** JCAMP-DX compressed-writer emission (PAC / SQZ / DIF)
       in all three languages. AFFN remains the default for bit-accurate
       round-trips; compressed output is opt-in via a writer flag.
       Gates on a cross-language byte-parity conformance test for each
-      compression form.
+      compression form. *Shipped 2026-04-23 across five sliced commits
+      — `9437a1b` (Slice A: Python reference encoder +
+      `_jcamp_encode`, reader PAC-detection, 37 unit tests),
+      `de377d6` (Slice B: `conformance/jcamp_dx/` golden fixtures +
+      regeneration script + Python conformance test),
+      `d889b19` (Slice C: Java `JcampDxEncoding` enum +
+      `JcampDxEncode` helper + writer overloads, 3/3
+      `JcampDxM76ConformanceTest` green, 345/345 full suite),
+      `4787aa2` (Slice D: ObjC `MPGOJcampDxEncoding` NS_ENUM +
+      `MPGOJcampDxEncode` helper + writer overloads, 3/3
+      `testM76JcampConformance` green, 1637/0 full suite), and this
+      docs flip. The compressed encoder emits an explicit Y-check
+      token on every non-first line to defeat the decoder's
+      prev-last-y collision on plateau boundaries; YFACTOR is chosen
+      per-spectrum as `10 ** (ceil(log10(max_abs)) - 7)` for ~7
+      significant digits of integer-scaled Y precision; rounding is
+      explicit half-away-from-zero so all three languages agree on
+      `.5` ties.*
 - [ ] **M77** 2D-COS computation primitives — generalised
       synchronous / asynchronous decomposition from a perturbation
       series (Noda's Hilbert-transform approach), plus a statistical
