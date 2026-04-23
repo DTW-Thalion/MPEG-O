@@ -65,6 +65,7 @@ extern void testMilestone73(void);
 extern void testMilestone73_1(void);
 extern void testM76JcampConformance(void);
 extern void testMilestone77(void);
+extern void testMilestone78(void);
 
 int main(int argc, const char *argv[])
 {
@@ -324,6 +325,10 @@ int main(int argc, const char *argv[])
         START_SET("M77: 2D-COS compute primitives (v0.12.0)")
             testMilestone77();
         END_SET("M77: 2D-COS compute primitives (v0.12.0)")
+
+        START_SET("M78: mzTab PEH/PEP + SFH/SMF + SEH/SME (v0.12.0)")
+            testMilestone78();
+        END_SET("M78: mzTab PEH/PEP + SFH/SMF + SEH/SME (v0.12.0)")
     }
     return 0;
 }

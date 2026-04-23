@@ -38,6 +38,7 @@ libMPGO_HEADER_FILES = \
 	Run/MPGOInstrumentConfig.h \
 	Run/MPGOSpectrumIndex.h \
 	Run/MPGOAcquisitionRun.h \
+	Dataset/MPGOFeature.h \
 	Dataset/MPGOIdentification.h \
 	Dataset/MPGOQuantification.h \
 	Dataset/MPGOProvenanceRecord.h \
@@ -128,6 +129,7 @@ libMPGO_OBJC_FILES = \
 	Run/MPGOInstrumentConfig.m \
 	Run/MPGOSpectrumIndex.m \
 	Run/MPGOAcquisitionRun.m \
+	Dataset/MPGOFeature.m \
 	Dataset/MPGOIdentification.m \
 	Dataset/MPGOQuantification.m \
 	Dataset/MPGOProvenanceRecord.m \
