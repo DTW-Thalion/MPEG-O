@@ -12,6 +12,7 @@ from ``firstx + i * deltax`` per the JCAMP-DX convention that
 """
 from __future__ import annotations
 
+import re
 from typing import Iterable
 
 
@@ -39,10 +40,19 @@ _COMPRESSION_CHARS = frozenset(_SQZ) | frozenset(_DIF) | frozenset(_DUP)
 # chars from the wider alphabet.
 _DETECT_CHARS = _COMPRESSION_CHARS - frozenset("Ee")
 
+# PAC bodies carry no SQZ/DIF/DUP chars — the distinguishing feature
+# is `\\d[+\\-]\\d` (digit-sign-digit without whitespace) since AFFN
+# separates tokens with whitespace and never produces that adjacency.
+# Scientific notation like "1.5e+03" is safe: the char before the
+# sign is always `e`/`E`, not a digit.
+_PAC_RE = re.compile(r"\d[+\-]\d")
+
 
 def has_compression(body: str) -> bool:
     """Return True if the XYDATA body uses any PAC/SQZ/DIF/DUP char."""
-    return any(ch in _DETECT_CHARS for ch in body)
+    if any(ch in _DETECT_CHARS for ch in body):
+        return True
+    return _PAC_RE.search(body) is not None
 
 
 def _tokenize(line: str) -> list[str]:
