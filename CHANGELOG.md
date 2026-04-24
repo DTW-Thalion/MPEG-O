@@ -11,6 +11,48 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [v1.1.1] — 2026-04-24
+
+Additive patch release that adds a persist-to-disk decryption API
+across all three language implementations. Needed by the
+MPEG-O-MCP-Server M5 `mpgo_decrypt_file` admin tool, which cannot
+use the read-only `decrypt_with_key` path (that returns an
+in-memory plaintext `SpectralDataset` without rewriting the file).
+No HDF5 format change — files produced and consumed by v1.1.1 are
+byte-identical to v1.1.0.
+
+### Added
+
+- `SpectralDataset.decrypt_in_place(path, key)` (Python classmethod),
+  `+[MPGOSpectralDataset decryptInPlaceAtPath:withKey:error:]`
+  (ObjC class method), and
+  `SpectralDataset.decryptInPlace(String path, byte[] key)`
+  (Java static method). Each walks every run in the file, decrypts
+  each signal channel's intensity ciphertext, replaces the three
+  encrypted datasets (`intensity_values_encrypted`, `intensity_iv`,
+  `intensity_tag`) and three encrypted attributes
+  (`intensity_ciphertext_bytes`, `intensity_original_count`,
+  `intensity_algorithm`) with a plaintext `intensity_values`
+  Float64 dataset, and clears the root `@encrypted` marker. The
+  call is idempotent on a plaintext file.
+- Underlying helper: `decrypt_intensity_channel_in_run_in_place`
+  (Python), `+[MPGOEncryptionManager decryptIntensityChannelInRunInPlace:atFilePath:withKey:error:]`
+  (ObjC), `EncryptionManager.decryptIntensityChannelInRunInPlace`
+  (Java). Short keys raise `ValueError` / `NSError` /
+  `IllegalArgumentException`; a missing file raises
+  `FileNotFoundError` / equivalent.
+
+### Parity coverage
+
+- Python: `tests/test_v1_1_1_decrypt_in_place.py` — 5 cases
+  (single-run round-trip, multi-run A/B/C round-trip, idempotent on
+  plaintext, rejects short key, missing file).
+- ObjC: `Tests/TestV111DecryptInPlace.m` — 4 cases, wired into
+  `MPGOTestRunner.m` under "v1.1.1 parity".
+- Java: `ProtectionTest#v111DecryptInPlace*` — 4 cases.
+
+---
+
 ## [v1.1.0] — 2026-04-23
 
 Bug-fix release that restores full round-trip usability of

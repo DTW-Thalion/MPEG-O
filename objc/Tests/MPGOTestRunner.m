@@ -67,6 +67,7 @@ extern void testM76JcampConformance(void);
 extern void testMilestone77(void);
 extern void testMilestone78(void);
 extern void testV11EncryptionParity(void);
+extern void testV111DecryptInPlace(void);
 
 int main(int argc, const char *argv[])
 {
@@ -334,6 +335,10 @@ int main(int argc, const char *argv[])
         START_SET("v1.1 parity: encrypt -> close -> reopen -> decrypt -> read")
             testV11EncryptionParity();
         END_SET("v1.1 parity: encrypt -> close -> reopen -> decrypt -> read")
+
+        START_SET("v1.1.1 parity: decryptInPlaceAtPath:withKey:error:")
+            testV111DecryptInPlace();
+        END_SET("v1.1.1 parity: decryptInPlaceAtPath:withKey:error:")
     }
     return 0;
 }

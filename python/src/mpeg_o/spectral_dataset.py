@@ -486,6 +486,57 @@ class SpectralDataset:
         """
         return {name: run.decrypt_with_key(key) for name, run in self.ms_runs.items()}
 
+    @classmethod
+    def decrypt_in_place(cls, path: str | Path, key: bytes) -> None:
+        """Strip AES-256-GCM encryption from a ``.mpgo`` file on disk.
+
+        For every MS run with an encrypted intensity channel, replaces
+        ``intensity_values_encrypted`` + IV + tag with a plaintext
+        ``intensity_values`` dataset, then clears the root ``@encrypted``
+        attribute. After this call the file is byte-compatible with the
+        pre-encryption state and :attr:`is_encrypted` is ``False`` when
+        reopened.
+
+        Symmetric with :meth:`encrypt_with_key`: that method leaves the
+        root ``@encrypted`` attribute set, this one removes it.
+
+        The file must not be held open by another writer.
+
+        Raises ``FileNotFoundError`` if the file does not exist,
+        ``ValueError`` if ``key`` is not 32 bytes or any channel's tag
+        does not verify.
+        """
+        from .encryption import (
+            AES_KEY_LEN,
+            decrypt_intensity_channel_in_run_in_place,
+        )
+
+        if len(key) != AES_KEY_LEN:
+            raise ValueError(
+                f"AES-256-GCM key must be {AES_KEY_LEN} bytes, got {len(key)}"
+            )
+
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"File not found: {p}")
+
+        with h5py.File(str(p), "r") as f:
+            ms_group = f.get("study/ms_runs")
+            if ms_group is None:
+                run_names: list[str] = []
+            else:
+                names_attr = io.read_string_attr(
+                    ms_group, "_run_names", default=""
+                ) or ""
+                run_names = [n for n in names_attr.split(",") if n]
+
+        for run_name in run_names:
+            decrypt_intensity_channel_in_run_in_place(str(p), run_name, key)
+
+        with h5py.File(str(p), "r+") as f:
+            if "encrypted" in f.attrs:
+                del f.attrs["encrypted"]
+
     def access_policy(self) -> AccessPolicy | None:
         """Return the current access policy, or ``None`` if not set."""
         return self._access_policy

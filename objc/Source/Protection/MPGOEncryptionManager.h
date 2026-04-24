@@ -85,6 +85,27 @@
                               atFilePath:(NSString *)path
     __attribute__((deprecated("Query via MPGOAcquisitionRun.accessPolicy instead")));
 
+/**
+ * v1.1.1: persist-to-disk decrypt counterpart to
+ * +encryptIntensityChannelInRun:atFilePath:withKey:error:.
+ *
+ * Opens the `.mpgo` file read-write, decrypts the named run's
+ * `intensity_values_encrypted` dataset, writes plaintext back as a new
+ * `intensity_values` Float64 dataset, deletes the encrypted siblings
+ * (`intensity_values_encrypted`, `intensity_iv`, `intensity_tag`), and
+ * removes the channel-level attrs `intensity_ciphertext_bytes`,
+ * `intensity_original_count`, `intensity_algorithm`. The root
+ * `@encrypted` attribute is left in place — callers that want a fully
+ * unprotected file should use
+ * `+[MPGOSpectralDataset decryptInPlaceAtPath:withKey:error:]`.
+ *
+ * Idempotent: returns YES with no error if the run is already plaintext.
+ */
++ (BOOL)decryptIntensityChannelInRunInPlace:(NSString *)runName
+                                 atFilePath:(NSString *)path
+                                    withKey:(NSData *)key
+                                      error:(NSError **)error;
+
 @end
 
 #endif
