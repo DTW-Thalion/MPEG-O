@@ -469,6 +469,106 @@ class ProtectionTest {
         }
     }
 
+    // ── v1.1.1 decryptInPlace parity ──────────────────────────────────
+
+    @Test
+    void v111DecryptInPlaceSingleRunRoundTrip() throws Exception {
+        String path = tempDir.resolve("v111_single.mpgo").toString();
+        byte[] key = new byte[32];
+        for (int i = 0; i < 32; i++) key[i] = (byte) i;
+        double[] expected = { 1.0, 2.0, 3.0, 4.0 };
+
+        writeMinimalOneRunFixture(path, "run_0001");
+
+        SpectralDataset holder = SpectralDataset.open(path);
+        holder.close();
+        holder.encryptWithKey(key, EncryptionLevel.DATASET);
+
+        SpectralDataset.decryptInPlace(path, key);
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            assertFalse(ds.isEncrypted(),
+                    "decryptInPlace must clear the root @encrypted attribute");
+            assertEquals("", ds.encryptedAlgorithm());
+            double[] got = ((MassSpectrum) ds.msRuns().get("run_0001")
+                    .objectAtIndex(0)).intensityValues();
+            assertArrayEquals(expected, got, 1e-12);
+        }
+    }
+
+    @Test
+    void v111DecryptInPlaceMultiRunRoundTrip() throws Exception {
+        String path = tempDir.resolve("v111_multi.mpgo").toString();
+        byte[] key = new byte[32];
+        for (int i = 0; i < 32; i++) key[i] = (byte) i;
+        double[] expected = { 1.0, 2.0, 3.0, 4.0 };
+
+        writeMinimalMultiRunFixture(path, List.of("run_A", "run_B", "run_C"));
+
+        SpectralDataset holder = SpectralDataset.open(path);
+        holder.close();
+        holder.encryptWithKey(key, EncryptionLevel.DATASET);
+
+        SpectralDataset.decryptInPlace(path, key);
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            assertFalse(ds.isEncrypted());
+            for (String name : List.of("run_A", "run_B", "run_C")) {
+                double[] got = ((MassSpectrum) ds.msRuns().get(name)
+                        .objectAtIndex(0)).intensityValues();
+                assertArrayEquals(expected, got, 1e-12,
+                        "intensity mismatch in " + name
+                                + " after decryptInPlace");
+            }
+        }
+    }
+
+    @Test
+    void v111DecryptInPlaceIdempotentOnPlaintext() throws Exception {
+        String path = tempDir.resolve("v111_plaintext.mpgo").toString();
+        byte[] key = new byte[32];
+        writeMinimalOneRunFixture(path, "run_0001");
+
+        // No encrypt() call — must be a no-op.
+        SpectralDataset.decryptInPlace(path, key);
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            assertFalse(ds.isEncrypted());
+            double[] got = ((MassSpectrum) ds.msRuns().get("run_0001")
+                    .objectAtIndex(0)).intensityValues();
+            assertArrayEquals(new double[]{1.0, 2.0, 3.0, 4.0}, got, 1e-12);
+        }
+    }
+
+    @Test
+    void v111DecryptInPlaceRejectsShortKey() throws Exception {
+        String path = tempDir.resolve("v111_shortkey.mpgo").toString();
+        writeMinimalOneRunFixture(path, "run_0001");
+
+        assertThrows(IllegalArgumentException.class, () ->
+                SpectralDataset.decryptInPlace(path, new byte[]{1, 2, 3}));
+    }
+
+    private static void writeMinimalMultiRunFixture(String path,
+                                                     java.util.List<String> runNames) {
+        java.util.List<AcquisitionRun> runs = new java.util.ArrayList<>();
+        for (String runName : runNames) {
+            SpectrumIndex idx = new SpectrumIndex(1,
+                    new long[]{0}, new int[]{4},
+                    new double[]{0.0}, new int[]{1}, new int[]{1},
+                    new double[]{0.0}, new int[]{0}, new double[]{100.0});
+            Map<String, double[]> ch = new LinkedHashMap<>();
+            ch.put("mz", new double[]{100.0, 200.0, 300.0, 400.0});
+            ch.put("intensity", new double[]{1.0, 2.0, 3.0, 4.0});
+            runs.add(new AcquisitionRun(runName, AcquisitionMode.MS1_DDA,
+                    idx, null, ch, List.of(), List.of(), null, 0.0));
+        }
+        try (SpectralDataset ds = SpectralDataset.create(path, "v1.1.1 parity",
+                null, runs, List.of(), List.of(), List.of())) {
+            // dataset written
+        }
+    }
+
     private static void writeMinimalOneRunFixture(String path, String runName) {
         SpectrumIndex idx = new SpectrumIndex(1,
                 new long[]{0}, new int[]{4},

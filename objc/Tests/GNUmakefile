@@ -63,7 +63,8 @@ MPGOTests_OBJC_FILES = \
 	TestM76JcampConformance.m \
 	TestMilestone77.m \
 	TestMilestone78.m \
-	TestV11EncryptionParity.m
+	TestV11EncryptionParity.m \
+	TestV111DecryptInPlace.m
 
 MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

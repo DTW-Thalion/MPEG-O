@@ -353,3 +353,108 @@ def decrypt_intensity_channel_in_run(
             raise KeyError(f"Run {run_name!r} not found in {file_path!r}")
         sig = f[f"{run_path}/signal_channels"]
         return read_encrypted_channel(sig, "intensity", key, dtype="<f8")
+
+
+def _decrypt_intensity_in_signal_group(sig, key: bytes) -> None:
+    """Reverse of :func:`_encrypt_intensity_in_signal_group`.
+
+    Reads ``intensity_values_encrypted`` + its IV/tag/bytes-count siblings,
+    decrypts to float64 plaintext, writes back ``intensity_values``, and
+    removes the encrypted siblings + algorithm/IV/tag attributes. Works
+    on both ``h5py.Group`` (fast path) and :class:`StorageGroup` inputs.
+
+    Idempotent: returns silently if ``intensity_values_encrypted`` is
+    already absent.
+    """
+    from .providers.base import StorageGroup
+
+    if isinstance(sig, StorageGroup) and getattr(sig, "_grp", None) is None:
+        # Non-HDF5 provider path.
+        if not sig.has_child("intensity_values_encrypted"):
+            return
+        plaintext = read_encrypted_channel(sig, "intensity", key, dtype="<f8")
+        # read_encrypted_channel already validated tag + returns float64.
+        from .enums import Precision
+        sig.create_dataset(
+            "intensity_values", Precision.FLOAT64, plaintext.size
+        ).write(plaintext)
+        sig.delete_child("intensity_values_encrypted")
+        for child in ("intensity_iv", "intensity_tag"):
+            if sig.has_child(child):
+                sig.delete_child(child)
+        for attr in (
+            "intensity_ciphertext_bytes",
+            "intensity_original_count",
+            "intensity_algorithm",
+        ):
+            if sig.has_attribute(attr):
+                sig.delete_attribute(attr)
+        return
+
+    # HDF5 fast path.
+    native = getattr(sig, "_grp", sig)
+    if "intensity_values_encrypted" not in native:
+        return
+    plaintext = read_encrypted_channel(native, "intensity", key, dtype="<f8")
+    native.create_dataset("intensity_values", data=plaintext.astype("<f8", copy=False))
+    del native["intensity_values_encrypted"]
+    for child in ("intensity_iv", "intensity_tag"):
+        if child in native:
+            del native[child]
+    for attr in (
+        "intensity_ciphertext_bytes",
+        "intensity_original_count",
+        "intensity_algorithm",
+    ):
+        if attr in native.attrs:
+            del native.attrs[attr]
+
+
+def decrypt_intensity_channel_in_run_in_place(
+    file_path: str, run_name: str, key: bytes
+) -> None:
+    """Decrypt one MS run's intensity channel back to plaintext on disk.
+
+    Symmetric with :func:`encrypt_intensity_channel_in_run`: opens the
+    .mpgo file read-write, decrypts ``intensity_values_encrypted`` for
+    the named run, writes ``intensity_values`` with the plaintext, and
+    deletes the encrypted siblings + attrs. Callers that want to leave
+    the file fully plaintext (``is_encrypted == False``) must also
+    remove the root ``@encrypted`` attribute — see
+    :meth:`SpectralDataset.decrypt_in_place` for that whole-file flow.
+
+    Idempotent: returns silently if the run is already decrypted.
+
+    Raises ``FileNotFoundError``, ``KeyError`` (run not found), or
+    ``ValueError`` (key wrong length / tag mismatch).
+    """
+    if len(key) != AES_KEY_LEN:
+        raise ValueError(f"AES-256-GCM key must be {AES_KEY_LEN} bytes, got {len(key)}")
+
+    import os
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    with h5py.File(file_path, "r+") as f:
+        run_path = f"study/ms_runs/{run_name}"
+        if run_path not in f:
+            raise KeyError(f"Run {run_name!r} not found in {file_path!r}")
+        sig = f[f"{run_path}/signal_channels"]
+        _decrypt_intensity_in_signal_group(sig, key)
+
+
+def decrypt_intensity_channel_in_group(
+    signal_channels_group, key: bytes
+) -> None:
+    """Decrypt the intensity_values dataset inside an already-open signal_channels group.
+
+    Open-handle counterpart to :func:`decrypt_intensity_channel_in_run_in_place`.
+    Use when the caller holds a writable group handle (e.g. via an open
+    :class:`~mpeg_o.spectral_dataset.SpectralDataset`) and cannot reopen
+    the file a second time.
+
+    Raises ``ValueError`` if ``key`` is not 32 bytes.
+    """
+    if len(key) != AES_KEY_LEN:
+        raise ValueError(f"AES-256-GCM key must be {AES_KEY_LEN} bytes, got {len(key)}")
+    _decrypt_intensity_in_signal_group(signal_channels_group, key)

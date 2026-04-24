@@ -749,6 +749,59 @@ public class SpectralDataset implements
         for (var run : msRuns.values()) run.decryptWithKey(key);
     }
 
+    /**
+     * v1.1.1: persist-to-disk decrypt. Strips AES-256-GCM encryption
+     * from the {@code .mpgo} file at {@code path}: for every MS run
+     * with an encrypted intensity channel, writes plaintext back as
+     * {@code intensity_values} and removes the encrypted siblings.
+     * Finally clears the root {@code @encrypted} attribute so
+     * {@link #isEncrypted} returns {@code false} when the file is
+     * reopened.
+     *
+     * <p>Symmetric with {@link #encryptWithKey(byte[],
+     * com.dtwthalion.mpgo.Enums.EncryptionLevel)} (which leaves the root
+     * attribute set). After this call the file is byte-compatible with
+     * the pre-encryption layout.</p>
+     *
+     * <p>The file must not be held open by another writer.</p>
+     *
+     * <p><b>Cross-language equivalents:</b> Python
+     * {@code SpectralDataset.decrypt_in_place}, Objective-C
+     * {@code +[MPGOSpectralDataset decryptInPlaceAtPath:withKey:error:]}.</p>
+     */
+    public static void decryptInPlace(String path, byte[] key) {
+        if (key == null || key.length != 32) {
+            throw new IllegalArgumentException("Key must be exactly 32 bytes");
+        }
+        java.util.List<String> runNames = new java.util.ArrayList<>();
+        try (com.dtwthalion.mpgo.hdf5.Hdf5File f =
+                     com.dtwthalion.mpgo.hdf5.Hdf5File.openReadOnly(path);
+             Hdf5Group root = f.rootGroup()) {
+            if (root.hasChild("study")) {
+                try (Hdf5Group study = root.openGroup("study")) {
+                    if (study.hasChild("ms_runs")) {
+                        try (Hdf5Group msRunsG = study.openGroup("ms_runs")) {
+                            runNames.addAll(msRunsG.childNames());
+                        }
+                    }
+                }
+            }
+        }
+
+        for (String runName : runNames) {
+            com.dtwthalion.mpgo.protection.EncryptionManager
+                    .decryptIntensityChannelInRunInPlace(path, runName, key);
+        }
+
+        try (com.dtwthalion.mpgo.hdf5.Hdf5File f =
+                     com.dtwthalion.mpgo.hdf5.Hdf5File.open(path);
+             Hdf5Group root = f.rootGroup()) {
+            if (root.hasAttribute("encrypted")) {
+                root.deleteAttribute("encrypted");
+            }
+        }
+    }
+
     @Override
     public Object accessPolicy() { return accessPolicy; }
 

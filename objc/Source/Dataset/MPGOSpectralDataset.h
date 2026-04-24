@@ -120,6 +120,24 @@
 - (MPGOAccessPolicy *)accessPolicy;
 - (void)setAccessPolicy:(MPGOAccessPolicy *)policy;
 
+/**
+ * v1.1.1: persist-to-disk decrypt. Strips AES-256-GCM encryption from
+ * the `.mpgo` file at `path`: for every MS run with an encrypted
+ * intensity channel, writes the plaintext back as `intensity_values`
+ * and removes the encrypted siblings. Finally clears the root
+ * `@encrypted` attribute so -isEncrypted returns NO when the file is
+ * reopened.
+ *
+ * Symmetric with -encryptWithKey:level:error: (which leaves the root
+ * attribute set). After this call the file is byte-compatible with
+ * the pre-encryption layout.
+ *
+ * The file must not be held open by another writer.
+ */
++ (BOOL)decryptInPlaceAtPath:(NSString *)path
+                     withKey:(NSData *)key
+                       error:(NSError **)error;
+
 #pragma mark - Subclass hooks
 
 /** Subclasses (e.g. MPGOMSImage) override to add their own datasets

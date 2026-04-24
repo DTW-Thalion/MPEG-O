@@ -590,6 +590,106 @@ public final class EncryptionManager {
         }
     }
 
+    /**
+     * v1.1.1: persist-to-disk decrypt counterpart to
+     * {@link #encryptIntensityChannelInRun}. Opens the {@code .mpgo} file
+     * read-write, decrypts the named run's {@code intensity_values_encrypted}
+     * dataset, writes plaintext back as a new {@code intensity_values}
+     * float64 dataset, deletes the encrypted siblings
+     * ({@code intensity_values_encrypted}, {@code intensity_iv},
+     * {@code intensity_tag}), and removes the channel-level attributes
+     * {@code intensity_ciphertext_bytes}, {@code intensity_original_count},
+     * and {@code intensity_algorithm}. The root {@code @encrypted}
+     * attribute is left in place — callers that want a fully unprotected
+     * file should use
+     * {@link com.dtwthalion.mpgo.SpectralDataset#decryptInPlace(String, byte[])}.
+     *
+     * <p>Idempotent: returns silently if the run is already plaintext.</p>
+     *
+     * @param filePath absolute path to the .mpgo file
+     * @param runName  run key under /study/ms_runs/
+     * @param key      32-byte AES-256 key
+     */
+    public static void decryptIntensityChannelInRunInPlace(String filePath,
+                                                            String runName,
+                                                            byte[] key) {
+        validateKey(key);
+        try (com.dtwthalion.mpgo.hdf5.Hdf5File f =
+                     com.dtwthalion.mpgo.hdf5.Hdf5File.open(filePath);
+             com.dtwthalion.mpgo.hdf5.Hdf5Group root = f.rootGroup();
+             com.dtwthalion.mpgo.hdf5.Hdf5Group study = root.openGroup("study");
+             com.dtwthalion.mpgo.hdf5.Hdf5Group msRuns = study.openGroup("ms_runs");
+             com.dtwthalion.mpgo.hdf5.Hdf5Group runGroup = msRuns.openGroup(runName);
+             com.dtwthalion.mpgo.hdf5.Hdf5Group sig = runGroup.openGroup("signal_channels")) {
+
+            // Idempotent: already plaintext.
+            if (!sig.hasChild("intensity_values_encrypted")) return;
+
+            long ciphertextBytes =
+                    sig.readIntegerAttribute("intensity_ciphertext_bytes", -1);
+            if (ciphertextBytes < 0) {
+                throw new IllegalStateException(
+                        "intensity_values_encrypted present but "
+                                + "intensity_ciphertext_bytes missing in run '"
+                                + runName + "'");
+            }
+            long originalCount =
+                    sig.readIntegerAttribute("intensity_original_count", -1);
+            if (originalCount < 0) {
+                throw new IllegalStateException(
+                        "intensity_values_encrypted present but "
+                                + "intensity_original_count missing in run '"
+                                + runName + "'");
+            }
+
+            int[] cipherInts;
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds =
+                         sig.openDataset("intensity_values_encrypted")) {
+                cipherInts = (int[]) ds.readData();
+            }
+            int[] ivInts;
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds =
+                         sig.openDataset("intensity_iv")) {
+                ivInts = (int[]) ds.readData();
+            }
+            int[] tagInts;
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds =
+                         sig.openDataset("intensity_tag")) {
+                tagInts = (int[]) ds.readData();
+            }
+
+            byte[] ciphertextPadded = intsToBytes(cipherInts);
+            byte[] ciphertext =
+                    Arrays.copyOf(ciphertextPadded, (int) ciphertextBytes);
+            byte[] iv = Arrays.copyOf(intsToBytes(ivInts), IV_BYTES);
+            byte[] tag = Arrays.copyOf(intsToBytes(tagInts), TAG_BYTES);
+
+            byte[] plaintextBytes = decrypt(ciphertext, iv, tag, key);
+            if (plaintextBytes.length != originalCount * Double.BYTES) {
+                throw new IllegalStateException(
+                        "decrypted plaintext length " + plaintextBytes.length
+                                + " does not match intensity_original_count*8 ("
+                                + (originalCount * Double.BYTES) + ")");
+            }
+            double[] plaintext =
+                    leBytesToDoubles(plaintextBytes, (int) originalCount);
+
+            sig.deleteChild("intensity_values_encrypted");
+            sig.deleteChild("intensity_iv");
+            sig.deleteChild("intensity_tag");
+            sig.deleteAttribute("intensity_ciphertext_bytes");
+            sig.deleteAttribute("intensity_original_count");
+            sig.deleteAttribute("intensity_algorithm");
+
+            try (com.dtwthalion.mpgo.hdf5.Hdf5Dataset ds =
+                         sig.createDataset("intensity_values",
+                                 com.dtwthalion.mpgo.Enums.Precision.FLOAT64,
+                                 plaintext.length, 0, 0)) {
+                ds.writeData(plaintext);
+            }
+        }
+    }
+
     // ------------------------------------------------------------ helpers
 
     private static void validateKey(byte[] key) {

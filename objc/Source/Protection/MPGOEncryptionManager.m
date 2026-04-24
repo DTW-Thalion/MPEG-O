@@ -278,4 +278,138 @@
     return has;
 }
 
++ (BOOL)decryptIntensityChannelInRunInPlace:(NSString *)runName
+                                 atFilePath:(NSString *)path
+                                    withKey:(NSData *)key
+                                      error:(NSError **)error
+{
+    if (key.length != MPGO_AES_KEY_LEN) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"AES-256-GCM requires a 32-byte key, got %lu",
+            (unsigned long)key.length);
+        return NO;
+    }
+
+    MPGOHDF5File *file = [MPGOHDF5File openAtPath:path error:error];
+    if (!file) return NO;
+
+    MPGOHDF5Group *runGroup = [[file rootGroup] openGroupNamed:runName error:error];
+    if (!runGroup) { [file close]; return NO; }
+    MPGOHDF5Group *channels =
+        [runGroup openGroupNamed:@"signal_channels" error:error];
+    if (!channels) { [file close]; return NO; }
+
+    // Idempotent path: plaintext already, nothing to do.
+    if (![channels hasChildNamed:@"intensity_values_encrypted"]) {
+        return [file close];
+    }
+
+    BOOL cipherBytesExists = NO;
+    int64_t cipherBytes =
+        [channels integerAttributeNamed:@"intensity_ciphertext_bytes"
+                                 exists:&cipherBytesExists
+                                  error:error];
+    if (!cipherBytesExists) {
+        if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
+            @"intensity_values_encrypted present but intensity_ciphertext_bytes is missing");
+        [file close];
+        return NO;
+    }
+
+    BOOL originalCountExists = NO;
+    int64_t originalCount =
+        [channels integerAttributeNamed:@"intensity_original_count"
+                                 exists:&originalCountExists
+                                  error:error];
+    if (!originalCountExists) {
+        if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
+            @"intensity_values_encrypted present but intensity_original_count is missing");
+        [file close];
+        return NO;
+    }
+
+    MPGOHDF5Dataset *encDS =
+        [channels openDatasetNamed:@"intensity_values_encrypted" error:error];
+    if (!encDS) { [file close]; return NO; }
+    NSData *padded = [encDS readDataWithError:error];
+    if (!padded) { [file close]; return NO; }
+    if ((NSUInteger)cipherBytes > padded.length) {
+        if (error) *error = MPGOMakeError(MPGOErrorAttributeRead,
+            @"intensity_ciphertext_bytes (%lld) exceeds encrypted dataset length (%lu)",
+            (long long)cipherBytes, (unsigned long)padded.length);
+        [file close];
+        return NO;
+    }
+    NSData *cipher = [padded subdataWithRange:NSMakeRange(0, (NSUInteger)cipherBytes)];
+
+    MPGOHDF5Dataset *ivDS = [channels openDatasetNamed:@"intensity_iv" error:error];
+    if (!ivDS) { [file close]; return NO; }
+    NSData *ivPad = [ivDS readDataWithError:error];
+    if (!ivPad) { [file close]; return NO; }
+    NSData *iv = [ivPad subdataWithRange:NSMakeRange(0, MPGO_AES_IV_LEN)];
+
+    MPGOHDF5Dataset *tagDS = [channels openDatasetNamed:@"intensity_tag" error:error];
+    if (!tagDS) { [file close]; return NO; }
+    NSData *tagPad = [tagDS readDataWithError:error];
+    if (!tagPad) { [file close]; return NO; }
+    NSData *tag = [tagPad subdataWithRange:NSMakeRange(0, MPGO_AES_TAG_LEN)];
+
+    NSData *plaintext = [self decryptData:cipher
+                                  withKey:key
+                                       iv:iv
+                                  authTag:tag
+                                    error:error];
+    if (!plaintext) { [file close]; return NO; }
+    if (plaintext.length != (NSUInteger)originalCount * sizeof(double)) {
+        if (error) *error = MPGOMakeError(MPGOErrorUnknown,
+            @"decrypted plaintext length (%lu) does not match intensity_original_count*8 (%lld)",
+            (unsigned long)plaintext.length,
+            (long long)((int64_t)originalCount * (int64_t)sizeof(double)));
+        [file close];
+        return NO;
+    }
+
+    // Release dataset handles before unlinking.
+    encDS = nil;
+    ivDS = nil;
+    tagDS = nil;
+
+    if (![channels deleteChildNamed:@"intensity_values_encrypted" error:error]) {
+        [file close];
+        return NO;
+    }
+    if (![channels deleteChildNamed:@"intensity_iv" error:error]) {
+        [file close];
+        return NO;
+    }
+    if (![channels deleteChildNamed:@"intensity_tag" error:error]) {
+        [file close];
+        return NO;
+    }
+    if (![channels deleteAttributeNamed:@"intensity_ciphertext_bytes" error:error]) {
+        [file close];
+        return NO;
+    }
+    if (![channels deleteAttributeNamed:@"intensity_original_count" error:error]) {
+        [file close];
+        return NO;
+    }
+    if (![channels deleteAttributeNamed:@"intensity_algorithm" error:error]) {
+        [file close];
+        return NO;
+    }
+
+    MPGOHDF5Dataset *plainDS =
+        [channels createDatasetNamed:@"intensity_values"
+                           precision:MPGOPrecisionFloat64
+                              length:(NSUInteger)originalCount
+                           chunkSize:0
+                    compressionLevel:0
+                               error:error];
+    if (!plainDS) { [file close]; return NO; }
+    if (![plainDS writeData:plaintext error:error]) { [file close]; return NO; }
+
+    return [file close];
+}
+
 @end

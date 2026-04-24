@@ -1054,4 +1054,67 @@ static BOOL writeIndexArrayDS(MPGOHDF5Group *g, NSString *name,
     return [f close];
 }
 
+#pragma mark - v1.1.1: persist-to-disk decrypt
+
++ (BOOL)decryptInPlaceAtPath:(NSString *)path
+                     withKey:(NSData *)key
+                       error:(NSError **)error
+{
+    if (key.length != 32) {
+        if (error) *error = MPGOMakeError(MPGOErrorInvalidArgument,
+            @"AES-256-GCM requires a 32-byte key, got %lu",
+            (unsigned long)key.length);
+        return NO;
+    }
+
+    // 1. Enumerate MS run names while the file is closed to readers.
+    NSMutableArray<NSString *> *runNames = [NSMutableArray array];
+    {
+        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:error];
+        if (!f) return NO;
+        MPGOHDF5Group *root = [f rootGroup];
+        if ([root hasChildNamed:@"study"]) {
+            MPGOHDF5Group *study = [root openGroupNamed:@"study" error:error];
+            if (!study) { [f close]; return NO; }
+            if ([study hasChildNamed:@"ms_runs"]) {
+                MPGOHDF5Group *msRunsG =
+                    [study openGroupNamed:@"ms_runs" error:error];
+                if (!msRunsG) { [f close]; return NO; }
+                for (NSString *name in [msRunsG childNames]) {
+                    [runNames addObject:name];
+                }
+            }
+        }
+        if (![f close]) return NO;
+    }
+
+    // 2. Decrypt each run's intensity channel in place. The encryption
+    //    manager opens/closes the file for each call, mirroring the
+    //    encrypt side's per-run lifecycle.
+    for (NSString *name in runNames) {
+        NSString *fullPath =
+            [NSString stringWithFormat:@"/study/ms_runs/%@", name];
+        if (![MPGOEncryptionManager
+                decryptIntensityChannelInRunInPlace:fullPath
+                                         atFilePath:path
+                                            withKey:key
+                                              error:error]) {
+            return NO;
+        }
+    }
+
+    // 3. Clear the root @encrypted attribute so a reopen sees the
+    //    file as unprotected.
+    MPGOHDF5File *fw = [MPGOHDF5File openAtPath:path error:error];
+    if (!fw) return NO;
+    MPGOHDF5Group *root = [fw rootGroup];
+    if ([root hasAttributeNamed:@"encrypted"]) {
+        if (![root deleteAttributeNamed:@"encrypted" error:error]) {
+            [fw close];
+            return NO;
+        }
+    }
+    return [fw close];
+}
+
 @end
