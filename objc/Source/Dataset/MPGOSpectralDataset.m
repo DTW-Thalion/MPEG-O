@@ -21,6 +21,13 @@
 #import "Providers/MPGOHDF5Provider.h"
 #import <hdf5.h>
 
+// Internal SPI surfaced by MPGOAcquisitionRun for the dataset-level
+// decrypt lifecycle. Not part of the public header.
+@interface MPGOAcquisitionRun (MPGOSpectralDatasetInternal)
+- (NSData *)decryptedChannelNamed:(NSString *)chName;
+- (BOOL)reattachSignalHandlesFromGroup:(MPGOHDF5Group *)channels error:(NSError **)error;
+@end
+
 // v0.2 format version emitted by this writer.
 static NSString *const kMPGOFormatVersion = @"1.1";
 
@@ -47,11 +54,18 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
     MPGOHDF5File     *_file;       // retained while alive for lazy reads
     NSString         *_filePath;
     MPGOAccessPolicy *_accessPolicy;
+    NSString         *_encryptedAlgorithm;  // empty string when not encrypted
     id<MPGOStorageProvider> _provider;  // M39: owns _file
 }
 
 @synthesize filePath = _filePath;
 @synthesize provider = _provider;
+@synthesize encryptedAlgorithm = _encryptedAlgorithm;
+
+- (BOOL)isEncrypted
+{
+    return _encryptedAlgorithm.length > 0;
+}
 
 - (instancetype)initWithTitle:(NSString *)title
            isaInvestigationId:(NSString *)isaId
@@ -72,6 +86,7 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
         _quantifications    = [quantifications copy] ?: @[];
         _provenanceRecords  = [provenance copy] ?: @[];
         _transitions        = transitions;
+        _encryptedAlgorithm = @"";
     }
     return self;
 }
@@ -540,6 +555,13 @@ static BOOL writeIndexArrayDS(MPGOHDF5Group *g, NSString *name,
                                          provenanceRecords:provRecs
                                                transitions:nil];
     ds->_filePath = [url copy];
+    // Surface the root `encrypted` attr for provider-backed reads too.
+    id encObj = [root attributeValueForName:@"encrypted" error:NULL];
+    if ([encObj isKindOfClass:[NSString class]]) {
+        ds->_encryptedAlgorithm = [(NSString *)encObj copy];
+    } else {
+        ds->_encryptedAlgorithm = @"";
+    }
     // _file / _provider stay nil — the provider instance was transient;
     // close() is a no-op for provider-backed datasets in v0.9.
     return ds;
@@ -669,6 +691,16 @@ static BOOL writeIndexArrayDS(MPGOHDF5Group *g, NSString *name,
             [root stringAttributeNamed:@"access_policy_json" error:NULL]);
     }
 
+    // Surface the root `encrypted` attribute (written by
+    // -markRootEncryptedWithError:) so -isEncrypted / -encryptedAlgorithm
+    // round-trip across close/reopen. Absent → empty string.
+    if ([root hasAttributeNamed:@"encrypted"]) {
+        NSString *alg = [root stringAttributeNamed:@"encrypted" error:NULL];
+        ds->_encryptedAlgorithm = [(alg ?: @"") copy];
+    } else {
+        ds->_encryptedAlgorithm = @"";
+    }
+
     return ds;
 }
 
@@ -734,6 +766,10 @@ static BOOL writeIndexArrayDS(MPGOHDF5Group *g, NSString *name,
     // 3. Mark the root + persist access policy.
     if (![self markRootEncryptedWithError:error]) return NO;
 
+    // 4. Mirror the on-disk attr in memory so -isEncrypted /
+    //    -encryptedAlgorithm return the new state without a reopen.
+    _encryptedAlgorithm = @"aes-256-gcm";
+
     return YES;
 }
 
@@ -754,6 +790,42 @@ static BOOL writeIndexArrayDS(MPGOHDF5Group *g, NSString *name,
     }
 
     if (![self unsealCompoundDatasetsWithKey:key error:error]) return NO;
+
+    // M5-handoff: reopen the file read-only and reattach each run's
+    // signal-channel handles so -spectrumAtIndex: can serve both the
+    // decrypted intensity channel (from the run's in-memory cache) and
+    // any unencrypted channels (mz, chemical_shift) from disk. The
+    // on-disk file still carries the `encrypted` attribute and the
+    // ciphertext datasets — decryption does not modify the file.
+    return [self reopenAfterDecryptWithError:error];
+}
+
+- (BOOL)reopenAfterDecryptWithError:(NSError **)error
+{
+    MPGOHDF5Provider *p = [[MPGOHDF5Provider alloc] init];
+    if (![p openURL:_filePath mode:MPGOStorageOpenModeRead error:error]) return NO;
+    MPGOHDF5File *f = (MPGOHDF5File *)[p nativeHandle];
+    if (!f) return NO;
+    MPGOHDF5Group *root = [f rootGroup];
+    if (!root) { [p close]; return NO; }
+    MPGOHDF5Group *study = [root openGroupNamed:@"study" error:error];
+    if (!study) { [p close]; return NO; }
+    MPGOHDF5Group *msRunsG = nil;
+    if ([study hasChildNamed:@"ms_runs"]) {
+        msRunsG = [study openGroupNamed:@"ms_runs" error:error];
+        if (!msRunsG) { [p close]; return NO; }
+    }
+    for (NSString *runName in _msRuns) {
+        if (!msRunsG) break;
+        MPGOHDF5Group *runG = [msRunsG openGroupNamed:runName error:NULL];
+        if (!runG) continue;
+        MPGOHDF5Group *channels = [runG openGroupNamed:@"signal_channels" error:NULL];
+        if (!channels) continue;
+        MPGOAcquisitionRun *run = _msRuns[runName];
+        (void)[run reattachSignalHandlesFromGroup:channels error:NULL];
+    }
+    _file     = f;
+    _provider = p;
     return YES;
 }
 

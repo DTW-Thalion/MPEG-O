@@ -11,6 +11,62 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [v1.1.0] — 2026-04-23
+
+Bug-fix release that restores full round-trip usability of
+`SpectralDataset` encryption across close/reopen cycles. Reported
+from the MPEG-O-MCP-Server M5 integration (`docs/handoff-from-mcp-server-m5-encryption.md`);
+the two issues below blocked the MCP server from offering a
+`mpeg_o_encrypt` → `mpeg_o_decrypt` → `mpeg_o_get_spectrum` flow
+against Python/ObjC/Java clients.
+
+### Fixed
+
+- **Issue A — `is_encrypted` / `encrypted_algorithm` lost across
+  close/reopen.** The root `@encrypted` HDF5 attribute written by
+  `encrypt_with_key` / `encryptWithKey:level:` /
+  `SpectralDataset.encryptWithKey` was not being read back on load
+  in Java (ObjC and Python already wrote it; Java wrote per-run
+  markers but no root marker, leaving `ds.isEncrypted()` at `false`
+  after reopen). All three implementations now persist and read
+  `@encrypted = "aes-256-gcm"` at the root group so
+  `SpectralDataset.is_encrypted` / `.isEncrypted()` / `.isEncrypted`
+  is the single source of truth after reopen.
+- **Issue B — `decrypt_with_key` returned raw bytes without
+  rehydrating the channel cache.** After decrypt, callers could
+  only get plaintext by parsing the returned bytes themselves;
+  `spec.intensity_array` / `spectrum.intensityArray` /
+  `MassSpectrum.intensityValues()` kept the pre-decrypt (empty or
+  ciphertext) state, raising `KeyError` in Python and returning a
+  zero-length array in Java/ObjC. The in-memory channel cache is
+  now rehydrated with the plaintext channel so the spectrum API is
+  usable without a reopen.
+
+### Added
+
+- v1.1 parity test in each language that pins the
+  encrypt → close → reopen → `is_encrypted` → `decrypt` → read
+  surface:
+  - `python/tests/test_v1_1_encryption_parity.py` (3 tests)
+  - `java/src/test/java/com/dtwthalion/mpgo/ProtectionTest.java`
+    (2 new tests: `v11EncryptedStateSurvivesCloseReopen`,
+    `v11DecryptRehydratesSpectrumIntensity`)
+  - `objc/Tests/TestV11EncryptionParity.m` (2 test functions,
+    17 PASS assertions) wired into the default test tool.
+
+### Changed
+
+- `python/pyproject.toml` — `version` 1.0.0 → 1.1.0.
+- `python/src/mpeg_o/__init__.py` — `__version__` 1.0.0 → 1.1.0.
+- `java/pom.xml` — `version` 1.0.0 → 1.1.0.
+
+No HDF5 format-version bump: the file layout is byte-identical to
+v1.0.0; only the library-level reader/writer paths changed. Clients
+pinned to MPEG-O v1.0.0 read v1.1.0-produced files without
+modification.
+
+---
+
 ## [v1.0.0] — 2026-04-23
 
 First stable release. API is SemVer-stable from this tag forward —

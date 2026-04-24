@@ -67,6 +67,13 @@ public class AcquisitionRun implements
     private com.dtwthalion.mpgo.protection.AccessPolicy accessPolicy;
     private String persistenceFilePath;
     private String persistenceRunName;
+    // v1.1 Issue B: plaintext channels recovered via decryptWithKey. The
+    // on-disk file is untouched (decrypt is read-only), so after
+    // open-on-encrypted + decrypt the in-memory {@link #channels} map is
+    // still missing the encrypted channel — spectra need to fall back
+    // to this overlay to see real intensities.
+    private final Map<String, double[]> decryptedChannels =
+            new java.util.LinkedHashMap<>();
 
     public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
                           SpectrumIndex spectrumIndex,
@@ -100,11 +107,19 @@ public class AcquisitionRun implements
 
     /** Read a single spectrum's channel data by index (hyperslab). */
     public double[] channelSlice(String channelName, int spectrumIdx) {
-        double[] data = channels.get(channelName);
+        double[] data = decryptedChannels.getOrDefault(channelName,
+                channels.get(channelName));
         if (data == null) return null;
         long offset = spectrumIndex.offsetAt(spectrumIdx);
         int length = spectrumIndex.lengthAt(spectrumIdx);
         return Arrays.copyOfRange(data, (int) offset, (int) offset + length);
+    }
+
+    /** Channel array that prefers the post-decrypt overlay, falling
+     *  back to the on-disk-loaded channels. v1.1 Issue B. */
+    private double[] effectiveChannel(String name) {
+        double[] overlay = decryptedChannels.get(name);
+        return overlay != null ? overlay : channels.getOrDefault(name, new double[0]);
     }
 
     /** Get the spectrum class name for HDF5 @spectrum_class attribute. */
@@ -125,9 +140,9 @@ public class AcquisitionRun implements
         long offset = spectrumIndex.offsetAt(index);
         int length = spectrumIndex.lengthAt(index);
 
-        double[] mz = channels.getOrDefault("mz", new double[0]);
-        double[] intensity = channels.getOrDefault("intensity", new double[0]);
-        double[] chemShift = channels.getOrDefault("chemical_shift", new double[0]);
+        double[] mz = effectiveChannel("mz");
+        double[] intensity = effectiveChannel("intensity");
+        double[] chemShift = effectiveChannel("chemical_shift");
 
         double scanTime = spectrumIndex.retentionTimeAt(index);
         double precursorMz = spectrumIndex.precursorMzAt(index);
@@ -238,17 +253,27 @@ public class AcquisitionRun implements
 
     @Override
     public void decryptWithKey(byte[] key) throws Exception {
-        // The protocol declares void return; plaintext is not returned to the
-        // caller because decrypt is read-only (file is not rewritten).
-        // If caller wants plaintext bytes, use
+        // The protocol declares void return; plaintext is rehydrated into
+        // an in-memory overlay so spectra can read real intensities after
+        // open-on-encrypted + decrypt. The on-disk file is untouched.
+        // Callers that need raw bytes can still use
         // EncryptionManager.decryptIntensityChannelInRun directly.
         if (persistenceFilePath == null || persistenceRunName == null) {
             throw new IllegalStateException(
                 "AcquisitionRun.decryptWithKey requires a persistence context");
         }
-        // Verify we can decrypt (auth-tag check) without returning data.
-        com.dtwthalion.mpgo.protection.EncryptionManager
+        byte[] plaintext = com.dtwthalion.mpgo.protection.EncryptionManager
             .decryptIntensityChannelInRun(persistenceFilePath, persistenceRunName, key);
+        // v1.1 Issue B: stash the recovered plaintext as a double[] so
+        // objectAtIndex / channelSlice can materialise spectra without
+        // re-decrypting per access. Little-endian matches the encode
+        // path in EncryptionManager.encryptChannel.
+        int n = plaintext.length / Double.BYTES;
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(plaintext)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        double[] intensity = new double[n];
+        for (int i = 0; i < n; i++) intensity[i] = bb.getDouble();
+        decryptedChannels.put("intensity", intensity);
     }
 
     @Override

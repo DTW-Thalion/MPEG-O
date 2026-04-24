@@ -66,6 +66,7 @@ extern void testMilestone73_1(void);
 extern void testM76JcampConformance(void);
 extern void testMilestone77(void);
 extern void testMilestone78(void);
+extern void testV11EncryptionParity(void);
 
 int main(int argc, const char *argv[])
 {
@@ -329,6 +330,10 @@ int main(int argc, const char *argv[])
         START_SET("M78: mzTab PEH/PEP + SFH/SMF + SEH/SME (v0.12.0)")
             testMilestone78();
         END_SET("M78: mzTab PEH/PEP + SFH/SMF + SEH/SME (v0.12.0)")
+
+        START_SET("v1.1 parity: encrypt -> close -> reopen -> decrypt -> read")
+            testV11EncryptionParity();
+        END_SET("v1.1 parity: encrypt -> close -> reopen -> decrypt -> read")
     }
     return 0;
 }

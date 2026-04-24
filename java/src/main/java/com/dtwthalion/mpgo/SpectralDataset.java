@@ -55,6 +55,11 @@ public class SpectralDataset implements
     private final List<ProvenanceRecord> provenanceRecords;
     // M41.5: Encryptable conformance.
     private com.dtwthalion.mpgo.protection.AccessPolicy accessPolicy;
+    // v1.1 Issue A: root-level encryption state that survives close/reopen.
+    // Empty string when the dataset carries no @encrypted root attribute;
+    // "aes-256-gcm" when it does. Updated by encryptWithKey and by both
+    // readers.
+    private String encryptedAlgorithm;
 
     private SpectralDataset(StorageProvider provider, Hdf5File file,
                             FeatureFlags featureFlags,
@@ -62,7 +67,8 @@ public class SpectralDataset implements
                             Map<String, AcquisitionRun> msRuns,
                             List<Identification> identifications,
                             List<Quantification> quantifications,
-                            List<ProvenanceRecord> provenanceRecords) {
+                            List<ProvenanceRecord> provenanceRecords,
+                            String encryptedAlgorithm) {
         this.provider = provider;
         this.file = file;
         this.featureFlags = featureFlags;
@@ -72,6 +78,18 @@ public class SpectralDataset implements
         this.identifications = identifications;
         this.quantifications = quantifications;
         this.provenanceRecords = provenanceRecords;
+        this.encryptedAlgorithm = encryptedAlgorithm != null ? encryptedAlgorithm : "";
+    }
+
+    private SpectralDataset(StorageProvider provider, Hdf5File file,
+                            FeatureFlags featureFlags,
+                            String title, String isaInvestigationId,
+                            Map<String, AcquisitionRun> msRuns,
+                            List<Identification> identifications,
+                            List<Quantification> quantifications,
+                            List<ProvenanceRecord> provenanceRecords) {
+        this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
+                identifications, quantifications, provenanceRecords, "");
     }
 
     /** The absolute path of the underlying .mpgo file (null for in-memory datasets). */
@@ -93,6 +111,20 @@ public class SpectralDataset implements
     public List<Quantification> quantifications() { return quantifications; }
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
 
+    /** {@code true} iff this dataset carries an {@code @encrypted} root
+     *  attribute. Survives close/reopen because the value is read back
+     *  from disk by {@link #open}. Mirrors Python
+     *  {@code SpectralDataset.is_encrypted} and Objective-C
+     *  {@code -[MPGOSpectralDataset isEncrypted]}. */
+    public boolean isEncrypted() { return !encryptedAlgorithm.isEmpty(); }
+
+    /** Algorithm string stored in the root {@code @encrypted} attribute,
+     *  or the empty string when the dataset is not encrypted. Typical
+     *  value is {@code "aes-256-gcm"}. Mirrors Python
+     *  {@code SpectralDataset.encrypted_algorithm} and Objective-C
+     *  {@code -[MPGOSpectralDataset encryptedAlgorithm]}. */
+    public String encryptedAlgorithm() { return encryptedAlgorithm; }
+
     // ── Open (read) ─────────────────────────────────────────────────
 
     /** Open an existing .mpgo file for reading. v0.9 M64.5 (Java):
@@ -111,6 +143,8 @@ public class SpectralDataset implements
         Hdf5File file = (Hdf5File) provider.nativeHandle();
         try (Hdf5Group root = file.rootGroup()) {
             FeatureFlags flags = FeatureFlags.readFrom(root);
+            String encryptedAlg = root.hasAttribute("encrypted")
+                    ? root.readStringAttribute("encrypted") : "";
 
             String title = null;
             String isaId = null;
@@ -153,7 +187,7 @@ public class SpectralDataset implements
             }
 
             return new SpectralDataset(provider, file, flags, title, isaId, runs,
-                    idents, quants, prov);
+                    idents, quants, prov, encryptedAlg);
         }
     }
 
@@ -174,6 +208,11 @@ public class SpectralDataset implements
         try (com.dtwthalion.mpgo.providers.StorageGroup root =
                 provider.rootGroup()) {
             FeatureFlags flags = FeatureFlags.readFrom(root);
+            String encryptedAlg = "";
+            if (root.hasAttribute("encrypted")) {
+                Object v = root.getAttribute("encrypted");
+                if (v != null) encryptedAlg = v.toString();
+            }
             String title = null, isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
             List<Identification> idents = List.of();
@@ -215,7 +254,7 @@ public class SpectralDataset implements
                 }
             }
             return new SpectralDataset(provider, null, flags, title, isaId, runs,
-                    idents, quants, prov);
+                    idents, quants, prov, encryptedAlg);
         }
     }
 
@@ -683,6 +722,26 @@ public class SpectralDataset implements
     public void encryptWithKey(byte[] key, com.dtwthalion.mpgo.Enums.EncryptionLevel level)
             throws Exception {
         for (var run : msRuns.values()) run.encryptWithKey(key, level);
+        markRootEncrypted();
+    }
+
+    /** v1.1 Issue A: write the root {@code @encrypted} attribute so
+     *  {@link #isEncrypted} / {@link #encryptedAlgorithm} survive
+     *  close/reopen. For HDF5-backed datasets (the only backend with
+     *  per-run on-disk encryption today) this opens the file R/W after
+     *  each run has finished its own encrypt pass. Callers must treat
+     *  the dataset as logically closed after this — matching the
+     *  Objective-C contract where {@code closeFile} precedes encrypt. */
+    private void markRootEncrypted() {
+        String path = file != null ? file.getPath() : null;
+        if (path != null) {
+            try (com.dtwthalion.mpgo.hdf5.Hdf5File f =
+                         com.dtwthalion.mpgo.hdf5.Hdf5File.open(path);
+                 Hdf5Group root = f.rootGroup()) {
+                root.setStringAttribute("encrypted", "aes-256-gcm");
+            }
+        }
+        this.encryptedAlgorithm = "aes-256-gcm";
     }
 
     @Override

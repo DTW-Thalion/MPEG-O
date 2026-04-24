@@ -415,6 +415,76 @@ class ProtectionTest {
         EncryptionManager.encryptIntensityChannelInRun(path, "run_0001", key);
     }
 
+    // ── v1.1 encrypt → close → reopen → decrypt → read parity ──────────
+
+    @Test
+    void v11EncryptedStateSurvivesCloseReopen() throws Exception {
+        String path = tempDir.resolve("v11_issue_a.mpgo").toString();
+        byte[] key = new byte[32];
+        for (int i = 0; i < 32; i++) key[i] = (byte) i;
+
+        writeMinimalOneRunFixture(path, "run_0001");
+
+        // Open, capture run + file context, close. Encrypt must run with
+        // the dataset closed — HDF5 single-writer contract, same as ObjC.
+        SpectralDataset holder = SpectralDataset.open(path);
+        assertFalse(holder.isEncrypted(), "freshly-written file must not be flagged");
+        assertEquals("", holder.encryptedAlgorithm());
+        holder.close();
+
+        // Issue A: dataset-level encrypt must persist @encrypted to disk.
+        holder.encryptWithKey(key, EncryptionLevel.DATASET);
+
+        try (SpectralDataset reopened = SpectralDataset.open(path)) {
+            assertTrue(reopened.isEncrypted(),
+                    "reopen must see the persisted @encrypted root attribute");
+            assertEquals("aes-256-gcm", reopened.encryptedAlgorithm());
+        }
+    }
+
+    @Test
+    void v11DecryptRehydratesSpectrumIntensity() throws Exception {
+        String path = tempDir.resolve("v11_issue_b.mpgo").toString();
+        byte[] key = new byte[32];
+        for (int i = 0; i < 32; i++) key[i] = (byte) i;
+        double[] expected = { 1.0, 2.0, 3.0, 4.0 };
+
+        writeMinimalOneRunFixture(path, "run_0001");
+
+        SpectralDataset holder = SpectralDataset.open(path);
+        holder.close();
+        holder.encryptWithKey(key, EncryptionLevel.DATASET);
+
+        try (SpectralDataset ds = SpectralDataset.open(path)) {
+            assertTrue(ds.isEncrypted());
+            // Issue B: after decrypt, the spectrum API must see plaintext
+            // intensities without the caller parsing bytes themselves.
+            ds.decryptWithKey(key);
+            AcquisitionRun run = ds.msRuns().get("run_0001");
+            Spectrum s = run.objectAtIndex(0);
+            assertInstanceOf(MassSpectrum.class, s);
+            double[] got = ((MassSpectrum) s).intensityValues();
+            assertArrayEquals(expected, got, 1e-12,
+                    "decrypt_with_key must rehydrate intensity so spectra are usable");
+        }
+    }
+
+    private static void writeMinimalOneRunFixture(String path, String runName) {
+        SpectrumIndex idx = new SpectrumIndex(1,
+                new long[]{0}, new int[]{4},
+                new double[]{0.0}, new int[]{1}, new int[]{1},
+                new double[]{0.0}, new int[]{0}, new double[]{100.0});
+        Map<String, double[]> ch = new LinkedHashMap<>();
+        ch.put("mz", new double[]{100.0, 200.0, 300.0, 400.0});
+        ch.put("intensity", new double[]{1.0, 2.0, 3.0, 4.0});
+        AcquisitionRun run = new AcquisitionRun(runName, AcquisitionMode.MS1_DDA,
+                idx, null, ch, List.of(), List.of(), null, 0.0);
+        try (SpectralDataset ds = SpectralDataset.create(path, "v1.1 parity",
+                null, List.of(run), List.of(), List.of(), List.of())) {
+            // dataset written
+        }
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────
 
     private static String getFixturePath(String name) {
