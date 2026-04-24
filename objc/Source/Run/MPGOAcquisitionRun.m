@@ -44,6 +44,14 @@
     // because Numpress decoding needs the running sum prefix.
     NSMutableDictionary<NSString *, NSData *> *_numpressChannels;
 
+    // M5-handoff: in-memory plaintext channels populated by
+    // -decryptWithKey:error:. Keyed by channel name. When present,
+    // spectrumAtIndex: slices into this float64 buffer so spectra are
+    // readable through the normal API after decrypt without modifying
+    // the on-disk file (mirrors the Python rehydrate-in-memory
+    // semantics in MPGOAcquisitionRun).
+    NSMutableDictionary<NSString *, NSData *> *_decryptedChannels;
+
     // Persistence context attached post-load for protocol encryption
     NSString *_persistenceFilePath;
     NSString *_persistenceRunName;
@@ -807,10 +815,12 @@
         [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
     for (NSString *chName in _channelNames) {
         NSData *d = nil;
-        NSData *decoded = _numpressChannels[chName];
+        NSData *plaintext = _decryptedChannels[chName];
+        NSData *decoded = plaintext ?: _numpressChannels[chName];
         if (decoded) {
-            // M21 Numpress-delta path: slice the eagerly-decoded
-            // float64 buffer directly. off/len are in element units.
+            // Unified element-wise slice: M21 Numpress-delta or
+            // M5-handoff decrypted-channels (both are contiguous
+            // float64 buffers keyed by off/len in element units).
             const uint8_t *base = (const uint8_t *)decoded.bytes;
             d = [NSData dataWithBytes:base + (NSUInteger)off * sizeof(double)
                                length:(NSUInteger)len * sizeof(double)];
@@ -995,7 +1005,51 @@
                                            withKey:key
                                              error:error];
 #pragma clang diagnostic pop
-    return plain != nil;
+    if (!plain) return NO;
+
+    // M5-handoff: cache the concatenated plaintext so
+    // -spectrumAtIndex: can slice it directly. The on-disk file stays
+    // encrypted — only the open handle sees plaintext.
+    if (!_decryptedChannels) {
+        _decryptedChannels = [NSMutableDictionary dictionary];
+    }
+    _decryptedChannels[@"intensity"] = plain;
+    return YES;
+}
+
+/** Expose the decrypted plaintext for channel ``chName`` if
+ *  -decryptWithKey:error: has populated the cache. Returns nil
+ *  otherwise. Consumed by MPGOSpectralDataset so the dataset-level
+ *  -decryptWithKey:error: can return a {runName: plaintext} NSDictionary
+ *  matching the Python surface. Internal API. */
+- (NSData *)decryptedChannelNamed:(NSString *)chName
+{
+    return _decryptedChannels[chName];
+}
+
+/** Reattach storage handles after a dataset-level decrypt that had to
+ *  close the file for compound-dataset unsealing. Accepts the fresh
+ *  signal_channels ``MPGOHDF5Group`` from the reopened file and
+ *  rebuilds ``_storageSignalGroup`` / ``_storageDatasets`` so
+ *  ``spectrumAtIndex:`` can once again read unencrypted channels
+ *  (mz, chemical_shift, ...) from disk. The decrypted intensity
+ *  channel continues to serve from the in-memory cache. Internal API
+ *  — called only by MPGOSpectralDataset. */
+- (BOOL)reattachSignalHandlesFromGroup:(MPGOHDF5Group *)channels error:(NSError **)error
+{
+    if (!channels) return NO;
+    NSMutableDictionary<NSString *, id<MPGOStorageDataset>> *datasets =
+        [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
+    for (NSString *chName in _channelNames) {
+        NSString *dsName = [chName stringByAppendingString:@"_values"];
+        if (![channels hasChildNamed:dsName]) continue;  // encrypted / absent
+        MPGOHDF5Dataset *ds = [channels openDatasetNamed:dsName error:error];
+        if (!ds) return NO;
+        datasets[chName] = [MPGOHDF5Provider adapterForDataset:ds name:dsName];
+    }
+    _storageSignalGroup = [MPGOHDF5Provider adapterForGroup:channels];
+    _storageDatasets    = datasets;
+    return YES;
 }
 
 - (MPGOAccessPolicy *)accessPolicy         { return _accessPolicy; }

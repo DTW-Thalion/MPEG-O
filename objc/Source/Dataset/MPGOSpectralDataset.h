@@ -45,6 +45,20 @@
 @property (readonly, copy) NSArray<MPGOProvenanceRecord *> *provenanceRecords;
 @property (readonly, strong) MPGOTransitionList *transitions;       // nullable
 
+/** YES iff this dataset carries an `encrypted` root attribute (written
+ *  by -encryptWithKey:level:error: via -markRootEncryptedWithError:).
+ *  Value is derived from -encryptedAlgorithm so the two stay consistent.
+ *  Mirrors Python `SpectralDataset.is_encrypted` / Java
+ *  `SpectralDataset.isEncrypted()`. */
+@property (readonly) BOOL isEncrypted;
+
+/** The algorithm identifier stored in the root `encrypted` attribute,
+ *  or the empty string when the dataset is not encrypted. Typical value
+ *  is @"aes-256-gcm". Mirrors Python
+ *  `SpectralDataset.encrypted_algorithm` / Java
+ *  `SpectralDataset.encryptedAlgorithm()`. */
+@property (readonly, copy) NSString *encryptedAlgorithm;
+
 - (instancetype)initWithTitle:(NSString *)title
            isaInvestigationId:(NSString *)isaId
                        msRuns:(NSDictionary *)msRuns

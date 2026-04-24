@@ -449,16 +449,40 @@ class SpectralDataset:
         encrypts every MS run's intensity channel in place. For finer-grained
         levels, callers should use ``run.encrypt_with_key`` directly.
 
-        Matches ObjC ``-[MPGOSpectralDataset encryptWithKey:level:error:]``.
+        Matches ObjC ``-[MPGOSpectralDataset encryptWithKey:level:error:]``:
+        after run-level encryption, marks the root with
+        ``encrypted="aes-256-gcm"`` so :attr:`is_encrypted` and
+        :attr:`encrypted_algorithm` round-trip across close/reopen.
         """
         for run in self.ms_runs.values():
             run.encrypt_with_key(key, level)
+        self._mark_root_encrypted()
+
+    def _mark_root_encrypted(self) -> None:
+        """Persist ``encrypted=<algorithm>`` on the root, mirroring ObjC's
+        ``-[MPGOSpectralDataset markRootEncryptedWithError:]``.
+
+        Updates the in-memory ``encrypted_algorithm`` field as well so
+        :attr:`is_encrypted` becomes True without requiring a reopen.
+        """
+        from .encryption import DEFAULT_ENCRYPTION_ALGORITHM
+
+        if self.file is not None:
+            io.write_fixed_string_attr(self.file, "encrypted", DEFAULT_ENCRYPTION_ALGORITHM)
+        elif self.provider is not None:
+            self.provider.root_group().set_attribute("encrypted", DEFAULT_ENCRYPTION_ALGORITHM)
+        object.__setattr__(self, "encrypted_algorithm", DEFAULT_ENCRYPTION_ALGORITHM)
 
     def decrypt_with_key(self, key: bytes) -> dict[str, bytes]:
         """Decrypt every MS run's intensity channel.
 
         Returns a mapping of ``{run_name: plaintext_bytes}``. The on-disk
         file is NOT modified — decryption is read-only.
+
+        Side effect: each run's decrypted channel is cached in memory so
+        ``run.object_at_index(i).intensity_array`` works without re-decrypting
+        (Option 1 of the MCP-Server M5 handoff; mirrors ObjC
+        ``-[MPGOSpectralDataset decryptWithKey:]`` rehydration semantics).
         """
         return {name: run.decrypt_with_key(key) for name, run in self.ms_runs.items()}
 

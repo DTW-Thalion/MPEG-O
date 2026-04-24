@@ -317,6 +317,12 @@ class AcquisitionRun:
     # this float64 buffer instead of hitting the HDF5 dataset, because
     # Numpress decoding needs the running-sum prefix of the run.
     _numpress_channels: dict[str, np.ndarray] = field(default_factory=dict, repr=False)
+    # M5-handoff: decrypted in-memory channels populated by
+    # :meth:`decrypt_with_key`, keyed by channel name. When present,
+    # :meth:`_materialize_spectrum` slices from this buffer so spectra
+    # are readable through the normal API after decrypt while the
+    # on-disk file stays encrypted. Mirrors ObjC rehydration.
+    _decrypted_channels: dict[str, np.ndarray] = field(default_factory=dict, repr=False)
     # M41.3: Streamable cursor and Provenanceable cache.
     _cursor: int = field(default=0, repr=False)
     _provenance_cache: list[ProvenanceRecord] | None = field(default=None, repr=False)
@@ -552,6 +558,12 @@ class AcquisitionRun:
         Operates through the already-open HDF5 group. Matches ObjC
         ``-[MPGOAcquisitionRun decryptWithKey:]`` semantics (NSData → bytes).
 
+        Side effect: the decrypted ndarray is cached on the run so
+        subsequent :meth:`object_at_index` calls can return
+        :class:`SignalArray` views without re-decrypting. See the M5
+        handoff note — spectra become readable through the normal API
+        path after decrypt.
+
         Requires a persistence context — call only after opening via
         :meth:`SpectralDataset.open`.
         """
@@ -565,6 +577,7 @@ class AcquisitionRun:
         # and StorageGroup; no native unwrap needed.
         sig_group = self.group.open_group("signal_channels")
         arr = read_encrypted_channel(sig_group, "intensity", key, dtype="<f8")
+        self._decrypted_channels["intensity"] = arr
         return arr.tobytes()
 
     def access_policy(self) -> AccessPolicy | None:
@@ -597,8 +610,10 @@ class AcquisitionRun:
 
         signal_arrays: dict[str, SignalArray] = {}
         for c in self.channel_names:
-            decoded = self._numpress_channels.get(c)
-            if decoded is not None:
+            decrypted = self._decrypted_channels.get(c)
+            if decrypted is not None:
+                arr = decrypted[offset:offset + length]
+            elif (decoded := self._numpress_channels.get(c)) is not None:
                 arr = decoded[offset:offset + length]
             else:
                 try:
