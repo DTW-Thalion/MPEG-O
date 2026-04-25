@@ -111,6 +111,7 @@ class SpectralDataset:
         cls,
         path: str | Path,
         *,
+        provider: str | None = None,
         thread_safe: bool = False,
         writable: bool = False,
         **fsspec_kwargs: Any,
@@ -174,6 +175,15 @@ class SpectralDataset:
                 raise
 
         p = Path(path)
+        # M82: if an explicit provider name is given for a bare path, route
+        # through open_provider so Memory / SQLite / Zarr backends work.
+        if provider is not None and provider not in ("hdf5", "h5", "h5py"):
+            sp = open_provider(str(path), provider=provider, mode=mode)
+            try:
+                return cls._from_provider(p, sp, thread_safe=thread_safe)
+            except Exception:
+                sp.close()
+                raise
         provider = Hdf5Provider.open(str(p), mode=mode)
         f = provider.native_handle()
         try:
