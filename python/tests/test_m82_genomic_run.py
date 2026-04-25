@@ -717,3 +717,35 @@ def test_multi_omics_file(tmp_path: Path):
         assert gr[0].chromosome == g_run.chromosomes[0]
     finally:
         ds.close()
+
+def test_opt_genomic_flag_present(tmp_path: Path):
+    """Acceptance #9a: opt_genomic in feature_flags when genomic_runs exist."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={},
+        genomic_runs={"genomic_0001": _make_written_run(n_reads=10)},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        assert "opt_genomic" in ds.feature_flags.features
+    finally:
+        ds.close()
+
+
+def test_opt_genomic_flag_absent_when_no_genomic_runs(tmp_path: Path):
+    """Acceptance #9b: opt_genomic NOT present when no genomic_runs."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    p = tmp_path / "ms_only.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i", runs={}
+    )
+    ds = SpectralDataset.open(p)
+    try:
+        assert "opt_genomic" not in ds.feature_flags.features
+    finally:
+        ds.close()
