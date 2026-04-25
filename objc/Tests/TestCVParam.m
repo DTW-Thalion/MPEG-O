@@ -1,8 +1,8 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "ValueClasses/MPGOCVParam.h"
+#import "ValueClasses/TTIOCVParam.h"
 
-static MPGOCVParam *roundTripCV(MPGOCVParam *p)
+static TTIOCVParam *roundTripCV(TTIOCVParam *p)
 {
     NSData *data = [NSKeyedArchiver archivedDataWithRootObject:p];
     return [NSKeyedUnarchiver unarchiveObjectWithData:data];
@@ -11,13 +11,13 @@ static MPGOCVParam *roundTripCV(MPGOCVParam *p)
 void testCVParam(void)
 {
     // ---- construction with all fields ----
-    MPGOCVParam *full =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *full =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000511"
                                      name:@"ms level"
                                     value:@2
                                      unit:nil];
-    PASS(full != nil, "MPGOCVParam constructible via class method");
+    PASS(full != nil, "TTIOCVParam constructible via class method");
     PASS([full.ontologyRef isEqualToString:@"MS"], "ontologyRef stored");
     PASS([full.accession isEqualToString:@"MS:1000511"], "accession stored");
     PASS([full.name isEqualToString:@"ms level"], "name stored");
@@ -25,8 +25,8 @@ void testCVParam(void)
     PASS(full.unit == nil, "nil unit is preserved");
 
     // ---- nil optional fields ----
-    MPGOCVParam *valueOnly =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *valueOnly =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000514"
                                      name:@"m/z array"
                                     value:nil
@@ -34,8 +34,8 @@ void testCVParam(void)
     PASS(valueOnly.value == nil, "nil value is preserved");
     PASS([valueOnly.unit isEqualToString:@"MS:1000040"], "unit-only param keeps unit");
 
-    MPGOCVParam *bare =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *bare =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000130"
                                      name:@"positive scan"
                                     value:nil
@@ -45,8 +45,8 @@ void testCVParam(void)
 
     // ---- string fields are copied (defensive) ----
     NSMutableString *mut = [NSMutableString stringWithString:@"original_name"];
-    MPGOCVParam *defcopy =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *defcopy =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:0000001"
                                      name:mut
                                     value:nil
@@ -56,44 +56,44 @@ void testCVParam(void)
          "name is defensively copied");
 
     // ---- equality ----
-    MPGOCVParam *a =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *a =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000511"
                                      name:@"ms level"
                                     value:@2
                                      unit:nil];
-    MPGOCVParam *b =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *b =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000511"
                                      name:@"ms level"
                                     value:@2
                                      unit:nil];
-    MPGOCVParam *diffOnto =
-        [MPGOCVParam paramWithOntologyRef:@"UO"
+    TTIOCVParam *diffOnto =
+        [TTIOCVParam paramWithOntologyRef:@"UO"
                                 accession:@"MS:1000511"
                                      name:@"ms level"
                                     value:@2
                                      unit:nil];
-    MPGOCVParam *diffAcc =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *diffAcc =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000512"
                                      name:@"ms level"
                                     value:@2
                                      unit:nil];
-    MPGOCVParam *diffName =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *diffName =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000511"
                                      name:@"different label"
                                     value:@2
                                      unit:nil];
-    MPGOCVParam *diffValue =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *diffValue =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000511"
                                      name:@"ms level"
                                     value:@3
                                      unit:nil];
-    MPGOCVParam *nilValue =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *nilValue =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000511"
                                      name:@"ms level"
                                     value:nil
@@ -109,8 +109,8 @@ void testCVParam(void)
     PASS(![a isEqual:nilValue],  "isEqual: non-nil value vs nil value distinguished");
     PASS([nilValue isEqual:nilValue], "isEqual: two nil-value params reflexive");
 
-    MPGOCVParam *nilValue2 =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *nilValue2 =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000511"
                                      name:@"ms level"
                                     value:nil
@@ -122,28 +122,28 @@ void testCVParam(void)
     PASS(![a isEqual:@"string"], "isEqual: foreign class → NO");
 
     // ---- copying (immutable) ----
-    MPGOCVParam *cp = [a copy];
+    TTIOCVParam *cp = [a copy];
     PASS(cp == a, "immutable copy returns self");
 
     // ---- NSCoding round-trip ----
-    MPGOCVParam *decoded = roundTripCV(a);
+    TTIOCVParam *decoded = roundTripCV(a);
     PASS(decoded != nil, "NSCoding round-trip yields object");
     PASS([decoded isEqual:a], "decoded equal to original");
     PASS([decoded.value isEqual:@2], "decoded numeric value preserved");
 
-    MPGOCVParam *decodedBare = roundTripCV(bare);
+    TTIOCVParam *decodedBare = roundTripCV(bare);
     PASS([decodedBare isEqual:bare], "param with nil value+unit survives NSCoding");
     PASS(decodedBare.value == nil, "decoded nil value stays nil");
     PASS(decodedBare.unit  == nil, "decoded nil unit stays nil");
 
     // String value (not just NSNumber)
-    MPGOCVParam *strParam =
-        [MPGOCVParam paramWithOntologyRef:@"MS"
+    TTIOCVParam *strParam =
+        [TTIOCVParam paramWithOntologyRef:@"MS"
                                 accession:@"MS:1000031"
                                      name:@"instrument model"
                                     value:@"Q Exactive HF"
                                      unit:nil];
-    MPGOCVParam *decodedStr = roundTripCV(strParam);
+    TTIOCVParam *decodedStr = roundTripCV(strParam);
     PASS([decodedStr.value isEqualToString:@"Q Exactive HF"],
          "string value survives NSCoding round-trip");
 }

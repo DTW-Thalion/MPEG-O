@@ -1,33 +1,33 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "ValueClasses/MPGOIsolationWindow.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOFeatureFlags.h"
+#import "ValueClasses/TTIOIsolationWindow.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOFeatureFlags.h"
 #import <unistd.h>
 
-static MPGOSignalArray *float64Array(const double *src, NSUInteger n)
+static TTIOSignalArray *float64Array(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf
                                             length:n
                                           encoding:enc
                                               axis:nil];
 }
 
-static MPGOIsolationWindow *roundTrip(MPGOIsolationWindow *w)
+static TTIOIsolationWindow *roundTrip(TTIOIsolationWindow *w)
 {
     NSData *data = [NSKeyedArchiver archivedDataWithRootObject:w];
     return [NSKeyedUnarchiver unarchiveObjectWithData:data];
@@ -36,10 +36,10 @@ static MPGOIsolationWindow *roundTrip(MPGOIsolationWindow *w)
 void testIsolationWindow(void)
 {
     // ---- construction ----
-    MPGOIsolationWindow *w = [MPGOIsolationWindow windowWithTargetMz:500.0
+    TTIOIsolationWindow *w = [TTIOIsolationWindow windowWithTargetMz:500.0
                                                          lowerOffset:1.0
                                                          upperOffset:2.0];
-    PASS(w != nil, "MPGOIsolationWindow constructible");
+    PASS(w != nil, "TTIOIsolationWindow constructible");
     PASS(w.targetMz == 500.0, "targetMz stored");
     PASS(w.lowerOffset == 1.0, "lowerOffset stored");
     PASS(w.upperOffset == 2.0, "upperOffset stored");
@@ -48,13 +48,13 @@ void testIsolationWindow(void)
     PASS([w width] == 3.0, "width = lowerOffset + upperOffset");
 
     // ---- equality ----
-    MPGOIsolationWindow *a = [MPGOIsolationWindow windowWithTargetMz:500.0
+    TTIOIsolationWindow *a = [TTIOIsolationWindow windowWithTargetMz:500.0
                                                          lowerOffset:0.5
                                                          upperOffset:0.5];
-    MPGOIsolationWindow *b = [MPGOIsolationWindow windowWithTargetMz:500.0
+    TTIOIsolationWindow *b = [TTIOIsolationWindow windowWithTargetMz:500.0
                                                          lowerOffset:0.5
                                                          upperOffset:0.5];
-    MPGOIsolationWindow *c = [MPGOIsolationWindow windowWithTargetMz:500.0
+    TTIOIsolationWindow *c = [TTIOIsolationWindow windowWithTargetMz:500.0
                                                          lowerOffset:0.5
                                                          upperOffset:1.0];
     PASS([a isEqual:b] && [b isEqual:a], "isEqual: symmetric for equal values");
@@ -63,11 +63,11 @@ void testIsolationWindow(void)
     PASS([a hash] == [b hash], "equal objects produce equal hashes");
 
     // ---- copying (immutable: copy returns self) ----
-    MPGOIsolationWindow *copy = [a copy];
+    TTIOIsolationWindow *copy = [a copy];
     PASS(copy == a, "immutable copy returns self");
 
     // ---- NSCoding round-trip ----
-    MPGOIsolationWindow *decoded = roundTrip(a);
+    TTIOIsolationWindow *decoded = roundTrip(a);
     PASS([decoded isEqual:a], "NSCoding round-trip preserves value");
     PASS(decoded != a, "decoded is a fresh instance");
 }
@@ -75,61 +75,61 @@ void testIsolationWindow(void)
 void testActivationMethodEnum(void)
 {
     // M74: values persist as int32 in spectrum_index; must match Python/Java.
-    PASS(MPGOActivationMethodNone  == 0, "ActivationMethod.None = 0");
-    PASS(MPGOActivationMethodCID   == 1, "ActivationMethod.CID  = 1");
-    PASS(MPGOActivationMethodHCD   == 2, "ActivationMethod.HCD  = 2");
-    PASS(MPGOActivationMethodETD   == 3, "ActivationMethod.ETD  = 3");
-    PASS(MPGOActivationMethodUVPD  == 4, "ActivationMethod.UVPD = 4");
-    PASS(MPGOActivationMethodECD   == 5, "ActivationMethod.ECD  = 5");
-    PASS(MPGOActivationMethodEThcD == 6, "ActivationMethod.EThcD= 6");
+    PASS(TTIOActivationMethodNone  == 0, "ActivationMethod.None = 0");
+    PASS(TTIOActivationMethodCID   == 1, "ActivationMethod.CID  = 1");
+    PASS(TTIOActivationMethodHCD   == 2, "ActivationMethod.HCD  = 2");
+    PASS(TTIOActivationMethodETD   == 3, "ActivationMethod.ETD  = 3");
+    PASS(TTIOActivationMethodUVPD  == 4, "ActivationMethod.UVPD = 4");
+    PASS(TTIOActivationMethodECD   == 5, "ActivationMethod.ECD  = 5");
+    PASS(TTIOActivationMethodEThcD == 6, "ActivationMethod.EThcD= 6");
 }
 
 void testMassSpectrumActivationAndIsolationFields(void)
 {
     double mzVals[] = { 100.0, 200.0 };
     double intVals[] = { 1.0, 2.0 };
-    MPGOSignalArray *mz = float64Array(mzVals, 2);
-    MPGOSignalArray *intens = float64Array(intVals, 2);
+    TTIOSignalArray *mz = float64Array(mzVals, 2);
+    TTIOSignalArray *intens = float64Array(intVals, 2);
 
     // Backward-compatible initializer defaults new fields.
     NSError *err = nil;
-    MPGOMassSpectrum *ms1 = [[MPGOMassSpectrum alloc]
+    TTIOMassSpectrum *ms1 = [[TTIOMassSpectrum alloc]
         initWithMzArray:mz intensityArray:intens
-                msLevel:1 polarity:MPGOPolarityPositive
+                msLevel:1 polarity:TTIOPolarityPositive
              scanWindow:nil
           indexPosition:0 scanTimeSeconds:0.0
             precursorMz:0.0 precursorCharge:0 error:&err];
     PASS(ms1 != nil, "backward-compat init builds MassSpectrum");
-    PASS(ms1.activationMethod == MPGOActivationMethodNone,
+    PASS(ms1.activationMethod == TTIOActivationMethodNone,
          "backward-compat defaults activationMethod to None");
     PASS(ms1.isolationWindow == nil,
          "backward-compat defaults isolationWindow to nil");
 
     // Full initializer populates both.
-    MPGOIsolationWindow *iw = [MPGOIsolationWindow windowWithTargetMz:500.0
+    TTIOIsolationWindow *iw = [TTIOIsolationWindow windowWithTargetMz:500.0
                                                           lowerOffset:1.0
                                                           upperOffset:1.0];
-    MPGOMassSpectrum *ms2 = [[MPGOMassSpectrum alloc]
+    TTIOMassSpectrum *ms2 = [[TTIOMassSpectrum alloc]
         initWithMzArray:mz intensityArray:intens
-                msLevel:2 polarity:MPGOPolarityPositive
+                msLevel:2 polarity:TTIOPolarityPositive
              scanWindow:nil
-       activationMethod:MPGOActivationMethodHCD
+       activationMethod:TTIOActivationMethodHCD
         isolationWindow:iw
           indexPosition:1 scanTimeSeconds:1.5
             precursorMz:500.0 precursorCharge:2 error:&err];
     PASS(ms2 != nil, "M74 init builds MassSpectrum");
-    PASS(ms2.activationMethod == MPGOActivationMethodHCD,
+    PASS(ms2.activationMethod == TTIOActivationMethodHCD,
          "activationMethod stored");
     PASS(ms2.isolationWindow == iw, "isolationWindow stored");
     PASS(ms2.isolationWindow.targetMz == 500.0,
          "isolationWindow.targetMz reachable via property");
 }
 
-// -------- M74 Slice B: MPGOSpectrumIndex round-trip --------
+// -------- M74 Slice B: TTIOSpectrumIndex round-trip --------
 
 static NSString *m74IndexPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m74idx_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m74idx_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
@@ -156,8 +156,8 @@ void testSpectrumIndexM74RoundTrip(void)
 
     // ---- legacy path (no M74 columns) ----
     {
-        MPGOSpectrumIndex *idx =
-            [[MPGOSpectrumIndex alloc] initWithOffsets:offsD
+        TTIOSpectrumIndex *idx =
+            [[TTIOSpectrumIndex alloc] initWithOffsets:offsD
                                                 lengths:lensD
                                          retentionTimes:rtsD
                                                msLevels:mlsD
@@ -167,23 +167,23 @@ void testSpectrumIndexM74RoundTrip(void)
                                      basePeakIntensities:bpisD];
         PASS(idx.count == n, "legacy SpectrumIndex count == 3");
         PASS(!idx.hasActivationDetail, "legacy SpectrumIndex hasActivationDetail == NO");
-        PASS([idx activationMethodAt:1] == MPGOActivationMethodNone,
+        PASS([idx activationMethodAt:1] == TTIOActivationMethodNone,
              "legacy activationMethodAt returns None sentinel");
         PASS([idx isolationWindowAt:1] == nil,
              "legacy isolationWindowAt returns nil");
 
         NSString *path = m74IndexPath(@"legacy");
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([idx writeToGroup:[f rootGroup] error:&err], "legacy index writes");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOSpectrumIndex *back =
-            [MPGOSpectrumIndex readFromGroup:[g rootGroup] error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOSpectrumIndex *back =
+            [TTIOSpectrumIndex readFromGroup:[g rootGroup] error:&err];
         PASS(back != nil, "legacy index reads back");
         PASS(!back.hasActivationDetail, "read-back legacy has no M74 columns");
-        PASS([back activationMethodAt:0] == MPGOActivationMethodNone,
+        PASS([back activationMethodAt:0] == TTIOActivationMethodNone,
              "read-back legacy activationMethodAt is None");
         [g close];
         unlink([path fileSystemRepresentation]);
@@ -191,9 +191,9 @@ void testSpectrumIndexM74RoundTrip(void)
 
     // ---- M74 path (all four columns populated) ----
     {
-        int32_t acts[3] = { MPGOActivationMethodNone,
-                            MPGOActivationMethodHCD,
-                            MPGOActivationMethodCID };
+        int32_t acts[3] = { TTIOActivationMethodNone,
+                            TTIOActivationMethodHCD,
+                            TTIOActivationMethodCID };
         double  itgt[3] = { 0.0, 500.0, 750.5 };
         double  ilo[3]  = { 0.0, 1.0, 0.5 };
         double  ihi[3]  = { 0.0, 2.0, 0.75 };
@@ -202,8 +202,8 @@ void testSpectrumIndexM74RoundTrip(void)
         NSData *iloD  = [NSData dataWithBytes:ilo  length:sizeof(ilo)];
         NSData *ihiD  = [NSData dataWithBytes:ihi  length:sizeof(ihi)];
 
-        MPGOSpectrumIndex *idx =
-            [[MPGOSpectrumIndex alloc] initWithOffsets:offsD
+        TTIOSpectrumIndex *idx =
+            [[TTIOSpectrumIndex alloc] initWithOffsets:offsD
                                                 lengths:lensD
                                          retentionTimes:rtsD
                                                msLevels:mlsD
@@ -216,29 +216,29 @@ void testSpectrumIndexM74RoundTrip(void)
                                    isolationLowerOffsets:iloD
                                    isolationUpperOffsets:ihiD];
         PASS(idx.hasActivationDetail, "M74 SpectrumIndex hasActivationDetail == YES");
-        PASS([idx activationMethodAt:1] == MPGOActivationMethodHCD,
+        PASS([idx activationMethodAt:1] == TTIOActivationMethodHCD,
              "M74 activationMethodAt returns HCD");
         PASS([idx isolationWindowAt:0] == nil,
              "MS1 sentinel: isolationWindowAt(0) == nil");
-        MPGOIsolationWindow *w1 = [idx isolationWindowAt:1];
+        TTIOIsolationWindow *w1 = [idx isolationWindowAt:1];
         PASS(w1 != nil && w1.targetMz == 500.0 && w1.lowerOffset == 1.0
              && w1.upperOffset == 2.0,
              "M74 isolationWindowAt(1) returns populated window");
 
         NSString *path = m74IndexPath(@"full");
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([idx writeToGroup:[f rootGroup] error:&err], "M74 index writes");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOSpectrumIndex *back =
-            [MPGOSpectrumIndex readFromGroup:[g rootGroup] error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOSpectrumIndex *back =
+            [TTIOSpectrumIndex readFromGroup:[g rootGroup] error:&err];
         PASS(back != nil, "M74 index reads back");
         PASS(back.hasActivationDetail, "read-back M74 hasActivationDetail == YES");
-        PASS([back activationMethodAt:2] == MPGOActivationMethodCID,
+        PASS([back activationMethodAt:2] == TTIOActivationMethodCID,
              "read-back M74 activationMethodAt(2) == CID");
-        MPGOIsolationWindow *w2 = [back isolationWindowAt:2];
+        TTIOIsolationWindow *w2 = [back isolationWindowAt:2];
         PASS(w2 != nil && w2.targetMz == 750.5 && [w2 width] == 1.25,
              "read-back M74 isolationWindowAt(2) reconstructs window");
         PASS([back isolationWindowAt:0] == nil,
@@ -251,25 +251,25 @@ void testSpectrumIndexM74RoundTrip(void)
 // -------- M74 Slice E: feature flag + format version bump --------
 //
 // Writing a dataset whose runs carry the four optional M74 columns must
-// advertise `opt_ms2_activation_detail` in @mpeg_o_features and bump
-// @mpeg_o_format_version from "1.1" to "1.3". Legacy datasets (no M74
+// advertise `opt_ms2_activation_detail` in @ttio_features and bump
+// @ttio_format_version from "1.1" to "1.3". Legacy datasets (no M74
 // columns) must keep the original "1.1" layout so existing byte-parity
 // tests survive.
 
-static MPGOMassSpectrum *m74SliceEMakeSpec(int msLevel,
-                                             MPGOActivationMethod m,
-                                             MPGOIsolationWindow *iw,
+static TTIOMassSpectrum *m74SliceEMakeSpec(int msLevel,
+                                             TTIOActivationMethod m,
+                                             TTIOIsolationWindow *iw,
                                              NSUInteger idxPos)
 {
     double mzVals[] = {100.0, 101.0, 102.0};
     double inVals[] = {10.0, 20.0, 30.0};
-    MPGOSignalArray *mz = float64Array(mzVals, 3);
-    MPGOSignalArray *in = float64Array(inVals, 3);
+    TTIOSignalArray *mz = float64Array(mzVals, 3);
+    TTIOSignalArray *in = float64Array(inVals, 3);
     NSError *err = nil;
-    return [[MPGOMassSpectrum alloc] initWithMzArray:mz
+    return [[TTIOMassSpectrum alloc] initWithMzArray:mz
                                       intensityArray:in
                                              msLevel:msLevel
-                                            polarity:MPGOPolarityPositive
+                                            polarity:TTIOPolarityPositive
                                           scanWindow:nil
                                     activationMethod:m
                                      isolationWindow:iw
@@ -280,47 +280,47 @@ static MPGOMassSpectrum *m74SliceEMakeSpec(int msLevel,
                                                error:&err];
 }
 
-static MPGOAcquisitionRun *m74SliceEMakeRun(BOOL withM74)
+static TTIOAcquisitionRun *m74SliceEMakeRun(BOOL withM74)
 {
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@""
                                                      model:@""
                                               serialNumber:@""
                                                 sourceType:@""
                                               analyzerType:@""
                                               detectorType:@""];
-    MPGOMassSpectrum *ms1 =
-        m74SliceEMakeSpec(1, MPGOActivationMethodNone, nil, 0);
+    TTIOMassSpectrum *ms1 =
+        m74SliceEMakeSpec(1, TTIOActivationMethodNone, nil, 0);
     NSArray *spectra;
     if (withM74) {
-        MPGOIsolationWindow *iw =
-            [MPGOIsolationWindow windowWithTargetMz:445.3
+        TTIOIsolationWindow *iw =
+            [TTIOIsolationWindow windowWithTargetMz:445.3
                                          lowerOffset:0.5
                                          upperOffset:0.5];
-        MPGOMassSpectrum *ms2 =
-            m74SliceEMakeSpec(2, MPGOActivationMethodHCD, iw, 1);
+        TTIOMassSpectrum *ms2 =
+            m74SliceEMakeSpec(2, TTIOActivationMethodHCD, iw, 1);
         spectra = @[ms1, ms2];
     } else {
         spectra = @[ms1];
     }
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
                                       instrumentConfig:cfg];
 }
 
 void testSpectralDatasetM74FeatureFlag(void)
 {
     NSString *legacyPath = [NSString stringWithFormat:
-        @"/tmp/mpgo_test_m74sliceE_legacy_%d.mpgo", (int)getpid()];
+        @"/tmp/ttio_test_m74sliceE_legacy_%d.tio", (int)getpid()];
     NSString *m74Path = [NSString stringWithFormat:
-        @"/tmp/mpgo_test_m74sliceE_m74_%d.mpgo", (int)getpid()];
+        @"/tmp/ttio_test_m74sliceE_m74_%d.tio", (int)getpid()];
     unlink([legacyPath fileSystemRepresentation]);
     unlink([m74Path fileSystemRepresentation]);
 
     // ---- Legacy dataset: no M74 content, keeps format "1.1" ----
     @autoreleasepool {
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"legacy"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"legacy"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": m74SliceEMakeRun(NO)}
                                                nmrRuns:@{}
@@ -332,10 +332,10 @@ void testSpectralDatasetM74FeatureFlag(void)
         PASS([ds writeToFilePath:legacyPath error:&err],
              "Slice E: legacy dataset writes");
 
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:legacyPath error:&err];
-        MPGOHDF5Group *root = [f rootGroup];
-        NSString *version = [MPGOFeatureFlags formatVersionForRoot:root];
-        NSArray *features = [MPGOFeatureFlags featuresForRoot:root];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:legacyPath error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        NSString *version = [TTIOFeatureFlags formatVersionForRoot:root];
+        NSArray *features = [TTIOFeatureFlags featuresForRoot:root];
         PASS([version isEqualToString:@"1.1"],
              "Slice E: legacy file keeps format version 1.1");
         PASS(![features containsObject:@"opt_ms2_activation_detail"],
@@ -345,8 +345,8 @@ void testSpectralDatasetM74FeatureFlag(void)
 
     // ---- M74 dataset: activation column present, bumps to "1.3" ----
     @autoreleasepool {
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m74"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m74"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": m74SliceEMakeRun(YES)}
                                                nmrRuns:@{}
@@ -358,27 +358,27 @@ void testSpectralDatasetM74FeatureFlag(void)
         PASS([ds writeToFilePath:m74Path error:&err],
              "Slice E: M74 dataset writes");
 
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:m74Path error:&err];
-        MPGOHDF5Group *root = [f rootGroup];
-        NSString *version = [MPGOFeatureFlags formatVersionForRoot:root];
-        NSArray *features = [MPGOFeatureFlags featuresForRoot:root];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:m74Path error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        NSString *version = [TTIOFeatureFlags formatVersionForRoot:root];
+        NSArray *features = [TTIOFeatureFlags featuresForRoot:root];
         PASS([version isEqualToString:@"1.3"],
              "Slice E: M74 file bumps format version to 1.3");
-        PASS([features containsObject:[MPGOFeatureFlags featureMS2ActivationDetail]],
+        PASS([features containsObject:[TTIOFeatureFlags featureMS2ActivationDetail]],
              "Slice E: M74 file advertises opt_ms2_activation_detail");
-        PASS([MPGOFeatureFlags root:root
-                    supportsFeature:[MPGOFeatureFlags featureMS2ActivationDetail]],
+        PASS([TTIOFeatureFlags root:root
+                    supportsFeature:[TTIOFeatureFlags featureMS2ActivationDetail]],
              "Slice E: root:supportsFeature: returns YES for M74 flag");
         [f close];
 
         // Round-trip: reading back must preserve M74 columns + index.
-        MPGOSpectralDataset *rt =
-            [MPGOSpectralDataset readFromFilePath:m74Path error:&err];
+        TTIOSpectralDataset *rt =
+            [TTIOSpectralDataset readFromFilePath:m74Path error:&err];
         PASS(rt != nil, "Slice E: M74 file reads back via full dataset reader");
-        MPGOAcquisitionRun *run = rt.msRuns[@"run_0001"];
+        TTIOAcquisitionRun *run = rt.msRuns[@"run_0001"];
         PASS(run.spectrumIndex.hasActivationDetail,
              "Slice E: round-tripped run preserves M74 columns");
-        PASS([run.spectrumIndex activationMethodAt:1] == MPGOActivationMethodHCD,
+        PASS([run.spectrumIndex activationMethodAt:1] == TTIOActivationMethodHCD,
              "Slice E: round-tripped index records HCD at position 1");
     }
 

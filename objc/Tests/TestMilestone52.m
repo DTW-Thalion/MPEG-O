@@ -1,10 +1,10 @@
 /*
- * TestMilestone52 — ObjC MPGOZarrProvider round-trip tests (v0.8 M52).
+ * TestMilestone52 — ObjC TTIOZarrProvider round-trip tests (v0.8 M52).
  *
  * Covers primitive 1-D + N-D, compound dataset, attributes, provider
  * registry discovery. Cross-language parity with Python and Java is
  * validated in a separate Python-driven harness that shells out to a
- * mpgo_zarr_cross_compat tool (also added in M52).
+ * ttio_zarr_cross_compat tool (also added in M52).
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
@@ -12,15 +12,15 @@
 #import "Testing.h"
 #import <unistd.h>
 
-#import "Providers/MPGOZarrProvider.h"
-#import "Providers/MPGOProviderRegistry.h"
-#import "Providers/MPGOCompoundField.h"
-#import "Providers/MPGOStorageProtocols.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Providers/TTIOZarrProvider.h"
+#import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOCompoundField.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "ValueClasses/TTIOEnums.h"
 
 static NSString *m52TempDir(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m52_%d_%@.zarr",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m52_%d_%@.zarr",
             (int)getpid(), suffix];
 }
 
@@ -34,29 +34,29 @@ void testMilestone52(void)
     // ── Registry wiring (+load runs at lib load time) ──
 
     NSArray<NSString *> *names =
-        [[MPGOProviderRegistry sharedRegistry] knownProviderNames];
+        [[TTIOProviderRegistry sharedRegistry] knownProviderNames];
     PASS([names containsObject:@"zarr"],
-         "M52: MPGOZarrProvider auto-registered as 'zarr'");
+         "M52: TTIOZarrProvider auto-registered as 'zarr'");
 
     // ── Primitive 1-D round trip ──
 
     NSString *path = m52TempDir(@"prim1d");
     rm_rf(path);
 
-    MPGOZarrProvider *p = [[MPGOZarrProvider alloc] init];
+    TTIOZarrProvider *p = [[TTIOZarrProvider alloc] init];
     NSError *err = nil;
-    PASS([p openURL:path mode:MPGOStorageOpenModeCreate error:&err],
+    PASS([p openURL:path mode:TTIOStorageOpenModeCreate error:&err],
          "M52: openURL mode=Create");
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
     PASS(root != nil, "M52: rootGroup non-nil");
 
-    id<MPGOStorageDataset> ds =
+    id<TTIOStorageDataset> ds =
         [root createDatasetNamed:@"signal"
-                        precision:MPGOPrecisionFloat64
+                        precision:TTIOPrecisionFloat64
                            length:64
                         chunkSize:0
-                      compression:MPGOCompressionNone
+                      compression:TTIOCompressionNone
                  compressionLevel:0
                             error:&err];
     PASS(ds != nil, "M52: create float64 dataset (64 elements)");
@@ -68,13 +68,13 @@ void testMilestone52(void)
     [p close];
 
     // Reopen + read back.
-    MPGOZarrProvider *p2 = [[MPGOZarrProvider alloc] init];
-    PASS([p2 openURL:path mode:MPGOStorageOpenModeRead error:&err],
+    TTIOZarrProvider *p2 = [[TTIOZarrProvider alloc] init];
+    PASS([p2 openURL:path mode:TTIOStorageOpenModeRead error:&err],
          "M52: openURL mode=Read");
-    id<MPGOStorageGroup> root2 = [p2 rootGroupWithError:&err];
-    id<MPGOStorageDataset> ds2 = [root2 openDatasetNamed:@"signal" error:&err];
+    id<TTIOStorageGroup> root2 = [p2 rootGroupWithError:&err];
+    id<TTIOStorageDataset> ds2 = [root2 openDatasetNamed:@"signal" error:&err];
     PASS(ds2 != nil, "M52: open float64 dataset back");
-    PASS([ds2 precision] == MPGOPrecisionFloat64,
+    PASS([ds2 precision] == TTIOPrecisionFloat64,
          "M52: precision round-trips as float64");
     PASS([ds2 length] == 64, "M52: length round-trips as 64");
     NSData *back = [ds2 readAll:&err];
@@ -87,18 +87,18 @@ void testMilestone52(void)
     path = m52TempDir(@"nd");
     rm_rf(path);
 
-    MPGOZarrProvider *p3 = [[MPGOZarrProvider alloc] init];
-    PASS([p3 openURL:path mode:MPGOStorageOpenModeCreate error:&err],
+    TTIOZarrProvider *p3 = [[TTIOZarrProvider alloc] init];
+    PASS([p3 openURL:path mode:TTIOStorageOpenModeCreate error:&err],
          "M52: create N-D store");
-    id<MPGOStorageGroup> root3 = [p3 rootGroupWithError:&err];
+    id<TTIOStorageGroup> root3 = [p3 rootGroupWithError:&err];
     NSArray *shape  = @[@(4), @(6)];
     NSArray *chunks = @[@(2), @(3)];
-    id<MPGOStorageDataset> dsN =
+    id<TTIOStorageDataset> dsN =
         [root3 createDatasetNDNamed:@"grid"
-                           precision:MPGOPrecisionInt32
+                           precision:TTIOPrecisionInt32
                                shape:shape
                               chunks:chunks
-                         compression:MPGOCompressionNone
+                         compression:TTIOCompressionNone
                     compressionLevel:0
                                error:&err];
     PASS(dsN != nil, "M52: create N-D int32 grid 4×6 chunked 2×3");
@@ -108,9 +108,9 @@ void testMilestone52(void)
     PASS([dsN writeAll:gridData error:&err], "M52: write N-D grid");
     [p3 close];
 
-    MPGOZarrProvider *p4 = [[MPGOZarrProvider alloc] init];
-    [p4 openURL:path mode:MPGOStorageOpenModeRead error:&err];
-    id<MPGOStorageDataset> dsN2 =
+    TTIOZarrProvider *p4 = [[TTIOZarrProvider alloc] init];
+    [p4 openURL:path mode:TTIOStorageOpenModeRead error:&err];
+    id<TTIOStorageDataset> dsN2 =
         [[p4 rootGroupWithError:&err] openDatasetNamed:@"grid" error:&err];
     NSData *backN = [dsN2 readAll:&err];
     PASS([backN isEqualToData:gridData],
@@ -123,18 +123,18 @@ void testMilestone52(void)
     path = m52TempDir(@"compound");
     rm_rf(path);
 
-    MPGOZarrProvider *p5 = [[MPGOZarrProvider alloc] init];
-    [p5 openURL:path mode:MPGOStorageOpenModeCreate error:&err];
-    id<MPGOStorageGroup> root5 = [p5 rootGroupWithError:&err];
-    NSArray<MPGOCompoundField *> *fields = @[
-        [[MPGOCompoundField alloc] initWithName:@"ident_id"
-                                            kind:MPGOCompoundFieldKindVLString],
-        [[MPGOCompoundField alloc] initWithName:@"spectrum_index"
-                                            kind:MPGOCompoundFieldKindUInt32],
-        [[MPGOCompoundField alloc] initWithName:@"mass_error"
-                                            kind:MPGOCompoundFieldKindFloat64],
+    TTIOZarrProvider *p5 = [[TTIOZarrProvider alloc] init];
+    [p5 openURL:path mode:TTIOStorageOpenModeCreate error:&err];
+    id<TTIOStorageGroup> root5 = [p5 rootGroupWithError:&err];
+    NSArray<TTIOCompoundField *> *fields = @[
+        [[TTIOCompoundField alloc] initWithName:@"ident_id"
+                                            kind:TTIOCompoundFieldKindVLString],
+        [[TTIOCompoundField alloc] initWithName:@"spectrum_index"
+                                            kind:TTIOCompoundFieldKindUInt32],
+        [[TTIOCompoundField alloc] initWithName:@"mass_error"
+                                            kind:TTIOCompoundFieldKindFloat64],
     ];
-    id<MPGOStorageDataset> cds =
+    id<TTIOStorageDataset> cds =
         [root5 createCompoundDatasetNamed:@"identifications"
                                      fields:fields
                                       count:3
@@ -148,9 +148,9 @@ void testMilestone52(void)
     PASS([cds writeAll:rows error:&err], "M52: compound writeAll rows");
     [p5 close];
 
-    MPGOZarrProvider *p6 = [[MPGOZarrProvider alloc] init];
-    [p6 openURL:path mode:MPGOStorageOpenModeRead error:&err];
-    id<MPGOStorageDataset> cdsRead =
+    TTIOZarrProvider *p6 = [[TTIOZarrProvider alloc] init];
+    [p6 openURL:path mode:TTIOStorageOpenModeRead error:&err];
+    id<TTIOStorageDataset> cdsRead =
         [[p6 rootGroupWithError:&err] openDatasetNamed:@"identifications"
                                                    error:&err];
     PASS(cdsRead != nil, "M52: open compound dataset back");
@@ -174,16 +174,16 @@ void testMilestone52(void)
 
     path = m52TempDir(@"attrs");
     rm_rf(path);
-    MPGOZarrProvider *p7 = [[MPGOZarrProvider alloc] init];
-    [p7 openURL:path mode:MPGOStorageOpenModeCreate error:&err];
-    id<MPGOStorageGroup> root7 = [p7 rootGroupWithError:&err];
+    TTIOZarrProvider *p7 = [[TTIOZarrProvider alloc] init];
+    [p7 openURL:path mode:TTIOStorageOpenModeCreate error:&err];
+    id<TTIOStorageGroup> root7 = [p7 rootGroupWithError:&err];
     [root7 setAttributeValue:@"demo" forName:@"title" error:&err];
     [root7 setAttributeValue:@(42) forName:@"count" error:&err];
     [p7 close];
 
-    MPGOZarrProvider *p8 = [[MPGOZarrProvider alloc] init];
-    [p8 openURL:path mode:MPGOStorageOpenModeRead error:&err];
-    id<MPGOStorageGroup> root8 = [p8 rootGroupWithError:&err];
+    TTIOZarrProvider *p8 = [[TTIOZarrProvider alloc] init];
+    [p8 openURL:path mode:TTIOStorageOpenModeRead error:&err];
+    id<TTIOStorageGroup> root8 = [p8 rootGroupWithError:&err];
     PASS([[root8 attributeValueForName:@"title" error:&err] isEqual:@"demo"],
          "M52: string attribute round-trips");
     PASS([[root8 attributeValueForName:@"count" error:&err] longLongValue] == 42,

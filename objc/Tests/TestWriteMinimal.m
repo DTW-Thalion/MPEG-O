@@ -1,7 +1,7 @@
 /*
  * TestWriteMinimal — v1.1 flat-buffer fast path.
  *
- * Verifies that MPGOSpectralDataset +writeMinimalToPath:... produces
+ * Verifies that TTIOSpectralDataset +writeMinimalToPath:... produces
  * a file readable by +readFromFilePath: and that round-tripped
  * signal data plus index metadata match exactly. Also checks byte-
  * for-byte parity with the object-mode writer for the same logical
@@ -13,23 +13,23 @@
 #import "Testing.h"
 #import <unistd.h>
 
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
 
 static NSString *tmpPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_writemin_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_writemin_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
-static MPGOWrittenRun *makeMinimalRun(NSUInteger n, NSUInteger peaks)
+static TTIOWrittenRun *makeMinimalRun(NSUInteger n, NSUInteger peaks)
 {
     NSUInteger total = n * peaks;
     NSMutableData *mzBuf = [NSMutableData dataWithLength:total * sizeof(double)];
@@ -70,9 +70,9 @@ static MPGOWrittenRun *makeMinimalRun(NSUInteger n, NSUInteger peaks)
         bpPtr[i]      = 1000.0;
     }
     NSDictionary *channels = @{@"mz": mzBuf, @"intensity": intBuf};
-    return [[MPGOWrittenRun alloc]
-        initWithSpectrumClassName:@"MPGOMassSpectrum"
-                  acquisitionMode:(int64_t)MPGOAcquisitionModeMS1DDA
+    return [[TTIOWrittenRun alloc]
+        initWithSpectrumClassName:@"TTIOMassSpectrum"
+                  acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
                       channelData:channels
                           offsets:offsets
                           lengths:lengths
@@ -91,8 +91,8 @@ void testWriteMinimal(void)
     // ── Basic round-trip ──────────────────────────────────────────────
     NSString *path = tmpPath(@"rt");
     unlink([path fileSystemRepresentation]);
-    MPGOWrittenRun *wr = makeMinimalRun(500, 16);
-    BOOL ok = [MPGOSpectralDataset writeMinimalToPath:path
+    TTIOWrittenRun *wr = makeMinimalRun(500, 16);
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
                                                  title:@"minimal"
                                    isaInvestigationId:@"ISA-MIN"
                                                msRuns:@{@"r": wr}
@@ -103,24 +103,24 @@ void testWriteMinimal(void)
     PASS(ok, "writeMinimalToPath: succeeds");
     if (!ok) { NSLog(@"err: %@", err); return; }
 
-    MPGOSpectralDataset *back =
-        [MPGOSpectralDataset readFromFilePath:path error:&err];
+    TTIOSpectralDataset *back =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
     PASS(back != nil, "minimal file re-opens via readFromFilePath:");
     PASS([back.title isEqualToString:@"minimal"], "title round-trips");
     PASS([back.isaInvestigationId isEqualToString:@"ISA-MIN"],
          "isa_investigation_id round-trips");
 
-    MPGOAcquisitionRun *run = back.msRuns[@"r"];
+    TTIOAcquisitionRun *run = back.msRuns[@"r"];
     PASS(run != nil, "run 'r' present after re-open");
     PASS(run.spectrumIndex.count == 500, "spectrum_count matches (500)");
 
-    MPGOMassSpectrum *s0 = [run objectAtIndex:0];
+    TTIOMassSpectrum *s0 = [run objectAtIndex:0];
     PASS(s0.signalArrays[@"mz"].length == 16,
          "first spectrum's mz array has 16 peaks");
     const double *mz0 = (const double *)s0.signalArrays[@"mz"].buffer.bytes;
     PASS(mz0[0] == 100.0, "first mz value matches what was written");
 
-    MPGOMassSpectrum *s100 = [run objectAtIndex:100];
+    TTIOMassSpectrum *s100 = [run objectAtIndex:100];
     const double *mz100 = (const double *)s100.signalArrays[@"mz"].buffer.bytes;
     PASS(mz100[0] == 200.0,
          "spectrum 100's mz[0] == 200.0 matches encoder formula");
@@ -130,7 +130,7 @@ void testWriteMinimal(void)
     // ── Empty nmr_runs must be present so readers see the layout ─────
     NSString *path2 = tmpPath(@"empty_runs");
     unlink([path2 fileSystemRepresentation]);
-    ok = [MPGOSpectralDataset writeMinimalToPath:path2
+    ok = [TTIOSpectralDataset writeMinimalToPath:path2
                                             title:@"e"
                               isaInvestigationId:@"ISA"
                                           msRuns:@{}
@@ -139,7 +139,7 @@ void testWriteMinimal(void)
                                 provenanceRecords:nil
                                             error:&err];
     PASS(ok, "writeMinimal with no runs still succeeds");
-    back = [MPGOSpectralDataset readFromFilePath:path2 error:&err];
+    back = [TTIOSpectralDataset readFromFilePath:path2 error:&err];
     PASS(back != nil && back.msRuns.count == 0 && back.nmrRuns.count == 0,
          "empty-runs file opens with zero ms_runs and zero nmr_runs");
     unlink([path2 fileSystemRepresentation]);

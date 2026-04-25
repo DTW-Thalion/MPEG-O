@@ -1,19 +1,19 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Import/MPGONmrMLReader.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGOFreeInductionDecay.h"
-#import "Spectra/MPGONMRSpectrum.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Import/TTIONmrMLReader.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIOFreeInductionDecay.h"
+#import "Spectra/TTIONMRSpectrum.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <math.h>
 #import <unistd.h>
 
 static NSString *m13path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m13_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m13_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
@@ -89,7 +89,7 @@ void testMilestone13(void)
         NSData *data = [xml dataUsingEncoding:NSUTF8StringEncoding];
 
         NSError *err = nil;
-        MPGONmrMLReader *r = [MPGONmrMLReader parseData:data error:&err];
+        TTIONmrMLReader *r = [TTIONmrMLReader parseData:data error:&err];
         PASS(r != nil, "nmrML parseData returns reader");
         PASS(err == nil, "nmrML parse no error");
 
@@ -103,7 +103,7 @@ void testMilestone13(void)
 
         // FID
         PASS(r.fids.count == 1, "one FID parsed");
-        MPGOFreeInductionDecay *f = r.fids[0];
+        TTIOFreeInductionDecay *f = r.fids[0];
         PASS(f.length == N, "FID complex length matches");
         PASS(complexBuffersEqual(f.buffer, fid, N), "FID real+imag match reference");
         PASS(fabs(f.dwellTimeSeconds - 0.0001) < 1e-12,
@@ -111,12 +111,12 @@ void testMilestone13(void)
         PASS(f.scanCount == 128, "FID scan count populated");
 
         // Processed spectrum1D
-        MPGOAcquisitionRun *run = r.dataset.msRuns[@"nmr_run"];
+        TTIOAcquisitionRun *run = r.dataset.msRuns[@"nmr_run"];
         PASS(run != nil, "nmr_run wrapped in dataset");
         PASS(run.count == 1, "one processed spectrum");
-        MPGONMRSpectrum *spec = [run spectrumAtIndex:0 error:&err];
-        PASS([spec isKindOfClass:[MPGONMRSpectrum class]],
-             "spectrum1D materializes as MPGONMRSpectrum");
+        TTIONMRSpectrum *spec = [run spectrumAtIndex:0 error:&err];
+        PASS([spec isKindOfClass:[TTIONMRSpectrum class]],
+             "spectrum1D materializes as TTIONMRSpectrum");
         PASS(spec.chemicalShiftArray.length == M, "cs array length");
         PASS(spec.intensityArray.length == M, "intensity array length");
         PASS([spec.nucleusType isEqualToString:@"1H"],
@@ -133,26 +133,26 @@ void testMilestone13(void)
         PASS(inMatch, "intensity bytes match reference");
     }
 
-    // ---- 2. Round-trip: nmrML -> MPGO -> .mpgo -> read back ----
+    // ---- 2. Round-trip: nmrML -> TTIO -> .tio -> read back ----
     {
         NSString *xml = buildNmrML(fid, N, cs, ins, M);
         NSData *data = [xml dataUsingEncoding:NSUTF8StringEncoding];
         NSError *err = nil;
-        MPGOSpectralDataset *ds =
-            [MPGONmrMLReader readFromData:data error:&err];
+        TTIOSpectralDataset *ds =
+            [TTIONmrMLReader readFromData:data error:&err];
         PASS(ds != nil, "readFromData returns dataset");
 
         NSString *path = m13path(@"roundtrip");
         unlink([path fileSystemRepresentation]);
-        PASS([ds writeToFilePath:path error:&err], "dataset writes .mpgo");
+        PASS([ds writeToFilePath:path error:&err], "dataset writes .tio");
 
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
-        PASS(back != nil, ".mpgo reads back");
-        MPGOAcquisitionRun *run = back.msRuns[@"nmr_run"];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
+        PASS(back != nil, ".tio reads back");
+        TTIOAcquisitionRun *run = back.msRuns[@"nmr_run"];
         PASS(run != nil, "nmr_run survives round-trip");
-        MPGONMRSpectrum *spec = [run spectrumAtIndex:0 error:&err];
-        PASS([spec isKindOfClass:[MPGONMRSpectrum class]],
+        TTIONMRSpectrum *spec = [run spectrumAtIndex:0 error:&err];
+        PASS([spec isKindOfClass:[TTIONMRSpectrum class]],
              "round-trip spectrum is NMR");
         PASS(spec.chemicalShiftArray.length == M,
              "round-trip cs length preserved");
@@ -164,8 +164,8 @@ void testMilestone13(void)
     {
         NSString *bad = @"<?xml version=\"1.0\"?><nmrML><acquisition><fidData>not-base64</";
         NSError *err = nil;
-        MPGOSpectralDataset *ds =
-            [MPGONmrMLReader readFromData:[bad dataUsingEncoding:NSUTF8StringEncoding]
+        TTIOSpectralDataset *ds =
+            [TTIONmrMLReader readFromData:[bad dataUsingEncoding:NSUTF8StringEncoding]
                                     error:&err];
         PASS(ds == nil, "malformed nmrML returns nil");
         PASS(err != nil, "malformed nmrML populates NSError");
@@ -191,7 +191,7 @@ void testMilestone13(void)
         } else {
             NSError *err = nil;
             NSDate *t0 = [NSDate date];
-            MPGONmrMLReader *r = [MPGONmrMLReader parseFilePath:fixturePath error:&err];
+            TTIONmrMLReader *r = [TTIONmrMLReader parseFilePath:fixturePath error:&err];
             NSTimeInterval dt = -[t0 timeIntervalSinceNow];
             PASS(r != nil, "bmse000325.nmrML parses");
             PASS(err == nil, "bmse000325.nmrML has no parse error");
@@ -210,7 +210,7 @@ void testMilestone13(void)
 
             // fidData encodedLength=32768 int32 samples -> 16384 complex
             PASS(r.fids.count == 1, "bmse has exactly one FID");
-            MPGOFreeInductionDecay *f = r.fids[0];
+            TTIOFreeInductionDecay *f = r.fids[0];
             PASS(f.length == 16384, "bmse FID length = 16384 complex samples");
             PASS(f.scanCount == 4, "bmse FID inherits scan count");
             PASS(f.buffer.length == 16384 * 2 * sizeof(double),

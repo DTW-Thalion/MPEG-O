@@ -1,0 +1,156 @@
+#ifndef TTIO_SPECTRAL_DATASET_H
+#define TTIO_SPECTRAL_DATASET_H
+
+#import <Foundation/Foundation.h>
+#import "Protocols/TTIOEncryptable.h"
+#import "ValueClasses/TTIOEnums.h"
+
+@class TTIOAcquisitionRun;
+@class TTIOWrittenRun;
+@class TTIONMRSpectrum;
+@class TTIOIdentification;
+@class TTIOQuantification;
+@class TTIOProvenanceRecord;
+@class TTIOTransitionList;
+@class TTIOAccessPolicy;
+@class TTIOHDF5Group;
+@protocol TTIOStorageProvider;
+
+/**
+ * Root container for an TTI-O `.tio` file. Owns a top-level `study/`
+ * group plus zero or more named MS acquisition runs, zero or more named
+ * NMR-spectrum collections, and the dataset-wide identifications,
+ * quantifications, provenance records, and (optionally) a transition list.
+ *
+ * Persistence is via -writeToFilePath:error: / +readFromFilePath:error:
+ * which open or create the underlying HDF5 file directly.
+ *
+ * API status: Stable. Encryptable conformance delivered in
+ * M41.5 in non-ObjC implementations.
+ *
+ * Cross-language equivalents:
+ *   Python: ttio.spectral_dataset.SpectralDataset
+ *   Java:   com.dtwthalion.tio.SpectralDataset
+ */
+@interface TTIOSpectralDataset : NSObject <TTIOEncryptable>
+
+@property (readonly, copy) NSString *title;
+@property (readonly, copy) NSString *isaInvestigationId;
+
+@property (readonly, copy) NSDictionary<NSString *, TTIOAcquisitionRun *> *msRuns;
+@property (readonly, copy) NSDictionary<NSString *, NSArray<TTIONMRSpectrum *> *> *nmrRuns;
+
+@property (readonly, copy) NSArray<TTIOIdentification *>   *identifications;
+@property (readonly, copy) NSArray<TTIOQuantification *>   *quantifications;
+@property (readonly, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
+@property (readonly, strong) TTIOTransitionList *transitions;       // nullable
+
+/** YES iff this dataset carries an `encrypted` root attribute (written
+ *  by -encryptWithKey:level:error: via -markRootEncryptedWithError:).
+ *  Value is derived from -encryptedAlgorithm so the two stay consistent.
+ *  Mirrors Python `SpectralDataset.is_encrypted` / Java
+ *  `SpectralDataset.isEncrypted()`. */
+@property (readonly) BOOL isEncrypted;
+
+/** The algorithm identifier stored in the root `encrypted` attribute,
+ *  or the empty string when the dataset is not encrypted. Typical value
+ *  is @"aes-256-gcm". Mirrors Python
+ *  `SpectralDataset.encrypted_algorithm` / Java
+ *  `SpectralDataset.encryptedAlgorithm()`. */
+@property (readonly, copy) NSString *encryptedAlgorithm;
+
+- (instancetype)initWithTitle:(NSString *)title
+           isaInvestigationId:(NSString *)isaId
+                       msRuns:(NSDictionary *)msRuns
+                      nmrRuns:(NSDictionary *)nmrRuns
+              identifications:(NSArray *)identifications
+              quantifications:(NSArray *)quantifications
+            provenanceRecords:(NSArray *)provenance
+                  transitions:(TTIOTransitionList *)transitions;
+
+- (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error;
++ (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error;
+
+/** Flat-buffer fast path. Bypasses per-spectrum object construction
+ *  and the write-time channel concat that -writeToFilePath:error:
+ *  performs when given an TTIOAcquisitionRun of TTIOMassSpectrum
+ *  objects. Callers that already have flat buffers (e.g. importers
+ *  reading mzML in bulk, numerical producers) pass TTIOWrittenRun
+ *  instances and skip both costs.
+ *
+ *  Writes the same on-disk layout as -writeToFilePath:, so readers
+ *  don't distinguish files produced by the two paths. Mirrors Python
+ *  +[SpectralDataset write_minimal] and gives the ObjC implementation
+ *  parity with Python's fastest write API. v1.1.
+ */
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                    msRuns:(NSDictionary<NSString *, TTIOWrittenRun *> *)runs
+            identifications:(nullable NSArray *)identifications
+            quantifications:(nullable NSArray *)quantifications
+          provenanceRecords:(nullable NSArray *)provenance
+                      error:(NSError * _Nullable * _Nullable)error;
+
+/** Release the underlying HDF5 file handle. After this call, any
+ *  further lazy hyperslab reads on contained runs will fail. Required
+ *  before calling encryptWithKey: so the encryption manager can
+ *  reopen the file read-write. Idempotent. */
+- (BOOL)closeFile;
+
+/** The path from which the dataset was last read or written. nil
+ *  until persistence has happened at least once. */
+@property (readonly, copy) NSString *filePath;
+
+/** M39: owning storage provider, set when this dataset was opened or
+ *  written via +readFromFilePath: / -writeToFilePath:. New call sites
+ *  should reach for this; byte-level code continues to use the
+ *  underlying native handle (``[provider nativeHandle]``). */
+@property (readonly, strong) id<TTIOStorageProvider> provider;
+
+/** Provenance records whose inputRefs contain `ref`. */
+- (NSArray<TTIOProvenanceRecord *> *)provenanceRecordsForInputRef:(NSString *)ref;
+
+#pragma mark - TTIOEncryptable
+
+- (BOOL)encryptWithKey:(NSData *)key
+                 level:(TTIOEncryptionLevel)level
+                 error:(NSError **)error;
+- (BOOL)decryptWithKey:(NSData *)key error:(NSError **)error;
+- (TTIOAccessPolicy *)accessPolicy;
+- (void)setAccessPolicy:(TTIOAccessPolicy *)policy;
+
+/**
+ * v1.1.1: persist-to-disk decrypt. Strips AES-256-GCM encryption from
+ * the `.tio` file at `path`: for every MS run with an encrypted
+ * intensity channel, writes the plaintext back as `intensity_values`
+ * and removes the encrypted siblings. Finally clears the root
+ * `@encrypted` attribute so -isEncrypted returns NO when the file is
+ * reopened.
+ *
+ * Symmetric with -encryptWithKey:level:error: (which leaves the root
+ * attribute set). After this call the file is byte-compatible with
+ * the pre-encryption layout.
+ *
+ * The file must not be held open by another writer.
+ */
++ (BOOL)decryptInPlaceAtPath:(NSString *)path
+                     withKey:(NSData *)key
+                       error:(NSError **)error;
+
+#pragma mark - Subclass hooks
+
+/** Subclasses (e.g. TTIOMSImage) override to add their own datasets
+ *  under /study/ after the base dataset has been written. The default
+ *  is a no-op. Return NO to abort the write. */
+- (BOOL)writeAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
+                              error:(NSError **)error;
+
+/** Subclasses override to read their own datasets under /study/ after
+ *  the base dataset has been loaded. Default is a no-op. */
+- (BOOL)readAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
+                             error:(NSError **)error;
+
+@end
+
+#endif

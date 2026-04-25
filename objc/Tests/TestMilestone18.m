@@ -13,19 +13,19 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOIdentification.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOFeatureFlags.h"
-#import "Protection/MPGOSignatureManager.h"
-#import "Protection/MPGOVerifier.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOIdentification.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOFeatureFlags.h"
+#import "Protection/TTIOSignatureManager.h"
+#import "Protection/TTIOVerifier.h"
 
 #import <hdf5.h>
 #import <openssl/hmac.h>
@@ -34,7 +34,7 @@
 
 static NSString *m18path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m18_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m18_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
@@ -45,7 +45,7 @@ static NSData *m18Key(void)
     return [NSData dataWithBytes:raw length:32];
 }
 
-static MPGOAcquisitionRun *m18BuildRun(void)
+static TTIOAcquisitionRun *m18BuildRun(void)
 {
     NSMutableArray *spectra = [NSMutableArray array];
     for (NSUInteger k = 0; k < 4; k++) {
@@ -54,25 +54,25 @@ static MPGOAcquisitionRun *m18BuildRun(void)
             mz[i] = 100.0 + (double)(k * 8 + i);
             in[i] = (double)(k * 10 + i + 1);
         }
-        MPGOEncodingSpec *enc =
-            [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                           compressionAlgorithm:MPGOCompressionZlib
-                                      byteOrder:MPGOByteOrderLittleEndian];
-        MPGOSignalArray *mzA =
-            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
+        TTIOEncodingSpec *enc =
+            [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                           compressionAlgorithm:TTIOCompressionZlib
+                                      byteOrder:TTIOByteOrderLittleEndian];
+        TTIOSignalArray *mzA =
+            [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
                                               length:8
                                             encoding:enc
                                                 axis:nil];
-        MPGOSignalArray *inA =
-            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
+        TTIOSignalArray *inA =
+            [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
                                               length:8
                                             encoding:enc
                                                 axis:nil];
         [spectra addObject:
-            [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+            [[TTIOMassSpectrum alloc] initWithMzArray:mzA
                                        intensityArray:inA
                                               msLevel:1
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       scanTimeSeconds:(double)k
@@ -80,15 +80,15 @@ static MPGOAcquisitionRun *m18BuildRun(void)
                                       precursorCharge:0
                                                 error:NULL]];
     }
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@""
                                                      model:@""
                                               serialNumber:@""
                                                 sourceType:@""
                                               analyzerType:@""
                                               detectorType:@""];
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
                                       instrumentConfig:cfg];
 }
 
@@ -96,11 +96,11 @@ static NSString *readSignatureString(NSString *path, const char *dsetPath)
 {
     NSString *out = nil;
     @autoreleasepool {
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:NULL];
-        MPGOHDF5Group *root = [f rootGroup];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+        TTIOHDF5Group *root = [f rootGroup];
         hid_t did = H5Dopen2(root.groupId, dsetPath, H5P_DEFAULT);
-        if (did >= 0 && H5Aexists(did, "mpgo_signature") > 0) {
-            hid_t aid = H5Aopen(did, "mpgo_signature", H5P_DEFAULT);
+        if (did >= 0 && H5Aexists(did, "ttio_signature") > 0) {
+            hid_t aid = H5Aopen(did, "ttio_signature", H5P_DEFAULT);
             hid_t t = H5Aget_type(aid);
             if (H5Tis_variable_str(t) > 0) {
                 char *cs = NULL;
@@ -125,17 +125,17 @@ static BOOL overwriteSignatureAsV1(NSString *path, const char *dsetPath,
 {
     BOOL ok = NO;
     @autoreleasepool {
-        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path error:NULL];
-        MPGOHDF5Group *root = [f rootGroup];
+        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:NULL];
+        TTIOHDF5Group *root = [f rootGroup];
         hid_t did = H5Dopen2(root.groupId, dsetPath, H5P_DEFAULT);
         if (did >= 0) {
-            if (H5Aexists(did, "mpgo_signature") > 0) {
-                H5Adelete(did, "mpgo_signature");
+            if (H5Aexists(did, "ttio_signature") > 0) {
+                H5Adelete(did, "ttio_signature");
             }
             hid_t strType = H5Tcopy(H5T_C_S1);
             H5Tset_size(strType, H5T_VARIABLE);
             hid_t scalar = H5Screate(H5S_SCALAR);
-            hid_t aid = H5Acreate2(did, "mpgo_signature", strType, scalar,
+            hid_t aid = H5Acreate2(did, "ttio_signature", strType, scalar,
                                    H5P_DEFAULT, H5P_DEFAULT);
             const char *cs = [unprefixed UTF8String];
             herr_t rc = H5Awrite(aid, strType, &cs);
@@ -154,8 +154,8 @@ static NSData *computeV1NativeMac(NSString *path, const char *dsetPath,
 {
     NSData *out = nil;
     @autoreleasepool {
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:NULL];
-        MPGOHDF5Group *root = [f rootGroup];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+        TTIOHDF5Group *root = [f rootGroup];
         hid_t did = H5Dopen2(root.groupId, dsetPath, H5P_DEFAULT);
         hid_t typeId = H5Dget_type(did);
         hid_t space = H5Dget_space(did);
@@ -186,8 +186,8 @@ void testMilestone18(void)
     NSString *path = m18path(@"v2rt");
     unlink([path fileSystemRepresentation]);
 
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"m18"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"m18"
                                 isaInvestigationId:@""
                                             msRuns:@{@"run_0001": m18BuildRun()}
                                            nmrRuns:@{}
@@ -203,7 +203,7 @@ void testMilestone18(void)
     NSString *intPath = @"/study/ms_runs/run_0001/signal_channels/intensity_values";
 
     err = nil;
-    PASS([MPGOSignatureManager signDataset:intPath inFile:path withKey:key error:&err],
+    PASS([TTIOSignatureManager signDataset:intPath inFile:path withKey:key error:&err],
          "sign intensity_values with canonical (v2) path");
 
     NSString *stored = readSignatureString(path, intPath.UTF8String);
@@ -211,7 +211,7 @@ void testMilestone18(void)
     PASS([stored hasPrefix:@"v2:"], "signature carries v2 prefix");
 
     err = nil;
-    PASS([MPGOSignatureManager verifyDataset:intPath
+    PASS([TTIOSignatureManager verifyDataset:intPath
                                       inFile:path
                                      withKey:key
                                        error:&err],
@@ -223,7 +223,7 @@ void testMilestone18(void)
                             16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31}
                                    length:32];
     err = nil;
-    PASS(![MPGOSignatureManager verifyDataset:intPath
+    PASS(![TTIOSignatureManager verifyDataset:intPath
                                        inFile:path
                                       withKey:wrong
                                         error:&err],
@@ -232,8 +232,8 @@ void testMilestone18(void)
 
     // ---- 2. feature flags include opt_canonical_signatures ----
     @autoreleasepool {
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:NULL];
-        NSArray *features = [MPGOFeatureFlags featuresForRoot:[f rootGroup]];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+        NSArray *features = [TTIOFeatureFlags featuresForRoot:[f rootGroup]];
         PASS([features containsObject:@"opt_canonical_signatures"],
              "opt_canonical_signatures flag present after signing");
         PASS([features containsObject:@"opt_digital_signatures"],
@@ -250,13 +250,13 @@ void testMilestone18(void)
         NSData *v1Mac = computeV1NativeMac(path, intPath.UTF8String, key);
         NSString *v1B64 = [v1Mac base64EncodedStringWithOptions:0];
         PASS(overwriteSignatureAsV1(path, intPath.UTF8String, v1B64),
-             "overwrite @mpgo_signature with unprefixed v1 base64");
+             "overwrite @ttio_signature with unprefixed v1 base64");
 
         NSString *now = readSignatureString(path, intPath.UTF8String);
         PASS(![now hasPrefix:@"v2:"], "signature is now unprefixed (v1 form)");
 
         NSError *err2 = nil;
-        PASS([MPGOSignatureManager verifyDataset:intPath
+        PASS([TTIOSignatureManager verifyDataset:intPath
                                           inFile:path
                                          withKey:key
                                            error:&err2],
@@ -267,11 +267,11 @@ void testMilestone18(void)
     // ---- 4. Sign a second dataset, tamper, expect failure ----
     @autoreleasepool {
         NSError *err2 = nil;
-        PASS([MPGOSignatureManager signDataset:mzPath inFile:path withKey:key error:&err2],
+        PASS([TTIOSignatureManager signDataset:mzPath inFile:path withKey:key error:&err2],
              "sign mz_values with v2");
 
         // Overwrite one value inside mz_values.
-        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path error:NULL];
+        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:NULL];
         hid_t did = H5Dopen2([f rootGroup].groupId, mzPath.UTF8String, H5P_DEFAULT);
         hid_t t   = H5Dget_type(did);
         hid_t sp  = H5Dget_space(did);
@@ -286,7 +286,7 @@ void testMilestone18(void)
         [f close];
 
         NSError *verr = nil;
-        PASS(![MPGOSignatureManager verifyDataset:mzPath
+        PASS(![TTIOSignatureManager verifyDataset:mzPath
                                            inFile:path
                                           withKey:key
                                             error:&verr],
@@ -302,20 +302,20 @@ void testMilestone18(void)
     NSString *path2 = m18path(@"compound");
     unlink([path2 fileSystemRepresentation]);
 
-    MPGOIdentification *a =
-        [[MPGOIdentification alloc] initWithRunName:@"run_0001"
+    TTIOIdentification *a =
+        [[TTIOIdentification alloc] initWithRunName:@"run_0001"
                                         spectrumIndex:0
                                        chemicalEntity:@"CHEBI:15000"
                                       confidenceScore:0.73
                                         evidenceChain:@[@"MS:1002217"]];
-    MPGOIdentification *b =
-        [[MPGOIdentification alloc] initWithRunName:@"run_0001"
+    TTIOIdentification *b =
+        [[TTIOIdentification alloc] initWithRunName:@"run_0001"
                                         spectrumIndex:2
                                        chemicalEntity:@"CHEBI:15377"
                                       confidenceScore:0.91
                                         evidenceChain:@[@"PRIDE:0000033"]];
-    MPGOSpectralDataset *ds2 =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"m18c"
+    TTIOSpectralDataset *ds2 =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"m18c"
                                 isaInvestigationId:@""
                                             msRuns:@{@"run_0001": m18BuildRun()}
                                            nmrRuns:@{}
@@ -329,7 +329,7 @@ void testMilestone18(void)
 
     NSString *identsPath = @"/study/identifications";
     err = nil;
-    PASS([MPGOSignatureManager signDataset:identsPath
+    PASS([TTIOSignatureManager signDataset:identsPath
                                     inFile:path2
                                    withKey:key
                                      error:&err],
@@ -339,7 +339,7 @@ void testMilestone18(void)
     PASS([stored2 hasPrefix:@"v2:"], "compound signature uses v2 prefix");
 
     err = nil;
-    PASS([MPGOSignatureManager verifyDataset:identsPath
+    PASS([TTIOSignatureManager verifyDataset:identsPath
                                       inFile:path2
                                      withKey:key
                                        error:&err],
@@ -348,7 +348,7 @@ void testMilestone18(void)
     // A compound record-level tamper (modify spectrum_index) breaks
     // the signature. We run it via a separate reopen.
     @autoreleasepool {
-        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path2 error:NULL];
+        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path2 error:NULL];
         hid_t did = H5Dopen2([f rootGroup].groupId,
                              identsPath.UTF8String, H5P_DEFAULT);
         hid_t t = H5Dget_type(did);
@@ -376,7 +376,7 @@ void testMilestone18(void)
         [f close];
 
         NSError *verr = nil;
-        PASS(![MPGOSignatureManager verifyDataset:identsPath
+        PASS(![TTIOSignatureManager verifyDataset:identsPath
                                            inFile:path2
                                           withKey:key
                                             error:&verr],

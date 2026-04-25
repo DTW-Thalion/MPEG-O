@@ -1,9 +1,9 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TEST_TOOL_NAME = MPGOTests
+TEST_TOOL_NAME = TTIOTests
 
-MPGOTests_OBJC_FILES = \
-	MPGOTestRunner.m \
+TTIOTests_OBJC_FILES = \
+	TTIOTestRunner.m \
 	TestValueRange.m \
 	TestIsolationWindow.m \
 	TestEncodingSpec.m \
@@ -67,8 +67,8 @@ MPGOTests_OBJC_FILES = \
 	TestV111DecryptInPlace.m \
 	TestM79GenomicEnums.m
 
-MPGOTests_TOOL_LIBS += -lMPGO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
-MPGOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
+TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 ADDITIONAL_CPPFLAGS += -I../Source
 

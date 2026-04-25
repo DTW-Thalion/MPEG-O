@@ -2,14 +2,14 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGONMRSpectrum.h"
-#import "Spectra/MPGOFreeInductionDecay.h"
-#import "Export/MPGONmrMLWriter.h"
-#import "Import/MPGONmrMLReader.h"
-#import "Import/MPGOThermoRawReader.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIONMRSpectrum.h"
+#import "Spectra/TTIOFreeInductionDecay.h"
+#import "Export/TTIONmrMLWriter.h"
+#import "Import/TTIONmrMLReader.h"
+#import "Import/TTIOThermoRawReader.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <unistd.h>
 #import <sys/stat.h>
 #import <stdlib.h>
@@ -17,18 +17,18 @@
 
 static NSString *m29TempPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m29_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m29_%d_%@",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *m29Array(const double *v, NSUInteger n)
+static TTIOSignalArray *m29Array(const double *v, NSUInteger n)
 {
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
     NSData *d = [NSData dataWithBytes:v length:n * sizeof(double)];
-    return [[MPGOSignalArray alloc] initWithBuffer:d length:n encoding:enc axis:nil];
+    return [[TTIOSignalArray alloc] initWithBuffer:d length:n encoding:enc axis:nil];
 }
 
 void testMilestone29(void)
@@ -37,8 +37,8 @@ void testMilestone29(void)
     {
         double cs[] = { 0.0, 1.0, 2.0, 3.0, 4.0 };
         double it[] = { 100.0, 200.0, 300.0, 200.0, 100.0 };
-        MPGONMRSpectrum *spec =
-            [[MPGONMRSpectrum alloc] initWithChemicalShiftArray:m29Array(cs, 5)
+        TTIONMRSpectrum *spec =
+            [[TTIONMRSpectrum alloc] initWithChemicalShiftArray:m29Array(cs, 5)
                                                   intensityArray:m29Array(it, 5)
                                                      nucleusType:@"1H"
                                         spectrometerFrequencyMHz:600.0
@@ -48,7 +48,7 @@ void testMilestone29(void)
         PASS(spec != nil, "M29: NMRSpectrum created");
 
         NSError *err = nil;
-        NSData *xml = [MPGONmrMLWriter dataForSpectrum:spec
+        NSData *xml = [TTIONmrMLWriter dataForSpectrum:spec
                                                     fid:nil
                                           sweepWidthPPM:12.0
                                                   error:&err];
@@ -94,8 +94,8 @@ void testMilestone29(void)
     {
         double cs[] = { 0.5, 1.5, 2.5, 3.5 };
         double it[] = { 10.0, 20.0, 30.0, 20.0 };
-        MPGONMRSpectrum *spec =
-            [[MPGONMRSpectrum alloc] initWithChemicalShiftArray:m29Array(cs, 4)
+        TTIONMRSpectrum *spec =
+            [[TTIONMRSpectrum alloc] initWithChemicalShiftArray:m29Array(cs, 4)
                                                   intensityArray:m29Array(it, 4)
                                                      nucleusType:@"1H"
                                         spectrometerFrequencyMHz:400.0
@@ -105,11 +105,11 @@ void testMilestone29(void)
         NSString *path = m29TempPath(@"rt.nmrML");
         unlink([path fileSystemRepresentation]);
         NSError *err = nil;
-        PASS([MPGONmrMLWriter writeSpectrum:spec fid:nil
+        PASS([TTIONmrMLWriter writeSpectrum:spec fid:nil
                               sweepWidthPPM:10.0 toPath:path error:&err],
              "M29: nmrML writes to disk");
 
-        MPGONmrMLReader *reader = [MPGONmrMLReader parseFilePath:path error:&err];
+        TTIONmrMLReader *reader = [TTIONmrMLReader parseFilePath:path error:&err];
         PASS(reader != nil, "M29: nmrML reader parses writer output");
         PASS([reader.nucleusType isEqualToString:@"1H"],
              "M29: reader recovered nucleus type 1H");
@@ -127,8 +127,8 @@ void testMilestone29(void)
     // ThermoRawFileParser delegation that validates the input first.
     {
         NSError *err = nil;
-        id result = [MPGOThermoRawReader readFromFilePath:
-                @"/tmp/definitely-does-not-exist-mpgo-m38.raw" error:&err];
+        id result = [TTIOThermoRawReader readFromFilePath:
+                @"/tmp/definitely-does-not-exist-ttio-m38.raw" error:&err];
         PASS(result == nil, "M38: Thermo reader returns nil for missing file");
         PASS(err != nil, "M38: Thermo reader populates NSError for missing file");
     }
@@ -172,7 +172,7 @@ void testMilestone29(void)
 
         setenv("THERMORAWFILEPARSER", [mockScript fileSystemRepresentation], 1);
         NSError *err = nil;
-        id result = [MPGOThermoRawReader readFromFilePath:rawPath error:&err];
+        id result = [TTIOThermoRawReader readFromFilePath:rawPath error:&err];
         unsetenv("THERMORAWFILEPARSER");
 
         PASS(result != nil, "M38: Thermo reader returns dataset via mock binary");

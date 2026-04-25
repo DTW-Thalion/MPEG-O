@@ -3,7 +3,7 @@
  *
  * Mock-converter delegation test. Validates the NSTask resolution
  * path, argv layout (-i <dir> -o <tmp>), stub mzML output landing
- * in the temp dir, and MPGOMzMLReader consuming the result.
+ * in the temp dir, and TTIOMzMLReader consuming the result.
  *
  * Cross-language counterpart:
  *   python/tests/integration/test_waters_masslynx.py
@@ -16,14 +16,14 @@
 #import <sys/stat.h>
 #import <unistd.h>
 
-#import "Import/MPGOWatersMassLynxReader.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOSpectrumIndex.h"
+#import "Import/TTIOWatersMassLynxReader.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOSpectrumIndex.h"
 
 static NSString *m63TempDir(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m63_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m63_%d_%@",
             (int)getpid(), suffix];
 }
 
@@ -39,7 +39,7 @@ static void m63Remove(NSString *path)
     [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 }
 
-/** Minimal mzML that MPGOMzMLReader can parse: 1 MS1 spectrum with
+/** Minimal mzML that TTIOMzMLReader can parse: 1 MS1 spectrum with
  *  2 peaks at mz=[10.0, 20.0], intensity=[1.0, 2.0] — values come from
  *  the base64 blobs below. Kept inline so the mock converter script
  *  can heredoc it. */
@@ -92,7 +92,7 @@ static NSString *m63WriteMockConverter(NSString *dir)
     NSString *script = [dir stringByAppendingPathComponent:@"mock_masslynxraw"];
     NSString *stubBody = m63MinimalMzML();
     // Quote for the heredoc — the content itself has no shell metachars
-    // that matter inside an unquoted heredoc, but we use 'MPGO_EOF'
+    // that matter inside an unquoted heredoc, but we use 'TTIO_EOF'
     // (quoted) so $ expansions inside the stub are left alone.
     NSString *src = [NSString stringWithFormat:
         @"#!/bin/sh\n"
@@ -111,9 +111,9 @@ static NSString *m63WriteMockConverter(NSString *dir)
         @"    exit 2\n"
         @"fi\n"
         @"stem=$(basename \"$input\" .raw)\n"
-        @"cat > \"$output/$stem.mzML\" <<'MPGO_EOF'\n"
+        @"cat > \"$output/$stem.mzML\" <<'TTIO_EOF'\n"
         @"%@"
-        @"MPGO_EOF\n",
+        @"TTIO_EOF\n",
         stubBody];
     [src writeToFile:script atomically:YES
              encoding:NSUTF8StringEncoding error:NULL];
@@ -134,13 +134,13 @@ void testWatersMassLynxReader(void)
         NSString *fakeRaw = [workdir stringByAppendingPathComponent:@"Sample_01.raw"];
         m63Mkdir(fakeRaw);
         NSError *err = nil;
-        MPGOSpectralDataset *ds = [MPGOWatersMassLynxReader
+        TTIOSpectralDataset *ds = [TTIOWatersMassLynxReader
             readFromDirectoryPath:fakeRaw
                        converter:@"/nonexistent/no-such-masslynx"
                            error:&err];
         PASS(ds == nil, "missing binary: returns nil");
-        PASS(err != nil && [err.domain isEqualToString:@"MPGOWatersMassLynxReader"],
-             "missing binary: MPGOWatersMassLynxReader error domain");
+        PASS(err != nil && [err.domain isEqualToString:@"TTIOWatersMassLynxReader"],
+             "missing binary: TTIOWatersMassLynxReader error domain");
     }
 
     // ── 2. Input is not a directory → clean error ────────────────────
@@ -149,7 +149,7 @@ void testWatersMassLynxReader(void)
         [@"plain text" writeToFile:bogus atomically:YES
                           encoding:NSUTF8StringEncoding error:NULL];
         NSError *err = nil;
-        MPGOSpectralDataset *ds = [MPGOWatersMassLynxReader
+        TTIOSpectralDataset *ds = [TTIOWatersMassLynxReader
             readFromDirectoryPath:bogus error:&err];
         PASS(ds == nil, "file-not-directory: returns nil");
         PASS(err != nil, "file-not-directory: populates NSError");
@@ -161,14 +161,14 @@ void testWatersMassLynxReader(void)
         m63Mkdir(src);
         NSString *mock = m63WriteMockConverter(workdir);
         NSError *err = nil;
-        MPGOSpectralDataset *ds = [MPGOWatersMassLynxReader
+        TTIOSpectralDataset *ds = [TTIOWatersMassLynxReader
             readFromDirectoryPath:src converter:mock error:&err];
         PASS(ds != nil, "mock converter: parse succeeds");
         PASS(err == nil || ds != nil, "mock converter: no error when ds returned");
         if (ds) {
             NSArray *runNames = [ds.msRuns allKeys];
             PASS(runNames.count >= 1, "mock converter: at least one run parsed");
-            MPGOAcquisitionRun *run = ds.msRuns[runNames.firstObject];
+            TTIOAcquisitionRun *run = ds.msRuns[runNames.firstObject];
             PASS(run.spectrumIndex.count == 1,
                  "mock converter: 1 spectrum (stub mzML)");
         }

@@ -1,12 +1,12 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Image/MPGOMSImage.h"
-#import "HDF5/MPGOHDF5Errors.h"
+#import "Image/TTIOMSImage.h"
+#import "HDF5/TTIOHDF5Errors.h"
 #import <unistd.h>
 
 static NSString *imgPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_img_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_img_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
@@ -32,7 +32,7 @@ void testMSImage(void)
         }
     }
 
-    MPGOMSImage *img = [[MPGOMSImage alloc] initWithWidth:W
+    TTIOMSImage *img = [[TTIOMSImage alloc] initWithWidth:W
                                                    height:H
                                            spectralPoints:SP
                                                  tileSize:TS
@@ -50,7 +50,7 @@ void testMSImage(void)
     PASS(err == nil, "no error on write");
 
     // ---- reopen + full round-trip equality ----
-    MPGOMSImage *back = [MPGOMSImage readFromFilePath:path error:&err];
+    TTIOMSImage *back = [TTIOMSImage readFromFilePath:path error:&err];
     PASS(back != nil, "MSImage reads back");
     PASS(back.width == W && back.height == H && back.spectralPoints == SP,
          "dimensions round-trip");
@@ -59,7 +59,7 @@ void testMSImage(void)
     PASS([back isEqual:img], "MSImage isEqual: original after round-trip");
 
     // ---- tile read: (0..31, 0..31) — top-left tile ----
-    NSData *tileTL = [MPGOMSImage readTileFromFilePath:path
+    NSData *tileTL = [TTIOMSImage readTileFromFilePath:path
                                                    atX:0 y:0
                                                  width:TS
                                                 height:TS
@@ -82,7 +82,7 @@ void testMSImage(void)
     PASS(ok, "top-left tile values match cube[0..31, 0..31, *] exactly");
 
     // ---- tile read: bottom-right (32..63, 32..63) ----
-    NSData *tileBR = [MPGOMSImage readTileFromFilePath:path
+    NSData *tileBR = [TTIOMSImage readTileFromFilePath:path
                                                    atX:32 y:32
                                                  width:TS
                                                 height:TS
@@ -102,7 +102,7 @@ void testMSImage(void)
     PASS(ok, "bottom-right tile values match cube[32..63, 32..63, *] exactly");
 
     // ---- non-tile-aligned partial read still works ----
-    NSData *partial = [MPGOMSImage readTileFromFilePath:path
+    NSData *partial = [TTIOMSImage readTileFromFilePath:path
                                                     atX:10 y:5
                                                   width:4
                                                  height:3

@@ -1,4 +1,4 @@
-# MPEG-O shared build flags
+# TTI-O shared build flags
 #
 # Override HDF5_PREFIX on the command line if libhdf5 is installed outside
 # /usr or /usr/local, e.g.:
@@ -9,7 +9,7 @@ HDF5_PREFIX ?= /usr
 # ---------------------------------------------------------------------------
 # Toolchain note
 # ---------------------------------------------------------------------------
-# MPEG-O requires clang — gcc's gobjc lacks -fobjc-arc. Use the build.sh
+# TTI-O requires clang — gcc's gobjc lacks -fobjc-arc. Use the build.sh
 # wrapper, or invoke make with `CC=clang OBJC=clang` on the command line.
 #
 # ---------------------------------------------------------------------------
@@ -30,12 +30,12 @@ ifneq ($(GNUSTEP_BASE_LIB),)
   GNUSTEP_BASE_HAS_V2 := $(shell nm -D $(GNUSTEP_BASE_LIB) 2>/dev/null | \
       grep -c '\._OBJC_CLASS_NSObject$$')
   ifeq ($(GNUSTEP_BASE_HAS_V2),0)
-    MPGO_OBJC_RUNTIME ?= gnustep-1.8
+    TTIO_OBJC_RUNTIME ?= gnustep-1.8
   else
-    MPGO_OBJC_RUNTIME ?= gnustep-2.0
+    TTIO_OBJC_RUNTIME ?= gnustep-2.0
   endif
 endif
-MPGO_OBJC_RUNTIME ?= gnustep-2.0
+TTIO_OBJC_RUNTIME ?= gnustep-2.0
 
 # ---------------------------------------------------------------------------
 # Build flags
@@ -54,7 +54,7 @@ ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include/hdf5/serial
 # (clang-compatible) objc/runtime.h there; pulling gcc's libobjc headers
 # in on top of that shadows the libobjc2 versions and produces clang
 # parse errors (member-access on `id`, missing ownership qualifiers, ...).
-ifeq ($(MPGO_OBJC_RUNTIME),gnustep-1.8)
+ifeq ($(TTIO_OBJC_RUNTIME),gnustep-1.8)
   ifeq ($(wildcard /usr/local/include/objc/objc.h),)
     GCC_OBJC_INCLUDE := $(firstword $(wildcard \
         /usr/lib/gcc/x86_64-linux-gnu/*/include))
@@ -70,16 +70,16 @@ endif
 # header not shipped by the GCC runtime — the resulting fatal include
 # error is the historical reason Ubuntu's gnustep-1.8 users disable blocks.
 # libobjc2-based gnustep-2.0 builds ship the header in-tree and are fine.
-ifeq ($(MPGO_OBJC_RUNTIME),gnustep-2.0)
-  MPGO_BLOCKS_FLAG := -fblocks
+ifeq ($(TTIO_OBJC_RUNTIME),gnustep-2.0)
+  TTIO_BLOCKS_FLAG := -fblocks
 else
-  MPGO_BLOCKS_FLAG :=
+  TTIO_BLOCKS_FLAG :=
 endif
 
 ADDITIONAL_OBJCFLAGS  += -Wall -Wextra -Wno-unused-parameter -fobjc-arc \
-                         -fobjc-runtime=$(MPGO_OBJC_RUNTIME) $(MPGO_BLOCKS_FLAG)
+                         -fobjc-runtime=$(TTIO_OBJC_RUNTIME) $(TTIO_BLOCKS_FLAG)
 ADDITIONAL_OBJCCFLAGS += -Wall -Wextra -Wno-unused-parameter -fobjc-arc \
-                         -fobjc-runtime=$(MPGO_OBJC_RUNTIME) $(MPGO_BLOCKS_FLAG)
+                         -fobjc-runtime=$(TTIO_OBJC_RUNTIME) $(TTIO_BLOCKS_FLAG)
 
 # Testing.h ships with gnustep-make's TestFramework.
 ADDITIONAL_OBJCFLAGS  += -I$(GNUSTEP_MAKEFILES)/TestFramework
@@ -102,7 +102,7 @@ OQS_PREFIX ?= $(firstword $(wildcard \
     /opt/oqs))
 ifneq ($(OQS_PREFIX),)
   ifneq ($(wildcard $(OQS_PREFIX)/include/oqs/oqs.h),)
-    ADDITIONAL_CPPFLAGS += -I$(OQS_PREFIX)/include -DMPGO_HAVE_LIBOQS=1
+    ADDITIONAL_CPPFLAGS += -I$(OQS_PREFIX)/include -DTTIO_HAVE_LIBOQS=1
     ADDITIONAL_LDFLAGS  += -L$(OQS_PREFIX)/lib -L$(OQS_PREFIX)/lib64
     ADDITIONAL_LDFLAGS  += -loqs
     ADDITIONAL_LDFLAGS  += -Wl,-rpath,$(OQS_PREFIX)/lib

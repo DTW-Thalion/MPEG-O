@@ -3,24 +3,24 @@
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Protection/MPGOEncryptionManager.h"
-#import "Protection/MPGOAccessPolicy.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Dataset.h"
-#import "HDF5/MPGOHDF5Errors.h"
+#import "Protection/TTIOEncryptionManager.h"
+#import "Protection/TTIOAccessPolicy.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Dataset.h"
+#import "HDF5/TTIOHDF5Errors.h"
 #import <unistd.h>
 
 static NSString *encPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_enc_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_enc_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
@@ -31,17 +31,17 @@ static NSData *make32ByteKey(uint8_t seed)
     return [NSData dataWithBytes:buf length:32];
 }
 
-static MPGOSignalArray *f64(const double *src, NSUInteger n)
+static TTIOSignalArray *f64(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf length:n encoding:enc axis:nil];
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf length:n encoding:enc axis:nil];
 }
 
-static MPGOAcquisitionRun *buildSmallRun(void)
+static TTIOAcquisitionRun *buildSmallRun(void)
 {
     NSMutableArray *spectra = [NSMutableArray array];
     for (NSUInteger k = 0; k < 5; k++) {
@@ -53,10 +53,10 @@ static MPGOAcquisitionRun *buildSmallRun(void)
         }
         NSError *err = nil;
         [spectra addObject:
-            [[MPGOMassSpectrum alloc] initWithMzArray:f64(mz, N)
+            [[TTIOMassSpectrum alloc] initWithMzArray:f64(mz, N)
                                        intensityArray:f64(in, N)
                                               msLevel:1
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       scanTimeSeconds:(double)k * 0.5
@@ -64,15 +64,15 @@ static MPGOAcquisitionRun *buildSmallRun(void)
                                       precursorCharge:0
                                                 error:&err]];
     }
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
                                                      model:@"QE"
                                               serialNumber:@"S"
                                                 sourceType:@"ESI"
                                               analyzerType:@"Orbitrap"
                                               detectorType:@"em"];
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
                                       instrumentConfig:cfg];
 }
 
@@ -86,20 +86,20 @@ void testEncryption(void)
         NSData *iv = nil, *tag = nil;
         NSError *err = nil;
         NSData *cipher =
-            [MPGOEncryptionManager encryptData:plain withKey:key iv:&iv authTag:&tag error:&err];
+            [TTIOEncryptionManager encryptData:plain withKey:key iv:&iv authTag:&tag error:&err];
         PASS(cipher != nil, "AES-256-GCM encrypt returns ciphertext");
         PASS(iv.length == 12, "GCM IV is 12 bytes");
         PASS(tag.length == 16, "GCM tag is 16 bytes");
         PASS(![cipher isEqualToData:plain], "ciphertext differs from plaintext");
 
         NSData *decrypted =
-            [MPGOEncryptionManager decryptData:cipher withKey:key iv:iv authTag:tag error:&err];
+            [TTIOEncryptionManager decryptData:cipher withKey:key iv:iv authTag:tag error:&err];
         PASS([decrypted isEqualToData:plain], "decrypt with correct key returns plaintext");
 
         NSData *wrongKey = make32ByteKey(99);
         NSError *err2 = nil;
         NSData *bogus =
-            [MPGOEncryptionManager decryptData:cipher withKey:wrongKey iv:iv authTag:tag error:&err2];
+            [TTIOEncryptionManager decryptData:cipher withKey:wrongKey iv:iv authTag:tag error:&err2];
         PASS(bogus == nil, "decrypt with wrong key returns nil");
         PASS(err2 != nil, "wrong-key decrypt populates NSError");
 
@@ -107,7 +107,7 @@ void testEncryption(void)
         ((uint8_t *)tampered.mutableBytes)[0] ^= 0xff;
         NSError *err3 = nil;
         NSData *tres =
-            [MPGOEncryptionManager decryptData:tampered withKey:key iv:iv authTag:tag error:&err3];
+            [TTIOEncryptionManager decryptData:tampered withKey:key iv:iv authTag:tag error:&err3];
         PASS(tres == nil, "tampered ciphertext fails authentication");
         PASS(err3 != nil, "tampered ciphertext populates NSError");
     }
@@ -117,23 +117,23 @@ void testEncryption(void)
     unlink([path fileSystemRepresentation]);
     NSError *err = nil;
     {
-        MPGOAcquisitionRun *run = buildSmallRun();
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOAcquisitionRun *run = buildSmallRun();
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([run writeToGroup:[f rootGroup] name:@"run_0001" error:&err], "run writes");
         [f close];
     }
 
-    PASS(![MPGOEncryptionManager isIntensityChannelEncryptedInRun:@"run_0001"
+    PASS(![TTIOEncryptionManager isIntensityChannelEncryptedInRun:@"run_0001"
                                                        atFilePath:path],
          "fresh run is not encrypted");
 
     // Capture original plaintext intensity for byte-exact verification later.
     NSData *originalIntensity = nil;
     {
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOHDF5Group *runG = [[f rootGroup] openGroupNamed:@"run_0001" error:&err];
-        MPGOHDF5Group *ch = [runG openGroupNamed:@"signal_channels" error:&err];
-        MPGOHDF5Dataset *ds = [ch openDatasetNamed:@"intensity_values" error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5Group *runG = [[f rootGroup] openGroupNamed:@"run_0001" error:&err];
+        TTIOHDF5Group *ch = [runG openGroupNamed:@"signal_channels" error:&err];
+        TTIOHDF5Dataset *ds = [ch openDatasetNamed:@"intensity_values" error:&err];
         originalIntensity = [ds readDataWithError:&err];
         PASS(originalIntensity.length == 5 * 8 * sizeof(double),
              "captured original intensity (40 doubles)");
@@ -142,21 +142,21 @@ void testEncryption(void)
 
     // Encrypt the intensity channel.
     NSData *key = make32ByteKey(123);
-    PASS([MPGOEncryptionManager encryptIntensityChannelInRun:@"run_0001"
+    PASS([TTIOEncryptionManager encryptIntensityChannelInRun:@"run_0001"
                                                   atFilePath:path
                                                      withKey:key
                                                        error:&err],
          "encrypt intensity channel succeeds");
-    PASS([MPGOEncryptionManager isIntensityChannelEncryptedInRun:@"run_0001"
+    PASS([TTIOEncryptionManager isIntensityChannelEncryptedInRun:@"run_0001"
                                                       atFilePath:path],
          "channel is now reported as encrypted");
 
     // Verify mz_values are still readable without the key.
     {
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOHDF5Group *runG = [[f rootGroup] openGroupNamed:@"run_0001" error:&err];
-        MPGOHDF5Group *ch = [runG openGroupNamed:@"signal_channels" error:&err];
-        MPGOHDF5Dataset *mzDS = [ch openDatasetNamed:@"mz_values" error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5Group *runG = [[f rootGroup] openGroupNamed:@"run_0001" error:&err];
+        TTIOHDF5Group *ch = [runG openGroupNamed:@"signal_channels" error:&err];
+        TTIOHDF5Dataset *mzDS = [ch openDatasetNamed:@"mz_values" error:&err];
         PASS(mzDS != nil, "mz_values still openable post-encryption");
         NSData *mz = [mzDS readDataWithError:&err];
         PASS(mz.length == 5 * 8 * sizeof(double),
@@ -169,7 +169,7 @@ void testEncryption(void)
 
     // Decrypt with correct key → byte-exact match.
     {
-        NSData *plain = [MPGOEncryptionManager decryptIntensityChannelInRun:@"run_0001"
+        NSData *plain = [TTIOEncryptionManager decryptIntensityChannelInRun:@"run_0001"
                                                                  atFilePath:path
                                                                     withKey:key
                                                                       error:&err];
@@ -182,7 +182,7 @@ void testEncryption(void)
     {
         NSData *wrong = make32ByteKey(200);
         NSError *e = nil;
-        NSData *plain = [MPGOEncryptionManager decryptIntensityChannelInRun:@"run_0001"
+        NSData *plain = [TTIOEncryptionManager decryptIntensityChannelInRun:@"run_0001"
                                                                  atFilePath:path
                                                                     withKey:wrong
                                                                       error:&e];
@@ -192,9 +192,9 @@ void testEncryption(void)
 
     // ---- access policy round-trip independent of key management ----
     {
-        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path error:&err];
-        MPGOAccessPolicy *policy =
-            [[MPGOAccessPolicy alloc] initWithPolicy:@{
+        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
+        TTIOAccessPolicy *policy =
+            [[TTIOAccessPolicy alloc] initWithPolicy:@{
                 @"version":  @1,
                 @"subjects": @[ @"alice@lab", @"bob@lab" ],
                 @"streams":  @[ @"run_0001/signal_channels/intensity_values_encrypted" ],
@@ -204,8 +204,8 @@ void testEncryption(void)
         [f close];
     }
     {
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOAccessPolicy *back = [MPGOAccessPolicy readFromFile:f error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOAccessPolicy *back = [TTIOAccessPolicy readFromFile:f error:&err];
         PASS(back != nil, "access policy reads back without a key");
         PASS([back.policy[@"subjects"] containsObject:@"alice@lab"], "policy subjects preserved");
         PASS([back.policy[@"key_id"] isEqualToString:@"kms://demo/2026"],

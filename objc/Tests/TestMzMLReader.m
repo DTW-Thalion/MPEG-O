@@ -1,22 +1,22 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Import/MPGOMzMLReader.h"
-#import "Import/MPGOBase64.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Spectra/MPGOChromatogram.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "ValueClasses/MPGOIsolationWindow.h"
+#import "Import/TTIOMzMLReader.h"
+#import "Import/TTIOBase64.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Spectra/TTIOChromatogram.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "ValueClasses/TTIOIsolationWindow.h"
 #import <math.h>
 #import <unistd.h>
 #import <zlib.h>
 
 static NSString *mpath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_mzml_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_mzml_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
@@ -138,7 +138,7 @@ static NSString *buildSyntheticMzML(const double *mz1, const double *in1, NSUInt
         (unsigned long)nc, ttb, tib];
 }
 
-static BOOL arrayMatchesDoubles(MPGOSignalArray *arr, const double *expected, NSUInteger n)
+static BOOL arrayMatchesDoubles(TTIOSignalArray *arr, const double *expected, NSUInteger n)
 {
     if (!arr || arr.length != n) return NO;
     const double *got = (const double *)arr.buffer.bytes;
@@ -164,22 +164,22 @@ void testMzMLReader(void)
         NSData *data = [xml dataUsingEncoding:NSUTF8StringEncoding];
 
         NSError *err = nil;
-        MPGOMzMLReader *r = [MPGOMzMLReader parseData:data error:&err];
+        TTIOMzMLReader *r = [TTIOMzMLReader parseData:data error:&err];
         PASS(r != nil, "parseData returns reader");
         PASS(err == nil, "no error on valid mzML");
         PASS(r.dataset != nil, "dataset materialized");
 
-        MPGOAcquisitionRun *run = r.dataset.msRuns[@"synthetic_run"];
+        TTIOAcquisitionRun *run = r.dataset.msRuns[@"synthetic_run"];
         PASS(run != nil, "run keyed by id");
 
-        MPGOMassSpectrum *s0 = [run spectrumAtIndex:0 error:&err];
-        MPGOMassSpectrum *s1 = [run spectrumAtIndex:1 error:&err];
+        TTIOMassSpectrum *s0 = [run spectrumAtIndex:0 error:&err];
+        TTIOMassSpectrum *s1 = [run spectrumAtIndex:1 error:&err];
         PASS(s0 != nil && s1 != nil, "both spectra retrievable");
 
         PASS(s0.msLevel == 1, "s0 ms level = 1");
         PASS(s1.msLevel == 2, "s1 ms level = 2");
-        PASS(s0.polarity == MPGOPolarityPositive, "s0 positive polarity");
-        PASS(s1.polarity == MPGOPolarityNegative, "s1 negative polarity");
+        PASS(s0.polarity == TTIOPolarityPositive, "s0 positive polarity");
+        PASS(s1.polarity == TTIOPolarityNegative, "s1 negative polarity");
         PASS(fabs(s0.scanTimeSeconds - 12.5) < 1e-9, "s0 scan time (seconds)");
         PASS(fabs(s1.scanTimeSeconds - 30.0) < 1e-9, "s1 scan time (minutes -> 30s)");
         PASS(fabs(s1.precursorMz - 456.789) < 1e-9, "s1 precursor m/z");
@@ -193,8 +193,8 @@ void testMzMLReader(void)
         PASS(arrayMatchesDoubles(s1.intensityArray, in2, 2), "s1 intensity matches");
 
         PASS(r.chromatograms.count == 1, "one chromatogram parsed");
-        MPGOChromatogram *chrom = r.chromatograms[0];
-        PASS(chrom.type == MPGOChromatogramTypeTIC, "chromatogram is TIC");
+        TTIOChromatogram *chrom = r.chromatograms[0];
+        PASS(chrom.type == TTIOChromatogramTypeTIC, "chromatogram is TIC");
         PASS(arrayMatchesDoubles(chrom.timeArray, tt, 5), "chromatogram time array");
         PASS(arrayMatchesDoubles(chrom.intensityArray, ti, 5), "chromatogram intensity array");
     }
@@ -205,34 +205,34 @@ void testMzMLReader(void)
         NSData *data = [xml dataUsingEncoding:NSUTF8StringEncoding];
 
         NSError *err = nil;
-        MPGOSpectralDataset *ds = [MPGOMzMLReader readFromData:data error:&err];
+        TTIOSpectralDataset *ds = [TTIOMzMLReader readFromData:data error:&err];
         PASS(ds != nil, "zlib-compressed arrays parse");
-        MPGOAcquisitionRun *run = ds.msRuns[@"synthetic_run"];
-        MPGOMassSpectrum *s1 = [run spectrumAtIndex:1 error:&err];
+        TTIOAcquisitionRun *run = ds.msRuns[@"synthetic_run"];
+        TTIOMassSpectrum *s1 = [run spectrumAtIndex:1 error:&err];
         PASS(arrayMatchesDoubles(s1.mzArray, mz2, 2), "zlib s1 mz recovered");
         PASS(arrayMatchesDoubles(s1.intensityArray, in2, 2), "zlib s1 intensity recovered");
     }
 
-    // ---- round-trip: mzML -> .mpgo -> read back ----
+    // ---- round-trip: mzML -> .tio -> read back ----
     {
         NSString *xml = buildSyntheticMzML(mz1, in1, 3, mz2, in2, 2, tt, ti, 5, NO);
         NSData *data = [xml dataUsingEncoding:NSUTF8StringEncoding];
         NSError *err = nil;
-        MPGOSpectralDataset *ds = [MPGOMzMLReader readFromData:data error:&err];
+        TTIOSpectralDataset *ds = [TTIOMzMLReader readFromData:data error:&err];
         PASS(ds != nil, "parse for round-trip");
 
         NSString *path = mpath(@"roundtrip");
         unlink([path fileSystemRepresentation]);
-        PASS([ds writeToFilePath:path error:&err], ".mpgo write succeeds");
+        PASS([ds writeToFilePath:path error:&err], ".tio write succeeds");
 
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
-        PASS(back != nil, ".mpgo read back");
-        MPGOAcquisitionRun *run = back.msRuns[@"synthetic_run"];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
+        PASS(back != nil, ".tio read back");
+        TTIOAcquisitionRun *run = back.msRuns[@"synthetic_run"];
         PASS(run != nil, "run survives round-trip");
 
-        MPGOMassSpectrum *s0 = [run spectrumAtIndex:0 error:&err];
-        MPGOMassSpectrum *s1 = [run spectrumAtIndex:1 error:&err];
+        TTIOMassSpectrum *s0 = [run spectrumAtIndex:0 error:&err];
+        TTIOMassSpectrum *s1 = [run spectrumAtIndex:1 error:&err];
         PASS(s0 != nil && s1 != nil, "both spectra recoverable post-round-trip");
         PASS(arrayMatchesDoubles(s0.mzArray, mz1, 3), "s0 mz survives round-trip");
         PASS(arrayMatchesDoubles(s1.mzArray, mz2, 2), "s1 mz survives round-trip");
@@ -245,7 +245,7 @@ void testMzMLReader(void)
         NSString *bad = @"<?xml version=\"1.0\"?><mzML><run><spectrum";
         NSData *data = [bad dataUsingEncoding:NSUTF8StringEncoding];
         NSError *err = nil;
-        MPGOSpectralDataset *ds = [MPGOMzMLReader readFromData:data error:&err];
+        TTIOSpectralDataset *ds = [TTIOMzMLReader readFromData:data error:&err];
         PASS(ds == nil, "malformed XML returns nil");
         PASS(err != nil, "malformed XML populates NSError");
     }
@@ -265,7 +265,7 @@ void testMzMLReader(void)
 
         NSDate *t0 = [NSDate date];
         NSError *err = nil;
-        MPGOSpectralDataset *ds = [MPGOMzMLReader readFromData:data error:&err];
+        TTIOSpectralDataset *ds = [TTIOMzMLReader readFromData:data error:&err];
         NSTimeInterval dt = -[t0 timeIntervalSinceNow];
         PASS(ds != nil, "100-peak synthetic parses");
         printf("    [bench] 100-peak synthetic mzML parse %.2f ms\n", dt * 1000.0);
@@ -292,13 +292,13 @@ void testMzMLReader(void)
 
             // tiny.pwiz.1.1.mzML: 4 spectra, 2 chromatograms
             NSDate *t0 = [NSDate date];
-            MPGOMzMLReader *r = [MPGOMzMLReader parseFilePath:tinyPath error:&err];
+            TTIOMzMLReader *r = [TTIOMzMLReader parseFilePath:tinyPath error:&err];
             NSTimeInterval dt = -[t0 timeIntervalSinceNow];
             PASS(r != nil, "tiny.pwiz.1.1.mzML parses");
             PASS(err == nil, "tiny.pwiz.1.1.mzML has no parse error");
             PASS(r.dataset != nil, "tiny.pwiz.1.1 dataset materialized");
 
-            MPGOAcquisitionRun *run = [r.dataset.msRuns.allValues firstObject];
+            TTIOAcquisitionRun *run = [r.dataset.msRuns.allValues firstObject];
             PASS(run != nil, "tiny.pwiz.1.1 has at least one run");
 
             NSUInteger msCount = run.spectrumIndex.count;
@@ -311,19 +311,19 @@ void testMzMLReader(void)
                    dt * 1000.0);
 
             // Spot check MS level + polarity on the first spectrum
-            MPGOMassSpectrum *first = [run spectrumAtIndex:0 error:&err];
+            TTIOMassSpectrum *first = [run spectrumAtIndex:0 error:&err];
             PASS(first != nil, "first spectrum retrievable");
             PASS(first.msLevel >= 1 && first.msLevel <= 3, "ms level in sane range");
 
-            // Full round trip to .mpgo
+            // Full round trip to .tio
             NSString *path = mpath(@"tiny_real");
             unlink([path fileSystemRepresentation]);
             PASS([r.dataset writeToFilePath:path error:&err],
-                 "tiny.pwiz.1.1 writes to .mpgo");
-            MPGOSpectralDataset *back =
-                [MPGOSpectralDataset readFromFilePath:path error:&err];
-            PASS(back != nil, "tiny.pwiz.1.1 .mpgo reads back");
-            MPGOAcquisitionRun *backRun = [back.msRuns.allValues firstObject];
+                 "tiny.pwiz.1.1 writes to .tio");
+            TTIOSpectralDataset *back =
+                [TTIOSpectralDataset readFromFilePath:path error:&err];
+            PASS(back != nil, "tiny.pwiz.1.1 .tio reads back");
+            TTIOAcquisitionRun *backRun = [back.msRuns.allValues firstObject];
             PASS(backRun != nil, "round-trip run recovered");
             unlink([path fileSystemRepresentation]);
         }
@@ -343,13 +343,13 @@ void testMzMLReader(void)
         if (oneMinPath) {
             NSError *err = nil;
             NSDate *t0 = [NSDate date];
-            MPGOSpectralDataset *ds =
-                [MPGOMzMLReader readFromFilePath:oneMinPath error:&err];
+            TTIOSpectralDataset *ds =
+                [TTIOMzMLReader readFromFilePath:oneMinPath error:&err];
             NSTimeInterval dt = -[t0 timeIntervalSinceNow];
             PASS(ds != nil, "1min.mzML parses");
             PASS(err == nil, "1min.mzML has no parse error");
 
-            MPGOAcquisitionRun *run = [ds.msRuns.allValues firstObject];
+            TTIOAcquisitionRun *run = [ds.msRuns.allValues firstObject];
             PASS(run != nil, "1min.mzML has a run");
 
             NSUInteger count = run.spectrumIndex.count;
@@ -381,13 +381,13 @@ void testMzMLReaderM74(void)
     }
 
     NSError *err = nil;
-    MPGOSpectralDataset *ds =
-        [MPGOMzMLReader readFromFilePath:tinyPath error:&err];
+    TTIOSpectralDataset *ds =
+        [TTIOMzMLReader readFromFilePath:tinyPath error:&err];
     PASS(ds != nil, "tiny.pwiz.1.1.mzML parses for M74 check");
-    MPGOAcquisitionRun *run = [ds.msRuns.allValues firstObject];
+    TTIOAcquisitionRun *run = [ds.msRuns.allValues firstObject];
     PASS(run != nil, "run present");
 
-    MPGOSpectrumIndex *idx = run.spectrumIndex;
+    TTIOSpectrumIndex *idx = run.spectrumIndex;
     PASS(idx.hasActivationDetail, "index has M74 activation-detail columns");
 
     // tiny.pwiz.1.1.mzML: MS2 scans 2 and 4 both use CID with target 445.3
@@ -399,9 +399,9 @@ void testMzMLReaderM74(void)
     PASS(ms2Found >= 0, "at least one MS2 present");
     if (ms2Found >= 0) {
         NSUInteger i = (NSUInteger)ms2Found;
-        PASS([idx activationMethodAt:i] == MPGOActivationMethodCID,
+        PASS([idx activationMethodAt:i] == TTIOActivationMethodCID,
              "MS2 activation method is CID");
-        MPGOIsolationWindow *iw = [idx isolationWindowAt:i];
+        TTIOIsolationWindow *iw = [idx isolationWindowAt:i];
         PASS(iw != nil, "MS2 isolation window present");
         PASS(iw != nil && fabs(iw.targetMz - 445.3) < 1e-9,
              "MS2 isolation target m/z = 445.3");
@@ -418,27 +418,27 @@ void testMzMLReaderM74(void)
     }
     if (ms1Found >= 0) {
         NSUInteger i = (NSUInteger)ms1Found;
-        PASS([idx activationMethodAt:i] == MPGOActivationMethodNone,
+        PASS([idx activationMethodAt:i] == TTIOActivationMethodNone,
              "MS1 activation method is None");
         PASS([idx isolationWindowAt:i] == nil,
              "MS1 isolation window is nil");
     }
 
-    // Full round-trip through .mpgo: M74 columns must survive.
+    // Full round-trip through .tio: M74 columns must survive.
     NSString *path = mpath(@"m74_roundtrip");
     unlink([path fileSystemRepresentation]);
-    PASS([ds writeToFilePath:path error:&err], "M74 write to .mpgo");
-    MPGOSpectralDataset *back =
-        [MPGOSpectralDataset readFromFilePath:path error:&err];
-    PASS(back != nil, "M74 .mpgo reads back");
-    MPGOAcquisitionRun *backRun = [back.msRuns.allValues firstObject];
-    MPGOSpectrumIndex *backIdx = backRun.spectrumIndex;
+    PASS([ds writeToFilePath:path error:&err], "M74 write to .tio");
+    TTIOSpectralDataset *back =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
+    PASS(back != nil, "M74 .tio reads back");
+    TTIOAcquisitionRun *backRun = [back.msRuns.allValues firstObject];
+    TTIOSpectrumIndex *backIdx = backRun.spectrumIndex;
     PASS(backIdx.hasActivationDetail, "M74 columns survive round-trip");
     if (ms2Found >= 0) {
         NSUInteger i = (NSUInteger)ms2Found;
-        PASS([backIdx activationMethodAt:i] == MPGOActivationMethodCID,
+        PASS([backIdx activationMethodAt:i] == TTIOActivationMethodCID,
              "post-round-trip MS2 activation method still CID");
-        MPGOIsolationWindow *iw = [backIdx isolationWindowAt:i];
+        TTIOIsolationWindow *iw = [backIdx isolationWindowAt:i];
         PASS(iw && fabs(iw.targetMz - 445.3) < 1e-9,
              "post-round-trip isolation target survives");
     }

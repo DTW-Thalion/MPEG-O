@@ -1,14 +1,14 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Dataset/MPGOFeature.h"
-#import "Dataset/MPGOIdentification.h"
-#import "Dataset/MPGOQuantification.h"
-#import "Export/MPGOMzTabWriter.h"
-#import "Import/MPGOMzTabReader.h"
+#import "Dataset/TTIOFeature.h"
+#import "Dataset/TTIOIdentification.h"
+#import "Dataset/TTIOQuantification.h"
+#import "Export/TTIOMzTabWriter.h"
+#import "Import/TTIOMzTabReader.h"
 #import <math.h>
 #import <unistd.h>
 
-// M78: MPGOFeature value class + mzTab PEH/PEP round-trip (1.0 dialect)
+// M78: TTIOFeature value class + mzTab PEH/PEP round-trip (1.0 dialect)
 // + SFH/SMF/SEH/SME round-trip (2.0.0-M dialect). Mirrors the Python
 // and Java M78 suites.
 
@@ -34,7 +34,7 @@ static NSString *tempPath(NSString *name)
 {
     NSString *tmp = NSTemporaryDirectory();
     NSString *dir = [tmp stringByAppendingPathComponent:
-        [NSString stringWithFormat:@"mpgo-m78-%d", getpid()]];
+        [NSString stringWithFormat:@"ttio-m78-%d", getpid()]];
     [[NSFileManager defaultManager] createDirectoryAtPath:dir
                               withIntermediateDirectories:YES
                                                attributes:nil
@@ -42,9 +42,9 @@ static NSString *tempPath(NSString *name)
     return [dir stringByAppendingPathComponent:name];
 }
 
-static NSArray<MPGOFeature *> *mzTabPFeats(void)
+static NSArray<TTIOFeature *> *mzTabPFeats(void)
 {
-    MPGOFeature *a = [[MPGOFeature alloc]
+    TTIOFeature *a = [[TTIOFeature alloc]
         initWithFeatureId:@"pep_1"
                   runName:@"run_a"
            chemicalEntity:@"AAAAPEPTIDER"
@@ -54,7 +54,7 @@ static NSArray<MPGOFeature *> *mzTabPFeats(void)
                 adductIon:@""
                abundances:@{@"sample_1": @1.5e6, @"sample_2": @2.25e6}
              evidenceRefs:@[@"ms_run[1]:scan=42"]];
-    MPGOFeature *b = [[MPGOFeature alloc]
+    TTIOFeature *b = [[TTIOFeature alloc]
         initWithFeatureId:@"pep_2"
                   runName:@"run_a"
            chemicalEntity:@"QWERTYK"
@@ -67,10 +67,10 @@ static NSArray<MPGOFeature *> *mzTabPFeats(void)
     return @[a, b];
 }
 
-static void mzTabMPayload(NSArray<MPGOFeature *> **outFeats,
-                           NSArray<MPGOIdentification *> **outIdents)
+static void mzTabMPayload(NSArray<TTIOFeature *> **outFeats,
+                           NSArray<TTIOIdentification *> **outIdents)
 {
-    MPGOFeature *f1 = [[MPGOFeature alloc]
+    TTIOFeature *f1 = [[TTIOFeature alloc]
         initWithFeatureId:@"smf_1"
                   runName:@"metabolomics"
            chemicalEntity:@"CHEBI:15377"
@@ -80,7 +80,7 @@ static void mzTabMPayload(NSArray<MPGOFeature *> **outFeats,
                 adductIon:@"[M+H]1+"
                abundances:@{@"sample_a": @1.2e4, @"sample_b": @1.1e4}
              evidenceRefs:@[@"sme_1"]];
-    MPGOFeature *f2 = [[MPGOFeature alloc]
+    TTIOFeature *f2 = [[TTIOFeature alloc]
         initWithFeatureId:@"smf_2"
                   runName:@"metabolomics"
            chemicalEntity:@"CHEBI:16865"
@@ -92,13 +92,13 @@ static void mzTabMPayload(NSArray<MPGOFeature *> **outFeats,
              evidenceRefs:@[@"sme_2"]];
     *outFeats = @[f1, f2];
 
-    MPGOIdentification *i1 = [[MPGOIdentification alloc]
+    TTIOIdentification *i1 = [[TTIOIdentification alloc]
         initWithRunName:@"metabolomics"
           spectrumIndex:0
          chemicalEntity:@"CHEBI:15377"
         confidenceScore:1.0
           evidenceChain:@[@"SME_ID=sme_1", @"name=glucose", @"formula=C6H12O6"]];
-    MPGOIdentification *i2 = [[MPGOIdentification alloc]
+    TTIOIdentification *i2 = [[TTIOIdentification alloc]
         initWithRunName:@"metabolomics"
           spectrumIndex:0
          chemicalEntity:@"CHEBI:16865"
@@ -111,7 +111,7 @@ static void mzTabMPayload(NSArray<MPGOFeature *> **outFeats,
 
 static void testFeatureDefaultsAreEmpty(void)
 {
-    MPGOFeature *f = [MPGOFeature featureWithId:@"f1"
+    TTIOFeature *f = [TTIOFeature featureWithId:@"f1"
                                         runName:@"run_a"
                                  chemicalEntity:@"PEPTIDER"];
     pass([f.featureId isEqualToString:@"f1"], "featureId preserved");
@@ -127,7 +127,7 @@ static void testFeatureDefaultsAreEmpty(void)
 
 static void testFeatureNilInputsCoerceToEmpty(void)
 {
-    MPGOFeature *f = [[MPGOFeature alloc]
+    TTIOFeature *f = [[TTIOFeature alloc]
         initWithFeatureId:@"f1"
                   runName:@"r"
            chemicalEntity:@"X"
@@ -144,12 +144,12 @@ static void testFeatureNilInputsCoerceToEmpty(void)
 
 static void testFeatureEquality(void)
 {
-    MPGOFeature *a = [[MPGOFeature alloc]
+    TTIOFeature *a = [[TTIOFeature alloc]
         initWithFeatureId:@"f1" runName:@"r" chemicalEntity:@"X"
      retentionTimeSeconds:0.0 expMassToCharge:500.25 charge:2
                 adductIon:@"" abundances:@{@"s1": @1.0}
              evidenceRefs:@[@"e1"]];
-    MPGOFeature *b = [[MPGOFeature alloc]
+    TTIOFeature *b = [[TTIOFeature alloc]
         initWithFeatureId:@"f1" runName:@"r" chemicalEntity:@"X"
      retentionTimeSeconds:0.0 expMassToCharge:500.25 charge:2
                 adductIon:@"" abundances:@{@"s1": @1.0}
@@ -162,10 +162,10 @@ static void testFeatureEquality(void)
 
 static void testPepRoundTripPreservesFields(void)
 {
-    NSArray<MPGOFeature *> *feats = mzTabPFeats();
+    NSArray<TTIOFeature *> *feats = mzTabPFeats();
     NSString *out = tempPath(@"pep.mztab");
     NSError *err = nil;
-    MPGOMzTabWriteResult *r = [MPGOMzTabWriter writeToPath:out
+    TTIOMzTabWriteResult *r = [TTIOMzTabWriter writeToPath:out
                                             identifications:@[]
                                             quantifications:@[]
                                                    features:feats
@@ -177,13 +177,13 @@ static void testPepRoundTripPreservesFields(void)
     pass(r.nPEPRows == 2, "nPEPRows == 2");
     pass(r.nPSMRows == 0, "nPSMRows == 0");
 
-    MPGOMzTabImport *parsed = [MPGOMzTabReader readFromFilePath:out error:&err];
+    TTIOMzTabImport *parsed = [TTIOMzTabReader readFromFilePath:out error:&err];
     pass(parsed != nil, "PEP parse succeeded");
     pass([parsed.version isEqualToString:@"1.0"], "round-trip version is 1.0");
     pass(parsed.features.count == 2, "two features round-trip");
 
-    MPGOFeature *aaa = nil;
-    for (MPGOFeature *f in parsed.features) {
+    TTIOFeature *aaa = nil;
+    for (TTIOFeature *f in parsed.features) {
         if ([f.chemicalEntity isEqualToString:@"AAAAPEPTIDER"]) { aaa = f; break; }
     }
     pass(aaa != nil, "AAAAPEPTIDER present after round-trip");
@@ -200,7 +200,7 @@ static void testPepWriterAddsPehHeader(void)
 {
     NSString *out = tempPath(@"pep_hdr.mztab");
     NSError *err = nil;
-    [MPGOMzTabWriter writeToPath:out
+    [TTIOMzTabWriter writeToPath:out
                  identifications:@[]
                  quantifications:@[]
                         features:mzTabPFeats()
@@ -233,12 +233,12 @@ static void testPepWriterAddsPehHeader(void)
 static void testEmptyFeaturesEmitsNoPeh(void)
 {
     NSString *out = tempPath(@"no_pep.mztab");
-    MPGOIdentification *ident = [[MPGOIdentification alloc]
+    TTIOIdentification *ident = [[TTIOIdentification alloc]
         initWithRunName:@"run_a" spectrumIndex:0
          chemicalEntity:@"PROT_X" confidenceScore:0.9
           evidenceChain:@[]];
     NSError *err = nil;
-    [MPGOMzTabWriter writeToPath:out
+    [TTIOMzTabWriter writeToPath:out
                  identifications:@[ident]
                  quantifications:@[]
                         features:@[]
@@ -255,12 +255,12 @@ static void testEmptyFeaturesEmitsNoPeh(void)
 
 static void testSmfSmeRoundTripPreservesFields(void)
 {
-    NSArray<MPGOFeature *> *feats = nil;
-    NSArray<MPGOIdentification *> *idents = nil;
+    NSArray<TTIOFeature *> *feats = nil;
+    NSArray<TTIOIdentification *> *idents = nil;
     mzTabMPayload(&feats, &idents);
     NSString *out = tempPath(@"m.mztab");
     NSError *err = nil;
-    MPGOMzTabWriteResult *r = [MPGOMzTabWriter writeToPath:out
+    TTIOMzTabWriteResult *r = [TTIOMzTabWriter writeToPath:out
                                             identifications:idents
                                             quantifications:@[]
                                                    features:feats
@@ -272,13 +272,13 @@ static void testSmfSmeRoundTripPreservesFields(void)
     pass(r.nSMFRows == 2, "nSMFRows == 2");
     pass(r.nSMERows == 2, "nSMERows == 2");
 
-    MPGOMzTabImport *parsed = [MPGOMzTabReader readFromFilePath:out error:&err];
+    TTIOMzTabImport *parsed = [TTIOMzTabReader readFromFilePath:out error:&err];
     pass(parsed != nil, "SMF parse succeeded");
     pass([parsed.version isEqualToString:@"2.0.0-M"], "round-trip version is 2.0.0-M");
     pass(parsed.features.count == 2, "two features round-trip");
 
-    MPGOFeature *glucose = nil;
-    for (MPGOFeature *f in parsed.features) {
+    TTIOFeature *glucose = nil;
+    for (TTIOFeature *f in parsed.features) {
         if ([f.adductIon isEqualToString:@"[M+H]1+"]) { glucose = f; break; }
     }
     pass(glucose != nil, "[M+H]1+ feature present");
@@ -293,12 +293,12 @@ static void testSmfSmeRoundTripPreservesFields(void)
 
 static void testSmfWriterAddsSfhAndSehHeaders(void)
 {
-    NSArray<MPGOFeature *> *feats = nil;
-    NSArray<MPGOIdentification *> *idents = nil;
+    NSArray<TTIOFeature *> *feats = nil;
+    NSArray<TTIOIdentification *> *idents = nil;
     mzTabMPayload(&feats, &idents);
     NSString *out = tempPath(@"m_hdr.mztab");
     NSError *err = nil;
-    [MPGOMzTabWriter writeToPath:out
+    [TTIOMzTabWriter writeToPath:out
                  identifications:idents
                  quantifications:@[]
                         features:feats
@@ -325,12 +325,12 @@ static void testSmfWriterAddsSfhAndSehHeaders(void)
 
 static void testSmeEmitsRankFromConfidence(void)
 {
-    NSArray<MPGOFeature *> *feats = nil;
-    NSArray<MPGOIdentification *> *idents = nil;
+    NSArray<TTIOFeature *> *feats = nil;
+    NSArray<TTIOIdentification *> *idents = nil;
     mzTabMPayload(&feats, &idents);
     NSString *out = tempPath(@"m_rank.mztab");
     NSError *err = nil;
-    [MPGOMzTabWriter writeToPath:out
+    [TTIOMzTabWriter writeToPath:out
                  identifications:idents
                  quantifications:@[]
                         features:feats
@@ -354,17 +354,17 @@ static void testSmeEmitsRankFromConfidence(void)
 static void testEmptyFeaturesMetabolomicsOmitsSfh(void)
 {
     NSString *out = tempPath(@"m_plain.mztab");
-    MPGOIdentification *ident = [[MPGOIdentification alloc]
+    TTIOIdentification *ident = [[TTIOIdentification alloc]
         initWithRunName:@"metabolomics" spectrumIndex:0
          chemicalEntity:@"CHEBI:15377" confidenceScore:0.9
           evidenceChain:@[]];
-    MPGOQuantification *q = [[MPGOQuantification alloc]
+    TTIOQuantification *q = [[TTIOQuantification alloc]
         initWithChemicalEntity:@"CHEBI:15377"
                      sampleRef:@"sample_a"
                      abundance:1.0e4
            normalizationMethod:@""];
     NSError *err = nil;
-    [MPGOMzTabWriter writeToPath:out
+    [TTIOMzTabWriter writeToPath:out
                  identifications:@[ident]
                  quantifications:@[q]
                         features:@[]
@@ -393,12 +393,12 @@ static void testProteomicsConformanceFixture(void)
         return;
     }
     NSError *err = nil;
-    MPGOMzTabImport *parsed = [MPGOMzTabReader readFromFilePath:path error:&err];
+    TTIOMzTabImport *parsed = [TTIOMzTabReader readFromFilePath:path error:&err];
     pass(parsed != nil && err == nil, "proteomics fixture parses");
     pass([parsed.version isEqualToString:@"1.0"], "proteomics fixture is 1.0");
     pass(parsed.features.count == 2, "two peptide features");
-    NSMutableDictionary<NSString *, MPGOFeature *> *bySeq = [NSMutableDictionary dictionary];
-    for (MPGOFeature *f in parsed.features) bySeq[f.chemicalEntity] = f;
+    NSMutableDictionary<NSString *, TTIOFeature *> *bySeq = [NSMutableDictionary dictionary];
+    for (TTIOFeature *f in parsed.features) bySeq[f.chemicalEntity] = f;
     pass(bySeq[@"AAAAPEPTIDER"] != nil, "AAAAPEPTIDER present");
     pass(bySeq[@"QWERTYK"] != nil, "QWERTYK present");
     pass(bySeq[@"AAAAPEPTIDER"].charge == 2, "AAAAPEPTIDER charge 2");
@@ -420,12 +420,12 @@ static void testMetabolomicsConformanceFixture(void)
         return;
     }
     NSError *err = nil;
-    MPGOMzTabImport *parsed = [MPGOMzTabReader readFromFilePath:path error:&err];
+    TTIOMzTabImport *parsed = [TTIOMzTabReader readFromFilePath:path error:&err];
     pass(parsed != nil && err == nil, "metabolomics fixture parses");
     pass([parsed.version isEqualToString:@"2.0.0-M"], "metabolomics fixture is 2.0.0-M");
     pass(parsed.features.count == 2, "two small-molecule features");
-    NSMutableDictionary<NSString *, MPGOFeature *> *byAdduct = [NSMutableDictionary dictionary];
-    for (MPGOFeature *f in parsed.features) byAdduct[f.adductIon] = f;
+    NSMutableDictionary<NSString *, TTIOFeature *> *byAdduct = [NSMutableDictionary dictionary];
+    for (TTIOFeature *f in parsed.features) byAdduct[f.adductIon] = f;
     pass(byAdduct[@"[M+H]1+"] != nil, "[M+H]1+ present");
     pass(byAdduct[@"[M+Na]1+"] != nil, "[M+Na]1+ present");
     pass([byAdduct[@"[M+H]1+"].chemicalEntity isEqualToString:@"CHEBI:15377"],
@@ -447,11 +447,11 @@ static void testMetabolomicsConformanceSmeConfidence(void)
         return;
     }
     NSError *err = nil;
-    MPGOMzTabImport *parsed = [MPGOMzTabReader readFromFilePath:path error:&err];
+    TTIOMzTabImport *parsed = [TTIOMzTabReader readFromFilePath:path error:&err];
     pass(parsed != nil && err == nil, "metabolomics fixture parses");
 
     NSMutableArray<NSNumber *> *smeConfs = [NSMutableArray array];
-    for (MPGOIdentification *i in parsed.identifications) {
+    for (TTIOIdentification *i in parsed.identifications) {
         BOOL hasSmeTag = NO;
         for (NSString *e in i.evidenceChain) {
             if ([e hasPrefix:@"SME_ID="]) { hasSmeTag = YES; break; }

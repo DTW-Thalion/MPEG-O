@@ -13,15 +13,15 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOFeatureFlags.h"
-#import "Protection/MPGOKeyRotationManager.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOFeatureFlags.h"
+#import "Protection/TTIOKeyRotationManager.h"
 #import <unistd.h>
 
 static NSString *m25TempPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m25_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m25_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
@@ -35,7 +35,7 @@ static NSData *m25MakeKey(uint8_t seed)
 void testMilestone25(void)
 {
     // ---- feature flag string is available ----
-    PASS([[MPGOFeatureFlags featureKeyRotation] isEqualToString:@"opt_key_rotation"],
+    PASS([[TTIOFeatureFlags featureKeyRotation] isEqualToString:@"opt_key_rotation"],
          "M25: featureKeyRotation constant");
 
     NSString *path = m25TempPath(@"envelope");
@@ -49,9 +49,9 @@ void testMilestone25(void)
     NSData *dek1 = nil;
     {
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS(f != nil, "M25: create file");
-        MPGOKeyRotationManager *mgr = [MPGOKeyRotationManager managerWithFile:f];
+        TTIOKeyRotationManager *mgr = [TTIOKeyRotationManager managerWithFile:f];
         PASS(![mgr hasEnvelopeEncryption],
              "M25: fresh file reports no envelope encryption");
 
@@ -75,9 +75,9 @@ void testMilestone25(void)
     // ---- reopen, rotate KEK-1 -> KEK-2 ----
     {
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
         PASS(f != nil, "M25: reopen file for rotation");
-        MPGOKeyRotationManager *mgr = [MPGOKeyRotationManager managerWithFile:f];
+        TTIOKeyRotationManager *mgr = [TTIOKeyRotationManager managerWithFile:f];
 
         NSDate *t0 = [NSDate date];
         BOOL ok = [mgr rotateToKEK:kek2 kekId:@"kek-2" oldKEK:kek1 error:&err];
@@ -106,8 +106,8 @@ void testMilestone25(void)
     // ---- second rotation: KEK-2 -> KEK-3 ----
     {
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path error:&err];
-        MPGOKeyRotationManager *mgr = [MPGOKeyRotationManager managerWithFile:f];
+        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
+        TTIOKeyRotationManager *mgr = [TTIOKeyRotationManager managerWithFile:f];
 
         BOOL ok = [mgr rotateToKEK:kek3 kekId:@"kek-3" oldKEK:kek2 error:&err];
         PASS(ok == YES, "M25: second rotation succeeds");
@@ -130,8 +130,8 @@ void testMilestone25(void)
     unlink([v12Path fileSystemRepresentation]);
     {
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:v12Path error:&err];
-        MPGOKeyRotationManager *mgr = [MPGOKeyRotationManager managerWithFile:f];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:v12Path error:&err];
+        TTIOKeyRotationManager *mgr = [TTIOKeyRotationManager managerWithFile:f];
         NSData *dek = [mgr enableEnvelopeEncryptionWithKEK:kek1
                                                       kekId:@"kek-v12"
                                                       error:&err];
@@ -140,11 +140,11 @@ void testMilestone25(void)
 
         // Re-open and inspect the raw dek_wrapped bytes + the new
         // @dek_wrapped_bytes attribute that records the actual length.
-        f = [MPGOHDF5File openReadOnlyAtPath:v12Path error:&err];
-        MPGOHDF5Group *root = [f rootGroup];
-        MPGOHDF5Group *prot = [root openGroupNamed:@"protection" error:&err];
-        MPGOHDF5Group *ki   = [prot openGroupNamed:@"key_info" error:&err];
-        MPGOHDF5Dataset *ds = [ki openDatasetNamed:@"dek_wrapped" error:&err];
+        f = [TTIOHDF5File openReadOnlyAtPath:v12Path error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        TTIOHDF5Group *prot = [root openGroupNamed:@"protection" error:&err];
+        TTIOHDF5Group *ki   = [prot openGroupNamed:@"key_info" error:&err];
+        TTIOHDF5Dataset *ds = [ki openDatasetNamed:@"dek_wrapped" error:&err];
         NSData *rawAligned = [ds readDataWithError:&err];
         PASS(rawAligned != nil, "M47: raw dek_wrapped readable");
 
@@ -172,8 +172,8 @@ void testMilestone25(void)
     {
         // Hand-craft a v1.1 file: 60-byte blob, no @dek_wrapped_bytes.
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:v11Path error:&err];
-        MPGOKeyRotationManager *mgr = [MPGOKeyRotationManager managerWithFile:f];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:v11Path error:&err];
+        TTIOKeyRotationManager *mgr = [TTIOKeyRotationManager managerWithFile:f];
 
         NSData *dek = m25MakeKey(0xD4);
         NSData *v11Blob = [mgr wrapDEK:dek
@@ -183,17 +183,17 @@ void testMilestone25(void)
         PASS(v11Blob.length == 60,
              "M47: legacyV1 wrap produces 60-byte blob");
 
-        MPGOHDF5Group *root = [f rootGroup];
-        MPGOHDF5Group *prot = [root createGroupNamed:@"protection" error:&err];
-        MPGOHDF5Group *ki   = [prot createGroupNamed:@"key_info" error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        TTIOHDF5Group *prot = [root createGroupNamed:@"protection" error:&err];
+        TTIOHDF5Group *ki   = [prot createGroupNamed:@"key_info" error:&err];
         // Write via the public path so @dek_wrapped_bytes would be
         // included — then delete the attribute so this mimics a real
         // pre-v0.7 file exactly.
-        MPGOHDF5Dataset *ds = [ki createDatasetNamed:@"dek_wrapped"
-                                             precision:MPGOPrecisionInt32
+        TTIOHDF5Dataset *ds = [ki createDatasetNamed:@"dek_wrapped"
+                                             precision:TTIOPrecisionInt32
                                                 length:15
                                              chunkSize:0
-                                           compression:MPGOCompressionNone
+                                           compression:TTIOCompressionNone
                                       compressionLevel:0
                                                  error:&err];
         [ds writeData:v11Blob error:&err];
@@ -202,8 +202,8 @@ void testMilestone25(void)
         [f close];
 
         // Unwrap via v0.7 code — must succeed.
-        f = [MPGOHDF5File openAtPath:v11Path error:&err];
-        mgr = [MPGOKeyRotationManager managerWithFile:f];
+        f = [TTIOHDF5File openAtPath:v11Path error:&err];
+        mgr = [TTIOKeyRotationManager managerWithFile:f];
         NSData *recovered = [mgr unwrapDEKWithKEK:kek1 error:&err];
         PASS(recovered != nil && [recovered isEqualToData:dek],
              "M47: v1.1 legacy 60-byte blob unwraps under v0.7 code");

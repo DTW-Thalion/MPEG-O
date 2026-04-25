@@ -1,24 +1,24 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOProvenanceRecord.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Dataset.h"
-#import "HDF5/MPGOFeatureFlags.h"
-#import "Protection/MPGOSignatureManager.h"
-#import "Protection/MPGOVerifier.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOProvenanceRecord.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Dataset.h"
+#import "HDF5/TTIOFeatureFlags.h"
+#import "Protection/TTIOSignatureManager.h"
+#import "Protection/TTIOVerifier.h"
 #import <unistd.h>
 
 static NSString *m14path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m14_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m14_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
@@ -29,7 +29,7 @@ static NSData *makeHmacKey(uint8_t seed)
     return [NSData dataWithBytes:raw length:32];
 }
 
-static MPGOAcquisitionRun *buildSmallRun(void)
+static TTIOAcquisitionRun *buildSmallRun(void)
 {
     NSMutableArray *spectra = [NSMutableArray array];
     for (NSUInteger k = 0; k < 5; k++) {
@@ -38,25 +38,25 @@ static MPGOAcquisitionRun *buildSmallRun(void)
             mz[i] = 100.0 + (double)(k * 8 + i);
             in[i] = (double)(k * 10 + i + 1);
         }
-        MPGOEncodingSpec *enc =
-            [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                           compressionAlgorithm:MPGOCompressionZlib
-                                      byteOrder:MPGOByteOrderLittleEndian];
-        MPGOSignalArray *mzA =
-            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
+        TTIOEncodingSpec *enc =
+            [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                           compressionAlgorithm:TTIOCompressionZlib
+                                      byteOrder:TTIOByteOrderLittleEndian];
+        TTIOSignalArray *mzA =
+            [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
                                               length:8
                                             encoding:enc
                                                 axis:nil];
-        MPGOSignalArray *inA =
-            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
+        TTIOSignalArray *inA =
+            [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
                                               length:8
                                             encoding:enc
                                                 axis:nil];
         [spectra addObject:
-            [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+            [[TTIOMassSpectrum alloc] initWithMzArray:mzA
                                        intensityArray:inA
                                               msLevel:1
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       scanTimeSeconds:(double)k
@@ -64,23 +64,23 @@ static MPGOAcquisitionRun *buildSmallRun(void)
                                       precursorCharge:0
                                                 error:NULL]];
     }
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@""
                                                      model:@""
                                               serialNumber:@""
                                                 sourceType:@""
                                               analyzerType:@""
                                               detectorType:@""];
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
                                       instrumentConfig:cfg];
 }
 
 void testMilestone14(void)
 {
     // ---- 1. Sign intensity_values -> verify -> PASS ----
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"m14"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"m14"
                                 isaInvestigationId:@""
                                             msRuns:@{@"run_0001": buildSmallRun()}
                                            nmrRuns:@{}
@@ -98,7 +98,7 @@ void testMilestone14(void)
     NSString *dsPath = @"/study/ms_runs/run_0001/signal_channels/intensity_values";
 
     err = nil;
-    PASS([MPGOSignatureManager signDataset:dsPath
+    PASS([TTIOSignatureManager signDataset:dsPath
                                     inFile:path
                                    withKey:key
                                      error:&err],
@@ -106,7 +106,7 @@ void testMilestone14(void)
     PASS(err == nil, "sign no error");
 
     err = nil;
-    PASS([MPGOSignatureManager verifyDataset:dsPath
+    PASS([TTIOSignatureManager verifyDataset:dsPath
                                       inFile:path
                                      withKey:key
                                        error:&err],
@@ -114,39 +114,39 @@ void testMilestone14(void)
 
     // Verify via the higher-level API.
     err = nil;
-    MPGOVerificationStatus st =
-        [MPGOVerifier verifyDataset:dsPath inFile:path withKey:key error:&err];
-    PASS(st == MPGOVerificationStatusValid,
-         "MPGOVerifier returns Valid for correct signature");
+    TTIOVerificationStatus st =
+        [TTIOVerifier verifyDataset:dsPath inFile:path withKey:key error:&err];
+    PASS(st == TTIOVerificationStatusValid,
+         "TTIOVerifier returns Valid for correct signature");
 
     // ---- 2. Wrong key -> Invalid ----
     err = nil;
-    st = [MPGOVerifier verifyDataset:dsPath inFile:path withKey:key2 error:&err];
-    PASS(st == MPGOVerificationStatusInvalid,
-         "MPGOVerifier returns Invalid for wrong key");
+    st = [TTIOVerifier verifyDataset:dsPath inFile:path withKey:key2 error:&err];
+    PASS(st == TTIOVerificationStatusInvalid,
+         "TTIOVerifier returns Invalid for wrong key");
     PASS(err != nil, "wrong-key verification populates NSError");
 
     // ---- 3. Tamper one byte of mz_values -> verify -> Invalid ----
     @autoreleasepool {
         NSString *mzPath = @"/study/ms_runs/run_0001/signal_channels/mz_values";
         err = nil;
-        PASS([MPGOSignatureManager signDataset:mzPath inFile:path withKey:key error:&err],
+        PASS([TTIOSignatureManager signDataset:mzPath inFile:path withKey:key error:&err],
              "sign mz_values too");
         err = nil;
-        PASS([MPGOSignatureManager verifyDataset:mzPath
+        PASS([TTIOSignatureManager verifyDataset:mzPath
                                           inFile:path
                                          withKey:key
                                            error:&err],
              "verify mz_values passes before tampering");
 
         // Open the file RW and overwrite one byte of mz_values.
-        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path error:&err];
-        MPGOHDF5Group *root = [f rootGroup];
-        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
-        MPGOHDF5Group *msg = [study openGroupNamed:@"ms_runs" error:&err];
-        MPGOHDF5Group *runG = [msg openGroupNamed:@"run_0001" error:&err];
-        MPGOHDF5Group *chans = [runG openGroupNamed:@"signal_channels" error:&err];
-        MPGOHDF5Dataset *mzDs = [chans openDatasetNamed:@"mz_values" error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        TTIOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+        TTIOHDF5Group *msg = [study openGroupNamed:@"ms_runs" error:&err];
+        TTIOHDF5Group *runG = [msg openGroupNamed:@"run_0001" error:&err];
+        TTIOHDF5Group *chans = [runG openGroupNamed:@"signal_channels" error:&err];
+        TTIOHDF5Dataset *mzDs = [chans openDatasetNamed:@"mz_values" error:&err];
         NSMutableData *buf = [[mzDs readDataWithError:&err] mutableCopy];
         double *dp = buf.mutableBytes;
         dp[0] = dp[0] + 1.0;  // flip one value
@@ -157,11 +157,11 @@ void testMilestone14(void)
         (void)f;
 
         err = nil;
-        st = [MPGOVerifier verifyDataset:mzPath
+        st = [TTIOVerifier verifyDataset:mzPath
                                   inFile:path
                                  withKey:key
                                    error:&err];
-        PASS(st == MPGOVerificationStatusInvalid,
+        PASS(st == TTIOVerificationStatusInvalid,
              "tampered mz_values verifies as Invalid");
         PASS(err != nil, "tamper populates descriptive NSError");
     }
@@ -169,15 +169,15 @@ void testMilestone14(void)
     // ---- 4. Unsigned dataset -> NotSigned ----
     err = nil;
     NSString *indexPath = @"/study/ms_runs/run_0001/spectrum_index/retention_times";
-    st = [MPGOVerifier verifyDataset:indexPath inFile:path withKey:key error:&err];
-    PASS(st == MPGOVerificationStatusNotSigned,
+    st = [TTIOVerifier verifyDataset:indexPath inFile:path withKey:key error:&err];
+    PASS(st == TTIOVerificationStatusNotSigned,
          "unsigned dataset reports NotSigned");
     PASS(err == nil, "NotSigned does not populate error");
 
     // ---- 5. Root feature flags include opt_digital_signatures ----
     @autoreleasepool {
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        NSArray *features = [MPGOFeatureFlags featuresForRoot:[f rootGroup]];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        NSArray *features = [TTIOFeatureFlags featuresForRoot:[f rootGroup]];
         PASS([features containsObject:@"opt_digital_signatures"],
              "opt_digital_signatures flag added after signing");
         (void)f;  // let pool drain handles in LIFO order
@@ -186,17 +186,17 @@ void testMilestone14(void)
 
     // ---- 6. Provenance chain signing ----
     {
-        MPGOAcquisitionRun *run = buildSmallRun();
-        MPGOProvenanceRecord *r1 =
-            [[MPGOProvenanceRecord alloc] initWithInputRefs:@[@"raw:1"]
+        TTIOAcquisitionRun *run = buildSmallRun();
+        TTIOProvenanceRecord *r1 =
+            [[TTIOProvenanceRecord alloc] initWithInputRefs:@[@"raw:1"]
                                                     software:@"tool"
                                                   parameters:@{}
                                                   outputRefs:@[@"out:1"]
                                                timestampUnix:1700000000];
         [run addProcessingStep:r1];
 
-        MPGOSpectralDataset *ds2 =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m14_prov"
+        TTIOSpectralDataset *ds2 =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m14_prov"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": run}
                                                nmrRuns:@{}
@@ -210,24 +210,24 @@ void testMilestone14(void)
 
         NSString *runPath = @"/study/ms_runs/run_0001";
         err = nil;
-        PASS([MPGOSignatureManager signProvenanceInRun:runPath
+        PASS([TTIOSignatureManager signProvenanceInRun:runPath
                                                 inFile:p
                                                withKey:key
                                                  error:&err],
              "sign provenance chain");
         err = nil;
-        PASS([MPGOSignatureManager verifyProvenanceInRun:runPath
+        PASS([TTIOSignatureManager verifyProvenanceInRun:runPath
                                                   inFile:p
                                                  withKey:key
                                                    error:&err],
              "verify provenance chain");
 
-        MPGOVerificationStatus pst =
-            [MPGOVerifier verifyProvenanceInRun:runPath
+        TTIOVerificationStatus pst =
+            [TTIOVerifier verifyProvenanceInRun:runPath
                                          inFile:p
                                         withKey:key
                                           error:&err];
-        PASS(pst == MPGOVerificationStatusValid, "Verifier: provenance Valid");
+        PASS(pst == TTIOVerificationStatusValid, "Verifier: provenance Valid");
         unlink([p fileSystemRepresentation]);
     }
 
@@ -240,10 +240,10 @@ void testMilestone14(void)
 
         NSString *p = m14path(@"perf");
         unlink([p fileSystemRepresentation]);
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:p error:&err];
-        MPGOHDF5Dataset *d = [[f rootGroup]
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:p error:&err];
+        TTIOHDF5Dataset *d = [[f rootGroup]
             createDatasetNamed:@"bigdata"
-                     precision:MPGOPrecisionFloat64
+                     precision:TTIOPrecisionFloat64
                         length:N
                      chunkSize:0
               compressionLevel:0
@@ -252,7 +252,7 @@ void testMilestone14(void)
         [f close];
 
         NSDate *t0 = [NSDate date];
-        PASS([MPGOSignatureManager signDataset:@"/bigdata"
+        PASS([TTIOSignatureManager signDataset:@"/bigdata"
                                         inFile:p
                                        withKey:key
                                          error:&err],
@@ -260,7 +260,7 @@ void testMilestone14(void)
         NSTimeInterval dtSign = -[t0 timeIntervalSinceNow];
 
         NSDate *t1 = [NSDate date];
-        PASS([MPGOSignatureManager verifyDataset:@"/bigdata"
+        PASS([TTIOSignatureManager verifyDataset:@"/bigdata"
                                           inFile:p
                                          withKey:key
                                            error:&err],

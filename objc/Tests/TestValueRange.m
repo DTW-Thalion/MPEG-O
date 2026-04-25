@@ -1,8 +1,8 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "ValueClasses/MPGOValueRange.h"
+#import "ValueClasses/TTIOValueRange.h"
 
-static MPGOValueRange *roundTrip(MPGOValueRange *r)
+static TTIOValueRange *roundTrip(TTIOValueRange *r)
 {
     NSData *data = [NSKeyedArchiver archivedDataWithRootObject:r];
     return [NSKeyedUnarchiver unarchiveObjectWithData:data];
@@ -11,14 +11,14 @@ static MPGOValueRange *roundTrip(MPGOValueRange *r)
 void testValueRange(void)
 {
     // ---- construction ----
-    MPGOValueRange *r = [MPGOValueRange rangeWithMinimum:100.0 maximum:2000.0];
-    PASS(r != nil, "MPGOValueRange constructible via class method");
+    TTIOValueRange *r = [TTIOValueRange rangeWithMinimum:100.0 maximum:2000.0];
+    PASS(r != nil, "TTIOValueRange constructible via class method");
     PASS(r.minimum == 100.0, "minimum stored");
     PASS(r.maximum == 2000.0, "maximum stored");
     PASS([r span] == 1900.0, "span = max - min");
 
-    MPGOValueRange *r2 = [[MPGOValueRange alloc] initWithMinimum:-5.0 maximum:5.0];
-    PASS(r2 != nil, "MPGOValueRange constructible via designated initializer");
+    TTIOValueRange *r2 = [[TTIOValueRange alloc] initWithMinimum:-5.0 maximum:5.0];
+    PASS(r2 != nil, "TTIOValueRange constructible via designated initializer");
     PASS([r2 span] == 10.0, "span across zero");
 
     // ---- containsValue ----
@@ -29,23 +29,23 @@ void testValueRange(void)
     PASS(![r containsValue:2000.001], "containsValue: above maximum rejected");
 
     // ---- zero-width range ----
-    MPGOValueRange *zero = [MPGOValueRange rangeWithMinimum:42.0 maximum:42.0];
+    TTIOValueRange *zero = [TTIOValueRange rangeWithMinimum:42.0 maximum:42.0];
     PASS([zero span] == 0.0, "zero-width span is 0");
     PASS([zero containsValue:42.0], "zero-width range contains its single point");
     PASS(![zero containsValue:42.000001], "zero-width range rejects neighbors");
 
     // ---- extreme bounds ----
-    MPGOValueRange *huge = [MPGOValueRange rangeWithMinimum:-DBL_MAX/2 maximum:DBL_MAX/2];
+    TTIOValueRange *huge = [TTIOValueRange rangeWithMinimum:-DBL_MAX/2 maximum:DBL_MAX/2];
     PASS([huge containsValue:0.0], "DBL_MAX/2 range contains 0");
     PASS([huge span] > 0, "DBL_MAX/2 span is positive");
 
-    MPGOValueRange *tiny = [MPGOValueRange rangeWithMinimum:0.0 maximum:DBL_MIN];
+    TTIOValueRange *tiny = [TTIOValueRange rangeWithMinimum:0.0 maximum:DBL_MIN];
     PASS([tiny span] == DBL_MIN, "DBL_MIN-wide span survives");
 
     // ---- equality ----
-    MPGOValueRange *a = [MPGOValueRange rangeWithMinimum:1.5 maximum:2.5];
-    MPGOValueRange *b = [MPGOValueRange rangeWithMinimum:1.5 maximum:2.5];
-    MPGOValueRange *c = [MPGOValueRange rangeWithMinimum:1.5 maximum:2.6];
+    TTIOValueRange *a = [TTIOValueRange rangeWithMinimum:1.5 maximum:2.5];
+    TTIOValueRange *b = [TTIOValueRange rangeWithMinimum:1.5 maximum:2.5];
+    TTIOValueRange *c = [TTIOValueRange rangeWithMinimum:1.5 maximum:2.6];
     PASS([a isEqual:a], "isEqual: reflexive");
     PASS([a isEqual:b] && [b isEqual:a], "isEqual: symmetric for equal values");
     PASS(![a isEqual:c], "isEqual: distinguishes maximum");
@@ -56,21 +56,21 @@ void testValueRange(void)
     PASS([a hash] == [b hash], "equal objects produce equal hashes");
 
     // ---- copying (immutable: copy returns self) ----
-    MPGOValueRange *copy = [a copy];
+    TTIOValueRange *copy = [a copy];
     PASS(copy == a, "immutable copy returns self");
     PASS([copy isEqual:a], "copy is equal to original");
 
     // ---- NSCoding round-trip ----
-    MPGOValueRange *decoded = roundTrip(a);
+    TTIOValueRange *decoded = roundTrip(a);
     PASS(decoded != nil, "NSCoding round-trip yields object");
     PASS(decoded != a, "decoded is a fresh instance");
     PASS([decoded isEqual:a], "decoded equal to original");
     PASS(decoded.minimum == 1.5 && decoded.maximum == 2.5, "decoded fields preserved");
 
-    MPGOValueRange *decodedZero = roundTrip(zero);
+    TTIOValueRange *decodedZero = roundTrip(zero);
     PASS([decodedZero isEqual:zero], "zero-width range survives NSCoding");
 
-    MPGOValueRange *decodedHuge = roundTrip(huge);
+    TTIOValueRange *decodedHuge = roundTrip(huge);
     PASS(decodedHuge.minimum == -DBL_MAX/2, "DBL_MAX/2 minimum survives NSCoding");
     PASS(decodedHuge.maximum ==  DBL_MAX/2, "DBL_MAX/2 maximum survives NSCoding");
 }

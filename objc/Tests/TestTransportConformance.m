@@ -1,7 +1,7 @@
 /*
  * TestTransportConformance — v0.10 M70.
  *
- * In-language .mpgo → .mots → .mpgo round-trip with signal values
+ * In-language .tio → .tis → .tio round-trip with signal values
  * preserved bit-for-bit.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -11,18 +11,18 @@
 #import <unistd.h>
 #include <math.h>
 
-#import "Transport/MPGOTransportWriter.h"
-#import "Transport/MPGOTransportReader.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Spectra/MPGOSpectrum.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Transport/TTIOTransportWriter.h"
+#import "Transport/TTIOTransportReader.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Spectra/TTIOSpectrum.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEnums.h"
 
 static NSString *tmp(NSString *n) {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m70_%d_%@", (int)getpid(), n];
+    return [NSString stringWithFormat:@"/tmp/ttio_m70_%d_%@", (int)getpid(), n];
 }
 static void rm(NSString *p) { [[NSFileManager defaultManager] removeItemAtPath:p error:NULL]; }
 
@@ -51,7 +51,7 @@ static BOOL buildDataset(NSString *path, NSUInteger nRuns,
                            NSUInteger nSpectra, NSUInteger pointsPerSpectrum,
                            NSError **error)
 {
-    NSMutableDictionary<NSString *, MPGOWrittenRun *> *runMap = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSString *, TTIOWrittenRun *> *runMap = [NSMutableDictionary dictionary];
     for (NSUInteger r = 0; r < nRuns; r++) {
         NSUInteger total = nSpectra * pointsPerSpectrum;
         double *mz = calloc(total, sizeof(double));
@@ -85,10 +85,10 @@ static BOOL buildDataset(NSString *path, NSUInteger nRuns,
             }
             bpis[i] = best;
         }
-        MPGOWrittenRun *run =
-            [[MPGOWrittenRun alloc]
-                initWithSpectrumClassName:@"MPGOMassSpectrum"
-                          acquisitionMode:(int64_t)MPGOAcquisitionModeMS1DDA
+        TTIOWrittenRun *run =
+            [[TTIOWrittenRun alloc]
+                initWithSpectrumClassName:@"TTIOMassSpectrum"
+                          acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
                               channelData:@{@"mz": f64le(mz, total),
                                             @"intensity": f64le(intensity, total)}
                                   offsets:u64arr(offsets, nSpectra)
@@ -104,7 +104,7 @@ static BOOL buildDataset(NSString *path, NSUInteger nRuns,
         free(offsets); free(lengths); free(rts);
         free(msLevels); free(pols); free(pmzs); free(pcs); free(bpis);
     }
-    return [MPGOSpectralDataset writeMinimalToPath:path
+    return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M70 ObjC conformance"
                                  isaInvestigationId:@"ISA-M70-OBJC"
                                              msRuns:runMap
@@ -120,17 +120,17 @@ static BOOL signalBytesEqual(NSData *a, NSData *b)
     return memcmp(a.bytes, b.bytes, a.length) == 0;
 }
 
-static BOOL datasetsSignalEqual(MPGOSpectralDataset *a, MPGOSpectralDataset *b)
+static BOOL datasetsSignalEqual(TTIOSpectralDataset *a, TTIOSpectralDataset *b)
 {
     if (![[NSSet setWithArray:a.msRuns.allKeys]
             isEqualToSet:[NSSet setWithArray:b.msRuns.allKeys]]) return NO;
     for (NSString *name in a.msRuns) {
-        MPGOAcquisitionRun *ra = a.msRuns[name];
-        MPGOAcquisitionRun *rb = b.msRuns[name];
+        TTIOAcquisitionRun *ra = a.msRuns[name];
+        TTIOAcquisitionRun *rb = b.msRuns[name];
         if ([ra count] != [rb count]) return NO;
         for (NSUInteger i = 0; i < [ra count]; i++) {
-            MPGOSpectrum *sa = [ra objectAtIndex:i];
-            MPGOSpectrum *sb = [rb objectAtIndex:i];
+            TTIOSpectrum *sa = [ra objectAtIndex:i];
+            TTIOSpectrum *sb = [rb objectAtIndex:i];
             if (fabs(sa.scanTimeSeconds - sb.scanTimeSeconds) > 1e-12) return NO;
             if (fabs(sa.precursorMz - sb.precursorMz) > 1e-12) return NO;
             if (!signalBytesEqual(sa.signalArrays[@"mz"].buffer,
@@ -145,24 +145,24 @@ static BOOL datasetsSignalEqual(MPGOSpectralDataset *a, MPGOSpectralDataset *b)
 static BOOL roundTrip(NSUInteger nRuns, NSUInteger nSpectra,
                         NSUInteger pointsPerSpectrum, BOOL withChecksum)
 {
-    NSString *src = tmp(@"src.mpgo");
-    NSString *mots = tmp(@"stream.mots");
-    NSString *rt = tmp(@"rt.mpgo");
+    NSString *src = tmp(@"src.tio");
+    NSString *mots = tmp(@"stream.tis");
+    NSString *rt = tmp(@"rt.tio");
     rm(src); rm(mots); rm(rt);
 
     NSError *err = nil;
     if (!buildDataset(src, nRuns, nSpectra, pointsPerSpectrum, &err)) return NO;
 
-    MPGOSpectralDataset *source = [MPGOSpectralDataset readFromFilePath:src error:&err];
-    MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithOutputPath:mots];
+    TTIOSpectralDataset *source = [TTIOSpectralDataset readFromFilePath:src error:&err];
+    TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
     tw.useChecksum = withChecksum;
     if (![tw writeDataset:source error:&err]) { [tw close]; return NO; }
     [tw close];
 
-    MPGOTransportReader *tr = [[MPGOTransportReader alloc] initWithInputPath:mots];
-    if (![tr writeMpgoToPath:rt error:&err]) return NO;
+    TTIOTransportReader *tr = [[TTIOTransportReader alloc] initWithInputPath:mots];
+    if (![tr writeTtioToPath:rt error:&err]) return NO;
 
-    MPGOSpectralDataset *rtDs = [MPGOSpectralDataset readFromFilePath:rt error:&err];
+    TTIOSpectralDataset *rtDs = [TTIOSpectralDataset readFromFilePath:rt error:&err];
     BOOL eq = datasetsSignalEqual(source, rtDs);
     rm(src); rm(mots); rm(rt);
     return eq;
@@ -171,24 +171,24 @@ static BOOL roundTrip(NSUInteger nRuns, NSUInteger nSpectra,
 static BOOL roundTripWithCompression(NSUInteger nRuns, NSUInteger nSpectra,
                                        NSUInteger pointsPerSpectrum)
 {
-    NSString *src = tmp(@"src-zlib.mpgo");
-    NSString *mots = tmp(@"stream-zlib.mots");
-    NSString *rt = tmp(@"rt-zlib.mpgo");
+    NSString *src = tmp(@"src-zlib.tio");
+    NSString *mots = tmp(@"stream-zlib.tis");
+    NSString *rt = tmp(@"rt-zlib.tio");
     rm(src); rm(mots); rm(rt);
 
     NSError *err = nil;
     if (!buildDataset(src, nRuns, nSpectra, pointsPerSpectrum, &err)) return NO;
 
-    MPGOSpectralDataset *source = [MPGOSpectralDataset readFromFilePath:src error:&err];
-    MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithOutputPath:mots];
+    TTIOSpectralDataset *source = [TTIOSpectralDataset readFromFilePath:src error:&err];
+    TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
     tw.useCompression = YES;
     if (![tw writeDataset:source error:&err]) { [tw close]; return NO; }
     [tw close];
 
-    MPGOTransportReader *tr = [[MPGOTransportReader alloc] initWithInputPath:mots];
-    if (![tr writeMpgoToPath:rt error:&err]) return NO;
+    TTIOTransportReader *tr = [[TTIOTransportReader alloc] initWithInputPath:mots];
+    if (![tr writeTtioToPath:rt error:&err]) return NO;
 
-    MPGOSpectralDataset *rtDs = [MPGOSpectralDataset readFromFilePath:rt error:&err];
+    TTIOSpectralDataset *rtDs = [TTIOSpectralDataset readFromFilePath:rt error:&err];
     BOOL eq = datasetsSignalEqual(source, rtDs);
     rm(src); rm(mots); rm(rt);
     return eq;

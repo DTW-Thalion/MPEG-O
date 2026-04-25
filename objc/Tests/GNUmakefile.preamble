@@ -6,6 +6,6 @@ ADDITIONAL_CPPFLAGS += -I../Source
 ADDITIONAL_LDFLAGS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 # gnustep-make's Testing.h uses NSAutoreleasePool, which ARC forbids.
-# Compile the test driver in MRC mode; libMPGO itself remains under ARC.
+# Compile the test driver in MRC mode; libTTIO itself remains under ARC.
 ADDITIONAL_OBJCFLAGS  += -fno-objc-arc
 ADDITIONAL_OBJCCFLAGS += -fno-objc-arc

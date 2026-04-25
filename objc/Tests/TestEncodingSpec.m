@@ -1,9 +1,9 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
 
-static MPGOEncodingSpec *roundTripSpec(MPGOEncodingSpec *s)
+static TTIOEncodingSpec *roundTripSpec(TTIOEncodingSpec *s)
 {
     NSData *data = [NSKeyedArchiver archivedDataWithRootObject:s];
     return [NSKeyedUnarchiver unarchiveObjectWithData:data];
@@ -12,56 +12,56 @@ static MPGOEncodingSpec *roundTripSpec(MPGOEncodingSpec *s)
 void testEncodingSpec(void)
 {
     // ---- construction + accessors ----
-    MPGOEncodingSpec *s = [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat32
-                                         compressionAlgorithm:MPGOCompressionZlib
-                                                    byteOrder:MPGOByteOrderLittleEndian];
-    PASS(s != nil, "MPGOEncodingSpec constructible via class method");
-    PASS(s.precision == MPGOPrecisionFloat32, "precision stored");
-    PASS(s.compressionAlgorithm == MPGOCompressionZlib, "compression stored");
-    PASS(s.byteOrder == MPGOByteOrderLittleEndian, "byte order stored");
+    TTIOEncodingSpec *s = [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat32
+                                         compressionAlgorithm:TTIOCompressionZlib
+                                                    byteOrder:TTIOByteOrderLittleEndian];
+    PASS(s != nil, "TTIOEncodingSpec constructible via class method");
+    PASS(s.precision == TTIOPrecisionFloat32, "precision stored");
+    PASS(s.compressionAlgorithm == TTIOCompressionZlib, "compression stored");
+    PASS(s.byteOrder == TTIOByteOrderLittleEndian, "byte order stored");
 
     // ---- elementSize for every precision ----
-    PASS([[MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat32
-                         compressionAlgorithm:MPGOCompressionNone
-                                    byteOrder:MPGOByteOrderLittleEndian] elementSize] == 4,
+    PASS([[TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat32
+                         compressionAlgorithm:TTIOCompressionNone
+                                    byteOrder:TTIOByteOrderLittleEndian] elementSize] == 4,
          "Float32 element size = 4");
-    PASS([[MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                         compressionAlgorithm:MPGOCompressionNone
-                                    byteOrder:MPGOByteOrderLittleEndian] elementSize] == 8,
+    PASS([[TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                         compressionAlgorithm:TTIOCompressionNone
+                                    byteOrder:TTIOByteOrderLittleEndian] elementSize] == 8,
          "Float64 element size = 8");
-    PASS([[MPGOEncodingSpec specWithPrecision:MPGOPrecisionInt32
-                         compressionAlgorithm:MPGOCompressionNone
-                                    byteOrder:MPGOByteOrderLittleEndian] elementSize] == 4,
+    PASS([[TTIOEncodingSpec specWithPrecision:TTIOPrecisionInt32
+                         compressionAlgorithm:TTIOCompressionNone
+                                    byteOrder:TTIOByteOrderLittleEndian] elementSize] == 4,
          "Int32 element size = 4");
-    PASS([[MPGOEncodingSpec specWithPrecision:MPGOPrecisionInt64
-                         compressionAlgorithm:MPGOCompressionNone
-                                    byteOrder:MPGOByteOrderLittleEndian] elementSize] == 8,
+    PASS([[TTIOEncodingSpec specWithPrecision:TTIOPrecisionInt64
+                         compressionAlgorithm:TTIOCompressionNone
+                                    byteOrder:TTIOByteOrderLittleEndian] elementSize] == 8,
          "Int64 element size = 8");
-    PASS([[MPGOEncodingSpec specWithPrecision:MPGOPrecisionUInt32
-                         compressionAlgorithm:MPGOCompressionNone
-                                    byteOrder:MPGOByteOrderLittleEndian] elementSize] == 4,
+    PASS([[TTIOEncodingSpec specWithPrecision:TTIOPrecisionUInt32
+                         compressionAlgorithm:TTIOCompressionNone
+                                    byteOrder:TTIOByteOrderLittleEndian] elementSize] == 4,
          "UInt32 element size = 4");
-    PASS([[MPGOEncodingSpec specWithPrecision:MPGOPrecisionComplex128
-                         compressionAlgorithm:MPGOCompressionNone
-                                    byteOrder:MPGOByteOrderLittleEndian] elementSize] == 16,
+    PASS([[TTIOEncodingSpec specWithPrecision:TTIOPrecisionComplex128
+                         compressionAlgorithm:TTIOCompressionNone
+                                    byteOrder:TTIOByteOrderLittleEndian] elementSize] == 16,
          "Complex128 element size = 16");
 
     // ---- equality ----
-    MPGOEncodingSpec *a = [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                                         compressionAlgorithm:MPGOCompressionLZ4
-                                                    byteOrder:MPGOByteOrderBigEndian];
-    MPGOEncodingSpec *b = [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                                         compressionAlgorithm:MPGOCompressionLZ4
-                                                    byteOrder:MPGOByteOrderBigEndian];
-    MPGOEncodingSpec *diffPrec = [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat32
-                                                compressionAlgorithm:MPGOCompressionLZ4
-                                                           byteOrder:MPGOByteOrderBigEndian];
-    MPGOEncodingSpec *diffComp = [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                                                compressionAlgorithm:MPGOCompressionZlib
-                                                           byteOrder:MPGOByteOrderBigEndian];
-    MPGOEncodingSpec *diffByte = [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                                                compressionAlgorithm:MPGOCompressionLZ4
-                                                           byteOrder:MPGOByteOrderLittleEndian];
+    TTIOEncodingSpec *a = [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                                         compressionAlgorithm:TTIOCompressionLZ4
+                                                    byteOrder:TTIOByteOrderBigEndian];
+    TTIOEncodingSpec *b = [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                                         compressionAlgorithm:TTIOCompressionLZ4
+                                                    byteOrder:TTIOByteOrderBigEndian];
+    TTIOEncodingSpec *diffPrec = [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat32
+                                                compressionAlgorithm:TTIOCompressionLZ4
+                                                           byteOrder:TTIOByteOrderBigEndian];
+    TTIOEncodingSpec *diffComp = [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                                                compressionAlgorithm:TTIOCompressionZlib
+                                                           byteOrder:TTIOByteOrderBigEndian];
+    TTIOEncodingSpec *diffByte = [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                                                compressionAlgorithm:TTIOCompressionLZ4
+                                                           byteOrder:TTIOByteOrderLittleEndian];
 
     PASS([a isEqual:a], "isEqual: reflexive");
     PASS([a isEqual:b], "isEqual: equal field values");
@@ -73,22 +73,22 @@ void testEncodingSpec(void)
     PASS(![a isEqual:@42], "isEqual: foreign class → NO");
 
     // ---- copying (immutable) ----
-    MPGOEncodingSpec *copy = [a copy];
+    TTIOEncodingSpec *copy = [a copy];
     PASS(copy == a, "immutable copy returns self");
 
     // ---- NSCoding round-trip ----
-    MPGOEncodingSpec *decoded = roundTripSpec(a);
+    TTIOEncodingSpec *decoded = roundTripSpec(a);
     PASS(decoded != nil, "NSCoding round-trip yields object");
     PASS([decoded isEqual:a], "decoded equal to original");
-    PASS(decoded.precision == MPGOPrecisionFloat64, "decoded precision preserved");
-    PASS(decoded.compressionAlgorithm == MPGOCompressionLZ4, "decoded compression preserved");
-    PASS(decoded.byteOrder == MPGOByteOrderBigEndian, "decoded byte order preserved");
+    PASS(decoded.precision == TTIOPrecisionFloat64, "decoded precision preserved");
+    PASS(decoded.compressionAlgorithm == TTIOCompressionLZ4, "decoded compression preserved");
+    PASS(decoded.byteOrder == TTIOByteOrderBigEndian, "decoded byte order preserved");
 
     // Round-trip Complex128 (largest element size)
-    MPGOEncodingSpec *cplx = [MPGOEncodingSpec specWithPrecision:MPGOPrecisionComplex128
-                                            compressionAlgorithm:MPGOCompressionNone
-                                                       byteOrder:MPGOByteOrderLittleEndian];
-    MPGOEncodingSpec *decodedCplx = roundTripSpec(cplx);
+    TTIOEncodingSpec *cplx = [TTIOEncodingSpec specWithPrecision:TTIOPrecisionComplex128
+                                            compressionAlgorithm:TTIOCompressionNone
+                                                       byteOrder:TTIOByteOrderLittleEndian];
+    TTIOEncodingSpec *decodedCplx = roundTripSpec(cplx);
     PASS([decodedCplx isEqual:cplx], "Complex128 spec survives NSCoding");
     PASS([decodedCplx elementSize] == 16, "decoded Complex128 element size preserved");
 }

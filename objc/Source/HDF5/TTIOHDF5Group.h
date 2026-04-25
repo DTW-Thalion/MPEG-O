@@ -1,0 +1,100 @@
+#ifndef TTIO_HDF5_GROUP_H
+#define TTIO_HDF5_GROUP_H
+
+#import <Foundation/Foundation.h>
+#import <hdf5.h>
+#import "ValueClasses/TTIOEnums.h"
+
+@class TTIOHDF5Dataset;
+@class TTIOHDF5Attribute;
+
+/**
+ * Thin wrapper around an HDF5 group handle. Created by
+ * -[TTIOHDF5File rootGroup] or by another group's -createGroupNamed: / -openGroupNamed:.
+ *
+ * Non-owning: the parent file's lifetime is retained by every group derived
+ * from it, so closing the file closes all groups transitively.
+ */
+@interface TTIOHDF5Group : NSObject
+
+/** Internal initializer; not intended for external use. */
+- (instancetype)initWithGroupId:(hid_t)gid retainer:(id)retainer;
+
+/** The raw HDF5 group identifier. */
+@property (readonly) hid_t groupId;
+
+#pragma mark - Sub-groups
+
+- (TTIOHDF5Group *)createGroupNamed:(NSString *)name error:(NSError **)error;
+- (TTIOHDF5Group *)openGroupNamed:(NSString *)name error:(NSError **)error;
+- (BOOL)hasChildNamed:(NSString *)name;
+
+/** Delete the named link (child group / dataset). No-op when the child
+ *  is absent. Used by M25 key rotation to overwrite dek_wrapped. */
+- (BOOL)deleteChildNamed:(NSString *)name error:(NSError **)error;
+
+#pragma mark - Datasets
+
+/**
+ * Create a new dataset under this group with the given precision, length,
+ * chunked storage, and zlib compression level (0 = none, 1–9 = deflate level).
+ * Pass chunkSize == 0 to use a single contiguous chunk.
+ */
+- (TTIOHDF5Dataset *)createDatasetNamed:(NSString *)name
+                              precision:(TTIOPrecision)precision
+                                 length:(NSUInteger)length
+                              chunkSize:(NSUInteger)chunkSize
+                       compressionLevel:(int)compressionLevel
+                                  error:(NSError **)error;
+
+/** Create a dataset with an explicit ``TTIOCompression`` choice.
+ *  v0.3 M21: adds LZ4 (filter 32004) alongside zlib and "no
+ *  compression". The ``compressionLevel`` parameter is honoured for
+ *  zlib (0–9); LZ4 ignores it. ``TTIOCompressionLZ4`` requires the
+ *  plugin to be loadable at runtime; if ``H5Zfilter_avail(32004)``
+ *  is false the call fails with ``TTIOErrorDatasetCreate`` and a
+ *  descriptive error message.
+ */
+- (TTIOHDF5Dataset *)createDatasetNamed:(NSString *)name
+                              precision:(TTIOPrecision)precision
+                                 length:(NSUInteger)length
+                              chunkSize:(NSUInteger)chunkSize
+                            compression:(TTIOCompression)compression
+                       compressionLevel:(int)compressionLevel
+                                  error:(NSError **)error;
+
+- (TTIOHDF5Dataset *)openDatasetNamed:(NSString *)name error:(NSError **)error;
+
+#pragma mark - Attributes
+
+- (BOOL)setStringAttribute:(NSString *)name
+                     value:(NSString *)value
+                     error:(NSError **)error;
+
+- (NSString *)stringAttributeNamed:(NSString *)name error:(NSError **)error;
+
+- (BOOL)setIntegerAttribute:(NSString *)name
+                      value:(int64_t)value
+                      error:(NSError **)error;
+
+- (int64_t)integerAttributeNamed:(NSString *)name
+                          exists:(BOOL *)outExists
+                           error:(NSError **)error;
+
+- (BOOL)hasAttributeNamed:(NSString *)name;
+
+/** Delete the named attribute. No-op when the attribute is absent. */
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error;
+
+/** Alphabetically ordered names of every attribute on this group. */
+- (NSArray<NSString *> *)attributeNames;
+
+/** Names of every link (group or dataset) directly under this group. */
+- (NSArray<NSString *> *)childNames;
+
+/** Short (last-path-segment) name, or "/" for root. */
+- (NSString *)groupName;
+
+@end
+
+#endif

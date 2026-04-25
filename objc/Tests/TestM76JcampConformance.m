@@ -1,10 +1,10 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGOUVVisSpectrum.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "Export/MPGOJcampDxWriter.h"
-#import "Export/MPGOJcampDxEncoding.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIOUVVisSpectrum.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "Export/TTIOJcampDxWriter.h"
+#import "Export/TTIOJcampDxEncoding.h"
 #import <unistd.h>
 
 // M76 byte-parity conformance test for the ObjC JCAMP-DX compressed
@@ -32,20 +32,20 @@ static NSString *conformanceDir(void)
     return nil;
 }
 
-static MPGOSignalArray *float64Arr(const double *src, NSUInteger n)
+static TTIOSignalArray *float64Arr(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf
                                             length:n
                                           encoding:enc
                                               axis:nil];
 }
 
-static MPGOUVVisSpectrum *ramp25Fixture(void)
+static TTIOUVVisSpectrum *ramp25Fixture(void)
 {
     const NSUInteger N = 25;
     double *wl     = malloc(N * sizeof(double));
@@ -56,11 +56,11 @@ static MPGOUVVisSpectrum *ramp25Fixture(void)
         double b  = 24.0 - (double)i;
         absorb[i] = (a < b) ? a : b;
     }
-    MPGOSignalArray *wlA = float64Arr(wl, N);
-    MPGOSignalArray *abA = float64Arr(absorb, N);
+    TTIOSignalArray *wlA = float64Arr(wl, N);
+    TTIOSignalArray *abA = float64Arr(absorb, N);
     free(wl); free(absorb);
     NSError *initErr = nil;
-    MPGOUVVisSpectrum *spec = [[MPGOUVVisSpectrum alloc]
+    TTIOUVVisSpectrum *spec = [[TTIOUVVisSpectrum alloc]
             initWithWavelengthArray:wlA
                     absorbanceArray:abA
                        pathLengthCm:1.0
@@ -74,7 +74,7 @@ static MPGOUVVisSpectrum *ramp25Fixture(void)
     return spec;
 }
 
-static void checkOneMode(MPGOJcampDxEncoding mode,
+static void checkOneMode(TTIOJcampDxEncoding mode,
                           NSString *modeName,
                           NSString *fixtureFile,
                           NSString *confDir)
@@ -87,11 +87,11 @@ static void checkOneMode(MPGOJcampDxEncoding mode,
         pass(YES, "skip: fixture missing %s", [golden UTF8String]);
         return;
     }
-    NSString *outPath = [NSString stringWithFormat:@"/tmp/mpgo_m76_%d_%@.jdx",
+    NSString *outPath = [NSString stringWithFormat:@"/tmp/ttio_m76_%d_%@.jdx",
                          (int)getpid(), modeName];
 
     NSError *err = nil;
-    BOOL ok = [MPGOJcampDxWriter writeUVVisSpectrum:ramp25Fixture()
+    BOOL ok = [TTIOJcampDxWriter writeUVVisSpectrum:ramp25Fixture()
                                               toPath:outPath
                                                title:@"m76 ramp-25"
                                             encoding:mode
@@ -122,7 +122,7 @@ void testM76JcampConformance(void)
         pass(YES, "skip: conformance/jcamp_dx not reachable from CWD");
         return;
     }
-    checkOneMode(MPGOJcampDxEncodingPAC, @"pac", @"uvvis_ramp25_pac.jdx", confDir);
-    checkOneMode(MPGOJcampDxEncodingSQZ, @"sqz", @"uvvis_ramp25_sqz.jdx", confDir);
-    checkOneMode(MPGOJcampDxEncodingDIF, @"dif", @"uvvis_ramp25_dif.jdx", confDir);
+    checkOneMode(TTIOJcampDxEncodingPAC, @"pac", @"uvvis_ramp25_pac.jdx", confDir);
+    checkOneMode(TTIOJcampDxEncodingSQZ, @"sqz", @"uvvis_ramp25_sqz.jdx", confDir);
+    checkOneMode(TTIOJcampDxEncodingDIF, @"dif", @"uvvis_ramp25_dif.jdx", confDir);
 }

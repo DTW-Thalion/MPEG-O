@@ -12,17 +12,17 @@
 #import <unistd.h>
 #include <string.h>
 
-#import "Transport/MPGOTransportServer.h"
-#import "Transport/MPGOTransportClient.h"
-#import "Transport/MPGOTransportPacket.h"
-#import "Transport/MPGOAccessUnit.h"
-#import "Transport/MPGOProtectionMetadata.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Transport/TTIOTransportServer.h"
+#import "Transport/TTIOTransportClient.h"
+#import "Transport/TTIOTransportPacket.h"
+#import "Transport/TTIOAccessUnit.h"
+#import "Transport/TTIOProtectionMetadata.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "ValueClasses/TTIOEnums.h"
 
 static NSString *tmp(NSString *n) {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m71_%d_%@", (int)getpid(), n];
+    return [NSString stringWithFormat:@"/tmp/ttio_m71_%d_%@", (int)getpid(), n];
 }
 static void rm(NSString *p) { [[NSFileManager defaultManager] removeItemAtPath:p error:NULL]; }
 
@@ -81,10 +81,10 @@ static BOOL buildLargeFixture(NSString *path, NSError **error)
         }
         bpis[i] = best;
     }
-    MPGOWrittenRun *run =
-        [[MPGOWrittenRun alloc]
-            initWithSpectrumClassName:@"MPGOMassSpectrum"
-                      acquisitionMode:(int64_t)MPGOAcquisitionModeMS1DDA
+    TTIOWrittenRun *run =
+        [[TTIOWrittenRun alloc]
+            initWithSpectrumClassName:@"TTIOMassSpectrum"
+                      acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
                           channelData:@{@"mz": f64le(mz, total),
                                         @"intensity": f64le(intensity, total)}
                               offsets:u64arr(offsets, n)
@@ -98,7 +98,7 @@ static BOOL buildLargeFixture(NSString *path, NSError **error)
     free(mz); free(intensity);
     free(offsets); free(lengths); free(rts);
     free(msLevels); free(pols); free(pmzs); free(pcs); free(bpis);
-    return [MPGOSpectralDataset writeMinimalToPath:path
+    return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M71 selective-access fixture"
                                  isaInvestigationId:@"ISA-M71-OBJC"
                                              msRuns:@{@"run_0001": run}
@@ -108,24 +108,24 @@ static BOOL buildLargeFixture(NSString *path, NSError **error)
                                               error:error];
 }
 
-static NSUInteger countAUs(NSArray<MPGOTransportPacketRecord *> *packets)
+static NSUInteger countAUs(NSArray<TTIOTransportPacketRecord *> *packets)
 {
     NSUInteger n = 0;
-    for (MPGOTransportPacketRecord *r in packets) {
-        if (r.header.packetType == MPGOTransportPacketAccessUnit) n++;
+    for (TTIOTransportPacketRecord *r in packets) {
+        if (r.header.packetType == TTIOTransportPacketAccessUnit) n++;
     }
     return n;
 }
 
-static NSArray *serveAndFetch(NSString *mpgo, NSDictionary *filters)
+static NSArray *serveAndFetch(NSString *ttio, NSDictionary *filters)
 {
-    MPGOTransportServer *srv =
-        [[MPGOTransportServer alloc] initWithDatasetPath:mpgo host:@"127.0.0.1" port:0];
+    TTIOTransportServer *srv =
+        [[TTIOTransportServer alloc] initWithDatasetPath:ttio host:@"127.0.0.1" port:0];
     NSError *err = nil;
     if (![srv startAndReturnError:&err]) return nil;
     NSString *url = [NSString stringWithFormat:@"ws://127.0.0.1:%u/",
                       (unsigned)srv.actualPort];
-    MPGOTransportClient *client = [[MPGOTransportClient alloc] initWithURL:url];
+    TTIOTransportClient *client = [[TTIOTransportClient alloc] initWithURL:url];
     NSArray *packets = [client fetchPacketsWithFilters:filters timeout:15.0 error:&err];
     [srv stopWithTimeout:2.0];
     return packets;
@@ -133,16 +133,16 @@ static NSArray *serveAndFetch(NSString *mpgo, NSDictionary *filters)
 
 void testSelectiveAccess(void)
 {
-    NSString *mpgo = tmp(@"large.mpgo");
-    rm(mpgo);
+    NSString *ttio = tmp(@"large.tio");
+    rm(ttio);
     NSError *err = nil;
-    PASS(buildLargeFixture(mpgo, &err), "M71: large fixture built");
+    PASS(buildLargeFixture(ttio, &err), "M71: large fixture built");
 
     // ── 1. RT range filter reduces transfer ───────────────────────
     {
-        NSArray *filtered = serveAndFetch(mpgo, @{@"rt_min": @(10.0),
+        NSArray *filtered = serveAndFetch(ttio, @{@"rt_min": @(10.0),
                                                    @"rt_max": @(12.0)});
-        NSArray *full = serveAndFetch(mpgo, nil);
+        NSArray *full = serveAndFetch(ttio, nil);
         NSUInteger fc = countAUs(filtered), tc = countAUs(full);
         PASS(tc > 0, "full stream returns AUs");
         PASS(fc > 0, "RT filter returns at least one AU");
@@ -152,24 +152,24 @@ void testSelectiveAccess(void)
 
     // ── 2. ms_level=2 halves the stream ───────────────────────────
     {
-        NSArray *p = serveAndFetch(mpgo, @{@"ms_level": @(2)});
+        NSArray *p = serveAndFetch(ttio, @{@"ms_level": @(2)});
         PASS(countAUs(p) == 300, "ms_level=2 yields exactly 300 AUs");
     }
 
     // ── 3. max_au cap ─────────────────────────────────────────────
     {
-        NSArray *p = serveAndFetch(mpgo, @{@"max_au": @(100)});
+        NSArray *p = serveAndFetch(ttio, @{@"max_au": @(100)});
         PASS(countAUs(p) == 100, "max_au=100 yields exactly 100 AUs");
-        MPGOTransportPacketRecord *last = p.lastObject;
-        PASS(last.header.packetType == MPGOTransportPacketEndOfStream,
+        TTIOTransportPacketRecord *last = p.lastObject;
+        PASS(last.header.packetType == TTIOTransportPacketEndOfStream,
              "capped stream still terminates with EndOfStream");
     }
 
     // ── 4. Combined filter: RT + ms_level ────────────────────────
     {
-        NSArray *rtOnly = serveAndFetch(mpgo,
+        NSArray *rtOnly = serveAndFetch(ttio,
             @{@"rt_min": @(10.0), @"rt_max": @(30.0)});
-        NSArray *combined = serveAndFetch(mpgo,
+        NSArray *combined = serveAndFetch(ttio,
             @{@"rt_min": @(10.0), @"rt_max": @(30.0), @"ms_level": @(2)});
         NSUInteger r = countAUs(rtOnly), c = countAUs(combined);
         PASS(c < r, "combined filter strictly narrows rt-only");
@@ -180,31 +180,31 @@ void testSelectiveAccess(void)
 
     // ── 5. No-match → skeleton only ──────────────────────────────
     {
-        NSArray *p = serveAndFetch(mpgo, @{@"ms_level": @(99)});
+        NSArray *p = serveAndFetch(ttio, @{@"ms_level": @(99)});
         PASS(countAUs(p) == 0, "impossible filter yields 0 AUs");
-        MPGOTransportPacketRecord *first = p.firstObject;
-        MPGOTransportPacketRecord *last = p.lastObject;
-        PASS(first.header.packetType == MPGOTransportPacketStreamHeader,
+        TTIOTransportPacketRecord *first = p.firstObject;
+        TTIOTransportPacketRecord *last = p.lastObject;
+        PASS(first.header.packetType == TTIOTransportPacketStreamHeader,
              "skeleton: StreamHeader first");
-        PASS(last.header.packetType == MPGOTransportPacketEndOfStream,
+        PASS(last.header.packetType == TTIOTransportPacketEndOfStream,
              "skeleton: EndOfStream last");
     }
 
-    rm(mpgo);
+    rm(ttio);
 
     // ── 6. ProtectionMetadata wire round-trip (AES-GCM) ──────────
     {
         uint8_t wrappedBytes[256]; memset(wrappedBytes, 1, sizeof(wrappedBytes));
         uint8_t pkBytes[32]; memset(pkBytes, 2, sizeof(pkBytes));
-        MPGOProtectionMetadata *pm =
-            [[MPGOProtectionMetadata alloc]
+        TTIOProtectionMetadata *pm =
+            [[TTIOProtectionMetadata alloc]
                 initWithCipherSuite:@"aes-256-gcm"
                        kekAlgorithm:@"rsa-oaep-sha256"
                         wrappedDek:[NSData dataWithBytes:wrappedBytes length:256]
                  signatureAlgorithm:@"ed25519"
                           publicKey:[NSData dataWithBytes:pkBytes length:32]];
         NSData *raw = [pm encode];
-        MPGOProtectionMetadata *d = [MPGOProtectionMetadata decodeFromData:raw];
+        TTIOProtectionMetadata *d = [TTIOProtectionMetadata decodeFromData:raw];
         PASS([d.cipherSuite isEqualToString:@"aes-256-gcm"],
              "ProtectionMetadata: cipher_suite round-trips");
         PASS([d.kekAlgorithm isEqualToString:@"rsa-oaep-sha256"],
@@ -225,15 +225,15 @@ void testSelectiveAccess(void)
         NSMutableData *pk = [NSMutableData dataWithLength:2592];
         memset(wrapped.mutableBytes, 0xFF, 1568);
         memset(pk.mutableBytes, 0xAA, 2592);
-        MPGOProtectionMetadata *pm =
-            [[MPGOProtectionMetadata alloc]
+        TTIOProtectionMetadata *pm =
+            [[TTIOProtectionMetadata alloc]
                 initWithCipherSuite:@"aes-256-gcm"
                        kekAlgorithm:@"ml-kem-1024"
                         wrappedDek:wrapped
                  signatureAlgorithm:@"ml-dsa-87"
                           publicKey:pk];
-        MPGOProtectionMetadata *d =
-            [MPGOProtectionMetadata decodeFromData:[pm encode]];
+        TTIOProtectionMetadata *d =
+            [TTIOProtectionMetadata decodeFromData:[pm encode]];
         PASS([d.kekAlgorithm isEqualToString:@"ml-kem-1024"]
              && [d.signatureAlgorithm isEqualToString:@"ml-dsa-87"],
              "ProtectionMetadata PQC: algorithm strings round-trip");
@@ -243,20 +243,20 @@ void testSelectiveAccess(void)
 
     // ── 8. Encrypted flag on AU header ───────────────────────────
     {
-        MPGOTransportPacketHeader *h =
-            [[MPGOTransportPacketHeader alloc]
-                initWithPacketType:MPGOTransportPacketAccessUnit
-                              flags:(uint16_t)MPGOTransportPacketFlagEncrypted
+        TTIOTransportPacketHeader *h =
+            [[TTIOTransportPacketHeader alloc]
+                initWithPacketType:TTIOTransportPacketAccessUnit
+                              flags:(uint16_t)TTIOTransportPacketFlagEncrypted
                           datasetId:1
                          auSequence:0
                       payloadLength:38
                         timestampNs:0];
         NSData *raw = [h encode];
-        MPGOTransportPacketHeader *d =
-            [MPGOTransportPacketHeader decodeFromBytes:(const uint8_t *)raw.bytes
+        TTIOTransportPacketHeader *d =
+            [TTIOTransportPacketHeader decodeFromBytes:(const uint8_t *)raw.bytes
                                                   length:raw.length
                                                    error:NULL];
-        PASS(d.flags & MPGOTransportPacketFlagEncrypted,
+        PASS(d.flags & TTIOTransportPacketFlagEncrypted,
              "encrypted flag round-trips on AU header");
     }
 }

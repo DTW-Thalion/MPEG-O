@@ -1,5 +1,5 @@
 // TestCloudAccess.m — M20 / v0.3 deferred follow-up: cloud-native
-// .mpgo access via libhdf5's ROS3 VFD.
+// .tio access via libhdf5's ROS3 VFD.
 //
 // This test asserts that the +isS3Supported probe works and that
 // +openS3URL: fails cleanly on an unresolvable bucket. Exercising a
@@ -10,13 +10,13 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "HDF5/MPGOHDF5File.h"
+#import "HDF5/TTIOHDF5File.h"
 
 void testCloudAccess(void)
 {
     // +isS3Supported must not crash; the return value depends on how
     // libhdf5 was built. Ubuntu 24.04's apt package ships ROS3 enabled.
-    BOOL s3 = [MPGOHDF5File isS3Supported];
+    BOOL s3 = [TTIOHDF5File isS3Supported];
     PASS(s3 == YES || s3 == NO,
         "cloud: isS3Supported returns a boolean");
 
@@ -30,8 +30,8 @@ void testCloudAccess(void)
     // return nil + populated NSError. No network is required because
     // bucket resolution fails at DNS.
     NSError *err = nil;
-    MPGOHDF5File *file = [MPGOHDF5File openS3URL:
-                              @"s3://mpeg-o-nonexistent-bucket-xyz/nope.mpgo"
+    TTIOHDF5File *file = [TTIOHDF5File openS3URL:
+                              @"s3://ttio-nonexistent-bucket-xyz/nope.tio"
                                            region:@"us-east-1"
                                      accessKeyId:nil
                                  secretAccessKey:nil

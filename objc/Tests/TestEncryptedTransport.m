@@ -1,7 +1,7 @@
 /*
  * TestEncryptedTransport — v1.0 ObjC.
  *
- * Verifies MPGOEncryptedTransport emits a well-formed stream from a
+ * Verifies TTIOEncryptedTransport emits a well-formed stream from a
  * per-AU-encrypted file:
  *   - StreamHeader + ProtectionMetadata + DatasetHeader + N AUs +
  *     EndOfDataset + EndOfStream appear in the expected order.
@@ -11,7 +11,7 @@
  *     kek_algorithm, wrapped_dek, etc.).
  *
  * Also verifies the reader-side path: decode a stream back into a
- * per-AU-encrypted .mpgo, decrypt with the same DEK, and confirm
+ * per-AU-encrypted .tio, decrypt with the same DEK, and confirm
  * plaintext channels survive byte-for-byte.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -21,18 +21,18 @@
 #import <unistd.h>
 #import <string.h>
 
-#import "Transport/MPGOEncryptedTransport.h"
-#import "Transport/MPGOTransportWriter.h"
-#import "Transport/MPGOTransportReader.h"
-#import "Transport/MPGOTransportPacket.h"
-#import "Protection/MPGOPerAUFile.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Transport/TTIOEncryptedTransport.h"
+#import "Transport/TTIOTransportWriter.h"
+#import "Transport/TTIOTransportReader.h"
+#import "Transport/TTIOTransportPacket.h"
+#import "Protection/TTIOPerAUFile.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "ValueClasses/TTIOEnums.h"
 
 
 static NSString *tmpPath(NSString *n) {
-    return [NSString stringWithFormat:@"/tmp/mpgo_enctrans_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_enctrans_%d_%@",
             (int)getpid(), n];
 }
 static void rmFile(NSString *p) { [[NSFileManager defaultManager] removeItemAtPath:p error:NULL]; }
@@ -82,10 +82,10 @@ static BOOL buildAndEncryptFixture(NSString *path,
     int32_t pcs[3] = {0, 2, 0};
     double bpis[3] = {40.0, 80.0, 120.0};
 
-    MPGOWrittenRun *run =
-        [[MPGOWrittenRun alloc]
-            initWithSpectrumClassName:@"MPGOMassSpectrum"
-                      acquisitionMode:(int64_t)MPGOAcquisitionModeMS1DDA
+    TTIOWrittenRun *run =
+        [[TTIOWrittenRun alloc]
+            initWithSpectrumClassName:@"TTIOMassSpectrum"
+                      acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
                           channelData:@{@"mz": f64arr(mz, total),
                                         @"intensity": f64arr(intensity, total)}
                               offsets:u64arr(offsets, n)
@@ -96,7 +96,7 @@ static BOOL buildAndEncryptFixture(NSString *path,
                          precursorMzs:f64arr(pmzs, n)
                      precursorCharges:i32arr(pcs, n)
                   basePeakIntensities:f64arr(bpis, n)];
-    if (![MPGOSpectralDataset writeMinimalToPath:path
+    if (![TTIOSpectralDataset writeMinimalToPath:path
                                             title:@"enc-transport fixture"
                                isaInvestigationId:@"ISA-ENC-TX"
                                            msRuns:@{@"run_0001": run}
@@ -104,7 +104,7 @@ static BOOL buildAndEncryptFixture(NSString *path,
                                   quantifications:nil
                                 provenanceRecords:nil
                                             error:error]) return NO;
-    return [MPGOPerAUFile encryptFilePath:path
+    return [TTIOPerAUFile encryptFilePath:path
                                         key:testKey()
                            encryptHeaders:encryptHeaders
                               providerName:nil
@@ -116,19 +116,19 @@ void testEncryptedTransport(void)
 {
     // ── 1. ENCRYPTED-only path ──────────────────────────────────
     {
-        NSString *src = tmpPath(@"src1.mpgo");
+        NSString *src = tmpPath(@"src1.tio");
         rmFile(src);
         NSError *err = nil;
         PASS(buildAndEncryptFixture(src, NO, &err),
              "encrypted fixture built (channels only)");
-        PASS([MPGOEncryptedTransport isPerAUEncryptedAtPath:src
+        PASS([TTIOEncryptedTransport isPerAUEncryptedAtPath:src
                                                 providerName:nil],
              "isPerAUEncrypted reports YES after encryption");
 
         NSMutableData *streamBuf = [NSMutableData data];
-        MPGOTransportWriter *writer =
-            [[MPGOTransportWriter alloc] initWithMutableData:streamBuf];
-        BOOL ok = [MPGOEncryptedTransport writeEncryptedDataset:src
+        TTIOTransportWriter *writer =
+            [[TTIOTransportWriter alloc] initWithMutableData:streamBuf];
+        BOOL ok = [TTIOEncryptedTransport writeEncryptedDataset:src
                                                            writer:writer
                                                      providerName:nil
                                                             error:&err];
@@ -137,8 +137,8 @@ void testEncryptedTransport(void)
         PASS(streamBuf.length > 0, "stream has content");
 
         // Parse packets back.
-        MPGOTransportReader *reader =
-            [[MPGOTransportReader alloc] initWithData:streamBuf];
+        TTIOTransportReader *reader =
+            [[TTIOTransportReader alloc] initWithData:streamBuf];
         NSArray *packets = [reader readAllPacketsWithError:&err];
         PASS(packets != nil, "stream parses");
 
@@ -146,20 +146,20 @@ void testEncryptedTransport(void)
         NSUInteger nAU = 0, nEOD = 0, nEOS = 0;
         BOOL allAUsEncrypted = YES;
         BOOL anyHeaderEncrypted = NO;
-        for (MPGOTransportPacketRecord *r in packets) {
+        for (TTIOTransportPacketRecord *r in packets) {
             switch (r.header.packetType) {
-                case MPGOTransportPacketStreamHeader: nStreamHeader++; break;
-                case MPGOTransportPacketDatasetHeader: nDatasetHeader++; break;
-                case MPGOTransportPacketProtectionMetadata: nProtection++; break;
-                case MPGOTransportPacketAccessUnit:
+                case TTIOTransportPacketStreamHeader: nStreamHeader++; break;
+                case TTIOTransportPacketDatasetHeader: nDatasetHeader++; break;
+                case TTIOTransportPacketProtectionMetadata: nProtection++; break;
+                case TTIOTransportPacketAccessUnit:
                     nAU++;
-                    if (!(r.header.flags & MPGOTransportPacketFlagEncrypted))
+                    if (!(r.header.flags & TTIOTransportPacketFlagEncrypted))
                         allAUsEncrypted = NO;
-                    if (r.header.flags & MPGOTransportPacketFlagEncryptedHeader)
+                    if (r.header.flags & TTIOTransportPacketFlagEncryptedHeader)
                         anyHeaderEncrypted = YES;
                     break;
-                case MPGOTransportPacketEndOfDataset: nEOD++; break;
-                case MPGOTransportPacketEndOfStream: nEOS++; break;
+                case TTIOTransportPacketEndOfDataset: nEOD++; break;
+                case TTIOTransportPacketEndOfStream: nEOS++; break;
                 default: break;
             }
         }
@@ -169,7 +169,7 @@ void testEncryptedTransport(void)
         PASS(nAU == 3, "three AccessUnits (3-spectrum fixture)");
         PASS(nEOD == 1 && nEOS == 1, "EndOfDataset + EndOfStream present");
         PASS(allAUsEncrypted,
-             "every AU carries MPGOTransportPacketFlagEncrypted");
+             "every AU carries TTIOTransportPacketFlagEncrypted");
         PASS(!anyHeaderEncrypted,
              "no AU carries EncryptedHeader (channels-only mode)");
         rmFile(src);
@@ -177,31 +177,31 @@ void testEncryptedTransport(void)
 
     // ── 2. ENCRYPTED | ENCRYPTED_HEADER path ────────────────────
     {
-        NSString *src = tmpPath(@"src2.mpgo");
+        NSString *src = tmpPath(@"src2.tio");
         rmFile(src);
         NSError *err = nil;
         buildAndEncryptFixture(src, YES, &err);
 
         NSMutableData *streamBuf = [NSMutableData data];
-        MPGOTransportWriter *writer =
-            [[MPGOTransportWriter alloc] initWithMutableData:streamBuf];
-        [MPGOEncryptedTransport writeEncryptedDataset:src
+        TTIOTransportWriter *writer =
+            [[TTIOTransportWriter alloc] initWithMutableData:streamBuf];
+        [TTIOEncryptedTransport writeEncryptedDataset:src
                                                  writer:writer
                                            providerName:nil
                                                   error:&err];
         [writer close];
 
-        MPGOTransportReader *reader =
-            [[MPGOTransportReader alloc] initWithData:streamBuf];
+        TTIOTransportReader *reader =
+            [[TTIOTransportReader alloc] initWithData:streamBuf];
         NSArray *packets = [reader readAllPacketsWithError:&err];
         BOOL allEncrypted = YES, allEncryptedHeader = YES;
         NSUInteger nAU = 0;
-        for (MPGOTransportPacketRecord *r in packets) {
-            if (r.header.packetType == MPGOTransportPacketAccessUnit) {
+        for (TTIOTransportPacketRecord *r in packets) {
+            if (r.header.packetType == TTIOTransportPacketAccessUnit) {
                 nAU++;
-                if (!(r.header.flags & MPGOTransportPacketFlagEncrypted))
+                if (!(r.header.flags & TTIOTransportPacketFlagEncrypted))
                     allEncrypted = NO;
-                if (!(r.header.flags & MPGOTransportPacketFlagEncryptedHeader))
+                if (!(r.header.flags & TTIOTransportPacketFlagEncryptedHeader))
                     allEncryptedHeader = NO;
             }
         }
@@ -213,39 +213,39 @@ void testEncryptedTransport(void)
     // ── 3. Round-trip: write stream → read stream → decrypt ─────
     for (int mode = 0; mode < 2; mode++) {
         BOOL encryptHeaders = (mode == 1);
-        NSString *src = tmpPath(encryptHeaders ? @"rt_src_hdr.mpgo"
-                                               : @"rt_src_ch.mpgo");
-        NSString *dst = tmpPath(encryptHeaders ? @"rt_dst_hdr.mpgo"
-                                               : @"rt_dst_ch.mpgo");
+        NSString *src = tmpPath(encryptHeaders ? @"rt_src_hdr.tio"
+                                               : @"rt_src_ch.tio");
+        NSString *dst = tmpPath(encryptHeaders ? @"rt_dst_hdr.tio"
+                                               : @"rt_dst_ch.tio");
         rmFile(src); rmFile(dst);
         NSError *err = nil;
         PASS(buildAndEncryptFixture(src, encryptHeaders, &err),
              "round-trip: encrypted fixture built");
 
         NSMutableData *streamBuf = [NSMutableData data];
-        MPGOTransportWriter *writer =
-            [[MPGOTransportWriter alloc] initWithMutableData:streamBuf];
-        BOOL wrote = [MPGOEncryptedTransport writeEncryptedDataset:src
+        TTIOTransportWriter *writer =
+            [[TTIOTransportWriter alloc] initWithMutableData:streamBuf];
+        BOOL wrote = [TTIOEncryptedTransport writeEncryptedDataset:src
                                                               writer:writer
                                                         providerName:nil
                                                                error:&err];
         [writer close];
         PASS(wrote, "round-trip: writeEncryptedDataset");
 
-        BOOL read = [MPGOEncryptedTransport readEncryptedToPath:dst
+        BOOL read = [TTIOEncryptedTransport readEncryptedToPath:dst
                                                       fromStream:streamBuf
                                                     providerName:nil
                                                            error:&err];
         PASS(read, "round-trip: readEncryptedToPath materialises file");
-        PASS([MPGOEncryptedTransport isPerAUEncryptedAtPath:dst
+        PASS([TTIOEncryptedTransport isPerAUEncryptedAtPath:dst
                                                 providerName:nil],
              "round-trip: output file carries opt_per_au_encryption");
 
         NSDictionary *srcPlain =
-            [MPGOPerAUFile decryptFilePath:src key:testKey()
+            [TTIOPerAUFile decryptFilePath:src key:testKey()
                               providerName:nil error:&err];
         NSDictionary *dstPlain =
-            [MPGOPerAUFile decryptFilePath:dst key:testKey()
+            [TTIOPerAUFile decryptFilePath:dst key:testKey()
                               providerName:nil error:&err];
         PASS(srcPlain != nil && dstPlain != nil,
              "round-trip: both files decrypt");
