@@ -119,6 +119,56 @@ context describing the migration itself.
 - **Out of scope (codec milestone):** Base-packing; M82 stores one
   ASCII byte per base.
 
+### M82.2 — GenomicRun (Objective-C normative)
+
+- **Added:** `TTIOAlignedRead`, `TTIOGenomicRun`, `TTIOGenomicIndex`,
+  `TTIOWrittenGenomicRun` under `objc/Source/Genomics/`. Mirror the
+  M82.1 Python reference shape.
+- **Added:** `TTIOSpectralDataset.genomicRuns` property and
+  `+writeMinimalToPath:title:isaInvestigationId:msRuns:genomicRuns:
+  identifications:quantifications:provenanceRecords:error:` overload;
+  `+readFromFilePath:` reads `/study/genomic_runs/` alongside
+  `/study/ms_runs/`. Existing 7-arg overload delegates with
+  `genomicRuns:nil`.
+- **Added:** `TTIOPrecisionUInt64 = 9` enum value with HDF5 + Memory
+  + SQLite + Zarr provider support. Matches Python's
+  `Precision.UINT64 = 9` for cross-language wire parity.
+- **Added:** `TTIOFeatureFlags.featureOptGenomic` returning
+  `@"opt_genomic"`; `kTTIOFormatVersionM82 = @"1.4"` emitted when
+  `genomicRuns` is non-empty.
+- **Added:** ~63 new ObjC test assertions in `TestM82GenomicRun.m`
+  covering value-class fields, in-memory queries, disk round-trip,
+  region/flag filters, paired-end mate info, multi-omics file, empty
+  run, pre-M82 backward compat, random-access reads, and the
+  cross-language fixture read of the Python-written
+  `m82_100reads.tio`. Total ObjC PASS now 1927 (was 1827 baseline).
+- **Fixed:** `TTIOHDF5Group` open-side `H5T_NATIVE_UINT64` mapping
+  now returns `TTIOPrecisionUInt64` (was `TTIOPrecisionInt64` as a
+  pre-M82 workaround). MS spectrum_index/offsets files written as
+  INT64 by the legacy ObjC writer continue to read back as INT64
+  (same on-disk bytes).
+- **Workaround:** `TTIOHDF5Group.stringAttributeNamed:` doesn't
+  type-check the H5 attribute and returns garbage bytes for INT64
+  attrs. The storage-protocol adapter tries string-first, so reading
+  `acquisition_mode` via `attributeValueForName:` returns an empty
+  NSString instead of NSNumber. `TTIOGenomicRun.openFromGroup:`
+  detects this and reads the integer directly via the underlying
+  TTIOHDF5Group when the group unwraps. Future cleanup: harden
+  `stringAttributeNamed:` to refuse non-`H5T_STRING` types.
+- **Backward compat:** Pre-M82 files open with empty `genomicRuns`
+  dict (verified). Existing 1827-test ObjC suite still passes
+  unchanged; M82.2 only adds, never modifies existing behavior.
+- **Out of scope (deferred):** Memory provider round-trip via
+  `+writeMinimalToPath:` — current ObjC `writeMinimal` hard-codes
+  HDF5Provider; needs a `provider:` parameter overload for parity
+  with Python M82.1's `write_minimal(..., provider=...)`. Direct
+  Memory-backed `TTIOGenomicIndex.write/read` works (Task 4 test
+  validates the provider-agnostic path), but full
+  multi-genomicRun-via-Memory writeMinimal is a small follow-up.
+- **Out of scope (M82.3/.4):** Java implementation; cross-language
+  conformance matrix beyond the ObjC-reads-Python fixture covered
+  here.
+
 ---
 
 ## [pre-rebrand] — M79 modality + genomic enumerations groundwork

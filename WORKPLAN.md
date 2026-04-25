@@ -1182,3 +1182,60 @@ Python reference implementation of the genomic data model spec'd in HANDOFF M82.
 
 M82.2 (ObjC normative), M82.3 (Java), M82.4 (cross-language
 conformance), M82.5 (docs).
+
+---
+
+## M82.2 — GenomicRun + AlignedRead (Objective-C normative) — shipped 2026-04-25
+
+ObjC normative implementation matching the Python reference shipped in M82.1.
+
+### Shipped (M82.2)
+
+- [x] **4 new classes** under `objc/Source/Genomics/` —
+      `TTIOAlignedRead`, `TTIOGenomicIndex`, `TTIOGenomicRun`,
+      `TTIOWrittenGenomicRun`. Mirror the M82.1 Python value/container
+      shapes. NSCopying + isEqual/hash on the value object.
+- [x] **`TTIOSpectralDataset.genomicRuns`** property + new
+      `+writeMinimalToPath:...:genomicRuns:...` overload (existing
+      7-arg version delegates with `genomicRuns:nil`).
+      `+readFromFilePath:` reads `/study/genomic_runs/` alongside
+      `/study/ms_runs/`.
+- [x] **`TTIOPrecisionUInt64 = 9`** enum value with HDF5 + Memory +
+      SQLite + Zarr provider support. Wire-level integer matches
+      Python's `Precision.UINT64`.
+- [x] **`featureOptGenomic` + `kTTIOFormatVersionM82 = "1.4"`**
+      emitted when genomicRuns is non-empty.
+- [x] **~63 new test assertions** in `TestM82GenomicRun.m`. Total
+      ObjC PASS now 1927 (was 1827 baseline). Zero regressions.
+- [x] **Cross-language fixture read** — ObjC reads the
+      Python-written `m82_100reads.tio` and asserts field-level
+      equivalence (11 cross-language assertions).
+
+### Bug fixes surfaced during execution
+
+- `TTIOHDF5Group` open-side `H5T_NATIVE_UINT64` mapping was returning
+  `TTIOPrecisionInt64` as a pre-M82 workaround (the enum value didn't
+  exist). Now returns `TTIOPrecisionUInt64`. MS files written as INT64
+  by the legacy ObjC writer continue to read back as INT64 (same
+  on-disk bytes).
+- `TTIOHDF5Group.stringAttributeNamed:` doesn't type-check the H5
+  attribute and returns garbage bytes for INT64 attrs read as strings.
+  `TTIOGenomicRun.openFromGroup:` works around this by reading the
+  integer directly via the underlying TTIOHDF5Group when the storage
+  group unwraps. Documented for a future cleanup pass.
+
+### Out of scope (deferred)
+
+- **Memory provider end-to-end via writeMinimal** — current ObjC
+  `+writeMinimalToPath:` hard-codes HDF5Provider; Python M82.1 has
+  `write_minimal(provider=...)` which ObjC doesn't yet have. Direct
+  Memory-backed `TTIOGenomicIndex.write/read` works through the
+  storage protocol; full multi-genomicRun-via-Memory writeMinimal is
+  a follow-up.
+- **Java implementation** (M82.3).
+- **3×3 cross-language conformance matrix** (M82.4) — only
+  ObjC-reads-Python is covered here.
+
+### Next
+
+M82.3 (Java), M82.4 (cross-language conformance matrix), M82.5 (docs).
