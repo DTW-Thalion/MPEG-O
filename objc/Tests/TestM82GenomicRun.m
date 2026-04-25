@@ -538,6 +538,34 @@ static void testEmptyRun(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Acceptance #8 — pre-M82 file → empty genomicRuns dict ──────────
+
+static void testPreM82BackwardCompat(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82bc_%d.tio", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    // Use the older 7-arg writeMinimalToPath (no genomicRuns arg) so
+    // the file does NOT contain /study/genomic_runs/.
+    NSError *err = nil;
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                  title:@"t"
+                                    isaInvestigationId:@"i"
+                                                msRuns:@{}
+                                        identifications:nil
+                                        quantifications:nil
+                                      provenanceRecords:nil
+                                                  error:&err];
+    PASS(ok, "M82: legacy writeMinimalToPath (no genomicRuns) succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    PASS(ds != nil, "M82: legacy file opens");
+    PASS(ds.genomicRuns.count == 0,
+         "M82: pre-M82 file has empty genomicRuns dict (backward compat)");
+
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -551,5 +579,6 @@ void testM82GenomicRun(void)
     testFlagFilter();
     testPairedEndMateInfo();
     testEmptyRun();
+    testPreM82BackwardCompat();
     // Subsequent tasks append more test functions called from here.
 }
