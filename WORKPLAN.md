@@ -1134,3 +1134,51 @@ locks the groupId on Maven Central.
   so a stale cache from a prior package's run will keep failing
   compile after a package rename. Clear that directory after any
   future Java package change.
+
+## M82.1 — GenomicRun + AlignedRead (Python reference) — shipped 2026-04-25
+
+Python reference implementation of the genomic data model spec'd in HANDOFF M82.
+
+### Shipped (M82.1)
+
+- [x] **5 new modules** — `aligned_read.py`, `genomic_index.py`,
+      `genomic_run.py`, `written_genomic_run.py`, plus extensions
+      to `spectral_dataset.py` and `_hdf5_io.py`.
+- [x] **`SpectralDataset.write_minimal(genomic_runs=...)`** write-side
+      parameter accepting a dict of `GenomicRun` objects.
+- [x] **`SpectralDataset.genomic_runs`** read accessor returning a
+      dict of `GenomicRun` objects reconstructed from disk.
+- [x] **`SpectralDataset.open(provider=...)`** keyword for non-HDF5
+      read parity, mirroring the existing `write_minimal` provider kwarg.
+- [x] **`Precision.UINT64 = 9`** enum addition; genomic write path
+      uses it directly via `_write_uint64_channel`; standard MS write
+      path continues to store uint64 as INT64 on disk for cross-language
+      parity until M82.2/M82.3 gain UINT64 support.
+- [x] **`opt_genomic` feature flag** emitted idempotently whenever a
+      file contains genomic runs; format version bumps to 1.4.
+- [x] **Cross-language reference fixture**
+      `python/tests/fixtures/genomic/m82_100reads.tio` written for M82.4.
+- [x] **30 new tests + 1 documented skip** — 12 acceptance tests
+      (HANDOFF §"Acceptance Criteria → Python") plus structural and
+      regression coverage. Zero regressions vs. M81 baseline.
+
+### Bug fixes surfaced during execution
+
+- `Hdf5Provider._Group.create_dataset` zero-length dataset chunking
+  crash (chunks=(1,) was applied to empty data; now skipped when
+  length=0).
+- `SpectralDataset.open` was missing the `provider=` keyword argument.
+
+### Notes
+
+- The `_precision_from_dtype` mapping in `_hdf5_io.py` maps `<u8` →
+  `Precision.INT64` (not UINT64) deliberately; the standard mass-spec
+  write path must preserve cross-language byte parity. Genomic writers
+  bypass this map via `_write_uint64_channel` directly.
+- Base-packing is out of scope for M82; sequences are stored as one
+  ASCII byte per base. Codec milestone follows.
+
+### Next
+
+M82.2 (ObjC normative), M82.3 (Java), M82.4 (cross-language
+conformance), M82.5 (docs).
