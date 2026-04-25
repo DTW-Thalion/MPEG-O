@@ -79,3 +79,49 @@ def test_aligned_read_is_frozen():
     )
     with pytest.raises((AttributeError, TypeError)):
         read.position = 999  # type: ignore[misc]
+
+
+def _make_index(n_reads: int = 6) -> "GenomicIndex":
+    from ttio.genomic_index import GenomicIndex
+    return GenomicIndex(
+        offsets=np.arange(n_reads, dtype=np.uint64) * 150,
+        lengths=np.full(n_reads, 150, dtype=np.uint32),
+        chromosomes=["chr1", "chr1", "chr2", "chr2", "chrX", "chr1"],
+        positions=np.array([100, 15000, 100, 200, 100, 25000], dtype=np.int64),
+        mapping_qualities=np.array([60, 60, 0, 60, 60, 60], dtype=np.uint8),
+        flags=np.array([0, 0, 0x4, 0x10, 0x1, 0], dtype=np.uint32),
+    )
+
+
+def test_genomic_index_count():
+    idx = _make_index(6)
+    assert idx.count == 6
+
+
+def test_genomic_index_indices_for_region():
+    idx = _make_index(6)
+    # chr1, [10000, 20000): only reads with chrom == chr1 AND 10000 <= pos < 20000
+    # Read 0: chr1@100 — out (pos < 10000)
+    # Read 1: chr1@15000 — in
+    # Read 5: chr1@25000 — out (pos >= 20000)
+    result = idx.indices_for_region("chr1", 10000, 20000)
+    assert result == [1]
+
+
+def test_genomic_index_indices_for_region_no_matches():
+    idx = _make_index(6)
+    assert idx.indices_for_region("chrY", 0, 1_000_000) == []
+
+
+def test_genomic_index_indices_for_unmapped():
+    idx = _make_index(6)
+    # Read 2 has flag 0x4 set
+    assert idx.indices_for_unmapped() == [2]
+
+
+def test_genomic_index_indices_for_flag():
+    idx = _make_index(6)
+    # Read 3 has flag 0x10 (reverse)
+    assert idx.indices_for_flag(0x10) == [3]
+    # Read 4 has flag 0x1 (paired)
+    assert idx.indices_for_flag(0x1) == [4]
