@@ -40,7 +40,7 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 | Stream | Status | Directory |
 |---|---|---|
 | **Objective-C (GNUstep)** | **Normative reference — v1.1.1, 1817 PASS / 1 env-dep skip.** | `objc/` |
-| **Python (`ttio`)**       | **v1.1.1 — full parity with ObjC and Java, 854 tests passing.** | `python/` |
+| **Python (`ttio`)**       | **v1.1.1 — full parity with ObjC and Java, 884 tests passing.** | `python/` |
 | **Java (`global.thalion.ttio`)** | **v1.1.1 — full parity with ObjC and Python, 389/389, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
