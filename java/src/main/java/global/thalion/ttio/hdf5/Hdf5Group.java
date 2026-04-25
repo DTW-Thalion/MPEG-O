@@ -418,6 +418,10 @@ public class Hdf5Group implements AutoCloseable {
             case INT64   -> HDF5Constants.H5T_NATIVE_INT64;
             case UINT32  -> HDF5Constants.H5T_NATIVE_UINT32;
             case UINT8   -> HDF5Constants.H5T_NATIVE_UINT8;
+            case UINT64  -> HDF5Constants.H5T_NATIVE_UINT64;
+            case _RESERVED_UINT16, _RESERVED_INT8 ->
+                throw new UnsupportedOperationException(
+                    "Precision " + precision + " is reserved (cross-lang parity)");
             case COMPLEX128 -> {
                 // Compound {double re; double im} — caller is responsible
                 // for H5Tclose() on the returned non-builtin id.
@@ -440,13 +444,14 @@ public class Hdf5Group implements AutoCloseable {
             return Precision.INT64;
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT32))
             return Precision.UINT32;
-        // v0.7 M51: Python writes spectrum_index/offsets as NumPy
-        // uint64, which HDF5 stores as H5T_NATIVE_UINT64. Treat it as
-        // 64-bit integer on read (no signed/unsigned distinction in
-        // Precision — matches the ObjC fix in commit 303e324 that
-        // added H5T_NATIVE_UINT64 → TTIOPrecisionInt64 mapping).
+        // v0.11 M82: round-trip H5T_NATIVE_UINT64 as Precision.UINT64
+        // (was Precision.INT64 as a pre-M82 workaround when the enum
+        // value didn't exist). Pre-M82 spectrum_index/offsets files
+        // written as INT64 by the legacy ObjC writer continue to read
+        // back as INT64 — same on-disk bytes; only the precision
+        // metadata differs.
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT64))
-            return Precision.INT64;
+            return Precision.UINT64;
         // v0.11 M79: H5T_NATIVE_UINT8 is the on-disk type for genomic
         // base/quality byte arrays.
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT8))

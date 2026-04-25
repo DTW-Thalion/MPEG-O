@@ -334,7 +334,7 @@ public final class SqliteProvider implements StorageProvider {
                 int[] arr = toIntArray(data);
                 for (int v : arr) buf.putInt(v);
             }
-            case INT64 -> {
+            case INT64, UINT64 -> {  // M82: UINT64 packs identically to INT64
                 long[] arr = toLongArray(data);
                 for (long v : arr) buf.putLong(v);
             }
@@ -348,6 +348,9 @@ public final class SqliteProvider implements StorageProvider {
                 byte[] arr = toByteArray(data);
                 buf.put(arr);
             }
+            case _RESERVED_UINT16, _RESERVED_INT8 ->
+                throw new UnsupportedOperationException(
+                    "Precision " + precision + " is reserved (cross-lang parity)");
         }
         return buf.array();
     }
@@ -378,7 +381,7 @@ public final class SqliteProvider implements StorageProvider {
                 for (int i = 0; i < n; i++) arr[i] = buf.getInt();
                 yield arr;
             }
-            case INT64 -> {
+            case INT64, UINT64 -> {  // M82: UINT64 unpacks identically to INT64
                 long[] arr = new long[n];
                 for (int i = 0; i < n; i++) arr[i] = buf.getLong();
                 yield arr;
@@ -395,6 +398,9 @@ public final class SqliteProvider implements StorageProvider {
                 buf.get(arr);
                 yield arr;
             }
+            case _RESERVED_UINT16, _RESERVED_INT8 ->
+                throw new UnsupportedOperationException(
+                    "Precision " + precision + " is reserved (cross-lang parity)");
         };
     }
 
@@ -1235,9 +1241,12 @@ public final class SqliteProvider implements StorageProvider {
                 case FLOAT32 -> new float[0];
                 case FLOAT64 -> new double[0];
                 case INT32, UINT32 -> new int[0];
-                case INT64 -> new long[0];
+                case INT64, UINT64 -> new long[0];  // M82
                 case COMPLEX128 -> new double[0];
                 case UINT8 -> new byte[0];
+                case _RESERVED_UINT16, _RESERVED_INT8 ->
+                    throw new UnsupportedOperationException(
+                        "Precision " + precision + " is reserved (cross-lang parity)");
             };
         }
 

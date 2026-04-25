@@ -20,7 +20,9 @@ class ValueClassesTest {
     @Test
     void precisionOrdinalsMatchObjC() {
         // ObjC TTIOPrecision: Float32=0, Float64=1, Int32=2, Int64=3,
-        // UInt32=4, Complex128=5, UInt8=6 (M79). Java Precision.ordinal() must match.
+        // UInt32=4, Complex128=5, UInt8=6 (M79), UInt64=9 (M82, with
+        // 7,8 reserved for future UINT16/INT8 parity).
+        // Java Precision.ordinal() must match.
         assertEquals(0, Precision.FLOAT32.ordinal());
         assertEquals(1, Precision.FLOAT64.ordinal());
         assertEquals(2, Precision.INT32.ordinal());
@@ -28,7 +30,9 @@ class ValueClassesTest {
         assertEquals(4, Precision.UINT32.ordinal());
         assertEquals(5, Precision.COMPLEX128.ordinal());
         assertEquals(6, Precision.UINT8.ordinal());
-        assertEquals(7, Precision.values().length, "no stray extras");
+        // Slots 7 and 8 are placeholder reservations (cross-lang parity).
+        assertEquals(9, Precision.UINT64.ordinal());
+        assertEquals(10, Precision.values().length, "no stray extras");
     }
 
     @Test

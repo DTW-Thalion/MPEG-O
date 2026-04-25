@@ -174,9 +174,12 @@ public class Hdf5Dataset implements AutoCloseable {
             case FLOAT32 -> new float[n];
             case FLOAT64 -> new double[n];
             case INT32, UINT32 -> new int[n];
-            case INT64 -> new long[n];
+            case INT64, UINT64 -> new long[n];  // M82: UINT64 packs as long[]
             case COMPLEX128 -> new byte[n * 16];
             case UINT8 -> new byte[n];
+            case _RESERVED_UINT16, _RESERVED_INT8 ->
+                throw new UnsupportedOperationException(
+                    "Precision " + precision + " is reserved (cross-lang parity)");
         };
     }
 
