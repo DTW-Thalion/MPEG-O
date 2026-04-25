@@ -436,3 +436,56 @@ def test_spectral_dataset_no_genomic_runs_pre_m82_compat(tmp_path: Path):
         assert ds.genomic_runs == {}
     finally:
         ds.close()
+
+
+def test_basic_roundtrip_100_reads(tmp_path: Path):
+    """Acceptance #1: 100-read GenomicRun round-trips with all fields."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    written = _make_written_run(n_reads=100, paired=False)
+
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": written},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == 100
+
+        for i in (0, 50, 99):
+            read = gr[i]
+            # Read-name from synthetic helper
+            assert read.read_name == f"read_{i:06d}"
+            # Position
+            assert read.position == int(written.positions[i])
+            # Chromosome
+            assert read.chromosome == written.chromosomes[i]
+            # Cigar
+            assert read.cigar == written.cigars[i]
+            # Sequence — bytes round-trip via ASCII
+            expected_seq = bytes(
+                written.sequences[
+                    int(written.offsets[i]):
+                    int(written.offsets[i]) + int(written.lengths[i])
+                ]
+            ).decode("ascii")
+            assert read.sequence == expected_seq
+            # Qualities
+            expected_q = bytes(
+                written.qualities[
+                    int(written.offsets[i]):
+                    int(written.offsets[i]) + int(written.lengths[i])
+                ]
+            )
+            assert read.qualities == expected_q
+            # Flags
+            assert read.flags == int(written.flags[i])
+            # Mate (unpaired in this test)
+            assert read.mate_chromosome == ""
+            assert read.mate_position == -1
+            assert read.template_length == 0
+    finally:
+        ds.close()
