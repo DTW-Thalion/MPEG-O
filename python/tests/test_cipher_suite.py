@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from mpeg_o import cipher_suite
-from mpeg_o.cipher_suite import (
+from ttio import cipher_suite
+from ttio.cipher_suite import (
     InvalidKeyError,
     UnsupportedAlgorithmError,
 )
@@ -136,7 +136,7 @@ def test_validate_key_unknown_algorithm_raises():
 
 def test_encrypt_bytes_default_algorithm_unchanged():
     """Default path must be byte-identical to pre-M48."""
-    from mpeg_o.encryption import encrypt_bytes, decrypt_bytes
+    from ttio.encryption import encrypt_bytes, decrypt_bytes
     key = b"k" * 32
     iv = b"i" * 12
     blob = encrypt_bytes(b"hello", key, iv)
@@ -146,7 +146,7 @@ def test_encrypt_bytes_default_algorithm_unchanged():
 
 
 def test_encrypt_bytes_explicit_algorithm_parameter():
-    from mpeg_o.encryption import encrypt_bytes, decrypt_bytes
+    from ttio.encryption import encrypt_bytes, decrypt_bytes
     key = b"k" * 32
     iv = b"i" * 12
     blob = encrypt_bytes(b"hello", key, iv, algorithm="aes-256-gcm")
@@ -154,7 +154,7 @@ def test_encrypt_bytes_explicit_algorithm_parameter():
 
 
 def test_encrypt_bytes_rejects_unknown_algorithm():
-    from mpeg_o.encryption import encrypt_bytes
+    from ttio.encryption import encrypt_bytes
     key = b"k" * 32
     with pytest.raises(UnsupportedAlgorithmError):
         encrypt_bytes(b"hello", key, algorithm="chacha20-poly1305")
@@ -164,7 +164,7 @@ def test_encrypt_bytes_rejects_asymmetric_algorithm():
     """``encrypt_bytes`` is an AEAD primitive — it rejects both
     unknown names and asymmetric ones (ml-kem-1024 is for key
     encapsulation, not bulk AEAD)."""
-    from mpeg_o.encryption import encrypt_bytes
+    from ttio.encryption import encrypt_bytes
     with pytest.raises((UnsupportedAlgorithmError, InvalidKeyError)):
         encrypt_bytes(b"hello", b"k" * 1568, algorithm="ml-kem-1024")
 
@@ -174,9 +174,9 @@ def test_sign_dataset_rejects_nonsignature_algorithm(tmp_path):
     must fail cleanly."""
     import h5py
     import numpy as np
-    from mpeg_o.signatures import sign_dataset
+    from ttio.signatures import sign_dataset
 
-    path = tmp_path / "m48_sig_algo.mpgo"
+    path = tmp_path / "m48_sig_algo.tio"
     with h5py.File(path, "w") as f:
         ds = f.create_dataset("v", data=np.arange(4, dtype="<f8"))
         with pytest.raises((UnsupportedAlgorithmError, InvalidKeyError)):

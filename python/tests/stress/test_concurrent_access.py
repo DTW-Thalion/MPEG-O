@@ -25,8 +25,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.value_range import ValueRange
+from ttio import SpectralDataset, WrittenRun
+from ttio.value_range import ValueRange
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from conftest import _load_fixture_module  # type: ignore[import-not-found]
@@ -42,7 +42,7 @@ def shared_fixture(tmp_path_factory: pytest.TempPathFactory) -> Path:
     mz = np.tile(np.linspace(100.0, 1000.0, n_peaks), n_spectra).astype(np.float64)
     intensity = rng.uniform(0.0, 1e6, size=n_spectra * n_peaks).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.arange(n_spectra, dtype=np.uint64) * n_peaks,
@@ -54,7 +54,7 @@ def shared_fixture(tmp_path_factory: pytest.TempPathFactory) -> Path:
         precursor_charges=np.zeros(n_spectra, dtype=np.int32),
         base_peak_intensities=intensity.reshape(n_spectra, n_peaks).max(axis=1),
     )
-    out = tmp_path_factory.mktemp("concurrent") / "shared.mpgo"
+    out = tmp_path_factory.mktemp("concurrent") / "shared.tio"
     SpectralDataset.write_minimal(
         out, title="concurrent",
         isa_investigation_id="ISA-CONCURRENT",
@@ -95,7 +95,7 @@ class TestConcurrency:
         n = 100
         n_pts = 8
         run = WrittenRun(
-            spectrum_class="MPGOMassSpectrum",
+            spectrum_class="TTIOMassSpectrum",
             acquisition_mode=0,
             channel_data={
                 "mz": np.tile(np.linspace(100.0, 200.0, n_pts), n).astype(np.float64),
@@ -110,7 +110,7 @@ class TestConcurrency:
             precursor_charges=np.zeros(n, dtype=np.int32),
             base_peak_intensities=np.full(n, 100.0),
         )
-        path = tmp_path / "writer.mpgo"
+        path = tmp_path / "writer.tio"
         SpectralDataset.write_minimal(
             path, title="w", isa_investigation_id="ISA-W",
             runs={"run_0001": run},

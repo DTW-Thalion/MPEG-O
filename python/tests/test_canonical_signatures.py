@@ -26,10 +26,10 @@ import h5py
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun, Identification
-from mpeg_o import _hdf5_io as io
-from mpeg_o.enums import AcquisitionMode
-from mpeg_o.signatures import (
+from ttio import SpectralDataset, WrittenRun, Identification
+from ttio import _hdf5_io as io
+from ttio.enums import AcquisitionMode
+from ttio.signatures import (
     SIGNATURE_ATTR,
     SIGNATURE_V2_PREFIX,
     hmac_sha256_b64,
@@ -51,7 +51,7 @@ def _build_written_run() -> WrittenRun:
     mz = np.tile(np.linspace(100.0, 200.0, n_pts), n_spec).astype(np.float64)
     intensity = np.tile(np.linspace(1.0, 100.0, n_pts), n_spec).astype(np.float64)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -69,9 +69,9 @@ def _build_written_run() -> WrittenRun:
 
 
 def test_v2_round_trip_on_atomic_dataset(tmp_path: Path) -> None:
-    out = tmp_path / "m18_atomic.mpgo"
+    out = tmp_path / "m18_atomic.tio"
     SpectralDataset.write_minimal(
-        out, title="m18", isa_investigation_id="MPGO:m18",
+        out, title="m18", isa_investigation_id="TTIO:m18",
         runs={"run_0001": _build_written_run()},
     )
     with h5py.File(out, "r+") as f:
@@ -84,7 +84,7 @@ def test_v2_round_trip_on_atomic_dataset(tmp_path: Path) -> None:
 
 
 def test_v2_round_trip_on_compound_dataset(tmp_path: Path) -> None:
-    out = tmp_path / "m18_compound.mpgo"
+    out = tmp_path / "m18_compound.tio"
     idents = [
         Identification(run_name="run_0001", spectrum_index=0,
                        chemical_entity="CHEBI:15000", confidence_score=0.73,
@@ -94,7 +94,7 @@ def test_v2_round_trip_on_compound_dataset(tmp_path: Path) -> None:
                        evidence_chain=["PRIDE:0000033"]),
     ]
     SpectralDataset.write_minimal(
-        out, title="m18c", isa_investigation_id="MPGO:m18c",
+        out, title="m18c", isa_investigation_id="TTIO:m18c",
         runs={"run_0001": _build_written_run()}, identifications=idents,
     )
     with h5py.File(out, "r+") as f:
@@ -105,11 +105,11 @@ def test_v2_round_trip_on_compound_dataset(tmp_path: Path) -> None:
 
 
 def test_legacy_v1_signature_still_verifies(tmp_path: Path) -> None:
-    """A dataset whose ``@mpgo_signature`` is unprefixed (v0.2 native
+    """A dataset whose ``@ttio_signature`` is unprefixed (v0.2 native
     byte layout) must still verify via the fallback path."""
-    out = tmp_path / "m18_legacy.mpgo"
+    out = tmp_path / "m18_legacy.tio"
     SpectralDataset.write_minimal(
-        out, title="m18l", isa_investigation_id="MPGO:m18l",
+        out, title="m18l", isa_investigation_id="TTIO:m18l",
         runs={"run_0001": _build_written_run()},
     )
     with h5py.File(out, "r+") as f:
@@ -151,28 +151,28 @@ def test_canonical_bytes_independent_of_numpy_byte_order(tmp_path: Path) -> None
 
 
 def _objc_build_available() -> bool:
-    # Use MpgoVerify as a build sentinel; if it exists, libMPGO is built.
-    return (_REPO_ROOT / "objc" / "Tools" / "obj" / "MpgoVerify").is_file()
+    # Use TtioVerify as a build sentinel; if it exists, libTTIO is built.
+    return (_REPO_ROOT / "objc" / "Tools" / "obj" / "TtioVerify").is_file()
 
 
 @pytest.mark.skipif(not _objc_build_available(),
-                    reason="ObjC libMPGO not built; M18 parity test skipped")
+                    reason="ObjC libTTIO not built; M18 parity test skipped")
 def test_objc_signed_file_verifies_from_python(tmp_path: Path) -> None:
     """Python writes a file → ObjC signs a dataset inside it via a
     helper program → Python reader verifies the v2 signature.
 
-    The helper program is a one-off ``MpgoSign`` binary that wraps
-    ``MPGOSignatureManager.signDataset:inFile:withKey:error:``. It is
-    compiled alongside MpgoVerify (see ``objc/Tools/GNUmakefile``).
+    The helper program is a one-off ``TtioSign`` binary that wraps
+    ``TTIOSignatureManager.signDataset:inFile:withKey:error:``. It is
+    compiled alongside TtioVerify (see ``objc/Tools/GNUmakefile``).
     """
-    sign_tool = _REPO_ROOT / "objc" / "Tools" / "obj" / "MpgoSign"
+    sign_tool = _REPO_ROOT / "objc" / "Tools" / "obj" / "TtioSign"
     if not sign_tool.is_file():
-        pytest.skip("MpgoSign not built yet")
+        pytest.skip("TtioSign not built yet")
     lib_dir = _REPO_ROOT / "objc" / "Source" / "obj"
 
-    out = tmp_path / "cross.mpgo"
+    out = tmp_path / "cross.tio"
     SpectralDataset.write_minimal(
-        out, title="cross", isa_investigation_id="MPGO:x",
+        out, title="cross", isa_investigation_id="TTIO:x",
         runs={"run_0001": _build_written_run()},
     )
 
@@ -197,18 +197,18 @@ def test_objc_signed_file_verifies_from_python(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(not _objc_build_available(),
-                    reason="ObjC libMPGO not built; M18 parity test skipped")
+                    reason="ObjC libTTIO not built; M18 parity test skipped")
 def test_python_signed_file_verifies_from_objc(tmp_path: Path) -> None:
-    """Inverse: Python signs a dataset → ObjC ``MpgoVerify`` with a
+    """Inverse: Python signs a dataset → ObjC ``TtioVerify`` with a
     ``--verify-signature`` flag reports success. We don't have that
-    flag in the current ``MpgoVerify`` helper, so this test is a
+    flag in the current ``TtioVerify`` helper, so this test is a
     placeholder that asserts Python's own verify matches — proves the
     byte stream is stable at least within one implementation. The
     true Py→ObjC direction is covered indirectly by the preceding
     test (matching v2 prefix + matching payload)."""
-    out = tmp_path / "py_signed.mpgo"
+    out = tmp_path / "py_signed.tio"
     SpectralDataset.write_minimal(
-        out, title="py", isa_investigation_id="MPGO:py",
+        out, title="py", isa_investigation_id="TTIO:py",
         runs={"run_0001": _build_written_run()},
     )
     with h5py.File(out, "r+") as f:

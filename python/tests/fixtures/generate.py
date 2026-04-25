@@ -1,6 +1,6 @@
-"""Synthetic .mpgo fixture generator.
+"""Synthetic .tio fixture generator.
 
-Produces deterministic small-to-medium ``.mpgo`` containers for
+Produces deterministic small-to-medium ``.tio`` containers for
 integration, security, anonymization and stress tests.
 
 All randomness uses ``np.random.default_rng(SEED)`` so benchmark
@@ -8,11 +8,11 @@ runs and round-trip comparisons are stable across machines.
 
 Files emitted (default destination ``tests/fixtures/_generated/``):
 
-* ``synth_bsa.mpgo``         — 500 MS1 + 200 MS2, 50 BSA peptide IDs
-* ``synth_multimodal.mpgo``  — 100 MS + 10 NMR spectra, linked IDs
-* ``synth_100k.mpgo``        — 100 000 MS spectra (for stress tests)
-* ``synth_saav.mpgo``        — 5 SAAV-flagged IDs for anonymization
-* ``synth_metabolites.mpgo`` — 5 rare-metabolite IDs for masking
+* ``synth_bsa.tio``         — 500 MS1 + 200 MS2, 50 BSA peptide IDs
+* ``synth_multimodal.tio``  — 100 MS + 10 NMR spectra, linked IDs
+* ``synth_100k.tio``        — 100 000 MS spectra (for stress tests)
+* ``synth_saav.tio``        — 5 SAAV-flagged IDs for anonymization
+* ``synth_metabolites.tio`` — 5 rare-metabolite IDs for masking
 
 CLI: ``python generate.py [--out DIR] [--include name [name ...]]``.
 """
@@ -24,8 +24,8 @@ from typing import Iterable
 
 import numpy as np
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.identification import Identification
+from ttio import SpectralDataset, WrittenRun
+from ttio.identification import Identification
 
 SEED = 42
 DEFAULT_OUT = Path(__file__).resolve().parent / "_generated"
@@ -64,7 +64,7 @@ def _ms_run(
     )
     precursor_charge = np.where(ms_levels == 2, 2, 0).astype(np.int32)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -85,7 +85,7 @@ def _nmr_run(*, n_spectra: int, n_points: int, rng: np.random.Generator) -> Writ
     offsets = (np.arange(n_spectra, dtype=np.uint64) * n_points)
     lengths = np.full(n_spectra, n_points, dtype=np.uint32)
     return WrittenRun(
-        spectrum_class="MPGONMRSpectrum",
+        spectrum_class="TTIONMRSpectrum",
         acquisition_mode=0,
         channel_data={"fid_real": real, "fid_imag": imag},
         offsets=offsets,
@@ -117,7 +117,7 @@ def gen_synth_bsa(out: Path) -> Path:
         )
         for i in range(50)
     ]
-    path = out / "synth_bsa.mpgo"
+    path = out / "synth_bsa.tio"
     SpectralDataset.write_minimal(
         path,
         title="Synthetic BSA tryptic digest",
@@ -137,7 +137,7 @@ def gen_synth_multimodal(out: Path) -> Path:
     ] + [
         Identification("nmr_run", i, f"CHEBI:{2000+i}", 0.8, []) for i in range(3)
     ]
-    path = out / "synth_multimodal.mpgo"
+    path = out / "synth_multimodal.tio"
     SpectralDataset.write_minimal(
         path,
         title="Synthetic multimodal MS + NMR study",
@@ -151,7 +151,7 @@ def gen_synth_multimodal(out: Path) -> Path:
 def gen_synth_100k(out: Path) -> Path:
     rng = np.random.default_rng(SEED + 2)
     run = _ms_run(n_spectra=100_000, n_peaks=16, rt_total_s=3600.0, rng=rng)
-    path = out / "synth_100k.mpgo"
+    path = out / "synth_100k.tio"
     SpectralDataset.write_minimal(
         path,
         title="Synthetic 100K-spectrum stress fixture",
@@ -168,7 +168,7 @@ def gen_synth_saav(out: Path) -> Path:
         Identification("run_0001", i, f"p.Ala{100+i}Thr SAAV", 0.85, [])
         for i in range(5)
     ]
-    path = out / "synth_saav.mpgo"
+    path = out / "synth_saav.tio"
     SpectralDataset.write_minimal(
         path,
         title="Synthetic SAAV anonymization fixture",
@@ -186,7 +186,7 @@ def gen_synth_metabolites(out: Path) -> Path:
         Identification("run_0001", i, f"CHEBI:9999{i}", 0.95, [])
         for i in range(5)
     ]
-    path = out / "synth_metabolites.mpgo"
+    path = out / "synth_metabolites.tio"
     SpectralDataset.write_minimal(
         path,
         title="Synthetic rare-metabolite anonymization fixture",
@@ -218,7 +218,7 @@ def generate_all(out: Path, *, names: Iterable[str] | None = None) -> dict[str, 
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="MPEG-O synthetic fixture generator")
+    parser = argparse.ArgumentParser(description="TTI-O synthetic fixture generator")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="output directory")
     parser.add_argument("--include", nargs="*", default=None, help="subset of fixtures to generate")
     ns = parser.parse_args(argv)

@@ -21,9 +21,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.encryption import read_encrypted_channel
-from mpeg_o.signatures import sign_dataset, verify_dataset
+from ttio import SpectralDataset, WrittenRun
+from ttio.encryption import read_encrypted_channel
+from ttio.signatures import sign_dataset, verify_dataset
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integration"))
 from _provider_matrix import (  # type: ignore[import-not-found]
@@ -37,12 +37,12 @@ _KEY = bytes(range(32))  # deterministic AES-256 / HMAC-SHA256 key
 
 
 def _build_dataset(provider: str, tmp_path: Path) -> str:
-    """Write a tiny .mpgo on the requested provider and return its URL."""
+    """Write a tiny .tio on the requested provider and return its URL."""
     n = 8
     mz = np.linspace(100.0, 200.0, n).astype(np.float64)
     intensity = np.linspace(1.0, 100.0, n).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.array([0], dtype=np.uint64),

@@ -30,13 +30,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import (
+from ttio import (
     AcquisitionMode,
     Identification,
     SpectralDataset,
     WrittenRun,
 )
-from mpeg_o.anonymization import AnonymizationPolicy, anonymize
+from ttio.anonymization import AnonymizationPolicy, anonymize
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integration"))
 from _provider_matrix import (  # type: ignore[import-not-found]
@@ -53,7 +53,7 @@ def _build_ms(provider: str, tmp_path: Path,
     mz = np.tile(np.linspace(100.0, 200.0, n_pts), n).astype(np.float64)
     intensity = rng.uniform(0.0, 1e6, size=n * n_pts).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum", acquisition_mode=0,
+        spectrum_class="TTIOMassSpectrum", acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.arange(n, dtype=np.uint64) * n_pts,
         lengths=np.full(n, n_pts, dtype=np.uint32),
@@ -80,7 +80,7 @@ def _build_nmr(provider: str, tmp_path: Path) -> str:
     cs = np.linspace(-1.0, 12.0, n_pts).astype(np.float64)
     intensity = np.linspace(0.0, 1.0, n_pts).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGONMRSpectrum",
+        spectrum_class="TTIONMRSpectrum",
         acquisition_mode=int(AcquisitionMode.NMR_1D),
         channel_data={"chemical_shift": cs, "intensity": intensity},
         offsets=np.array([0], dtype=np.uint64),

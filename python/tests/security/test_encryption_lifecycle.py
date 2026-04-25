@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
+from ttio import SpectralDataset, WrittenRun
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integration"))
 from _provider_matrix import (  # type: ignore[import-not-found]
@@ -43,7 +43,7 @@ def _build(provider: str, tmp_path: Path, *, n_spectra: int = 2, n_peaks: int = 
     mz = np.tile(np.linspace(100.0, 200.0, n_peaks), n_spectra).astype(np.float64)
     intensity = np.tile(np.linspace(1.0, 100.0, n_peaks), n_spectra).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum", acquisition_mode=0,
+        spectrum_class="TTIOMassSpectrum", acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.arange(n_spectra, dtype=np.uint64) * n_peaks,
         lengths=np.full(n_spectra, n_peaks, dtype=np.uint32),

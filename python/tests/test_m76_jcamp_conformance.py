@@ -22,8 +22,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import AxisDescriptor, SignalArray, UVVisSpectrum
-from mpeg_o.exporters.jcamp_dx import write_uv_vis_spectrum
+from ttio import AxisDescriptor, SignalArray, UVVisSpectrum
+from ttio.exporters.jcamp_dx import write_uv_vis_spectrum
 
 
 _CONFORMANCE = Path(__file__).resolve().parents[2] / "conformance" / "jcamp_dx"

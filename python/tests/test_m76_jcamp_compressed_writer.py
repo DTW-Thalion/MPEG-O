@@ -6,7 +6,7 @@ Covers the Python half of the cross-language byte-parity gate:
    integers with a deterministic power-of-ten scale.
 2. Primitive encoders (``_encode_sqz``, ``_encode_dif``,
    ``_encode_pac_y``) mirror the decoder tables in
-   :mod:`mpeg_o.importers._jcamp_decode` exactly.
+   :mod:`ttio.importers._jcamp_decode` exactly.
 3. End-to-end ``write_{raman,ir,uv_vis}_spectrum`` round-trip via the
    existing reader for all three compressed modes.
 4. Opt-in: the default encoding stays AFFN; passing ``encoding="…"``
@@ -21,9 +21,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import AxisDescriptor, SignalArray, UVVisSpectrum
-from mpeg_o.enums import IRMode
-from mpeg_o.exporters._jcamp_encode import (
+from ttio import AxisDescriptor, SignalArray, UVVisSpectrum
+from ttio.enums import IRMode
+from ttio.exporters._jcamp_encode import (
     VALUES_PER_LINE,
     choose_yfactor,
     encode_xydata,
@@ -31,15 +31,15 @@ from mpeg_o.exporters._jcamp_encode import (
     _encode_pac_y,
     _encode_sqz,
 )
-from mpeg_o.exporters.jcamp_dx import (
+from ttio.exporters.jcamp_dx import (
     write_ir_spectrum,
     write_raman_spectrum,
     write_uv_vis_spectrum,
 )
-from mpeg_o.importers._jcamp_decode import decode_xydata
-from mpeg_o.importers.jcamp_dx import read_spectrum
-from mpeg_o.ir_spectrum import IRSpectrum
-from mpeg_o.raman_spectrum import RamanSpectrum
+from ttio.importers._jcamp_decode import decode_xydata
+from ttio.importers.jcamp_dx import read_spectrum
+from ttio.ir_spectrum import IRSpectrum
+from ttio.raman_spectrum import RamanSpectrum
 
 
 # --- SQZ primitives ------------------------------------------------------

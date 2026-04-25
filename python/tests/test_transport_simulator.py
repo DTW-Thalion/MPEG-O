@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o.transport.codec import TransportReader, TransportWriter
-from mpeg_o.transport.packets import PacketType
-from mpeg_o.transport.simulator import AcquisitionSimulator
+from ttio.transport.codec import TransportReader, TransportWriter
+from ttio.transport.packets import PacketType
+from ttio.transport.simulator import AcquisitionSimulator
 
 
 class TestSimulatorBasics:
@@ -58,7 +58,7 @@ class TestSimulatorBasics:
                 scan_rate=20, duration=1.5, seed=7
             ).stream_to_writer(tw)
         buf.seek(0)
-        from mpeg_o.transport.packets import AccessUnit
+        from ttio.transport.packets import AccessUnit
         last_rt = -1.0
         with TransportReader(buf) as tr:
             for h, payload in tr.iter_packets():
@@ -77,7 +77,7 @@ class TestSimulatorBasics:
                 scan_rate=100, duration=2.0, ms1_fraction=0.5, seed=123
             ).stream_to_writer(tw)
         buf.seek(0)
-        from mpeg_o.transport.packets import AccessUnit
+        from ttio.transport.packets import AccessUnit
         ms1 = ms2 = 0
         with TransportReader(buf) as tr:
             for h, payload in tr.iter_packets():
@@ -101,7 +101,7 @@ class TestSimulatorBasics:
                 scan_rate=50, duration=2.0, ms1_fraction=0.3, seed=9
             ).stream_to_writer(tw)
         buf.seek(0)
-        from mpeg_o.transport.packets import AccessUnit
+        from ttio.transport.packets import AccessUnit
         ms2_with_precursor = 0
         ms2_total = 0
         with TransportReader(buf) as tr:
@@ -119,18 +119,18 @@ class TestSimulatorBasics:
         # any MS1).
         assert ms2_with_precursor >= ms2_total - 1
 
-    def test_materializes_as_valid_mpgo(self, tmp_path):
-        mots = tmp_path / "sim.mots"
+    def test_materializes_as_valid_ttio(self, tmp_path):
+        mots = tmp_path / "sim.tis"
         with TransportWriter(mots) as tw:
             AcquisitionSimulator(seed=42, duration=1.0, scan_rate=5).stream_to_writer(tw)
-        from mpeg_o.transport.codec import transport_to_file
-        mpgo = transport_to_file(mots, tmp_path / "sim.mpgo")
+        from ttio.transport.codec import transport_to_file
+        ttio = transport_to_file(mots, tmp_path / "sim.tio")
         try:
-            assert mpgo.title == "Simulated acquisition"
-            assert "simulated_run" in mpgo.all_runs
-            assert len(mpgo.all_runs["simulated_run"]) == 5
+            assert ttio.title == "Simulated acquisition"
+            assert "simulated_run" in ttio.all_runs
+            assert len(ttio.all_runs["simulated_run"]) == 5
         finally:
-            mpgo.close()
+            ttio.close()
 
 
 class TestAsyncStream:

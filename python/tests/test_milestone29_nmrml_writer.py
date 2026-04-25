@@ -6,10 +6,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.exporters.nmrml import spectrum_to_bytes, write_spectrum
-from mpeg_o.nmr_spectrum import NMRSpectrum
-from mpeg_o.signal_array import SignalArray
-from mpeg_o.axis_descriptor import AxisDescriptor
+from ttio.exporters.nmrml import spectrum_to_bytes, write_spectrum
+from ttio.nmr_spectrum import NMRSpectrum
+from ttio.signal_array import SignalArray
+from ttio.axis_descriptor import AxisDescriptor
 
 
 def _make_spectrum() -> NMRSpectrum:
@@ -140,6 +140,6 @@ def test_thermo_raw_rejects_missing_file() -> None:
     # M29 stub raised NotImplementedError unconditionally; M38 replaced
     # the stub with a real ThermoRawFileParser delegation, which rejects
     # a missing input path before looking for the binary.
-    from mpeg_o.importers.thermo_raw import read
+    from ttio.importers.thermo_raw import read
     with pytest.raises(FileNotFoundError):
-        read("/tmp/definitely-does-not-exist-mpgo-m38.raw")
+        read("/tmp/definitely-does-not-exist-ttio-m38.raw")

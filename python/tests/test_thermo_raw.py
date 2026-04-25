@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o.importers import ImportResult, thermo_raw
+from ttio.importers import ImportResult, thermo_raw
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]

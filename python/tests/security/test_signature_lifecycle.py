@@ -25,12 +25,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import (
+from ttio import (
     Identification,
     SpectralDataset,
     WrittenRun,
 )
-from mpeg_o.signatures import (
+from ttio.signatures import (
     SIGNATURE_ATTR,
     SIGNATURE_V2_PREFIX,
     sign_dataset,
@@ -50,7 +50,7 @@ _KEY = bytes(range(32))
 def _build(provider: str, tmp_path: Path) -> str:
     n = 4
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum", acquisition_mode=0,
+        spectrum_class="TTIOMassSpectrum", acquisition_mode=0,
         channel_data={
             "mz": np.linspace(100.0, 200.0, n).astype(np.float64),
             "intensity": np.linspace(1.0, 100.0, n).astype(np.float64),

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mpeg_o import SpectralDataset
+from ttio import SpectralDataset
 
 
 def test_synth_bsa_round_trips(synth_fixture) -> None:
@@ -27,7 +27,7 @@ def test_synth_multimodal_has_two_runs(synth_fixture) -> None:
         assert set(ds.all_runs.keys()) == {"ms_run", "nmr_run"}
         assert len(ds.ms_runs["ms_run"]) == 100
         nmr = ds.ms_runs["nmr_run"]
-        assert nmr.spectrum_class == "MPGONMRSpectrum"
+        assert nmr.spectrum_class == "TTIONMRSpectrum"
         assert len(nmr) == 10
 
 

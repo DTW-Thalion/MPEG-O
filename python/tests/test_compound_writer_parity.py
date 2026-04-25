@@ -1,7 +1,7 @@
 """v0.7 M51 — cross-language compound writes byte-parity harness.
 
 Exercises the three compound-dataset dumpers — Python, Java, and
-Objective-C — against a shared `.mpgo` fixture. All three must emit
+Objective-C — against a shared `.tio` fixture. All three must emit
 byte-identical canonical JSON.
 
 This is the catch-net for the kind of write-path / read-path drift the
@@ -24,12 +24,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.enums import AcquisitionMode
-from mpeg_o.identification import Identification
-from mpeg_o.provenance import ProvenanceRecord
-from mpeg_o.quantification import Quantification
-from mpeg_o.spectral_dataset import SpectralDataset, WrittenRun
-from mpeg_o.tools.dump_identifications import dump as python_dump
+from ttio.enums import AcquisitionMode
+from ttio.identification import Identification
+from ttio.provenance import ProvenanceRecord
+from ttio.quantification import Quantification
+from ttio.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.tools.dump_identifications import dump as python_dump
 
 
 # ── CLI resolvers ─────────────────────────────────────────────────────
@@ -47,11 +47,11 @@ def _repo_root() -> Path:
 
 def _find_objc_cli() -> tuple[Path | None, Path | None]:
     """Return (cli path, LD_LIBRARY_PATH dir)."""
-    which = shutil.which("MpgoDumpIdentifications")
+    which = shutil.which("TtioDumpIdentifications")
     if which:
         return Path(which), None
     root = _repo_root()
-    candidate = root / "objc" / "Tools" / "obj" / "MpgoDumpIdentifications"
+    candidate = root / "objc" / "Tools" / "obj" / "TtioDumpIdentifications"
     if candidate.is_file() and os.access(candidate, os.X_OK):
         libdir = root / "objc" / "Source" / "obj"
         return candidate, libdir if libdir.is_dir() else None
@@ -75,7 +75,7 @@ JAVA_RUNNER = _find_java_runner()
 
 skip_if_no_objc = pytest.mark.skipif(
     OBJC_CLI is None,
-    reason="objc/Tools/MpgoDumpIdentifications not built",
+    reason="objc/Tools/TtioDumpIdentifications not built",
 )
 skip_if_no_java = pytest.mark.skipif(
     JAVA_RUNNER is None,
@@ -87,11 +87,11 @@ skip_if_no_java = pytest.mark.skipif(
 
 
 def _write_fixture(path: Path) -> None:
-    """Write a deterministic `.mpgo` file with 5 identifications, 3
+    """Write a deterministic `.tio` file with 5 identifications, 3
     quantifications, and 7 provenance records."""
     n_spec, n_pts = 3, 4
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={
             "mz": np.tile(np.linspace(100.0, 400.0, n_pts), n_spec),
@@ -128,7 +128,7 @@ def _write_fixture(path: Path) -> None:
         for i in range(7)
     ]
     SpectralDataset.write_minimal(
-        path, title="M51-parity", isa_investigation_id="MPGO:parity",
+        path, title="M51-parity", isa_investigation_id="TTIO:parity",
         runs={"r_0": run},
         identifications=idents,
         quantifications=quants,
@@ -151,7 +151,7 @@ def _run_objc(path: Path) -> bytes:
         capture_output=True, env=env, check=False,
     )
     assert r.returncode == 0, (
-        f"MpgoDumpIdentifications failed ({r.returncode}):\n"
+        f"TtioDumpIdentifications failed ({r.returncode}):\n"
         f"stderr: {r.stderr.decode(errors='replace')}"
     )
     return r.stdout
@@ -160,7 +160,7 @@ def _run_objc(path: Path) -> bytes:
 def _run_java(path: Path) -> bytes:
     r = subprocess.run(
         [str(JAVA_RUNNER),
-         "com.dtwthalion.mpgo.tools.DumpIdentifications",
+         "com.dtwthalion.ttio.tools.DumpIdentifications",
          str(path)],
         capture_output=True, check=False,
     )
@@ -190,7 +190,7 @@ def _first_diff(a: bytes, b: bytes) -> str:
 def test_python_dumper_non_trivial(tmp_path: Path) -> None:
     """Sanity check — the Python reference dumper emits the three
     sections with the expected shape."""
-    p = tmp_path / "parity.mpgo"
+    p = tmp_path / "parity.tio"
     _write_fixture(p)
     out = python_dump(p)
     assert out.startswith("{\n")
@@ -202,7 +202,7 @@ def test_python_dumper_non_trivial(tmp_path: Path) -> None:
 
 @skip_if_no_objc
 def test_python_vs_objc_dump(tmp_path: Path) -> None:
-    p = tmp_path / "parity.mpgo"
+    p = tmp_path / "parity.tio"
     _write_fixture(p)
     py = python_dump(p).encode("utf-8")
     objc = _run_objc(p)
@@ -212,7 +212,7 @@ def test_python_vs_objc_dump(tmp_path: Path) -> None:
 
 @skip_if_no_java
 def test_python_vs_java_dump(tmp_path: Path) -> None:
-    p = tmp_path / "parity.mpgo"
+    p = tmp_path / "parity.tio"
     _write_fixture(p)
     py = python_dump(p).encode("utf-8")
     java = _run_java(p)
@@ -223,7 +223,7 @@ def test_python_vs_java_dump(tmp_path: Path) -> None:
 @skip_if_no_objc
 @skip_if_no_java
 def test_java_vs_objc_dump(tmp_path: Path) -> None:
-    p = tmp_path / "parity.mpgo"
+    p = tmp_path / "parity.tio"
     _write_fixture(p)
     objc = _run_objc(p)
     java = _run_java(p)

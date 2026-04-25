@@ -13,7 +13,7 @@ import pytest
 
 pytest.importorskip("cryptography")
 
-from mpeg_o.encryption_per_au import (
+from ttio.encryption_per_au import (
     ChannelSegment,
     HeaderSegment,
     aad_for_channel,

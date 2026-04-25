@@ -1,4 +1,4 @@
-"""Fixture downloader for MPEG-O integration tests.
+"""Fixture downloader for TTI-O integration tests.
 
 Fetches large reference fixtures from public repositories (PRIDE,
 MetaboLights, BMRB, imzml.org, opentims) into an XDG-aware cache
@@ -49,7 +49,7 @@ def _xdg_cache_home() -> Path:
     return Path.home() / ".cache"
 
 
-CACHE_ROOT = _xdg_cache_home() / "mpgo-test-fixtures"
+CACHE_ROOT = _xdg_cache_home() / "ttio-test-fixtures"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -157,7 +157,7 @@ FIXTURES: list[FixtureSpec] = [
     #  - opentims-bruker-bridge bundles its test .d as a Python
     #    package resource; resolve via importlib in the milestone
     #    that needs it (see tests/test_bruker_tdf.py +
-    #    MPGO_BRUKER_TDF_FIXTURE).
+    #    TTIO_BRUKER_TDF_FIXTURE).
 ]
 
 
@@ -298,7 +298,7 @@ def cmd_pin(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="MPEG-O fixture downloader")
+    parser = argparse.ArgumentParser(description="TTI-O fixture downloader")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="show every fixture and its cache/pin/URL state")
     p_fetch = sub.add_parser("fetch", help="fetch a single fixture")

@@ -1,4 +1,4 @@
-# MPEG-O Test Fixtures
+# TTI-O Test Fixtures
 
 This directory contains fixture management code (`download.py`,
 `generate.py`) and a SHA-256 manifest (`checksums.json`).
@@ -9,8 +9,8 @@ rule and live under `objc/Tests/Fixtures/` (where the ObjC test
 suite expects them); the Python downloader exposes them via
 `in_repo_path` entries so a single `download.py` API resolves
 both in-repo and network-fetched sources. Larger fixtures live in
-`$XDG_CACHE_HOME/mpgo-test-fixtures/` (default
-`~/.cache/mpgo-test-fixtures/`) and are pulled on demand.
+`$XDG_CACHE_HOME/ttio-test-fixtures/` (default
+`~/.cache/ttio-test-fixtures/`) and are pulled on demand.
 
 | Source     | Files                                                                    |
 |------------|--------------------------------------------------------------------------|
@@ -34,17 +34,17 @@ to update a pinned hash deliberately.
 
 ## Synthetic fixtures
 
-`generate.py` produces small `.mpgo` containers that are entirely
+`generate.py` produces small `.tio` containers that are entirely
 deterministic (seeded RNG, `np.random.default_rng(42)`) so benchmarks
 are comparable across runs:
 
 | Fixture                    | Contents                                                  |
 |----------------------------|-----------------------------------------------------------|
-| `synth_bsa.mpgo`           | 500 MS1 + 200 MS2 + 50 BSA peptide identifications        |
-| `synth_multimodal.mpgo`    | 100 MS spectra + 10 NMR spectra + linked identifications  |
-| `synth_100k.mpgo`          | 100 000 spectra for stress benchmarks                     |
-| `synth_saav.mpgo`          | 5 SAAV-flagged identifications for anonymization tests    |
-| `synth_metabolites.mpgo`   | 5 rare-metabolite identifications for masking tests       |
+| `synth_bsa.tio`           | 500 MS1 + 200 MS2 + 50 BSA peptide identifications        |
+| `synth_multimodal.tio`    | 100 MS spectra + 10 NMR spectra + linked identifications  |
+| `synth_100k.tio`          | 100 000 spectra for stress benchmarks                     |
+| `synth_saav.tio`          | 5 SAAV-flagged identifications for anonymization tests    |
+| `synth_metabolites.tio`   | 5 rare-metabolite identifications for masking tests       |
 
 ```bash
 python tests/fixtures/generate.py --out tests/fixtures/_generated

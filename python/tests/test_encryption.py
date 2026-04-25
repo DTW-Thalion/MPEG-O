@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import pytest
 
-from mpeg_o.encryption import (
+from ttio.encryption import (
     AES_IV_LEN,
     AES_KEY_LEN,
     SealedBlob,
@@ -24,7 +24,7 @@ FIXTURE_KEY = bytes(0xA5 ^ (i * 3) & 0xFF for i in range(AES_KEY_LEN))
 
 def test_encrypt_then_decrypt_round_trip() -> None:
     key = bytes(range(AES_KEY_LEN))
-    plaintext = b"hello, mpeg-o world!" * 32
+    plaintext = b"hello, ttio world!" * 32
     blob = encrypt_bytes(plaintext, key)
     assert len(blob.iv) == AES_IV_LEN
     assert len(blob.tag) == 16
@@ -73,18 +73,18 @@ def test_decrypt_objc_fixture_intensity_channel(encrypted_fixture: Path) -> None
 # ------------------------------------------------------------------ helpers
 
 
-def _make_mpgo_fixture(path, run_names: list) -> None:
-    """Write a minimal valid .mpgo file with float64 intensity_values."""
+def _make_ttio_fixture(path, run_names: list) -> None:
+    """Write a minimal valid .tio file with float64 intensity_values."""
     with h5py.File(path, "w") as f:
-        f.attrs["mpeg_o_format_version"] = "0.6"
+        f.attrs["ttio_format_version"] = "0.6"
         study = f.create_group("study")
         runs_group = study.create_group("ms_runs")
         runs_group.attrs["_run_names"] = ",".join(run_names)
-        from mpeg_o.enums import AcquisitionMode
+        from ttio.enums import AcquisitionMode
         for rname in run_names:
             g = runs_group.create_group(rname)
             g.attrs["acquisition_mode"] = np.int64(AcquisitionMode.MS1_DDA)
-            g.attrs["spectrum_class"] = "MPGOMassSpectrum"
+            g.attrs["spectrum_class"] = "TTIOMassSpectrum"
             idx = g.create_group("spectrum_index")
             idx.create_dataset("offsets", data=np.array([0], dtype="<u8"))
             idx.create_dataset("lengths", data=np.array([4], dtype="<u4"))
@@ -112,14 +112,14 @@ def _make_mpgo_fixture(path, run_names: list) -> None:
 def test_acquisition_run_encrypt_decrypt_round_trip(tmp_path):
     """Full round-trip: open dataset, encrypt via run.encrypt_with_key,
     re-open, decrypt via run.decrypt_with_key, verify plaintext matches."""
-    from mpeg_o import SpectralDataset
-    from mpeg_o.enums import EncryptionLevel
+    from ttio import SpectralDataset
+    from ttio.enums import EncryptionLevel
 
-    path = str(tmp_path / "encryptable.mpgo")
+    path = str(tmp_path / "encryptable.tio")
     key = bytes(range(32))  # 32-byte AES-256 key
     original_intensity = np.array([1.0, 2.0, 3.0, 4.0], dtype="<f8")
 
-    _make_mpgo_fixture(path, ["run_0001"])
+    _make_ttio_fixture(path, ["run_0001"])
 
     # Encrypt via run.encrypt_with_key (open writable so h5py allows writes)
     ds = SpectralDataset.open(path, writable=True)
@@ -156,14 +156,14 @@ def test_acquisition_run_encrypt_decrypt_round_trip(tmp_path):
 
 def test_spectral_dataset_encrypt_all_runs(tmp_path):
     """SpectralDataset.encrypt_with_key encrypts every MS run at once."""
-    from mpeg_o import SpectralDataset
-    from mpeg_o.enums import EncryptionLevel
+    from ttio import SpectralDataset
+    from ttio.enums import EncryptionLevel
 
-    path = str(tmp_path / "multi_run.mpgo")
+    path = str(tmp_path / "multi_run.tio")
     key = bytes(range(32))
     original = np.array([1.0, 2.0, 3.0, 4.0], dtype="<f8")
 
-    _make_mpgo_fixture(path, ["run_A", "run_B"])
+    _make_ttio_fixture(path, ["run_A", "run_B"])
 
     # Encrypt all runs at once via the dataset-level API (writable mode)
     ds = SpectralDataset.open(path, writable=True)

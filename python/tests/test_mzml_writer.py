@@ -6,15 +6,15 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.enums import AcquisitionMode
-from mpeg_o.exporters import mzml as mzml_writer
-from mpeg_o.importers import mzml as mzml_reader
+from ttio import SpectralDataset, WrittenRun
+from ttio.enums import AcquisitionMode
+from ttio.exporters import mzml as mzml_writer
+from ttio.importers import mzml as mzml_reader
 
 
 def _build_dataset(n_spec: int = 3, n_pts: int = 6) -> Path:
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={
             "mz": np.tile(np.linspace(100.0, 102.5, n_pts), n_spec).astype(np.float64),
@@ -31,23 +31,23 @@ def _build_dataset(n_spec: int = 3, n_pts: int = 6) -> Path:
     )
 
 
-def _write_mpgo(tmp_path: Path, n_spec: int = 3, n_pts: int = 6) -> Path:
-    out = tmp_path / "m19_src.mpgo"
+def _write_ttio(tmp_path: Path, n_spec: int = 3, n_pts: int = 6) -> Path:
+    out = tmp_path / "m19_src.tio"
     SpectralDataset.write_minimal(
-        out, title="m19", isa_investigation_id="MPGO:m19",
+        out, title="m19", isa_investigation_id="TTIO:m19",
         runs={"run_0001": _build_dataset(n_spec=n_spec, n_pts=n_pts)},
     )
     return out
 
 
 def test_writer_produces_parseable_mzml_uncompressed(tmp_path: Path) -> None:
-    src = _write_mpgo(tmp_path, n_spec=3, n_pts=6)
+    src = _write_ttio(tmp_path, n_spec=3, n_pts=6)
     mzml_path = tmp_path / "out.mzML"
     with SpectralDataset.open(src) as ds:
         mzml_writer.write_dataset(ds, mzml_path, zlib_compression=False)
     assert mzml_path.stat().st_size > 0
 
-    # Round trip via the mpeg_o mzML importer.
+    # Round trip via the ttio mzML importer.
     result = mzml_reader.read(mzml_path)
     assert len(result.ms_spectra) == 3
     first = result.ms_spectra[0]
@@ -60,7 +60,7 @@ def test_writer_produces_parseable_mzml_uncompressed(tmp_path: Path) -> None:
 
 
 def test_writer_produces_parseable_mzml_zlib(tmp_path: Path) -> None:
-    src = _write_mpgo(tmp_path, n_spec=4, n_pts=8)
+    src = _write_ttio(tmp_path, n_spec=4, n_pts=8)
     mzml_path = tmp_path / "out.mzML"
     with SpectralDataset.open(src) as ds:
         mzml_writer.write_dataset(ds, mzml_path, zlib_compression=True)
@@ -78,7 +78,7 @@ def test_writer_produces_parseable_mzml_zlib(tmp_path: Path) -> None:
 def test_indexed_mzml_offsets_point_at_spectrum_tag(tmp_path: Path) -> None:
     """``<indexList>`` offsets must be byte-correct — the byte at each
     offset should be the literal ``<`` of ``<spectrum``."""
-    src = _write_mpgo(tmp_path, n_spec=2, n_pts=4)
+    src = _write_ttio(tmp_path, n_spec=2, n_pts=4)
     with SpectralDataset.open(src) as ds:
         blob = mzml_writer.dataset_to_bytes(ds, zlib_compression=False)
 
@@ -101,12 +101,12 @@ def test_writer_emits_activation_block_for_ms2_spectra(tmp_path: Path) -> None:
     ``opt_ms2_activation_detail`` flag unset), the element is emitted
     empty rather than with a fabricated cvParam — downstream tooling
     can tell the difference."""
-    out = tmp_path / "ms2.mpgo"
+    out = tmp_path / "ms2.tio"
     # Build a dataset with one MS1 + one MS2 spectrum.
     SpectralDataset.write_minimal(
-        out, title="ms2 test", isa_investigation_id="MPGO:ms2",
+        out, title="ms2 test", isa_investigation_id="TTIO:ms2",
         runs={"run1": WrittenRun(
-            spectrum_class="MPGOMassSpectrum",
+            spectrum_class="TTIOMassSpectrum",
             acquisition_mode=int(AcquisitionMode.MS1_DDA),
             channel_data={
                 "mz": np.array([100.0, 200.0, 300.0, 150.0, 250.0], dtype=np.float64),
@@ -145,13 +145,13 @@ def test_writer_emits_m74_activation_and_isolation(tmp_path: Path) -> None:
     and isolation window columns, the mzML writer emits the matching
     PSI-MS cvParams and the round-trip through the reader restores the
     original ActivationMethod / IsolationWindow values."""
-    from mpeg_o.enums import ActivationMethod
+    from ttio.enums import ActivationMethod
 
-    out = tmp_path / "m74.mpgo"
+    out = tmp_path / "m74.tio"
     SpectralDataset.write_minimal(
-        out, title="m74 test", isa_investigation_id="MPGO:m74",
+        out, title="m74 test", isa_investigation_id="TTIO:m74",
         runs={"run1": WrittenRun(
-            spectrum_class="MPGOMassSpectrum",
+            spectrum_class="TTIOMassSpectrum",
             acquisition_mode=int(AcquisitionMode.MS2_DDA),
             channel_data={
                 "mz": np.array([100.0, 200.0, 300.0, 150.0, 250.0], dtype=np.float64),
@@ -193,7 +193,7 @@ def test_writer_emits_m74_activation_and_isolation(tmp_path: Path) -> None:
     assert 'value="445.3"' in text  # target m/z
     assert 'value="0.5"' in text    # shared lower/upper offset
 
-    # Round-trip: write mzML to disk, read with mpeg_o.importers.mzml,
+    # Round-trip: write mzML to disk, read with ttio.importers.mzml,
     # confirm the reader recovers the same enum + offsets.
     mzml_path = tmp_path / "m74.mzML"
     mzml_path.write_bytes(blob)
@@ -216,11 +216,11 @@ def test_writer_populates_instrument_configuration_from_dataset(
     the dataset's InstrumentConfig rather than emitting an empty block.
     write_minimal callers that don't set instrument metadata get an
     empty cvParam value — the block is still XSD-valid."""
-    out = tmp_path / "ic.mpgo"
+    out = tmp_path / "ic.tio"
     SpectralDataset.write_minimal(
-        out, title="ic test", isa_investigation_id="MPGO:ic",
+        out, title="ic test", isa_investigation_id="TTIO:ic",
         runs={"run1": WrittenRun(
-            spectrum_class="MPGOMassSpectrum",
+            spectrum_class="TTIOMassSpectrum",
             acquisition_mode=int(AcquisitionMode.MS1_DDA),
             channel_data={
                 "mz": np.array([100.0, 200.0], dtype=np.float64),
@@ -249,13 +249,13 @@ def test_writer_populates_instrument_configuration_from_dataset(
 
 
 def test_writer_refuses_dataset_without_ms_run(tmp_path: Path) -> None:
-    out = tmp_path / "empty.mpgo"
-    # Build a valid .mpgo with a single NMR-class run so there is no
-    # MPGOMassSpectrum to export.
+    out = tmp_path / "empty.tio"
+    # Build a valid .tio with a single NMR-class run so there is no
+    # TTIOMassSpectrum to export.
     SpectralDataset.write_minimal(
-        out, title="nmr only", isa_investigation_id="MPGO:nmr",
+        out, title="nmr only", isa_investigation_id="TTIO:nmr",
         runs={"nmr_run": WrittenRun(
-            spectrum_class="MPGONMRSpectrum",
+            spectrum_class="TTIONMRSpectrum",
             acquisition_mode=int(AcquisitionMode.NMR_1D),
             channel_data={
                 "chemical_shift": np.linspace(0.0, 10.0, 8),
@@ -273,5 +273,5 @@ def test_writer_refuses_dataset_without_ms_run(tmp_path: Path) -> None:
         )},
     )
     with SpectralDataset.open(out) as ds:
-        with pytest.raises(ValueError, match="no MPGOMassSpectrum"):
+        with pytest.raises(ValueError, match="no TTIOMassSpectrum"):
             mzml_writer.dataset_to_bytes(ds)

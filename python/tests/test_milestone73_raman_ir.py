@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import (
+from ttio import (
     AxisDescriptor,
     IRImage,
     IRMode,
@@ -15,8 +15,8 @@ from mpeg_o import (
     RamanSpectrum,
     SignalArray,
 )
-from mpeg_o.exporters.jcamp_dx import write_ir_spectrum, write_raman_spectrum
-from mpeg_o.importers.jcamp_dx import read_spectrum
+from ttio.exporters.jcamp_dx import write_ir_spectrum, write_raman_spectrum
+from ttio.importers.jcamp_dx import read_spectrum
 
 
 # --- helpers --------------------------------------------------------------

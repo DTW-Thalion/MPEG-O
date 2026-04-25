@@ -2,12 +2,12 @@
 
 Covers:
 
-* :mod:`mpeg_o.pqc` thin-wrapper round-trips for ML-KEM-1024 and
+* :mod:`ttio.pqc` thin-wrapper round-trips for ML-KEM-1024 and
   ML-DSA-87 (liboqs-python).
-* :func:`mpeg_o.signatures.sign_dataset` / ``verify_dataset`` with
+* :func:`ttio.signatures.sign_dataset` / ``verify_dataset`` with
   ``algorithm="ml-dsa-87"`` — v3: prefix emit, verify round trip,
   cross-algorithm rejection, backward compat with v2: HMAC.
-* :mod:`mpeg_o.key_rotation` ML-KEM-1024 envelope: enable → unwrap →
+* :mod:`ttio.key_rotation` ML-KEM-1024 envelope: enable → unwrap →
   rotate (including AES→PQC and PQC→AES migrations).
 * ``opt_pqc_preview`` feature flag set exactly when a PQC primitive is
   activated on a file.
@@ -24,10 +24,10 @@ import h5py
 import numpy as np
 import pytest
 
-from mpeg_o import cipher_suite, pqc
-from mpeg_o.cipher_suite import InvalidKeyError, UnsupportedAlgorithmError
-from mpeg_o.feature_flags import OPT_PQC_PREVIEW
-from mpeg_o.key_rotation import (
+from ttio import cipher_suite, pqc
+from ttio.cipher_suite import InvalidKeyError, UnsupportedAlgorithmError
+from ttio.feature_flags import OPT_PQC_PREVIEW
+from ttio.key_rotation import (
     KeyRotationError,
     enable_envelope_encryption,
     key_history,
@@ -39,7 +39,7 @@ from mpeg_o.key_rotation import (
     _wrap_dek,
     _unwrap_dek,
 )
-from mpeg_o.signatures import (
+from ttio.signatures import (
     SIGNATURE_ATTR,
     SIGNATURE_V2_PREFIX,
     SIGNATURE_V3_PREFIX,
@@ -50,7 +50,7 @@ from mpeg_o.signatures import (
 
 pytestmark = pytest.mark.skipif(
     not pqc.is_available(),
-    reason="liboqs-python / liboqs not installed — install with mpeg-o[pqc]",
+    reason="liboqs-python / liboqs not installed — install with ttio[pqc]",
 )
 
 
@@ -132,7 +132,7 @@ def _signable_dataset(f: h5py.File) -> h5py.Dataset:
 
 
 def test_ml_dsa_sign_verify_roundtrip(tmp_path: Path) -> None:
-    path = tmp_path / "sig_v3.mpgo"
+    path = tmp_path / "sig_v3.tio"
     kp = pqc.sig_keygen()
     with h5py.File(path, "w") as f:
         ds = _signable_dataset(f)
@@ -145,7 +145,7 @@ def test_ml_dsa_sign_verify_roundtrip(tmp_path: Path) -> None:
 
 
 def test_v3_verify_rejects_tampered_payload(tmp_path: Path) -> None:
-    path = tmp_path / "sig_v3_tamper.mpgo"
+    path = tmp_path / "sig_v3_tamper.tio"
     kp = pqc.sig_keygen()
     with h5py.File(path, "w") as f:
         ds = _signable_dataset(f)
@@ -162,7 +162,7 @@ def test_v3_verify_rejects_tampered_payload(tmp_path: Path) -> None:
 def test_v3_verify_wrong_algorithm_mix(tmp_path: Path) -> None:
     """Verifier refuses to check a v3 blob with algorithm='hmac-sha256'
     (and vice-versa), preventing silent drift."""
-    path = tmp_path / "sig_mix.mpgo"
+    path = tmp_path / "sig_mix.tio"
     hmac_key = b"\xA1" * 32
     kp = pqc.sig_keygen()
     with h5py.File(path, "w") as f:
@@ -175,7 +175,7 @@ def test_v3_verify_wrong_algorithm_mix(tmp_path: Path) -> None:
             verify_dataset(ds, hmac_key, algorithm="hmac-sha256")
 
     # And the reverse: v2-stored, verifier asks for v3.
-    path2 = tmp_path / "sig_mix_v2.mpgo"
+    path2 = tmp_path / "sig_mix_v2.tio"
     with h5py.File(path2, "w") as f:
         ds = _signable_dataset(f)
         sign_dataset(ds, hmac_key, algorithm="hmac-sha256")
@@ -188,7 +188,7 @@ def test_v3_verify_wrong_algorithm_mix(tmp_path: Path) -> None:
 def test_v2_backward_compat_with_pqc_build(tmp_path: Path) -> None:
     """A file signed with v2 HMAC still verifies under the same build
     that ships PQC. Legacy guarantee (HANDOFF binding #44)."""
-    path = tmp_path / "sig_v2_compat.mpgo"
+    path = tmp_path / "sig_v2_compat.tio"
     hmac_key = b"\xC3" * 32
     with h5py.File(path, "w") as f:
         ds = _signable_dataset(f)
@@ -202,7 +202,7 @@ def test_v2_backward_compat_with_pqc_build(tmp_path: Path) -> None:
 
 
 def test_ml_kem_enable_unwrap_roundtrip(tmp_path: Path) -> None:
-    path = tmp_path / "env_kem.mpgo"
+    path = tmp_path / "env_kem.tio"
     kp = pqc.kem_keygen()
     with h5py.File(path, "w") as f:
         dek_a = enable_envelope_encryption(
@@ -216,7 +216,7 @@ def test_ml_kem_enable_unwrap_roundtrip(tmp_path: Path) -> None:
 
 
 def test_ml_kem_wrong_private_key_fails(tmp_path: Path) -> None:
-    path = tmp_path / "env_kem_bad.mpgo"
+    path = tmp_path / "env_kem_bad.tio"
     kp_good = pqc.kem_keygen()
     kp_bad = pqc.kem_keygen()
     with h5py.File(path, "w") as f:
@@ -233,7 +233,7 @@ def test_ml_kem_wrong_private_key_fails(tmp_path: Path) -> None:
 def test_ml_kem_blob_length_matches_spec(tmp_path: Path) -> None:
     """On-disk v1.2 ML-KEM blob = 11 header + 1596 metadata + 32
     ciphertext = 1639 bytes. Regression check for format stability."""
-    path = tmp_path / "env_kem_len.mpgo"
+    path = tmp_path / "env_kem_len.tio"
     kp = pqc.kem_keygen()
     with h5py.File(path, "w") as f:
         enable_envelope_encryption(
@@ -249,7 +249,7 @@ def test_ml_kem_blob_length_matches_spec(tmp_path: Path) -> None:
 def test_ml_kem_enable_wrong_key_shape(tmp_path: Path) -> None:
     """Passing an ML-KEM *private* key to a writer must fail the
     validate_public_key guard."""
-    path = tmp_path / "env_kem_wrong_shape.mpgo"
+    path = tmp_path / "env_kem_wrong_shape.tio"
     kp = pqc.kem_keygen()
     with h5py.File(path, "w") as f:
         with pytest.raises(InvalidKeyError, match="public key"):
@@ -259,27 +259,27 @@ def test_ml_kem_enable_wrong_key_shape(tmp_path: Path) -> None:
 
 
 def test_ml_kem_pqc_preview_flag_set(tmp_path: Path) -> None:
-    path = tmp_path / "env_kem_flag.mpgo"
+    path = tmp_path / "env_kem_flag.tio"
     kp = pqc.kem_keygen()
     with h5py.File(path, "w") as f:
-        # Seed @mpeg_o_features so _mark_pqc_preview has something to append to.
-        f.attrs["mpeg_o_features"] = json.dumps(["base_v1"])
+        # Seed @ttio_features so _mark_pqc_preview has something to append to.
+        f.attrs["ttio_features"] = json.dumps(["base_v1"])
         enable_envelope_encryption(
             f, kp.public_key, kek_id="kem-1", algorithm="ml-kem-1024"
         )
     with h5py.File(path, "r") as f:
-        features = json.loads(f.attrs["mpeg_o_features"])
+        features = json.loads(f.attrs["ttio_features"])
         assert OPT_PQC_PREVIEW in features
 
 
 def test_aes_envelope_does_not_mark_pqc_preview(tmp_path: Path) -> None:
-    path = tmp_path / "env_aes_noflag.mpgo"
+    path = tmp_path / "env_aes_noflag.tio"
     kek = b"\xA1" * 32
     with h5py.File(path, "w") as f:
-        f.attrs["mpeg_o_features"] = json.dumps(["base_v1"])
+        f.attrs["ttio_features"] = json.dumps(["base_v1"])
         enable_envelope_encryption(f, kek, kek_id="aes-1")
     with h5py.File(path, "r") as f:
-        features = json.loads(f.attrs["mpeg_o_features"])
+        features = json.loads(f.attrs["ttio_features"])
         assert OPT_PQC_PREVIEW not in features
 
 
@@ -287,12 +287,12 @@ def test_aes_envelope_does_not_mark_pqc_preview(tmp_path: Path) -> None:
 
 
 def test_rotate_aes_to_ml_kem(tmp_path: Path) -> None:
-    path = tmp_path / "rot_aes_to_kem.mpgo"
+    path = tmp_path / "rot_aes_to_kem.tio"
     aes_kek = b"\xA1" * 32
     kem_kp = pqc.kem_keygen()
 
     with h5py.File(path, "w") as f:
-        f.attrs["mpeg_o_features"] = json.dumps(["base_v1"])
+        f.attrs["ttio_features"] = json.dumps(["base_v1"])
         dek_original = enable_envelope_encryption(f, aes_kek, kek_id="aes-1")
 
     with h5py.File(path, "r+") as f:
@@ -317,17 +317,17 @@ def test_rotate_aes_to_ml_kem(tmp_path: Path) -> None:
         assert len(hist) == 1
         assert hist[0]["kek_algorithm"] == "aes-256-gcm"
     with h5py.File(path, "r") as f:
-        features = json.loads(f.attrs["mpeg_o_features"])
+        features = json.loads(f.attrs["ttio_features"])
         assert OPT_PQC_PREVIEW in features
 
 
 def test_rotate_ml_kem_to_aes(tmp_path: Path) -> None:
-    path = tmp_path / "rot_kem_to_aes.mpgo"
+    path = tmp_path / "rot_kem_to_aes.tio"
     kem_kp = pqc.kem_keygen()
     aes_kek = b"\xB2" * 32
 
     with h5py.File(path, "w") as f:
-        f.attrs["mpeg_o_features"] = json.dumps(["base_v1"])
+        f.attrs["ttio_features"] = json.dumps(["base_v1"])
         dek_original = enable_envelope_encryption(
             f, kem_kp.public_key, kek_id="kem-1", algorithm="ml-kem-1024"
         )

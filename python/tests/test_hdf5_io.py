@@ -7,7 +7,7 @@ import h5py
 import numpy as np
 import pytest
 
-from mpeg_o import _hdf5_io as io
+from ttio import _hdf5_io as io
 
 
 # -------------------------------------------------------------- attributes ---
@@ -16,10 +16,10 @@ from mpeg_o import _hdf5_io as io
 def test_fixed_string_attr_round_trip(tmp_path: Path) -> None:
     p = tmp_path / "attrs.h5"
     with h5py.File(p, "w") as f:
-        io.write_fixed_string_attr(f, "mpeg_o_format_version", "1.1")
+        io.write_fixed_string_attr(f, "ttio_format_version", "1.1")
         io.write_fixed_string_attr(f, "title", "my study")
     with h5py.File(p, "r") as f:
-        assert io.read_string_attr(f, "mpeg_o_format_version") == "1.1"
+        assert io.read_string_attr(f, "ttio_format_version") == "1.1"
         assert io.read_string_attr(f, "title") == "my study"
 
 
@@ -150,7 +150,7 @@ def test_feature_flags_round_trip(tmp_path: Path) -> None:
 def test_feature_flags_legacy_v1_detection(tmp_path: Path) -> None:
     p = tmp_path / "legacy.h5"
     with h5py.File(p, "w") as f:
-        io.write_fixed_string_attr(f, "mpeg_o_version", "1.0.0")
+        io.write_fixed_string_attr(f, "ttio_version", "1.0.0")
     with h5py.File(p, "r") as f:
         assert io.is_legacy_v1(f) is True
         version, features = io.read_feature_flags(f)

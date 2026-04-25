@@ -11,9 +11,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.exporters import imzml as imzml_writer
-from mpeg_o.importers import imzml as imzml_reader
-from mpeg_o.importers.imzml import ImzMLPixelSpectrum
+from ttio.exporters import imzml as imzml_writer
+from ttio.importers import imzml as imzml_reader
+from ttio.importers.imzml import ImzMLPixelSpectrum
 
 
 def _pixel(x: int, y: int, mz: np.ndarray, intensity: np.ndarray) -> ImzMLPixelSpectrum:

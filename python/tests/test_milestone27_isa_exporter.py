@@ -13,7 +13,7 @@ Verifies:
 
 The ObjC side is covered in TestMilestone27.m; byte-level JSON parity
 is relaxed to structural (parse-and-compare) per the note in
-mpeg_o.exporters.isa — the NSJSONSerialization vs json.dumps
+ttio.exporters.isa — the NSJSONSerialization vs json.dumps
 whitespace differences are not meaningful.
 """
 from __future__ import annotations
@@ -24,12 +24,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.chromatogram import Chromatogram
-from mpeg_o.enums import ChromatogramType
-from mpeg_o.exporters.isa import bundle_for_dataset, write_bundle_for_dataset
-from mpeg_o.instrument_config import InstrumentConfig
-from mpeg_o.signal_array import SignalArray
+from ttio import SpectralDataset, WrittenRun
+from ttio.chromatogram import Chromatogram
+from ttio.enums import ChromatogramType
+from ttio.exporters.isa import bundle_for_dataset, write_bundle_for_dataset
+from ttio.instrument_config import InstrumentConfig
+from ttio.signal_array import SignalArray
 
 
 def _make_run(*, with_chromatograms: bool) -> WrittenRun:
@@ -49,7 +49,7 @@ def _make_run(*, with_chromatograms: bool) -> WrittenRun:
             chromatogram_type=ChromatogramType.TIC,
         ))
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": it},
         offsets=offsets, lengths=lengths,
@@ -64,7 +64,7 @@ def _make_run(*, with_chromatograms: bool) -> WrittenRun:
 
 
 def _make_dataset(tmp_path: Path, *, with_chromatograms: bool) -> SpectralDataset:
-    path = tmp_path / "m27_dataset.mpgo"
+    path = tmp_path / "m27_dataset.tio"
     if path.exists():
         path.unlink()
     SpectralDataset.write_minimal(

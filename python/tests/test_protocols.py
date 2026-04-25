@@ -1,11 +1,11 @@
 """Parity tests for the domain protocols defined in
-``mpeg_o.protocols``. Mirrors Objective-C ``MPGOCVAnnotatable.h``,
-``MPGOEncryptable.h``, ``MPGOIndexable.h``, ``MPGOProvenanceable.h``,
-``MPGOStreamable.h``.
+``ttio.protocols``. Mirrors Objective-C ``TTIOCVAnnotatable.h``,
+``TTIOEncryptable.h``, ``TTIOIndexable.h``, ``TTIOProvenanceable.h``,
+``TTIOStreamable.h``.
 """
 from __future__ import annotations
 
-from mpeg_o.protocols import (
+from ttio.protocols import (
     CVAnnotatable,
     Encryptable,
     Indexable,
@@ -15,7 +15,7 @@ from mpeg_o.protocols import (
 
 
 def test_cv_annotatable_surface():
-    # Every ObjC MPGOCVAnnotatable method has a Python counterpart.
+    # Every ObjC TTIOCVAnnotatable method has a Python counterpart.
     assert hasattr(CVAnnotatable, "add_cv_param")
     assert hasattr(CVAnnotatable, "remove_cv_param")
     assert hasattr(CVAnnotatable, "all_cv_params")

@@ -15,11 +15,11 @@ conformance contract is:
    language verifies cleanly in every other language.
 4. Classical v0.7 HMAC signatures still verify under v0.8 code.
 5. ``v2:`` HMAC and ``v3:`` ML-DSA signatures coexist on the same
-   ``.mpgo`` file.
+   ``.tio`` file.
 
 The harness shells out to two peer CLIs that ship with v0.8 M54:
-``com.dtwthalion.mpgo.tools.PQCTool`` (Java, via ``run-tool.sh``) and
-``MpgoPQCTool`` (Objective-C, built via ``./build.sh``). When a peer
+``com.dtwthalion.ttio.tools.PQCTool`` (Java, via ``run-tool.sh``) and
+``TtioPQCTool`` (Objective-C, built via ``./build.sh``). When a peer
 CLI is not present the corresponding cells are **skipped** — the test
 reports which pairings actually ran so CI can show graceful
 degradation on hosts without one of the toolchains.
@@ -35,8 +35,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from mpeg_o import pqc
-from mpeg_o.signatures import (
+from ttio import pqc
+from ttio.signatures import (
     SIGNATURE_ATTR,
     SIGNATURE_V2_PREFIX,
     SIGNATURE_V3_PREFIX,
@@ -59,13 +59,13 @@ def _java_runner() -> list[str] | None:
         return None
     if not classes.is_dir():
         return None
-    return [str(runner), "com.dtwthalion.mpgo.tools.PQCTool"]
+    return [str(runner), "com.dtwthalion.ttio.tools.PQCTool"]
 
 
 def _objc_runner() -> list[str] | None:
-    """Resolve the ObjC MpgoPQCTool binary + the LD_LIBRARY_PATH needed
-    to find libMPGO.so."""
-    binary = _REPO_ROOT / "objc" / "Tools" / "obj" / "MpgoPQCTool"
+    """Resolve the ObjC TtioPQCTool binary + the LD_LIBRARY_PATH needed
+    to find libTTIO.so."""
+    binary = _REPO_ROOT / "objc" / "Tools" / "obj" / "TtioPQCTool"
     libdir = _REPO_ROOT / "objc" / "Source" / "obj"
     if not binary.is_file() or not os.access(binary, os.X_OK):
         return None
@@ -93,7 +93,7 @@ skip_no_java = pytest.mark.skipif(
 )
 skip_no_objc = pytest.mark.skipif(
     OBJC_CMD is None or not pqc.is_available(),
-    reason="objc/Tools/obj/MpgoPQCTool not built or liboqs unavailable",
+    reason="objc/Tools/obj/TtioPQCTool not built or liboqs unavailable",
 )
 skip_no_pqc = pytest.mark.skipif(
     not pqc.is_available(),
@@ -317,7 +317,7 @@ def _do_kem_decaps(lang: str, sk_path: Path, ct_path: Path,
 
 def _seed_hdf5_dataset(path: Path, dataset: str = "/payload",
                         data: np.ndarray | None = None) -> None:
-    """Create an .mpgo file with a single float64 dataset at ``dataset``."""
+    """Create an .tio file with a single float64 dataset at ``dataset``."""
     import h5py
     if data is None:
         data = np.arange(64, dtype="<f8")
@@ -347,7 +347,7 @@ def test_v3_hdf5_cross_language(tmp_path: Path, signer: str,
 
     pk_path = tmp_path / "pk.bin"
     sk_path = tmp_path / "sk.bin"
-    mpgo = tmp_path / "fixture.mpgo"
+    ttio = tmp_path / "fixture.tio"
 
     # Keygen in Python (all three languages understand the same raw key
     # shape, so the generator choice is cosmetic — using Python keeps
@@ -356,20 +356,20 @@ def test_v3_hdf5_cross_language(tmp_path: Path, signer: str,
     pk_path.write_bytes(kp.public_key)
     sk_path.write_bytes(kp.private_key)
 
-    _seed_hdf5_dataset(mpgo)
+    _seed_hdf5_dataset(ttio)
 
     # Sign with the chosen signer.
     if signer == "python":
-        with h5py.File(mpgo, "r+") as f:
+        with h5py.File(ttio, "r+") as f:
             sign_dataset(f["payload"], kp.private_key, algorithm="ml-dsa-87")
     else:
         cli = JAVA_CMD if signer == "java" else OBJC_CMD
         env = _objc_env() if signer == "objc" else None
-        rc = _hdf5_sign(cli, mpgo, "/payload", sk_path, env=env)
+        rc = _hdf5_sign(cli, ttio, "/payload", sk_path, env=env)
         assert rc == 0, f"{signer} hdf5-sign failed"
 
     # Sanity: the signature attribute should carry the v3: prefix.
-    with h5py.File(mpgo, "r") as f:
+    with h5py.File(ttio, "r") as f:
         stored = f["payload"].attrs[SIGNATURE_ATTR]
         stored_str = stored.decode() if isinstance(stored, bytes) else str(stored)
         assert stored_str.startswith(SIGNATURE_V3_PREFIX), \
@@ -377,13 +377,13 @@ def test_v3_hdf5_cross_language(tmp_path: Path, signer: str,
 
     # Verify with the chosen verifier.
     if verifier == "python":
-        with h5py.File(mpgo, "r") as f:
+        with h5py.File(ttio, "r") as f:
             assert verify_dataset(
                 f["payload"], kp.public_key, algorithm="ml-dsa-87")
     else:
         cli = JAVA_CMD if verifier == "java" else OBJC_CMD
         env = _objc_env() if verifier == "objc" else None
-        rc = _hdf5_verify(cli, mpgo, "/payload", pk_path, env=env)
+        rc = _hdf5_verify(cli, ttio, "/payload", pk_path, env=env)
         assert rc == 0, f"{verifier} hdf5-verify failed"
 
 
@@ -392,11 +392,11 @@ def test_v3_hdf5_cross_language(tmp_path: Path, signer: str,
 
 @skip_no_pqc
 def test_v2_and_v3_coexist_on_same_file(tmp_path: Path) -> None:
-    """A single .mpgo can carry ``v2:`` HMAC on one dataset and ``v3:``
+    """A single .tio can carry ``v2:`` HMAC on one dataset and ``v3:``
     ML-DSA on another. Both verify with their respective keys."""
     import h5py
 
-    path = tmp_path / "mixed.mpgo"
+    path = tmp_path / "mixed.tio"
     hmac_key = bytes(range(32))
     dsa_kp = pqc.sig_keygen()
 
@@ -428,7 +428,7 @@ def test_v07_classical_signature_still_verifies(tmp_path: Path) -> None:
     backward-compat promise from HANDOFF binding #44."""
     import h5py
 
-    path = tmp_path / "v07_legacy.mpgo"
+    path = tmp_path / "v07_legacy.tio"
     hmac_key = bytes(range(32))
     with h5py.File(path, "w") as f:
         ds = f.create_dataset("payload", data=np.arange(32, dtype="<f8"))

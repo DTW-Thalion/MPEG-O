@@ -7,7 +7,7 @@ Mirrors TestMilestone25.m in the ObjC suite:
   * rotation < 100 ms
   * feature-flag constant present
   * cross-language parity: unwrap a file produced by ObjC's
-    MPGOKeyRotationManager (if the manual fixture is available)
+    TTIOKeyRotationManager (if the manual fixture is available)
 """
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from pathlib import Path
 import h5py
 import pytest
 
-from mpeg_o.feature_flags import OPT_KEY_ROTATION
-from mpeg_o.key_rotation import (
+from ttio.feature_flags import OPT_KEY_ROTATION
+from ttio.key_rotation import (
     KeyRotationError,
     enable_envelope_encryption,
     has_envelope_encryption,
@@ -38,7 +38,7 @@ def test_feature_flag_constant() -> None:
 
 
 def test_enable_and_unwrap(tmp_path: Path) -> None:
-    path = tmp_path / "m25_enable.mpgo"
+    path = tmp_path / "m25_enable.tio"
     kek1 = _key(0xA1)
     with h5py.File(path, "w") as f:
         assert not has_envelope_encryption(f)
@@ -51,7 +51,7 @@ def test_enable_and_unwrap(tmp_path: Path) -> None:
 
 
 def test_wrong_kek_fails(tmp_path: Path) -> None:
-    path = tmp_path / "m25_wrong.mpgo"
+    path = tmp_path / "m25_wrong.tio"
     kek1 = _key(0xA1)
     kek_bad = _key(0xFF)
     with h5py.File(path, "w") as f:
@@ -62,7 +62,7 @@ def test_wrong_kek_fails(tmp_path: Path) -> None:
 
 
 def test_rotate_preserves_dek(tmp_path: Path) -> None:
-    path = tmp_path / "m25_rotate.mpgo"
+    path = tmp_path / "m25_rotate.tio"
     kek1 = _key(0xA1)
     kek2 = _key(0xB2)
     kek3 = _key(0xC3)
@@ -98,7 +98,7 @@ def test_rotate_preserves_dek(tmp_path: Path) -> None:
 
 
 def test_rotate_with_wrong_old_kek_fails(tmp_path: Path) -> None:
-    path = tmp_path / "m25_rotate_wrong.mpgo"
+    path = tmp_path / "m25_rotate_wrong.tio"
     kek1 = _key(0xA1)
     kek_bad = _key(0xFF)
     kek2 = _key(0xB2)
@@ -124,7 +124,7 @@ def test_cross_language_parity(tmp_path: Path) -> None:
     requires the ObjC test binary to generate a fixture; that path is
     covered in the ObjC suite (TestMilestone25.m).
     """
-    path = tmp_path / "m25_parity.mpgo"
+    path = tmp_path / "m25_parity.tio"
     kek = _key(0xA1)
     with h5py.File(path, "w") as f:
         dek1 = enable_envelope_encryption(f, kek, kek_id="kek-1")
@@ -153,10 +153,10 @@ def test_v11_backward_compat_unwrap(tmp_path: Path) -> None:
     """M47 Binding Decision 38: the v1.1 60-byte AES-256-GCM wrapped
     blob remains readable forever. Hand-craft a v1.1 file and verify
     v0.7+ code unwraps it correctly."""
-    from mpeg_o.key_rotation import _wrap_dek, _write_wrapped_dataset
+    from ttio.key_rotation import _wrap_dek, _write_wrapped_dataset
     import numpy as np
 
-    path = tmp_path / "m47_legacy_v11.mpgo"
+    path = tmp_path / "m47_legacy_v11.tio"
     kek = _key(0xB2)
     dek = _key(0xC3)
     # Produce the v1.1 layout explicitly via the legacy path.
@@ -178,7 +178,7 @@ def test_v12_reject_unknown_algorithm(tmp_path: Path) -> None:
     """A v1.2 blob carrying a reserved algorithm id (e.g. ML-KEM-1024,
     M49) must raise UnsupportedWrappedBlobError — not a garbled
     decrypt error."""
-    from mpeg_o.key_rotation import (
+    from ttio.key_rotation import (
         UnsupportedWrappedBlobError,
         _WK_ALG_ML_KEM_1024,
         _pack_blob_v2,

@@ -1,4 +1,4 @@
-"""mzML import → .mpgo → mzML export round-trip fidelity (v0.9 M58).
+"""mzML import → .tio → mzML export round-trip fidelity (v0.9 M58).
 
 Covers HUPO-PSI fidelity contract:
 
@@ -29,9 +29,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset
-from mpeg_o.exporters import mzml as mzml_writer
-from mpeg_o.importers import mzml as mzml_reader
+from ttio import SpectralDataset
+from ttio.exporters import mzml as mzml_writer
+from ttio.importers import mzml as mzml_reader
 
 from _provider_matrix import (
     PROVIDERS as _PROVIDERS,
@@ -136,7 +136,7 @@ def _wrap_mzml(spectra_xml: str, run_id: str = "synthetic_run") -> str:
     </fileContent>
   </fileDescription>
   <softwareList count="1">
-    <software id="mpeg_o_test" version="0.9.0"/>
+    <software id="ttio_test" version="0.9.0"/>
   </softwareList>
   <instrumentConfigurationList count="1">
     <instrumentConfiguration id="IC1"/>
@@ -249,15 +249,15 @@ def zlib_compressed_mzml(tmp_path: Path) -> tuple[Path, Path]:
 
 def _import_export(
     mzml_path: Path,
-    mpgo_url: str,
+    ttio_url: str,
     out_mzml: Path,
     *,
     provider: str = "hdf5",
 ) -> tuple:
-    """mzML → .mpgo (on ``provider``) → mzML. Returns (original, roundtrip)."""
+    """mzML → .tio (on ``provider``) → mzML. Returns (original, roundtrip)."""
     original = mzml_reader.read(mzml_path)
-    original.to_mpgo(mpgo_url, provider=provider)
-    with SpectralDataset.open(mpgo_url) as ds:
+    original.to_ttio(ttio_url, provider=provider)
+    with SpectralDataset.open(ttio_url) as ds:
         mzml_writer.write_dataset(ds, out_mzml, zlib_compression=False)
     roundtrip = mzml_reader.read(out_mzml)
     return original, roundtrip
@@ -270,9 +270,9 @@ def _import_export(
 @pytest.mark.parametrize("provider", _PROVIDERS)
 def test_mzml_full_roundtrip_synthetic(provider: str, tiny_synthetic_mzml: Path, tmp_path: Path) -> None:
     _maybe_skip_provider(provider)
-    mpgo = _provider_url(provider, tmp_path, "rt")
+    ttio = _provider_url(provider, tmp_path, "rt")
     out = tmp_path / "rt.mzML"
-    original, roundtrip = _import_export(tiny_synthetic_mzml, mpgo, out, provider=provider)
+    original, roundtrip = _import_export(tiny_synthetic_mzml, ttio, out, provider=provider)
 
     assert len(roundtrip.ms_spectra) == len(original.ms_spectra) == 3
 
@@ -298,9 +298,9 @@ def test_mzml_roundtrip_pinned_psi_reference(
     """
     _maybe_skip_provider(provider)
     src = downloaded_fixture("tiny_pwiz_mzml")
-    mpgo = _provider_url(provider, tmp_path, "psi")
+    ttio = _provider_url(provider, tmp_path, "psi")
     out = tmp_path / "psi.mzML"
-    original, roundtrip = _import_export(src, mpgo, out, provider=provider)
+    original, roundtrip = _import_export(src, ttio, out, provider=provider)
     assert len(roundtrip.ms_spectra) == len(original.ms_spectra)
     assert len(roundtrip.ms_spectra) > 0
 
@@ -316,9 +316,9 @@ def test_mzml_roundtrip_pinned_psi_reference(
 
 def test_empty_spectrum_round_trip(empty_spectrum_mzml: Path, tmp_path: Path) -> None:
     """A zero-peak spectrum must survive the full pipeline."""
-    mpgo = tmp_path / "empty.mpgo"
+    ttio = tmp_path / "empty.tio"
     out = tmp_path / "empty_out.mzML"
-    _, roundtrip = _import_export(empty_spectrum_mzml, mpgo, out)
+    _, roundtrip = _import_export(empty_spectrum_mzml, ttio, out)
     assert len(roundtrip.ms_spectra) == 1
     assert roundtrip.ms_spectra[0].mz_or_chemical_shift.size == 0
     assert roundtrip.ms_spectra[0].intensity.size == 0
@@ -326,9 +326,9 @@ def test_empty_spectrum_round_trip(empty_spectrum_mzml: Path, tmp_path: Path) ->
 
 def test_large_spectrum_round_trip(large_spectrum_mzml: Path, tmp_path: Path) -> None:
     """10 240 peaks survive without truncation or precision loss."""
-    mpgo = tmp_path / "large.mpgo"
+    ttio = tmp_path / "large.tio"
     out = tmp_path / "large_out.mzML"
-    original, roundtrip = _import_export(large_spectrum_mzml, mpgo, out)
+    original, roundtrip = _import_export(large_spectrum_mzml, ttio, out)
     assert roundtrip.ms_spectra[0].mz_or_chemical_shift.size == 10_240
     np.testing.assert_array_equal(
         roundtrip.ms_spectra[0].mz_or_chemical_shift,
@@ -339,9 +339,9 @@ def test_large_spectrum_round_trip(large_spectrum_mzml: Path, tmp_path: Path) ->
 def test_f32_precision_preserved(f32_precision_mzml: Path, tmp_path: Path) -> None:
     """A 32-bit-encoded source preserves its float32 quantization through
     the round-trip — values match the float32 cast of the original."""
-    mpgo = tmp_path / "f32.mpgo"
+    ttio = tmp_path / "f32.tio"
     out = tmp_path / "f32_out.mzML"
-    original, roundtrip = _import_export(f32_precision_mzml, mpgo, out)
+    original, roundtrip = _import_export(f32_precision_mzml, ttio, out)
     expected_mz = original.ms_spectra[0].mz_or_chemical_shift.astype(np.float32).astype(np.float64)
     np.testing.assert_array_equal(
         roundtrip.ms_spectra[0].mz_or_chemical_shift.astype(np.float32).astype(np.float64),
@@ -353,12 +353,12 @@ def test_zlib_source_matches_uncompressed(zlib_compressed_mzml, tmp_path: Path) 
     """A zlib-compressed source must produce values bit-identical to the
     same logical spectrum from an uncompressed source."""
     plain_src, zlib_src = zlib_compressed_mzml
-    plain_mpgo = tmp_path / "plain.mpgo"
-    zlib_mpgo = tmp_path / "zlib.mpgo"
+    plain_ttio = tmp_path / "plain.tio"
+    zlib_ttio = tmp_path / "zlib.tio"
     plain_out = tmp_path / "plain_out.mzML"
     zlib_out = tmp_path / "zlib_out.mzML"
-    _, plain_rt = _import_export(plain_src, plain_mpgo, plain_out)
-    _, zlib_rt = _import_export(zlib_src, zlib_mpgo, zlib_out)
+    _, plain_rt = _import_export(plain_src, plain_ttio, plain_out)
+    _, zlib_rt = _import_export(zlib_src, zlib_ttio, zlib_out)
 
     np.testing.assert_array_equal(
         plain_rt.ms_spectra[0].mz_or_chemical_shift,

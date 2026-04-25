@@ -1,7 +1,7 @@
 """M77 cross-language conformance gate — Python side.
 
 Loads ``conformance/two_d_cos/dynamic.csv``, computes the 2D-COS
-decomposition via ``mpeg_o.analysis.two_d_cos.compute``, and asserts
+decomposition via ``ttio.analysis.two_d_cos.compute``, and asserts
 it matches the committed ``sync.csv`` / ``async.csv`` within
 ``rtol=1e-9, atol=1e-12``. The Java and ObjC suites ship analogous
 tests — together they form the M77 cross-language float-tolerance
@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.analysis import two_d_cos
+from ttio.analysis import two_d_cos
 
 
 def _find_conformance_dir() -> Path | None:

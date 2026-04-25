@@ -1,7 +1,7 @@
 """Milestone 28 — spectral anonymization.
 
 Per-policy tests + integration round-trip that verifies the output is
-a valid .mpgo readable by SpectralDataset.open with the opt_anonymized
+a valid .tio readable by SpectralDataset.open with the opt_anonymized
 feature flag and a provenance record documenting what was done.
 """
 from __future__ import annotations
@@ -11,10 +11,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.anonymization import AnonymizationPolicy, anonymize
-from mpeg_o.feature_flags import OPT_ANONYMIZED
-from mpeg_o.identification import Identification
+from ttio import SpectralDataset, WrittenRun
+from ttio.anonymization import AnonymizationPolicy, anonymize
+from ttio.feature_flags import OPT_ANONYMIZED
+from ttio.identification import Identification
 
 
 def _build_source(tmp_path: Path, *, n_spectra: int = 5, ids: list[Identification] | None = None) -> SpectralDataset:
@@ -26,7 +26,7 @@ def _build_source(tmp_path: Path, *, n_spectra: int = 5, ids: list[Identificatio
     offsets = np.arange(n_spectra, dtype=np.uint64) * n
     lengths = np.full(n_spectra, n, dtype=np.uint32)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data=channel,
         offsets=offsets, lengths=lengths,
@@ -37,7 +37,7 @@ def _build_source(tmp_path: Path, *, n_spectra: int = 5, ids: list[Identificatio
         precursor_charges=np.zeros(n_spectra, dtype=np.int32),
         base_peak_intensities=np.full(n_spectra, 950.0, dtype=np.float64),
     )
-    path = tmp_path / "m28_source.mpgo"
+    path = tmp_path / "m28_source.tio"
     SpectralDataset.write_minimal(
         path,
         title="M28 Source",
@@ -58,7 +58,7 @@ def test_redact_saav_spectra(tmp_path: Path) -> None:
         Identification("run_0001", 3, "p.Ala123Thr SAAV", 0.85, []),
     ]
     ds = _build_source(tmp_path, n_spectra=5, ids=ids)
-    out = tmp_path / "m28_saav.mpgo"
+    out = tmp_path / "m28_saav.tio"
     policy = AnonymizationPolicy(redact_saav_spectra=True)
     try:
         result = anonymize(ds, out, policy)
@@ -72,7 +72,7 @@ def test_redact_saav_spectra(tmp_path: Path) -> None:
 
 def test_mask_intensity_below_quantile(tmp_path: Path) -> None:
     ds = _build_source(tmp_path, n_spectra=1)
-    out = tmp_path / "m28_intensity.mpgo"
+    out = tmp_path / "m28_intensity.tio"
     policy = AnonymizationPolicy(mask_intensity_below_quantile=0.5)
     try:
         result = anonymize(ds, out, policy)
@@ -86,7 +86,7 @@ def test_mask_intensity_below_quantile(tmp_path: Path) -> None:
 
 def test_coarsen_mz_decimals(tmp_path: Path) -> None:
     ds = _build_source(tmp_path, n_spectra=1)
-    out = tmp_path / "m28_mz.mpgo"
+    out = tmp_path / "m28_mz.tio"
     policy = AnonymizationPolicy(coarsen_mz_decimals=0)
     try:
         result = anonymize(ds, out, policy)
@@ -103,7 +103,7 @@ def test_mask_rare_metabolites(tmp_path: Path) -> None:
     table = {"CHEBI:99999": 0.001}
     ids = [Identification("run_0001", 0, "CHEBI:99999", 0.95, [])]
     ds = _build_source(tmp_path, n_spectra=2, ids=ids)
-    out = tmp_path / "m28_rare.mpgo"
+    out = tmp_path / "m28_rare.tio"
     policy = AnonymizationPolicy(
         mask_rare_metabolites=True,
         rare_metabolite_threshold=0.05,
@@ -123,7 +123,7 @@ def test_mask_rare_metabolites(tmp_path: Path) -> None:
 
 def test_strip_metadata_fields(tmp_path: Path) -> None:
     ds = _build_source(tmp_path, n_spectra=1)
-    out = tmp_path / "m28_strip.mpgo"
+    out = tmp_path / "m28_strip.tio"
     policy = AnonymizationPolicy(strip_metadata_fields=True)
     try:
         result = anonymize(ds, out, policy)
@@ -136,7 +136,7 @@ def test_strip_metadata_fields(tmp_path: Path) -> None:
 
 def test_provenance_and_feature_flag(tmp_path: Path) -> None:
     ds = _build_source(tmp_path, n_spectra=2)
-    out = tmp_path / "m28_prov.mpgo"
+    out = tmp_path / "m28_prov.tio"
     policy = AnonymizationPolicy(coarsen_mz_decimals=1)
     try:
         anonymize(ds, out, policy)
@@ -146,17 +146,17 @@ def test_provenance_and_feature_flag(tmp_path: Path) -> None:
         assert anon.feature_flags.has("opt_anonymized")
         prov = anon.provenance()
         assert len(prov) >= 1
-        assert prov[0].software == "mpeg-o anonymizer v0.4"
+        assert prov[0].software == "ttio anonymizer v0.4"
 
 
 def test_original_unmodified(tmp_path: Path) -> None:
     ds = _build_source(tmp_path, n_spectra=3)
-    out = tmp_path / "m28_unmod.mpgo"
+    out = tmp_path / "m28_unmod.tio"
     policy = AnonymizationPolicy(redact_saav_spectra=True)
     original_count = len(ds.ms_runs["run_0001"])
     try:
         anonymize(ds, out, policy)
     finally:
         ds.close()
-    with SpectralDataset.open(tmp_path / "m28_source.mpgo") as original:
+    with SpectralDataset.open(tmp_path / "m28_source.tio") as original:
         assert len(original.ms_runs["run_0001"]) == original_count

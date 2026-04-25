@@ -12,9 +12,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.enums import AcquisitionMode, Polarity
-from mpeg_o.spectral_dataset import SpectralDataset, WrittenRun
-from mpeg_o.transport import (
+from ttio.enums import AcquisitionMode, Polarity
+from ttio.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.transport import (
     AccessUnit,
     PacketHeader,
     PacketType,
@@ -55,7 +55,7 @@ def _make_minimal_dataset(path: Path) -> Path:
     )
 
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz_all, "intensity": intensity_all},
         offsets=offsets,
@@ -100,7 +100,7 @@ def _assert_datasets_equivalent(a: SpectralDataset, b: SpectralDataset) -> None:
 class TestInMemoryRoundTrip:
 
     def test_empty_stream_only_headers(self, tmp_path):
-        src = _make_minimal_dataset(tmp_path / "src.mpgo")
+        src = _make_minimal_dataset(tmp_path / "src.tio")
         buffer = io.BytesIO()
         file_to_transport(src, buffer)
         assert buffer.tell() > 0
@@ -120,11 +120,11 @@ class TestInMemoryRoundTrip:
         ]
 
     def test_round_trip_values_preserved(self, tmp_path):
-        src = _make_minimal_dataset(tmp_path / "src.mpgo")
+        src = _make_minimal_dataset(tmp_path / "src.tio")
         buffer = io.BytesIO()
         file_to_transport(src, buffer)
         buffer.seek(0)
-        round_trip = transport_to_file(buffer, tmp_path / "rt.mpgo")
+        round_trip = transport_to_file(buffer, tmp_path / "rt.tio")
         original = SpectralDataset.open(src)
         try:
             _assert_datasets_equivalent(original, round_trip)
@@ -133,11 +133,11 @@ class TestInMemoryRoundTrip:
             round_trip.close()
 
     def test_round_trip_file_based(self, tmp_path):
-        src = _make_minimal_dataset(tmp_path / "src.mpgo")
-        stream_path = tmp_path / "stream.mots"
+        src = _make_minimal_dataset(tmp_path / "src.tio")
+        stream_path = tmp_path / "stream.tis"
         file_to_transport(src, stream_path)
         assert stream_path.stat().st_size > 0
-        rt = transport_to_file(stream_path, tmp_path / "rt.mpgo")
+        rt = transport_to_file(stream_path, tmp_path / "rt.tio")
         original = SpectralDataset.open(src)
         try:
             _assert_datasets_equivalent(original, rt)
@@ -149,12 +149,12 @@ class TestInMemoryRoundTrip:
 class TestCompression:
 
     def test_zlib_wire_compression_roundtrip(self, tmp_path):
-        """use_compression=True should produce a smaller .mots than
+        """use_compression=True should produce a smaller .tis than
         the uncompressed baseline while preserving signal values."""
-        src = _make_minimal_dataset(tmp_path / "src.mpgo")
+        src = _make_minimal_dataset(tmp_path / "src.tio")
 
-        plain = tmp_path / "plain.mots"
-        compressed = tmp_path / "compressed.mots"
+        plain = tmp_path / "plain.tis"
+        compressed = tmp_path / "compressed.tis"
         file_to_transport(src, plain)
         file_to_transport(src, compressed, use_compression=True)
 
@@ -164,7 +164,7 @@ class TestCompression:
         # matters more than size for such a tiny fixture.
         assert compressed.stat().st_size <= plain.stat().st_size + 64
 
-        rt = transport_to_file(compressed, tmp_path / "rt.mpgo")
+        rt = transport_to_file(compressed, tmp_path / "rt.tio")
         original = SpectralDataset.open(src)
         try:
             for name in original.all_runs:
@@ -190,7 +190,7 @@ class TestCompression:
         mz = np.tile(np.linspace(100.0, 2000.0, points), n_spectra)  # repetitive
         intensity = np.tile(np.ones(points), n_spectra) * 1000.0  # constant
         run = WrittenRun(
-            spectrum_class="MPGOMassSpectrum",
+            spectrum_class="TTIOMassSpectrum",
             acquisition_mode=int(AcquisitionMode.MS1_DDA),
             channel_data={"mz": mz, "intensity": intensity},
             offsets=np.arange(0, total, points, dtype="<u8"),
@@ -202,13 +202,13 @@ class TestCompression:
             precursor_charges=np.zeros(n_spectra, dtype="<i4"),
             base_peak_intensities=np.full(n_spectra, 1000.0, dtype="<f8"),
         )
-        src = tmp_path / "src.mpgo"
+        src = tmp_path / "src.tio"
         SpectralDataset.write_minimal(
             src, title="zlib benchmark", isa_investigation_id="ISA-ZLIB",
             runs={"run_0001": run},
         )
-        plain = tmp_path / "plain.mots"
-        compressed = tmp_path / "compressed.mots"
+        plain = tmp_path / "plain.tis"
+        compressed = tmp_path / "compressed.tis"
         file_to_transport(src, plain)
         file_to_transport(src, compressed, use_compression=True)
         # Constant+repetitive data: zlib should compress substantially
@@ -217,7 +217,7 @@ class TestCompression:
             f"expected <50% size, got "
             f"{compressed.stat().st_size}/{plain.stat().st_size}"
         )
-        rt = transport_to_file(compressed, tmp_path / "rt.mpgo")
+        rt = transport_to_file(compressed, tmp_path / "rt.tio")
         try:
             assert len(rt.all_runs["run_0001"]) == n_spectra
         finally:
@@ -227,16 +227,16 @@ class TestCompression:
 class TestChecksum:
 
     def test_checksum_enabled(self, tmp_path):
-        src = _make_minimal_dataset(tmp_path / "src.mpgo")
+        src = _make_minimal_dataset(tmp_path / "src.tio")
         buffer = io.BytesIO()
         file_to_transport(src, buffer, use_checksum=True)
         buffer.seek(0)
-        rt = transport_to_file(buffer, tmp_path / "rt.mpgo")
+        rt = transport_to_file(buffer, tmp_path / "rt.tio")
         assert len(rt.all_runs) == 1
         rt.close()
 
     def test_corrupted_payload_fails_checksum(self, tmp_path):
-        src = _make_minimal_dataset(tmp_path / "src.mpgo")
+        src = _make_minimal_dataset(tmp_path / "src.tio")
         buffer = io.BytesIO()
         file_to_transport(src, buffer, use_checksum=True)
         raw = bytearray(buffer.getvalue())
@@ -247,7 +247,7 @@ class TestChecksum:
         raw[flip] ^= 0xFF
         corrupted = io.BytesIO(bytes(raw))
         with pytest.raises(ValueError, match="CRC-32C"):
-            transport_to_file(corrupted, tmp_path / "rt.mpgo")
+            transport_to_file(corrupted, tmp_path / "rt.tio")
 
 
 class TestOrderingEnforcement:
@@ -265,7 +265,7 @@ class TestOrderingEnforcement:
             )
             tw.write_dataset_header(
                 dataset_id=1, name="r", acquisition_mode=0,
-                spectrum_class="MPGOMassSpectrum",
+                spectrum_class="TTIOMassSpectrum",
                 channel_names=["mz", "intensity"],
                 instrument_json="{}",
             )
@@ -285,7 +285,7 @@ class TestOrderingEnforcement:
             tw.write_end_of_stream()
         buffer.seek(0)
         with pytest.raises(ValueError, match="non-monotonic"):
-            transport_to_file(buffer, tmp_path / "rt.mpgo")
+            transport_to_file(buffer, tmp_path / "rt.tio")
 
     def test_access_unit_before_stream_header_rejected(self, tmp_path):
         buffer = io.BytesIO()
@@ -295,4 +295,4 @@ class TestOrderingEnforcement:
             tw.write_end_of_stream()
         buffer.seek(0)
         with pytest.raises(ValueError, match="StreamHeader"):
-            transport_to_file(buffer, tmp_path / "rt.mpgo")
+            transport_to_file(buffer, tmp_path / "rt.tio")

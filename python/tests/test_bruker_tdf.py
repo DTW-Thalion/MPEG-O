@@ -3,15 +3,15 @@
 Tests split into two tiers:
 
 * **Metadata-only** (always runs): builds a synthetic ``analysis.tdf``
-  SQLite database with the tables :mod:`mpeg_o.importers.bruker_tdf`
+  SQLite database with the tables :mod:`ttio.importers.bruker_tdf`
   reads (``Frames``, ``GlobalMetadata``, ``Properties``). Verifies
   frame-count and metadata-extraction paths without needing
   ``opentimspy`` or a real Bruker fixture.
 * **Binary round-trip** (skipped if no real ``.d`` fixture available):
   requires a user-supplied Bruker timsTOF directory pointed at by the
-  ``MPGO_BRUKER_TDF_FIXTURE`` environment variable. Extracts m/z,
+  ``TTIO_BRUKER_TDF_FIXTURE`` environment variable. Extracts m/z,
   intensity, inv_ion_mobility peaks via opentimspy and asserts the
-  written ``.mpgo`` round-trips with three signal channels.
+  written ``.tio`` round-trips with three signal channels.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def _write_synthetic_tdf(d_dir: Path,
                           vendor: str = "Bruker",
                           model: str = "timsTOF Pro") -> None:
     """Construct a minimal ``analysis.tdf`` SQLite file with the
-    metadata tables the MPEG-O importer consumes. No binary blob is
+    metadata tables the TTI-O importer consumes. No binary blob is
     emitted — the metadata-only tests use this path."""
     d_dir.mkdir(parents=True, exist_ok=True)
     tdf = d_dir / "analysis.tdf"
@@ -65,7 +65,7 @@ def _write_synthetic_tdf(d_dir: Path,
 
 
 def test_metadata_reads_synthetic_fixture(tmp_path: Path) -> None:
-    from mpeg_o.importers.bruker_tdf import read_metadata
+    from ttio.importers.bruker_tdf import read_metadata
 
     d = tmp_path / "example.d"
     _write_synthetic_tdf(d, frame_count=5, ms1_count=3,
@@ -86,7 +86,7 @@ def test_metadata_reads_synthetic_fixture(tmp_path: Path) -> None:
 
 
 def test_metadata_raises_on_non_tdf_directory(tmp_path: Path) -> None:
-    from mpeg_o.importers.bruker_tdf import read_metadata
+    from ttio.importers.bruker_tdf import read_metadata
     with pytest.raises(FileNotFoundError, match="analysis.tdf"):
         read_metadata(tmp_path / "does_not_exist.d")
 
@@ -96,7 +96,7 @@ def test_read_without_opentimspy_raises_cleanly(tmp_path: Path) -> None:
     :class:`BrukerTDFUnavailableError` with install guidance — the
     module import itself must remain healthy so ``read_metadata``
     stays callable on opentimspy-free hosts."""
-    from mpeg_o.importers.bruker_tdf import (
+    from ttio.importers.bruker_tdf import (
         BrukerTDFUnavailableError,
         read,
     )
@@ -119,12 +119,12 @@ def test_read_without_opentimspy_raises_cleanly(tmp_path: Path) -> None:
         if "opentimspy" in sys.modules:
             del sys.modules["opentimspy"]
         with pytest.raises(BrukerTDFUnavailableError, match="opentimspy"):
-            read(d, tmp_path / "out.mpgo")
+            read(d, tmp_path / "out.tio")
     finally:
         builtins.__import__ = real_import
 
 
-_FIXTURE_ENV = "MPGO_BRUKER_TDF_FIXTURE"
+_FIXTURE_ENV = "TTIO_BRUKER_TDF_FIXTURE"
 
 
 @pytest.mark.skipif(
@@ -133,12 +133,12 @@ _FIXTURE_ENV = "MPGO_BRUKER_TDF_FIXTURE"
 )
 def test_real_tdf_round_trip(tmp_path: Path) -> None:
     """Full round-trip: read a real Bruker .d via opentimspy, write
-    a .mpgo, reopen, and assert that the three signal channels
+    a .tio, reopen, and assert that the three signal channels
     (mz / intensity / inv_ion_mobility) round-trip and the frame
     count matches the SQLite Frames table."""
     opentimspy = pytest.importorskip("opentimspy.opentims")
-    from mpeg_o.importers.bruker_tdf import read, read_metadata
-    from mpeg_o.spectral_dataset import SpectralDataset
+    from ttio.importers.bruker_tdf import read, read_metadata
+    from ttio.spectral_dataset import SpectralDataset
 
     d_dir = Path(os.environ[_FIXTURE_ENV]).expanduser().resolve()
     assert d_dir.is_dir(), f"fixture .d not found: {d_dir}"
@@ -147,7 +147,7 @@ def test_real_tdf_round_trip(tmp_path: Path) -> None:
     assert md.frame_count > 0
     assert md.mz_range[1] > md.mz_range[0]
 
-    out = tmp_path / "tims.mpgo"
+    out = tmp_path / "tims.tio"
     written = read(d_dir, out)
     assert written.is_file()
 

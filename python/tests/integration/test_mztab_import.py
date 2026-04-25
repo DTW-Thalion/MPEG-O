@@ -8,7 +8,7 @@ Covers HANDOFF M60 acceptance:
   abundance_study_variable columns.
 * Provenance records created for the import operation (software,
   search engine, ms_run locations).
-* Linking to an existing .mpgo: identifications get added on top of
+* Linking to an existing .tio: identifications get added on top of
   the linked dataset's existing records.
 * Hard error on missing mzTab-version line.
 
@@ -23,8 +23,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.importers.mztab import MzTabParseError, read as mztab_read
+from ttio import SpectralDataset, WrittenRun
+from ttio.importers.mztab import MzTabParseError, read as mztab_read
 
 
 # --------------------------------------------------------------------------- #
@@ -176,17 +176,17 @@ def test_metabolomics_abundance(metabolomics_fixture: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Round-trip into .mpgo + link_to existing dataset.
+# Round-trip into .tio + link_to existing dataset.
 # --------------------------------------------------------------------------- #
 
-def _make_seed_mpgo(tmp_path: Path) -> Path:
-    """Build a minimal .mpgo with one MS run for the link_to test."""
+def _make_seed_ttio(tmp_path: Path) -> Path:
+    """Build a minimal .tio with one MS run for the link_to test."""
     n_spectra = 3
     n_peaks = 4
     mz = np.tile(np.linspace(100.0, 200.0, n_peaks), n_spectra).astype(np.float64)
     intensity = np.tile(np.linspace(1.0, 100.0, n_peaks), n_spectra).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.arange(n_spectra, dtype=np.uint64) * n_peaks,
@@ -198,7 +198,7 @@ def _make_seed_mpgo(tmp_path: Path) -> Path:
         precursor_charges=np.zeros(n_spectra, dtype=np.int32),
         base_peak_intensities=np.full(n_spectra, 100.0, dtype=np.float64),
     )
-    seed = tmp_path / "seed.mpgo"
+    seed = tmp_path / "seed.tio"
     SpectralDataset.write_minimal(
         seed, title="seed",
         isa_investigation_id="ISA-SEED",
@@ -207,22 +207,22 @@ def _make_seed_mpgo(tmp_path: Path) -> Path:
     return seed
 
 
-def test_to_mpgo_identifications_only(proteomics_fixture: Path, tmp_path: Path) -> None:
+def test_to_ttio_identifications_only(proteomics_fixture: Path, tmp_path: Path) -> None:
     parsed = mztab_read(proteomics_fixture)
-    out = tmp_path / "out.mpgo"
-    parsed.to_mpgo(out, title="proteomics-only")
+    out = tmp_path / "out.tio"
+    parsed.to_ttio(out, title="proteomics-only")
     with SpectralDataset.open(out) as ds:
         assert ds.title == "proteomics-only"
         assert len(ds.identifications()) == 3
         assert len(ds.quantifications()) == 2
 
 
-def test_to_mpgo_link_to_existing(proteomics_fixture: Path, tmp_path: Path) -> None:
-    seed_path = _make_seed_mpgo(tmp_path)
+def test_to_ttio_link_to_existing(proteomics_fixture: Path, tmp_path: Path) -> None:
+    seed_path = _make_seed_ttio(tmp_path)
     parsed = mztab_read(proteomics_fixture)
-    out = tmp_path / "merged.mpgo"
+    out = tmp_path / "merged.tio"
     with SpectralDataset.open(seed_path) as seed:
-        parsed.to_mpgo(out, title="merged", link_to=seed)
+        parsed.to_ttio(out, title="merged", link_to=seed)
     with SpectralDataset.open(out) as merged:
         # Original run survives the rewrite.
         assert "bsa_digest" in merged.ms_runs

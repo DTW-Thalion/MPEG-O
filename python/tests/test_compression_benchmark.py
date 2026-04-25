@@ -20,8 +20,8 @@ import h5py
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.enums import AcquisitionMode
+from ttio import SpectralDataset, WrittenRun
+from ttio.enums import AcquisitionMode
 
 
 def _has_lz4() -> bool:
@@ -44,7 +44,7 @@ def _build_synthetic_run(n_spec: int, n_pts: int, codec: str) -> WrittenRun:
     ).astype(np.float64)
     intensity_flat = (1.0 + rng.exponential(500.0, size=n_spec * n_pts)).astype(np.float64)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz_flat, "intensity": intensity_flat},
         offsets=np.arange(n_spec, dtype=np.uint64) * n_pts,
@@ -61,10 +61,10 @@ def _build_synthetic_run(n_spec: int, n_pts: int, codec: str) -> WrittenRun:
 
 def _write_and_time(tmp_path: Path, codec: str, n_spec: int, n_pts: int):
     run = _build_synthetic_run(n_spec, n_pts, codec)
-    out = tmp_path / f"bench_{codec}.mpgo"
+    out = tmp_path / f"bench_{codec}.tio"
     t0 = time.perf_counter()
     SpectralDataset.write_minimal(
-        out, title=f"bench {codec}", isa_investigation_id=f"MPGO:bench:{codec}",
+        out, title=f"bench {codec}", isa_investigation_id=f"TTIO:bench:{codec}",
         runs={"run_0001": run},
     )
     write_ms = (time.perf_counter() - t0) * 1000.0

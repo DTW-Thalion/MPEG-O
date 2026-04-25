@@ -19,11 +19,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.enums import Compression, Precision
-from mpeg_o.providers import CompoundField, CompoundFieldKind
-from mpeg_o.providers.hdf5 import Hdf5Provider
-from mpeg_o.providers.memory import MemoryProvider
-from mpeg_o.providers.sqlite import SqliteProvider
+from ttio.enums import Compression, Precision
+from ttio.providers import CompoundField, CompoundFieldKind
+from ttio.providers.hdf5 import Hdf5Provider
+from ttio.providers.memory import MemoryProvider
+from ttio.providers.sqlite import SqliteProvider
 
 
 # ── Primitive cases ──────────────────────────────────────────────────
@@ -61,7 +61,7 @@ def test_primitive_cross_backend_identity(tmp_path: Path,
     MemoryProvider.discard_store(mem_url)
 
     # SQLite.
-    sq_path = tmp_path / "cb.mpgo.sqlite"
+    sq_path = tmp_path / "cb.tio.sqlite"
     with SqliteProvider.open(str(sq_path), mode="w") as p:
         ds = p.root_group().create_dataset("v", precision, len(values))
         ds.write(values)
@@ -158,7 +158,7 @@ def test_compound_cross_backend_identity(tmp_path: Path) -> None:
     # SQLite — write path accepts list-of-dicts only (per its docstring
     # convention; Gap 2 made the READ side uniform, write is
     # SQLite-native).
-    sq_path = tmp_path / "cb_compound.mpgo.sqlite"
+    sq_path = tmp_path / "cb_compound.tio.sqlite"
     sqlite_rows = [
         {"run_name": r["run_name"], "spectrum_index": int(r["spectrum_index"]),
          "score": float(r["score"]), "chem_id": r["chem_id"]}
