@@ -1,0 +1,43 @@
+ttio.tools.per_au_cli
+=====================
+
+.. py:module:: ttio.tools.per_au_cli
+
+.. autoapi-nested-parse::
+
+   v1.0 per-AU encryption CLI for cross-language conformance testing.
+
+   Provides encrypt/decrypt and transport-stream encrypt/decrypt
+   subcommands that mirror the Java ``com.dtwthalion.ttio.tools.PerAUCli``
+   and Objective-C ``TtioPerAU`` tool. All three implementations MUST
+   produce byte-equivalent outputs given identical inputs; the
+   cross-language conformance harness (``tests/integration/
+   test_per_au_cross_language.py``) drives this via subprocess.
+
+   Usage:
+       python -m ttio.tools.per_au_cli encrypt   <in.tio> <out.tio> <key-file> [--headers]
+       python -m ttio.tools.per_au_cli decrypt   <in.tio> <out.mpad> <key-file>
+       python -m ttio.tools.per_au_cli send      <in.tio> <out.tis> [--provider NAME]
+       python -m ttio.tools.per_au_cli recv      <in.tis> <out.tio>
+       python -m ttio.tools.per_au_cli transcode <in.tio> <out.tio> <key-file> [--headers] [--rekey <new-key-file>]
+
+   Decryption writes an "MPAD" binary dump compatible with the Java and
+   Objective-C sides (see ``PerAUCli.java`` Javadoc for the byte
+   layout). Cross-language byte equality on the .mpad artefact proves
+   per-AU encryption parity end-to-end.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.per_au_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

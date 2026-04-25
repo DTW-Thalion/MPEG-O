@@ -1,0 +1,89 @@
+ttio.transport.filters
+======================
+
+.. py:module:: ttio.transport.filters
+
+.. autoapi-nested-parse::
+
+   Query filters for selective-access streaming (v0.10 M68).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.filters.AUFilter
+
+
+Module Contents
+---------------
+
+.. py:class:: AUFilter
+
+   Filter predicate evaluated against an :class:`AccessUnit`.
+
+   All fields are optional; an empty filter accepts every AU. See
+   ``docs/transport-spec.md`` §7.
+
+   The filter is applied BEFORE an AU is serialized to the wire, so
+   filtered streams consume no bandwidth for non-matching spectra.
+
+
+   .. py:attribute:: rt_min
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: rt_max
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: ms_level
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: precursor_mz_min
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: precursor_mz_max
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: polarity
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: dataset_id
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: max_au
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:method:: from_dict(data: dict[str, Any] | None) -> AUFilter
+      :classmethod:
+
+
+
+   .. py:method:: matches(au: ttio.transport.packets.AccessUnit, dataset_id: int) -> bool
+
+

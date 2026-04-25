@@ -1,14 +1,14 @@
-# Migration Guide: mzML and nmrML to MPEG-O (current: v0.11)
+# Migration Guide: mzML and nmrML to TTI-O (current: v0.11)
 
 ## Audience and prerequisites
 
 This guide is for developers who already have mzML or nmrML tooling and want to
-write MPEG-O (`.mpgo`) files instead. It covers only the Python implementation.
+write TTI-O (`.tio`) files instead. It covers only the Python implementation.
 
 **You need:**
 
 - Python 3.11 or later
-- An MPEG-O v0.7 checkout (PyPI publishing is deferred to M40; install from source)
+- An TTI-O v0.7 checkout (PyPI publishing is deferred to M40; install from source)
 - For Thermo `.raw` input: ThermoRawFileParser on your `PATH` (see section 6)
 - For a non-HDF5 backend: `pip install 'mpeg-o[zarr]'` (v0.7 M46)
 
@@ -16,10 +16,10 @@ write MPEG-O (`.mpgo`) files instead. It covers only the Python implementation.
 
 ## Install
 
-Install from the `python/` subdirectory of the MPEG-O checkout:
+Install from the `python/` subdirectory of the TTI-O checkout:
 
 ```
-cd /path/to/MPEG-O/python
+cd /path/to/TTI-O/python
 pip install -e ".[test,import]"
 ```
 
@@ -34,30 +34,30 @@ The public API shown in this guide will remain stable across that transition.
 
 ---
 
-## 1. mzML to MPEG-O
+## 1. mzML to TTI-O
 
 ### 1.1 Python quickstart
 
-`mpeg_o.importers.mzml.read()` is a streaming SAX parser. It returns an
+`ttio.importers.mzml.read()` is a streaming SAX parser. It returns an
 `ImportResult` — a lightweight in-memory container — rather than a live
 `SpectralDataset`, because no backing HDF5 file exists yet. Call
 `result.to_mpgo()` to flush to disk.
 
 ```python
-from mpeg_o.importers.mzml import read as read_mzml
+from ttio.importers.mzml import read as read_mzml
 
 # Parse mzML into memory
 result = read_mzml("sample.mzML")
 
-# Write to an MPEG-O file
-result.to_mpgo("sample.mpgo")
+# Write to an TTI-O file
+result.to_mpgo("sample.tio")
 ```
 
 `to_mpgo()` returns the resolved `Path` of the written file. If you want to
 pass optional feature flags (e.g. `"numpress-delta"`) at write time:
 
 ```python
-result.to_mpgo("sample.mpgo", features=["numpress-delta"])
+result.to_mpgo("sample.tio", features=["numpress-delta"])
 ```
 
 Quick sanity check before writing:
@@ -67,9 +67,9 @@ print(f"Parsed {result.spectrum_count} spectra from {result.source_file}")
 # e.g. "Parsed 39 spectra from sample.mzML"
 ```
 
-### 1.2 Semantic mapping: mzML to MPEG-O
+### 1.2 Semantic mapping: mzML to TTI-O
 
-| mzML element / attribute                         | MPEG-O equivalent                                                      |
+| mzML element / attribute                         | TTI-O equivalent                                                      |
 |--------------------------------------------------|------------------------------------------------------------------------|
 | `<run>`                                          | `AcquisitionRun` (keyed `"run_0001"` in `SpectralDataset.ms_runs`)    |
 | `<spectrum>`                                     | `MassSpectrum` (MS1 / MS2 distinguished by `ms_level`)                |
@@ -93,7 +93,7 @@ disk. This is useful for validation pipelines that need to filter or annotate
 spectra before writing.
 
 ```python
-from mpeg_o.importers.mzml import read as read_mzml
+from ttio.importers.mzml import read as read_mzml
 
 result = read_mzml("sample.mzML")
 
@@ -120,12 +120,12 @@ identifications.
 
 ### 1.3 Round-trip verification
 
-After writing, open the `.mpgo` file and confirm the run loaded correctly:
+After writing, open the `.tio` file and confirm the run loaded correctly:
 
 ```python
-from mpeg_o import SpectralDataset
+from ttio import SpectralDataset
 
-ds = SpectralDataset.open("sample.mpgo")
+ds = SpectralDataset.open("sample.tio")
 run = ds.ms_runs["run_0001"]
 print(f"Wrote {run.count()} spectra.")
 ds.close()
@@ -134,9 +134,9 @@ ds.close()
 For a more thorough check, iterate spectra and inspect the signal arrays:
 
 ```python
-from mpeg_o import SpectralDataset
+from ttio import SpectralDataset
 
-ds = SpectralDataset.open("sample.mpgo")
+ds = SpectralDataset.open("sample.tio")
 run = ds.ms_runs["run_0001"]
 
 for i in range(min(3, run.count())):
@@ -157,17 +157,17 @@ If chromatograms were present in the source mzML, they are stored inside
 
 ---
 
-## 2. nmrML to MPEG-O
+## 2. nmrML to TTI-O
 
 ### 2.1 Python quickstart
 
 The nmrML importer follows the same `read()` / `to_mpgo()` pattern:
 
 ```python
-from mpeg_o.importers.nmrml import read as read_nmrml
+from ttio.importers.nmrml import read as read_nmrml
 
 result = read_nmrml("sample.nmrML")
-result.to_mpgo("sample.mpgo")
+result.to_mpgo("sample.tio")
 ```
 
 Print a summary before writing:
@@ -177,9 +177,9 @@ print(f"Parsed {result.spectrum_count} NMR spectra, nucleus={result.nucleus_type
 # e.g. "Parsed 1 NMR spectra, nucleus='1H'"
 ```
 
-### 2.2 Semantic mapping: nmrML to MPEG-O
+### 2.2 Semantic mapping: nmrML to TTI-O
 
-| nmrML element / CV term                             | MPEG-O equivalent                                                        |
+| nmrML element / CV term                             | TTI-O equivalent                                                        |
 |-----------------------------------------------------|--------------------------------------------------------------------------|
 | `<spectrum1D>`                                      | `NMRSpectrum` (keyed in `SpectralDataset.nmr_runs["nmr_run"]`)          |
 | NMR:1000001 (spectrometer frequency)                | `NMRSpectrum.spectrometer_frequency_mhz`                                |
@@ -199,9 +199,9 @@ are all stored as `"1H"`. If the nucleus cannot be determined from the CV terms,
 NMR runs are stored in `SpectralDataset.nmr_runs` (distinct from `ms_runs`):
 
 ```python
-from mpeg_o import SpectralDataset
+from ttio import SpectralDataset
 
-ds = SpectralDataset.open("sample.mpgo")
+ds = SpectralDataset.open("sample.tio")
 run = ds.nmr_runs["nmr_run"]
 print(f"Wrote {run.count()} NMR spectra.")
 ds.close()
@@ -210,9 +210,9 @@ ds.close()
 Inspect the first spectrum's signal arrays:
 
 ```python
-from mpeg_o import SpectralDataset
+from ttio import SpectralDataset
 
-ds = SpectralDataset.open("sample.mpgo")
+ds = SpectralDataset.open("sample.tio")
 run = ds.nmr_runs["nmr_run"]
 
 spectrum = run[0]
@@ -232,7 +232,7 @@ ds.close()
 ## 3. Where the fixtures live
 
 The canonical reference fixtures used by the cross-compatibility test suite are
-in `objc/Tests/Fixtures/` inside the MPEG-O checkout. The Python tests
+in `objc/Tests/Fixtures/` inside the TTI-O checkout. The Python tests
 (`python/tests/test_importers.py`) reference them from there.
 
 | Fixture file                       | Type   | Description                                          |
@@ -260,7 +260,7 @@ not an mzML/nmrML input. All XML import fixtures are under `objc/Tests/Fixtures/
 
 ### ThermoRawFileParser must be on PATH for .raw input
 
-The Thermo importer (`mpeg_o.importers.thermo_raw`) shells out to
+The Thermo importer (`ttio.importers.thermo_raw`) shells out to
 `ThermoRawFileParser` (or a path you supply via the `thermorawfileparser=`
 kwarg). If the binary is not on `PATH` and no path is supplied, the importer
 raises `FileNotFoundError`. Install ThermoRawFileParser from
@@ -305,7 +305,7 @@ Accessing `ds.ms_runs["nmr_run"]` will raise `KeyError`.
 `SpectralDataset.open()` returns a live HDF5 handle. Always close it when done:
 
 ```python
-ds = SpectralDataset.open("sample.mpgo")
+ds = SpectralDataset.open("sample.tio")
 try:
     # ... work with ds ...
     pass
@@ -319,14 +319,14 @@ Or use the context manager if available in your version.
 
 ## 5. End-to-end example
 
-The following script imports a real-world mzML file, writes MPEG-O, and verifies
+The following script imports a real-world mzML file, writes TTI-O, and verifies
 the round-trip in one pass:
 
 ```python
 import sys
 from pathlib import Path
-from mpeg_o.importers.mzml import read as read_mzml
-from mpeg_o import SpectralDataset
+from ttio.importers.mzml import read as read_mzml
+from ttio import SpectralDataset
 
 def convert_and_verify(mzml_path: str, out_path: str) -> None:
     # Step 1: parse
@@ -352,9 +352,9 @@ if __name__ == "__main__":
 Run it:
 
 ```
-python convert.py objc/Tests/Fixtures/1min.mzML out/1min.mpgo
+python convert.py objc/Tests/Fixtures/1min.mzML out/1min.tio
 # Parsed 39 spectra from 1min.mzML
-# Wrote out/1min.mpgo
+# Wrote out/1min.tio
 # Round-trip OK: 39 spectra in run_0001
 ```
 
@@ -363,8 +363,8 @@ For nmrML, swap in the nmrML importer and use `nmr_runs`:
 ```python
 import sys
 from pathlib import Path
-from mpeg_o.importers.nmrml import read as read_nmrml
-from mpeg_o import SpectralDataset
+from ttio.importers.nmrml import read as read_nmrml
+from ttio import SpectralDataset
 
 def convert_and_verify_nmr(nmrml_path: str, out_path: str) -> None:
     result = read_nmrml(nmrml_path)
@@ -397,10 +397,10 @@ Any call that opened a file directly now takes a URL and routes to the
 matching provider:
 
 ```python
-from mpeg_o.providers import open_provider
+from ttio.providers import open_provider
 
 # Default — HDF5 (unchanged from v0.6)
-with open_provider("run.mpgo", mode="r") as p:
+with open_provider("run.tio", mode="r") as p:
     ...
 
 # In-process scratch
@@ -428,7 +428,7 @@ parameters that validate against the `CipherSuite` catalog. Default
 behaviour is unchanged (`aes-256-gcm` / `hmac-sha256`):
 
 ```python
-from mpeg_o.encryption import encrypt_bytes
+from ttio.encryption import encrypt_bytes
 
 ct, iv, tag = encrypt_bytes(b"payload", key32,
                              algorithm="aes-256-gcm")  # explicit
@@ -484,9 +484,9 @@ existing callers.
 
 ## 9. Migrating from v0.9 to v0.10 — streaming transport
 
-New in v0.10: the `.mots` streaming transport format
+New in v0.10: the `.tis` streaming transport format
 (`docs/transport-spec.md`) with nine packet types and optional
-CRC-32C framing. The transport layer is additive — existing `.mpgo`
+CRC-32C framing. The transport layer is additive — existing `.tio`
 files continue to open unchanged. `TransportWriter` /
 `TransportReader` plus `TransportClient` / `TransportServer` are new
 APIs; see `docs/api-stability-v0.8.md` §4.1 for the stable surface.
@@ -498,17 +498,17 @@ starting points:
 
 **a) Plaintext → per-AU encrypted.** Use the `transcode` subcommand
 of the per-AU CLI (or call `encrypt_per_au` / `PerAUFile.encryptFile`
-/ `+[MPGOPerAUFile encryptFilePath:...]` directly):
+/ `+[TTIOPerAUFile encryptFilePath:...]` directly):
 
 ```bash
 # Python
-python -m mpeg_o.tools.per_au_cli transcode input.mpgo output.mpgo key.bin --headers
+python -m ttio.tools.per_au_cli transcode input.tio output.tio key.bin --headers
 
 # Java
-java -cp ... com.dtwthalion.mpgo.tools.PerAUCli encrypt input.mpgo output.mpgo key.bin --headers
+java -cp ... com.dtwthalion.tio.tools.PerAUCli encrypt input.tio output.tio key.bin --headers
 
 # ObjC
-MpgoPerAU encrypt input.mpgo output.mpgo key.bin --headers
+TtioPerAU encrypt input.tio output.tio key.bin --headers
 ```
 
 `--headers` additionally encrypts the 36-byte semantic header
@@ -521,14 +521,14 @@ without the key.
 `transcode` subcommand with `--rekey`:
 
 ```bash
-python -m mpeg_o.tools.per_au_cli transcode \
-  already_encrypted.mpgo rotated.mpgo old_key.bin --rekey new_key.bin --headers
+python -m ttio.tools.per_au_cli transcode \
+  already_encrypted.tio rotated.tio old_key.bin --rekey new_key.bin --headers
 ```
 
 The tool decrypts with the old key into a scratch layout (rewriting
 `<channel>_values` + plaintext `spectrum_index` arrays inside the
 output file before re-encrypting), then re-encrypts with the new key
-and fresh IVs. Old-key decryption of `rotated.mpgo` fails cleanly
+and fresh IVs. Old-key decryption of `rotated.tio` fails cleanly
 via AES-GCM tag mismatch.
 
 **c) v0.x `opt_dataset_encryption` → v1.0 per-AU.** The v0.x channel-
@@ -538,16 +538,16 @@ materialising the plaintext. Two-step migration:
 
 ```python
 import numpy as np
-from mpeg_o import SpectralDataset
+from ttio import SpectralDataset
 # 1. Open with the v0.x API and decrypt into a plaintext scratch copy.
-with SpectralDataset.open("v0x_encrypted.mpgo") as src:
+with SpectralDataset.open("v0x_encrypted.tio") as src:
     src.decrypt(key=dek)
-    src.save_as("plaintext_scratch.mpgo")
+    src.save_as("plaintext_scratch.tio")
 # 2. Encrypt forward through the v1.0 path.
 import subprocess, sys
-subprocess.check_call([sys.executable, "-m", "mpeg_o.tools.per_au_cli",
-                        "transcode", "plaintext_scratch.mpgo",
-                        "v1_encrypted.mpgo", "key.bin", "--headers"])
+subprocess.check_call([sys.executable, "-m", "ttio.tools.per_au_cli",
+                        "transcode", "plaintext_scratch.tio",
+                        "v1_encrypted.tio", "key.bin", "--headers"])
 ```
 
 The `transcode` CLI refuses `opt_dataset_encryption` inputs with a
@@ -571,11 +571,11 @@ citizens. No existing call changes; no feature flag was introduced.
 
 | Concept | Python | Java | ObjC |
 |---|---|---|---|
-| Raman point spectrum | `mpeg_o.RamanSpectrum` | `com.dtwthalion.mpgo.RamanSpectrum` | `MPGORamanSpectrum` |
-| IR point spectrum | `mpeg_o.IRSpectrum` | `com.dtwthalion.mpgo.IRSpectrum` | `MPGOIRSpectrum` |
-| Raman hyperspectral cube | `mpeg_o.RamanImage` | `com.dtwthalion.mpgo.RamanImage` | `MPGORamanImage` |
-| IR hyperspectral cube | `mpeg_o.IRImage` | `com.dtwthalion.mpgo.IRImage` | `MPGOIRImage` |
-| IR mode enum | `mpeg_o.IRMode` | `com.dtwthalion.mpgo.IRMode` | `MPGOIRMode` |
+| Raman point spectrum | `ttio.RamanSpectrum` | `com.dtwthalion.tio.RamanSpectrum` | `TTIORamanSpectrum` |
+| IR point spectrum | `ttio.IRSpectrum` | `com.dtwthalion.tio.IRSpectrum` | `TTIOIRSpectrum` |
+| Raman hyperspectral cube | `ttio.RamanImage` | `com.dtwthalion.tio.RamanImage` | `TTIORamanImage` |
+| IR hyperspectral cube | `ttio.IRImage` | `com.dtwthalion.tio.IRImage` | `TTIOIRImage` |
+| IR mode enum | `ttio.IRMode` | `com.dtwthalion.tio.IRMode` | `TTIOIRMode` |
 
 Both spectrum classes share the same shape: `wavenumber_array` +
 `intensity_array` (cm⁻¹ x, arbitrary y), plus modality-specific
@@ -599,11 +599,11 @@ not both (mutually exclusive per the format spec). See
 All three languages ship a JCAMP-DX 5.01 AFFN reader and writer:
 
 ```python
-from mpeg_o.importers.jcampdx import read as read_jcampdx
+from ttio.importers.jcampdx import read as read_jcampdx
 result = read_jcampdx("sample.jdx")
-result.to_mpgo("sample.mpgo")
+result.to_mpgo("sample.tio")
 
-from mpeg_o.exporters.jcampdx import write as write_jcampdx
+from ttio.exporters.jcampdx import write as write_jcampdx
 write_jcampdx(spectrum, "out.jdx")
 ```
 

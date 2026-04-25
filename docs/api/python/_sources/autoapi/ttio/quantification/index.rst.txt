@@ -1,0 +1,64 @@
+ttio.quantification
+===================
+
+.. py:module:: ttio.quantification
+
+.. autoapi-nested-parse::
+
+   ``Quantification`` — chemical-entity abundance record.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.quantification.Quantification
+
+
+Module Contents
+---------------
+
+.. py:class:: Quantification
+
+   An abundance observation for a chemical entity in a sample.
+
+   :param chemical_entity: CHEBI accession or chemical formula.
+   :type chemical_entity: str
+   :param sample_ref: Sample identifier.
+   :type sample_ref: str
+   :param abundance: Measured abundance.
+   :type abundance: float
+   :param normalization_method: Normalization method. Empty string represents an unnormalized
+                                abundance.
+   :type normalization_method: str, default ""
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOQuantification`` · Java:
+   ``com.dtwthalion.ttio.Quantification``.
+
+
+   .. py:attribute:: chemical_entity
+      :type:  str
+
+
+   .. py:attribute:: sample_ref
+      :type:  str
+
+
+   .. py:attribute:: abundance
+      :type:  float
+
+
+   .. py:attribute:: normalization_method
+      :type:  str
+      :value: ''
+
+
+

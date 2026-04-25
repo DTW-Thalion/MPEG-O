@@ -15,7 +15,7 @@ are introduced during v0.8 — everything added in this release is
 either `Stable` (firm contract) or `Deprecated` (no new contract).
 
 This document is advisory: the authoritative annotations live in
-the source (`@since`, `@Deprecated`, `MPGO_DEPRECATED_MSG`,
+the source (`@since`, `@Deprecated`, `TTIO_DEPRECATED_MSG`,
 `warnings.warn`).
 
 ---
@@ -27,7 +27,7 @@ the source (`@since`, `@Deprecated`, `MPGO_DEPRECATED_MSG`,
 | API | Status | Since | Notes |
 |---|---|---|---|
 | `SpectralDataset.open(path, mode="r")` | **Stable** | v0.2 | Primary entry point. `mode` values `r`, `r+`, `w`, `w-` (matches h5py). |
-| `SpectralDataset.write_minimal(path, title, runs, ...)` | **Stable** | v0.3 | Convenience writer that builds a full `.mpgo` from `WrittenRun` buffers. |
+| `SpectralDataset.write_minimal(path, title, runs, ...)` | **Stable** | v0.3 | Convenience writer that builds a full `.tio` from `WrittenRun` buffers. |
 | `_pack_run` / `WrittenRun` | **Stable** | v0.3 | Internal but documented; used by importers to assemble runs. The `channel_data` dict accepts arbitrary channel names (v0.8 M53 adds `inv_ion_mobility`). |
 | `close()` / context-manager | **Stable** | v0.2 | |
 
@@ -35,13 +35,13 @@ the source (`@since`, `@Deprecated`, `MPGO_DEPRECATED_MSG`,
 
 | API | Status | Since | Notes |
 |---|---|---|---|
-| `MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`, `MPGOFreeInductionDecay`, `MPGOChromatogram` | **Stable** | v0.1 | Class hierarchy frozen. |
-| `MPGORamanSpectrum`, `MPGOIRSpectrum` (all languages) | **Stable** | v0.11 (M73) | `Spectrum` subclasses keyed by `wavenumber` + `intensity`. Raman: `excitationWavelengthNm`, `laserPowerMw`, `integrationTimeSec`. IR: `mode` (`MPGOIRMode`), `resolutionCmInv`, `numberOfScans`. |
-| `MPGORamanImage`, `MPGOIRImage` (all languages) | **Stable** | v0.11 (M73) | Rank-3 intensity cube + rank-1 shared wavenumber axis. HDF5 layout: `/study/raman_image_cube/` and `/study/ir_image_cube/` — see `docs/format-spec.md` §7a. |
-| `MPGOIRMode` enum (TRANSMITTANCE=0, ABSORBANCE=1) | **Stable** | v0.11 (M73) | Ordinal values are wire-stable; do not renumber. |
+| `TTIOMassSpectrum`, `TTIONMRSpectrum`, `TTIONMR2DSpectrum`, `TTIOFreeInductionDecay`, `TTIOChromatogram` | **Stable** | v0.1 | Class hierarchy frozen. |
+| `TTIORamanSpectrum`, `TTIOIRSpectrum` (all languages) | **Stable** | v0.11 (M73) | `Spectrum` subclasses keyed by `wavenumber` + `intensity`. Raman: `excitationWavelengthNm`, `laserPowerMw`, `integrationTimeSec`. IR: `mode` (`TTIOIRMode`), `resolutionCmInv`, `numberOfScans`. |
+| `TTIORamanImage`, `TTIOIRImage` (all languages) | **Stable** | v0.11 (M73) | Rank-3 intensity cube + rank-1 shared wavenumber axis. HDF5 layout: `/study/raman_image_cube/` and `/study/ir_image_cube/` — see `docs/format-spec.md` §7a. |
+| `TTIOIRMode` enum (TRANSMITTANCE=0, ABSORBANCE=1) | **Stable** | v0.11 (M73) | Ordinal values are wire-stable; do not renumber. |
 | `AcquisitionRun.open(group, name)` | **Stable** | v0.4 | |
 | `MSImage` native-rank-3 cube layout (`opt_native_msimage_cube`) | **Stable** | v0.4 | |
-| `AcquisitionRun.encryptWithKey:level:error:` (ObjC) | **Stable** | v0.4 | Supersedes `MPGOEncryptionManager.encryptIntensityChannelInRun:atFilePath:...` (see §4.1). |
+| `AcquisitionRun.encryptWithKey:level:error:` (ObjC) | **Stable** | v0.4 | Supersedes `TTIOEncryptionManager.encryptIntensityChannelInRun:atFilePath:...` (see §4.1). |
 
 ### 1.3 Compound datasets (identifications / quantifications / provenance)
 
@@ -106,12 +106,12 @@ for safety.
 |---|---|---|---|
 | `EncryptionManager.encryptData:/decryptData:` low-level primitives | **Stable** | v0.4 | AES-256-GCM. |
 | `EncryptionManager.wrapKey(dek, kek[, legacyV1, algorithm])` | **Stable** | v0.7 (M47) | v1.2 wrapped-key blob envelope. |
-| `MPGOEncryptionManager.encryptIntensityChannelInRun:atFilePath:...` | **Deprecated (v1.0 removal)** | v0.4 | Superseded by `-encryptWithKey:level:error:` on `MPGOAcquisitionRun`. Already carries `__attribute__((deprecated))`; hard-remove at v1.0. |
-| `MPGOEncryptionManager.decryptIntensityChannelInRun:...` | **Deprecated (v1.0 removal)** | v0.4 | Same. |
-| `MPGOEncryptionManager.isIntensityChannelEncryptedInRun:...` | **Deprecated (v1.0 removal)** | v0.4 | Migrate to `MPGOAcquisitionRun.accessPolicy`. |
-| `PerAUEncryption.{aadForChannel,aadForHeader,aadForPixel}` / `encryptWithAad` / `decryptWithAad` / `randomIv` | **Stable** | v0.10 (v1.0 scope) | Per-AU AES-256-GCM primitives; AAD-bound. Parallel names in Python (`mpeg_o.encryption_per_au`) and ObjC (`MPGOPerAUEncryption`). |
+| `TTIOEncryptionManager.encryptIntensityChannelInRun:atFilePath:...` | **Deprecated (v1.0 removal)** | v0.4 | Superseded by `-encryptWithKey:level:error:` on `TTIOAcquisitionRun`. Already carries `__attribute__((deprecated))`; hard-remove at v1.0. |
+| `TTIOEncryptionManager.decryptIntensityChannelInRun:...` | **Deprecated (v1.0 removal)** | v0.4 | Same. |
+| `TTIOEncryptionManager.isIntensityChannelEncryptedInRun:...` | **Deprecated (v1.0 removal)** | v0.4 | Migrate to `TTIOAcquisitionRun.accessPolicy`. |
+| `PerAUEncryption.{aadForChannel,aadForHeader,aadForPixel}` / `encryptWithAad` / `decryptWithAad` / `randomIv` | **Stable** | v0.10 (v1.0 scope) | Per-AU AES-256-GCM primitives; AAD-bound. Parallel names in Python (`ttio.encryption_per_au`) and ObjC (`TTIOPerAUEncryption`). |
 | `PerAUEncryption.{encrypt,decrypt}ChannelToSegments` / `packAUHeaderPlaintext` / `{encrypt,decrypt}HeaderSegments` | **Stable** | v0.10 | Per-spectrum segment/header round-trips. |
-| `PerAUFile.{encryptFile,decryptFile}` / `MPGOPerAUFile` / `mpeg_o.encryption_per_au.{encrypt_per_au,decrypt_per_au}` | **Stable** | v0.10 | File-level orchestrator; routes through the StorageProvider abstraction. Supports `opt_per_au_encryption` + optional `opt_encrypted_au_headers`. |
+| `PerAUFile.{encryptFile,decryptFile}` / `TTIOPerAUFile` / `ttio.encryption_per_au.{encrypt_per_au,decrypt_per_au}` | **Stable** | v0.10 | File-level orchestrator; routes through the StorageProvider abstraction. Supports `opt_per_au_encryption` + optional `opt_encrypted_au_headers`. |
 
 ### 3.3 Key rotation / envelope
 
@@ -127,10 +127,10 @@ for safety.
 
 | API | Status | Since | Notes |
 |---|---|---|---|
-| `mpeg_o.pqc.kem_keygen / kem_encapsulate / kem_decapsulate` | **Stable** | v0.8 | Thin liboqs wrapper; the public surface is expected to be stable. |
-| `mpeg_o.pqc.sig_keygen / sig_sign / sig_verify` | **Stable** | v0.8 | |
+| `ttio.pqc.kem_keygen / kem_encapsulate / kem_decapsulate` | **Stable** | v0.8 | Thin liboqs wrapper; the public surface is expected to be stable. |
+| `ttio.pqc.sig_keygen / sig_sign / sig_verify` | **Stable** | v0.8 | |
 | `PostQuantumCrypto.kemKeygen / kemEncapsulate / kemDecapsulate` (Java) | **Stable** | v0.8 | Bouncy Castle wrapper. Same shape as Python and ObjC. |
-| `MPGOPostQuantumCrypto +kemKeygenWithError: / …` (ObjC) | **Stable** | v0.8 | Same shape. |
+| `TTIOPostQuantumCrypto +kemKeygenWithError: / …` (ObjC) | **Stable** | v0.8 | Same shape. |
 | `CipherSuite.validatePublicKey` / `validatePrivateKey` | **Stable** | v0.8 | |
 | `CipherSuite.publicKeySize` / `privateKeySize` | **Stable** | v0.8 | |
 | `CipherSuite.validateKey` (on asymmetric input) | **Stable behaviour change** | v0.8 | Now raises with a redirect message instead of silently accepting. |
@@ -159,7 +159,7 @@ for safety.
 | mzML / nmrML / ISA-Tab writers | **Stable** | v0.4 | |
 | JCAMP-DX 5.01 reader (Raman / IR) | **Stable** | v0.11 (M73) | AFFN `##XYDATA=(X++(Y..Y))` only. Dispatch on `##DATA TYPE=` between `RamanSpectrum` / `IRSpectrum`. See `docs/vendor-formats.md`. |
 | JCAMP-DX 5.01 writer (Raman / IR) | **Stable** | v0.11 (M73) | `%.10g` AFFN deterministic output; verified bit-identical across Python / Java / ObjC by the cross-language harness. |
-| `MpgoJcampDxDump` CLI (ObjC) | **Stable** | v0.11 (M73) | Driver used by the Python↔ObjC conformance test; `docs/vendor-formats.md` documents the surface. |
+| `TtioJcampDxDump` CLI (ObjC) | **Stable** | v0.11 (M73) | Driver used by the Python↔ObjC conformance test; `docs/vendor-formats.md` documents the surface. |
 
 ### 4.1 Transport (v0.10)
 
@@ -169,21 +169,21 @@ All three languages expose a parallel surface — see
 
 | API | Status | Since | Notes |
 |---|---|---|---|
-| `TransportWriter` / `TransportReader` (`.mots` codec) | **Stable** | v0.10 (M67) | Equivalent names in Python / ObjC / Java. |
+| `TransportWriter` / `TransportReader` (`.tis` codec) | **Stable** | v0.10 (M67) | Equivalent names in Python / ObjC / Java. |
 | `TransportWriter.emitRawPacket` (Java) / `-_writeRawPacketHeader` (ObjC) / writer internals (Python) | **Stable** | v0.10 | Lets `EncryptedTransport` set arbitrary flag bits on AU packets. |
 | `TransportClient` / `TransportServer` (WebSocket) | **Stable** | v0.10 (M68 / M68.5) | libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). |
 | `AcquisitionSimulator` | **Stable** | v0.10 (M69) | |
 | `AUFilter` / selective access APIs | **Stable** | v0.10 (M71) | |
 | `ProtectionMetadata` packet | **Stable** | v0.10 (M71) | Carries cipher_suite, kek_algorithm, wrapped_dek, signature_algorithm, public_key. |
-| `EncryptedTransport.{writeEncryptedDataset,readEncryptedToPath,isPerAUEncrypted}` (Java / ObjC) / `mpeg_o.transport.encrypted.{write_encrypted_dataset,read_encrypted_to_file}` (Python) | **Stable** | v0.10 | Ciphertext passes through the wire unmodified (server never decrypts in transit). |
+| `EncryptedTransport.{writeEncryptedDataset,readEncryptedToPath,isPerAUEncrypted}` (Java / ObjC) / `ttio.transport.encrypted.{write_encrypted_dataset,read_encrypted_to_file}` (Python) | **Stable** | v0.10 | Ciphertext passes through the wire unmodified (server never decrypts in transit). |
 
 ### 4.2 Per-AU CLIs (v0.10)
 
 | CLI | Language | Since | Notes |
 |---|---|---|---|
-| `python -m mpeg_o.tools.per_au_cli {encrypt,decrypt,send,recv,transcode}` | Python | v0.10 | `decrypt` emits a canonical "MPAD" binary dump (see that module's docstring) used by the cross-language conformance harness. |
-| `com.dtwthalion.mpgo.tools.PerAUCli` | Java | v0.10 | Same subcommand surface, same MPAD output. |
-| `MpgoPerAU` | ObjC | v0.10 | Same. |
+| `python -m ttio.tools.per_au_cli {encrypt,decrypt,send,recv,transcode}` | Python | v0.10 | `decrypt` emits a canonical "MPAD" binary dump (see that module's docstring) used by the cross-language conformance harness. |
+| `com.dtwthalion.tio.tools.PerAUCli` | Java | v0.10 | Same subcommand surface, same MPAD output. |
+| `TtioPerAU` | ObjC | v0.10 | Same. |
 
 ---
 
@@ -208,9 +208,9 @@ for v1.0 planning:
 | `opt_encrypted_au_headers` | **Stable** | optional (v0.10) | Additionally encrypts the 36-byte semantic header into `spectrum_index/au_header_segments`. Implies `opt_per_au_encryption`. |
 
 **v0.11 M73 note:** Raman / IR spectroscopy did **not** introduce
-any new feature flags. `MPGORamanSpectrum` / `MPGOIRSpectrum` are
+any new feature flags. `TTIORamanSpectrum` / `TTIOIRSpectrum` are
 regular Spectrum subclasses (keyed on wavenumber/intensity);
-`MPGORamanImage` / `MPGOIRImage` reuse the same opt-in pattern as
+`TTIORamanImage` / `TTIOIRImage` reuse the same opt-in pattern as
 `opt_native_msimage_cube` but via dedicated HDF5 groups
 (`/study/raman_image_cube/`, `/study/ir_image_cube/`) — see
 `docs/format-spec.md` §7a.
@@ -227,12 +227,12 @@ requires explicit migration guidance before landing.
 The following APIs are **scheduled for removal at v1.0**. Each emits
 a deprecation warning when invoked in v0.8.
 
-1. `MPGOEncryptionManager.encryptIntensityChannelInRun:atFilePath:withKey:error:`
-   — migrate to `MPGOAcquisitionRun -encryptWithKey:level:error:`.
-2. `MPGOEncryptionManager.decryptIntensityChannelInRun:…` —
-   migrate to `MPGOAcquisitionRun -decryptWithKey:error:`.
-3. `MPGOEncryptionManager.isIntensityChannelEncryptedInRun:…` —
-   migrate to `MPGOAcquisitionRun.accessPolicy`.
+1. `TTIOEncryptionManager.encryptIntensityChannelInRun:atFilePath:withKey:error:`
+   — migrate to `TTIOAcquisitionRun -encryptWithKey:level:error:`.
+2. `TTIOEncryptionManager.decryptIntensityChannelInRun:…` —
+   migrate to `TTIOAcquisitionRun -decryptWithKey:error:`.
+3. `TTIOEncryptionManager.isIntensityChannelEncryptedInRun:…` —
+   migrate to `TTIOAcquisitionRun.accessPolicy`.
 4. `StorageProvider.native_handle()` / `nativeHandle` — M43-M45
    eliminated every internal caller. External callers should drop
    direct backend handles in favour of the provider protocol.

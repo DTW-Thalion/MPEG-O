@@ -1,10 +1,10 @@
-# MPEG-O Transport Format Specification — v0.10.0
+# TTI-O Transport Format Specification — v0.10.0
 
-This document specifies the MPEG-O streaming transport format: a
+This document specifies the TTI-O streaming transport format: a
 self-describing binary framing protocol that carries the same logical
-data as the `.mpgo` file format over sequential byte streams and
+data as the `.tio` file format over sequential byte streams and
 network connections. It is the MPEG-G ISO/IEC 23092-1 §7 ("Transport
-Format") equivalent for MPEG-O.
+Format") equivalent for TTI-O.
 
 The file format (see [`format-spec.md`](format-spec.md)) is the
 authoritative at-rest representation. The transport format is a
@@ -12,7 +12,7 @@ streaming wire protocol. The two are bidirectionally convertible with
 no loss of information on signal data, annotations, provenance, or
 protection metadata.
 
-Transport streams use the `.mots` file extension (MPEG-O Transport
+Transport streams use the `.tis` file extension (TTI-O Transport
 Stream) when serialized to a file. This parallels MPEG-G's `.mgg`
 (file) vs `.mggts` (transport) convention.
 
@@ -149,7 +149,7 @@ features:            repeated { uint16 len, bytes[len] }
 n_datasets:          uint16                       # number of DatasetHeaders to follow
 ```
 
-`format_version` SHOULD match the `mpeg_o_format_version` root
+`format_version` SHOULD match the `ttio_format_version` root
 attribute of the source file (e.g. `"1.2"`) so receivers can enable
 version-appropriate parsing of nested JSON payloads.
 
@@ -162,9 +162,9 @@ carrying the matching `dataset_id`.
 dataset_id:          uint16                       # matches header.dataset_id
 name_len:            uint16
 name:                bytes[name_len]              # run name, e.g. "run_0001"
-acquisition_mode:    uint8                        # MPGOAcquisitionMode enum
+acquisition_mode:    uint8                        # TTIOAcquisitionMode enum
 spectrum_class_len:  uint16
-spectrum_class:      bytes[spectrum_class_len]    # e.g. "MPGOMassSpectrum"
+spectrum_class:      bytes[spectrum_class_len]    # e.g. "TTIOMassSpectrum"
 n_channels:          uint8
 channel_names:       repeated { uint16 len, bytes[len] }
 instrument_json_len: uint32
@@ -197,7 +197,7 @@ flags:
 ```
 spectrum_class:      uint8        # 0=MassSpectrum, 1=NMRSpectrum,
                                   # 2=NMR2D, 3=FID, 4=MSImagePixel
-acquisition_mode:    uint8        # MPGOAcquisitionMode
+acquisition_mode:    uint8        # TTIOAcquisitionMode
 ms_level:            uint8        # 1, 2, ... (0 for NMR)
 polarity:            uint8        # 0=positive, 1=negative, 2=unknown
 retention_time:      float64      # seconds
@@ -468,8 +468,8 @@ regardless of AU filters so the receiver has a complete container
 skeleton.
 
 Filtered streams are valid transport streams — a client MAY tee a
-filtered stream to disk as a smaller `.mots` file, or materialize
-it as a subset `.mpgo`.
+filtered stream to disk as a smaller `.tis` file, or materialize
+it as a subset `.tio`.
 
 ## 8. Gotchas
 

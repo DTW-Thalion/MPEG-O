@@ -1,4 +1,4 @@
-# MPEG-O Container Design
+# TTI-O Container Design
 
 > **Historical note (v0.11 update):** This document captures the
 > original v0.1–v0.2 container sketch and is retained for
@@ -14,15 +14,15 @@
 > `/study/ir_image_cube/` — see format-spec.md §7a) all live in
 > format-spec.md.
 
-MPEG-O files use the `.mpgo` extension and are valid HDF5 files. Any tool that reads HDF5 (h5py, h5dump, HDFView, matlab) can inspect them. MPEG-O adds semantic structure on top of HDF5's generic group/dataset/attribute model.
+TTI-O files use the `.tio` extension and are valid HDF5 files. Any tool that reads HDF5 (h5py, h5dump, HDFView, matlab) can inspect them. TTI-O adds semantic structure on top of HDF5's generic group/dataset/attribute model.
 
 ---
 
 ## File Layout
 
 ```
-file.mpgo  (HDF5 root)
-├── @mpeg_o_version                     (attr: string)
+file.tio  (HDF5 root)
+├── @ttio_version                     (attr: string)
 ├── @created_utc                        (attr: string, ISO8601)
 ├── @writer_software                    (attr: string)
 │
@@ -32,8 +32,8 @@ file.mpgo  (HDF5 root)
 │   ├── metadata/
 │   │   └── cv_params                   (compound dataset)
 │   │
-│   ├── run_0001/                       (group — = MPGOAcquisitionRun)
-│   │   ├── @acquisition_mode           (attr: int — MPGOAcquisitionMode enum)
+│   ├── run_0001/                       (group — = TTIOAcquisitionRun)
+│   │   ├── @acquisition_mode           (attr: int — TTIOAcquisitionMode enum)
 │   │   ├── @spectrum_count             (attr: uint64)
 │   │   ├── instrument_config           (compound dataset, single row)
 │   │   ├── provenance/
@@ -156,7 +156,7 @@ Default chunk size for signal channels: **16,384 elements** (~128 KiB for float6
 
 ## Versioning
 
-The file-level `@mpeg_o_version` attribute uses semantic versioning. Readers must:
+The file-level `@ttio_version` attribute uses semantic versioning. Readers must:
 
 - Accept any file with matching major version.
 - Warn on newer minor version (may contain unknown optional groups).

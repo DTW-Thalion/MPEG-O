@@ -1,0 +1,115 @@
+ttio.signal_array
+=================
+
+.. py:module:: ttio.signal_array
+
+.. autoapi-nested-parse::
+
+   ``SignalArray`` — numpy buffer + axis + encoding metadata.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.signal_array.SignalArray
+
+
+Module Contents
+---------------
+
+.. py:class:: SignalArray
+
+   A named 1-D numeric signal buffer paired with axis and encoding
+   metadata, with CV annotation support.
+
+   :param data: 1-D numeric array holding the raw signal values. Callers should
+                treat the array contents as immutable after construction.
+   :type data: numpy.ndarray
+   :param axis: Descriptor of the physical dimension represented by ``data``
+                (e.g. m/z, ppm). ``None`` when the axis is not yet known or not
+                applicable.
+   :type axis: AxisDescriptor or None, optional
+   :param encoding: Wire-format encoding for HDF5 serialisation.  Defaults to
+                    FLOAT64 / ZLIB / little-endian.
+   :type encoding: EncodingSpec, optional
+   :param cv_params: Initial CV annotations.  Usually empty; grow at runtime via
+                     :meth:`add_cv_param`.
+   :type cv_params: list of CVParam, optional
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSignalArray`` ·
+   Java: ``com.dtwthalion.ttio.SignalArray``
+
+
+   .. py:attribute:: data
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: axis
+      :type:  ttio.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: encoding
+      :type:  ttio.encoding_spec.EncodingSpec
+
+
+   .. py:attribute:: cv_params
+      :type:  list[ttio.cv_param.CVParam]
+      :value: []
+
+
+
+   .. py:method:: add_cv_param(param: ttio.cv_param.CVParam) -> None
+
+      Attach *param* to this array in insertion order.
+
+
+
+   .. py:method:: remove_cv_param(param: ttio.cv_param.CVParam) -> None
+
+      Detach *param*.  No-op if not present.
+
+
+
+   .. py:method:: all_cv_params() -> list[ttio.cv_param.CVParam]
+
+      Return all attached CV params in insertion order.
+
+
+
+   .. py:method:: cv_params_for_accession(accession: str) -> list[ttio.cv_param.CVParam]
+
+      Return params whose ``accession`` equals *accession*.
+
+
+
+   .. py:method:: cv_params_for_ontology_ref(ontology_ref: str) -> list[ttio.cv_param.CVParam]
+
+      Return params whose ``ontology_ref`` equals *ontology_ref*.
+
+
+
+   .. py:method:: has_cv_param_with_accession(accession: str) -> bool
+
+      Return ``True`` if at least one attached param matches *accession*.
+
+
+
+   .. py:method:: from_numpy(array: numpy.ndarray, axis: ttio.axis_descriptor.AxisDescriptor | None = None, encoding: ttio.encoding_spec.EncodingSpec | None = None) -> SignalArray
+      :classmethod:
+
+
+
+   .. py:method:: __len__() -> int
+
+

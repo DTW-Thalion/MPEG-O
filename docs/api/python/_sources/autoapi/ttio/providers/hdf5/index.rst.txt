@@ -1,0 +1,104 @@
+ttio.providers.hdf5
+===================
+
+.. py:module:: ttio.providers.hdf5
+
+.. autoapi-nested-parse::
+
+   HDF5 storage provider — Milestone 39 Part C.
+
+   Adapter that exposes ``h5py`` through the :mod:`ttio.providers.base`
+   contract. No behavioural change — callers that used ``h5py.File``
+   directly can switch to ``Hdf5Provider.open(path)`` and continue.
+
+   API status: Stable (Provisional per M39 — may change before v1.0).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOHDF5Provider`` class
+   Java:        ``com.dtwthalion.ttio.providers.Hdf5Provider`` class
+
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.providers.hdf5.Hdf5Provider
+
+
+Module Contents
+---------------
+
+.. py:class:: Hdf5Provider(file: h5py.File | None = None)
+
+   Bases: :py:obj:`ttio.providers.base.StorageProvider`
+
+
+   Storage provider backed by an h5py-managed HDF5 file.
+
+   API status: Stable (Provisional per M39 — may change before v1.0).
+
+   Cross-language equivalents:
+     Objective-C: ``TTIOHDF5Provider``
+     Java:        ``com.dtwthalion.ttio.providers.Hdf5Provider``
+
+
+   .. py:method:: open(path_or_url=None, *, mode: str = 'r', **kwargs) -> Hdf5Provider
+
+      Open an HDF5 file under this provider. Supports both factory
+      and instance call styles per Appendix B Gap 1 — see
+      :class:`ttio.providers.base.StorageProvider.open`.
+
+
+
+   .. py:method:: provider_name() -> str
+
+      Short identifier used for logging and registry lookup
+      (``"hdf5"``, ``"memory"``, ``"zarr"``, …).
+
+      Exposed as a method (not a property) to mirror the ObjC
+      ``-providerName`` selector and Java ``providerName()`` getter.
+      Appendix B Gap 5 — Provisional storage-provider convergence.
+
+
+
+   .. py:method:: root_group() -> ttio.providers.base.StorageGroup
+
+
+   .. py:method:: is_open() -> bool
+
+
+   .. py:method:: close() -> None
+
+
+   .. py:method:: supports_chunking() -> bool
+
+      Returns True if the backend honors ``chunk_size`` in
+      :meth:`StorageGroup.create_dataset`. HDF5 returns True; Memory
+      and SQLite return False (chunk_size is accepted for interface
+      compatibility but silently ignored).
+
+      Callers that depend on chunked I/O for streaming large datasets
+      can query this to degrade gracefully.
+
+
+
+   .. py:method:: supports_compression() -> bool
+
+      Returns True if the backend honors ``compression`` /
+      ``compression_level``. HDF5 returns True (zlib + LZ4); Memory
+      and SQLite return False.
+
+
+
+   .. py:method:: native_handle() -> h5py.File
+
+      Underlying h5py.File — escape hatch for byte-level code
+      (signature hashing, encryption, native compression filters).
+
+
+

@@ -1,0 +1,48 @@
+ttio.importers.jcamp_dx
+=======================
+
+.. py:module:: ttio.importers.jcamp_dx
+
+.. autoapi-nested-parse::
+
+   JCAMP-DX 5.01 reader for 1-D vibrational and UV-Vis spectra.
+
+   Dispatches on ``##DATA TYPE=`` and returns one of
+   :class:`RamanSpectrum`, :class:`IRSpectrum`, or :class:`UVVisSpectrum`.
+
+   Accepts two dialects of ``##XYDATA=(X++(Y..Y))``:
+
+   - **AFFN** (fast path) — one ``(X, Y)`` pair per line, free-format
+     decimals. Emitted by :mod:`ttio.exporters.jcamp_dx`. Preserves
+     non-uniform X spacing verbatim.
+   - **PAC / SQZ / DIF / DUP** (compressed) — JCAMP-DX 5.01 §5.9
+     character-encoded Y-stream. Delegated to
+     :func:`_jcamp_decode.decode_xydata`. Requires ``FIRSTX``, ``LASTX``,
+     and ``NPOINTS`` headers (equispaced X).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOJcampDxReader`` · Java:
+   ``com.dtwthalion.ttio.importers.JcampDxReader``.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.jcamp_dx.read_spectrum
+
+
+Module Contents
+---------------
+
+.. py:function:: read_spectrum(path: str | pathlib.Path) -> Spectrum1D
+
+   Parse ``path`` and return an appropriate spectrum subclass.
+
+   :raises ValueError: If the file is malformed (empty/mismatched XYDATA) or carries a
+       ``##DATA TYPE=`` that this reader does not handle.
+
+

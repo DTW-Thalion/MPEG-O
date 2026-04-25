@@ -1,0 +1,76 @@
+ttio.cv_param
+=============
+
+.. py:module:: ttio.cv_param
+
+.. autoapi-nested-parse::
+
+   ``CVParam`` — controlled-vocabulary parameter reference.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.cv_param.CVParam
+
+
+Module Contents
+---------------
+
+.. py:class:: CVParam
+
+   A single controlled-vocabulary parameter reference.
+
+   Immutable value class in the form
+   ``(ontology_ref, accession, name, [value], [unit])``.
+
+   :param ontology_ref: Ontology short name (``"MS"``, ``"NMR"``, ``"UO"``, ...).
+   :type ontology_ref: str
+   :param accession: Ontology accession in ``<CV>:<id>`` form
+                     (e.g. ``"MS:1000515"``).
+   :type accession: str
+   :param name: Human-readable label.
+   :type name: str
+   :param value: Optional free-form value. Use an empty string when the
+                 parameter is a pure assertion with no associated value.
+   :type value: str, default ""
+   :param unit: Optional unit accession (typically a UO or MS term).
+   :type unit: str or None, default None
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOCVParam`` · Java:
+   ``com.dtwthalion.ttio.CVParam``.
+
+
+   .. py:attribute:: ontology_ref
+      :type:  str
+
+
+   .. py:attribute:: accession
+      :type:  str
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: value
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: unit
+      :type:  str | None
+      :value: None
+
+
+

@@ -1,0 +1,95 @@
+ttio.nmr_2d
+===========
+
+.. py:module:: ttio.nmr_2d
+
+.. autoapi-nested-parse::
+
+   ``NMR2DSpectrum`` — rank-2 NMR spectrum with two axis descriptors.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.nmr_2d.NMR2DSpectrum
+
+
+Module Contents
+---------------
+
+.. py:class:: NMR2DSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   2-D NMR spectrum: rank-2 intensity matrix with F1 and F2 axes.
+
+   Subclass of :class:`Spectrum`. The matrix is stored as a rank-2
+   ``numpy.ndarray`` of shape ``(height, width)``.
+
+   :param intensity_matrix: Rank-2 intensity matrix; shape ``(height, width)``.
+   :type intensity_matrix: numpy.ndarray
+   :param f1_axis: F1 axis descriptor.
+   :type f1_axis: AxisDescriptor or None, default None
+   :param f2_axis: F2 axis descriptor.
+   :type f2_axis: AxisDescriptor or None, default None
+   :param nucleus_f1: Nucleus type on F1 (``"1H"``, ``"13C"``, ...).
+   :type nucleus_f1: str, default ""
+   :param nucleus_f2: Nucleus type on F2.
+   :type nucleus_f2: str, default ""
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIONMR2DSpectrum`` · Java:
+   ``com.dtwthalion.ttio.NMR2DSpectrum``.
+
+
+   .. py:attribute:: intensity_matrix
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: f1_axis
+      :type:  ttio.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: f2_axis
+      :type:  ttio.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: nucleus_f1
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: nucleus_f2
+      :type:  str
+      :value: ''
+
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:property:: matrix_height
+      :type: int
+
+
+
+   .. py:property:: matrix_width
+      :type: int
+
+
+

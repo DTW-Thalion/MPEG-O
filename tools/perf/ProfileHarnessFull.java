@@ -1,5 +1,5 @@
 /*
- * Multi-function Java perf harness for MPEG-O.
+ * Multi-function Java perf harness for TTI-O.
  *
  * Mirrors profile_python_full.py so cross-language deltas are
  * comparable. Covers: MS write/read across all 4 providers,
@@ -17,26 +17,26 @@
  */
 package tools.perf;
 
-import com.dtwthalion.mpgo.AcquisitionRun;
-import com.dtwthalion.mpgo.IRSpectrum;
-import com.dtwthalion.mpgo.RamanSpectrum;
-import com.dtwthalion.mpgo.SignalArray;
-import com.dtwthalion.mpgo.SpectralDataset;
-import com.dtwthalion.mpgo.Spectrum;
-import com.dtwthalion.mpgo.SpectrumIndex;
-import com.dtwthalion.mpgo.TwoDimensionalCorrelationSpectrum;
-import com.dtwthalion.mpgo.UVVisSpectrum;
-import com.dtwthalion.mpgo.Enums.AcquisitionMode;
-import com.dtwthalion.mpgo.Enums.IRMode;
-import com.dtwthalion.mpgo.Enums.SamplingMode;
-import com.dtwthalion.mpgo.AxisDescriptor;
-import com.dtwthalion.mpgo.ValueRange;
-import com.dtwthalion.mpgo.exporters.JcampDxWriter;
-import com.dtwthalion.mpgo.importers.JcampDxReader;
-import com.dtwthalion.mpgo.protection.PerAUFile;
-import com.dtwthalion.mpgo.protection.SignatureManager;
-import com.dtwthalion.mpgo.transport.TransportReader;
-import com.dtwthalion.mpgo.transport.TransportWriter;
+import com.dtwthalion.tio.AcquisitionRun;
+import com.dtwthalion.tio.IRSpectrum;
+import com.dtwthalion.tio.RamanSpectrum;
+import com.dtwthalion.tio.SignalArray;
+import com.dtwthalion.tio.SpectralDataset;
+import com.dtwthalion.tio.Spectrum;
+import com.dtwthalion.tio.SpectrumIndex;
+import com.dtwthalion.tio.TwoDimensionalCorrelationSpectrum;
+import com.dtwthalion.tio.UVVisSpectrum;
+import com.dtwthalion.tio.Enums.AcquisitionMode;
+import com.dtwthalion.tio.Enums.IRMode;
+import com.dtwthalion.tio.Enums.SamplingMode;
+import com.dtwthalion.tio.AxisDescriptor;
+import com.dtwthalion.tio.ValueRange;
+import com.dtwthalion.tio.exporters.JcampDxWriter;
+import com.dtwthalion.tio.importers.JcampDxReader;
+import com.dtwthalion.tio.protection.PerAUFile;
+import com.dtwthalion.tio.protection.SignatureManager;
+import com.dtwthalion.tio.transport.TransportReader;
+import com.dtwthalion.tio.transport.TransportWriter;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -118,10 +118,10 @@ public final class ProfileHarnessFull {
         Result r = new Result();
         String url;
         switch (provider) {
-            case "hdf5":   url = tmp.resolve("ms-hdf5.mpgo").toString(); break;
+            case "hdf5":   url = tmp.resolve("ms-hdf5.tio").toString(); break;
             case "memory": url = "memory://ms-bench-" + UUID.randomUUID(); break;
-            case "sqlite": url = "sqlite://" + tmp.resolve("ms-sqlite.mpgo.sqlite"); break;
-            case "zarr":   url = "zarr://" + tmp.resolve("ms-zarr.mpgo.zarr"); break;
+            case "sqlite": url = "sqlite://" + tmp.resolve("ms-sqlite.tio.sqlite"); break;
+            case "zarr":   url = "zarr://" + tmp.resolve("ms-zarr.tio.zarr"); break;
             default: throw new IllegalArgumentException(provider);
         }
 
@@ -155,7 +155,7 @@ public final class ProfileHarnessFull {
     private static Result benchTransport(Path tmp, int n, int peaks,
                                           boolean useCompression) throws Exception {
         Result r = new Result();
-        Path src = tmp.resolve(useCompression ? "xport-c.mpgo" : "xport.mpgo");
+        Path src = tmp.resolve(useCompression ? "xport-c.tio" : "xport.tio");
         try (SpectralDataset ds = SpectralDataset.create(
                 src.toString(), "xport", "ISA-XPORT",
                 List.of(makeRun(n, peaks)), List.of(), List.of(), List.of())) {
@@ -175,7 +175,7 @@ public final class ProfileHarnessFull {
         r.timing("encode", System.nanoTime() - s);
         r.size("mots_mb", Files.size(motsPath));
 
-        Path rtPath = tmp.resolve(useCompression ? "rt-c.mpgo" : "rt.mpgo");
+        Path rtPath = tmp.resolve(useCompression ? "rt-c.tio" : "rt.tio");
         s = System.nanoTime();
         byte[] motsBytes = Files.readAllBytes(motsPath);
         try (TransportReader tr = new TransportReader(motsBytes)) {
@@ -192,14 +192,14 @@ public final class ProfileHarnessFull {
 
     private static Result benchEncryption(Path tmp, int n, int peaks) throws Exception {
         Result r = new Result();
-        Path src = tmp.resolve("enc.mpgo");
+        Path src = tmp.resolve("enc.tio");
         try (SpectralDataset ds = SpectralDataset.create(
                 src.toString(), "enc", "ISA-ENC",
                 List.of(makeRun(n, peaks)), List.of(), List.of(), List.of())) {
         }
         r.size("bytes_mb", Files.size(src));
 
-        Path copy = tmp.resolve("enc-copy.mpgo");
+        Path copy = tmp.resolve("enc-copy.tio");
         Files.copy(src, copy, StandardCopyOption.REPLACE_EXISTING);
         byte[] key = new byte[32];
         for (int i = 0; i < 32; i++) key[i] = (byte) i;
@@ -373,7 +373,7 @@ public final class ProfileHarnessFull {
     private static Result runOne(String name, Path tmpRoot,
                                   int n, int peaks) throws Exception {
         Path tmp = Files.createTempDirectory(tmpRoot,
-                "mpgo-" + name.replace('.', '-') + "-");
+                "ttio-" + name.replace('.', '-') + "-");
         switch (name) {
             case "ms.hdf5":   return benchMs(tmp, n, peaks, "hdf5");
             case "ms.memory": return benchMs(tmp, n, peaks, "memory");

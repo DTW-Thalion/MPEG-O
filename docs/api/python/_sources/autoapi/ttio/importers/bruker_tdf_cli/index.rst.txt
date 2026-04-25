@@ -1,0 +1,41 @@
+ttio.importers.bruker_tdf_cli
+=============================
+
+.. py:module:: ttio.importers.bruker_tdf_cli
+
+.. autoapi-nested-parse::
+
+   CLI wrapper for :mod:`ttio.importers.bruker_tdf` — invoked by the
+   Java ``BrukerTDFReader`` and Objective-C ``TTIOBrukerTDFReader`` via
+   subprocess. Not intended for direct user use; callers should prefer
+   the in-process Python API.
+
+   Usage::
+
+       python -m ttio.importers.bruker_tdf_cli \
+           --input path/to/analysis.d \
+           --output path/to/target.tio [--title "Run 1"] [--ms2]
+
+   Exit codes:
+     0  — success.
+     2  — argument error.
+     3  — ``opentimspy`` not importable; install ``ttio[bruker]``.
+     4  — I/O error (missing ``.d``, malformed SQLite, cannot write output).
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.bruker_tdf_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

@@ -1,0 +1,112 @@
+ttio.mass_spectrum
+==================
+
+.. py:module:: ttio.mass_spectrum
+
+.. autoapi-nested-parse::
+
+   ``MassSpectrum`` — MS subclass with m/z + intensity channels.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.mass_spectrum.MassSpectrum
+
+
+Module Contents
+---------------
+
+.. py:class:: MassSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A mass spectrum: m/z + intensity arrays plus MS level, polarity,
+   and an optional scan window.
+
+   :param ms_level: MS level (1, 2, 3, ...).
+   :type ms_level: int, default 1
+   :param polarity: Ion polarity.
+   :type polarity: Polarity, default Polarity.UNKNOWN
+   :param scan_window: m/z range covered by the scan. ``None`` if not reported.
+   :type scan_window: ValueRange or None, default None
+   :param activation_method: Precursor activation method for MS2+ scans. ``NONE`` for MS1
+                             and for MS2 scans whose activation was not reported.
+   :type activation_method: ActivationMethod, default ActivationMethod.NONE
+   :param isolation_window: Precursor isolation window for MS2+ scans. ``None`` for MS1
+                            and when the window was not reported.
+   :type isolation_window: IsolationWindow or None, default None
+   :param \*plus all base :class:`Spectrum` parameters (signal_arrays:
+   :param axes:
+   :param :
+   :param index_position:
+   :param scan_time_seconds:
+   :param precursor_mz:
+   :param precursor_charge)*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Standard channel names are ``"mz"`` and ``"intensity"``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOMassSpectrum`` · Java:
+   ``com.dtwthalion.ttio.MassSpectrum``.
+
+
+   .. py:attribute:: MZ
+      :value: 'mz'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: ms_level
+      :type:  int
+      :value: 1
+
+
+
+   .. py:attribute:: polarity
+      :type:  ttio.enums.Polarity
+
+
+   .. py:attribute:: scan_window
+      :type:  ttio.value_range.ValueRange | None
+      :value: None
+
+
+
+   .. py:attribute:: activation_method
+      :type:  ttio.enums.ActivationMethod
+
+
+   .. py:attribute:: isolation_window
+      :type:  ttio.isolation_window.IsolationWindow | None
+      :value: None
+
+
+
+   .. py:property:: mz_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"mz"`` :class:`SignalArray`. Raises if absent.
+
+
+   .. py:property:: intensity_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+

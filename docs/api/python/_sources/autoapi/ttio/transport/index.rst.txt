@@ -1,0 +1,489 @@
+ttio.transport
+==============
+
+.. py:module:: ttio.transport
+
+.. autoapi-nested-parse::
+
+   TTI-O streaming transport codec (v0.10 M67).
+
+   Implements the wire format specified in ``docs/transport-spec.md``:
+
+   - :class:`PacketHeader` — 24-byte fixed header with CRC-32C checksum
+     support.
+   - :class:`PacketType` — enum of 9 packet types (stream/dataset header,
+     access unit, protection metadata, annotation, provenance,
+     chromatogram, end-of-dataset, end-of-stream).
+   - :class:`AccessUnit` — one spectrum's filter keys + channel bytes.
+   - :class:`TransportWriter` / :class:`TransportReader` — file and
+     in-memory stream codecs.
+   - :func:`file_to_transport` / :func:`transport_to_file` — convenience
+     one-shot round-trip helpers.
+
+   Cross-language: ObjC ``objc/Source/Transport/`` · Java
+   ``com.dtwthalion.ttio.transport``.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/ttio/transport/client/index
+   /autoapi/ttio/transport/codec/index
+   /autoapi/ttio/transport/encrypted/index
+   /autoapi/ttio/transport/filters/index
+   /autoapi/ttio/transport/packets/index
+   /autoapi/ttio/transport/server/index
+   /autoapi/ttio/transport/simulator/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.transport.HEADER_MAGIC
+   ttio.transport.HEADER_SIZE
+   ttio.transport.VERSION
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.AccessUnit
+   ttio.transport.ChannelData
+   ttio.transport.PacketFlag
+   ttio.transport.PacketHeader
+   ttio.transport.PacketType
+   ttio.transport.TransportReader
+   ttio.transport.TransportWriter
+   ttio.transport.AUFilter
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.transport.crc32c
+   ttio.transport.file_to_transport
+   ttio.transport.transport_to_file
+
+
+Package Contents
+----------------
+
+.. py:data:: HEADER_MAGIC
+   :value: b'TI'
+
+
+.. py:data:: HEADER_SIZE
+   :value: 24
+
+
+.. py:data:: VERSION
+   :value: 1
+
+
+.. py:class:: AccessUnit
+
+   One spectrum as a transport-layer value.
+
+   The fixed-prefix fields are the **filter keys** a server uses for
+   selective access. Channel bytes travel in :attr:`channels`.
+
+
+   .. py:attribute:: spectrum_class
+      :type:  int
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  int
+
+
+   .. py:attribute:: ms_level
+      :type:  int
+
+
+   .. py:attribute:: polarity
+      :type:  int
+
+
+   .. py:attribute:: retention_time
+      :type:  float
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+
+
+   .. py:attribute:: precursor_charge
+      :type:  int
+
+
+   .. py:attribute:: ion_mobility
+      :type:  float
+
+
+   .. py:attribute:: base_peak_intensity
+      :type:  float
+
+
+   .. py:attribute:: channels
+      :type:  list[ChannelData]
+      :value: []
+
+
+
+   .. py:attribute:: pixel_x
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_y
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_z
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: to_bytes() -> bytes
+
+
+   .. py:method:: from_bytes(data: bytes) -> AccessUnit
+      :classmethod:
+
+
+
+.. py:class:: ChannelData
+
+   One signal channel inside an :class:`AccessUnit`.
+
+   ``precision`` and ``compression`` are the wire encoding — the
+   :attr:`data` bytes are already encoded. The codec does not
+   transcode channels; round-tripping preserves the source encoding.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: precision
+      :type:  int
+
+
+   .. py:attribute:: compression
+      :type:  int
+
+
+   .. py:attribute:: n_elements
+      :type:  int
+
+
+   .. py:attribute:: data
+      :type:  bytes
+
+
+   .. py:method:: to_bytes() -> bytes
+
+
+   .. py:method:: from_buffer(buf: bytes, offset: int) -> tuple[ChannelData, int]
+      :classmethod:
+
+
+
+.. py:class:: PacketFlag
+
+   Bases: :py:obj:`enum.IntFlag`
+
+
+   Support for integer-based Flags
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: ENCRYPTED
+      :value: 1
+
+
+
+   .. py:attribute:: COMPRESSED
+      :value: 2
+
+
+
+   .. py:attribute:: HAS_CHECKSUM
+      :value: 4
+
+
+
+   .. py:attribute:: ENCRYPTED_HEADER
+      :value: 8
+
+
+
+.. py:class:: PacketHeader
+
+   24-byte transport packet header.
+
+
+   .. py:attribute:: packet_type
+      :type:  int
+
+
+   .. py:attribute:: flags
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: dataset_id
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: au_sequence
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: payload_length
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: timestamp_ns
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: to_bytes() -> bytes
+
+
+   .. py:method:: from_bytes(data: bytes) -> PacketHeader
+      :classmethod:
+
+
+
+.. py:class:: PacketType
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Transport packet types. See ``docs/transport-spec.md`` §3.2.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: STREAM_HEADER
+      :value: 1
+
+
+
+   .. py:attribute:: DATASET_HEADER
+      :value: 2
+
+
+
+   .. py:attribute:: ACCESS_UNIT
+      :value: 3
+
+
+
+   .. py:attribute:: PROTECTION_METADATA
+      :value: 4
+
+
+
+   .. py:attribute:: ANNOTATION
+      :value: 5
+
+
+
+   .. py:attribute:: PROVENANCE
+      :value: 6
+
+
+
+   .. py:attribute:: CHROMATOGRAM
+      :value: 7
+
+
+
+   .. py:attribute:: END_OF_DATASET
+      :value: 8
+
+
+
+   .. py:attribute:: END_OF_STREAM
+      :value: 255
+
+
+
+.. py:function:: crc32c(data: bytes) -> int
+
+   CRC-32C (Castagnoli, reflected) of ``data``.
+
+   Matches ``google-crc32c`` and ``java.util.zip.CRC32C`` output.
+   Used when :attr:`PacketFlag.HAS_CHECKSUM` is set.
+
+
+.. py:class:: TransportReader(source: BinaryIO | str | pathlib.Path)
+
+   Deserialize a transport byte stream.
+
+   The low-level API :meth:`iter_packets` yields ``(header, payload)``
+   pairs. The high-level :meth:`read_to_dataset` materializes the
+   stream into a new ``.tio`` file.
+
+
+   .. py:method:: __enter__() -> TransportReader
+
+
+   .. py:method:: __exit__(*exc: object) -> None
+
+
+   .. py:method:: close() -> None
+
+
+   .. py:method:: iter_packets() -> Iterator[tuple[ttio.transport.packets.PacketHeader, bytes]]
+
+
+   .. py:method:: read_to_dataset(*, output_path: str | pathlib.Path, provider: str = 'hdf5') -> ttio.spectral_dataset.SpectralDataset
+
+      Materialize the stream into a ``.tio`` file at ``output_path``.
+
+
+
+.. py:class:: TransportWriter(output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False)
+
+   Serialize a :class:`SpectralDataset` as a transport byte stream.
+
+
+   .. py:property:: use_compression
+      :type: bool
+
+
+
+   .. py:method:: __enter__() -> TransportWriter
+
+
+   .. py:method:: __exit__(*exc: object) -> None
+
+
+   .. py:method:: close() -> None
+
+
+   .. py:method:: write_stream_header(*, format_version: str, title: str, isa_investigation: str, features: list[str], n_datasets: int) -> None
+
+
+   .. py:method:: write_dataset_header(*, dataset_id: int, name: str, acquisition_mode: int, spectrum_class: str, channel_names: list[str], instrument_json: str, expected_au_count: int = 0) -> None
+
+
+   .. py:method:: write_access_unit(*, dataset_id: int, au_sequence: int, au: ttio.transport.packets.AccessUnit) -> None
+
+
+   .. py:method:: write_end_of_dataset(*, dataset_id: int, final_au_sequence: int) -> None
+
+
+   .. py:method:: write_end_of_stream() -> None
+
+
+   .. py:method:: write_dataset(dataset: ttio.spectral_dataset.SpectralDataset) -> None
+
+      Walk ``dataset`` and emit the full packet sequence.
+
+
+
+.. py:function:: file_to_transport(ttio_path: str | pathlib.Path, output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False) -> None
+
+   Convert a ``.tio`` file to a transport stream.
+
+
+.. py:function:: transport_to_file(source: BinaryIO | str | pathlib.Path, ttio_path: str | pathlib.Path, *, provider: str = 'hdf5') -> ttio.spectral_dataset.SpectralDataset
+
+   Convert a transport stream to a ``.tio`` file.
+
+
+.. py:class:: AUFilter
+
+   Filter predicate evaluated against an :class:`AccessUnit`.
+
+   All fields are optional; an empty filter accepts every AU. See
+   ``docs/transport-spec.md`` §7.
+
+   The filter is applied BEFORE an AU is serialized to the wire, so
+   filtered streams consume no bandwidth for non-matching spectra.
+
+
+   .. py:attribute:: rt_min
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: rt_max
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: ms_level
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: precursor_mz_min
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: precursor_mz_max
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: polarity
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: dataset_id
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: max_au
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:method:: from_dict(data: dict[str, Any] | None) -> AUFilter
+      :classmethod:
+
+
+
+   .. py:method:: matches(au: ttio.transport.packets.AccessUnit, dataset_id: int) -> bool
+
+

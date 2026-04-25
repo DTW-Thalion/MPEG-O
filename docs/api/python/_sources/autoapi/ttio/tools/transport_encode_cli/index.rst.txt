@@ -1,0 +1,31 @@
+ttio.tools.transport_encode_cli
+===============================
+
+.. py:module:: ttio.tools.transport_encode_cli
+
+.. autoapi-nested-parse::
+
+   Encode a .tio file as a .tis transport stream (v0.10 M70).
+
+   Parallel to Java {@code com.dtwthalion.ttio.tools.TransportEncodeCli}
+   and ObjC {@code TtioTransportEncode}.
+
+   Usage:
+       python -m ttio.tools.transport_encode_cli <input.tio> <output.tis>
+           [--checksum]
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.transport_encode_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

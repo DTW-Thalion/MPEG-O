@@ -1,0 +1,104 @@
+ttio.two_dimensional_correlation_spectrum
+=========================================
+
+.. py:module:: ttio.two_dimensional_correlation_spectrum
+
+.. autoapi-nested-parse::
+
+   ``TwoDimensionalCorrelationSpectrum`` — 2D-COS synchronous/asynchronous pair.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.two_dimensional_correlation_spectrum.TwoDimensionalCorrelationSpectrum
+
+
+Module Contents
+---------------
+
+.. py:class:: TwoDimensionalCorrelationSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   2D correlation spectrum (Noda 2D-COS): synchronous + asynchronous matrices.
+
+   A 2D-COS observation carries a pair of square rank-2 correlation
+   matrices — synchronous (in-phase) and asynchronous
+   (quadrature) — both keyed on the same spectral-variable axis
+   (e.g. wavenumber ν₁ = ν₂). The diagonal of the synchronous matrix
+   is the perturbation-modulated autocorrelation; off-diagonal
+   cross-peaks report simultaneous changes. Off-diagonal asynchronous
+   cross-peaks report sequential changes.
+
+   :param synchronous_matrix: Rank-2 synchronous correlation matrix, shape ``(n, n)``.
+   :type synchronous_matrix: numpy.ndarray
+   :param asynchronous_matrix: Rank-2 asynchronous correlation matrix, shape ``(n, n)``.
+   :type asynchronous_matrix: numpy.ndarray
+   :param variable_axis: Shared axis descriptor (applies to both F1 and F2).
+   :type variable_axis: AxisDescriptor or None, default None
+   :param perturbation: Free-form description of the driving perturbation
+                        (``"temperature"``, ``"concentration"``, ...).
+   :type perturbation: str, default ""
+   :param perturbation_unit: Unit for the perturbation (e.g. ``"K"``, ``"mM"``).
+   :type perturbation_unit: str, default ""
+   :param source_modality: Originating spectroscopy (``"raman"``, ``"ir"``, ``"uv-vis"``, ...).
+   :type source_modality: str, default ""
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11.1).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOTwoDimensionalCorrelationSpectrum`` · Java:
+   ``com.dtwthalion.ttio.TwoDimensionalCorrelationSpectrum``.
+
+
+   .. py:attribute:: synchronous_matrix
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: asynchronous_matrix
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: variable_axis
+      :type:  ttio.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: perturbation
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: perturbation_unit
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: source_modality
+      :type:  str
+      :value: ''
+
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:property:: matrix_size
+      :type: int
+
+
+      Return the length of the shared variable axis.
+
+

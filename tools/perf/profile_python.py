@@ -1,4 +1,4 @@
-"""Python profiling harness for MPEG-O write+read hot paths.
+"""Python profiling harness for TTI-O write+read hot paths.
 
 Workload: 10K spectra × 16 peaks, HDF5 backend. Matches the Java
 StressTest and ObjC TestStress workloads so results are comparable.
@@ -23,10 +23,10 @@ from pathlib import Path
 
 import numpy as np
 
-from mpeg_o import SpectralDataset
-from mpeg_o.enums import Precision, Compression
-from mpeg_o.encoding_spec import ByteOrder, EncodingSpec
-from mpeg_o.signal_array import SignalArray
+from ttio import SpectralDataset
+from ttio.enums import Precision, Compression
+from ttio.encoding_spec import ByteOrder, EncodingSpec
+from ttio.signal_array import SignalArray
 
 # write_minimal uses WrittenRun; import from the fixtures helper.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1].parent / "python" / "tests"))
@@ -54,7 +54,7 @@ def build_written_run(n: int, peaks: int) -> WrittenRun:
     precursor_charges = np.zeros(n, dtype=np.int32)
     base_peak_intensities = intensity.reshape(n, peaks).max(axis=1)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -107,13 +107,13 @@ def main() -> int:
 
     # Warm up — JIT doesn't apply, but caches and imports do.
     for _ in range(args.warmups):
-        wpath = args.out / "warmup.mpgo"
+        wpath = args.out / "warmup.tio"
         if wpath.exists():
             wpath.unlink()
         workload(wpath, args.n, args.peaks, {})
         wpath.unlink()
 
-    mpgo_path = args.out / "stress.mpgo"
+    mpgo_path = args.out / "stress.tio"
     if mpgo_path.exists():
         mpgo_path.unlink()
 

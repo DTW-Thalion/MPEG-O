@@ -1,0 +1,360 @@
+ttio.transport.packets
+======================
+
+.. py:module:: ttio.transport.packets
+
+.. autoapi-nested-parse::
+
+   Packet encoding primitives for the TTI-O transport format.
+
+   All integers and floats are little-endian on the wire. Strings are
+   UTF-8 with explicit ``uint16`` or ``uint32`` length prefixes and are
+   NOT NUL-terminated.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.transport.packets.HEADER_MAGIC
+   ttio.transport.packets.VERSION
+   ttio.transport.packets.HEADER_SIZE
+   ttio.transport.packets.SPECTRUM_CLASS_MASS_SPECTRUM
+   ttio.transport.packets.SPECTRUM_CLASS_NMR_SPECTRUM
+   ttio.transport.packets.SPECTRUM_CLASS_NMR_2D
+   ttio.transport.packets.SPECTRUM_CLASS_FID
+   ttio.transport.packets.SPECTRUM_CLASS_MS_IMAGE_PIXEL
+   ttio.transport.packets.SPECTRUM_CLASS_GENOMIC_READ
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.packets.PacketType
+   ttio.transport.packets.PacketFlag
+   ttio.transport.packets.PacketHeader
+   ttio.transport.packets.ChannelData
+   ttio.transport.packets.AccessUnit
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.transport.packets.crc32c
+   ttio.transport.packets.now_ns
+   ttio.transport.packets.pack_string
+   ttio.transport.packets.unpack_string
+
+
+Module Contents
+---------------
+
+.. py:data:: HEADER_MAGIC
+   :value: b'TI'
+
+
+.. py:data:: VERSION
+   :value: 1
+
+
+.. py:data:: HEADER_SIZE
+   :value: 24
+
+
+.. py:class:: PacketType
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Transport packet types. See ``docs/transport-spec.md`` §3.2.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: STREAM_HEADER
+      :value: 1
+
+
+
+   .. py:attribute:: DATASET_HEADER
+      :value: 2
+
+
+
+   .. py:attribute:: ACCESS_UNIT
+      :value: 3
+
+
+
+   .. py:attribute:: PROTECTION_METADATA
+      :value: 4
+
+
+
+   .. py:attribute:: ANNOTATION
+      :value: 5
+
+
+
+   .. py:attribute:: PROVENANCE
+      :value: 6
+
+
+
+   .. py:attribute:: CHROMATOGRAM
+      :value: 7
+
+
+
+   .. py:attribute:: END_OF_DATASET
+      :value: 8
+
+
+
+   .. py:attribute:: END_OF_STREAM
+      :value: 255
+
+
+
+.. py:class:: PacketFlag
+
+   Bases: :py:obj:`enum.IntFlag`
+
+
+   Support for integer-based Flags
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: ENCRYPTED
+      :value: 1
+
+
+
+   .. py:attribute:: COMPRESSED
+      :value: 2
+
+
+
+   .. py:attribute:: HAS_CHECKSUM
+      :value: 4
+
+
+
+   .. py:attribute:: ENCRYPTED_HEADER
+      :value: 8
+
+
+
+.. py:function:: crc32c(data: bytes) -> int
+
+   CRC-32C (Castagnoli, reflected) of ``data``.
+
+   Matches ``google-crc32c`` and ``java.util.zip.CRC32C`` output.
+   Used when :attr:`PacketFlag.HAS_CHECKSUM` is set.
+
+
+.. py:class:: PacketHeader
+
+   24-byte transport packet header.
+
+
+   .. py:attribute:: packet_type
+      :type:  int
+
+
+   .. py:attribute:: flags
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: dataset_id
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: au_sequence
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: payload_length
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: timestamp_ns
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: to_bytes() -> bytes
+
+
+   .. py:method:: from_bytes(data: bytes) -> PacketHeader
+      :classmethod:
+
+
+
+.. py:class:: ChannelData
+
+   One signal channel inside an :class:`AccessUnit`.
+
+   ``precision`` and ``compression`` are the wire encoding — the
+   :attr:`data` bytes are already encoded. The codec does not
+   transcode channels; round-tripping preserves the source encoding.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: precision
+      :type:  int
+
+
+   .. py:attribute:: compression
+      :type:  int
+
+
+   .. py:attribute:: n_elements
+      :type:  int
+
+
+   .. py:attribute:: data
+      :type:  bytes
+
+
+   .. py:method:: to_bytes() -> bytes
+
+
+   .. py:method:: from_buffer(buf: bytes, offset: int) -> tuple[ChannelData, int]
+      :classmethod:
+
+
+
+.. py:data:: SPECTRUM_CLASS_MASS_SPECTRUM
+   :value: 0
+
+
+.. py:data:: SPECTRUM_CLASS_NMR_SPECTRUM
+   :value: 1
+
+
+.. py:data:: SPECTRUM_CLASS_NMR_2D
+   :value: 2
+
+
+.. py:data:: SPECTRUM_CLASS_FID
+   :value: 3
+
+
+.. py:data:: SPECTRUM_CLASS_MS_IMAGE_PIXEL
+   :value: 4
+
+
+.. py:data:: SPECTRUM_CLASS_GENOMIC_READ
+   :value: 5
+
+
+.. py:class:: AccessUnit
+
+   One spectrum as a transport-layer value.
+
+   The fixed-prefix fields are the **filter keys** a server uses for
+   selective access. Channel bytes travel in :attr:`channels`.
+
+
+   .. py:attribute:: spectrum_class
+      :type:  int
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  int
+
+
+   .. py:attribute:: ms_level
+      :type:  int
+
+
+   .. py:attribute:: polarity
+      :type:  int
+
+
+   .. py:attribute:: retention_time
+      :type:  float
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+
+
+   .. py:attribute:: precursor_charge
+      :type:  int
+
+
+   .. py:attribute:: ion_mobility
+      :type:  float
+
+
+   .. py:attribute:: base_peak_intensity
+      :type:  float
+
+
+   .. py:attribute:: channels
+      :type:  list[ChannelData]
+      :value: []
+
+
+
+   .. py:attribute:: pixel_x
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_y
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_z
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: to_bytes() -> bytes
+
+
+   .. py:method:: from_bytes(data: bytes) -> AccessUnit
+      :classmethod:
+
+
+
+.. py:function:: now_ns() -> int
+
+.. py:function:: pack_string(s: str, *, width: int = 2) -> bytes
+
+   Encode a UTF-8 string with a length prefix (``width=2`` → uint16,
+   ``width=4`` → uint32). Matches the ``{uint<N> len, bytes[len]}``
+   wire convention used throughout the transport format.
+
+
+.. py:function:: unpack_string(buf: bytes, offset: int, *, width: int = 2) -> tuple[str, int]
+
+   Inverse of :func:`pack_string`.
+
+

@@ -1,0 +1,30 @@
+ttio.tools.transport_server_cli
+===============================
+
+.. py:module:: ttio.tools.transport_server_cli
+
+.. autoapi-nested-parse::
+
+   Entry-point for spawning a transport server as a subprocess.
+
+   Usage:
+       python -m ttio.tools.transport_server_cli <ttio-path> [--port 0] [--host 127.0.0.1]
+
+   The bound port is printed to stdout as ``PORT=<n>`` on a single line so
+   callers can capture it. The process runs until terminated.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.transport_server_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

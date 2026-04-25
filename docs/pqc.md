@@ -1,9 +1,9 @@
-# Post-Quantum Cryptography in MPEG-O (v0.8 M49)
+# Post-Quantum Cryptography in TTI-O (v0.8 M49)
 
-MPEG-O activates two NIST-standardized post-quantum primitives in
+TTI-O activates two NIST-standardized post-quantum primitives in
 v0.8:
 
-| Algorithm       | FIPS      | Role in MPEG-O                           | Identifier in catalog |
+| Algorithm       | FIPS      | Role in TTI-O                           | Identifier in catalog |
 |-----------------|-----------|------------------------------------------|-----------------------|
 | **ML-KEM-1024** | FIPS 203  | Envelope key wrap (replaces AES-KEK)     | `ml-kem-1024`         |
 | **ML-DSA-87**   | FIPS 204  | Dataset signatures (`v3:` prefix)        | `ml-dsa-87`           |
@@ -97,8 +97,8 @@ ninja -C build && sudo ninja -C build install
 The build picks up liboqs automatically from `$OQS_PREFIX`,
 `$HOME/_oqs`, `/usr/local/oqs`, `/opt/oqs`, `/usr/local`, or `/usr`
 — first found wins. If liboqs is absent at build time, the PQC
-entry points in `MPGOPostQuantumCrypto` return `NO` with a clear
-"libMPGO was built without liboqs" error message at runtime, and
+entry points in `TTIOPostQuantumCrypto` return `NO` with a clear
+"libTTIO was built without liboqs" error message at runtime, and
 existing AES-GCM / HMAC code paths are unaffected.
 
 ### Java
@@ -177,7 +177,7 @@ remain readable forever (HANDOFF binding decision 38).
 
 Any file that uses `ml-kem-1024` for key wrapping or `ml-dsa-87`
 for signatures gets `opt_pqc_preview` added to its root
-`@mpeg_o_features` list. Because it carries the `opt_` prefix,
+`@ttio_features` list. Because it carries the `opt_` prefix,
 readers without PQC support can still open the file — they just
 cannot verify v3 signatures or unwrap ML-KEM-wrapped DEKs (AES-GCM
 wrapped DEKs on the same file remain unwrappable).
@@ -189,7 +189,7 @@ wrapped DEKs on the same file remain unwrappable).
 ### Python
 
 ```python
-from mpeg_o import pqc, signatures, key_rotation
+from ttio import pqc, signatures, key_rotation
 
 # Primitives
 kp = pqc.kem_keygen()                       # KeyPair(pk=1568, sk=3168)
@@ -214,7 +214,7 @@ dek = key_rotation.unwrap_dek(f, kp.private_key, algorithm="ml-kem-1024")
 ### Java
 
 ```java
-import com.dtwthalion.mpgo.protection.*;
+import com.dtwthalion.tio.protection.*;
 
 // Primitives
 PostQuantumCrypto.KeyPair kp = PostQuantumCrypto.kemKeygen();
@@ -239,44 +239,44 @@ byte[] unwrapped = EncryptionManager.unwrapKey(
 ### Objective-C
 
 ```objc
-#import <MPGOPostQuantumCrypto.h>
-#import <MPGOKeyRotationManager.h>
-#import <MPGOSignatureManager.h>
+#import <TTIOPostQuantumCrypto.h>
+#import <TTIOKeyRotationManager.h>
+#import <TTIOSignatureManager.h>
 
 // Primitives
-MPGOPQCKeyPair *kp = [MPGOPostQuantumCrypto kemKeygenWithError:&err];
-MPGOPQCKemEncapResult *r =
-    [MPGOPostQuantumCrypto kemEncapsulateWithPublicKey:kp.publicKey
+TTIOPQCKeyPair *kp = [TTIOPostQuantumCrypto kemKeygenWithError:&err];
+TTIOPQCKemEncapResult *r =
+    [TTIOPostQuantumCrypto kemEncapsulateWithPublicKey:kp.publicKey
                                                  error:&err];
 NSData *ss2 =
-    [MPGOPostQuantumCrypto kemDecapsulateWithPrivateKey:kp.privateKey
+    [TTIOPostQuantumCrypto kemDecapsulateWithPrivateKey:kp.privateKey
                                              ciphertext:r.ciphertext
                                                   error:&err];
 
-MPGOPQCKeyPair *sk = [MPGOPostQuantumCrypto sigKeygenWithError:&err];
-NSData *sig = [MPGOPostQuantumCrypto sigSignWithPrivateKey:sk.privateKey
+TTIOPQCKeyPair *sk = [TTIOPostQuantumCrypto sigKeygenWithError:&err];
+NSData *sig = [TTIOPostQuantumCrypto sigSignWithPrivateKey:sk.privateKey
                                                    message:msg
                                                      error:&err];
-BOOL ok = [MPGOPostQuantumCrypto sigVerifyWithPublicKey:sk.publicKey
+BOOL ok = [TTIOPostQuantumCrypto sigVerifyWithPublicKey:sk.publicKey
                                                 message:msg
                                               signature:sig
                                                   error:&err];
 
-// Dataset signing (v3) — MPGOSignatureManager algorithm-parameterized
-[MPGOSignatureManager signDataset:@"/payload"
+// Dataset signing (v3) — TTIOSignatureManager algorithm-parameterized
+[TTIOSignatureManager signDataset:@"/payload"
                            inFile:path
                           withKey:sk.privateKey
                         algorithm:@"ml-dsa-87"
                             error:&err];
-[MPGOSignatureManager verifyDataset:@"/payload"
+[TTIOSignatureManager verifyDataset:@"/payload"
                              inFile:path
                             withKey:sk.publicKey
                           algorithm:@"ml-dsa-87"
                               error:&err];
 
-// Envelope wrap — MPGOKeyRotationManager algorithm-parameterized
-MPGOKeyRotationManager *mgr =
-    [MPGOKeyRotationManager managerWithFile:f];
+// Envelope wrap — TTIOKeyRotationManager algorithm-parameterized
+TTIOKeyRotationManager *mgr =
+    [TTIOKeyRotationManager managerWithFile:f];
 NSData *dek = [mgr enableEnvelopeEncryptionWithKEK:kp.publicKey
                                               kekId:@"kem-1"
                                           algorithm:@"ml-kem-1024"
@@ -300,8 +300,8 @@ NSData *dekRead = [mgr unwrapDEKWithKEK:kp.privateKey
 | ML-DSA-87 private key            | 4896  |
 | ML-DSA-87 signature              | 4627  |
 
-These are pinned in `MPGOCipherSuite` (ObjC) /
-`mpeg_o.cipher_suite` (Python) / `CipherSuite` (Java) catalog
+These are pinned in `TTIOCipherSuite` (ObjC) /
+`ttio.cipher_suite` (Python) / `CipherSuite` (Java) catalog
 entries. See the dedicated accessors:
 `public_key_size` / `private_key_size` per language.
 

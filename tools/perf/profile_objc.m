@@ -1,32 +1,32 @@
 /*
- * ObjC profiling harness for MPEG-O. Matches the Python + Java
+ * ObjC profiling harness for TTI-O. Matches the Python + Java
  * harnesses: 10K spectra, 16 peaks, HDF5 backend.
  *
  * Reports phase timings (build / write / read). When built with
  * `-pg`, the gmon.out dump lets gprof produce a hot-method breakdown.
  *
  * Build:
- *   clang -fobjc-arc -I ../Source profile_objc.m -lMPGO \
+ *   clang -fobjc-arc -I ../Source profile_objc.m -lTTIO \
  *       -lgnustep-base -lhdf5 -lobjc -o _build/profile_objc
  *
  * With gprof instrumentation:
- *   add -pg + link libMPGO that was also built with -pg.
+ *   add -pg + link libTTIO that was also built with -pg.
  */
 #import <Foundation/Foundation.h>
 #import <time.h>
 
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Dataset.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Dataset.h"
 
 static double nowSeconds(void)
 {
@@ -35,30 +35,30 @@ static double nowSeconds(void)
     return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
-static MPGOSignalArray *encodeF64(const double *src, NSUInteger n)
+static TTIOSignalArray *encodeF64(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf length:n encoding:enc axis:nil];
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf length:n encoding:enc axis:nil];
 }
 
-static MPGOMassSpectrum *makeSpectrum(NSUInteger k, NSUInteger nPeaks,
+static TTIOMassSpectrum *makeSpectrum(NSUInteger k, NSUInteger nPeaks,
                                        double *mzScratch, double *intScratch)
 {
     for (NSUInteger i = 0; i < nPeaks; i++) {
         mzScratch[i]  = 100.0 + (double)k + (double)i * 0.1;
         intScratch[i] = 1000.0 + (double)((k * 31 + i) % 1000);
     }
-    MPGOSignalArray *mz  = encodeF64(mzScratch, nPeaks);
-    MPGOSignalArray *in_ = encodeF64(intScratch, nPeaks);
+    TTIOSignalArray *mz  = encodeF64(mzScratch, nPeaks);
+    TTIOSignalArray *in_ = encodeF64(intScratch, nPeaks);
     NSError *err = nil;
-    return [[MPGOMassSpectrum alloc] initWithMzArray:mz
+    return [[TTIOMassSpectrum alloc] initWithMzArray:mz
                                       intensityArray:in_
                                              msLevel:1
-                                            polarity:MPGOPolarityPositive
+                                            polarity:TTIOPolarityPositive
                                           scanWindow:nil
                                        indexPosition:k
                                      scanTimeSeconds:(double)k * 0.06
@@ -68,7 +68,7 @@ static MPGOMassSpectrum *makeSpectrum(NSUInteger k, NSUInteger nPeaks,
 }
 
 /* Low-level HDF5 path: writes the two signal channels directly as
- * flat datasets, bypassing MPGOAcquisitionRun/MPGOMassSpectrum object
+ * flat datasets, bypassing TTIOAcquisitionRun/TTIOMassSpectrum object
  * construction. This is the apples-to-apples analogue of Python's
  * `SpectralDataset.write_minimal` and Java's direct double[] channels.
  *
@@ -78,7 +78,7 @@ static MPGOMassSpectrum *makeSpectrum(NSUInteger k, NSUInteger nPeaks,
  *          H5Dwrite the buffers, close
  *   read:  open HDF5, H5Dread the mz dataset, no object construction
  */
-/* writeMinimal API path: builds an MPGOWrittenRun with flat NSData
+/* writeMinimal API path: builds an TTIOWrittenRun with flat NSData
  * buffers and calls the new v1.1 writeMinimalToPath. Parity
  * comparison for Python's SpectralDataset.write_minimal. */
 static void workload_minimal(NSString *path, NSUInteger n, NSUInteger peaks,
@@ -121,9 +121,9 @@ static void workload_minimal(NSString *path, NSUInteger n, NSUInteger peaks,
             rp[i] = (double)i * 0.06;
             mp[i] = 1; pp[i] = 1; qp[i] = 0.0; cp[i] = 0; bp[i] = 1000.0;
         }
-        MPGOWrittenRun *wr = [[MPGOWrittenRun alloc]
-            initWithSpectrumClassName:@"MPGOMassSpectrum"
-                      acquisitionMode:(int64_t)MPGOAcquisitionModeMS1DDA
+        TTIOWrittenRun *wr = [[TTIOWrittenRun alloc]
+            initWithSpectrumClassName:@"TTIOMassSpectrum"
+                      acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
                           channelData:@{@"mz": mzBuf, @"intensity": intBuf}
                               offsets:offsets
                               lengths:lengths
@@ -137,7 +137,7 @@ static void workload_minimal(NSString *path, NSUInteger n, NSUInteger peaks,
 
         t0 = nowSeconds();
         NSError *err = nil;
-        BOOL ok = [MPGOSpectralDataset writeMinimalToPath:path
+        BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
                                                      title:@"stress"
                                        isaInvestigationId:@"ISA-STRESS"
                                                    msRuns:@{@"r": wr}
@@ -149,13 +149,13 @@ static void workload_minimal(NSString *path, NSUInteger n, NSUInteger peaks,
         outT[1] = nowSeconds() - t0;
 
         t0 = nowSeconds();
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         if (!back) { NSLog(@"read failed: %@", err); exit(1); }
-        MPGOAcquisitionRun *backRun = back.msRuns[@"r"];
+        TTIOAcquisitionRun *backRun = back.msRuns[@"r"];
         NSUInteger sampled = 0;
         for (NSUInteger i = 0; i < n; i += 100) {
-            MPGOMassSpectrum *spec = [backRun objectAtIndex:i];
+            TTIOMassSpectrum *spec = [backRun objectAtIndex:i];
             sampled += spec.signalArrays[@"mz"].length;
         }
         outT[2] = nowSeconds() - t0;
@@ -193,23 +193,23 @@ static void workload_flat(NSString *path, NSUInteger n, NSUInteger peaks,
         // ── write ─────────────────────────────────────────────────
         t0 = nowSeconds();
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         if (!f) { NSLog(@"create failed: %@", err); exit(1); }
-        MPGOHDF5Group *root = [f rootGroup];
-        MPGOHDF5Group *ch = [root createGroupNamed:@"signal_channels" error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        TTIOHDF5Group *ch = [root createGroupNamed:@"signal_channels" error:&err];
 
-        MPGOHDF5Dataset *mzDs =
+        TTIOHDF5Dataset *mzDs =
             [ch createDatasetNamed:@"mz_values"
-                         precision:MPGOPrecisionFloat64
+                         precision:TTIOPrecisionFloat64
                             length:total
                          chunkSize:16384
                   compressionLevel:6
                              error:&err];
         [mzDs writeData:mzBuf error:&err];
 
-        MPGOHDF5Dataset *inDs =
+        TTIOHDF5Dataset *inDs =
             [ch createDatasetNamed:@"intensity_values"
-                         precision:MPGOPrecisionFloat64
+                         precision:TTIOPrecisionFloat64
                             length:total
                          chunkSize:16384
                   compressionLevel:6
@@ -222,10 +222,10 @@ static void workload_flat(NSString *path, NSUInteger n, NSUInteger peaks,
         // mz slices of 16 doubles each), do the same with explicit
         // hyperslab reads on the flat dataset.
         t0 = nowSeconds();
-        MPGOHDF5File *f2 = [MPGOHDF5File openAtPath:path error:&err];
-        MPGOHDF5Group *root2 = [f2 rootGroup];
-        MPGOHDF5Group *ch2 = [root2 openGroupNamed:@"signal_channels" error:&err];
-        MPGOHDF5Dataset *mzDs2 = [ch2 openDatasetNamed:@"mz_values" error:&err];
+        TTIOHDF5File *f2 = [TTIOHDF5File openAtPath:path error:&err];
+        TTIOHDF5Group *root2 = [f2 rootGroup];
+        TTIOHDF5Group *ch2 = [root2 openGroupNamed:@"signal_channels" error:&err];
+        TTIOHDF5Dataset *mzDs2 = [ch2 openDatasetNamed:@"mz_values" error:&err];
         NSUInteger sampled = 0;
         for (NSUInteger i = 0; i < n; i += 100) {
             NSData *slice = [mzDs2 readDataAtOffset:i * peaks
@@ -266,22 +266,22 @@ static void workload(NSString *path, NSUInteger n, NSUInteger peaks,
         }
         g_subBuildSpectrum = nowSeconds() - t0;
         t0 = nowSeconds();
-        MPGOInstrumentConfig *cfg =
-            [[MPGOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
+        TTIOInstrumentConfig *cfg =
+            [[TTIOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
                                                          model:@"QE"
                                                   serialNumber:@"S"
                                                     sourceType:@"ESI"
                                                   analyzerType:@"Orbitrap"
                                                   detectorType:@"em"];
-        MPGOAcquisitionRun *run =
-            [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                        acquisitionMode:MPGOAcquisitionModeMS1DDA
+        TTIOAcquisitionRun *run =
+            [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                        acquisitionMode:TTIOAcquisitionModeMS1DDA
                                        instrumentConfig:cfg];
         g_subBuildRun = nowSeconds() - t0;
 
         t0 = nowSeconds();
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"stress"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"stress"
                                   isaInvestigationId:@"ISA-STRESS"
                                               msRuns:@{@"r": run}
                                              nmrRuns:@{}
@@ -294,7 +294,7 @@ static void workload(NSString *path, NSUInteger n, NSUInteger peaks,
 
         // Measure the channel-concat cost separately: iterate over every
         // spectrum's NSData channel and memcpy into one flat NSMutableData,
-        // for both "mz" and "intensity". This is what MPGOAcquisitionRun
+        // for both "mz" and "intensity". This is what TTIOAcquisitionRun
         // writeToGroup: does internally; doing it here quantifies the
         // object-model tax versus the flat-buffer path.
         t0 = nowSeconds();
@@ -302,8 +302,8 @@ static void workload(NSString *path, NSUInteger n, NSUInteger peaks,
         for (NSString *chName in @[@"mz", @"intensity"]) {
             NSMutableData *all = [NSMutableData dataWithLength:total * sizeof(double)];
             NSUInteger cursor = 0;
-            for (MPGOMassSpectrum *s in spectra) {
-                MPGOSignalArray *arr = s.signalArrays[chName];
+            for (TTIOMassSpectrum *s in spectra) {
+                TTIOSignalArray *arr = s.signalArrays[chName];
                 NSUInteger nn = arr.length;
                 memcpy((uint8_t *)all.mutableBytes + cursor * sizeof(double),
                        arr.buffer.bytes, nn * sizeof(double));
@@ -326,16 +326,16 @@ static void workload(NSString *path, NSUInteger n, NSUInteger peaks,
         g_subHdf5Write = outT[1] - g_subConcat;
 
         t0 = nowSeconds();
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         if (!back) {
             NSLog(@"read failed: %@", err);
             exit(1);
         }
-        MPGOAcquisitionRun *backRun = back.msRuns[@"r"];
+        TTIOAcquisitionRun *backRun = back.msRuns[@"r"];
         NSUInteger sampled = 0;
         for (NSUInteger i = 0; i < n; i += 100) {
-            MPGOMassSpectrum *spec = [backRun objectAtIndex:i];
+            TTIOMassSpectrum *spec = [backRun objectAtIndex:i];
             sampled += spec.signalArrays[@"mz"].length;
         }
         outT[2] = nowSeconds() - t0;                                 // read
@@ -388,7 +388,7 @@ int main(int argc, const char *argv[])
 
         // Warm up (caches; no JIT).
         for (NSUInteger w = 0; w < warmups; w++) {
-            NSString *wp = [NSString stringWithFormat:@"%@/warm_%lu.mpgo",
+            NSString *wp = [NSString stringWithFormat:@"%@/warm_%lu.tio",
                             outDir, (unsigned long)w];
             unlink([wp fileSystemRepresentation]);
             double t[3];
@@ -396,7 +396,7 @@ int main(int argc, const char *argv[])
             unlink([wp fileSystemRepresentation]);
         }
 
-        NSString *path = [NSString stringWithFormat:@"%@/stress.mpgo", outDir];
+        NSString *path = [NSString stringWithFormat:@"%@/stress.tio", outDir];
         unlink([path fileSystemRepresentation]);
 
         double t[3];

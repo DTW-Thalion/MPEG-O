@@ -1,4 +1,4 @@
-# MPEG-O v0.7 API Review — Cross-Language Consistency Notes
+# TTI-O v0.7 API Review — Cross-Language Consistency Notes
 
 > **Milestone block:** v0.7 (all must-have + both stretch items complete)
 > **Date:** 2026-04-18
@@ -36,10 +36,10 @@ static factory method cannot mutate an existing instance, and ObjC's
 uniformly. The Python dual-style is a local convenience, not a portable
 API contract.
 
-### 1.2 `-readRows:` required on `MPGOStorageDataset` (v0.7 M50.2)
+### 1.2 `-readRows:` required on `TTIOStorageDataset` (v0.7 M50.2)
 
 Prior to v0.7, ObjC's `-readRows:error:` was marked `@optional` on the
-`MPGOStorageDataset` protocol. A provider that forgot to implement it
+`TTIOStorageDataset` protocol. A provider that forgot to implement it
 would silently fail at runtime with `doesNotRecognizeSelector:`. M50.2
 promotes the method to `@required`, making omission a compile-time
 error. Python and Java have always had concrete default implementations
@@ -50,8 +50,8 @@ of the equivalent (`read_rows()` / `readRows()`).
 | Language | Importer error type |
 |---|---|
 | Python   | `MzMLParseError(ValueError)` — typed, chainable via `__cause__` |
-| Java     | `MzMLParseException extends MpgoReaderException extends IOException` (v0.7 M50.3) |
-| ObjC     | `NSError` with domain `MPGOMzMLReaderErrorDomain`, specific codes |
+| Java     | `MzMLParseException extends TtioReaderException extends IOException` (v0.7 M50.3) |
+| ObjC     | `NSError` with domain `TTIOMzMLReaderErrorDomain`, specific codes |
 
 Pre-v0.7 Java threw bare `Exception`, making it impossible to catch
 "parse error" vs "I/O error" distinctly. M50.3 introduces a typed
@@ -63,7 +63,7 @@ catching arbitrary runtime errors.
 Python module docstrings and ObjC header comments uniformly carry
 "API status: Stable" + "Cross-language equivalents" blocks. Java coverage
 was patchy pre-v0.7; M50.4 completes an audit pass so every public type
-in `com.dtwthalion.mpgo.*` carries a `@since` tag matching its
+in `com.dtwthalion.tio.*` carries a `@since` tag matching its
 introducing milestone (v0.5, v0.6, v0.6.1, or v0.7).
 
 ---
@@ -96,30 +96,30 @@ failure mode in another, use this table. One row per conceptual error.
 
 | Condition | Objective-C (`NSError.code`) | Java exception | Python exception |
 |-----------|------------------------------|----------------|------------------|
-| File not found on open | `MPGOErrorFileNotFound` | `FileNotFoundException` | `FileNotFoundError` |
-| File open failed (other) | `MPGOErrorFileOpen` | `IOException` | `IOError` / `OSError` |
-| File create/truncate failed | `MPGOErrorFileCreate` | `IOException` | `IOError` |
-| Dataset read failed | `MPGOErrorDatasetRead` | `RuntimeException` | `RuntimeError` |
-| Dataset write failed | `MPGOErrorDatasetWrite` | `RuntimeException` | `RuntimeError` |
-| Dataset create failed | `MPGOErrorDatasetCreate` | `Hdf5Errors.DatasetCreateException` | `RuntimeError` |
-| Group create failed | `MPGOErrorGroupCreate` | `Hdf5Errors.GroupCreateException` | `RuntimeError` |
-| Group open failed | `MPGOErrorGroupOpen` | `Hdf5Errors.GroupOpenException` | `RuntimeError` |
-| Hyperslab / index out of range | `MPGOErrorOutOfRange` | `IndexOutOfBoundsException` | `IndexError` |
-| Attribute read (missing) | `MPGOErrorAttributeRead` | `RuntimeException` / `NullPointerException` | `KeyError` |
-| Attribute write (read-only) | `MPGOErrorAttributeWrite` | `UnsupportedOperationException` | `PermissionError` |
-| mzML parse error | `MPGOMzMLReaderErrorParseFailed` | `MzMLParseException` (M50.3) | `MzMLParseError` |
-| nmrML parse error | `MPGONmrMLReaderErrorParseFailed` | `NmrMLParseException` (M50.3) | `NmrMLParseError` |
-| Thermo RAW convert failed | `MPGOThermoRawErrorConvert` | `ThermoRawException` (M50.3) | `ThermoRawError` |
-| Provider not open | `MPGOErrorFileOpen` | `IllegalStateException` | `IOError` ("provider is not open") |
-| Unsupported algorithm (v0.7 M48) | `MPGOErrorUnsupportedAlgorithm` | `UnsupportedAlgorithmException` | `UnsupportedAlgorithmError` |
-| Unsupported signature version (v0.7 M47) | `MPGOErrorUnsupportedSignature` | `UnsupportedSignatureException` | `UnsupportedSignatureError` |
-| Key length mismatch (v0.7 M48) | `MPGOErrorInvalidKey` | `InvalidKeyException` (`java.security`) | `InvalidKeyError` |
-| Decryption authentication tag mismatch | `MPGOErrorDecryptionFailed` | `AEADBadTagException` | `cryptography.exceptions.InvalidTag` |
-| Signature verification failed | `MPGOErrorSignatureMismatch` | `SignatureException` | `InvalidSignatureError` |
+| File not found on open | `TTIOErrorFileNotFound` | `FileNotFoundException` | `FileNotFoundError` |
+| File open failed (other) | `TTIOErrorFileOpen` | `IOException` | `IOError` / `OSError` |
+| File create/truncate failed | `TTIOErrorFileCreate` | `IOException` | `IOError` |
+| Dataset read failed | `TTIOErrorDatasetRead` | `RuntimeException` | `RuntimeError` |
+| Dataset write failed | `TTIOErrorDatasetWrite` | `RuntimeException` | `RuntimeError` |
+| Dataset create failed | `TTIOErrorDatasetCreate` | `Hdf5Errors.DatasetCreateException` | `RuntimeError` |
+| Group create failed | `TTIOErrorGroupCreate` | `Hdf5Errors.GroupCreateException` | `RuntimeError` |
+| Group open failed | `TTIOErrorGroupOpen` | `Hdf5Errors.GroupOpenException` | `RuntimeError` |
+| Hyperslab / index out of range | `TTIOErrorOutOfRange` | `IndexOutOfBoundsException` | `IndexError` |
+| Attribute read (missing) | `TTIOErrorAttributeRead` | `RuntimeException` / `NullPointerException` | `KeyError` |
+| Attribute write (read-only) | `TTIOErrorAttributeWrite` | `UnsupportedOperationException` | `PermissionError` |
+| mzML parse error | `TTIOMzMLReaderErrorParseFailed` | `MzMLParseException` (M50.3) | `MzMLParseError` |
+| nmrML parse error | `TTIONmrMLReaderErrorParseFailed` | `NmrMLParseException` (M50.3) | `NmrMLParseError` |
+| Thermo RAW convert failed | `TTIOThermoRawErrorConvert` | `ThermoRawException` (M50.3) | `ThermoRawError` |
+| Provider not open | `TTIOErrorFileOpen` | `IllegalStateException` | `IOError` ("provider is not open") |
+| Unsupported algorithm (v0.7 M48) | `TTIOErrorUnsupportedAlgorithm` | `UnsupportedAlgorithmException` | `UnsupportedAlgorithmError` |
+| Unsupported signature version (v0.7 M47) | `TTIOErrorUnsupportedSignature` | `UnsupportedSignatureException` | `UnsupportedSignatureError` |
+| Key length mismatch (v0.7 M48) | `TTIOErrorInvalidKey` | `InvalidKeyException` (`java.security`) | `InvalidKeyError` |
+| Decryption authentication tag mismatch | `TTIOErrorDecryptionFailed` | `AEADBadTagException` | `cryptography.exceptions.InvalidTag` |
+| Signature verification failed | `TTIOErrorSignatureMismatch` | `SignatureException` | `InvalidSignatureError` |
 
 **Rule of thumb:** ObjC error codes are the most precise; Java uses
 standard `java.io` / `java.security` exceptions where they exist and
-MPGO-specific ones otherwise; Python mirrors Java's specificity using
+TTIO-specific ones otherwise; Python mirrors Java's specificity using
 exception subclass names that match `<DomainName>Error` convention.
 
 ---
@@ -177,18 +177,18 @@ The harness:
 
 1. Python writes a 5-identification / 3-quantification / 7-provenance
    fixture via `SpectralDataset.write_minimal`.
-2. Three dumpers — `python -m mpeg_o.tools.dump_identifications`,
-   `objc/Tools/obj/MpgoDumpIdentifications`, and
-   `com.dtwthalion.mpgo.tools.DumpIdentifications` (invoked via
+2. Three dumpers — `python -m ttio.tools.dump_identifications`,
+   `objc/Tools/obj/TtioDumpIdentifications`, and
+   `com.dtwthalion.tio.tools.DumpIdentifications` (invoked via
    `java/run-tool.sh`) — emit the same deterministic JSON to stdout.
 3. `python/tests/test_compound_writer_parity.py` diffs the three outputs
    pairwise; any non-zero diff fails the test.
 
 Format: sorted keys, tight inner JSON, one record per line, LF endings,
 C99 `%.17g` floats. Implementations live in
-`mpeg_o/tools/_canonical_json.py`,
-`com/dtwthalion/mpgo/tools/CanonicalJson.java`, and the static helpers
-in `objc/Tools/MpgoDumpIdentifications.m`.
+`ttio/tools/_canonical_json.py`,
+`com/dtwthalion/ttio/tools/CanonicalJson.java`, and the static helpers
+in `objc/Tools/TtioDumpIdentifications.m`.
 
 The 9-way interop grid (3 writers × 3 dumpers) called out in HANDOFF.md
 M51 ships with the read direction only (1 writer × 3 dumpers); Java

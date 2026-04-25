@@ -1,0 +1,164 @@
+ttio.signatures
+===============
+
+.. py:module:: ttio.signatures
+
+.. autoapi-nested-parse::
+
+   HMAC-SHA256 digital signatures matching the ObjC reference implementation.
+
+   v0.2 (``v1`` in this file) signed over the raw bytes returned by
+   ``H5Dread`` in the dataset's native memory type; on little-endian hosts
+   that happens to be the same as the canonical form, but signatures would
+   not validate across host endianness. v0.3 introduces a ``v2`` canonical
+   form that normalizes atomic numeric datasets to little-endian before
+   hashing and emits compound records with a fixed per-field layout
+   (little-endian numerics plus ``u32_le(length) || bytes`` for VL strings).
+
+   Stored signatures carry a ``v2:`` prefix; verifiers accept unprefixed
+   ``v1`` signatures for backward compatibility and silently route them
+   through the native-bytes path.
+
+   The format is fully interoperable with the Objective-C reference
+   implementation — see ``objc/Source/Protection/TTIOSignatureManager.m``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSignatureManager`` · Java:
+   ``com.dtwthalion.ttio.protection.SignatureManager``.
+
+   API status: Stable.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.signatures.SIGNATURE_ATTR
+   ttio.signatures.PROVENANCE_SIGNATURE_ATTR
+   ttio.signatures.SIGNATURE_V2_PREFIX
+   ttio.signatures.SIGNATURE_V3_PREFIX
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.signatures.hmac_sha256
+   ttio.signatures.hmac_sha256_b64
+   ttio.signatures.sign_dataset
+   ttio.signatures.verify_dataset
+   ttio.signatures.verify_provenance
+   ttio.signatures.sign_storage_dataset
+   ttio.signatures.verify_storage_dataset
+
+
+Module Contents
+---------------
+
+.. py:data:: SIGNATURE_ATTR
+   :value: 'ttio_signature'
+
+
+.. py:data:: PROVENANCE_SIGNATURE_ATTR
+   :value: 'provenance_signature'
+
+
+.. py:data:: SIGNATURE_V2_PREFIX
+   :value: 'v2:'
+
+
+.. py:data:: SIGNATURE_V3_PREFIX
+   :value: 'v3:'
+
+
+.. py:function:: hmac_sha256(data: bytes, key: bytes) -> bytes
+
+   Return the raw 32-byte HMAC-SHA256 MAC.
+
+
+.. py:function:: hmac_sha256_b64(data: bytes, key: bytes) -> str
+
+   Return the base64-encoded MAC as produced by the ObjC writer.
+
+
+.. py:function:: sign_dataset(dataset: Any, key: bytes, *, algorithm: str = 'hmac-sha256') -> str
+
+   Sign ``dataset`` with a canonical signature.
+
+   For ``algorithm="hmac-sha256"`` (default) ``key`` is a shared secret
+   and the output is ``"v2:" + base64(hmac)``. For
+   ``algorithm="ml-dsa-87"`` (v0.8 M49) ``key`` is the 4896-byte
+   ML-DSA-87 signing private key and the output is
+   ``"v3:" + base64(signature)``. Use :func:`verify_dataset` to
+   validate; it dispatches on the stored prefix.
+
+   v0.9 M64.5 phase B: ``dataset`` may be either an ``h5py.Dataset``
+   (legacy fast path) or a :class:`StorageDataset` from any provider.
+   Non-h5py inputs delegate to :func:`sign_storage_dataset` so the
+   same signature ends up on Memory / SQLite / Zarr backends.
+
+   v0.8 M49: ML-DSA-87 requires the ``[pqc]`` optional extra (Python /
+   ObjC backend is ``liboqs``; Java uses Bouncy Castle — see
+   :file:`docs/pqc.md`).
+
+
+.. py:function:: verify_dataset(dataset: Any, key: bytes, *, algorithm: str = 'hmac-sha256') -> bool
+
+   Verify the stored ``@ttio_signature`` against ``key``.
+
+   Accepts v0.2 unprefixed HMAC (native-bytes path), v0.3 ``v2:``
+   canonical HMAC, and v0.8 ``v3:`` ML-DSA-87 signatures. Uses
+   timing-safe comparison for HMAC; ML-DSA verification itself runs
+   in constant time via liboqs.
+
+   v0.9 M64.5 phase B: ``dataset`` may be either an ``h5py.Dataset``
+   or a :class:`StorageDataset`; non-h5py inputs delegate to
+   :func:`verify_storage_dataset`.
+
+   The ``algorithm`` keyword tells the verifier what key shape to
+   expect. If the on-disk prefix does not match, raises
+   :class:`~ttio.cipher_suite.UnsupportedAlgorithmError` so callers
+   don't silently pass verification of a file encrypted with a
+   different algorithm. For ML-DSA-87, ``key`` is the 2592-byte
+   verification public key.
+
+
+.. py:function:: verify_provenance(run_group: h5py.Group, key: bytes) -> bool
+
+   Verify the ``@provenance_signature`` over ``@provenance_json``.
+
+
+.. py:function:: sign_storage_dataset(dataset: Any, key: bytes, *, algorithm: str = 'hmac-sha256') -> str
+
+   Sign any :class:`~ttio.providers.base.StorageDataset` with the
+   named algorithm.
+
+   Mirrors :func:`sign_dataset` (h5py-native) but works across every
+   provider — HDF5, Memory, SQLite, Zarr. The canonical byte stream
+   comes from :meth:`StorageDataset.read_canonical_bytes` so the
+   signature is identical regardless of backend.
+
+   Used by the M54.1 cross-language conformance matrix. The dataset
+   must support ``set_attribute("ttio_signature", str)`` — every
+   shipping provider does.
+
+   @since 0.8 (v0.8 M54.1)
+
+
+.. py:function:: verify_storage_dataset(dataset: Any, key: bytes, *, algorithm: str = 'hmac-sha256') -> bool
+
+   Verify any :class:`~ttio.providers.base.StorageDataset`'s
+   stored ``@ttio_signature``.
+
+   Prefix/algorithm must match — a ``v3:`` attribute with
+   ``algorithm="hmac-sha256"`` raises
+   :class:`~ttio.cipher_suite.UnsupportedAlgorithmError` so silent
+   acceptance of a wrong-scheme file is impossible.
+
+   @since 0.8 (v0.8 M54.1)
+
+

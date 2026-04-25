@@ -1,0 +1,75 @@
+ttio.query
+==========
+
+.. py:module:: ttio.query
+
+.. autoapi-nested-parse::
+
+   ``Query`` — compressed-domain query builder over ``SpectrumIndex``.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.query.Query
+
+
+Module Contents
+---------------
+
+.. py:class:: Query
+
+   Compressed-domain query against a :class:`SpectrumIndex`.
+
+   Predicates are combined with AND (intersection). The query
+   operates entirely on the in-memory index arrays — signal-channel
+   datasets are never opened, so a 10k-spectrum scan completes in
+   under a millisecond and never touches the encrypted intensity
+   stream.
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOQuery`` · Java:
+   ``com.dtwthalion.ttio.Query``.
+
+
+   .. py:attribute:: index
+      :type:  ttio.acquisition_run.SpectrumIndex
+
+
+   .. py:method:: on_index(index: ttio.acquisition_run.SpectrumIndex) -> Query
+      :classmethod:
+
+
+      Start a query on the given index.
+
+
+
+   .. py:method:: with_retention_time_range(value_range: ttio.value_range.ValueRange) -> Query
+
+
+   .. py:method:: with_ms_level(level: int) -> Query
+
+
+   .. py:method:: with_polarity(polarity: ttio.enums.Polarity) -> Query
+
+
+   .. py:method:: with_precursor_mz_range(value_range: ttio.value_range.ValueRange) -> Query
+
+
+   .. py:method:: with_base_peak_intensity_at_least(threshold: float) -> Query
+
+
+   .. py:method:: matching_indices() -> list[int]
+
+      Return the indices that match all predicates (AND).
+
+
+

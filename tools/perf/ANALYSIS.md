@@ -1,7 +1,7 @@
 # Cross-language Performance Analysis
 
 Harnesses under `tools/perf/` profile identical workloads (N spectra ×
-16 peaks, HDF5 backend, zlib compression) across the three MPEG-O
+16 peaks, HDF5 backend, zlib compression) across the three TTI-O
 implementations. Timings below are from one representative run on WSL2
 (Ubuntu 24.04, 6.6.87.2-microsoft-standard-WSL2) with one warmup pass.
 All three harnesses warm the libhdf5 path before measurement.
@@ -77,11 +77,11 @@ sun.nio.fs.UnixNativeDispatcher.unlink0                  1     2.1%
 
 ### ObjC — sub-phase timers + flat-path contrast
 
-Object API (MPGOMassSpectrum per-spectrum), 100 000 spectra, 755 ms total:
+Object API (TTIOMassSpectrum per-spectrum), 100 000 spectra, 755 ms total:
 
 ```
 build phase               136.9 ms
-  build spectrum objects  112.7 ms   (100K MPGOMassSpectrum alloc + 2×NSData)
+  build spectrum objects  112.7 ms   (100K TTIOMassSpectrum alloc + 2×NSData)
   build AcquisitionRun     24.1 ms
   build SpectralDataset     0.0 ms
 write phase               579.5 ms
@@ -92,7 +92,7 @@ write phase               579.5 ms
 read phase (sampled)       38.6 ms
 ```
 
-Flat API (MPGOHDF5Provider primitives, no Spectrum objects), 100 K × 16,
+Flat API (TTIOHDF5Provider primitives, no Spectrum objects), 100 K × 16,
 473 ms total:
 
 ```
@@ -103,7 +103,7 @@ read    47.2 ms
 
 ### The gap between ObjC object-mode and flat-mode write is
 **explained by format, not language**. Object-mode emits the full v0.2
-`.mpgo` layout: `spectrum_index/{offsets, lengths, retention_times,
+`.tio` layout: `spectrum_index/{offsets, lengths, retention_times,
 ms_levels, polarities, precursor_mzs, precursor_charges,
 base_peak_intensities}` (9 datasets, 100 K rows each), plus compound
 headers, instrument_config group, provenance, and attributes.
@@ -119,16 +119,16 @@ ObjC 69 ms write) use each language's **high-level** API:
   object construction, no per-spectrum autorelease.
 - Java's `SpectralDataset.create(...)` takes an `AcquisitionRun` built
   from a `Map<String,double[]>` — again, flat up-front.
-- ObjC's `MPGOSpectralDataset initWithMsRuns:` requires an
-  `MPGOAcquisitionRun` built from an `NSArray<MPGOMassSpectrum>`,
+- ObjC's `TTIOSpectralDataset initWithMsRuns:` requires an
+  `TTIOAcquisitionRun` built from an `NSArray<TTIOMassSpectrum>`,
   i.e. **one `NSData` buffer per spectrum per channel**.
 
 So the ObjC high-level write path pays two costs the other two don't:
 
-1. **Per-spectrum object construction** — 10 K × (`MPGOMassSpectrum` +
-   2 × `MPGOSignalArray` + 2 × `NSData`). On 100 K at 16 peaks this
+1. **Per-spectrum object construction** — 10 K × (`TTIOMassSpectrum` +
+   2 × `TTIOSignalArray` + 2 × `NSData`). On 100 K at 16 peaks this
    costs ~113 ms before `write` even starts.
-2. **Concat-at-write** — at write time, `MPGOAcquisitionRun
+2. **Concat-at-write** — at write time, `TTIOAcquisitionRun
    writeToGroup:` iterates every spectrum and memcpys its two channels
    into one flat `NSMutableData`. ~69 ms on 100 K.
 
@@ -171,11 +171,11 @@ Mirror Python's `SpectralDataset.write_minimal` in ObjC:
                      title:(NSString *)title
               investigation:(NSString *)inv
                       runs:(NSDictionary<NSString *,
-                            MPGOWrittenRun *> *)runs
+                            TTIOWrittenRun *> *)runs
                      error:(NSError **)error;
 ```
 
-where `MPGOWrittenRun` is a plain value object holding `NSData *mz`,
+where `TTIOWrittenRun` is a plain value object holding `NSData *mz`,
 `NSData *intensity`, `NSData *offsets`, `NSData *retentionTimes`,
 etc. — exactly what the current `writeToGroup:` loop builds
 internally. Callers who already have flat buffers skip both the
@@ -228,13 +228,13 @@ Expected delta: cuts the 69 ms concat to ~20 ms.
 
 Three optimisations shipped following the analysis above:
 
-1. ObjC `+MPGOSpectralDataset writeMinimalToPath:` — flat-buffer fast
-   path plus new `MPGOWrittenRun` value class; eliminates per-spectrum
+1. ObjC `+TTIOSpectralDataset writeMinimalToPath:` — flat-buffer fast
+   path plus new `TTIOWrittenRun` value class; eliminates per-spectrum
    alloc and write-time channel concat.
 2. Default HDF5 chunk sizes raised across all three languages: signal
    channels 16 384 → 65 536 (128 KB → 512 KB per chunk); index arrays
    1 024 → 4 096 (ObjC + Python).
-3. ObjC `MPGOAcquisitionRun -writeToGroup:` channel concat now uses
+3. ObjC `TTIOAcquisitionRun -writeToGroup:` channel concat now uses
    `malloc` + `NSData dataWithBytesNoCopy:freeWhenDone:` instead of
    `NSMutableData dataWithLength:` + `.mutableBytes`, avoiding the
    zero-fill tax on the concat buffer.
@@ -440,7 +440,7 @@ After format parity and the writeMinimal fix, ObjC's read phase at
 Phase                                Time      per call   Wrapper tax
 ───────────────────────────────────────────────────────────────────────
 A.  raw-C H5Dread (1 ch, reuse)      17.1 ms   17.1 us    (baseline)
-B.  MPGOHDF5Dataset wrapper (1 ch)   17.4 ms   17.4 us    +0.3 us
+B.  TTIOHDF5Dataset wrapper (1 ch)   17.4 ms   17.4 us    +0.3 us
 B2. hand-coded reuse-spaces path     16.5 ms   16.5 us    (best case)
 C0. readFromFilePath (8 idx arrays)   6.9 ms   ──         format work
 C1. full objectAtIndex loop (2 ch)   27.4 ms   27.4 us    2nd ch + alloc
@@ -453,7 +453,7 @@ mandatory work* or *a fair apples-to-apples comparison issue*:
 
 ### 1. The 2nd channel read is the single biggest cost (~12 ms of 21 ms gap)
 
-`MPGOMassSpectrum` is contractually two-channel (mz + intensity). The
+`TTIOMassSpectrum` is contractually two-channel (mz + intensity). The
 raw-C baseline harness reads only `mz_values` because that's all it
 needs for a perf floor. An apples-to-apples raw-C harness that also
 reads `intensity_values` would land at roughly 2× the current 17 ms —
@@ -461,7 +461,7 @@ maybe 28-30 ms with chunk-cache adjacency savings — at which point
 ObjC's 34 ms is **~1.1-1.2× raw C**.
 
 We can't drop this cost without breaking the spectrum abstraction.
-Every real consumer of `MPGOMassSpectrum` needs both arrays.
+Every real consumer of `TTIOMassSpectrum` needs both arrays.
 
 ### 2. Eager spectrum_index loading (~3-4 ms)
 
@@ -479,10 +479,10 @@ predictable.
 
 ### 3. Object allocation is essentially free (~2 ms)
 
-Allocating `MPGOMassSpectrum` + 2× `MPGOSignalArray` + 2× `NSData` per
+Allocating `TTIOMassSpectrum` + 2× `TTIOSignalArray` + 2× `NSData` per
 spectrum costs ~2 µs per sample × 1000 = ~2 ms of the 100K-sample
 loop. That's the cost of the API shape — ObjC users iterate over
-`id<MPGOIndexable>` returning typed objects, not raw buffers. The
+`id<TTIOIndexable>` returning typed objects, not raw buffers. The
 alternative (lower-level C-style iteration) would break every
 existing caller.
 
@@ -493,7 +493,7 @@ existing caller.
 | 2nd channel read (intensity) | ~12 ms | Mandatory — API contract |
 | Eager spectrum_index (6 extra arrays) | ~3-4 ms | Optimizable but deferred |
 | Object allocation (MassSpectrum + wrappers) | ~2 ms | API shape |
-| MPGOHDF5Dataset wrapper (per-call native-call overhead) | ~0.3 ms | At the libhdf5 floor |
+| TTIOHDF5Dataset wrapper (per-call native-call overhead) | ~0.3 ms | At the libhdf5 floor |
 | **Total residual vs single-channel raw C** | **~18 ms** | |
 
 Put differently: **ObjC at 34 ms** vs **an apples-to-apples raw C
@@ -504,7 +504,7 @@ not work ObjC does redundantly.
 
 ### What we're not pursuing, and why
 
-- **Lazy `MPGOSignalArray`** (~8 ms potential): Goodhart's law. The
+- **Lazy `TTIOSignalArray`** (~8 ms potential): Goodhart's law. The
   benchmark reads only `.length` so lazy I/O would hide the cost,
   but real peak-picking code reads `.data` and would pay the same
   cost later. Would make the benchmark prettier without helping any
@@ -521,18 +521,18 @@ below the return-on-investment line for v1.x.
 
 ```bash
 # Python
-cd ~/MPEG-O/python && source .venv/bin/activate
-python3 ~/MPEG-O/tools/perf/profile_python.py --n 10000
-python3 ~/MPEG-O/tools/perf/profile_python.py --n 100000
+cd ~/TTI-O/python && source .venv/bin/activate
+python3 ~/TTI-O/tools/perf/profile_python.py --n 10000
+python3 ~/TTI-O/tools/perf/profile_python.py --n 100000
 
 # Java (JFR)
-bash ~/MPEG-O/tools/perf/build_and_run_java.sh --n 10000
-python3 ~/MPEG-O/tools/perf/aggregate_jfr.py \
-    ~/MPEG-O/tools/perf/_out_java/native_samples_raw.txt
+bash ~/TTI-O/tools/perf/build_and_run_java.sh --n 10000
+python3 ~/TTI-O/tools/perf/aggregate_jfr.py \
+    ~/TTI-O/tools/perf/_out_java/native_samples_raw.txt
 
 # ObjC (object + flat modes)
-bash ~/MPEG-O/tools/perf/build_and_run_objc.sh --n 10000
-bash ~/MPEG-O/tools/perf/build_and_run_objc.sh --n 10000 --flat
+bash ~/TTI-O/tools/perf/build_and_run_objc.sh --n 10000
+bash ~/TTI-O/tools/perf/build_and_run_objc.sh --n 10000 --flat
 ```
 
 ---
@@ -540,7 +540,7 @@ bash ~/MPEG-O/tools/perf/build_and_run_objc.sh --n 10000 --flat
 # v0.11.1 multi-function matrix
 
 Everything above measures the MS write/read path only — the workload
-MPEG-O shipped in v0.9. Since then v0.10 added the `.mots` transport
+TTI-O shipped in v0.9. Since then v0.10 added the `.tis` transport
 codec, v0.10.5 added per-AU AES-256-GCM encryption and HMAC-SHA256 /
 ML-DSA-87 signatures, and v0.11 added IR / Raman / UV-Vis / 2D-COS
 spectrum classes with JCAMP-DX 5.01 import + export. A three-way
@@ -553,7 +553,7 @@ three languages so cross-language deltas are directly comparable:
 | Benchmark | Workload |
 |---|---|
 | `ms.hdf5`, `ms.memory`, `ms.sqlite`, `ms.zarr` | write_minimal + sampled read across every storage provider |
-| `transport.plain`, `transport.compressed` | `.mots` encode + decode, with and without zlib per-channel |
+| `transport.plain`, `transport.compressed` | `.tis` encode + decode, with and without zlib per-channel |
 | `encryption` | per-AU AES-256-GCM encrypt + decrypt on the MS file |
 | `signatures` | HMAC-SHA256 sign + verify on the intensity channel |
 | `jcamp` | JCAMP-DX write + read for IR / Raman / UV-Vis, plus a compressed (SQZ) read |
@@ -618,7 +618,7 @@ scheduled post-v1.0). Listed here as `—` so the table makes the gap
 explicit; the ObjC read path would already land on all four providers
 if the harness exercised it.
 
-### `transport.*` — .mots codec
+### `transport.*` — .tis codec
 
 - **Python is the outlier at 740–812 ms**, ~4-5× the compiled
   languages. The Python writer builds per-packet `bytes` concatenations
@@ -724,13 +724,13 @@ v1.x point release.
 
 ```bash
 # Python
-python3 ~/MPEG-O/tools/perf/profile_python_full.py --n 10000 \
-    --json ~/MPEG-O/tools/perf/_out_python_full/full.json
+python3 ~/TTI-O/tools/perf/profile_python_full.py --n 10000 \
+    --json ~/TTI-O/tools/perf/_out_python_full/full.json
 
 # Java (JFR)
-bash ~/MPEG-O/tools/perf/build_and_run_java_full.sh --n 10000
+bash ~/TTI-O/tools/perf/build_and_run_java_full.sh --n 10000
 
 # ObjC
-bash ~/MPEG-O/tools/perf/build_and_run_objc_full.sh --n 10000 \
-    --json ~/MPEG-O/tools/perf/_out_objc_full/full.json
+bash ~/TTI-O/tools/perf/build_and_run_objc_full.sh --n 10000 \
+    --json ~/TTI-O/tools/perf/_out_objc_full/full.json
 ```

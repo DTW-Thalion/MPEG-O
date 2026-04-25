@@ -1,0 +1,85 @@
+ttio.stream_reader
+==================
+
+.. py:module:: ttio.stream_reader
+
+.. autoapi-nested-parse::
+
+   ``StreamReader`` — sequential reader over a run inside an .tio file.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.stream_reader.StreamReader
+
+
+Module Contents
+---------------
+
+.. py:class:: StreamReader(file_path: str, run_name: str)
+
+   Sequential reader for a single MS run inside an ``.tio`` file.
+
+   Opens the file and the named run lazily; each
+   :meth:`next_spectrum` call returns a :class:`Spectrum` via the
+   run's hyperslab path. Suitable for streaming through runs larger
+   than memory.
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOStreamReader`` · Java:
+   ``com.dtwthalion.ttio.StreamReader``.
+
+
+   .. py:property:: total_count
+      :type: int
+
+
+      Total number of spectra in the run.
+
+
+   .. py:property:: current_position
+      :type: int
+
+
+      0-based position of the next spectrum to be read.
+
+
+   .. py:method:: at_end() -> bool
+
+      Return ``True`` once every spectrum has been read.
+
+
+
+   .. py:method:: next_spectrum() -> ttio.spectrum.Spectrum
+
+      Return the next spectrum and advance the cursor.
+
+
+
+   .. py:method:: reset() -> None
+
+      Reposition the cursor to 0.
+
+
+
+   .. py:method:: close() -> None
+
+      Close the underlying HDF5 file.
+
+
+
+   .. py:method:: __enter__() -> StreamReader
+
+
+   .. py:method:: __exit__(*exc: object) -> None
+
+

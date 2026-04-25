@@ -1,0 +1,174 @@
+ttio.importers.cv_term_mapper
+=============================
+
+.. py:module:: ttio.importers.cv_term_mapper
+
+.. autoapi-nested-parse::
+
+   PSI-MS and nmrCV accession mappings.
+
+   Exact Python port of the ObjC ``TTIOCVTermMapper`` lookup tables. The set
+   deliberately mirrors the ObjC side so that writing an ``mzML`` from Python
+   (M19) produces the same accession choices as the ObjC exporter.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOCVTermMapper`` · Java:
+   ``com.dtwthalion.ttio.importers.CVTermMapper``
+
+   API status: Stable.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.importers.cv_term_mapper.PRECISION_ACCESSIONS
+   ttio.importers.cv_term_mapper.COMPRESSION_ACCESSIONS
+   ttio.importers.cv_term_mapper.SIGNAL_ARRAY_ACCESSIONS
+   ttio.importers.cv_term_mapper.MS_LEVEL
+   ttio.importers.cv_term_mapper.POSITIVE_POLARITY
+   ttio.importers.cv_term_mapper.NEGATIVE_POLARITY
+   ttio.importers.cv_term_mapper.SCAN_WINDOW_LOWER
+   ttio.importers.cv_term_mapper.SCAN_WINDOW_UPPER
+   ttio.importers.cv_term_mapper.SCAN_START_TIME
+   ttio.importers.cv_term_mapper.SELECTED_ION_MZ
+   ttio.importers.cv_term_mapper.CHARGE_STATE
+   ttio.importers.cv_term_mapper.TOTAL_ION_CHROMATOGRAM
+   ttio.importers.cv_term_mapper.SELECTED_REACTION_MONITORING
+   ttio.importers.cv_term_mapper.MINUTES_UNIT
+   ttio.importers.cv_term_mapper.ACTIVATION_METHOD_ACCESSIONS
+   ttio.importers.cv_term_mapper.ISOLATION_TARGET_MZ
+   ttio.importers.cv_term_mapper.ISOLATION_LOWER_OFFSET
+   ttio.importers.cv_term_mapper.ISOLATION_UPPER_OFFSET
+   ttio.importers.cv_term_mapper.NMR_SPECTROMETER_FREQUENCY
+   ttio.importers.cv_term_mapper.NMR_NUCLEUS
+   ttio.importers.cv_term_mapper.NMR_NUMBER_OF_SCANS
+   ttio.importers.cv_term_mapper.NMR_DWELL_TIME
+   ttio.importers.cv_term_mapper.NMR_SWEEP_WIDTH
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.cv_term_mapper.activation_method_for
+   ttio.importers.cv_term_mapper.activation_accession_for
+   ttio.importers.cv_term_mapper.precision_for
+   ttio.importers.cv_term_mapper.compression_for
+   ttio.importers.cv_term_mapper.signal_array_name
+
+
+Module Contents
+---------------
+
+.. py:data:: PRECISION_ACCESSIONS
+   :type:  dict[str, ttio.enums.Precision]
+
+.. py:data:: COMPRESSION_ACCESSIONS
+   :type:  dict[str, ttio.enums.Compression]
+
+.. py:data:: SIGNAL_ARRAY_ACCESSIONS
+   :type:  dict[str, str]
+
+.. py:data:: MS_LEVEL
+   :value: 'MS:1000511'
+
+
+.. py:data:: POSITIVE_POLARITY
+   :value: 'MS:1000130'
+
+
+.. py:data:: NEGATIVE_POLARITY
+   :value: 'MS:1000129'
+
+
+.. py:data:: SCAN_WINDOW_LOWER
+   :value: 'MS:1000501'
+
+
+.. py:data:: SCAN_WINDOW_UPPER
+   :value: 'MS:1000500'
+
+
+.. py:data:: SCAN_START_TIME
+   :value: 'MS:1000016'
+
+
+.. py:data:: SELECTED_ION_MZ
+   :value: 'MS:1000744'
+
+
+.. py:data:: CHARGE_STATE
+   :value: 'MS:1000041'
+
+
+.. py:data:: TOTAL_ION_CHROMATOGRAM
+   :value: 'MS:1000235'
+
+
+.. py:data:: SELECTED_REACTION_MONITORING
+   :value: 'MS:1001473'
+
+
+.. py:data:: MINUTES_UNIT
+   :value: 'UO:0000031'
+
+
+.. py:data:: ACTIVATION_METHOD_ACCESSIONS
+   :type:  dict[str, ttio.enums.ActivationMethod]
+
+.. py:function:: activation_method_for(accession: str) -> ttio.enums.ActivationMethod | None
+
+   (M74) Return the ActivationMethod for a PSI-MS accession, or None.
+
+
+.. py:function:: activation_accession_for(method: ttio.enums.ActivationMethod) -> tuple[str, str] | None
+
+   (M74) Return ``(accession, name)`` for an ActivationMethod, or
+   ``None`` when ``method`` is :attr:`ActivationMethod.NONE`. Used by
+   the mzML writer to emit ``<activation>`` cvParams symmetrically to
+   the reader.
+
+
+.. py:data:: ISOLATION_TARGET_MZ
+   :value: 'MS:1000827'
+
+
+.. py:data:: ISOLATION_LOWER_OFFSET
+   :value: 'MS:1000828'
+
+
+.. py:data:: ISOLATION_UPPER_OFFSET
+   :value: 'MS:1000829'
+
+
+.. py:data:: NMR_SPECTROMETER_FREQUENCY
+   :value: 'NMR:1000001'
+
+
+.. py:data:: NMR_NUCLEUS
+   :value: 'NMR:1000002'
+
+
+.. py:data:: NMR_NUMBER_OF_SCANS
+   :value: 'NMR:1000003'
+
+
+.. py:data:: NMR_DWELL_TIME
+   :value: 'NMR:1000004'
+
+
+.. py:data:: NMR_SWEEP_WIDTH
+   :value: 'NMR:1400014'
+
+
+.. py:function:: precision_for(accession: str) -> ttio.enums.Precision
+
+.. py:function:: compression_for(accession: str) -> ttio.enums.Compression
+
+.. py:function:: signal_array_name(accession: str) -> str | None
+

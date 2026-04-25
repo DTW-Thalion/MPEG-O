@@ -1,4 +1,4 @@
-# MPEG-O Workplan
+# TTI-O Workplan
 
 Eight milestones, each with concrete deliverables and acceptance criteria. Milestones are strictly sequential — each builds on the previous.
 
@@ -9,24 +9,24 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 **Deliverables**
 
 - All five protocol headers under `objc/Source/Protocols/`:
-  - `MPGOIndexable.h`
-  - `MPGOStreamable.h`
-  - `MPGOCVAnnotatable.h`
-  - `MPGOProvenanceable.h`
-  - `MPGOEncryptable.h`
+  - `TTIOIndexable.h`
+  - `TTIOStreamable.h`
+  - `TTIOCVAnnotatable.h`
+  - `TTIOProvenanceable.h`
+  - `TTIOEncryptable.h`
 - Value classes under `objc/Source/ValueClasses/`:
-  - `MPGOCVParam` — `ontologyRef`, `accession`, `name`, `value`, `unit`
-  - `MPGOAxisDescriptor` — `name`, `unit`, `valueRange`, `samplingMode`
-  - `MPGOEncodingSpec` — `precision`, `compressionAlgorithm`, `byteOrder`
-  - `MPGOValueRange` — `minimum`, `maximum`
+  - `TTIOCVParam` — `ontologyRef`, `accession`, `name`, `value`, `unit`
+  - `TTIOAxisDescriptor` — `name`, `unit`, `valueRange`, `samplingMode`
+  - `TTIOEncodingSpec` — `precision`, `compressionAlgorithm`, `byteOrder`
+  - `TTIOValueRange` — `minimum`, `maximum`
 - All value classes conform to `NSCoding` and `NSCopying`, with overridden `-isEqual:` and `-hash`.
-- GNUStep Make build system compiling `libMPGO` as a shared library.
-- Test binary `MPGOTests` runnable via `make check`.
+- GNUStep Make build system compiling `libTTIO` as a shared library.
+- Test binary `TTIOTests` runnable via `make check`.
 
 **Acceptance Criteria**
 
-- [x] `make` in `objc/` produces `libMPGO.so` (or platform equivalent).
-- [x] `make check` in `objc/` runs `MPGOTests` and all value class tests PASS.
+- [x] `make` in `objc/` produces `libTTIO.so` (or platform equivalent).
+- [x] `make check` in `objc/` runs `TTIOTests` and all value class tests PASS.
 - [x] Each value class: construction, equality, hashing, copying, NSCoding round-trip.
 - [x] Edge cases covered: nil optional fields, zero-width ranges, extreme precisions.
 
@@ -37,14 +37,14 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 **Deliverables**
 
 - HDF5 wrappers under `objc/Source/HDF5/`:
-  - `MPGOHDF5File` — thin wrapper around `H5Fcreate`/`H5Fopen`/`H5Fclose`
-  - `MPGOHDF5Group` — `H5Gcreate2`/`H5Gopen2`/`H5Gclose`
-  - `MPGOHDF5Dataset` — `H5Dcreate2`/`H5Dwrite`/`H5Dread`/`H5Dclose`
-  - `MPGOHDF5Attribute` — `H5Acreate2`/`H5Awrite`/`H5Aread`
+  - `TTIOHDF5File` — thin wrapper around `H5Fcreate`/`H5Fopen`/`H5Fclose`
+  - `TTIOHDF5Group` — `H5Gcreate2`/`H5Gopen2`/`H5Gclose`
+  - `TTIOHDF5Dataset` — `H5Dcreate2`/`H5Dwrite`/`H5Dread`/`H5Dclose`
+  - `TTIOHDF5Attribute` — `H5Acreate2`/`H5Awrite`/`H5Aread`
 - Type support: `float32`, `float64`, `int32`, `int64`, `uint32`, `complex128` (compound).
 - Chunked storage via `H5Pset_chunk`.
 - zlib compression via `H5Pset_deflate` (levels 0–9).
-- `MPGOSignalArray` full implementation with HDF5 persistence.
+- `TTIOSignalArray` full implementation with HDF5 persistence.
 - CVAnnotation storage on SignalArray that survives HDF5 round-trip.
 
 **Acceptance Criteria**
@@ -54,7 +54,7 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 - [x] Write & read chunked+compressed int32 dataset, byte-exact match.
 - [x] Write & read complex128 dataset, real and imaginary components intact.
 - [x] Partial read: write 1000 elements, read elements 500–599, verify.
-- [x] `MPGOSignalArray` HDF5 round-trip: write → read → `-isEqual:` true.
+- [x] `TTIOSignalArray` HDF5 round-trip: write → read → `-isEqual:` true.
 - [x] Benchmark: 1M float64 elements, write < 100 ms, read < 100 ms (logged, PASS if under).
 - [x] Error path: opening nonexistent file returns nil with populated `NSError`, no crash.
 
@@ -64,12 +64,12 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOSpectrum` base class: named-SignalArray dictionary + coordinate axes + index position + scan time + optional precursor info.
-- `MPGOMassSpectrum` with mandatory mz+intensity arrays, MS level, polarity, optional scan window.
-- `MPGONMRSpectrum` with chemical shift + intensity, nucleus type, spectrometer frequency.
-- `MPGONMR2DSpectrum` with 2D intensity matrix and F1/F2 axis descriptors.
-- `MPGOFreeInductionDecay` extending SignalArray with real/imaginary components, dwell time, scan count, receiver gain.
-- `MPGOChromatogram` with time/intensity arrays and TIC/XIC/SRM type enum.
+- `TTIOSpectrum` base class: named-SignalArray dictionary + coordinate axes + index position + scan time + optional precursor info.
+- `TTIOMassSpectrum` with mandatory mz+intensity arrays, MS level, polarity, optional scan window.
+- `TTIONMRSpectrum` with chemical shift + intensity, nucleus type, spectrometer frequency.
+- `TTIONMR2DSpectrum` with 2D intensity matrix and F1/F2 axis descriptors.
+- `TTIOFreeInductionDecay` extending SignalArray with real/imaginary components, dwell time, scan count, receiver gain.
+- `TTIOChromatogram` with time/intensity arrays and TIC/XIC/SRM type enum.
 - HDF5 serialization following the container design: each Spectrum is an HDF5 group; its SignalArrays are datasets within.
 
 **Acceptance Criteria**
@@ -86,11 +86,11 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOAcquisitionRun` managing an ordered, heterogeneous collection of Spectrum objects.
-- `MPGOSpectrumIndex` — offsets + lengths + compound headers dataset.
-- `MPGOInstrumentConfig` value class.
+- `TTIOAcquisitionRun` managing an ordered, heterogeneous collection of Spectrum objects.
+- `TTIOSpectrumIndex` — offsets + lengths + compound headers dataset.
+- `TTIOInstrumentConfig` value class.
 - Signal-channel separation: writing a run extracts all mz values into one contiguous dataset, all intensities into another, all scan metadata into a compound dataset.
-- `MPGOIndexable` + `MPGOStreamable` fully exercised on runs.
+- `TTIOIndexable` + `TTIOStreamable` fully exercised on runs.
 
 **Acceptance Criteria**
 
@@ -98,7 +98,7 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 - [x] Random-access read of spectrum 0, 500, 999 — verify each without reading unrelated spectra (confirm via HDF5 chunk access counts or dataset region selection).
 - [x] Range query "RT between 10.0 and 12.0 minutes" returns expected subset.
 - [x] Streaming iteration through all 1000 spectra yields correct order.
-- [x] `MPGOInstrumentConfig` round-trip as HDF5 compound attribute.
+- [x] `TTIOInstrumentConfig` round-trip as HDF5 compound attribute.
 
 ---
 
@@ -106,17 +106,17 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOSpectralDataset` as the root `.mpgo` file object managing `/study/`.
-- `MPGOIdentification` linking spectrum refs to chemical entities + confidence + evidence chain.
-- `MPGOQuantification` with abundance, sample reference, normalization metadata.
-- `MPGOProvenanceRecord` with W3C PROV chain: inputs → activity (software + params) → outputs → timestamp.
-- `MPGOTransitionList` for SRM/MRM transition definitions.
+- `TTIOSpectralDataset` as the root `.tio` file object managing `/study/`.
+- `TTIOIdentification` linking spectrum refs to chemical entities + confidence + evidence chain.
+- `TTIOQuantification` with abundance, sample reference, normalization metadata.
+- `TTIOProvenanceRecord` with W3C PROV chain: inputs → activity (software + params) → outputs → timestamp.
+- `TTIOTransitionList` for SRM/MRM transition definitions.
 - Full HDF5 round-trip of a multi-run dataset with identifications and quantifications.
 
 **Acceptance Criteria**
 
 - [x] Build a dataset with 2 MS runs + 1 NMR run, 10 identifications, 5 quantifications, multi-step provenance.
-- [x] Write to `.mpgo`, close, reopen, verify every field matches.
+- [x] Write to `.tio`, close, reopen, verify every field matches.
 - [x] Provenance chain queryable by input entity reference.
 - [x] TransitionList round-trip preserves collision energies and RT windows.
 
@@ -126,7 +126,7 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOMSImage` extending `MPGOSpectralDataset` with spatial grid indexing.
+- `TTIOMSImage` extending `TTIOSpectralDataset` with spatial grid indexing.
 - Tile-based Access Units (32×32 pixel default).
 - HDF5 3D layout `[x, y, spectral_points]` with tile-aligned chunking.
 
@@ -143,9 +143,9 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOEncryptionManager` using AES-256-GCM (CommonCrypto or OpenSSL).
-- `MPGOAccessPolicy` stored as JSON in `/protection/access_policies`.
-- `MPGOEncryptable` conformance on `MPGOAcquisitionRun` and `MPGOSpectralDataset`.
+- `TTIOEncryptionManager` using AES-256-GCM (CommonCrypto or OpenSSL).
+- `TTIOAccessPolicy` stored as JSON in `/protection/access_policies`.
+- `TTIOEncryptable` conformance on `TTIOAcquisitionRun` and `TTIOSpectralDataset`.
 - Selective encryption: encrypt `intensity_values` dataset while leaving `mz_values` and `scan_metadata` unencrypted.
 - Encryption metadata (algorithm, IV, auth tag) as HDF5 attributes.
 
@@ -163,10 +163,10 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOQuery` class performing compressed-domain queries via SpectrumIndex header scanning.
+- `TTIOQuery` class performing compressed-domain queries via SpectrumIndex header scanning.
 - Predicate support: RT range, MS level, polarity, precursor m/z range, base peak intensity threshold.
-- `MPGOStreamWriter` — append spectra to an open `.mpgo` file incrementally.
-- `MPGOStreamReader` — sequential read with prefetch buffering.
+- `TTIOStreamWriter` — append spectra to an open `.tio` file incrementally.
+- `TTIOStreamReader` — sequential read with prefetch buffering.
 
 **Acceptance Criteria**
 
@@ -183,7 +183,7 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 - [x] All eight milestones complete with all tests passing locally (WSL) and in GitHub Actions CI. **379 tests pass on `ubuntu-latest`; benchmarks: 1M float64 write/read ~3 ms, 1000-spectrum run write ~22 ms, 10k-spectrum query scan ~0.2 ms.**
 - [x] README, ARCHITECTURE, WORKPLAN, and all `docs/` files finalized.
 - [x] No warnings under `-Wall -Wextra` with clang.
-- [x] Tag `v0.1.0-alpha` pushed to `DTW-Thalion/MPEG-O`.
+- [x] Tag `v0.1.0-alpha` pushed to `DTW-Thalion/TTI-O`.
 
 ---
 
@@ -193,26 +193,26 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOMzMLReader` SAX parser via `NSXMLParser` (Apache-2.0 in `Import/`).
-- `MPGOBase64` decoder + optional zlib inflate.
-- `MPGOCVTermMapper` hard-coded PSI-MS accession mappings.
+- `TTIOMzMLReader` SAX parser via `NSXMLParser` (Apache-2.0 in `Import/`).
+- `TTIOBase64` decoder + optional zlib inflate.
+- `TTIOCVTermMapper` hard-coded PSI-MS accession mappings.
 - Real fixtures: `tiny.pwiz.1.1.mzML` + `1min.mzML` from HUPO-PSI.
 
 **Acceptance Criteria**
 
 - [x] Parses centroided mzML and verifies spectrum count + m/z/intensity arrays.
 - [x] Handles zlib-compressed binary arrays.
-- [x] Full round-trip: mzML → MPGO → `.mpgo` → read-back.
+- [x] Full round-trip: mzML → TTIO → `.tio` → read-back.
 - [x] Malformed XML returns nil with NSError.
 
 ## Milestone 10 — Protocol Conformance + Modality-Agnostic Runs
 
 **Deliverables**
 
-- `MPGOAcquisitionRun` accepts any `MPGOSpectrum` subclass (MS + NMR proven).
+- `TTIOAcquisitionRun` accepts any `TTIOSpectrum` subclass (MS + NMR proven).
 - Name-driven signal channel serialization; v0.1 MS layout binary-compatible.
-- `<MPGOProvenanceable>` + `<MPGOEncryptable>` conformance on runs.
-- `MPGOEncryptionManager` file-path API marked with `MPGO_DEPRECATED_MSG`.
+- `<TTIOProvenanceable>` + `<TTIOEncryptable>` conformance on runs.
+- `TTIOEncryptionManager` file-path API marked with `TTIO_DEPRECATED_MSG`.
 
 **Acceptance Criteria**
 
@@ -226,10 +226,10 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOHDF5CompoundType` wrapper (H5Tcreate compound + VL string helper).
-- `MPGOFeatureFlags` versioning utility (`@mpeg_o_format_version`, `@mpeg_o_features`).
-- `MPGOCompoundIO` for identifications / quantifications / dataset provenance / index headers.
-- `MPGOSpectralDataset.closeFile` + full `<MPGOEncryptable>` conformance.
+- `TTIOHDF5CompoundType` wrapper (H5Tcreate compound + VL string helper).
+- `TTIOFeatureFlags` versioning utility (`@ttio_format_version`, `@ttio_features`).
+- `TTIOCompoundIO` for identifications / quantifications / dataset provenance / index headers.
+- `TTIOSpectralDataset.closeFile` + full `<TTIOEncryptable>` conformance.
 - Sealed compound blobs + `@encrypted` marker + `@access_policy_json`.
 
 **Acceptance Criteria**
@@ -244,9 +244,9 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGOMSImage` inherits `MPGOSpectralDataset`; cube at `/study/image_cube/`.
+- `TTIOMSImage` inherits `TTIOSpectralDataset`; cube at `/study/image_cube/`.
 - Spatial metadata properties (`pixelSizeX/Y`, `scanPattern`).
-- `MPGONMR2DSpectrum` writes native rank-2 dataset `intensity_matrix_2d` with `H5DSattach_scale` dim scales.
+- `TTIONMR2DSpectrum` writes native rank-2 dataset `intensity_matrix_2d` with `H5DSattach_scale` dim scales.
 - `opt_native_2d_nmr` and `opt_native_msimage_cube` feature flags.
 
 **Acceptance Criteria**
@@ -260,8 +260,8 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 **Deliverables**
 
-- `MPGONmrMLReader` SAX parser for nmrML 1.0+ (Apache-2.0 in `Import/`).
-- nmrCV accession predicates on `MPGOCVTermMapper`.
+- `TTIONmrMLReader` SAX parser for nmrML 1.0+ (Apache-2.0 in `Import/`).
+- nmrCV accession predicates on `TTIOCVTermMapper`.
 - Real fixture: `bmse000325.nmrML` from BMRB via the nmrML project.
 - Real-file parser extensions: element-based acquisition params, int32/int64 FID widening.
 
@@ -269,15 +269,15 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 
 - [x] Synthetic FID + spectrum1D round-trip with exact byte match.
 - [x] Real BMRB fixture: numberOfScans, nucleus, frequency, sweep width, 16384-sample FID extracted correctly.
-- [x] Round-trip nmrML → MPGO → `.mpgo` → read-back.
+- [x] Round-trip nmrML → TTIO → `.tio` → read-back.
 - [x] Malformed XML returns nil with NSError.
 
 ## Milestone 14 — Digital Signatures + Integrity Verification
 
 **Deliverables**
 
-- `MPGOSignatureManager` HMAC-SHA256 over dataset bytes via OpenSSL.
-- `MPGOVerifier` higher-level status API (Valid/Invalid/NotSigned/Error).
+- `TTIOSignatureManager` HMAC-SHA256 over dataset bytes via OpenSSL.
+- `TTIOVerifier` higher-level status API (Valid/Invalid/NotSigned/Error).
 - Provenance chain signing on `@provenance_json`.
 - `opt_digital_signatures` feature flag.
 
@@ -295,7 +295,7 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 - `docs/format-spec.md` — complete HDF5 layout spec for third-party readers.
 - `docs/feature-flags.md` — registry with semantics and introducing milestone.
 - `objc/Tools/MakeFixtures` — reference fixture generator.
-- Reference `.mpgo` fixtures under `objc/Tests/Fixtures/mpgo/`.
+- Reference `.tio` fixtures under `objc/Tests/Fixtures/ttio/`.
 - WORKPLAN updated; README + ARCHITECTURE notes on v0.2 changes.
 
 **Acceptance Criteria**
@@ -308,11 +308,11 @@ Eight milestones, each with concrete deliverables and acceptance criteria. Miles
 ## Overall Release Criteria (v0.2.0)
 
 - [x] All seven v0.2 milestones complete with tests passing locally and in CI. **656 tests pass.**
-- [x] v0.1.0-alpha `.mpgo` files remain readable via v0.2 fallback paths (verified in TestMilestone10, TestMilestone11, TestMilestone12).
+- [x] v0.1.0-alpha `.tio` files remain readable via v0.2 fallback paths (verified in TestMilestone10, TestMilestone11, TestMilestone12).
 - [x] No non-deprecation warnings under `-Wall -Wextra` with clang.
 - [x] `docs/format-spec.md` and `docs/feature-flags.md` published.
-- [x] Reference `.mpgo` fixtures under `objc/Tests/Fixtures/mpgo/` committed.
-- [x] Tag `v0.2.0` pushed to `DTW-Thalion/MPEG-O` (`61a3968`).
+- [x] Reference `.tio` fixtures under `objc/Tests/Fixtures/ttio/` committed.
+- [x] Tag `v0.2.0` pushed to `DTW-Thalion/TTI-O` (`61a3968`).
 
 ## v0.3 Deferred Follow-Ups
 
@@ -324,43 +324,43 @@ the full milestone history.
 ### Milestone 19 — mzML Writer
 
 - [x] **Chromatogram emission in the mzML writer.** *Shipped with
-      M24 (v0.4.0) once `MPGOAcquisitionRun.chromatograms` became a
+      M24 (v0.4.0) once `TTIOAcquisitionRun.chromatograms` became a
       first-class property.* All three mzML writers now walk
       `run.chromatograms` into a `<chromatogramList>` followed by a
       second `<index name="chromatogram">` entry inside the
       `<indexList>`:
-      `objc/Source/Export/MPGOMzMLWriter.m:293`,
-      `python/src/mpeg_o/exporters/mzml.py:217`,
-      `java/src/main/java/com/dtwthalion/mpgo/exporters/MzMLWriter.java:176`.
+      `objc/Source/Export/TTIOMzMLWriter.m:293`,
+      `python/src/ttio/exporters/mzml.py:217`,
+      `java/src/main/java/com/dtwthalion/ttio/exporters/MzMLWriter.java:176`.
       Round-trip covered by `TestMilestone24.m` and
       `test_milestone24_chromatograms.py`.
 
 - [x] **Direct byte-for-byte parity test between the ObjC and Python
-      mzML writers.** *Shipped and green.* `objc/Tools/MpgoToMzML.m`
-      is a minimal CLI modelled on `MpgoVerify` / `MpgoSign`, and
+      mzML writers.** *Shipped and green.* `objc/Tools/TtioToMzML.m`
+      is a minimal CLI modelled on `TtioVerify` / `TtioSign`, and
       `python/tests/test_mzml_writer_parity.py` drives both writers
       on the same fixture and structurally diffs the output (masking
       indexListOffset, fileChecksum, and absolute-byte offset
       attributes that encode file state). The harness caught a real
       cross-language read-path bug on first run: ObjC's
-      `MPGOHDF5Group.openDatasetNamed:` didn't probe for
-      `H5T_NATIVE_UINT64` and fell through to `MPGOPrecisionFloat64`,
+      `TTIOHDF5Group.openDatasetNamed:` didn't probe for
+      `H5T_NATIVE_UINT64` and fell through to `TTIOPrecisionFloat64`,
       so Python-written `spectrum_index/offsets` (uint64 per
       format-spec §6) were read with an implicit HDF5 int-to-float
-      conversion and `MPGOMzMLWriter` silently dropped every spectrum
+      conversion and `TTIOMzMLWriter` silently dropped every spectrum
       after index 0 when `spectrumAtIndex:` returned nil. Fix: the
-      precision probe now maps `H5T_NATIVE_UINT64 → MPGOPrecisionInt64`
+      precision probe now maps `H5T_NATIVE_UINT64 → TTIOPrecisionInt64`
       (bit-identical for non-negative values). Parity test now
       passes.
 
 ### Milestone 20 — Cloud-Native Access
 
-- [x] **Objective-C cloud-native `.mpgo` access.** *Shipped via
+- [x] **Objective-C cloud-native `.tio` access.** *Shipped via
       option 1 (ROS3 VFD).* Apt's `libhdf5-dev` on modern Debian /
       Ubuntu ships `H5Pset_fapl_ros3` enabled — the WORKPLAN's
       original assumption that a libhdf5 rebuild would be required
       is stale, so the CI-rebuild subtask is obviated.
-      `MPGOHDF5File` grows `+openS3URL:region:accessKeyId:
+      `TTIOHDF5File` grows `+openS3URL:region:accessKeyId:
       secretAccessKey:sessionToken:error:` plus an `+isS3Supported`
       capability probe; `s3://` canonical URLs are translated to
       `https://bucket.s3.region.amazonaws.com/key` internally before
@@ -374,14 +374,14 @@ the full milestone history.
       covers S3 and any S3-compatible endpoint (MinIO, LocalStack,
       etc.) which is the overwhelmingly common cloud topology.
 
-      The on-disk `.mpgo` layout is unchanged by any of these, so
+      The on-disk `.tio` layout is unchanged by any of these, so
       the milestone is a *transport* concern, not a *format* one.
       Cloud-hosted files written from Python (including those that
       carry v2 canonical signatures and compound per-run provenance)
       are already readable by the ObjC reader as soon as they reach
       a POSIX path.
 
-      Touches (option 1 path): `objc/Source/HDF5/MPGOHDF5File.{h,m}`
+      Touches (option 1 path): `objc/Source/HDF5/TTIOHDF5File.{h,m}`
       (new `openS3URL:` entry point), `objc/check-deps.sh` (probe
       for ROS3), `.github/workflows/ci.yml` (libhdf5 rebuild step),
       new `objc/Tests/TestCloudAccess.m` with an S3 mock harness.
@@ -468,7 +468,7 @@ Summary:
 ### Release criteria
 - [x] ObjC 1057 assertions / Python 284 tests / Java 179 tests pass.
 - [x] `CHANGELOG.md` v0.7.0 entry.
-- [x] Annotated `v0.7.0` tag pushed to `DTW-Thalion/MPEG-O`.
+- [x] Annotated `v0.7.0` tag pushed to `DTW-Thalion/TTI-O`.
 
 **v0.7.0 status:** Shipped.
 
@@ -482,7 +482,7 @@ Summary:
       flag auto-set whenever either primitive runs. Python + ObjC use
       liboqs; Java uses Bouncy Castle 1.80+. Rationale: `docs/pqc.md`.
   - [x] **M49.1** ObjC dataset / envelope integration via
-        `MPGOSignatureManager` + `MPGOKeyRotationManager`.
+        `TTIOSignatureManager` + `TTIOKeyRotationManager`.
 - [x] **M52** Java + ObjC `ZarrProvider` ports — self-contained
       LocalStore implementations, no external zarr library dependency.
       Cross-reads Python `zarr-python` stores byte-for-byte. (On-disk
@@ -496,7 +496,7 @@ Summary:
 - [x] **M54 + M54.1** 32-cell cross-language × cross-provider PQC
       conformance matrix: primitive ML-DSA / ML-KEM, v3 signatures on
       HDF5 / Zarr / SQLite, v2+v3 coexistence, v0.7 backward-compat.
-      New Java `PQCTool` + ObjC `MpgoPQCTool` CLIs drive the harness;
+      New Java `PQCTool` + ObjC `TtioPQCTool` CLIs drive the harness;
       new Python `sign_storage_dataset` / `verify_storage_dataset`
       provider-agnostic helpers.
 
@@ -599,7 +599,7 @@ and migrating the Zarr on-disk format to v3.
 
 - [x] **M66** — Transport spec docs (`docs/transport-spec.md`,
       packet types, wire format, flag bits, ordering rules).
-- [x] **M67** — Transport codec (`.mots` writer / reader) in all
+- [x] **M67** — Transport codec (`.tis` writer / reader) in all
       three languages, CRC-32C optional, nine packet types.
 - [x] **M68** — WebSocket transport client (libwebsockets for ObjC,
       `websockets` for Python, Java-WebSocket for Java).
@@ -638,14 +638,14 @@ Five phases across all three languages:
       the wire unmodified.
 - [x] **Phase E** — cross-language conformance harness
       (`tests/integration/test_per_au_cross_language.py`) drives
-      `per_au_cli` / `PerAUCli` / `MpgoPerAU` via subprocess and
+      `per_au_cli` / `PerAUCli` / `TtioPerAU` via subprocess and
       byte-compares a canonical "MPAD" decryption dump; 38/38
       combinations passing across every encrypt × decrypt × headers
       × language triple.
 
 ### Tooling + migration
 
-- [x] `per_au_cli` / `PerAUCli` / `MpgoPerAU` CLIs with
+- [x] `per_au_cli` / `PerAUCli` / `TtioPerAU` CLIs with
       `{encrypt, decrypt, send, recv, transcode}` subcommands.
 - [x] `transcode --rekey` for DEK rotation; clear migration hint
       when the source carries v0.x `opt_dataset_encryption`.
@@ -689,7 +689,7 @@ Five phases across all three languages:
       `INFRARED SPECTRUM` variant. PAC / SQZ / DIF compression and
       2-D NTUPLES are out of scope (the reader rejects unknown
       types rather than guessing).
-- [x] **ObjC CLI `MpgoJcampDxDump`** — tiny subprocess driver
+- [x] **ObjC CLI `TtioJcampDxDump`** — tiny subprocess driver
       matching the existing CLI family so the Python conformance
       harness can compare parses bit-for-bit.
 - [x] **Cross-language conformance test**
@@ -766,8 +766,8 @@ Objective-C, and Java.
 Direct inventory of the Python / Java / ObjC source trees against the
 three-language-parity rule (Python, Java, ObjC all expose the same
 classes **and** CLI tools; each stands alone). Verified by file-system
-enumeration of `python/src/mpeg_o/`,
-`java/src/main/java/com/dtwthalion/mpgo/`, and `objc/Source/` +
+enumeration of `python/src/ttio/`,
+`java/src/main/java/com/dtwthalion/ttio/`, and `objc/Source/` +
 `objc/Tools/` at commit `4dfa103`.
 
 ### Domain model — full parity
@@ -807,31 +807,31 @@ per-AU encryption.
 
 ### Transport — full parity
 
-`.mots` codec (9 packet types), `TransportClient`, `TransportServer`,
+`.tis` codec (9 packet types), `TransportClient`, `TransportServer`,
 `AcquisitionSimulator`, `EncryptedTransport`, `AUFilter`,
 `ProtectionMetadata`.
 
 ### CLI tools
 
 Core parity (6 tools, every language):
-`per_au_cli` / `PerAUCli` / `MpgoPerAU`,
-`simulator_cli` / `SimulatorCli` / `MpgoSimulator`,
-`transport_encode_cli` / `TransportEncodeCli` / `MpgoTransportEncode`,
-`transport_decode_cli` / `TransportDecodeCli` / `MpgoTransportDecode`,
-`transport_server_cli` / `TransportServerCli` / `MpgoTransportServer`,
-`dump_identifications` / `DumpIdentifications` / `MpgoDumpIdentifications`.
+`per_au_cli` / `PerAUCli` / `TtioPerAU`,
+`simulator_cli` / `SimulatorCli` / `TtioSimulator`,
+`transport_encode_cli` / `TransportEncodeCli` / `TtioTransportEncode`,
+`transport_decode_cli` / `TransportDecodeCli` / `TtioTransportDecode`,
+`transport_server_cli` / `TransportServerCli` / `TtioTransportServer`,
+`dump_identifications` / `DumpIdentifications` / `TtioDumpIdentifications`.
 
 Documented asymmetries (intentional, test-harness plumbing):
 
 | Tool | Python | Java | ObjC | Rationale |
 |------|:------:|:----:|:----:|-----------|
 | `MakeFixtures` | — | — | ✓ | Fixture generator consumed by Python/Java test suites. |
-| `MpgoJcampDxDump` | — | — | ✓ | ObjC subprocess driver for the Python JCAMP-DX conformance harness. |
-| `MpgoToMzML` | — | — | ✓ | Byte-parity driver for `test_mzml_writer_parity.py`. |
-| `MpgoSign` | — | — | ✓ | Signing CLI (Python + Java use library API via tests). |
-| `MpgoVerify` / `mpgo-verify` | module only | ✓ | ✓ | CLI parity polish candidate (v0.12.0). |
-| `MpgoPQCTool` / `mpgo-pqc` | module only | ✓ | ✓ | CLI parity polish candidate (v0.12.0). |
-| `CanonicalJson` | ✓ (internal) | ✓ | — | Used by test harness; ObjC equivalent is `MPGOCanonicalBytes`. |
+| `TtioJcampDxDump` | — | — | ✓ | ObjC subprocess driver for the Python JCAMP-DX conformance harness. |
+| `TtioToMzML` | — | — | ✓ | Byte-parity driver for `test_mzml_writer_parity.py`. |
+| `TtioSign` | — | — | ✓ | Signing CLI (Python + Java use library API via tests). |
+| `TtioVerify` / `ttio-verify` | module only | ✓ | ✓ | CLI parity polish candidate (v0.12.0). |
+| `TtioPQCTool` / `ttio-pqc` | module only | ✓ | ✓ | CLI parity polish candidate (v0.12.0). |
+| `CanonicalJson` | ✓ (internal) | ✓ | — | Used by test harness; ObjC equivalent is `TTIOCanonicalBytes`. |
 | `bruker_tdf_cli` | ✓ | — | — | Python bridge wrapping `opentimspy`; Java/ObjC subprocess into the Python helper. |
 
 ### Open v1.0 data-model gap
@@ -868,8 +868,8 @@ holds for every line item.
       B (spectrum_index schema, `736ecef`), C (mzML reader,
       `9340007`), D (mzML writer, `c502d68`), E (feature flag +
       format bump + round-trip tests, `e96105f`).*
-- [x] **M75** Python CLI parity polish — add `mpgo-verify`,
-      `mpgo-sign`, `mpgo-pqc` console_scripts to `pyproject.toml`
+- [x] **M75** Python CLI parity polish — add `ttio-verify`,
+      `ttio-sign`, `ttio-pqc` console_scripts to `pyproject.toml`
       backed by the existing `verifier.py` / `signatures.py` /
       `pqc.py` modules. Brings Python up to Java + ObjC CLI surface
       for the three protection tools. *Shipped 2026-04-23 as commit
@@ -893,8 +893,8 @@ holds for every line item.
       `d889b19` (Slice C: Java `JcampDxEncoding` enum +
       `JcampDxEncode` helper + writer overloads, 3/3
       `JcampDxM76ConformanceTest` green, 345/345 full suite),
-      `4787aa2` (Slice D: ObjC `MPGOJcampDxEncoding` NS_ENUM +
-      `MPGOJcampDxEncode` helper + writer overloads, 3/3
+      `4787aa2` (Slice D: ObjC `TTIOJcampDxEncoding` NS_ENUM +
+      `TTIOJcampDxEncode` helper + writer overloads, 3/3
       `testM76JcampConformance` green, 1637/0 full suite), and this
       docs flip. The compressed encoder emits an explicit Y-check
       token on every non-first line to defeat the decoder's
@@ -930,7 +930,7 @@ holds for every line item.
       `docs/v1.0-gaps.md`). Three-language parity for the value class
       + importer + exporter. *(Shipped: Python `Feature` +
       PEH/PEP/SFH/SMF/SEH/SME emission + back-fill; Java `Feature`
-      record + round-trip; ObjC `MPGOFeature` + reader/writer
+      record + round-trip; ObjC `TTIOFeature` + reader/writer
       parity. Rank↔confidence mapping (rank N ↔ confidence 1/N) with
       gating rule "SEH/SME only when features present" preserves
       plain-SML round-trips. Shared fixtures at
@@ -952,7 +952,7 @@ holds for every line item.
 - [x] M74 + M75 shipped; M76–M78 shipped or re-deferred explicitly.
       *(All five shipped.)*
 - [x] All three test suites green; cross-language conformance matrix
-      extended to cover M74 round-trip (mzML → MPGO → mzML preserves
+      extended to cover M74 round-trip (mzML → TTIO → mzML preserves
       activation + isolation). *(Python 875, Java 373, ObjC 1704/0.)*
 - [x] `CHANGELOG.md` v0.12.0 entry; `docs/v1.0-gaps.md` "Must-fix for
       v1.0" list empty. *(Both flipped 2026-04-23.)*
@@ -1026,7 +1026,7 @@ v0.11 writer that does not stamp the new attributes.
   invocations across 7 test cases (UINT8 round-trip + partial read
   on each provider, codec ordinals, genomic acquisition modes,
   AccessUnit GenomicRead, modality default + explicit).
-- Java: `java/src/test/java/com/dtwthalion/mpgo/M79GenomicEnumsTest.java`
+- Java: `java/src/test/java/com/dtwthalion/ttio/M79GenomicEnumsTest.java`
   — 10 JUnit5 methods covering the same surface.
 - ObjC: `objc/Tests/TestM79GenomicEnums.m` — 27 inline `PASS`
   assertions wired into the runner under `M79: modality + genomic

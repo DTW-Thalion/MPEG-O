@@ -1,4 +1,4 @@
-# MPEG-O Test Strategy
+# TTI-O Test Strategy
 
 This document describes the layered test suite introduced by v0.9 and
 how CI exercises each layer. It covers all three language
@@ -32,7 +32,7 @@ pytest invocation applies the filter
 |--------|----------|---------------|
 | `stress` | Long-running fixtures + benchmarks | default filter |
 | `requires_network` | Fixture downloads, XSD fetches | default filter |
-| `requires_s3` | S3 / MinIO endpoint | `MPGO_S3_FIXTURE_URL` unset |
+| `requires_s3` | S3 / MinIO endpoint | `TTIO_S3_FIXTURE_URL` unset |
 | `requires_pyteomics` | Third-party cross-reader | `pyteomics` not importable |
 | `requires_pymzml` | Third-party cross-reader | `pymzml` not importable |
 | `requires_isatools` | Third-party validator | `isatools` not importable |
@@ -79,8 +79,8 @@ absent.
 4. **ISA-Tab isatools validation** — assert our bundle passes the
    isatools validator. xfailed on the known INVESTIGATION
    PUBLICATIONS-section gap until v1.0.
-5. **Backward-compatibility** — every committed `.mpgo` fixture under
-   `objc/Tests/Fixtures/mpgo/` (5 fixtures spanning v0.1-v0.8
+5. **Backward-compatibility** — every committed `.tio` fixture under
+   `objc/Tests/Fixtures/ttio/` (5 fixtures spanning v0.1-v0.8
    format layouts) must still open cleanly on the current Python
    reader.
 6. **Well-formed XML baseline** — even when XSDs are unreachable, the
@@ -94,10 +94,10 @@ absent.
 
 | Job | What |
 |-----|------|
-| `objc-build-test` | GNUstep + libobjc2 + libMPGO + test runner (307 tests as of v0.11.0) |
+| `objc-build-test` | GNUstep + libobjc2 + libTTIO + test runner (307 tests as of v0.11.0) |
 | `python-test` | `tests/` default filter, Python 3.11 + 3.12 matrix (1443 tests as of v0.11.0) |
 | `java-test` | Maven `verify`, JDK 17 (695 tests as of v0.11.0) |
-| `cross-compat` | Python smoke tests that subprocess into `MpgoVerify` + `MpgoSign` binaries (44 combinations as of v0.11.0) |
+| `cross-compat` | Python smoke tests that subprocess into `TtioVerify` + `TtioSign` binaries (44 combinations as of v0.11.0) |
 | `python-validation` | `tests/validation + tests/integration + tests/security` with `[integration]` extras installed |
 
 **Nightly (02:30 UTC):**
@@ -117,7 +117,7 @@ subprocess verification runs.
 - [x] nmrML well-formed XML verified
 - [x] nmrML XSD validation ran (xfailed on version attribute)
 - [x] isatools validator ran against ISA-Tab output (xfailed on PUBLICATIONS section)
-- [x] Every committed historical `.mpgo` fixture still readable
+- [x] Every committed historical `.tio` fixture still readable
 - [x] Integration CI job added
 - [x] Nightly stress CI job added
 - [x] Tag `v0.9.0` pushed (`eaac284`)
@@ -132,8 +132,8 @@ in CI and surface the error log so the defects stay visible.
 subprocess-driven harness that proves JCAMP-DX 5.01 AFFN output is
 bit-identical across the Python / Java / ObjC writers, and that each
 implementation's reader accepts every other's output. The ObjC CLI
-driver (`MpgoJcampDxDump`) ships under `objc/Tools/`; the Java driver
+driver (`TtioJcampDxDump`) ships under `objc/Tools/`; the Java driver
 is built ad-hoc into `/tmp/` per test run. Runtime resolution of
-`libMPGO.so.0` in the ObjC subprocess path uses an injected
+`libTTIO.so.0` in the ObjC subprocess path uses an injected
 `LD_LIBRARY_PATH` pointing at `objc/Source/obj`. The harness
 contributes 6 tests to the 44 cross-compat-job total.

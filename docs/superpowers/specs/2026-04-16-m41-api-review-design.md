@@ -1,7 +1,7 @@
 # M41 — API Review Checkpoint: Design
 
 **Date:** 2026-04-16
-**Milestone:** M41 (MPEG-O v0.6)
+**Milestone:** M41 (TTI-O v0.6)
 **Status:** Design, pending user approval
 **Scope decision:** Option C — full consistency pass; ObjC is ground truth
 
@@ -24,11 +24,11 @@
     "now-consistent" state, per-subsystem inconsistency resolutions,
     stability markers.
   - `docs/migration-guide.md` — Python-focused quickstart for
-    mzML → MPEG-O and nmrML → MPEG-O.
+    mzML → TTI-O and nmrML → TTI-O.
 
 ### Out of scope
 
-- Non-public internals (`_hdf5_io.py`, `MiniJson.java`, `MPGOHDF5File`
+- Non-public internals (`_hdf5_io.py`, `MiniJson.java`, `TTIOHDF5File`
   and other low-level HDF5 helpers, `_rwlock.py`, etc.).
 - The `com.dtwthalion` → `global.thalion` groupId migration (belongs to
   M40). Cross-references in docstrings use **short class names**
@@ -56,13 +56,13 @@ equivalence:
      Java `Map<K, V>`.
    - `NSError **` ↔ Python exceptions ↔ Java exceptions /
      `AutoCloseable`.
-3. **Class shape must match.** If ObjC `MPGOSpectrum` base has
+3. **Class shape must match.** If ObjC `TTIOSpectrum` base has
    `precursorMz`, both Python `Spectrum` base and Java `Spectrum` base
    must have it too. Subclass-specific fields stay on subclasses in
    all three languages.
 4. **Method sets must match.** Every ObjC public method needs a Python
    and Java equivalent, resolved by semantics — not by spelling.
-5. **Protocols/interfaces align.** ObjC `<MPGOIndexable>` → Python
+5. **Protocols/interfaces align.** ObjC `<TTIOIndexable>` → Python
    `Protocol` / `ABC` → Java `interface`. Same capability surface, same
    method set.
 
@@ -152,22 +152,22 @@ values, and error conditions.
 ```objc
 /**
  * Base class for any spectrum. Holds an ordered dictionary of named
- * MPGOSignalArrays plus the coordinate axes that index them, the
+ * TTIOSignalArrays plus the coordinate axes that index them, the
  * spectrum's position in its parent run, scan time, and optional
  * precursor info for tandem MS.
  *
- * Concrete subclasses (MPGOMassSpectrum, MPGONMRSpectrum, ...) add
+ * Concrete subclasses (TTIOMassSpectrum, TTIONMRSpectrum, ...) add
  * their own typed metadata and validation.
  *
  * HDF5 representation: each spectrum is an HDF5 group whose immediate
- * children are MPGOSignalArray sub-groups (one per named array) plus
+ * children are TTIOSignalArray sub-groups (one per named array) plus
  * scalar attributes for the metadata fields.
  *
  * Cross-language equivalents:
- *   Python: mpeg_o.spectrum.Spectrum
- *   Java:   com.dtwthalion.mpgo.Spectrum
+ *   Python: ttio.spectrum.Spectrum
+ *   Java:   com.dtwthalion.tio.Spectrum
  */
-@interface MPGOSpectrum : NSObject
+@interface TTIOSpectrum : NSObject
 ```
 
 ### Python (NumPy-style)
@@ -209,7 +209,7 @@ class Spectrum:
 
     Cross-language equivalents
     --------------------------
-    Objective-C: ``MPGOSpectrum`` · Java: ``Spectrum``
+    Objective-C: ``TTIOSpectrum`` · Java: ``Spectrum``
     """
 ```
 
@@ -231,7 +231,7 @@ class Spectrum:
  * fields.</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
- * {@code MPGOSpectrum}, Python {@code mpeg_o.spectrum.Spectrum}.</p>
+ * {@code TTIOSpectrum}, Python {@code ttio.spectrum.Spectrum}.</p>
  *
  * @since 0.6
  */
@@ -286,16 +286,16 @@ Stamped in two places:
 ## 8. Deliverable — `docs/api-review-v0.6.md`
 
 ```
-# MPEG-O v0.6 API Review
+# TTI-O v0.6 API Review
 
 ## 1. Scope and stability policy
    - Three-language coverage: ObjC (normative), Python, Java
    - Stable vs Provisional definitions and policy
 
 ## 2. Namespace summary
-   - ObjC:   MPGO* (Foundation-based, prefix convention)
-   - Python: mpeg_o.* (single top-level package)
-   - Java:   com.dtwthalion.mpgo.* (groupId migrates to global.thalion in M40)
+   - ObjC:   TTIO* (Foundation-based, prefix convention)
+   - Python: ttio.* (single top-level package)
+   - Java:   com.dtwthalion.tio.* (groupId migrates to global.thalion in M40)
 
 ## 3. Per-subsystem parity
    One section per slice 41.1 .. 41.8. Each section has:
@@ -319,19 +319,19 @@ Stamped in two places:
 ## 9. Deliverable — `docs/migration-guide.md`
 
 ```
-# Migrating to MPEG-O
+# Migrating to TTI-O
 
 ## 1. Audience and prerequisites
-   - "You have mzML or nmrML files and want to move to MPEG-O."
+   - "You have mzML or nmrML files and want to move to TTI-O."
    - Python 3.11+, pip, optional ThermoRawFileParser for .raw input.
 
 ## 2. Install
    - pip install -e ".[test,import]"  (from source during v0.6;
      swap to "pip install mpeg-o" once M40 ships)
 
-## 3. mzML → MPEG-O
+## 3. mzML → TTI-O
    3.1 Python quickstart (runnable snippet)
-   3.2 CLI (MpgoImport or equivalent)
+   3.2 CLI (TtioImport or equivalent)
    3.3 Semantic mapping table:
        mzML run            -> AcquisitionRun
        mzML spectrum       -> Spectrum (MassSpectrum subclass)
@@ -339,25 +339,25 @@ Stamped in two places:
        mzML instrumentConf -> InstrumentConfig
        mzML dataProcessing -> ProvenanceRecord
        mzML scan window    -> ValueRange on MassSpectrum.scanWindow
-   3.4 Round-trip verification with MpgoVerify CLI
+   3.4 Round-trip verification with TtioVerify CLI
 
-## 4. nmrML → MPEG-O
+## 4. nmrML → TTI-O
    4.1 Python quickstart
    4.2 Semantic mapping table (NMR-specific)
    4.3 Round-trip verification
 
 ## 5. Where the fixtures live
    - Pointer to data/ directory for reference mzML and nmrML inputs
-   - Known good .mpgo outputs used in cross-compat tests
+   - Known good .tio outputs used in cross-compat tests
 ```
 
 ## 10. Verification
 
 ### Per-slice acceptance
 
-- ObjC: `cd ~/MPEG-O/objc && ./build.sh check` passes.
-- Python: `cd ~/MPEG-O/python && pytest` passes.
-- Java: `cd ~/MPEG-O/java && mvn verify -B` passes.
+- ObjC: `cd ~/TTI-O/objc && ./build.sh check` passes.
+- Python: `cd ~/TTI-O/python && pytest` passes.
+- Java: `cd ~/TTI-O/java && mvn verify -B` passes.
 - Three-way cross-compat fixture round-trip passes.
 
 ### M41 completion (matches HANDOFF acceptance list)
@@ -382,7 +382,7 @@ surface immediately.
 - Commit message format: `M41.N: <subsystem> parity`.
 - Multi-line messages via `-F ~/msg.txt` per existing discipline.
 - `Co-Authored-By` trailer per existing discipline.
-- `git fetch "//wsl.localhost/Ubuntu/home/toddw/MPEG-O" main` →
+- `git fetch "//wsl.localhost/Ubuntu/home/toddw/TTI-O" main` →
   `git clean -fd java/` → `git merge --ff-only FETCH_HEAD` →
   `git push origin main` from the Windows checkout per existing
   workflow.

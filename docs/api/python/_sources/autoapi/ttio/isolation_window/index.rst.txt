@@ -1,0 +1,82 @@
+ttio.isolation_window
+=====================
+
+.. py:module:: ttio.isolation_window
+
+.. autoapi-nested-parse::
+
+   ``IsolationWindow`` — precursor isolation window for MS/MS scans.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.isolation_window.IsolationWindow
+
+
+Module Contents
+---------------
+
+.. py:class:: IsolationWindow
+
+   Precursor isolation window, expressed as a target m/z with
+   asymmetric lower/upper offsets in Th (Da).
+
+   The instrument-reported window spans
+   ``[target_mz - lower_offset, target_mz + upper_offset]``. Offsets are
+   non-negative by convention; the lower and upper may differ when the
+   quadrupole is offset from the monoisotopic m/z (common in DIA).
+
+   :param target_mz: Center of the isolation window in Th (Da).
+   :type target_mz: float
+   :param lower_offset: Distance from ``target_mz`` to the lower bound, in Th. Non-negative.
+   :type lower_offset: float
+   :param upper_offset: Distance from ``target_mz`` to the upper bound, in Th. Non-negative.
+   :type upper_offset: float
+
+   .. rubric:: Notes
+
+   API status: Stable (v1.1, M74).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOIsolationWindow`` · Java:
+   ``com.dtwthalion.ttio.IsolationWindow``.
+
+
+   .. py:attribute:: target_mz
+      :type:  float
+
+
+   .. py:attribute:: lower_offset
+      :type:  float
+
+
+   .. py:attribute:: upper_offset
+      :type:  float
+
+
+   .. py:property:: lower_bound
+      :type: float
+
+
+      Lower m/z bound ``target_mz - lower_offset``.
+
+
+   .. py:property:: upper_bound
+      :type: float
+
+
+      Upper m/z bound ``target_mz + upper_offset``.
+
+
+   .. py:property:: width
+      :type: float
+
+
+      Total isolation width ``lower_offset + upper_offset``.
+
+

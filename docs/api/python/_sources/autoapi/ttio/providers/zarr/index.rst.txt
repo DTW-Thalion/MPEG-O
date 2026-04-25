@@ -1,0 +1,148 @@
+ttio.providers.zarr
+===================
+
+.. py:module:: ttio.providers.zarr
+
+.. autoapi-nested-parse::
+
+   Zarr storage provider — Milestone 46 (Track A, stretch).
+
+   Validates that the v0.7 storage-provider abstraction
+   (M43/M44/M45 refinements) generalises beyond HDF5. Zarr is the most
+   mature alternative chunked-array container with a first-class Python
+   binding. Backed by zarr-python 3.x — on-disk format is **Zarr v3**
+   (migrated from v2 in v0.9; pre-deployment, no shim was needed).
+
+   URL schemes
+   -----------
+   * ``zarr:///path/to/store.zarr`` — directory store on the local
+     filesystem (delegates to :class:`zarr.storage.LocalStore`).
+   * ``zarr+memory://<name>`` — in-memory store, keyed by ``<name>`` so
+     two opens of the same URL share state (mirrors
+     :class:`~ttio.providers.memory.MemoryProvider`).
+   * ``zarr+s3://bucket/key`` — cloud-backed store via fsspec
+     (delegates to :class:`zarr.storage.FsspecStore`).
+
+   Bare paths like ``/tmp/foo.zarr`` map to ``zarr:///tmp/foo.zarr``.
+
+   Compound datasets
+   -----------------
+   Zarr has no native compound type. This provider stores compound
+   datasets as plain sub-groups with:
+
+   * ``@_ttio_kind = "compound"``
+   * ``@_ttio_schema = <JSON-list-of-{name, kind}>``
+   * ``@_ttio_rows = <JSON-list-of-row-dicts>``
+
+   This matches the SqliteProvider layout — row-of-dicts preserved in
+   JSON, no need to wrestle zarr's structured-dtype VL-string quirks.
+   Primitive N-D datasets use real zarr arrays.
+
+   Non-deliverables
+   ----------------
+   - Java and ObjC ZarrProviders: deferred to v0.8 — Python first to
+     stress-test the abstraction.
+   - Provenance signing / encryption: ZarrProvider is a raw storage
+     layer; security plumbing remains HDF5-only in v0.7 (binding
+     decision from HANDOFF.md v0.6 §Gotchas).
+
+   API status
+   ----------
+   Provisional (v0.7 M46 stretch). The public surface is the
+   StorageProvider / StorageGroup / StorageDataset contract; internal
+   layout conventions may evolve in v0.8 once Java + ObjC catch up.
+
+   Cross-language equivalents
+   --------------------------
+   Java: deferred to v0.8. Objective-C: deferred to v0.8.
+
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.providers.zarr.ZarrProvider
+
+
+Module Contents
+---------------
+
+.. py:class:: ZarrProvider(url: str | None = None)
+
+   Bases: :py:obj:`ttio.providers.base.StorageProvider`
+
+
+   Zarr-backed storage provider. Accepts ``zarr://``, ``zarr+s3://``,
+   ``zarr+memory://`` URL schemes, plus bare filesystem paths.
+
+   See the module docstring for the compound-layout convention and
+   scheme details.
+
+
+   .. py:method:: open(path_or_url=None, *, mode: str = 'r', **kwargs) -> ZarrProvider
+
+      Dual-style open() per Appendix B Gap 1 — mirrors HDF5 /
+      Memory / SQLite providers.
+
+
+
+   .. py:method:: provider_name() -> str
+
+      Short identifier used for logging and registry lookup
+      (``"hdf5"``, ``"memory"``, ``"zarr"``, …).
+
+      Exposed as a method (not a property) to mirror the ObjC
+      ``-providerName`` selector and Java ``providerName()`` getter.
+      Appendix B Gap 5 — Provisional storage-provider convergence.
+
+
+
+   .. py:method:: root_group() -> ttio.providers.base.StorageGroup
+
+
+   .. py:method:: is_open() -> bool
+
+
+   .. py:method:: close() -> None
+
+
+   .. py:method:: supports_chunking() -> bool
+
+      Returns True if the backend honors ``chunk_size`` in
+      :meth:`StorageGroup.create_dataset`. HDF5 returns True; Memory
+      and SQLite return False (chunk_size is accepted for interface
+      compatibility but silently ignored).
+
+      Callers that depend on chunked I/O for streaming large datasets
+      can query this to degrade gracefully.
+
+
+
+   .. py:method:: supports_compression() -> bool
+
+      Returns True if the backend honors ``compression`` /
+      ``compression_level``. HDF5 returns True (zlib + LZ4); Memory
+      and SQLite return False.
+
+
+
+   .. py:method:: native_handle() -> Any
+
+      The underlying :class:`zarr.Group` — callers that
+      need zarr-specific APIs (consolidate_metadata, tree display)
+      can reach for it.
+
+
+
+   .. py:method:: discard_memory_store(url: str) -> None
+      :staticmethod:
+
+
+      Wipe a ``zarr+memory://`` store. Mainly for tests.
+
+
+

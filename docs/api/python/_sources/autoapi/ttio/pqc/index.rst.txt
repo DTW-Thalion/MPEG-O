@@ -1,0 +1,173 @@
+ttio.pqc
+========
+
+.. py:module:: ttio.pqc
+
+.. autoapi-nested-parse::
+
+   Post-quantum crypto primitives — ML-KEM-1024 + ML-DSA-87 (v0.8 M49).
+
+   Thin wrapper over ``liboqs-python`` (Open Quantum Safe) that gives the
+   rest of :mod:`ttio` a stable surface for FIPS 203 (ML-KEM-1024) key
+   encapsulation and FIPS 204 (ML-DSA-87) digital signatures without
+   leaking the ``oqs`` API directly.
+
+   Availability
+   ------------
+   This module requires the ``[pqc]`` extra:
+
+   .. code-block:: bash
+
+       pip install 'ttio[pqc]'
+
+   which pulls in ``liboqs-python`` (pure Python over ``ctypes``). The
+   wrapper in turn needs a system ``liboqs`` ≥ 0.14 shared library.
+   ``liboqs-python`` auto-installs one to ``$HOME/_oqs`` on first import
+   if missing, but CI is expected to provide it explicitly (Ubuntu 24.04
+   has no apt package). See :file:`docs/pqc.md` for the platform matrix.
+
+   If ``oqs`` is not importable, every entry point in this module raises
+   :class:`PQCUnavailableError` at call time — importing :mod:`ttio.pqc`
+   itself succeeds so that the rest of the package stays importable on
+   hosts without liboqs.
+
+   Role map
+   --------
+   * **Encapsulation** (sender, writer side) takes a *public key* and
+     returns ``(kem_ciphertext, shared_secret)``.
+   * **Decapsulation** (receiver, reader side) takes a *private key* and
+     the KEM ciphertext, returns ``shared_secret``.
+   * **Sign** takes a *signing key* (private) and message, returns
+     ``signature``.
+   * **Verify** takes a *verification key* (public), message, and
+     signature, returns ``bool``.
+
+   All public-key / private-key / ciphertext / signature sizes are pinned
+   by FIPS 203 and FIPS 204; see :mod:`ttio.cipher_suite` for the
+   catalog values.
+
+   Cross-language equivalents
+   --------------------------
+   * Objective-C: ``TTIOCipherSuite`` (same liboqs library, C API)
+   * Java: Bouncy Castle ``org.bouncycastle.pqc.*`` (different provider
+     — see :file:`docs/pqc.md` § "Why Python/ObjC use liboqs but Java
+     uses Bouncy Castle").
+
+   API status: Provisional (v0.8). Subject to breaking changes through
+   the v0.8 series; will be marked Stable at v1.0.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.pqc.ML_KEM_1024
+   ttio.pqc.ML_DSA_87
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.pqc.PQCUnavailableError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.pqc.is_available
+   ttio.pqc.kem_keygen
+   ttio.pqc.kem_encapsulate
+   ttio.pqc.kem_decapsulate
+   ttio.pqc.sig_keygen
+   ttio.pqc.sig_sign
+   ttio.pqc.sig_verify
+
+
+Module Contents
+---------------
+
+.. py:data:: ML_KEM_1024
+   :value: 'ML-KEM-1024'
+
+
+.. py:data:: ML_DSA_87
+   :value: 'ML-DSA-87'
+
+
+.. py:exception:: PQCUnavailableError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Raised when a PQC primitive is requested but the optional
+   ``liboqs-python`` / system ``liboqs`` dependency is missing.
+
+   Swallow at the call site to provide a graceful "PQC unavailable"
+   experience (for example when a reader opens a v3: signed file
+   without the ``[pqc]`` extra installed).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:function:: is_available() -> bool
+
+   Return True iff liboqs-python is importable. Does not touch the
+   native library, so it's cheap to call repeatedly.
+
+
+.. py:function:: kem_keygen(algorithm: str = ML_KEM_1024) -> KeyPair
+
+   Generate a new ML-KEM-1024 encapsulation keypair.
+
+   Returns a :class:`KeyPair` of raw bytes. For ML-KEM-1024:
+   ``len(public_key) == 1568``, ``len(private_key) == 3168``.
+
+
+.. py:function:: kem_encapsulate(public_key: bytes, algorithm: str = ML_KEM_1024) -> tuple[bytes, bytes]
+
+   Encapsulate a fresh shared secret under ``public_key``.
+
+   Returns ``(kem_ciphertext, shared_secret)``. For ML-KEM-1024 the
+   ciphertext is 1568 bytes and the shared secret is 32 bytes (the
+   natural width of an AES-256 key — used downstream to AES-wrap the
+   actual DEK in the envelope model).
+
+
+.. py:function:: kem_decapsulate(private_key: bytes, ciphertext: bytes, algorithm: str = ML_KEM_1024) -> bytes
+
+   Recover the shared secret from a KEM ciphertext using ``private_key``.
+
+   Returns 32 bytes for ML-KEM-1024. Raises the underlying ``oqs``
+   exception on malformed inputs — ML-KEM does not have
+   authenticated decapsulation, so a corrupted ciphertext yields a
+   well-formed but meaningless shared secret; downstream AES-GCM
+   unwrap authenticates the chain.
+
+
+.. py:function:: sig_keygen(algorithm: str = ML_DSA_87) -> KeyPair
+
+   Generate a new ML-DSA-87 signing keypair.
+
+   For ML-DSA-87: ``len(public_key) == 2592``, ``len(private_key) == 4896``.
+
+
+.. py:function:: sig_sign(private_key: bytes, message: bytes, algorithm: str = ML_DSA_87) -> bytes
+
+   Sign ``message`` with the given ML-DSA-87 signing key. Returns
+   raw signature bytes (4627 bytes for ML-DSA-87).
+
+
+.. py:function:: sig_verify(public_key: bytes, message: bytes, signature: bytes, algorithm: str = ML_DSA_87) -> bool
+
+   Verify that ``signature`` is a valid ML-DSA-87 signature on
+   ``message`` under ``public_key``. Returns ``True`` / ``False``;
+   malformed inputs surface as the underlying ``oqs`` exception so
+   callers can distinguish "wrong signature" from "corrupt file".
+
+

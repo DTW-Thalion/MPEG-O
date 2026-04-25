@@ -1,0 +1,169 @@
+ttio.raman_image
+================
+
+.. py:module:: ttio.raman_image
+
+.. autoapi-nested-parse::
+
+   ``RamanImage`` — Raman hyperspectral imaging cube.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.raman_image.RamanImage
+
+
+Module Contents
+---------------
+
+.. py:class:: RamanImage
+
+   Raman hyperspectral imaging dataset: a ``width × height`` grid of
+   pixels, each pixel a spectrum of ``spectral_points`` intensity values
+   sampled at a shared rank-1 ``wavenumbers`` axis.
+
+   :param width: Image grid dimensions in pixels.
+   :type width: int, default 0
+   :param height: Image grid dimensions in pixels.
+   :type height: int, default 0
+   :param spectral_points: Number of float64 intensity values per pixel.
+   :type spectral_points: int, default 0
+   :param intensity: Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
+   :type intensity: numpy.ndarray, default empty rank-3 array
+   :param wavenumbers: Rank-1 wavenumber axis of length ``spectral_points`` (1/cm).
+   :type wavenumbers: numpy.ndarray, default empty rank-1 array
+   :param pixel_size_x: Spatial pixel size (implementation-defined units).
+   :type pixel_size_x: float, default 0.0
+   :param pixel_size_y: Spatial pixel size (implementation-defined units).
+   :type pixel_size_y: float, default 0.0
+   :param scan_pattern: Scan pattern label (``"raster"``, ``"random_access"``, ...).
+   :type scan_pattern: str, default ""
+   :param tile_size: HDF5 chunk tile size for reads; 0 means native cube chunks.
+   :type tile_size: int, default 0
+   :param excitation_wavelength_nm: Laser excitation wavelength in nanometres.
+   :type excitation_wavelength_nm: float, default 0.0
+   :param laser_power_mw: Incident laser power in milliwatts.
+   :type laser_power_mw: float, default 0.0
+   :param title: Dataset-level metadata.
+   :type title: str, default ""
+   :param isa_investigation_id: Dataset-level metadata.
+   :type isa_investigation_id: str, default ""
+   :param identifications: Dataset-level composition fields (ObjC inherits these from
+                           ``TTIOSpectralDataset``).
+   :type identifications: list, default []
+   :param quantifications: Dataset-level composition fields (ObjC inherits these from
+                           ``TTIOSpectralDataset``).
+   :type quantifications: list, default []
+   :param provenance_records: Dataset-level composition fields (ObjC inherits these from
+                              ``TTIOSpectralDataset``).
+   :type provenance_records: list, default []
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11, M73).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIORamanImage`` · Java:
+   ``com.dtwthalion.ttio.RamanImage``.
+
+
+   .. py:attribute:: width
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: height
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: spectral_points
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_size_x
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: pixel_size_y
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: intensity
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: wavenumbers
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: scan_pattern
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: tile_size
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: excitation_wavelength_nm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: laser_power_mw
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: identifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: provenance_records
+      :type:  list
+      :value: []
+
+
+
+   .. py:method:: __post_init__() -> None
+
+

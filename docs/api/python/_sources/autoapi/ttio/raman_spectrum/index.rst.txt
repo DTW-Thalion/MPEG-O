@@ -1,0 +1,89 @@
+ttio.raman_spectrum
+===================
+
+.. py:module:: ttio.raman_spectrum
+
+.. autoapi-nested-parse::
+
+   ``RamanSpectrum`` — 1-D Raman spectrum subclass.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.raman_spectrum.RamanSpectrum
+
+
+Module Contents
+---------------
+
+.. py:class:: RamanSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A 1-D Raman spectrum with ``wavenumber`` and ``intensity`` channels.
+
+   :param excitation_wavelength_nm: Laser excitation wavelength in nanometres (e.g. 532, 785).
+   :type excitation_wavelength_nm: float, default 0.0
+   :param laser_power_mw: Incident laser power in milliwatts.
+   :type laser_power_mw: float, default 0.0
+   :param integration_time_sec: Detector integration time in seconds.
+   :type integration_time_sec: float, default 0.0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11, M73).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIORamanSpectrum`` · Java:
+   ``com.dtwthalion.ttio.RamanSpectrum``.
+
+
+   .. py:attribute:: WAVENUMBER
+      :value: 'wavenumber'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: excitation_wavelength_nm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: laser_power_mw
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: integration_time_sec
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:property:: wavenumber_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"wavenumber"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+

@@ -1,0 +1,84 @@
+ttio.uv_vis_spectrum
+====================
+
+.. py:module:: ttio.uv_vis_spectrum
+
+.. autoapi-nested-parse::
+
+   ``UVVisSpectrum`` — 1-D UV-visible absorption spectrum subclass.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.uv_vis_spectrum.UVVisSpectrum
+
+
+Module Contents
+---------------
+
+.. py:class:: UVVisSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A 1-D UV-Vis spectrum with ``wavelength`` (nm) and ``absorbance`` channels.
+
+   Unlike Raman / IR spectra, UV-Vis observations are indexed by
+   wavelength in nanometres rather than wavenumber.
+
+   :param path_length_cm: Optical path length of the cuvette in centimetres.
+   :type path_length_cm: float, default 0.0
+   :param solvent: Free-form solvent description (e.g. ``"methanol"``).
+   :type solvent: str, default ``""``
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11.1).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOUVVisSpectrum`` · Java:
+   ``com.dtwthalion.ttio.UVVisSpectrum``.
+
+
+   .. py:attribute:: WAVELENGTH
+      :value: 'wavelength'
+
+
+
+   .. py:attribute:: ABSORBANCE
+      :value: 'absorbance'
+
+
+
+   .. py:attribute:: path_length_cm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: solvent
+      :type:  str
+      :value: ''
+
+
+
+   .. py:property:: wavelength_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"wavelength"`` :class:`SignalArray`.
+
+
+   .. py:property:: absorbance_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"absorbance"`` :class:`SignalArray`.
+
+

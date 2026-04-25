@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-ROOT="$HOME/MPEG-O"
+ROOT="$HOME/TTI-O"
 OBJC_DIR="$ROOT/objc"
 BUILD="$ROOT/tools/perf/_build"
 mkdir -p "$BUILD"
@@ -22,7 +22,7 @@ clang -fobjc-arc -O2 \
     -L/usr/lib/x86_64-linux-gnu/hdf5/serial \
     -L/usr/local/lib \
     "$ROOT/tools/perf/profile_read_detail.m" \
-    -lMPGO -lhdf5_serial -lhdf5_serial_hl -lz -lcrypto -lsqlite3 -lobjc \
+    -lTTIO -lhdf5_serial -lhdf5_serial_hl -lz -lcrypto -lsqlite3 -lobjc \
     $GNU_LIB \
     -o "$BUILD/profile_read_detail"
 

@@ -1,6 +1,6 @@
-# The Six MPEG-O Data Primitives
+# The Six TTI-O Data Primitives
 
-MPEG-O is built on six shared primitives that together span the data-generation pipeline from raw measurement to identified, quantified, and provenance-tracked biological entity.
+TTI-O is built on six shared primitives that together span the data-generation pipeline from raw measurement to identified, quantified, and provenance-tracked biological entity.
 
 ---
 
@@ -11,9 +11,9 @@ The atomic unit of measured signal — a typed, axis-annotated numeric buffer.
 | Field | Type | Description |
 |---|---|---|
 | `buffer` | `NSData` | Raw bytes, laid out according to `encodingSpec.precision` and `encodingSpec.byteOrder` |
-| `encodingSpec` | `MPGOEncodingSpec` | Precision, compression algorithm, byte order |
-| `axisDescriptor` | `MPGOAxisDescriptor` | What the indices mean (name, unit, range, sampling) |
-| `cvAnnotations` | `NSArray<MPGOCVParam>` | CV parameters attached to this array |
+| `encodingSpec` | `TTIOEncodingSpec` | Precision, compression algorithm, byte order |
+| `axisDescriptor` | `TTIOAxisDescriptor` | What the indices mean (name, unit, range, sampling) |
+| `cvAnnotations` | `NSArray<TTIOCVParam>` | CV parameters attached to this array |
 
 Supported precisions: `Float32`, `Float64`, `Int32`, `Int64`, `UInt32`, `Complex128` (stored as compound `{double re; double im;}`).
 
@@ -27,14 +27,14 @@ A named dictionary of SignalArrays that together describe a single spectral obse
 
 | Field | Type | Description |
 |---|---|---|
-| `signalArrays` | `NSDictionary<NSString*, MPGOSignalArray*>` | Named channels — e.g. `"mz"`, `"intensity"`, `"ion_mobility"` |
-| `coordinateAxes` | `NSArray<MPGOAxisDescriptor>` | Ordered axes when the spectrum is multi-dimensional |
+| `signalArrays` | `NSDictionary<NSString*, TTIOSignalArray*>` | Named channels — e.g. `"mz"`, `"intensity"`, `"ion_mobility"` |
+| `coordinateAxes` | `NSArray<TTIOAxisDescriptor>` | Ordered axes when the spectrum is multi-dimensional |
 | `indexPosition` | `NSUInteger` | Position within the parent AcquisitionRun |
 | `scanTime` | `double` | Acquisition time (seconds from run start) |
 | `precursorInfo` | `NSDictionary` (optional) | For tandem MS: precursor m/z, charge, isolation window, activation |
-| `cvAnnotations` | `NSArray<MPGOCVParam>` | Spectrum-level CV parameters |
+| `cvAnnotations` | `NSArray<TTIOCVParam>` | Spectrum-level CV parameters |
 
-Concrete subclasses (`MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGONMR2DSpectrum`, and — since v0.11 / M73 — `MPGORamanSpectrum` and `MPGOIRSpectrum`) add mandatory named arrays and domain-specific metadata.
+Concrete subclasses (`TTIOMassSpectrum`, `TTIONMRSpectrum`, `TTIONMR2DSpectrum`, and — since v0.11 / M73 — `TTIORamanSpectrum` and `TTIOIRSpectrum`) add mandatory named arrays and domain-specific metadata.
 
 ---
 
@@ -44,18 +44,18 @@ An ordered, indexable, streamable collection of Spectrum objects that share an i
 
 | Field | Type | Description |
 |---|---|---|
-| `spectra` | `NSArray<MPGOSpectrum>` | Ordered spectra |
-| `chromatograms` | `NSArray<MPGOChromatogram>` | Derived or acquired chromatograms |
-| `instrumentConfig` | `MPGOInstrumentConfig` | Shared across all spectra in the run |
+| `spectra` | `NSArray<TTIOSpectrum>` | Ordered spectra |
+| `chromatograms` | `NSArray<TTIOChromatogram>` | Derived or acquired chromatograms |
+| `instrumentConfig` | `TTIOInstrumentConfig` | Shared across all spectra in the run |
 | `sourceFiles` | `NSArray<NSString>` | Provenance pointers to raw vendor files |
-| `provenance` | `NSArray<MPGOProvenanceRecord>` | Processing history |
-| `spectrumIndex` | `MPGOSpectrumIndex` | Access Unit index (populated on write) |
+| `provenance` | `NSArray<TTIOProvenanceRecord>` | Processing history |
+| `spectrumIndex` | `TTIOSpectrumIndex` | Access Unit index (populated on write) |
 
-An AcquisitionRun conforms to `MPGOIndexable`, `MPGOStreamable`, `MPGOProvenanceable`, and `MPGOEncryptable`.
+An AcquisitionRun conforms to `TTIOIndexable`, `TTIOStreamable`, `TTIOProvenanceable`, and `TTIOEncryptable`.
 
 ---
 
-## 4. CVAnnotation (`MPGOCVParam`)
+## 4. CVAnnotation (`TTIOCVParam`)
 
 A single controlled-vocabulary parameter bound to an annotatable object.
 
@@ -67,7 +67,7 @@ A single controlled-vocabulary parameter bound to an annotatable object.
 | `value` | `id` (nullable) | Optional value (string, number, or boolean) |
 | `unit` | `NSString` (nullable) | Optional unit accession, e.g. `"MS:1000040"` for m/z |
 
-CVAnnotations are the primary extensibility mechanism: any class conforming to `MPGOCVAnnotatable` can be tagged with any number of CVParams. This allows MPEG-O to remain minimal at the schema level while deferring semantic richness to well-curated ontologies (PSI-MS, nmrCV, CHEBI, BFO, UO).
+CVAnnotations are the primary extensibility mechanism: any class conforming to `TTIOCVAnnotatable` can be tagged with any number of CVParams. This allows TTI-O to remain minimal at the schema level while deferring semantic richness to well-curated ontologies (PSI-MS, nmrCV, CHEBI, BFO, UO).
 
 ---
 
@@ -81,7 +81,7 @@ A link from a spectrum (or region thereof) to a chemical entity, with confidence
 | `chemicalEntity` | `NSString` | Identifier (CHEBI, HMDB, PubChem, SMILES, …) |
 | `confidenceScore` | `double` | Numeric score whose semantics are declared via CVAnnotation |
 | `evidenceChain` | `NSArray` | References to supporting provenance records |
-| `cvAnnotations` | `NSArray<MPGOCVParam>` | e.g. search engine, score type, FDR controls |
+| `cvAnnotations` | `NSArray<TTIOCVParam>` | e.g. search engine, score type, FDR controls |
 
 Identifications are stored in the dataset root, not per-spectrum, so a single spectrum can carry multiple competing identifications.
 
@@ -99,4 +99,4 @@ A W3C PROV-compatible record of a single processing step.
 | `outputEntities` | `NSArray<NSString>` | References to outputs |
 | `timestamp` | `NSDate` | When the activity occurred |
 
-Chains of ProvenanceRecords form a directed acyclic graph: any entity's history can be traced back to the raw vendor file that produced it, making MPEG-O files self-documenting and suitable for regulated environments.
+Chains of ProvenanceRecords form a directed acyclic graph: any entity's history can be traced back to the raw vendor file that produced it, making TTI-O files self-documenting and suitable for regulated environments.

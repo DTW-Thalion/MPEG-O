@@ -1,6 +1,6 @@
-# MPEG-O Architecture
+# TTI-O Architecture
 
-MPEG-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data: mass spectrometry, NMR, and vibrational spectroscopy (Raman + IR).
+TTI-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data: mass spectrometry, NMR, and vibrational spectroscopy (Raman + IR).
 
 As of v0.11.1 there are three interoperable reference implementations:
 
@@ -11,7 +11,7 @@ As of v0.11.1 there are three interoperable reference implementations:
   Apache-2.0 importers/exporters) — a full reader/writer on top of
   `h5py` + `numpy` that mirrors the Objective-C class hierarchy
   1-to-1. 765 tests passing.
-- **Java (`com.dtwthalion.mpgo`)** (`java/`, LGPL-3.0 core +
+- **Java (`com.dtwthalion.tio`)** (`java/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
   mirroring the ObjC/Python class hierarchy. 331 tests passing.
   Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
@@ -41,21 +41,21 @@ Protocols define capabilities that can be mixed into any class. A class may conf
 
 | Protocol | Purpose | Key Methods |
 |---|---|---|
-| `MPGOIndexable` | Random access by index, key, or range | `-objectAtIndex:`, `-objectForKey:`, `-objectsInRange:` |
-| `MPGOStreamable` | Sequential access with seek | `-nextObject`, `-seekToPosition:`, `-currentPosition`, `-hasMore`, `-reset` |
-| `MPGOCVAnnotatable` | Controlled-vocabulary annotation | `-addCVParam:`, `-cvParamsForAccession:`, `-allCVParams`, `-hasCVParamWithAccession:` |
-| `MPGOProvenanceable` | W3C PROV-compatible processing history | `-addProcessingStep:`, `-provenanceChain`, `-inputEntities`, `-outputEntities` |
-| `MPGOEncryptable` | MPEG-G-style multi-level protection | `-encryptWithKey:level:`, `-decryptWithKey:`, `-accessPolicy`, `-setAccessPolicy:` |
+| `TTIOIndexable` | Random access by index, key, or range | `-objectAtIndex:`, `-objectForKey:`, `-objectsInRange:` |
+| `TTIOStreamable` | Sequential access with seek | `-nextObject`, `-seekToPosition:`, `-currentPosition`, `-hasMore`, `-reset` |
+| `TTIOCVAnnotatable` | Controlled-vocabulary annotation | `-addCVParam:`, `-cvParamsForAccession:`, `-allCVParams`, `-hasCVParamWithAccession:` |
+| `TTIOProvenanceable` | W3C PROV-compatible processing history | `-addProcessingStep:`, `-provenanceChain`, `-inputEntities`, `-outputEntities` |
+| `TTIOEncryptable` | MPEG-G-style multi-level protection | `-encryptWithKey:level:`, `-decryptWithKey:`, `-accessPolicy`, `-setAccessPolicy:` |
 
 ### Encryption levels
 
 ```objc
-typedef NS_ENUM(NSUInteger, MPGOEncryptionLevel) {
-    MPGOEncryptionLevelNone = 0,
-    MPGOEncryptionLevelDatasetGroup,    // Entire study
-    MPGOEncryptionLevelDataset,          // A single AcquisitionRun
-    MPGOEncryptionLevelDescriptorStream, // A single signal channel (e.g. intensity)
-    MPGOEncryptionLevelAccessUnit        // An individual spectrum
+typedef NS_ENUM(NSUInteger, TTIOEncryptionLevel) {
+    TTIOEncryptionLevelNone = 0,
+    TTIOEncryptionLevelDatasetGroup,    // Entire study
+    TTIOEncryptionLevelDataset,          // A single AcquisitionRun
+    TTIOEncryptionLevelDescriptorStream, // A single signal channel (e.g. intensity)
+    TTIOEncryptionLevelAccessUnit        // An individual spectrum
 };
 ```
 
@@ -80,31 +80,31 @@ ciphertext verbatim — servers never decrypt in transit.
 
 Conformance below reflects the **v0.1.0-alpha** implementation. Several
 classes that the original design declared as conforming to
-`MPGOEncryptable` / `MPGOProvenanceable` / `MPGOCVAnnotatable` instead
+`TTIOEncryptable` / `TTIOProvenanceable` / `TTIOCVAnnotatable` instead
 delegate to the relevant managers in v0.1; see "Implementation notes
 (v0.1.0-alpha)" below.
 
 | Class | Inherits | Conforms To | Key Properties |
 |---|---|---|---|
-| `MPGOSignalArray` | `NSObject` | `MPGOCVAnnotatable` | `buffer` (NSData), `length`, `encoding`, `axis` |
-| `MPGOAxisDescriptor` | `NSObject` | `NSCoding`, `NSCopying` | `name`, `unit`, `valueRange`, `samplingMode` |
-| `MPGOEncodingSpec` | `NSObject` | `NSCoding`, `NSCopying` | `precision`, `compressionAlgorithm`, `byteOrder` |
-| `MPGOValueRange` | `NSObject` | `NSCoding`, `NSCopying` | `minimum`, `maximum` |
-| `MPGOCVParam` | `NSObject` | `NSCoding`, `NSCopying` | `ontologyRef`, `accession`, `name`, `value`, `unit` |
-| `MPGOSpectrum` | `NSObject` | — | `signalArrays` (NSDictionary), `axes`, `indexPosition`, `scanTimeSeconds`, `precursorMz`, `precursorCharge` |
-| `MPGOAcquisitionRun` | `NSObject` | `MPGOIndexable`, `MPGOStreamable` | `spectrumIndex`, `instrumentConfig`, `acquisitionMode`; lazy hyperslab reads when read from disk |
-| `MPGOSpectralDataset` | `NSObject` | — | `title`, `isaInvestigationId`, `msRuns`, `nmrRuns`, `identifications`, `quantifications`, `provenanceRecords`, `transitions` |
-| `MPGOIdentification` | `NSObject` | `NSCopying` | `runName`, `spectrumIndex`, `chemicalEntity`, `confidenceScore`, `evidenceChain` |
-| `MPGOQuantification` | `NSObject` | `NSCopying` | `chemicalEntity`, `sampleRef`, `abundance`, `normalizationMethod` |
-| `MPGOProvenanceRecord` | `NSObject` | `NSCopying` | `inputRefs`, `software`, `parameters`, `outputRefs`, `timestampUnix` |
-| `MPGOInstrumentConfig` | `NSObject` | `NSCoding`, `NSCopying` | `manufacturer`, `model`, `serialNumber`, `sourceType`, `analyzerType`, `detectorType` |
-| `MPGOSpectrumIndex` | `NSObject` | — | `offsets`, `lengths`, `retentionTimes`, `msLevels`, `polarities`, `precursorMzs`, `precursorCharges`, `basePeakIntensities` (parallel C arrays) |
-| `MPGOTransitionList` | `NSObject` | — | ordered `MPGOTransition` array |
-| `MPGOMSImage` | `NSObject` | — | `width`, `height`, `spectralPoints`, `tileSize`, `cube`; tile-aligned 3-D HDF5 storage |
-| `MPGOQuery` | `NSObject` | — | builder over `MPGOSpectrumIndex`; predicates: RT, MS level, polarity, precursor m/z, base peak |
-| `MPGOStreamWriter` / `MPGOStreamReader` | `NSObject` | — | incremental append with periodic flush; sequential read |
-| `MPGOEncryptionManager` | `NSObject` | — | static AES-256-GCM helpers (OpenSSL EVP) |
-| `MPGOAccessPolicy` | `NSObject` | `NSCopying` | JSON-encoded policy persisted under `/protection/access_policies` |
+| `TTIOSignalArray` | `NSObject` | `TTIOCVAnnotatable` | `buffer` (NSData), `length`, `encoding`, `axis` |
+| `TTIOAxisDescriptor` | `NSObject` | `NSCoding`, `NSCopying` | `name`, `unit`, `valueRange`, `samplingMode` |
+| `TTIOEncodingSpec` | `NSObject` | `NSCoding`, `NSCopying` | `precision`, `compressionAlgorithm`, `byteOrder` |
+| `TTIOValueRange` | `NSObject` | `NSCoding`, `NSCopying` | `minimum`, `maximum` |
+| `TTIOCVParam` | `NSObject` | `NSCoding`, `NSCopying` | `ontologyRef`, `accession`, `name`, `value`, `unit` |
+| `TTIOSpectrum` | `NSObject` | — | `signalArrays` (NSDictionary), `axes`, `indexPosition`, `scanTimeSeconds`, `precursorMz`, `precursorCharge` |
+| `TTIOAcquisitionRun` | `NSObject` | `TTIOIndexable`, `TTIOStreamable` | `spectrumIndex`, `instrumentConfig`, `acquisitionMode`; lazy hyperslab reads when read from disk |
+| `TTIOSpectralDataset` | `NSObject` | — | `title`, `isaInvestigationId`, `msRuns`, `nmrRuns`, `identifications`, `quantifications`, `provenanceRecords`, `transitions` |
+| `TTIOIdentification` | `NSObject` | `NSCopying` | `runName`, `spectrumIndex`, `chemicalEntity`, `confidenceScore`, `evidenceChain` |
+| `TTIOQuantification` | `NSObject` | `NSCopying` | `chemicalEntity`, `sampleRef`, `abundance`, `normalizationMethod` |
+| `TTIOProvenanceRecord` | `NSObject` | `NSCopying` | `inputRefs`, `software`, `parameters`, `outputRefs`, `timestampUnix` |
+| `TTIOInstrumentConfig` | `NSObject` | `NSCoding`, `NSCopying` | `manufacturer`, `model`, `serialNumber`, `sourceType`, `analyzerType`, `detectorType` |
+| `TTIOSpectrumIndex` | `NSObject` | — | `offsets`, `lengths`, `retentionTimes`, `msLevels`, `polarities`, `precursorMzs`, `precursorCharges`, `basePeakIntensities` (parallel C arrays) |
+| `TTIOTransitionList` | `NSObject` | — | ordered `TTIOTransition` array |
+| `TTIOMSImage` | `NSObject` | — | `width`, `height`, `spectralPoints`, `tileSize`, `cube`; tile-aligned 3-D HDF5 storage |
+| `TTIOQuery` | `NSObject` | — | builder over `TTIOSpectrumIndex`; predicates: RT, MS level, polarity, precursor m/z, base peak |
+| `TTIOStreamWriter` / `TTIOStreamReader` | `NSObject` | — | incremental append with periodic flush; sequential read |
+| `TTIOEncryptionManager` | `NSObject` | — | static AES-256-GCM helpers (OpenSSL EVP) |
+| `TTIOAccessPolicy` | `NSObject` | `NSCopying` | JSON-encoded policy persisted under `/protection/access_policies` |
 
 ---
 
@@ -112,18 +112,18 @@ delegate to the relevant managers in v0.1; see "Implementation notes
 
 | Class | Extends | Domain-Specific Properties |
 |---|---|---|
-| `MPGOMassSpectrum` | `MPGOSpectrum` | `mzArray`, `intensityArray` (mandatory, equal length); `msLevel`, `polarity`, `scanWindow` (optional) |
-| `MPGONMRSpectrum` | `MPGOSpectrum` | `chemicalShiftArray`, `intensityArray`, `nucleusType`, `spectrometerFrequencyMHz` |
-| `MPGONMR2DSpectrum` | `MPGOSpectrum` | `intensityMatrix` (flattened row-major float64), `width`, `height`, `f1Axis`, `f2Axis`, `nucleusF1`, `nucleusF2` |
-| `MPGORamanSpectrum` (v0.11) | `MPGOSpectrum` | `wavenumberArray`, `intensityArray`, `excitationWavelengthNm`, `laserPowerMw`, `integrationTimeSec` |
-| `MPGOIRSpectrum` (v0.11) | `MPGOSpectrum` | `wavenumberArray`, `intensityArray`, `mode` (`MPGOIRMode` — transmittance/absorbance), `resolutionCmInv`, `numberOfScans` |
-| `MPGORamanImage` (v0.11) | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube` (float64[H][W][SP]), `wavenumbers` (float64[SP]), `excitationWavelengthNm`, `laserPowerMw` |
-| `MPGOIRImage` (v0.11) | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube`, `wavenumbers`, `mode`, `resolutionCmInv` |
-| `MPGOUVVisSpectrum` (v0.11.1) | `MPGOSpectrum` | `wavelengthArray` (nm), `absorbanceArray`, `pathLengthCm`, `solvent` |
-| `MPGOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `MPGOSpectrum` | `variableAxis` (float64[N]), `synchronousMatrix` (float64[N×N] row-major), `asynchronousMatrix` (float64[N×N] row-major); feature-flagged `opt_native_2d_cos` |
-| `MPGOFreeInductionDecay` | `MPGOSignalArray` | Complex128 buffer (interleaved real/imag), `dwellTimeSeconds`, `scanCount`, `receiverGain` |
-| `MPGOChromatogram` | `MPGOSpectrum` | `timeArray`, `intensityArray`, `type` (TIC / XIC / SRM), `targetMz`, `precursorProductMz`, `productMz` |
-| `MPGOTransition` / `MPGOTransitionList` | `NSObject` | precursor → product m/z, collision energy, RT window |
+| `TTIOMassSpectrum` | `TTIOSpectrum` | `mzArray`, `intensityArray` (mandatory, equal length); `msLevel`, `polarity`, `scanWindow` (optional) |
+| `TTIONMRSpectrum` | `TTIOSpectrum` | `chemicalShiftArray`, `intensityArray`, `nucleusType`, `spectrometerFrequencyMHz` |
+| `TTIONMR2DSpectrum` | `TTIOSpectrum` | `intensityMatrix` (flattened row-major float64), `width`, `height`, `f1Axis`, `f2Axis`, `nucleusF1`, `nucleusF2` |
+| `TTIORamanSpectrum` (v0.11) | `TTIOSpectrum` | `wavenumberArray`, `intensityArray`, `excitationWavelengthNm`, `laserPowerMw`, `integrationTimeSec` |
+| `TTIOIRSpectrum` (v0.11) | `TTIOSpectrum` | `wavenumberArray`, `intensityArray`, `mode` (`TTIOIRMode` — transmittance/absorbance), `resolutionCmInv`, `numberOfScans` |
+| `TTIORamanImage` (v0.11) | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube` (float64[H][W][SP]), `wavenumbers` (float64[SP]), `excitationWavelengthNm`, `laserPowerMw` |
+| `TTIOIRImage` (v0.11) | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube`, `wavenumbers`, `mode`, `resolutionCmInv` |
+| `TTIOUVVisSpectrum` (v0.11.1) | `TTIOSpectrum` | `wavelengthArray` (nm), `absorbanceArray`, `pathLengthCm`, `solvent` |
+| `TTIOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TTIOSpectrum` | `variableAxis` (float64[N]), `synchronousMatrix` (float64[N×N] row-major), `asynchronousMatrix` (float64[N×N] row-major); feature-flagged `opt_native_2d_cos` |
+| `TTIOFreeInductionDecay` | `TTIOSignalArray` | Complex128 buffer (interleaved real/imag), `dwellTimeSeconds`, `scanCount`, `receiverGain` |
+| `TTIOChromatogram` | `TTIOSpectrum` | `timeArray`, `intensityArray`, `type` (TIC / XIC / SRM), `targetMz`, `precursorProductMz`, `productMz` |
+| `TTIOTransition` / `TTIOTransitionList` | `NSObject` | precursor → product m/z, collision energy, RT window |
 
 ---
 
@@ -153,10 +153,10 @@ The data model and API are the standard; the storage backend is a
 Providers register via platform-native discovery:
 
 * **Python** — `importlib.metadata` entry points
-  (`project.entry-points."mpeg_o.providers"` in `pyproject.toml`).
+  (`project.entry-points."ttio.providers"` in `pyproject.toml`).
 * **Java** — `java.util.ServiceLoader` with a service file at
-  `META-INF/services/com.dtwthalion.mpgo.providers.StorageProvider`.
-* **ObjC** — `+load` registration into `MPGOProviderRegistry`.
+  `META-INF/services/com.dtwthalion.tio.providers.StorageProvider`.
+* **ObjC** — `+load` registration into `TTIOProviderRegistry`.
 
 Each language exposes the same **capability floor**:
 
@@ -184,7 +184,7 @@ Two orthogonal axes:
    v0.7+. Memory / SQLite / Zarr backends are reached by URL scheme
    (`memory://…`, `sqlite://…`, `zarr://…`).
 
-2. **Streaming transport (v0.10)** — the `.mots` wire format
+2. **Streaming transport (v0.10)** — the `.tis` wire format
    documented in `docs/transport-spec.md`. 24-byte packet headers
    carry nine packet types (StreamHeader, DatasetHeader, AccessUnit,
    ProtectionMetadata, Annotation, Provenance, Chromatogram,
@@ -200,7 +200,7 @@ Two orthogonal axes:
 ### Transport ↔ file bidirectionality
 
 `TransportReader.materialize_to(path)` and the ObjC / Java
-equivalents write a `.mpgo` from a `.mots` stream; the inverse
+equivalents write a `.tio` from a `.tis` stream; the inverse
 `TransportWriter.write_dataset(dataset)` emits the stream from a
 file. The bidirectional conformance test (M70) asserts that any
 writer × reader pair across {Python, ObjC, Java} produces
@@ -218,7 +218,7 @@ Memory / SQLite / Zarr backends round-trip end-to-end:
 | `SpectralDataset.write_minimal` | **Provider-aware** — `provider=` kwarg picks backend; HDF5 fast path keeps legacy byte layout (M64.5) |
 | `_write_run` / `_write_identifications` / `_write_quantifications` / `_write_provenance` | **Provider-aware** via the StorageGroup protocol; HDF5 helpers in `_hdf5_io.py` dispatch on isinstance for byte parity (M64.5) |
 | `AcquisitionRun.open` + `_read_chromatograms` + `write_chromatograms_to_run_group` | **Provider-aware** — cold-path attribute and dataset reads go through StorageGroup primitives (M64.5) |
-| `Hdf5Provider.native_handle()` | Returns underlying `h5py.File` / `Hdf5File` / `MPGOHDF5File` for byte-level code that hasn't been ported yet |
+| `Hdf5Provider.native_handle()` | Returns underlying `h5py.File` / `Hdf5File` / `TTIOHDF5File` for byte-level code that hasn't been ported yet |
 | `EncryptionManager` (`encrypt_intensity_channel_in_group` + `read_encrypted_channel`) | **Provider-aware** — both helpers dispatch via isinstance: HDF5 keeps the legacy multi-dataset rewrite path, non-HDF5 routes through StorageGroup `create_dataset` / `open_dataset` / `delete_child` (M64.5 phase B) |
 | `SignatureManager` (`sign_dataset` / `verify_dataset`) | **Provider-aware** — h5py callers go through the legacy fast path; `StorageDataset` callers delegate to the M54.1 `sign_storage_dataset` / `verify_storage_dataset` siblings (M64.5 phase B) |
 | `Anonymizer.anonymize` | **Provider-aware** — accepts a `provider=` kwarg passed through to `write_minimal` (M64.5 phase B) |
@@ -246,7 +246,7 @@ Java and ObjC entry points:
 |---|---|---|---|
 | Python  | All 4 providers | All 4 providers | HDF5 fast path + StorageGroup path (M64.5 phase A) |
 | Java    | All 4 providers | All 4 providers | M64.5-objc-java: `ProviderRegistry.open` + JSON-attribute metadata path. `ZarrProvider` reads gzip-compressed Zarr v3 chunks via JDK `GZIPInputStream`. |
-| ObjC    | All 4 providers (read) | HDF5 only | v0.9 follow-up: `+readViaProviderURL:` uses `MPGOProviderRegistry` + new `MPGOAcquisitionRun readFromStorageGroup:` + new `MPGOSpectrumIndex readFromStorageGroup:` + JSON-attribute metadata. `MPGOZarrProvider` reads gzip-compressed Zarr v3 chunks via libz. Write-side caller refactor is a v1.0+ item. |
+| ObjC    | All 4 providers (read) | HDF5 only | v0.9 follow-up: `+readViaProviderURL:` uses `TTIOProviderRegistry` + new `TTIOAcquisitionRun readFromStorageGroup:` + new `TTIOSpectrumIndex readFromStorageGroup:` + JSON-attribute metadata. `TTIOZarrProvider` reads gzip-compressed Zarr v3 chunks via libz. Write-side caller refactor is a v1.0+ item. |
 
 **Cross-language cross-provider interop** is tested by
 `python/tests/validation/test_cross_language_smoke.py` — 10 cells:
@@ -278,11 +278,11 @@ limit rather than an implementation gap. Persistent-file interop
 
 ## HDF5 Container Mapping
 
-MPEG-O files are HDF5 files with the `.mpgo` extension. The internal hierarchy mirrors the MPEG-G file model:
+TTI-O files are HDF5 files with the `.tio` extension. The internal hierarchy mirrors the MPEG-G file model:
 
 ```
 /                                       # Root (= MPEG-G File)
-├── @mpeg_o_version                     # "1.0.0"
+├── @ttio_version                     # "1.0.0"
 ├── /study/                             # Dataset Group (= ISA Investigation)
 │   ├── @isa_investigation_id
 │   ├── /metadata/                      # Study-level CV annotations
@@ -338,24 +338,24 @@ MPEG-O files are HDF5 files with the `.mpgo` extension. The internal hierarchy m
 Every persistent class implements a pair of methods:
 
 ```objc
-- (BOOL)writeToGroup:(MPGOHDF5Group *)group name:(NSString *)name error:(NSError **)error;
-+ (instancetype)readFromGroup:(MPGOHDF5Group *)group name:(NSString *)name error:(NSError **)error;
+- (BOOL)writeToGroup:(TTIOHDF5Group *)group name:(NSString *)name error:(NSError **)error;
++ (instancetype)readFromGroup:(TTIOHDF5Group *)group name:(NSString *)name error:(NSError **)error;
 ```
 
 In-memory objects can be constructed, mutated, and held without
-touching HDF5 at all — persistence is explicit. `MPGOSpectralDataset`
+touching HDF5 at all — persistence is explicit. `TTIOSpectralDataset`
 provides file-level entry points (`-writeToFilePath:error:` /
-`+readFromFilePath:error:`) and `MPGOStreamWriter` / `MPGOStreamReader`
+`+readFromFilePath:error:`) and `TTIOStreamWriter` / `TTIOStreamReader`
 support incremental ingestion of large runs.
 
 ## Thread Safety
 
 **Opt-in reader-writer locking since v0.4 (Milestone 23).**
 
-### Objective-C: `MPGOHDF5File`
+### Objective-C: `TTIOHDF5File`
 
-Each `MPGOHDF5File` owns a `pthread_rwlock_t`. Every public method on
-`MPGOHDF5Group` and `MPGOHDF5Dataset` acquires either the shared (read)
+Each `TTIOHDF5File` owns a `pthread_rwlock_t`. Every public method on
+`TTIOHDF5Group` and `TTIOHDF5Dataset` acquires either the shared (read)
 or exclusive (write) lock on the owning file for the duration of its
 HDF5 calls:
 
@@ -377,13 +377,13 @@ mode via a one-shot `H5is_library_threadsafe` probe.
 ### Python: `SpectralDataset`
 
 Opt-in via `SpectralDataset.open(path, thread_safe=True)`. When enabled,
-the dataset carries an `mpeg_o._rwlock.RWLock` (writer-preferring,
+the dataset carries an `ttio._rwlock.RWLock` (writer-preferring,
 stdlib-only). `read_lock()` and `write_lock()` are context managers that
 are *no-ops* when `thread_safe` was not requested, so call sites can use
 them unconditionally:
 
 ```python
-with SpectralDataset.open("dataset.mpgo", thread_safe=True) as ds:
+with SpectralDataset.open("dataset.tio", thread_safe=True) as ds:
     with ds.read_lock():
         ids = ds.identifications()
 ```
@@ -420,41 +420,41 @@ potential v0.5 optimisation (not in scope for M23).
 ## Python class mapping (v0.3, M16)
 
 The Python package mirrors the Objective-C hierarchy without the
-`MPGO` prefix. Files under `python/src/mpeg_o/` are keyed by
+`TTIO` prefix. Files under `python/src/ttio/` are keyed by
 snake_case module names.
 
 | Objective-C class                | Python class                              | Module                              |
 |----------------------------------|-------------------------------------------|-------------------------------------|
-| `MPGOSignalArray`                | `SignalArray`                             | `mpeg_o.signal_array`               |
-| `MPGOSpectrum`                   | `Spectrum`                                | `mpeg_o.spectrum`                   |
-| `MPGOMassSpectrum`               | `MassSpectrum`                            | `mpeg_o.mass_spectrum`              |
-| `MPGONMRSpectrum`                | `NMRSpectrum`                             | `mpeg_o.nmr_spectrum`               |
-| `MPGONMR2DSpectrum`              | `NMR2DSpectrum`                           | `mpeg_o.nmr_2d`                     |
-| `MPGORamanSpectrum` (v0.11)      | `RamanSpectrum`                           | `mpeg_o.raman_spectrum`             |
-| `MPGOIRSpectrum` (v0.11)         | `IRSpectrum`                              | `mpeg_o.ir_spectrum`                |
-| `MPGOUVVisSpectrum` (v0.11.1)    | `UVVisSpectrum`                           | `mpeg_o.uv_vis_spectrum`            |
-| `MPGOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TwoDimensionalCorrelationSpectrum` | `mpeg_o.two_dimensional_correlation_spectrum` |
-| `MPGOFreeInductionDecay`         | `FreeInductionDecay`                      | `mpeg_o.fid`                        |
-| `MPGOChromatogram`               | `Chromatogram`                            | `mpeg_o.chromatogram`               |
-| `MPGOAcquisitionRun`             | `AcquisitionRun` + `SpectrumIndex`        | `mpeg_o.acquisition_run`            |
-| `MPGOSpectralDataset`            | `SpectralDataset`                         | `mpeg_o.spectral_dataset`           |
-| `MPGOMSImage`                    | `MSImage`                                 | `mpeg_o.ms_image`                   |
-| `MPGORamanImage` (v0.11)         | `RamanImage`                              | `mpeg_o.raman_image`                |
-| `MPGOIRImage` (v0.11)            | `IRImage`                                 | `mpeg_o.ir_image`                   |
-| `MPGOIdentification`             | `Identification`                          | `mpeg_o.identification`             |
-| `MPGOQuantification`             | `Quantification`                          | `mpeg_o.quantification`             |
-| `MPGOProvenanceRecord`           | `ProvenanceRecord`                        | `mpeg_o.provenance`                 |
-| `MPGOTransitionList`             | `TransitionList` / `Transition`           | `mpeg_o.transition_list`            |
-| `MPGOFeatureFlags`               | `FeatureFlags`                            | `mpeg_o.feature_flags`              |
-| `MPGOInstrumentConfig`           | `InstrumentConfig`                        | `mpeg_o.instrument_config`          |
-| `MPGOEncryptionManager`          | `mpeg_o.encryption` module                | `mpeg_o.encryption`                 |
-| `MPGOSignatureManager`           | `mpeg_o.signatures` module                | `mpeg_o.signatures`                 |
-| `MPGONumpress`                   | `mpeg_o._numpress` module                 | `mpeg_o._numpress`                  |
-| `MPGOMzMLReader` (Apache-2.0)    | `mpeg_o.importers.mzml`                   | `mpeg_o.importers.mzml`             |
-| `MPGONmrMLReader` (Apache-2.0)   | `mpeg_o.importers.nmrml`                  | `mpeg_o.importers.nmrml`            |
-| `MPGOMzMLWriter` (Apache-2.0)    | `mpeg_o.exporters.mzml`                   | `mpeg_o.exporters.mzml`             |
-| `MPGOCVTermMapper`               | `mpeg_o.importers.cv_term_mapper`         | `mpeg_o.importers.cv_term_mapper`   |
-| *(new in v0.3)*                  | `mpeg_o.remote` (fsspec URL dispatcher)   | `mpeg_o.remote`                     |
+| `TTIOSignalArray`                | `SignalArray`                             | `ttio.signal_array`               |
+| `TTIOSpectrum`                   | `Spectrum`                                | `ttio.spectrum`                   |
+| `TTIOMassSpectrum`               | `MassSpectrum`                            | `ttio.mass_spectrum`              |
+| `TTIONMRSpectrum`                | `NMRSpectrum`                             | `ttio.nmr_spectrum`               |
+| `TTIONMR2DSpectrum`              | `NMR2DSpectrum`                           | `ttio.nmr_2d`                     |
+| `TTIORamanSpectrum` (v0.11)      | `RamanSpectrum`                           | `ttio.raman_spectrum`             |
+| `TTIOIRSpectrum` (v0.11)         | `IRSpectrum`                              | `ttio.ir_spectrum`                |
+| `TTIOUVVisSpectrum` (v0.11.1)    | `UVVisSpectrum`                           | `ttio.uv_vis_spectrum`            |
+| `TTIOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TwoDimensionalCorrelationSpectrum` | `ttio.two_dimensional_correlation_spectrum` |
+| `TTIOFreeInductionDecay`         | `FreeInductionDecay`                      | `ttio.fid`                        |
+| `TTIOChromatogram`               | `Chromatogram`                            | `ttio.chromatogram`               |
+| `TTIOAcquisitionRun`             | `AcquisitionRun` + `SpectrumIndex`        | `ttio.acquisition_run`            |
+| `TTIOSpectralDataset`            | `SpectralDataset`                         | `ttio.spectral_dataset`           |
+| `TTIOMSImage`                    | `MSImage`                                 | `ttio.ms_image`                   |
+| `TTIORamanImage` (v0.11)         | `RamanImage`                              | `ttio.raman_image`                |
+| `TTIOIRImage` (v0.11)            | `IRImage`                                 | `ttio.ir_image`                   |
+| `TTIOIdentification`             | `Identification`                          | `ttio.identification`             |
+| `TTIOQuantification`             | `Quantification`                          | `ttio.quantification`             |
+| `TTIOProvenanceRecord`           | `ProvenanceRecord`                        | `ttio.provenance`                 |
+| `TTIOTransitionList`             | `TransitionList` / `Transition`           | `ttio.transition_list`            |
+| `TTIOFeatureFlags`               | `FeatureFlags`                            | `ttio.feature_flags`              |
+| `TTIOInstrumentConfig`           | `InstrumentConfig`                        | `ttio.instrument_config`          |
+| `TTIOEncryptionManager`          | `ttio.encryption` module                | `ttio.encryption`                 |
+| `TTIOSignatureManager`           | `ttio.signatures` module                | `ttio.signatures`                 |
+| `TTIONumpress`                   | `ttio._numpress` module                 | `ttio._numpress`                  |
+| `TTIOMzMLReader` (Apache-2.0)    | `ttio.importers.mzml`                   | `ttio.importers.mzml`             |
+| `TTIONmrMLReader` (Apache-2.0)   | `ttio.importers.nmrml`                  | `ttio.importers.nmrml`            |
+| `TTIOMzMLWriter` (Apache-2.0)    | `ttio.exporters.mzml`                   | `ttio.exporters.mzml`             |
+| `TTIOCVTermMapper`               | `ttio.importers.cv_term_mapper`         | `ttio.importers.cv_term_mapper`   |
+| *(new in v0.3)*                  | `ttio.remote` (fsspec URL dispatcher)   | `ttio.remote`                     |
 
 ---
 
@@ -462,40 +462,40 @@ snake_case module names.
 
 | ObjC Class | Java Class | Package |
 |------------|-----------|---------|
-| `MPGOSignalArray` | `SignalArray` | `com.dtwthalion.mpgo` |
-| `MPGOSpectrum` | `Spectrum` | `com.dtwthalion.mpgo` |
-| `MPGOMassSpectrum` | `MassSpectrum` | `com.dtwthalion.mpgo` |
-| `MPGONMRSpectrum` | `NMRSpectrum` | `com.dtwthalion.mpgo` |
-| `MPGONMR2DSpectrum` | `NMR2DSpectrum` | `com.dtwthalion.mpgo` |
-| `MPGORamanSpectrum` (v0.11) | `RamanSpectrum` | `com.dtwthalion.mpgo` |
-| `MPGOIRSpectrum` (v0.11) | `IRSpectrum` | `com.dtwthalion.mpgo` |
-| `MPGOUVVisSpectrum` (v0.11.1) | `UVVisSpectrum` | `com.dtwthalion.mpgo` |
-| `MPGOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TwoDimensionalCorrelationSpectrum` | `com.dtwthalion.mpgo` |
-| `MPGOFreeInductionDecay` | `FreeInductionDecay` | `com.dtwthalion.mpgo` |
-| `MPGOChromatogram` | `Chromatogram` | `com.dtwthalion.mpgo` |
-| `MPGOSpectrumIndex` | `SpectrumIndex` | `com.dtwthalion.mpgo` |
-| `MPGOAcquisitionRun` | `AcquisitionRun` | `com.dtwthalion.mpgo` |
-| `MPGOSpectralDataset` | `SpectralDataset` | `com.dtwthalion.mpgo` |
-| `MPGOMSImage` | `MSImage` | `com.dtwthalion.mpgo` |
-| `MPGORamanImage` (v0.11) | `RamanImage` | `com.dtwthalion.mpgo` |
-| `MPGOIRImage` (v0.11) | `IRImage` | `com.dtwthalion.mpgo` |
-| `MPGOFeatureFlags` | `FeatureFlags` | `com.dtwthalion.mpgo` |
-| `MPGOIdentification` | `Identification` | `com.dtwthalion.mpgo` (record) |
-| `MPGOQuantification` | `Quantification` | `com.dtwthalion.mpgo` (record) |
-| `MPGOProvenanceRecord` | `ProvenanceRecord` | `com.dtwthalion.mpgo` (record) |
-| `MPGOEncryptionManager` | `EncryptionManager` | `com.dtwthalion.mpgo.protection` |
-| `MPGOSignatureManager` | `SignatureManager` | `com.dtwthalion.mpgo.protection` |
-| `MPGOKeyRotationManager` | `KeyRotationManager` | `com.dtwthalion.mpgo.protection` |
-| `MPGOAnonymizer` | `Anonymizer` | `com.dtwthalion.mpgo.protection` |
-| `MPGOMzMLReader` | `MzMLReader` | `com.dtwthalion.mpgo.importers` |
-| `MPGOMzMLWriter` | `MzMLWriter` | `com.dtwthalion.mpgo.exporters` |
-| `MPGONmrMLReader` | `NmrMLReader` | `com.dtwthalion.mpgo.importers` |
-| `MPGONmrMLWriter` | `NmrMLWriter` | `com.dtwthalion.mpgo.exporters` |
-| `MPGOISAExporter` | `ISAExporter` | `com.dtwthalion.mpgo.exporters` |
-| `MPGONumpress` | `NumpressCodec` | `com.dtwthalion.mpgo` |
-| `MPGOHDF5File` | `Hdf5File` | `com.dtwthalion.mpgo.hdf5` |
-| `MPGOHDF5Group` | `Hdf5Group` | `com.dtwthalion.mpgo.hdf5` |
-| `MPGOHDF5Dataset` | `Hdf5Dataset` | `com.dtwthalion.mpgo.hdf5` |
+| `TTIOSignalArray` | `SignalArray` | `com.dtwthalion.tio` |
+| `TTIOSpectrum` | `Spectrum` | `com.dtwthalion.tio` |
+| `TTIOMassSpectrum` | `MassSpectrum` | `com.dtwthalion.tio` |
+| `TTIONMRSpectrum` | `NMRSpectrum` | `com.dtwthalion.tio` |
+| `TTIONMR2DSpectrum` | `NMR2DSpectrum` | `com.dtwthalion.tio` |
+| `TTIORamanSpectrum` (v0.11) | `RamanSpectrum` | `com.dtwthalion.tio` |
+| `TTIOIRSpectrum` (v0.11) | `IRSpectrum` | `com.dtwthalion.tio` |
+| `TTIOUVVisSpectrum` (v0.11.1) | `UVVisSpectrum` | `com.dtwthalion.tio` |
+| `TTIOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TwoDimensionalCorrelationSpectrum` | `com.dtwthalion.tio` |
+| `TTIOFreeInductionDecay` | `FreeInductionDecay` | `com.dtwthalion.tio` |
+| `TTIOChromatogram` | `Chromatogram` | `com.dtwthalion.tio` |
+| `TTIOSpectrumIndex` | `SpectrumIndex` | `com.dtwthalion.tio` |
+| `TTIOAcquisitionRun` | `AcquisitionRun` | `com.dtwthalion.tio` |
+| `TTIOSpectralDataset` | `SpectralDataset` | `com.dtwthalion.tio` |
+| `TTIOMSImage` | `MSImage` | `com.dtwthalion.tio` |
+| `TTIORamanImage` (v0.11) | `RamanImage` | `com.dtwthalion.tio` |
+| `TTIOIRImage` (v0.11) | `IRImage` | `com.dtwthalion.tio` |
+| `TTIOFeatureFlags` | `FeatureFlags` | `com.dtwthalion.tio` |
+| `TTIOIdentification` | `Identification` | `com.dtwthalion.tio` (record) |
+| `TTIOQuantification` | `Quantification` | `com.dtwthalion.tio` (record) |
+| `TTIOProvenanceRecord` | `ProvenanceRecord` | `com.dtwthalion.tio` (record) |
+| `TTIOEncryptionManager` | `EncryptionManager` | `com.dtwthalion.tio.protection` |
+| `TTIOSignatureManager` | `SignatureManager` | `com.dtwthalion.tio.protection` |
+| `TTIOKeyRotationManager` | `KeyRotationManager` | `com.dtwthalion.tio.protection` |
+| `TTIOAnonymizer` | `Anonymizer` | `com.dtwthalion.tio.protection` |
+| `TTIOMzMLReader` | `MzMLReader` | `com.dtwthalion.tio.importers` |
+| `TTIOMzMLWriter` | `MzMLWriter` | `com.dtwthalion.tio.exporters` |
+| `TTIONmrMLReader` | `NmrMLReader` | `com.dtwthalion.tio.importers` |
+| `TTIONmrMLWriter` | `NmrMLWriter` | `com.dtwthalion.tio.exporters` |
+| `TTIOISAExporter` | `ISAExporter` | `com.dtwthalion.tio.exporters` |
+| `TTIONumpress` | `NumpressCodec` | `com.dtwthalion.tio` |
+| `TTIOHDF5File` | `Hdf5File` | `com.dtwthalion.tio.hdf5` |
+| `TTIOHDF5Group` | `Hdf5Group` | `com.dtwthalion.tio.hdf5` |
+| `TTIOHDF5Dataset` | `Hdf5Dataset` | `com.dtwthalion.tio.hdf5` |
 
 Java uses `AutoCloseable` + try-with-resources instead of ObjC `-dealloc`. Thread
 safety via `ReentrantReadWriteLock` on `Hdf5File` (same model as ObjC's
@@ -535,9 +535,9 @@ bindings (`libhdf5-java`).
 
 | Codec              | Transport                                    | Lossy? | ObjC support                                          | Python support                                    |
 |--------------------|----------------------------------------------|--------|-------------------------------------------------------|---------------------------------------------------|
-| **zlib** (default) | `H5P_DEFLATE` filter, level 6                | No     | `MPGOCompressionZlib` via `H5Pset_deflate`            | `compression="gzip"` on `h5py.create_dataset`     |
-| **LZ4**            | HDF5 filter 32004 (plugin-gated)             | No     | `MPGOCompressionLZ4` via `H5Pset_filter(32004)`       | `compression="lz4"` via `hdf5plugin.LZ4()`        |
-| **Numpress-delta** | MPGO transform → int64 deltas + zlib         | Yes    | `MPGOCompressionNumpressDelta` via `MPGONumpress`     | `signal_compression="numpress_delta"`             |
+| **zlib** (default) | `H5P_DEFLATE` filter, level 6                | No     | `TTIOCompressionZlib` via `H5Pset_deflate`            | `compression="gzip"` on `h5py.create_dataset`     |
+| **LZ4**            | HDF5 filter 32004 (plugin-gated)             | No     | `TTIOCompressionLZ4` via `H5Pset_filter(32004)`       | `compression="lz4"` via `hdf5plugin.LZ4()`        |
+| **Numpress-delta** | TTIO transform → int64 deltas + zlib         | Yes    | `TTIOCompressionNumpressDelta` via `TTIONumpress`     | `signal_compression="numpress_delta"`             |
 
 LZ4 availability is runtime-detected via `H5Zfilter_avail(32004)` in ObjC and `hdf5plugin.PLUGIN_PATH` + `h5py.h5z.filter_avail(32004)` in Python; both implementations skip their LZ4 tests cleanly when the filter is absent. Numpress-delta is always available because it is a pure-library transform that produces an ordinary int64 HDF5 dataset.
 
@@ -545,7 +545,7 @@ LZ4 availability is runtime-detected via `H5Zfilter_avail(32004)` in ObjC and `h
 
 ## Cloud-native access (v0.3, M20, Python-only)
 
-`SpectralDataset.open("s3://bucket/file.mpgo")` detects URL schemes via `mpeg_o.remote.is_remote_url` and routes them through `fsspec.open(url, "rb")`. The resulting seekable byte stream is handed to `h5py.File`, which then reads only the HDF5 chunks touched by the caller. Supported schemes include `file://`, `http(s)://`, `s3://`, `gs://`, `gcs://`, `az://`, `abfs(s)://`; the backend dependencies live behind the `cloud` optional extra.
+`SpectralDataset.open("s3://bucket/file.tio")` detects URL schemes via `ttio.remote.is_remote_url` and routes them through `fsspec.open(url, "rb")`. The resulting seekable byte stream is handed to `h5py.File`, which then reads only the HDF5 chunks touched by the caller. Supported schemes include `file://`, `http(s)://`, `s3://`, `gs://`, `gcs://`, `az://`, `abfs(s)://`; the backend dependencies live behind the `cloud` optional extra.
 
 Performance characteristics (observed on a 15 MB fixture served over localhost with a 64 KiB fsspec block cache):
 
@@ -561,16 +561,16 @@ The Objective-C implementation reads only POSIX files in v0.3 because `libhdf5` 
 A few deliberate simplifications keep v0.1's surface area small. None
 affect on-disk readability via standard HDF5 tools.
 
-* **`MPGOEncryptable` is delegated, not directly conformed.**
-  `MPGOAcquisitionRun` and `MPGOSpectralDataset` do not yet conform to
-  `MPGOEncryptable` themselves; selective encryption of the intensity
-  channel is performed via the static `MPGOEncryptionManager` API
-  against an open `.mpgo` path. A v0.2 milestone may thread the
+* **`TTIOEncryptable` is delegated, not directly conformed.**
+  `TTIOAcquisitionRun` and `TTIOSpectralDataset` do not yet conform to
+  `TTIOEncryptable` themselves; selective encryption of the intensity
+  channel is performed via the static `TTIOEncryptionManager` API
+  against an open `.tio` path. A v0.2 milestone may thread the
   protocol through both classes' init/read paths.
 
-* **`MPGOProvenanceable` is satisfied at the dataset level.**
-  Provenance is stored as an array of `MPGOProvenanceRecord` on
-  `MPGOSpectralDataset` rather than per-run. The dataset-level
+* **`TTIOProvenanceable` is satisfied at the dataset level.**
+  Provenance is stored as an array of `TTIOProvenanceRecord` on
+  `TTIOSpectralDataset` rather than per-run. The dataset-level
   `-provenanceRecordsForInputRef:` query satisfies the workplan
   acceptance criterion.
 
@@ -580,29 +580,29 @@ affect on-disk readability via standard HDF5 tools.
   inspectable with any JSON-aware tool, at the cost of slightly larger
   on-disk footprint than a packed compound layout.
 
-* **`MPGOSpectrumIndex` uses parallel 1-D datasets.** The MPEG-G design
+* **`TTIOSpectrumIndex` uses parallel 1-D datasets.** The MPEG-G design
   spec calls for a single compound `headers` dataset; v0.1 stores eight
   parallel datasets (offsets, lengths, retention_times, ms_levels,
   polarities, precursor_mzs, precursor_charges, base_peak_intensities)
   for simpler readout from non-Cocoa tools and a smaller HDF5 wrapper
   surface.
 
-* **`MPGOMSImage` is standalone, not a `MPGOSpectralDataset` subclass.**
+* **`TTIOMSImage` is standalone, not a `TTIOSpectralDataset` subclass.**
   The cube lives under `/image_cube/` and can coexist with a `/study/`
-  written by `MPGOSpectralDataset` in the same `.mpgo` file. Inheritance
+  written by `TTIOSpectralDataset` in the same `.tio` file. Inheritance
   may be added in a later milestone.
 
-* **Mass-spectrum runs only.** `MPGOAcquisitionRun` accepts only
-  `MPGOMassSpectrum` instances. NMR runs live as named arrays of
-  `MPGONMRSpectrum` directly under `MPGOSpectralDataset.nmrRuns`. Mixed
+* **Mass-spectrum runs only.** `TTIOAcquisitionRun` accepts only
+  `TTIOMassSpectrum` instances. NMR runs live as named arrays of
+  `TTIONMRSpectrum` directly under `TTIOSpectralDataset.nmrRuns`. Mixed
   runs are a planned post-1.0 extension.
 
-* **`MPGONMR2DSpectrum` flattens its matrix.** The 2-D intensity matrix
-  is stored as a 1-D `MPGOSignalArray` with `width` × `height` bytes
+* **`TTIONMR2DSpectrum` flattens its matrix.** The 2-D intensity matrix
+  is stored as a 1-D `TTIOSignalArray` with `width` × `height` bytes
   plus shape attributes, rather than a native 2-D HDF5 dataset. Round-
   trip equality is byte-exact; native multi-dim datasets may follow.
 
 * **`-fblocks` is disabled on the apt gnustep-1.8 toolchain path.**
-  `libMPGO` itself uses no block-based APIs; CI builds against
+  `libTTIO` itself uses no block-based APIs; CI builds against
   source-built `libobjc2` (gnustep-2.0 non-fragile ABI) where blocks
   are available.

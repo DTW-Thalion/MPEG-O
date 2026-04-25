@@ -1,0 +1,1118 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>ttio.importers.mztab - TTI-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">TTI-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">TTI-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../autoapi/ttio/index.html">ttio</a><input aria-label="Toggle navigation of ttio" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/access_policy/index.html">ttio.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/acquisition_run/index.html">ttio.acquisition_run</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/analysis/index.html">ttio.analysis</a><input aria-label="Toggle navigation of ttio.analysis" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/analysis/two_d_cos/index.html">ttio.analysis.two_d_cos</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/anonymization/index.html">ttio.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/axis_descriptor/index.html">ttio.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/chromatogram/index.html">ttio.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cipher_suite/index.html">ttio.cipher_suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cv_param/index.html">ttio.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encoding_spec/index.html">ttio.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption/index.html">ttio.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption_per_au/index.html">ttio.encryption_per_au</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/enums/index.html">ttio.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/imzml/index.html">ttio.exporters.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/isa/index.html">ttio.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mzml/index.html">ttio.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mztab/index.html">ttio.exporters.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature/index.html">ttio.feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature_flags/index.html">ttio.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/fid/index.html">ttio.fid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/imzml/index.html">ttio.importers.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mzml/index.html">ttio.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mztab/index.html">ttio.importers.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_image/index.html">ttio.ir_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_spectrum/index.html">ttio.ir_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/isolation_window/index.html">ttio.isolation_window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/key_rotation/index.html">ttio.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/mass_spectrum/index.html">ttio.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ms_image/index.html">ttio.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_2d/index.html">ttio.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/pqc/index.html">ttio.pqc</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/indexable/index.html">ttio.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/provenanceable/index.html">ttio.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/streamable/index.html">ttio.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/provenance/index.html">ttio.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/base/index.html">ttio.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/hdf5/index.html">ttio.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/memory/index.html">ttio.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/registry/index.html">ttio.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/sqlite/index.html">ttio.providers.sqlite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/zarr/index.html">ttio.providers.zarr</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/quantification/index.html">ttio.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/query/index.html">ttio.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_image/index.html">ttio.raman_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_spectrum/index.html">ttio.raman_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signal_array/index.html">ttio.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signatures/index.html">ttio.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectral_dataset/index.html">ttio.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectrum/index.html">ttio.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_reader/index.html">ttio.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_writer/index.html">ttio.stream_writer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_encode_cli/index.html">ttio.tools.transport_encode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_server_cli/index.html">ttio.tools.transport_server_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/transition_list/index.html">ttio.transition_list</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/client/index.html">ttio.transport.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/codec/index.html">ttio.transport.codec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/encrypted/index.html">ttio.transport.encrypted</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/packets/index.html">ttio.transport.packets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/server/index.html">ttio.transport.server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/simulator/index.html">ttio.transport.simulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/value_range/index.html">ttio.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/verifier/index.html">ttio.verifier</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for ttio.importers.mztab</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;mzTab importer (v0.9 M60).</span>
+
+<span class="sd">mzTab is a results-level interchange format from PSI. It is a</span>
+<span class="sd">tab-separated text file divided into sections by a one-line prefix:</span>
+
+<span class="sd">* ``MTD`` — metadata (key / value lines)</span>
+<span class="sd">* ``PRH`` / ``PRT`` — protein header / row    (mzTab 1.0)</span>
+<span class="sd">* ``PEH`` / ``PEP`` — peptide header / row    (mzTab 1.0)</span>
+<span class="sd">* ``PSH`` / ``PSM`` — PSM header / row        (mzTab 1.0)</span>
+<span class="sd">* ``SMH`` / ``SML`` — small-molecule header / row (mzTab-M 2.0)</span>
+<span class="sd">* ``COM`` — comment line, ignored</span>
+<span class="sd">* anything else — treated as a malformed-row warning, skipped</span>
+
+<span class="sd">Per HANDOFF binding decision 47 (mzTab version detection):</span>
+<span class="sd">``MTD\\tmzTab-version\\t1.0`` selects the proteomics dialect;</span>
+<span class="sd">``MTD\\tmzTab-version\\t2.0.0-M`` selects the metabolomics dialect.</span>
+<span class="sd">The reader detects on the metadata line and dispatches accordingly.</span>
+
+<span class="sd">Mapping into TTI-O records</span>
+<span class="sd">---------------------------</span>
+
+<span class="sd">| mzTab section | TTI-O record               | Notes                                                         |</span>
+<span class="sd">|---------------|------------------------------|---------------------------------------------------------------|</span>
+<span class="sd">| PSM           | :class:`Identification`     | ``run_name`` from ``spectra_ref``; score from best search engine score |</span>
+<span class="sd">| PRT           | :class:`Quantification`     | one record per ``protein_abundance_assay[N]`` column           |</span>
+<span class="sd">| PEP           | :class:`Feature`            | peptide-level feature (v0.12.0 M78)                            |</span>
+<span class="sd">| SML           | :class:`Identification`     | metabolite annotation; ``run_name=&#39;metabolomics&#39;`` placeholder |</span>
+<span class="sd">| SML abundance | :class:`Quantification`     | one record per ``abundance_study_variable[N]`` column          |</span>
+<span class="sd">| SMF           | :class:`Feature`            | small-molecule feature row (v0.12.0 M78)                       |</span>
+<span class="sd">| SME           | :class:`Identification`     | small-molecule evidence row (v0.12.0 M78)                      |</span>
+<span class="sd">| MTD           | :class:`ProvenanceRecord`   | software, search engine and ms_run locations                   |</span>
+
+<span class="sd">Cross-language equivalents</span>
+<span class="sd">--------------------------</span>
+<span class="sd">Objective-C: ``TTIOMzTabReader``</span>
+<span class="sd">Java:        ``com.dtwthalion.ttio.importers.MzTabReader``</span>
+
+<span class="sd">SPDX-License-Identifier: Apache-2.0</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">..feature</span><span class="w"> </span><span class="kn">import</span> <span class="n">Feature</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..identification</span><span class="w"> </span><span class="kn">import</span> <span class="n">Identification</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..provenance</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProvenanceRecord</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..quantification</span><span class="w"> </span><span class="kn">import</span> <span class="n">Quantification</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..spectral_dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpectralDataset</span>
+
+
+<div class="viewcode-block" id="MzTabParseError">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabParseError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">MzTabParseError</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the mzTab document is structurally invalid.&quot;&quot;&quot;</span></div>
+
+
+
+<span class="c1"># Convention: mzTab spectra_ref values look like</span>
+<span class="c1">#   &quot;ms_run[1]:scan=42&quot;</span>
+<span class="c1">#   &quot;ms_run[2]:index=17&quot;</span>
+<span class="c1"># Capture (ms_run_index, spectrum_locator).</span>
+<span class="n">_SPECTRA_REF_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^ms_run\[(\d+)\]:(.+)$&quot;</span><span class="p">)</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="MzTabImport">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">MzTabImport</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;In-memory representation of a parsed mzTab file.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MzTabImport.version">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.version">[docs]</a>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># &quot;1.0&quot; (proteomics) or &quot;2.0.0-M&quot; (metabolomics)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.description">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.description">[docs]</a>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
+
+<div class="viewcode-block" id="MzTabImport.title">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.title">[docs]</a>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
+
+<div class="viewcode-block" id="MzTabImport.ms_run_locations">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.ms_run_locations">[docs]</a>
+    <span class="n">ms_run_locations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.sample_refs">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.sample_refs">[docs]</a>
+    <span class="n">sample_refs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.software">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.software">[docs]</a>
+    <span class="n">software</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.search_engines">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.search_engines">[docs]</a>
+    <span class="n">search_engines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.identifications">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.identifications">[docs]</a>
+    <span class="n">identifications</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Identification</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.quantifications">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.quantifications">[docs]</a>
+    <span class="n">quantifications</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Quantification</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.features">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.features">[docs]</a>
+    <span class="n">features</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Feature</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.provenance">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.provenance">[docs]</a>
+    <span class="n">provenance</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MzTabImport.source_path">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.source_path">[docs]</a>
+    <span class="n">source_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="MzTabImport.is_metabolomics">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.is_metabolomics">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_metabolomics</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;-M&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="MzTabImport.to_ttio">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.MzTabImport.to_ttio">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_ttio</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">isa_investigation_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">link_to</span><span class="p">:</span> <span class="n">SpectralDataset</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write the imported records to an .tio container.</span>
+
+<span class="sd">        When ``link_to`` is ``None`` an identifications-only container</span>
+<span class="sd">        is emitted (no spectra runs). When a :class:`SpectralDataset`</span>
+<span class="sd">        is supplied, its existing runs + identifications are merged</span>
+<span class="sd">        with the mzTab records before writing — useful for splicing</span>
+<span class="sd">        results back into the dataset that produced them. The merge</span>
+<span class="sd">        preserves spectra_ref → run_name mappings recorded in the</span>
+<span class="sd">        ``MTD ms_run[N]-location`` lines whenever the basename</span>
+<span class="sd">        matches a run in the linked dataset.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">merged_runs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">merged_idents</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">identifications</span><span class="p">)</span>
+        <span class="n">merged_quants</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">quantifications</span><span class="p">)</span>
+        <span class="n">merged_prov</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">provenance</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">link_to</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Re-emit the linked dataset&#39;s runs verbatim. Read out the</span>
+            <span class="c1"># WrittenRun-equivalent buffers and pass them straight</span>
+            <span class="c1"># through the writer so the spectra survive the rewrite.</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">..spectral_dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">WrittenRun</span>
+
+            <span class="k">for</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">run</span> <span class="ow">in</span> <span class="n">link_to</span><span class="o">.</span><span class="n">all_runs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">channel_data</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="n">name</span><span class="p">:</span> <span class="n">arr</span><span class="o">.</span><span class="n">signal_arrays</span><span class="p">[</span><span class="n">name</span><span class="p">]</span><span class="o">.</span><span class="n">data</span>
+                    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">arr</span> <span class="ow">in</span> <span class="p">{</span><span class="s2">&quot;_&quot;</span><span class="p">:</span> <span class="n">run</span><span class="p">}</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>  <span class="c1"># placeholder loop</span>
+                    <span class="k">if</span> <span class="kc">False</span>  <span class="c1"># see below — we need the *flattened* arrays</span>
+                <span class="p">}</span>
+                <span class="c1"># The reader exposes per-spectrum signal_arrays; flatten them</span>
+                <span class="c1"># back into concatenated buffers so write_minimal can re-emit.</span>
+                <span class="n">channels</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="n">offsets</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">lengths</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">cursor</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">run</span><span class="p">)):</span>
+                    <span class="n">spec</span> <span class="o">=</span> <span class="n">run</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="k">for</span> <span class="n">cname</span><span class="p">,</span> <span class="n">sa</span> <span class="ow">in</span> <span class="n">spec</span><span class="o">.</span><span class="n">signal_arrays</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                        <span class="n">channels</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">cname</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">sa</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+                    <span class="n">n</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">spec</span><span class="o">.</span><span class="n">signal_arrays</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">size</span>
+                    <span class="n">offsets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">cursor</span><span class="p">)</span>
+                    <span class="n">lengths</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+                    <span class="n">cursor</span> <span class="o">+=</span> <span class="n">n</span>
+                <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+                <span class="n">rt</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">run</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+                <span class="n">ms_levels</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">run</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+                <span class="n">pol</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">run</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+                <span class="n">pmz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">run</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+                <span class="n">pch</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">run</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+                <span class="n">bp</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">run</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+                <span class="n">merged_runs</span><span class="p">[</span><span class="n">run_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">WrittenRun</span><span class="p">(</span>
+                    <span class="n">spectrum_class</span><span class="o">=</span><span class="n">run</span><span class="o">.</span><span class="n">spectrum_class</span><span class="p">,</span>
+                    <span class="n">acquisition_mode</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">run</span><span class="o">.</span><span class="n">acquisition_mode</span><span class="p">),</span>
+                    <span class="n">channel_data</span><span class="o">=</span><span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">channels</span><span class="o">.</span><span class="n">items</span><span class="p">()},</span>
+                    <span class="n">offsets</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">offsets</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint64</span><span class="p">),</span>
+                    <span class="n">lengths</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">lengths</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">),</span>
+                    <span class="n">retention_times</span><span class="o">=</span><span class="n">rt</span><span class="p">,</span> <span class="n">ms_levels</span><span class="o">=</span><span class="n">ms_levels</span><span class="p">,</span> <span class="n">polarities</span><span class="o">=</span><span class="n">pol</span><span class="p">,</span>
+                    <span class="n">precursor_mzs</span><span class="o">=</span><span class="n">pmz</span><span class="p">,</span> <span class="n">precursor_charges</span><span class="o">=</span><span class="n">pch</span><span class="p">,</span>
+                    <span class="n">base_peak_intensities</span><span class="o">=</span><span class="n">bp</span><span class="p">,</span>
+                    <span class="n">nucleus_type</span><span class="o">=</span><span class="n">run</span><span class="o">.</span><span class="n">nucleus_type</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="n">merged_idents</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">link_to</span><span class="o">.</span><span class="n">identifications</span><span class="p">())</span> <span class="o">+</span> <span class="n">merged_idents</span>
+            <span class="n">merged_quants</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">link_to</span><span class="o">.</span><span class="n">quantifications</span><span class="p">())</span> <span class="o">+</span> <span class="n">merged_quants</span>
+            <span class="n">merged_prov</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">link_to</span><span class="o">.</span><span class="n">provenance</span><span class="p">())</span> <span class="o">+</span> <span class="n">merged_prov</span>
+
+        <span class="k">return</span> <span class="n">SpectralDataset</span><span class="o">.</span><span class="n">write_minimal</span><span class="p">(</span>
+            <span class="n">path</span><span class="p">,</span>
+            <span class="n">title</span><span class="o">=</span><span class="n">title</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;mzTab import: </span><span class="si">{</span><span class="n">Path</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">source_path</span><span class="p">)</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">isa_investigation_id</span><span class="o">=</span><span class="n">isa_investigation_id</span><span class="p">,</span>
+            <span class="n">runs</span><span class="o">=</span><span class="n">merged_runs</span><span class="p">,</span>
+            <span class="n">identifications</span><span class="o">=</span><span class="n">merged_idents</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">quantifications</span><span class="o">=</span><span class="n">merged_quants</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">provenance</span><span class="o">=</span><span class="n">merged_prov</span> <span class="ow">or</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="read">
+<a class="viewcode-back" href="../../../autoapi/ttio/importers/mztab/index.html#ttio.importers.mztab.read">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">MzTabImport</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Parse an mzTab file and return an :class:`MzTabImport`.&quot;&quot;&quot;</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">p</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;mzTab file not found: </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">state</span> <span class="o">=</span> <span class="n">_ParserState</span><span class="p">()</span>
+    <span class="k">with</span> <span class="n">p</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fh</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">raw_line</span> <span class="ow">in</span> <span class="n">fh</span><span class="p">:</span>
+            <span class="n">line</span> <span class="o">=</span> <span class="n">raw_line</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">line</span> <span class="ow">or</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;#&quot;</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">cols</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">prefix</span> <span class="o">=</span> <span class="n">cols</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;COM&quot;</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;MTD&quot;</span><span class="p">:</span>
+                <span class="n">_handle_mtd</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;PRH&quot;</span><span class="p">:</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">prt_header</span> <span class="o">=</span> <span class="n">cols</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;PRT&quot;</span> <span class="ow">and</span> <span class="n">state</span><span class="o">.</span><span class="n">prt_header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_handle_prt</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;PSH&quot;</span><span class="p">:</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">psm_header</span> <span class="o">=</span> <span class="n">cols</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;PSM&quot;</span> <span class="ow">and</span> <span class="n">state</span><span class="o">.</span><span class="n">psm_header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_handle_psm</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;SMH&quot;</span><span class="p">:</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">sml_header</span> <span class="o">=</span> <span class="n">cols</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;SML&quot;</span> <span class="ow">and</span> <span class="n">state</span><span class="o">.</span><span class="n">sml_header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_handle_sml</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;PEH&quot;</span><span class="p">:</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">pep_header</span> <span class="o">=</span> <span class="n">cols</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;PEP&quot;</span> <span class="ow">and</span> <span class="n">state</span><span class="o">.</span><span class="n">pep_header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_handle_pep</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;SFH&quot;</span><span class="p">:</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">smf_header</span> <span class="o">=</span> <span class="n">cols</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;SMF&quot;</span> <span class="ow">and</span> <span class="n">state</span><span class="o">.</span><span class="n">smf_header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_handle_smf</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;SEH&quot;</span><span class="p">:</span>
+                <span class="n">state</span><span class="o">.</span><span class="n">sme_header</span> <span class="o">=</span> <span class="n">cols</span>
+            <span class="k">elif</span> <span class="n">prefix</span> <span class="o">==</span> <span class="s2">&quot;SME&quot;</span> <span class="ow">and</span> <span class="n">state</span><span class="o">.</span><span class="n">sme_header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_handle_sme</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">state</span><span class="o">.</span><span class="n">version</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">MzTabParseError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">: missing MTD mzTab-version line&quot;</span><span class="p">)</span>
+
+    <span class="n">prov</span> <span class="o">=</span> <span class="n">_build_provenance</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">MzTabImport</span><span class="p">(</span>
+        <span class="n">version</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">title</span><span class="p">,</span>
+        <span class="n">ms_run_locations</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">ms_run_locations</span><span class="p">,</span>
+        <span class="n">sample_refs</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">assay_to_sample</span><span class="o">.</span><span class="n">values</span><span class="p">())</span> <span class="ow">or</span> <span class="nb">list</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">study_variables</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span>
+        <span class="n">software</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">software</span><span class="p">,</span>
+        <span class="n">search_engines</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">search_engines</span><span class="p">,</span>
+        <span class="n">identifications</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">identifications</span><span class="p">,</span>
+        <span class="n">quantifications</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">quantifications</span><span class="p">,</span>
+        <span class="n">features</span><span class="o">=</span><span class="n">state</span><span class="o">.</span><span class="n">features</span><span class="p">,</span>
+        <span class="n">provenance</span><span class="o">=</span><span class="p">[</span><span class="n">prov</span><span class="p">]</span> <span class="k">if</span> <span class="n">prov</span> <span class="k">else</span> <span class="p">[],</span>
+        <span class="n">source_path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">),</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+<span class="c1"># Parser state and per-section handlers.</span>
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_ParserState</span><span class="p">:</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">ms_run_locations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">assay_to_sample</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">study_variables</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">software</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">search_engines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">psm_header</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">prt_header</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">sml_header</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">pep_header</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">smf_header</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">sme_header</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">study_variable_assays</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+    <span class="n">identifications</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Identification</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">quantifications</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Quantification</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+    <span class="n">features</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Feature</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
+
+
+<span class="n">_MTD_KEY_MS_RUN_LOCATION_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^ms_run\[(\d+)\]-location$&quot;</span><span class="p">)</span>
+<span class="n">_MTD_KEY_ASSAY_SAMPLE_RE</span>   <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^assay\[(\d+)\]-sample_ref$&quot;</span><span class="p">)</span>
+<span class="n">_MTD_KEY_STUDY_VAR_RE</span>      <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^study_variable\[(\d+)\]-description$&quot;</span><span class="p">)</span>
+<span class="n">_MTD_KEY_SOFTWARE_RE</span>       <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^software\[(\d+)\](?:-setting\[\d+\])?$&quot;</span><span class="p">)</span>
+<span class="n">_MTD_KEY_SEARCH_ENGINE_RE</span>  <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^psm_search_engine_score\[(\d+)\]$&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_mtd</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">cols</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">cols</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span>
+    <span class="k">if</span> <span class="n">key</span> <span class="o">==</span> <span class="s2">&quot;mzTab-version&quot;</span><span class="p">:</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">version</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">elif</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;mzTab-description&quot;</span><span class="p">):</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">description</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">elif</span> <span class="n">key</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;mzTab-ID&quot;</span><span class="p">):</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">title</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">elif</span> <span class="p">(</span><span class="n">m</span> <span class="o">:=</span> <span class="n">_MTD_KEY_MS_RUN_LOCATION_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">key</span><span class="p">)):</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">ms_run_locations</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">elif</span> <span class="p">(</span><span class="n">m</span> <span class="o">:=</span> <span class="n">_MTD_KEY_ASSAY_SAMPLE_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">key</span><span class="p">)):</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">assay_to_sample</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">elif</span> <span class="p">(</span><span class="n">m</span> <span class="o">:=</span> <span class="n">_MTD_KEY_STUDY_VAR_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">key</span><span class="p">)):</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">study_variables</span><span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))]</span> <span class="o">=</span> <span class="n">value</span>
+    <span class="k">elif</span> <span class="n">_MTD_KEY_SOFTWARE_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">software</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">_MTD_KEY_SEARCH_ENGINE_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">search_engines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_resolve_run_name</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">ms_run_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Map an ms_run[N] reference to a run name suitable for the</span>
+<span class="sd">    .tio Identification.run_name field. We use the file basename</span>
+<span class="sd">    when a location is available, falling back to ``run_&lt;N&gt;``.&quot;&quot;&quot;</span>
+    <span class="n">location</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">ms_run_locations</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">ms_run_index</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">location</span><span class="p">:</span>
+        <span class="c1"># location is typically a file:// URL — pull the basename.</span>
+        <span class="n">path</span> <span class="o">=</span> <span class="n">location</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="s2">&quot;.&quot;</span> <span class="ow">in</span> <span class="n">path</span><span class="p">:</span>
+            <span class="n">path</span> <span class="o">=</span> <span class="n">path</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">path</span> <span class="ow">or</span> <span class="sa">f</span><span class="s2">&quot;run_</span><span class="si">{</span><span class="n">ms_run_index</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;run_</span><span class="si">{</span><span class="n">ms_run_index</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_column_indices</span><span class="p">(</span><span class="n">header</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">pattern</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">Pattern</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return [(column_index, group_index_from_pattern), ...] for</span>
+<span class="sd">    every header column whose name matches ``pattern``.&quot;&quot;&quot;</span>
+    <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">header</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">m</span> <span class="o">:=</span> <span class="n">pattern</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">name</span><span class="p">)):</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">i</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))))</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">idx</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">cols</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">idx</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">cols</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_to_float</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">s</span> <span class="ow">or</span> <span class="n">s</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;na&quot;</span><span class="p">,</span> <span class="s2">&quot;n/a&quot;</span><span class="p">,</span> <span class="s2">&quot;nan&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_to_int</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">s</span> <span class="ow">or</span> <span class="n">s</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;na&quot;</span><span class="p">,</span> <span class="s2">&quot;n/a&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+
+<span class="n">_PSM_BEST_SCORE_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^search_engine_score\[(\d+)\]$&quot;</span><span class="p">)</span>
+<span class="n">_PSM_SPECTRA_REF_HEADER</span> <span class="o">=</span> <span class="s2">&quot;spectra_ref&quot;</span>
+<span class="n">_PSM_ACCESSION_HEADER</span> <span class="o">=</span> <span class="s2">&quot;accession&quot;</span>
+<span class="n">_PSM_SEQUENCE_HEADER</span> <span class="o">=</span> <span class="s2">&quot;sequence&quot;</span>
+<span class="n">_PSM_ID_HEADER</span> <span class="o">=</span> <span class="s2">&quot;PSM_ID&quot;</span>
+<span class="n">_PSM_SEARCH_ENGINE_HEADER</span> <span class="o">=</span> <span class="s2">&quot;search_engine&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_psm</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">header</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">psm_header</span>
+    <span class="k">assert</span> <span class="n">header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">score_columns</span> <span class="o">=</span> <span class="n">_column_indices</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">_PSM_BEST_SCORE_RE</span><span class="p">)</span>
+    <span class="n">name_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">header</span><span class="p">)}</span>
+
+    <span class="n">accession</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PSM_ACCESSION_HEADER</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">accession</span> <span class="ow">or</span> <span class="n">accession</span> <span class="o">==</span> <span class="s2">&quot;null&quot;</span><span class="p">:</span>
+        <span class="c1"># Fall back to peptide sequence if no protein accession available.</span>
+        <span class="n">accession</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PSM_SEQUENCE_HEADER</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">accession</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="n">spectra_ref</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PSM_SPECTRA_REF_HEADER</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">run_name</span> <span class="o">=</span> <span class="s2">&quot;imported&quot;</span>
+    <span class="n">spectrum_index</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">m</span> <span class="o">:=</span> <span class="n">_SPECTRA_REF_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">spectra_ref</span><span class="p">)):</span>
+        <span class="n">run_name</span> <span class="o">=</span> <span class="n">_resolve_run_name</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+        <span class="c1"># locator is e.g. &quot;scan=42&quot; or &quot;index=17&quot;; capture the number.</span>
+        <span class="n">locator</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;=&quot;</span> <span class="ow">in</span> <span class="n">locator</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">spectrum_index</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">locator</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">spectrum_index</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">best_score</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="k">for</span> <span class="n">col_idx</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">score_columns</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">col_idx</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">best_score</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">best_score</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+
+    <span class="n">evidence</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">se</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PSM_SEARCH_ENGINE_HEADER</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">se</span><span class="p">:</span>
+        <span class="n">evidence</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">se</span><span class="p">)</span>
+    <span class="n">psm_id</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PSM_ID_HEADER</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">psm_id</span><span class="p">:</span>
+        <span class="n">evidence</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;PSM_ID=</span><span class="si">{</span><span class="n">psm_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">state</span><span class="o">.</span><span class="n">identifications</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Identification</span><span class="p">(</span>
+        <span class="n">run_name</span><span class="o">=</span><span class="n">run_name</span><span class="p">,</span>
+        <span class="n">spectrum_index</span><span class="o">=</span><span class="n">spectrum_index</span><span class="p">,</span>
+        <span class="n">chemical_entity</span><span class="o">=</span><span class="n">accession</span><span class="p">,</span>
+        <span class="n">confidence_score</span><span class="o">=</span><span class="n">best_score</span><span class="p">,</span>
+        <span class="n">evidence_chain</span><span class="o">=</span><span class="n">evidence</span><span class="p">,</span>
+    <span class="p">))</span>
+
+
+<span class="n">_PRT_ABUNDANCE_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^protein_abundance_assay\[(\d+)\]$&quot;</span><span class="p">)</span>
+<span class="n">_PRT_ACCESSION_HEADER</span> <span class="o">=</span> <span class="s2">&quot;accession&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_prt</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">header</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">prt_header</span>
+    <span class="k">assert</span> <span class="n">header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">abund_columns</span> <span class="o">=</span> <span class="n">_column_indices</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">_PRT_ABUNDANCE_RE</span><span class="p">)</span>
+    <span class="n">name_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">header</span><span class="p">)}</span>
+    <span class="n">accession</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PRT_ACCESSION_HEADER</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">accession</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="k">for</span> <span class="n">col_idx</span><span class="p">,</span> <span class="n">assay_idx</span> <span class="ow">in</span> <span class="n">abund_columns</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">col_idx</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">sample_ref</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">assay_to_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">assay_idx</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;assay_</span><span class="si">{</span><span class="n">assay_idx</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">quantifications</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Quantification</span><span class="p">(</span>
+            <span class="n">chemical_entity</span><span class="o">=</span><span class="n">accession</span><span class="p">,</span>
+            <span class="n">sample_ref</span><span class="o">=</span><span class="n">sample_ref</span><span class="p">,</span>
+            <span class="n">abundance</span><span class="o">=</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">normalization_method</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="p">))</span>
+
+
+<span class="n">_SML_ABUNDANCE_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^abundance_study_variable\[(\d+)\]$&quot;</span><span class="p">)</span>
+<span class="n">_SML_DB_ID</span> <span class="o">=</span> <span class="s2">&quot;database_identifier&quot;</span>
+<span class="n">_SML_NAME</span> <span class="o">=</span> <span class="s2">&quot;chemical_name&quot;</span>
+<span class="n">_SML_FORMULA</span> <span class="o">=</span> <span class="s2">&quot;chemical_formula&quot;</span>
+<span class="n">_SML_BEST_CONF</span> <span class="o">=</span> <span class="s2">&quot;best_id_confidence_value&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_sml</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">header</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">sml_header</span>
+    <span class="k">assert</span> <span class="n">header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">name_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">header</span><span class="p">)}</span>
+    <span class="n">abund_columns</span> <span class="o">=</span> <span class="n">_column_indices</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">_SML_ABUNDANCE_RE</span><span class="p">)</span>
+
+    <span class="n">db_id</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SML_DB_ID</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">chem_name</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SML_NAME</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">formula</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SML_FORMULA</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">entity</span> <span class="o">=</span> <span class="n">db_id</span> <span class="ow">or</span> <span class="n">chem_name</span> <span class="ow">or</span> <span class="n">formula</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">entity</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="n">best</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SML_BEST_CONF</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span> <span class="ow">or</span> <span class="mf">0.0</span>
+    <span class="n">evidence</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">chem_name</span> <span class="ow">and</span> <span class="n">chem_name</span> <span class="o">!=</span> <span class="n">entity</span><span class="p">:</span>
+        <span class="n">evidence</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;name=</span><span class="si">{</span><span class="n">chem_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">formula</span> <span class="ow">and</span> <span class="n">formula</span> <span class="o">!=</span> <span class="n">entity</span><span class="p">:</span>
+        <span class="n">evidence</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;formula=</span><span class="si">{</span><span class="n">formula</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">state</span><span class="o">.</span><span class="n">identifications</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Identification</span><span class="p">(</span>
+        <span class="n">run_name</span><span class="o">=</span><span class="s2">&quot;metabolomics&quot;</span><span class="p">,</span>
+        <span class="n">spectrum_index</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">chemical_entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span>
+        <span class="n">confidence_score</span><span class="o">=</span><span class="n">best</span><span class="p">,</span>
+        <span class="n">evidence_chain</span><span class="o">=</span><span class="n">evidence</span><span class="p">,</span>
+    <span class="p">))</span>
+
+    <span class="k">for</span> <span class="n">col_idx</span><span class="p">,</span> <span class="n">sv_idx</span> <span class="ow">in</span> <span class="n">abund_columns</span><span class="p">:</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">col_idx</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">sample_ref</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">study_variables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">sv_idx</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;study_variable_</span><span class="si">{</span><span class="n">sv_idx</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">state</span><span class="o">.</span><span class="n">quantifications</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Quantification</span><span class="p">(</span>
+            <span class="n">chemical_entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span>
+            <span class="n">sample_ref</span><span class="o">=</span><span class="n">sample_ref</span><span class="p">,</span>
+            <span class="n">abundance</span><span class="o">=</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">normalization_method</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_provenance</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProvenanceRecord</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">software</span> <span class="ow">or</span> <span class="n">state</span><span class="o">.</span><span class="n">search_engines</span> <span class="ow">or</span> <span class="n">state</span><span class="o">.</span><span class="n">ms_run_locations</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">ProvenanceRecord</span><span class="p">(</span>
+        <span class="n">timestamp_unix</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()),</span>
+        <span class="n">software</span><span class="o">=</span><span class="s2">&quot;ttio mztab importer v0.9&quot;</span><span class="p">,</span>
+        <span class="n">parameters</span><span class="o">=</span><span class="p">{</span>
+            <span class="s2">&quot;mztab_version&quot;</span><span class="p">:</span> <span class="n">state</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
+            <span class="s2">&quot;mztab_description&quot;</span><span class="p">:</span> <span class="n">state</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
+            <span class="s2">&quot;mztab_software&quot;</span><span class="p">:</span> <span class="s2">&quot;;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">software</span><span class="p">),</span>
+            <span class="s2">&quot;mztab_search_engines&quot;</span><span class="p">:</span> <span class="s2">&quot;;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">search_engines</span><span class="p">),</span>
+            <span class="s2">&quot;mztab_ms_run_locations&quot;</span><span class="p">:</span> <span class="s2">&quot;;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">loc</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">loc</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">ms_run_locations</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+            <span class="p">),</span>
+        <span class="p">},</span>
+        <span class="n">input_refs</span><span class="o">=</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">source</span><span class="p">)]</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">ms_run_locations</span><span class="o">.</span><span class="n">values</span><span class="p">()),</span>
+        <span class="n">output_refs</span><span class="o">=</span><span class="p">[],</span>
+    <span class="p">)</span>
+
+
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+<span class="c1"># PEP / SMF / SME section handlers (v0.12.0 M78).</span>
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+
+<span class="n">_PEP_ACCESSION</span> <span class="o">=</span> <span class="s2">&quot;accession&quot;</span>
+<span class="n">_PEP_SEQUENCE</span> <span class="o">=</span> <span class="s2">&quot;sequence&quot;</span>
+<span class="n">_PEP_CHARGE</span> <span class="o">=</span> <span class="s2">&quot;charge&quot;</span>
+<span class="n">_PEP_MASS_TO_CHARGE</span> <span class="o">=</span> <span class="s2">&quot;mass_to_charge&quot;</span>
+<span class="n">_PEP_RETENTION_TIME</span> <span class="o">=</span> <span class="s2">&quot;retention_time&quot;</span>
+<span class="n">_PEP_SPECTRA_REF</span> <span class="o">=</span> <span class="s2">&quot;spectra_ref&quot;</span>
+<span class="n">_PEP_ABUNDANCE_ASSAY_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^peptide_abundance_assay\[(\d+)\]$&quot;</span><span class="p">)</span>
+<span class="n">_PEP_ABUNDANCE_SV_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^peptide_abundance_study_variable\[(\d+)\]$&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_pep</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;mzTab 1.0 PEP row — one peptide feature per row.&quot;&quot;&quot;</span>
+    <span class="n">header</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">pep_header</span>
+    <span class="k">assert</span> <span class="n">header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">name_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">header</span><span class="p">)}</span>
+    <span class="n">assay_cols</span> <span class="o">=</span> <span class="n">_column_indices</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">_PEP_ABUNDANCE_ASSAY_RE</span><span class="p">)</span>
+    <span class="n">sv_cols</span> <span class="o">=</span> <span class="n">_column_indices</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">_PEP_ABUNDANCE_SV_RE</span><span class="p">)</span>
+
+    <span class="n">sequence</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PEP_SEQUENCE</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">accession</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PEP_ACCESSION</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="c1"># Prefer the peptide sequence as the chemical entity; fall back to</span>
+    <span class="c1"># the linked protein accession so every PEP row survives.</span>
+    <span class="n">entity</span> <span class="o">=</span> <span class="n">sequence</span> <span class="ow">or</span> <span class="n">accession</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">entity</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="n">spectra_ref</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PEP_SPECTRA_REF</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">run_name</span> <span class="o">=</span> <span class="s2">&quot;imported&quot;</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">m</span> <span class="o">:=</span> <span class="n">_SPECTRA_REF_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">spectra_ref</span><span class="p">)):</span>
+        <span class="n">run_name</span> <span class="o">=</span> <span class="n">_resolve_run_name</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+
+    <span class="n">charge</span> <span class="o">=</span> <span class="n">_to_int</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PEP_CHARGE</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span> <span class="ow">or</span> <span class="mi">0</span>
+    <span class="n">mz</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PEP_MASS_TO_CHARGE</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span> <span class="ow">or</span> <span class="mf">0.0</span>
+    <span class="n">rt</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_PEP_RETENTION_TIME</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span> <span class="ow">or</span> <span class="mf">0.0</span>
+
+    <span class="n">abundances</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">col_idx</span><span class="p">,</span> <span class="n">assay_idx</span> <span class="ow">in</span> <span class="n">assay_cols</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">col_idx</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">sample_ref</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">assay_to_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">assay_idx</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;assay_</span><span class="si">{</span><span class="n">assay_idx</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">abundances</span><span class="p">[</span><span class="n">sample_ref</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+    <span class="k">for</span> <span class="n">col_idx</span><span class="p">,</span> <span class="n">sv_idx</span> <span class="ow">in</span> <span class="n">sv_cols</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">col_idx</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">sample_ref</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">study_variables</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">sv_idx</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;study_variable_</span><span class="si">{</span><span class="n">sv_idx</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">abundances</span><span class="p">[</span><span class="n">sample_ref</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+
+    <span class="n">evidence_refs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">spectra_ref</span><span class="p">:</span>
+        <span class="n">evidence_refs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">spectra_ref</span><span class="p">)</span>
+
+    <span class="n">feature_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;pep_</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">features</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">state</span><span class="o">.</span><span class="n">features</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Feature</span><span class="p">(</span>
+        <span class="n">feature_id</span><span class="o">=</span><span class="n">feature_id</span><span class="p">,</span>
+        <span class="n">run_name</span><span class="o">=</span><span class="n">run_name</span><span class="p">,</span>
+        <span class="n">chemical_entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span>
+        <span class="n">retention_time_seconds</span><span class="o">=</span><span class="n">rt</span><span class="p">,</span>
+        <span class="n">exp_mass_to_charge</span><span class="o">=</span><span class="n">mz</span><span class="p">,</span>
+        <span class="n">charge</span><span class="o">=</span><span class="n">charge</span><span class="p">,</span>
+        <span class="n">adduct_ion</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">abundances</span><span class="o">=</span><span class="n">abundances</span><span class="p">,</span>
+        <span class="n">evidence_refs</span><span class="o">=</span><span class="n">evidence_refs</span><span class="p">,</span>
+    <span class="p">))</span>
+
+
+<span class="n">_SMF_ID</span> <span class="o">=</span> <span class="s2">&quot;SMF_ID&quot;</span>
+<span class="n">_SMF_SME_REFS</span> <span class="o">=</span> <span class="s2">&quot;SME_ID_REFS&quot;</span>
+<span class="n">_SMF_ADDUCT</span> <span class="o">=</span> <span class="s2">&quot;adduct_ion&quot;</span>
+<span class="n">_SMF_EXP_MZ</span> <span class="o">=</span> <span class="s2">&quot;exp_mass_to_charge&quot;</span>
+<span class="n">_SMF_CHARGE</span> <span class="o">=</span> <span class="s2">&quot;charge&quot;</span>
+<span class="n">_SMF_RT</span> <span class="o">=</span> <span class="s2">&quot;retention_time_in_seconds&quot;</span>
+<span class="n">_SMF_ABUNDANCE_ASSAY_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;^abundance_assay\[(\d+)\]$&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_smf</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;mzTab-M 2.0.0-M SMF row — one small-molecule feature per row.&quot;&quot;&quot;</span>
+    <span class="n">header</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">smf_header</span>
+    <span class="k">assert</span> <span class="n">header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">name_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">header</span><span class="p">)}</span>
+    <span class="n">assay_cols</span> <span class="o">=</span> <span class="n">_column_indices</span><span class="p">(</span><span class="n">header</span><span class="p">,</span> <span class="n">_SMF_ABUNDANCE_ASSAY_RE</span><span class="p">)</span>
+
+    <span class="n">smf_id</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SMF_ID</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">smf_id</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="c1"># Resolve chemical entity via the first SME_ID_REF if present;</span>
+    <span class="c1"># otherwise fall back to the SMF_ID string.</span>
+    <span class="n">sme_refs_raw</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SMF_SME_REFS</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">sme_refs</span> <span class="o">=</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">sme_refs_raw</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">r</span> <span class="ow">and</span> <span class="n">r</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="s2">&quot;null&quot;</span><span class="p">]</span>
+
+    <span class="n">adduct</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SMF_ADDUCT</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">adduct</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;null&quot;</span><span class="p">:</span>
+        <span class="n">adduct</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">mz</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SMF_EXP_MZ</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span> <span class="ow">or</span> <span class="mf">0.0</span>
+    <span class="n">rt</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SMF_RT</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span> <span class="ow">or</span> <span class="mf">0.0</span>
+    <span class="n">charge</span> <span class="o">=</span> <span class="n">_to_int</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SMF_CHARGE</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span> <span class="ow">or</span> <span class="mi">0</span>
+
+    <span class="n">abundances</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">col_idx</span><span class="p">,</span> <span class="n">assay_idx</span> <span class="ow">in</span> <span class="n">assay_cols</span><span class="p">:</span>
+        <span class="n">v</span> <span class="o">=</span> <span class="n">_to_float</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">col_idx</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">sample_ref</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">assay_to_sample</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">assay_idx</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;assay_</span><span class="si">{</span><span class="n">assay_idx</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">abundances</span><span class="p">[</span><span class="n">sample_ref</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+
+    <span class="c1"># Entity resolution happens lazily in _handle_sme when evidence</span>
+    <span class="c1"># rows arrive; keep a placeholder referencing the SME ids so the</span>
+    <span class="c1"># Feature stays linkable.</span>
+    <span class="n">entity</span> <span class="o">=</span> <span class="n">sme_refs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">sme_refs</span> <span class="k">else</span> <span class="n">smf_id</span>
+
+    <span class="n">state</span><span class="o">.</span><span class="n">features</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Feature</span><span class="p">(</span>
+        <span class="n">feature_id</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;smf_</span><span class="si">{</span><span class="n">smf_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+        <span class="n">run_name</span><span class="o">=</span><span class="s2">&quot;metabolomics&quot;</span><span class="p">,</span>
+        <span class="n">chemical_entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span>
+        <span class="n">retention_time_seconds</span><span class="o">=</span><span class="n">rt</span><span class="p">,</span>
+        <span class="n">exp_mass_to_charge</span><span class="o">=</span><span class="n">mz</span><span class="p">,</span>
+        <span class="n">charge</span><span class="o">=</span><span class="n">charge</span><span class="p">,</span>
+        <span class="n">adduct_ion</span><span class="o">=</span><span class="n">adduct</span><span class="p">,</span>
+        <span class="n">abundances</span><span class="o">=</span><span class="n">abundances</span><span class="p">,</span>
+        <span class="n">evidence_refs</span><span class="o">=</span><span class="n">sme_refs</span><span class="p">,</span>
+    <span class="p">))</span>
+
+
+<span class="n">_SME_ID</span> <span class="o">=</span> <span class="s2">&quot;SME_ID&quot;</span>
+<span class="n">_SME_DB_ID</span> <span class="o">=</span> <span class="s2">&quot;database_identifier&quot;</span>
+<span class="n">_SME_NAME</span> <span class="o">=</span> <span class="s2">&quot;chemical_name&quot;</span>
+<span class="n">_SME_FORMULA</span> <span class="o">=</span> <span class="s2">&quot;chemical_formula&quot;</span>
+<span class="n">_SME_EXP_MZ</span> <span class="o">=</span> <span class="s2">&quot;exp_mass_to_charge&quot;</span>
+<span class="n">_SME_CHARGE</span> <span class="o">=</span> <span class="s2">&quot;charge&quot;</span>
+<span class="n">_SME_SPECTRA_REF</span> <span class="o">=</span> <span class="s2">&quot;spectra_ref&quot;</span>
+<span class="n">_SME_RANK</span> <span class="o">=</span> <span class="s2">&quot;rank&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_sme</span><span class="p">(</span><span class="n">state</span><span class="p">:</span> <span class="n">_ParserState</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;mzTab-M 2.0.0-M SME row — per-feature annotation evidence.</span>
+
+<span class="sd">    Emits one :class:`Identification` per evidence row so downstream</span>
+<span class="sd">    consumers keep annotation + rank data after round-trip.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">header</span> <span class="o">=</span> <span class="n">state</span><span class="o">.</span><span class="n">sme_header</span>
+    <span class="k">assert</span> <span class="n">header</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="n">name_to_idx</span> <span class="o">=</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">header</span><span class="p">)}</span>
+
+    <span class="n">sme_id</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SME_ID</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">sme_id</span><span class="p">:</span>
+        <span class="k">return</span>
+
+    <span class="n">db_id</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SME_DB_ID</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">chem_name</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SME_NAME</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">formula</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SME_FORMULA</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">entity</span> <span class="o">=</span> <span class="n">db_id</span> <span class="ow">or</span> <span class="n">chem_name</span> <span class="ow">or</span> <span class="n">formula</span> <span class="ow">or</span> <span class="n">sme_id</span>
+
+    <span class="n">rank</span> <span class="o">=</span> <span class="n">_to_int</span><span class="p">(</span><span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SME_RANK</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)))</span> <span class="ow">or</span> <span class="mi">1</span>
+    <span class="c1"># mzTab-M rank 1 is the best; map rank → confidence as 1/rank so</span>
+    <span class="c1"># the winning evidence gets 1.0 and weaker alternatives get &lt; 1.0.</span>
+    <span class="n">confidence</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">rank</span><span class="p">)</span> <span class="k">if</span> <span class="n">rank</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mf">0.0</span>
+
+    <span class="n">spectra_ref</span> <span class="o">=</span> <span class="n">_safe_get</span><span class="p">(</span><span class="n">cols</span><span class="p">,</span> <span class="n">name_to_idx</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">_SME_SPECTRA_REF</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">run_name</span> <span class="o">=</span> <span class="s2">&quot;metabolomics&quot;</span>
+    <span class="n">spectrum_index</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">m</span> <span class="o">:=</span> <span class="n">_SPECTRA_REF_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">spectra_ref</span><span class="p">)):</span>
+        <span class="n">run_name</span> <span class="o">=</span> <span class="n">_resolve_run_name</span><span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)))</span>
+        <span class="n">locator</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;=&quot;</span> <span class="ow">in</span> <span class="n">locator</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">spectrum_index</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">locator</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">])</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">spectrum_index</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">evidence</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;SME_ID=</span><span class="si">{</span><span class="n">sme_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">chem_name</span> <span class="ow">and</span> <span class="n">chem_name</span> <span class="o">!=</span> <span class="n">entity</span><span class="p">:</span>
+        <span class="n">evidence</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;name=</span><span class="si">{</span><span class="n">chem_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">formula</span> <span class="ow">and</span> <span class="n">formula</span> <span class="o">!=</span> <span class="n">entity</span><span class="p">:</span>
+        <span class="n">evidence</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;formula=</span><span class="si">{</span><span class="n">formula</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">state</span><span class="o">.</span><span class="n">identifications</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Identification</span><span class="p">(</span>
+        <span class="n">run_name</span><span class="o">=</span><span class="n">run_name</span><span class="p">,</span>
+        <span class="n">spectrum_index</span><span class="o">=</span><span class="n">spectrum_index</span><span class="p">,</span>
+        <span class="n">chemical_entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span>
+        <span class="n">confidence_score</span><span class="o">=</span><span class="n">confidence</span><span class="p">,</span>
+        <span class="n">evidence_chain</span><span class="o">=</span><span class="n">evidence</span><span class="p">,</span>
+    <span class="p">))</span>
+
+    <span class="c1"># Back-fill features that referenced this SME so their</span>
+    <span class="c1"># chemical_entity gets upgraded from the placeholder ID.</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">feat</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">state</span><span class="o">.</span><span class="n">features</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">sme_id</span> <span class="ow">in</span> <span class="n">feat</span><span class="o">.</span><span class="n">evidence_refs</span> <span class="ow">and</span> <span class="n">feat</span><span class="o">.</span><span class="n">chemical_entity</span> <span class="o">==</span> <span class="n">sme_id</span><span class="p">:</span>
+            <span class="n">state</span><span class="o">.</span><span class="n">features</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">Feature</span><span class="p">(</span>
+                <span class="n">feature_id</span><span class="o">=</span><span class="n">feat</span><span class="o">.</span><span class="n">feature_id</span><span class="p">,</span>
+                <span class="n">run_name</span><span class="o">=</span><span class="n">feat</span><span class="o">.</span><span class="n">run_name</span><span class="p">,</span>
+                <span class="n">chemical_entity</span><span class="o">=</span><span class="n">entity</span><span class="p">,</span>
+                <span class="n">retention_time_seconds</span><span class="o">=</span><span class="n">feat</span><span class="o">.</span><span class="n">retention_time_seconds</span><span class="p">,</span>
+                <span class="n">exp_mass_to_charge</span><span class="o">=</span><span class="n">feat</span><span class="o">.</span><span class="n">exp_mass_to_charge</span><span class="p">,</span>
+                <span class="n">charge</span><span class="o">=</span><span class="n">feat</span><span class="o">.</span><span class="n">charge</span><span class="p">,</span>
+                <span class="n">adduct_ion</span><span class="o">=</span><span class="n">feat</span><span class="o">.</span><span class="n">adduct_ion</span><span class="p">,</span>
+                <span class="n">abundances</span><span class="o">=</span><span class="n">feat</span><span class="o">.</span><span class="n">abundances</span><span class="p">,</span>
+                <span class="n">evidence_refs</span><span class="o">=</span><span class="n">feat</span><span class="o">.</span><span class="n">evidence_refs</span><span class="p">,</span>
+            <span class="p">)</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;MzTabImport&quot;</span><span class="p">,</span> <span class="s2">&quot;MzTabParseError&quot;</span><span class="p">,</span> <span class="s2">&quot;read&quot;</span><span class="p">]</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DTW-Thalion
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=2bd037f0"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

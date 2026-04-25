@@ -1,0 +1,89 @@
+ttio.instrument_config
+======================
+
+.. py:module:: ttio.instrument_config
+
+.. autoapi-nested-parse::
+
+   ``InstrumentConfig`` — human-readable acquisition instrument description.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.instrument_config.InstrumentConfig
+
+
+Module Contents
+---------------
+
+.. py:class:: InstrumentConfig
+
+   Instrument configuration block persisted as HDF5 string attributes.
+
+   All fields default to empty strings because the format spec
+   explicitly allows every sub-field to be missing (§3 of
+   ``docs/format-spec.md``).
+
+   :param manufacturer: Instrument manufacturer (e.g. ``"Thermo Fisher Scientific"``).
+   :type manufacturer: str, default ""
+   :param model: Instrument model (e.g. ``"Orbitrap Eclipse"``).
+   :type model: str, default ""
+   :param serial_number: Serial number.
+   :type serial_number: str, default ""
+   :param source_type: Ionization source (e.g. ``"ESI"``, ``"MALDI"``).
+   :type source_type: str, default ""
+   :param analyzer_type: Mass analyzer (e.g. ``"Orbitrap"``, ``"TOF"``).
+   :type analyzer_type: str, default ""
+   :param detector_type: Detector (e.g. ``"inductive"``, ``"electron multiplier"``).
+   :type detector_type: str, default ""
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOInstrumentConfig`` · Java:
+   ``com.dtwthalion.ttio.InstrumentConfig``.
+
+
+   .. py:attribute:: manufacturer
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: model
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: serial_number
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: source_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: analyzer_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: detector_type
+      :type:  str
+      :value: ''
+
+
+

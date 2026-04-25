@@ -1,0 +1,229 @@
+ttio.encryption
+===============
+
+.. py:module:: ttio.encryption
+
+.. autoapi-nested-parse::
+
+   AES-256-GCM encryption / decryption matching the ObjC reference layout.
+
+   The Objective-C implementation uses OpenSSL ``EVP_aes_256_gcm`` with a
+   12-byte IV and a 16-byte auth tag. Ciphertext is stored separately from the
+   tag (via ``EVP_CTRL_GCM_GET_TAG``). Python mirrors this using
+   ``cryptography.hazmat.primitives.ciphers.aead.AESGCM`` — note that
+   ``AESGCM.encrypt`` returns ``ciphertext || tag``; we split the last 16 bytes
+   off to match the OpenSSL layout.
+
+   Per-channel encrypted-signal-channel layout (see §5 of ``docs/format-spec.md``)::
+
+       <channel>_values_encrypted    int32 raw byte container, zero-padded to /4
+       <channel>_iv                  3 × int32 raw bytes (12-byte IV)
+       <channel>_tag                 4 × int32 raw bytes (16-byte GCM tag)
+       @<channel>_ciphertext_bytes   int64  exact ciphertext length
+       @<channel>_original_count     int64  original element count
+       @<channel>_algorithm          string "AES-256-GCM"
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOEncryptionManager`` · Java:
+   ``com.dtwthalion.ttio.protection.EncryptionManager``.
+
+   API status: Stable.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.encryption.AES_KEY_LEN
+   ttio.encryption.AES_IV_LEN
+   ttio.encryption.AES_TAG_LEN
+   ttio.encryption.ALGORITHM_NAME
+   ttio.encryption.DEFAULT_ENCRYPTION_ALGORITHM
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.encryption.SealedBlob
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.encryption.encrypt_bytes
+   ttio.encryption.decrypt_bytes
+   ttio.encryption.read_encrypted_channel
+   ttio.encryption.encrypt_intensity_channel_in_run
+   ttio.encryption.encrypt_intensity_channel_in_group
+   ttio.encryption.decrypt_intensity_channel_in_run
+   ttio.encryption.decrypt_intensity_channel_in_run_in_place
+   ttio.encryption.decrypt_intensity_channel_in_group
+
+
+Module Contents
+---------------
+
+.. py:data:: AES_KEY_LEN
+   :value: 32
+
+
+.. py:data:: AES_IV_LEN
+   :value: 12
+
+
+.. py:data:: AES_TAG_LEN
+   :value: 16
+
+
+.. py:data:: ALGORITHM_NAME
+   :value: 'AES-256-GCM'
+
+
+.. py:data:: DEFAULT_ENCRYPTION_ALGORITHM
+   :value: 'aes-256-gcm'
+
+
+.. py:class:: SealedBlob
+
+   Result of an AES-256-GCM encrypt: separate ciphertext, IV, and tag.
+
+
+   .. py:attribute:: ciphertext
+      :type:  bytes
+
+
+   .. py:attribute:: iv
+      :type:  bytes
+
+
+   .. py:attribute:: tag
+      :type:  bytes
+
+
+.. py:function:: encrypt_bytes(plaintext: bytes, key: bytes, iv: bytes | None = None, *, algorithm: str = DEFAULT_ENCRYPTION_ALGORITHM) -> SealedBlob
+
+   Encrypt ``plaintext`` with the named AEAD cipher.
+   Returns ciphertext/iv/tag tuple.
+
+   v0.7 M48: the algorithm is a parameter, not an invariant. Key and
+   nonce lengths come from :mod:`ttio.cipher_suite`. Passing an
+   unsupported algorithm raises
+   :class:`~ttio.cipher_suite.UnsupportedAlgorithmError`.
+
+   Default ``algorithm="aes-256-gcm"`` preserves pre-v0.7 behaviour
+   exactly. If ``iv`` is ``None`` a random nonce of the cipher's
+   required length is generated. Tests that need cross-implementation
+   parity should pass a fixed ``iv``.
+
+
+.. py:function:: decrypt_bytes(blob: SealedBlob, key: bytes, *, algorithm: str = DEFAULT_ENCRYPTION_ALGORITHM) -> bytes
+
+   Decrypt a sealed blob with the named AEAD cipher. Raises on
+   authentication failure. Key / IV / tag lengths dispatched via
+   :mod:`ttio.cipher_suite` (v0.7 M48).
+
+
+.. py:function:: read_encrypted_channel(channels_group, channel: str, key: bytes, dtype: str = '<f8') -> numpy.ndarray
+
+   Decrypt one encrypted signal channel from a ``signal_channels`` group.
+
+   The plaintext is interpreted as an array of ``dtype`` (default
+   little-endian float64, matching the ObjC writer). Raises ``KeyError`` if
+   the channel is not encrypted in this group.
+
+   v0.9 M64.5 phase B: ``channels_group`` may be an ``h5py.Group``
+   (legacy fast path) or a :class:`StorageGroup`. The HDF5-backed
+   StorageGroup unwraps to the native h5py path; non-HDF5 providers
+   route through the protocol's ``open_dataset().read()`` and
+   ``get_attribute`` primitives.
+
+
+.. py:function:: encrypt_intensity_channel_in_run(file_path: str, run_name: str, key: bytes) -> None
+
+   Encrypt the intensity_values dataset of the named MS run in place.
+
+   Matches ObjC
+   ``+[TTIOEncryptionManager encryptIntensityChannelInRun:atFilePath:withKey:error:]``.
+
+   Opens the .tio file read-write, locates
+   ``/study/ms_runs/<run_name>/signal_channels/``, encrypts the
+   ``intensity_values`` dataset bytes with AES-256-GCM, writes an
+   ``intensity_values_encrypted`` dataset (bytes padded to 4-byte boundary,
+   stored as int32 array for ObjC wire compat) plus sibling scalar
+   datasets ``intensity_iv`` and ``intensity_tag``, plus attributes
+   ``intensity_ciphertext_bytes`` (int64), ``intensity_original_count``
+   (int64), and ``intensity_algorithm`` ("AES-256-GCM"), and deletes the
+   original ``intensity_values`` dataset.
+
+   Idempotent: if ``intensity_values_encrypted`` already exists, returns
+   silently without re-encrypting.
+
+   Raises ``FileNotFoundError`` if the file or run does not exist,
+   ``ValueError`` if key is not 32 bytes.
+
+
+.. py:function:: encrypt_intensity_channel_in_group(signal_channels_group, key: bytes) -> None
+
+   Encrypt the intensity_values dataset inside an already-open signal_channels group.
+
+   Use this variant when the caller already holds an open file handle
+   (e.g. via :class:`~ttio.spectral_dataset.SpectralDataset`) and
+   cannot open the file a second time. v0.9 M64.5 phase B: accepts
+   either an ``h5py.Group`` or a :class:`StorageGroup` so non-HDF5
+   providers also encrypt in place.
+
+   Raises ``ValueError`` if ``key`` is not 32 bytes, ``KeyError`` if
+   ``intensity_values`` is absent.
+
+
+.. py:function:: decrypt_intensity_channel_in_run(file_path: str, run_name: str, key: bytes) -> numpy.ndarray
+
+   Decrypt the intensity_values channel of the named MS run.
+
+   Matches ObjC
+   ``+[TTIOEncryptionManager decryptIntensityChannelInRun:atFilePath:withKey:error:]``.
+
+   Returns a float64 numpy array with the original element count. The
+   on-disk file is NOT modified — decryption is read-only.
+
+   Raises ``FileNotFoundError``, ``KeyError`` (run not found), or
+   ``ValueError`` (channel not encrypted / key wrong) as appropriate.
+
+
+.. py:function:: decrypt_intensity_channel_in_run_in_place(file_path: str, run_name: str, key: bytes) -> None
+
+   Decrypt one MS run's intensity channel back to plaintext on disk.
+
+   Symmetric with :func:`encrypt_intensity_channel_in_run`: opens the
+   .tio file read-write, decrypts ``intensity_values_encrypted`` for
+   the named run, writes ``intensity_values`` with the plaintext, and
+   deletes the encrypted siblings + attrs. Callers that want to leave
+   the file fully plaintext (``is_encrypted == False``) must also
+   remove the root ``@encrypted`` attribute — see
+   :meth:`SpectralDataset.decrypt_in_place` for that whole-file flow.
+
+   Idempotent: returns silently if the run is already decrypted.
+
+   Raises ``FileNotFoundError``, ``KeyError`` (run not found), or
+   ``ValueError`` (key wrong length / tag mismatch).
+
+
+.. py:function:: decrypt_intensity_channel_in_group(signal_channels_group, key: bytes) -> None
+
+   Decrypt the intensity_values dataset inside an already-open signal_channels group.
+
+   Open-handle counterpart to :func:`decrypt_intensity_channel_in_run_in_place`.
+   Use when the caller holds a writable group handle (e.g. via an open
+   :class:`~ttio.spectral_dataset.SpectralDataset`) and cannot reopen
+   the file a second time.
+
+   Raises ``ValueError`` if ``key`` is not 32 bytes.
+
+

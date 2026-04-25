@@ -1,0 +1,87 @@
+ttio.analysis.two_d_cos
+=======================
+
+.. py:module:: ttio.analysis.two_d_cos
+
+.. autoapi-nested-parse::
+
+   2D-COS compute primitives — Noda's synchronous/asynchronous decomposition.
+
+   Given a perturbation series ``A`` of shape ``(m, n)``:
+
+   - ``m`` = number of perturbation points (time, temperature, concentration...)
+   - ``n`` = number of spectral variables (shared axis)
+
+   The dynamic spectra ``Ã = A - reference`` (reference defaults to the
+   column-wise mean) are decomposed into:
+
+   - Synchronous matrix ``Φ = (1 / (m - 1)) · Ãᵀ · Ã``, symmetric.
+   - Asynchronous matrix ``Ψ = (1 / (m - 1)) · Ãᵀ · N · Ã``, antisymmetric,
+     where ``N`` is the discrete Hilbert-Noda transform matrix of size
+     ``(m, m)``.
+
+   ``N[j, k] = 0`` when ``j == k`` else ``1 / (π · (k - j))``.
+
+   The disrelation-like significance spectrum ``|Φ| / (|Φ| + |Ψ|)`` is
+   bounded in ``[0, 1]`` (cells where both matrices vanish return ``NaN``).
+
+   Cross-language equivalents: Java
+   ``com.dtwthalion.ttio.analysis.TwoDCos`` · Objective-C
+   ``TTIOTwoDCos``.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.analysis.two_d_cos.hilbert_noda_matrix
+   ttio.analysis.two_d_cos.compute
+   ttio.analysis.two_d_cos.disrelation_spectrum
+
+
+Module Contents
+---------------
+
+.. py:function:: hilbert_noda_matrix(m: int) -> numpy.ndarray
+
+   Return the discrete Hilbert-Noda transform matrix of size ``(m, m)``.
+
+   Entry ``(j, k)`` is ``0`` on the diagonal and ``1 / (π · (k - j))``
+   off-diagonal. The matrix is antisymmetric, so
+   ``hilbert_noda_matrix(m).T == -hilbert_noda_matrix(m)``.
+
+
+.. py:function:: compute(dynamic_spectra: numpy.ndarray, *, reference: numpy.ndarray | None = None, variable_axis: AxisDescriptor | None = None, perturbation: str = '', perturbation_unit: str = '', source_modality: str = '') -> ttio.two_dimensional_correlation_spectrum.TwoDimensionalCorrelationSpectrum
+
+   Compute synchronous + asynchronous correlation matrices via Noda 2D-COS.
+
+   :param dynamic_spectra: Perturbation-series matrix ``A`` of shape ``(m, n)``. Each row
+                           is one spectrum sampled at the same ``n`` spectral variables.
+   :param reference: Reference spectrum to subtract, shape ``(n,)``. Defaults to the
+                     column-wise mean of ``dynamic_spectra`` (standard mean-centered
+                     2D-COS). Pass an explicit baseline to compute difference 2D-COS.
+   :param variable_axis: Forwarded to the returned
+                         :class:`~ttio.TwoDimensionalCorrelationSpectrum`.
+   :param perturbation: Forwarded to the returned
+                        :class:`~ttio.TwoDimensionalCorrelationSpectrum`.
+   :param perturbation_unit: Forwarded to the returned
+                             :class:`~ttio.TwoDimensionalCorrelationSpectrum`.
+   :param source_modality: Forwarded to the returned
+                           :class:`~ttio.TwoDimensionalCorrelationSpectrum`.
+
+   :returns: *TwoDimensionalCorrelationSpectrum* -- Wrapping the ``(n, n)`` synchronous and asynchronous matrices.
+
+
+.. py:function:: disrelation_spectrum(synchronous: numpy.ndarray, asynchronous: numpy.ndarray) -> numpy.ndarray
+
+   Return ``|Φ| / (|Φ| + |Ψ|)`` — synchronous dominance in ``[0, 1]``.
+
+   Cells where both matrices vanish yield ``NaN`` (no information).
+   High values (→ 1) indicate cross-peaks dominated by in-phase
+   variation; low values (→ 0) indicate sequential variation.
+
+

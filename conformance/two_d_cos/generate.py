@@ -2,7 +2,7 @@
 
 Produces a small perturbation-series matrix plus the expected
 synchronous and asynchronous matrices computed by the Python
-reference implementation (``mpeg_o.analysis.two_d_cos.compute``).
+reference implementation (``ttio.analysis.two_d_cos.compute``).
 Python, Java, and ObjC test suites all load the CSVs written here
 and compare their own compute outputs against them with a
 float-tolerance gate (rtol=1e-9, atol=1e-12).
@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 sys.path.insert(0, str(REPO / "python" / "src"))
 
-from mpeg_o.analysis import two_d_cos  # noqa: E402
+from ttio.analysis import two_d_cos  # noqa: E402
 
 
 M = 24

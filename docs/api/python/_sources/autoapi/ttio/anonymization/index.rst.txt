@@ -1,0 +1,181 @@
+ttio.anonymization
+==================
+
+.. py:module:: ttio.anonymization
+
+.. autoapi-nested-parse::
+
+   Milestone 28 — Spectral anonymization.
+
+   Applies caller-selected policies to a :class:`SpectralDataset` and
+   writes a **new** ``.tio`` file. The original is never modified.
+
+   Policies
+   --------
+   Proteomics:
+     ``redact_saav_spectra``          remove spectra with SAAV identifications
+     ``mask_intensity_below_quantile`` zero intensities below a percentile
+
+   Metabolomics:
+     ``mask_rare_metabolites``        suppress signals linked to metabolites
+                                       below a prevalence threshold
+
+   NMR:
+     ``coarsen_chemical_shift_decimals`` reduce ppm precision
+
+   Universal:
+     ``coarsen_mz_decimals``          reduce m/z precision
+     ``strip_metadata_fields``        remove operator, serial, source, timestamps
+
+   Audit
+   -----
+   A :class:`ProvenanceRecord` is appended documenting which policies ran,
+   how many spectra / values were affected, and the timestamp. The output
+   carries the ``opt_anonymized`` feature flag.
+
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOAnonymizer`` · Java:
+   ``com.dtwthalion.ttio.protection.Anonymizer``.
+
+   API status: Stable.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.anonymization.AnonymizationPolicy
+   ttio.anonymization.AnonymizationResult
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.anonymization.anonymize
+
+
+Module Contents
+---------------
+
+.. py:class:: AnonymizationPolicy
+
+   Which policies to apply and their parameters.
+
+
+   .. py:attribute:: redact_saav_spectra
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: mask_intensity_below_quantile
+      :type:  float | None
+      :value: None
+
+
+
+   .. py:attribute:: mask_rare_metabolites
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: rare_metabolite_threshold
+      :type:  float
+      :value: 0.05
+
+
+
+   .. py:attribute:: rare_metabolite_table
+      :type:  dict[str, float] | None
+      :value: None
+
+
+
+   .. py:attribute:: coarsen_chemical_shift_decimals
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: coarsen_mz_decimals
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: strip_metadata_fields
+      :type:  bool
+      :value: False
+
+
+
+.. py:class:: AnonymizationResult
+
+   Summary of what the anonymizer did.
+
+
+   .. py:attribute:: output_path
+      :type:  pathlib.Path
+
+
+   .. py:attribute:: spectra_redacted
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: intensities_zeroed
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: mz_values_coarsened
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: chemical_shift_values_coarsened
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: metabolites_masked
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: metadata_fields_stripped
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: policies_applied
+      :type:  list[str]
+      :value: []
+
+
+
+.. py:function:: anonymize(source: ttio.spectral_dataset.SpectralDataset, output_path: str | pathlib.Path, policy: AnonymizationPolicy, *, provider: str = 'hdf5') -> AnonymizationResult
+
+   Apply ``policy`` to ``source`` and write a new ``.tio`` to ``output_path``.
+
+   The source dataset must be open for reading. The original is not
+   modified. v0.9 M64.5 phase B: the optional ``provider`` kwarg is
+   threaded through to :meth:`SpectralDataset.write_minimal` so the
+   anonymized output can land on any registered backend
+   (``"hdf5"`` / ``"memory"`` / ``"sqlite"`` / ``"zarr"``).
+
+

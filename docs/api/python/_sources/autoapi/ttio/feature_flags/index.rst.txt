@@ -1,0 +1,154 @@
+ttio.feature_flags
+==================
+
+.. py:module:: ttio.feature_flags
+
+.. autoapi-nested-parse::
+
+   ``FeatureFlags`` — the registry of format feature strings used by a file.
+
+   The actual on-disk read/write lives in :mod:`ttio._hdf5_io`; this module
+   provides a thin value object and the canonical list of reserved feature
+   names documented in ``docs/feature-flags.md``.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.feature_flags.BASE_V1
+   ttio.feature_flags.COMPOUND_IDENTIFICATIONS
+   ttio.feature_flags.COMPOUND_QUANTIFICATIONS
+   ttio.feature_flags.COMPOUND_PROVENANCE
+   ttio.feature_flags.OPT_COMPOUND_HEADERS
+   ttio.feature_flags.OPT_NATIVE_2D_NMR
+   ttio.feature_flags.OPT_NATIVE_MSIMAGE_CUBE
+   ttio.feature_flags.OPT_DATASET_ENCRYPTION
+   ttio.feature_flags.OPT_DIGITAL_SIGNATURES
+   ttio.feature_flags.OPT_CANONICAL_SIGNATURES
+   ttio.feature_flags.COMPOUND_PER_RUN_PROVENANCE
+   ttio.feature_flags.OPT_KEY_ROTATION
+   ttio.feature_flags.OPT_ANONYMIZED
+   ttio.feature_flags.OPT_PQC_PREVIEW
+   ttio.feature_flags.OPT_PER_AU_ENCRYPTION
+   ttio.feature_flags.OPT_ENCRYPTED_AU_HEADERS
+   ttio.feature_flags.OPT_NATIVE_2D_COS
+   ttio.feature_flags.OPT_MS2_ACTIVATION_DETAIL
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.feature_flags.FeatureFlags
+
+
+Module Contents
+---------------
+
+.. py:data:: BASE_V1
+   :value: 'base_v1'
+
+
+.. py:data:: COMPOUND_IDENTIFICATIONS
+   :value: 'compound_identifications'
+
+
+.. py:data:: COMPOUND_QUANTIFICATIONS
+   :value: 'compound_quantifications'
+
+
+.. py:data:: COMPOUND_PROVENANCE
+   :value: 'compound_provenance'
+
+
+.. py:data:: OPT_COMPOUND_HEADERS
+   :value: 'opt_compound_headers'
+
+
+.. py:data:: OPT_NATIVE_2D_NMR
+   :value: 'opt_native_2d_nmr'
+
+
+.. py:data:: OPT_NATIVE_MSIMAGE_CUBE
+   :value: 'opt_native_msimage_cube'
+
+
+.. py:data:: OPT_DATASET_ENCRYPTION
+   :value: 'opt_dataset_encryption'
+
+
+.. py:data:: OPT_DIGITAL_SIGNATURES
+   :value: 'opt_digital_signatures'
+
+
+.. py:data:: OPT_CANONICAL_SIGNATURES
+   :value: 'opt_canonical_signatures'
+
+
+.. py:data:: COMPOUND_PER_RUN_PROVENANCE
+   :value: 'compound_per_run_provenance'
+
+
+.. py:data:: OPT_KEY_ROTATION
+   :value: 'opt_key_rotation'
+
+
+.. py:data:: OPT_ANONYMIZED
+   :value: 'opt_anonymized'
+
+
+.. py:data:: OPT_PQC_PREVIEW
+   :value: 'opt_pqc_preview'
+
+
+.. py:data:: OPT_PER_AU_ENCRYPTION
+   :value: 'opt_per_au_encryption'
+
+
+.. py:data:: OPT_ENCRYPTED_AU_HEADERS
+   :value: 'opt_encrypted_au_headers'
+
+
+.. py:data:: OPT_NATIVE_2D_COS
+   :value: 'opt_native_2d_cos'
+
+
+.. py:data:: OPT_MS2_ACTIVATION_DETAIL
+   :value: 'opt_ms2_activation_detail'
+
+
+.. py:class:: FeatureFlags
+
+   Immutable set of format feature strings with a version label.
+
+
+   .. py:attribute:: version
+      :type:  str
+      :value: '1.1'
+
+
+
+   .. py:attribute:: features
+      :type:  tuple[str, Ellipsis]
+      :value: ()
+
+
+
+   .. py:method:: from_iterable(version: str, features: Iterable[str]) -> FeatureFlags
+      :classmethod:
+
+
+
+   .. py:method:: has(name: str) -> bool
+
+
+   .. py:method:: required() -> tuple[str, Ellipsis]
+
+      Features whose absence should cause a reader to refuse the file.
+
+
+

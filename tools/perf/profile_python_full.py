@@ -1,10 +1,10 @@
-"""Multi-function Python perf harness for MPEG-O.
+"""Multi-function Python perf harness for TTI-O.
 
 Covers every major function introduced through v0.11.1:
 
 * **ms**           — MS write/read across all four storage providers
                      (HDF5, Memory, SQLite, Zarr).
-* **transport**    — ``.mots`` encode + decode (plain and compressed).
+* **transport**    — ``.tis`` encode + decode (plain and compressed).
 * **encryption**   — per-AU AES-256-GCM encrypt + decrypt.
 * **signatures**   — HMAC-SHA256 sign + verify.
 * **jcamp**        — JCAMP-DX write + read (AFFN and SQZ/DIF compressed).
@@ -35,7 +35,7 @@ from typing import Any
 
 import numpy as np
 
-from mpeg_o import (
+from ttio import (
     AxisDescriptor,
     IRSpectrum,
     RamanSpectrum,
@@ -45,19 +45,19 @@ from mpeg_o import (
     UVVisSpectrum,
     WrittenRun,
 )
-from mpeg_o.encryption_per_au import (
+from ttio.encryption_per_au import (
     decrypt_per_au_file,
     encrypt_per_au_file,
 )
-from mpeg_o.enums import IRMode
-from mpeg_o.exporters.jcamp_dx import (
+from ttio.enums import IRMode
+from ttio.exporters.jcamp_dx import (
     write_ir_spectrum,
     write_raman_spectrum,
     write_uv_vis_spectrum,
 )
-from mpeg_o.importers.jcamp_dx import read_spectrum as jcamp_read_spectrum
-from mpeg_o.signatures import sign_dataset, verify_dataset
-from mpeg_o.transport import file_to_transport, transport_to_file
+from ttio.importers.jcamp_dx import read_spectrum as jcamp_read_spectrum
+from ttio.signatures import sign_dataset, verify_dataset
+from ttio.transport import file_to_transport, transport_to_file
 
 # ---------------------------------------------------------------------------
 # Workload helpers
@@ -81,7 +81,7 @@ def _build_ms_run(n: int, peaks: int) -> WrittenRun:
     precursor_charges = np.zeros(n, dtype=np.int32)
     base_peak = intensity.reshape(n, peaks).max(axis=1)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -113,13 +113,13 @@ def bench_ms(tmp: Path, n: int, peaks: int,
     run = _build_ms_run(n, peaks)
 
     if provider == "hdf5":
-        url: str = str(tmp / f"ms-{provider}.mpgo")
+        url: str = str(tmp / f"ms-{provider}.tio")
     elif provider == "memory":
         url = f"memory://ms-bench-{os.getpid()}-{id(run):x}"
     elif provider == "sqlite":
-        url = f"sqlite://{tmp / 'ms-sqlite.mpgo.sqlite'}"
+        url = f"sqlite://{tmp / 'ms-sqlite.tio.sqlite'}"
     elif provider == "zarr":
-        url = f"zarr://{tmp / 'ms-zarr.mpgo.zarr'}"
+        url = f"zarr://{tmp / 'ms-zarr.tio.zarr'}"
     else:
         raise ValueError(provider)
 
@@ -140,7 +140,7 @@ def bench_ms(tmp: Path, n: int, peaks: int,
     t_read, _ = _timed(_read)
 
     if provider == "memory":
-        from mpeg_o.providers.memory import MemoryProvider
+        from ttio.providers.memory import MemoryProvider
         MemoryProvider.discard_store(url)
 
     return {"write": t_write, "read": t_read}
@@ -148,18 +148,18 @@ def bench_ms(tmp: Path, n: int, peaks: int,
 
 def bench_transport(tmp: Path, n: int, peaks: int,
                     use_compression: bool) -> dict[str, float]:
-    """Encode a .mpgo file to .mots and decode it back."""
-    src = tmp / "xport.mpgo"
+    """Encode a .tio file to .tis and decode it back."""
+    src = tmp / "xport.tio"
     SpectralDataset.write_minimal(
         src, title="xport", isa_investigation_id="ISA-XPORT",
         runs={"r": _build_ms_run(n, peaks)},
     )
-    mots = tmp / ("xport-c.mots" if use_compression else "xport.mots")
+    mots = tmp / ("xport-c.tis" if use_compression else "xport.tis")
     t_enc, _ = _timed(
         file_to_transport, src, mots,
         use_compression=use_compression, use_checksum=True,
     )
-    rt = tmp / ("rt-c.mpgo" if use_compression else "rt.mpgo")
+    rt = tmp / ("rt-c.tio" if use_compression else "rt.tio")
     t_dec, _ = _timed(transport_to_file, mots, rt)
     return {"encode": t_enc, "decode": t_dec,
             "src_mb": src.stat().st_size / 1e6,
@@ -168,7 +168,7 @@ def bench_transport(tmp: Path, n: int, peaks: int,
 
 def bench_per_au_encryption(tmp: Path, n: int,
                             peaks: int) -> dict[str, float]:
-    src = tmp / "enc.mpgo"
+    src = tmp / "enc.tio"
     SpectralDataset.write_minimal(
         src, title="enc", isa_investigation_id="ISA-ENC",
         runs={"r": _build_ms_run(n, peaks)},
@@ -179,7 +179,7 @@ def bench_per_au_encryption(tmp: Path, n: int,
     # copy for the decrypt phase so both measurements start from the
     # same plaintext state.
     import shutil
-    copy = tmp / "enc-copy.mpgo"
+    copy = tmp / "enc-copy.tio"
     shutil.copy(src, copy)
     t_enc, _ = _timed(encrypt_per_au_file, str(copy), key)
     t_dec, _ = _timed(decrypt_per_au_file, str(copy), key)
@@ -188,7 +188,7 @@ def bench_per_au_encryption(tmp: Path, n: int,
 
 
 def bench_signatures(tmp: Path, n: int, peaks: int) -> dict[str, float]:
-    src = tmp / "sig.mpgo"
+    src = tmp / "sig.tio"
     SpectralDataset.write_minimal(
         src, title="sig", isa_investigation_id="ISA-SIG",
         runs={"r": _build_ms_run(n, peaks)},
@@ -408,7 +408,7 @@ def main() -> int:
 
     all_results: dict[str, dict[str, float]] = {}
     for name in selected:
-        tmp = Path(tempfile.mkdtemp(prefix=f"mpgo-{name.replace('.', '-')}-",
+        tmp = Path(tempfile.mkdtemp(prefix=f"ttio-{name.replace('.', '-')}-",
                                       dir=str(args.out)))
         try:
             fn = BENCHMARKS[name]

@@ -1,18 +1,18 @@
 # Vendor Format Integration Guide
 
 This document covers the status and integration patterns for vendor-specific
-mass spectrometry and NMR data formats in MPEG-O.
+mass spectrometry and NMR data formats in TTI-O.
 
 ## Thermo .raw (v0.6+ — delegation to ThermoRawFileParser)
 
 **Status:** Implemented via delegation. No proprietary code ships
-with MPEG-O; the converter is resolved at runtime.
+with TTI-O; the converter is resolved at runtime.
 
 Thermo Scientific `.raw` files are the most common proprietary MS
 format in proteomics and metabolomics. The format has no open spec;
 reading it requires Thermo's closed-source `RawFileReader` .NET
 assembly. The CompOmics team's [ThermoRawFileParser][trfp] wraps
-that assembly in a CLI that emits mzML / MGF / parquet. MPEG-O
+that assembly in a CLI that emits mzML / MGF / parquet. TTI-O
 delegates to that CLI and parses the emitted mzML with its existing
 reader.
 
@@ -58,7 +58,7 @@ directory.
 Everything the mzML bridge preserves: scan headers (RT, MS level,
 polarity, precursor m/z + charge), profile or centroid m/z + intensity
 arrays, TIC/BPC chromatograms. Thermo-specific extended method
-metadata that the bridge drops is not carried into MPEG-O by this
+metadata that the bridge drops is not carried into TTI-O by this
 path — if that data is load-bearing, you will need a direct reader.
 
 ## Bruker TDF (v0.8 M53 — shipped)
@@ -96,11 +96,11 @@ and `libtimsdata.dll` (Windows) — no extra toolchain required.
 
 ### Binary path resolution (Java + Objective-C)
 
-The Java `BrukerTDFReader` and Objective-C `MPGOBrukerTDFReader`
+The Java `BrukerTDFReader` and Objective-C `TTIOBrukerTDFReader`
 read SQLite metadata natively but subprocess to Python for binary
 frame data. Python interpreter lookup order:
 
-1. `MPGO_PYTHON` environment variable (absolute path).
+1. `TTIO_PYTHON` environment variable (absolute path).
 2. `python3` on `PATH`.
 3. `python` on `PATH`.
 
@@ -125,12 +125,12 @@ config (vendor, model, acquisition software) are populated from the
 ### Round-trip verification
 
 The Python test `tests/test_bruker_tdf.py::test_real_tdf_round_trip`
-takes an optional `MPGO_BRUKER_TDF_FIXTURE` environment variable
+takes an optional `TTIO_BRUKER_TDF_FIXTURE` environment variable
 pointing at a real Bruker `.d` directory. When set, it round-trips
 through `read()` and asserts that:
 
 * Frame count matches `analysis.tdf`'s `Frames` table.
-* The written `.mpgo` has `mz`, `intensity`, and `inv_ion_mobility`
+* The written `.tio` has `mz`, `intensity`, and `inv_ion_mobility`
   signal channels with identical shapes.
 * m/z and intensity match the opentimspy reference extraction.
 
@@ -140,9 +140,9 @@ The test is skipped when the environment variable is not set
 ### Command invoked (Java + ObjC)
 
 ```
-<python> -m mpeg_o.importers.bruker_tdf_cli \
+<python> -m ttio.importers.bruker_tdf_cli \
     --input <path/to/run.d> \
-    --output <path/to/target.mpgo> [--title "..."] [--ms2]
+    --output <path/to/target.tio> [--title "..."] [--ms2]
 ```
 
 Exit codes: 0 = success, 2 = bad args, 3 = `opentimspy` missing, 4 = I/O.
@@ -157,15 +157,15 @@ are v0.9 concerns.
 ## Waters MassLynx (v0.9 M63 — delegation pattern)
 
 **Status:** Implemented via delegation, in all three languages. No
-proprietary code ships with MPEG-O; the converter is resolved at
+proprietary code ships with TTI-O; the converter is resolved at
 runtime exactly like the Thermo integration.
 
 Waters MassLynx raw data lives in `.raw` **directories** (same
 extension as Thermo but a directory, not a file — a common source of
 confusion). The format is undocumented; access requires Waters'
-`MassLynxRaw` SDK or a community CLI wrapper. MPEG-O delegates to
+`MassLynxRaw` SDK or a community CLI wrapper. TTI-O delegates to
 a user-installed `masslynxraw` command (or `MassLynxRaw.exe` on
-Windows / via Mono), which emits mzML; MPEG-O then parses the mzML
+Windows / via Mono), which emits mzML; TTI-O then parses the mzML
 with its existing reader.
 
 ### Installation
@@ -177,7 +177,7 @@ deployment patterns are:
 |---|---|---|
 | **Community `masslynxraw` wrapper** | `pip install masslynxraw` then `masslynxraw -i <raw-dir> -o <out>` | Python wrapper; invokes the SDK via cffi. Requires the Waters SDK installed separately. |
 | **Waters Connect API** | Vendor-provided MSI/DMG | Ships a `MassLynxRaw.exe` or equivalent CLI. |
-| **In-house scripts** | Any argv-compatible `-i <raw-dir> -o <out-dir>` CLI | Pass an explicit `converter=` argument; MPEG-O invokes it verbatim. |
+| **In-house scripts** | Any argv-compatible `-i <raw-dir> -o <out-dir>` CLI | Pass an explicit `converter=` argument; TTI-O invokes it verbatim. |
 
 ### Binary resolution order
 
@@ -197,22 +197,22 @@ this document.
 
 | Language | Entry point |
 |---|---|
-| Python | `mpeg_o.importers.waters_masslynx.read(raw_dir, *, converter=None)` |
-| ObjC | `+[MPGOWatersMassLynxReader readFromDirectoryPath:converter:error:]` |
+| Python | `ttio.importers.waters_masslynx.read(raw_dir, *, converter=None)` |
+| ObjC | `+[TTIOWatersMassLynxReader readFromDirectoryPath:converter:error:]` |
 | Java | `WatersMassLynxReader.read(String dirPath, String converter)` |
 
 ### CLI contract
 
-MPEG-O invokes the converter with:
+TTI-O invokes the converter with:
 
 ```
 <converter> -i <input-raw-dir> -o <output-dir>
 ```
 
-and expects an `.mpgo`-ready mzML in the output directory, named
+and expects an `.tio`-ready mzML in the output directory, named
 `<basename>.mzML` where `<basename>` is the `.raw` directory name with
 its trailing `.raw` stripped. If the converter uses different flags,
-wrap it with a small shim that accepts the MPEG-O contract.
+wrap it with a small shim that accepts the TTI-O contract.
 
 ### Testing without Waters tooling
 
@@ -225,7 +225,7 @@ the vendor SDK:
 * ObjC: `Tests/TestWatersMassLynxReader.m` (the "mock converter" set)
 * Java: `WatersMassLynxReaderTest.mockConverter_roundTrip`
 
-Set `MPGO_MASSLYNX_FIXTURE` to a real Waters `.raw` directory and
+Set `TTIO_MASSLYNX_FIXTURE` to a real Waters `.raw` directory and
 ensure `masslynxraw` is on PATH to exercise the vendor-tooling path
 in nightly CI.
 
@@ -247,14 +247,14 @@ DUP); see "Compressed-form reader" below.
 
 | Language | Reader | Writer |
 |---|---|---|
-| Python | `mpeg_o.importers.jcamp_dx.read_spectrum(path)` | `mpeg_o.exporters.jcamp_dx.write_raman_spectrum` / `write_ir_spectrum` / `write_uv_vis_spectrum` |
-| ObjC | `+[MPGOJcampDxReader readSpectrumFromPath:error:]` | `+[MPGOJcampDxWriter writeRamanSpectrum:...]` / `writeIRSpectrum:` / `writeUVVisSpectrum:` |
+| Python | `ttio.importers.jcamp_dx.read_spectrum(path)` | `ttio.exporters.jcamp_dx.write_raman_spectrum` / `write_ir_spectrum` / `write_uv_vis_spectrum` |
+| ObjC | `+[TTIOJcampDxReader readSpectrumFromPath:error:]` | `+[TTIOJcampDxWriter writeRamanSpectrum:...]` / `writeIRSpectrum:` / `writeUVVisSpectrum:` |
 | Java | `JcampDxReader.readSpectrum(Path)` | `JcampDxWriter.writeRamanSpectrum` / `writeIRSpectrum` / `writeUVVisSpectrum` |
 
 The reader dispatches on `##DATA TYPE=`:
 `RAMAN SPECTRUM` → `RamanSpectrum`;
 `INFRARED ABSORBANCE` / `INFRARED TRANSMITTANCE` → `IRSpectrum`
-with the matching `MPGOIRMode`; `INFRARED SPECTRUM` falls back to
+with the matching `TTIOIRMode`; `INFRARED SPECTRUM` falls back to
 `##YUNITS=` for mode detection (`ABSORBANCE` substring →
 absorbance, otherwise transmittance);
 `UV/VIS SPECTRUM` / `UV-VIS SPECTRUM` / `UV/VISIBLE SPECTRUM` →
@@ -269,9 +269,9 @@ On a compressed body, it delegates to a per-language decoder:
 
 | Language | Decoder |
 |---|---|
-| Python | `mpeg_o.importers._jcamp_decode.decode_xydata` |
-| ObjC | `+[MPGOJcampDxDecode decodeLines:firstx:deltax:xfactor:yfactor:outXs:outYs:error:]` |
-| Java | `com.dtwthalion.mpgo.importers.JcampDxDecode.decode` |
+| Python | `ttio.importers._jcamp_decode.decode_xydata` |
+| ObjC | `+[TTIOJcampDxDecode decodeLines:firstx:deltax:xfactor:yfactor:outXs:outYs:error:]` |
+| Java | `com.dtwthalion.tio.importers.JcampDxDecode.decode` |
 
 Each decoder implements the full SQZ alphabet (`@`, `A-I`, `a-i`),
 DIF alphabet (`%`, `J-R`, `j-r`), DUP alphabet (`S-Z`, `s`), plus
@@ -290,7 +290,7 @@ implementations is caught in code review.
 
 The cross-language conformance harness additionally feeds a
 Python-generated `.jdx` to small subprocess drivers built on top
-of the ObjC (`objc/Tools/MpgoJcampDxDump`) and Java (compiled
+of the ObjC (`objc/Tools/TtioJcampDxDump`) and Java (compiled
 ad-hoc into `/tmp/mpgo_m73_driver/`) readers, then compares the
 parsed `(wavenumber, intensity)` arrays bit-for-bit. The tests
 skip on dev boxes where the ObjC/Java sides aren't built and run

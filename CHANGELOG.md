@@ -1,6 +1,6 @@
 # CHANGELOG
 
-All notable changes to the MPEG-O multi-omics data standard reference
+All notable changes to the TTI-O multi-omics data standard reference
 implementation. Dates are release dates; the repository commits record
 the actual timeline.
 
@@ -20,9 +20,9 @@ stamp the new attributes.
 
 ### Added
 
-- `Precision.UINT8 = 6` across Python (`mpeg_o.enums.Precision`),
-  Java (`com.dtwthalion.mpgo.Enums.Precision`), and ObjC
-  (`MPGOPrecisionUInt8`). Wired through every storage provider
+- `Precision.UINT8 = 6` across Python (`ttio.enums.Precision`),
+  Java (`com.dtwthalion.tio.Enums.Precision`), and ObjC
+  (`TTIOPrecisionUInt8`). Wired through every storage provider
   (HDF5, Memory, SQLite, Zarr); 1000-byte buffers round-trip
   byte-exactly across all four backends in all three languages.
 - `Compression` ids 4–8: `RANS_ORDER0`, `RANS_ORDER1`, `BASE_PACK`,
@@ -57,11 +57,11 @@ stamp the new attributes.
 
 - Python: `python/tests/test_m79_genomic_enums.py` — 18
   parametrised invocations across 7 test cases.
-- Java: `java/src/test/java/com/dtwthalion/mpgo/M79GenomicEnumsTest.java`
+- Java: `java/src/test/java/com/dtwthalion/ttio/M79GenomicEnumsTest.java`
   — 10 JUnit5 methods.
 - ObjC: `objc/Tests/TestM79GenomicEnums.m` — 27 inline `PASS`
   assertions, registered under `M79: modality + genomic enums
-  (v0.11)` in `MPGOTestRunner.m`.
+  (v0.11)` in `TTIOTestRunner.m`.
 
 ---
 
@@ -69,7 +69,7 @@ stamp the new attributes.
 
 Additive patch release that adds a persist-to-disk decryption API
 across all three language implementations. Needed by the
-MPEG-O-MCP-Server M5 `mpgo_decrypt_file` admin tool, which cannot
+TTI-O-MCP-Server M5 `mpgo_decrypt_file` admin tool, which cannot
 use the read-only `decrypt_with_key` path (that returns an
 in-memory plaintext `SpectralDataset` without rewriting the file).
 No HDF5 format change — files produced and consumed by v1.1.1 are
@@ -78,7 +78,7 @@ byte-identical to v1.1.0.
 ### Added
 
 - `SpectralDataset.decrypt_in_place(path, key)` (Python classmethod),
-  `+[MPGOSpectralDataset decryptInPlaceAtPath:withKey:error:]`
+  `+[TTIOSpectralDataset decryptInPlaceAtPath:withKey:error:]`
   (ObjC class method), and
   `SpectralDataset.decryptInPlace(String path, byte[] key)`
   (Java static method). Each walks every run in the file, decrypts
@@ -90,7 +90,7 @@ byte-identical to v1.1.0.
   Float64 dataset, and clears the root `@encrypted` marker. The
   call is idempotent on a plaintext file.
 - Underlying helper: `decrypt_intensity_channel_in_run_in_place`
-  (Python), `+[MPGOEncryptionManager decryptIntensityChannelInRunInPlace:atFilePath:withKey:error:]`
+  (Python), `+[TTIOEncryptionManager decryptIntensityChannelInRunInPlace:atFilePath:withKey:error:]`
   (ObjC), `EncryptionManager.decryptIntensityChannelInRunInPlace`
   (Java). Short keys raise `ValueError` / `NSError` /
   `IllegalArgumentException`; a missing file raises
@@ -102,7 +102,7 @@ byte-identical to v1.1.0.
   (single-run round-trip, multi-run A/B/C round-trip, idempotent on
   plaintext, rejects short key, missing file).
 - ObjC: `Tests/TestV111DecryptInPlace.m` — 4 cases, wired into
-  `MPGOTestRunner.m` under "v1.1.1 parity".
+  `TTIOTestRunner.m` under "v1.1.1 parity".
 - Java: `ProtectionTest#v111DecryptInPlace*` — 4 cases.
 
 ---
@@ -111,9 +111,9 @@ byte-identical to v1.1.0.
 
 Bug-fix release that restores full round-trip usability of
 `SpectralDataset` encryption across close/reopen cycles. Reported
-from the MPEG-O-MCP-Server M5 integration (`docs/handoff-from-mcp-server-m5-encryption.md`);
+from the TTI-O-MCP-Server M5 integration (`docs/handoff-from-mcp-server-m5-encryption.md`);
 the two issues below blocked the MCP server from offering a
-`mpeg_o_encrypt` → `mpeg_o_decrypt` → `mpeg_o_get_spectrum` flow
+`ttio_encrypt` → `ttio_decrypt` → `ttio_get_spectrum` flow
 against Python/ObjC/Java clients.
 
 ### Fixed
@@ -144,7 +144,7 @@ against Python/ObjC/Java clients.
   encrypt → close → reopen → `is_encrypted` → `decrypt` → read
   surface:
   - `python/tests/test_v1_1_encryption_parity.py` (3 tests)
-  - `java/src/test/java/com/dtwthalion/mpgo/ProtectionTest.java`
+  - `java/src/test/java/com/dtwthalion/ttio/ProtectionTest.java`
     (2 new tests: `v11EncryptedStateSurvivesCloseReopen`,
     `v11DecryptRehydratesSpectrumIntensity`)
   - `objc/Tests/TestV11EncryptionParity.m` (2 test functions,
@@ -153,12 +153,12 @@ against Python/ObjC/Java clients.
 ### Changed
 
 - `python/pyproject.toml` — `version` 1.0.0 → 1.1.0.
-- `python/src/mpeg_o/__init__.py` — `__version__` 1.0.0 → 1.1.0.
+- `python/src/ttio/__init__.py` — `__version__` 1.0.0 → 1.1.0.
 - `java/pom.xml` — `version` 1.0.0 → 1.1.0.
 
 No HDF5 format-version bump: the file layout is byte-identical to
 v1.0.0; only the library-level reader/writer paths changed. Clients
-pinned to MPEG-O v1.0.0 read v1.1.0-produced files without
+pinned to TTI-O v1.0.0 read v1.1.0-produced files without
 modification.
 
 ---
@@ -233,7 +233,7 @@ provenance chain, hyperspectral analysis primitives).
       and a complete `<isolationWindow>` block in the XSD-required
       order (`isolationWindow` → `selectedIonList` → `activation`).
     - `opt_ms2_activation_detail` feature flag registered in all
-      three languages; the writer bumps `@mpeg_o_format_version`
+      three languages; the writer bumps `@ttio_format_version`
       from `1.1` to `1.3` only on files that actually carry the
       columns, so legacy-content files keep byte-parity with earlier
       releases.
@@ -243,16 +243,16 @@ provenance chain, hyperspectral analysis primitives).
 
 - **M75 — Python CLI parity polish (2026-04-23).** Three new
   `console_scripts` registered in `python/pyproject.toml` close the
-  last CLI-surface gap with the Java (`com.dtwthalion.mpgo.tools.*`)
-  and Objective-C (`objc/Tools/Mpgo*`) tool families:
+  last CLI-surface gap with the Java (`com.dtwthalion.tio.tools.*`)
+  and Objective-C (`objc/Tools/Ttio*`) tool families:
 
-    - `mpgo-sign` — HMAC-SHA256 canonical-byte signer. Mirrors ObjC
-      `MpgoSign`. Exit: 0 signed / 1 I/O or dataset-missing / 2 usage.
-    - `mpgo-verify` — canonical HMAC verifier backed by
-      `mpeg_o.verifier.Verifier`. Stdout prints
+    - `ttio-sign` — HMAC-SHA256 canonical-byte signer. Mirrors ObjC
+      `TtioSign`. Exit: 0 signed / 1 I/O or dataset-missing / 2 usage.
+    - `ttio-verify` — canonical HMAC verifier backed by
+      `ttio.verifier.Verifier`. Stdout prints
       `VerificationStatus.name` (`VALID` / `INVALID` / `NOT_SIGNED` /
       `ERROR`); exit code = `int(status)` (0 / 1 / 2 / 3).
-    - `mpgo-pqc` — post-quantum CLI mirroring the ObjC `MpgoPQCTool`
+    - `ttio-pqc` — post-quantum CLI mirroring the ObjC `TtioPQCTool`
       and Java `PQCTool` subcommand grammar 1:1 across 10 verbs:
       `sig-keygen` / `sig-sign` / `sig-verify` / `kem-keygen` /
       `kem-encaps` / `kem-decaps` / `hdf5-sign` / `hdf5-verify` /
@@ -267,13 +267,13 @@ provenance chain, hyperspectral analysis primitives).
   an opt-in writer mode in all three languages. AFFN stays the
   default for bit-accurate round-trips; compressed output is
   selected via a keyword (`encoding="pac"`), enum
-  (`JcampDxEncoding.PAC`), or NS_ENUM (`MPGOJcampDxEncodingPAC`)
+  (`JcampDxEncoding.PAC`), or NS_ENUM (`TTIOJcampDxEncodingPAC`)
   value on the existing `write*Spectrum` surfaces:
 
     - **Byte-parity across languages.** A single reference encoder
-      lives in Python (`mpeg_o.exporters._jcamp_encode`) and is
+      lives in Python (`ttio.exporters._jcamp_encode`) and is
       mirrored verbatim in Java (`JcampDxEncode`) and Objective-C
-      (`MPGOJcampDxEncode`). Rounding is explicit half-away-from-zero
+      (`TTIOJcampDxEncode`). Rounding is explicit half-away-from-zero
       (portable across Python / Java / C); YFACTOR is chosen as
       `10 ** (ceil(log10(max_abs)) - 7)` for ~7 significant digits of
       integer-scaled Y precision; lines break every 10 Y values.
@@ -302,7 +302,7 @@ provenance chain, hyperspectral analysis primitives).
   tests) · `de377d6` (B: conformance fixtures + regenerator +
   Python conformance test) · `d889b19` (C: Java writer,
   `JcampDxEncoding` enum, 3/3 conformance, 345/345 suite) ·
-  `4787aa2` (D: ObjC writer, `MPGOJcampDxEncoding` NS_ENUM, 3/3
+  `4787aa2` (D: ObjC writer, `TTIOJcampDxEncoding` NS_ENUM, 3/3
   conformance, 1637/0 suite) · this docs flip (E).
 
 - **M77 — 2D-COS computation primitives (2026-04-23).** Noda's
@@ -327,9 +327,9 @@ provenance chain, hyperspectral analysis primitives).
       element-wise in `[0, 1]` as the significance metric, NaN
       where both matrices vanish.
     - **Cross-language parity.** Python
-      (`mpeg_o.analysis.two_d_cos`) uses NumPy BLAS; Java
-      (`com.dtwthalion.mpgo.analysis.TwoDCos`) and Objective-C
-      (`Analysis/MPGOTwoDCos`) use plain nested loops with the
+      (`ttio.analysis.two_d_cos`) uses NumPy BLAS; Java
+      (`com.dtwthalion.tio.analysis.TwoDCos`) and Objective-C
+      (`Analysis/TTIOTwoDCos`) use plain nested loops with the
       Hilbert-Noda weight folded into the asynchronous multiply.
       Because BLAS accumulation order differs across
       implementations, the conformance gate is float-tolerance
@@ -350,11 +350,11 @@ provenance chain, hyperspectral analysis primitives).
       synchronous-autocorrelation / asynchronous-phase-offset
       pattern.
 
-  Commits: `df321d5` (A: Python `mpeg_o.analysis.two_d_cos` + 15
+  Commits: `df321d5` (A: Python `ttio.analysis.two_d_cos` + 15
   unit tests) · `2dfe27d` (B: `conformance/two_d_cos/` fixtures +
   Python conformance gate) · `6f4f115` (C: Java `TwoDCos` + 13
   unit tests + conformance, 359/359 suite) · `2f02ffa` (D: ObjC
-  `MPGOTwoDCos` + 27 new pass() cases, 1664/0 suite) · `9e4b367`
+  `TTIOTwoDCos` + 27 new pass() cases, 1664/0 suite) · `9e4b367`
   (E: docs flip).
 
 - **M78 — mzTab PEH/PEP + SFH/SMF + SEH/SME support (2026-04-23).**
@@ -372,7 +372,7 @@ provenance chain, hyperspectral analysis primitives).
       SME refs). Immutable across all three languages: Python
       `dataclass(frozen=True)`, Java `record` with compact-constructor
       null-coercion + `Map.copyOf` / `List.copyOf` defensive copies,
-      Objective-C `MPGOFeature` with readonly copy properties.
+      Objective-C `TTIOFeature` with readonly copy properties.
     - **Reader.** Parses PEH/PEP rows into `Feature` records
       (sequence, charge, m/z, RT, spectra_ref, per-assay or
       per-study-variable abundance columns) and SFH/SMF rows with
@@ -401,7 +401,7 @@ provenance chain, hyperspectral analysis primitives).
   conformance fixture, 11 new unit tests + 3 conformance) ·
   `c1286f0` (C: Java `Feature` record + reader/writer, 373/0 suite;
   +4 value-class + 7 writer + 3 conformance) · `073335f` (D: ObjC
-  `MPGOFeature` + reader/writer, 1704/0 suite; +3 value-class + 7
+  `TTIOFeature` + reader/writer, 1704/0 suite; +3 value-class + 7
   writer + 3 conformance) · this docs flip (E).
 
 ### Test totals (post-M78)
@@ -436,9 +436,9 @@ bit-identical on the round-trip path.
   scan that excludes `e`/`E` (so AFFN scientific notation doesn't
   false-trigger), then delegates to a per-language decoder:
 
-    - Python: `mpeg_o.importers._jcamp_decode.decode_xydata`
-    - Java: `com.dtwthalion.mpgo.importers.JcampDxDecode.decode`
-    - Objective-C: `MPGOJcampDxDecode +decodeLines:…`
+    - Python: `ttio.importers._jcamp_decode.decode_xydata`
+    - Java: `com.dtwthalion.tio.importers.JcampDxDecode.decode`
+    - Objective-C: `TTIOJcampDxDecode +decodeLines:…`
 
   Implements the full SQZ alphabet (`@`, `A–I`, `a–i`), DIF alphabet
   (`%`, `J–R`, `j–r`), DUP alphabet (`S–Z`, `s`), the DIF Y-check
@@ -515,14 +515,14 @@ and round-trips byte-for-byte between them.
   `python/tests/integration/test_raman_ir_cross_language.py`
   writes a Python JCAMP-DX file, feeds it to small subprocess
   drivers built on the ObjC and Java readers
-  (`objc/Tools/MpgoJcampDxDump` + a `/tmp/` ad-hoc Java driver),
+  (`objc/Tools/TtioJcampDxDump` + a `/tmp/` ad-hoc Java driver),
   and compares the parsed arrays bit-for-bit. Tests skip on dev
   boxes where the ObjC / Java sides are unbuilt and run in full
   in CI. A companion test locks the LDR emission order so format
   drift between implementations is caught in code review.
 
-- **ObjC CLI tool `MpgoJcampDxDump`** — tiny driver that reads a
-  `.jdx` via `MPGOJcampDxReader` and dumps `x,y` pairs + a
+- **ObjC CLI tool `TtioJcampDxDump`** — tiny driver that reads a
+  `.jdx` via `TTIOJcampDxReader` and dumps `x,y` pairs + a
   `CLASS=<tag>` trailer, matching the Java driver contract so
   both subprocess drivers can share the Python-side parser.
 
@@ -557,7 +557,7 @@ here lands in Python, Objective-C, and Java before the tag.
 
 ### Added
 
-- **Transport codec (M67)** — `.mots` streams for the MPEG-O wire
+- **Transport codec (M67)** — `.tis` streams for the TTI-O wire
   format defined in `docs/transport-spec.md` §3. 24-byte packet
   headers, little-endian, `{StreamHeader, DatasetHeader, AccessUnit,
   ProtectionMetadata, Annotation, Provenance, Chromatogram,
@@ -566,7 +566,7 @@ here lands in Python, Objective-C, and Java before the tag.
 
 - **Transport client + server (M68 / M68.5)** — WebSocket push
   endpoints (libwebsockets for ObjC, `websockets` for Python,
-  Java-WebSocket for Java). Streams .mpgo datasets as `.mots` over
+  Java-WebSocket for Java). Streams .tio datasets as `.tis` over
   the wire with optional CRC-32C per packet.
 
 - **Acquisition simulator (M69)** — replays a fixture at wall-clock
@@ -595,7 +595,7 @@ here lands in Python, Objective-C, and Java before the tag.
       wiring. The Java side uses a native hvl_t raw-buffer pool
       because JHI5 1.10 doesn't marshal VL-in-compound directly.
     - **Phase C** — file-level encrypt/decrypt orchestrator
-      (`PerAUFile` / `MPGOPerAUFile` / `encrypt_per_au`). All I/O
+      (`PerAUFile` / `TTIOPerAUFile` / `encrypt_per_au`). All I/O
       flows through the StorageProvider abstraction — any backend
       with VL_BYTES compound support works.
     - **Phase D** — encrypted transport writer + reader. Ciphertext
@@ -736,7 +736,7 @@ on-disk format from v2 to v3.
   auto-set whenever either primitive runs. Python and Objective-C
   use liboqs; Java uses Bouncy Castle 1.80+. Rationale: `docs/pqc.md`.
   - **M49.1** ObjC dataset / envelope integration via
-    `MPGOSignatureManager` + `MPGOKeyRotationManager`.
+    `TTIOSignatureManager` + `TTIOKeyRotationManager`.
 - **M52** Java and Objective-C `ZarrProvider` ports. Self-contained
   LocalStore implementations — no external zarr library dependency.
   Same on-disk layout as the Python reference so all three languages
@@ -751,8 +751,8 @@ on-disk format from v2 to v3.
 - **M54 + M54.1** 32-cell cross-language × cross-provider PQC
   conformance matrix: primitive ML-DSA / ML-KEM, v3 signatures on
   HDF5 / Zarr / SQLite, v2+v3 coexistence, v0.7 backward-compat.
-  New `com.dtwthalion.mpgo.tools.PQCTool` (Java) and
-  `MpgoPQCTool` (ObjC) CLIs drive the harness. New Python
+  New `com.dtwthalion.tio.tools.PQCTool` (Java) and
+  `TtioPQCTool` (ObjC) CLIs drive the harness. New Python
   `sign_storage_dataset` / `verify_storage_dataset` provider-agnostic
   helpers.
 
@@ -809,7 +809,7 @@ on-disk format from v2 to v3.
   languages — 9-cell interop grid.
 
 ### Changed
-- `mpeg_o_format_version` bumps from `1.1` to `1.2`.
+- `ttio_format_version` bumps from `1.1` to `1.2`.
 - Default wrapped-key layout is v1.2 (71 bytes for AES-GCM);
   v1.1 (60-byte fixed) remains readable indefinitely.
 
@@ -858,15 +858,15 @@ capability queries, etc.).
 - **M11-M16** Core dataset model: `/study/ms_runs/*/spectrum_index`,
   signal-channels group, compound `identifications` /
   `quantifications` / `provenance` datasets, v1 HMAC signatures.
-- `mpeg_o_format_version = "1.1"` and `mpeg_o_features` JSON
+- `ttio_format_version = "1.1"` and `ttio_features` JSON
   array introduced.
 
 ## [v0.1.0-alpha] — 2025-04
 
 - **M1-M10** Initial ObjC reference implementation with HDF5
   backing store. Core spectrum hierarchy
-  (`MPGOMassSpectrum`, `MPGONMRSpectrum`, `MPGOFreeInductionDecay`,
-  `MPGOMSImage`). Basic mzML reader.
+  (`TTIOMassSpectrum`, `TTIONMRSpectrum`, `TTIOFreeInductionDecay`,
+  `TTIOMSImage`). Basic mzML reader.
 
 ---
 

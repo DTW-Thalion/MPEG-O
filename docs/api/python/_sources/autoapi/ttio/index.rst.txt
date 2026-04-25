@@ -1,0 +1,2792 @@
+ttio
+====
+
+.. py:module:: ttio
+
+.. autoapi-nested-parse::
+
+   TTI-O — Python reader/writer for the multi-omics data standard.
+
+   Public API is re-exported here. See :class:`ttio.SpectralDataset` for the
+   main entry point.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/ttio/access_policy/index
+   /autoapi/ttio/acquisition_run/index
+   /autoapi/ttio/analysis/index
+   /autoapi/ttio/anonymization/index
+   /autoapi/ttio/axis_descriptor/index
+   /autoapi/ttio/chromatogram/index
+   /autoapi/ttio/cipher_suite/index
+   /autoapi/ttio/cv_param/index
+   /autoapi/ttio/encoding_spec/index
+   /autoapi/ttio/encryption/index
+   /autoapi/ttio/encryption_per_au/index
+   /autoapi/ttio/enums/index
+   /autoapi/ttio/exporters/index
+   /autoapi/ttio/feature/index
+   /autoapi/ttio/feature_flags/index
+   /autoapi/ttio/fid/index
+   /autoapi/ttio/identification/index
+   /autoapi/ttio/importers/index
+   /autoapi/ttio/instrument_config/index
+   /autoapi/ttio/ir_image/index
+   /autoapi/ttio/ir_spectrum/index
+   /autoapi/ttio/isolation_window/index
+   /autoapi/ttio/key_rotation/index
+   /autoapi/ttio/mass_spectrum/index
+   /autoapi/ttio/ms_image/index
+   /autoapi/ttio/nmr_2d/index
+   /autoapi/ttio/nmr_spectrum/index
+   /autoapi/ttio/pqc/index
+   /autoapi/ttio/protocols/index
+   /autoapi/ttio/provenance/index
+   /autoapi/ttio/providers/index
+   /autoapi/ttio/quantification/index
+   /autoapi/ttio/query/index
+   /autoapi/ttio/raman_image/index
+   /autoapi/ttio/raman_spectrum/index
+   /autoapi/ttio/remote/index
+   /autoapi/ttio/signal_array/index
+   /autoapi/ttio/signatures/index
+   /autoapi/ttio/spectral_dataset/index
+   /autoapi/ttio/spectrum/index
+   /autoapi/ttio/stream_reader/index
+   /autoapi/ttio/stream_writer/index
+   /autoapi/ttio/tools/index
+   /autoapi/ttio/transition_list/index
+   /autoapi/ttio/transport/index
+   /autoapi/ttio/two_dimensional_correlation_spectrum/index
+   /autoapi/ttio/uv_vis_spectrum/index
+   /autoapi/ttio/value_range/index
+   /autoapi/ttio/verifier/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.__version__
+   ttio.FORMAT_VERSION
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.AcquisitionMode
+   ttio.ActivationMethod
+   ttio.Compression
+   ttio.IRMode
+   ttio.Polarity
+   ttio.Precision
+   ttio.SamplingMode
+   ttio.ValueRange
+   ttio.IsolationWindow
+   ttio.CVParam
+   ttio.AxisDescriptor
+   ttio.EncodingSpec
+   ttio.InstrumentConfig
+   ttio.SignalArray
+   ttio.Spectrum
+   ttio.MassSpectrum
+   ttio.NMRSpectrum
+   ttio.NMR2DSpectrum
+   ttio.FreeInductionDecay
+   ttio.Chromatogram
+   ttio.Identification
+   ttio.Quantification
+   ttio.Feature
+   ttio.ProvenanceRecord
+   ttio.Transition
+   ttio.TransitionList
+   ttio.FeatureFlags
+   ttio.AcquisitionRun
+   ttio.SpectrumIndex
+   ttio.MSImage
+   ttio.RamanSpectrum
+   ttio.IRSpectrum
+   ttio.UVVisSpectrum
+   ttio.TwoDimensionalCorrelationSpectrum
+   ttio.RamanImage
+   ttio.IRImage
+
+
+Package Contents
+----------------
+
+.. py:data:: __version__
+   :value: '1.1.1'
+
+
+.. py:data:: FORMAT_VERSION
+   :value: '1.3'
+
+
+.. py:class:: AcquisitionMode
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   High-level acquisition scheme for a run.
+
+   Cross-language: ObjC ``TTIOAcquisitionMode`` · Java
+   ``Enums.AcquisitionMode``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: MS1_DDA
+      :value: 0
+
+
+
+   .. py:attribute:: MS2_DDA
+      :value: 1
+
+
+
+   .. py:attribute:: DIA
+      :value: 2
+
+
+
+   .. py:attribute:: SRM
+      :value: 3
+
+
+
+   .. py:attribute:: NMR_1D
+      :value: 4
+
+
+
+   .. py:attribute:: NMR_2D
+      :value: 5
+
+
+
+   .. py:attribute:: IMAGING
+      :value: 6
+
+
+
+   .. py:attribute:: GENOMIC_WGS
+      :value: 7
+
+
+
+   .. py:attribute:: GENOMIC_WES
+      :value: 8
+
+
+
+.. py:class:: ActivationMethod
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   MS/MS precursor activation (dissociation) method.
+
+   Stored as ``int32`` in the optional ``activation_methods`` column of
+   ``spectrum_index`` (see ``opt_ms2_activation_detail``). ``NONE`` is
+   the sentinel for MS1 scans and for MS2+ scans whose activation method
+   was not reported by the source instrument.
+
+   Cross-language: ObjC ``TTIOActivationMethod`` · Java
+   ``Enums.ActivationMethod``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: NONE
+      :value: 0
+
+
+
+   .. py:attribute:: CID
+      :value: 1
+
+
+
+   .. py:attribute:: HCD
+      :value: 2
+
+
+
+   .. py:attribute:: ETD
+      :value: 3
+
+
+
+   .. py:attribute:: UVPD
+      :value: 4
+
+
+
+   .. py:attribute:: ECD
+      :value: 5
+
+
+
+   .. py:attribute:: EThcD
+      :value: 6
+
+
+
+.. py:class:: Compression
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Compression algorithm applied to a signal buffer.
+
+   Cross-language: ObjC ``TTIOCompression`` · Java
+   ``Enums.Compression``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: NONE
+      :value: 0
+
+
+
+   .. py:attribute:: ZLIB
+      :value: 1
+
+
+
+   .. py:attribute:: LZ4
+      :value: 2
+
+
+
+   .. py:attribute:: NUMPRESS_DELTA
+      :value: 3
+
+
+
+   .. py:attribute:: RANS_ORDER0
+      :value: 4
+
+
+
+   .. py:attribute:: RANS_ORDER1
+      :value: 5
+
+
+
+   .. py:attribute:: BASE_PACK
+      :value: 6
+
+
+
+   .. py:attribute:: QUALITY_BINNED
+      :value: 7
+
+
+
+   .. py:attribute:: NAME_TOKENIZED
+      :value: 8
+
+
+
+.. py:class:: IRMode
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Infrared y-axis interpretation.
+
+   Cross-language: ObjC ``TTIOIRMode`` · Java
+   ``Enums.IRMode``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: TRANSMITTANCE
+      :value: 0
+
+
+
+   .. py:attribute:: ABSORBANCE
+      :value: 1
+
+
+
+.. py:class:: Polarity
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Ion polarity for mass spectrometry.
+
+   Cross-language: ObjC ``TTIOPolarity`` · Java
+   ``Enums.Polarity``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: UNKNOWN
+      :value: 0
+
+
+
+   .. py:attribute:: POSITIVE
+      :value: 1
+
+
+
+   .. py:attribute:: NEGATIVE
+      :value: -1
+
+
+
+.. py:class:: Precision
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Numeric precision of a signal buffer.
+
+   Cross-language: ObjC ``TTIOPrecision`` · Java
+   ``Enums.Precision``.
+
+   Appendix B Gap 7: ``Precision`` is a pure enum. The HDF5 type
+   mapping (``H5T_NATIVE_DOUBLE`` &c.) lives in
+   ``ttio.providers.hdf5`` so non-HDF5 providers (SQLite, Memory,
+   future Zarr) can import ``Precision`` without pulling HDF5
+   dependencies onto their classpath. See v0.6.1 Appendix B gap 7
+   in ``docs/api-review-v0.6.md`` for the motivating bug.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: FLOAT32
+      :value: 0
+
+
+
+   .. py:attribute:: FLOAT64
+      :value: 1
+
+
+
+   .. py:attribute:: INT32
+      :value: 2
+
+
+
+   .. py:attribute:: INT64
+      :value: 3
+
+
+
+   .. py:attribute:: UINT32
+      :value: 4
+
+
+
+   .. py:attribute:: COMPLEX128
+      :value: 5
+
+
+
+   .. py:attribute:: UINT8
+      :value: 6
+
+
+
+   .. py:method:: numpy_dtype() -> str
+
+      Return the little-endian NumPy dtype string for this precision.
+
+
+
+.. py:class:: SamplingMode
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Axis sampling regularity.
+
+   Cross-language: ObjC ``TTIOSamplingMode`` · Java
+   ``Enums.SamplingMode``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: UNIFORM
+      :value: 0
+
+
+
+   .. py:attribute:: NON_UNIFORM
+      :value: 1
+
+
+
+.. py:class:: ValueRange
+
+   An inclusive numeric interval ``[minimum, maximum]``.
+
+   Immutable value class. Empty or inverted ranges are permitted at
+   construction time; consumers decide whether ``minimum > maximum``
+   is meaningful in their context.
+
+   :param minimum: Lower bound (inclusive).
+   :type minimum: float
+   :param maximum: Upper bound (inclusive).
+   :type maximum: float
+
+   .. attribute:: span
+
+      Difference ``maximum - minimum``.
+
+      :type: float
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOValueRange`` · Java:
+   ``com.dtwthalion.ttio.ValueRange``.
+
+
+   .. py:attribute:: minimum
+      :type:  float
+
+
+   .. py:attribute:: maximum
+      :type:  float
+
+
+   .. py:method:: contains(value: float) -> bool
+
+      Return ``True`` if ``value`` lies within the closed range.
+
+      :param value:
+      :type value: float
+
+      :returns: *bool*
+
+
+
+   .. py:property:: span
+      :type: float
+
+
+      Difference between ``maximum`` and ``minimum``.
+
+
+.. py:class:: IsolationWindow
+
+   Precursor isolation window, expressed as a target m/z with
+   asymmetric lower/upper offsets in Th (Da).
+
+   The instrument-reported window spans
+   ``[target_mz - lower_offset, target_mz + upper_offset]``. Offsets are
+   non-negative by convention; the lower and upper may differ when the
+   quadrupole is offset from the monoisotopic m/z (common in DIA).
+
+   :param target_mz: Center of the isolation window in Th (Da).
+   :type target_mz: float
+   :param lower_offset: Distance from ``target_mz`` to the lower bound, in Th. Non-negative.
+   :type lower_offset: float
+   :param upper_offset: Distance from ``target_mz`` to the upper bound, in Th. Non-negative.
+   :type upper_offset: float
+
+   .. rubric:: Notes
+
+   API status: Stable (v1.1, M74).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOIsolationWindow`` · Java:
+   ``com.dtwthalion.ttio.IsolationWindow``.
+
+
+   .. py:attribute:: target_mz
+      :type:  float
+
+
+   .. py:attribute:: lower_offset
+      :type:  float
+
+
+   .. py:attribute:: upper_offset
+      :type:  float
+
+
+   .. py:property:: lower_bound
+      :type: float
+
+
+      Lower m/z bound ``target_mz - lower_offset``.
+
+
+   .. py:property:: upper_bound
+      :type: float
+
+
+      Upper m/z bound ``target_mz + upper_offset``.
+
+
+   .. py:property:: width
+      :type: float
+
+
+      Total isolation width ``lower_offset + upper_offset``.
+
+
+.. py:class:: CVParam
+
+   A single controlled-vocabulary parameter reference.
+
+   Immutable value class in the form
+   ``(ontology_ref, accession, name, [value], [unit])``.
+
+   :param ontology_ref: Ontology short name (``"MS"``, ``"NMR"``, ``"UO"``, ...).
+   :type ontology_ref: str
+   :param accession: Ontology accession in ``<CV>:<id>`` form
+                     (e.g. ``"MS:1000515"``).
+   :type accession: str
+   :param name: Human-readable label.
+   :type name: str
+   :param value: Optional free-form value. Use an empty string when the
+                 parameter is a pure assertion with no associated value.
+   :type value: str, default ""
+   :param unit: Optional unit accession (typically a UO or MS term).
+   :type unit: str or None, default None
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOCVParam`` · Java:
+   ``com.dtwthalion.ttio.CVParam``.
+
+
+   .. py:attribute:: ontology_ref
+      :type:  str
+
+
+   .. py:attribute:: accession
+      :type:  str
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: value
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: unit
+      :type:  str | None
+      :value: None
+
+
+
+.. py:class:: AxisDescriptor
+
+   Describes a single axis of a :class:`~ttio.signal_array.SignalArray`.
+
+   Immutable value class. ``name`` is a short token (``"mz"``,
+   ``"chemical_shift"``, ...) and ``unit`` is a free-form label
+   (``"m/z"``, ``"ppm"``, ``"s"``, ...).
+
+   :param name: Semantic name of the axis.
+   :type name: str
+   :param unit: Unit of the axis values.
+   :type unit: str
+   :param value_range: Numeric bounds of the axis. ``None`` when unknown.
+   :type value_range: ValueRange or None, default None
+   :param sampling_mode: Whether samples are regularly spaced.
+   :type sampling_mode: SamplingMode, default SamplingMode.UNIFORM
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOAxisDescriptor`` · Java:
+   ``com.dtwthalion.ttio.AxisDescriptor``.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: unit
+      :type:  str
+
+
+   .. py:attribute:: value_range
+      :type:  ttio.value_range.ValueRange | None
+      :value: None
+
+
+
+   .. py:attribute:: sampling_mode
+      :type:  ttio.enums.SamplingMode
+
+
+.. py:class:: EncodingSpec
+
+   Describes how a signal buffer is encoded on disk.
+
+   Immutable value class pairing numeric precision, compression
+   algorithm, and byte order.
+
+   :param precision: Numeric precision of each sample.
+   :type precision: Precision, default Precision.FLOAT64
+   :param compression: Compression algorithm.
+   :type compression: Compression, default Compression.ZLIB
+   :param byte_order: Byte order on disk.
+   :type byte_order: ByteOrder, default ByteOrder.LITTLE_ENDIAN
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   The HDF5 compression level (0-9 for zlib) is a
+   provider-configuration concern and lives on
+   :class:`~ttio.providers.hdf5.Hdf5Provider` via
+   ``create_dataset(compression_level=...)``, not on this value
+   class.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOEncodingSpec`` · Java:
+   ``com.dtwthalion.ttio.EncodingSpec``.
+
+
+   .. py:attribute:: precision
+      :type:  ttio.enums.Precision
+
+
+   .. py:attribute:: compression
+      :type:  ttio.enums.Compression
+
+
+   .. py:attribute:: byte_order
+      :type:  ttio.enums.ByteOrder
+
+
+   .. py:method:: element_size() -> int
+
+      Return the size in bytes of one element at this precision.
+
+
+
+.. py:class:: InstrumentConfig
+
+   Instrument configuration block persisted as HDF5 string attributes.
+
+   All fields default to empty strings because the format spec
+   explicitly allows every sub-field to be missing (§3 of
+   ``docs/format-spec.md``).
+
+   :param manufacturer: Instrument manufacturer (e.g. ``"Thermo Fisher Scientific"``).
+   :type manufacturer: str, default ""
+   :param model: Instrument model (e.g. ``"Orbitrap Eclipse"``).
+   :type model: str, default ""
+   :param serial_number: Serial number.
+   :type serial_number: str, default ""
+   :param source_type: Ionization source (e.g. ``"ESI"``, ``"MALDI"``).
+   :type source_type: str, default ""
+   :param analyzer_type: Mass analyzer (e.g. ``"Orbitrap"``, ``"TOF"``).
+   :type analyzer_type: str, default ""
+   :param detector_type: Detector (e.g. ``"inductive"``, ``"electron multiplier"``).
+   :type detector_type: str, default ""
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOInstrumentConfig`` · Java:
+   ``com.dtwthalion.ttio.InstrumentConfig``.
+
+
+   .. py:attribute:: manufacturer
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: model
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: serial_number
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: source_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: analyzer_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: detector_type
+      :type:  str
+      :value: ''
+
+
+
+.. py:class:: SignalArray
+
+   A named 1-D numeric signal buffer paired with axis and encoding
+   metadata, with CV annotation support.
+
+   :param data: 1-D numeric array holding the raw signal values. Callers should
+                treat the array contents as immutable after construction.
+   :type data: numpy.ndarray
+   :param axis: Descriptor of the physical dimension represented by ``data``
+                (e.g. m/z, ppm). ``None`` when the axis is not yet known or not
+                applicable.
+   :type axis: AxisDescriptor or None, optional
+   :param encoding: Wire-format encoding for HDF5 serialisation.  Defaults to
+                    FLOAT64 / ZLIB / little-endian.
+   :type encoding: EncodingSpec, optional
+   :param cv_params: Initial CV annotations.  Usually empty; grow at runtime via
+                     :meth:`add_cv_param`.
+   :type cv_params: list of CVParam, optional
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSignalArray`` ·
+   Java: ``com.dtwthalion.ttio.SignalArray``
+
+
+   .. py:attribute:: data
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: axis
+      :type:  ttio.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: encoding
+      :type:  ttio.encoding_spec.EncodingSpec
+
+
+   .. py:attribute:: cv_params
+      :type:  list[ttio.cv_param.CVParam]
+      :value: []
+
+
+
+   .. py:method:: add_cv_param(param: ttio.cv_param.CVParam) -> None
+
+      Attach *param* to this array in insertion order.
+
+
+
+   .. py:method:: remove_cv_param(param: ttio.cv_param.CVParam) -> None
+
+      Detach *param*.  No-op if not present.
+
+
+
+   .. py:method:: all_cv_params() -> list[ttio.cv_param.CVParam]
+
+      Return all attached CV params in insertion order.
+
+
+
+   .. py:method:: cv_params_for_accession(accession: str) -> list[ttio.cv_param.CVParam]
+
+      Return params whose ``accession`` equals *accession*.
+
+
+
+   .. py:method:: cv_params_for_ontology_ref(ontology_ref: str) -> list[ttio.cv_param.CVParam]
+
+      Return params whose ``ontology_ref`` equals *ontology_ref*.
+
+
+
+   .. py:method:: has_cv_param_with_accession(accession: str) -> bool
+
+      Return ``True`` if at least one attached param matches *accession*.
+
+
+
+   .. py:method:: from_numpy(array: numpy.ndarray, axis: ttio.axis_descriptor.AxisDescriptor | None = None, encoding: ttio.encoding_spec.EncodingSpec | None = None) -> SignalArray
+      :classmethod:
+
+
+
+   .. py:method:: __len__() -> int
+
+
+.. py:class:: Spectrum
+
+   Generic multi-channel 1-D spectrum with per-scan metadata.
+
+   Holds an ordered mapping of named :class:`SignalArray` objects and
+   the coordinate axes that index them, plus per-scan metadata
+   (index position, scan time, optional precursor info for tandem
+   MS).
+
+   Concrete subclasses (:class:`MassSpectrum`, :class:`NMRSpectrum`)
+   add their own typed metadata.
+
+   :param signal_arrays: Named signal arrays keyed by channel name
+                         (``"mz"``, ``"intensity"``, ``"chemical_shift"``, ...).
+   :type signal_arrays: dict[str, SignalArray]
+   :param axes: Coordinate axes describing the signal arrays.
+   :type axes: list[AxisDescriptor]
+   :param index_position: Position in the parent :class:`~ttio.acquisition_run.AcquisitionRun` (0-based).
+   :type index_position: int, default 0
+   :param scan_time_seconds: Scan time in seconds from run start.
+   :type scan_time_seconds: float, default 0.0
+   :param precursor_mz: Precursor m/z for tandem MS. ``0`` if not tandem.
+   :type precursor_mz: float, default 0.0
+   :param precursor_charge: Precursor charge state. ``0`` if unknown.
+   :type precursor_charge: int, default 0
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   HDF5 representation: each spectrum is an HDF5 group whose
+   immediate children are ``SignalArray`` sub-groups plus scalar
+   attributes for the metadata fields.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSpectrum`` · Java:
+   ``com.dtwthalion.ttio.Spectrum``.
+
+
+   .. py:attribute:: signal_arrays
+      :type:  dict[str, ttio.signal_array.SignalArray]
+
+
+   .. py:attribute:: axes
+      :type:  list[ttio.axis_descriptor.AxisDescriptor]
+      :value: []
+
+
+
+   .. py:attribute:: index_position
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: scan_time_seconds
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: precursor_charge
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: signal_array(name: str) -> ttio.signal_array.SignalArray
+
+      Return the named ``SignalArray``. Raises ``KeyError`` if absent.
+
+
+
+   .. py:method:: has_signal_array(name: str) -> bool
+
+      Return ``True`` iff ``name`` is in ``signal_arrays``.
+
+
+
+   .. py:method:: signal_array_names() -> list[str]
+
+      Return the channel names in insertion order.
+
+
+
+   .. py:method:: __len__() -> int
+
+
+.. py:class:: MassSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A mass spectrum: m/z + intensity arrays plus MS level, polarity,
+   and an optional scan window.
+
+   :param ms_level: MS level (1, 2, 3, ...).
+   :type ms_level: int, default 1
+   :param polarity: Ion polarity.
+   :type polarity: Polarity, default Polarity.UNKNOWN
+   :param scan_window: m/z range covered by the scan. ``None`` if not reported.
+   :type scan_window: ValueRange or None, default None
+   :param activation_method: Precursor activation method for MS2+ scans. ``NONE`` for MS1
+                             and for MS2 scans whose activation was not reported.
+   :type activation_method: ActivationMethod, default ActivationMethod.NONE
+   :param isolation_window: Precursor isolation window for MS2+ scans. ``None`` for MS1
+                            and when the window was not reported.
+   :type isolation_window: IsolationWindow or None, default None
+   :param \*plus all base :class:`Spectrum` parameters (signal_arrays:
+   :param axes:
+   :param :
+   :param index_position:
+   :param scan_time_seconds:
+   :param precursor_mz:
+   :param precursor_charge)*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Standard channel names are ``"mz"`` and ``"intensity"``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOMassSpectrum`` · Java:
+   ``com.dtwthalion.ttio.MassSpectrum``.
+
+
+   .. py:attribute:: MZ
+      :value: 'mz'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: ms_level
+      :type:  int
+      :value: 1
+
+
+
+   .. py:attribute:: polarity
+      :type:  ttio.enums.Polarity
+
+
+   .. py:attribute:: scan_window
+      :type:  ttio.value_range.ValueRange | None
+      :value: None
+
+
+
+   .. py:attribute:: activation_method
+      :type:  ttio.enums.ActivationMethod
+
+
+   .. py:attribute:: isolation_window
+      :type:  ttio.isolation_window.IsolationWindow | None
+      :value: None
+
+
+
+   .. py:property:: mz_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"mz"`` :class:`SignalArray`. Raises if absent.
+
+
+   .. py:property:: intensity_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+
+.. py:class:: NMRSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A 1-D NMR spectrum with ``chemical_shift`` and ``intensity`` channels.
+
+   :param nucleus_type: Nucleus type (``"1H"``, ``"13C"``, ``"31P"``, ...).
+   :type nucleus_type: str, default ""
+   :param spectrometer_frequency_mhz: Spectrometer frequency in MHz.
+   :type spectrometer_frequency_mhz: float, default 0.0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIONMRSpectrum`` · Java:
+   ``com.dtwthalion.ttio.NMRSpectrum``.
+
+
+   .. py:attribute:: CHEMICAL_SHIFT
+      :value: 'chemical_shift'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: nucleus_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: spectrometer_frequency_mhz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:property:: chemical_shift_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"chemical_shift"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+
+.. py:class:: NMR2DSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   2-D NMR spectrum: rank-2 intensity matrix with F1 and F2 axes.
+
+   Subclass of :class:`Spectrum`. The matrix is stored as a rank-2
+   ``numpy.ndarray`` of shape ``(height, width)``.
+
+   :param intensity_matrix: Rank-2 intensity matrix; shape ``(height, width)``.
+   :type intensity_matrix: numpy.ndarray
+   :param f1_axis: F1 axis descriptor.
+   :type f1_axis: AxisDescriptor or None, default None
+   :param f2_axis: F2 axis descriptor.
+   :type f2_axis: AxisDescriptor or None, default None
+   :param nucleus_f1: Nucleus type on F1 (``"1H"``, ``"13C"``, ...).
+   :type nucleus_f1: str, default ""
+   :param nucleus_f2: Nucleus type on F2.
+   :type nucleus_f2: str, default ""
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIONMR2DSpectrum`` · Java:
+   ``com.dtwthalion.ttio.NMR2DSpectrum``.
+
+
+   .. py:attribute:: intensity_matrix
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: f1_axis
+      :type:  ttio.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: f2_axis
+      :type:  ttio.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: nucleus_f1
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: nucleus_f2
+      :type:  str
+      :value: ''
+
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:property:: matrix_height
+      :type: int
+
+
+
+   .. py:property:: matrix_width
+      :type: int
+
+
+
+.. py:class:: FreeInductionDecay
+
+   Bases: :py:obj:`ttio.signal_array.SignalArray`
+
+
+   NMR free-induction-decay signal.
+
+   Subclass of :class:`SignalArray` holding a complex-valued buffer
+   plus FID-specific acquisition metadata: dwell time, scan count,
+   receiver gain.
+
+   :param dwell_time_seconds: Sample spacing in seconds.
+   :type dwell_time_seconds: float, default 0.0
+   :param scan_count: Number of scans averaged.
+   :type scan_count: int, default 1
+   :param receiver_gain: Receiver gain used during acquisition.
+   :type receiver_gain: float, default 1.0
+   :param \*plus all base :class:`SignalArray` parameters (data:
+   :param axis:
+   :param :
+   :param encoding:
+   :param cv_params)*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOFreeInductionDecay`` · Java:
+   ``com.dtwthalion.ttio.FreeInductionDecay``.
+
+
+   .. py:attribute:: dwell_time_seconds
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: scan_count
+      :type:  int
+      :value: 1
+
+
+
+   .. py:attribute:: receiver_gain
+      :type:  float
+      :value: 1.0
+
+
+
+.. py:class:: Chromatogram
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   Chromatogram: time-vs-intensity trace. TIC, XIC, or SRM.
+
+   Subclass of :class:`Spectrum`. The time and intensity arrays live
+   in :attr:`signal_arrays` under keys ``"time"`` and ``"intensity"``.
+
+   :param chromatogram_type: TIC / XIC / SRM.
+   :type chromatogram_type: ChromatogramType, default ChromatogramType.TIC
+   :param target_mz: XIC target m/z. ``0`` if not XIC.
+   :type target_mz: float, default 0.0
+   :param product_mz: SRM product m/z. ``0`` if not SRM.
+   :type product_mz: float, default 0.0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Standard channel names are ``"time"`` and ``"intensity"``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOChromatogram`` · Java:
+   ``com.dtwthalion.ttio.Chromatogram``.
+
+
+   .. py:attribute:: TIME
+      :value: 'time'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: chromatogram_type
+      :type:  ttio.enums.ChromatogramType
+
+
+   .. py:attribute:: target_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: product_mz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:property:: time_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"time"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+
+.. py:class:: Identification
+
+   A spectrum-level chemical-entity identification.
+
+   Links a spectrum (by its 0-based index within an acquisition run)
+   to a chemical entity with a confidence score and an evidence
+   chain.
+
+   :param run_name: Acquisition run that contains the spectrum.
+   :type run_name: str
+   :param spectrum_index: 0-based position within that run.
+   :type spectrum_index: int
+   :param chemical_entity: CHEBI accession or chemical formula.
+   :type chemical_entity: str
+   :param confidence_score: Score in ``[0.0, 1.0]``.
+   :type confidence_score: float
+   :param evidence_chain: Ordered list of free-form evidence strings (typically CV
+                          accession references).
+   :type evidence_chain: list[str], default []
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOIdentification`` · Java:
+   ``com.dtwthalion.ttio.Identification``.
+
+
+   .. py:attribute:: run_name
+      :type:  str
+
+
+   .. py:attribute:: spectrum_index
+      :type:  int
+
+
+   .. py:attribute:: chemical_entity
+      :type:  str
+
+
+   .. py:attribute:: confidence_score
+      :type:  float
+
+
+   .. py:attribute:: evidence_chain
+      :type:  list[str]
+      :value: []
+
+
+
+.. py:class:: Quantification
+
+   An abundance observation for a chemical entity in a sample.
+
+   :param chemical_entity: CHEBI accession or chemical formula.
+   :type chemical_entity: str
+   :param sample_ref: Sample identifier.
+   :type sample_ref: str
+   :param abundance: Measured abundance.
+   :type abundance: float
+   :param normalization_method: Normalization method. Empty string represents an unnormalized
+                                abundance.
+   :type normalization_method: str, default ""
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOQuantification`` · Java:
+   ``com.dtwthalion.ttio.Quantification``.
+
+
+   .. py:attribute:: chemical_entity
+      :type:  str
+
+
+   .. py:attribute:: sample_ref
+      :type:  str
+
+
+   .. py:attribute:: abundance
+      :type:  float
+
+
+   .. py:attribute:: normalization_method
+      :type:  str
+      :value: ''
+
+
+
+.. py:class:: Feature
+
+   A feature-level observation: a peak detected in one run, with
+   retention time + m/z + charge + per-sample abundances.
+
+   ``Feature`` sits between :class:`Identification` (spectrum-level)
+   and :class:`Quantification` (entity-level): it is the row-level
+   record required by mzTab's PEP section (peptide-level
+   quantification in the 1.0 proteomics dialect) and by mzTab-M's
+   SMF/SME sections (small-molecule feature + evidence in the
+   2.0.0-M metabolomics dialect).
+
+   :param feature_id: Identifier unique within a single file (typically the mzTab
+                      ``PEP_ID`` or ``SMF_ID`` value as a string).
+   :type feature_id: str
+   :param run_name: Acquisition run this feature was detected in.
+   :type run_name: str
+   :param chemical_entity: Peptide sequence, CHEBI accession, chemical name, or formula
+                           — whatever the source file assigned.
+   :type chemical_entity: str
+   :param retention_time_seconds: Apex retention time in seconds. ``0.0`` if the source did not
+                                  record one.
+   :type retention_time_seconds: float
+   :param exp_mass_to_charge: Experimental (observed) precursor m/z. ``0.0`` if unavailable.
+   :type exp_mass_to_charge: float
+   :param charge: Precursor charge state. ``0`` if unknown.
+   :type charge: int
+   :param adduct_ion: Adduct annotation (e.g. ``"[M+H]1+"``). Empty for proteomics
+                      peptide features.
+   :type adduct_ion: str, default ""
+   :param abundances: Per-sample abundances keyed by sample/study-variable label.
+   :type abundances: dict[str, float], default {}
+   :param evidence_refs: References that support this feature — mzTab-M ``SME_ID``
+                         values for metabolomics, ``spectra_ref`` entries for
+                         proteomics.
+   :type evidence_refs: list[str], default []
+
+   .. rubric:: Notes
+
+   API status: Provisional (v0.12.0 M78).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOFeature`` · Java:
+   ``com.dtwthalion.ttio.Feature``.
+
+
+   .. py:attribute:: feature_id
+      :type:  str
+
+
+   .. py:attribute:: run_name
+      :type:  str
+
+
+   .. py:attribute:: chemical_entity
+      :type:  str
+
+
+   .. py:attribute:: retention_time_seconds
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: exp_mass_to_charge
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: charge
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: adduct_ion
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: abundances
+      :type:  dict[str, float]
+
+
+   .. py:attribute:: evidence_refs
+      :type:  list[str]
+      :value: []
+
+
+
+.. py:class:: ProvenanceRecord
+
+   A single provenance step describing how data was produced or
+   transformed. W3C PROV-compatible.
+
+   :param timestamp_unix: Unix timestamp (seconds since 1970-01-01T00:00:00Z).
+   :type timestamp_unix: int, default 0
+   :param software: Software name + version (e.g. ``"MSConvert 3.0.24052"``).
+   :type software: str, default ""
+   :param parameters: Software-specific processing parameters.
+   :type parameters: dict[str, Any], default {}
+   :param input_refs: URIs / identifiers of input entities.
+   :type input_refs: list[str], default []
+   :param output_refs: URIs / identifiers of output entities.
+   :type output_refs: list[str], default []
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOProvenanceRecord`` · Java:
+   ``com.dtwthalion.ttio.ProvenanceRecord``.
+
+
+   .. py:attribute:: timestamp_unix
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: software
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: parameters
+      :type:  dict[str, Any]
+
+
+   .. py:attribute:: input_refs
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:attribute:: output_refs
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:method:: contains_input_ref(ref: str) -> bool
+
+      Return ``True`` iff ``ref`` is in ``input_refs``.
+
+
+
+.. py:class:: Transition
+
+   One SRM/MRM transition.
+
+   :param precursor_mz: Precursor m/z.
+   :type precursor_mz: float
+   :param product_mz: Product m/z.
+   :type product_mz: float
+   :param collision_energy: Collision energy (eV).
+   :type collision_energy: float, default 0.0
+   :param retention_time_window: Optional retention-time acceptance window.
+   :type retention_time_window: ValueRange or None, default None
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOTransition`` · Java:
+   ``com.dtwthalion.ttio.TransitionList.Transition``.
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+
+
+   .. py:attribute:: product_mz
+      :type:  float
+
+
+   .. py:attribute:: collision_energy
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: retention_time_window
+      :type:  ttio.value_range.ValueRange | None
+      :value: None
+
+
+
+.. py:class:: TransitionList
+
+   An ordered collection of SRM/MRM transitions.
+
+   :param transitions: Ordered transitions.
+   :type transitions: tuple[Transition, ...], default ()
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOTransitionList`` · Java:
+   ``com.dtwthalion.ttio.TransitionList``.
+
+
+   .. py:attribute:: transitions
+      :type:  tuple[Transition, Ellipsis]
+      :value: ()
+
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: count() -> int
+
+      Return the number of transitions.
+
+
+
+   .. py:method:: transition_at_index(index: int) -> Transition
+
+      Return the transition at ``index``.
+
+
+
+.. py:class:: FeatureFlags
+
+   Immutable set of format feature strings with a version label.
+
+
+   .. py:attribute:: version
+      :type:  str
+      :value: '1.1'
+
+
+
+   .. py:attribute:: features
+      :type:  tuple[str, Ellipsis]
+      :value: ()
+
+
+
+   .. py:method:: from_iterable(version: str, features: Iterable[str]) -> FeatureFlags
+      :classmethod:
+
+
+
+   .. py:method:: has(name: str) -> bool
+
+
+   .. py:method:: required() -> tuple[str, Ellipsis]
+
+      Features whose absence should cause a reader to refuse the file.
+
+
+
+.. py:class:: AcquisitionRun
+
+   Lazy view over one acquisition run inside an ``.tio`` file.
+
+   Conforms to :class:`~ttio.protocols.Indexable`,
+   :class:`~ttio.protocols.Streamable`, and
+   :class:`~ttio.protocols.Provenanceable`.
+   :class:`~ttio.protocols.Encryptable` conformance is delivered
+   in slice 41.5 when the encryption manager subsystem lands.
+
+   Spectrum access is zero-copy-aware: the spectrum index is
+   pre-loaded into numpy arrays at open time but signal channels are
+   sliced on demand, so random access to spectrum ``i`` touches only
+   the dataset bytes it needs.
+
+   .. rubric:: Notes
+
+   API status: Stable (Encryptable surface pending).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOAcquisitionRun`` · Java:
+   ``com.dtwthalion.ttio.AcquisitionRun``.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: group
+      :type:  ttio.providers.base.StorageGroup
+
+
+   .. py:attribute:: spectrum_class
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  ttio.enums.AcquisitionMode
+
+
+   .. py:attribute:: index
+      :type:  SpectrumIndex
+
+
+   .. py:attribute:: channel_names
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:attribute:: instrument_config
+      :type:  ttio.instrument_config.InstrumentConfig
+
+
+   .. py:attribute:: nucleus_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: provenance_json
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: modality
+      :type:  str
+      :value: 'mass_spectrometry'
+
+
+
+   .. py:attribute:: chromatograms
+      :type:  list[ttio.chromatogram.Chromatogram]
+      :value: []
+
+
+
+   .. py:method:: open(group: ttio.providers.base.StorageGroup | h5py.Group, name: str) -> AcquisitionRun
+      :classmethod:
+
+
+      Open a run from a storage-provider group (v0.7 M44, v0.9 M64.5).
+
+      Accepts either a :class:`StorageGroup` (protocol path) or an
+      :class:`h5py.Group` (legacy path — wrapped transparently via
+      :class:`~ttio.providers.hdf5._Group`). v0.9 M64.5 made every
+      cold-path read route through the StorageGroup protocol so
+      Memory / SQLite / Zarr backends work without touching h5py.
+
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: __iter__() -> Iterator[ttio.spectrum.Spectrum]
+
+
+   .. py:method:: provenance() -> list[ttio.provenance.ProvenanceRecord]
+
+      Per-run provenance records.
+
+      Prefers the v0.3 compound layout at ``<run>/provenance/steps`` and
+      falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2
+      files (no per-run provenance of any kind) return an empty list.
+
+
+
+   .. py:method:: __getitem__(i: int) -> ttio.spectrum.Spectrum
+
+
+   .. py:method:: object_at_index(index: int) -> ttio.spectrum.Spectrum
+
+      Return the spectrum at ``index``. Negative indices are supported.
+
+
+
+   .. py:method:: count() -> int
+
+      Return the total number of spectra.
+
+
+
+   .. py:method:: object_for_key(key: object) -> ttio.spectrum.Spectrum
+      :abstractmethod:
+
+
+      Not supported — AcquisitionRun uses integer indexing only.
+
+
+
+   .. py:method:: objects_in_range(start: int, stop: int) -> list[ttio.spectrum.Spectrum]
+
+      Return spectra in the half-open slice ``[start, stop)``.
+
+
+
+   .. py:method:: next_object() -> ttio.spectrum.Spectrum
+
+      Return the next spectrum and advance the cursor.
+
+
+
+   .. py:method:: has_more() -> bool
+
+      Return ``True`` if ``next_object`` can be called.
+
+
+
+   .. py:method:: current_position() -> int
+
+      0-based position of the next spectrum to be yielded.
+
+
+
+   .. py:method:: seek_to_position(position: int) -> bool
+
+      Reposition the cursor. Returns ``True`` on success.
+
+
+
+   .. py:method:: reset() -> None
+
+      Reposition the cursor to 0.
+
+
+
+   .. py:method:: add_processing_step(step: ttio.provenance.ProvenanceRecord) -> None
+
+      Append a processing step to this run's provenance chain.
+
+
+
+   .. py:method:: provenance_chain() -> list[ttio.provenance.ProvenanceRecord]
+
+      Return this run's provenance records in insertion order.
+
+
+
+   .. py:method:: input_entities() -> list[str]
+
+      Distinct input entity identifiers referenced by the chain.
+
+
+
+   .. py:method:: output_entities() -> list[str]
+
+      Distinct output entity identifiers referenced by the chain.
+
+
+
+   .. py:method:: encrypt_with_key(key: bytes, level: ttio.enums.EncryptionLevel) -> None
+
+      Encrypt this run's intensity channel in place.
+
+      Operates through the already-open HDF5 group so no second file
+      handle is required — the file must be open for writing (``"r+"``
+      or ``"w"``). Matches ObjC
+      ``-[TTIOAcquisitionRun encryptWithKey:level:error:]`` semantics.
+
+      Requires a persistence context — call only after opening via
+      :meth:`SpectralDataset.open`.
+
+
+
+   .. py:method:: decrypt_with_key(key: bytes) -> bytes
+
+      Decrypt this run's intensity channel.
+
+      Returns the plaintext bytes. The on-disk file is NOT modified.
+      Operates through the already-open HDF5 group. Matches ObjC
+      ``-[TTIOAcquisitionRun decryptWithKey:]`` semantics (NSData → bytes).
+
+      Side effect: the decrypted ndarray is cached on the run so
+      subsequent :meth:`object_at_index` calls can return
+      :class:`SignalArray` views without re-decrypting. See the M5
+      handoff note — spectra become readable through the normal API
+      path after decrypt.
+
+      Requires a persistence context — call only after opening via
+      :meth:`SpectralDataset.open`.
+
+
+
+   .. py:method:: access_policy() -> ttio.access_policy.AccessPolicy | None
+
+      Return the current access policy, or ``None`` if not set.
+
+
+
+   .. py:method:: set_access_policy(policy: ttio.access_policy.AccessPolicy | None) -> None
+
+      Replace the current access policy.
+
+
+
+.. py:class:: SpectrumIndex
+
+   Parallel per-spectrum arrays loaded eagerly at run open time.
+
+   The arrays map 1:1 to the datasets under
+   ``/study/ms_runs/<name>/spectrum_index/`` described in §4 of
+   ``docs/format-spec.md``. They are small (length = spectrum_count) and
+   cheap to hold in memory; signal channels remain lazy.
+
+   :param offsets: Starting element index of each spectrum in the mz_values channel.
+   :type offsets: numpy.ndarray
+   :param lengths: Number of elements (peaks) in each spectrum.
+   :type lengths: numpy.ndarray
+   :param retention_times: Retention time in seconds for each spectrum.
+   :type retention_times: numpy.ndarray
+   :param ms_levels: MS level (1, 2, …) for each spectrum.
+   :type ms_levels: numpy.ndarray
+   :param polarities: Polarity (1=positive, -1=negative, 0=unknown) for each spectrum.
+   :type polarities: numpy.ndarray
+   :param precursor_mzs: Precursor m/z for each spectrum (0.0 for MS1).
+   :type precursor_mzs: numpy.ndarray
+   :param precursor_charges: Precursor charge state for each spectrum (0 for MS1).
+   :type precursor_charges: numpy.ndarray
+   :param base_peak_intensities: Base-peak intensity for each spectrum.
+   :type base_peak_intensities: numpy.ndarray
+   :param activation_methods: (M74, optional) Activation method int value per spectrum; see
+                              :class:`~ttio.enums.ActivationMethod`. Present only when the
+                              file was written with the ``opt_ms2_activation_detail`` feature
+                              flag; absent columns indicate MS1-only or legacy files.
+   :type activation_methods: numpy.ndarray | None
+   :param isolation_target_mzs: (M74, optional) Target m/z of the isolation window per spectrum.
+                                Zero when no isolation applied.
+   :type isolation_target_mzs: numpy.ndarray | None
+   :param isolation_lower_offsets: (M74, optional) Lower offset of the isolation window per
+                                   spectrum. Zero when no isolation applied.
+   :type isolation_lower_offsets: numpy.ndarray | None
+   :param isolation_upper_offsets: (M74, optional) Upper offset of the isolation window per
+                                   spectrum. Zero when no isolation applied.
+   :type isolation_upper_offsets: numpy.ndarray | None
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSpectrumIndex`` ·
+   Java: ``com.dtwthalion.ttio.SpectrumIndex``.
+
+
+   .. py:attribute:: offsets
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: retention_times
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: ms_levels
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: polarities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: precursor_mzs
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: precursor_charges
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: base_peak_intensities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: activation_methods
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:attribute:: isolation_target_mzs
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:attribute:: isolation_lower_offsets
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:attribute:: isolation_upper_offsets
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:property:: count
+      :type: int
+
+
+
+   .. py:method:: offset_at(index: int) -> int
+
+      Return element offset of spectrum ``index`` in mz_values.
+
+
+
+   .. py:method:: length_at(index: int) -> int
+
+      Return element count (peaks) of spectrum ``index``.
+
+
+
+   .. py:method:: retention_time_at(index: int) -> float
+
+      Return retention time in seconds of spectrum ``index``.
+
+
+
+   .. py:method:: ms_level_at(index: int) -> int
+
+      Return MS level of spectrum ``index``.
+
+
+
+   .. py:method:: polarity_at(index: int) -> ttio.enums.Polarity
+
+      Return :class:`~ttio.enums.Polarity` of spectrum ``index``.
+
+
+
+   .. py:method:: precursor_mz_at(index: int) -> float
+
+      Return precursor m/z of spectrum ``index`` (0.0 for MS1).
+
+
+
+   .. py:method:: precursor_charge_at(index: int) -> int
+
+      Return precursor charge state of spectrum ``index`` (0 for MS1).
+
+
+
+   .. py:method:: base_peak_intensity_at(index: int) -> float
+
+      Return base-peak intensity of spectrum ``index``.
+
+
+
+   .. py:method:: activation_method_at(index: int) -> ttio.enums.ActivationMethod
+
+      Return :class:`~ttio.enums.ActivationMethod` of spectrum
+      ``index``. Returns ``ActivationMethod.NONE`` when the M74
+      column is absent (legacy file or MS1-only run).
+
+
+
+   .. py:method:: isolation_window_at(index: int) -> ttio.isolation_window.IsolationWindow | None
+
+      Return :class:`~ttio.isolation_window.IsolationWindow` of
+      spectrum ``index``, or ``None`` when the M74 columns are absent
+      or the stored target+offsets are all zero (MS1 sentinel).
+
+
+
+   .. py:method:: indices_in_retention_time_range(value_range: ttio.value_range.ValueRange) -> list[int]
+
+      Return indices whose retention time lies in
+      ``[value_range.minimum, value_range.maximum]`` (inclusive).
+
+
+
+   .. py:method:: indices_for_ms_level(ms_level: int) -> list[int]
+
+      Return indices whose ``ms_level`` equals ``ms_level``.
+
+
+
+   .. py:method:: read(idx_group: ttio.providers.base.StorageGroup | h5py.Group) -> SpectrumIndex
+      :classmethod:
+
+
+      Load all index columns.
+
+      Accepts either a :class:`StorageGroup` (v0.7 M44 protocol path)
+      or an :class:`h5py.Group` (legacy). The h5py path is retained
+      via ``_native_h5py`` so existing callers that dereferenced
+      child groups with ``group["spectrum_index"]`` continue to work.
+
+
+
+.. py:class:: MSImage
+
+   Mass-spectrometry imaging dataset: a ``width × height`` grid of
+   pixels, each pixel a spectral profile of ``spectral_points`` values.
+
+   :param width: Image grid dimensions in pixels.
+   :type width: int, default 0
+   :param height: Image grid dimensions in pixels.
+   :type height: int, default 0
+   :param spectral_points: Number of float64 values per pixel.
+   :type spectral_points: int, default 0
+   :param intensity: Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
+   :type intensity: numpy.ndarray, default empty rank-3 array
+   :param pixel_size_x: Spatial pixel size (implementation-defined units).
+   :type pixel_size_x: float, default 0.0
+   :param pixel_size_y: Spatial pixel size (implementation-defined units).
+   :type pixel_size_y: float, default 0.0
+   :param scan_pattern: Scan pattern label (e.g. ``"raster"``, ``"random_access"``).
+   :type scan_pattern: str, default ""
+   :param tile_size: HDF5 chunk tile size for reads; 0 means native cube chunks.
+   :type tile_size: int, default 0
+   :param title: Dataset-level metadata. In Objective-C these are inherited
+                 from ``TTIOSpectralDataset``; in Python they are composed
+                 directly onto ``MSImage``.
+   :type title: str, default ""
+   :param isa_investigation_id: Dataset-level metadata. In Objective-C these are inherited
+                                from ``TTIOSpectralDataset``; in Python they are composed
+                                directly onto ``MSImage``.
+   :type isa_investigation_id: str, default ""
+   :param identifications: Dataset-level identifications (composed — see Notes).
+   :type identifications: list, default []
+   :param quantifications: Dataset-level quantifications (composed).
+   :type quantifications: list, default []
+   :param provenance_records: Dataset-level provenance records (composed).
+   :type provenance_records: list, default []
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   **Composition vs inheritance.** In Objective-C ``TTIOMSImage``
+   inherits from ``TTIOSpectralDataset`` so dataset-level fields come
+   for free. In Python, ``SpectralDataset`` is a file-handle wrapper
+   whose lifecycle does not map cleanly to an MSImage subclass;
+   composition is used here (the five dataset-level fields live on
+   ``MSImage`` directly). This is a known stylistic difference
+   between the language implementations, recorded in
+   :doc:`/api-review-v0.6`.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOMSImage`` · Java:
+   ``com.dtwthalion.ttio.MSImage``.
+
+
+   .. py:attribute:: width
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: height
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: spectral_points
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_size_x
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: pixel_size_y
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: intensity
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: scan_pattern
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: tile_size
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: identifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: provenance_records
+      :type:  list
+      :value: []
+
+
+
+   .. py:method:: __post_init__() -> None
+
+
+.. py:class:: RamanSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A 1-D Raman spectrum with ``wavenumber`` and ``intensity`` channels.
+
+   :param excitation_wavelength_nm: Laser excitation wavelength in nanometres (e.g. 532, 785).
+   :type excitation_wavelength_nm: float, default 0.0
+   :param laser_power_mw: Incident laser power in milliwatts.
+   :type laser_power_mw: float, default 0.0
+   :param integration_time_sec: Detector integration time in seconds.
+   :type integration_time_sec: float, default 0.0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11, M73).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIORamanSpectrum`` · Java:
+   ``com.dtwthalion.ttio.RamanSpectrum``.
+
+
+   .. py:attribute:: WAVENUMBER
+      :value: 'wavenumber'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: excitation_wavelength_nm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: laser_power_mw
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: integration_time_sec
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:property:: wavenumber_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"wavenumber"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+
+.. py:class:: IRSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A 1-D infrared spectrum with ``wavenumber`` and ``intensity`` channels.
+
+   :param mode: Whether y-values are absorbance or transmittance.
+   :type mode: IRMode, default ``IRMode.TRANSMITTANCE``
+   :param resolution_cm_inv: Spectral resolution in reciprocal centimetres.
+   :type resolution_cm_inv: float, default 0.0
+   :param number_of_scans: Number of co-added scans producing this spectrum.
+   :type number_of_scans: int, default 0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11, M73).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOIRSpectrum`` · Java:
+   ``com.dtwthalion.ttio.IRSpectrum``.
+
+
+   .. py:attribute:: WAVENUMBER
+      :value: 'wavenumber'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: mode
+      :type:  ttio.enums.IRMode
+
+
+   .. py:attribute:: resolution_cm_inv
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: number_of_scans
+      :type:  int
+      :value: 0
+
+
+
+   .. py:property:: wavenumber_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"wavenumber"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+
+.. py:class:: UVVisSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A 1-D UV-Vis spectrum with ``wavelength`` (nm) and ``absorbance`` channels.
+
+   Unlike Raman / IR spectra, UV-Vis observations are indexed by
+   wavelength in nanometres rather than wavenumber.
+
+   :param path_length_cm: Optical path length of the cuvette in centimetres.
+   :type path_length_cm: float, default 0.0
+   :param solvent: Free-form solvent description (e.g. ``"methanol"``).
+   :type solvent: str, default ``""``
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11.1).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOUVVisSpectrum`` · Java:
+   ``com.dtwthalion.ttio.UVVisSpectrum``.
+
+
+   .. py:attribute:: WAVELENGTH
+      :value: 'wavelength'
+
+
+
+   .. py:attribute:: ABSORBANCE
+      :value: 'absorbance'
+
+
+
+   .. py:attribute:: path_length_cm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: solvent
+      :type:  str
+      :value: ''
+
+
+
+   .. py:property:: wavelength_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"wavelength"`` :class:`SignalArray`.
+
+
+   .. py:property:: absorbance_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"absorbance"`` :class:`SignalArray`.
+
+
+.. py:class:: TwoDimensionalCorrelationSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   2D correlation spectrum (Noda 2D-COS): synchronous + asynchronous matrices.
+
+   A 2D-COS observation carries a pair of square rank-2 correlation
+   matrices — synchronous (in-phase) and asynchronous
+   (quadrature) — both keyed on the same spectral-variable axis
+   (e.g. wavenumber ν₁ = ν₂). The diagonal of the synchronous matrix
+   is the perturbation-modulated autocorrelation; off-diagonal
+   cross-peaks report simultaneous changes. Off-diagonal asynchronous
+   cross-peaks report sequential changes.
+
+   :param synchronous_matrix: Rank-2 synchronous correlation matrix, shape ``(n, n)``.
+   :type synchronous_matrix: numpy.ndarray
+   :param asynchronous_matrix: Rank-2 asynchronous correlation matrix, shape ``(n, n)``.
+   :type asynchronous_matrix: numpy.ndarray
+   :param variable_axis: Shared axis descriptor (applies to both F1 and F2).
+   :type variable_axis: AxisDescriptor or None, default None
+   :param perturbation: Free-form description of the driving perturbation
+                        (``"temperature"``, ``"concentration"``, ...).
+   :type perturbation: str, default ""
+   :param perturbation_unit: Unit for the perturbation (e.g. ``"K"``, ``"mM"``).
+   :type perturbation_unit: str, default ""
+   :param source_modality: Originating spectroscopy (``"raman"``, ``"ir"``, ``"uv-vis"``, ...).
+   :type source_modality: str, default ""
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11.1).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOTwoDimensionalCorrelationSpectrum`` · Java:
+   ``com.dtwthalion.ttio.TwoDimensionalCorrelationSpectrum``.
+
+
+   .. py:attribute:: synchronous_matrix
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: asynchronous_matrix
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: variable_axis
+      :type:  ttio.axis_descriptor.AxisDescriptor | None
+      :value: None
+
+
+
+   .. py:attribute:: perturbation
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: perturbation_unit
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: source_modality
+      :type:  str
+      :value: ''
+
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:property:: matrix_size
+      :type: int
+
+
+      Return the length of the shared variable axis.
+
+
+.. py:class:: RamanImage
+
+   Raman hyperspectral imaging dataset: a ``width × height`` grid of
+   pixels, each pixel a spectrum of ``spectral_points`` intensity values
+   sampled at a shared rank-1 ``wavenumbers`` axis.
+
+   :param width: Image grid dimensions in pixels.
+   :type width: int, default 0
+   :param height: Image grid dimensions in pixels.
+   :type height: int, default 0
+   :param spectral_points: Number of float64 intensity values per pixel.
+   :type spectral_points: int, default 0
+   :param intensity: Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
+   :type intensity: numpy.ndarray, default empty rank-3 array
+   :param wavenumbers: Rank-1 wavenumber axis of length ``spectral_points`` (1/cm).
+   :type wavenumbers: numpy.ndarray, default empty rank-1 array
+   :param pixel_size_x: Spatial pixel size (implementation-defined units).
+   :type pixel_size_x: float, default 0.0
+   :param pixel_size_y: Spatial pixel size (implementation-defined units).
+   :type pixel_size_y: float, default 0.0
+   :param scan_pattern: Scan pattern label (``"raster"``, ``"random_access"``, ...).
+   :type scan_pattern: str, default ""
+   :param tile_size: HDF5 chunk tile size for reads; 0 means native cube chunks.
+   :type tile_size: int, default 0
+   :param excitation_wavelength_nm: Laser excitation wavelength in nanometres.
+   :type excitation_wavelength_nm: float, default 0.0
+   :param laser_power_mw: Incident laser power in milliwatts.
+   :type laser_power_mw: float, default 0.0
+   :param title: Dataset-level metadata.
+   :type title: str, default ""
+   :param isa_investigation_id: Dataset-level metadata.
+   :type isa_investigation_id: str, default ""
+   :param identifications: Dataset-level composition fields (ObjC inherits these from
+                           ``TTIOSpectralDataset``).
+   :type identifications: list, default []
+   :param quantifications: Dataset-level composition fields (ObjC inherits these from
+                           ``TTIOSpectralDataset``).
+   :type quantifications: list, default []
+   :param provenance_records: Dataset-level composition fields (ObjC inherits these from
+                              ``TTIOSpectralDataset``).
+   :type provenance_records: list, default []
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11, M73).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIORamanImage`` · Java:
+   ``com.dtwthalion.ttio.RamanImage``.
+
+
+   .. py:attribute:: width
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: height
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: spectral_points
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_size_x
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: pixel_size_y
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: intensity
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: wavenumbers
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: scan_pattern
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: tile_size
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: excitation_wavelength_nm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: laser_power_mw
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: identifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: provenance_records
+      :type:  list
+      :value: []
+
+
+
+   .. py:method:: __post_init__() -> None
+
+
+.. py:class:: IRImage
+
+   Infrared hyperspectral imaging dataset: a ``width × height`` grid
+   of pixels, each pixel an IR spectrum of ``spectral_points`` intensity
+   values sampled at a shared rank-1 ``wavenumbers`` axis.
+
+   :param width: Image grid dimensions in pixels.
+   :type width: int, default 0
+   :param height: Image grid dimensions in pixels.
+   :type height: int, default 0
+   :param spectral_points: Number of float64 intensity values per pixel.
+   :type spectral_points: int, default 0
+   :param intensity: Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
+   :type intensity: numpy.ndarray, default empty rank-3 array
+   :param wavenumbers: Rank-1 wavenumber axis of length ``spectral_points`` (1/cm).
+   :type wavenumbers: numpy.ndarray, default empty rank-1 array
+   :param pixel_size_x: Spatial pixel size (implementation-defined units).
+   :type pixel_size_x: float, default 0.0
+   :param pixel_size_y: Spatial pixel size (implementation-defined units).
+   :type pixel_size_y: float, default 0.0
+   :param scan_pattern: Scan pattern label (``"raster"``, ``"random_access"``, ...).
+   :type scan_pattern: str, default ""
+   :param tile_size: HDF5 chunk tile size for reads; 0 means native cube chunks.
+   :type tile_size: int, default 0
+   :param mode: Whether y-values are absorbance or transmittance.
+   :type mode: IRMode, default ``IRMode.TRANSMITTANCE``
+   :param resolution_cm_inv: Spectral resolution in reciprocal centimetres.
+   :type resolution_cm_inv: float, default 0.0
+   :param title: Dataset-level metadata.
+   :type title: str, default ""
+   :param isa_investigation_id: Dataset-level metadata.
+   :type isa_investigation_id: str, default ""
+   :param identifications: Dataset-level composition fields.
+   :type identifications: list, default []
+   :param quantifications: Dataset-level composition fields.
+   :type quantifications: list, default []
+   :param provenance_records: Dataset-level composition fields.
+   :type provenance_records: list, default []
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11, M73).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOIRImage`` · Java:
+   ``com.dtwthalion.ttio.IRImage``.
+
+
+   .. py:attribute:: width
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: height
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: spectral_points
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_size_x
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: pixel_size_y
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: intensity
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: wavenumbers
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: scan_pattern
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: tile_size
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: mode
+      :type:  ttio.enums.IRMode
+
+
+   .. py:attribute:: resolution_cm_inv
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: identifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: provenance_records
+      :type:  list
+      :value: []
+
+
+
+   .. py:method:: __post_init__() -> None
+
+

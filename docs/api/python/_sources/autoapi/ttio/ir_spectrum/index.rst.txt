@@ -1,0 +1,87 @@
+ttio.ir_spectrum
+================
+
+.. py:module:: ttio.ir_spectrum
+
+.. autoapi-nested-parse::
+
+   ``IRSpectrum`` — 1-D infrared spectrum subclass.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.ir_spectrum.IRSpectrum
+
+
+Module Contents
+---------------
+
+.. py:class:: IRSpectrum
+
+   Bases: :py:obj:`ttio.spectrum.Spectrum`
+
+
+   A 1-D infrared spectrum with ``wavenumber`` and ``intensity`` channels.
+
+   :param mode: Whether y-values are absorbance or transmittance.
+   :type mode: IRMode, default ``IRMode.TRANSMITTANCE``
+   :param resolution_cm_inv: Spectral resolution in reciprocal centimetres.
+   :type resolution_cm_inv: float, default 0.0
+   :param number_of_scans: Number of co-added scans producing this spectrum.
+   :type number_of_scans: int, default 0
+   :param \*plus all base :class:`Spectrum` parameters*:
+
+   .. rubric:: Notes
+
+   API status: Stable (v0.11, M73).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOIRSpectrum`` · Java:
+   ``com.dtwthalion.ttio.IRSpectrum``.
+
+
+   .. py:attribute:: WAVENUMBER
+      :value: 'wavenumber'
+
+
+
+   .. py:attribute:: INTENSITY
+      :value: 'intensity'
+
+
+
+   .. py:attribute:: mode
+      :type:  ttio.enums.IRMode
+
+
+   .. py:attribute:: resolution_cm_inv
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: number_of_scans
+      :type:  int
+      :value: 0
+
+
+
+   .. py:property:: wavenumber_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"wavenumber"`` :class:`SignalArray`.
+
+
+   .. py:property:: intensity_array
+      :type: ttio.signal_array.SignalArray
+
+
+      Return the ``"intensity"`` :class:`SignalArray`.
+
+

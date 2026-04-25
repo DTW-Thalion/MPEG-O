@@ -1,0 +1,60 @@
+ttio.importers.thermo_raw
+=========================
+
+.. py:module:: ttio.importers.thermo_raw
+
+.. autoapi-nested-parse::
+
+   Thermo .raw importer — M38.
+
+   Delegates to the user-installed `ThermoRawFileParser`_ binary to convert
+   ``.raw`` → mzML, then parses the mzML via :mod:`ttio.importers.mzml`.
+   No proprietary code ships with TTI-O.
+
+   Binary resolution order:
+
+   1. Explicit ``thermorawfileparser=`` argument.
+   2. ``THERMORAWFILEPARSER`` environment variable.
+   3. ``ThermoRawFileParser`` on ``PATH`` (Linux .NET 8 self-contained build).
+   4. ``ThermoRawFileParser.exe`` on ``PATH`` — invoked through ``mono``.
+
+   .. _ThermoRawFileParser: https://github.com/compomics/ThermoRawFileParser
+
+   SPDX-License-Identifier: Apache-2.0
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOThermoRawReader`` (v0.4 stub; delegation to
+   ThermoRawFileParser is a future milestone in ObjC) · Java:
+   ``com.dtwthalion.ttio.importers.ThermoRawReader`` (M38 shipped; delegates
+   to ThermoRawFileParser binary)
+
+   API status: Stable (M38 shipped; delegates to ThermoRawFileParser binary).
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.thermo_raw.read
+
+
+Module Contents
+---------------
+
+.. py:function:: read(path: str | pathlib.Path, *, thermorawfileparser: str | None = None) -> ttio.importers.import_result.ImportResult
+
+   Import a Thermo ``.raw`` file via ThermoRawFileParser delegation.
+
+   Args:
+       path: ``.raw`` file to import.
+       thermorawfileparser: Override the resolved binary path.
+
+   Raises:
+       FileNotFoundError: Binary could not be located (check PATH or
+           install ThermoRawFileParser — see ``docs/vendor-formats.md``).
+       RuntimeError: Binary exited non-zero or produced no mzML.
+
+

@@ -1,6 +1,6 @@
 /*
  * Read-path breakdown harness — isolates each fixed per-call cost in
- * MPGOHDF5Dataset readDataAtOffset. Measures:
+ * TTIOHDF5Dataset readDataAtOffset. Measures:
  *
  *   A. Raw C H5Dread (baseline)
  *   B. ObjC readDataAtOffset: (the library call actually used)
@@ -15,15 +15,15 @@
 #import <time.h>
 #import <hdf5.h>
 
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Dataset.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Dataset.h"
+#import "ValueClasses/TTIOEnums.h"
 
 static double nowSec(void) {
     struct timespec ts;
@@ -31,7 +31,7 @@ static double nowSec(void) {
     return ts.tv_sec + ts.tv_nsec / 1e9;
 }
 
-static MPGOWrittenRun *minimalRun(NSUInteger n, NSUInteger peaks) {
+static TTIOWrittenRun *minimalRun(NSUInteger n, NSUInteger peaks) {
     NSUInteger total = n * peaks;
     NSMutableData *mzBuf  = [NSMutableData dataWithLength:total * sizeof(double)];
     NSMutableData *intBuf = [NSMutableData dataWithLength:total * sizeof(double)];
@@ -59,7 +59,7 @@ static MPGOWrittenRun *minimalRun(NSUInteger n, NSUInteger peaks) {
         rp[i] = (double)i*0.06; mp[i] = 1; pp[i] = 1;
         qp[i] = 0.0; cp[i] = 0; bpp[i] = 1000.0;
     }
-    return [[MPGOWrittenRun alloc] initWithSpectrumClassName:@"MPGOMassSpectrum"
+    return [[TTIOWrittenRun alloc] initWithSpectrumClassName:@"TTIOMassSpectrum"
         acquisitionMode:0 channelData:@{@"mz":mzBuf, @"intensity":intBuf}
         offsets:off lengths:len retentionTimes:rts msLevels:ml
         polarities:pol precursorMzs:pmz precursorCharges:pc basePeakIntensities:bp];
@@ -74,7 +74,7 @@ int main(int argc, const char *argv[]) {
         }
 
         const char *home = getenv("HOME");
-        NSString *path = [NSString stringWithFormat:@"%s/mpgo_readdetail_out/stress.mpgo",
+        NSString *path = [NSString stringWithFormat:@"%s/mpgo_readdetail_out/stress.tio",
                           home ? home : "/tmp"];
         NSString *dir = [path stringByDeletingLastPathComponent];
         [[NSFileManager defaultManager] createDirectoryAtPath:dir
@@ -83,15 +83,15 @@ int main(int argc, const char *argv[]) {
 
         // write fixture
         NSError *err = nil;
-        [MPGOSpectralDataset writeMinimalToPath:path title:@"s"
+        [TTIOSpectralDataset writeMinimalToPath:path title:@"s"
                              isaInvestigationId:@"I" msRuns:@{@"r": minimalRun(n, peaks)}
                                  identifications:nil quantifications:nil
                                provenanceRecords:nil error:&err];
 
         // warm up
         for (int w = 0; w < 2; w++) {
-            MPGOSpectralDataset *d = [MPGOSpectralDataset readFromFilePath:path error:&err];
-            MPGOAcquisitionRun *r = d.msRuns[@"r"];
+            TTIOSpectralDataset *d = [TTIOSpectralDataset readFromFilePath:path error:&err];
+            TTIOAcquisitionRun *r = d.msRuns[@"r"];
             for (NSUInteger i = 0; i < n; i += 100) (void)[r objectAtIndex:i];
         }
 
@@ -121,21 +121,21 @@ int main(int argc, const char *argv[]) {
         printf("A. raw C (1 channel, reuse spaces)  : %8.2f ms  (%6.1f us/call)\n",
                rawC*1000, rawC*1e6/samples);
 
-        // ── B. MPGOHDF5Dataset readDataAtOffset, 1 channel ─────────
-        MPGOHDF5File *file = [MPGOHDF5File openAtPath:path error:&err];
-        MPGOHDF5Group *root = [file rootGroup];
-        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:NULL];
-        MPGOHDF5Group *msr = [study openGroupNamed:@"ms_runs" error:NULL];
-        MPGOHDF5Group *rg = [msr openGroupNamed:@"r" error:NULL];
-        MPGOHDF5Group *sc = [rg openGroupNamed:@"signal_channels" error:NULL];
-        MPGOHDF5Dataset *mzd = [sc openDatasetNamed:@"mz_values" error:NULL];
+        // ── B. TTIOHDF5Dataset readDataAtOffset, 1 channel ─────────
+        TTIOHDF5File *file = [TTIOHDF5File openAtPath:path error:&err];
+        TTIOHDF5Group *root = [file rootGroup];
+        TTIOHDF5Group *study = [root openGroupNamed:@"study" error:NULL];
+        TTIOHDF5Group *msr = [study openGroupNamed:@"ms_runs" error:NULL];
+        TTIOHDF5Group *rg = [msr openGroupNamed:@"r" error:NULL];
+        TTIOHDF5Group *sc = [rg openGroupNamed:@"signal_channels" error:NULL];
+        TTIOHDF5Dataset *mzd = [sc openDatasetNamed:@"mz_values" error:NULL];
         t = nowSec();
         for (NSUInteger i = 0; i < n; i += stride) {
             NSData *d = [mzd readDataAtOffset:i*peaks count:peaks error:NULL];
             (void)d;
         }
         double objDS = nowSec() - t;
-        printf("B. MPGOHDF5Dataset 1ch (current)    : %8.2f ms  (%6.1f us/call)\n",
+        printf("B. TTIOHDF5Dataset 1ch (current)    : %8.2f ms  (%6.1f us/call)\n",
                objDS*1000, objDS*1e6/samples);
 
         // ── B2. Same but reusing spaces+htype MANUALLY via H5 calls ─
@@ -197,15 +197,15 @@ int main(int argc, const char *argv[]) {
         // ── C0. readFromFilePath: in isolation (opens file, loads
         //         all 8 spectrum_index arrays, but no spectrum reads)
         t = nowSec();
-        MPGOSpectralDataset *ds = [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
         double openC = nowSec() - t;
         printf("\nC0. readFromFilePath (alone)        : %8.2f ms\n", openC*1000);
 
-        MPGOAcquisitionRun *run = ds.msRuns[@"r"];
+        TTIOAcquisitionRun *run = ds.msRuns[@"r"];
         t = nowSec();
         NSUInteger sampled = 0;
         for (NSUInteger i = 0; i < n; i += stride) {
-            MPGOMassSpectrum *s = [run objectAtIndex:i];
+            TTIOMassSpectrum *s = [run objectAtIndex:i];
             sampled += s.signalArrays[@"mz"].length;
         }
         double full = nowSec() - t;
@@ -217,7 +217,7 @@ int main(int argc, const char *argv[]) {
 
         printf("\n== Per-call cost breakdown ==\n");
         printf("  raw C H5Dread (1ch)            : %6.1f us\n", rawC*1e6/samples);
-        printf("  MPGOHDF5Dataset readDataAtOffset: %6.1f us  (+%.1f us wrapper)\n",
+        printf("  TTIOHDF5Dataset readDataAtOffset: %6.1f us  (+%.1f us wrapper)\n",
                objDS*1e6/samples, (objDS-rawC)*1e6/samples);
         printf("  handle-level reuse spaces      : %6.1f us  (best-case H5Dread)\n",
                objReuse*1e6/samples);

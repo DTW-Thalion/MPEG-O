@@ -1,0 +1,435 @@
+ttio.enums
+==========
+
+.. py:module:: ttio.enums
+
+.. autoapi-nested-parse::
+
+   Enumerations mirroring the Objective-C ``TTIOEnums.h`` integer values.
+
+   All enums are ``IntEnum`` subclasses because every enum in the format
+   is persisted on disk as an integer attribute (for example
+   ``@acquisition_mode = 0``). Keeping the Python-side values identical
+   to the Objective-C ``NS_ENUM`` values makes the HDF5 layer a direct
+   pass-through and removes any translation table to go stale.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOEnums.h`` ·
+   Java: ``com.dtwthalion.ttio.Enums``
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.enums.SamplingMode
+   ttio.enums.Precision
+   ttio.enums.Compression
+   ttio.enums.ByteOrder
+   ttio.enums.Polarity
+   ttio.enums.ChromatogramType
+   ttio.enums.AcquisitionMode
+   ttio.enums.IRMode
+   ttio.enums.EncryptionLevel
+   ttio.enums.ActivationMethod
+
+
+Module Contents
+---------------
+
+.. py:class:: SamplingMode
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Axis sampling regularity.
+
+   Cross-language: ObjC ``TTIOSamplingMode`` · Java
+   ``Enums.SamplingMode``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: UNIFORM
+      :value: 0
+
+
+
+   .. py:attribute:: NON_UNIFORM
+      :value: 1
+
+
+
+.. py:class:: Precision
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Numeric precision of a signal buffer.
+
+   Cross-language: ObjC ``TTIOPrecision`` · Java
+   ``Enums.Precision``.
+
+   Appendix B Gap 7: ``Precision`` is a pure enum. The HDF5 type
+   mapping (``H5T_NATIVE_DOUBLE`` &c.) lives in
+   ``ttio.providers.hdf5`` so non-HDF5 providers (SQLite, Memory,
+   future Zarr) can import ``Precision`` without pulling HDF5
+   dependencies onto their classpath. See v0.6.1 Appendix B gap 7
+   in ``docs/api-review-v0.6.md`` for the motivating bug.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: FLOAT32
+      :value: 0
+
+
+
+   .. py:attribute:: FLOAT64
+      :value: 1
+
+
+
+   .. py:attribute:: INT32
+      :value: 2
+
+
+
+   .. py:attribute:: INT64
+      :value: 3
+
+
+
+   .. py:attribute:: UINT32
+      :value: 4
+
+
+
+   .. py:attribute:: COMPLEX128
+      :value: 5
+
+
+
+   .. py:attribute:: UINT8
+      :value: 6
+
+
+
+   .. py:method:: numpy_dtype() -> str
+
+      Return the little-endian NumPy dtype string for this precision.
+
+
+
+.. py:class:: Compression
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Compression algorithm applied to a signal buffer.
+
+   Cross-language: ObjC ``TTIOCompression`` · Java
+   ``Enums.Compression``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: NONE
+      :value: 0
+
+
+
+   .. py:attribute:: ZLIB
+      :value: 1
+
+
+
+   .. py:attribute:: LZ4
+      :value: 2
+
+
+
+   .. py:attribute:: NUMPRESS_DELTA
+      :value: 3
+
+
+
+   .. py:attribute:: RANS_ORDER0
+      :value: 4
+
+
+
+   .. py:attribute:: RANS_ORDER1
+      :value: 5
+
+
+
+   .. py:attribute:: BASE_PACK
+      :value: 6
+
+
+
+   .. py:attribute:: QUALITY_BINNED
+      :value: 7
+
+
+
+   .. py:attribute:: NAME_TOKENIZED
+      :value: 8
+
+
+
+.. py:class:: ByteOrder
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Byte order of a signal buffer on disk.
+
+   Cross-language: ObjC ``TTIOByteOrder`` · Java
+   ``Enums.ByteOrder``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: LITTLE_ENDIAN
+      :value: 0
+
+
+
+   .. py:attribute:: BIG_ENDIAN
+      :value: 1
+
+
+
+.. py:class:: Polarity
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Ion polarity for mass spectrometry.
+
+   Cross-language: ObjC ``TTIOPolarity`` · Java
+   ``Enums.Polarity``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: UNKNOWN
+      :value: 0
+
+
+
+   .. py:attribute:: POSITIVE
+      :value: 1
+
+
+
+   .. py:attribute:: NEGATIVE
+      :value: -1
+
+
+
+.. py:class:: ChromatogramType
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Chromatogram kind.
+
+   Cross-language: ObjC ``TTIOChromatogramType`` · Java
+   ``Enums.ChromatogramType``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: TIC
+      :value: 0
+
+
+
+   .. py:attribute:: XIC
+      :value: 1
+
+
+
+   .. py:attribute:: SRM
+      :value: 2
+
+
+
+.. py:class:: AcquisitionMode
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   High-level acquisition scheme for a run.
+
+   Cross-language: ObjC ``TTIOAcquisitionMode`` · Java
+   ``Enums.AcquisitionMode``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: MS1_DDA
+      :value: 0
+
+
+
+   .. py:attribute:: MS2_DDA
+      :value: 1
+
+
+
+   .. py:attribute:: DIA
+      :value: 2
+
+
+
+   .. py:attribute:: SRM
+      :value: 3
+
+
+
+   .. py:attribute:: NMR_1D
+      :value: 4
+
+
+
+   .. py:attribute:: NMR_2D
+      :value: 5
+
+
+
+   .. py:attribute:: IMAGING
+      :value: 6
+
+
+
+   .. py:attribute:: GENOMIC_WGS
+      :value: 7
+
+
+
+   .. py:attribute:: GENOMIC_WES
+      :value: 8
+
+
+
+.. py:class:: IRMode
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Infrared y-axis interpretation.
+
+   Cross-language: ObjC ``TTIOIRMode`` · Java
+   ``Enums.IRMode``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: TRANSMITTANCE
+      :value: 0
+
+
+
+   .. py:attribute:: ABSORBANCE
+      :value: 1
+
+
+
+.. py:class:: EncryptionLevel
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Multi-level protection granularity (MPEG-G style).
+
+   Cross-language: ObjC ``TTIOEncryptionLevel`` · Java
+   ``Enums.EncryptionLevel``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: NONE
+      :value: 0
+
+
+
+   .. py:attribute:: DATASET_GROUP
+      :value: 1
+
+
+
+   .. py:attribute:: DATASET
+      :value: 2
+
+
+
+   .. py:attribute:: DESCRIPTOR_STREAM
+      :value: 3
+
+
+
+   .. py:attribute:: ACCESS_UNIT
+      :value: 4
+
+
+
+.. py:class:: ActivationMethod
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   MS/MS precursor activation (dissociation) method.
+
+   Stored as ``int32`` in the optional ``activation_methods`` column of
+   ``spectrum_index`` (see ``opt_ms2_activation_detail``). ``NONE`` is
+   the sentinel for MS1 scans and for MS2+ scans whose activation method
+   was not reported by the source instrument.
+
+   Cross-language: ObjC ``TTIOActivationMethod`` · Java
+   ``Enums.ActivationMethod``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: NONE
+      :value: 0
+
+
+
+   .. py:attribute:: CID
+      :value: 1
+
+
+
+   .. py:attribute:: HCD
+      :value: 2
+
+
+
+   .. py:attribute:: ETD
+      :value: 3
+
+
+
+   .. py:attribute:: UVPD
+      :value: 4
+
+
+
+   .. py:attribute:: ECD
+      :value: 5
+
+
+
+   .. py:attribute:: EThcD
+      :value: 6
+
+
+

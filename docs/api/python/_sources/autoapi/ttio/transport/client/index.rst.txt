@@ -1,0 +1,56 @@
+ttio.transport.client
+=====================
+
+.. py:module:: ttio.transport.client
+
+.. autoapi-nested-parse::
+
+   WebSocket transport client (v0.10 M68).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.client.TransportClient
+
+
+Module Contents
+---------------
+
+.. py:class:: TransportClient(url: str)
+
+   Connect to a :class:`TransportServer` and receive a filtered stream.
+
+   ``url`` must be a ``ws://`` or ``wss://`` URI.
+
+
+   .. py:method:: fetch_packets(*, filters: dict[str, Any] | None = None) -> list[tuple[ttio.transport.packets.PacketHeader, bytes]]
+      :async:
+
+
+      Open one connection, send the query, collect all packets.
+
+
+
+   .. py:method:: iter_packets(*, filters: dict[str, Any] | None = None) -> AsyncIterator[tuple[ttio.transport.packets.PacketHeader, bytes]]
+      :async:
+
+
+      Connect, send the query, yield ``(header, payload)`` pairs.
+
+      The iterator terminates after ``EndOfStream`` or when the
+      connection closes.
+
+
+
+   .. py:method:: stream_to_file(output_path: str | pathlib.Path, *, filters: dict[str, Any] | None = None, provider: str = 'hdf5') -> ttio.spectral_dataset.SpectralDataset
+      :async:
+
+
+      Stream a filtered dataset directly into a ``.tio`` file.
+
+
+

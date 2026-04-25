@@ -1,0 +1,87 @@
+ttio.importers.waters_masslynx
+==============================
+
+.. py:module:: ttio.importers.waters_masslynx
+
+.. autoapi-nested-parse::
+
+   Waters MassLynx importer — v0.9 M63.
+
+   Delegates to the user-installed Waters conversion tool
+   (``masslynxraw`` is the usual CLI wrapper around the proprietary
+   MassLynxRaw SDK). The tool reads a Waters ``.raw`` **directory**
+   and writes mzML; TTI-O then parses the mzML via
+   :mod:`ttio.importers.mzml`. No proprietary code ships with TTI-O.
+
+   Binary resolution order:
+
+   1. Explicit ``converter=`` argument.
+   2. ``MASSLYNXRAW`` environment variable.
+   3. ``masslynxraw`` on ``PATH``.
+   4. ``MassLynxRaw.exe`` on ``PATH`` — invoked through ``mono`` on
+      non-Windows hosts.
+
+   Waters ``.raw`` inputs are directories (not single files). The
+   ``read()`` function validates the input is a directory before
+   invoking the converter.
+
+   SPDX-License-Identifier: Apache-2.0
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOWatersMassLynxReader``
+   Java:        ``com.dtwthalion.ttio.importers.WatersMassLynxReader``
+
+   API status: Provisional (v0.9 M63) — delegates to an external tool;
+   the CLI flag names below match the common ``masslynxraw`` wrapper
+   used by the proteomics community. Sites that deploy a different
+   wrapper (Waters Connect API, in-house scripts) can pass an
+   explicit ``converter=`` path and the CLI is invoked with the same
+   ``-i <input> -o <output>`` convention.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.importers.waters_masslynx.WatersMassLynxError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.waters_masslynx.read
+
+
+Module Contents
+---------------
+
+.. py:exception:: WatersMassLynxError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Raised when the MassLynx converter exits non-zero or produces no mzML.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:function:: read(raw_dir: str | pathlib.Path, *, converter: str | None = None) -> ttio.importers.import_result.ImportResult
+
+   Import a Waters ``.raw`` directory via the MassLynx converter.
+
+   Args:
+       raw_dir: Path to the Waters ``.raw`` directory (not a file).
+       converter: Override the resolved binary path.
+
+   Raises:
+       FileNotFoundError: Binary could not be located, or ``raw_dir``
+           is not a directory. Use :envvar:`MASSLYNXRAW` or install
+           the converter — see ``docs/vendor-formats.md``.
+       WatersMassLynxError: Binary exited non-zero or produced no mzML.
+
+

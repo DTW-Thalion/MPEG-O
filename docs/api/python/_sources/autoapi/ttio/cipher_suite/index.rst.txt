@@ -1,0 +1,198 @@
+ttio.cipher_suite
+=================
+
+.. py:module:: ttio.cipher_suite
+
+.. autoapi-nested-parse::
+
+   Cipher-suite catalog and algorithm-dispatched parameter helpers (v0.7 M48).
+
+   Pre-v0.7, encryption / signing / key-wrap APIs accepted an implicit
+   fixed algorithm (AES-256-GCM for bulk, HMAC-SHA256 for signatures,
+   AES-KW-style wrap for KEK). Key sizes and nonce lengths were
+   hardcoded module-level constants.
+
+   v0.7 M48 generalises the public API with an ``algorithm=`` keyword
+   parameter backed by this catalog. The intent was to shape the
+   parameter hole so M49's post-quantum binding is a pure plug-in — no
+   API change — once ML-KEM-1024 / ML-DSA-87 are ready.
+
+   v0.8 M49 activates the post-quantum entries. ``"ml-kem-1024"`` (FIPS
+   203) and ``"ml-dsa-87"`` (FIPS 204) transition from
+   ``status="reserved"`` to ``status="active"``. Activation requires
+   the optional ``[pqc]`` extra (``pip install 'ttio[pqc]'`` pulls in
+   ``liboqs-python``, which in turn needs a system liboqs 0.14+). Without
+   that extra, :mod:`ttio.pqc` import raises
+   :class:`~ttio.pqc.PQCUnavailableError` and all PQC entry points fail
+   cleanly — the catalog still lists the entries but the sign/wrap code
+   paths refuse to run.
+
+   ``"shake256"`` remains reserved (no consumer yet in the protection
+   APIs; a v0.9 domain-separator primitive may activate it).
+
+   Design notes (binding decision 39):
+   * ``CipherSuite`` is a **static allow-list**, not a plugin registry.
+     Adding a new algorithm is a source-code change. Runtime
+     registration would let callers push FIPS-unapproved algorithms
+     through production code; that complexity is deferred to v0.8+.
+
+   Cross-language equivalents:
+   * ObjC: ``TTIOCipherSuite`` (:file:`objc/Source/Protection/TTIOCipherSuite.h`)
+   * Java: ``com.dtwthalion.ttio.protection.CipherSuite``
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.cipher_suite.Category
+   ttio.cipher_suite.Status
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.cipher_suite.UnsupportedAlgorithmError
+   ttio.cipher_suite.InvalidKeyError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.cipher_suite.is_supported
+   ttio.cipher_suite.is_registered
+   ttio.cipher_suite.category
+   ttio.cipher_suite.key_length
+   ttio.cipher_suite.nonce_length
+   ttio.cipher_suite.tag_length
+   ttio.cipher_suite.validate_key
+   ttio.cipher_suite.validate_public_key
+   ttio.cipher_suite.validate_private_key
+   ttio.cipher_suite.public_key_size
+   ttio.cipher_suite.private_key_size
+   ttio.cipher_suite.algorithms
+
+
+Module Contents
+---------------
+
+.. py:exception:: UnsupportedAlgorithmError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Raised when a caller specifies an algorithm not in the static
+   catalog — either misspelled, or reserved for a later milestone
+   (e.g., ML-KEM-1024 prior to M49).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:exception:: InvalidKeyError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Raised when a key length does not match the selected algorithm.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:data:: Category
+
+.. py:data:: Status
+
+.. py:function:: is_supported(algorithm: str) -> bool
+
+   Return True iff ``algorithm`` is a known catalog entry with
+   ``status="active"``. Reserved entries return False.
+
+
+.. py:function:: is_registered(algorithm: str) -> bool
+
+   Return True iff ``algorithm`` is listed in the catalog,
+   including reserved entries. Useful for error messages that want
+   to distinguish 'unknown' from 'not yet implemented'.
+
+
+.. py:function:: category(algorithm: str) -> Category
+
+   Return the algorithm's category identifier.
+
+
+.. py:function:: key_length(algorithm: str) -> int | None
+
+   Return the fixed key length for this algorithm, or ``None`` if
+   the algorithm tolerates variable-length keys (HMAC).
+
+
+.. py:function:: nonce_length(algorithm: str) -> int
+
+   Return the nonce / IV length in bytes. Zero for non-AEAD
+   primitives. Replaces the module-level ``AES_IV_LEN = 12``
+   constant scattered through pre-v0.7 code.
+
+
+.. py:function:: tag_length(algorithm: str) -> int
+
+   Return the authentication-tag or signature length in bytes.
+   Zero for hashes and XOFs whose output size is variable.
+
+
+.. py:function:: validate_key(algorithm: str, key: bytes) -> None
+
+   Raise :class:`InvalidKeyError` if ``key`` does not match the
+   algorithm's required length. Replaces inline ``len(key) == 32``
+   checks.
+
+   For algorithms with variable-length keys (HMAC), imposes a sanity
+   minimum of 1 byte and logs when the key is unusually short (< 16
+   bytes). For reserved-status algorithms, raises
+   :class:`UnsupportedAlgorithmError` so callers don't silently run
+   against stub code paths.
+
+   Asymmetric algorithms (category KEM / Signature) have two key
+   shapes — public and private. ``validate_key`` on a KEM / Signature
+   algorithm raises :class:`InvalidKeyError` directing the caller to
+   :func:`validate_public_key` or :func:`validate_private_key`; this
+   keeps role confusion out of the symmetric-focused call sites.
+
+
+.. py:function:: validate_public_key(algorithm: str, key: bytes) -> None
+
+   Raise :class:`InvalidKeyError` if ``key`` is not the right length
+   for ``algorithm``'s public key (KEM encapsulation / signature
+   verification). Symmetric algorithms raise immediately — use
+   :func:`validate_key`.
+
+
+.. py:function:: validate_private_key(algorithm: str, key: bytes) -> None
+
+   Raise :class:`InvalidKeyError` if ``key`` is not the right length
+   for ``algorithm``'s private key (KEM decapsulation / signing).
+   Symmetric algorithms raise immediately — use :func:`validate_key`.
+
+
+.. py:function:: public_key_size(algorithm: str) -> int
+
+   Return the asymmetric public-key length in bytes. Raises for
+   symmetric algorithms.
+
+
+.. py:function:: private_key_size(algorithm: str) -> int
+
+   Return the asymmetric private-key length in bytes. Raises for
+   symmetric algorithms.
+
+
+.. py:function:: algorithms(*, status: Status | None = None) -> list[str]
+
+   Return catalog entries, optionally filtered by status.
+
+

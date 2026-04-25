@@ -1,7 +1,7 @@
 MTD	mzTab-version	1.0
 MTD	mzTab-mode	Summary
 MTD	mzTab-type	Identification
-MTD	mzTab-ID	mpgo-export
+MTD	mzTab-ID	ttio-export
 MTD	title	M78 conformance (proteomics)
 MTD	software[1]	[MS, MS:1000799, custom unreleased software tool, mpeg-o]
 MTD	ms_run[1]-location	file://run_a.mzML

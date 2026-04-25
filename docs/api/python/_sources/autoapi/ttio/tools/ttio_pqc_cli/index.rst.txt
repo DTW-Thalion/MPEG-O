@@ -1,0 +1,88 @@
+ttio.tools.ttio_pqc_cli
+=======================
+
+.. py:module:: ttio.tools.ttio_pqc_cli
+
+.. autoapi-nested-parse::
+
+   ``ttio-pqc`` — Python post-quantum crypto CLI (M75).
+
+   Python equivalent of the Objective-C ``TtioPQCTool`` (``objc/Tools/
+   TtioPQCTool.m``) and Java ``com.dtwthalion.ttio.tools.PQCTool``. The
+   subcommand grammar is 1-to-1 across the three languages so the
+   cross-language conformance harness (``python/tests/
+   test_m54_pqc_conformance.py``) can drive any of the three via identical
+   argument strings.
+
+   All file arguments are raw bytes (no hex wrapping) so round-trip byte
+   equality is exact.
+
+   Subcommands::
+
+       ttio-pqc sig-keygen       PK_OUT  SK_OUT
+       ttio-pqc sig-sign         SK_IN   MSG_IN  SIG_OUT
+       ttio-pqc sig-verify       PK_IN   MSG_IN  SIG_IN       (exit 0/1/2)
+       ttio-pqc kem-keygen       PK_OUT  SK_OUT
+       ttio-pqc kem-encaps       PK_IN   CT_OUT  SS_OUT
+       ttio-pqc kem-decaps       SK_IN   CT_IN   SS_OUT
+       ttio-pqc hdf5-sign        FILE    DS_PATH  SK_IN
+       ttio-pqc hdf5-verify      FILE    DS_PATH  PK_IN       (exit 0/1/2)
+       ttio-pqc provider-sign    URL     DS_PATH  SK_IN
+       ttio-pqc provider-verify  URL     DS_PATH  PK_IN       (exit 0/1/2)
+
+   The verify subcommands return ``0`` for a valid signature, ``1`` for an
+   invalid one, and ``2`` for any other error (matches the peer tools).
+
+   Requires the ``[pqc]`` optional extra (``pip install 'ttio[pqc]'``).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.tools.ttio_pqc_cli.USAGE
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.ttio_pqc_cli.main
+
+
+Module Contents
+---------------
+
+.. py:data:: USAGE
+   :value: Multiline-String
+
+   .. raw:: html
+
+      <details><summary>Show Value</summary>
+
+   .. code-block:: python
+
+      """usage: ttio-pqc <subcommand> [args...]
+        sig-keygen       PK_OUT  SK_OUT
+        sig-sign         SK_IN   MSG_IN  SIG_OUT
+        sig-verify       PK_IN   MSG_IN  SIG_IN
+        kem-keygen       PK_OUT  SK_OUT
+        kem-encaps       PK_IN   CT_OUT  SS_OUT
+        kem-decaps       SK_IN   CT_IN   SS_OUT
+        hdf5-sign        FILE    DS_PATH  SK_IN
+        hdf5-verify      FILE    DS_PATH  PK_IN
+        provider-sign    URL     DS_PATH  SK_IN
+        provider-verify  URL     DS_PATH  PK_IN
+      """
+
+   .. raw:: html
+
+      </details>
+
+
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

@@ -1,0 +1,87 @@
+ttio.protocols.cv_annotatable
+=============================
+
+.. py:module:: ttio.protocols.cv_annotatable
+
+.. autoapi-nested-parse::
+
+   ``CVAnnotatable`` — controlled-vocabulary annotation capability.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.protocols.cv_annotatable.CVAnnotatable
+
+
+Module Contents
+---------------
+
+.. py:class:: CVAnnotatable
+
+   Bases: :py:obj:`Protocol`
+
+
+   Capability for objects that can be tagged with controlled-vocabulary
+   parameters from any ontology (PSI-MS, nmrCV, CHEBI, BFO, ...).
+
+   This is the primary extensibility mechanism in TTI-O: the schema
+   stays minimal while semantic richness lives in curated external
+   ontologies.
+
+   .. method:: add_cv_param(param)
+
+      Attach a ``CVParam`` to this object.
+
+   .. method:: remove_cv_param(param)
+
+      Detach a previously-attached ``CVParam``. No-op if absent.
+
+   .. method:: all_cv_params()
+
+      Return every attached ``CVParam`` in insertion order.
+
+   .. method:: cv_params_for_accession(accession)
+
+      Return every attached ``CVParam`` whose ``accession`` matches.
+
+   .. method:: cv_params_for_ontology_ref(ontology_ref)
+
+      Return every attached ``CVParam`` whose ``ontology_ref`` matches.
+
+   .. method:: has_cv_param_with_accession(accession)
+
+      Return ``True`` if at least one attached ``CVParam`` matches.
+      
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOCVAnnotatable`` ·
+   Java: ``com.dtwthalion.ttio.protocols.CVAnnotatable``
+
+
+   .. py:method:: add_cv_param(param: ttio.cv_param.CVParam) -> None
+
+
+   .. py:method:: remove_cv_param(param: ttio.cv_param.CVParam) -> None
+
+
+   .. py:method:: all_cv_params() -> list[ttio.cv_param.CVParam]
+
+
+   .. py:method:: cv_params_for_accession(accession: str) -> list[ttio.cv_param.CVParam]
+
+
+   .. py:method:: cv_params_for_ontology_ref(ontology_ref: str) -> list[ttio.cv_param.CVParam]
+
+
+   .. py:method:: has_cv_param_with_accession(accession: str) -> bool
+
+

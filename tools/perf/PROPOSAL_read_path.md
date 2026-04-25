@@ -15,7 +15,7 @@ Harness: `tools/perf/profile_read_detail.m` (new).
 Phase                                Time       per call   Notes
 ───────────────────────────────────────────────────────────────────────
 A. Raw C H5Dread, 1 channel          17.1 ms    17.1 us    baseline
-B. MPGOHDF5Dataset readDataAtOffset  17.4 ms    17.4 us    +0.3 us
+B. TTIOHDF5Dataset readDataAtOffset  17.4 ms    17.4 us    +0.3 us
 B2. Same but hand-coded reuse spaces 16.5 ms    16.5 us    best case
 C0. readFromFilePath (alone)          6.9 ms    ──          8 index arrays
 C1. full objectAtIndex loop          27.4 ms    27.4 us    2ch + obj alloc
@@ -36,10 +36,10 @@ C.  total (C0 + C1)                  34.3 ms                matches bench
 
 ## Four proposed optimizations
 
-### ① HDF5 handle caches in `MPGOHDF5Dataset` — LOW complexity
+### ① HDF5 handle caches in `TTIOHDF5Dataset` — LOW complexity
 **What.** Cache filespace, memspace-per-count, and htype inside the
 dataset wrapper. Today every `readDataAtOffset:` calls
-`H5Dget_space` + `H5Screate_simple` + `MPGOHDF5TypeForPrecision` and
+`H5Dget_space` + `H5Screate_simple` + `TTIOHDF5TypeForPrecision` and
 then closes them, even when 1000 consecutive calls use identical
 parameters.
 
@@ -63,30 +63,30 @@ backing store before `H5Dread` overwrites every byte. Replace with
 **Abstraction impact.** Zero. Returned `NSData` is still immutable
 and owns its buffer.
 
-### ③ Lazy `MPGOSpectrumIndex` sub-arrays — MEDIUM complexity
-**What.** Today `MPGOSpectrumIndex +readFromGroup:` reads all 8
+### ③ Lazy `TTIOSpectrumIndex` sub-arrays — MEDIUM complexity
+**What.** Today `TTIOSpectrumIndex +readFromGroup:` reads all 8
 parallel datasets up-front. Keep `offsets` + `lengths` eager (needed
 for every `spectrumAtIndex:`), defer the other 6 until first
 accessor call (`retentionTimeAt:`, `msLevelAt:`, etc.) or first
 query (`indicesInRetentionTimeRange:`).
 
 Requires adding a new internal init that retains the source
-`MPGOHDF5Group` reference (or a dataset map) plus a per-array
+`TTIOHDF5Group` reference (or a dataset map) plus a per-array
 `NSLock`/`once` guard for thread safety.
 
 **Measured savings potential (raw-C detail harness).**
   - Summed cost of 6 lazy-candidate arrays: **3.7 ms** at 100 K
   - 0.5 ms at 10 K
 
-**Abstraction impact.** Minimal. The `MPGOSpectrumIndex` public API is
+**Abstraction impact.** Minimal. The `TTIOSpectrumIndex` public API is
 unchanged; internal storage becomes optionally-deferred. Trade-off:
 workloads that DO call `indicesInRetentionTimeRange:` pay the cost at
 query time instead of load time — same total, different distribution.
 
-### ④ — *not recommended* — Lazy `MPGOSignalArray`
+### ④ — *not recommended* — Lazy `TTIOSignalArray`
 **What.** Today `spectrumAtIndex:` issues 2 × `H5Dread` (mz + intensity)
 even when the caller only touches `.length`. A deferred
-`MPGOSignalArray` would carry a reference to the storage dataset and
+`TTIOSignalArray` would carry a reference to the storage dataset and
 read on first `.buffer` / `.data` access.
 
 **Potential savings.** ~8-10 ms on 100 K (halves the per-call I/O).
@@ -121,7 +121,7 @@ isn't there. The gap to raw-C exists because:
 - The benchmark's raw-C baseline reads **1 channel**, ObjC reads **2**
   (the format promises both mz and intensity are present). This is
   ~12 ms of unavoidable work for any implementation that honors the
-  `MPGOMassSpectrum` contract.
+  `TTIOMassSpectrum` contract.
 - `readFromFilePath` eagerly reads the full 8-array `spectrum_index`;
   lazy-loading drops this to **~3 ms** but doesn't eliminate it.
 
@@ -133,12 +133,12 @@ whether you consider the "extra" work part of the job.
 
 ## Proposed path forward
 
-1. **Ship ① + ②** as one commit — purely local to MPGOHDF5Dataset,
+1. **Ship ① + ②** as one commit — purely local to TTIOHDF5Dataset,
    high confidence, ~3.3 ms saved, zero abstraction risk. All
    1202 ObjC tests passed with the prototype.
 
 2. **Ship ③** as a follow-up commit — lazy spectrum_index arrays.
-   Requires careful refactor of MPGOSpectrumIndex + thread-safety
+   Requires careful refactor of TTIOSpectrumIndex + thread-safety
    guard. Saves ~3.7 ms more. Brings total to ~1.85× raw-C.
 
 3. **Do not ship ④.** Goodhart trap.

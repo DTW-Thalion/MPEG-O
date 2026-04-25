@@ -1,4 +1,4 @@
-# MPEG-O Transport Encryption — Design Proposal
+# TTI-O Transport Encryption — Design Proposal
 
 **Status:** SHIPPED in v0.10.0 (2026-04-20). This document is now a
 retrospective design note; the as-built surface matches every
@@ -276,7 +276,7 @@ The transcoded output:
 - Sets `opt_per_au_encryption` (and optionally
   `opt_encrypted_au_headers` if requested).
 - Logs a `ProvenanceRecord` with `software =
-  "mpgo-transport-transcode v1.0"`, `input_refs = [old_file_sha]`,
+  "ttio-transport-transcode v1.0"`, `input_refs = [old_file_sha]`,
   `output_refs = [new_file_sha]`, `timestamp_unix = now`.
 - Carries the original `wrapped_dek` in `ProtectionMetadata`;
   the receiver writes a v1.0 per-AU file with the same DEK so
@@ -328,17 +328,17 @@ security implications, not a streaming-time default.
 
 ### 8.2 Reference implementation (Python, first)
 
-- [x] `mpeg_o.encryption.encrypt_per_au(dataset, key)` — new
+- [x] `ttio.encryption.encrypt_per_au(dataset, key)` — new
   writer path, emits `<channel>_segments` and
   `au_header_segments` compounds. Deterministic ciphertext
   given (plaintext, key, IV).
-- [x] `mpeg_o.encryption.decrypt_per_au_channel` /
+- [x] `ttio.encryption.decrypt_per_au_channel` /
   `decrypt_per_au_header` — reader counterparts.
-- [x] `mpeg_o.transport.codec.TransportWriter` — detect
+- [x] `ttio.transport.codec.TransportWriter` — detect
   `opt_per_au_encryption` and `opt_encrypted_au_headers`;
   package encrypted segments into `ChannelData.data` bytes
   with AAD binding.
-- [x] `mpeg_o.transport.codec.TransportReader` — honor
+- [x] `ttio.transport.codec.TransportReader` — honor
   encrypted variants, materialize target file with the same
   flags and same DEK.
 - [x] Tests: per-AU encrypt → stream → decrypt round-trip;
@@ -348,14 +348,14 @@ security implications, not a streaming-time default.
 
 ### 8.3 ObjC port
 
-- [x] `MPGOEncryptionManager` — add `encryptPerAUWithKey:`.
-- [x] `MPGOTransportWriter` / `MPGOTransportReader` — detect
+- [x] `TTIOEncryptionManager` — add `encryptPerAUWithKey:`.
+- [x] `TTIOTransportWriter` / `TTIOTransportReader` — detect
   flags and handle the three AU variants.
 - [x] Tests: mirror Python coverage in `TestEncryptedTransport.m`.
 
 ### 8.4 Java port
 
-- [x] `com.dtwthalion.mpgo.protection.EncryptionManager` —
+- [x] `com.dtwthalion.tio.protection.EncryptionManager` —
   add `encryptPerAU(key)`.
 - [x] `TransportWriter` / `TransportReader` updates.
 - [x] Tests: mirror Python coverage in

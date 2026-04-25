@@ -1,0 +1,32 @@
+ttio.exporters
+==============
+
+.. py:module:: ttio.exporters
+
+.. autoapi-nested-parse::
+
+   Exporter subpackage (Apache-2.0).
+
+   - mzML (M19): indexed-mzML writer
+   - nmrML (M29): 1D spectrum writer
+   - ISA-Tab (M27): study bundle writer
+   - imzML (v0.9+): MS imaging writer (.imzML + .ibd pair)
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/ttio/exporters/imzml/index
+   /autoapi/ttio/exporters/isa/index
+   /autoapi/ttio/exporters/jcamp_dx/index
+   /autoapi/ttio/exporters/mzml/index
+   /autoapi/ttio/exporters/mztab/index
+   /autoapi/ttio/exporters/nmrml/index
+
+
