@@ -11,9 +11,12 @@
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Genomics/TTIOGenomicRun.h"
+#import "Dataset/TTIOSpectralDataset.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOProviderRegistry.h"
 #include <unistd.h>
+#include <string.h>
 
 // ── AlignedRead value class ────────────────────────────────────────
 
@@ -228,6 +231,139 @@ static void testGenomicIndexDiskRoundTrip(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Synthetic genomic run helper (matches Python _make_written_run) ─
+
+static TTIOWrittenGenomicRun *makeWrittenGenomicRun(NSUInteger nReads, BOOL paired)
+{
+    NSUInteger readLength = 150;
+    NSArray<NSString *> *chromsPool = @[@"chr1", @"chr2", @"chrX"];
+    NSMutableArray<NSString *> *chroms = [NSMutableArray array];
+    NSMutableData *positionsData = [NSMutableData dataWithLength:nReads * sizeof(int64_t)];
+    int64_t *positions = (int64_t *)positionsData.mutableBytes;
+    for (NSUInteger i = 0; i < nReads; i++) {
+        [chroms addObject:chromsPool[i % 3]];
+        positions[i] = 10000 + (int64_t)((i / 3) * 100);
+    }
+
+    NSMutableData *flagsData = [NSMutableData dataWithLength:nReads * sizeof(uint32_t)];
+    uint32_t *flags = (uint32_t *)flagsData.mutableBytes;
+    if (paired) {
+        for (NSUInteger i = 0; i < nReads; i++) flags[i] = 0x1;
+    }
+
+    NSMutableData *mapqsData = [NSMutableData dataWithLength:nReads * sizeof(uint8_t)];
+    memset(mapqsData.mutableBytes, 60, nReads);
+
+    NSMutableData *sequencesData = [NSMutableData dataWithLength:nReads * readLength];
+    uint8_t *seqBytes = (uint8_t *)sequencesData.mutableBytes;
+    const char bases[4] = {'A', 'C', 'G', 'T'};
+    for (NSUInteger i = 0; i < nReads * readLength; i++) {
+        seqBytes[i] = (uint8_t)bases[i % 4];
+    }
+
+    NSMutableData *qualitiesData = [NSMutableData dataWithLength:nReads * readLength];
+    memset(qualitiesData.mutableBytes, 30, nReads * readLength);
+
+    NSMutableData *offsetsData = [NSMutableData dataWithLength:nReads * sizeof(uint64_t)];
+    uint64_t *offsets = (uint64_t *)offsetsData.mutableBytes;
+    for (NSUInteger i = 0; i < nReads; i++) offsets[i] = i * readLength;
+
+    NSMutableData *lengthsData = [NSMutableData dataWithLength:nReads * sizeof(uint32_t)];
+    uint32_t *lengths = (uint32_t *)lengthsData.mutableBytes;
+    for (NSUInteger i = 0; i < nReads; i++) lengths[i] = (uint32_t)readLength;
+
+    NSMutableArray *cigars = [NSMutableArray array];
+    NSMutableArray *names  = [NSMutableArray array];
+    NSMutableArray *mateChroms = [NSMutableArray array];
+    for (NSUInteger i = 0; i < nReads; i++) {
+        [cigars addObject:[NSString stringWithFormat:@"%luM", (unsigned long)readLength]];
+        [names  addObject:[NSString stringWithFormat:@"read_%06lu", (unsigned long)i]];
+        [mateChroms addObject:paired ? chroms[i] : @""];
+    }
+
+    NSMutableData *matePosData = [NSMutableData dataWithLength:nReads * sizeof(int64_t)];
+    int64_t *matePos = (int64_t *)matePosData.mutableBytes;
+    NSMutableData *tlensData = [NSMutableData dataWithLength:nReads * sizeof(int32_t)];
+    int32_t *tlens = (int32_t *)tlensData.mutableBytes;
+    for (NSUInteger i = 0; i < nReads; i++) {
+        matePos[i] = paired ? positions[i] + 200 : -1;
+        tlens[i]   = paired ? 200 : 0;
+    }
+
+    return [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                   referenceUri:@"GRCh38.p14"
+                       platform:@"ILLUMINA"
+                     sampleName:@"NA12878"
+                      positions:positionsData
+               mappingQualities:mapqsData
+                          flags:flagsData
+                      sequences:sequencesData
+                      qualities:qualitiesData
+                        offsets:offsetsData
+                        lengths:lengthsData
+                         cigars:cigars
+                      readNames:names
+                mateChromosomes:mateChroms
+                  matePositions:matePosData
+                templateLengths:tlensData
+                    chromosomes:chroms
+              signalCompression:TTIOCompressionZlib];
+}
+
+// ── Acceptance #1 — 100-read round-trip via HDF5 ──────────────────
+
+static void testBasicRoundTrip100Reads(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82rt_%d.tio", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    TTIOWrittenGenomicRun *written = makeWrittenGenomicRun(100, NO);
+    NSError *err = nil;
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                  title:@"t"
+                                    isaInvestigationId:@"i"
+                                                msRuns:@{}
+                                            genomicRuns:@{@"genomic_0001": written}
+                                        identifications:nil
+                                        quantifications:nil
+                                      provenanceRecords:nil
+                                                  error:&err];
+    PASS(ok, "M82: writeMinimalToPath with genomicRuns succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    PASS(ds != nil, "M82: readFromFilePath succeeds for genomic file");
+
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M82: genomicRuns dict populated");
+    PASS(gr.readCount == 100, "M82: readCount round-trips");
+    PASS([gr.referenceUri isEqualToString:@"GRCh38.p14"],
+         "M82: referenceUri round-trips");
+    PASS(gr.acquisitionMode == TTIOAcquisitionModeGenomicWGS,
+         "M82: acquisitionMode round-trips");
+
+    TTIOAlignedRead *r0 = [gr readAtIndex:0 error:&err];
+    PASS(r0 != nil, "M82: readAtIndex[0] succeeds");
+    PASS([r0.readName isEqualToString:@"read_000000"],
+         "M82: readName[0] = read_000000");
+    PASS([r0.chromosome isEqualToString:@"chr1"],
+         "M82: chromosome[0] = chr1");
+    PASS(r0.position == 10000, "M82: position[0] = 10000");
+    PASS([r0.cigar isEqualToString:@"150M"], "M82: cigar[0] = 150M");
+    PASS(r0.sequence.length == 150, "M82: sequence[0] length = 150");
+    PASS(r0.flags == 0, "M82: flags[0] = 0");
+    PASS([r0.mateChromosome isEqualToString:@""],
+         "M82: mateChromosome[0] sentinel");
+    PASS(r0.matePosition == -1, "M82: matePosition[0] sentinel");
+
+    TTIOAlignedRead *r99 = [gr readAtIndex:99 error:&err];
+    PASS(r99 != nil, "M82: readAtIndex[99] succeeds");
+    PASS([r99.readName isEqualToString:@"read_000099"],
+         "M82: readName[99] = read_000099");
+
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -236,5 +372,6 @@ void testM82GenomicRun(void)
     testGenomicIndexInMemory();
     testWrittenGenomicRunConstruction();
     testGenomicIndexDiskRoundTrip();
+    testBasicRoundTrip100Reads();
     // Subsequent tasks append more test functions called from here.
 }

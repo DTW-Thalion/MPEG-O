@@ -51,7 +51,21 @@
     TTIOGenomicIndex *index = [TTIOGenomicIndex readFromGroup:idxGroup error:error];
     if (!index) return nil;
 
-    NSNumber *modeN     = [runGroup attributeValueForName:@"acquisition_mode" error:error];
+    // Integer attribute: the storage-protocol adapter tries
+    // stringAttributeNamed first which silently returns garbage bytes
+    // for INT64 attrs (TTIOHDF5Group.stringAttributeNamed doesn't
+    // type-check). Read directly via the underlying HDF5Group when
+    // available; fall back to the protocol for non-HDF5 providers.
+    int64_t modeValue = 0;
+    if ([runGroup respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *h5 = [(id)runGroup performSelector:@selector(unwrap)];
+        BOOL exists = NO;
+        modeValue = [h5 integerAttributeNamed:@"acquisition_mode"
+                                        exists:&exists error:NULL];
+    } else {
+        id v = [runGroup attributeValueForName:@"acquisition_mode" error:NULL];
+        if ([v isKindOfClass:[NSNumber class]]) modeValue = [v longLongValue];
+    }
     NSString *modality  = [runGroup attributeValueForName:@"modality"         error:error];
     NSString *refUri    = [runGroup attributeValueForName:@"reference_uri"    error:error];
     NSString *platform  = [runGroup attributeValueForName:@"platform"         error:error];
@@ -59,7 +73,7 @@
 
     return [[TTIOGenomicRun alloc]
         initWithName:name
-     acquisitionMode:(TTIOAcquisitionMode)[modeN integerValue]
+     acquisitionMode:(TTIOAcquisitionMode)modeValue
             modality:modality ?: @"genomic_sequencing"
         referenceUri:refUri ?: @""
             platform:platform ?: @""
