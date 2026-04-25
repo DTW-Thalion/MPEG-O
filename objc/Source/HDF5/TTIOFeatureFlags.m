@@ -18,6 +18,7 @@
 + (NSString *)featureAnonymized              { return @"opt_anonymized"; }
 + (NSString *)featurePQCPreview              { return @"opt_pqc_preview"; }
 + (NSString *)featureMS2ActivationDetail     { return @"opt_ms2_activation_detail"; }
++ (NSString *)featureOptGenomic              { return @"opt_genomic"; }
 
 + (NSString *)formatVersionForRoot:(TTIOHDF5Group *)root
 {

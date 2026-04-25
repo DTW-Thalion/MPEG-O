@@ -18,7 +18,11 @@
 #import "Protection/TTIOAccessPolicy.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOCompoundField.h"
 #import "Providers/TTIOHDF5Provider.h"
+#import "Genomics/TTIOGenomicRun.h"            // M82
+#import "Genomics/TTIOGenomicIndex.h"          // M82
+#import "Genomics/TTIOWrittenGenomicRun.h"     // M82
 #import <hdf5.h>
 
 // Internal SPI surfaced by TTIOAcquisitionRun for the dataset-level
@@ -35,6 +39,7 @@ static NSString *const kTTIOFormatVersion = @"1.1";
 // opt_ms2_activation_detail (i.e. any run's spectrum_index has the
 // four optional activation/isolation columns).
 static NSString *const kTTIOFormatVersionM74 = @"1.3";
+static NSString *const kTTIOFormatVersionM82 = @"1.4";
 
 /** v0.12 M74 Slice E: scan the ms_runs dict for any run whose
  *  spectrum_index carries the four optional activation/isolation
@@ -61,6 +66,7 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
 @synthesize filePath = _filePath;
 @synthesize provider = _provider;
 @synthesize encryptedAlgorithm = _encryptedAlgorithm;
+@synthesize genomicRuns = _genomicRuns;  // M82
 
 - (BOOL)isEncrypted
 {
@@ -82,6 +88,7 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
         _isaInvestigationId = [isaId copy];
         _msRuns             = [msRuns copy] ?: @{};
         _nmrRuns            = [nmrRuns copy] ?: @{};
+        _genomicRuns        = @{};   // M82: populated by +readFromFilePath: when present
         _identifications    = [identifications copy] ?: @[];
         _quantifications    = [quantifications copy] ?: @[];
         _provenanceRecords  = [provenance copy] ?: @[];
@@ -304,10 +311,165 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     return [ds writeData:data error:error];
 }
 
+// M82: write one /study/genomic_runs/<name>/ subtree. Mirrors the
+// per-MS-run writer but for the genomic data model. Uses TTIOGenomicIndex
+// for the index subgroup + TTIOCompoundIO for the 3 VL compound
+// datasets (cigars, read_names, mate_info) under signal_channels/.
++ (BOOL)writeGenomicRun:(TTIOWrittenGenomicRun *)run
+                 toGroup:(TTIOHDF5Group *)parent
+                    name:(NSString *)name
+                   error:(NSError **)error
+{
+    TTIOHDF5Group *rg = [parent createGroupNamed:name error:error];
+    if (!rg) return NO;
+
+    // Run-level attributes.
+    if (![rg setIntegerAttribute:@"acquisition_mode"
+                            value:run.acquisitionMode error:error]) return NO;
+    if (![rg setStringAttribute:@"modality"
+                           value:@"genomic_sequencing" error:error]) return NO;
+    if (![rg setIntegerAttribute:@"spectrum_class" value:5 error:error]) return NO;
+    if (![rg setStringAttribute:@"reference_uri"
+                           value:run.referenceUri error:error]) return NO;
+    if (![rg setStringAttribute:@"platform"
+                           value:run.platform error:error]) return NO;
+    if (![rg setStringAttribute:@"sample_name"
+                           value:run.sampleName error:error]) return NO;
+    if (![rg setIntegerAttribute:@"read_count"
+                            value:(int64_t)run.readCount error:error]) return NO;
+
+    // genomic_index subgroup (delegates to TTIOGenomicIndex).
+    TTIOGenomicIndex *idx = [[TTIOGenomicIndex alloc]
+        initWithOffsets:run.offsetsData
+                lengths:run.lengthsData
+            chromosomes:run.chromosomes
+              positions:run.positionsData
+       mappingQualities:run.mappingQualitiesData
+                  flags:run.flagsData];
+    TTIOHDF5Group *idxG = [rg createGroupNamed:@"genomic_index" error:error];
+    if (!idxG) return NO;
+    // GenomicIndex.writeToGroup takes id<TTIOStorageGroup>; wrap via the
+    // HDF5 provider's adapter. Use the same trick: TTIOHDF5GroupAdapter
+    // is created by openProviderURL but we can construct it via
+    // TTIOHDF5Provider's escape hatch. Simpler: pass the raw HDF5Group
+    // via `id`-cast since GenomicIndex.writeToGroup checks
+    // respondsToSelector:@selector(unwrap) and falls through to direct
+    // TTIOCompoundIO + the storage protocol calls also work on
+    // TTIOHDF5Group via category methods. Easiest: just reuse the
+    // helper directly — TTIOGenomicIndex's internal writes use
+    // createDatasetNamed:precision:length:chunkSize:compression:
+    // compressionLevel:error: which TTIOHDF5Group implements with a
+    // slightly different signature (no `compression` arg). Wrap via
+    // adapter to bridge.
+    id<TTIOStorageGroup> idxGAdapter =
+        (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
+            performSelector:@selector(initWithGroup:) withObject:idxG];
+    if (!idxGAdapter) return NO;
+    if (![idx writeToGroup:idxGAdapter error:error]) return NO;
+
+    // signal_channels subgroup.
+    TTIOHDF5Group *sc = [rg createGroupNamed:@"signal_channels" error:error];
+    if (!sc) return NO;
+    id<TTIOStorageGroup> scAdapter =
+        (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
+            performSelector:@selector(initWithGroup:) withObject:sc];
+    if (!scAdapter) return NO;
+
+    // 5 typed channels (use TTIOGenomicIndex's static writeTypedChannel
+    // helper isn't accessible — inline the same pattern via the
+    // adapter). These match the precision choices in the spec:
+    // positions=int64, sequences=uint8, qualities=uint8, flags=uint32,
+    // mapping_qualities=uint8.
+    TTIOCompression codec = run.signalCompression;
+    NSDictionary *channels = @{
+        @"positions"         : @[ @(TTIOPrecisionInt64),  run.positionsData ],
+        @"sequences"         : @[ @(TTIOPrecisionUInt8),  run.sequencesData ],
+        @"qualities"         : @[ @(TTIOPrecisionUInt8),  run.qualitiesData ],
+        @"flags"             : @[ @(TTIOPrecisionUInt32), run.flagsData ],
+        @"mapping_qualities" : @[ @(TTIOPrecisionUInt8),  run.mappingQualitiesData ],
+    };
+    for (NSString *chName in @[@"positions", @"sequences", @"qualities",
+                                @"flags", @"mapping_qualities"]) {
+        NSArray *spec = channels[chName];
+        TTIOPrecision prec = (TTIOPrecision)[spec[0] integerValue];
+        NSData *data = spec[1];
+        NSUInteger n = data.length / TTIOPrecisionElementSize(prec);
+        id<TTIOStorageDataset> ds = [scAdapter createDatasetNamed:chName
+                                                          precision:prec
+                                                             length:n
+                                                          chunkSize:65536
+                                                        compression:codec
+                                                   compressionLevel:6
+                                                              error:error];
+        if (!ds) return NO;
+        if (![ds writeAll:data error:error]) return NO;
+    }
+
+    // 3 compound datasets via TTIOCompoundIO (HDF5-direct).
+    NSArray *vlValueField = @[
+        [TTIOCompoundField fieldWithName:@"value" kind:TTIOCompoundFieldKindVLString]
+    ];
+
+    NSMutableArray *cigarRows = [NSMutableArray arrayWithCapacity:run.cigars.count];
+    for (NSString *c in run.cigars) [cigarRows addObject:@{@"value": c}];
+    if (![TTIOCompoundIO writeGeneric:cigarRows
+                              intoGroup:sc datasetNamed:@"cigars"
+                                  fields:vlValueField error:error]) return NO;
+
+    NSMutableArray *nameRows = [NSMutableArray arrayWithCapacity:run.readNames.count];
+    for (NSString *rn in run.readNames) [nameRows addObject:@{@"value": rn}];
+    if (![TTIOCompoundIO writeGeneric:nameRows
+                              intoGroup:sc datasetNamed:@"read_names"
+                                  fields:vlValueField error:error]) return NO;
+
+    // mate_info compound: chrom (VL str) + pos (int64) + tlen (int32 → boxed as int64 via VLString-or-int64 schema).
+    NSArray *mateFields = @[
+        [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"pos"   kind:TTIOCompoundFieldKindInt64],
+        [TTIOCompoundField fieldWithName:@"tlen"  kind:TTIOCompoundFieldKindInt64],
+    ];
+    NSMutableArray *mateRows = [NSMutableArray arrayWithCapacity:run.readCount];
+    const int64_t *matePos = (const int64_t *)run.matePositionsData.bytes;
+    const int32_t *tlens   = (const int32_t *)run.templateLengthsData.bytes;
+    for (NSUInteger i = 0; i < run.readCount; i++) {
+        [mateRows addObject:@{
+            @"chrom": run.mateChromosomes[i],
+            @"pos":   @(matePos[i]),
+            @"tlen":  @((int64_t)tlens[i]),
+        }];
+    }
+    if (![TTIOCompoundIO writeGeneric:mateRows
+                              intoGroup:sc datasetNamed:@"mate_info"
+                                  fields:mateFields error:error]) return NO;
+
+    return YES;
+}
+
 + (BOOL)writeMinimalToPath:(NSString *)path
                       title:(NSString *)title
         isaInvestigationId:(NSString *)isaId
                     msRuns:(NSDictionary<NSString *, TTIOWrittenRun *> *)runs
+            identifications:(NSArray *)identifications
+            quantifications:(NSArray *)quantifications
+          provenanceRecords:(NSArray *)provenance
+                      error:(NSError **)error
+{
+    return [self writeMinimalToPath:path
+                              title:title
+                 isaInvestigationId:isaId
+                             msRuns:runs
+                         genomicRuns:nil
+                     identifications:identifications
+                     quantifications:quantifications
+                  provenanceRecords:provenance
+                              error:error];
+}
+
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                    msRuns:(NSDictionary<NSString *, TTIOWrittenRun *> *)runs
+                genomicRuns:(NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
             identifications:(NSArray *)identifications
             quantifications:(NSArray *)quantifications
           provenanceRecords:(NSArray *)provenance
@@ -321,7 +483,7 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
 
     // Same feature-flag set as -writeToFilePath: so readers can't tell
     // the two paths apart.
-    NSArray *features = @[
+    NSMutableArray *features = [@[
         [TTIOFeatureFlags featureBaseV1],
         [TTIOFeatureFlags featureCompoundIdentifications],
         [TTIOFeatureFlags featureCompoundQuantifications],
@@ -330,8 +492,23 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         [TTIOFeatureFlags featureCompoundHeaders],
         [TTIOFeatureFlags featureNative2DNMR],
         [TTIOFeatureFlags featureNativeMSImageCube],
-    ];
-    if (![TTIOFeatureFlags writeFormatVersion:kTTIOFormatVersion
+    ] mutableCopy];
+
+    // M82: opt_genomic is the canonical advertisement of genomic
+    // content. Add it whenever genomicRuns is non-empty, idempotent
+    // if a future caller pre-populates it. Bump format_version to 1.4
+    // (which implies 1.3 + 1.1 — readers gate features by flag, not
+    // by version equality).
+    BOOL hasGenomic = genomicRuns.count > 0;
+    NSString *formatVersion = kTTIOFormatVersion;
+    if (hasGenomic) {
+        if (![features containsObject:[TTIOFeatureFlags featureOptGenomic]]) {
+            [features addObject:[TTIOFeatureFlags featureOptGenomic]];
+        }
+        formatVersion = kTTIOFormatVersionM82;
+    }
+
+    if (![TTIOFeatureFlags writeFormatVersion:formatVersion
                                       features:features
                                         toRoot:root
                                          error:error]) return NO;
@@ -444,6 +621,24 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     TTIOHDF5Group *nmrRunsGroup = [study createGroupNamed:@"nmr_runs" error:error];
     if (!nmrRunsGroup) return NO;
     if (![nmrRunsGroup setStringAttribute:@"_run_names" value:@"" error:error]) return NO;
+
+    // M82: genomic_runs subtree (only when non-empty — pre-M82 byte
+    // parity for ms-only files).
+    if (hasGenomic) {
+        TTIOHDF5Group *gRunsGroup = [study createGroupNamed:@"genomic_runs" error:error];
+        if (!gRunsGroup) return NO;
+        NSArray *gNames = [[genomicRuns allKeys] sortedArrayUsingSelector:@selector(compare:)];
+        if (![gRunsGroup setStringAttribute:@"_run_names"
+                                      value:[gNames componentsJoinedByString:@","]
+                                      error:error]) return NO;
+        for (NSString *gName in gNames) {
+            TTIOWrittenGenomicRun *gRun = genomicRuns[gName];
+            if (![self writeGenomicRun:gRun
+                                toGroup:gRunsGroup
+                                   name:gName
+                                  error:error]) return NO;
+        }
+    }
 
     if (identifications.count > 0) {
         if (![TTIOCompoundIO writeIdentifications:identifications
@@ -602,6 +797,27 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         }
     }
 
+    // M82: genomic_runs subtree (absent on pre-M82 files → empty dict).
+    NSMutableDictionary *genomicRuns = [NSMutableDictionary dictionary];
+    if ([study hasChildNamed:@"genomic_runs"]) {
+        TTIOHDF5Group *gg = [study openGroupNamed:@"genomic_runs" error:error];
+        NSString *gNames = [gg stringAttributeNamed:@"_run_names" error:NULL] ?: @"";
+        for (NSString *rname in [gNames componentsSeparatedByString:@","]) {
+            NSString *trimmed =
+                [rname stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            if (trimmed.length == 0 || ![gg hasChildNamed:trimmed]) continue;
+            TTIOHDF5Group *runG = [gg openGroupNamed:trimmed error:error];
+            if (!runG) return nil;
+            id<TTIOStorageGroup> runAdapter =
+                (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
+                    performSelector:@selector(initWithGroup:) withObject:runG];
+            TTIOGenomicRun *gr =
+                [TTIOGenomicRun openFromGroup:runAdapter name:trimmed error:error];
+            if (!gr) return nil;
+            genomicRuns[trimmed] = gr;
+        }
+    }
+
     // NMR runs (legacy)
     NSMutableDictionary *nmrRuns = [NSMutableDictionary dictionary];
     if ([study hasChildNamed:@"nmr_runs"]) {
@@ -679,9 +895,10 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                                            quantifications:quants
                                          provenanceRecords:prov
                                                transitions:trans];
-    ds->_file     = f;
-    ds->_provider = p;
-    ds->_filePath = [path copy];
+    ds->_file        = f;
+    ds->_provider    = p;
+    ds->_filePath    = [path copy];
+    ds->_genomicRuns = [genomicRuns copy];  // M82
 
     // Subclass hook: read additional /study/ content while file is open.
     (void)[ds readAdditionalStudyContent:study error:NULL];

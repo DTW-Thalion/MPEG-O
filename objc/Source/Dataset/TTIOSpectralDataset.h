@@ -14,6 +14,8 @@
 @class TTIOTransitionList;
 @class TTIOAccessPolicy;
 @class TTIOHDF5Group;
+@class TTIOGenomicRun;          // v0.11 M82
+@class TTIOWrittenGenomicRun;   // v0.11 M82
 @protocol TTIOStorageProvider;
 
 /**
@@ -39,6 +41,10 @@
 
 @property (readonly, copy) NSDictionary<NSString *, TTIOAcquisitionRun *> *msRuns;
 @property (readonly, copy) NSDictionary<NSString *, NSArray<TTIONMRSpectrum *> *> *nmrRuns;
+
+/** v0.11 M82: zero or more named genomic runs. Empty for pre-M82
+ *  files; populated when /study/genomic_runs/ is present. */
+@property (readonly, copy) NSDictionary<NSString *, TTIOGenomicRun *> *genomicRuns;
 
 @property (readonly, copy) NSArray<TTIOIdentification *>   *identifications;
 @property (readonly, copy) NSArray<TTIOQuantification *>   *quantifications;
@@ -87,6 +93,20 @@
                       title:(NSString *)title
         isaInvestigationId:(NSString *)isaId
                     msRuns:(NSDictionary<NSString *, TTIOWrittenRun *> *)runs
+            identifications:(nullable NSArray *)identifications
+            quantifications:(nullable NSArray *)quantifications
+          provenanceRecords:(nullable NSArray *)provenance
+                      error:(NSError * _Nullable * _Nullable)error;
+
+/** v0.11 M82: extended write_minimal accepting genomic runs alongside
+ *  MS runs. Setting genomicRuns to a non-empty dict adds the
+ *  `opt_genomic` feature flag and bumps format_version to 1.4. The
+ *  shorter overload above delegates here with genomicRuns:nil. */
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                    msRuns:(NSDictionary<NSString *, TTIOWrittenRun *> *)runs
+                genomicRuns:(nullable NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
             identifications:(nullable NSArray *)identifications
             quantifications:(nullable NSArray *)quantifications
           provenanceRecords:(nullable NSArray *)provenance
