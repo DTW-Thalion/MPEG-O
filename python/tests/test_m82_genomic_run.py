@@ -634,3 +634,32 @@ def test_empty_run(tmp_path: Path):
         assert gr.reads_in_region("chr1", 0, 1_000_000_000) == []
     finally:
         ds.close()
+
+
+@pytest.mark.parametrize("provider", ["memory", "sqlite"])
+def test_multi_provider_roundtrip(tmp_path: Path, provider: str):
+    """Acceptance #7: 100-read round-trip via Memory and SQLite providers."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    if provider == "memory":
+        url = "memory://test_m82"
+    else:
+        url = str(tmp_path / "g.sqlite")
+
+    written = _make_written_run(n_reads=100, paired=False)
+    SpectralDataset.write_minimal(
+        url, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": written},
+        provider=provider,
+    )
+
+    ds = SpectralDataset.open(url, provider=provider)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == 100
+        read = gr[42]
+        assert read.read_name == "read_000042"
+        assert read.chromosome == written.chromosomes[42]
+        assert read.position == int(written.positions[42])
+    finally:
+        ds.close()
