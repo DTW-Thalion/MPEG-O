@@ -5,6 +5,9 @@
  */
 package global.thalion.ttio;
 
+import global.thalion.ttio.genomics.GenomicIndex;        // M82.3
+import global.thalion.ttio.genomics.GenomicRun;          // M82.3
+import global.thalion.ttio.genomics.WrittenGenomicRun;   // M82.3
 import global.thalion.ttio.hdf5.Hdf5CompoundIO;
 import global.thalion.ttio.hdf5.Hdf5File;
 import global.thalion.ttio.hdf5.Hdf5Group;
@@ -50,6 +53,7 @@ public class SpectralDataset implements
     private final String title;
     private final String isaInvestigationId;
     private final Map<String, AcquisitionRun> msRuns;
+    private final Map<String, GenomicRun> genomicRuns;  // M82.3
     private final List<Identification> identifications;
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
@@ -65,6 +69,7 @@ public class SpectralDataset implements
                             FeatureFlags featureFlags,
                             String title, String isaInvestigationId,
                             Map<String, AcquisitionRun> msRuns,
+                            Map<String, GenomicRun> genomicRuns,
                             List<Identification> identifications,
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords,
@@ -75,10 +80,25 @@ public class SpectralDataset implements
         this.title = title;
         this.isaInvestigationId = isaInvestigationId;
         this.msRuns = msRuns;
+        this.genomicRuns = genomicRuns != null ? genomicRuns : Map.of();
         this.identifications = identifications;
         this.quantifications = quantifications;
         this.provenanceRecords = provenanceRecords;
         this.encryptedAlgorithm = encryptedAlgorithm != null ? encryptedAlgorithm : "";
+    }
+
+    // Pre-M82.3 constructors (kept for callers that don't use genomic_runs).
+    private SpectralDataset(StorageProvider provider, Hdf5File file,
+                            FeatureFlags featureFlags,
+                            String title, String isaInvestigationId,
+                            Map<String, AcquisitionRun> msRuns,
+                            List<Identification> identifications,
+                            List<Quantification> quantifications,
+                            List<ProvenanceRecord> provenanceRecords,
+                            String encryptedAlgorithm) {
+        this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
+                Map.of(), identifications, quantifications, provenanceRecords,
+                encryptedAlgorithm);
     }
 
     private SpectralDataset(StorageProvider provider, Hdf5File file,
@@ -89,7 +109,7 @@ public class SpectralDataset implements
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                identifications, quantifications, provenanceRecords, "");
+                Map.of(), identifications, quantifications, provenanceRecords, "");
     }
 
     /** The absolute path of the underlying .tio file (null for in-memory datasets). */
@@ -107,6 +127,9 @@ public class SpectralDataset implements
     public String title() { return title; }
     public String isaInvestigationId() { return isaInvestigationId; }
     public Map<String, AcquisitionRun> msRuns() { return msRuns; }
+    /** v0.11 M82.3: zero or more named genomic runs. Empty for pre-M82
+     *  files; populated when {@code /study/genomic_runs/} is present. */
+    public Map<String, GenomicRun> genomicRuns() { return genomicRuns; }
     public List<Identification> identifications() { return identifications; }
     public List<Quantification> quantifications() { return quantifications; }
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
@@ -149,6 +172,7 @@ public class SpectralDataset implements
             String title = null;
             String isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
+            Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();  // M82.3
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
@@ -180,6 +204,24 @@ public class SpectralDataset implements
                         }
                     }
 
+                    // M82.3: read genomic_runs/ when present.
+                    if (study.hasChild("genomic_runs")) {
+                        try (Hdf5Group gG = study.openGroup("genomic_runs")) {
+                            if (gG.hasAttribute("_run_names")) {
+                                String names = gG.readStringAttribute("_run_names");
+                                var gAdapter = Hdf5Provider.adapterForGroup(gG);
+                                for (String rn : names.split(",")) {
+                                    String name = rn.strip();
+                                    if (!name.isEmpty() && gG.hasChild(name)) {
+                                        var rgGroup = gAdapter.openGroup(name);
+                                        genomicRuns.put(name,
+                                            GenomicRun.readFrom(rgGroup, name));
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     idents = readIdentifications(study);
                     quants = readQuantifications(study);
                     prov = readProvenance(study);
@@ -187,7 +229,7 @@ public class SpectralDataset implements
             }
 
             return new SpectralDataset(provider, file, flags, title, isaId, runs,
-                    idents, quants, prov, encryptedAlg);
+                    genomicRuns, idents, quants, prov, encryptedAlg);
         }
     }
 
@@ -215,6 +257,7 @@ public class SpectralDataset implements
             }
             String title = null, isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
+            Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();  // M82.3
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
@@ -248,19 +291,37 @@ public class SpectralDataset implements
                             }
                         }
                     }
+                    // M82.3: read genomic_runs/ from any provider.
+                    if (study.hasChild("genomic_runs")) {
+                        try (var gG = study.openGroup("genomic_runs")) {
+                            if (gG.hasAttribute("_run_names")) {
+                                Object n = gG.getAttribute("_run_names");
+                                String csv = n != null ? n.toString() : "";
+                                for (String rn : csv.split(",")) {
+                                    String name = rn.strip();
+                                    if (!name.isEmpty() && gG.hasChild(name)) {
+                                        var rgGroup = gG.openGroup(name);
+                                        genomicRuns.put(name,
+                                            GenomicRun.readFrom(rgGroup, name));
+                                    }
+                                }
+                            }
+                        }
+                    }
                     idents = readIdentificationsFromJson(study);
                     quants = readQuantificationsFromJson(study);
                     prov = readProvenanceFromJson(study);
                 }
             }
             return new SpectralDataset(provider, null, flags, title, isaId, runs,
-                    idents, quants, prov, encryptedAlg);
+                    genomicRuns, idents, quants, prov, encryptedAlg);
         }
     }
 
     private static SpectralDataset createViaProvider(
             String url, String title, String isaInvestigationId,
             List<AcquisitionRun> runs,
+            List<WrittenGenomicRun> genomicRuns,
             List<Identification> identifications,
             List<Quantification> quantifications,
             List<ProvenanceRecord> provenanceRecords,
@@ -308,11 +369,33 @@ public class SpectralDataset implements
                     study.setAttribute("provenance_json",
                             buildProvenanceJson(provenanceRecords));
                 }
+
+                // M82.3: genomic_runs subtree (provider-agnostic).
+                Map<String, GenomicRun> genomicMap = new LinkedHashMap<>();
+                if (genomicRuns != null && !genomicRuns.isEmpty()) {
+                    try (var gG = study.createGroup("genomic_runs")) {
+                        StringBuilder names = new StringBuilder();
+                        for (int i = 0; i < genomicRuns.size(); i++) {
+                            WrittenGenomicRun gr = genomicRuns.get(i);
+                            String gname = "genomic_" + String.format("%04d", i + 1);
+                            if (i > 0) names.append(",");
+                            names.append(gname);
+                            writeGenomicRunSubtree(gG, gname, gr);
+                            try (var rgGroup = gG.openGroup(gname)) {
+                                genomicMap.put(gname, GenomicRun.readFrom(rgGroup, gname));
+                            }
+                        }
+                        gG.setAttribute("_run_names", names.toString());
+                    }
+                }
+
                 SpectralDataset out = new SpectralDataset(provider, null,
                         featureFlags, title, isaInvestigationId, runMap,
+                        genomicMap,
                         identifications != null ? identifications : List.of(),
                         quantifications != null ? quantifications : List.of(),
-                        provenanceRecords != null ? provenanceRecords : List.of());
+                        provenanceRecords != null ? provenanceRecords : List.of(),
+                        "");
                 provider.commitTransaction();
                 return out;
             }
@@ -356,6 +439,8 @@ public class SpectralDataset implements
         return new FeatureFlags("1.3", withFlag);
     }
 
+    /** v0.11 M82.3: Convenience overload that delegates to the
+     *  {@code genomicRuns}-aware variant with an empty genomic list. */
     public static SpectralDataset create(String pathOrUrl, String title,
                                           String isaInvestigationId,
                                           List<AcquisitionRun> runs,
@@ -363,10 +448,38 @@ public class SpectralDataset implements
                                           List<Quantification> quantifications,
                                           List<ProvenanceRecord> provenanceRecords,
                                           FeatureFlags featureFlags) {
+        return create(pathOrUrl, title, isaInvestigationId, runs, List.of(),
+                identifications, quantifications, provenanceRecords, featureFlags);
+    }
+
+    /** v0.11 M82.3: full create signature accepting genomic runs
+     *  alongside MS runs. When {@code genomicRuns} is non-empty,
+     *  {@link FeatureFlags#OPT_GENOMIC} is added (idempotent if the
+     *  caller-supplied {@code featureFlags} already includes it) and
+     *  the format version is bumped to {@code "1.4"}. */
+    public static SpectralDataset create(String pathOrUrl, String title,
+                                          String isaInvestigationId,
+                                          List<AcquisitionRun> runs,
+                                          List<WrittenGenomicRun> genomicRuns,
+                                          List<Identification> identifications,
+                                          List<Quantification> quantifications,
+                                          List<ProvenanceRecord> provenanceRecords,
+                                          FeatureFlags featureFlags) {
+        // M82.3: opt_genomic + format_version 1.4 when genomic content present.
+        boolean hasGenomic = genomicRuns != null && !genomicRuns.isEmpty();
+        if (hasGenomic && !featureFlags.features().contains(FeatureFlags.OPT_GENOMIC)) {
+            java.util.Set<String> withFlag =
+                new java.util.LinkedHashSet<>(featureFlags.features());
+            withFlag.add(FeatureFlags.OPT_GENOMIC);
+            featureFlags = new FeatureFlags("1.4", withFlag);
+        } else if (hasGenomic && !"1.4".equals(featureFlags.formatVersion())) {
+            featureFlags = new FeatureFlags("1.4", featureFlags.features());
+        }
+
         if (pathOrUrl != null && isNonHdf5Url(pathOrUrl)) {
             return createViaProvider(pathOrUrl, title, isaInvestigationId,
-                    runs, identifications, quantifications, provenanceRecords,
-                    featureFlags);
+                    runs, genomicRuns, identifications, quantifications,
+                    provenanceRecords, featureFlags);
         }
         Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
                 .open(pathOrUrl, StorageProvider.Mode.CREATE);
@@ -396,6 +509,28 @@ public class SpectralDataset implements
                     }
                 }
 
+                // M82.3: genomic_runs subtree (only when non-empty).
+                Map<String, GenomicRun> genomicMap = new LinkedHashMap<>();
+                if (hasGenomic) {
+                    try (Hdf5Group gRunsGroup = study.createGroup("genomic_runs")) {
+                        StringBuilder names = new StringBuilder();
+                        for (int i = 0; i < genomicRuns.size(); i++) {
+                            WrittenGenomicRun gr = genomicRuns.get(i);
+                            String gname = "genomic_" + String.format("%04d", i + 1);
+                            if (i > 0) names.append(",");
+                            names.append(gname);
+                            writeGenomicRunSubtree(
+                                Hdf5Provider.adapterForGroup(gRunsGroup), gname, gr);
+                            // Open a read-side handle to populate genomicMap.
+                            try (var gAdapter = Hdf5Provider.adapterForGroup(gRunsGroup);
+                                 var rgGroup = gAdapter.openGroup(gname)) {
+                                genomicMap.put(gname, GenomicRun.readFrom(rgGroup, gname));
+                            }
+                        }
+                        gRunsGroup.setStringAttribute("_run_names", names.toString());
+                    }
+                }
+
                 if (identifications != null && !identifications.isEmpty()) {
                     writeIdentifications(study, identifications);
                 }
@@ -407,10 +542,117 @@ public class SpectralDataset implements
                 }
 
                 return new SpectralDataset(provider, file, featureFlags, title, isaInvestigationId,
-                        runMap, identifications != null ? identifications : List.of(),
+                        runMap, genomicMap,
+                        identifications != null ? identifications : List.of(),
                         quantifications != null ? quantifications : List.of(),
-                        provenanceRecords != null ? provenanceRecords : List.of());
+                        provenanceRecords != null ? provenanceRecords : List.of(),
+                        "");
             }
+        }
+    }
+
+    /** v0.11 M82.3: write one {@code /study/genomic_runs/<name>/}
+     *  subtree via the StorageGroup protocol. Provider-agnostic — used
+     *  by both the HDF5 fast path and the {@code memory://} /
+     *  {@code sqlite://} / {@code zarr://} paths. */
+    private static void writeGenomicRunSubtree(
+            global.thalion.ttio.providers.StorageGroup parent,
+            String name,
+            WrittenGenomicRun run) {
+        try (var rg = parent.createGroup(name)) {
+            // Run-level attributes.
+            rg.setAttribute("acquisition_mode",
+                (long) run.acquisitionMode().ordinal());
+            rg.setAttribute("modality", "genomic_sequencing");
+            rg.setAttribute("spectrum_class", 5L);
+            rg.setAttribute("reference_uri", run.referenceUri());
+            rg.setAttribute("platform", run.platform());
+            rg.setAttribute("sample_name", run.sampleName());
+            rg.setAttribute("read_count", (long) run.readCount());
+
+            // genomic_index (delegates to GenomicIndex.writeTo).
+            GenomicIndex idx = new GenomicIndex(
+                run.offsets(), run.lengths(), run.chromosomes(),
+                run.positions(), run.mappingQualities(), run.flags());
+            try (var ig = rg.createGroup("genomic_index")) {
+                idx.writeTo(ig);
+            }
+
+            // signal_channels: 5 typed channels + 3 compound datasets.
+            try (var sc = rg.createGroup("signal_channels")) {
+                writeSignalChannel(sc, "positions",
+                    Enums.Precision.INT64,  run.positions(), run.signalCompression());
+                writeSignalChannel(sc, "sequences",
+                    Enums.Precision.UINT8,  run.sequences(), run.signalCompression());
+                writeSignalChannel(sc, "qualities",
+                    Enums.Precision.UINT8,  run.qualities(), run.signalCompression());
+                writeSignalChannel(sc, "flags",
+                    Enums.Precision.UINT32, run.flags(), run.signalCompression());
+                writeSignalChannel(sc, "mapping_qualities",
+                    Enums.Precision.UINT8,  run.mappingQualities(),
+                    run.signalCompression());
+
+                // Compound datasets: cigars + read_names (single VL string)
+                List<global.thalion.ttio.providers.CompoundField> vlField = List.of(
+                    new global.thalion.ttio.providers.CompoundField("value",
+                        global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
+                writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
+                writeCompoundOneCol(sc, "read_names", vlField, run.readNames());
+
+                // mate_info: chrom (VL str) + pos (int64) + tlen (int64).
+                List<global.thalion.ttio.providers.CompoundField> mateFields = List.of(
+                    new global.thalion.ttio.providers.CompoundField("chrom",
+                        global.thalion.ttio.providers.CompoundField.Kind.VL_STRING),
+                    new global.thalion.ttio.providers.CompoundField("pos",
+                        global.thalion.ttio.providers.CompoundField.Kind.INT64),
+                    new global.thalion.ttio.providers.CompoundField("tlen",
+                        global.thalion.ttio.providers.CompoundField.Kind.INT64));
+                List<Object[]> mateRows = new ArrayList<>(run.readCount());
+                for (int i = 0; i < run.readCount(); i++) {
+                    mateRows.add(new Object[]{
+                        run.mateChromosomes().get(i),
+                        run.matePositions()[i],
+                        (long) run.templateLengths()[i],
+                    });
+                }
+                try (var ds = sc.createCompoundDataset("mate_info", mateFields,
+                                                         mateRows.size())) {
+                    ds.writeAll(mateRows);
+                }
+            }
+        }
+    }
+
+    private static void writeSignalChannel(
+            global.thalion.ttio.providers.StorageGroup sc,
+            String name, Enums.Precision precision, Object data,
+            Enums.Compression codec) {
+        int len;
+        if (data instanceof long[] a)        len = a.length;
+        else if (data instanceof int[] a)    len = a.length;
+        else if (data instanceof byte[] a)   len = a.length;
+        else throw new IllegalArgumentException(
+            "writeSignalChannel: unsupported data type "
+            + data.getClass().getName());
+        global.thalion.ttio.providers.StorageDataset ds;
+        try {
+            ds = sc.createDataset(name, precision, len, 65536, codec, 6);
+        } catch (UnsupportedOperationException e) {
+            ds = sc.createDataset(name, precision, len, 0,
+                Enums.Compression.NONE, 0);
+        }
+        try (var closeMe = ds) { closeMe.writeAll(data); }
+    }
+
+    private static void writeCompoundOneCol(
+            global.thalion.ttio.providers.StorageGroup sc,
+            String name,
+            List<global.thalion.ttio.providers.CompoundField> fields,
+            List<String> values) {
+        List<Object[]> rows = new ArrayList<>(values.size());
+        for (String v : values) rows.add(new Object[]{ v });
+        try (var ds = sc.createCompoundDataset(name, fields, rows.size())) {
+            ds.writeAll(rows);
         }
     }
 

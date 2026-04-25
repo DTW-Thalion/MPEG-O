@@ -46,6 +46,12 @@ public final class FeatureFlags {
      *  format version {@code "1.3"}; pre-M74 readers that ignore the
      *  flag still parse the base columns. @since 0.12 */
     public static final String OPT_MS2_ACTIVATION_DETAIL = "opt_ms2_activation_detail";
+    /** v0.11 M82: file contains one or more genomic runs under
+     *  {@code /study/genomic_runs/}. Files that set this flag are
+     *  written with format version {@code "1.4"}; pre-M82 readers
+     *  that ignore the flag still parse the MS pipeline normally
+     *  (genomic runs are a separate group hierarchy). @since 0.11 M82 */
+    public static final String OPT_GENOMIC = "opt_genomic";
 
     private static final Set<String> REQUIRED = Set.of(
         BASE_V1, COMPOUND_IDENTIFICATIONS, COMPOUND_QUANTIFICATIONS,
