@@ -7,9 +7,10 @@ via the ``genomic_runs`` parameter. Genomic analogue of
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
+
+from .provenance import ProvenanceRecord
 
 
 @dataclass(slots=True)
@@ -47,5 +48,5 @@ class WrittenGenomicRun:
     chromosomes: list[str]
 
     # Optional
-    provenance_records: list[Any] = field(default_factory=list)
+    provenance_records: list[ProvenanceRecord] = field(default_factory=list)
     signal_compression: str = "gzip"  # "gzip" → ZLIB; "none" → NONE
