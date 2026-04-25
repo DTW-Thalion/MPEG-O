@@ -229,17 +229,19 @@ def write_signal_channel(
 def _precision_from_dtype(dt: np.dtype) -> Any:
     """Map a numpy dtype to the Precision enum used by StorageGroup.
 
-    v0.11 M82: ``<u8`` (uint64) now maps to ``Precision.UINT64`` (added in
-    Task 6).  Previously (v0.9) it was coerced to INT64 because the enum had
-    no UINT64 entry; that workaround now lives only in
-    ``SpectrumIndex.read`` (``acquisition_run.py``) where the on-disk int64
-    column is re-cast back to ``<u8`` for legacy files written before M82.
+    UINT64 exists in the Precision enum (added in M82 for genomic
+    index offsets), but write_signal_channel callers passing uint64
+    numpy arrays still get INT64-on-disk to preserve cross-language
+    byte parity until ObjC (M82.2) and Java (M82.3) gain UINT64
+    support in their SQLite/Zarr providers. Genomic writers bypass
+    this map by calling _write_uint64_channel directly with
+    Precision.UINT64.
     """
     from .enums import Precision
     by_str = {
         "<f4": Precision.FLOAT32, "<f8": Precision.FLOAT64,
         "<i4": Precision.INT32,  "<i8": Precision.INT64,
-        "<u8": Precision.UINT64,
+        "<u8": Precision.INT64,
         "<u4": Precision.UINT32,
     }
     return by_str.get(dt.str, Precision.FLOAT64)
