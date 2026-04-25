@@ -165,7 +165,7 @@ if [ -n "$oqs_hdr" ]; then
     ok "liboqs headers ($oqs_hdr) — PQC enabled (ML-KEM-1024, ML-DSA-87)"
 else
     note "liboqs not found — PQC entry points will raise at runtime "
-    note "       (pip install 'mpeg-o[pqc]' auto-installs to \$HOME/_oqs)"
+    note "       (pip install 'ttio[pqc]' auto-installs to \$HOME/_oqs)"
 fi
 
 echo

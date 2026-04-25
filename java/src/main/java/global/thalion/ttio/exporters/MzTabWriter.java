@@ -116,7 +116,7 @@ public final class MzTabWriter {
         if (description != null && !description.isEmpty()) {
             lines.add("MTD\tdescription\t" + escapeTsv(description));
         }
-        lines.add("MTD\tsoftware[1]\t[MS, MS:1000799, custom unreleased software tool, mpeg-o]");
+        lines.add("MTD\tsoftware[1]\t[MS, MS:1000799, custom unreleased software tool, ttio]");
 
         for (var e : runIdx.entrySet()) {
             lines.add(String.format(

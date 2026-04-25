@@ -2,7 +2,7 @@ MTD	mzTab-version	2.0.0-M
 MTD	mzTab-mode	Summary
 MTD	mzTab-type	Identification
 MTD	title	M78 conformance (metabolomics)
-MTD	software[1]	[MS, MS:1000799, custom unreleased software tool, mpeg-o]
+MTD	software[1]	[MS, MS:1000799, custom unreleased software tool, ttio]
 MTD	ms_run[1]-location	file://metabolomics.mzML
 MTD	assay[1]-sample_ref	sample_a
 MTD	assay[1]-quantification_reagent	[MS, MS:1002038, unlabeled sample, sample_a]

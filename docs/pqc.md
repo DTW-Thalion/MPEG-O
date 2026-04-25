@@ -76,7 +76,7 @@ test (M54) validates this explicitly.
 ### Python
 
 ```bash
-pip install 'mpeg-o[pqc]'
+pip install 'ttio[pqc]'
 ```
 
 This pulls `liboqs-python` from PyPI. On first import, `liboqs-python`

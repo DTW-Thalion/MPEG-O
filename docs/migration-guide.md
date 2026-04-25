@@ -10,7 +10,7 @@ write TTI-O (`.tio`) files instead. It covers only the Python implementation.
 - Python 3.11 or later
 - An TTI-O v0.7 checkout (PyPI publishing is deferred to M40; install from source)
 - For Thermo `.raw` input: ThermoRawFileParser on your `PATH` (see section 6)
-- For a non-HDF5 backend: `pip install 'mpeg-o[zarr]'` (v0.7 M46)
+- For a non-HDF5 backend: `pip install 'ttio[zarr]'` (v0.7 M46)
 
 ---
 
@@ -27,7 +27,7 @@ The `import` extra pulls in lxml, numpy, and h5py. The `test` extra adds pytest
 and related tools. When M40 ships the PyPI-published package will be:
 
 ```
-pip install mpeg-o
+pip install ttio
 ```
 
 The public API shown in this guide will remain stable across that transition.
@@ -411,7 +411,7 @@ with open_provider("memory://scratch", mode="w") as p:
 with open_provider("sqlite:///tmp/run.db", mode="w") as p:
     ...
 
-# Zarr (v0.7, needs `pip install 'mpeg-o[zarr]'`)
+# Zarr (v0.7, needs `pip install 'ttio[zarr]'`)
 with open_provider("zarr:///tmp/store.zarr", mode="w") as p:
     ...
 with open_provider("zarr+s3://bucket/key.zarr", mode="r") as p:
@@ -465,7 +465,7 @@ Binding decision 37.
 
 Additive: `opt_pqc_preview` enables ML-KEM-1024 envelope wrapping and
 ML-DSA-87 signatures alongside the classical AES-256-GCM + HMAC-SHA256
-defaults. Install with `pip install 'mpeg-o[pqc]'` (Python) or add the
+defaults. Install with `pip install 'ttio[pqc]'` (Python) or add the
 Bouncy Castle 1.80+ artefact (Java); ObjC links `liboqs` directly. No
 on-disk layout change is forced; the flag simply signals the reader
 that a `v3:` signature attribute or an ML-KEM-1024 wrapped key may be

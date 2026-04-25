@@ -323,7 +323,7 @@ public final class ImzMLWriter {
         sb.append("  <softwareList count=\"1\">\n");
         sb.append("    <software id=\"ttio\" version=\"0.9.0\">\n");
         sb.append("      <cvParam cvRef=\"MS\" accession=\"MS:1000799\"");
-        sb.append(" name=\"custom unreleased software tool\" value=\"mpeg-o\"/>\n");
+        sb.append(" name=\"custom unreleased software tool\" value=\"ttio\"/>\n");
         sb.append("    </software>\n");
         sb.append("  </softwareList>\n");
 
