@@ -401,6 +401,64 @@ static void testRegionQuery(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Acceptance #3 — flag filter (unmapped + reverse) ──────────────
+
+static void testFlagFilter(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82ff_%d.tio", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    // Patch the synthetic written run so flags[7]=0x4, flags[3]=0x10, flags[9]=0x10
+    TTIOWrittenGenomicRun *w0 = makeWrittenGenomicRun(100, NO);
+    NSMutableData *flagsData = [w0.flagsData mutableCopy];
+    uint32_t *flags = (uint32_t *)flagsData.mutableBytes;
+    flags[7] |= 0x4;
+    flags[3] |= 0x10;
+    flags[9] |= 0x10;
+
+    TTIOWrittenGenomicRun *patched = [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:w0.acquisitionMode
+                   referenceUri:w0.referenceUri
+                       platform:w0.platform
+                     sampleName:w0.sampleName
+                      positions:w0.positionsData
+               mappingQualities:w0.mappingQualitiesData
+                          flags:flagsData
+                      sequences:w0.sequencesData
+                      qualities:w0.qualitiesData
+                        offsets:w0.offsetsData
+                        lengths:w0.lengthsData
+                         cigars:w0.cigars
+                      readNames:w0.readNames
+                mateChromosomes:w0.mateChromosomes
+                  matePositions:w0.matePositionsData
+                templateLengths:w0.templateLengthsData
+                    chromosomes:w0.chromosomes
+              signalCompression:w0.signalCompression];
+
+    NSError *err = nil;
+    [TTIOSpectralDataset writeMinimalToPath:path
+                                        title:@"t"
+                          isaInvestigationId:@"i"
+                                      msRuns:@{}
+                                  genomicRuns:@{@"genomic_0001": patched}
+                              identifications:nil
+                              quantifications:nil
+                            provenanceRecords:nil
+                                        error:&err];
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+
+    NSIndexSet *unmapped = [gr.index indicesForUnmapped];
+    PASS([unmapped containsIndex:7] && unmapped.count == 1,
+         "M82: indicesForUnmapped returns [7]");
+    NSIndexSet *reverse = [gr.index indicesForFlag:0x10];
+    PASS([reverse containsIndex:3] && [reverse containsIndex:9] && reverse.count == 2,
+         "M82: indicesForFlag(0x10) returns [3, 9]");
+
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -411,5 +469,6 @@ void testM82GenomicRun(void)
     testGenomicIndexDiskRoundTrip();
     testBasicRoundTrip100Reads();
     testRegionQuery();
+    testFlagFilter();
     // Subsequent tasks append more test functions called from here.
 }
