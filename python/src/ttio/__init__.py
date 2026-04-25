@@ -37,7 +37,11 @@ from .provenance import ProvenanceRecord
 from .transition_list import Transition, TransitionList
 from .feature_flags import FeatureFlags
 from .acquisition_run import AcquisitionRun, SpectrumIndex
+from .aligned_read import AlignedRead
+from .genomic_index import GenomicIndex
+from .genomic_run import GenomicRun
 from .spectral_dataset import SpectralDataset, WrittenRun
+from .written_genomic_run import WrittenGenomicRun
 from .ms_image import MSImage
 from .raman_spectrum import RamanSpectrum
 from .ir_spectrum import IRSpectrum
@@ -51,6 +55,7 @@ __all__ = [
     "FORMAT_VERSION",
     "AcquisitionMode",
     "ActivationMethod",
+    "AlignedRead",
     "Compression",
     "IRMode",
     "Polarity",
@@ -61,6 +66,8 @@ __all__ = [
     "CVParam",
     "AxisDescriptor",
     "EncodingSpec",
+    "GenomicIndex",
+    "GenomicRun",
     "InstrumentConfig",
     "SignalArray",
     "Spectrum",
@@ -80,6 +87,7 @@ __all__ = [
     "SpectrumIndex",
     "SpectralDataset",
     "WrittenRun",
+    "WrittenGenomicRun",
     "MSImage",
     "RamanSpectrum",
     "IRSpectrum",
