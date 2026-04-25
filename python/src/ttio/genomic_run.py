@@ -1,10 +1,49 @@
 """GenomicRun — lazy view over /study/genomic_runs/<name>/.
 
-Implemented in Task 9 of the M82.1 plan. This file currently holds a
-placeholder so module re-exports from `ttio.__init__` succeed.
+Task 8: minimal shape holding name + group + an open() classmethod
+so SpectralDataset.open can populate the genomic_runs dictionary.
+Task 9 will replace this with the full read implementation
+(__getitem__, __iter__, reads_in_region, materialisation from signal
+channels, GenomicIndex eager-load).
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from .providers.base import StorageGroup
+
+
+def _wrap_hdf5_group(obj: object) -> "StorageGroup":
+    """Adapt an h5py.Group to a StorageGroup; pass-through for StorageGroup."""
+    from .providers.base import StorageGroup as _SG
+    if isinstance(obj, _SG):
+        return obj
+    from .providers.hdf5 import _Group as _Hdf5Group
+    return _Hdf5Group(obj)  # type: ignore[arg-type]
+
+
+@dataclass(slots=True)
 class GenomicRun:
-    """Placeholder. Real implementation in Task 9."""
+    """Minimal handle to one /study/genomic_runs/<name>/ group.
+
+    Task 8: name + group only. Task 9 fills in the read path.
+    """
+
+    name: str
+    group: "StorageGroup"
+
+    @classmethod
+    def open(
+        cls,
+        parent_group: "StorageGroup | object",
+        name: str,
+    ) -> "GenomicRun":
+        """Open a GenomicRun from parent_group[name].
+
+        Accepts either a StorageGroup (provider path) or an h5py.Group
+        (HDF5 fast path) — mirrors AcquisitionRun.open.
+        """
+        sgroup = _wrap_hdf5_group(parent_group)
+        return cls(name=name, group=sgroup.open_group(name))

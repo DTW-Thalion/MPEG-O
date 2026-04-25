@@ -393,3 +393,46 @@ def test_write_minimal_genomic_sets_format_version_and_flag(tmp_path: Path):
 
     assert format_version == "1.4"
     assert "opt_genomic" in feature_list
+
+
+def test_spectral_dataset_genomic_runs_property(tmp_path: Path):
+    """SpectralDataset.open exposes genomic_runs dict."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p,
+        title="t",
+        isa_investigation_id="i",
+        runs={},
+        genomic_runs={
+            "genomic_0001": _make_written_run(n_reads=10),
+            "genomic_0002": _make_written_run(n_reads=5),
+        },
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        assert set(ds.genomic_runs.keys()) == {"genomic_0001", "genomic_0002"}
+        # We don't materialise reads yet — Task 9 — but the GenomicRun
+        # objects must exist with the right names.
+        assert ds.genomic_runs["genomic_0001"].name == "genomic_0001"
+        assert ds.genomic_runs["genomic_0002"].name == "genomic_0002"
+    finally:
+        ds.close()
+
+
+def test_spectral_dataset_no_genomic_runs_pre_m82_compat(tmp_path: Path):
+    """Files without /study/genomic_runs/ → empty dict, no error."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    p = tmp_path / "ms_only.tio"
+    # Write a normal MS-only file with no genomic_runs= argument.
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i", runs={}
+    )
+    ds = SpectralDataset.open(p)
+    try:
+        assert ds.genomic_runs == {}
+    finally:
+        ds.close()

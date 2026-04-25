@@ -24,6 +24,7 @@ from . import _hdf5_io as io
 from ._rwlock import RWLock
 from .access_policy import AccessPolicy
 from .acquisition_run import AcquisitionRun
+from .genomic_run import GenomicRun  # M82
 from .enums import EncryptionLevel
 from .feature_flags import FeatureFlags
 from .identification import Identification
@@ -88,6 +89,7 @@ class SpectralDataset:
     isa_investigation_id: str
     ms_runs: dict[str, AcquisitionRun] = field(default_factory=dict)
     nmr_runs: dict[str, AcquisitionRun] = field(default_factory=dict)
+    genomic_runs: dict[str, GenomicRun] = field(default_factory=dict)  # M82
     encrypted_algorithm: str = ""
     _closed: bool = False
     _remote_fileobj: Any = None  # fsspec file-like kept alive when remote
@@ -228,6 +230,16 @@ class SpectralDataset:
                     run._set_persistence_context(str(path), name)
                     nmr_runs[name] = run
 
+        genomic_runs_map: dict[str, GenomicRun] = {}  # M82
+        if study.has_child("genomic_runs"):
+            g_group = study.open_group("genomic_runs")
+            names = _split_run_names(
+                io.read_string_attr(g_group, "_run_names", default="") or ""
+            )
+            for name in names:
+                if g_group.has_child(name):
+                    genomic_runs_map[name] = GenomicRun.open(g_group, name)
+
         return cls(
             path=path,
             file=None,  # non-HDF5 providers don't expose h5py.File
@@ -236,6 +248,7 @@ class SpectralDataset:
             isa_investigation_id=isa,
             ms_runs=ms_runs,
             nmr_runs=nmr_runs,
+            genomic_runs=genomic_runs_map,  # M82
             encrypted_algorithm=encrypted,
             _remote_fileobj=None,
             _lock=(RWLock() if thread_safe else None),
@@ -286,6 +299,14 @@ class SpectralDataset:
                     run._set_persistence_context(file_path, name)
                     nmr_runs[name] = run
 
+        genomic_runs_map: dict[str, GenomicRun] = {}  # M82
+        if "genomic_runs" in study:
+            g_group = study["genomic_runs"]
+            names = _split_run_names(io.read_string_attr(g_group, "_run_names", default=""))
+            for name in names:
+                if name in g_group:
+                    genomic_runs_map[name] = GenomicRun.open(g_group, name)
+
         return cls(
             path=path,
             file=f,
@@ -294,6 +315,7 @@ class SpectralDataset:
             isa_investigation_id=isa,
             ms_runs=ms_runs,
             nmr_runs=nmr_runs,
+            genomic_runs=genomic_runs_map,  # M82
             encrypted_algorithm=encrypted,
             _remote_fileobj=remote_fileobj,
             _lock=(RWLock() if thread_safe else None),
