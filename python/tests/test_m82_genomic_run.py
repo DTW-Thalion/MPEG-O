@@ -519,3 +519,30 @@ def test_region_query(tmp_path: Path):
         assert gr.reads_in_region("chrY", 0, 1_000_000) == []
     finally:
         ds.close()
+
+
+def test_flag_filter(tmp_path: Path):
+    """Acceptance #3: indices_for_unmapped + indices_for_flag work end-to-end."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    written = _make_written_run(n_reads=100, paired=False)
+    # Patch a few flags: read 7 unmapped, reads 3 and 9 reverse-strand.
+    written.flags[7] |= 0x4
+    written.flags[3] |= 0x10
+    written.flags[9] |= 0x10
+
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": written},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        unmapped = gr.index.indices_for_unmapped()
+        assert unmapped == [7]
+        reverse = gr.index.indices_for_flag(0x10)
+        assert sorted(reverse) == [3, 9]
+    finally:
+        ds.close()
