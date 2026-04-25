@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  MPEG-O Java Implementation
+  TTI-O Java Implementation
   Copyright (C) 2026 DTW-Thalion
   SPDX-License-Identifier: LGPL-3.0-or-later
 -->
@@ -11,12 +11,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.dtwthalion</groupId>
-    <artifactId>mpgo</artifactId>
+    <artifactId>ttio</artifactId>
     <version>1.1.1</version>
     <packaging>jar</packaging>
 
-    <name>MPEG-O</name>
-    <description>Java implementation of the MPEG-O multi-omics spectral data container</description>
+    <name>TTI-O</name>
+    <description>Java implementation of the TTI-O multi-omics spectral data container</description>
 
     <licenses>
         <license>
@@ -119,7 +119,7 @@
             </plugin>
             <plugin>
                 <!-- v0.7 M51: the compound-parity dumper
-                     com.dtwthalion.mpgo.tools.DumpIdentifications is
+                     com.dtwthalion.ttio.tools.DumpIdentifications is
                      intended to be run via `mvn exec:java`. System-
                      scoped deps (jhdf5) need to be force-included on
                      the exec classpath so the tool can open HDF5
@@ -146,8 +146,8 @@
                 <version>3.6.3</version>
                 <configuration>
                     <source>17</source>
-                    <doctitle>MPEG-O Java API (v0.8.0)</doctitle>
-                    <windowtitle>MPEG-O Java API</windowtitle>
+                    <doctitle>TTI-O Java API (v0.8.0)</doctitle>
+                    <windowtitle>TTI-O Java API</windowtitle>
                     <show>protected</show>
                     <failOnWarnings>false</failOnWarnings>
                     <doclint>none</doclint>
