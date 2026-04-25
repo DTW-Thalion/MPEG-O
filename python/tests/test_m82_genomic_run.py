@@ -491,3 +491,31 @@ def test_basic_roundtrip_100_reads(tmp_path: Path):
             assert read.template_length == 0
     finally:
         ds.close()
+
+
+def test_region_query(tmp_path: Path):
+    """Acceptance #2: reads_in_region returns only matching reads."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    written = _make_written_run(n_reads=100, paired=False)
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": written},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        # Synthetic helper assigns chromosomes round-robin and ramps
+        # positions per chromosome by 100. Pick a window that should
+        # capture some chr1 reads but not chr2 or chrX.
+        results = gr.reads_in_region("chr1", 10_000, 10_500)
+        assert len(results) > 0
+        for r in results:
+            assert r.chromosome == "chr1"
+            assert 10_000 <= r.position < 10_500
+        # Empty window
+        assert gr.reads_in_region("chrY", 0, 1_000_000) == []
+    finally:
+        ds.close()
