@@ -207,14 +207,17 @@ class _Group(StorageGroup):
             "shape": (length,),
             "dtype": precision.numpy_dtype(),
         }
-        if chunk_size > 0:
-            kwargs["chunks"] = (min(chunk_size, max(length, 1)),)
-        if compression == Compression.ZLIB:
-            kwargs["compression"] = "gzip"
-            kwargs["compression_opts"] = compression_level
-        elif compression == Compression.LZ4:
-            # LZ4 filter id 32004; requires hdf5plugin on the read side.
-            kwargs["compression"] = 32004
+        if length > 0 and chunk_size > 0:
+            # HDF5 requires chunk shape <= dataset shape in every dimension.
+            # Skip chunking (and compression, which requires chunking) for
+            # zero-length datasets so empty-run writes don't raise ValueError.
+            kwargs["chunks"] = (min(chunk_size, length),)
+            if compression == Compression.ZLIB:
+                kwargs["compression"] = "gzip"
+                kwargs["compression_opts"] = compression_level
+            elif compression == Compression.LZ4:
+                # LZ4 filter id 32004; requires hdf5plugin on the read side.
+                kwargs["compression"] = 32004
         ds = self._grp.create_dataset(name, **kwargs)
         return _Dataset(ds)
 
