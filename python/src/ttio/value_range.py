@@ -31,7 +31,7 @@ class ValueRange:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOValueRange`` · Java:
-    ``com.dtwthalion.ttio.ValueRange``.
+    ``global.thalion.ttio.ValueRange``.
     """
 
     minimum: float

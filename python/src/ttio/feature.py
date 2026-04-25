@@ -50,7 +50,7 @@ class Feature:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOFeature`` · Java:
-    ``com.dtwthalion.ttio.Feature``.
+    ``global.thalion.ttio.Feature``.
     """
 
     feature_id: str

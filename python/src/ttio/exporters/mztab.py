@@ -11,7 +11,7 @@ SPDX-License-Identifier: Apache-2.0
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOMzTabWriter`` · Java:
-``com.dtwthalion.ttio.exporters.MzTabWriter``
+``global.thalion.ttio.exporters.MzTabWriter``
 
 API status: Provisional (v0.9+).
 """

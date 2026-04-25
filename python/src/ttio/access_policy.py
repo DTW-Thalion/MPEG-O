@@ -31,7 +31,7 @@ class AccessPolicy:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOAccessPolicy`` · Java:
-    ``com.dtwthalion.ttio.protection.AccessPolicy``.
+    ``global.thalion.ttio.protection.AccessPolicy``.
     """
 
     policy: dict[str, Any] = field(default_factory=dict)

@@ -29,7 +29,7 @@ class IRSpectrum(Spectrum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOIRSpectrum`` · Java:
-    ``com.dtwthalion.ttio.IRSpectrum``.
+    ``global.thalion.ttio.IRSpectrum``.
     """
 
     WAVENUMBER = "wavenumber"

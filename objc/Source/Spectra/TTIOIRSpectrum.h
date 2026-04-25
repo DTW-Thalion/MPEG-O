@@ -16,7 +16,7 @@
  * how to interpret the values.
  *
  * Cross-language equivalents:
- *   Java:   com.dtwthalion.ttio.IRSpectrum
+ *   Java:   global.thalion.ttio.IRSpectrum
  *   Python: ttio.ir_spectrum.IRSpectrum
  */
 @interface TTIOIRSpectrum : TTIOSpectrum

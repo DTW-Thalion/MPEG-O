@@ -72,7 +72,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOMSImage`` · Java:
-   ``com.dtwthalion.ttio.MSImage``.
+   ``global.thalion.ttio.MSImage``.
 
 
    .. py:attribute:: width

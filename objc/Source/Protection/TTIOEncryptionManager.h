@@ -29,7 +29,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.encryption
- *   Java:   com.dtwthalion.ttio.protection.EncryptionManager
+ *   Java:   global.thalion.ttio.protection.EncryptionManager
  */
 @interface TTIOEncryptionManager : NSObject
 

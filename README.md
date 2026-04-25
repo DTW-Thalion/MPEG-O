@@ -41,7 +41,7 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 |---|---|---|
 | **Objective-C (GNUstep)** | **Normative reference — v1.0.0, full suite passing (1704/0).** | `objc/` |
 | **Python (`mpeg-o`)**     | **v1.0.0 — full parity with ObjC and Java, 875 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.ttio`)** | **v1.0.0 — full parity with ObjC and Python, 373 tests, JDK 17, Maven.** | `java/` |
+| **Java (`global.thalion.ttio`)** | **v1.0.0 — full parity with ObjC and Python, 373 tests, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages
@@ -128,7 +128,7 @@ release-by-release narrative (*which version introduced what*), see
 
 ### Cross-language conformance
 
-* **Three-language parity** — Objective-C (GNUstep) normative reference, Python (`mpeg-o`, Python 3.11+), Java (`com.dtwthalion.ttio`, JDK 17 + Maven). Every cross-language round-trip test passes byte-for-byte, driven by shared format fixtures.
+* **Three-language parity** — Objective-C (GNUstep) normative reference, Python (`mpeg-o`, Python 3.11+), Java (`global.thalion.ttio`, JDK 17 + Maven). Every cross-language round-trip test passes byte-for-byte, driven by shared format fixtures.
 * **Compound byte-parity harness** — three dumper CLIs (Python `python -m ttio.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `TtioDumpIdentifications`) emit identifications / quantifications / provenance as byte-identical canonical JSON; pairwise-diffed in CI.
 * **Per-AU encryption CLIs** — `per_au_cli` (Python), `PerAUCli` (Java), `TtioPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" dump for byte-compare; `transcode --rekey` rotates DEKs.
 * **PQC conformance matrix** — 32-cell verification across languages × providers (primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence).

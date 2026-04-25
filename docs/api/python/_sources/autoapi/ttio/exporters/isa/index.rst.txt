@@ -24,7 +24,7 @@ ttio.exporters.isa
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOISAExporter`` · Java:
-   ``com.dtwthalion.ttio.exporters.ISAExporter``
+   ``global.thalion.ttio.exporters.ISAExporter``
 
    API status: Stable.
 

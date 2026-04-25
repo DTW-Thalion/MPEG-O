@@ -26,7 +26,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.anonymization
- *   Java:   com.dtwthalion.ttio.protection.Anonymizer
+ *   Java:   global.thalion.ttio.protection.Anonymizer
  */
 @interface TTIOAnonymizationPolicy : NSObject
 

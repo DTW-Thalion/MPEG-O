@@ -22,7 +22,7 @@
           bounds of a signal axis. API status: Stable.
           Cross-language equivalents: Python:
           ttio.value_range.ValueRange Java:
-          com.dtwthalion.ttio.ValueRange
+          global.thalion.ttio.ValueRange
         </desc>
         <method type="instancetype" factory="yes">
           <sel>rangeWithMinimum:</sel>

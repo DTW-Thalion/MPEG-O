@@ -23,7 +23,7 @@ The only differences are names, paths, and magic bytes.
 | `TTIO` | `TTIO` | ObjC class/protocol/constant/enum prefix |
 | `Ttio` | `Ttio` | ObjC mixed-case (e.g., `TtioVerify` → `TtioVerify`, `TtioDumpIdentifications` → `TtioDumpIdentifications`) |
 | `ttio` | `ttio` | Java package segment, lowercase file references, CLI tool names |
-| `com.dtwthalion.ttio` | `com.dtwthalion.ttio` | Java package |
+| `global.thalion.ttio` | `global.thalion.ttio` | Java package |
 | `.tio` | `.tio` | File container extension |
 | `.tis` | `.tis` | Transport stream extension |
 | `"MO"` | `"TI"` | 2-byte transport header magic |
@@ -183,15 +183,15 @@ mv java/src/test/java/com/dtwthalion/ttio \
 
 **2.12 ServiceLoader file:**
 ```bash
-mv java/src/main/resources/META-INF/services/com.dtwthalion.ttio.providers.StorageProvider \
-   java/src/main/resources/META-INF/services/com.dtwthalion.ttio.providers.StorageProvider
+mv java/src/main/resources/META-INF/services/global.thalion.ttio.providers.StorageProvider \
+   java/src/main/resources/META-INF/services/global.thalion.ttio.providers.StorageProvider
 ```
-Update the contents of that file to reference `com.dtwthalion.ttio.providers.*`.
+Update the contents of that file to reference `global.thalion.ttio.providers.*`.
 
 **2.13 Content replace in all `.java` files:**
 ```bash
 find java/ -name '*.java' | xargs sed -i \
-  -e 's/com\.dtwthalion\.tio/com.dtwthalion.ttio/g' \
+  -e 's/com\.dtwthalion\.tio/global.thalion.ttio/g' \
   -e 's/TTIO/TTIO/g' \
   -e 's/TTI-O/TTI-O/g' \
   -e 's/ttio/ttio/g' \

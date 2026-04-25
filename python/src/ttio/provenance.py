@@ -30,7 +30,7 @@ class ProvenanceRecord:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOProvenanceRecord`` · Java:
-    ``com.dtwthalion.ttio.ProvenanceRecord``.
+    ``global.thalion.ttio.ProvenanceRecord``.
     """
 
     timestamp_unix: int = 0

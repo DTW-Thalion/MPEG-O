@@ -47,7 +47,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOEncodingSpec`` · Java:
-   ``com.dtwthalion.ttio.EncodingSpec``.
+   ``global.thalion.ttio.EncodingSpec``.
 
 
    .. py:attribute:: precision

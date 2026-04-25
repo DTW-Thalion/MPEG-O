@@ -27,7 +27,7 @@
  * Cross-language equivalents:
  *   Python: ttio.importers.thermo_raw (M38 shipped; delegates to
  *           ThermoRawFileParser binary)
- *   Java:   com.dtwthalion.ttio.importers.ThermoRawReader (M38 shipped;
+ *   Java:   global.thalion.ttio.importers.ThermoRawReader (M38 shipped;
  *           delegates to ThermoRawFileParser binary)
  */
 @interface TTIOThermoRawReader : NSObject

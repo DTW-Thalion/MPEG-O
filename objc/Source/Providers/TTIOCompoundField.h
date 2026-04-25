@@ -28,7 +28,7 @@ typedef NS_ENUM(NSInteger, TTIOCompoundFieldKind) {
  *
  * Cross-language equivalents:
  *   Python: ttio.providers.base.CompoundField
- *   Java:   com.dtwthalion.ttio.providers.CompoundField
+ *   Java:   global.thalion.ttio.providers.CompoundField
  */
 @interface TTIOCompoundField : NSObject <NSCopying>
 @property (readonly, copy) NSString *name;

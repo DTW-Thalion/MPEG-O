@@ -64,7 +64,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOCVAnnotatable`` ·
-   Java: ``com.dtwthalion.ttio.protocols.CVAnnotatable``
+   Java: ``global.thalion.ttio.protocols.CVAnnotatable``
 
 
    .. py:method:: add_cv_param(param: ttio.cv_param.CVParam) -> None

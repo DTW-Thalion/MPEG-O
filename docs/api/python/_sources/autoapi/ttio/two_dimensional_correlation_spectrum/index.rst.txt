@@ -57,7 +57,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOTwoDimensionalCorrelationSpectrum`` · Java:
-   ``com.dtwthalion.ttio.TwoDimensionalCorrelationSpectrum``.
+   ``global.thalion.ttio.TwoDimensionalCorrelationSpectrum``.
 
 
    .. py:attribute:: synchronous_matrix

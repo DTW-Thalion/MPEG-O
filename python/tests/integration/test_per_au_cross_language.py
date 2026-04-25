@@ -17,7 +17,7 @@ Python side still runs in isolation on platforms where those builds
 aren't available.
 
 Cross-language equivalents: Objective-C ``TtioPerAU``, Java
-``com.dtwthalion.ttio.tools.PerAUCli``.
+``global.thalion.ttio.tools.PerAUCli``.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 OBJC_CLI = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioPerAU"
 
-JAVA_CLASS = "com.dtwthalion.ttio.tools.PerAUCli"
+JAVA_CLASS = "global.thalion.ttio.tools.PerAUCli"
 
 
 def _java_classpath() -> str | None:

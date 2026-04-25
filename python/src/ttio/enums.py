@@ -9,7 +9,7 @@ pass-through and removes any translation table to go stale.
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOEnums.h`` ·
-Java: ``com.dtwthalion.ttio.Enums``
+Java: ``global.thalion.ttio.Enums``
 """
 from __future__ import annotations
 

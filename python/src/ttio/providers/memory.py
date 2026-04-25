@@ -12,7 +12,7 @@ API status: Stable (Provisional per M39 — may change before v1.0).
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOMemoryProvider`` class
-Java:        ``com.dtwthalion.ttio.providers.MemoryProvider`` class
+Java:        ``global.thalion.ttio.providers.MemoryProvider`` class
 
 SPDX-License-Identifier: LGPL-3.0-or-later
 """
@@ -242,7 +242,7 @@ class MemoryProvider(StorageProvider):
 
     Cross-language equivalents:
       Objective-C: ``TTIOMemoryProvider``
-      Java:        ``com.dtwthalion.ttio.providers.MemoryProvider``
+      Java:        ``global.thalion.ttio.providers.MemoryProvider``
     """
 
     def __init__(self, url: str | None = None, root: _MemoryRoot | None = None):

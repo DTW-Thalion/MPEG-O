@@ -37,7 +37,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOQuery`` · Java:
-   ``com.dtwthalion.ttio.Query``.
+   ``global.thalion.ttio.Query``.
 
 
    .. py:attribute:: index

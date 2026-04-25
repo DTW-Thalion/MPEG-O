@@ -14,7 +14,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.instrument_config.InstrumentConfig
- *   Java:   com.dtwthalion.ttio.InstrumentConfig
+ *   Java:   global.thalion.ttio.InstrumentConfig
  */
 @interface TTIOInstrumentConfig : NSObject <NSCopying, NSCoding>
 

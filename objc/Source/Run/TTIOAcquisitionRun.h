@@ -40,7 +40,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.acquisition_run.AcquisitionRun
- *   Java:   com.dtwthalion.ttio.AcquisitionRun
+ *   Java:   global.thalion.ttio.AcquisitionRun
  */
 @interface TTIOAcquisitionRun : NSObject <TTIOIndexable,
                                           TTIOStreamable,

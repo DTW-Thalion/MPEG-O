@@ -64,7 +64,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOFeature`` · Java:
-   ``com.dtwthalion.ttio.Feature``.
+   ``global.thalion.ttio.Feature``.
 
 
    .. py:attribute:: feature_id

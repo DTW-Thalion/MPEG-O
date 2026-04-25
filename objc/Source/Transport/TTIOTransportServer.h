@@ -6,7 +6,7 @@
  * filtering (ms_level, rt range, precursor m/z range, polarity,
  * dataset_id, max_au cap). Wire protocol identical to Python
  * ttio.transport.server.TransportServer and Java
- * com.dtwthalion.ttio.transport.TransportServer.
+ * global.thalion.ttio.transport.TransportServer.
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

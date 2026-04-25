@@ -19,7 +19,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.providers.hdf5.Hdf5Provider
- *   Java:   com.dtwthalion.ttio.providers.Hdf5Provider
+ *   Java:   global.thalion.ttio.providers.Hdf5Provider
  */
 @interface TTIOHDF5Provider : NSObject <TTIOStorageProvider>
 

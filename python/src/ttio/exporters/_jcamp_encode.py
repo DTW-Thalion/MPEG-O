@@ -7,7 +7,7 @@ emits the body of an ``##XYDATA=(X++(Y..Y))`` block in one of three
 compressed forms.
 
 The same algorithm ships unchanged in the Java
-(``com.dtwthalion.ttio.exporters.JcampDxWriter``) and Objective-C
+(``global.thalion.ttio.exporters.JcampDxWriter``) and Objective-C
 (``TTIOJcampDxWriter``) writers — byte-for-byte identical output is
 a hard gate enforced by the conformance fixtures under
 ``conformance/jcamp_dx/``.
@@ -31,7 +31,7 @@ all three languages for every finite double.
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOJcampDxWriter+Compress.m`` · Java:
-``com.dtwthalion.ttio.exporters.JcampDxWriter#encodeXYData``.
+``global.thalion.ttio.exporters.JcampDxWriter#encodeXYData``.
 """
 from __future__ import annotations
 

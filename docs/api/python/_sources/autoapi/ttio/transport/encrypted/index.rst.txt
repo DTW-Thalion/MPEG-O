@@ -14,7 +14,7 @@ ttio.transport.encrypted
 
    Cross-language equivalents: ObjC
    ``TTIOEncryptedTransport`` · Java
-   ``com.dtwthalion.ttio.transport.EncryptedTransport``.
+   ``global.thalion.ttio.transport.EncryptedTransport``.
 
 
 

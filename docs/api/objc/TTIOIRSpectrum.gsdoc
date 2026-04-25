@@ -23,7 +23,7 @@
           the HDF5 layout regardless of mode; the `mode` attribute
           tells a reader how to interpret the values.
           Cross-language equivalents: Java:
-          com.dtwthalion.ttio.IRSpectrum
+          global.thalion.ttio.IRSpectrum
           Python: ttio.ir_spectrum.IRSpectrum
         </desc>
         <method type="instancetype">

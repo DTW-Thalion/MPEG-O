@@ -40,7 +40,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.exporters.isa
- *   Java:   com.dtwthalion.ttio.exporters.ISAExporter
+ *   Java:   global.thalion.ttio.exporters.ISAExporter
  */
 @interface TTIOISAExporter : NSObject
 

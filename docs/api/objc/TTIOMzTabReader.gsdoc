@@ -139,7 +139,7 @@
           `TTIOMzTabReaderErrorDomain`.
           Cross-language equivalents: Python:
           ttio.importers.mztab Java:
-          com.dtwthalion.ttio.importers.MzTabReader
+          global.thalion.ttio.importers.MzTabReader
         </desc>
         <method type="TTIOMzTabImport*" factory="yes">
           <sel>readFromFilePath:</sel>

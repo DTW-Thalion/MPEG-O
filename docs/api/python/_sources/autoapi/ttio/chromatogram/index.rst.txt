@@ -47,7 +47,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOChromatogram`` · Java:
-   ``com.dtwthalion.ttio.Chromatogram``.
+   ``global.thalion.ttio.Chromatogram``.
 
 
    .. py:attribute:: TIME

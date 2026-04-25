@@ -462,7 +462,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOValueRange`` · Java:
-   ``com.dtwthalion.ttio.ValueRange``.
+   ``global.thalion.ttio.ValueRange``.
 
 
    .. py:attribute:: minimum
@@ -515,7 +515,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOIsolationWindow`` · Java:
-   ``com.dtwthalion.ttio.IsolationWindow``.
+   ``global.thalion.ttio.IsolationWindow``.
 
 
    .. py:attribute:: target_mz
@@ -578,7 +578,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOCVParam`` · Java:
-   ``com.dtwthalion.ttio.CVParam``.
+   ``global.thalion.ttio.CVParam``.
 
 
    .. py:attribute:: ontology_ref
@@ -629,7 +629,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOAxisDescriptor`` · Java:
-   ``com.dtwthalion.ttio.AxisDescriptor``.
+   ``global.thalion.ttio.AxisDescriptor``.
 
 
    .. py:attribute:: name
@@ -677,7 +677,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOEncodingSpec`` · Java:
-   ``com.dtwthalion.ttio.EncodingSpec``.
+   ``global.thalion.ttio.EncodingSpec``.
 
 
    .. py:attribute:: precision
@@ -726,7 +726,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOInstrumentConfig`` · Java:
-   ``com.dtwthalion.ttio.InstrumentConfig``.
+   ``global.thalion.ttio.InstrumentConfig``.
 
 
    .. py:attribute:: manufacturer
@@ -791,7 +791,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOSignalArray`` ·
-   Java: ``com.dtwthalion.ttio.SignalArray``
+   Java: ``global.thalion.ttio.SignalArray``
 
 
    .. py:attribute:: data
@@ -895,7 +895,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOSpectrum`` · Java:
-   ``com.dtwthalion.ttio.Spectrum``.
+   ``global.thalion.ttio.Spectrum``.
 
 
    .. py:attribute:: signal_arrays
@@ -990,7 +990,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOMassSpectrum`` · Java:
-   ``com.dtwthalion.ttio.MassSpectrum``.
+   ``global.thalion.ttio.MassSpectrum``.
 
 
    .. py:attribute:: MZ
@@ -1063,7 +1063,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIONMRSpectrum`` · Java:
-   ``com.dtwthalion.ttio.NMRSpectrum``.
+   ``global.thalion.ttio.NMRSpectrum``.
 
 
    .. py:attribute:: CHEMICAL_SHIFT
@@ -1131,7 +1131,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIONMR2DSpectrum`` · Java:
-   ``com.dtwthalion.ttio.NMR2DSpectrum``.
+   ``global.thalion.ttio.NMR2DSpectrum``.
 
 
    .. py:attribute:: intensity_matrix
@@ -1205,7 +1205,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOFreeInductionDecay`` · Java:
-   ``com.dtwthalion.ttio.FreeInductionDecay``.
+   ``global.thalion.ttio.FreeInductionDecay``.
 
 
    .. py:attribute:: dwell_time_seconds
@@ -1253,7 +1253,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOChromatogram`` · Java:
-   ``com.dtwthalion.ttio.Chromatogram``.
+   ``global.thalion.ttio.Chromatogram``.
 
 
    .. py:attribute:: TIME
@@ -1323,7 +1323,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOIdentification`` · Java:
-   ``com.dtwthalion.ttio.Identification``.
+   ``global.thalion.ttio.Identification``.
 
 
    .. py:attribute:: run_name
@@ -1369,7 +1369,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOQuantification`` · Java:
-   ``com.dtwthalion.ttio.Quantification``.
+   ``global.thalion.ttio.Quantification``.
 
 
    .. py:attribute:: chemical_entity
@@ -1434,7 +1434,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOFeature`` · Java:
-   ``com.dtwthalion.ttio.Feature``.
+   ``global.thalion.ttio.Feature``.
 
 
    .. py:attribute:: feature_id
@@ -1506,7 +1506,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOProvenanceRecord`` · Java:
-   ``com.dtwthalion.ttio.ProvenanceRecord``.
+   ``global.thalion.ttio.ProvenanceRecord``.
 
 
    .. py:attribute:: timestamp_unix
@@ -1563,7 +1563,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOTransition`` · Java:
-   ``com.dtwthalion.ttio.TransitionList.Transition``.
+   ``global.thalion.ttio.TransitionList.Transition``.
 
 
    .. py:attribute:: precursor_mz
@@ -1600,7 +1600,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOTransitionList`` · Java:
-   ``com.dtwthalion.ttio.TransitionList``.
+   ``global.thalion.ttio.TransitionList``.
 
 
    .. py:attribute:: transitions
@@ -1677,7 +1677,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOAcquisitionRun`` · Java:
-   ``com.dtwthalion.ttio.AcquisitionRun``.
+   ``global.thalion.ttio.AcquisitionRun``.
 
 
    .. py:attribute:: name
@@ -1937,7 +1937,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOSpectrumIndex`` ·
-   Java: ``com.dtwthalion.ttio.SpectrumIndex``.
+   Java: ``global.thalion.ttio.SpectrumIndex``.
 
 
    .. py:attribute:: offsets
@@ -2143,7 +2143,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOMSImage`` · Java:
-   ``com.dtwthalion.ttio.MSImage``.
+   ``global.thalion.ttio.MSImage``.
 
 
    .. py:attribute:: width
@@ -2247,7 +2247,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIORamanSpectrum`` · Java:
-   ``com.dtwthalion.ttio.RamanSpectrum``.
+   ``global.thalion.ttio.RamanSpectrum``.
 
 
    .. py:attribute:: WAVENUMBER
@@ -2314,7 +2314,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOIRSpectrum`` · Java:
-   ``com.dtwthalion.ttio.IRSpectrum``.
+   ``global.thalion.ttio.IRSpectrum``.
 
 
    .. py:attribute:: WAVENUMBER
@@ -2380,7 +2380,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOUVVisSpectrum`` · Java:
-   ``com.dtwthalion.ttio.UVVisSpectrum``.
+   ``global.thalion.ttio.UVVisSpectrum``.
 
 
    .. py:attribute:: WAVELENGTH
@@ -2456,7 +2456,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOTwoDimensionalCorrelationSpectrum`` · Java:
-   ``com.dtwthalion.ttio.TwoDimensionalCorrelationSpectrum``.
+   ``global.thalion.ttio.TwoDimensionalCorrelationSpectrum``.
 
 
    .. py:attribute:: synchronous_matrix
@@ -2550,7 +2550,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIORamanImage`` · Java:
-   ``com.dtwthalion.ttio.RamanImage``.
+   ``global.thalion.ttio.RamanImage``.
 
 
    .. py:attribute:: width
@@ -2694,7 +2694,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOIRImage`` · Java:
-   ``com.dtwthalion.ttio.IRImage``.
+   ``global.thalion.ttio.IRImage``.
 
 
    .. py:attribute:: width

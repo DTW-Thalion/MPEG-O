@@ -12,7 +12,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.protocols.Indexable
- *   Java:   com.dtwthalion.ttio.protocols.Indexable
+ *   Java:   global.thalion.ttio.protocols.Indexable
  */
 @protocol TTIOIndexable <NSObject>
 

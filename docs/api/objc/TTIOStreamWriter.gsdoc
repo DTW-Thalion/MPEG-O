@@ -35,7 +35,7 @@
           (flush integration pending). Cross-language
           equivalents: Python:
           ttio.stream_writer.StreamWriter
-          Java: com.dtwthalion.ttio.StreamWriter
+          Java: global.thalion.ttio.StreamWriter
         </desc>
         <method type="BOOL">
           <sel>appendSpectrum:</sel>

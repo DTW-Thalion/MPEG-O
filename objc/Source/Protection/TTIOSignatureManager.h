@@ -30,7 +30,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.signatures
- *   Java:   com.dtwthalion.ttio.protection.SignatureManager
+ *   Java:   global.thalion.ttio.protection.SignatureManager
  */
 @interface TTIOSignatureManager : NSObject
 

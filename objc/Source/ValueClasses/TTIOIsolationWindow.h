@@ -16,7 +16,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.isolation_window.IsolationWindow
- *   Java:   com.dtwthalion.ttio.IsolationWindow
+ *   Java:   global.thalion.ttio.IsolationWindow
  */
 @interface TTIOIsolationWindow : NSObject <NSCoding, NSCopying>
 

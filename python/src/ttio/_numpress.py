@@ -18,7 +18,7 @@ rounding rule, and the same delta pass.
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIONumpress`` · Java:
-``com.dtwthalion.ttio.NumpressCodec``.
+``global.thalion.ttio.NumpressCodec``.
 
 API status: Stable.
 

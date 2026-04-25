@@ -41,7 +41,7 @@ Scope
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOBrukerTDFReader`` · Java:
-``com.dtwthalion.ttio.importers.BrukerTDFReader``.
+``global.thalion.ttio.importers.BrukerTDFReader``.
 Both Java and ObjC readers parse the SQLite metadata natively (via
 ``sqlite-jdbc`` and ``libsqlite3`` respectively); binary frame data
 extraction delegates to this Python module via subprocess, matching

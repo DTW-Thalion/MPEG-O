@@ -24,7 +24,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.providers.sqlite.SqliteProvider
- *   Java:   com.dtwthalion.ttio.providers.SqliteProvider
+ *   Java:   global.thalion.ttio.providers.SqliteProvider
  */
 @interface TTIOSqliteProvider : NSObject <TTIOStorageProvider>
 @end

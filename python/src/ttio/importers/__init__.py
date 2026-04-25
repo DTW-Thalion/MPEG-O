@@ -10,7 +10,7 @@ Cross-language equivalents
 --------------------------
 Objective-C: ``Source/Import/`` headers (``TTIOMzMLReader``,
 ``TTIONmrMLReader``, etc.) · Java:
-``com.dtwthalion.ttio.importers`` package
+``global.thalion.ttio.importers`` package
 
 API status: Stable.
 """

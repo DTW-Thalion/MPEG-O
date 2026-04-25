@@ -36,7 +36,7 @@
           is verified by the M27 cross-language parity tests. API
           status: Stable. Cross-language equivalents: Python:
           ttio.exporters.isa Java:
-          com.dtwthalion.ttio.exporters.ISAExporter
+          global.thalion.ttio.exporters.ISAExporter
         </desc>
         <method type="NSDictionary&lt;NSString*,NSData*&gt;*" factory="yes">
           <sel>bundleForDataset:</sel>

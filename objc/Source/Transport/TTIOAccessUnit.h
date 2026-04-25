@@ -7,7 +7,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.transport.packets.AccessUnit
- *   Java:   com.dtwthalion.ttio.transport.AccessUnit
+ *   Java:   global.thalion.ttio.transport.AccessUnit
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

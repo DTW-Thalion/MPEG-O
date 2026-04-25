@@ -39,7 +39,7 @@
           `TTIOMzMLReaderErrorDomain`. Not
           thread-safe. API status: Stable. Cross-language
           equivalents: Python: ttio.importers.mzml Java:
-          com.dtwthalion.ttio.importers.MzMLReader
+          global.thalion.ttio.importers.MzMLReader
         </desc>
         <method type="instancetype" factory="yes">
           <sel>parseData:</sel>

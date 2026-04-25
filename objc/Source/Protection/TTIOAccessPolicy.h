@@ -20,7 +20,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.access_policy.AccessPolicy
- *   Java:   com.dtwthalion.ttio.protection.AccessPolicy
+ *   Java:   global.thalion.ttio.protection.AccessPolicy
  */
 @interface TTIOAccessPolicy : NSObject <NSCopying>
 

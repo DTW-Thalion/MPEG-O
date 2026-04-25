@@ -22,7 +22,7 @@ be replayed against a different AU or envelope.
 
 Cross-language equivalents: ObjC
 ``TTIOPerAUEncryption`` · Java
-``com.dtwthalion.ttio.protection.PerAUEncryption``.
+``global.thalion.ttio.protection.PerAUEncryption``.
 """
 from __future__ import annotations
 

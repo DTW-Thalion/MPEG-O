@@ -3,7 +3,7 @@
 Java implementation of the TTI-O multi-omics spectral data container,
 at full feature parity with the Objective-C and Python implementations.
 
-Package: `com.dtwthalion.ttio`
+Package: `global.thalion.ttio`
 License: LGPL-3.0-or-later (core), Apache-2.0 (importers/exporters)
 
 ## Prerequisites
@@ -41,11 +41,11 @@ The Java implementation mirrors the three-layer ObjC/Python pattern:
 
 | Layer | Java Package | Description |
 |-------|-------------|-------------|
-| HDF5 wrappers | `com.dtwthalion.ttio.hdf5` | `Hdf5File`, `Hdf5Group`, `Hdf5Dataset`, `Hdf5CompoundType` |
-| Core + enums | `com.dtwthalion.ttio` | `SignalArray`, `Spectrum`, `AcquisitionRun`, `SpectralDataset`, `FeatureFlags`, `NumpressCodec` |
-| Importers | `com.dtwthalion.ttio.importers` | `MzMLReader`, `NmrMLReader`, `CVTermMapper`, `ThermoRawReader` (stub) |
-| Exporters | `com.dtwthalion.ttio.exporters` | `MzMLWriter`, `NmrMLWriter`, `ISAExporter` |
-| Protection | `com.dtwthalion.ttio.protection` | `EncryptionManager`, `SignatureManager`, `KeyRotationManager`, `Anonymizer` |
+| HDF5 wrappers | `global.thalion.ttio.hdf5` | `Hdf5File`, `Hdf5Group`, `Hdf5Dataset`, `Hdf5CompoundType` |
+| Core + enums | `global.thalion.ttio` | `SignalArray`, `Spectrum`, `AcquisitionRun`, `SpectralDataset`, `FeatureFlags`, `NumpressCodec` |
+| Importers | `global.thalion.ttio.importers` | `MzMLReader`, `NmrMLReader`, `CVTermMapper`, `ThermoRawReader` (stub) |
+| Exporters | `global.thalion.ttio.exporters` | `MzMLWriter`, `NmrMLWriter`, `ISAExporter` |
+| Protection | `global.thalion.ttio.protection` | `EncryptionManager`, `SignatureManager`, `KeyRotationManager`, `Anonymizer` |
 
 See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the full 28-class mapping
 table and design notes.

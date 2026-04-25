@@ -1,6 +1,6 @@
 """Encode a .tio file as a .tis transport stream (v0.10 M70).
 
-Parallel to Java {@code com.dtwthalion.ttio.tools.TransportEncodeCli}
+Parallel to Java {@code global.thalion.ttio.tools.TransportEncodeCli}
 and ObjC {@code TtioTransportEncode}.
 
 Usage:

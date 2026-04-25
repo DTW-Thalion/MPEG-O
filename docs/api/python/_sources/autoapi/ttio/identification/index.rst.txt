@@ -47,7 +47,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOIdentification`` · Java:
-   ``com.dtwthalion.ttio.Identification``.
+   ``global.thalion.ttio.Identification``.
 
 
    .. py:attribute:: run_name

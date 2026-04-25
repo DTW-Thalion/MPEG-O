@@ -71,7 +71,7 @@ NS_ASSUME_NONNULL_BEGIN
  *
  * Cross-language equivalents:
  *   Python: ttio.importers.mztab
- *   Java:   com.dtwthalion.ttio.importers.MzTabReader
+ *   Java:   global.thalion.ttio.importers.MzTabReader
  */
 @interface TTIOMzTabReader : NSObject
 

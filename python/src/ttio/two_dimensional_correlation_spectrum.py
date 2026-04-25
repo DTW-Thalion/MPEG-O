@@ -45,7 +45,7 @@ class TwoDimensionalCorrelationSpectrum(Spectrum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOTwoDimensionalCorrelationSpectrum`` · Java:
-    ``com.dtwthalion.ttio.TwoDimensionalCorrelationSpectrum``.
+    ``global.thalion.ttio.TwoDimensionalCorrelationSpectrum``.
     """
 
     synchronous_matrix: np.ndarray = field(default_factory=lambda: np.zeros((0, 0)))

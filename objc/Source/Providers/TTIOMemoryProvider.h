@@ -18,7 +18,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.providers.memory.MemoryProvider
- *   Java:   com.dtwthalion.ttio.providers.MemoryProvider
+ *   Java:   global.thalion.ttio.providers.MemoryProvider
  */
 @interface TTIOMemoryProvider : NSObject <TTIOStorageProvider>
 

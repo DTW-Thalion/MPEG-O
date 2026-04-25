@@ -23,7 +23,7 @@ SPDX-License-Identifier: Apache-2.0
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOWatersMassLynxReader``
-Java:        ``com.dtwthalion.ttio.importers.WatersMassLynxReader``
+Java:        ``global.thalion.ttio.importers.WatersMassLynxReader``
 
 API status: Provisional (v0.9 M63) — delegates to an external tool;
 the CLI flag names below match the common ``masslynxraw`` wrapper

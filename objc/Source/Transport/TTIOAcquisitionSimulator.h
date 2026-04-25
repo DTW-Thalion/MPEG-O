@@ -8,7 +8,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.transport.simulator.AcquisitionSimulator
- *   Java:   com.dtwthalion.ttio.transport.AcquisitionSimulator
+ *   Java:   global.thalion.ttio.transport.AcquisitionSimulator
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

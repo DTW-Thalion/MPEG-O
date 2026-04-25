@@ -86,7 +86,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOCVAnnotatable`` ·
-   Java: ``com.dtwthalion.ttio.protocols.CVAnnotatable``
+   Java: ``global.thalion.ttio.protocols.CVAnnotatable``
 
 
    .. py:method:: add_cv_param(param: ttio.cv_param.CVParam) -> None
@@ -144,7 +144,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOEncryptable`` ·
-   Java: ``com.dtwthalion.ttio.protocols.Encryptable``
+   Java: ``global.thalion.ttio.protocols.Encryptable``
 
 
    .. py:method:: encrypt_with_key(key: bytes, level: ttio.enums.EncryptionLevel) -> None
@@ -195,7 +195,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: TTIOIndexable ·
-   Java: com.dtwthalion.ttio.protocols.Indexable
+   Java: global.thalion.ttio.protocols.Indexable
 
 
    .. py:method:: object_at_index(index: int) -> Any
@@ -248,7 +248,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOProvenanceable`` ·
-   Java: ``com.dtwthalion.ttio.protocols.Provenanceable``
+   Java: ``global.thalion.ttio.protocols.Provenanceable``
 
 
    .. py:method:: add_processing_step(step: ttio.provenance.ProvenanceRecord) -> None
@@ -301,7 +301,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOStreamable`` ·
-   Java: ``com.dtwthalion.ttio.protocols.Streamable``
+   Java: ``global.thalion.ttio.protocols.Streamable``
 
 
    .. py:method:: next_object() -> Any

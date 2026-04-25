@@ -26,7 +26,7 @@
           scans whose activation method was not reported by the
           source instrument. Cross-language equivalents: Python:
           ttio.enums.ActivationMethod Java:
-          com.dtwthalion.ttio.Enums.ActivationMethod
+          global.thalion.ttio.Enums.ActivationMethod
           <deflist>
             <term><em>TTIOActivationMethodNone</em></term>
             <desc></desc>

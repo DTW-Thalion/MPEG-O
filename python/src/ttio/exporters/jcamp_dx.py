@@ -14,7 +14,7 @@ Emits ``##XYDATA=(X++(Y..Y))`` in one of four forms selected by the
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOJcampDxWriter`` · Java:
-``com.dtwthalion.ttio.exporters.JcampDxWriter``.
+``global.thalion.ttio.exporters.JcampDxWriter``.
 """
 from __future__ import annotations
 

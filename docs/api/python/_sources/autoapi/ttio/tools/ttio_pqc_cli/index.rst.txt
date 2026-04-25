@@ -8,7 +8,7 @@ ttio.tools.ttio_pqc_cli
    ``ttio-pqc`` — Python post-quantum crypto CLI (M75).
 
    Python equivalent of the Objective-C ``TtioPQCTool`` (``objc/Tools/
-   TtioPQCTool.m``) and Java ``com.dtwthalion.ttio.tools.PQCTool``. The
+   TtioPQCTool.m``) and Java ``global.thalion.ttio.tools.PQCTool``. The
    subcommand grammar is 1-to-1 across the three languages so the
    cross-language conformance harness (``python/tests/
    test_m54_pqc_conformance.py``) can drive any of the three via identical

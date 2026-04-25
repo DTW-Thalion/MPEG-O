@@ -7,7 +7,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.transport.codec.TransportWriter
- *   Java:   com.dtwthalion.ttio.transport.TransportWriter
+ *   Java:   global.thalion.ttio.transport.TransportWriter
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

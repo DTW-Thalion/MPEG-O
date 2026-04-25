@@ -21,7 +21,7 @@ ttio.transport
      one-shot round-trip helpers.
 
    Cross-language: ObjC ``objc/Source/Transport/`` · Java
-   ``com.dtwthalion.ttio.transport``.
+   ``global.thalion.ttio.transport``.
 
 
 

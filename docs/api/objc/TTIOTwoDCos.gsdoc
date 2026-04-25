@@ -23,7 +23,7 @@
           perturbation points x n spectral variables.
           Cross-language equivalents: Python:
           ttio.analysis.two_d_cos Java:
-          com.dtwthalion.ttio.analysis.TwoDCos
+          global.thalion.ttio.analysis.TwoDCos
         </desc>
         <method type="TTIOTwoDimensionalCorrelationSpectrum*" factory="yes">
           <sel>computeWithDynamicSpectra:</sel>

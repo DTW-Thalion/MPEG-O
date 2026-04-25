@@ -37,7 +37,7 @@ class NMR2DSpectrum(Spectrum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIONMR2DSpectrum`` · Java:
-    ``com.dtwthalion.ttio.NMR2DSpectrum``.
+    ``global.thalion.ttio.NMR2DSpectrum``.
     """
 
     intensity_matrix: np.ndarray = field(default_factory=lambda: np.zeros((0, 0)))

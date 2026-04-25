@@ -27,7 +27,7 @@
           scalar attributes for the metadata fields. API status:
           Stable. Cross-language equivalents: Python:
           ttio.spectrum.Spectrum Java:
-          com.dtwthalion.ttio.Spectrum
+          global.thalion.ttio.Spectrum
         </desc>
         <method type="instancetype" factory="yes">
           <sel>readFromGroup:</sel>

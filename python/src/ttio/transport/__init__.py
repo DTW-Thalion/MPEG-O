@@ -14,7 +14,7 @@ Implements the wire format specified in ``docs/transport-spec.md``:
   one-shot round-trip helpers.
 
 Cross-language: ObjC ``objc/Source/Transport/`` · Java
-``com.dtwthalion.ttio.transport``.
+``global.thalion.ttio.transport``.
 """
 from __future__ import annotations
 

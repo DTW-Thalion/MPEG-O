@@ -33,7 +33,7 @@ class AxisDescriptor:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOAxisDescriptor`` · Java:
-    ``com.dtwthalion.ttio.AxisDescriptor``.
+    ``global.thalion.ttio.AxisDescriptor``.
     """
 
     name: str

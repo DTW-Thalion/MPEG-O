@@ -21,7 +21,7 @@
           this class is consulted only when `hasCompression:`
           reports a compression sentinel. Cross-language
           equivalents: Java:
-          com.dtwthalion.ttio.importers.JcampDxDecode
+          global.thalion.ttio.importers.JcampDxDecode
           Python: ttio.importers._jcamp_decode
         </desc>
         <method type="BOOL" factory="yes">

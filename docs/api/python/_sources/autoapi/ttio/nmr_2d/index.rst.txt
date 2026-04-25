@@ -49,7 +49,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIONMR2DSpectrum`` · Java:
-   ``com.dtwthalion.ttio.NMR2DSpectrum``.
+   ``global.thalion.ttio.NMR2DSpectrum``.
 
 
    .. py:attribute:: intensity_matrix

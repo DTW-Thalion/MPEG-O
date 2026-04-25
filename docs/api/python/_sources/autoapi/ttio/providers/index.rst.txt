@@ -71,7 +71,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOCompoundField`` · Java:
-   ``com.dtwthalion.ttio.providers.CompoundField``.
+   ``global.thalion.ttio.providers.CompoundField``.
 
 
    .. py:attribute:: name
@@ -96,7 +96,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOCompoundFieldKind`` · Java:
-   ``com.dtwthalion.ttio.providers.CompoundField.Kind``.
+   ``global.thalion.ttio.providers.CompoundField.Kind``.
 
 
    .. py:attribute:: UINT32
@@ -136,7 +136,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOStorageDataset`` · Java:
-   ``com.dtwthalion.ttio.providers.StorageDataset``.
+   ``global.thalion.ttio.providers.StorageDataset``.
 
 
    .. py:property:: name
@@ -324,7 +324,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOStorageGroup`` · Java:
-   ``com.dtwthalion.ttio.providers.StorageGroup``.
+   ``global.thalion.ttio.providers.StorageGroup``.
 
 
    .. py:property:: name
@@ -439,7 +439,7 @@ Package Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOStorageProvider`` · Java:
-   ``com.dtwthalion.ttio.providers.StorageProvider``.
+   ``global.thalion.ttio.providers.StorageProvider``.
 
 
    .. py:method:: open(path_or_url: str, *, mode: str = 'r', **kwargs) -> StorageProvider

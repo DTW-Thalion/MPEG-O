@@ -12,7 +12,7 @@ instrument acquiring in real time. Two output modes:
   other async sink.
 
 Cross-language equivalents: Java
-``com.dtwthalion.ttio.transport.AcquisitionSimulator``, ObjC
+``global.thalion.ttio.transport.AcquisitionSimulator``, ObjC
 ``TTIOAcquisitionSimulator``.
 """
 from __future__ import annotations

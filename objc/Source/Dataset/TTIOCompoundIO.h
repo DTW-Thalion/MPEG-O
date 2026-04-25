@@ -27,7 +27,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio._hdf5_io (private helper module)
- *   Java:   com.dtwthalion.ttio.hdf5.Hdf5CompoundIO
+ *   Java:   global.thalion.ttio.hdf5.Hdf5CompoundIO
  *
  * Each language exposes these differently due to HDF5 binding
  * shapes; see docs/api-review-v0.6.md for the documented stylistic

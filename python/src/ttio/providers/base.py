@@ -25,7 +25,7 @@ error out at the caller layer.
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOStorageProtocols.h`` · Java:
-``com.dtwthalion.ttio.providers`` package.
+``global.thalion.ttio.providers`` package.
 
 API status: Stable (Provisional per M39 — may change before v1.0).
 
@@ -53,7 +53,7 @@ class CompoundFieldKind(Enum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOCompoundFieldKind`` · Java:
-    ``com.dtwthalion.ttio.providers.CompoundField.Kind``.
+    ``global.thalion.ttio.providers.CompoundField.Kind``.
     """
 
     UINT32 = "uint32"
@@ -75,7 +75,7 @@ class CompoundField:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOCompoundField`` · Java:
-    ``com.dtwthalion.ttio.providers.CompoundField``.
+    ``global.thalion.ttio.providers.CompoundField``.
     """
 
     name: str
@@ -90,7 +90,7 @@ class StorageDataset(ABC):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOStorageDataset`` · Java:
-    ``com.dtwthalion.ttio.providers.StorageDataset``.
+    ``global.thalion.ttio.providers.StorageDataset``.
     """
 
     # ── Type and shape ──────────────────────────────────────────────
@@ -268,7 +268,7 @@ class StorageGroup(ABC):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOStorageGroup`` · Java:
-    ``com.dtwthalion.ttio.providers.StorageGroup``.
+    ``global.thalion.ttio.providers.StorageGroup``.
     """
 
     # ── Identity ────────────────────────────────────────────────────
@@ -371,7 +371,7 @@ class StorageProvider(ABC):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOStorageProvider`` · Java:
-    ``com.dtwthalion.ttio.providers.StorageProvider``.
+    ``global.thalion.ttio.providers.StorageProvider``.
     """
 
     @abstractmethod

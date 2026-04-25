@@ -75,8 +75,8 @@ def _java_parse_xy(jdx_path: Path) -> tuple[np.ndarray, np.ndarray, str]:
     driver_class = driver_dir / "M73Driver.class"
     if not driver_java.exists():
         driver_java.write_text(textwrap.dedent("""
-            import com.dtwthalion.ttio.*;
-            import com.dtwthalion.ttio.importers.JcampDxReader;
+            import global.thalion.ttio.*;
+            import global.thalion.ttio.importers.JcampDxReader;
             import java.nio.file.Paths;
             public class M73Driver {
                 public static void main(String[] a) throws Exception {

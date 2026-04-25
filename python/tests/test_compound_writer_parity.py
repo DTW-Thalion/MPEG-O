@@ -160,7 +160,7 @@ def _run_objc(path: Path) -> bytes:
 def _run_java(path: Path) -> bytes:
     r = subprocess.run(
         [str(JAVA_RUNNER),
-         "com.dtwthalion.ttio.tools.DumpIdentifications",
+         "global.thalion.ttio.tools.DumpIdentifications",
          str(path)],
         capture_output=True, check=False,
     )

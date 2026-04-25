@@ -41,7 +41,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOQuantification`` · Java:
-   ``com.dtwthalion.ttio.Quantification``.
+   ``global.thalion.ttio.Quantification``.
 
 
    .. py:attribute:: chemical_entity

@@ -33,7 +33,7 @@ class Identification:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOIdentification`` · Java:
-    ``com.dtwthalion.ttio.Identification``.
+    ``global.thalion.ttio.Identification``.
     """
 
     run_name: str

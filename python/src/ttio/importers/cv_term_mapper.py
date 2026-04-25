@@ -7,7 +7,7 @@ deliberately mirrors the ObjC side so that writing an ``mzML`` from Python
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOCVTermMapper`` · Java:
-``com.dtwthalion.ttio.importers.CVTermMapper``
+``global.thalion.ttio.importers.CVTermMapper``
 
 API status: Stable.
 """

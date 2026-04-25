@@ -44,7 +44,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOAccessPolicy`` · Java:
-   ``com.dtwthalion.ttio.protection.AccessPolicy``.
+   ``global.thalion.ttio.protection.AccessPolicy``.
 
 
    .. py:attribute:: policy

@@ -16,7 +16,7 @@ Accepts two dialects of ``##XYDATA=(X++(Y..Y))``:
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOJcampDxReader`` · Java:
-``com.dtwthalion.ttio.importers.JcampDxReader``.
+``global.thalion.ttio.importers.JcampDxReader``.
 """
 from __future__ import annotations
 

@@ -16,7 +16,7 @@
           JCAMP-DX 5.01 compressed-XYDATA encoder (PAC / SQZ /
           DIF). Byte-for-byte mirror of Python
           `ttio.exporters._jcamp_encode`
-          and Java `com.dtwthalion.ttio.exporters.JcampDxEncode`.
+          and Java `global.thalion.ttio.exporters.JcampDxEncode`.
           The conformance fixtures under `conformance/jcamp_dx/`
           are the gate — if this encoder and the Python/Java
           encoders diverge, one of them is wrong. Private

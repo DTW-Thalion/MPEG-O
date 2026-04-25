@@ -19,7 +19,7 @@ Per-channel encrypted-signal-channel layout (see §5 of ``docs/format-spec.md``)
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOEncryptionManager`` · Java:
-``com.dtwthalion.ttio.protection.EncryptionManager``.
+``global.thalion.ttio.protection.EncryptionManager``.
 
 API status: Stable.
 """

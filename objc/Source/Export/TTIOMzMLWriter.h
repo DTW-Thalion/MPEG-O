@@ -37,7 +37,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.exporters.mzml
- *   Java:   com.dtwthalion.ttio.exporters.MzMLWriter
+ *   Java:   global.thalion.ttio.exporters.MzMLWriter
  */
 @interface TTIOMzMLWriter : NSObject
 

@@ -15,7 +15,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.analysis.two_d_cos
- *   Java:   com.dtwthalion.ttio.analysis.TwoDCos
+ *   Java:   global.thalion.ttio.analysis.TwoDCos
  */
 @interface TTIOTwoDCos : NSObject
 

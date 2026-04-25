@@ -38,7 +38,7 @@ class SignalArray:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOSignalArray`` ·
-    Java: ``com.dtwthalion.ttio.SignalArray``
+    Java: ``global.thalion.ttio.SignalArray``
     """
 
     data: np.ndarray

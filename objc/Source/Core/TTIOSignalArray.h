@@ -27,7 +27,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.signal_array.SignalArray
- *   Java:   com.dtwthalion.ttio.SignalArray
+ *   Java:   global.thalion.ttio.SignalArray
  */
 @interface TTIOSignalArray : NSObject <TTIOCVAnnotatable>
 
