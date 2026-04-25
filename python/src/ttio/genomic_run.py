@@ -48,10 +48,10 @@ class GenomicRun:
     sample_name: str
     index: GenomicIndex
     group: "StorageGroup"
-    channel_names: list[str]
+    channel_names: list[str]  # populated for introspection / future tooling; not read by __getitem__
 
-    _signal_cache: dict = field(default_factory=dict)
-    _compound_cache: dict = field(default_factory=dict)
+    _signal_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    _compound_cache: dict[str, list[dict]] = field(default_factory=dict, repr=False, compare=False)
 
     # ------------------------------------------------------------------
     # Sequence protocol
@@ -126,7 +126,13 @@ class GenomicRun:
     def reads_in_region(
         self, chromosome: str, start: int, end: int
     ) -> list[AlignedRead]:
-        """Return reads on ``chromosome`` overlapping ``[start, end)``."""
+        """Return reads on ``chromosome`` whose mapping position is in ``[start, end)``.
+
+        Note: filters by mapping position only, not by read end coordinate.
+        A read whose start lies outside the window but extends into it
+        will NOT be returned. Use SAM-style overlap semantics in a future
+        enhancement if needed.
+        """
         return [
             self[i]
             for i in self.index.indices_for_region(chromosome, start, end)

@@ -481,6 +481,8 @@ def test_basic_roundtrip_100_reads(tmp_path: Path):
                 ]
             )
             assert read.qualities == expected_q
+            # Mapping quality
+            assert read.mapping_quality == int(written.mapping_qualities[i])
             # Flags
             assert read.flags == int(written.flags[i])
             # Mate (unpaired in this test)
