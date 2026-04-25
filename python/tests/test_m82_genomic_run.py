@@ -841,3 +841,23 @@ def test_backward_compat_pre_m82_file():
         assert ds.genomic_runs == {}
     finally:
         ds.close()
+
+
+def test_committed_fixture_readable():
+    """The committed cross-language reference fixture opens and has 100 reads."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    fixture = (
+        Path(__file__).parent / "fixtures" / "genomic" / "m82_100reads.tio"
+    )
+    assert fixture.exists(), "regenerate via fixtures/genomic/generate.py"
+    ds = SpectralDataset.open(fixture)
+    try:
+        assert "genomic_0001" in ds.genomic_runs
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == 100
+        first = gr[0]
+        assert first.chromosome in ("chr1", "chr2", "chrX")
+        assert first.read_length == 150
+    finally:
+        ds.close()
