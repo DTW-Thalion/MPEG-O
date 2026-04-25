@@ -282,6 +282,7 @@
         case TTIOPrecisionUInt32:    elem = 4;  break;
         case TTIOPrecisionComplex128:elem = 16; break;
         case TTIOPrecisionUInt8:     elem = 1;  break;
+        case TTIOPrecisionUInt64:    elem = 8;  break;
         default:                     elem = 8;  break;
     }
     NSUInteger start = offset * elem;

@@ -97,6 +97,7 @@ static NSString *precisionName(TTIOPrecision p)
         case TTIOPrecisionUInt32:     return @"UINT32";
         case TTIOPrecisionComplex128: return @"COMPLEX128";
         case TTIOPrecisionUInt8:      return @"UINT8";
+        case TTIOPrecisionUInt64:     return @"UINT64";
         default:                      return @"FLOAT64";
     }
 }
@@ -112,6 +113,7 @@ static TTIOPrecision precisionFromName(const char *name)
     if (strcmp(name, "UINT32")     == 0) return TTIOPrecisionUInt32;
     if (strcmp(name, "COMPLEX128") == 0) return TTIOPrecisionComplex128;
     if (strcmp(name, "UINT8")      == 0) return TTIOPrecisionUInt8;
+    if (strcmp(name, "UINT64")     == 0) return TTIOPrecisionUInt64;
     return TTIOPrecisionFloat64;
 }
 
@@ -126,6 +128,7 @@ static NSUInteger precisionElementSize(TTIOPrecision p)
         case TTIOPrecisionUInt32:     return 4;
         case TTIOPrecisionComplex128: return 16;
         case TTIOPrecisionUInt8:      return 1;
+        case TTIOPrecisionUInt64:     return 8;
         default:                      return 8;
     }
 }

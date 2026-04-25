@@ -36,7 +36,8 @@ typedef NS_ENUM(NSUInteger, TTIOPrecision) {
     TTIOPrecisionInt64,
     TTIOPrecisionUInt32,
     TTIOPrecisionComplex128,
-    TTIOPrecisionUInt8        // v0.11 M79: genomic quality scores + packed bases
+    TTIOPrecisionUInt8,       // v0.11 M79: genomic quality scores + packed bases
+    TTIOPrecisionUInt64 = 9   // v0.11 M82: genomic index offsets (7, 8 reserved for UINT16/INT8 cross-language parity)
 };
 
 typedef NS_ENUM(NSUInteger, TTIOCompression) {

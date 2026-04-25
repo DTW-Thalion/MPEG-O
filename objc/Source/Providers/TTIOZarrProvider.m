@@ -50,6 +50,7 @@ static NSString *zDtypeFor(TTIOPrecision p)
         case TTIOPrecisionInt32:   return @"int32";
         case TTIOPrecisionUInt32:  return @"uint32";
         case TTIOPrecisionUInt8:   return @"uint8";
+        case TTIOPrecisionUInt64:  return @"uint64";
         case TTIOPrecisionComplex128:
         default:
             [NSException raise:NSInvalidArgumentException
@@ -82,6 +83,9 @@ static TTIOPrecision zPrecisionFor(NSString *dtype)
         [dtype isEqualToString:@"<u1"] || [dtype isEqualToString:@"|u1"] ||
         [dtype isEqualToString:@"u1"])
         return TTIOPrecisionUInt8;
+    if ([dtype isEqualToString:@"uint64"] ||
+        [dtype isEqualToString:@"<u8"] || [dtype isEqualToString:@"|u8"])
+        return TTIOPrecisionUInt64;
     return TTIOPrecisionFloat64;
 }
 
@@ -89,7 +93,8 @@ static NSUInteger zBytesPerElement(TTIOPrecision p)
 {
     switch (p) {
         case TTIOPrecisionFloat64:
-        case TTIOPrecisionInt64:   return 8;
+        case TTIOPrecisionInt64:
+        case TTIOPrecisionUInt64:  return 8;
         case TTIOPrecisionFloat32:
         case TTIOPrecisionInt32:
         case TTIOPrecisionUInt32:  return 4;
