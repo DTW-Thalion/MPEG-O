@@ -229,20 +229,19 @@ def write_signal_channel(
 def _precision_from_dtype(dt: np.dtype) -> Any:
     """Map a numpy dtype to the Precision enum used by StorageGroup.
 
-    v0.9: ``<u8`` (uint64) maps to INT64 because the Precision enum
-    has no UINT64 entry and .tio spectrum_index offsets are always
-    non-negative and < 2^63, so the on-disk byte layout is identical.
-    This keeps offsets readable as INT64 columns by the Java
-    ``SqliteProvider`` (which rejected the prior FLOAT64 fallback with
-    ``class [D cannot be cast to class [J``). Python's
-    ``SpectrumIndex.read`` already reinterprets the int64 back as
-    ``<u8`` via ``astype``.
+    UINT64 exists in the Precision enum (added in M82 for genomic
+    index offsets), but write_signal_channel callers passing uint64
+    numpy arrays still get INT64-on-disk to preserve cross-language
+    byte parity until ObjC (M82.2) and Java (M82.3) gain UINT64
+    support in their SQLite/Zarr providers. Genomic writers bypass
+    this map by calling _write_uint64_channel directly with
+    Precision.UINT64.
     """
     from .enums import Precision
     by_str = {
         "<f4": Precision.FLOAT32, "<f8": Precision.FLOAT64,
         "<i4": Precision.INT32,  "<i8": Precision.INT64,
-        "<u8": Precision.INT64,  # v0.9: uint64 → int64 (see docstring)
+        "<u8": Precision.INT64,
         "<u4": Precision.UINT32,
     }
     return by_str.get(dt.str, Precision.FLOAT64)
@@ -553,3 +552,86 @@ def read_au_header_segments(parent_storage_group, name):
             ciphertext=_row_value_to_bytes(row["ciphertext"]),
         ))
     return rows
+
+
+# ----------------------------------------------------------------------
+# M82 — Signal channel helpers for genomic data.
+#
+# These wrap StorageGroup.create_dataset for the per-read signal
+# channels under /study/genomic_runs/<name>/signal_channels/. They
+# unify chunk size (65536) and gzip-vs-none compression mapping so
+# _write_genomic_run() reads cleanly.
+# ----------------------------------------------------------------------
+
+def _compression_for(label: str) -> Any:
+    """Map a friendly compression label to the Compression enum."""
+    from .enums import Compression
+    if label == "gzip":
+        return Compression.ZLIB
+    if label == "none":
+        return Compression.NONE
+    raise ValueError(f"unsupported signal_compression: {label!r}")
+
+
+def _write_uint8_channel(
+    group: _IOTarget, name: str, data: np.ndarray, compression: str
+) -> None:
+    """Write a UINT8 signal channel as a chunked dataset."""
+    from .enums import Precision
+    if data.dtype != np.uint8:
+        data = data.astype(np.uint8, copy=False)
+    ds = group.create_dataset(
+        name, Precision.UINT8, length=int(data.shape[0]),
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=_compression_for(compression),
+        compression_level=6,
+    )
+    ds.write(data)
+
+
+def _write_uint32_channel(
+    group: _IOTarget, name: str, data: np.ndarray, compression: str
+) -> None:
+    """Write a UINT32 signal channel as a chunked dataset."""
+    from .enums import Precision
+    if data.dtype != np.uint32:
+        data = data.astype(np.uint32, copy=False)
+    ds = group.create_dataset(
+        name, Precision.UINT32, length=int(data.shape[0]),
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=_compression_for(compression),
+        compression_level=6,
+    )
+    ds.write(data)
+
+
+def _write_int64_channel(
+    group: _IOTarget, name: str, data: np.ndarray, compression: str
+) -> None:
+    """Write an INT64 signal channel as a chunked dataset."""
+    from .enums import Precision
+    if data.dtype != np.int64:
+        data = data.astype(np.int64, copy=False)
+    ds = group.create_dataset(
+        name, Precision.INT64, length=int(data.shape[0]),
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=_compression_for(compression),
+        compression_level=6,
+    )
+    ds.write(data)
+
+
+def _write_uint64_channel(
+    group: _IOTarget, name: str, data: np.ndarray, compression: str
+) -> None:
+    """Write a UINT64 channel (used for genomic index offsets)."""
+    from .enums import Precision
+    if data.dtype != np.uint64:
+        data = data.astype(np.uint64, copy=False)
+    ds = group.create_dataset(
+        name, Precision.UINT64, length=int(data.shape[0]),
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=_compression_for(compression),
+        compression_level=6,
+    )
+    ds.write(data)

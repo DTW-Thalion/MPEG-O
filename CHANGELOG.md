@@ -93,6 +93,32 @@ context describing the migration itself.
 - Cross-language conformance: full `[py/objc/java]³` matrix (61
   cells) plus 4-provider matrix.
 
+### M82.1 — GenomicRun (Python reference)
+
+- **Added:** `AlignedRead`, `GenomicRun`, `GenomicIndex`,
+  `WrittenGenomicRun` — the genomic data model (analogue of
+  `MassSpectrum` / `AcquisitionRun` / `SpectrumIndex` / `WrittenRun`).
+- **Added:** `SpectralDataset.write_minimal(..., genomic_runs=...)`
+  parameter and the `SpectralDataset.genomic_runs` read accessor.
+- **Added:** `SpectralDataset.open(..., provider=...)` keyword for
+  reading non-HDF5 backends symmetrically with `write_minimal`.
+- **Added:** `Precision.UINT64 = 9` for genomic index offsets;
+  cross-language ObjC/Java implementations (M82.2/M82.3) must match.
+- **Added:** `opt_genomic` feature flag emitted whenever a file
+  contains genomic runs (idempotent — added even when caller supplies
+  their own `features` list); format version bumps to 1.4.
+- **Added:** Cross-language reference fixture
+  `python/tests/fixtures/genomic/m82_100reads.tio` for M82.4.
+- **Fixed:** `Hdf5Provider._Group.create_dataset` no longer fails on
+  zero-length datasets (skip chunking + compression when length=0).
+- **Backward compat:** Files without `/study/genomic_runs/` open
+  with `ds.genomic_runs == {}` and no error. Standard MS write path
+  continues to store uint64 numpy arrays as INT64 on disk to preserve
+  cross-language byte parity until M82.2/M82.3 gain UINT64 support.
+- **Out of scope (M82.2/.3):** ObjC and Java implementations.
+- **Out of scope (codec milestone):** Base-packing; M82 stores one
+  ASCII byte per base.
+
 ---
 
 ## [pre-rebrand] — M79 modality + genomic enumerations groundwork

@@ -48,6 +48,7 @@ class Precision(IntEnum):
     UINT32 = 4
     COMPLEX128 = 5
     UINT8 = 6           # v0.11 M79: genomic quality scores + packed bases
+    UINT64 = 9   # v0.11 M82: genomic index offsets (7, 8 reserved for future UINT16 / INT8 cross-language parity)
 
     def numpy_dtype(self) -> str:
         """Return the little-endian NumPy dtype string for this precision."""
@@ -59,6 +60,7 @@ class Precision(IntEnum):
             Precision.UINT32: "<u4",
             Precision.COMPLEX128: "<c16",
             Precision.UINT8: "u1",
+            Precision.UINT64: "<u8",
         }[self]
 
 
