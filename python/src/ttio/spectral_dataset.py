@@ -32,6 +32,7 @@ from .providers.base import StorageGroup
 from .providers.hdf5 import Hdf5Provider
 from .provenance import ProvenanceRecord
 from .quantification import Quantification
+from .written_genomic_run import WrittenGenomicRun  # M82
 
 # M23 sentinel: returned by ``read_lock``/``write_lock`` when ``thread_safe``
 # is False so call sites can use ``with ds.read_lock(): ...`` unconditionally.
@@ -555,6 +556,7 @@ class SpectralDataset:
         title: str,
         isa_investigation_id: str,
         runs: Mapping[str, "WrittenRun"],
+        genomic_runs: Mapping[str, WrittenGenomicRun] | None = None,  # M82
         identifications: list[Identification] | None = None,
         quantifications: list[Quantification] | None = None,
         provenance: list[ProvenanceRecord] | None = None,
@@ -597,6 +599,14 @@ class SpectralDataset:
             feature_list = feature_list + ["opt_ms2_activation_detail"]
         format_version = "1.3" if any_m74 else "1.1"
 
+        # M82: opt_genomic feature flag + version bump when genomic_runs present.
+        has_genomic = bool(genomic_runs)
+        if features is None and has_genomic:
+            feature_list = feature_list + ["opt_genomic"]
+        # Conservative version bump: 1.4 when M82 content present.
+        if has_genomic:
+            format_version = "1.4"
+
         # HDF5 fast path keeps the legacy byte layout (fixed-length
         # string attrs, padded compound types) so existing tests and
         # cross-language readers continue to round-trip bit-for-bit.
@@ -614,6 +624,14 @@ class SpectralDataset:
 
                 nmr_group = study.create_group("nmr_runs")
                 io.write_fixed_string_attr(nmr_group, "_run_names", "")
+
+                if has_genomic:
+                    g_group = study.create_group("genomic_runs")
+                    io.write_fixed_string_attr(
+                        g_group, "_run_names", ",".join(genomic_runs.keys())
+                    )
+                    for gname, grun in genomic_runs.items():
+                        _write_genomic_run(g_group, gname, grun)
 
                 if identifications:
                     _write_identifications(study, identifications)
@@ -648,6 +666,14 @@ class SpectralDataset:
 
             nmr_group = study.create_group("nmr_runs")
             io.write_fixed_string_attr(nmr_group, "_run_names", "")
+
+            if has_genomic:
+                g_group = study.create_group("genomic_runs")
+                io.write_fixed_string_attr(
+                    g_group, "_run_names", ",".join(genomic_runs.keys())
+                )
+                for gname, grun in genomic_runs.items():
+                    _write_genomic_run(g_group, gname, grun)
 
             if identifications:
                 _write_identifications(study, identifications)
@@ -787,6 +813,95 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
     if run.chromatograms:
         from .acquisition_run import write_chromatograms_to_run_group
         write_chromatograms_to_run_group(g, run.chromatograms)
+
+
+def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
+    """Write one /study/genomic_runs/<name>/ subtree.
+
+    Mirrors :func:`_write_run` but for the genomic data model. Uses the
+    M82 signal-channel helpers from ``_hdf5_io`` and the existing
+    compound-dataset writer for variable-length per-read fields.
+
+    ``parent`` may be either a raw h5py group (HDF5 fast path) or a
+    :class:`~ttio.providers.base.StorageGroup` (provider path). Raw
+    h5py groups are wrapped in :class:`~ttio.providers.hdf5._Group` so
+    the signal-channel helpers (which expect the StorageGroup API) work
+    identically on both paths.
+    """
+    from ttio.genomic_index import GenomicIndex
+    from ttio.providers.hdf5 import _Group as _H5Group
+
+    # Normalise: the signal-channel helpers call StorageGroup.create_dataset
+    # with the (name, Precision, length=N, ...) signature, which differs
+    # from h5py's positional API.  Wrap any bare h5py group so both paths
+    # use the same StorageGroup interface.
+    if isinstance(parent, h5py.Group):
+        parent = _H5Group(parent)
+
+    rg = parent.create_group(name)
+
+    # Run-level attributes (mirrors _write_run pattern).
+    io.write_int_attr(rg, "acquisition_mode", run.acquisition_mode)
+    io.write_fixed_string_attr(rg, "modality", "genomic_sequencing")
+    io.write_int_attr(rg, "spectrum_class", 5)
+    io.write_fixed_string_attr(rg, "reference_uri", run.reference_uri)
+    io.write_fixed_string_attr(rg, "platform", run.platform)
+    io.write_fixed_string_attr(rg, "sample_name", run.sample_name)
+    io.write_int_attr(rg, "read_count", int(run.offsets.shape[0]))
+
+    # Genomic index (parallel arrays, including chromosomes as compound).
+    idx = GenomicIndex(
+        offsets=run.offsets,
+        lengths=run.lengths,
+        chromosomes=run.chromosomes,
+        positions=run.positions,
+        mapping_qualities=run.mapping_qualities,
+        flags=run.flags,
+    )
+    idx_group = rg.create_group("genomic_index")
+    idx.write(idx_group)
+
+    # Signal channels — these honour run.signal_compression.
+    sc = rg.create_group("signal_channels")
+    io._write_int64_channel(sc, "positions", run.positions, run.signal_compression)
+    io._write_uint8_channel(sc, "sequences", run.sequences, run.signal_compression)
+    io._write_uint8_channel(sc, "qualities", run.qualities, run.signal_compression)
+    io._write_uint32_channel(sc, "flags", run.flags, run.signal_compression)
+    io._write_uint8_channel(
+        sc, "mapping_qualities", run.mapping_qualities, run.signal_compression
+    )
+    # Variable-length per-read string fields — cigars and read_names are
+    # 7-bit ASCII; vl_str() (ASCII encoding) matches the ObjC reader.
+    io.write_compound_dataset(
+        sc,
+        "cigars",
+        [{"value": c} for c in run.cigars],
+        [("value", io.vl_str())],
+    )
+    io.write_compound_dataset(
+        sc,
+        "read_names",
+        [{"value": n} for n in run.read_names],
+        [("value", io.vl_str())],
+    )
+    io.write_compound_dataset(
+        sc,
+        "mate_info",
+        [
+            {"chrom": mc, "pos": int(mp), "tlen": int(tl)}
+            for mc, mp, tl in zip(
+                run.mate_chromosomes,
+                run.mate_positions,
+                run.template_lengths,
+            )
+        ],
+        [("chrom", io.vl_str()), ("pos", "<i8"), ("tlen", "<i4")],
+    )
+
+    # Per-run provenance — same pattern as _write_run.
+    if run.provenance_records:
+        prov = rg.create_group("provenance")
+        _write_provenance(prov, run.provenance_records, dataset_name="steps")
 
 
 def _write_identifications(study: h5py.Group, records: list[Identification]) -> None:
