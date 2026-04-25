@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import (
+from ttio import (
     AcquisitionRun,
     ActivationMethod,
     Identification,
@@ -20,7 +20,7 @@ from mpeg_o import (
     SpectralDataset,
     WrittenRun,
 )
-from mpeg_o.enums import AcquisitionMode
+from ttio.enums import AcquisitionMode
 
 
 def test_reads_minimal_ms_fixture(minimal_ms_fixture: Path) -> None:
@@ -28,12 +28,12 @@ def test_reads_minimal_ms_fixture(minimal_ms_fixture: Path) -> None:
         assert ds.feature_flags.version == "1.1"
         assert "base_v1" in ds.feature_flags.features
         assert ds.title == "minimal MS"
-        assert ds.isa_investigation_id == "MPGO:minimal"
+        assert ds.isa_investigation_id == "TTIO:minimal"
         assert list(ds.ms_runs.keys()) == ["run_0001"]
         run = ds.ms_runs["run_0001"]
         assert isinstance(run, AcquisitionRun)
         assert len(run) == 10
-        assert run.spectrum_class == "MPGOMassSpectrum"
+        assert run.spectrum_class == "TTIOMassSpectrum"
         assert run.acquisition_mode is AcquisitionMode.MS1_DDA
         assert run.channel_names == ("intensity", "mz")
         assert not ds.is_encrypted
@@ -71,7 +71,7 @@ def test_reads_nmr_1d_fixture(nmr_1d_fixture: Path) -> None:
     with SpectralDataset.open(nmr_1d_fixture) as ds:
         assert "nmr_run" in ds.ms_runs
         run = ds.ms_runs["nmr_run"]
-        assert run.spectrum_class == "MPGONMRSpectrum"
+        assert run.spectrum_class == "TTIONMRSpectrum"
         assert run.nucleus_type == "1H"
         assert run.acquisition_mode is AcquisitionMode.NMR_1D
         s = run[0]
@@ -98,7 +98,7 @@ def _make_run(n_spectra: int, points_per: int) -> WrittenRun:
     intensity = np.tile(np.linspace(1.0, 1000.0, points_per), n_spectra).astype(np.float64)
     base_peaks = np.full(n_spectra, 1000.0, dtype=np.float64)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -113,7 +113,7 @@ def _make_run(n_spectra: int, points_per: int) -> WrittenRun:
 
 
 def test_write_minimal_round_trip(tmp_path: Path) -> None:
-    out = tmp_path / "py_written.mpgo"
+    out = tmp_path / "py_written.tio"
     run = _make_run(n_spectra=5, points_per=8)
     idents = [
         Identification(run_name="run_0001", spectrum_index=0,
@@ -126,14 +126,14 @@ def test_write_minimal_round_trip(tmp_path: Path) -> None:
                        normalization_method="tic"),
     ]
     prov = [
-        ProvenanceRecord(timestamp_unix=1710000000, software="mpeg-o-py/0.3.0a1",
+        ProvenanceRecord(timestamp_unix=1710000000, software="ttio-py/0.3.0a1",
                          parameters={"run": "test"}, input_refs=[],
-                         output_refs=["file:py_written.mpgo"]),
+                         output_refs=["file:py_written.tio"]),
     ]
     SpectralDataset.write_minimal(
         out,
         title="python round trip",
-        isa_investigation_id="MPGO:pyrt",
+        isa_investigation_id="TTIO:pyrt",
         runs={"run_0001": run},
         identifications=idents,
         quantifications=quants,
@@ -143,7 +143,7 @@ def test_write_minimal_round_trip(tmp_path: Path) -> None:
 
     with SpectralDataset.open(out) as ds:
         assert ds.title == "python round trip"
-        assert ds.isa_investigation_id == "MPGO:pyrt"
+        assert ds.isa_investigation_id == "TTIO:pyrt"
         assert ds.feature_flags.version == "1.1"
         assert "run_0001" in ds.ms_runs
         r = ds.ms_runs["run_0001"]
@@ -162,7 +162,7 @@ def test_write_minimal_round_trip(tmp_path: Path) -> None:
         assert got_quants[0].abundance == pytest.approx(12345.6)
 
         got_prov = ds.provenance()
-        assert got_prov[0].software == "mpeg-o-py/0.3.0a1"
+        assert got_prov[0].software == "ttio-py/0.3.0a1"
         assert got_prov[0].parameters == {"run": "test"}
 
 
@@ -172,9 +172,9 @@ def test_spectrum_index_round_trip_without_m74_columns(tmp_path: Path) -> None:
     """Legacy path: WrittenRun leaves the four M74 fields None, so the
     writer omits the columns and the reader sees ``None`` on the
     SpectrumIndex M74 fields."""
-    out = tmp_path / "no_m74.mpgo"
+    out = tmp_path / "no_m74.tio"
     SpectralDataset.write_minimal(
-        out, title="no m74", isa_investigation_id="MPGO:no_m74",
+        out, title="no m74", isa_investigation_id="TTIO:no_m74",
         runs={"run_0001": _make_run(n_spectra=3, points_per=4)},
     )
     with SpectralDataset.open(out) as ds:
@@ -192,7 +192,7 @@ def test_spectrum_index_round_trip_with_m74_columns(tmp_path: Path) -> None:
     """M74 path: WrittenRun supplies all four parallel arrays, writer
     emits the columns, and the reader reconstructs per-spectrum
     activation methods and isolation windows."""
-    out = tmp_path / "with_m74.mpgo"
+    out = tmp_path / "with_m74.tio"
     run = _make_run(n_spectra=3, points_per=4)
     # Spectrum 0 is MS1 (NONE sentinel); 1 and 2 are MS2 with HCD + CID.
     run.activation_methods = np.array(
@@ -204,7 +204,7 @@ def test_spectrum_index_round_trip_with_m74_columns(tmp_path: Path) -> None:
     run.isolation_upper_offsets = np.array([0.0, 2.0, 0.75], dtype=np.float64)
 
     SpectralDataset.write_minimal(
-        out, title="with m74", isa_investigation_id="MPGO:m74",
+        out, title="with m74", isa_investigation_id="TTIO:m74",
         runs={"run_0001": run},
     )
     with SpectralDataset.open(out) as ds:
@@ -235,13 +235,13 @@ def test_m74_file_bumps_format_version_and_advertises_flag(
     tmp_path: Path,
 ) -> None:
     """Slice E: writing a dataset with M74 columns must bump
-    ``@mpeg_o_format_version`` from ``"1.1"`` to ``"1.3"`` and include
-    ``opt_ms2_activation_detail`` in ``@mpeg_o_features``. A dataset
+    ``@ttio_format_version`` from ``"1.1"`` to ``"1.3"`` and include
+    ``opt_ms2_activation_detail`` in ``@ttio_features``. A dataset
     without M74 columns keeps the legacy ``"1.1"`` layout."""
     # Legacy: no M74 columns => format 1.1, flag absent
-    legacy_path = tmp_path / "legacy.mpgo"
+    legacy_path = tmp_path / "legacy.tio"
     SpectralDataset.write_minimal(
-        legacy_path, title="legacy", isa_investigation_id="MPGO:legacy",
+        legacy_path, title="legacy", isa_investigation_id="TTIO:legacy",
         runs={"run_0001": _make_run(n_spectra=2, points_per=4)},
     )
     with SpectralDataset.open(legacy_path) as ds:
@@ -249,7 +249,7 @@ def test_m74_file_bumps_format_version_and_advertises_flag(
         assert "opt_ms2_activation_detail" not in ds.feature_flags.features
 
     # M74: any run with activation_methods => format 1.3 + flag
-    m74_path = tmp_path / "m74.mpgo"
+    m74_path = tmp_path / "m74.tio"
     run = _make_run(n_spectra=2, points_per=4)
     run.activation_methods = np.array(
         [int(ActivationMethod.NONE), int(ActivationMethod.HCD)],
@@ -259,7 +259,7 @@ def test_m74_file_bumps_format_version_and_advertises_flag(
     run.isolation_lower_offsets = np.array([0.0, 0.5], dtype=np.float64)
     run.isolation_upper_offsets = np.array([0.0, 0.5], dtype=np.float64)
     SpectralDataset.write_minimal(
-        m74_path, title="m74", isa_investigation_id="MPGO:m74",
+        m74_path, title="m74", isa_investigation_id="TTIO:m74",
         runs={"run_0001": run},
     )
     with SpectralDataset.open(m74_path) as ds:
@@ -274,12 +274,12 @@ def test_m74_file_bumps_format_version_and_advertises_flag(
 def test_written_run_rejects_partial_m74_population(tmp_path: Path) -> None:
     """All-or-nothing: populating some but not all of the four M74
     arrays is a schema error."""
-    out = tmp_path / "partial_m74.mpgo"
+    out = tmp_path / "partial_m74.tio"
     run = _make_run(n_spectra=2, points_per=4)
     run.activation_methods = np.array([0, 0], dtype=np.int32)
     # Deliberately omit the isolation_* trio.
     with pytest.raises(ValueError, match="M74 columns"):
         SpectralDataset.write_minimal(
-            out, title="partial m74", isa_investigation_id="MPGO:part",
+            out, title="partial m74", isa_investigation_id="TTIO:part",
             runs={"run_0001": run},
         )

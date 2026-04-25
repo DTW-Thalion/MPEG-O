@@ -33,12 +33,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import AxisDescriptor, IRMode, IRSpectrum, RamanSpectrum, SignalArray
-from mpeg_o.exporters.jcamp_dx import write_ir_spectrum, write_raman_spectrum
-from mpeg_o.importers.jcamp_dx import read_spectrum
+from ttio import AxisDescriptor, IRMode, IRSpectrum, RamanSpectrum, SignalArray
+from ttio.exporters.jcamp_dx import write_ir_spectrum, write_raman_spectrum
+from ttio.importers.jcamp_dx import read_spectrum
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-OBJC_DRIVER = REPO_ROOT / "objc" / "Tools" / "obj" / "MpgoJcampDxDump"
+OBJC_DRIVER = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioJcampDxDump"
 JAVA_CLASSES = REPO_ROOT / "java" / "target" / "classes"
 JAVA_CLASSPATH_FILE = REPO_ROOT / "java" / "target" / "classpath.txt"
 
@@ -69,14 +69,14 @@ def _java_parse_xy(jdx_path: Path) -> tuple[np.ndarray, np.ndarray, str]:
     ``x0,y0\nx1,y1\n...`` on stdout plus a trailing ``CLASS=<name>``
     line. Compiles the driver on first call into ``/tmp``."""
     cp = _java_classpath()
-    driver_dir = Path("/tmp/mpgo_m73_driver")
+    driver_dir = Path("/tmp/ttio_m73_driver")
     driver_dir.mkdir(exist_ok=True)
     driver_java = driver_dir / "M73Driver.java"
     driver_class = driver_dir / "M73Driver.class"
     if not driver_java.exists():
         driver_java.write_text(textwrap.dedent("""
-            import com.dtwthalion.mpgo.*;
-            import com.dtwthalion.mpgo.importers.JcampDxReader;
+            import com.dtwthalion.ttio.*;
+            import com.dtwthalion.ttio.importers.JcampDxReader;
             import java.nio.file.Paths;
             public class M73Driver {
                 public static void main(String[] a) throws Exception {
@@ -230,7 +230,7 @@ def test_ir_jcamp_python_to_java(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(not _objc_available(),
-                    reason="ObjC MpgoJcampDxDump CLI not built")
+                    reason="ObjC TtioJcampDxDump CLI not built")
 def test_raman_jcamp_python_to_objc(tmp_path: Path) -> None:
     original = _raman_fixture()
     p = tmp_path / "raman_py.jdx"
@@ -243,7 +243,7 @@ def test_raman_jcamp_python_to_objc(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(not _objc_available(),
-                    reason="ObjC MpgoJcampDxDump CLI not built")
+                    reason="ObjC TtioJcampDxDump CLI not built")
 def test_ir_jcamp_python_to_objc(tmp_path: Path) -> None:
     original = _ir_fixture()
     p = tmp_path / "ir_py.jdx"
@@ -279,7 +279,7 @@ def test_jcamp_layout_is_deterministic(tmp_path: Path) -> None:
         "##TITLE=deterministic\n"
         "##JCAMP-DX=5.01\n"
         "##DATA TYPE=RAMAN SPECTRUM\n"
-        "##ORIGIN=MPEG-O\n"
+        "##ORIGIN=TTI-O\n"
         "##OWNER=\n"
         "##XUNITS=1/CM\n"
         "##YUNITS=ARBITRARY UNITS\n"

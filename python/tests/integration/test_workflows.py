@@ -1,4 +1,4 @@
-"""End-to-end MPEG-O workflows (v0.9 M61).
+"""End-to-end TTI-O workflows (v0.9 M61).
 
 Four scenarios from the HANDOFF, each exercised across all four
 storage providers (HDF5, Memory, SQLite, Zarr):
@@ -7,7 +7,7 @@ storage providers (HDF5, Memory, SQLite, Zarr):
    peptide identifications → re-emit mzML → ISA-Tab export →
    sign + verify → encrypt + decrypt → anonymize → confirm
    provenance chain.
-2. **Multi-modal MS + NMR** — two runs in one .mpgo, ISA bundle
+2. **Multi-modal MS + NMR** — two runs in one .tio, ISA bundle
    carries both assays, format-specific re-export.
 3. **Key-rotation lifecycle** — wrap DEK with KEK-A, rotate to
    KEK-B, verify history. (KeyRotation is provider-aware as of
@@ -30,25 +30,25 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import (
+from ttio import (
     AcquisitionMode,
     Identification,
     SpectralDataset,
     WrittenRun,
 )
-from mpeg_o.anonymization import AnonymizationPolicy, anonymize
-from mpeg_o.exporters import isa as isa_exporter
-from mpeg_o.exporters import mzml as mzml_writer
-from mpeg_o.importers import mzml as mzml_reader
-from mpeg_o.key_rotation import (
+from ttio.anonymization import AnonymizationPolicy, anonymize
+from ttio.exporters import isa as isa_exporter
+from ttio.exporters import mzml as mzml_writer
+from ttio.importers import mzml as mzml_reader
+from ttio.key_rotation import (
     enable_envelope_encryption,
     has_envelope_encryption,
     key_history,
     rotate_key,
     unwrap_dek,
 )
-from mpeg_o.signatures import sign_dataset, verify_dataset
-from mpeg_o.value_range import ValueRange
+from ttio.signatures import sign_dataset, verify_dataset
+from ttio.value_range import ValueRange
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _provider_matrix import (  # type: ignore[import-not-found]
@@ -122,7 +122,7 @@ def _wrap_mzml(spectra_xml: str, run_id: str) -> str:
   <fileDescription><fileContent>
     <cvParam cvRef="MS" accession="MS:1000580" name="MSn spectrum"/>
   </fileContent></fileDescription>
-  <softwareList count="1"><software id="mpgo" version="0.9.0"/></softwareList>
+  <softwareList count="1"><software id="ttio" version="0.9.0"/></softwareList>
   <instrumentConfigurationList count="1"><instrumentConfiguration id="IC1"/></instrumentConfigurationList>
   <dataProcessingList count="1"><dataProcessing id="dp"/></dataProcessingList>
   <run id="{run_id}" defaultInstrumentConfigurationRef="IC1">
@@ -169,12 +169,12 @@ def test_workflow_bsa_proteomics_pipeline(provider: str, tmp_path: Path) -> None
     _maybe_skip_provider(provider)
     src = _build_bsa_synthetic_mzml(tmp_path)
 
-    # 1. Import mzML → .mpgo on the parametrized provider.
-    mpgo_url = _provider_url(provider, tmp_path, "bsa")
-    mzml_reader.read(src).to_mpgo(mpgo_url, provider=provider)
+    # 1. Import mzML → .tio on the parametrized provider.
+    ttio_url = _provider_url(provider, tmp_path, "bsa")
+    mzml_reader.read(src).to_ttio(ttio_url, provider=provider)
 
     # 2. Open + verify spectrum count and MS-level distribution.
-    with SpectralDataset.open(mpgo_url) as ds:
+    with SpectralDataset.open(ttio_url) as ds:
         run = ds.ms_runs["run_0001"]
         assert len(run) == 5
         ms1_indices = run.index.indices_for_ms_level(1)
@@ -202,12 +202,12 @@ def test_workflow_bsa_proteomics_pipeline(provider: str, tmp_path: Path) -> None
         )
         for j, i in enumerate(ms2_at_547)
     ]
-    mpgo_with_ids = _provider_url(provider, tmp_path, "bsa_ids")
-    parsed.to_mpgo(mpgo_with_ids, provider=provider)
+    ttio_with_ids = _provider_url(provider, tmp_path, "bsa_ids")
+    parsed.to_ttio(ttio_with_ids, provider=provider)
 
     # 5. Re-export to mzML → both spectra survive the round-trip.
     out_mzml = tmp_path / "bsa_out.mzML"
-    with SpectralDataset.open(mpgo_with_ids, writable=True) as ds:
+    with SpectralDataset.open(ttio_with_ids, writable=True) as ds:
         mzml_writer.write_dataset(ds, out_mzml, zlib_compression=False)
         re_imported = mzml_reader.read(out_mzml)
         assert len(re_imported.ms_spectra) == 5
@@ -235,7 +235,7 @@ def test_workflow_bsa_proteomics_pipeline(provider: str, tmp_path: Path) -> None
     #    + coarsen m/z. Output written through the same provider via the
     #    provider= kwarg.
     anon_url = _provider_url(provider, tmp_path, "bsa_anon")
-    with SpectralDataset.open(mpgo_with_ids) as ds:
+    with SpectralDataset.open(ttio_with_ids) as ds:
         result = anonymize(
             ds, anon_url,
             AnonymizationPolicy(strip_metadata_fields=True, coarsen_mz_decimals=1),
@@ -244,18 +244,18 @@ def test_workflow_bsa_proteomics_pipeline(provider: str, tmp_path: Path) -> None
     assert result.metadata_fields_stripped == 1
     assert "strip_metadata_fields" in result.policies_applied
 
-    # 9. Verify the anonymized .mpgo carries the right provenance + flags.
+    # 9. Verify the anonymized .tio carries the right provenance + flags.
     with SpectralDataset.open(anon_url) as anon_ds:
         prov = anon_ds.provenance()
         assert prov, "anonymizer must record at least one provenance step"
-        assert prov[0].software.startswith("mpeg-o anonymizer")
+        assert prov[0].software.startswith("ttio anonymizer")
         assert anon_ds.feature_flags.has("opt_anonymized")
         assert anon_ds.title == ""  # stripped
 
     # 10. Encrypt → decrypt the intensity channel on the original file.
     #     Done last so encryption's destructive in-place rewrite of
     #     intensity_values doesn't break later steps that need plaintext.
-    with SpectralDataset.open(mpgo_with_ids, writable=True) as ds:
+    with SpectralDataset.open(ttio_with_ids, writable=True) as ds:
         run = ds.ms_runs["run_0001"]
         run.encrypt_with_key(key, level=0)
         plaintext = run.decrypt_with_key(key)
@@ -278,7 +278,7 @@ def _build_multimodal(provider: str, tmp_path: Path) -> str:
     ms_mz = np.tile(np.linspace(100.0, 200.0, n_pts), n_ms).astype(np.float64)
     ms_int = rng.uniform(0.0, 1e5, size=n_ms * n_pts).astype(np.float64)
     ms_run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": ms_mz, "intensity": ms_int},
         offsets=np.arange(n_ms, dtype=np.uint64) * n_pts,
@@ -294,7 +294,7 @@ def _build_multimodal(provider: str, tmp_path: Path) -> str:
     cs = np.tile(np.linspace(-1.0, 12.0, n_pts), n_nmr).astype(np.float64)
     nmr_int = rng.normal(0.0, 1.0, size=n_nmr * n_pts).astype(np.float64)
     nmr_run = WrittenRun(
-        spectrum_class="MPGONMRSpectrum",
+        spectrum_class="TTIONMRSpectrum",
         acquisition_mode=int(AcquisitionMode.NMR_1D),
         channel_data={"chemical_shift": cs, "intensity": nmr_int},
         offsets=np.arange(n_nmr, dtype=np.uint64) * n_pts,
@@ -331,7 +331,7 @@ def test_workflow_multimodal(provider: str, tmp_path: Path) -> None:
         assert set(ds.all_runs.keys()) == {"ms_run", "nmr_run"}
         assert len(ds.ms_runs["ms_run"]) == 6
         nmr = ds.ms_runs["nmr_run"]
-        assert nmr.spectrum_class == "MPGONMRSpectrum"
+        assert nmr.spectrum_class == "TTIONMRSpectrum"
         assert len(nmr) == 3
 
         # Cross-modal identifications survived the write.
@@ -390,7 +390,7 @@ def _build_clinical(provider: str, tmp_path: Path) -> str:
     mz = np.tile(np.linspace(100.0, 200.0, n_pts), n).astype(np.float64)
     intensity = rng.uniform(0.0, 1e6, size=n * n_pts).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.arange(n, dtype=np.uint64) * n_pts,
@@ -446,7 +446,7 @@ def test_workflow_clinical_anonymization(provider: str, tmp_path: Path) -> None:
         assert anon_ds.title == ""
         # Provenance carries the policy summary.
         prov = anon_ds.provenance()
-        assert prov and prov[0].software.startswith("mpeg-o anonymizer")
+        assert prov and prov[0].software.startswith("ttio anonymizer")
         assert anon_ds.feature_flags.has("opt_anonymized")
 
     # Original file unmodified.

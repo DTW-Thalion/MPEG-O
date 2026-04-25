@@ -23,10 +23,10 @@ import pytest
 
 pytest.importorskip("websockets")
 
-from mpeg_o.enums import AcquisitionMode, Polarity
-from mpeg_o.spectral_dataset import SpectralDataset, WrittenRun
-from mpeg_o.transport.client import TransportClient
-from mpeg_o.transport.packets import (
+from ttio.enums import AcquisitionMode, Polarity
+from ttio.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.transport.client import TransportClient
+from ttio.transport.packets import (
     AccessUnit,
     PacketFlag,
     PacketHeader,
@@ -34,7 +34,7 @@ from mpeg_o.transport.packets import (
     pack_string,
     unpack_string,
 )
-from mpeg_o.transport.server import TransportServer, serving
+from ttio.transport.server import TransportServer, serving
 
 
 # ---------------------------------------------------------- fixture
@@ -71,7 +71,7 @@ def _build_large_fixture(path: Path, n_spectra: int = 600,
         dtype="<f8",
     )
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -94,7 +94,7 @@ def _build_large_fixture(path: Path, n_spectra: int = 600,
 
 @pytest.fixture
 def large_fixture(tmp_path):
-    return _build_large_fixture(tmp_path / "large.mpgo")
+    return _build_large_fixture(tmp_path / "large.tio")
 
 
 def _count_aus(packets):

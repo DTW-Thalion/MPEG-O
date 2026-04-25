@@ -1,4 +1,4 @@
-"""Tests for mpeg_o.providers.sqlite.SqliteProvider.
+"""Tests for ttio.providers.sqlite.SqliteProvider.
 
 Covers Task C1: structural round-trip stress-test of the Provisional
 provider abstraction per the M41 design spec.
@@ -8,15 +8,15 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mpeg_o.providers.sqlite import SqliteProvider
-from mpeg_o.providers.base import CompoundField, CompoundFieldKind
-from mpeg_o.enums import Precision
+from ttio.providers.sqlite import SqliteProvider
+from ttio.providers.base import CompoundField, CompoundFieldKind
+from ttio.enums import Precision
 
 
 def test_provider_name_and_registration():
-    from mpeg_o.providers import discover_providers
+    from ttio.providers import discover_providers
     # Clear the registry cache so the entry-point / fallback logic fires.
-    import mpeg_o.providers.registry as _reg
+    import ttio.providers.registry as _reg
     _reg._REGISTRY.clear()
     providers = discover_providers()
     assert "sqlite" in providers
@@ -25,7 +25,7 @@ def test_provider_name_and_registration():
 
 
 def test_open_create_close(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     assert p.is_open()
@@ -37,7 +37,7 @@ def test_open_create_close(tmp_path):
 
 def test_open_as_classmethod(tmp_path):
     """open() works as a classmethod too."""
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider.open(path, mode="w")
     assert p.is_open()
     assert p.provider_name() == "sqlite"
@@ -45,14 +45,14 @@ def test_open_as_classmethod(tmp_path):
 
 
 def test_context_manager(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     with SqliteProvider.open(path, mode="w") as p:
         assert p.is_open()
     assert not p.is_open()
 
 
 def test_groups_roundtrip(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -77,7 +77,7 @@ def test_groups_roundtrip(tmp_path):
 
 
 def test_open_group_missing_raises(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -87,7 +87,7 @@ def test_open_group_missing_raises(tmp_path):
 
 
 def test_create_group_duplicate_raises(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -98,7 +98,7 @@ def test_create_group_duplicate_raises(tmp_path):
 
 
 def test_delete_child_group(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -110,7 +110,7 @@ def test_delete_child_group(tmp_path):
 
 
 def test_delete_child_dataset(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -123,7 +123,7 @@ def test_delete_child_dataset(tmp_path):
 
 
 def test_primitive_dataset_1d_roundtrip(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -151,7 +151,7 @@ def test_primitive_dataset_1d_roundtrip(tmp_path):
 
 
 def test_primitive_dataset_read_slice(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -166,7 +166,7 @@ def test_primitive_dataset_read_slice(tmp_path):
 
 
 def test_primitive_dataset_nd_roundtrip(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -183,7 +183,7 @@ def test_primitive_dataset_nd_roundtrip(tmp_path):
 
 def test_all_precisions_roundtrip(tmp_path):
     """Every Precision enum value survives a write/read cycle."""
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -208,7 +208,7 @@ def test_all_precisions_roundtrip(tmp_path):
 
 
 def test_compound_dataset_roundtrip(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -229,7 +229,7 @@ def test_compound_dataset_roundtrip(tmp_path):
 
 
 def test_attributes_roundtrip(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -245,7 +245,7 @@ def test_attributes_roundtrip(tmp_path):
 
 
 def test_attribute_has_delete(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -259,7 +259,7 @@ def test_attribute_has_delete(tmp_path):
 
 
 def test_attribute_missing_raises(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -269,7 +269,7 @@ def test_attribute_missing_raises(tmp_path):
 
 
 def test_dataset_attributes(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     root = p.root_group()
@@ -285,7 +285,7 @@ def test_dataset_attributes(tmp_path):
 
 
 def test_read_only_rejects_writes(tmp_path):
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     # Create file first
     with SqliteProvider.open(path, mode="w") as p:
         root = p.root_group()
@@ -303,16 +303,16 @@ def test_read_only_rejects_writes(tmp_path):
 
 
 def test_supports_url():
-    assert SqliteProvider.supports_url("sqlite:///path/to/data.mpgo.sqlite")
-    assert SqliteProvider.supports_url("/data/file.mpgo.sqlite")
+    assert SqliteProvider.supports_url("sqlite:///path/to/data.tio.sqlite")
+    assert SqliteProvider.supports_url("/data/file.tio.sqlite")
     assert SqliteProvider.supports_url("/data/file.sqlite")
     assert not SqliteProvider.supports_url("memory://foo")
-    assert not SqliteProvider.supports_url("/data/file.mpgo.h5")
+    assert not SqliteProvider.supports_url("/data/file.tio.h5")
 
 
 def test_native_handle(tmp_path):
     import sqlite3
-    path = str(tmp_path / "t.mpgo.sqlite")
+    path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
     handle = p.native_handle()
@@ -321,14 +321,14 @@ def test_native_handle(tmp_path):
 
 
 def test_mode_r_missing_file_raises(tmp_path):
-    path = str(tmp_path / "does_not_exist.mpgo.sqlite")
+    path = str(tmp_path / "does_not_exist.tio.sqlite")
     p = SqliteProvider()
     with pytest.raises(FileNotFoundError):
         p.open(path, mode="r")
 
 
 def test_mode_a_creates_if_missing(tmp_path):
-    path = str(tmp_path / "new.mpgo.sqlite")
+    path = str(tmp_path / "new.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="a")
     assert p.is_open()
@@ -341,25 +341,25 @@ def test_mode_a_creates_if_missing(tmp_path):
     q.close()
 
 
-def test_mpeg_o_shaped_tree_roundtrip(tmp_path):
-    """C1 — round-trip a tree structured like a real .mpgo file.
+def test_ttio_shaped_tree_roundtrip(tmp_path):
+    """C1 — round-trip a tree structured like a real .tio file.
 
     This exercises the full provider protocol in the exact pattern
     SpectralDataset would use if it were wired through providers.
     """
-    path = str(tmp_path / "spectral.mpgo.sqlite")
+    path = str(tmp_path / "spectral.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
 
     root = p.root_group()
-    root.set_attribute("mpeg_o_format_version", "0.6-sqlite")
+    root.set_attribute("ttio_format_version", "0.6-sqlite")
     study = root.create_group("study")
     study.set_attribute("title", "End-to-end")
 
     runs_group = study.create_group("ms_runs")
     run0 = runs_group.create_group("run_0001")
     run0.set_attribute("acquisition_mode", 0)   # MS1_DDA
-    run0.set_attribute("spectrum_class", "MPGOMassSpectrum")
+    run0.set_attribute("spectrum_class", "TTIOMassSpectrum")
 
     # spectrum_index: 8 parallel 1-D datasets
     idx = run0.create_group("spectrum_index")
@@ -411,13 +411,13 @@ def test_mpeg_o_shaped_tree_roundtrip(tmp_path):
     q = SqliteProvider()
     q.open(path, mode="r")
     r2 = q.root_group()
-    assert r2.get_attribute("mpeg_o_format_version") == "0.6-sqlite"
+    assert r2.get_attribute("ttio_format_version") == "0.6-sqlite"
     s2 = r2.open_group("study")
     assert s2.get_attribute("title") == "End-to-end"
     runs2 = s2.open_group("ms_runs")
     run_back = runs2.open_group("run_0001")
     assert run_back.get_attribute("acquisition_mode") == 0
-    assert run_back.get_attribute("spectrum_class") == "MPGOMassSpectrum"
+    assert run_back.get_attribute("spectrum_class") == "TTIOMassSpectrum"
 
     idx2 = run_back.open_group("spectrum_index")
     np.testing.assert_array_equal(

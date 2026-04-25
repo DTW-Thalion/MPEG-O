@@ -4,8 +4,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mpeg_o import AxisDescriptor, TwoDimensionalCorrelationSpectrum
-from mpeg_o.analysis import two_d_cos
+from ttio import AxisDescriptor, TwoDimensionalCorrelationSpectrum
+from ttio.analysis import two_d_cos
 
 
 def test_hilbert_noda_matrix_shape_and_antisymmetry() -> None:

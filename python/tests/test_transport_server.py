@@ -1,4 +1,4 @@
-"""Tests for mpeg_o.transport.server / .client (v0.10 M68).
+"""Tests for ttio.transport.server / .client (v0.10 M68).
 
 The fixture builder from ``test_transport_codec`` is re-used so the
 server tests share a deterministic dataset shape with the offline
@@ -15,11 +15,11 @@ import pytest
 
 pytest.importorskip("websockets")
 
-from mpeg_o.enums import AcquisitionMode, Polarity
-from mpeg_o.spectral_dataset import SpectralDataset, WrittenRun
-from mpeg_o.transport.client import TransportClient
-from mpeg_o.transport.packets import PacketType
-from mpeg_o.transport.server import TransportServer, serving
+from ttio.enums import AcquisitionMode, Polarity
+from ttio.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.transport.client import TransportClient
+from ttio.transport.packets import PacketType
+from ttio.transport.server import TransportServer, serving
 
 
 def _make_fixture(path: Path, *, n_spectra: int = 5) -> Path:
@@ -46,7 +46,7 @@ def _make_fixture(path: Path, *, n_spectra: int = 5) -> Path:
         dtype="<f8",
     )
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -68,15 +68,15 @@ def _make_fixture(path: Path, *, n_spectra: int = 5) -> Path:
 
 
 @pytest.fixture
-def mpgo_fixture(tmp_path):
-    return _make_fixture(tmp_path / "src.mpgo")
+def ttio_fixture(tmp_path):
+    return _make_fixture(tmp_path / "src.tio")
 
 
 class TestServerBasics:
 
     @pytest.mark.asyncio
-    async def test_unfiltered_stream_full_dataset(self, mpgo_fixture, tmp_path):
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_unfiltered_stream_full_dataset(self, ttio_fixture, tmp_path):
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             client = TransportClient(f"ws://127.0.0.1:{srv.port}")
             packets = await client.fetch_packets()
         types = [h.packet_type for h, _ in packets]
@@ -87,9 +87,9 @@ class TestServerBasics:
         assert au_count == 5
 
     @pytest.mark.asyncio
-    async def test_client_materializes_to_file(self, mpgo_fixture, tmp_path):
-        output = tmp_path / "client_out.mpgo"
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_client_materializes_to_file(self, ttio_fixture, tmp_path):
+        output = tmp_path / "client_out.tio"
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             client = TransportClient(f"ws://127.0.0.1:{srv.port}")
             rt = await client.stream_to_file(output)
         try:
@@ -104,8 +104,8 @@ class TestServerBasics:
 class TestFilters:
 
     @pytest.mark.asyncio
-    async def test_ms_level_filter(self, mpgo_fixture):
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_ms_level_filter(self, ttio_fixture):
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             client = TransportClient(f"ws://127.0.0.1:{srv.port}")
             packets = await client.fetch_packets(filters={"ms_level": 2})
         au_count = sum(
@@ -115,8 +115,8 @@ class TestFilters:
         assert au_count == 2
 
     @pytest.mark.asyncio
-    async def test_rt_range_filter(self, mpgo_fixture):
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_rt_range_filter(self, ttio_fixture):
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             client = TransportClient(f"ws://127.0.0.1:{srv.port}")
             packets = await client.fetch_packets(
                 filters={"rt_min": 2.5, "rt_max": 4.0}
@@ -128,8 +128,8 @@ class TestFilters:
         assert au_count == 2
 
     @pytest.mark.asyncio
-    async def test_precursor_mz_filter(self, mpgo_fixture):
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_precursor_mz_filter(self, ttio_fixture):
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             client = TransportClient(f"ws://127.0.0.1:{srv.port}")
             packets = await client.fetch_packets(
                 filters={"precursor_mz_min": 510.0, "precursor_mz_max": 520.0}
@@ -142,8 +142,8 @@ class TestFilters:
         assert au_count == 1
 
     @pytest.mark.asyncio
-    async def test_combined_filters(self, mpgo_fixture):
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_combined_filters(self, ttio_fixture):
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             client = TransportClient(f"ws://127.0.0.1:{srv.port}")
             packets = await client.fetch_packets(
                 filters={"ms_level": 2, "rt_max": 2.5}
@@ -155,8 +155,8 @@ class TestFilters:
         assert au_count == 1
 
     @pytest.mark.asyncio
-    async def test_max_au_cap(self, mpgo_fixture):
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_max_au_cap(self, ttio_fixture):
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             client = TransportClient(f"ws://127.0.0.1:{srv.port}")
             packets = await client.fetch_packets(filters={"max_au": 2})
         au_count = sum(
@@ -165,8 +165,8 @@ class TestFilters:
         assert au_count == 2
 
     @pytest.mark.asyncio
-    async def test_no_matches_returns_headers_only(self, mpgo_fixture):
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_no_matches_returns_headers_only(self, ttio_fixture):
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             client = TransportClient(f"ws://127.0.0.1:{srv.port}")
             packets = await client.fetch_packets(filters={"ms_level": 99})
         au_count = sum(
@@ -181,8 +181,8 @@ class TestFilters:
 class TestConcurrency:
 
     @pytest.mark.asyncio
-    async def test_multiple_concurrent_clients(self, mpgo_fixture):
-        async with serving(mpgo_fixture, host="127.0.0.1", port=0) as srv:
+    async def test_multiple_concurrent_clients(self, ttio_fixture):
+        async with serving(ttio_fixture, host="127.0.0.1", port=0) as srv:
             url = f"ws://127.0.0.1:{srv.port}"
             # Two concurrent fetches, one filtered and one full.
             full = TransportClient(url).fetch_packets()
@@ -202,8 +202,8 @@ class TestConcurrency:
         assert filt_au == 2
 
     @pytest.mark.asyncio
-    async def test_graceful_shutdown(self, mpgo_fixture):
-        server = TransportServer(mpgo_fixture, host="127.0.0.1", port=0)
+    async def test_graceful_shutdown(self, ttio_fixture):
+        server = TransportServer(ttio_fixture, host="127.0.0.1", port=0)
         await server.start()
         try:
             client = TransportClient(f"ws://127.0.0.1:{server.port}")

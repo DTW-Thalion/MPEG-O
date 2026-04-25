@@ -2,7 +2,7 @@
 
 Covers:
 
-1. ``mpeg_o._numpress`` unit tests — encoder + decoder round trip,
+1. ``ttio._numpress`` unit tests — encoder + decoder round trip,
    max relative error < 1 ppm, equal-length output, scale-for-range
    contract.
 2. End-to-end Numpress compression via ``WrittenRun.signal_compression
@@ -12,9 +12,9 @@ Covers:
 3. LZ4 end-to-end via ``hdf5plugin``. Skipped cleanly when the
    ``codecs`` optional dependency isn't installed.
 4. Cross-language parity for Numpress:
-   - Python writes a .mpgo with ``numpress_delta``; the ObjC
-     ``MpgoVerify`` tool reports the expected run + spectrum counts,
-     proving the dataset is a valid compound-capable .mpgo.
+   - Python writes a .tio with ``numpress_delta``; the ObjC
+     ``TtioVerify`` tool reports the expected run + spectrum counts,
+     proving the dataset is a valid compound-capable .tio.
    - Byte-identical scale + deltas between Python and ObjC when run
      on the same input is asserted by a direct comparison of the
      in-memory encode path (both implementations use the same formula
@@ -31,11 +31,11 @@ import h5py
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o._numpress import decode as np_decode
-from mpeg_o._numpress import encode as np_encode
-from mpeg_o._numpress import scale_for_range
-from mpeg_o.enums import AcquisitionMode
+from ttio import SpectralDataset, WrittenRun
+from ttio._numpress import decode as np_decode
+from ttio._numpress import encode as np_encode
+from ttio._numpress import scale_for_range
+from ttio.enums import AcquisitionMode
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -67,7 +67,7 @@ def _make_run(n_spec: int, n_pts: int, *, codec: str) -> WrittenRun:
     mz = 100.0 + np.sort(rng.uniform(0.0, 1900.0, size=n_spec * n_pts)).astype(np.float64)
     intensity = (1.0 + rng.exponential(100.0, size=n_spec * n_pts)).astype(np.float64)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -122,9 +122,9 @@ def test_numpress_empty_array() -> None:
 
 def test_numpress_end_to_end_round_trip(tmp_path: Path) -> None:
     run = _make_run(n_spec=10, n_pts=64, codec="numpress_delta")
-    out = tmp_path / "np.mpgo"
+    out = tmp_path / "np.tio"
     SpectralDataset.write_minimal(
-        out, title="m21np", isa_investigation_id="MPGO:np",
+        out, title="m21np", isa_investigation_id="TTIO:np",
         runs={"run_0001": run},
     )
 
@@ -158,9 +158,9 @@ def test_numpress_end_to_end_round_trip(tmp_path: Path) -> None:
 @pytest.mark.skipif(not HAS_LZ4, reason="hdf5plugin LZ4 filter not available")
 def test_lz4_end_to_end_round_trip(tmp_path: Path) -> None:
     run = _make_run(n_spec=10, n_pts=64, codec="lz4")
-    out = tmp_path / "lz4.mpgo"
+    out = tmp_path / "lz4.tio"
     SpectralDataset.write_minimal(
-        out, title="m21lz4", isa_investigation_id="MPGO:lz4",
+        out, title="m21lz4", isa_investigation_id="TTIO:lz4",
         runs={"run_0001": run},
     )
     # Confirm the HDF5 file actually has filter 32004 on the dataset.
@@ -185,33 +185,33 @@ def test_lz4_end_to_end_round_trip(tmp_path: Path) -> None:
 # ------------------------------------------------- cross-language parity ---
 
 
-def _mpgo_verify_binary() -> Path | None:
+def _ttio_verify_binary() -> Path | None:
     candidates = [
-        _REPO_ROOT / "objc" / "Tools" / "obj" / "MpgoVerify",
+        _REPO_ROOT / "objc" / "Tools" / "obj" / "TtioVerify",
     ]
     for c in candidates:
         if c.is_file() and os.access(c, os.X_OK):
             return c
-    which = shutil.which("MpgoVerify")
+    which = shutil.which("TtioVerify")
     return Path(which) if which else None
 
 
-@pytest.mark.skipif(_mpgo_verify_binary() is None,
-                    reason="ObjC libMPGO not built; cross-lang test skipped")
+@pytest.mark.skipif(_ttio_verify_binary() is None,
+                    reason="ObjC libTTIO not built; cross-lang test skipped")
 def test_python_numpress_file_is_recognised_by_objc(tmp_path: Path) -> None:
-    """A Python-written Numpress-delta ``.mpgo`` must still be a
-    valid MPGO dataset from the ObjC reader's point of view: the
-    ``MpgoVerify`` summary reports the run + spectrum counts
+    """A Python-written Numpress-delta ``.tio`` must still be a
+    valid TTIO dataset from the ObjC reader's point of view: the
+    ``TtioVerify`` summary reports the run + spectrum counts
     correctly, proving the scale + delta layout matches
-    ``MPGONumpress`` expectations."""
+    ``TTIONumpress`` expectations."""
     run = _make_run(n_spec=4, n_pts=16, codec="numpress_delta")
-    out = tmp_path / "cross.mpgo"
+    out = tmp_path / "cross.tio"
     SpectralDataset.write_minimal(
-        out, title="cross np", isa_investigation_id="MPGO:npx",
+        out, title="cross np", isa_investigation_id="TTIO:npx",
         runs={"run_0001": run},
     )
 
-    binary = _mpgo_verify_binary()
+    binary = _ttio_verify_binary()
     assert binary is not None
     lib_dir = _REPO_ROOT / "objc" / "Source" / "obj"
     env = os.environ.copy()

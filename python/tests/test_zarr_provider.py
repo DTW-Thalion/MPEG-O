@@ -14,14 +14,14 @@ import pytest
 
 pytest.importorskip("zarr", minversion="3.0")
 
-from mpeg_o.enums import Compression, Precision  # noqa: E402
-from mpeg_o.providers import (  # noqa: E402
+from ttio.enums import Compression, Precision  # noqa: E402
+from ttio.providers import (  # noqa: E402
     CompoundField,
     CompoundFieldKind,
     discover_providers,
     open_provider,
 )
-from mpeg_o.providers.zarr import ZarrProvider  # noqa: E402
+from ttio.providers.zarr import ZarrProvider  # noqa: E402
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────

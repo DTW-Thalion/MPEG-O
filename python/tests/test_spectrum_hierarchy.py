@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mpeg_o import (
+from ttio import (
     AxisDescriptor,
     Chromatogram,
     EncodingSpec,
@@ -16,7 +16,7 @@ from mpeg_o import (
     Spectrum,
     FreeInductionDecay,
 )
-from mpeg_o.enums import ChromatogramType
+from ttio.enums import ChromatogramType
 
 
 def _mz_axis() -> AxisDescriptor:
@@ -76,8 +76,8 @@ def test_nmr_spectrum_channels() -> None:
 
 
 def test_nmr_2d_spectrum_shape_validation() -> None:
-    from mpeg_o.axis_descriptor import AxisDescriptor
-    from mpeg_o.value_range import ValueRange
+    from ttio.axis_descriptor import AxisDescriptor
+    from ttio.value_range import ValueRange
     matrix = np.zeros((4, 8), dtype=np.float64)
     f1 = AxisDescriptor(name="1H", unit="ppm", value_range=ValueRange(0.0, 10.0))
     f2 = AxisDescriptor(name="13C", unit="ppm", value_range=ValueRange(0.0, 200.0))
@@ -125,7 +125,7 @@ def test_fid_inherits_signal_array() -> None:
 
 
 def test_chromatogram_validation() -> None:
-    from mpeg_o.signal_array import SignalArray
+    from ttio.signal_array import SignalArray
 
     rt = np.arange(10, dtype=np.float64)
     it = np.arange(10, dtype=np.float64) * 2
@@ -141,9 +141,9 @@ def test_chromatogram_validation() -> None:
 
 
 def test_chromatogram_inherits_spectrum() -> None:
-    from mpeg_o.chromatogram import Chromatogram
-    from mpeg_o.spectrum import Spectrum
-    from mpeg_o.enums import ChromatogramType
+    from ttio.chromatogram import Chromatogram
+    from ttio.spectrum import Spectrum
+    from ttio.enums import ChromatogramType
     import numpy as np
 
     t = SignalArray(data=np.array([0.0, 1.0, 2.0]))

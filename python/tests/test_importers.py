@@ -6,9 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset
-from mpeg_o.enums import ActivationMethod
-from mpeg_o.importers import ImportResult, mzml, nmrml
+from ttio import SpectralDataset
+from ttio.enums import ActivationMethod
+from ttio.importers import ImportResult, mzml, nmrml
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -60,12 +60,12 @@ def test_mzml_imports_1min_fixture(onemin_mzml: Path) -> None:
         assert s.mz_or_chemical_shift.shape == s.intensity.shape
 
 
-def test_mzml_round_trip_via_mpgo(tiny_mzml: Path, tmp_path: Path) -> None:
-    """End-to-end: mzML → ImportResult → .mpgo → SpectralDataset and
+def test_mzml_round_trip_via_ttio(tiny_mzml: Path, tmp_path: Path) -> None:
+    """End-to-end: mzML → ImportResult → .tio → SpectralDataset and
     verify spectrum-count and first-spectrum shape preservation."""
     result = mzml.read(tiny_mzml)
-    out = tmp_path / "from_mzml.mpgo"
-    result.to_mpgo(out)
+    out = tmp_path / "from_mzml.tio"
+    result.to_ttio(out)
 
     with SpectralDataset.open(out) as ds:
         assert "run_0001" in ds.ms_runs
@@ -81,7 +81,7 @@ def test_mzml_ms2_activation_and_isolation_round_trip(
 ) -> None:
     """(M74) Parse the pwiz tiny fixture and confirm that the MS2 spectrum's
     activation method and isolation window propagate through ImportResult,
-    the written .mpgo container, and SpectrumIndex accessors.
+    the written .tio container, and SpectrumIndex accessors.
 
     The fixture has one MS2 spectrum with CID activation and an isolation
     window at 445.3 m/z (lower=0.5, upper=0.5), plus one SRM spectrum with
@@ -105,9 +105,9 @@ def test_mzml_ms2_activation_and_isolation_round_trip(
     assert abs(first.isolation_lower_offset - 0.5) < 1e-6
     assert abs(first.isolation_upper_offset - 0.5) < 1e-6
 
-    # Round-trip through the .mpgo writer (schema-gating path).
-    out = tmp_path / "tiny_m74.mpgo"
-    result.to_mpgo(out)
+    # Round-trip through the .tio writer (schema-gating path).
+    out = tmp_path / "tiny_m74.tio"
+    result.to_ttio(out)
 
     with SpectralDataset.open(out) as ds:
         run = ds.ms_runs["run_0001"]
@@ -132,7 +132,7 @@ def test_mzml_pack_run_skips_m74_columns_when_all_ms1(tmp_path: Path) -> None:
     """(M74) When every ImportedSpectrum has default activation + zero
     isolation offsets, ``_pack_run`` must leave the four optional
     WrittenRun columns None so the writer does not emit them."""
-    from mpeg_o.importers.import_result import ImportResult, ImportedSpectrum
+    from ttio.importers.import_result import ImportResult, ImportedSpectrum
 
     spectra = [
         ImportedSpectrum(
@@ -145,8 +145,8 @@ def test_mzml_pack_run_skips_m74_columns_when_all_ms1(tmp_path: Path) -> None:
         for i in range(3)
     ]
     result = ImportResult(title="ms1_only", ms_spectra=spectra)
-    out = tmp_path / "ms1_only.mpgo"
-    result.to_mpgo(out)
+    out = tmp_path / "ms1_only.tio"
+    result.to_ttio(out)
     with SpectralDataset.open(out) as ds:
         idx = ds.ms_runs["run_0001"].index
         assert idx.activation_methods is None
@@ -160,11 +160,11 @@ def test_nmrml_imports_bmrb_fixture(bmrb_nmrml: Path, tmp_path: Path) -> None:
     # The BMRB fixture may carry an FID plus one or more 1-D spectra; we
     # accept zero spectra (FID-only) by also checking the nucleus metadata.
     if result.spectrum_count > 0:
-        out = tmp_path / "from_nmrml.mpgo"
-        result.to_mpgo(out)
+        out = tmp_path / "from_nmrml.tio"
+        result.to_ttio(out)
         with SpectralDataset.open(out) as ds:
             assert "nmr_run" in ds.ms_runs
-            assert ds.ms_runs["nmr_run"].spectrum_class == "MPGONMRSpectrum"
+            assert ds.ms_runs["nmr_run"].spectrum_class == "TTIONMRSpectrum"
     else:
         # Still record that we parsed the nucleus, so the test isn't trivial.
         assert result.nucleus_type or result.source_file

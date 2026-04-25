@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o.importers import mztab
+from ttio.importers import mztab
 
 CONFORMANCE_DIR = Path(__file__).resolve().parents[2] / "conformance" / "mztab_features"
 

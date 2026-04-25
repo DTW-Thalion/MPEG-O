@@ -1,6 +1,6 @@
 """v1.1 parity: encrypt → close → reopen → is_encrypted → decrypt → read.
 
-Covers the two bugs reported in the MPEG-O-MCP-Server M5 handoff:
+Covers the two bugs reported in the TTI-O-MCP-Server M5 handoff:
  * Issue A: SpectralDataset.is_encrypted / encrypted_algorithm lost state
    across close/reopen.
  * Issue B: decrypt_with_key(key) left spec.intensity_array unusable
@@ -17,20 +17,20 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from mpeg_o import SpectralDataset
-from mpeg_o.enums import AcquisitionMode, EncryptionLevel
+from ttio import SpectralDataset
+from ttio.enums import AcquisitionMode, EncryptionLevel
 
 
 def _write_fixture(path: Path, run_names: list[str]) -> None:
     with h5py.File(path, "w") as f:
-        f.attrs["mpeg_o_format_version"] = "1.1"
+        f.attrs["ttio_format_version"] = "1.1"
         study = f.create_group("study")
         runs = study.create_group("ms_runs")
         runs.attrs["_run_names"] = ",".join(run_names)
         for rname in run_names:
             g = runs.create_group(rname)
             g.attrs["acquisition_mode"] = np.int64(AcquisitionMode.MS1_DDA)
-            g.attrs["spectrum_class"] = "MPGOMassSpectrum"
+            g.attrs["spectrum_class"] = "TTIOMassSpectrum"
             idx = g.create_group("spectrum_index")
             idx.create_dataset("offsets", data=np.array([0], dtype="<u8"))
             idx.create_dataset("lengths", data=np.array([4], dtype="<u4"))
@@ -49,7 +49,7 @@ def _write_fixture(path: Path, run_names: list[str]) -> None:
 
 
 def test_issue_a_encrypted_state_survives_close_reopen(tmp_path: Path) -> None:
-    path = tmp_path / "a.mpgo"
+    path = tmp_path / "a.tio"
     _write_fixture(path, ["run_0001"])
     key = bytes(range(32))
 
@@ -68,7 +68,7 @@ def test_issue_a_encrypted_state_survives_close_reopen(tmp_path: Path) -> None:
 
 
 def test_issue_b_decrypt_rehydrates_intensity_for_spectra(tmp_path: Path) -> None:
-    path = tmp_path / "b.mpgo"
+    path = tmp_path / "b.tio"
     _write_fixture(path, ["run_0001"])
     key = bytes(range(32))
     expected = np.array([1.0, 2.0, 3.0, 4.0], dtype="<f8")
@@ -92,7 +92,7 @@ def test_issue_b_decrypt_rehydrates_intensity_for_spectra(tmp_path: Path) -> Non
 
 
 def test_issue_b_dataset_level_decrypt_rehydrates_all_runs(tmp_path: Path) -> None:
-    path = tmp_path / "c.mpgo"
+    path = tmp_path / "c.tio"
     _write_fixture(path, ["run_A", "run_B"])
     key = bytes(range(32))
     expected = np.array([1.0, 2.0, 3.0, 4.0], dtype="<f8")

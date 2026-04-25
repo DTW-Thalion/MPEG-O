@@ -11,7 +11,7 @@ Cells (parametrised across provider × signer × verifier):
 * SqliteProvider × (Python ↔ Java ↔ ObjC) = 6 cells
 
 Same fixture-exchange pattern as M54: one language signs the dataset
-(storing ``v3:<base64>`` on ``@mpgo_signature``), another language
+(storing ``v3:<base64>`` on ``@ttio_signature``), another language
 opens the same store and verifies.
 """
 from __future__ import annotations
@@ -24,10 +24,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import pqc
-from mpeg_o.providers.sqlite import SqliteProvider
-from mpeg_o.providers.zarr import ZarrProvider
-from mpeg_o.signatures import (
+from ttio import pqc
+from ttio.providers.sqlite import SqliteProvider
+from ttio.providers.zarr import ZarrProvider
+from ttio.signatures import (
     SIGNATURE_ATTR,
     SIGNATURE_V3_PREFIX,
     sign_storage_dataset,
@@ -44,11 +44,11 @@ def _java_cli() -> list[str] | None:
         return None
     if not classes.is_dir():
         return None
-    return [str(runner), "com.dtwthalion.mpgo.tools.PQCTool"]
+    return [str(runner), "com.dtwthalion.ttio.tools.PQCTool"]
 
 
 def _objc_cli() -> list[str] | None:
-    binary = _REPO_ROOT / "objc" / "Tools" / "obj" / "MpgoPQCTool"
+    binary = _REPO_ROOT / "objc" / "Tools" / "obj" / "TtioPQCTool"
     libdir = _REPO_ROOT / "objc" / "Source" / "obj"
     if not binary.is_file() or not os.access(binary, os.X_OK):
         return None
@@ -75,7 +75,7 @@ skip_no_java = pytest.mark.skipif(
 )
 skip_no_objc = pytest.mark.skipif(
     OBJC_CMD is None or not pqc.is_available(),
-    reason="objc/Tools/obj/MpgoPQCTool missing",
+    reason="objc/Tools/obj/TtioPQCTool missing",
 )
 
 
@@ -117,7 +117,7 @@ def _seed_provider(url: str):
     else:
         raise ValueError(f"unknown provider url: {url}")
     root = p.root_group()
-    from mpeg_o.enums import Precision, Compression
+    from ttio.enums import Precision, Compression
     ds = root.create_dataset("payload", precision=Precision.FLOAT64,
                               length=64, chunk_size=0,
                               compression=Compression.NONE)

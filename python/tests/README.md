@@ -1,4 +1,4 @@
-# MPEG-O Python test suite
+# TTI-O Python test suite
 
 ## Running
 
@@ -52,9 +52,9 @@ and CI topology.
 
 | Variable | Purpose |
 |----------|---------|
-| `MPGO_S3_FIXTURE_URL` | S3 / MinIO endpoint for cloud-access stress tests |
-| `MPGO_BRUKER_TDF_FIXTURE` | Path to a real Bruker `.d` directory for timsTOF round-trip |
-| `MPGO_MASSLYNX_FIXTURE` | Path to a Waters `.raw` directory for MassLynx round-trip |
-| `MPGO_PYTHON` | Python interpreter path (Java + ObjC subprocess bruker_tdf_cli) |
+| `TTIO_S3_FIXTURE_URL` | S3 / MinIO endpoint for cloud-access stress tests |
+| `TTIO_BRUKER_TDF_FIXTURE` | Path to a real Bruker `.d` directory for timsTOF round-trip |
+| `TTIO_MASSLYNX_FIXTURE` | Path to a Waters `.raw` directory for MassLynx round-trip |
+| `TTIO_PYTHON` | Python interpreter path (Java + ObjC subprocess bruker_tdf_cli) |
 | `THERMORAWFILEPARSER` | Path to ThermoRawFileParser binary |
 | `MASSLYNXRAW` | Path to Waters MassLynx converter |

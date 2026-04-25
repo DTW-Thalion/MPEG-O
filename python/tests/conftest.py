@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the mpeg-o package."""
+"""Shared pytest fixtures for the ttio package."""
 from __future__ import annotations
 
 import importlib.util
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_OBJC_FIXTURES = _REPO_ROOT / "objc" / "Tests" / "Fixtures" / "mpgo"
+_OBJC_FIXTURES = _REPO_ROOT / "objc" / "Tests" / "Fixtures" / "ttio"
 _FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 _GENERATED_DIR = _FIXTURES_DIR / "_generated"
 
@@ -21,7 +21,7 @@ def _load_fixture_module(name: str):
     conftest scope). Loading the file by path keeps the new modules
     importable from fixtures/conftest while leaving discovery alone.
     """
-    mod_name = f"_mpgo_fixture_{name}"
+    mod_name = f"_ttio_fixture_{name}"
     if mod_name in sys.modules:
         return sys.modules[mod_name]
     spec = importlib.util.spec_from_file_location(mod_name, _FIXTURES_DIR / f"{name}.py")
@@ -56,7 +56,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 @pytest.fixture(scope="session")
 def objc_fixtures_dir() -> Path:
-    """Directory of reference .mpgo fixtures produced by the ObjC build."""
+    """Directory of reference .tio fixtures produced by the ObjC build."""
     if not _OBJC_FIXTURES.is_dir():
         pytest.skip(f"ObjC fixtures not found at {_OBJC_FIXTURES}")
     return _OBJC_FIXTURES
@@ -64,7 +64,7 @@ def objc_fixtures_dir() -> Path:
 
 @pytest.fixture()
 def minimal_ms_fixture(objc_fixtures_dir: Path) -> Path:
-    p = objc_fixtures_dir / "minimal_ms.mpgo"
+    p = objc_fixtures_dir / "minimal_ms.tio"
     if not p.is_file():
         pytest.skip(f"{p} missing")
     return p
@@ -72,7 +72,7 @@ def minimal_ms_fixture(objc_fixtures_dir: Path) -> Path:
 
 @pytest.fixture()
 def full_ms_fixture(objc_fixtures_dir: Path) -> Path:
-    p = objc_fixtures_dir / "full_ms.mpgo"
+    p = objc_fixtures_dir / "full_ms.tio"
     if not p.is_file():
         pytest.skip(f"{p} missing")
     return p
@@ -80,7 +80,7 @@ def full_ms_fixture(objc_fixtures_dir: Path) -> Path:
 
 @pytest.fixture()
 def nmr_1d_fixture(objc_fixtures_dir: Path) -> Path:
-    p = objc_fixtures_dir / "nmr_1d.mpgo"
+    p = objc_fixtures_dir / "nmr_1d.tio"
     if not p.is_file():
         pytest.skip(f"{p} missing")
     return p
@@ -88,7 +88,7 @@ def nmr_1d_fixture(objc_fixtures_dir: Path) -> Path:
 
 @pytest.fixture()
 def encrypted_fixture(objc_fixtures_dir: Path) -> Path:
-    p = objc_fixtures_dir / "encrypted.mpgo"
+    p = objc_fixtures_dir / "encrypted.tio"
     if not p.is_file():
         pytest.skip(f"{p} missing")
     return p
@@ -96,7 +96,7 @@ def encrypted_fixture(objc_fixtures_dir: Path) -> Path:
 
 @pytest.fixture()
 def signed_fixture(objc_fixtures_dir: Path) -> Path:
-    p = objc_fixtures_dir / "signed.mpgo"
+    p = objc_fixtures_dir / "signed.tio"
     if not p.is_file():
         pytest.skip(f"{p} missing")
     return p
@@ -114,7 +114,7 @@ def fixtures_dir() -> Path:
 
 @pytest.fixture(scope="session")
 def synth_fixture(tmp_path_factory: pytest.TempPathFactory):
-    """Generate (or reuse) one of the synthetic .mpgo fixtures by name.
+    """Generate (or reuse) one of the synthetic .tio fixtures by name.
 
     Generation is cached for the test session; large fixtures
     (``synth_100k``) are produced lazily on first request.
@@ -130,7 +130,7 @@ def synth_fixture(tmp_path_factory: pytest.TempPathFactory):
             return cache[name]
         if name not in generate.GENERATORS:
             pytest.fail(f"unknown synthetic fixture: {name}")
-        out = target / f"{name}.mpgo"
+        out = target / f"{name}.tio"
         if not out.is_file():
             generate.GENERATORS[name](target)
         cache[name] = out

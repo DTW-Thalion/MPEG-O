@@ -13,8 +13,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.enums import Compression, Precision
-from mpeg_o.providers import (
+from ttio.enums import Compression, Precision
+from ttio.providers import (
     CompoundField,
     CompoundFieldKind,
     StorageProvider,
@@ -22,8 +22,8 @@ from mpeg_o.providers import (
     open_provider,
     register_provider,
 )
-from mpeg_o.providers.hdf5 import Hdf5Provider
-from mpeg_o.providers.memory import MemoryProvider
+from ttio.providers.hdf5 import Hdf5Provider
+from ttio.providers.memory import MemoryProvider
 
 
 # ── Fixture helpers ───────────────────────────────────────────────────
@@ -363,13 +363,13 @@ def test_memory_native_handle_is_none(memory_url: str) -> None:
 def test_spectral_dataset_open_wires_provider(tmp_path: Path) -> None:
     """SpectralDataset.open routes through Hdf5Provider and exposes it
     on the ``provider`` attribute; closing flows through the provider."""
-    from mpeg_o import SpectralDataset
+    from ttio import SpectralDataset
     import h5py
 
-    path = tmp_path / "wired.mpgo"
+    path = tmp_path / "wired.tio"
     with h5py.File(path, "w") as f:
-        f.attrs["mpeg_o_format_version"] = "1.1"
-        f.attrs["mpeg_o_features"] = "[\"base_v1\"]"
+        f.attrs["ttio_format_version"] = "1.1"
+        f.attrs["ttio_features"] = "[\"base_v1\"]"
         f.create_group("study")
 
     with SpectralDataset.open(path) as ds:

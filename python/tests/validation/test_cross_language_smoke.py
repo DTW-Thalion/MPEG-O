@@ -1,12 +1,12 @@
 """Cross-language smoke test (v0.9 M62-x).
 
-Python writes a .mpgo on every supported provider, then reads back
-through both the ObjC ``MpgoVerify`` CLI and the Java
-``com.dtwthalion.mpgo.tools.MpgoVerify`` class. Both must produce
+Python writes a .tio on every supported provider, then reads back
+through both the ObjC ``TtioVerify`` CLI and the Java
+``com.dtwthalion.ttio.tools.TtioVerify`` class. Both must produce
 the same JSON summary that Python's own reader produces, proving:
 
 * Python's writes are bit-readable from ObjC and Java
-* The 4-provider write matrix delivered by M64.5 produces .mpgo
+* The 4-provider write matrix delivered by M64.5 produces .tio
   files that the canonical (HDF5-only) ObjC + Java readers
   consume — for the providers whose on-disk format IS HDF5
   underneath. Memory / SQLite / Zarr writes are skipped here
@@ -14,10 +14,10 @@ the same JSON summary that Python's own reader produces, proving:
 
 The test auto-skips when the ObjC / Java tooling is not available:
 
-* ObjC: requires ``MPGO_OBJC_VERIFY`` env var pointing at the
-  built ``MpgoVerify`` binary, or the convention path
-  ``objc/Tools/obj/MpgoVerify`` next to ``libMPGO.so``.
-* Java: requires ``MPGO_JAVA_CP`` env var with a Maven-style
+* ObjC: requires ``TTIO_OBJC_VERIFY`` env var pointing at the
+  built ``TtioVerify`` binary, or the convention path
+  ``objc/Tools/obj/TtioVerify`` next to ``libTTIO.so``.
+* Java: requires ``TTIO_JAVA_CP`` env var with a Maven-style
   classpath including ``target/classes`` + the test deps, or a
   ``mvn dependency:build-classpath`` invocation that succeeded.
 
@@ -37,18 +37,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import Identification, SpectralDataset, WrittenRun
+from ttio import Identification, SpectralDataset, WrittenRun
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _resolve_objc_verify() -> tuple[Path, dict[str, str]] | None:
-    """Locate the built MpgoVerify binary + the env vars needed to run it."""
-    explicit = os.environ.get("MPGO_OBJC_VERIFY")
+    """Locate the built TtioVerify binary + the env vars needed to run it."""
+    explicit = os.environ.get("TTIO_OBJC_VERIFY")
     if explicit and Path(explicit).is_file():
         binary = Path(explicit)
     else:
-        binary = _REPO_ROOT / "objc" / "Tools" / "obj" / "MpgoVerify"
+        binary = _REPO_ROOT / "objc" / "Tools" / "obj" / "TtioVerify"
         if not binary.is_file():
             return None
     libdir = _REPO_ROOT / "objc" / "Source" / "obj"
@@ -62,8 +62,8 @@ def _resolve_objc_verify() -> tuple[Path, dict[str, str]] | None:
 
 
 def _resolve_java_verify() -> tuple[list[str], dict[str, str]] | None:
-    """Build the ``java -cp ... MpgoVerify`` argv prefix + env."""
-    explicit = os.environ.get("MPGO_JAVA_CP")
+    """Build the ``java -cp ... TtioVerify`` argv prefix + env."""
+    explicit = os.environ.get("TTIO_JAVA_CP")
     if explicit:
         cp = explicit
     else:
@@ -87,35 +87,35 @@ def _resolve_java_verify() -> tuple[list[str], dict[str, str]] | None:
     classes = _REPO_ROOT / "java" / "target" / "classes"
     if not classes.is_dir():
         return None
-    if not (classes / "com" / "dtwthalion" / "mpgo" / "tools" / "MpgoVerify.class").is_file():
+    if not (classes / "com" / "dtwthalion" / "ttio" / "tools" / "TtioVerify.class").is_file():
         return None
     full_cp = f"{classes}:{cp}"
     env = os.environ.copy()
     # Linux convention path for the JNI HDF5 library; override via
-    # MPGO_JAVA_LIB_PATH for non-Debian distros.
+    # TTIO_JAVA_LIB_PATH for non-Debian distros.
     env.setdefault(
-        "MPGO_JAVA_LIB_PATH",
+        "TTIO_JAVA_LIB_PATH",
         "/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial",
     )
     argv = [
         "java",
-        f"-Djava.library.path={env['MPGO_JAVA_LIB_PATH']}",
+        f"-Djava.library.path={env['TTIO_JAVA_LIB_PATH']}",
         "-cp", full_cp,
-        "com.dtwthalion.mpgo.tools.MpgoVerify",
+        "com.dtwthalion.ttio.tools.TtioVerify",
     ]
     return argv, env
 
 
 @pytest.fixture(scope="module")
-def python_mpgo(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Write a deterministic HDF5 .mpgo via Python; both CLIs read it."""
+def python_ttio(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Write a deterministic HDF5 .tio via Python; both CLIs read it."""
     n = 5
     n_pts = 8
     rng = np.random.default_rng(202604)
     mz = np.tile(np.linspace(100.0, 200.0, n_pts), n).astype(np.float64)
     intensity = rng.uniform(0.0, 1e6, size=n * n_pts).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum", acquisition_mode=0,
+        spectrum_class="TTIOMassSpectrum", acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.arange(n, dtype=np.uint64) * n_pts,
         lengths=np.full(n, n_pts, dtype=np.uint32),
@@ -130,7 +130,7 @@ def python_mpgo(tmp_path_factory: pytest.TempPathFactory) -> Path:
         Identification("run_0001", 0, "P12345", 0.95, []),
         Identification("run_0001", 2, "P67890", 0.81, []),
     ]
-    out = tmp_path_factory.mktemp("xlang") / "py_written.mpgo"
+    out = tmp_path_factory.mktemp("xlang") / "py_written.tio"
     SpectralDataset.write_minimal(
         out, title="Cross-language smoke",
         isa_investigation_id="ISA-XLANG",
@@ -153,10 +153,10 @@ def _python_summary(path: Path) -> dict:
         }
 
 
-def test_python_baseline(python_mpgo: Path) -> None:
+def test_python_baseline(python_ttio: Path) -> None:
     """Sanity: Python's own reader gives the expected summary so the
     ObjC / Java CLI comparisons have a known reference."""
-    summary = _python_summary(python_mpgo)
+    summary = _python_summary(python_ttio)
     assert summary == {
         "title": "Cross-language smoke",
         "isa_investigation_id": "ISA-XLANG",
@@ -167,53 +167,53 @@ def test_python_baseline(python_mpgo: Path) -> None:
     }
 
 
-def test_objc_mpgo_verify_matches_python(python_mpgo: Path) -> None:
-    """Spawn the ObjC ``MpgoVerify`` binary; its JSON must match
+def test_objc_ttio_verify_matches_python(python_ttio: Path) -> None:
+    """Spawn the ObjC ``TtioVerify`` binary; its JSON must match
     Python's view of the same file. Skipped when the binary or
-    libMPGO.so is missing."""
+    libTTIO.so is missing."""
     objc = _resolve_objc_verify()
     if objc is None:
-        pytest.skip("ObjC MpgoVerify binary or libMPGO.so not built; "
+        pytest.skip("ObjC TtioVerify binary or libTTIO.so not built; "
                     "run `cd objc && ./build.sh` first")
     binary, env = objc
     proc = subprocess.run(
-        [str(binary), str(python_mpgo)],
+        [str(binary), str(python_ttio)],
         capture_output=True, text=True, env=env, timeout=30,
     )
     if proc.returncode != 0:
-        pytest.fail(f"MpgoVerify exit {proc.returncode}: {proc.stderr.strip()}")
+        pytest.fail(f"TtioVerify exit {proc.returncode}: {proc.stderr.strip()}")
     objc_summary = json.loads(proc.stdout.strip())
-    py_summary = _python_summary(python_mpgo)
+    py_summary = _python_summary(python_ttio)
     assert objc_summary == py_summary, (
-        f"ObjC and Python disagree on the same .mpgo file:\n"
+        f"ObjC and Python disagree on the same .tio file:\n"
         f"  ObjC: {objc_summary}\n"
         f"  Py  : {py_summary}"
     )
 
 
-def test_java_mpgo_verify_matches_python(python_mpgo: Path) -> None:
-    """Spawn the Java ``MpgoVerify`` main class; same contract."""
+def test_java_ttio_verify_matches_python(python_ttio: Path) -> None:
+    """Spawn the Java ``TtioVerify`` main class; same contract."""
     java = _resolve_java_verify()
     if java is None:
-        pytest.skip("Java MpgoVerify classpath / target/classes not available; "
+        pytest.skip("Java TtioVerify classpath / target/classes not available; "
                     "run `cd java && mvn compile dependency:build-classpath "
                     "-DincludeScope=test -Dmdep.outputFile=target/_smoke_cp.txt`")
     argv_prefix, env = java
     proc = subprocess.run(
-        argv_prefix + [str(python_mpgo)],
+        argv_prefix + [str(python_ttio)],
         capture_output=True, text=True, env=env, timeout=60,
     )
     if proc.returncode != 0:
-        pytest.fail(f"Java MpgoVerify exit {proc.returncode}: {proc.stderr.strip()}")
+        pytest.fail(f"Java TtioVerify exit {proc.returncode}: {proc.stderr.strip()}")
     # Java's slf4j prints two INFO lines on stdout before the JSON. Take
     # the last non-empty line.
     payload_line = next(
         ln for ln in reversed(proc.stdout.splitlines()) if ln.strip().startswith("{")
     )
     java_summary = json.loads(payload_line)
-    py_summary = _python_summary(python_mpgo)
+    py_summary = _python_summary(python_ttio)
     assert java_summary == py_summary, (
-        f"Java and Python disagree on the same .mpgo file:\n"
+        f"Java and Python disagree on the same .tio file:\n"
         f"  Java: {java_summary}\n"
         f"  Py  : {py_summary}"
     )
@@ -244,7 +244,7 @@ _CROSSLANG_XFAIL_REASONS = {
 def _python_writes_on_provider(
     provider: str, tmp_path: Path,
 ) -> tuple[str, dict]:
-    """Write the same logical .mpgo via Python on ``provider`` and
+    """Write the same logical .tio via Python on ``provider`` and
     return the URL + expected summary dict."""
     import sys as _sys
     _sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integration"))
@@ -256,7 +256,7 @@ def _python_writes_on_provider(
     mz = np.tile(np.linspace(100.0, 200.0, n_pts), n).astype(np.float64)
     intensity = rng.uniform(0.0, 1e6, size=n * n_pts).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum", acquisition_mode=0,
+        spectrum_class="TTIOMassSpectrum", acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.arange(n, dtype=np.uint64) * n_pts,
         lengths=np.full(n, n_pts, dtype=np.uint32),
@@ -293,7 +293,7 @@ def _python_writes_on_provider(
 def test_java_reads_python_4_provider_matrix(
     request, provider: str, tmp_path: Path
 ) -> None:
-    """Python writes through 4 providers; Java ``MpgoVerify`` reads
+    """Python writes through 4 providers; Java ``TtioVerify`` reads
     each via URL-scheme dispatch; JSON summary matches.
 
     Non-HDF5 cross-language cells are expected-failure (xfail) with
@@ -301,7 +301,7 @@ def test_java_reads_python_4_provider_matrix(
     """
     java = _resolve_java_verify()
     if java is None:
-        pytest.skip("Java MpgoVerify classpath not available")
+        pytest.skip("Java TtioVerify classpath not available")
     xfail_reason = _CROSSLANG_XFAIL_REASONS.get(provider)
     if xfail_reason is not None:
         request.applymarker(pytest.mark.xfail(strict=False, reason=xfail_reason))
@@ -313,7 +313,7 @@ def test_java_reads_python_4_provider_matrix(
         capture_output=True, text=True, env=env, timeout=60,
     )
     if proc.returncode != 0:
-        pytest.fail(f"Java MpgoVerify on {provider} URL exit {proc.returncode}: "
+        pytest.fail(f"Java TtioVerify on {provider} URL exit {proc.returncode}: "
                     f"{proc.stderr.strip()}")
     payload_line = next(
         ln for ln in reversed(proc.stdout.splitlines()) if ln.strip().startswith("{")
@@ -332,7 +332,7 @@ def test_objc_rejects_non_hdf5_url_cleanly(tmp_path: Path) -> None:
     error (empty registry, nothing to route to)."""
     objc = _resolve_objc_verify()
     if objc is None:
-        pytest.skip("ObjC MpgoVerify binary not built")
+        pytest.skip("ObjC TtioVerify binary not built")
     binary, env = objc
     proc = subprocess.run(
         [str(binary), "memory://does-not-exist"],
@@ -352,7 +352,7 @@ def test_objc_reads_python_non_hdf5(provider: str, tmp_path: Path) -> None:
     readViaProviderURL path reads the same summary."""
     objc = _resolve_objc_verify()
     if objc is None:
-        pytest.skip("ObjC MpgoVerify binary not built")
+        pytest.skip("ObjC TtioVerify binary not built")
     binary, env = objc
     url, expected = _python_writes_on_provider(provider, tmp_path)
     proc = subprocess.run(
@@ -360,7 +360,7 @@ def test_objc_reads_python_non_hdf5(provider: str, tmp_path: Path) -> None:
         capture_output=True, text=True, env=env, timeout=30,
     )
     if proc.returncode != 0:
-        pytest.fail(f"ObjC MpgoVerify on {provider} URL exit {proc.returncode}: "
+        pytest.fail(f"ObjC TtioVerify on {provider} URL exit {proc.returncode}: "
                     f"{proc.stderr.strip()}")
     objc_summary = json.loads(proc.stdout.strip())
     assert objc_summary == expected, (

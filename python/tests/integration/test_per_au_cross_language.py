@@ -8,7 +8,7 @@ confirms:
    the canonical ``.mpad`` dump emitted by the ``decrypt`` CLI; any
    per-AU ciphertext change (IV, tag, byte layout) trips the test.
 
-2. The same holds for the transport round trip: a ``.mots`` produced
+2. The same holds for the transport round trip: a ``.tis`` produced
    by one ``send`` can be fed to any ``recv`` and decrypts to the
    same plaintext bytes.
 
@@ -16,8 +16,8 @@ Tests are skipped when the ObjC or Java CLI is missing, so the
 Python side still runs in isolation on platforms where those builds
 aren't available.
 
-Cross-language equivalents: Objective-C ``MpgoPerAU``, Java
-``com.dtwthalion.mpgo.tools.PerAUCli``.
+Cross-language equivalents: Objective-C ``TtioPerAU``, Java
+``com.dtwthalion.ttio.tools.PerAUCli``.
 """
 from __future__ import annotations
 
@@ -32,9 +32,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-OBJC_CLI = REPO_ROOT / "objc" / "Tools" / "obj" / "MpgoPerAU"
+OBJC_CLI = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioPerAU"
 
-JAVA_CLASS = "com.dtwthalion.mpgo.tools.PerAUCli"
+JAVA_CLASS = "com.dtwthalion.ttio.tools.PerAUCli"
 
 
 def _java_classpath() -> str | None:
@@ -78,11 +78,11 @@ def _java_available() -> bool:
     return shutil.which("java") is not None and _java_classpath() is not None
 
 
-def _fixture_mpgo(tmp_path: Path, name: str) -> Path:
-    """Build a deterministic plaintext .mpgo usable by all three
+def _fixture_ttio(tmp_path: Path, name: str) -> Path:
+    """Build a deterministic plaintext .tio usable by all three
     languages."""
-    from mpeg_o import SpectralDataset
-    from mpeg_o.spectral_dataset import WrittenRun
+    from ttio import SpectralDataset
+    from ttio.spectral_dataset import WrittenRun
 
     n_spectra, per_spectrum = 3, 4
     total = n_spectra * per_spectrum
@@ -92,7 +92,7 @@ def _fixture_mpgo(tmp_path: Path, name: str) -> Path:
     lengths = np.array([4, 4, 4], dtype="<u4")
 
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=1,                       # MS1_DDA
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -124,14 +124,14 @@ def _key_file(tmp_path: Path) -> Path:
 
 def _run_py(*args: str) -> None:
     subprocess.run(
-        [sys.executable, "-m", "mpeg_o.tools.per_au_cli", *args],
+        [sys.executable, "-m", "ttio.tools.per_au_cli", *args],
         check=True, capture_output=True,
     )
 
 
 def _run_objc(*args: str) -> None:
     env = os.environ.copy()
-    # Ensure the dynamic linker finds libMPGO built alongside the tool.
+    # Ensure the dynamic linker finds libTTIO built alongside the tool.
     lib_dir = str(REPO_ROOT / "objc" / "Source" / "obj")
     prior = env.get("LD_LIBRARY_PATH", "")
     env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prior}" if prior else lib_dir
@@ -163,9 +163,9 @@ if _java_available():
                           [(e, d) for e in RUNNERS for d in RUNNERS])
 @pytest.mark.parametrize("headers", [False, True])
 def test_file_level_round_trip(tmp_path, enc_lang, dec_lang, headers):
-    fx = _fixture_mpgo(tmp_path, f"fx_{enc_lang}_{dec_lang}_{headers}.mpgo")
+    fx = _fixture_ttio(tmp_path, f"fx_{enc_lang}_{dec_lang}_{headers}.tio")
     key = _key_file(tmp_path)
-    encrypted = tmp_path / f"enc_{enc_lang}_{dec_lang}_{headers}.mpgo"
+    encrypted = tmp_path / f"enc_{enc_lang}_{dec_lang}_{headers}.tio"
 
     enc_args = ["encrypt", str(fx), str(encrypted), str(key)]
     if headers:
@@ -191,11 +191,11 @@ def test_transcode_plaintext_to_per_au(tmp_path):
     """`transcode` on a plaintext fixture matches a direct `encrypt`
     with the same key + headers setting (modulo IV randomness, which
     we strip by byte-comparing the decrypted MPAD dump)."""
-    fx = _fixture_mpgo(tmp_path, "tc_fx.mpgo")
+    fx = _fixture_ttio(tmp_path, "tc_fx.tio")
     key = _key_file(tmp_path)
 
-    direct_enc = tmp_path / "tc_direct.mpgo"
-    via_transcode = tmp_path / "tc_via.mpgo"
+    direct_enc = tmp_path / "tc_direct.tio"
+    via_transcode = tmp_path / "tc_via.tio"
 
     _run_py("encrypt", str(fx), str(direct_enc), str(key), "--headers")
     _run_py("transcode", str(fx), str(via_transcode), str(key), "--headers")
@@ -210,15 +210,15 @@ def test_transcode_plaintext_to_per_au(tmp_path):
 def test_transcode_rekey_path(tmp_path):
     """After transcoding with --rekey to a new key, the old key no
     longer decrypts and the new key decrypts to the same plaintext."""
-    fx = _fixture_mpgo(tmp_path, "tc_fx2.mpgo")
+    fx = _fixture_ttio(tmp_path, "tc_fx2.tio")
     key1 = _key_file(tmp_path)
     key2 = tmp_path / "key2.bin"
     key2.write_bytes(bytes([0xAB] * 32))
 
-    enc_v1 = tmp_path / "tc_v1.mpgo"
+    enc_v1 = tmp_path / "tc_v1.tio"
     _run_py("encrypt", str(fx), str(enc_v1), str(key1))
 
-    enc_v2 = tmp_path / "tc_v2.mpgo"
+    enc_v2 = tmp_path / "tc_v2.tio"
     _run_py("transcode", str(enc_v1), str(enc_v2), str(key1),
              "--rekey", str(key2))
 
@@ -239,10 +239,10 @@ def test_transcode_rekey_path(tmp_path):
                           [(s, r) for s in RUNNERS for r in RUNNERS])
 @pytest.mark.parametrize("headers", [False, True])
 def test_transport_round_trip(tmp_path, send_lang, recv_lang, headers):
-    fx = _fixture_mpgo(tmp_path,
-        f"tfx_{send_lang}_{recv_lang}_{headers}.mpgo")
+    fx = _fixture_ttio(tmp_path,
+        f"tfx_{send_lang}_{recv_lang}_{headers}.tio")
     key = _key_file(tmp_path)
-    encrypted = tmp_path / f"tenc_{send_lang}_{recv_lang}_{headers}.mpgo"
+    encrypted = tmp_path / f"tenc_{send_lang}_{recv_lang}_{headers}.tio"
 
     enc_args = ["encrypt", str(fx), str(encrypted), str(key)]
     if headers:
@@ -250,10 +250,10 @@ def test_transport_round_trip(tmp_path, send_lang, recv_lang, headers):
     RUNNERS["py"](*enc_args)   # fix encryption side to Python so we
                                 # isolate the transport behaviour
 
-    stream = tmp_path / f"stream_{send_lang}_{recv_lang}_{headers}.mots"
+    stream = tmp_path / f"stream_{send_lang}_{recv_lang}_{headers}.tis"
     RUNNERS[send_lang]("send", str(encrypted), str(stream))
 
-    received = tmp_path / f"recv_{send_lang}_{recv_lang}_{headers}.mpgo"
+    received = tmp_path / f"recv_{send_lang}_{recv_lang}_{headers}.tio"
     RUNNERS[recv_lang]("recv", str(stream), str(received))
 
     # Decrypt both sides in Python and compare canonical MPAD dumps.

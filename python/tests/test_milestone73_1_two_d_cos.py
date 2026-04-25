@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from mpeg_o import AxisDescriptor, TwoDimensionalCorrelationSpectrum
+from ttio import AxisDescriptor, TwoDimensionalCorrelationSpectrum
 
 
 def _sync_async_fixture(n: int = 16) -> tuple[np.ndarray, np.ndarray]:

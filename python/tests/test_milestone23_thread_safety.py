@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o._rwlock import RWLock
-from mpeg_o.spectral_dataset import SpectralDataset
+from ttio._rwlock import RWLock
+from ttio.spectral_dataset import SpectralDataset
 
 
 def test_rwlock_multiple_readers_can_hold_concurrently() -> None:

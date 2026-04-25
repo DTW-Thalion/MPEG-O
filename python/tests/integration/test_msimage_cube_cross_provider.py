@@ -9,7 +9,7 @@ stream.
 
 A full MSImage writer on top of ``SpectralDataset.write_minimal``
 remains a v1.0+ item (the M64.5 phase C survey confirmed no writer
-exists yet in ``src/mpeg_o/``); once that ships the cube flows
+exists yet in ``src/ttio/``); once that ships the cube flows
 through this same primitive without test churn.
 """
 from __future__ import annotations
@@ -21,8 +21,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.enums import Precision
-from mpeg_o.providers import open_provider
+from ttio.enums import Precision
+from ttio.providers import open_provider
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _provider_matrix import (  # type: ignore[import-not-found]

@@ -1,7 +1,7 @@
 """Milestone 24 — Chromatogram API + mzML writer completion.
 
 Verifies:
-  * Chromatograms round-trip through ``.mpgo`` (write_minimal → open → read).
+  * Chromatograms round-trip through ``.tio`` (write_minimal → open → read).
   * Chromatograms round-trip through the Python mzML writer + reader.
   * v0.3 files (no /chromatograms/ group) still read back with an empty list.
   * A fixture produced by the ObjC writer (if available) exposes chromatograms
@@ -14,12 +14,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.chromatogram import Chromatogram
-from mpeg_o.enums import ChromatogramType
-from mpeg_o.exporters.mzml import dataset_to_bytes
-from mpeg_o.importers.mzml import read as read_mzml
-from mpeg_o.signal_array import SignalArray
+from ttio import SpectralDataset, WrittenRun
+from ttio.chromatogram import Chromatogram
+from ttio.enums import ChromatogramType
+from ttio.exporters.mzml import dataset_to_bytes
+from ttio.importers.mzml import read as read_mzml
+from ttio.signal_array import SignalArray
 
 
 def _empty_ms_run() -> WrittenRun:
@@ -28,7 +28,7 @@ def _empty_ms_run() -> WrittenRun:
     f8 = np.zeros(0, dtype=np.float64)
     i4 = np.zeros(0, dtype=np.int32)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": f8, "intensity": f8},
         offsets=z8, lengths=z4,
@@ -58,8 +58,8 @@ def _make_chromatograms() -> list[Chromatogram]:
     ]
 
 
-def test_chromatograms_mpgo_round_trip(tmp_path: Path) -> None:
-    path = tmp_path / "m24_rt.mpgo"
+def test_chromatograms_ttio_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "m24_rt.tio"
     run = _empty_ms_run()
     run.chromatograms = _make_chromatograms()
     SpectralDataset.write_minimal(
@@ -84,7 +84,7 @@ def test_chromatograms_mpgo_round_trip(tmp_path: Path) -> None:
 
 
 def test_v03_file_reads_as_empty_chromatogram_list(tmp_path: Path) -> None:
-    path = tmp_path / "m24_v03.mpgo"
+    path = tmp_path / "m24_v03.tio"
     run = _empty_ms_run()  # no chromatograms
     SpectralDataset.write_minimal(
         path,
@@ -99,7 +99,7 @@ def test_v03_file_reads_as_empty_chromatogram_list(tmp_path: Path) -> None:
 def test_mzml_writer_emits_chromatogram_list_and_index(tmp_path: Path) -> None:
     """Writer must emit <chromatogramList> + <index name="chromatogram"> block
     whose offset anchors each <chromatogram tag's first byte."""
-    # Need a run with at least one MPGOMassSpectrum to satisfy the writer's
+    # Need a run with at least one TTIOMassSpectrum to satisfy the writer's
     # "choose first MS run" check. Build a 2-spectrum MS1 run.
     n = 3
     mz = np.array([100.0, 150.0, 200.0], dtype=np.float64)
@@ -109,7 +109,7 @@ def test_mzml_writer_emits_chromatogram_list_and_index(tmp_path: Path) -> None:
     offsets = np.array([0, n], dtype=np.uint64)
     lengths = np.array([n, n], dtype=np.uint32)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data=channel,
         offsets=offsets, lengths=lengths,
@@ -121,7 +121,7 @@ def test_mzml_writer_emits_chromatogram_list_and_index(tmp_path: Path) -> None:
         base_peak_intensities=np.array([900.0, 900.0], dtype=np.float64),
         chromatograms=_make_chromatograms(),
     )
-    path = tmp_path / "m24_mzml_in.mpgo"
+    path = tmp_path / "m24_mzml_in.tio"
     SpectralDataset.write_minimal(
         path,
         title="m24",

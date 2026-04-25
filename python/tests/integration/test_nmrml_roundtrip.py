@@ -1,10 +1,10 @@
-"""nmrML import → .mpgo → nmrML export round-trip fidelity (v0.9 M58).
+"""nmrML import → .tio → nmrML export round-trip fidelity (v0.9 M58).
 
 The nmrML pipeline is shallower than mzML at v0.8. The reader extracts
 ``chemical_shift``, ``intensity``, ``nucleus_type``, sweep width, and
 acquisition frequency into ``ImportResult`` state, but
 ``ImportResult.build_runs`` only carries ``chemical_shift`` + intensity
-through into the .mpgo. The writer emits nucleus, optional FID, and
+through into the .tio. The writer emits nucleus, optional FID, and
 the two arrays.
 
 This file tests fidelity at the level that *is* wired:
@@ -34,13 +34,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset
-from mpeg_o.axis_descriptor import AxisDescriptor
-from mpeg_o.encoding_spec import EncodingSpec
-from mpeg_o.exporters import nmrml as nmrml_writer
-from mpeg_o.importers import nmrml as nmrml_reader
-from mpeg_o.nmr_spectrum import NMRSpectrum
-from mpeg_o.signal_array import SignalArray
+from ttio import SpectralDataset
+from ttio.axis_descriptor import AxisDescriptor
+from ttio.encoding_spec import EncodingSpec
+from ttio.exporters import nmrml as nmrml_writer
+from ttio.importers import nmrml as nmrml_reader
+from ttio.nmr_spectrum import NMRSpectrum
+from ttio.signal_array import SignalArray
 
 
 _ENC = EncodingSpec()
@@ -120,7 +120,7 @@ def synthetic_nmrml(tmp_path: Path) -> tuple[Path, np.ndarray, np.ndarray]:
 
 
 # --------------------------------------------------------------------------- #
-# Wired round-trips: nmrML → ImportResult → .mpgo → NMRSpectrum → nmrML.
+# Wired round-trips: nmrML → ImportResult → .tio → NMRSpectrum → nmrML.
 # --------------------------------------------------------------------------- #
 
 @pytest.mark.parametrize("provider", _PROVIDERS)
@@ -136,12 +136,12 @@ def test_nmrml_full_roundtrip(provider: str, synthetic_nmrml, tmp_path: Path) ->
         original.nmr_spectra[0].mz_or_chemical_shift, expected_cs, rtol=1e-9, atol=0,
     )
 
-    mpgo = _provider_url(provider, tmp_path, "rt.nmrml")
-    original.to_mpgo(mpgo, provider=provider)
+    ttio = _provider_url(provider, tmp_path, "rt.nmrml")
+    original.to_ttio(ttio, provider=provider)
 
-    with SpectralDataset.open(mpgo) as ds:
+    with SpectralDataset.open(ttio) as ds:
         run = ds.ms_runs["nmr_run"]  # write_minimal places NMR runs in ms_runs (see test_importers)
-        assert run.spectrum_class == "MPGONMRSpectrum"
+        assert run.spectrum_class == "TTIONMRSpectrum"
         assert len(run) == 1
         spec = run[0]
 
@@ -327,7 +327,7 @@ def test_spectrometer_frequency_round_trip(tmp_path: Path, synthetic_nmrml) -> N
 @pytest.mark.aspirational
 @pytest.mark.xfail(strict=True, reason="numberOfScans not propagated through WrittenRun — v0.9+")
 def test_number_of_scans_round_trip(tmp_path: Path, synthetic_nmrml) -> None:
-    """numberOfScans survives import → mpgo → re-export → re-import."""
+    """numberOfScans survives import → ttio → re-export → re-import."""
     src, _, _ = synthetic_nmrml
     parsed = nmrml_reader.read(src)
     assert getattr(parsed, "number_of_scans", 0) == 16

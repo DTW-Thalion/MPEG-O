@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mpeg-o"
+name = "ttio"
 version = "1.1.1"
-description = "Python reader/writer for the MPEG-O multi-omics data standard"
+description = "Python reader/writer for the TTI-O multi-omics data standard"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "LGPL-3.0-or-later" }
@@ -53,30 +53,30 @@ test = ["pytest>=7", "pytest-asyncio>=0.23", "cryptography>=41.0", "lxml", "fssp
 # isatools is pinned because the API churns between minor releases.
 integration = ["pyimzml>=1.5", "pyteomics>=4.6", "pymzml>=2.5", "isatools>=0.14,<1"]
 # v0.10 M68: streaming transport over WebSocket. The codec itself
-# (mpeg_o.transport.packets / .codec) has no network dependency;
+# (ttio.transport.packets / .codec) has no network dependency;
 # only the TransportServer / TransportClient need ``websockets``.
 network = ["websockets>=12.0"]
-all = ["mpeg-o[crypto,import,cloud,codecs,zarr,pqc,bruker]"]
+all = ["ttio[crypto,import,cloud,codecs,zarr,pqc,bruker]"]
 
 [project.urls]
 Homepage = "https://github.com/DTW-Thalion/MPEG-O"
 Repository = "https://github.com/DTW-Thalion/MPEG-O"
 Issues = "https://github.com/DTW-Thalion/MPEG-O/issues"
 
-[project.entry-points."mpeg_o.providers"]
-hdf5 = "mpeg_o.providers.hdf5:Hdf5Provider"
-memory = "mpeg_o.providers.memory:MemoryProvider"
-sqlite = "mpeg_o.providers.sqlite:SqliteProvider"
-zarr = "mpeg_o.providers.zarr:ZarrProvider"
+[project.entry-points."ttio.providers"]
+hdf5 = "ttio.providers.hdf5:Hdf5Provider"
+memory = "ttio.providers.memory:MemoryProvider"
+sqlite = "ttio.providers.sqlite:SqliteProvider"
+zarr = "ttio.providers.zarr:ZarrProvider"
 
 # v0.12 M75: console_scripts for the three protection tools, giving
-# Python parity with the Java (com.dtwthalion.mpgo.tools.*) and ObjC
-# (objc/Tools/Mpgo*) CLI family. mpgo-pqc additionally mirrors the
+# Python parity with the Java (com.dtwthalion.ttio.tools.*) and ObjC
+# (objc/Tools/Ttio*) CLI family. ttio-pqc additionally mirrors the
 # subcommand grammar of its peers 1:1.
 [project.scripts]
-mpgo-sign = "mpeg_o.tools.mpgo_sign_cli:main"
-mpgo-verify = "mpeg_o.tools.mpgo_verify_cli:main"
-mpgo-pqc = "mpeg_o.tools.mpgo_pqc_cli:main"
+ttio-sign = "ttio.tools.ttio_sign_cli:main"
+ttio-verify = "ttio.tools.ttio_verify_cli:main"
+ttio-pqc = "ttio.tools.ttio_pqc_cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -85,7 +85,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-mpeg_o = ["py.typed"]
+ttio = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

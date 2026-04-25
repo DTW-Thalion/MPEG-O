@@ -1,4 +1,4 @@
-"""Thermo .raw → .mpgo delegation integration test (v0.9 M58).
+"""Thermo .raw → .tio delegation integration test (v0.9 M58).
 
 The Thermo importer shells out to user-installed
 ``ThermoRawFileParser``; full execution requires the binary on PATH.
@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o import SpectralDataset
-from mpeg_o.importers import thermo_raw
+from ttio import SpectralDataset
+from ttio.importers import thermo_raw
 
 
 THERMO_BIN = shutil.which("ThermoRawFileParser") or shutil.which("thermorawfileparser")
@@ -35,25 +35,25 @@ def test_missing_input_raises_filenotfound(tmp_path: Path) -> None:
 
 
 @pytest.mark.requires_thermorawfileparser
-def test_thermo_raw_to_mpgo_delegation(tmp_path: Path) -> None:
-    """End-to-end: tiny .raw → ImportResult → .mpgo → verify spectra count.
+def test_thermo_raw_to_ttio_delegation(tmp_path: Path) -> None:
+    """End-to-end: tiny .raw → ImportResult → .tio → verify spectra count.
 
     Skipped automatically (per conftest) when ThermoRawFileParser is
     not available. A user-supplied fixture is also required —
-    accepting the env var ``MPGO_THERMO_RAW_FIXTURE``.
+    accepting the env var ``TTIO_THERMO_RAW_FIXTURE``.
     """
     import os
-    fixture_env = os.environ.get("MPGO_THERMO_RAW_FIXTURE")
+    fixture_env = os.environ.get("TTIO_THERMO_RAW_FIXTURE")
     if not fixture_env:
-        pytest.skip("MPGO_THERMO_RAW_FIXTURE not set; no real Thermo .raw available")
+        pytest.skip("TTIO_THERMO_RAW_FIXTURE not set; no real Thermo .raw available")
     raw = Path(fixture_env)
     if not raw.is_file():
-        pytest.skip(f"MPGO_THERMO_RAW_FIXTURE={raw} not found")
+        pytest.skip(f"TTIO_THERMO_RAW_FIXTURE={raw} not found")
 
     result = thermo_raw.read(raw)
     assert result.spectrum_count > 0
-    out = tmp_path / "thermo.mpgo"
-    result.to_mpgo(out)
+    out = tmp_path / "thermo.tio"
+    result.to_ttio(out)
     with SpectralDataset.open(out) as ds:
         runs = list(ds.ms_runs.values())
         assert runs

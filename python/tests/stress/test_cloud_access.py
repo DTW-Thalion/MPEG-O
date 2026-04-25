@@ -5,8 +5,8 @@ the bytes it actually needs (HDF5 metadata + the chunks each
 spectrum touches), rather than downloading the whole file.
 
 The whole module is gated on ``requires_s3`` AND on the
-``MPGO_S3_FIXTURE_URL`` env var (e.g.
-``s3://my-bucket/synth_100k.mpgo`` or a MinIO URL). When neither is
+``TTIO_S3_FIXTURE_URL`` env var (e.g.
+``s3://my-bucket/synth_100k.tio`` or a MinIO URL). When neither is
 present the tests skip cleanly so the default + nightly CI runs
 stay green; an operator with an S3 endpoint configured locally can
 opt-in by exporting the variable.
@@ -17,9 +17,9 @@ import os
 
 import pytest
 
-from mpeg_o import SpectralDataset
+from ttio import SpectralDataset
 
-_S3_URL = os.environ.get("MPGO_S3_FIXTURE_URL")
+_S3_URL = os.environ.get("TTIO_S3_FIXTURE_URL")
 
 
 pytestmark = [
@@ -31,7 +31,7 @@ pytestmark = [
 @pytest.fixture(scope="module")
 def s3_fixture_url() -> str:
     if not _S3_URL:
-        pytest.skip("MPGO_S3_FIXTURE_URL not set; cloud access tests need an S3/MinIO endpoint")
+        pytest.skip("TTIO_S3_FIXTURE_URL not set; cloud access tests need an S3/MinIO endpoint")
     return _S3_URL
 
 
@@ -75,7 +75,7 @@ def test_selective_spectrum_fetch(s3_fixture_url: str) -> None:
 def test_query_without_full_download(s3_fixture_url: str) -> None:
     """An RT-range query against the index should not download the
     full signal_channels payload."""
-    from mpeg_o.value_range import ValueRange
+    from ttio.value_range import ValueRange
     with SpectralDataset.open(s3_fixture_url) as ds:
         run = next(iter(ds.ms_runs.values()))
         rt_max = float(run.index.retention_times.max())

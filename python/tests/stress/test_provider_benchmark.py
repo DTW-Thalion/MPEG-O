@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import (
+from ttio import (
     Identification,
     SpectralDataset,
     WrittenRun,
@@ -55,7 +55,7 @@ def _build_run(n: int, n_peaks: int, rng: np.random.Generator) -> WrittenRun:
     mz = np.tile(np.linspace(100.0, 1000.0, n_peaks), n).astype(np.float64)
     intensity = rng.uniform(0.0, 1e6, size=n * n_peaks).astype(np.float64)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={"mz": mz, "intensity": intensity},
         offsets=np.arange(n, dtype=np.uint64) * n_peaks,

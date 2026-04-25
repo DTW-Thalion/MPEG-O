@@ -16,8 +16,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.key_rotation import (
+from ttio import SpectralDataset, WrittenRun
+from ttio.key_rotation import (
     enable_envelope_encryption,
     has_envelope_encryption,
     key_history,
@@ -34,10 +34,10 @@ from _provider_matrix import (  # type: ignore[import-not-found]
 
 
 def _build_dataset(provider: str, tmp_path: Path) -> str:
-    """Write a tiny .mpgo and return a URL suitable for open(writable=True)."""
+    """Write a tiny .tio and return a URL suitable for open(writable=True)."""
     n = 4
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=0,
         channel_data={
             "mz": np.linspace(100.0, 200.0, n).astype(np.float64),

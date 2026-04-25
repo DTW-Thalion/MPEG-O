@@ -6,10 +6,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import AxisDescriptor, SignalArray, UVVisSpectrum
-from mpeg_o.exporters.jcamp_dx import write_uv_vis_spectrum
-from mpeg_o.importers._jcamp_decode import decode_xydata, has_compression
-from mpeg_o.importers.jcamp_dx import read_spectrum
+from ttio import AxisDescriptor, SignalArray, UVVisSpectrum
+from ttio.exporters.jcamp_dx import write_uv_vis_spectrum
+from ttio.importers._jcamp_decode import decode_xydata, has_compression
+from ttio.importers.jcamp_dx import read_spectrum
 
 
 # --- compression primitives ----------------------------------------------

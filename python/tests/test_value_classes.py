@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from mpeg_o import (
+from ttio import (
     AxisDescriptor,
     CVParam,
     Compression,
@@ -14,12 +14,12 @@ from mpeg_o import (
     SamplingMode,
     ValueRange,
 )
-from mpeg_o.enums import AcquisitionMode, ChromatogramType, EncryptionLevel
+from ttio.enums import AcquisitionMode, ChromatogramType, EncryptionLevel
 
 
 def test_enum_integer_values_match_objc() -> None:
     """Fixtures store acquisition_mode as int64; the numeric values must
-    agree with MPGOEnums.h or the disk round-trip fails silently."""
+    agree with TTIOEnums.h or the disk round-trip fails silently."""
     assert AcquisitionMode.MS1_DDA == 0
     assert AcquisitionMode.NMR_1D == 4
     assert AcquisitionMode.IMAGING == 6
@@ -65,7 +65,7 @@ def test_axis_descriptor_default_sampling() -> None:
 
 
 def test_encoding_spec_defaults() -> None:
-    from mpeg_o.enums import ByteOrder
+    from ttio.enums import ByteOrder
     e = EncodingSpec()
     assert e.precision is Precision.FLOAT64
     assert e.compression is Compression.ZLIB
@@ -80,10 +80,10 @@ def test_instrument_config_all_empty_by_default() -> None:
 
 
 def test_verifier_status_wrapping():
-    from mpeg_o.verifier import Verifier, VerificationStatus
-    from mpeg_o import signatures
+    from ttio.verifier import Verifier, VerificationStatus
+    from ttio import signatures
 
-    data = b"hello, mpeg-o"
+    data = b"hello, ttio"
     key = b"0" * 32
 
     # NOT_SIGNED
@@ -100,17 +100,17 @@ def test_verifier_status_wrapping():
 
 
 def test_compression_includes_numpress_delta():
-    from mpeg_o.enums import Compression
+    from ttio.enums import Compression
     assert Compression.NUMPRESS_DELTA.value == 3
 
 
 def test_byte_order_enum_exists():
-    from mpeg_o.enums import ByteOrder
+    from ttio.enums import ByteOrder
     assert ByteOrder.LITTLE_ENDIAN.value == 0
     assert ByteOrder.BIG_ENDIAN.value == 1
 
 def test_value_range_span_and_contains():
-    from mpeg_o.value_range import ValueRange
+    from ttio.value_range import ValueRange
     r = ValueRange(0.0, 10.0)
     assert r.span == 10.0
     assert r.contains(5.0)
@@ -118,9 +118,9 @@ def test_value_range_span_and_contains():
 
 
 def test_axis_descriptor_has_value_range():
-    from mpeg_o.axis_descriptor import AxisDescriptor
-    from mpeg_o.value_range import ValueRange
-    from mpeg_o.enums import SamplingMode
+    from ttio.axis_descriptor import AxisDescriptor
+    from ttio.value_range import ValueRange
+    from ttio.enums import SamplingMode
 
     a = AxisDescriptor(
         name="mz",
@@ -133,8 +133,8 @@ def test_axis_descriptor_has_value_range():
 
 
 def test_encoding_spec_uses_byte_order_enum():
-    from mpeg_o.encoding_spec import EncodingSpec
-    from mpeg_o.enums import Precision, Compression, ByteOrder
+    from ttio.encoding_spec import EncodingSpec
+    from ttio.enums import Precision, Compression, ByteOrder
     e = EncodingSpec(
         precision=Precision.FLOAT64,
         compression=Compression.ZLIB,
@@ -144,15 +144,15 @@ def test_encoding_spec_uses_byte_order_enum():
 
 
 def test_encoding_spec_element_size():
-    from mpeg_o.encoding_spec import EncodingSpec
-    from mpeg_o.enums import Precision
+    from ttio.encoding_spec import EncodingSpec
+    from ttio.enums import Precision
     assert EncodingSpec(precision=Precision.FLOAT32).element_size() == 4
     assert EncodingSpec(precision=Precision.FLOAT64).element_size() == 8
     assert EncodingSpec(precision=Precision.COMPLEX128).element_size() == 16
 
 
 def test_cv_param_has_ontology_ref_and_single_unit():
-    from mpeg_o.cv_param import CVParam
+    from ttio.cv_param import CVParam
     p = CVParam(
         ontology_ref="MS",
         accession="MS:1000515",
@@ -166,9 +166,9 @@ def test_cv_param_has_ontology_ref_and_single_unit():
 
 
 def test_spectrum_base_fields_match_objc():
-    from mpeg_o.spectrum import Spectrum
-    from mpeg_o.signal_array import SignalArray
-    from mpeg_o.axis_descriptor import AxisDescriptor
+    from ttio.spectrum import Spectrum
+    from ttio.signal_array import SignalArray
+    from ttio.axis_descriptor import AxisDescriptor
     import numpy as np
 
     mz = SignalArray(data=np.array([100.0, 200.0]))
@@ -196,10 +196,10 @@ def test_spectrum_base_fields_match_objc():
 
 
 def test_mass_spectrum_has_typed_fields():
-    from mpeg_o.mass_spectrum import MassSpectrum
-    from mpeg_o.signal_array import SignalArray
-    from mpeg_o.enums import Polarity
-    from mpeg_o.value_range import ValueRange
+    from ttio.mass_spectrum import MassSpectrum
+    from ttio.signal_array import SignalArray
+    from ttio.enums import Polarity
+    from ttio.value_range import ValueRange
     import numpy as np
 
     mz = SignalArray(data=np.array([100.0, 200.0]))
@@ -227,7 +227,7 @@ def test_mass_spectrum_has_typed_fields():
 
 def test_activation_method_integer_values_match_objc():
     """M74: values persist as int32 in spectrum_index; must match ObjC."""
-    from mpeg_o import ActivationMethod
+    from ttio import ActivationMethod
     assert ActivationMethod.NONE == 0
     assert ActivationMethod.CID == 1
     assert ActivationMethod.HCD == 2
@@ -238,7 +238,7 @@ def test_activation_method_integer_values_match_objc():
 
 
 def test_isolation_window_bounds_and_width():
-    from mpeg_o import IsolationWindow
+    from ttio import IsolationWindow
     w = IsolationWindow(target_mz=500.0, lower_offset=1.0, upper_offset=2.0)
     assert w.target_mz == 500.0
     assert w.lower_offset == 1.0
@@ -249,14 +249,14 @@ def test_isolation_window_bounds_and_width():
 
 
 def test_isolation_window_is_frozen():
-    from mpeg_o import IsolationWindow
+    from ttio import IsolationWindow
     w = IsolationWindow(target_mz=500.0, lower_offset=1.0, upper_offset=1.0)
     with pytest.raises(Exception):
         w.target_mz = 600.0  # type: ignore[misc]
 
 
 def test_isolation_window_equality():
-    from mpeg_o import IsolationWindow
+    from ttio import IsolationWindow
     a = IsolationWindow(target_mz=500.0, lower_offset=0.5, upper_offset=0.5)
     b = IsolationWindow(target_mz=500.0, lower_offset=0.5, upper_offset=0.5)
     c = IsolationWindow(target_mz=500.0, lower_offset=0.5, upper_offset=1.0)
@@ -266,10 +266,10 @@ def test_isolation_window_equality():
 
 
 def test_mass_spectrum_has_activation_and_isolation_fields():
-    from mpeg_o.mass_spectrum import MassSpectrum
-    from mpeg_o.signal_array import SignalArray
-    from mpeg_o.enums import ActivationMethod, Polarity
-    from mpeg_o.isolation_window import IsolationWindow
+    from ttio.mass_spectrum import MassSpectrum
+    from ttio.signal_array import SignalArray
+    from ttio.enums import ActivationMethod, Polarity
+    from ttio.isolation_window import IsolationWindow
     import numpy as np
 
     mz = SignalArray(data=np.array([100.0, 200.0]))
@@ -299,9 +299,9 @@ def test_mass_spectrum_has_activation_and_isolation_fields():
 
 def test_signal_array_is_cv_annotatable():
     import numpy as np
-    from mpeg_o.signal_array import SignalArray
-    from mpeg_o.cv_param import CVParam
-    from mpeg_o.protocols import CVAnnotatable
+    from ttio.signal_array import SignalArray
+    from ttio.cv_param import CVParam
+    from ttio.protocols import CVAnnotatable
 
     sa = SignalArray(data=np.array([1.0, 2.0, 3.0]), axis=None)
     param = CVParam(
@@ -318,8 +318,8 @@ def test_signal_array_is_cv_annotatable():
 
 
 def test_nmr_spectrum_has_nucleus_type_and_frequency():
-    from mpeg_o.nmr_spectrum import NMRSpectrum
-    from mpeg_o.signal_array import SignalArray
+    from ttio.nmr_spectrum import NMRSpectrum
+    from ttio.signal_array import SignalArray
     import numpy as np
 
     cs = SignalArray(data=np.array([1.0, 2.0, 3.0]))
@@ -340,10 +340,10 @@ def test_nmr_spectrum_has_nucleus_type_and_frequency():
 
 
 def test_nmr_2d_uses_axis_descriptors_and_inherits_spectrum():
-    from mpeg_o.nmr_2d import NMR2DSpectrum
-    from mpeg_o.spectrum import Spectrum
-    from mpeg_o.axis_descriptor import AxisDescriptor
-    from mpeg_o.value_range import ValueRange
+    from ttio.nmr_2d import NMR2DSpectrum
+    from ttio.spectrum import Spectrum
+    from ttio.axis_descriptor import AxisDescriptor
+    from ttio.value_range import ValueRange
     import numpy as np
 
     f1 = AxisDescriptor(name="1H", unit="ppm", value_range=ValueRange(0.0, 10.0))
@@ -364,9 +364,9 @@ def test_nmr_2d_uses_axis_descriptors_and_inherits_spectrum():
 
 
 def test_spectrum_index_element_accessors():
-    from mpeg_o.acquisition_run import SpectrumIndex
-    from mpeg_o.value_range import ValueRange
-    from mpeg_o.enums import Polarity
+    from ttio.acquisition_run import SpectrumIndex
+    from ttio.value_range import ValueRange
+    from ttio.enums import Polarity
     import numpy as np
 
     idx = SpectrumIndex(
@@ -397,16 +397,16 @@ def test_acquisition_run_conforms_to_protocols():
     import numpy as np
     import tempfile
     from pathlib import Path
-    from mpeg_o.acquisition_run import AcquisitionRun
-    from mpeg_o.enums import AcquisitionMode
-    from mpeg_o.protocols import Indexable, Streamable, Provenanceable
+    from ttio.acquisition_run import AcquisitionRun
+    from ttio.enums import AcquisitionMode
+    from ttio.protocols import Indexable, Streamable, Provenanceable
 
     tmp = Path(tempfile.mkstemp(suffix=".h5")[1])
     try:
         with h5py.File(tmp, "w") as f:
             g = f.create_group("run0")
             g.attrs["acquisition_mode"] = np.int64(AcquisitionMode.MS1_DDA)
-            g.attrs["spectrum_class"] = "MPGOMassSpectrum"
+            g.attrs["spectrum_class"] = "TTIOMassSpectrum"
             idx = g.create_group("spectrum_index")
             idx.create_dataset("offsets", data=np.array([0, 2], dtype="<u8"))
             idx.create_dataset("lengths", data=np.array([2, 2], dtype="<u4"))
@@ -445,7 +445,7 @@ def test_acquisition_run_conforms_to_protocols():
 
 
 def test_ms_image_has_dataset_level_fields():
-    from mpeg_o.ms_image import MSImage
+    from ttio.ms_image import MSImage
     import numpy as np
 
     img = MSImage(
@@ -464,7 +464,7 @@ def test_ms_image_has_dataset_level_fields():
 
 
 def test_identification_fields():
-    from mpeg_o.identification import Identification
+    from ttio.identification import Identification
     i = Identification(
         run_name="run_0001",
         spectrum_index=42,
@@ -480,7 +480,7 @@ def test_identification_fields():
 
 
 def test_quantification_fields():
-    from mpeg_o.quantification import Quantification
+    from ttio.quantification import Quantification
     q = Quantification(
         chemical_entity="CHEBI:17234",
         sample_ref="sample1",
@@ -494,21 +494,21 @@ def test_quantification_fields():
 
 
 def test_provenance_record_contains_input_ref():
-    from mpeg_o.provenance import ProvenanceRecord
+    from ttio.provenance import ProvenanceRecord
     r = ProvenanceRecord(
         timestamp_unix=1700000000,
         software="MSConvert 3.0",
         parameters={"threshold": "100"},
         input_refs=["file:///data/raw/run.mzML"],
-        output_refs=["file:///data/processed/run.mpgo"],
+        output_refs=["file:///data/processed/run.tio"],
     )
     assert r.contains_input_ref("file:///data/raw/run.mzML")
     assert not r.contains_input_ref("file:///data/raw/other.mzML")
 
 
 def test_transition_list_count_and_index():
-    from mpeg_o.transition_list import Transition, TransitionList
-    from mpeg_o.value_range import ValueRange
+    from ttio.transition_list import Transition, TransitionList
+    from ttio.value_range import ValueRange
     t = Transition(
         precursor_mz=500.0, product_mz=100.0, collision_energy=25.0,
         retention_time_window=ValueRange(10.0, 20.0))
@@ -519,7 +519,7 @@ def test_transition_list_count_and_index():
 
 
 def test_access_policy_holds_dict():
-    from mpeg_o.access_policy import AccessPolicy
+    from ttio.access_policy import AccessPolicy
     p = AccessPolicy(policy={"subjects": ["alice"], "key_id": "kek-1"})
     assert p.policy["subjects"] == ["alice"]
     assert p.policy["key_id"] == "kek-1"
@@ -529,7 +529,7 @@ def test_access_policy_holds_dict():
 
 
 def test_anonymization_policy_defaults():
-    from mpeg_o.anonymization import AnonymizationPolicy
+    from ttio.anonymization import AnonymizationPolicy
     p = AnonymizationPolicy()  # defaults
     assert hasattr(p, "redact_saav_spectra")
     assert hasattr(p, "mask_intensity_below_quantile")
@@ -537,10 +537,10 @@ def test_anonymization_policy_defaults():
 
 
 def test_encryption_round_trip():
-    from mpeg_o import encryption
+    from ttio import encryption
 
     key = b"0" * 32
-    plaintext = b"hello, mpeg-o encryption"
+    plaintext = b"hello, ttio encryption"
     blob = encryption.encrypt_bytes(plaintext, key)
     recovered = encryption.decrypt_bytes(blob, key)
     assert recovered == plaintext
@@ -549,7 +549,7 @@ def test_encryption_round_trip():
 def test_key_rotation_fresh_manager_has_no_envelope():
     import h5py, tempfile
     from pathlib import Path
-    from mpeg_o.key_rotation import has_envelope_encryption
+    from ttio.key_rotation import has_envelope_encryption
 
     tmp = Path(tempfile.mkstemp(suffix=".h5")[1])
     try:
@@ -562,10 +562,10 @@ def test_key_rotation_fresh_manager_has_no_envelope():
 
 
 def test_signature_round_trip():
-    from mpeg_o import signatures
+    from ttio import signatures
     import base64
 
-    data = b"hello, mpeg-o signatures"
+    data = b"hello, ttio signatures"
     key = b"0" * 32
     sig = signatures.hmac_sha256_b64(data, key)
     # Expected: base64(hmac_sha256(data, key))
@@ -577,17 +577,17 @@ def test_acquisition_run_has_encryptable_surface():
     import numpy as np
     import tempfile
     from pathlib import Path
-    from mpeg_o.acquisition_run import AcquisitionRun
-    from mpeg_o.access_policy import AccessPolicy
-    from mpeg_o.enums import AcquisitionMode
-    from mpeg_o.protocols import Encryptable
+    from ttio.acquisition_run import AcquisitionRun
+    from ttio.access_policy import AccessPolicy
+    from ttio.enums import AcquisitionMode
+    from ttio.protocols import Encryptable
 
     tmp = Path(tempfile.mkstemp(suffix=".h5")[1])
     try:
         with h5py.File(tmp, "w") as f:
             g = f.create_group("run0")
             g.attrs["acquisition_mode"] = np.int64(AcquisitionMode.MS1_DDA)
-            g.attrs["spectrum_class"] = "MPGOMassSpectrum"
+            g.attrs["spectrum_class"] = "TTIOMassSpectrum"
             idx = g.create_group("spectrum_index")
             idx.create_dataset("offsets", data=np.array([0], dtype="<u8"))
             idx.create_dataset("lengths", data=np.array([0], dtype="<u4"))
@@ -614,8 +614,8 @@ def test_acquisition_run_has_encryptable_surface():
 
 
 def test_spectral_dataset_has_encryptable_surface():
-    from mpeg_o.spectral_dataset import SpectralDataset
-    from mpeg_o.protocols import Encryptable
+    from ttio.spectral_dataset import SpectralDataset
+    from ttio.protocols import Encryptable
     assert hasattr(SpectralDataset, "encrypt_with_key")
     assert hasattr(SpectralDataset, "decrypt_with_key")
     assert hasattr(SpectralDataset, "access_policy")
@@ -625,10 +625,10 @@ def test_spectral_dataset_has_encryptable_surface():
 
 def test_query_builder_intersects():
     import numpy as np
-    from mpeg_o.acquisition_run import SpectrumIndex
-    from mpeg_o.query import Query
-    from mpeg_o.value_range import ValueRange
-    from mpeg_o.enums import Polarity
+    from ttio.acquisition_run import SpectrumIndex
+    from ttio.query import Query
+    from ttio.value_range import ValueRange
+    from ttio.enums import Polarity
 
     idx = SpectrumIndex(
         offsets=np.array([0, 10, 20, 30], dtype="<u8"),
@@ -655,16 +655,16 @@ def test_query_builder_intersects():
 def test_stream_reader_iterates_spectra(tmp_path):
     import h5py
     import numpy as np
-    from mpeg_o.stream_reader import StreamReader
-    from mpeg_o.enums import AcquisitionMode
+    from ttio.stream_reader import StreamReader
+    from ttio.enums import AcquisitionMode
 
-    path = str(tmp_path / "minimal.mpgo")
+    path = str(tmp_path / "minimal.tio")
     with h5py.File(path, "w") as f:
         study = f.create_group("study")
         runs = study.create_group("ms_runs")
         g = runs.create_group("run0")
         g.attrs["acquisition_mode"] = np.int64(AcquisitionMode.MS1_DDA)
-        g.attrs["spectrum_class"] = "MPGOMassSpectrum"
+        g.attrs["spectrum_class"] = "TTIOMassSpectrum"
         idx = g.create_group("spectrum_index")
         idx.create_dataset("offsets", data=np.array([0, 2], dtype="<u8"))
         idx.create_dataset("lengths", data=np.array([2, 2], dtype="<u4"))
@@ -691,14 +691,14 @@ def test_stream_reader_iterates_spectra(tmp_path):
 
 def test_stream_writer_buffers_spectra():
     import numpy as np
-    from mpeg_o.stream_writer import StreamWriter
-    from mpeg_o.mass_spectrum import MassSpectrum
-    from mpeg_o.signal_array import SignalArray
-    from mpeg_o.instrument_config import InstrumentConfig
-    from mpeg_o.enums import AcquisitionMode
+    from ttio.stream_writer import StreamWriter
+    from ttio.mass_spectrum import MassSpectrum
+    from ttio.signal_array import SignalArray
+    from ttio.instrument_config import InstrumentConfig
+    from ttio.enums import AcquisitionMode
 
     w = StreamWriter(
-        file_path="/tmp/does-not-matter-not-flushed.mpgo",
+        file_path="/tmp/does-not-matter-not-flushed.tio",
         run_name="run0",
         acquisition_mode=AcquisitionMode.MS1_DDA,
         instrument_config=InstrumentConfig(),
@@ -715,7 +715,7 @@ def test_stream_writer_buffers_spectra():
 
 
 def test_provider_registry_discovers_builtin_providers() -> None:
-    from mpeg_o.providers import discover_providers
+    from ttio.providers import discover_providers
 
     providers = discover_providers()
     # Two built-in providers must be present.
@@ -724,8 +724,8 @@ def test_provider_registry_discovers_builtin_providers() -> None:
 
 
 def test_memory_provider_round_trip() -> None:
-    from mpeg_o.providers.memory import MemoryProvider
-    from mpeg_o.providers.base import StorageProvider
+    from ttio.providers.memory import MemoryProvider
+    from ttio.providers.base import StorageProvider
 
     # MemoryProvider.open() is the entry point (constructor requires
     # internal args); mode='w' creates a fresh in-process store.
@@ -745,8 +745,8 @@ def test_memory_provider_round_trip() -> None:
 
 
 def test_cv_term_mapper_basic_accessions():
-    from mpeg_o.importers import cv_term_mapper as m
-    from mpeg_o.enums import Precision
+    from ttio.importers import cv_term_mapper as m
+    from ttio.enums import Precision
     # MS:1000521 = 32-bit float; MS:1000523 = 64-bit float.
     assert m.precision_for("MS:1000523") == Precision.FLOAT64
     assert m.precision_for("MS:1000521") == Precision.FLOAT32
@@ -757,8 +757,8 @@ def test_cv_term_mapper_basic_accessions():
 def test_base64_zlib_round_trip():
     import base64
     import zlib
-    from mpeg_o.importers._base64_zlib import decode
-    raw = b"hello mpeg-o base64"
+    from ttio.importers._base64_zlib import decode
+    raw = b"hello ttio base64"
     # Round trip without zlib: encode manually, decode via module.
     encoded_plain = base64.b64encode(raw).decode("ascii")
     assert decode(encoded_plain, zlib_compressed=False) == raw
@@ -768,16 +768,16 @@ def test_base64_zlib_round_trip():
 
 
 def test_stream_writer_flush_round_trip(tmp_path):
-    """StreamWriter.flush writes a valid .mpgo file that can be re-read."""
+    """StreamWriter.flush writes a valid .tio file that can be re-read."""
     import numpy as np
-    from mpeg_o.stream_writer import StreamWriter
-    from mpeg_o.mass_spectrum import MassSpectrum
-    from mpeg_o.signal_array import SignalArray
-    from mpeg_o.instrument_config import InstrumentConfig
-    from mpeg_o.enums import AcquisitionMode, Polarity
-    from mpeg_o import SpectralDataset
+    from ttio.stream_writer import StreamWriter
+    from ttio.mass_spectrum import MassSpectrum
+    from ttio.signal_array import SignalArray
+    from ttio.instrument_config import InstrumentConfig
+    from ttio.enums import AcquisitionMode, Polarity
+    from ttio import SpectralDataset
 
-    path = tmp_path / "streamed.mpgo"
+    path = tmp_path / "streamed.tio"
     writer = StreamWriter(
         file_path=str(path),
         run_name="run_0001",

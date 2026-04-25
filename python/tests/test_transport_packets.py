@@ -5,7 +5,7 @@ import struct
 
 import pytest
 
-from mpeg_o.transport.packets import (
+from ttio.transport.packets import (
     HEADER_MAGIC,
     HEADER_SIZE,
     VERSION,
@@ -53,7 +53,7 @@ class TestPacketHeader:
             PacketHeader.from_bytes(raw)
 
     def test_rejects_bad_version(self):
-        raw = b"MO" + b"\x99\x01" + b"\x00" * (HEADER_SIZE - 4)
+        raw = b"TI" + b"\x99\x01" + b"\x00" * (HEADER_SIZE - 4)
         with pytest.raises(ValueError, match="version"):
             PacketHeader.from_bytes(raw)
 

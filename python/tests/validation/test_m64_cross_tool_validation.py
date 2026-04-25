@@ -24,9 +24,9 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o import SpectralDataset
-from mpeg_o.exporters import mzml as mzml_exporter
-from mpeg_o.exporters import nmrml as nmrml_exporter
+from ttio import SpectralDataset
+from ttio.exporters import mzml as mzml_exporter
+from ttio.exporters import nmrml as nmrml_exporter
 
 
 def _export_first_nmr_spectrum(ds: SpectralDataset, out: Path) -> Path:
@@ -35,7 +35,7 @@ def _export_first_nmr_spectrum(ds: SpectralDataset, out: Path) -> Path:
 
     NMR runs are stored either under ``nmr_runs`` (native NMR-modality
     datasets) or under ``ms_runs`` with ``spectrum_class =
-    MPGONMRSpectrum`` (legacy shape); check both.
+    TTIONMRSpectrum`` (legacy shape); check both.
     """
     for run in ds.nmr_runs.values():
         if len(run) > 0:
@@ -44,7 +44,7 @@ def _export_first_nmr_spectrum(ds: SpectralDataset, out: Path) -> Path:
                 run[0], out, spectrometer_frequency_mhz=freq
             )
     for run in ds.ms_runs.values():
-        if (getattr(run, "spectrum_class", "") == "MPGONMRSpectrum"
+        if (getattr(run, "spectrum_class", "") == "TTIONMRSpectrum"
                 and len(run) > 0):
             freq = float(getattr(run, "spectrometer_frequency_mhz", 0.0) or 0.0)
             return nmrml_exporter.write_spectrum(
@@ -151,7 +151,7 @@ def test_mzml_export_validates_against_psi_xsd(
 def test_nmrml_export_validates_against_xsd(tmp_path: Path) -> None:
     """Validate our nmrML writer output against the upstream nmrML XSD.
 
-    Uses the committed ``nmr_1d.mpgo`` fixture because it carries the
+    Uses the committed ``nmr_1d.tio`` fixture because it carries the
     ``chemical_shift`` + ``intensity`` channel layout the nmrML exporter
     expects. The synthetic ``synth_multimodal`` NMR run uses a
     ``fid_real`` + ``fid_imag`` layout that the exporter doesn't yet
@@ -164,7 +164,7 @@ def test_nmrml_export_validates_against_xsd(tmp_path: Path) -> None:
     if xsd_path is None:
         pytest.skip("nmrML XSD unreachable — offline or upstream moved")
 
-    nmr_fixture = _OBJC_FIXTURES / "nmr_1d.mpgo"
+    nmr_fixture = _OBJC_FIXTURES / "nmr_1d.tio"
     if not nmr_fixture.is_file():
         pytest.skip(f"{nmr_fixture} not committed")
     ds = SpectralDataset.open(nmr_fixture)
@@ -237,7 +237,7 @@ def test_isatab_export_validates_with_isatools(
     synth_fixture, tmp_path: Path
 ) -> None:
     """Our ISA-Tab exporter output must pass isatools' validator."""
-    from mpeg_o.exporters import isa as isa_exporter
+    from ttio.exporters import isa as isa_exporter
 
     multimodal = SpectralDataset.open(synth_fixture("synth_multimodal"))
     out_dir = tmp_path / "isatab_out"
@@ -277,28 +277,28 @@ def test_isatab_export_validates_with_isatools(
 # round-trip on the current code.
 # ---------------------------------------------------------------------------
 
-# Committed .mpgo corpus; the ObjC build produces these at each
+# Committed .tio corpus; the ObjC build produces these at each
 # milestone and the Python reader is expected to open every one.
-_OBJC_FIXTURES = Path(__file__).resolve().parents[3] / "objc" / "Tests" / "Fixtures" / "mpgo"
+_OBJC_FIXTURES = Path(__file__).resolve().parents[3] / "objc" / "Tests" / "Fixtures" / "ttio"
 
 
-def _discover_mpgo_fixtures() -> list[Path]:
-    """List every .mpgo fixture committed in the repo that we expect
+def _discover_ttio_fixtures() -> list[Path]:
+    """List every .tio fixture committed in the repo that we expect
     current code to read. The ObjC test corpus acts as our backward-
     compatibility archive — new format versions are expected to keep
     reading these."""
     if not _OBJC_FIXTURES.is_dir():
         return []
-    return sorted(_OBJC_FIXTURES.glob("*.mpgo"))
+    return sorted(_OBJC_FIXTURES.glob("*.tio"))
 
 
 @pytest.mark.parametrize(
     "fixture_path",
-    _discover_mpgo_fixtures(),
+    _discover_ttio_fixtures(),
     ids=lambda p: p.name,
 )
-def test_historical_mpgo_fixture_still_readable(fixture_path: Path) -> None:
-    """Every .mpgo committed to the ObjC test corpus must open on the
+def test_historical_ttio_fixture_still_readable(fixture_path: Path) -> None:
+    """Every .tio committed to the ObjC test corpus must open on the
     current Python reader. These files span v0.1-v0.8 format versions
     (the ObjC suite built them at each milestone) and the reader is
     contractually backward-compatible within a major version."""
@@ -348,7 +348,7 @@ def test_nmrml_export_is_well_formed_xml(tmp_path: Path) -> None:
     """
     from lxml import etree
 
-    nmr_fixture = _OBJC_FIXTURES / "nmr_1d.mpgo"
+    nmr_fixture = _OBJC_FIXTURES / "nmr_1d.tio"
     if not nmr_fixture.is_file():
         pytest.skip(f"{nmr_fixture} not committed")
     ds = SpectralDataset.open(nmr_fixture)

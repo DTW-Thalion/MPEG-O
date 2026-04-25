@@ -2,7 +2,7 @@
 
 Two layers of testing:
 
-1. **In-language round-trip** — .mpgo → .mots → .mpgo with signal
+1. **In-language round-trip** — .tio → .tis → .tio with signal
    values preserved to float64 epsilon. Same for multi-run,
    multi-spectrum, and empty-run edge cases.
 
@@ -11,7 +11,7 @@ Two layers of testing:
    language is decodable in the other two.
 
 Cross-language tests skip automatically when the Java classpath or
-ObjC binary cannot be located (e.g. running outside the MPEG-O
+ObjC binary cannot be located (e.g. running outside the TTI-O
 repo layout).
 """
 from __future__ import annotations
@@ -24,9 +24,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.enums import AcquisitionMode, Polarity
-from mpeg_o.spectral_dataset import SpectralDataset, WrittenRun
-from mpeg_o.transport.codec import file_to_transport, transport_to_file
+from ttio.enums import AcquisitionMode, Polarity
+from ttio.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.transport.codec import file_to_transport, transport_to_file
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -61,7 +61,7 @@ def _build_dataset(path: Path, *, n_runs: int = 1, n_spectra: int = 5,
             for i in range(n_spectra)
         ], dtype="<f8")
         runs[f"run_{r:04d}"] = WrittenRun(
-            spectrum_class="MPGOMassSpectrum",
+            spectrum_class="TTIOMassSpectrum",
             acquisition_mode=int(AcquisitionMode.MS1_DDA),
             channel_data={"mz": mz, "intensity": intensity},
             offsets=offsets,
@@ -106,9 +106,9 @@ def _assert_signal_equal(a: SpectralDataset, b: SpectralDataset) -> None:
 class TestInLanguageRoundTrip:
 
     def test_single_run_roundtrip(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo")
-        mots = tmp_path / "stream.mots"
-        rt = tmp_path / "rt.mpgo"
+        src = _build_dataset(tmp_path / "src.tio")
+        mots = tmp_path / "stream.tis"
+        rt = tmp_path / "rt.tio"
         file_to_transport(src, mots)
         ds = transport_to_file(mots, rt)
         try:
@@ -118,9 +118,9 @@ class TestInLanguageRoundTrip:
             ds.close()
 
     def test_multi_run_roundtrip(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo", n_runs=3)
-        mots = tmp_path / "stream.mots"
-        rt = tmp_path / "rt.mpgo"
+        src = _build_dataset(tmp_path / "src.tio", n_runs=3)
+        mots = tmp_path / "stream.tis"
+        rt = tmp_path / "rt.tio"
         file_to_transport(src, mots)
         ds = transport_to_file(mots, rt)
         try:
@@ -131,10 +131,10 @@ class TestInLanguageRoundTrip:
 
     def test_larger_spectra(self, tmp_path):
         src = _build_dataset(
-            tmp_path / "src.mpgo", n_spectra=20, points_per_spectrum=128
+            tmp_path / "src.tio", n_spectra=20, points_per_spectrum=128
         )
-        mots = tmp_path / "stream.mots"
-        rt = tmp_path / "rt.mpgo"
+        mots = tmp_path / "stream.tis"
+        rt = tmp_path / "rt.tio"
         file_to_transport(src, mots)
         ds = transport_to_file(mots, rt)
         try:
@@ -144,9 +144,9 @@ class TestInLanguageRoundTrip:
             ds.close()
 
     def test_with_checksum_roundtrip(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo")
-        mots = tmp_path / "stream.mots"
-        rt = tmp_path / "rt.mpgo"
+        src = _build_dataset(tmp_path / "src.tio")
+        mots = tmp_path / "stream.tis"
+        rt = tmp_path / "rt.tio"
         file_to_transport(src, mots, use_checksum=True)
         ds = transport_to_file(mots, rt)
         try:
@@ -161,7 +161,7 @@ class TestInLanguageRoundTrip:
 
 def _java_cli_available() -> bool:
     target = REPO_ROOT / "java" / "target" / "classes"
-    return target.is_dir() and (target / "com" / "dtwthalion" / "mpgo"
+    return target.is_dir() and (target / "com" / "dtwthalion" / "ttio"
                                   / "tools" / "TransportEncodeCli.class").is_file()
 
 
@@ -180,7 +180,7 @@ def _run_java(cli: str, *args: str) -> None:
     subprocess.run(
         ["java", "-cp", cp,
          "-Djava.library.path=/usr/lib/x86_64-linux-gnu/jni",
-         f"com.dtwthalion.mpgo.tools.{cli}", *args],
+         f"com.dtwthalion.ttio.tools.{cli}", *args],
         check=True, capture_output=True,
     )
 
@@ -203,18 +203,18 @@ def _run_objc(tool: str, *args: str) -> None:
 class TestPythonJavaExchange:
 
     def test_python_encoded_stream_readable_by_java(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo")
-        mots = tmp_path / "py.mots"
-        rt = tmp_path / "rt.mpgo"
+        src = _build_dataset(tmp_path / "src.tio")
+        mots = tmp_path / "py.tis"
+        rt = tmp_path / "rt.tio"
         file_to_transport(src, mots)
         _run_java("TransportDecodeCli", str(mots), str(rt))
         with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
             _assert_signal_equal(a, b)
 
     def test_java_encoded_stream_readable_by_python(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo")
-        mots = tmp_path / "java.mots"
-        rt = tmp_path / "rt.mpgo"
+        src = _build_dataset(tmp_path / "src.tio")
+        mots = tmp_path / "java.tis"
+        rt = tmp_path / "rt.tio"
         _run_java("TransportEncodeCli", str(src), str(mots))
         ds = transport_to_file(mots, rt)
         try:
@@ -225,25 +225,25 @@ class TestPythonJavaExchange:
 
 
 @pytest.mark.skipif(
-    not _objc_tool_available("MpgoTransportEncode"),
+    not _objc_tool_available("TtioTransportEncode"),
     reason="ObjC tools not built (run `./build.sh` first)"
 )
 class TestPythonObjCExchange:
 
     def test_python_encoded_stream_readable_by_objc(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo")
-        mots = tmp_path / "py.mots"
-        rt = tmp_path / "rt.mpgo"
+        src = _build_dataset(tmp_path / "src.tio")
+        mots = tmp_path / "py.tis"
+        rt = tmp_path / "rt.tio"
         file_to_transport(src, mots)
-        _run_objc("MpgoTransportDecode", str(mots), str(rt))
+        _run_objc("TtioTransportDecode", str(mots), str(rt))
         with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
             _assert_signal_equal(a, b)
 
     def test_objc_encoded_stream_readable_by_python(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo")
-        mots = tmp_path / "objc.mots"
-        rt = tmp_path / "rt.mpgo"
-        _run_objc("MpgoTransportEncode", str(src), str(mots))
+        src = _build_dataset(tmp_path / "src.tio")
+        mots = tmp_path / "objc.tis"
+        rt = tmp_path / "rt.tio"
+        _run_objc("TtioTransportEncode", str(src), str(mots))
         ds = transport_to_file(mots, rt)
         try:
             with SpectralDataset.open(src) as original:
@@ -254,25 +254,25 @@ class TestPythonObjCExchange:
 
 @pytest.mark.skipif(
     not (_java_cli_available()
-         and _objc_tool_available("MpgoTransportEncode")),
+         and _objc_tool_available("TtioTransportEncode")),
     reason="Both Java and ObjC tools required"
 )
 class TestJavaObjCExchange:
 
     def test_java_encoded_stream_readable_by_objc(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo")
-        mots = tmp_path / "java.mots"
-        rt = tmp_path / "rt.mpgo"
+        src = _build_dataset(tmp_path / "src.tio")
+        mots = tmp_path / "java.tis"
+        rt = tmp_path / "rt.tio"
         _run_java("TransportEncodeCli", str(src), str(mots))
-        _run_objc("MpgoTransportDecode", str(mots), str(rt))
+        _run_objc("TtioTransportDecode", str(mots), str(rt))
         with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
             _assert_signal_equal(a, b)
 
     def test_objc_encoded_stream_readable_by_java(self, tmp_path):
-        src = _build_dataset(tmp_path / "src.mpgo")
-        mots = tmp_path / "objc.mots"
-        rt = tmp_path / "rt.mpgo"
-        _run_objc("MpgoTransportEncode", str(src), str(mots))
+        src = _build_dataset(tmp_path / "src.tio")
+        mots = tmp_path / "objc.tis"
+        rt = tmp_path / "rt.tio"
+        _run_objc("TtioTransportEncode", str(src), str(mots))
         _run_java("TransportDecodeCli", str(mots), str(rt))
         with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
             _assert_signal_equal(a, b)

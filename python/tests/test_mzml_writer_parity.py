@@ -5,13 +5,13 @@ share the same XML template and are individually round-trip-tested via
 their respective readers, but nothing ran both writers on the same
 input and diffed the bytes. This test closes that gap.
 
-The ObjC side ships a tiny CLI `objc/Tools/MpgoToMzML` (built by the
+The ObjC side ships a tiny CLI `objc/Tools/TtioToMzML` (built by the
 gnustep-make recipe in `objc/Tools/GNUmakefile`). When the binary is
 available on PATH or under `objc/Tools/obj/`, the harness:
 
-  1. Synthesises a small `.mpgo` fixture via `_fixture_dataset()`.
-  2. Invokes MpgoToMzML to produce `a.mzML`.
-  3. Calls `mpeg_o.exporters.mzml.write_dataset` on the same dataset
+  1. Synthesises a small `.tio` fixture via `_fixture_dataset()`.
+  2. Invokes TtioToMzML to produce `a.mzML`.
+  3. Calls `ttio.exporters.mzml.write_dataset` on the same dataset
      to produce `b.mzML`.
   4. Compares the two files — structurally, not strictly byte-identical,
      because both writers render indexListOffset / fileChecksum from
@@ -19,7 +19,7 @@ available on PATH or under `objc/Tools/obj/`, the harness:
      construction. The structural compare asserts that every element
      and attribute matches once those two pieces are masked out.
 
-When MpgoToMzML is unavailable (no ObjC build on the runner), the test
+When TtioToMzML is unavailable (no ObjC build on the runner), the test
 is skipped with a clear message — CI in pure-Python environments keeps
 working.
 """
@@ -34,19 +34,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.enums import AcquisitionMode
-from mpeg_o.exporters import mzml as mzml_exporter
-from mpeg_o.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.enums import AcquisitionMode
+from ttio.exporters import mzml as mzml_exporter
+from ttio.spectral_dataset import SpectralDataset, WrittenRun
 
 
-# ── MpgoToMzML resolver ───────────────────────────────────────────────
+# ── TtioToMzML resolver ───────────────────────────────────────────────
 
 
-def _find_mpgo_to_mzml() -> tuple[Path | None, Path | None]:
-    """Locate the MpgoToMzML CLI and the libMPGO.so sibling directory
+def _find_ttio_to_mzml() -> tuple[Path | None, Path | None]:
+    """Locate the TtioToMzML CLI and the libTTIO.so sibling directory
     that its loader needs on LD_LIBRARY_PATH. Returns (None, None)
     when the CLI is absent."""
-    which = shutil.which("MpgoToMzML")
+    which = shutil.which("TtioToMzML")
     if which:
         return Path(which), None  # on PATH; loader config is user's problem
 
@@ -54,7 +54,7 @@ def _find_mpgo_to_mzml() -> tuple[Path | None, Path | None]:
     # known gnustep-make output location.
     here = Path(__file__).resolve()
     for parent in here.parents:
-        candidate = parent / "objc" / "Tools" / "obj" / "MpgoToMzML"
+        candidate = parent / "objc" / "Tools" / "obj" / "TtioToMzML"
         if candidate.is_file() and os.access(candidate, os.X_OK):
             libdir = parent / "objc" / "Source" / "obj"
             return candidate, libdir if libdir.is_dir() else None
@@ -63,24 +63,24 @@ def _find_mpgo_to_mzml() -> tuple[Path | None, Path | None]:
     return None, None
 
 
-MPGO_TO_MZML, LIBMPGO_DIR = _find_mpgo_to_mzml()
+TTIO_TO_MZML, LIBTTIO_DIR = _find_ttio_to_mzml()
 skip_if_no_cli = pytest.mark.skipif(
-    MPGO_TO_MZML is None,
-    reason="objc/Tools/MpgoToMzML not built; run (cd objc && ./build.sh) first",
+    TTIO_TO_MZML is None,
+    reason="objc/Tools/TtioToMzML not built; run (cd objc && ./build.sh) first",
 )
 
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[bytes]:
-    """Invoke MpgoToMzML with LD_LIBRARY_PATH pointing at the in-tree
-    libMPGO.so if it isn't installed system-wide."""
+    """Invoke TtioToMzML with LD_LIBRARY_PATH pointing at the in-tree
+    libTTIO.so if it isn't installed system-wide."""
     env = os.environ.copy()
-    if LIBMPGO_DIR is not None:
+    if LIBTTIO_DIR is not None:
         existing = env.get("LD_LIBRARY_PATH", "")
         env["LD_LIBRARY_PATH"] = (
-            f"{LIBMPGO_DIR}:{existing}" if existing else str(LIBMPGO_DIR)
+            f"{LIBTTIO_DIR}:{existing}" if existing else str(LIBTTIO_DIR)
         )
     return subprocess.run(
-        [str(MPGO_TO_MZML), *args],
+        [str(TTIO_TO_MZML), *args],
         capture_output=True,
         env=env,
     )
@@ -99,7 +99,7 @@ def _fixture_dataset(tmp_path: Path) -> Path:
         np.tile(np.linspace(10.0, 20.0, n_pts), n_spec).astype(np.float64)
     )
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -111,9 +111,9 @@ def _fixture_dataset(tmp_path: Path) -> Path:
         precursor_charges=np.zeros(n_spec, dtype=np.int32),
         base_peak_intensities=np.full(n_spec, 20.0, dtype=np.float64),
     )
-    out = tmp_path / "parity.mpgo"
+    out = tmp_path / "parity.tio"
     SpectralDataset.write_minimal(
-        out, title="parity", isa_investigation_id="MPGO:parity",
+        out, title="parity", isa_investigation_id="TTIO:parity",
         runs={"run_0001": run},
     )
     return out
@@ -162,19 +162,19 @@ def _normalise(blob: bytes) -> bytes:
 @skip_if_no_cli
 def test_objc_python_mzml_writer_parity(tmp_path: Path) -> None:
     """Both writers, same input, structural parity."""
-    mpgo = _fixture_dataset(tmp_path)
+    ttio = _fixture_dataset(tmp_path)
 
     objc_out = tmp_path / "a.mzML"
-    result = _run_cli(str(mpgo), str(objc_out))
+    result = _run_cli(str(ttio), str(objc_out))
     assert result.returncode == 0, (
-        f"MpgoToMzML failed ({result.returncode}):\n"
+        f"TtioToMzML failed ({result.returncode}):\n"
         f"stdout: {result.stdout.decode(errors='replace')}\n"
         f"stderr: {result.stderr.decode(errors='replace')}"
     )
     assert objc_out.is_file()
 
     py_out = tmp_path / "b.mzML"
-    with SpectralDataset.open(str(mpgo)) as ds:
+    with SpectralDataset.open(str(ttio)) as ds:
         mzml_exporter.write_dataset(ds, py_out)
     assert py_out.is_file()
 
@@ -206,7 +206,7 @@ def test_objc_python_mzml_writer_parity(tmp_path: Path) -> None:
 
 
 @skip_if_no_cli
-def test_mpgo_to_mzml_rejects_missing_args(tmp_path: Path) -> None:
+def test_ttio_to_mzml_rejects_missing_args(tmp_path: Path) -> None:
     """Usage errors exit with non-zero status."""
     result = _run_cli()
     assert result.returncode != 0

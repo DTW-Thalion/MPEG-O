@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o import Feature
-from mpeg_o.exporters import mztab as mztab_writer
-from mpeg_o.importers import mztab as mztab_reader
-from mpeg_o.identification import Identification
-from mpeg_o.quantification import Quantification
+from ttio import Feature
+from ttio.exporters import mztab as mztab_writer
+from ttio.importers import mztab as mztab_reader
+from ttio.identification import Identification
+from ttio.quantification import Quantification
 
 
 # --------------------------------------------------------------------------- #
@@ -51,9 +51,9 @@ def test_feature_equality():
 
 
 def test_feature_exposed_from_package_root():
-    import mpeg_o
-    assert hasattr(mpeg_o, "Feature")
-    assert "Feature" in mpeg_o.__all__
+    import ttio
+    assert hasattr(ttio, "Feature")
+    assert "Feature" in ttio.__all__
 
 
 # --------------------------------------------------------------------------- #

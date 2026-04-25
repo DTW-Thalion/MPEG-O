@@ -6,8 +6,8 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from mpeg_o.encryption import AES_KEY_LEN
-from mpeg_o.signatures import (
+from ttio.encryption import AES_KEY_LEN
+from ttio.signatures import (
     SIGNATURE_ATTR,
     hmac_sha256_b64,
     sign_dataset,

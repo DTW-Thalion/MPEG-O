@@ -18,9 +18,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset
-from mpeg_o.signatures import sign_dataset
-from mpeg_o.value_range import ValueRange
+from ttio import SpectralDataset
+from ttio.signatures import sign_dataset
+from ttio.value_range import ValueRange
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from conftest import _load_fixture_module  # type: ignore[import-not-found]
@@ -34,7 +34,7 @@ def synth_100k(tmp_path_factory: pytest.TempPathFactory) -> Path:
     generate = _load_fixture_module("generate")
     out_dir = tmp_path_factory.mktemp("synth100k")
     generate.GENERATORS["synth_100k"](out_dir)
-    return out_dir / "synth_100k.mpgo"
+    return out_dir / "synth_100k.tio"
 
 
 @pytest.mark.stress
@@ -47,7 +47,7 @@ class TestLargeFile:
         t0 = time.perf_counter()
         generate.GENERATORS["synth_100k"](tmp_path)
         elapsed = time.perf_counter() - t0
-        size_mb = (tmp_path / "synth_100k.mpgo").stat().st_size / 1024 / 1024
+        size_mb = (tmp_path / "synth_100k.tio").stat().st_size / 1024 / 1024
         print(f"\n[bench] write 100K spectra: {elapsed:.2f}s, {size_mb:.1f} MB")
         # Soft target: 30s. Allow 90s on slow runners.
         assert elapsed < 90.0, f"100K write took {elapsed:.2f}s — investigate"
@@ -107,7 +107,7 @@ class TestLargeFile:
         # Copy the fixture so the encrypt-in-place doesn't poison
         # other tests sharing the module-scoped synth_100k.
         import shutil
-        local = tmp_path / "for_encrypt.mpgo"
+        local = tmp_path / "for_encrypt.tio"
         shutil.copyfile(synth_100k, local)
         with SpectralDataset.open(local, writable=True) as ds:
             run = ds.ms_runs["run_0001"]
@@ -119,7 +119,7 @@ class TestLargeFile:
 
     def test_sign_100k(self, synth_100k: Path, tmp_path: Path) -> None:
         import shutil
-        local = tmp_path / "for_sign.mpgo"
+        local = tmp_path / "for_sign.tio"
         shutil.copyfile(synth_100k, local)
         with SpectralDataset.open(local, writable=True) as ds:
             sig_group = ds.ms_runs["run_0001"].group.open_group("signal_channels")

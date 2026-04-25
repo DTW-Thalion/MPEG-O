@@ -19,14 +19,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.acquisition_run import AcquisitionRun
-from mpeg_o.enums import AcquisitionMode, Compression, Precision
-from mpeg_o.providers import open_provider
-from mpeg_o.providers.hdf5 import Hdf5Provider
-from mpeg_o.providers.memory import MemoryProvider
-from mpeg_o.providers.sqlite import SqliteProvider
-from mpeg_o.spectral_dataset import SpectralDataset, WrittenRun
-from mpeg_o.transport.packets import (
+from ttio.acquisition_run import AcquisitionRun
+from ttio.enums import AcquisitionMode, Compression, Precision
+from ttio.providers import open_provider
+from ttio.providers.hdf5 import Hdf5Provider
+from ttio.providers.memory import MemoryProvider
+from ttio.providers.sqlite import SqliteProvider
+from ttio.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.transport.packets import (
     SPECTRUM_CLASS_GENOMIC_READ,
     AccessUnit,
 )
@@ -41,7 +41,7 @@ def _provider_url(provider: str, tmp_path: Path) -> str:
     if provider == "memory":
         return f"memory://m79-{provider}-{id(tmp_path)}"
     if provider == "sqlite":
-        return str(tmp_path / "m79.mpgo.sqlite")
+        return str(tmp_path / "m79.tio.sqlite")
     if provider == "zarr":
         return f"zarr://{tmp_path / 'm79.zarr'}"
     raise ValueError(provider)
@@ -174,7 +174,7 @@ def test_access_unit_spectrum_class_genomic_read_roundtrip() -> None:
 
 
 def _write_minimal_run(path: Path) -> None:
-    """Smallest valid v1.1 .mpgo with one MS run for modality tests."""
+    """Smallest valid v1.1 .tio with one MS run for modality tests."""
     n_spec, n_pts = 2, 4
     offsets = np.arange(n_spec, dtype=np.uint64) * n_pts
     lengths = np.full(n_spec, n_pts, dtype=np.uint32)
@@ -182,7 +182,7 @@ def _write_minimal_run(path: Path) -> None:
     intensity = np.tile(
         np.linspace(1.0, 1000.0, n_pts), n_spec).astype(np.float64)
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -197,7 +197,7 @@ def _write_minimal_run(path: Path) -> None:
     SpectralDataset.write_minimal(
         path,
         title="m79 modality",
-        isa_investigation_id="MPGO:m79",
+        isa_investigation_id="TTIO:m79",
         runs={"run_0001": run},
     )
 
@@ -206,7 +206,7 @@ def test_modality_default_for_v0_10_files(tmp_path: Path) -> None:
     """Files written without a ``@modality`` attribute (= every v0.10
     file) read as ``"mass_spectrometry"`` so existing readers don't
     break on the new field."""
-    out = tmp_path / "default.mpgo"
+    out = tmp_path / "default.tio"
     _write_minimal_run(out)
 
     with SpectralDataset.open(out) as ds:
@@ -220,7 +220,7 @@ def test_modality_explicit_genomic_sequencing(tmp_path: Path) -> None:
     the read side; the write here goes through the StorageGroup
     attribute API directly so we don't need GenomicRun.write_to_group
     (M74)."""
-    out = tmp_path / "explicit.mpgo"
+    out = tmp_path / "explicit.tio"
     _write_minimal_run(out)
 
     # Re-open in read-write mode and stamp the attribute. SpectralDataset

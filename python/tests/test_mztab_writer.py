@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o.exporters import mztab as mztab_writer
-from mpeg_o.identification import Identification
-from mpeg_o.importers import mztab as mztab_reader
-from mpeg_o.quantification import Quantification
+from ttio.exporters import mztab as mztab_writer
+from ttio.identification import Identification
+from ttio.importers import mztab as mztab_reader
+from ttio.quantification import Quantification
 
 
 def _idents() -> list[Identification]:
@@ -173,18 +173,18 @@ def test_tabs_in_field_values_are_escaped(tmp_path: Path) -> None:
     assert "nasty\tvalue" not in text
 
 
-def test_write_dataset_convenience_on_real_mpgo(tmp_path: Path) -> None:
+def test_write_dataset_convenience_on_real_ttio(tmp_path: Path) -> None:
     """write_dataset() lifts the ids + quants out of an open
-    SpectralDataset and delegates to write(). Compose a real .mpgo via
+    SpectralDataset and delegates to write(). Compose a real .tio via
     write_minimal and verify the bytes match a direct write() call."""
-    from mpeg_o import SpectralDataset
-    from mpeg_o.spectral_dataset import WrittenRun
-    from mpeg_o.enums import AcquisitionMode
+    from ttio import SpectralDataset
+    from ttio.spectral_dataset import WrittenRun
+    from ttio.enums import AcquisitionMode
     import numpy as np
 
-    mpgo_path = tmp_path / "source.mpgo"
+    ttio_path = tmp_path / "source.tio"
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={
             "mz": np.array([100.0, 200.0], dtype=np.float64),
@@ -200,7 +200,7 @@ def test_write_dataset_convenience_on_real_mpgo(tmp_path: Path) -> None:
         base_peak_intensities=np.array([2.0]),
     )
     SpectralDataset.write_minimal(
-        mpgo_path, title="convenience",
+        ttio_path, title="convenience",
         isa_investigation_id="ISA-CONV",
         runs={"run1": run},
         identifications=_idents(),
@@ -212,7 +212,7 @@ def test_write_dataset_convenience_on_real_mpgo(tmp_path: Path) -> None:
     mztab_writer.write(direct_path,
         identifications=_idents(), quantifications=_quants(),
         version="1.0", title="convenience")
-    with SpectralDataset.open(mpgo_path) as ds:
+    with SpectralDataset.open(ttio_path) as ds:
         mztab_writer.write_dataset(ds, conv_path, version="1.0")
 
     # The convenience path threads the dataset's title through

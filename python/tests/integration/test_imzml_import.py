@@ -7,7 +7,7 @@ Covers HANDOFF M59 acceptance:
 * Processed-mode reference imports correctly (per-pixel m/z arrays).
 * Spatial coordinates map onto the pixel grid.
 * m/z and intensity bytes round-trip through ``ImzMLImport`` to a
-  readable .mpgo via :meth:`SpectralDataset.open`.
+  readable .tio via :meth:`SpectralDataset.open`.
 * Hard error on UUID mismatch (gotcha 49).
 * Hard error on offsets that read past .ibd EOF (gotcha 48).
 
@@ -26,8 +26,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset
-from mpeg_o.importers.imzml import (
+from ttio import SpectralDataset
+from ttio.importers.imzml import (
     ImzMLBinaryError,
     ImzMLImport,
     ImzMLParseError,
@@ -281,16 +281,16 @@ def test_no_mode_cv_raises(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Round-trip into .mpgo and back through SpectralDataset.
+# Round-trip into .tio and back through SpectralDataset.
 # --------------------------------------------------------------------------- #
 
-def test_to_mpgo_round_trip(tmp_path: Path) -> None:
+def test_to_ttio_round_trip(tmp_path: Path) -> None:
     imzml, _ibd, meta = _build_pair(
         tmp_path, mode="processed", grid_x=2, grid_y=2, n_peaks=10,
     )
     parsed = imzml_read(imzml)
-    out = tmp_path / "imaging.mpgo"
-    parsed.to_mpgo(out, title="synth IMS")
+    out = tmp_path / "imaging.tio"
+    parsed.to_ttio(out, title="synth IMS")
     with SpectralDataset.open(out) as ds:
         run = ds.ms_runs["imzml_pixels"]
         assert len(run) == 4
@@ -325,8 +325,8 @@ def test_continuous_round_trip_records_mode(tmp_path: Path) -> None:
         tmp_path, mode="continuous", grid_x=2, grid_y=1, n_peaks=4,
     )
     parsed = imzml_read(imzml)
-    out = tmp_path / "cont.mpgo"
-    parsed.to_mpgo(out)
+    out = tmp_path / "cont.tio"
+    parsed.to_ttio(out)
     with SpectralDataset.open(out) as ds:
         prov = ds.provenance()
         assert prov[0].parameters["imzml_mode"] == "continuous"

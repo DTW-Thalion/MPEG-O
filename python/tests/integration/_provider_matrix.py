@@ -50,14 +50,14 @@ def maybe_skip_provider(provider: str) -> None:
 def provider_url(provider: str, tmp_path: Path, stem: str = "rt") -> str:
     """Return a URL/path suitable for the given provider.
 
-    ``hdf5`` returns a bare ``.mpgo`` path; the other providers use
+    ``hdf5`` returns a bare ``.tio`` path; the other providers use
     their canonical URL schemes so :meth:`SpectralDataset.open` routes
     correctly. The unique-id suffix on Memory URLs prevents store
     name collisions across parametrized matrix cells running in the
     same process.
     """
     if provider == "hdf5":
-        return str(tmp_path / f"{stem}.mpgo")
+        return str(tmp_path / f"{stem}.tio")
     if provider == "memory":
         return f"memory://{stem}-{uuid.uuid4().hex[:8]}"
     if provider == "sqlite":

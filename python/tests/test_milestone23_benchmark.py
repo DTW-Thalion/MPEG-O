@@ -24,13 +24,13 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.enums import AcquisitionMode
-from mpeg_o.identification import Identification
+from ttio import SpectralDataset, WrittenRun
+from ttio.enums import AcquisitionMode
+from ttio.identification import Identification
 
 
 def _build_fixture(tmp_path: Path, n_ids: int = 200) -> Path:
-    path = tmp_path / "m23_bench.mpgo"
+    path = tmp_path / "m23_bench.tio"
     ids = [
         Identification(
             run_name="run0",

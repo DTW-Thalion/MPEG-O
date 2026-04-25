@@ -17,10 +17,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o.enums import Compression, Precision
-from mpeg_o.providers.hdf5 import Hdf5Provider
-from mpeg_o.providers.memory import MemoryProvider
-from mpeg_o.providers.sqlite import SqliteProvider
+from ttio.enums import Compression, Precision
+from ttio.providers.hdf5 import Hdf5Provider
+from ttio.providers.memory import MemoryProvider
+from ttio.providers.sqlite import SqliteProvider
 
 
 def _build_3d_cube() -> np.ndarray:
@@ -95,7 +95,7 @@ def test_rank3_cube_roundtrip_memory() -> None:
 
 
 def test_rank3_cube_roundtrip_sqlite(tmp_path: Path) -> None:
-    path = tmp_path / "cube.mpgo.sqlite"
+    path = tmp_path / "cube.tio.sqlite"
     got = _roundtrip_3d(SqliteProvider, str(path))
     expected = _build_3d_cube()
     assert got.shape == expected.shape
@@ -121,7 +121,7 @@ def test_rank2_slab_roundtrip_memory() -> None:
 
 
 def test_rank2_slab_roundtrip_sqlite(tmp_path: Path) -> None:
-    path = tmp_path / "slab.mpgo.sqlite"
+    path = tmp_path / "slab.tio.sqlite"
     got = _roundtrip_2d(SqliteProvider, str(path))
     np.testing.assert_array_equal(got, _build_2d_slab())
 
@@ -182,7 +182,7 @@ def test_chunk_hint_honoured_by_hdf5(tmp_path: Path) -> None:
 @pytest.mark.parametrize("provider_name,factory,path_template", [
     ("hdf5",   Hdf5Provider,   "nd_sanity.h5"),
     ("memory", MemoryProvider, "memory://m45-sanity"),
-    ("sqlite", SqliteProvider, "nd_sanity.mpgo.sqlite"),
+    ("sqlite", SqliteProvider, "nd_sanity.tio.sqlite"),
 ])
 def test_shape_attribute_preserved_across_backends(
         provider_name: str, factory, path_template: str,

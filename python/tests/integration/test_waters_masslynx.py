@@ -4,7 +4,7 @@ Mirrors the Thermo delegation test style (``test_thermo_delegation.py``):
 
 * Error-contract tests always run — missing converter / missing input
   directory / wrong explicit path.
-* Real-fixture round-trip is gated on ``MPGO_MASSLYNX_FIXTURE`` +
+* Real-fixture round-trip is gated on ``TTIO_MASSLYNX_FIXTURE`` +
   a resolvable ``masslynxraw`` binary.
 * **Mock-converter test** always runs: a tiny shell script that
   behaves like a minimal ``masslynxraw`` (reads ``-i`` + ``-o`` flags,
@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from mpeg_o.importers import waters_masslynx
-from mpeg_o.importers.waters_masslynx import WatersMassLynxError
+from ttio.importers import waters_masslynx
+from ttio.importers.waters_masslynx import WatersMassLynxError
 
 
 MASSLYNX_BIN = shutil.which("masslynxraw") or shutil.which("MassLynxRaw.exe")
@@ -115,8 +115,8 @@ if [ -z "$input" ] || [ -z "$output" ]; then
     exit 2
 fi
 stem=$(basename "$input" .raw)
-cat > "$output/$stem.mzML" <<'MPGO_MOCK_MZML'
-{mzml_stub}MPGO_MOCK_MZML
+cat > "$output/$stem.mzML" <<'TTIO_MOCK_MZML'
+{mzml_stub}TTIO_MOCK_MZML
 """)
     mock.chmod(mock.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
@@ -140,20 +140,20 @@ def test_env_var_override(tmp_path: Path, monkeypatch) -> None:
 
 @pytest.mark.requires_network  # marker also used for vendor-binary gating
 def test_real_masslynx_roundtrip(tmp_path: Path) -> None:
-    """End-to-end: real .raw → .mpgo via a real masslynxraw binary.
+    """End-to-end: real .raw → .tio via a real masslynxraw binary.
 
-    Skipped unless both ``MPGO_MASSLYNX_FIXTURE`` is set to a
+    Skipped unless both ``TTIO_MASSLYNX_FIXTURE`` is set to a
     Waters ``.raw`` directory AND a ``masslynxraw`` binary is
     available on PATH.
     """
-    fixture_env = os.environ.get("MPGO_MASSLYNX_FIXTURE")
+    fixture_env = os.environ.get("TTIO_MASSLYNX_FIXTURE")
     if not fixture_env:
-        pytest.skip("MPGO_MASSLYNX_FIXTURE not set; no real Waters .raw available")
+        pytest.skip("TTIO_MASSLYNX_FIXTURE not set; no real Waters .raw available")
     if not MASSLYNX_BIN:
         pytest.skip("masslynxraw / MassLynxRaw.exe not on PATH")
     raw = Path(fixture_env)
     if not raw.is_dir():
-        pytest.skip(f"MPGO_MASSLYNX_FIXTURE={raw} not a directory")
+        pytest.skip(f"TTIO_MASSLYNX_FIXTURE={raw} not a directory")
 
     result = waters_masslynx.read(raw)
     assert result.spectrum_count > 0

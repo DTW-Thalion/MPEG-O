@@ -2,13 +2,13 @@
 
 Covers four dimensions:
 
-1. URL detection — :func:`mpeg_o.remote.is_remote_url` routes local
+1. URL detection — :func:`ttio.remote.is_remote_url` routes local
    paths and URL schemes correctly.
 2. ``file://`` round trip — :meth:`SpectralDataset.open` can consume a
    ``file://`` URL via fsspec and produce the same in-memory view as a
    local path open.
 3. ``http://`` lazy access — a background ``ThreadingHTTPServer``
-   serves a large ``.mpgo`` over HTTP with range-request support; the
+   serves a large ``.tio`` over HTTP with range-request support; the
    Python reader loads metadata only and random-access-reads individual
    spectra without downloading the whole file.
 4. Benchmark — 10 random spectra from a 1000-spectrum file are pulled
@@ -27,9 +27,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from mpeg_o import SpectralDataset, WrittenRun
-from mpeg_o.enums import AcquisitionMode
-from mpeg_o.remote import is_remote_url, open_remote_file
+from ttio import SpectralDataset, WrittenRun
+from ttio.enums import AcquisitionMode
+from ttio.remote import is_remote_url, open_remote_file
 
 
 # ---------------------------------------------------------------- fixtures ---
@@ -46,7 +46,7 @@ def _make_run(n_spec: int, n_pts: int) -> WrittenRun:
     mz = (100.0 + rng.uniform(0.0, 1500.0, size=n_spec * n_pts)).astype(np.float64)
     intensity = (1.0 + rng.exponential(100.0, size=n_spec * n_pts)).astype(np.float64)
     return WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -61,25 +61,25 @@ def _make_run(n_spec: int, n_pts: int) -> WrittenRun:
 
 
 @pytest.fixture()
-def small_mpgo(tmp_path: Path) -> Path:
-    out = tmp_path / "small.mpgo"
+def small_ttio(tmp_path: Path) -> Path:
+    out = tmp_path / "small.tio"
     SpectralDataset.write_minimal(
-        out, title="remote small", isa_investigation_id="MPGO:remote",
+        out, title="remote small", isa_investigation_id="TTIO:remote",
         runs={"run_0001": _make_run(n_spec=5, n_pts=8)},
     )
     return out
 
 
 @pytest.fixture(scope="module")
-def large_mpgo(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def large_ttio(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """1000-spectrum fixture, built once per module so the benchmark
     test pays the construction cost only once."""
     tmp_path = tmp_path_factory.mktemp("m20_large")
-    out = tmp_path / "large.mpgo"
+    out = tmp_path / "large.tio"
     # 1000 × 1024 × 8 B × 2 channels ≈ 16 MB. Bigger than the 5 MB default
     # fsspec block cache so lazy reads are observable.
     SpectralDataset.write_minimal(
-        out, title="remote large", isa_investigation_id="MPGO:large",
+        out, title="remote large", isa_investigation_id="TTIO:large",
         runs={"run_0001": _make_run(n_spec=1000, n_pts=1024)},
     )
     return out
@@ -227,24 +227,24 @@ def _serve_directory(directory: Path):
 
 
 def test_is_remote_url_detects_schemes() -> None:
-    assert is_remote_url("s3://bucket/file.mpgo")
-    assert is_remote_url("http://example.com/file.mpgo")
-    assert is_remote_url("https://example.com/file.mpgo")
-    assert is_remote_url("gs://bucket/file.mpgo")
-    assert is_remote_url("az://container/file.mpgo")
-    assert is_remote_url("file:///tmp/file.mpgo")
+    assert is_remote_url("s3://bucket/file.tio")
+    assert is_remote_url("http://example.com/file.tio")
+    assert is_remote_url("https://example.com/file.tio")
+    assert is_remote_url("gs://bucket/file.tio")
+    assert is_remote_url("az://container/file.tio")
+    assert is_remote_url("file:///tmp/file.tio")
 
 
 def test_is_remote_url_ignores_local_paths(tmp_path: Path) -> None:
-    assert not is_remote_url(tmp_path / "local.mpgo")
-    assert not is_remote_url("./relative/local.mpgo")
-    assert not is_remote_url("/absolute/local.mpgo")
+    assert not is_remote_url(tmp_path / "local.tio")
+    assert not is_remote_url("./relative/local.tio")
+    assert not is_remote_url("/absolute/local.tio")
     # Windows drive letter parses as scheme "c" — must NOT be routed.
-    assert not is_remote_url(r"C:\Users\toddw\local.mpgo")
+    assert not is_remote_url(r"C:\Users\toddw\local.tio")
 
 
-def test_file_url_round_trip(small_mpgo: Path) -> None:
-    url = f"file://{small_mpgo.resolve()}"
+def test_file_url_round_trip(small_ttio: Path) -> None:
+    url = f"file://{small_ttio.resolve()}"
     with SpectralDataset.open(url) as ds:
         assert ds.title == "remote small"
         assert list(ds.ms_runs.keys()) == ["run_0001"]
@@ -254,9 +254,9 @@ def test_file_url_round_trip(small_mpgo: Path) -> None:
         assert first.mz_array.data.shape == (8,)
 
 
-def test_http_remote_open_and_lazy_spectrum_read(small_mpgo: Path) -> None:
-    with _serve_directory(small_mpgo.parent) as (base_url, handler_cls):
-        url = f"{base_url}/{small_mpgo.name}"
+def test_http_remote_open_and_lazy_spectrum_read(small_ttio: Path) -> None:
+    with _serve_directory(small_ttio.parent) as (base_url, handler_cls):
+        url = f"{base_url}/{small_ttio.name}"
         with SpectralDataset.open(url) as ds:
             assert ds.title == "remote small"
             run = ds.ms_runs["run_0001"]
@@ -270,16 +270,16 @@ def test_http_remote_open_and_lazy_spectrum_read(small_mpgo: Path) -> None:
     # metadata chunks. For a real large file this would be a tiny
     # fraction of the total.
     assert served > 0
-    assert served < 2 * small_mpgo.stat().st_size
+    assert served < 2 * small_ttio.stat().st_size
 
 
-def test_http_remote_random_access_benchmark(large_mpgo: Path) -> None:
+def test_http_remote_random_access_benchmark(large_ttio: Path) -> None:
     """Acceptance: 10 random spectra from a 1000-spectrum file in
     under 2 seconds via HTTP + fsspec + h5py, plus a sanity check
     that we did not download the entire file."""
-    file_size = large_mpgo.stat().st_size
-    with _serve_directory(large_mpgo.parent) as (base_url, handler_cls):
-        url = f"{base_url}/{large_mpgo.name}"
+    file_size = large_ttio.stat().st_size
+    with _serve_directory(large_ttio.parent) as (base_url, handler_cls):
+        url = f"{base_url}/{large_ttio.name}"
 
         # Pin a small fsspec block size so each HDF5 chunk pull round-trips
         # as its own HTTP range request. Without this, fsspec's default

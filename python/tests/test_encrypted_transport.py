@@ -1,7 +1,7 @@
 """v1.0 encrypted transport round-trip tests.
 
-Covers the full loop: plaintext → encrypted .mpgo → transport
-stream → decrypted .mpgo → decrypt plaintext, and variants with
+Covers the full loop: plaintext → encrypted .tio → transport
+stream → decrypted .tio → decrypt plaintext, and variants with
 encrypted AU headers.
 """
 from __future__ import annotations
@@ -15,20 +15,20 @@ import pytest
 pytest.importorskip("cryptography")
 pytest.importorskip("h5py")
 
-from mpeg_o.enums import AcquisitionMode, Polarity
-from mpeg_o.encryption_per_au import decrypt_per_au_file, encrypt_per_au_file
-from mpeg_o.feature_flags import (
+from ttio.enums import AcquisitionMode, Polarity
+from ttio.encryption_per_au import decrypt_per_au_file, encrypt_per_au_file
+from ttio.feature_flags import (
     OPT_ENCRYPTED_AU_HEADERS,
     OPT_PER_AU_ENCRYPTION,
 )
-from mpeg_o.spectral_dataset import SpectralDataset, WrittenRun
-from mpeg_o.transport.codec import TransportReader, TransportWriter
-from mpeg_o.transport.encrypted import (
+from ttio.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.transport.codec import TransportReader, TransportWriter
+from ttio.transport.encrypted import (
     is_per_au_encrypted,
     read_encrypted_to_file,
     write_encrypted_dataset,
 )
-from mpeg_o.transport.packets import PacketFlag, PacketType
+from ttio.transport.packets import PacketFlag, PacketType
 
 
 KEY = b"\xCD" * 32
@@ -59,7 +59,7 @@ def _make_plaintext(path: Path, n_spectra: int = 5,
         dtype="<f8",
     )
     run = WrittenRun(
-        spectrum_class="MPGOMassSpectrum",
+        spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
         channel_data={"mz": mz, "intensity": intensity},
         offsets=offsets,
@@ -83,11 +83,11 @@ def _make_plaintext(path: Path, n_spectra: int = 5,
 class TestDetection:
 
     def test_is_per_au_encrypted_before_encrypt(self, tmp_path):
-        p = _make_plaintext(tmp_path / "src.mpgo")
+        p = _make_plaintext(tmp_path / "src.tio")
         assert not is_per_au_encrypted(str(p))
 
     def test_is_per_au_encrypted_after_encrypt(self, tmp_path):
-        p = _make_plaintext(tmp_path / "src.mpgo")
+        p = _make_plaintext(tmp_path / "src.tio")
         encrypt_per_au_file(str(p), KEY)
         assert is_per_au_encrypted(str(p))
 
@@ -96,7 +96,7 @@ class TestEncryptedChannelRoundTrip:
     """ENCRYPTED-only mode (plaintext filter header)."""
 
     def _encrypt_then_stream(self, tmp_path: Path):
-        src = _make_plaintext(tmp_path / "src.mpgo")
+        src = _make_plaintext(tmp_path / "src.tio")
         encrypt_per_au_file(str(src), KEY)
         stream = io.BytesIO()
         with TransportWriter(stream) as tw:
@@ -122,7 +122,7 @@ class TestEncryptedChannelRoundTrip:
 
     def test_full_roundtrip(self, tmp_path):
         src, stream = self._encrypt_then_stream(tmp_path)
-        rt_path = tmp_path / "rt.mpgo"
+        rt_path = tmp_path / "rt.tio"
         meta = read_encrypted_to_file(stream, rt_path)
         assert meta["title"] == "encrypted transport fixture"
         assert meta["runs"]["run_0001"]["n_spectra"] == 5
@@ -140,7 +140,7 @@ class TestEncryptedHeaderRoundTrip:
     """ENCRYPTED | ENCRYPTED_HEADER mode."""
 
     def _encrypt_headers_then_stream(self, tmp_path: Path):
-        src = _make_plaintext(tmp_path / "src.mpgo")
+        src = _make_plaintext(tmp_path / "src.tio")
         encrypt_per_au_file(str(src), KEY, encrypt_headers=True)
         stream = io.BytesIO()
         with TransportWriter(stream) as tw:
@@ -158,7 +158,7 @@ class TestEncryptedHeaderRoundTrip:
 
     def test_full_roundtrip_with_headers(self, tmp_path):
         src, stream = self._encrypt_headers_then_stream(tmp_path)
-        rt_path = tmp_path / "rt.mpgo"
+        rt_path = tmp_path / "rt.tio"
         meta = read_encrypted_to_file(stream, rt_path)
         assert meta["runs"]["run_0001"]["encrypted_headers"] is True
         assert is_per_au_encrypted(str(rt_path))
@@ -166,7 +166,7 @@ class TestEncryptedHeaderRoundTrip:
         # Both files should carry opt_encrypted_au_headers.
         import h5py
         with h5py.File(str(rt_path), "r") as f:
-            raw = f.attrs.get("mpeg_o_features", b"[]")
+            raw = f.attrs.get("ttio_features", b"[]")
             if isinstance(raw, bytes):
                 raw = raw.decode()
             assert OPT_ENCRYPTED_AU_HEADERS in raw
