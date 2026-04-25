@@ -125,3 +125,32 @@ def test_genomic_index_indices_for_flag():
     assert idx.indices_for_flag(0x10) == [3]
     # Read 4 has flag 0x1 (paired)
     assert idx.indices_for_flag(0x1) == [4]
+
+
+def test_written_genomic_run_construction():
+    from ttio.written_genomic_run import WrittenGenomicRun
+
+    run = WrittenGenomicRun(
+        acquisition_mode=7,  # GENOMIC_WGS
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="NA12878",
+        positions=np.zeros(2, dtype=np.int64),
+        mapping_qualities=np.zeros(2, dtype=np.uint8),
+        flags=np.zeros(2, dtype=np.uint32),
+        sequences=np.zeros(300, dtype=np.uint8),
+        qualities=np.zeros(300, dtype=np.uint8),
+        offsets=np.array([0, 150], dtype=np.uint64),
+        lengths=np.full(2, 150, dtype=np.uint32),
+        cigars=["150M", "150M"],
+        read_names=["r1", "r2"],
+        mate_chromosomes=["", ""],
+        mate_positions=np.full(2, -1, dtype=np.int64),
+        template_lengths=np.zeros(2, dtype=np.int32),
+        chromosomes=["chr1", "chr1"],
+    )
+    assert run.acquisition_mode == 7
+    assert run.reference_uri == "GRCh38.p14"
+    assert len(run.cigars) == 2
+    assert run.signal_compression == "gzip"  # default
+    assert run.provenance_records == []      # default
