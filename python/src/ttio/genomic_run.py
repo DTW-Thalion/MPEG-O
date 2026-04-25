@@ -35,15 +35,12 @@ class GenomicRun:
     group: "StorageGroup"
 
     @classmethod
-    def open(
-        cls,
-        parent_group: "StorageGroup | object",
-        name: str,
-    ) -> "GenomicRun":
-        """Open a GenomicRun from parent_group[name].
+    def open(cls, group, name: str) -> "GenomicRun":
+        """Open an existing genomic_runs/<name>/ group.
 
-        Accepts either a StorageGroup (provider path) or an h5py.Group
-        (HDF5 fast path) — mirrors AcquisitionRun.open.
+        Mirrors :meth:`ttio.acquisition_run.AcquisitionRun.open`: the
+        caller resolves the child group; this classmethod wraps the
+        provided handle into a StorageGroup and constructs the run.
         """
-        sgroup = _wrap_hdf5_group(parent_group)
-        return cls(name=name, group=sgroup.open_group(name))
+        sgroup = _wrap_hdf5_group(group)
+        return cls(name=name, group=sgroup)

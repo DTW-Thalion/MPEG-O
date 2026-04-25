@@ -238,7 +238,7 @@ class SpectralDataset:
             )
             for name in names:
                 if g_group.has_child(name):
-                    genomic_runs_map[name] = GenomicRun.open(g_group, name)
+                    genomic_runs_map[name] = GenomicRun.open(g_group.open_group(name), name)
 
         return cls(
             path=path,
@@ -305,7 +305,7 @@ class SpectralDataset:
             names = _split_run_names(io.read_string_attr(g_group, "_run_names", default=""))
             for name in names:
                 if name in g_group:
-                    genomic_runs_map[name] = GenomicRun.open(g_group, name)
+                    genomic_runs_map[name] = GenomicRun.open(g_group[name], name)
 
         return cls(
             path=path,
