@@ -11,6 +11,9 @@
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "Providers/TTIOProviderRegistry.h"
+#include <unistd.h>
 
 // ── AlignedRead value class ────────────────────────────────────────
 
@@ -178,6 +181,53 @@ static void testWrittenGenomicRunConstruction(void)
          "M82: signalCompression preserved");
 }
 
+// ── GenomicIndex disk round-trip ───────────────────────────────────
+
+static void testGenomicIndexDiskRoundTrip(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82idx_%d.h5", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    TTIOGenomicIndex *original = makeIndex6();
+    NSError *err = nil;
+
+    id<TTIOStorageProvider> w = [[TTIOProviderRegistry sharedRegistry]
+        openURL:path
+           mode:TTIOStorageOpenModeCreate
+       provider:@"hdf5"
+          error:&err];
+    PASS(w != nil, "M82: HDF5 provider opens for index round-trip");
+    id<TTIOStorageGroup> root = [w rootGroupWithError:&err];
+    id<TTIOStorageGroup> idxGroup = [root createGroupNamed:@"genomic_index" error:&err];
+    PASS([original writeToGroup:idxGroup error:&err], "M82: GenomicIndex.write");
+    [w close];
+
+    id<TTIOStorageProvider> r = [[TTIOProviderRegistry sharedRegistry]
+        openURL:path
+           mode:TTIOStorageOpenModeRead
+       provider:@"hdf5"
+          error:&err];
+    id<TTIOStorageGroup> root2 = [r rootGroupWithError:&err];
+    id<TTIOStorageGroup> idxGroup2 = [root2 openGroupNamed:@"genomic_index" error:&err];
+    TTIOGenomicIndex *loaded = [TTIOGenomicIndex readFromGroup:idxGroup2 error:&err];
+    PASS(loaded != nil, "M82: GenomicIndex.read");
+
+    PASS(loaded.count == original.count, "M82: index count round-trips");
+    BOOL allMatch = YES;
+    for (NSUInteger i = 0; i < original.count; i++) {
+        if ([loaded offsetAt:i] != [original offsetAt:i]) allMatch = NO;
+        if ([loaded lengthAt:i] != [original lengthAt:i]) allMatch = NO;
+        if ([loaded positionAt:i] != [original positionAt:i]) allMatch = NO;
+        if ([loaded mappingQualityAt:i] != [original mappingQualityAt:i]) allMatch = NO;
+        if ([loaded flagsAt:i] != [original flagsAt:i]) allMatch = NO;
+        if (![[loaded chromosomeAt:i] isEqualToString:[original chromosomeAt:i]]) allMatch = NO;
+    }
+    PASS(allMatch, "M82: all 6 columns round-trip byte-exactly");
+
+    [r close];
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -185,5 +235,6 @@ void testM82GenomicRun(void)
     testAlignedReadEquality();
     testGenomicIndexInMemory();
     testWrittenGenomicRunConstruction();
+    testGenomicIndexDiskRoundTrip();
     // Subsequent tasks append more test functions called from here.
 }
