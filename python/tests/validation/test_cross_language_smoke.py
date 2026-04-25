@@ -87,7 +87,7 @@ def _resolve_java_verify() -> tuple[list[str], dict[str, str]] | None:
     classes = _REPO_ROOT / "java" / "target" / "classes"
     if not classes.is_dir():
         return None
-    if not (classes / "com" / "dtwthalion" / "ttio" / "tools" / "TtioVerify.class").is_file():
+    if not (classes / "global" / "thalion" / "ttio" / "tools" / "TtioVerify.class").is_file():
         return None
     full_cp = f"{classes}:{cp}"
     env = os.environ.copy()

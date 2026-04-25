@@ -187,7 +187,7 @@ The harness:
 Format: sorted keys, tight inner JSON, one record per line, LF endings,
 C99 `%.17g` floats. Implementations live in
 `ttio/tools/_canonical_json.py`,
-`com/dtwthalion/ttio/tools/CanonicalJson.java`, and the static helpers
+`global/thalion/ttio/tools/CanonicalJson.java`, and the static helpers
 in `objc/Tools/TtioDumpIdentifications.m`.
 
 The 9-way interop grid (3 writers × 3 dumpers) called out in HANDOFF.md

@@ -117,7 +117,7 @@ Scope of the Java + ObjC ZarrProviders:
    your backend. The contract tests cover group/attribute/primitive/
    compound/N-D round-trips plus canonical-bytes parity.
 4. Cross-language parity: once the Python impl is stable, port to
-   Java (`java/src/main/java/com/dtwthalion/ttio/providers/`) and
+   Java (`java/src/main/java/global/thalion/ttio/providers/`) and
    Objective-C (`objc/Source/Providers/`). Both mirror the Python
    class and method shapes.
 

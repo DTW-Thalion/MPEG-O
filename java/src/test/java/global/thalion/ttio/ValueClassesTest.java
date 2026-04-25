@@ -325,7 +325,7 @@ class ValueClassesTest {
 
     @Test
     void verifierStatusWrapping() {
-        byte[] data = "hello, mpeg-o".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] data = "hello, ttio".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         byte[] key = new byte[32];
         java.util.Arrays.fill(key, (byte) '0');
 
@@ -360,7 +360,7 @@ class ValueClassesTest {
     void encryptionRoundTrip() {
         byte[] key = new byte[32];
         java.util.Arrays.fill(key, (byte) '0');
-        byte[] plaintext = "hello, mpeg-o encryption".getBytes(
+        byte[] plaintext = "hello, ttio encryption".getBytes(
             java.nio.charset.StandardCharsets.UTF_8);
 
         global.thalion.ttio.protection.EncryptionManager.EncryptResult r =
@@ -384,7 +384,7 @@ class ValueClassesTest {
 
     @Test
     void signatureRoundTrip() {
-        byte[] data = "hello, mpeg-o signatures".getBytes(
+        byte[] data = "hello, ttio signatures".getBytes(
             java.nio.charset.StandardCharsets.UTF_8);
         byte[] key = new byte[32];
         java.util.Arrays.fill(key, (byte) '0');

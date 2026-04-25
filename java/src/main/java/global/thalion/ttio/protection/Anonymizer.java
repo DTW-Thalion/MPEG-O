@@ -191,7 +191,7 @@ public class Anonymizer {
         params.put("metadata_fields_stripped", String.valueOf(metadataFieldsStripped));
 
         ProvenanceRecord anonProv = ProvenanceRecord.of(
-                "mpeg-o anonymizer v0.4", params, List.of(), List.of());
+                "ttio anonymizer v0.4", params, List.of(), List.of());
 
         List<ProvenanceRecord> prov = new ArrayList<>(source.provenanceRecords());
         prov.add(anonProv);

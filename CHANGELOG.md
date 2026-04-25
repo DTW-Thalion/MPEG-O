@@ -11,7 +11,91 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M79 modality + genomic enumerations groundwork
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId
+
+### Renamed (M80, 2026-04-25)
+
+Repository-wide clean-sweep rebrand from MPEG-O to TTI-O. **No
+backward compatibility, no dual-read.** Files written by pre-M80
+implementations cannot be read by post-M80 implementations and
+vice-versa.
+
+- Brand: `MPEG-O` → `TTI-O` (human-readable product name).
+- Lowercase identifiers: `mpgo` → `ttio`, `mpeg_o` → `ttio` (Python
+  package), `Mpgo` → `Ttio` (mixed-case ObjC tools).
+- Uppercase identifiers: `MPGO` → `TTIO` (ObjC class prefix,
+  enum/constant prefix).
+- Python: `python/src/mpeg_o/` → `python/src/ttio/`. PyPI distribution
+  name `mpeg-o` → `ttio`. CLI scripts (`mpgo-verify`, `mpgo-sign`,
+  …) → (`ttio-verify`, `ttio-sign`, …).
+- ObjC: 91 `MPGO*`/`Mpgo*` source files renamed to `TTIO*`/`Ttio*`.
+  Library `libMPGO` → `libTTIO`. Tools (`MpgoVerify`,
+  `MpgoDumpIdentifications`, `MpgoPerAU`, …) → (`TtioVerify`,
+  `TtioDumpIdentifications`, `TtioPerAU`, …).
+- Java: package `com.dtwthalion.mpgo.*` → `com.dtwthalion.ttio.*`
+  (later corrected to `global.thalion.ttio.*` in M81). pom.xml
+  `<artifactId>mpgo</artifactId>` → `<artifactId>ttio</artifactId>`.
+- File container extension `.mpgo` → `.tio`. Transport stream
+  extension `.mots` → `.tis`.
+- Transport magic bytes `"MO"` → `"TI"` (Thalion Initiative).
+- HDF5 root attributes: `mpgo_format_version` → `ttio_format_version`,
+  `mpgo_features` → `ttio_features`, legacy `mpgo_version` →
+  `ttio_version`. All run / spectrum / identification / quantification
+  / provenance attribute prefixes likewise.
+
+### Preserved (M80)
+
+External standards, organisation, and internal debug formats are
+**not** renamed — only the project's own product name was rebranded.
+
+- `MPEG-G` (ISO/IEC 23092 — the multi-omics standard TTI-O is
+  modelled after).
+- `MPEG-2`, `MPEG-4`, `MPEG LA` (external references).
+- `DTW-Thalion` (organisation name).
+- `MPAD` (internal per-AU debug-dump magic — not a public wire
+  format).
+
+### Changed (M81, 2026-04-25)
+
+Java package root corrected from `com.dtwthalion.ttio` to
+`global.thalion.ttio` to match Thalion's actual reverse-DNS
+(`thalion.global`). The `com.dtwthalion` form would have implied
+ownership of `dtwthalion.com`. Maven Central groupId likewise
+corrected from `com.dtwthalion` to `global.thalion`. M40 publishing
+was still pending so the groupId was not yet locked on Central.
+
+- 158 .java files moved
+  `java/src/main/java/com/dtwthalion/ttio/` →
+  `java/src/main/java/global/thalion/ttio/` (and `test/`).
+- META-INF ServiceLoader file
+  `com.dtwthalion.ttio.providers.StorageProvider` →
+  `global.thalion.ttio.providers.StorageProvider`.
+- pom.xml `<groupId>com.dtwthalion</groupId>` →
+  `<groupId>global.thalion</groupId>`.
+- Cross-language references updated across 80 .py, 85 .h, 6 .m,
+  23 .md, 1 .toml, 1 .in, 1 .sh, 2 ProfileHarness*.java.
+- Generated docs regenerated (Javadoc, autogsdoc, Sphinx) so the
+  rendered API surface reflects the new paths.
+
+3 migration-narrative documents (`docs/api-review-v0.6.md`,
+`docs/superpowers/specs/2026-04-16-m41-api-review-design.md`,
+`docs/superpowers/plans/2026-04-17-m41.9-docs-assembly.md`)
+intentionally retain `com.dtwthalion` in prose as historical
+context describing the migration itself.
+
+### Verification (M80 + M81)
+
+- Python: pytest 854 passing (2 pre-existing M16 baseline
+  `test_smoke` failures with hardcoded version strings — predate
+  M80, out of scope).
+- Java: mvn test 389/389.
+- ObjC: gmake check 1817 PASS / 1 env-dep skip.
+- Cross-language conformance: full `[py/objc/java]³` matrix (61
+  cells) plus 4-provider matrix.
+
+---
+
+## [pre-rebrand] — M79 modality + genomic enumerations groundwork
 
 Purely additive groundwork for the v0.11 genomic milestone series
 (M74–M82). No on-disk wire change for v0.10/v1.0 content; v0.10
@@ -57,7 +141,7 @@ stamp the new attributes.
 
 - Python: `python/tests/test_m79_genomic_enums.py` — 18
   parametrised invocations across 7 test cases.
-- Java: `java/src/test/java/com/dtwthalion/ttio/M79GenomicEnumsTest.java`
+- Java: `java/src/test/java/global/thalion/ttio/M79GenomicEnumsTest.java`
   — 10 JUnit5 methods.
 - ObjC: `objc/Tests/TestM79GenomicEnums.m` — 27 inline `PASS`
   assertions, registered under `M79: modality + genomic enums
@@ -144,7 +228,7 @@ against Python/ObjC/Java clients.
   encrypt → close → reopen → `is_encrypted` → `decrypt` → read
   surface:
   - `python/tests/test_v1_1_encryption_parity.py` (3 tests)
-  - `java/src/test/java/com/dtwthalion/ttio/ProtectionTest.java`
+  - `java/src/test/java/global/thalion/ttio/ProtectionTest.java`
     (2 new tests: `v11EncryptedStateSurvivesCloseReopen`,
     `v11DecryptRehydratesSpectrumIntensity`)
   - `objc/Tests/TestV11EncryptionParity.m` (2 test functions,

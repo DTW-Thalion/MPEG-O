@@ -161,7 +161,7 @@ class TestInLanguageRoundTrip:
 
 def _java_cli_available() -> bool:
     target = REPO_ROOT / "java" / "target" / "classes"
-    return target.is_dir() and (target / "com" / "dtwthalion" / "ttio"
+    return target.is_dir() and (target / "global" / "thalion" / "ttio"
                                   / "tools" / "TransportEncodeCli.class").is_file()
 
 

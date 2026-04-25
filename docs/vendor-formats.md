@@ -87,7 +87,7 @@ implementation of the documented frame format.
 ### Installation
 
 ```bash
-pip install 'mpeg-o[bruker]'
+pip install 'ttio[bruker]'
 ```
 
 This pulls `opentimspy` + `opentims-bruker-bridge`. The bridge wheel
@@ -104,7 +104,7 @@ frame data. Python interpreter lookup order:
 2. `python3` on `PATH`.
 3. `python` on `PATH`.
 
-The chosen interpreter must have `mpeg-o[bruker]` installed.
+The chosen interpreter must have `ttio[bruker]` installed.
 
 ### What is recovered
 

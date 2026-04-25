@@ -331,7 +331,7 @@ the full milestone history.
       `<indexList>`:
       `objc/Source/Export/TTIOMzMLWriter.m:293`,
       `python/src/ttio/exporters/mzml.py:217`,
-      `java/src/main/java/com/dtwthalion/ttio/exporters/MzMLWriter.java:176`.
+      `java/src/main/java/global/thalion/ttio/exporters/MzMLWriter.java:176`.
       Round-trip covered by `TestMilestone24.m` and
       `test_milestone24_chromatograms.py`.
 
@@ -767,7 +767,7 @@ Direct inventory of the Python / Java / ObjC source trees against the
 three-language-parity rule (Python, Java, ObjC all expose the same
 classes **and** CLI tools; each stands alone). Verified by file-system
 enumeration of `python/src/ttio/`,
-`java/src/main/java/com/dtwthalion/ttio/`, and `objc/Source/` +
+`java/src/main/java/global/thalion/ttio/`, and `objc/Source/` +
 `objc/Tools/` at commit `4dfa103`.
 
 ### Domain model — full parity
@@ -1026,7 +1026,7 @@ v0.11 writer that does not stamp the new attributes.
   invocations across 7 test cases (UINT8 round-trip + partial read
   on each provider, codec ordinals, genomic acquisition modes,
   AccessUnit GenomicRead, modality default + explicit).
-- Java: `java/src/test/java/com/dtwthalion/ttio/M79GenomicEnumsTest.java`
+- Java: `java/src/test/java/global/thalion/ttio/M79GenomicEnumsTest.java`
   — 10 JUnit5 methods covering the same surface.
 - ObjC: `objc/Tests/TestM79GenomicEnums.m` — 27 inline `PASS`
   assertions wired into the runner under `M79: modality + genomic
@@ -1048,3 +1048,89 @@ v0.11 writer that does not stamp the new attributes.
   decoder implementations.
 - Genomic-specific AU prefix layout (replacing zeroed spectral
   fields with proper genomic metadata).
+
+---
+
+## M80 — TTI-O Rebrand Clean Sweep (2026-04-25)
+
+Five-commit, four-phase rebrand of every reference in the repository
+from MPEG-O / MPGO / mpeg_o / Mpgo → TTI-O / TTIO / ttio / Ttio.
+Container extension `.mpgo` → `.tio`, transport stream extension
+`.mots` → `.tis`, transport magic bytes `"MO"` → `"TI"`, on-disk
+HDF5 attributes `mpgo_*` → `ttio_*`. **No backward compatibility,
+no dual-read.** External standards (`MPEG-G`, `MPEG-2`, `MPEG-4`,
+`MPEG LA`), the `DTW-Thalion` org name, and the internal `MPAD`
+debug-dump magic were intentionally preserved.
+
+### Shipped (M80)
+
+- [x] **Phase 1 — Python** (`82c7ae4`). `python/src/mpeg_o` →
+      `python/src/ttio`, full content rewrite, fixture regeneration,
+      pytest 854 passing (matches pre-rebrand baseline; 2 pre-existing
+      `test_smoke` version-string failures from M16 carry through).
+- [x] **Phase 2 — ObjC** (`df9702f`). 91 `MPGO*`/`Mpgo*` files renamed
+      to `TTIO*`/`Ttio*`, library `libMPGO` → `libTTIO`, transport
+      magic byte rewrite. 1817 PASS / 1 env-dep skip.
+- [x] **Phase 3 — Java** (`dfdddde`). `com.dtwthalion.mpgo` →
+      `com.dtwthalion.ttio` (later corrected to `global.thalion.ttio`
+      in M81). pom.xml `artifactId` `mpgo` → `ttio`. 389/389 passing.
+- [x] **Phase 4 — Docs + Repo** (`87068e4`). All `.md`, sphinx,
+      autogsdoc, Javadoc HTML regenerated. CI configs, build scripts,
+      CLI tool names, fixture file paths.
+- [x] **Phase 4 fixup** (`f3267ab`). Sed-order bug: the Phase-4
+      multi-rule sed had `s/\.mpgo\b/.tio/g` running before the
+      package-qualifier rule, eating one `t` and producing
+      `com.dtwthalion.tio`. Fixed across 378 files. Lessons saved
+      to `feedback_sed_order_extension_vs_qualifier.md`.
+
+### Not yet renamed
+
+- On-disk repo dir `~/MPEG-O` (rename deferred until next session
+  when no clones are open).
+- GitHub repo URL `DTW-Thalion/MPEG-O`.
+
+---
+
+## M81 — Java reverse-DNS correction (2026-04-25)
+
+Single commit (`9c2ad31`). Thalion's domain is `thalion.global`,
+so the reverse-DNS Java package root is `global.thalion`, not
+`com.dtwthalion` (which would imply Thalion owned `dtwthalion.com`).
+M80 used the wrong root. M81 corrects it before M40 publishing
+locks the groupId on Maven Central.
+
+### Shipped (M81)
+
+- [x] **Java sources** — 158 .java files moved
+      `java/src/main/java/com/dtwthalion/ttio/` →
+      `java/src/main/java/global/thalion/ttio/` (same for `test/`),
+      preserving git rename history.
+- [x] **META-INF ServiceLoader** —
+      `com.dtwthalion.ttio.providers.StorageProvider` →
+      `global.thalion.ttio.providers.StorageProvider` (file rename
+      and contents).
+- [x] **pom.xml** — `<groupId>com.dtwthalion</groupId>` →
+      `<groupId>global.thalion</groupId>`.
+- [x] **Cross-language refs** — sed `com.dtwthalion.ttio` →
+      `global.thalion.ttio` across 80 .py, 85 .h, 6 .m, 23 .md,
+      1 .toml, 1 .in, 1 .sh, 2 ProfileHarness*.java (outside `java/`).
+- [x] **Generated docs regenerated** — Javadoc (384 html), autogsdoc
+      (131 gsdoc + 131 html), Sphinx (292 html).
+- [x] **Test suites** — Java 389/389, Python 854/856 (2 pre-existing
+      M16 baseline), ObjC 1817 + 1 env-dep. Full M80 baseline parity.
+
+### Notes
+
+- 3 migration-narrative docs (`docs/api-review-v0.6.md`,
+  `docs/superpowers/specs/2026-04-16-m41-api-review-design.md`,
+  `docs/superpowers/plans/2026-04-17-m41.9-docs-assembly.md`)
+  intentionally retain `com.dtwthalion` in prose as historical
+  context for the migration itself.
+- Sed substitution `s/com\.dtwthalion\.ttio/global.thalion.ttio/g`
+  was unambiguous: `ttio` is a leaf token, no extension collision
+  (extensions are `.tio` / `.tis`). The M80 trap could not recur.
+- Cross-language tests cache a compiled `M73Driver.class` at
+  `/tmp/ttio_m73_driver/`. The `.java` is only written when absent,
+  so a stale cache from a prior package's run will keep failing
+  compile after a package rename. Clear that directory after any
+  future Java package change.

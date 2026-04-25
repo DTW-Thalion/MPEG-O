@@ -151,7 +151,7 @@ public final class BrukerTDFReader {
      * <p>The Python interpreter is resolved in this order:
      * {@code TTIO_PYTHON} env var → {@code python3} on {@code PATH} →
      * {@code python} on {@code PATH}. The interpreter must have
-     * {@code mpeg-o[bruker]} installed.</p>
+     * {@code ttio[bruker]} installed.</p>
      *
      * @param dDir   Bruker {@code .d} directory.
      * @param output target {@code .tio} output path.
@@ -182,7 +182,7 @@ public final class BrukerTDFReader {
         } catch (IOException | InterruptedException e) {
             throw new BrukerTDFException(
                     "failed to invoke Python bruker_tdf helper "
-                    + "(install mpeg-o[bruker] and ensure python is on PATH)",
+                    + "(install ttio[bruker] and ensure python is on PATH)",
                     e);
         }
         if (!Files.isRegularFile(output)) {
