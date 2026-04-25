@@ -262,6 +262,18 @@ public interface StorageDataset extends AutoCloseable {
                 // v0.11 M79: bytes are endian-neutral; copy through.
                 yield (byte[]) raw;
             }
+            case _RESERVED_UINT16, _RESERVED_INT8 ->
+                throw new UnsupportedOperationException(
+                    "Precision " + p + " is reserved for cross-language parity");
+            case UINT64 -> {
+                // v0.11 M82: genomic index offsets, packed identically
+                // to INT64 (twos-complement is the same on the wire).
+                long[] a = (long[]) raw;
+                ByteBuffer bb = ByteBuffer.allocate(a.length * 8)
+                        .order(ByteOrder.LITTLE_ENDIAN);
+                for (long l : a) bb.putLong(l);
+                yield bb.array();
+            }
         };
     }
 

@@ -47,7 +47,27 @@ public final class Enums {
         /** 128-bit complex: two {@code double} values per element (16 bytes). */
         COMPLEX128(16),
         /** Unsigned 8-bit integer (1 byte). v0.11 M79. */
-        UINT8(1);
+        UINT8(1),
+        /**
+         * Reserved for cross-language UINT16 parity (ordinal slot 7).
+         * Python {@code Precision.UINT64 = 9} expects positions 7 and
+         * 8 to be reserved; Java pads the enum with placeholder
+         * constants so {@code UINT64.ordinal() == 9} matches.
+         * @deprecated never use directly; reserved for future extension.
+         */
+        @Deprecated _RESERVED_UINT16(2),
+        /**
+         * Reserved for cross-language INT8 parity (ordinal slot 8).
+         * @deprecated never use directly; reserved for future extension.
+         */
+        @Deprecated _RESERVED_INT8(1),
+        /**
+         * Unsigned 64-bit integer (8 bytes). v0.11 M82: genomic index
+         * offsets. Cross-language ordinal {@code = 9} matches Python's
+         * {@code Precision.UINT64} and ObjC's {@code TTIOPrecisionUInt64}.
+         * Wire format uses HDF5 native types.
+         */
+        UINT64(8);
 
         private final int elementSize;
 

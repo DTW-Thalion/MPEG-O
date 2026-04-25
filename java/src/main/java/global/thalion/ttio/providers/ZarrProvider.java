@@ -298,6 +298,10 @@ public final class ZarrProvider implements StorageProvider {
             case INT32   -> "int32";
             case UINT32  -> "uint32";
             case UINT8   -> "uint8";
+            case UINT64  -> "uint64";   // M82
+            case _RESERVED_UINT16, _RESERVED_INT8 ->
+                throw new UnsupportedOperationException(
+                    "Precision " + p + " is reserved (cross-lang parity)");
             case COMPLEX128 -> throw new UnsupportedOperationException(
                     "ZarrProvider: complex128 not supported");
         };
@@ -378,10 +382,13 @@ public final class ZarrProvider implements StorageProvider {
 
     static int bytesPerElement(Precision p) {
         return switch (p) {
-            case FLOAT64, INT64 -> 8;
+            case FLOAT64, INT64, UINT64 -> 8;   // M82: UINT64 is 8 bytes
             case FLOAT32, INT32, UINT32 -> 4;
             case COMPLEX128 -> 16;
             case UINT8 -> 1;
+            case _RESERVED_UINT16, _RESERVED_INT8 ->
+                throw new UnsupportedOperationException(
+                    "Precision " + p + " is reserved (cross-lang parity)");
         };
     }
 
@@ -1142,7 +1149,7 @@ public final class ZarrProvider implements StorageProvider {
                 for (int i = 0; i < n; i++) out[i] = bb.getFloat();
                 yield out;
             }
-            case INT64 -> {
+            case INT64, UINT64 -> {   // M82: UINT64 unpacks as long[]
                 int n = raw.length / 8;
                 long[] out = new long[n];
                 for (int i = 0; i < n; i++) out[i] = bb.getLong();
@@ -1160,6 +1167,9 @@ public final class ZarrProvider implements StorageProvider {
                 System.arraycopy(raw, 0, out, 0, raw.length);
                 yield out;
             }
+            case _RESERVED_UINT16, _RESERVED_INT8 ->
+                throw new UnsupportedOperationException(
+                    "Precision " + p + " is reserved (cross-lang parity)");
             case COMPLEX128 -> raw;
         };
     }
@@ -1176,7 +1186,7 @@ public final class ZarrProvider implements StorageProvider {
                 float[] a = (float[]) data;
                 for (int i = 0; i < totalElems; i++) bb.putFloat(a[i]);
             }
-            case INT64 -> {
+            case INT64, UINT64 -> {   // M82
                 long[] a = (long[]) data;
                 for (int i = 0; i < totalElems; i++) bb.putLong(a[i]);
             }
