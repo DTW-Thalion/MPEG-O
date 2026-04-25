@@ -10,6 +10,7 @@
 #import "Testing.h"
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOGenomicIndex.h"
+#import "Genomics/TTIOWrittenGenomicRun.h"
 
 // ── AlignedRead value class ────────────────────────────────────────
 
@@ -133,11 +134,56 @@ static void testGenomicIndexInMemory(void)
          "M82: indicesForFlag(paired)");
 }
 
+// ── WrittenGenomicRun container ────────────────────────────────────
+
+static void testWrittenGenomicRunConstruction(void)
+{
+    uint64_t offsets[2]   = {0, 150};
+    uint32_t lengths[2]   = {150, 150};
+    int64_t  positions[2] = {1000, 2000};
+    uint8_t  mapqs[2]     = {60, 60};
+    uint32_t flags[2]     = {0, 0};
+    int64_t  matePos[2]   = {-1, -1};
+    int32_t  tlens[2]     = {0, 0};
+
+    TTIOWrittenGenomicRun *run =
+        [[TTIOWrittenGenomicRun alloc]
+            initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                       referenceUri:@"GRCh38.p14"
+                           platform:@"ILLUMINA"
+                         sampleName:@"NA12878"
+                           positions:[NSData dataWithBytes:positions length:sizeof(positions)]
+                    mappingQualities:[NSData dataWithBytes:mapqs length:sizeof(mapqs)]
+                               flags:[NSData dataWithBytes:flags length:sizeof(flags)]
+                           sequences:[NSMutableData dataWithLength:300]
+                           qualities:[NSMutableData dataWithLength:300]
+                             offsets:[NSData dataWithBytes:offsets length:sizeof(offsets)]
+                             lengths:[NSData dataWithBytes:lengths length:sizeof(lengths)]
+                              cigars:@[@"150M", @"150M"]
+                           readNames:@[@"r1", @"r2"]
+                     mateChromosomes:@[@"", @""]
+                       matePositions:[NSData dataWithBytes:matePos length:sizeof(matePos)]
+                     templateLengths:[NSData dataWithBytes:tlens length:sizeof(tlens)]
+                         chromosomes:@[@"chr1", @"chr1"]
+                  signalCompression:TTIOCompressionZlib];
+
+    PASS(run != nil, "M82: WrittenGenomicRun constructible");
+    PASS(run.acquisitionMode == TTIOAcquisitionModeGenomicWGS,
+         "M82: acquisitionMode preserved");
+    PASS([run.referenceUri isEqualToString:@"GRCh38.p14"],
+         "M82: referenceUri preserved");
+    PASS(run.cigars.count == 2, "M82: cigars count preserved");
+    PASS(run.readCount == 2, "M82: readCount derived from offsets");
+    PASS(run.signalCompression == TTIOCompressionZlib,
+         "M82: signalCompression preserved");
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
     testAlignedReadFlagAccessors();
     testAlignedReadEquality();
     testGenomicIndexInMemory();
+    testWrittenGenomicRunConstruction();
     // Subsequent tasks append more test functions called from here.
 }
