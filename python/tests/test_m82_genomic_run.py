@@ -593,3 +593,44 @@ def test_large_run_10k_reads(tmp_path: Path):
             assert read.position == int(written.positions[i])
     finally:
         ds.close()
+
+
+def test_empty_run(tmp_path: Path):
+    """Acceptance #6: 0-read GenomicRun round-trips."""
+    from ttio.spectral_dataset import SpectralDataset
+    from ttio.written_genomic_run import WrittenGenomicRun
+
+    empty = WrittenGenomicRun(
+        acquisition_mode=7,
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="NA12878",
+        positions=np.zeros(0, dtype=np.int64),
+        mapping_qualities=np.zeros(0, dtype=np.uint8),
+        flags=np.zeros(0, dtype=np.uint32),
+        sequences=np.zeros(0, dtype=np.uint8),
+        qualities=np.zeros(0, dtype=np.uint8),
+        offsets=np.zeros(0, dtype=np.uint64),
+        lengths=np.zeros(0, dtype=np.uint32),
+        cigars=[],
+        read_names=[],
+        mate_chromosomes=[],
+        mate_positions=np.zeros(0, dtype=np.int64),
+        template_lengths=np.zeros(0, dtype=np.int32),
+        chromosomes=[],
+    )
+
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": empty},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == 0
+        assert list(gr) == []
+        assert gr.reads_in_region("chr1", 0, 1_000_000_000) == []
+    finally:
+        ds.close()
