@@ -47,6 +47,7 @@ class Precision(IntEnum):
     INT64 = 3
     UINT32 = 4
     COMPLEX128 = 5
+    UINT8 = 6           # v0.11 M79: genomic quality scores + packed bases
 
     def numpy_dtype(self) -> str:
         """Return the little-endian NumPy dtype string for this precision."""
@@ -57,6 +58,7 @@ class Precision(IntEnum):
             Precision.INT64: "<i8",
             Precision.UINT32: "<u4",
             Precision.COMPLEX128: "<c16",
+            Precision.UINT8: "u1",
         }[self]
 
 
@@ -71,6 +73,12 @@ class Compression(IntEnum):
     ZLIB = 1
     LZ4 = 2
     NUMPRESS_DELTA = 3
+    # v0.11 M79: genomic codecs (clean-room implementations land in M75+).
+    RANS_ORDER0 = 4
+    RANS_ORDER1 = 5
+    BASE_PACK = 6
+    QUALITY_BINNED = 7
+    NAME_TOKENIZED = 8
 
 
 class ByteOrder(IntEnum):
@@ -122,6 +130,8 @@ class AcquisitionMode(IntEnum):
     NMR_1D = 4
     NMR_2D = 5
     IMAGING = 6
+    GENOMIC_WGS = 7   # v0.11 M79: whole-genome sequencing
+    GENOMIC_WES = 8   # v0.11 M79: whole-exome sequencing
 
 
 class IRMode(IntEnum):

@@ -146,6 +146,26 @@ channel names.
 
 ---
 
+## 3a. Run modality (M79, v0.11)
+
+Each run group MAY carry an optional `@modality` UTF-8 string
+attribute identifying the omics modality the run represents. The
+attribute is purely informational at v0.11 — readers continue to
+dispatch on `@spectrum_class` for record decoding — but it scopes
+which downstream metadata + analytics apply to the run.
+
+| `@modality`           | Meaning                                                                       |
+|-----------------------|-------------------------------------------------------------------------------|
+| `mass_spectrometry`   | Default. Mass-spec, NMR, vibrational, UV-Vis runs (every v0.10 / pre-v0.11 file). |
+| `genomic_sequencing`  | Genomic short-read / long-read runs. Reserved for the v0.11 genomic milestones (M74+). |
+
+Absence of `@modality` MUST be interpreted as `mass_spectrometry`
+so v0.10 files load unchanged. Future modality strings (proteomic,
+metabolomic, …) MAY be added without a format-version bump because
+unrecognised values surface as the literal string at the API layer.
+
+---
+
 ## 4. `spectrum_index/`
 
 Parallel 1-D datasets, one per field. All datasets have length
@@ -737,6 +757,25 @@ HDF5 filter pipeline or a dedicated per-channel attribute:
 | **zlib** (default)     | `H5P_DEFLATE` filter at level 6. Lossless. Readable by any HDF5 library without extra plugins.                                                                                |
 | **LZ4**                | HDF5 filter id **32004**. Requires the LZ4 filter plugin (`libh5lz4.so`) to be loadable at runtime via `HDF5_PLUGIN_PATH`. Lossless. ~35× faster write / ~2× faster read than zlib, at ~20% larger files on random data. |
 | **Numpress-delta**     | Per-channel transform implemented inside MPGO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. |
+| **rANS-order0**        | Reserved (M79, v0.11). Range-asymmetric numeral systems entropy coder, order-0 (per-byte) frequency model. Used by genomic codecs in M74+. v0.11 reserves codec id `4`; encoder/decoder land with M74. |
+| **rANS-order1**        | Reserved (M79, v0.11). Order-1 (preceding-byte context) rANS variant. Codec id `5`. |
+| **base-pack**          | Reserved (M79, v0.11). 2-bit ACGT packed-base codec for genomic read sequences. Codec id `6`. Lossless on the canonical alphabet `{A,C,G,T}`; reads containing `N` are diverted to a sidecar mask dataset (defined in M74). |
+| **quality-binned**     | Reserved (M79, v0.11). Illumina-style quality-score binning that maps 40 raw Phred levels onto a small number of bins (default: 8). Codec id `7`. Lossy by construction; the bin table is stored as an attribute on the channel. |
+| **name-tokenized**     | Reserved (M79, v0.11). Read-name tokenisation: shared prefixes are factored out and indices replace the per-read names. Codec id `8`. Lossless. |
+
+The five reserved codec ids (`4`–`8`) are committed to disk format
+in M79 so cross-language readers see a stable enum even before
+the encoders land. Reading a dataset whose codec id ≥ 4 on a
+v0.11 reader without M74 returns an `UnsupportedCodec` error.
+
+### Precision additions (M79, v0.11)
+
+`MPGOPrecision` gains `UINT8` (id `6`) for byte-typed datasets —
+genomic packed-base buffers, quality-score arrays, and any future
+per-element symbol stream that does not need wider integers. The
+existing storage providers (HDF5, Memory, SQLite, Zarr) honour
+`UINT8` byte-exactly; canonical bytes for a `UINT8` dataset are the
+raw payload (endian-neutral).
 
 ### Numpress-delta algorithm
 

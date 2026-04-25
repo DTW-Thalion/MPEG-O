@@ -42,6 +42,7 @@ def _precision_from_dtype(dt: np.dtype) -> Precision | None:
         "<f4": Precision.FLOAT32, "<f8": Precision.FLOAT64,
         "<i4": Precision.INT32, "<i8": Precision.INT64,
         "<u4": Precision.UINT32, "<c16": Precision.COMPLEX128,
+        "|u1": Precision.UINT8,
     }
     return by_dtype.get(dt.str)
 

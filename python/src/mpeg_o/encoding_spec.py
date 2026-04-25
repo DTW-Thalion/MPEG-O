@@ -13,6 +13,7 @@ _ELEMENT_SIZE: dict[Precision, int] = {
     Precision.INT64: 8,
     Precision.UINT32: 4,
     Precision.COMPLEX128: 16,
+    Precision.UINT8: 1,
 }
 
 

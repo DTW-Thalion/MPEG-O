@@ -297,6 +297,7 @@ public final class ZarrProvider implements StorageProvider {
             case INT64   -> "int64";
             case INT32   -> "int32";
             case UINT32  -> "uint32";
+            case UINT8   -> "uint8";
             case COMPLEX128 -> throw new UnsupportedOperationException(
                     "ZarrProvider: complex128 not supported");
         };
@@ -311,6 +312,7 @@ public final class ZarrProvider implements StorageProvider {
             case "int64",   "<i8", "|i8" -> Precision.INT64;
             case "int32",   "<i4", "|i4" -> Precision.INT32;
             case "uint32",  "<u4", "|u4" -> Precision.UINT32;
+            case "uint8",   "<u1", "|u1", "u1" -> Precision.UINT8;
             default -> throw new UnsupportedOperationException(
                     "ZarrProvider: unsupported dtype " + dtype);
         };
@@ -379,6 +381,7 @@ public final class ZarrProvider implements StorageProvider {
             case FLOAT64, INT64 -> 8;
             case FLOAT32, INT32, UINT32 -> 4;
             case COMPLEX128 -> 16;
+            case UINT8 -> 1;
         };
     }
 
@@ -1151,6 +1154,12 @@ public final class ZarrProvider implements StorageProvider {
                 for (int i = 0; i < n; i++) out[i] = bb.getInt();
                 yield out;
             }
+            case UINT8 -> {
+                // v0.11 M79: byte channel — copy out unchanged.
+                byte[] out = new byte[raw.length];
+                System.arraycopy(raw, 0, out, 0, raw.length);
+                yield out;
+            }
             case COMPLEX128 -> raw;
         };
     }
@@ -1174,6 +1183,12 @@ public final class ZarrProvider implements StorageProvider {
             case INT32, UINT32 -> {
                 int[] a = (int[]) data;
                 for (int i = 0; i < totalElems; i++) bb.putInt(a[i]);
+            }
+            case UINT8 -> {
+                // v0.11 M79: byte channel — single-byte writes are
+                // endian-neutral.
+                byte[] a = (byte[]) data;
+                for (int i = 0; i < totalElems; i++) bb.put(a[i]);
             }
             default -> throw new UnsupportedOperationException(
                     "unsupported precision " + p);

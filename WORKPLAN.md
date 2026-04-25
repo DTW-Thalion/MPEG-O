@@ -981,3 +981,70 @@ lists are both empty.
   emission — reviewer-facing XML restructure.
 - **Hyperspectral-image analysis primitives** — scope expansion
   beyond tile-chunk cubes.
+
+---
+
+## v0.11 (M79) — Modality abstraction + genomic enumerations (groundwork, 2026-04-24)
+
+Purely additive groundwork for the genomic milestone series
+(M74–M82). M79 ships **no new wire content** beyond on-disk integer
+reservations; readers and writers behave bit-identically to v0.10
+files, and v0.10 readers can still open every file produced by a
+v0.11 writer that does not stamp the new attributes.
+
+### Shipped (M79)
+
+- [x] **`Precision.UINT8 = 6`** wired through every storage provider
+      (HDF5, Memory, SQLite, Zarr) in all three languages. 1000-byte
+      buffers round-trip byte-exactly. Covers genomic packed bases
+      and quality scores for M74+.
+- [x] **`Compression` ids 4–8 reserved** —
+      `RANS_ORDER0`, `RANS_ORDER1`, `BASE_PACK`, `QUALITY_BINNED`,
+      `NAME_TOKENIZED`. Cross-language enum integers committed so
+      readers see a stable codec table; encoders/decoders ship with
+      M74. Each ordinal round-trips as an HDF5 integer attribute.
+- [x] **`AcquisitionMode.GENOMIC_WGS = 7`, `GENOMIC_WES = 8`** —
+      reserved acquisition-mode integers for whole-genome /
+      whole-exome runs.
+- [x] **Transport `spectrumClass = 5` (GenomicRead)** — the 38-byte
+      AccessUnit prefix is generic over the spectral fields, so
+      genomic AUs can flow through the existing transport codec
+      with all spectral fields zeroed. The MSImagePixel extension
+      (12 trailing bytes) MUST NOT activate for `spectrumClass=5`.
+      Proper genomic prefix arrives in M82.
+- [x] **`@modality` UTF-8 attribute on run groups** — read-side
+      contract only at M79. Absence ⇒ `mass_spectrometry` (every
+      v0.10 file). Explicit `genomic_sequencing` round-trips
+      through `AcquisitionRun.modality` unchanged. Write side
+      lands with `GenomicRun.write_to_group` in M74.
+- [x] **`opt_genomic` feature flag** registered. Reserved by M79;
+      stamped by writers in M74+ when genomic content is present.
+
+### Test additions
+
+- Python: `python/tests/test_m79_genomic_enums.py` — 18 parametrised
+  invocations across 7 test cases (UINT8 round-trip + partial read
+  on each provider, codec ordinals, genomic acquisition modes,
+  AccessUnit GenomicRead, modality default + explicit).
+- Java: `java/src/test/java/com/dtwthalion/mpgo/M79GenomicEnumsTest.java`
+  — 10 JUnit5 methods covering the same surface.
+- ObjC: `objc/Tests/TestM79GenomicEnums.m` — 27 inline `PASS`
+  assertions wired into the runner under `M79: modality + genomic
+  enums (v0.11)`.
+
+### Release criteria
+
+- [x] Python pytest, Java mvn test, ObjC test runner each pass
+      green for the M79 surface (the prior v0.11.1 baselines
+      remain unchanged, modulo the new tests).
+- [x] `format-spec.md` §3a (modality) + §10.4 codec/precision rows.
+- [x] `feature-flags.md` v0.11 (M79) section + `opt_genomic`.
+- [x] CHANGELOG entry under the v0.11 series.
+
+### Deferred to M74
+
+- `GenomicRun` class + `write_to_group` write-side path.
+- rANS / base-pack / quality-binned / name-tokenized encoder +
+  decoder implementations.
+- Genomic-specific AU prefix layout (replacing zeroed spectral
+  fields with proper genomic metadata).

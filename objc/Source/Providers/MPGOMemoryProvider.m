@@ -281,6 +281,7 @@
         case MPGOPrecisionInt64:     elem = 8;  break;
         case MPGOPrecisionUInt32:    elem = 4;  break;
         case MPGOPrecisionComplex128:elem = 16; break;
+        case MPGOPrecisionUInt8:     elem = 1;  break;
         default:                     elem = 8;  break;
     }
     NSUInteger start = offset * elem;

@@ -49,6 +49,7 @@ static NSString *zDtypeFor(MPGOPrecision p)
         case MPGOPrecisionInt64:   return @"int64";
         case MPGOPrecisionInt32:   return @"int32";
         case MPGOPrecisionUInt32:  return @"uint32";
+        case MPGOPrecisionUInt8:   return @"uint8";
         case MPGOPrecisionComplex128:
         default:
             [NSException raise:NSInvalidArgumentException
@@ -77,6 +78,10 @@ static MPGOPrecision zPrecisionFor(NSString *dtype)
     if ([dtype isEqualToString:@"uint32"] ||
         [dtype isEqualToString:@"<u4"] || [dtype isEqualToString:@"|u4"])
         return MPGOPrecisionUInt32;
+    if ([dtype isEqualToString:@"uint8"] ||
+        [dtype isEqualToString:@"<u1"] || [dtype isEqualToString:@"|u1"] ||
+        [dtype isEqualToString:@"u1"])
+        return MPGOPrecisionUInt8;
     return MPGOPrecisionFloat64;
 }
 
@@ -88,6 +93,7 @@ static NSUInteger zBytesPerElement(MPGOPrecision p)
         case MPGOPrecisionFloat32:
         case MPGOPrecisionInt32:
         case MPGOPrecisionUInt32:  return 4;
+        case MPGOPrecisionUInt8:   return 1;
         case MPGOPrecisionComplex128: return 16;
     }
     return 8;

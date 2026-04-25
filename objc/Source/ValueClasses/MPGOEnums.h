@@ -35,14 +35,20 @@ typedef NS_ENUM(NSUInteger, MPGOPrecision) {
     MPGOPrecisionInt32,
     MPGOPrecisionInt64,
     MPGOPrecisionUInt32,
-    MPGOPrecisionComplex128
+    MPGOPrecisionComplex128,
+    MPGOPrecisionUInt8        // v0.11 M79: genomic quality scores + packed bases
 };
 
 typedef NS_ENUM(NSUInteger, MPGOCompression) {
     MPGOCompressionNone = 0,
     MPGOCompressionZlib,
     MPGOCompressionLZ4,
-    MPGOCompressionNumpressDelta  // v0.3 M21: fixed-point + first-difference
+    MPGOCompressionNumpressDelta,    // v0.3 M21: fixed-point + first-difference
+    MPGOCompressionRansOrder0,       // v0.11 M79: rANS order-0 entropy coder
+    MPGOCompressionRansOrder1,       // v0.11 M79: rANS order-1 entropy coder
+    MPGOCompressionBasePack,         // v0.11 M79: 2-bit ACGT packed bases
+    MPGOCompressionQualityBinned,    // v0.11 M79: Illumina-style quality binning
+    MPGOCompressionNameTokenized     // v0.11 M79: read-name tokenisation
 };
 
 typedef NS_ENUM(NSUInteger, MPGOByteOrder) {
@@ -69,7 +75,9 @@ typedef NS_ENUM(NSUInteger, MPGOAcquisitionMode) {
     MPGOAcquisitionModeSRM,
     MPGOAcquisitionMode1DNMR,
     MPGOAcquisitionMode2DNMR,
-    MPGOAcquisitionModeImaging
+    MPGOAcquisitionModeImaging,
+    MPGOAcquisitionModeGenomicWGS,   // v0.11 M79: whole-genome sequencing
+    MPGOAcquisitionModeGenomicWES    // v0.11 M79: whole-exome sequencing
 };
 
 typedef NS_ENUM(NSUInteger, MPGOEncryptionLevel) {

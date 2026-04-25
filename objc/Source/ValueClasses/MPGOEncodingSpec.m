@@ -33,6 +33,7 @@
         case MPGOPrecisionInt64:      return 8;
         case MPGOPrecisionUInt32:     return 4;
         case MPGOPrecisionComplex128: return 16;
+        case MPGOPrecisionUInt8:      return 1;
     }
     return 0;
 }

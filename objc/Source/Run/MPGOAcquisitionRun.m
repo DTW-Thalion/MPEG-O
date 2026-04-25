@@ -95,6 +95,7 @@
 
         _spectrumIndex = [self buildIndexFromSpectra:spectra];
         _chromatograms = @[];
+        _modality = @"mass_spectrometry";
     }
     return self;
 }
@@ -505,6 +506,12 @@
         ? (NSString *)classObj : @"MPGOMassSpectrum";
     id nucObj = [runGroup attributeValueForName:@"nucleus_type" error:NULL];
     NSString *nucleus = [nucObj isKindOfClass:[NSString class]] ? nucObj : nil;
+    // v0.11 M79: @modality fallback to "mass_spectrometry" so pre-v0.11
+    // runs read back as mass-spec.
+    id modObj = [runGroup attributeValueForName:@"modality" error:NULL];
+    NSString *modality = ([modObj isKindOfClass:[NSString class]]
+                          && [(NSString *)modObj length] > 0)
+        ? (NSString *)modObj : @"mass_spectrometry";
 
     MPGOSpectrumIndex *idx = [MPGOSpectrumIndex readFromStorageGroup:runGroup error:error];
     if (!idx) return nil;
@@ -556,6 +563,7 @@
     run->_numpressChannels     = nil;
     run->_signalCompression    = MPGOCompressionNone;
     run->_chromatograms        = @[];
+    run->_modality             = [modality copy];
     return run;
 }
 
@@ -580,6 +588,13 @@
     if ([runGroup hasAttributeNamed:@"spectrum_class"]) {
         className = [runGroup stringAttributeNamed:@"spectrum_class" error:NULL];
         if (className.length == 0) className = @"MPGOMassSpectrum";
+    }
+
+    // v0.11 M79: @modality with pre-v0.11 mass-spec fallback.
+    NSString *modality = @"mass_spectrometry";
+    if ([runGroup hasAttributeNamed:@"modality"]) {
+        NSString *m = [runGroup stringAttributeNamed:@"modality" error:NULL];
+        if (m.length > 0) modality = m;
     }
 
     NSString *nucleus = nil;
@@ -700,6 +715,7 @@
     run->_spectrumClassName    = [className copy];
     run->_nucleusType          = [nucleus copy];
     run->_spectrometerFrequencyMHz = freqMHz;
+    run->_modality             = [modality copy];
     run->_inMemorySpectra      = nil;
     run->_streamPosition       = 0;
     run->_provenance           = provenance;

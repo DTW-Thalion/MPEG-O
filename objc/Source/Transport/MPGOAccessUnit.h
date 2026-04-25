@@ -50,7 +50,7 @@ NS_ASSUME_NONNULL_BEGIN
  *
  * ``spectrumClass`` wire values:
  *   0 = MassSpectrum, 1 = NMRSpectrum, 2 = NMR2D,
- *   3 = FID, 4 = MSImagePixel
+ *   3 = FID, 4 = MSImagePixel, 5 = GenomicRead
  *
  * ``polarity`` wire values (differs from MPGOPolarity which uses -1
  * for negative; the wire uses nonneg only):

@@ -45,7 +45,9 @@ public final class Enums {
         /** Unsigned 32-bit integer stored as signed {@code int} (4 bytes). */
         UINT32(4),
         /** 128-bit complex: two {@code double} values per element (16 bytes). */
-        COMPLEX128(16);
+        COMPLEX128(16),
+        /** Unsigned 8-bit integer (1 byte). v0.11 M79. */
+        UINT8(1);
 
         private final int elementSize;
 
@@ -66,7 +68,17 @@ public final class Enums {
         /** LZ4 block compression. */
         LZ4,
         /** NumPRESS delta-integer compression for ordered m/z or retention-time arrays. */
-        NUMPRESS_DELTA
+        NUMPRESS_DELTA,
+        /** rANS order-0 entropy coder (genomic CRAM-style). v0.11 M79 reservation; codec lands in M75. */
+        RANS_ORDER0,
+        /** rANS order-1 entropy coder (context-aware). v0.11 M79 reservation; codec lands in M75. */
+        RANS_ORDER1,
+        /** 2-bit packed nucleotide bases (A/C/G/T). v0.11 M79 reservation; codec lands in M75. */
+        BASE_PACK,
+        /** Quality-score binning (Illumina-style). v0.11 M79 reservation; codec lands in M75. */
+        QUALITY_BINNED,
+        /** Read-name tokenisation. v0.11 M79 reservation; codec lands in M75. */
+        NAME_TOKENIZED
     }
 
     /** Ion polarity for mass spectrometry. */
@@ -122,7 +134,11 @@ public final class Enums {
         /** Two-dimensional NMR experiment. */
         NMR_2D,
         /** Mass spectrometry imaging. */
-        IMAGING
+        IMAGING,
+        /** Whole-genome sequencing. v0.11 M79. */
+        GENOMIC_WGS,
+        /** Whole-exome sequencing. v0.11 M79. */
+        GENOMIC_WES
     }
 
     /** Chromatogram kind. */
