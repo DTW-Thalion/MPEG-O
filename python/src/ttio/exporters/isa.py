@@ -17,7 +17,7 @@ SPDX-License-Identifier: Apache-2.0
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOISAExporter`` · Java:
-``com.dtwthalion.ttio.exporters.ISAExporter``
+``global.thalion.ttio.exporters.ISAExporter``
 
 API status: Stable.
 """

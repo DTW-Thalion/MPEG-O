@@ -70,7 +70,7 @@ sqlite = "ttio.providers.sqlite:SqliteProvider"
 zarr = "ttio.providers.zarr:ZarrProvider"
 
 # v0.12 M75: console_scripts for the three protection tools, giving
-# Python parity with the Java (com.dtwthalion.ttio.tools.*) and ObjC
+# Python parity with the Java (global.thalion.ttio.tools.*) and ObjC
 # (objc/Tools/Ttio*) CLI family. ttio-pqc additionally mirrors the
 # subcommand grammar of its peers 1:1.
 [project.scripts]

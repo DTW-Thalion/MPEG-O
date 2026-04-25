@@ -11,7 +11,7 @@
  * `hasCompression:` reports a compression sentinel.
  *
  * Cross-language equivalents:
- *   Java:   com.dtwthalion.ttio.importers.JcampDxDecode
+ *   Java:   global.thalion.ttio.importers.JcampDxDecode
  *   Python: ttio.importers._jcamp_decode
  */
 @interface TTIOJcampDxDecode : NSObject

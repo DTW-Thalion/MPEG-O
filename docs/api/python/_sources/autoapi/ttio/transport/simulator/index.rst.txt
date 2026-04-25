@@ -19,7 +19,7 @@ ttio.transport.simulator
      other async sink.
 
    Cross-language equivalents: Java
-   ``com.dtwthalion.ttio.transport.AcquisitionSimulator``, ObjC
+   ``global.thalion.ttio.transport.AcquisitionSimulator``, ObjC
    ``TTIOAcquisitionSimulator``.
 
 

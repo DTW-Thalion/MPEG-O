@@ -25,7 +25,7 @@ class Query:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOQuery`` · Java:
-    ``com.dtwthalion.ttio.Query``.
+    ``global.thalion.ttio.Query``.
     """
 
     index: SpectrumIndex

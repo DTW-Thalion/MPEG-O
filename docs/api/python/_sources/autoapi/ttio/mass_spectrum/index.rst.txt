@@ -57,7 +57,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOMassSpectrum`` · Java:
-   ``com.dtwthalion.ttio.MassSpectrum``.
+   ``global.thalion.ttio.MassSpectrum``.
 
 
    .. py:attribute:: MZ

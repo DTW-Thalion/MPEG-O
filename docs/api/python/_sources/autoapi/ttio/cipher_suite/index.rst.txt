@@ -38,7 +38,7 @@ ttio.cipher_suite
 
    Cross-language equivalents:
    * ObjC: ``TTIOCipherSuite`` (:file:`objc/Source/Protection/TTIOCipherSuite.h`)
-   * Java: ``com.dtwthalion.ttio.protection.CipherSuite``
+   * Java: ``global.thalion.ttio.protection.CipherSuite``
 
 
 

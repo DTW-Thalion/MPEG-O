@@ -36,7 +36,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOStreamReader`` · Java:
-   ``com.dtwthalion.ttio.StreamReader``.
+   ``global.thalion.ttio.StreamReader``.
 
 
    .. py:property:: total_count

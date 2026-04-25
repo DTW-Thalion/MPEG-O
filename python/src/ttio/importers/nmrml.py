@@ -8,7 +8,7 @@ milestone that adds a ``FreeInductionDecay`` writer.
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIONmrMLReader`` · Java:
-``com.dtwthalion.ttio.importers.NmrMLReader``
+``global.thalion.ttio.importers.NmrMLReader``
 
 API status: Stable.
 """

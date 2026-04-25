@@ -117,7 +117,7 @@ class SpectrumIndex:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOSpectrumIndex`` ·
-    Java: ``com.dtwthalion.ttio.SpectrumIndex``.
+    Java: ``global.thalion.ttio.SpectrumIndex``.
     """
 
     offsets: np.ndarray
@@ -296,7 +296,7 @@ class AcquisitionRun:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOAcquisitionRun`` · Java:
-    ``com.dtwthalion.ttio.AcquisitionRun``.
+    ``global.thalion.ttio.AcquisitionRun``.
     """
 
     name: str

@@ -271,7 +271,7 @@ On a compressed body, it delegates to a per-language decoder:
 |---|---|
 | Python | `ttio.importers._jcamp_decode.decode_xydata` |
 | ObjC | `+[TTIOJcampDxDecode decodeLines:firstx:deltax:xfactor:yfactor:outXs:outYs:error:]` |
-| Java | `com.dtwthalion.ttio.importers.JcampDxDecode.decode` |
+| Java | `global.thalion.ttio.importers.JcampDxDecode.decode` |
 
 Each decoder implements the full SQZ alphabet (`@`, `A-I`, `a-i`),
 DIF alphabet (`%`, `J-R`, `j-r`), DUP alphabet (`S-Z`, `s`), plus

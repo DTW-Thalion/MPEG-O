@@ -19,7 +19,7 @@ The disrelation-like significance spectrum ``|Φ| / (|Φ| + |Ψ|)`` is
 bounded in ``[0, 1]`` (cells where both matrices vanish return ``NaN``).
 
 Cross-language equivalents: Java
-``com.dtwthalion.ttio.analysis.TwoDCos`` · Objective-C
+``global.thalion.ttio.analysis.TwoDCos`` · Objective-C
 ``TTIOTwoDCos``.
 
 SPDX-License-Identifier: Apache-2.0

@@ -33,7 +33,7 @@ Mapping into TTI-O records
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOMzTabReader``
-Java:        ``com.dtwthalion.ttio.importers.MzTabReader``
+Java:        ``global.thalion.ttio.importers.MzTabReader``
 
 SPDX-License-Identifier: Apache-2.0
 """

@@ -7,7 +7,7 @@ transport without being decrypted in transit.
 
 Cross-language equivalents: ObjC
 ``TTIOEncryptedTransport`` · Java
-``com.dtwthalion.ttio.transport.EncryptedTransport``.
+``global.thalion.ttio.transport.EncryptedTransport``.
 """
 from __future__ import annotations
 

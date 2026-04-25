@@ -40,7 +40,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIONMRSpectrum`` · Java:
-   ``com.dtwthalion.ttio.NMRSpectrum``.
+   ``global.thalion.ttio.NMRSpectrum``.
 
 
    .. py:attribute:: CHEMICAL_SHIFT

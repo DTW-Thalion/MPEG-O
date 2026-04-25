@@ -14,7 +14,7 @@
  * digits of integer-scaled Y precision.
  *
  * Cross-language equivalents:
- *   Java:    com.dtwthalion.ttio.exporters.JcampDxEncoding
+ *   Java:    global.thalion.ttio.exporters.JcampDxEncoding
  *   Python:  encoding="..." keyword on write_*_spectrum
  */
 typedef NS_ENUM(NSInteger, TTIOJcampDxEncoding) {

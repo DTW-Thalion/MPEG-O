@@ -180,7 +180,7 @@ def _run_java(cli: str, *args: str) -> None:
     subprocess.run(
         ["java", "-cp", cp,
          "-Djava.library.path=/usr/lib/x86_64-linux-gnu/jni",
-         f"com.dtwthalion.ttio.tools.{cli}", *args],
+         f"global.thalion.ttio.tools.{cli}", *args],
         check=True, capture_output=True,
     )
 

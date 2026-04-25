@@ -33,7 +33,7 @@ class CVParam:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOCVParam`` · Java:
-    ``com.dtwthalion.ttio.CVParam``.
+    ``global.thalion.ttio.CVParam``.
     """
 
     ontology_ref: str

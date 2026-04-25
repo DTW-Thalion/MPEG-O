@@ -16,7 +16,7 @@ ttio.providers.hdf5
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOHDF5Provider`` class
-   Java:        ``com.dtwthalion.ttio.providers.Hdf5Provider`` class
+   Java:        ``global.thalion.ttio.providers.Hdf5Provider`` class
 
    SPDX-License-Identifier: LGPL-3.0-or-later
 
@@ -44,7 +44,7 @@ Module Contents
 
    Cross-language equivalents:
      Objective-C: ``TTIOHDF5Provider``
-     Java:        ``com.dtwthalion.ttio.providers.Hdf5Provider``
+     Java:        ``global.thalion.ttio.providers.Hdf5Provider``
 
 
    .. py:method:: open(path_or_url=None, *, mode: str = 'r', **kwargs) -> Hdf5Provider

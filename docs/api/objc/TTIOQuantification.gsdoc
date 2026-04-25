@@ -23,7 +23,7 @@
           in the TTI-O container. API status: Stable. Cross-language
           equivalents: Python:
           ttio.quantification.Quantification
-          Java: com.dtwthalion.ttio.Quantification
+          Java: global.thalion.ttio.Quantification
         </desc>
         <method type="instancetype" factory="yes">
           <sel>fromPlist:</sel>

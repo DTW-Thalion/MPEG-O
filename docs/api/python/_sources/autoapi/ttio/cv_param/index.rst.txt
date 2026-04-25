@@ -47,7 +47,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOCVParam`` · Java:
-   ``com.dtwthalion.ttio.CVParam``.
+   ``global.thalion.ttio.CVParam``.
 
 
    .. py:attribute:: ontology_ref

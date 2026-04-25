@@ -26,7 +26,7 @@ ttio.encryption
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOEncryptionManager`` · Java:
-   ``com.dtwthalion.ttio.protection.EncryptionManager``.
+   ``global.thalion.ttio.protection.EncryptionManager``.
 
    API status: Stable.
 

@@ -25,7 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
  *
  * Cross-language equivalents:
  *   Python: ttio.feature.Feature
- *   Java:   com.dtwthalion.ttio.Feature
+ *   Java:   global.thalion.ttio.Feature
  */
 @interface TTIOFeature : NSObject <NSCopying>
 

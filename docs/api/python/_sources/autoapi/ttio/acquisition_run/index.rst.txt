@@ -76,7 +76,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOSpectrumIndex`` ·
-   Java: ``com.dtwthalion.ttio.SpectrumIndex``.
+   Java: ``global.thalion.ttio.SpectrumIndex``.
 
 
    .. py:attribute:: offsets
@@ -252,7 +252,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOAcquisitionRun`` · Java:
-   ``com.dtwthalion.ttio.AcquisitionRun``.
+   ``global.thalion.ttio.AcquisitionRun``.
 
 
    .. py:attribute:: name

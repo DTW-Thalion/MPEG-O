@@ -14,7 +14,7 @@ ttio.importers.cv_term_mapper
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOCVTermMapper`` · Java:
-   ``com.dtwthalion.ttio.importers.CVTermMapper``
+   ``global.thalion.ttio.importers.CVTermMapper``
 
    API status: Stable.
 

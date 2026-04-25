@@ -24,7 +24,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.spectrum.Spectrum
- *   Java:   com.dtwthalion.ttio.Spectrum
+ *   Java:   global.thalion.ttio.Spectrum
  */
 @interface TTIOSpectrum : NSObject
 

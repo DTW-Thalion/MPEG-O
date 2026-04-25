@@ -44,7 +44,7 @@ def _java_cli() -> list[str] | None:
         return None
     if not classes.is_dir():
         return None
-    return [str(runner), "com.dtwthalion.ttio.tools.PQCTool"]
+    return [str(runner), "global.thalion.ttio.tools.PQCTool"]
 
 
 def _objc_cli() -> list[str] | None:

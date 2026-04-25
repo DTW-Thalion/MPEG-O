@@ -37,7 +37,7 @@ class CVAnnotatable(Protocol):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOCVAnnotatable`` ·
-    Java: ``com.dtwthalion.ttio.protocols.CVAnnotatable``
+    Java: ``global.thalion.ttio.protocols.CVAnnotatable``
     """
 
     def add_cv_param(self, param: CVParam) -> None: ...

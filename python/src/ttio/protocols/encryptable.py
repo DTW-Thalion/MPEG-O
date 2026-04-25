@@ -34,7 +34,7 @@ class Encryptable(Protocol):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOEncryptable`` ·
-    Java: ``com.dtwthalion.ttio.protocols.Encryptable``
+    Java: ``global.thalion.ttio.protocols.Encryptable``
     """
 
     def encrypt_with_key(self, key: bytes, level: EncryptionLevel) -> None: ...

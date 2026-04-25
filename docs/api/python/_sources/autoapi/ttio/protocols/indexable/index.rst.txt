@@ -56,7 +56,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: TTIOIndexable ·
-   Java: com.dtwthalion.ttio.protocols.Indexable
+   Java: global.thalion.ttio.protocols.Indexable
 
 
    .. py:method:: object_at_index(index: int) -> Any

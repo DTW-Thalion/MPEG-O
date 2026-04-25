@@ -13,7 +13,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.chromatogram.Chromatogram
- *   Java:   com.dtwthalion.ttio.Chromatogram
+ *   Java:   global.thalion.ttio.Chromatogram
  */
 @interface TTIOChromatogram : TTIOSpectrum
 

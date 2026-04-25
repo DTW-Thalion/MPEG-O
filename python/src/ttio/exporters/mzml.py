@@ -12,7 +12,7 @@ SPDX-License-Identifier: Apache-2.0
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOMzMLWriter`` · Java:
-``com.dtwthalion.ttio.exporters.MzMLWriter``
+``global.thalion.ttio.exporters.MzMLWriter``
 
 API status: Stable.
 """

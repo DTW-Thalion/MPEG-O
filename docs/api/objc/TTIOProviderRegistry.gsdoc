@@ -25,7 +25,7 @@
           (discover_providers, open_provider,
           register_provider) — idiomatic for Python
           packaging. Java:
-          com.dtwthalion.ttio.providers.ProviderRegistry
+          global.thalion.ttio.providers.ProviderRegistry
           class
         </desc>
         <method type="instancetype" factory="yes">

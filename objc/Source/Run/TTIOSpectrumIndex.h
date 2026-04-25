@@ -23,7 +23,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.acquisition_run.SpectrumIndex
- *   Java:   com.dtwthalion.ttio.SpectrumIndex
+ *   Java:   global.thalion.ttio.SpectrumIndex
  */
 @interface TTIOSpectrumIndex : NSObject
 

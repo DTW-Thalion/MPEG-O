@@ -39,7 +39,7 @@
           computation, the same rounding rule, and the
           same delta pass. API status: Stable. Cross-language
           equivalents: Python: ttio._numpress Java:
-          com.dtwthalion.ttio.NumpressCodec
+          global.thalion.ttio.NumpressCodec
         </desc>
         <method type="BOOL" factory="yes">
           <sel>decodeInt64:</sel>

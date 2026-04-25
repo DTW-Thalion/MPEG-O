@@ -43,7 +43,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOProvenanceRecord`` · Java:
-   ``com.dtwthalion.ttio.ProvenanceRecord``.
+   ``global.thalion.ttio.ProvenanceRecord``.
 
 
    .. py:attribute:: timestamp_unix

@@ -18,7 +18,7 @@ Entry points are declared in ``pyproject.toml``:
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOProviderRegistry`` class ·
-Java: ``com.dtwthalion.ttio.providers.ProviderRegistry`` class ·
+Java: ``global.thalion.ttio.providers.ProviderRegistry`` class ·
 Python: module-level functions
 (``discover_providers``, ``open_provider``, ``register_provider``)
 — idiomatic for Python packaging.

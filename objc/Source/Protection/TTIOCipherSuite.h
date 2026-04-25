@@ -20,7 +20,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.cipher_suite
- *   Java:   com.dtwthalion.ttio.protection.CipherSuite
+ *   Java:   global.thalion.ttio.protection.CipherSuite
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

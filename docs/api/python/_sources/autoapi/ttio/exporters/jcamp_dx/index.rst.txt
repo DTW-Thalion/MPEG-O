@@ -21,7 +21,7 @@ ttio.exporters.jcamp_dx
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOJcampDxWriter`` · Java:
-   ``com.dtwthalion.ttio.exporters.JcampDxWriter``.
+   ``global.thalion.ttio.exporters.JcampDxWriter``.
 
 
 

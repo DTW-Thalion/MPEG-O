@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# v0.7 M51: thin wrapper that invokes a com.dtwthalion.ttio.tools.* main
+# v0.7 M51: thin wrapper that invokes a global.thalion.ttio.tools.* main
 # class with the full runtime classpath (including the system-scoped
 # jhdf5 jar). Used by the compound-parity harness to run the Java
 # dumper the same way Python and ObjC invoke their native CLIs.

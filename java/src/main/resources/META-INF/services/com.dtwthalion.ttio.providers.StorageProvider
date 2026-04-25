@@ -1,4 +1,0 @@
-com.dtwthalion.ttio.providers.Hdf5Provider
-com.dtwthalion.ttio.providers.MemoryProvider
-com.dtwthalion.ttio.providers.SqliteProvider
-com.dtwthalion.ttio.providers.ZarrProvider

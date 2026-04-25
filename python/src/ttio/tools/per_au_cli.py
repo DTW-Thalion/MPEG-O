@@ -1,7 +1,7 @@
 """v1.0 per-AU encryption CLI for cross-language conformance testing.
 
 Provides encrypt/decrypt and transport-stream encrypt/decrypt
-subcommands that mirror the Java ``com.dtwthalion.ttio.tools.PerAUCli``
+subcommands that mirror the Java ``global.thalion.ttio.tools.PerAUCli``
 and Objective-C ``TtioPerAU`` tool. All three implementations MUST
 produce byte-equivalent outputs given identical inputs; the
 cross-language conformance harness (``tests/integration/

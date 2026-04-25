@@ -23,7 +23,7 @@ ttio.importers.jcamp_dx
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOJcampDxReader`` · Java:
-   ``com.dtwthalion.ttio.importers.JcampDxReader``.
+   ``global.thalion.ttio.importers.JcampDxReader``.
 
 
 

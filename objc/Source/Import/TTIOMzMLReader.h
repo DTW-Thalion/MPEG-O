@@ -39,7 +39,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.importers.mzml
- *   Java:   com.dtwthalion.ttio.importers.MzMLReader
+ *   Java:   global.thalion.ttio.importers.MzMLReader
  */
 @interface TTIOMzMLReader : NSObject
 

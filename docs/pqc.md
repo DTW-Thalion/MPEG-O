@@ -214,7 +214,7 @@ dek = key_rotation.unwrap_dek(f, kp.private_key, algorithm="ml-kem-1024")
 ### Java
 
 ```java
-import com.dtwthalion.ttio.protection.*;
+import global.thalion.ttio.protection.*;
 
 // Primitives
 PostQuantumCrypto.KeyPair kp = PostQuantumCrypto.kemKeygen();

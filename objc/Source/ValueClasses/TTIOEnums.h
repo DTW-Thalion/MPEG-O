@@ -6,7 +6,7 @@
 /*
  * Cross-language equivalents:
  *   Python: ttio.enums
- *   Java:   com.dtwthalion.ttio.Enums
+ *   Java:   global.thalion.ttio.Enums
  *
  * Declaration order in each ObjC NS_ENUM is authoritative; Python's
  * IntEnum values and Java's enum declaration order must match.
@@ -27,7 +27,7 @@ typedef NS_ENUM(NSUInteger, TTIOSamplingMode) {
  * so non-HDF5 providers (SQLite, in-memory, future Zarr) can use
  * this enum without pulling the HDF5 library onto the link graph.
  * Cross-language equivalents: Python ttio.enums.Precision, Java
- * com.dtwthalion.ttio.Enums.Precision.
+ * global.thalion.ttio.Enums.Precision.
  */
 typedef NS_ENUM(NSUInteger, TTIOPrecision) {
     TTIOPrecisionFloat32 = 0,
@@ -108,7 +108,7 @@ typedef NS_ENUM(NSUInteger, TTIOIRMode) {
  *
  * Cross-language equivalents:
  *   Python: ttio.enums.ActivationMethod
- *   Java:   com.dtwthalion.ttio.Enums.ActivationMethod
+ *   Java:   global.thalion.ttio.Enums.ActivationMethod
  */
 typedef NS_ENUM(NSInteger, TTIOActivationMethod) {
     TTIOActivationMethodNone  = 0,

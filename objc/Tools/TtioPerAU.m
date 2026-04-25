@@ -2,7 +2,7 @@
  * TtioPerAU — v1.0 cross-language conformance CLI for per-AU
  *             encryption. Parallel to Python
  *             ttio.tools.per_au_cli and Java
- *             com.dtwthalion.ttio.tools.PerAUCli.
+ *             global.thalion.ttio.tools.PerAUCli.
  *
  * All three implementations emit byte-equivalent outputs given
  * identical inputs. ``decrypt`` produces an "MPAD" binary dump with

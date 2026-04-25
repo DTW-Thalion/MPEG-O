@@ -69,7 +69,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIORamanImage`` · Java:
-   ``com.dtwthalion.ttio.RamanImage``.
+   ``global.thalion.ttio.RamanImage``.
 
 
    .. py:attribute:: width

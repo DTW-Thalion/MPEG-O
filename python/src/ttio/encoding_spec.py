@@ -46,7 +46,7 @@ class EncodingSpec:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOEncodingSpec`` · Java:
-    ``com.dtwthalion.ttio.EncodingSpec``.
+    ``global.thalion.ttio.EncodingSpec``.
     """
 
     precision: Precision = Precision.FLOAT64

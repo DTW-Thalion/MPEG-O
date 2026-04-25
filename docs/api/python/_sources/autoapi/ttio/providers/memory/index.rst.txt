@@ -19,7 +19,7 @@ ttio.providers.memory
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOMemoryProvider`` class
-   Java:        ``com.dtwthalion.ttio.providers.MemoryProvider`` class
+   Java:        ``global.thalion.ttio.providers.MemoryProvider`` class
 
    SPDX-License-Identifier: LGPL-3.0-or-later
 
@@ -49,7 +49,7 @@ Module Contents
 
    Cross-language equivalents:
      Objective-C: ``TTIOMemoryProvider``
-     Java:        ``com.dtwthalion.ttio.providers.MemoryProvider``
+     Java:        ``global.thalion.ttio.providers.MemoryProvider``
 
 
    .. py:method:: open(path_or_url=None, *, mode: str = 'r', **kwargs) -> MemoryProvider

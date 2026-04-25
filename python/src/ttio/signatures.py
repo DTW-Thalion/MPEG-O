@@ -18,7 +18,7 @@ implementation — see ``objc/Source/Protection/TTIOSignatureManager.m``.
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOSignatureManager`` · Java:
-``com.dtwthalion.ttio.protection.SignatureManager``.
+``global.thalion.ttio.protection.SignatureManager``.
 
 API status: Stable.
 """

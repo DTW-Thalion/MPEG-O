@@ -37,7 +37,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.importers.nmrml
- *   Java:   com.dtwthalion.ttio.importers.NmrMLReader
+ *   Java:   global.thalion.ttio.importers.NmrMLReader
  */
 @interface TTIONmrMLReader : NSObject
 

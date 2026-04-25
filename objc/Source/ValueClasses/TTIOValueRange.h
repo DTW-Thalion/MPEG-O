@@ -11,7 +11,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.value_range.ValueRange
- *   Java:   com.dtwthalion.ttio.ValueRange
+ *   Java:   global.thalion.ttio.ValueRange
  */
 @interface TTIOValueRange : NSObject <NSCoding, NSCopying>
 

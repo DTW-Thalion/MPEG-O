@@ -34,7 +34,7 @@ class InstrumentConfig:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOInstrumentConfig`` · Java:
-    ``com.dtwthalion.ttio.InstrumentConfig``.
+    ``global.thalion.ttio.InstrumentConfig``.
     """
 
     manufacturer: str = ""

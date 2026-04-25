@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIONmrMLWriter`` · Java:
-``com.dtwthalion.ttio.exporters.NmrMLWriter``
+``global.thalion.ttio.exporters.NmrMLWriter``
 
 API status: Stable.
 """

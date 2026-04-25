@@ -50,7 +50,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOFreeInductionDecay`` · Java:
-   ``com.dtwthalion.ttio.FreeInductionDecay``.
+   ``global.thalion.ttio.FreeInductionDecay``.
 
 
    .. py:attribute:: dwell_time_seconds

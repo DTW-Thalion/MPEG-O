@@ -58,7 +58,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOProvenanceable`` ·
-   Java: ``com.dtwthalion.ttio.protocols.Provenanceable``
+   Java: ``global.thalion.ttio.protocols.Provenanceable``
 
 
    .. py:method:: add_processing_step(step: ttio.provenance.ProvenanceRecord) -> None

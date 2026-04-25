@@ -32,7 +32,7 @@
           Cross-language equivalents: Python:
           ttio.importers.waters_masslynx
           Java:
-          com.dtwthalion.ttio.importers.WatersMassLynxReader
+          global.thalion.ttio.importers.WatersMassLynxReader
         </desc>
         <method type="TTIOSpectralDataset*" factory="yes">
           <sel>readFromDirectoryPath:</sel>

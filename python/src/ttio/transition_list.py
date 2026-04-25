@@ -28,7 +28,7 @@ class Transition:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOTransition`` · Java:
-    ``com.dtwthalion.ttio.TransitionList.Transition``.
+    ``global.thalion.ttio.TransitionList.Transition``.
     """
 
     precursor_mz: float
@@ -53,7 +53,7 @@ class TransitionList:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOTransitionList`` · Java:
-    ``com.dtwthalion.ttio.TransitionList``.
+    ``global.thalion.ttio.TransitionList``.
     """
 
     transitions: tuple[Transition, ...] = field(default_factory=tuple)

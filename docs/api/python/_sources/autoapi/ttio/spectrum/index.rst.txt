@@ -57,7 +57,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOSpectrum`` · Java:
-   ``com.dtwthalion.ttio.Spectrum``.
+   ``global.thalion.ttio.Spectrum``.
 
 
    .. py:attribute:: signal_arrays

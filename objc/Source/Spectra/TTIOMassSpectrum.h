@@ -15,7 +15,7 @@
  *
  * Cross-language equivalents:
  *   Python  — ttio.mass_spectrum.MassSpectrum
- *   Java    — com.dtwthalion.ttio.MassSpectrum
+ *   Java    — global.thalion.ttio.MassSpectrum
  */
 @interface TTIOMassSpectrum : TTIOSpectrum
 

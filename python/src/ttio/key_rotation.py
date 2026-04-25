@@ -36,7 +36,7 @@ Usage::
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOKeyRotationManager`` · Java:
-``com.dtwthalion.ttio.protection.KeyRotationManager``.
+``global.thalion.ttio.protection.KeyRotationManager``.
 
 API status: Stable.
 """

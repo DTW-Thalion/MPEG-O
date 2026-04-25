@@ -12,7 +12,7 @@ class VerificationStatus(IntEnum):
     """Sign-and-verify cycle outcome.
 
     Cross-language: ObjC ``TTIOVerificationStatus`` · Java
-    ``com.dtwthalion.ttio.protection.Verifier.Status``.
+    ``global.thalion.ttio.protection.Verifier.Status``.
     """
 
     VALID = 0
@@ -37,7 +37,7 @@ class Verifier:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOVerifier`` · Java:
-    ``com.dtwthalion.ttio.protection.Verifier``.
+    ``global.thalion.ttio.protection.Verifier``.
     """
 
     @staticmethod

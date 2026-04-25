@@ -46,7 +46,7 @@ class Spectrum:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOSpectrum`` · Java:
-    ``com.dtwthalion.ttio.Spectrum``.
+    ``global.thalion.ttio.Spectrum``.
     """
 
     signal_arrays: dict[str, SignalArray] = field(default_factory=dict)

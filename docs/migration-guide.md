@@ -505,7 +505,7 @@ of the per-AU CLI (or call `encrypt_per_au` / `PerAUFile.encryptFile`
 python -m ttio.tools.per_au_cli transcode input.tio output.tio key.bin --headers
 
 # Java
-java -cp ... com.dtwthalion.ttio.tools.PerAUCli encrypt input.tio output.tio key.bin --headers
+java -cp ... global.thalion.ttio.tools.PerAUCli encrypt input.tio output.tio key.bin --headers
 
 # ObjC
 TtioPerAU encrypt input.tio output.tio key.bin --headers
@@ -571,11 +571,11 @@ citizens. No existing call changes; no feature flag was introduced.
 
 | Concept | Python | Java | ObjC |
 |---|---|---|---|
-| Raman point spectrum | `ttio.RamanSpectrum` | `com.dtwthalion.ttio.RamanSpectrum` | `TTIORamanSpectrum` |
-| IR point spectrum | `ttio.IRSpectrum` | `com.dtwthalion.ttio.IRSpectrum` | `TTIOIRSpectrum` |
-| Raman hyperspectral cube | `ttio.RamanImage` | `com.dtwthalion.ttio.RamanImage` | `TTIORamanImage` |
-| IR hyperspectral cube | `ttio.IRImage` | `com.dtwthalion.ttio.IRImage` | `TTIOIRImage` |
-| IR mode enum | `ttio.IRMode` | `com.dtwthalion.ttio.IRMode` | `TTIOIRMode` |
+| Raman point spectrum | `ttio.RamanSpectrum` | `global.thalion.ttio.RamanSpectrum` | `TTIORamanSpectrum` |
+| IR point spectrum | `ttio.IRSpectrum` | `global.thalion.ttio.IRSpectrum` | `TTIOIRSpectrum` |
+| Raman hyperspectral cube | `ttio.RamanImage` | `global.thalion.ttio.RamanImage` | `TTIORamanImage` |
+| IR hyperspectral cube | `ttio.IRImage` | `global.thalion.ttio.IRImage` | `TTIOIRImage` |
+| IR mode enum | `ttio.IRMode` | `global.thalion.ttio.IRMode` | `TTIOIRMode` |
 
 Both spectrum classes share the same shape: `wavenumber_array` +
 `intensity_array` (cm⁻¹ x, arbitrary y), plus modality-specific

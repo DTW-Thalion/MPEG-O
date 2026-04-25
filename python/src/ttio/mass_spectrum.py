@@ -41,7 +41,7 @@ class MassSpectrum(Spectrum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOMassSpectrum`` · Java:
-    ``com.dtwthalion.ttio.MassSpectrum``.
+    ``global.thalion.ttio.MassSpectrum``.
     """
 
     MZ = "mz"

@@ -9,7 +9,7 @@ ignored rather than forwarded, matching the ObjC reader's behaviour.
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOMzMLReader`` · Java:
-``com.dtwthalion.ttio.importers.MzMLReader``
+``global.thalion.ttio.importers.MzMLReader``
 
 API status: Stable.
 """

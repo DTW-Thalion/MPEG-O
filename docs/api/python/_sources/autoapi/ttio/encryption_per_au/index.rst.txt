@@ -29,7 +29,7 @@ ttio.encryption_per_au
 
    Cross-language equivalents: ObjC
    ``TTIOPerAUEncryption`` · Java
-   ``com.dtwthalion.ttio.protection.PerAUEncryption``.
+   ``global.thalion.ttio.protection.PerAUEncryption``.
 
 
 

@@ -35,7 +35,7 @@ class Provenanceable(Protocol):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOProvenanceable`` ·
-    Java: ``com.dtwthalion.ttio.protocols.Provenanceable``
+    Java: ``global.thalion.ttio.protocols.Provenanceable``
     """
 
     def add_processing_step(self, step: ProvenanceRecord) -> None: ...

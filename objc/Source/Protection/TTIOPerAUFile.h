@@ -12,7 +12,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.encryption_per_au.encrypt_per_au/decrypt_per_au
- *   Java:   com.dtwthalion.ttio.protection.PerAUFile
+ *   Java:   global.thalion.ttio.protection.PerAUFile
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

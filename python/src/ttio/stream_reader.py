@@ -22,7 +22,7 @@ class StreamReader:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOStreamReader`` · Java:
-    ``com.dtwthalion.ttio.StreamReader``.
+    ``global.thalion.ttio.StreamReader``.
     """
 
     def __init__(self, file_path: str, run_name: str) -> None:

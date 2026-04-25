@@ -2,7 +2,7 @@
  * TTIOPerAUEncryption — v1.0 per-Access-Unit encryption primitives.
  *
  * Parallel to Python ttio.encryption_per_au and Java
- * com.dtwthalion.ttio.protection.PerAUEncryption. Implements the AAD
+ * global.thalion.ttio.protection.PerAUEncryption. Implements the AAD
  * binding rules from docs/transport-spec.md §4.3.4 and the
  * <channel>_segments / au_header_segments compound layout from
  * docs/format-spec.md §9.1.

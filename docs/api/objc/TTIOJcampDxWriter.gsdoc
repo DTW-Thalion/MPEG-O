@@ -29,7 +29,7 @@
           for RamanImage / IRImage, or wait for M73.1 NTUPLES
           support. Cross-language equivalents: Python:
           ttio.exporters.jcamp_dx.write_*_spectrum
-          Java: com.dtwthalion.ttio.exporters.JcampDxWriter
+          Java: global.thalion.ttio.exporters.JcampDxWriter
         </desc>
         <method type="BOOL" factory="yes">
           <sel>writeIRSpectrum:</sel>

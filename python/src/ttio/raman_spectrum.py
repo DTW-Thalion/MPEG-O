@@ -28,7 +28,7 @@ class RamanSpectrum(Spectrum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIORamanSpectrum`` · Java:
-    ``com.dtwthalion.ttio.RamanSpectrum``.
+    ``global.thalion.ttio.RamanSpectrum``.
     """
 
     WAVENUMBER = "wavenumber"

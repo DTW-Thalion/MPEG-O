@@ -31,7 +31,7 @@ class Indexable(Protocol):
     Cross-language equivalents
     --------------------------
     Objective-C: TTIOIndexable ·
-    Java: com.dtwthalion.ttio.protocols.Indexable
+    Java: global.thalion.ttio.protocols.Indexable
     """
 
     def object_at_index(self, index: int) -> Any: ...

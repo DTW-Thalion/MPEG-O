@@ -46,7 +46,7 @@ class IRImage:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOIRImage`` · Java:
-    ``com.dtwthalion.ttio.IRImage``.
+    ``global.thalion.ttio.IRImage``.
     """
 
     width: int = 0

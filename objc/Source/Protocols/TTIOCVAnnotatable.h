@@ -13,7 +13,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.protocols.CVAnnotatable
- *   Java:   com.dtwthalion.ttio.protocols.CVAnnotatable
+ *   Java:   global.thalion.ttio.protocols.CVAnnotatable
  *
  * API status: Stable.
  */

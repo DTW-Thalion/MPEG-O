@@ -2,7 +2,7 @@
 
 Python writes a .tio on every supported provider, then reads back
 through both the ObjC ``TtioVerify`` CLI and the Java
-``com.dtwthalion.ttio.tools.TtioVerify`` class. Both must produce
+``global.thalion.ttio.tools.TtioVerify`` class. Both must produce
 the same JSON summary that Python's own reader produces, proving:
 
 * Python's writes are bit-readable from ObjC and Java
@@ -101,7 +101,7 @@ def _resolve_java_verify() -> tuple[list[str], dict[str, str]] | None:
         "java",
         f"-Djava.library.path={env['TTIO_JAVA_LIB_PATH']}",
         "-cp", full_cp,
-        "com.dtwthalion.ttio.tools.TtioVerify",
+        "global.thalion.ttio.tools.TtioVerify",
     ]
     return argv, env
 

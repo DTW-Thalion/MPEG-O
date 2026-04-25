@@ -38,7 +38,7 @@ ttio.anonymization
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOAnonymizer`` · Java:
-   ``com.dtwthalion.ttio.protection.Anonymizer``.
+   ``global.thalion.ttio.protection.Anonymizer``.
 
    API status: Stable.
 

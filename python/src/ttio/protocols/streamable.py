@@ -31,7 +31,7 @@ class Streamable(Protocol):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOStreamable`` ·
-    Java: ``com.dtwthalion.ttio.protocols.Streamable``
+    Java: ``global.thalion.ttio.protocols.Streamable``
     """
 
     def next_object(self) -> Any: ...

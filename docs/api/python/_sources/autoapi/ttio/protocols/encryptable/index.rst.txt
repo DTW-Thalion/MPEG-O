@@ -57,7 +57,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOEncryptable`` ·
-   Java: ``com.dtwthalion.ttio.protocols.Encryptable``
+   Java: ``global.thalion.ttio.protocols.Encryptable``
 
 
    .. py:method:: encrypt_with_key(key: bytes, level: ttio.enums.EncryptionLevel) -> None

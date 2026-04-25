@@ -29,7 +29,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio._numpress
- *   Java:   com.dtwthalion.ttio.NumpressCodec
+ *   Java:   global.thalion.ttio.NumpressCodec
  */
 @interface TTIONumpress : NSObject
 

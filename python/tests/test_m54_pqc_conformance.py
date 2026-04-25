@@ -18,7 +18,7 @@ conformance contract is:
    ``.tio`` file.
 
 The harness shells out to two peer CLIs that ship with v0.8 M54:
-``com.dtwthalion.ttio.tools.PQCTool`` (Java, via ``run-tool.sh``) and
+``global.thalion.ttio.tools.PQCTool`` (Java, via ``run-tool.sh``) and
 ``TtioPQCTool`` (Objective-C, built via ``./build.sh``). When a peer
 CLI is not present the corresponding cells are **skipped** — the test
 reports which pairings actually ran so CI can show graceful
@@ -59,7 +59,7 @@ def _java_runner() -> list[str] | None:
         return None
     if not classes.is_dir():
         return None
-    return [str(runner), "com.dtwthalion.ttio.tools.PQCTool"]
+    return [str(runner), "global.thalion.ttio.tools.PQCTool"]
 
 
 def _objc_runner() -> list[str] | None:

@@ -96,7 +96,7 @@ NS_ASSUME_NONNULL_BEGIN
  *
  * Cross-language equivalents:
  *   Python: ttio.importers.imzml
- *   Java:   com.dtwthalion.ttio.importers.ImzMLReader
+ *   Java:   global.thalion.ttio.importers.ImzMLReader
  */
 @interface TTIOImzMLReader : NSObject
 

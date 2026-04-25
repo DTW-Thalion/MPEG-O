@@ -44,7 +44,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOIsolationWindow`` · Java:
-   ``com.dtwthalion.ttio.IsolationWindow``.
+   ``global.thalion.ttio.IsolationWindow``.
 
 
    .. py:attribute:: target_mz

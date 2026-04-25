@@ -23,7 +23,7 @@
           mode. Immutable value class. API status: Stable.
           Cross-language equivalents: Python:
           ttio.axis_descriptor.AxisDescriptor
-          Java: com.dtwthalion.ttio.AxisDescriptor
+          Java: global.thalion.ttio.AxisDescriptor
         </desc>
         <method type="instancetype" factory="yes">
           <sel>descriptorWithName:</sel>

@@ -26,7 +26,7 @@ ttio.exporters.imzml
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOImzMLWriter`` · Java:
-   ``com.dtwthalion.ttio.exporters.ImzMLWriter``
+   ``global.thalion.ttio.exporters.ImzMLWriter``
 
    API status: Provisional (v0.9+ — will stabilise after the first round
    of production feedback on the imaging writer).

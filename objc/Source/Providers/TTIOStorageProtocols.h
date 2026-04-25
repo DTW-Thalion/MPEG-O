@@ -42,7 +42,7 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
  *
  * Cross-language equivalents:
  *   Python: ttio.providers.base.StorageDataset
- *   Java:   com.dtwthalion.ttio.providers.StorageDataset
+ *   Java:   global.thalion.ttio.providers.StorageDataset
  */
 @protocol TTIOStorageDataset <NSObject>
 
@@ -135,7 +135,7 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
  *
  * Cross-language equivalents:
  *   Python: ttio.providers.base.StorageGroup
- *   Java:   com.dtwthalion.ttio.providers.StorageGroup
+ *   Java:   global.thalion.ttio.providers.StorageGroup
  */
 @protocol TTIOStorageGroup <NSObject>
 
@@ -205,7 +205,7 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
  *
  * Cross-language equivalents:
  *   Python: ttio.providers.base.StorageProvider
- *   Java:   com.dtwthalion.ttio.providers.StorageProvider
+ *   Java:   global.thalion.ttio.providers.StorageProvider
  */
 @protocol TTIOStorageProvider <NSObject>
 

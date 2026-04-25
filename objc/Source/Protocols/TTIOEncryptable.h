@@ -17,7 +17,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.protocols.Encryptable
- *   Java:   com.dtwthalion.ttio.protocols.Encryptable
+ *   Java:   global.thalion.ttio.protocols.Encryptable
  */
 @protocol TTIOEncryptable <NSObject>
 

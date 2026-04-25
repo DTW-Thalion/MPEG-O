@@ -24,7 +24,7 @@
           array on disk. API status: Stable. Cross-language
           equivalents: Python:
           ttio.provenance.ProvenanceRecord
-          Java: com.dtwthalion.ttio.ProvenanceRecord
+          Java: global.thalion.ttio.ProvenanceRecord
         </desc>
         <method type="instancetype" factory="yes">
           <sel>fromPlist:</sel>

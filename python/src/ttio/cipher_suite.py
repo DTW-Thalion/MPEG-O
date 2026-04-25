@@ -31,7 +31,7 @@ Design notes (binding decision 39):
 
 Cross-language equivalents:
 * ObjC: ``TTIOCipherSuite`` (:file:`objc/Source/Protection/TTIOCipherSuite.h`)
-* Java: ``com.dtwthalion.ttio.protection.CipherSuite``
+* Java: ``global.thalion.ttio.protection.CipherSuite``
 """
 from __future__ import annotations
 

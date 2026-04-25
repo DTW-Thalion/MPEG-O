@@ -42,7 +42,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOIRSpectrum`` · Java:
-   ``com.dtwthalion.ttio.IRSpectrum``.
+   ``global.thalion.ttio.IRSpectrum``.
 
 
    .. py:attribute:: WAVENUMBER

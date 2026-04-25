@@ -16,7 +16,7 @@ ttio.enums
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOEnums.h`` ·
-   Java: ``com.dtwthalion.ttio.Enums``
+   Java: ``global.thalion.ttio.Enums``
 
 
 

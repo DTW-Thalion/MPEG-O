@@ -29,7 +29,7 @@ class UVVisSpectrum(Spectrum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOUVVisSpectrum`` · Java:
-    ``com.dtwthalion.ttio.UVVisSpectrum``.
+    ``global.thalion.ttio.UVVisSpectrum``.
     """
 
     WAVELENGTH = "wavelength"

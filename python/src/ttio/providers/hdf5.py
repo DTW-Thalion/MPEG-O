@@ -9,7 +9,7 @@ API status: Stable (Provisional per M39 — may change before v1.0).
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOHDF5Provider`` class
-Java:        ``com.dtwthalion.ttio.providers.Hdf5Provider`` class
+Java:        ``global.thalion.ttio.providers.Hdf5Provider`` class
 
 SPDX-License-Identifier: LGPL-3.0-or-later
 """
@@ -267,7 +267,7 @@ class Hdf5Provider(StorageProvider):
 
     Cross-language equivalents:
       Objective-C: ``TTIOHDF5Provider``
-      Java:        ``com.dtwthalion.ttio.providers.Hdf5Provider``
+      Java:        ``global.thalion.ttio.providers.Hdf5Provider``
     """
 
     def __init__(self, file: h5py.File | None = None):

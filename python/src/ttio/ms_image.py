@@ -54,7 +54,7 @@ class MSImage:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOMSImage`` · Java:
-    ``com.dtwthalion.ttio.MSImage``.
+    ``global.thalion.ttio.MSImage``.
     """
 
     width: int = 0

@@ -30,7 +30,7 @@ class StreamWriter:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOStreamWriter`` · Java:
-    ``com.dtwthalion.ttio.StreamWriter``.
+    ``global.thalion.ttio.StreamWriter``.
     """
 
     def __init__(self, file_path: str,

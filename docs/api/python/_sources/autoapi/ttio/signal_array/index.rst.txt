@@ -46,7 +46,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOSignalArray`` ·
-   Java: ``com.dtwthalion.ttio.SignalArray``
+   Java: ``global.thalion.ttio.SignalArray``
 
 
    .. py:attribute:: data

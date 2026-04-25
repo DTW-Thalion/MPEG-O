@@ -1,0 +1,4 @@
+global.thalion.ttio.providers.Hdf5Provider
+global.thalion.ttio.providers.MemoryProvider
+global.thalion.ttio.providers.SqliteProvider
+global.thalion.ttio.providers.ZarrProvider

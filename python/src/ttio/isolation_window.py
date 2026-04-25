@@ -30,7 +30,7 @@ class IsolationWindow:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOIsolationWindow`` · Java:
-    ``com.dtwthalion.ttio.IsolationWindow``.
+    ``global.thalion.ttio.IsolationWindow``.
     """
 
     target_mz: float

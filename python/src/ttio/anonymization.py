@@ -31,7 +31,7 @@ SPDX-License-Identifier: LGPL-3.0-or-later
 Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOAnonymizer`` · Java:
-``com.dtwthalion.ttio.protection.Anonymizer``.
+``global.thalion.ttio.protection.Anonymizer``.
 
 API status: Stable.
 """

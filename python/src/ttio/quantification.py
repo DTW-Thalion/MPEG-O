@@ -27,7 +27,7 @@ class Quantification:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOQuantification`` · Java:
-    ``com.dtwthalion.ttio.Quantification``.
+    ``global.thalion.ttio.Quantification``.
     """
 
     chemical_entity: str

@@ -21,7 +21,7 @@
           encoding spec, an optional axis descriptor, and an
           arbitrary number of CV annotations. Construction is
           via
-          <ref type="method" id="-initWithBuffer:length:encoding:axis:">-initWithBuffer:length:encoding:axis:</ref> with raw bytes; the caller is responsible for matching the buffer layout to the encoding's elementSize. HDF5 round-trip is via <ref type="method" id="-writeToGroup:name:">-writeToGroup:name:</ref> and <ref type="method" id="+readFromGroup:name:">+readFromGroup:name:</ref>. Not thread-safe. Mutating CV annotations from multiple threads is undefined. API status: Stable. Cross-language equivalents: Python: ttio.signal_array.SignalArray Java: com.dtwthalion.ttio.SignalArray
+          <ref type="method" id="-initWithBuffer:length:encoding:axis:">-initWithBuffer:length:encoding:axis:</ref> with raw bytes; the caller is responsible for matching the buffer layout to the encoding's elementSize. HDF5 round-trip is via <ref type="method" id="-writeToGroup:name:">-writeToGroup:name:</ref> and <ref type="method" id="+readFromGroup:name:">+readFromGroup:name:</ref>. Not thread-safe. Mutating CV annotations from multiple threads is undefined. API status: Stable. Cross-language equivalents: Python: ttio.signal_array.SignalArray Java: global.thalion.ttio.SignalArray
         </desc>
         <method type="instancetype" factory="yes">
           <sel>readFromGroup:</sel>

@@ -13,7 +13,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.provenance.ProvenanceRecord
- *   Java:   com.dtwthalion.ttio.ProvenanceRecord
+ *   Java:   global.thalion.ttio.ProvenanceRecord
  */
 @interface TTIOProvenanceRecord : NSObject <NSCopying>
 

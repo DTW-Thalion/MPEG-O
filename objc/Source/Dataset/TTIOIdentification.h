@@ -15,7 +15,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.identification.Identification
- *   Java:   com.dtwthalion.ttio.Identification
+ *   Java:   global.thalion.ttio.Identification
  */
 @interface TTIOIdentification : NSObject <NSCopying>
 

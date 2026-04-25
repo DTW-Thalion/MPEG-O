@@ -41,7 +41,7 @@ Module Contents
    Cross-language equivalents
    --------------------------
    Objective-C: ``TTIOStreamWriter`` · Java:
-   ``com.dtwthalion.ttio.StreamWriter``.
+   ``global.thalion.ttio.StreamWriter``.
 
 
    .. py:method:: append_spectrum(spectrum: ttio.mass_spectrum.MassSpectrum) -> None

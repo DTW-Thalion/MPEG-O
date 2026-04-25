@@ -73,7 +73,7 @@ class SpectralDataset:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOSpectralDataset`` · Java:
-    ``com.dtwthalion.ttio.SpectralDataset``.
+    ``global.thalion.ttio.SpectralDataset``.
     """
 
     path: Path

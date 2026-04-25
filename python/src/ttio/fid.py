@@ -34,7 +34,7 @@ class FreeInductionDecay(SignalArray):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOFreeInductionDecay`` · Java:
-    ``com.dtwthalion.ttio.FreeInductionDecay``.
+    ``global.thalion.ttio.FreeInductionDecay``.
     """
 
     dwell_time_seconds: float = 0.0

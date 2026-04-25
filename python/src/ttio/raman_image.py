@@ -45,7 +45,7 @@ class RamanImage:
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIORamanImage`` · Java:
-    ``com.dtwthalion.ttio.RamanImage``.
+    ``global.thalion.ttio.RamanImage``.
     """
 
     width: int = 0

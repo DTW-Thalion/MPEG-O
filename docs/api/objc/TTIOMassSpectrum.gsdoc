@@ -21,7 +21,7 @@
           enforces equal-length m/z and intensity arrays.
           Cross-language equivalents: Python —
           ttio.mass_spectrum.MassSpectrum
-          Java — com.dtwthalion.ttio.MassSpectrum
+          Java — global.thalion.ttio.MassSpectrum
         </desc>
         <method type="TTIOActivationMethod">
           <sel>activationMethod</sel>

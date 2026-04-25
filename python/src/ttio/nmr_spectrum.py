@@ -26,7 +26,7 @@ class NMRSpectrum(Spectrum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIONMRSpectrum`` · Java:
-    ``com.dtwthalion.ttio.NMRSpectrum``.
+    ``global.thalion.ttio.NMRSpectrum``.
     """
 
     CHEMICAL_SHIFT = "chemical_shift"

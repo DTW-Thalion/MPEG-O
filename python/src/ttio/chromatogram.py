@@ -34,7 +34,7 @@ class Chromatogram(Spectrum):
     Cross-language equivalents
     --------------------------
     Objective-C: ``TTIOChromatogram`` · Java:
-    ``com.dtwthalion.ttio.Chromatogram``.
+    ``global.thalion.ttio.Chromatogram``.
     """
 
     TIME = "time"
