@@ -14,50 +14,50 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Export/MPGOISAExporter.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Spectra/MPGOChromatogram.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Core/TTIOSignalArray.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Export/TTIOISAExporter.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Spectra/TTIOChromatogram.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <unistd.h>
 #import <sys/stat.h>
 
 static NSString *m27TempDir(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m27_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m27_%d_%@",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *m27Array(const double *values, NSUInteger n)
+static TTIOSignalArray *m27Array(const double *values, NSUInteger n)
 {
-    MPGOEncodingSpec *spec =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
+    TTIOEncodingSpec *spec =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
     NSData *buf = [NSData dataWithBytes:values length:n * sizeof(double)];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf length:n encoding:spec axis:nil];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf length:n encoding:spec axis:nil];
 }
 
-static MPGOSpectralDataset *m27MakeDataset(BOOL withChromatograms)
+static TTIOSpectralDataset *m27MakeDataset(BOOL withChromatograms)
 {
     double mz[]  = { 100.0, 200.0, 300.0 };
     double it[]  = { 10.0,  20.0,  30.0 };
-    MPGOSignalArray *mzArr = m27Array(mz, 3);
-    MPGOSignalArray *inArr = m27Array(it, 3);
-    MPGOMassSpectrum *s =
-        [[MPGOMassSpectrum alloc] initWithMzArray:mzArr intensityArray:inArr
-                                            msLevel:1 polarity:MPGOPolarityPositive
+    TTIOSignalArray *mzArr = m27Array(mz, 3);
+    TTIOSignalArray *inArr = m27Array(it, 3);
+    TTIOMassSpectrum *s =
+        [[TTIOMassSpectrum alloc] initWithMzArray:mzArr intensityArray:inArr
+                                            msLevel:1 polarity:TTIOPolarityPositive
                                          scanWindow:nil indexPosition:0
                                     scanTimeSeconds:1.0
                                         precursorMz:0.0 precursorCharge:0
                                               error:NULL];
 
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
                                                      model:@"Orbitrap Exploris 480"
                                               serialNumber:@"SN-001"
                                                 sourceType:@"electrospray ionization"
@@ -68,22 +68,22 @@ static MPGOSpectralDataset *m27MakeDataset(BOOL withChromatograms)
     if (withChromatograms) {
         double t[]  = { 0.0, 1.0, 2.0 };
         double iv[] = { 100.0, 500.0, 200.0 };
-        MPGOSignalArray *tArr = m27Array(t, 3);
-        MPGOSignalArray *iArr = m27Array(iv, 3);
-        MPGOChromatogram *c = [[MPGOChromatogram alloc]
+        TTIOSignalArray *tArr = m27Array(t, 3);
+        TTIOSignalArray *iArr = m27Array(iv, 3);
+        TTIOChromatogram *c = [[TTIOChromatogram alloc]
             initWithTimeArray:tArr intensityArray:iArr
-                          type:MPGOChromatogramTypeTIC
+                          type:TTIOChromatogramTypeTIC
                       targetMz:0.0 precursorMz:0.0 productMz:0.0 error:NULL];
         chroms = @[c];
     }
 
-    MPGOAcquisitionRun *run =
-        [[MPGOAcquisitionRun alloc] initWithSpectra:@[s]
+    TTIOAcquisitionRun *run =
+        [[TTIOAcquisitionRun alloc] initWithSpectra:@[s]
                                       chromatograms:chroms
-                                    acquisitionMode:MPGOAcquisitionModeMS1DDA
+                                    acquisitionMode:TTIOAcquisitionModeMS1DDA
                                    instrumentConfig:cfg];
 
-    return [[MPGOSpectralDataset alloc]
+    return [[TTIOSpectralDataset alloc]
         initWithTitle:@"M27 Investigation"
    isaInvestigationId:@"ISA-M27-001"
                msRuns:@{ @"run_0001": run }
@@ -98,9 +98,9 @@ void testMilestone27(void)
 {
     // ---- minimal dataset: bundle contents ----
     {
-        MPGOSpectralDataset *ds = m27MakeDataset(NO);
+        TTIOSpectralDataset *ds = m27MakeDataset(NO);
         NSError *err = nil;
-        NSDictionary *bundle = [MPGOISAExporter bundleForDataset:ds error:&err];
+        NSDictionary *bundle = [TTIOISAExporter bundleForDataset:ds error:&err];
         PASS(bundle != nil, "M27: bundleForDataset succeeds");
         PASS(bundle[@"i_investigation.txt"] != nil, "M27: i_investigation.txt present");
         PASS(bundle[@"s_study.txt"] != nil, "M27: s_study.txt present");
@@ -181,9 +181,9 @@ void testMilestone27(void)
 
     // ---- dataset with chromatograms: derived file listed ----
     {
-        MPGOSpectralDataset *ds = m27MakeDataset(YES);
+        TTIOSpectralDataset *ds = m27MakeDataset(YES);
         NSError *err = nil;
-        NSDictionary *bundle = [MPGOISAExporter bundleForDataset:ds error:&err];
+        NSDictionary *bundle = [TTIOISAExporter bundleForDataset:ds error:&err];
         NSString *assay = [[NSString alloc] initWithData:bundle[@"a_assay_ms_run_0001.txt"]
                                                    encoding:NSUTF8StringEncoding];
         PASS([assay rangeOfString:@"run_0001_chrom_0"].location != NSNotFound,
@@ -195,9 +195,9 @@ void testMilestone27(void)
         NSString *dir = m27TempDir(@"bundle");
         [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];
 
-        MPGOSpectralDataset *ds = m27MakeDataset(NO);
+        TTIOSpectralDataset *ds = m27MakeDataset(NO);
         NSError *err = nil;
-        BOOL ok = [MPGOISAExporter writeBundleForDataset:ds
+        BOOL ok = [TTIOISAExporter writeBundleForDataset:ds
                                               toDirectory:dir
                                                     error:&err];
         PASS(ok == YES, "M27: writeBundleForDataset returns YES");

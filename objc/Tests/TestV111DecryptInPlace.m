@@ -1,10 +1,10 @@
-// v1.1.1 parity: +[MPGOSpectralDataset decryptInPlaceAtPath:withKey:error:].
+// v1.1.1 parity: +[TTIOSpectralDataset decryptInPlaceAtPath:withKey:error:].
 //
-// Covers the upstream-first piece of the MPEG-O-MCP-Server M5
-// mpgo_decrypt_file tool: the existing v1.1.0 -decryptWithKey:error: is
+// Covers the upstream-first piece of the TTI-O-MCP-Server M5
+// ttio_decrypt_file tool: the existing v1.1.0 -decryptWithKey:error: is
 // read-only, so the admin flow that writes plaintext back to disk needs a
 // dedicated API. This suite verifies the classmethod reverses
-// -encryptWithKey:level:MPGOEncryptionLevelDataset: across single- and
+// -encryptWithKey:level:TTIOEncryptionLevelDataset: across single- and
 // multi-run fixtures, leaving the file byte-compatible with its
 // pre-encryption state.
 //
@@ -16,59 +16,59 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <unistd.h>
 #import <assert.h>
 
 static NSString *v111path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_v111_decrypt_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_v111_decrypt_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *v111F64(const double *values, NSUInteger n)
+static TTIOSignalArray *v111F64(const double *values, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:values length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf
                                             length:n
                                           encoding:enc
                                               axis:nil];
 }
 
-static MPGOAcquisitionRun *v111MakeOneSpectrumRun(const double *intensity, NSUInteger n)
+static TTIOAcquisitionRun *v111MakeOneSpectrumRun(const double *intensity, NSUInteger n)
 {
     double mzBuf[4] = {100.0, 200.0, 300.0, 400.0};
     assert(n == 4 && "fixture assumes 4-point spectrum");
-    MPGOMassSpectrum *spec =
-        [[MPGOMassSpectrum alloc] initWithMzArray:v111F64(mzBuf, n)
+    TTIOMassSpectrum *spec =
+        [[TTIOMassSpectrum alloc] initWithMzArray:v111F64(mzBuf, n)
                                    intensityArray:v111F64(intensity, n)
                                           msLevel:1
-                                         polarity:MPGOPolarityPositive
+                                         polarity:TTIOPolarityPositive
                                        scanWindow:nil
                                     indexPosition:0
                                   scanTimeSeconds:0.0
                                       precursorMz:0.0
                                   precursorCharge:0
                                             error:NULL];
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@""
                                                      model:@""
                                               serialNumber:@""
                                                 sourceType:@""
                                               analyzerType:@""
                                               detectorType:@""];
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:@[spec]
-                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:@[spec]
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
                                       instrumentConfig:cfg];
 }
 
@@ -76,13 +76,13 @@ static NSString *v111WriteFixture(NSString *suffix,
                                   NSArray<NSString *> *runNames,
                                   const double *intensity)
 {
-    NSMutableDictionary<NSString *, MPGOAcquisitionRun *> *runs =
+    NSMutableDictionary<NSString *, TTIOAcquisitionRun *> *runs =
         [NSMutableDictionary dictionary];
     for (NSString *name in runNames) {
         runs[name] = v111MakeOneSpectrumRun(intensity, 4);
     }
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"v111_decrypt"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"v111_decrypt"
                                 isaInvestigationId:@""
                                             msRuns:runs
                                            nmrRuns:@{}
@@ -108,7 +108,7 @@ static NSData *v111KnownKey(void)
     return [NSData dataWithBytes:k length:32];
 }
 
-static BOOL v111MatchesExpected(MPGOSignalArray *arr, const double *expected, NSUInteger n)
+static BOOL v111MatchesExpected(TTIOSignalArray *arr, const double *expected, NSUInteger n)
 {
     if (!arr || arr.length != n) return NO;
     if (arr.buffer.length != n * sizeof(double)) return NO;
@@ -129,37 +129,37 @@ static void v111TestSingleRunRoundTrip(void)
     NSData *key = v111KnownKey();
     NSError *err = nil;
 
-    MPGOSpectralDataset *writer =
-        [MPGOSpectralDataset readFromFilePath:path error:&err];
+    TTIOSpectralDataset *writer =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
     PASS(writer != nil, "single-run: initial read succeeds");
     [writer closeFile];
     err = nil;
     PASS([writer encryptWithKey:key
-                          level:MPGOEncryptionLevelDataset
+                          level:TTIOEncryptionLevelDataset
                           error:&err],
          "single-run: encryptWithKey: succeeds");
     [writer closeFile];
 
     err = nil;
-    BOOL ok = [MPGOSpectralDataset decryptInPlaceAtPath:path
+    BOOL ok = [TTIOSpectralDataset decryptInPlaceAtPath:path
                                                 withKey:key
                                                   error:&err];
     PASS(ok, "single-run: decryptInPlaceAtPath: succeeds");
 
     // A fresh reader must see isEncrypted == NO and usable intensities.
     err = nil;
-    MPGOSpectralDataset *reopened =
-        [MPGOSpectralDataset readFromFilePath:path error:&err];
+    TTIOSpectralDataset *reopened =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
     PASS(reopened != nil, "single-run: reopen after decryptInPlace succeeds");
     PASS(!reopened.isEncrypted,
          "single-run: reopened dataset reports isEncrypted == NO");
     PASS([reopened.encryptedAlgorithm isEqualToString:@""],
          "single-run: encryptedAlgorithm cleared");
 
-    MPGOAcquisitionRun *run = reopened.msRuns[@"run_0001"];
+    TTIOAcquisitionRun *run = reopened.msRuns[@"run_0001"];
     err = nil;
     id specAny = [run spectrumAtIndex:0 error:&err];
-    MPGOMassSpectrum *spec = (MPGOMassSpectrum *)specAny;
+    TTIOMassSpectrum *spec = (TTIOMassSpectrum *)specAny;
     PASS(v111MatchesExpected(spec.intensityArray, intensity, 4),
          "single-run: decrypted intensity bytes equal plaintext");
 
@@ -179,34 +179,34 @@ static void v111TestMultiRunRoundTrip(void)
     NSData *key = v111KnownKey();
     NSError *err = nil;
 
-    MPGOSpectralDataset *writer =
-        [MPGOSpectralDataset readFromFilePath:path error:&err];
+    TTIOSpectralDataset *writer =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
     PASS(writer != nil, "multi-run: initial read succeeds");
     [writer closeFile];
     err = nil;
     PASS([writer encryptWithKey:key
-                          level:MPGOEncryptionLevelDataset
+                          level:TTIOEncryptionLevelDataset
                           error:&err],
          "multi-run: encryptWithKey: succeeds");
     [writer closeFile];
 
     err = nil;
-    PASS([MPGOSpectralDataset decryptInPlaceAtPath:path
+    PASS([TTIOSpectralDataset decryptInPlaceAtPath:path
                                            withKey:key
                                              error:&err],
          "multi-run: decryptInPlaceAtPath: succeeds");
 
     err = nil;
-    MPGOSpectralDataset *reopened =
-        [MPGOSpectralDataset readFromFilePath:path error:&err];
+    TTIOSpectralDataset *reopened =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
     PASS(!reopened.isEncrypted,
          "multi-run: reopened dataset reports isEncrypted == NO");
 
     for (NSString *name in @[@"run_A", @"run_B", @"run_C"]) {
-        MPGOAcquisitionRun *run = reopened.msRuns[name];
+        TTIOAcquisitionRun *run = reopened.msRuns[name];
         err = nil;
-        MPGOMassSpectrum *spec =
-            (MPGOMassSpectrum *)[run spectrumAtIndex:0 error:&err];
+        TTIOMassSpectrum *spec =
+            (TTIOMassSpectrum *)[run spectrumAtIndex:0 error:&err];
         PASS(v111MatchesExpected(spec.intensityArray, intensity, 4),
              "multi-run: all runs' intensities equal plaintext");
     }
@@ -223,20 +223,20 @@ static void v111TestIdempotentOnPlaintext(void)
     PASS(path != nil, "idempotent: fixture writes");
 
     NSError *err = nil;
-    BOOL ok = [MPGOSpectralDataset decryptInPlaceAtPath:path
+    BOOL ok = [TTIOSpectralDataset decryptInPlaceAtPath:path
                                                 withKey:v111KnownKey()
                                                   error:&err];
     PASS(ok, "idempotent: decryptInPlaceAtPath: on plaintext file succeeds");
 
     err = nil;
-    MPGOSpectralDataset *reopened =
-        [MPGOSpectralDataset readFromFilePath:path error:&err];
+    TTIOSpectralDataset *reopened =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
     PASS(!reopened.isEncrypted,
          "idempotent: plaintext file still reports isEncrypted == NO");
-    MPGOAcquisitionRun *run = reopened.msRuns[@"run_0001"];
+    TTIOAcquisitionRun *run = reopened.msRuns[@"run_0001"];
     err = nil;
-    MPGOMassSpectrum *spec =
-        (MPGOMassSpectrum *)[run spectrumAtIndex:0 error:&err];
+    TTIOMassSpectrum *spec =
+        (TTIOMassSpectrum *)[run spectrumAtIndex:0 error:&err];
     PASS(v111MatchesExpected(spec.intensityArray, intensity, 4),
          "idempotent: intensities unchanged");
 
@@ -253,7 +253,7 @@ static void v111TestRejectsShortKey(void)
 
     NSData *shortKey = [@"too short" dataUsingEncoding:NSUTF8StringEncoding];
     NSError *err = nil;
-    BOOL ok = [MPGOSpectralDataset decryptInPlaceAtPath:path
+    BOOL ok = [TTIOSpectralDataset decryptInPlaceAtPath:path
                                                 withKey:shortKey
                                                   error:&err];
     PASS(!ok, "reject: decryptInPlaceAtPath: fails on short key");

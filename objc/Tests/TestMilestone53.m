@@ -1,9 +1,9 @@
 /*
- * TestMilestone53 — ObjC MPGOBrukerTDFReader (metadata side).
+ * TestMilestone53 — ObjC TTIOBrukerTDFReader (metadata side).
  *
  * Binary round-trip via NSTask is exercised by
  * python/tests/test_bruker_tdf.py::test_real_tdf_round_trip when a
- * real `.d` fixture is available (MPGO_BRUKER_TDF_FIXTURE env var).
+ * real `.d` fixture is available (TTIO_BRUKER_TDF_FIXTURE env var).
  * This suite covers the SQLite metadata path with a synthetic
  * fixture.
  *
@@ -14,11 +14,11 @@
 #import <sqlite3.h>
 #import <unistd.h>
 
-#import "Import/MPGOBrukerTDFReader.h"
+#import "Import/TTIOBrukerTDFReader.h"
 
 static NSString *m53TempDir(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m53_%d_%@.d",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m53_%d_%@.d",
             (int)getpid(), suffix];
 }
 
@@ -84,8 +84,8 @@ void testMilestone53(void)
     writeSyntheticTdf(path, 5, 3, @"Bruker Daltonics", @"timsTOF SCP");
 
     NSError *err = nil;
-    MPGOBrukerTDFMetadata *md =
-        [MPGOBrukerTDFReader readMetadataAtPath:path error:&err];
+    TTIOBrukerTDFMetadata *md =
+        [TTIOBrukerTDFReader readMetadataAtPath:path error:&err];
     PASS(md != nil, "M53: readMetadataAtPath returns non-nil");
     PASS(md.frameCount == 5, "M53: frameCount is 5");
     PASS(md.ms1FrameCount == 3, "M53: ms1FrameCount is 3");
@@ -105,8 +105,8 @@ void testMilestone53(void)
     // Missing directory → clean error.
     NSString *missing = m53TempDir(@"does-not-exist");
     err = nil;
-    MPGOBrukerTDFMetadata *md2 =
-        [MPGOBrukerTDFReader readMetadataAtPath:missing error:&err];
+    TTIOBrukerTDFMetadata *md2 =
+        [TTIOBrukerTDFReader readMetadataAtPath:missing error:&err];
     PASS(md2 == nil && err != nil,
          "M53: readMetadataAtPath populates NSError on missing dir");
 
@@ -126,8 +126,8 @@ void testMilestone53(void)
         NULL, NULL, NULL);
     sqlite3_close(db);
     err = nil;
-    MPGOBrukerTDFMetadata *md3 =
-        [MPGOBrukerTDFReader readMetadataAtPath:minPath error:&err];
+    TTIOBrukerTDFMetadata *md3 =
+        [TTIOBrukerTDFReader readMetadataAtPath:minPath error:&err];
     PASS(md3 != nil && [md3.instrumentVendor isEqualToString:@"Bruker"],
          "M53: vendor defaults to 'Bruker' when GlobalMetadata missing");
     rm_rf53(minPath);

@@ -1,14 +1,14 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Analysis/MPGOTwoDCos.h"
-#import "Spectra/MPGOTwoDimensionalCorrelationSpectrum.h"
-#import "ValueClasses/MPGOAxisDescriptor.h"
+#import "Analysis/TTIOTwoDCos.h"
+#import "Spectra/TTIOTwoDimensionalCorrelationSpectrum.h"
+#import "ValueClasses/TTIOAxisDescriptor.h"
 #import <math.h>
 #import <stdlib.h>
 #import <string.h>
 
 // M77 unit tests + cross-language conformance gate for the ObjC
-// 2D-COS compute primitives (Analysis/MPGOTwoDCos).
+// 2D-COS compute primitives (Analysis/TTIOTwoDCos).
 
 static NSString *m77ConformanceDir(void)
 {
@@ -95,7 +95,7 @@ static BOOL allclose(const double *actual, const double *expected,
 static void testHilbertNodaMatrix(void)
 {
     NSError *err = nil;
-    NSData *n = [MPGOTwoDCos hilbertNodaMatrixOfOrder:8 error:&err];
+    NSData *n = [TTIOTwoDCos hilbertNodaMatrixOfOrder:8 error:&err];
     pass(n != nil && err == nil, "hilbertNodaMatrix(8) built");
     pass(n.length == 8 * 8 * sizeof(double), "hilbertNodaMatrix(8) byte length");
     const double *v = (const double *)n.bytes;
@@ -119,7 +119,7 @@ static void testHilbertNodaMatrix(void)
     }
     pass(YES, "hilbertNodaMatrix is antisymmetric");
     // Known entry.
-    NSData *n4 = [MPGOTwoDCos hilbertNodaMatrixOfOrder:4 error:NULL];
+    NSData *n4 = [TTIOTwoDCos hilbertNodaMatrixOfOrder:4 error:NULL];
     const double *v4 = (const double *)n4.bytes;
     pass(fabs(v4[0 * 4 + 1] - 1.0 / M_PI) < 1e-15,
          "hilbertNodaMatrix(4)[0,1] == 1/pi");
@@ -127,7 +127,7 @@ static void testHilbertNodaMatrix(void)
          "hilbertNodaMatrix(4)[0,3] == 1/(3*pi)");
 
     NSError *badErr = nil;
-    NSData *bad = [MPGOTwoDCos hilbertNodaMatrixOfOrder:0 error:&badErr];
+    NSData *bad = [TTIOTwoDCos hilbertNodaMatrixOfOrder:0 error:&badErr];
     pass(bad == nil && badErr != nil,
          "hilbertNodaMatrix(0) rejects");
 }
@@ -143,8 +143,8 @@ static void testComputeConstantInput(void)
         }
     }
     NSError *err = nil;
-    MPGOTwoDimensionalCorrelationSpectrum *spec =
-        [MPGOTwoDCos computeWithDynamicSpectra:dynBuf
+    TTIOTwoDimensionalCorrelationSpectrum *spec =
+        [TTIOTwoDCos computeWithDynamicSpectra:dynBuf
                             perturbationPoints:m
                              spectralVariables:n
                                      reference:nil
@@ -177,8 +177,8 @@ static void testComputeStructuralInvariants(void)
         d[i] = ((int32_t)(seed >> 33)) * (1.0 / (double)(1LL << 31));
     }
     NSError *err = nil;
-    MPGOTwoDimensionalCorrelationSpectrum *spec =
-        [MPGOTwoDCos computeWithDynamicSpectra:dynBuf
+    TTIOTwoDimensionalCorrelationSpectrum *spec =
+        [TTIOTwoDCos computeWithDynamicSpectra:dynBuf
                             perturbationPoints:m
                              spectralVariables:n
                                      reference:nil
@@ -205,8 +205,8 @@ static void testComputeRejects(void)
 {
     NSError *err = nil;
     NSMutableData *buf = [NSMutableData dataWithLength:5 * sizeof(double)];
-    MPGOTwoDimensionalCorrelationSpectrum *spec =
-        [MPGOTwoDCos computeWithDynamicSpectra:buf
+    TTIOTwoDimensionalCorrelationSpectrum *spec =
+        [TTIOTwoDCos computeWithDynamicSpectra:buf
                             perturbationPoints:1
                              spectralVariables:5
                                      reference:nil
@@ -219,7 +219,7 @@ static void testComputeRejects(void)
 
     err = nil;
     NSMutableData *buf2 = [NSMutableData dataWithLength:20 * sizeof(double)];
-    spec = [MPGOTwoDCos computeWithDynamicSpectra:buf2
+    spec = [TTIOTwoDCos computeWithDynamicSpectra:buf2
                               perturbationPoints:3
                                spectralVariables:4
                                        reference:nil
@@ -234,7 +234,7 @@ static void testComputeRejects(void)
     err = nil;
     NSMutableData *dynOk = [NSMutableData dataWithLength:4 * 5 * sizeof(double)];
     NSMutableData *refBad = [NSMutableData dataWithLength:7 * sizeof(double)];
-    spec = [MPGOTwoDCos computeWithDynamicSpectra:dynOk
+    spec = [TTIOTwoDCos computeWithDynamicSpectra:dynOk
                               perturbationPoints:4
                                spectralVariables:5
                                        reference:refBad
@@ -253,7 +253,7 @@ static void testDisrelation(void)
     NSData *s = [NSData dataWithBytes:syncVals length:sizeof(syncVals)];
     NSData *a = [NSData dataWithBytes:asyncVals length:sizeof(asyncVals)];
     NSError *err = nil;
-    NSData *d = [MPGOTwoDCos disrelationSpectrumFromSynchronous:s
+    NSData *d = [TTIOTwoDCos disrelationSpectrumFromSynchronous:s
                                                     asynchronous:a
                                                            error:&err];
     pass(d != nil && err == nil, "disrelation computes");
@@ -265,7 +265,7 @@ static void testDisrelation(void)
 
     NSData *bad = [NSData dataWithBytes:syncVals length:sizeof(syncVals) / 2];
     err = nil;
-    NSData *dm = [MPGOTwoDCos disrelationSpectrumFromSynchronous:s
+    NSData *dm = [TTIOTwoDCos disrelationSpectrumFromSynchronous:s
                                                      asynchronous:bad
                                                             error:&err];
     pass(dm == nil && err != nil, "disrelation rejects shape mismatch");
@@ -291,8 +291,8 @@ static void testConformanceFixture(void)
     pass(ok && aN == unused && aN == n, "read async.csv shape");
 
     NSError *err = nil;
-    MPGOTwoDimensionalCorrelationSpectrum *spec =
-        [MPGOTwoDCos computeWithDynamicSpectra:dynBuf
+    TTIOTwoDimensionalCorrelationSpectrum *spec =
+        [TTIOTwoDCos computeWithDynamicSpectra:dynBuf
                             perturbationPoints:m
                              spectralVariables:n
                                      reference:nil

@@ -14,27 +14,27 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOProvenanceRecord.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOFeatureFlags.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOProvenanceRecord.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOFeatureFlags.h"
 #import <hdf5.h>
 #import <unistd.h>
 
 static NSString *m17path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m17_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m17_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
-static MPGOAcquisitionRun *m17BuildRunWithProvenance(void)
+static TTIOAcquisitionRun *m17BuildRunWithProvenance(void)
 {
     NSMutableArray *spectra = [NSMutableArray array];
     for (NSUInteger k = 0; k < 3; k++) {
@@ -43,25 +43,25 @@ static MPGOAcquisitionRun *m17BuildRunWithProvenance(void)
             mz[i] = 100.0 + (double)(k * 4 + i);
             in[i] = (double)(k + 1) * 10.0 + (double)i;
         }
-        MPGOEncodingSpec *enc =
-            [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                           compressionAlgorithm:MPGOCompressionZlib
-                                      byteOrder:MPGOByteOrderLittleEndian];
-        MPGOSignalArray *mzA =
-            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
+        TTIOEncodingSpec *enc =
+            [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                           compressionAlgorithm:TTIOCompressionZlib
+                                      byteOrder:TTIOByteOrderLittleEndian];
+        TTIOSignalArray *mzA =
+            [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
                                               length:4
                                             encoding:enc
                                                 axis:nil];
-        MPGOSignalArray *inA =
-            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
+        TTIOSignalArray *inA =
+            [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
                                               length:4
                                             encoding:enc
                                                 axis:nil];
         [spectra addObject:
-            [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+            [[TTIOMassSpectrum alloc] initWithMzArray:mzA
                                        intensityArray:inA
                                               msLevel:1
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       scanTimeSeconds:(double)k
@@ -69,29 +69,29 @@ static MPGOAcquisitionRun *m17BuildRunWithProvenance(void)
                                       precursorCharge:0
                                                 error:NULL]];
     }
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@"TestCo"
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@"TestCo"
                                                      model:@"M17"
                                               serialNumber:@"00001"
                                                 sourceType:@"ESI"
                                               analyzerType:@"Orbitrap"
                                               detectorType:@"inductive"];
-    MPGOAcquisitionRun *run =
-        [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                    acquisitionMode:MPGOAcquisitionModeMS1DDA
+    TTIOAcquisitionRun *run =
+        [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                    acquisitionMode:TTIOAcquisitionModeMS1DDA
                                    instrumentConfig:cfg];
 
-    MPGOProvenanceRecord *step1 =
-        [[MPGOProvenanceRecord alloc] initWithInputRefs:@[@"raw:run_0001"]
+    TTIOProvenanceRecord *step1 =
+        [[TTIOProvenanceRecord alloc] initWithInputRefs:@[@"raw:run_0001"]
                                                 software:@"thermo-raw-parser/1.4"
                                               parameters:@{@"denoise": @"yes"}
-                                              outputRefs:@[@"mpgo:run_0001"]
+                                              outputRefs:@[@"ttio:run_0001"]
                                            timestampUnix:1710000000];
-    MPGOProvenanceRecord *step2 =
-        [[MPGOProvenanceRecord alloc] initWithInputRefs:@[@"mpgo:run_0001"]
-                                                software:@"mpeg-o-obj/0.3.0"
+    TTIOProvenanceRecord *step2 =
+        [[TTIOProvenanceRecord alloc] initWithInputRefs:@[@"ttio:run_0001"]
+                                                software:@"ttio-obj/0.3.0"
                                               parameters:@{@"mode": @"serialize"}
-                                              outputRefs:@[@"mpgo:run_0001"]
+                                              outputRefs:@[@"ttio:run_0001"]
                                            timestampUnix:1710000100];
     [run addProcessingStep:step1];
     [run addProcessingStep:step2];
@@ -100,9 +100,9 @@ static MPGOAcquisitionRun *m17BuildRunWithProvenance(void)
 
 static void m17WriteAndReopen(NSString *path)
 {
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"m17"
-                                isaInvestigationId:@"MPGO:m17"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"m17"
+                                isaInvestigationId:@"TTIO:m17"
                                             msRuns:@{@"run_0001": m17BuildRunWithProvenance()}
                                            nmrRuns:@{}
                                    identifications:@[]
@@ -124,9 +124,9 @@ void testMilestone17(void)
     // Root-level feature flags include compound_per_run_provenance.
     @autoreleasepool {
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
         PASS(f != nil, "reopen for feature flag check");
-        NSArray *features = [MPGOFeatureFlags featuresForRoot:[f rootGroup]];
+        NSArray *features = [TTIOFeatureFlags featuresForRoot:[f rootGroup]];
         PASS([features containsObject:@"compound_per_run_provenance"],
              "compound_per_run_provenance feature flag present");
         (void)f;
@@ -135,14 +135,14 @@ void testMilestone17(void)
     // Both the compound subgroup and the legacy JSON mirror must exist.
     @autoreleasepool {
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOHDF5Group *root  = [f rootGroup];
-        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
-        MPGOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
-        MPGOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5Group *root  = [f rootGroup];
+        TTIOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+        TTIOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
+        TTIOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
         PASS([run hasChildNamed:@"provenance"],
              "compound per-run provenance subgroup written");
-        MPGOHDF5Group *prov = [run openGroupNamed:@"provenance" error:&err];
+        TTIOHDF5Group *prov = [run openGroupNamed:@"provenance" error:&err];
         PASS([prov hasChildNamed:@"steps"],
              "per-run provenance/steps compound dataset written");
         PASS([run hasAttributeNamed:@"provenance_json"],
@@ -153,19 +153,19 @@ void testMilestone17(void)
     // Round-trip the dataset and confirm the records decode correctly.
     @autoreleasepool {
         NSError *err = nil;
-        MPGOSpectralDataset *rt = [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *rt = [TTIOSpectralDataset readFromFilePath:path error:&err];
         PASS(rt != nil, "reopen the round-tripped dataset");
-        MPGOAcquisitionRun *run = rt.msRuns[@"run_0001"];
+        TTIOAcquisitionRun *run = rt.msRuns[@"run_0001"];
         PASS(run != nil, "round-tripped run is available");
         NSArray *steps = [run provenanceChain];
         PASS(steps.count == 2, "two provenance records decoded");
         if (steps.count == 2) {
-            MPGOProvenanceRecord *s0 = steps[0];
+            TTIOProvenanceRecord *s0 = steps[0];
             PASS([s0.software isEqualToString:@"thermo-raw-parser/1.4"],
                  "step 0 software matches");
             PASS(s0.timestampUnix == 1710000000, "step 0 timestamp matches");
-            MPGOProvenanceRecord *s1 = steps[1];
-            PASS([s1.software isEqualToString:@"mpeg-o-obj/0.3.0"],
+            TTIOProvenanceRecord *s1 = steps[1];
+            PASS([s1.software isEqualToString:@"ttio-obj/0.3.0"],
                  "step 1 software matches");
             PASS(s1.timestampUnix == 1710000100, "step 1 timestamp matches");
         }
@@ -183,12 +183,12 @@ void testMilestone17(void)
 
     @autoreleasepool {
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File openAtPath:path2 error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path2 error:&err];
         PASS(f != nil, "reopen writable for compound removal");
-        MPGOHDF5Group *root  = [f rootGroup];
-        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
-        MPGOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
-        MPGOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
+        TTIOHDF5Group *root  = [f rootGroup];
+        TTIOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+        TTIOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
+        TTIOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
         // Unlink the entire `provenance` subgroup.
         herr_t rc = H5Ldelete(run.groupId, "provenance", H5P_DEFAULT);
         PASS(rc >= 0, "manually unlink compound per-run provenance subgroup");
@@ -197,14 +197,14 @@ void testMilestone17(void)
 
     @autoreleasepool {
         NSError *err = nil;
-        MPGOSpectralDataset *rt = [MPGOSpectralDataset readFromFilePath:path2 error:&err];
+        TTIOSpectralDataset *rt = [TTIOSpectralDataset readFromFilePath:path2 error:&err];
         PASS(rt != nil, "reopen dataset after compound removal");
-        MPGOAcquisitionRun *run = rt.msRuns[@"run_0001"];
+        TTIOAcquisitionRun *run = rt.msRuns[@"run_0001"];
         NSArray *steps = [run provenanceChain];
         PASS(steps.count == 2,
              "legacy @provenance_json fallback recovers both records");
         if (steps.count == 2) {
-            MPGOProvenanceRecord *s0 = steps[0];
+            TTIOProvenanceRecord *s0 = steps[0];
             PASS([s0.software isEqualToString:@"thermo-raw-parser/1.4"],
                  "legacy fallback preserves step 0 software");
         }
@@ -215,27 +215,27 @@ void testMilestone17(void)
     NSString *path3 = m17path(@"empty");
     unlink([path3 fileSystemRepresentation]);
 
-    MPGOAcquisitionRun *cleanRun = nil;
+    TTIOAcquisitionRun *cleanRun = nil;
     {
         NSMutableArray *spectra = [NSMutableArray array];
         for (NSUInteger k = 0; k < 2; k++) {
             double mz[2] = { 100.0 + k, 101.0 + k };
             double in[2] = { 1.0, 2.0 };
-            MPGOEncodingSpec *enc =
-                [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                               compressionAlgorithm:MPGOCompressionZlib
-                                          byteOrder:MPGOByteOrderLittleEndian];
-            MPGOSignalArray *mzA =
-                [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
+            TTIOEncodingSpec *enc =
+                [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                               compressionAlgorithm:TTIOCompressionZlib
+                                          byteOrder:TTIOByteOrderLittleEndian];
+            TTIOSignalArray *mzA =
+                [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:sizeof(mz)]
                                                   length:2 encoding:enc axis:nil];
-            MPGOSignalArray *inA =
-                [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
+            TTIOSignalArray *inA =
+                [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:sizeof(in)]
                                                   length:2 encoding:enc axis:nil];
             [spectra addObject:
-                [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+                [[TTIOMassSpectrum alloc] initWithMzArray:mzA
                                            intensityArray:inA
                                                   msLevel:1
-                                                 polarity:MPGOPolarityPositive
+                                                 polarity:TTIOPolarityPositive
                                                scanWindow:nil
                                             indexPosition:k
                                           scanTimeSeconds:0
@@ -243,15 +243,15 @@ void testMilestone17(void)
                                           precursorCharge:0
                                                     error:NULL]];
         }
-        MPGOInstrumentConfig *cfg =
-            [[MPGOInstrumentConfig alloc] initWithManufacturer:@"" model:@"" serialNumber:@""
+        TTIOInstrumentConfig *cfg =
+            [[TTIOInstrumentConfig alloc] initWithManufacturer:@"" model:@"" serialNumber:@""
                                                     sourceType:@"" analyzerType:@"" detectorType:@""];
-        cleanRun = [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                               acquisitionMode:MPGOAcquisitionModeMS1DDA
+        cleanRun = [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                               acquisitionMode:TTIOAcquisitionModeMS1DDA
                                               instrumentConfig:cfg];
     }
-    MPGOSpectralDataset *dsEmpty =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"m17e"
+    TTIOSpectralDataset *dsEmpty =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"m17e"
                                 isaInvestigationId:@""
                                             msRuns:@{@"run_0001": cleanRun}
                                            nmrRuns:@{}
@@ -264,11 +264,11 @@ void testMilestone17(void)
          "dataset with no per-run provenance writes cleanly");
 
     @autoreleasepool {
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path3 error:&err];
-        MPGOHDF5Group *root  = [f rootGroup];
-        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
-        MPGOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
-        MPGOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path3 error:&err];
+        TTIOHDF5Group *root  = [f rootGroup];
+        TTIOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+        TTIOHDF5Group *ms    = [study openGroupNamed:@"ms_runs" error:&err];
+        TTIOHDF5Group *run   = [ms openGroupNamed:@"run_0001" error:&err];
         PASS(![run hasChildNamed:@"provenance"],
              "no compound per-run provenance subgroup when records are empty");
         PASS(![run hasAttributeNamed:@"provenance_json"],

@@ -1,4 +1,4 @@
-// Milestone 23: Thread safety on MPGOHDF5File.
+// Milestone 23: Thread safety on TTIOHDF5File.
 //
 // Exercises:
 //   * -isThreadSafe reflects H5is_library_threadsafe() AND rwlock init
@@ -15,25 +15,25 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Dataset.h"
-#import "HDF5/MPGOHDF5Errors.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Dataset.h"
+#import "HDF5/TTIOHDF5Errors.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <pthread.h>
 #import <unistd.h>
 #import <sys/stat.h>
 
 static NSString *m23TempPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m23_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m23_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
 // ---------------------------------------------------------------- worker ctx
 
 typedef struct {
-    MPGOHDF5Dataset *ds;
+    TTIOHDF5Dataset *ds;
     NSUInteger       length;
     int              iterations;
     volatile int     ok;      // 1 on all reads success
@@ -62,7 +62,7 @@ static void *m23_reader_thread(void *arg)
 // ------------------------- writer-holds, reader-waits ---------------------
 
 typedef struct {
-    MPGOHDF5File *file;
+    TTIOHDF5File *file;
     volatile int  acquired;   // 1 once the reader-side lock is held
     volatile int  done;
 } M23LockCtx;
@@ -84,7 +84,7 @@ void testMilestone23(void)
         NSString *path = m23TempPath(@"ts");
         unlink([path fileSystemRepresentation]);
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS(f != nil, "M23: create file for thread-safety probe");
         BOOL ts = [f isThreadSafe];
         // We only assert the call doesn't crash; the answer depends on the
@@ -99,15 +99,15 @@ void testMilestone23(void)
         NSString *path = m23TempPath(@"concread");
         unlink([path fileSystemRepresentation]);
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS(f != nil, "M23: create file for concurrent reads");
 
-        MPGOHDF5Group *root = [f rootGroup];
+        TTIOHDF5Group *root = [f rootGroup];
         PASS(root != nil, "M23: root group");
 
         NSUInteger N = 1000;
-        MPGOHDF5Dataset *ds = [root createDatasetNamed:@"x"
-                                             precision:MPGOPrecisionFloat64
+        TTIOHDF5Dataset *ds = [root createDatasetNamed:@"x"
+                                             precision:TTIOPrecisionFloat64
                                                 length:N
                                              chunkSize:0
                                       compressionLevel:0
@@ -148,7 +148,7 @@ void testMilestone23(void)
         NSString *path = m23TempPath(@"wblock");
         unlink([path fileSystemRepresentation]);
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS(f != nil, "M23: create file for write-blocks test");
 
         [f lockForWriting];

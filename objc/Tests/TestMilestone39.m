@@ -5,17 +5,17 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Providers/MPGOStorageProtocols.h"
-#import "Providers/MPGOProviderRegistry.h"
-#import "Providers/MPGOHDF5Provider.h"
-#import "Providers/MPGOMemoryProvider.h"
-#import "Providers/MPGOCompoundField.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOHDF5Provider.h"
+#import "Providers/TTIOMemoryProvider.h"
+#import "Providers/TTIOCompoundField.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <unistd.h>
 
 static NSString *m39HDF5Path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m39_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_m39_%d_%@",
             (int)getpid(), suffix];
 }
 
@@ -23,20 +23,20 @@ static void runRoundTripForProvider(NSString *providerName, NSString *url)
 {
     NSString *label = [providerName copy];
 
-    MPGOProviderRegistry *reg = [MPGOProviderRegistry sharedRegistry];
+    TTIOProviderRegistry *reg = [TTIOProviderRegistry sharedRegistry];
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [reg openURL:url mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [reg openURL:url mode:TTIOStorageOpenModeCreate
              provider:providerName error:&err];
     PASS(p != nil, "M39 (%s): open CREATE", [label UTF8String]);
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
     PASS(root != nil, "M39 (%s): rootGroup", [label UTF8String]);
 
     PASS([root setAttributeValue:@"round-trip" forName:@"title" error:&err],
          "M39 (%s): setAttribute", [label UTF8String]);
 
-    id<MPGOStorageGroup> study = [root createGroupNamed:@"study" error:&err];
+    id<TTIOStorageGroup> study = [root createGroupNamed:@"study" error:&err];
     PASS(study != nil, "M39 (%s): createGroup", [label UTF8String]);
 
     PASS([study setAttributeValue:@(11) forName:@"version" error:&err],
@@ -44,12 +44,12 @@ static void runRoundTripForProvider(NSString *providerName, NSString *url)
 
     // Primitive dataset round-trip
     double vals[] = { 1.0, 2.5, 3.14159, -0.001, 1e10 };
-    id<MPGOStorageDataset> ds =
+    id<TTIOStorageDataset> ds =
         [study createDatasetNamed:@"values"
-                         precision:MPGOPrecisionFloat64
+                         precision:TTIOPrecisionFloat64
                             length:5
                          chunkSize:0
-                       compression:MPGOCompressionNone
+                       compression:TTIOCompressionNone
                   compressionLevel:0
                              error:&err];
     PASS(ds != nil, "M39 (%s): createDataset (primitive)", [label UTF8String]);
@@ -59,10 +59,10 @@ static void runRoundTripForProvider(NSString *providerName, NSString *url)
 
     // Compound dataset round-trip
     NSArray *fields = @[
-        [MPGOCompoundField fieldWithName:@"run_name" kind:MPGOCompoundFieldKindVLString],
-        [MPGOCompoundField fieldWithName:@"spectrum_index" kind:MPGOCompoundFieldKindUInt32],
-        [MPGOCompoundField fieldWithName:@"chemical_entity" kind:MPGOCompoundFieldKindVLString],
-        [MPGOCompoundField fieldWithName:@"confidence_score" kind:MPGOCompoundFieldKindFloat64],
+        [TTIOCompoundField fieldWithName:@"run_name" kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"spectrum_index" kind:TTIOCompoundFieldKindUInt32],
+        [TTIOCompoundField fieldWithName:@"chemical_entity" kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"confidence_score" kind:TTIOCompoundFieldKindFloat64],
     ];
     NSArray *rows = @[
         @{@"run_name":        @"run_A",
@@ -74,7 +74,7 @@ static void runRoundTripForProvider(NSString *providerName, NSString *url)
           @"chemical_entity": @"CHEBI:17234",
           @"confidence_score":@(0.72)},
     ];
-    id<MPGOStorageDataset> compound =
+    id<TTIOStorageDataset> compound =
         [study createCompoundDatasetNamed:@"identifications"
                                      fields:fields
                                       count:rows.count
@@ -86,7 +86,7 @@ static void runRoundTripForProvider(NSString *providerName, NSString *url)
     [p close];
 
     // Re-open read-only and verify
-    p = [reg openURL:url mode:MPGOStorageOpenModeRead
+    p = [reg openURL:url mode:TTIOStorageOpenModeRead
             provider:providerName error:&err];
     PASS(p != nil, "M39 (%s): open READ", [label UTF8String]);
     root = [p rootGroupWithError:&err];
@@ -113,39 +113,39 @@ void testMilestone39(void)
     // memory://
     runRoundTripForProvider(@"memory",
         [NSString stringWithFormat:@"memory://m39-%d", (int)getpid()]);
-    [MPGOMemoryProvider discardStore:[NSString stringWithFormat:@"memory://m39-%d", (int)getpid()]];
+    [TTIOMemoryProvider discardStore:[NSString stringWithFormat:@"memory://m39-%d", (int)getpid()]];
 
     // hdf5 (bare path)
-    NSString *path = m39HDF5Path(@"providers.mpgo");
+    NSString *path = m39HDF5Path(@"providers.tio");
     runRoundTripForProvider(@"hdf5", path);
     unlink([path fileSystemRepresentation]);
 
     // Registry discovery
-    NSArray *known = [[MPGOProviderRegistry sharedRegistry] knownProviderNames];
+    NSArray *known = [[TTIOProviderRegistry sharedRegistry] knownProviderNames];
     PASS([known containsObject:@"hdf5"], "M39: registry knows hdf5");
     PASS([known containsObject:@"memory"], "M39: registry knows memory");
 
     // M50.2: every provider's primitive + compound dataset must
     // respond to -readRows: now that the selector is @required on
-    // the MPGOStorageDataset protocol. The compile-time requirement
+    // the TTIOStorageDataset protocol. The compile-time requirement
     // catches omissions, but a runtime test guards against silent
     // @optional regressions on custom providers loaded via +load.
     for (NSString *providerName in @[@"memory", @"hdf5"]) {
-        id<MPGOStorageProvider> p = nil;
+        id<TTIOStorageProvider> p = nil;
         NSString *url = [providerName isEqualToString:@"memory"]
             ? [NSString stringWithFormat:@"memory://m50-%d", (int)getpid()]
-            : m39HDF5Path(@"readrows.mpgo");
-        p = [[MPGOProviderRegistry sharedRegistry]
+            : m39HDF5Path(@"readrows.tio");
+        p = [[TTIOProviderRegistry sharedRegistry]
                 openURL:url
-                   mode:MPGOStorageOpenModeCreate
+                   mode:TTIOStorageOpenModeCreate
                provider:providerName
                   error:nil];
         PASS(p != nil, "M50.2: provider %s opens", providerName.UTF8String);
-        id<MPGOStorageGroup> root = [p rootGroupWithError:nil];
+        id<TTIOStorageGroup> root = [p rootGroupWithError:nil];
 
-        MPGOCompoundField *field = [MPGOCompoundField
-                fieldWithName:@"f" kind:MPGOCompoundFieldKindFloat64];
-        id<MPGOStorageDataset> cds =
+        TTIOCompoundField *field = [TTIOCompoundField
+                fieldWithName:@"f" kind:TTIOCompoundFieldKindFloat64];
+        id<TTIOStorageDataset> cds =
             [root createCompoundDatasetNamed:@"m50_rr"
                                       fields:@[field]
                                        count:1
@@ -154,12 +154,12 @@ void testMilestone39(void)
             "M50.2: %s compound dataset responds to readRows:",
             providerName.UTF8String);
 
-        id<MPGOStorageDataset> prim =
+        id<TTIOStorageDataset> prim =
             [root createDatasetNamed:@"m50_rr_prim"
-                            precision:MPGOPrecisionFloat64
+                            precision:TTIOPrecisionFloat64
                                length:1
                             chunkSize:0
-                          compression:MPGOCompressionNone
+                          compression:TTIOCompressionNone
                      compressionLevel:0
                                 error:nil];
         PASS([(NSObject *)prim respondsToSelector:@selector(readRows:)],
@@ -168,7 +168,7 @@ void testMilestone39(void)
 
         [p close];
         if ([providerName isEqualToString:@"memory"]) {
-            [MPGOMemoryProvider discardStore:url];
+            [TTIOMemoryProvider discardStore:url];
         } else {
             unlink([url fileSystemRepresentation]);
         }

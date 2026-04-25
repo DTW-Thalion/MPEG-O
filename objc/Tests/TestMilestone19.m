@@ -1,8 +1,8 @@
 /*
  * TestMilestone19 — mzML writer round trip + indexedmzML byte offsets.
  *
- * Builds a small MPGOSpectralDataset, serializes it via
- * MPGOMzMLWriter, parses the result with MPGOMzMLReader, and
+ * Builds a small TTIOSpectralDataset, serializes it via
+ * TTIOMzMLWriter, parses the result with TTIOMzMLReader, and
  * compares the in-memory spectra field by field. Also verifies that
  * the byte offsets stored in <indexList> point at the literal
  * '<spectrum ' tag in the output.
@@ -11,21 +11,21 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 
-#import "Core/MPGOSignalArray.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "ValueClasses/MPGOIsolationWindow.h"
-#import "Export/MPGOMzMLWriter.h"
-#import "Import/MPGOMzMLReader.h"
+#import "Core/TTIOSignalArray.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "ValueClasses/TTIOIsolationWindow.h"
+#import "Export/TTIOMzMLWriter.h"
+#import "Import/TTIOMzMLReader.h"
 
 #import <unistd.h>
 
-static MPGOAcquisitionRun *m19BuildRun(NSUInteger nSpec, NSUInteger nPts)
+static TTIOAcquisitionRun *m19BuildRun(NSUInteger nSpec, NSUInteger nPts)
 {
     NSMutableArray *spectra = [NSMutableArray array];
     for (NSUInteger k = 0; k < nSpec; k++) {
@@ -34,25 +34,25 @@ static MPGOAcquisitionRun *m19BuildRun(NSUInteger nSpec, NSUInteger nPts)
             mz[i] = 100.0 + (double)(k * nPts + i) * 0.5;
             in[i] = (double)(k + 1) * 10.0 + (double)i;
         }
-        MPGOEncodingSpec *enc =
-            [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                           compressionAlgorithm:MPGOCompressionZlib
-                                      byteOrder:MPGOByteOrderLittleEndian];
-        MPGOSignalArray *mzA =
-            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:nPts * sizeof(double)]
+        TTIOEncodingSpec *enc =
+            [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                           compressionAlgorithm:TTIOCompressionZlib
+                                      byteOrder:TTIOByteOrderLittleEndian];
+        TTIOSignalArray *mzA =
+            [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz length:nPts * sizeof(double)]
                                               length:nPts
                                             encoding:enc
                                                 axis:nil];
-        MPGOSignalArray *inA =
-            [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:nPts * sizeof(double)]
+        TTIOSignalArray *inA =
+            [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in length:nPts * sizeof(double)]
                                               length:nPts
                                             encoding:enc
                                                 axis:nil];
         [spectra addObject:
-            [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+            [[TTIOMassSpectrum alloc] initWithMzArray:mzA
                                        intensityArray:inA
                                               msLevel:1
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       scanTimeSeconds:(double)k * 0.5
@@ -60,21 +60,21 @@ static MPGOAcquisitionRun *m19BuildRun(NSUInteger nSpec, NSUInteger nPts)
                                       precursorCharge:0
                                                 error:NULL]];
     }
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@""
                                                      model:@""
                                               serialNumber:@""
                                                 sourceType:@""
                                               analyzerType:@""
                                               detectorType:@""];
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
                                       instrumentConfig:cfg];
 }
 
-static MPGOSpectralDataset *m19BuildDataset(NSUInteger nSpec, NSUInteger nPts)
+static TTIOSpectralDataset *m19BuildDataset(NSUInteger nSpec, NSUInteger nPts)
 {
-    return [[MPGOSpectralDataset alloc] initWithTitle:@"m19"
+    return [[TTIOSpectralDataset alloc] initWithTitle:@"m19"
                                    isaInvestigationId:@""
                                                msRuns:@{@"run_0001": m19BuildRun(nSpec, nPts)}
                                               nmrRuns:@{}
@@ -88,9 +88,9 @@ void testMilestone19(void)
 {
     // ---- 1. Uncompressed round trip ----
     {
-        MPGOSpectralDataset *ds = m19BuildDataset(3, 6);
+        TTIOSpectralDataset *ds = m19BuildDataset(3, 6);
         NSError *err = nil;
-        NSData *xml = [MPGOMzMLWriter dataForDataset:ds
+        NSData *xml = [TTIOMzMLWriter dataForDataset:ds
                                      zlibCompression:NO
                                                error:&err];
         PASS(xml != nil && xml.length > 0, "writer produces non-empty mzML");
@@ -110,19 +110,19 @@ void testMilestone19(void)
         PASS([xmlStr rangeOfString:@"MS:1000031"].location != NSNotFound,
              "v0.9 M64: <instrumentConfiguration> carries MS:1000031 cvParam");
 
-        // Parse back with MPGOMzMLReader.
+        // Parse back with TTIOMzMLReader.
         err = nil;
-        MPGOSpectralDataset *round =
-            [MPGOMzMLReader readFromData:xml error:&err];
-        PASS(round != nil, "MPGOMzMLReader re-parses writer output");
+        TTIOSpectralDataset *round =
+            [TTIOMzMLReader readFromData:xml error:&err];
+        PASS(round != nil, "TTIOMzMLReader re-parses writer output");
         PASS(err == nil, "no error on re-parse");
 
-        MPGOAcquisitionRun *run = round.msRuns[round.msRuns.allKeys.firstObject];
+        TTIOAcquisitionRun *run = round.msRuns[round.msRuns.allKeys.firstObject];
         PASS(run != nil, "round-tripped run present");
         PASS(run.spectrumIndex.count == 3, "spectrum count preserved (3)");
 
         NSError *e2 = nil;
-        MPGOMassSpectrum *s0 = [run spectrumAtIndex:0 error:&e2];
+        TTIOMassSpectrum *s0 = [run spectrumAtIndex:0 error:&e2];
         PASS(s0.mzArray.length == 6, "spectrum 0 has 6 m/z points");
         const double *mz = s0.mzArray.buffer.bytes;
         const double *in = s0.intensityArray.buffer.bytes;
@@ -133,21 +133,21 @@ void testMilestone19(void)
 
     // ---- 2. zlib-compressed round trip ----
     {
-        MPGOSpectralDataset *ds = m19BuildDataset(4, 8);
+        TTIOSpectralDataset *ds = m19BuildDataset(4, 8);
         NSError *err = nil;
-        NSData *xml = [MPGOMzMLWriter dataForDataset:ds
+        NSData *xml = [TTIOMzMLWriter dataForDataset:ds
                                      zlibCompression:YES
                                                error:&err];
         PASS(xml != nil, "writer produces zlib-compressed mzML");
 
-        MPGOSpectralDataset *round = [MPGOMzMLReader readFromData:xml error:&err];
+        TTIOSpectralDataset *round = [TTIOMzMLReader readFromData:xml error:&err];
         PASS(round != nil, "re-parses zlib-compressed output");
-        MPGOAcquisitionRun *run = round.msRuns[round.msRuns.allKeys.firstObject];
+        TTIOAcquisitionRun *run = round.msRuns[round.msRuns.allKeys.firstObject];
         PASS(run.spectrumIndex.count == 4, "compressed round trip spectrum count");
 
         // Bit-exact value check on the last spectrum
         NSError *e2 = nil;
-        MPGOMassSpectrum *s3 = [run spectrumAtIndex:3 error:&e2];
+        TTIOMassSpectrum *s3 = [run spectrumAtIndex:3 error:&e2];
         const double *mz = s3.mzArray.buffer.bytes;
         const double *in = s3.intensityArray.buffer.bytes;
         PASS(mz[0] == 100.0 + (3.0 * 8.0 + 0.0) * 0.5,
@@ -158,9 +158,9 @@ void testMilestone19(void)
 
     // ---- 3. indexedmzML byte offsets are byte-correct ----
     {
-        MPGOSpectralDataset *ds = m19BuildDataset(2, 4);
+        TTIOSpectralDataset *ds = m19BuildDataset(2, 4);
         NSError *err = nil;
-        NSData *xml = [MPGOMzMLWriter dataForDataset:ds
+        NSData *xml = [TTIOMzMLWriter dataForDataset:ds
                                      zlibCompression:NO
                                                error:&err];
         NSString *s = [[NSString alloc] initWithData:xml encoding:NSUTF8StringEncoding];
@@ -197,31 +197,31 @@ void testMilestone19(void)
 
 // M74 Slice D: writer emits real activation method + isolation window from
 // the run's SpectrumIndex instead of a hardcoded CID placeholder, and
-// round-trips via MPGOMzMLReader.
+// round-trips via TTIOMzMLReader.
 void testMilestone19M74(void)
 {
     NSUInteger nPts = 4;
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
 
     double mz1[] = {100.0, 101.0, 102.0, 103.0};
     double in1[] = {10.0, 20.0, 30.0, 40.0};
-    MPGOSignalArray *mz1A =
-        [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz1 length:sizeof(mz1)]
+    TTIOSignalArray *mz1A =
+        [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz1 length:sizeof(mz1)]
                                           length:nPts encoding:enc axis:nil];
-    MPGOSignalArray *in1A =
-        [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in1 length:sizeof(in1)]
+    TTIOSignalArray *in1A =
+        [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in1 length:sizeof(in1)]
                                           length:nPts encoding:enc axis:nil];
     NSError *err = nil;
-    MPGOMassSpectrum *ms1 =
-        [[MPGOMassSpectrum alloc] initWithMzArray:mz1A
+    TTIOMassSpectrum *ms1 =
+        [[TTIOMassSpectrum alloc] initWithMzArray:mz1A
                                    intensityArray:in1A
                                           msLevel:1
-                                         polarity:MPGOPolarityPositive
+                                         polarity:TTIOPolarityPositive
                                        scanWindow:nil
-                                 activationMethod:MPGOActivationMethodNone
+                                 activationMethod:TTIOActivationMethodNone
                                   isolationWindow:nil
                                     indexPosition:0
                                   scanTimeSeconds:0.0
@@ -232,23 +232,23 @@ void testMilestone19M74(void)
 
     double mz2[] = {200.0, 201.0, 202.0, 203.0};
     double in2[] = {11.0, 22.0, 33.0, 44.0};
-    MPGOSignalArray *mz2A =
-        [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz2 length:sizeof(mz2)]
+    TTIOSignalArray *mz2A =
+        [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:mz2 length:sizeof(mz2)]
                                           length:nPts encoding:enc axis:nil];
-    MPGOSignalArray *in2A =
-        [[MPGOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in2 length:sizeof(in2)]
+    TTIOSignalArray *in2A =
+        [[TTIOSignalArray alloc] initWithBuffer:[NSData dataWithBytes:in2 length:sizeof(in2)]
                                           length:nPts encoding:enc axis:nil];
-    MPGOIsolationWindow *iw =
-        [MPGOIsolationWindow windowWithTargetMz:445.3
+    TTIOIsolationWindow *iw =
+        [TTIOIsolationWindow windowWithTargetMz:445.3
                                      lowerOffset:0.5
                                      upperOffset:0.5];
-    MPGOMassSpectrum *ms2 =
-        [[MPGOMassSpectrum alloc] initWithMzArray:mz2A
+    TTIOMassSpectrum *ms2 =
+        [[TTIOMassSpectrum alloc] initWithMzArray:mz2A
                                    intensityArray:in2A
                                           msLevel:2
-                                         polarity:MPGOPolarityPositive
+                                         polarity:TTIOPolarityPositive
                                        scanWindow:nil
-                                 activationMethod:MPGOActivationMethodHCD
+                                 activationMethod:TTIOActivationMethodHCD
                                   isolationWindow:iw
                                     indexPosition:1
                                   scanTimeSeconds:1.5
@@ -257,24 +257,24 @@ void testMilestone19M74(void)
                                             error:&err];
     PASS(ms2 != nil, "M74: MS2 spectrum built with HCD + isolation window");
 
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@""
                                                      model:@""
                                               serialNumber:@""
                                                 sourceType:@""
                                               analyzerType:@""
                                               detectorType:@""];
-    MPGOAcquisitionRun *run =
-        [[MPGOAcquisitionRun alloc] initWithSpectra:@[ms1, ms2]
-                                    acquisitionMode:MPGOAcquisitionModeMS1DDA
+    TTIOAcquisitionRun *run =
+        [[TTIOAcquisitionRun alloc] initWithSpectra:@[ms1, ms2]
+                                    acquisitionMode:TTIOAcquisitionModeMS1DDA
                                    instrumentConfig:cfg];
     PASS(run.spectrumIndex.hasActivationDetail,
          "M74: index carries activation-detail columns");
-    PASS([run.spectrumIndex activationMethodAt:1] == MPGOActivationMethodHCD,
+    PASS([run.spectrumIndex activationMethodAt:1] == TTIOActivationMethodHCD,
          "M74: index records HCD at position 1");
 
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"m74-writer"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"m74-writer"
                                 isaInvestigationId:@""
                                             msRuns:@{@"run_0001": run}
                                            nmrRuns:@{}
@@ -283,7 +283,7 @@ void testMilestone19M74(void)
                                  provenanceRecords:@[]
                                        transitions:nil];
 
-    NSData *xml = [MPGOMzMLWriter dataForDataset:ds
+    NSData *xml = [TTIOMzMLWriter dataForDataset:ds
                                  zlibCompression:NO
                                            error:&err];
     PASS(xml != nil && xml.length > 0, "M74: writer produces output");
@@ -314,15 +314,15 @@ void testMilestone19M74(void)
          "M74 writer emits isolationWindow before selectedIonList");
 
     // Re-parse through the reader and confirm the round-trip.
-    MPGOSpectralDataset *round = [MPGOMzMLReader readFromData:xml error:&err];
+    TTIOSpectralDataset *round = [TTIOMzMLReader readFromData:xml error:&err];
     PASS(round != nil, "M74: writer output re-parses");
-    MPGOAcquisitionRun *backRun = [round.msRuns.allValues firstObject];
-    MPGOSpectrumIndex *backIdx = backRun.spectrumIndex;
+    TTIOAcquisitionRun *backRun = [round.msRuns.allValues firstObject];
+    TTIOSpectrumIndex *backIdx = backRun.spectrumIndex;
     PASS(backIdx.hasActivationDetail,
          "M74: round-tripped index carries activation-detail columns");
-    PASS([backIdx activationMethodAt:1] == MPGOActivationMethodHCD,
+    PASS([backIdx activationMethodAt:1] == TTIOActivationMethodHCD,
          "M74: round-tripped MS2 activation method is HCD");
-    MPGOIsolationWindow *backIw = [backIdx isolationWindowAt:1];
+    TTIOIsolationWindow *backIw = [backIdx isolationWindowAt:1];
     PASS(backIw != nil, "M74: round-tripped isolation window present");
     PASS(backIw && fabs(backIw.targetMz - 445.3) < 1e-9,
          "M74: round-tripped isolation target = 445.3");
@@ -332,7 +332,7 @@ void testMilestone19M74(void)
          "M74: round-tripped isolation upper offset = 0.5");
 
     // MS1 row must not have emitted activation or isolation metadata.
-    PASS([backIdx activationMethodAt:0] == MPGOActivationMethodNone,
+    PASS([backIdx activationMethodAt:0] == TTIOActivationMethodNone,
          "M74: round-tripped MS1 activation method is None");
     PASS([backIdx isolationWindowAt:0] == nil,
          "M74: round-tripped MS1 has no isolation window");

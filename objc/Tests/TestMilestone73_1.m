@@ -1,35 +1,35 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGORamanSpectrum.h"
-#import "Spectra/MPGOIRSpectrum.h"
-#import "Spectra/MPGOUVVisSpectrum.h"
-#import "Spectra/MPGOTwoDimensionalCorrelationSpectrum.h"
-#import "ValueClasses/MPGOAxisDescriptor.h"
-#import "ValueClasses/MPGOValueRange.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "HDF5/MPGOHDF5Errors.h"
-#import "Import/MPGOJcampDxDecode.h"
-#import "Import/MPGOJcampDxReader.h"
-#import "Export/MPGOJcampDxWriter.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIORamanSpectrum.h"
+#import "Spectra/TTIOIRSpectrum.h"
+#import "Spectra/TTIOUVVisSpectrum.h"
+#import "Spectra/TTIOTwoDimensionalCorrelationSpectrum.h"
+#import "ValueClasses/TTIOAxisDescriptor.h"
+#import "ValueClasses/TTIOValueRange.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "HDF5/TTIOHDF5Errors.h"
+#import "Import/TTIOJcampDxDecode.h"
+#import "Import/TTIOJcampDxReader.h"
+#import "Export/TTIOJcampDxWriter.h"
 #import <math.h>
 #import <unistd.h>
 
 static NSString *m73_1Path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m73_1_%d_%@.jdx",
+    return [NSString stringWithFormat:@"/tmp/ttio_m73_1_%d_%@.jdx",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *float64Arr(const double *src, NSUInteger n)
+static TTIOSignalArray *float64Arr(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf
                                             length:n
                                           encoding:enc
                                               axis:nil];
@@ -49,21 +49,21 @@ void testMilestone73_1(void)
     // ---- hasCompression: AFFN (with scientific notation) is NOT compressed ----
     {
         NSString *affn = @"1000 1.234e-05\n1001 2.345E+02\n1002 3.0";
-        PASS(![MPGOJcampDxDecode hasCompression:affn],
+        PASS(![TTIOJcampDxDecode hasCompression:affn],
              "AFFN with e/E is not flagged as compressed");
     }
 
     // ---- hasCompression: SQZ token IS detected ----
     {
         NSString *sqz = @"1000 A50\n1001 B25";
-        PASS([MPGOJcampDxDecode hasCompression:sqz],
+        PASS([TTIOJcampDxDecode hasCompression:sqz],
              "SQZ body is flagged as compressed");
     }
 
     // ---- hasCompression: DIF token IS detected ----
     {
         NSString *dif = @"1000 A50 J5\n1001 K3";
-        PASS([MPGOJcampDxDecode hasCompression:dif],
+        PASS([TTIOJcampDxDecode hasCompression:dif],
              "DIF body is flagged as compressed");
     }
 
@@ -73,7 +73,7 @@ void testMilestone73_1(void)
         NSArray *lines = @[ @"1000 A0 B5 C3" ];
         NSMutableArray *xs = [NSMutableArray array], *ys = [NSMutableArray array];
         NSError *err = nil;
-        BOOL ok = [MPGOJcampDxDecode decodeLines:lines
+        BOOL ok = [TTIOJcampDxDecode decodeLines:lines
                                           firstx:1000
                                           deltax:1
                                          xfactor:1
@@ -97,7 +97,7 @@ void testMilestone73_1(void)
         NSArray *lines = @[ @"1000 A50", @"1001 A50 J5" ];
         NSMutableArray *xs = [NSMutableArray array], *ys = [NSMutableArray array];
         NSError *err = nil;
-        BOOL ok = [MPGOJcampDxDecode decodeLines:lines
+        BOOL ok = [TTIOJcampDxDecode decodeLines:lines
                                           firstx:1000
                                           deltax:1
                                          xfactor:1
@@ -119,7 +119,7 @@ void testMilestone73_1(void)
         NSArray *lines = @[ @"1000 A50 T" ];
         NSMutableArray *xs = [NSMutableArray array], *ys = [NSMutableArray array];
         NSError *err = nil;
-        BOOL ok = [MPGOJcampDxDecode decodeLines:lines
+        BOOL ok = [TTIOJcampDxDecode decodeLines:lines
                                           firstx:1000
                                           deltax:1
                                          xfactor:1
@@ -155,11 +155,11 @@ void testMilestone73_1(void)
         NSString *p = m73_1Path(@"raman_compressed");
         [jdx writeToFile:p atomically:YES encoding:NSUTF8StringEncoding error:nil];
         NSError *err = nil;
-        id spec = [MPGOJcampDxReader readSpectrumFromPath:p error:&err];
+        id spec = [TTIOJcampDxReader readSpectrumFromPath:p error:&err];
         PASS(spec != nil, "compressed JCAMP-DX reads");
-        PASS([spec isKindOfClass:[MPGORamanSpectrum class]],
+        PASS([spec isKindOfClass:[TTIORamanSpectrum class]],
              "compressed JCAMP-DX Raman classified correctly");
-        MPGORamanSpectrum *r = (MPGORamanSpectrum *)spec;
+        TTIORamanSpectrum *r = (TTIORamanSpectrum *)spec;
         PASS(r.wavenumberArray.length == 3, "compressed decode yields 3 points");
         const double *ys = r.intensityArray.buffer.bytes;
         PASS(ys[0] == 10.0 && ys[1] == 25.0 && ys[2] == 33.0,
@@ -175,11 +175,11 @@ void testMilestone73_1(void)
         const NSUInteger N = 4;
         double wl[4] = { 200, 250, 300, 400 };
         double ab[4] = { 0.1, 0.3, 0.5, 0.2 };
-        MPGOSignalArray *wlA = float64Arr(wl, N);
-        MPGOSignalArray *abA = float64Arr(ab, N);
+        TTIOSignalArray *wlA = float64Arr(wl, N);
+        TTIOSignalArray *abA = float64Arr(ab, N);
         NSError *err = nil;
-        MPGOUVVisSpectrum *uv =
-            [[MPGOUVVisSpectrum alloc] initWithWavelengthArray:wlA
+        TTIOUVVisSpectrum *uv =
+            [[TTIOUVVisSpectrum alloc] initWithWavelengthArray:wlA
                                                 absorbanceArray:abA
                                                    pathLengthCm:1.0
                                                         solvent:@"water"
@@ -197,10 +197,10 @@ void testMilestone73_1(void)
     // ---- UVVisSpectrum mismatched lengths → nil + error ----
     {
         double a[3] = { 1, 2, 3 }, b[2] = { 0.1, 0.2 };
-        MPGOSignalArray *aA = float64Arr(a, 3), *bA = float64Arr(b, 2);
+        TTIOSignalArray *aA = float64Arr(a, 3), *bA = float64Arr(b, 2);
         NSError *err = nil;
-        MPGOUVVisSpectrum *uv =
-            [[MPGOUVVisSpectrum alloc] initWithWavelengthArray:aA
+        TTIOUVVisSpectrum *uv =
+            [[TTIOUVVisSpectrum alloc] initWithWavelengthArray:aA
                                                 absorbanceArray:bA
                                                    pathLengthCm:0
                                                         solvent:@""
@@ -208,7 +208,7 @@ void testMilestone73_1(void)
                                                 scanTimeSeconds:0
                                                           error:&err];
         PASS(uv == nil, "mismatched UV-Vis returns nil");
-        PASS(err != nil && err.code == MPGOErrorInvalidArgument,
+        PASS(err != nil && err.code == TTIOErrorInvalidArgument,
              "mismatched UV-Vis error code is InvalidArgument");
     }
 
@@ -221,12 +221,12 @@ void testMilestone73_1(void)
             wl[i] = 200.0 + (double)i * 5.0;   // 200..515 nm
             ab[i] = 0.2 + 0.1 * sin((double)i * 0.1);
         }
-        MPGOSignalArray *wlA = float64Arr(wl, N);
-        MPGOSignalArray *abA = float64Arr(ab, N);
+        TTIOSignalArray *wlA = float64Arr(wl, N);
+        TTIOSignalArray *abA = float64Arr(ab, N);
 
         NSError *err = nil;
-        MPGOUVVisSpectrum *orig =
-            [[MPGOUVVisSpectrum alloc] initWithWavelengthArray:wlA
+        TTIOUVVisSpectrum *orig =
+            [[TTIOUVVisSpectrum alloc] initWithWavelengthArray:wlA
                                                 absorbanceArray:abA
                                                    pathLengthCm:1.0
                                                         solvent:@"ethanol"
@@ -236,17 +236,17 @@ void testMilestone73_1(void)
 
         NSString *p = m73_1Path(@"uvvis");
         unlink([p fileSystemRepresentation]);
-        PASS([MPGOJcampDxWriter writeUVVisSpectrum:orig
+        PASS([TTIOJcampDxWriter writeUVVisSpectrum:orig
                                              toPath:p
                                               title:@"Synthetic UV-Vis"
                                               error:&err],
              "JCAMP-DX UV-Vis writes");
 
-        id decoded = [MPGOJcampDxReader readSpectrumFromPath:p error:&err];
+        id decoded = [TTIOJcampDxReader readSpectrumFromPath:p error:&err];
         PASS(decoded != nil, "JCAMP-DX UV-Vis reads back");
-        PASS([decoded isKindOfClass:[MPGOUVVisSpectrum class]],
+        PASS([decoded isKindOfClass:[TTIOUVVisSpectrum class]],
              "JCAMP-DX UV-Vis reader picks UVVisSpectrum class");
-        MPGOUVVisSpectrum *back = (MPGOUVVisSpectrum *)decoded;
+        TTIOUVVisSpectrum *back = (TTIOUVVisSpectrum *)decoded;
         PASS(back.wavelengthArray.length == N, "UV-Vis point count preserved");
         PASS(back.pathLengthCm == 1.0, "UV-Vis path length round-trips");
         PASS([back.solvent isEqualToString:@"ethanol"],
@@ -270,17 +270,17 @@ void testMilestone73_1(void)
         NSData *syncD = [NSData dataWithBytes:sync length:sizeof(sync)];
         NSData *asynD = [NSData dataWithBytes:asyn length:sizeof(asyn)];
 
-        MPGOValueRange *axisRange =
-            [MPGOValueRange rangeWithMinimum:0 maximum:(double)(SIZE - 1)];
-        MPGOAxisDescriptor *axis =
-            [[MPGOAxisDescriptor alloc] initWithName:@"wavenumber"
+        TTIOValueRange *axisRange =
+            [TTIOValueRange rangeWithMinimum:0 maximum:(double)(SIZE - 1)];
+        TTIOAxisDescriptor *axis =
+            [[TTIOAxisDescriptor alloc] initWithName:@"wavenumber"
                                                  unit:@"1/cm"
                                            valueRange:axisRange
-                                         samplingMode:MPGOSamplingModeNonUniform];
+                                         samplingMode:TTIOSamplingModeNonUniform];
 
         NSError *err = nil;
-        MPGOTwoDimensionalCorrelationSpectrum *cos =
-            [[MPGOTwoDimensionalCorrelationSpectrum alloc]
+        TTIOTwoDimensionalCorrelationSpectrum *cos =
+            [[TTIOTwoDimensionalCorrelationSpectrum alloc]
                 initWithSynchronousMatrix:syncD
                        asynchronousMatrix:asynD
                                matrixSize:SIZE
@@ -311,8 +311,8 @@ void testMilestone73_1(void)
         NSData *sD = [NSData dataWithBytes:s length:sizeof(s)];
         NSData *aD = [NSData dataWithBytes:a length:sizeof(a)];
         NSError *err = nil;
-        MPGOTwoDimensionalCorrelationSpectrum *cos =
-            [[MPGOTwoDimensionalCorrelationSpectrum alloc]
+        TTIOTwoDimensionalCorrelationSpectrum *cos =
+            [[TTIOTwoDimensionalCorrelationSpectrum alloc]
                 initWithSynchronousMatrix:sD
                        asynchronousMatrix:aD
                                matrixSize:4
@@ -323,7 +323,7 @@ void testMilestone73_1(void)
                             indexPosition:0
                                     error:&err];
         PASS(cos == nil, "mismatched 2D-COS returns nil");
-        PASS(err != nil && err.code == MPGOErrorInvalidArgument,
+        PASS(err != nil && err.code == TTIOErrorInvalidArgument,
              "mismatched 2D-COS error code is InvalidArgument");
     }
 }

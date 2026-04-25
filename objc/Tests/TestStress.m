@@ -23,32 +23,32 @@
 #import <unistd.h>
 #import <pthread.h>
 
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
 
 static NSString *stressPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_stress_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_stress_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *bytesAsF64(const double *src, NSUInteger n)
+static TTIOSignalArray *bytesAsF64(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf length:n encoding:enc axis:nil];
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf length:n encoding:enc axis:nil];
 }
 
-static MPGOMassSpectrum *makeSpectrum(NSUInteger k, NSUInteger nPeaks)
+static TTIOMassSpectrum *makeSpectrum(NSUInteger k, NSUInteger nPeaks)
 {
     double *mz = malloc(nPeaks * sizeof(double));
     double *intensity = malloc(nPeaks * sizeof(double));
@@ -56,14 +56,14 @@ static MPGOMassSpectrum *makeSpectrum(NSUInteger k, NSUInteger nPeaks)
         mz[i]        = 100.0 + (double)k + (double)i * 0.1;
         intensity[i] = 1000.0 + (double)((k * 31 + i) % 1000);
     }
-    MPGOSignalArray *mzArr  = bytesAsF64(mz, nPeaks);
-    MPGOSignalArray *intArr = bytesAsF64(intensity, nPeaks);
+    TTIOSignalArray *mzArr  = bytesAsF64(mz, nPeaks);
+    TTIOSignalArray *intArr = bytesAsF64(intensity, nPeaks);
     free(mz); free(intensity);
     NSError *err = nil;
-    return [[MPGOMassSpectrum alloc] initWithMzArray:mzArr
+    return [[TTIOMassSpectrum alloc] initWithMzArray:mzArr
                                        intensityArray:intArr
                                               msLevel:1
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       scanTimeSeconds:(double)k * 0.06
@@ -87,16 +87,16 @@ static void *concurrent_reader(void *arg)
     @autoreleasepool {
         ReaderArgs *a = (ReaderArgs *)arg;
         NSError *err = nil;
-        MPGOSpectralDataset *ds =
-            [MPGOSpectralDataset readFromFilePath:a->path error:&err];
+        TTIOSpectralDataset *ds =
+            [TTIOSpectralDataset readFromFilePath:a->path error:&err];
         if (!ds) { a->ok = NO; return NULL; }
-        MPGOAcquisitionRun *run = ds.msRuns[@"r"];
+        TTIOAcquisitionRun *run = ds.msRuns[@"r"];
         if (!run || run.spectrumIndex.count == 0) { a->ok = NO; return NULL; }
         NSUInteger total = 0;
         for (NSUInteger i = 0; i < a->count; i++) {
             NSUInteger idx = (a->startIndex + i) % run.spectrumIndex.count;
-            MPGOMassSpectrum *spec = [run objectAtIndex:idx];
-            MPGOSignalArray *mz = spec.signalArrays[@"mz"];
+            TTIOMassSpectrum *spec = [run objectAtIndex:idx];
+            TTIOSignalArray *mz = spec.signalArrays[@"mz"];
             total += mz.length;
         }
         a->seenSizes = total;
@@ -107,7 +107,7 @@ static void *concurrent_reader(void *arg)
 
 void testStress(void)
 {
-    // ── Build a 10K-spectrum HDF5 .mpgo for the concurrency drill ──
+    // ── Build a 10K-spectrum HDF5 .tio for the concurrency drill ──
     NSString *path = stressPath(@"10k");
     unlink([path fileSystemRepresentation]);
 
@@ -116,19 +116,19 @@ void testStress(void)
     for (NSUInteger k = 0; k < 10000; k++) {
         [spectra addObject:makeSpectrum(k, 16)];
     }
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
                                                      model:@"QE"
                                               serialNumber:@"S"
                                                 sourceType:@"ESI"
                                               analyzerType:@"Orbitrap"
                                               detectorType:@"em"];
-    MPGOAcquisitionRun *run =
-        [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                    acquisitionMode:MPGOAcquisitionModeMS1DDA
+    TTIOAcquisitionRun *run =
+        [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                    acquisitionMode:TTIOAcquisitionModeMS1DDA
                                    instrumentConfig:cfg];
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"stress"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"stress"
                               isaInvestigationId:@"ISA-STRESS"
                                           msRuns:@{@"r": run}
                                          nmrRuns:@{}
@@ -145,14 +145,14 @@ void testStress(void)
 
     // ── Sequential read sample ─────────────────────────────────────
     t0 = [NSDate date];
-    MPGOSpectralDataset *back =
-        [MPGOSpectralDataset readFromFilePath:path error:&err];
+    TTIOSpectralDataset *back =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
     PASS(back && back.msRuns[@"r"].spectrumIndex.count == 10000,
          "stress fixture re-opens with 10K spectra");
-    MPGOAcquisitionRun *backRun = back.msRuns[@"r"];
+    TTIOAcquisitionRun *backRun = back.msRuns[@"r"];
     NSUInteger sampledTotal = 0;
     for (NSUInteger i = 0; i < 10000; i += 100) {
-        MPGOMassSpectrum *spec = [backRun objectAtIndex:i];
+        TTIOMassSpectrum *spec = [backRun objectAtIndex:i];
         sampledTotal += spec.signalArrays[@"mz"].length;
     }
     NSTimeInterval readMs = -[t0 timeIntervalSinceNow] * 1000.0;

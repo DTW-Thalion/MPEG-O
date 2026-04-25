@@ -3,32 +3,32 @@
 // Modality abstraction + genomic enumerations. Purely additive
 // groundwork for the v0.11 genomic milestone series:
 //
-//   * MPGOPrecisionUInt8 round-trips through HDF5 + Memory providers.
-//   * New MPGOCompression ordinals 4-8 (rANS / base-pack /
+//   * TTIOPrecisionUInt8 round-trips through HDF5 + Memory providers.
+//   * New TTIOCompression ordinals 4-8 (rANS / base-pack /
 //     quality-binned / name-tokenized) have stable integer values.
-//   * MPGOAcquisitionMode gains GenomicWGS = 7, GenomicWES = 8.
-//   * Transport MPGOAccessUnit accepts spectrumClass = 5 (GenomicRead)
+//   * TTIOAcquisitionMode gains GenomicWGS = 7, GenomicWES = 8.
+//   * Transport TTIOAccessUnit accepts spectrumClass = 5 (GenomicRead)
 //     without crashing; MSImagePixel extension MUST NOT activate.
-//   * MPGOAcquisitionRun.modality defaults to @"mass_spectrometry"
+//   * TTIOAcquisitionRun.modality defaults to @"mass_spectrometry"
 //     so v0.10 files surface as mass-spec runs.
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Providers/MPGOStorageProtocols.h"
-#import "Providers/MPGOProviderRegistry.h"
-#import "Providers/MPGOMemoryProvider.h"
-#import "Transport/MPGOAccessUnit.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOMemoryProvider.h"
+#import "Transport/TTIOAccessUnit.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <unistd.h>
 
 static NSString *m79GePath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m79ge_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_m79ge_%d_%@",
             (int)getpid(), suffix];
 }
 
@@ -49,22 +49,22 @@ static void uint8RoundTripThroughProvider(NSString *providerName,
     NSData *expected = uint8Sample(N);
     NSError *err = nil;
 
-    id<MPGOStorageProvider> w =
-        [[MPGOProviderRegistry sharedRegistry]
+    id<TTIOStorageProvider> w =
+        [[TTIOProviderRegistry sharedRegistry]
             openURL:url
-               mode:MPGOStorageOpenModeCreate
+               mode:TTIOStorageOpenModeCreate
            provider:providerName
               error:&err];
     PASS(w != nil, "M79: provider opens for create (%s)",
          [providerName UTF8String]);
 
-    id<MPGOStorageGroup> root = [w rootGroupWithError:&err];
-    id<MPGOStorageDataset> ds =
+    id<TTIOStorageGroup> root = [w rootGroupWithError:&err];
+    id<TTIOStorageDataset> ds =
         [root createDatasetNamed:@"bases"
-                        precision:MPGOPrecisionUInt8
+                        precision:TTIOPrecisionUInt8
                            length:N
                         chunkSize:0
-                      compression:MPGOCompressionNone
+                      compression:TTIOCompressionNone
                  compressionLevel:0
                             error:&err];
     PASS(ds != nil, "M79: UINT8 dataset created (%s)",
@@ -73,20 +73,20 @@ static void uint8RoundTripThroughProvider(NSString *providerName,
          "M79: UINT8 dataset writes (%s)", [providerName UTF8String]);
     [w close];
 
-    id<MPGOStorageProvider> r =
-        [[MPGOProviderRegistry sharedRegistry]
+    id<TTIOStorageProvider> r =
+        [[TTIOProviderRegistry sharedRegistry]
             openURL:url
-               mode:MPGOStorageOpenModeRead
+               mode:TTIOStorageOpenModeRead
            provider:providerName
               error:&err];
     PASS(r != nil, "M79: provider reopens read-only (%s)",
          [providerName UTF8String]);
-    id<MPGOStorageGroup> root2 = [r rootGroupWithError:&err];
-    id<MPGOStorageDataset> back =
+    id<TTIOStorageGroup> root2 = [r rootGroupWithError:&err];
+    id<TTIOStorageDataset> back =
         [root2 openDatasetNamed:@"bases" error:&err];
     PASS(back != nil, "M79: UINT8 dataset reopens (%s)",
          [providerName UTF8String]);
-    PASS([back precision] == MPGOPrecisionUInt8,
+    PASS([back precision] == TTIOPrecisionUInt8,
          "M79: precision survives round-trip (%s)",
          [providerName UTF8String]);
 
@@ -113,47 +113,47 @@ void testM79GenomicEnums(void)
     {
         NSString *url = [NSString stringWithFormat:@"memory://m79ge-%d",
                          (int)getpid()];
-        [MPGOMemoryProvider discardStore:url];
+        [TTIOMemoryProvider discardStore:url];
         uint8RoundTripThroughProvider(@"memory", url);
-        [MPGOMemoryProvider discardStore:url];
+        [TTIOMemoryProvider discardStore:url];
     }
 
-    // ── 3. MPGOPrecisionUInt8 element size == 1 ────────────────────
+    // ── 3. TTIOPrecisionUInt8 element size == 1 ────────────────────
     {
-        MPGOEncodingSpec *spec =
-            [MPGOEncodingSpec specWithPrecision:MPGOPrecisionUInt8
-                           compressionAlgorithm:MPGOCompressionNone
-                                      byteOrder:MPGOByteOrderLittleEndian];
+        TTIOEncodingSpec *spec =
+            [TTIOEncodingSpec specWithPrecision:TTIOPrecisionUInt8
+                           compressionAlgorithm:TTIOCompressionNone
+                                      byteOrder:TTIOByteOrderLittleEndian];
         PASS([spec elementSize] == 1,
-             "M79: MPGOPrecisionUInt8 element size is 1 byte");
+             "M79: TTIOPrecisionUInt8 element size is 1 byte");
     }
 
     // ── 4. New compression ordinals are stable ─────────────────────
     {
-        PASS((NSUInteger)MPGOCompressionNone           == 0, "Compression.None == 0");
-        PASS((NSUInteger)MPGOCompressionZlib           == 1, "Compression.Zlib == 1");
-        PASS((NSUInteger)MPGOCompressionLZ4            == 2, "Compression.LZ4 == 2");
-        PASS((NSUInteger)MPGOCompressionNumpressDelta  == 3, "Compression.NumpressDelta == 3");
-        PASS((NSUInteger)MPGOCompressionRansOrder0     == 4, "Compression.RansOrder0 == 4");
-        PASS((NSUInteger)MPGOCompressionRansOrder1     == 5, "Compression.RansOrder1 == 5");
-        PASS((NSUInteger)MPGOCompressionBasePack       == 6, "Compression.BasePack == 6");
-        PASS((NSUInteger)MPGOCompressionQualityBinned  == 7, "Compression.QualityBinned == 7");
-        PASS((NSUInteger)MPGOCompressionNameTokenized  == 8, "Compression.NameTokenized == 8");
+        PASS((NSUInteger)TTIOCompressionNone           == 0, "Compression.None == 0");
+        PASS((NSUInteger)TTIOCompressionZlib           == 1, "Compression.Zlib == 1");
+        PASS((NSUInteger)TTIOCompressionLZ4            == 2, "Compression.LZ4 == 2");
+        PASS((NSUInteger)TTIOCompressionNumpressDelta  == 3, "Compression.NumpressDelta == 3");
+        PASS((NSUInteger)TTIOCompressionRansOrder0     == 4, "Compression.RansOrder0 == 4");
+        PASS((NSUInteger)TTIOCompressionRansOrder1     == 5, "Compression.RansOrder1 == 5");
+        PASS((NSUInteger)TTIOCompressionBasePack       == 6, "Compression.BasePack == 6");
+        PASS((NSUInteger)TTIOCompressionQualityBinned  == 7, "Compression.QualityBinned == 7");
+        PASS((NSUInteger)TTIOCompressionNameTokenized  == 8, "Compression.NameTokenized == 8");
     }
 
     // ── 5. AcquisitionMode genomic ordinals are stable ─────────────
     {
-        PASS((NSUInteger)MPGOAcquisitionModeMS1DDA      == 0, "AcquisitionMode.MS1DDA == 0");
-        PASS((NSUInteger)MPGOAcquisitionModeGenomicWGS  == 7, "AcquisitionMode.GenomicWGS == 7");
-        PASS((NSUInteger)MPGOAcquisitionModeGenomicWES  == 8, "AcquisitionMode.GenomicWES == 8");
+        PASS((NSUInteger)TTIOAcquisitionModeMS1DDA      == 0, "AcquisitionMode.MS1DDA == 0");
+        PASS((NSUInteger)TTIOAcquisitionModeGenomicWGS  == 7, "AcquisitionMode.GenomicWGS == 7");
+        PASS((NSUInteger)TTIOAcquisitionModeGenomicWES  == 8, "AcquisitionMode.GenomicWES == 8");
     }
 
     // ── 6. AccessUnit spectrumClass=5 (GenomicRead) round-trip ─────
     {
-        MPGOAccessUnit *au =
-            [[MPGOAccessUnit alloc]
+        TTIOAccessUnit *au =
+            [[TTIOAccessUnit alloc]
                 initWithSpectrumClass:5
-                      acquisitionMode:(uint8_t)MPGOAcquisitionModeGenomicWGS
+                      acquisitionMode:(uint8_t)TTIOAcquisitionModeGenomicWGS
                               msLevel:0
                              polarity:2     // unknown — wire convention
                         retentionTime:0.0
@@ -172,14 +172,14 @@ void testM79GenomicEnums(void)
              "M79: GenomicRead AU encodes (>= 38 byte fixed prefix)");
 
         NSError *err = nil;
-        MPGOAccessUnit *back =
-            [MPGOAccessUnit decodeFromBytes:(const uint8_t *)blob.bytes
+        TTIOAccessUnit *back =
+            [TTIOAccessUnit decodeFromBytes:(const uint8_t *)blob.bytes
                                      length:blob.length
                                       error:&err];
         PASS(back != nil, "M79: GenomicRead AU decodes");
         PASS(back.spectrumClass == 5, "M79: spectrumClass preserved as 5");
         PASS(back.acquisitionMode ==
-                 (uint8_t)MPGOAcquisitionModeGenomicWGS,
+                 (uint8_t)TTIOAcquisitionModeGenomicWGS,
              "M79: acquisitionMode preserved as GenomicWGS");
         PASS(back.channels.count == 0, "M79: zero channels preserved");
         // MSImagePixel extension MUST NOT activate for spectrumClass=5.
@@ -190,18 +190,18 @@ void testM79GenomicEnums(void)
 
     // ── 7. AcquisitionRun.modality default ─────────────────────────
     {
-        MPGOInstrumentConfig *cfg =
-            [[MPGOInstrumentConfig alloc]
+        TTIOInstrumentConfig *cfg =
+            [[TTIOInstrumentConfig alloc]
                 initWithManufacturer:@"Test"
                                model:@"M79"
                         serialNumber:@""
                           sourceType:@""
                         analyzerType:@""
                         detectorType:@""];
-        MPGOAcquisitionRun *run =
-            [[MPGOAcquisitionRun alloc]
+        TTIOAcquisitionRun *run =
+            [[TTIOAcquisitionRun alloc]
                 initWithSpectra:@[]
-                acquisitionMode:MPGOAcquisitionModeMS1DDA
+                acquisitionMode:TTIOAcquisitionModeMS1DDA
                instrumentConfig:cfg];
         PASS(run != nil, "M79: empty MS run constructible");
         PASS([run.modality isEqualToString:@"mass_spectrometry"],

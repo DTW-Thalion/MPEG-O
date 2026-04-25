@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-deps.sh — verify build prerequisites for the MPEG-O Objective-C
+# check-deps.sh — verify build prerequisites for the TTI-O Objective-C
 # reference implementation before invoking `make`.
 #
 # Exit codes:
@@ -16,7 +16,7 @@ ok()   { printf '  [ok]   %s\n' "$*"; }
 fail() { printf '  [FAIL] %s\n' "$*"; missing=$((missing+1)); }
 note() { printf '  [warn] %s\n' "$*"; warn=$((warn+1)); }
 
-echo "==> MPEG-O dependency check"
+echo "==> TTI-O dependency check"
 
 # --- GNUstep make ----------------------------------------------------------
 if command -v gnustep-config >/dev/null 2>&1; then
@@ -116,7 +116,7 @@ for cand in /usr/include/hdf5.h \
 done
 if [ -n "$hdf5_hdr" ]; then
     ok "libhdf5 headers ($hdf5_hdr)"
-    # Probe libhdf5 for ROS3 VFD (cloud-native .mpgo access). Apt's
+    # Probe libhdf5 for ROS3 VFD (cloud-native .tio access). Apt's
     # libhdf5 ships ROS3 enabled; custom builds may not.
     hdf5_lib=""
     for cand in /usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so \

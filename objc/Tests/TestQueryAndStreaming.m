@@ -1,41 +1,41 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Query/MPGOQuery.h"
-#import "Query/MPGOStreamWriter.h"
-#import "Query/MPGOStreamReader.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOValueRange.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Errors.h"
+#import "Query/TTIOQuery.h"
+#import "Query/TTIOStreamWriter.h"
+#import "Query/TTIOStreamReader.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOValueRange.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Errors.h"
 #import <math.h>
 #import <unistd.h>
 #import <sys/stat.h>
 
 static NSString *qpath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_q_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_q_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *qf64(const double *src, NSUInteger n)
+static TTIOSignalArray *qf64(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf length:n encoding:enc axis:nil];
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf length:n encoding:enc axis:nil];
 }
 
 /** k-th spectrum of a 10k synthetic LC-MS run. */
-static MPGOMassSpectrum *bigSpectrum(NSUInteger k)
+static TTIOMassSpectrum *bigSpectrum(NSUInteger k)
 {
     const NSUInteger N = 8;
     double mz[8], in[8];
@@ -45,10 +45,10 @@ static MPGOMassSpectrum *bigSpectrum(NSUInteger k)
         in[i] = (i == N/2) ? basePeakIntensity : (double)(i + 1);
     }
     NSError *err = nil;
-    return [[MPGOMassSpectrum alloc] initWithMzArray:qf64(mz, N)
+    return [[TTIOMassSpectrum alloc] initWithMzArray:qf64(mz, N)
                                        intensityArray:qf64(in, N)
                                               msLevel:(k % 3 == 0 ? 1 : 2)  // 1/3 are MS1, 2/3 are MS2
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       // RT = k * 0.06 → 10000 spectra cover 0..600 seconds
@@ -64,16 +64,16 @@ void testQueryAndStreaming(void)
     {
         NSMutableArray *spectra = [NSMutableArray arrayWithCapacity:10000];
         for (NSUInteger k = 0; k < 10000; k++) [spectra addObject:bigSpectrum(k)];
-        MPGOInstrumentConfig *cfg =
-            [[MPGOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
+        TTIOInstrumentConfig *cfg =
+            [[TTIOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
                                                          model:@"QE"
                                                   serialNumber:@"S"
                                                     sourceType:@"ESI"
                                                   analyzerType:@"Orbitrap"
                                                   detectorType:@"em"];
-        MPGOAcquisitionRun *run =
-            [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                        acquisitionMode:MPGOAcquisitionModeMS2DDA
+        TTIOAcquisitionRun *run =
+            [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                        acquisitionMode:TTIOAcquisitionModeMS2DDA
                                        instrumentConfig:cfg];
         PASS([run count] == 10000, "10000-spectrum run constructed in memory");
 
@@ -82,23 +82,23 @@ void testQueryAndStreaming(void)
         NSString *path = qpath(@"q10k");
         unlink([path fileSystemRepresentation]);
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([run writeToGroup:[f rootGroup] name:@"r" error:&err], "10k run writes");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOAcquisitionRun *back =
-            [MPGOAcquisitionRun readFromGroup:[g rootGroup] name:@"r" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOAcquisitionRun *back =
+            [TTIOAcquisitionRun readFromGroup:[g rootGroup] name:@"r" error:&err];
         PASS(back.spectrumIndex.count == 10000, "10k index loaded");
 
         // Run the query: MS2, RT in [10, 12] seconds, precursor in [500, 550]
         // RT 10..12 → k in 167..200 inclusive (k * 0.06 in [10.02, 12.0] → k 167..200)
         NSDate *t0 = [NSDate date];
         NSIndexSet *hits =
-            [[[[MPGOQuery queryOnIndex:back.spectrumIndex]
+            [[[[TTIOQuery queryOnIndex:back.spectrumIndex]
                 withMsLevel:2]
-                withRetentionTimeRange:[MPGOValueRange rangeWithMinimum:10.0 maximum:12.0]]
-                withPrecursorMzRange:[MPGOValueRange rangeWithMinimum:500.0 maximum:550.0]]
+                withRetentionTimeRange:[TTIOValueRange rangeWithMinimum:10.0 maximum:12.0]]
+                withPrecursorMzRange:[TTIOValueRange rangeWithMinimum:500.0 maximum:550.0]]
                 .matchingIndices;
         NSTimeInterval scanMs = -[t0 timeIntervalSinceNow] * 1000.0;
         printf("    [bench] 10k-spectrum query scan %.2f ms (%lu hits)\n",
@@ -120,12 +120,12 @@ void testQueryAndStreaming(void)
 
         // Single-predicate variants
         NSIndexSet *justMS1 =
-            [[MPGOQuery queryOnIndex:back.spectrumIndex] withMsLevel:1].matchingIndices;
+            [[TTIOQuery queryOnIndex:back.spectrumIndex] withMsLevel:1].matchingIndices;
         // 1/3 of 10000 should be MS1 (k % 3 == 0): floor(10000/3)+1 = 3334
         PASS(justMS1.count == 3334, "MS1 filter returns 3334 spectra");
 
         NSIndexSet *byBasePeak =
-            [[MPGOQuery queryOnIndex:back.spectrumIndex]
+            [[TTIOQuery queryOnIndex:back.spectrumIndex]
                 withBasePeakIntensityAtLeast:5000.0].matchingIndices;
         PASS(byBasePeak.count > 0, "base-peak filter returns hits");
         // Verify the threshold actually applies
@@ -146,20 +146,20 @@ void testQueryAndStreaming(void)
         NSString *path = qpath(@"stream");
         unlink([path fileSystemRepresentation]);
         NSError *err = nil;
-        MPGOInstrumentConfig *cfg =
-            [[MPGOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
+        TTIOInstrumentConfig *cfg =
+            [[TTIOInstrumentConfig alloc] initWithManufacturer:@"Thermo"
                                                          model:@"QE"
                                                   serialNumber:@"S"
                                                     sourceType:@"ESI"
                                                   analyzerType:@"Orbitrap"
                                                   detectorType:@"em"];
-        MPGOStreamWriter *w =
-            [[MPGOStreamWriter alloc] initWithFilePath:path
+        TTIOStreamWriter *w =
+            [[TTIOStreamWriter alloc] initWithFilePath:path
                                                 runName:@"stream_run"
-                                        acquisitionMode:MPGOAcquisitionModeMS1DDA
+                                        acquisitionMode:TTIOAcquisitionModeMS1DDA
                                        instrumentConfig:cfg
                                                   error:&err];
-        PASS(w != nil, "MPGOStreamWriter created");
+        PASS(w != nil, "TTIOStreamWriter created");
 
         BOOL appendedAll = YES;
         for (NSUInteger k = 0; k < 500; k++) {
@@ -172,9 +172,9 @@ void testQueryAndStreaming(void)
             if ((k + 1) % 100 == 0) {
                 @autoreleasepool {
                     PASS([w flushWithError:&err], "intermediate flush succeeds");
-                    MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-                    MPGOAcquisitionRun *run =
-                        [MPGOAcquisitionRun readFromGroup:[f rootGroup]
+                    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+                    TTIOAcquisitionRun *run =
+                        [TTIOAcquisitionRun readFromGroup:[f rootGroup]
                                                       name:@"stream_run"
                                                      error:&err];
                     PASS(run != nil, "post-flush file opens as a valid run");
@@ -190,19 +190,19 @@ void testQueryAndStreaming(void)
         PASS(w.spectrumCount == 500, "writer reports 500 spectra written");
 
         // ---- StreamReader reads the same 500 spectra in order with byte-exact match ----
-        MPGOStreamReader *r =
-            [[MPGOStreamReader alloc] initWithFilePath:path
+        TTIOStreamReader *r =
+            [[TTIOStreamReader alloc] initWithFilePath:path
                                                 runName:@"stream_run"
                                                   error:&err];
-        PASS(r != nil, "MPGOStreamReader opens the streamed file");
+        PASS(r != nil, "TTIOStreamReader opens the streamed file");
         PASS(r.totalCount == 500, "reader reports 500 spectra");
 
         NSUInteger seen = 0;
         BOOL allOk = YES;
         while (![r atEnd]) {
-            MPGOMassSpectrum *got = [r nextSpectrumWithError:&err];
+            TTIOMassSpectrum *got = [r nextSpectrumWithError:&err];
             if (!got) { allOk = NO; break; }
-            MPGOMassSpectrum *expected = bigSpectrum(seen);
+            TTIOMassSpectrum *expected = bigSpectrum(seen);
             if (![got.mzArray.buffer isEqualToData:expected.mzArray.buffer]) allOk = NO;
             if (![got.intensityArray.buffer isEqualToData:expected.intensityArray.buffer]) allOk = NO;
             if (got.msLevel != expected.msLevel) allOk = NO;

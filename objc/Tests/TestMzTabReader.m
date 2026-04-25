@@ -11,13 +11,13 @@
 #import "Testing.h"
 #import <unistd.h>
 
-#import "Import/MPGOMzTabReader.h"
-#import "Dataset/MPGOIdentification.h"
-#import "Dataset/MPGOQuantification.h"
+#import "Import/TTIOMzTabReader.h"
+#import "Dataset/TTIOIdentification.h"
+#import "Dataset/TTIOQuantification.h"
 
 static NSString *m60Path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m60_%d_%@.mztab",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m60_%d_%@.mztab",
             (int)getpid(), suffix];
 }
 
@@ -68,7 +68,7 @@ void testMzTabReader(void)
         [proteomicsFixture() writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL];
 
         NSError *err = nil;
-        MPGOMzTabImport *result = [MPGOMzTabReader readFromFilePath:path error:&err];
+        TTIOMzTabImport *result = [TTIOMzTabReader readFromFilePath:path error:&err];
         PASS(result != nil, "proteomics: parse succeeds");
         PASS([result.version isEqualToString:@"1.0"], "proteomics: version 1.0");
         PASS(result.isMetabolomics == NO, "proteomics: isMetabolomics == NO");
@@ -76,14 +76,14 @@ void testMzTabReader(void)
         PASS([result.msRunLocations[@1] containsString:@"bsa_digest"], "proteomics: ms_run[1] location");
 
         PASS(result.identifications.count == 3, "proteomics: 3 PSMs");
-        MPGOIdentification *first = result.identifications.firstObject;
+        TTIOIdentification *first = result.identifications.firstObject;
         PASS([first.chemicalEntity isEqualToString:@"P02769"], "proteomics: PSM accession");
         PASS(fabs(first.confidenceScore - 0.95) < 1e-9, "proteomics: best score = 0.95");
         PASS([first.runName isEqualToString:@"bsa_digest"], "proteomics: run name from ms_run location");
         PASS(first.spectrumIndex == 42, "proteomics: spectrum index from spectra_ref");
 
         PASS(result.quantifications.count == 2, "proteomics: 2 PRT abundances");
-        MPGOQuantification *q0 = result.quantifications[0];
+        TTIOQuantification *q0 = result.quantifications[0];
         PASS([q0.chemicalEntity isEqualToString:@"P02769"], "proteomics: quant accession");
         PASS(q0.abundance > 0.0, "proteomics: quant abundance > 0");
 
@@ -96,12 +96,12 @@ void testMzTabReader(void)
         [metabolomicsFixture() writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL];
 
         NSError *err = nil;
-        MPGOMzTabImport *result = [MPGOMzTabReader readFromFilePath:path error:&err];
+        TTIOMzTabImport *result = [TTIOMzTabReader readFromFilePath:path error:&err];
         PASS(result != nil, "metabolomics: parse succeeds");
         PASS([result.version isEqualToString:@"2.0.0-M"], "metabolomics: version 2.0.0-M");
         PASS(result.isMetabolomics == YES, "metabolomics: isMetabolomics == YES");
         PASS(result.identifications.count == 2, "metabolomics: 2 SML identifications");
-        MPGOIdentification *glucose = result.identifications.firstObject;
+        TTIOIdentification *glucose = result.identifications.firstObject;
         PASS([glucose.chemicalEntity isEqualToString:@"CHEBI:17234"], "metabolomics: glucose CHEBI id");
         PASS(fabs(glucose.confidenceScore - 0.95) < 1e-9, "metabolomics: confidence value");
         PASS(result.quantifications.count == 4, "metabolomics: 4 quantifications (2 metabolites x 2 study vars)");
@@ -114,9 +114,9 @@ void testMzTabReader(void)
         NSString *path = m60Path(@"noversion");
         [@"MTD\tdescription\tno version line\n" writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:NULL];
         NSError *err = nil;
-        MPGOMzTabImport *result = [MPGOMzTabReader readFromFilePath:path error:&err];
+        TTIOMzTabImport *result = [TTIOMzTabReader readFromFilePath:path error:&err];
         PASS(result == nil, "missing version: returns nil");
-        PASS(err != nil && err.code == MPGOMzTabReaderErrorMissingVersion,
+        PASS(err != nil && err.code == TTIOMzTabReaderErrorMissingVersion,
              "missing version: error code MissingVersion");
         rmFile(path);
     }
@@ -124,9 +124,9 @@ void testMzTabReader(void)
     // ── Missing file ─────────────────────────────────────────────────
     {
         NSError *err = nil;
-        MPGOMzTabImport *result = [MPGOMzTabReader readFromFilePath:@"/tmp/__no_such__.mztab" error:&err];
+        TTIOMzTabImport *result = [TTIOMzTabReader readFromFilePath:@"/tmp/__no_such__.mztab" error:&err];
         PASS(result == nil, "missing file: returns nil");
-        PASS(err != nil && err.code == MPGOMzTabReaderErrorMissingFile,
+        PASS(err != nil && err.code == TTIOMzTabReaderErrorMissingFile,
              "missing file: error code MissingFile");
     }
 }

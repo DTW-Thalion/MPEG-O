@@ -1,14 +1,14 @@
 /*
  * TestImzMLReader — v0.9 M59 follow-up.
  *
- * Synthetic-fixture coverage for MPGOImzMLReader. Builds .imzML +
+ * Synthetic-fixture coverage for TTIOImzMLReader. Builds .imzML +
  * .ibd pairs in /tmp, runs them through the reader, asserts:
  *
  *   - continuous mode shares one m/z buffer across pixels
  *   - processed mode produces a distinct m/z buffer per pixel
- *   - UUID mismatch is rejected with MPGOImzMLReaderErrorUUIDMismatch
+ *   - UUID mismatch is rejected with TTIOImzMLReaderErrorUUIDMismatch
  *   - .ibd shorter than the declared offsets is rejected with
- *     MPGOImzMLReaderErrorOffsetOverflow
+ *     TTIOImzMLReaderErrorOffsetOverflow
  *   - missing files are rejected before any parsing happens
  *
  * Cross-language equivalent:
@@ -20,17 +20,17 @@
 #import "Testing.h"
 #import <unistd.h>
 
-#import "Import/MPGOImzMLReader.h"
+#import "Import/TTIOImzMLReader.h"
 
 static NSString *m59ImzMLPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m59_%d_%@.imzML",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m59_%d_%@.imzML",
             (int)getpid(), suffix];
 }
 
 static NSString *m59IbdPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m59_%d_%@.ibd",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m59_%d_%@.ibd",
             (int)getpid(), suffix];
 }
 
@@ -183,7 +183,7 @@ void testImzMLReader(void)
                             NO, -1, &uuidHex);
 
         NSError *err = nil;
-        MPGOImzMLImport *result = [MPGOImzMLReader readFromImzMLPath:imzml
+        TTIOImzMLImport *result = [TTIOImzMLReader readFromImzMLPath:imzml
                                                               ibdPath:ibd
                                                                 error:&err];
         PASS(result != nil, "continuous mode: parse succeeds");
@@ -198,7 +198,7 @@ void testImzMLReader(void)
              "continuous mode: last pixel (3,2)");
         // Continuous contract: every pixel aliases the same m/z buffer.
         BOOL allShared = YES;
-        for (MPGOImzMLPixelSpectrum *s in result.spectra) {
+        for (TTIOImzMLPixelSpectrum *s in result.spectra) {
             if (s.mzArray != result.spectra.firstObject.mzArray) { allShared = NO; break; }
         }
         PASS(allShared, "continuous mode: pixels share the m/z NSData object");
@@ -215,7 +215,7 @@ void testImzMLReader(void)
                             NO, -1, &uuidHex);
 
         NSError *err = nil;
-        MPGOImzMLImport *result = [MPGOImzMLReader readFromImzMLPath:imzml
+        TTIOImzMLImport *result = [TTIOImzMLReader readFromImzMLPath:imzml
                                                               ibdPath:ibd
                                                                 error:&err];
         PASS(result != nil, "processed mode: parse succeeds");
@@ -242,17 +242,17 @@ void testImzMLReader(void)
                             YES /*bad UUID*/, -1, &uuidHex);
 
         NSError *err = nil;
-        MPGOImzMLImport *result = [MPGOImzMLReader readFromImzMLPath:imzml
+        TTIOImzMLImport *result = [TTIOImzMLReader readFromImzMLPath:imzml
                                                               ibdPath:ibd
                                                                 error:&err];
         PASS(result == nil, "UUID mismatch: returns nil");
-        PASS(err != nil && err.code == MPGOImzMLReaderErrorUUIDMismatch,
-             "UUID mismatch: error code MPGOImzMLReaderErrorUUIDMismatch");
+        PASS(err != nil && err.code == TTIOImzMLReaderErrorUUIDMismatch,
+             "UUID mismatch: error code TTIOImzMLReaderErrorUUIDMismatch");
 
         rmFile(imzml); rmFile(ibd);
     }
 
-    // ── 4. Truncated .ibd → MPGOImzMLReaderErrorOffsetOverflow ───────
+    // ── 4. Truncated .ibd → TTIOImzMLReaderErrorOffsetOverflow ───────
     {
         NSString *imzml = m59ImzMLPath(@"truncate");
         NSString *ibd   = m59IbdPath(@"truncate");
@@ -261,12 +261,12 @@ void testImzMLReader(void)
                             NO, 20 /*keep UUID, kill payload*/, &uuidHex);
 
         NSError *err = nil;
-        MPGOImzMLImport *result = [MPGOImzMLReader readFromImzMLPath:imzml
+        TTIOImzMLImport *result = [TTIOImzMLReader readFromImzMLPath:imzml
                                                               ibdPath:ibd
                                                                 error:&err];
         PASS(result == nil, "truncated .ibd: returns nil");
-        PASS(err != nil && err.code == MPGOImzMLReaderErrorOffsetOverflow,
-             "truncated .ibd: error code MPGOImzMLReaderErrorOffsetOverflow");
+        PASS(err != nil && err.code == TTIOImzMLReaderErrorOffsetOverflow,
+             "truncated .ibd: error code TTIOImzMLReaderErrorOffsetOverflow");
 
         rmFile(imzml); rmFile(ibd);
     }
@@ -274,11 +274,11 @@ void testImzMLReader(void)
     // ── 5. Missing files ─────────────────────────────────────────────
     {
         NSError *err = nil;
-        MPGOImzMLImport *result = [MPGOImzMLReader readFromImzMLPath:@"/tmp/__no_such__.imzML"
+        TTIOImzMLImport *result = [TTIOImzMLReader readFromImzMLPath:@"/tmp/__no_such__.imzML"
                                                               ibdPath:nil
                                                                 error:&err];
         PASS(result == nil, "missing imzML: returns nil");
-        PASS(err != nil && err.code == MPGOImzMLReaderErrorMissingFile,
+        PASS(err != nil && err.code == TTIOImzMLReaderErrorMissingFile,
              "missing imzML: error code MissingFile");
     }
 }

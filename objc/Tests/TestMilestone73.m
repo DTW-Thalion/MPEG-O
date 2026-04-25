@@ -1,34 +1,34 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGORamanSpectrum.h"
-#import "Spectra/MPGOIRSpectrum.h"
-#import "Image/MPGORamanImage.h"
-#import "Image/MPGOIRImage.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Errors.h"
-#import "Export/MPGOJcampDxWriter.h"
-#import "Import/MPGOJcampDxReader.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIORamanSpectrum.h"
+#import "Spectra/TTIOIRSpectrum.h"
+#import "Image/TTIORamanImage.h"
+#import "Image/TTIOIRImage.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Errors.h"
+#import "Export/TTIOJcampDxWriter.h"
+#import "Import/TTIOJcampDxReader.h"
 #import <math.h>
 #import <unistd.h>
 
 static NSString *m73Path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m73_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_m73_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *float64Arr(const double *src, NSUInteger n)
+static TTIOSignalArray *float64Arr(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf
                                             length:n
                                           encoding:enc
                                               axis:nil];
@@ -45,13 +45,13 @@ void testMilestone73(void)
             wn[i]   = 200.0 + (double)i * 2.0;           // 200..2246 cm^-1
             intn[i] = 1000.0 + 500.0 * sin((double)i * 0.05);
         }
-        MPGOSignalArray *wnA = float64Arr(wn, N);
-        MPGOSignalArray *inA = float64Arr(intn, N);
+        TTIOSignalArray *wnA = float64Arr(wn, N);
+        TTIOSignalArray *inA = float64Arr(intn, N);
         free(wn); free(intn);
 
         NSError *err = nil;
-        MPGORamanSpectrum *r =
-            [[MPGORamanSpectrum alloc] initWithWavenumberArray:wnA
+        TTIORamanSpectrum *r =
+            [[TTIORamanSpectrum alloc] initWithWavenumberArray:wnA
                                                  intensityArray:inA
                                          excitationWavelengthNm:785.0
                                                    laserPowerMw:10.0
@@ -59,7 +59,7 @@ void testMilestone73(void)
                                                   indexPosition:3
                                                 scanTimeSeconds:0
                                                           error:&err];
-        PASS(r != nil, "MPGORamanSpectrum constructible");
+        PASS(r != nil, "TTIORamanSpectrum constructible");
         PASS(err == nil, "no error on construction");
         PASS(r.excitationWavelengthNm == 785.0, "excitation stored");
         PASS(r.laserPowerMw == 10.0, "laser power stored");
@@ -68,16 +68,16 @@ void testMilestone73(void)
 
         NSString *path = m73Path(@"raman");
         unlink([path fileSystemRepresentation]);
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([r writeToGroup:[f rootGroup] name:@"spec" error:&err],
              "Raman spectrum writes to HDF5");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGORamanSpectrum *back =
-            [MPGORamanSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIORamanSpectrum *back =
+            [TTIORamanSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
         PASS(back != nil, "Raman spectrum reads back");
-        PASS([back isKindOfClass:[MPGORamanSpectrum class]], "decoded is MPGORamanSpectrum");
+        PASS([back isKindOfClass:[TTIORamanSpectrum class]], "decoded is TTIORamanSpectrum");
         PASS(back.wavenumberArray.length == N, "wavenumber length preserved");
         PASS(back.excitationWavelengthNm == 785.0, "excitation round-trips");
         PASS(back.laserPowerMw == 10.0, "laser power round-trips");
@@ -90,10 +90,10 @@ void testMilestone73(void)
     // ---- mismatched arrays → nil + error ----
     {
         double a[3] = {1, 2, 3}, b[2] = {10, 20};
-        MPGOSignalArray *aA = float64Arr(a, 3), *bA = float64Arr(b, 2);
+        TTIOSignalArray *aA = float64Arr(a, 3), *bA = float64Arr(b, 2);
         NSError *err = nil;
-        MPGORamanSpectrum *r =
-            [[MPGORamanSpectrum alloc] initWithWavenumberArray:aA
+        TTIORamanSpectrum *r =
+            [[TTIORamanSpectrum alloc] initWithWavenumberArray:aA
                                                  intensityArray:bA
                                          excitationWavelengthNm:532
                                                    laserPowerMw:5
@@ -102,7 +102,7 @@ void testMilestone73(void)
                                                 scanTimeSeconds:0
                                                           error:&err];
         PASS(r == nil, "mismatched Raman construction returns nil");
-        PASS(err != nil && err.code == MPGOErrorInvalidArgument,
+        PASS(err != nil && err.code == TTIOErrorInvalidArgument,
              "error code is InvalidArgument");
     }
 
@@ -115,37 +115,37 @@ void testMilestone73(void)
             wn[i]   = 400.0 + (double)i * 2.0;           // 400..4494 cm^-1
             intn[i] = 0.05 + 0.02 * cos((double)i * 0.03);
         }
-        MPGOSignalArray *wnA = float64Arr(wn, N);
-        MPGOSignalArray *inA = float64Arr(intn, N);
+        TTIOSignalArray *wnA = float64Arr(wn, N);
+        TTIOSignalArray *inA = float64Arr(intn, N);
         free(wn); free(intn);
 
         NSError *err = nil;
-        MPGOIRSpectrum *ir =
-            [[MPGOIRSpectrum alloc] initWithWavenumberArray:wnA
+        TTIOIRSpectrum *ir =
+            [[TTIOIRSpectrum alloc] initWithWavenumberArray:wnA
                                               intensityArray:inA
-                                                        mode:MPGOIRModeAbsorbance
+                                                        mode:TTIOIRModeAbsorbance
                                              resolutionCmInv:4.0
                                                numberOfScans:32
                                                indexPosition:0
                                              scanTimeSeconds:0
                                                        error:&err];
-        PASS(ir != nil, "MPGOIRSpectrum constructible");
-        PASS(ir.mode == MPGOIRModeAbsorbance, "IR mode stored");
+        PASS(ir != nil, "TTIOIRSpectrum constructible");
+        PASS(ir.mode == TTIOIRModeAbsorbance, "IR mode stored");
         PASS(ir.resolutionCmInv == 4.0, "IR resolution stored");
         PASS(ir.numberOfScans == 32, "IR number_of_scans stored");
 
         NSString *path = m73Path(@"ir");
         unlink([path fileSystemRepresentation]);
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([ir writeToGroup:[f rootGroup] name:@"spec" error:&err],
              "IR spectrum writes to HDF5");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOIRSpectrum *back =
-            [MPGOIRSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOIRSpectrum *back =
+            [TTIOIRSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
         PASS(back != nil, "IR spectrum reads back");
-        PASS(back.mode == MPGOIRModeAbsorbance, "IR mode round-trips");
+        PASS(back.mode == TTIOIRModeAbsorbance, "IR mode round-trips");
         PASS(back.resolutionCmInv == 4.0, "resolution round-trips");
         PASS(back.numberOfScans == 32, "number_of_scans round-trips");
         PASS([back isEqual:ir], "IR isEqual: original after round-trip");
@@ -157,25 +157,25 @@ void testMilestone73(void)
     {
         double wn[4] = {1000, 1100, 1200, 1300};
         double tr[4] = {0.95, 0.80, 0.70, 0.85};
-        MPGOSignalArray *wnA = float64Arr(wn, 4), *trA = float64Arr(tr, 4);
+        TTIOSignalArray *wnA = float64Arr(wn, 4), *trA = float64Arr(tr, 4);
         NSError *err = nil;
-        MPGOIRSpectrum *ir =
-            [[MPGOIRSpectrum alloc] initWithWavenumberArray:wnA
+        TTIOIRSpectrum *ir =
+            [[TTIOIRSpectrum alloc] initWithWavenumberArray:wnA
                                               intensityArray:trA
-                                                        mode:MPGOIRModeTransmittance
+                                                        mode:TTIOIRModeTransmittance
                                              resolutionCmInv:8.0
                                                numberOfScans:0
                                                indexPosition:0
                                              scanTimeSeconds:0
                                                        error:&err];
         NSString *path = m73Path(@"ir_trans");
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         [ir writeToGroup:[f rootGroup] name:@"spec" error:&err];
         [f close];
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOIRSpectrum *back =
-            [MPGOIRSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
-        PASS(back.mode == MPGOIRModeTransmittance,
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOIRSpectrum *back =
+            [TTIOIRSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
+        PASS(back.mode == TTIOIRModeTransmittance,
              "IR transmittance mode round-trips");
         [g close];
         unlink([path fileSystemRepresentation]);
@@ -195,8 +195,8 @@ void testMilestone73(void)
         double *wp = wn.mutableBytes;
         for (NSUInteger s = 0; s < SP; s++) wp[s] = 200.0 + s * 50.0;
 
-        MPGORamanImage *img =
-            [[MPGORamanImage alloc] initWithWidth:W
+        TTIORamanImage *img =
+            [[TTIORamanImage alloc] initWithWidth:W
                                             height:H
                                     spectralPoints:SP
                                           tileSize:8
@@ -212,7 +212,7 @@ void testMilestone73(void)
         PASS([img writeToFilePath:path error:&err],
              "RamanImage writes to HDF5");
 
-        MPGORamanImage *back = [MPGORamanImage readFromFilePath:path error:&err];
+        TTIORamanImage *back = [TTIORamanImage readFromFilePath:path error:&err];
         PASS(back != nil, "RamanImage reads back");
         PASS(back.width == W && back.height == H && back.spectralPoints == SP,
              "Raman image dimensions round-trip");
@@ -236,14 +236,14 @@ void testMilestone73(void)
         double *wp = wn.mutableBytes;
         for (NSUInteger s = 0; s < SP; s++) wp[s] = 400.0 + s * 30.0;
 
-        MPGOIRImage *img =
-            [[MPGOIRImage alloc] initWithWidth:W
+        TTIOIRImage *img =
+            [[TTIOIRImage alloc] initWithWidth:W
                                          height:H
                                  spectralPoints:SP
                                        tileSize:4
                                            cube:cube
                                     wavenumbers:wn
-                                           mode:MPGOIRModeAbsorbance
+                                           mode:TTIOIRModeAbsorbance
                                 resolutionCmInv:4.0];
         PASS(img != nil, "8x8x64 IRImage constructible");
 
@@ -252,12 +252,12 @@ void testMilestone73(void)
         NSError *err = nil;
         PASS([img writeToFilePath:path error:&err], "IRImage writes");
 
-        MPGOIRImage *back = [MPGOIRImage readFromFilePath:path error:&err];
+        TTIOIRImage *back = [TTIOIRImage readFromFilePath:path error:&err];
         PASS(back != nil, "IRImage reads back");
         PASS(back.width == W && back.height == H && back.spectralPoints == SP,
              "IR image dimensions round-trip");
         PASS([back.cube isEqualToData:cube], "IR cube bytes exact");
-        PASS(back.mode == MPGOIRModeAbsorbance, "IR image mode round-trips");
+        PASS(back.mode == TTIOIRModeAbsorbance, "IR image mode round-trips");
         PASS(back.resolutionCmInv == 4.0, "IR resolution round-trips");
         PASS([back isEqual:img], "IRImage isEqual: original after round-trip");
         unlink([path fileSystemRepresentation]);
@@ -272,11 +272,11 @@ void testMilestone73(void)
             wn[i]   = 100.0 + (double)i * 3.0;
             intn[i] = 500.0 + 100.0 * sin((double)i * 0.1);
         }
-        MPGOSignalArray *wnA = float64Arr(wn, N), *inA = float64Arr(intn, N);
+        TTIOSignalArray *wnA = float64Arr(wn, N), *inA = float64Arr(intn, N);
 
         NSError *err = nil;
-        MPGORamanSpectrum *orig =
-            [[MPGORamanSpectrum alloc] initWithWavenumberArray:wnA
+        TTIORamanSpectrum *orig =
+            [[TTIORamanSpectrum alloc] initWithWavenumberArray:wnA
                                                  intensityArray:inA
                                          excitationWavelengthNm:532.0
                                                    laserPowerMw:25.0
@@ -287,19 +287,19 @@ void testMilestone73(void)
 
         NSString *jdxPath = m73Path(@"raman.jdx");
         unlink([jdxPath fileSystemRepresentation]);
-        PASS([MPGOJcampDxWriter writeRamanSpectrum:orig
+        PASS([TTIOJcampDxWriter writeRamanSpectrum:orig
                                              toPath:jdxPath
                                               title:@"Synthetic Raman"
                                               error:&err],
              "JCAMP-DX Raman writes");
 
-        MPGOSpectrum *decoded = [MPGOJcampDxReader readSpectrumFromPath:jdxPath
+        TTIOSpectrum *decoded = [TTIOJcampDxReader readSpectrumFromPath:jdxPath
                                                                    error:&err];
         PASS(decoded != nil, "JCAMP-DX Raman reads back");
-        PASS([decoded isKindOfClass:[MPGORamanSpectrum class]],
+        PASS([decoded isKindOfClass:[TTIORamanSpectrum class]],
              "JCAMP-DX Raman reader picks RamanSpectrum class");
 
-        MPGORamanSpectrum *back = (MPGORamanSpectrum *)decoded;
+        TTIORamanSpectrum *back = (TTIORamanSpectrum *)decoded;
         PASS(back.wavenumberArray.length == N,
              "JCAMP-DX Raman point count preserved");
         PASS(back.excitationWavelengthNm == 532.0,
@@ -331,13 +331,13 @@ void testMilestone73(void)
             wn[i] = 400.0 + (double)i * 15.0;
             ab[i] = 0.1 + 0.05 * cos((double)i * 0.2);
         }
-        MPGOSignalArray *wnA = float64Arr(wn, N), *abA = float64Arr(ab, N);
+        TTIOSignalArray *wnA = float64Arr(wn, N), *abA = float64Arr(ab, N);
 
         NSError *err = nil;
-        MPGOIRSpectrum *orig =
-            [[MPGOIRSpectrum alloc] initWithWavenumberArray:wnA
+        TTIOIRSpectrum *orig =
+            [[TTIOIRSpectrum alloc] initWithWavenumberArray:wnA
                                               intensityArray:abA
-                                                        mode:MPGOIRModeAbsorbance
+                                                        mode:TTIOIRModeAbsorbance
                                              resolutionCmInv:2.0
                                                numberOfScans:64
                                                indexPosition:0
@@ -346,18 +346,18 @@ void testMilestone73(void)
 
         NSString *jdxPath = m73Path(@"ir.jdx");
         unlink([jdxPath fileSystemRepresentation]);
-        PASS([MPGOJcampDxWriter writeIRSpectrum:orig
+        PASS([TTIOJcampDxWriter writeIRSpectrum:orig
                                           toPath:jdxPath
                                            title:@"Synthetic IR"
                                            error:&err],
              "JCAMP-DX IR writes");
 
-        MPGOSpectrum *decoded = [MPGOJcampDxReader readSpectrumFromPath:jdxPath
+        TTIOSpectrum *decoded = [TTIOJcampDxReader readSpectrumFromPath:jdxPath
                                                                    error:&err];
-        PASS([decoded isKindOfClass:[MPGOIRSpectrum class]],
+        PASS([decoded isKindOfClass:[TTIOIRSpectrum class]],
              "JCAMP-DX IR reader picks IRSpectrum class");
-        MPGOIRSpectrum *back = (MPGOIRSpectrum *)decoded;
-        PASS(back.mode == MPGOIRModeAbsorbance,
+        TTIOIRSpectrum *back = (TTIOIRSpectrum *)decoded;
+        PASS(back.mode == TTIOIRModeAbsorbance,
              "JCAMP-DX IR mode picked from DATA TYPE=INFRARED ABSORBANCE");
         PASS(back.resolutionCmInv == 2.0, "JCAMP-DX IR resolution round-trips");
         PASS(back.numberOfScans == 64, "JCAMP-DX IR number_of_scans round-trips");

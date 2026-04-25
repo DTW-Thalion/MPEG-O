@@ -1,36 +1,36 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGOSpectrum.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Spectra/MPGONMRSpectrum.h"
-#import "Spectra/MPGONMR2DSpectrum.h"
-#import "Spectra/MPGOFreeInductionDecay.h"
-#import "Spectra/MPGOChromatogram.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOAxisDescriptor.h"
-#import "ValueClasses/MPGOValueRange.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Errors.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIOSpectrum.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Spectra/TTIONMRSpectrum.h"
+#import "Spectra/TTIONMR2DSpectrum.h"
+#import "Spectra/TTIOFreeInductionDecay.h"
+#import "Spectra/TTIOChromatogram.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOAxisDescriptor.h"
+#import "ValueClasses/TTIOValueRange.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Errors.h"
 #import <math.h>
 #import <unistd.h>
 
 static NSString *spath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_spec_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_spec_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *float64ArrayWithValues(const double *src, NSUInteger n)
+static TTIOSignalArray *float64ArrayWithValues(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf
                                             length:n
                                           encoding:enc
                                               axis:nil];
@@ -47,44 +47,44 @@ void testSpectra(void)
             mz[i]   = 100.0 + (double)i * 4.5;
             intn[i] = 1.0e6 * (1.0 + sin((double)i * 0.1));
         }
-        MPGOSignalArray *mzA = float64ArrayWithValues(mz, N);
-        MPGOSignalArray *inA = float64ArrayWithValues(intn, N);
+        TTIOSignalArray *mzA = float64ArrayWithValues(mz, N);
+        TTIOSignalArray *inA = float64ArrayWithValues(intn, N);
         free(mz); free(intn);
 
         NSError *err = nil;
-        MPGOMassSpectrum *ms =
-            [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+        TTIOMassSpectrum *ms =
+            [[TTIOMassSpectrum alloc] initWithMzArray:mzA
                                        intensityArray:inA
                                               msLevel:1
-                                             polarity:MPGOPolarityPositive
-                                           scanWindow:[MPGOValueRange rangeWithMinimum:50 maximum:2000]
+                                             polarity:TTIOPolarityPositive
+                                           scanWindow:[TTIOValueRange rangeWithMinimum:50 maximum:2000]
                                         indexPosition:42
                                       scanTimeSeconds:123.456
                                           precursorMz:0
                                       precursorCharge:0
                                                 error:&err];
-        PASS(ms != nil, "MPGOMassSpectrum constructible with matched arrays");
+        PASS(ms != nil, "TTIOMassSpectrum constructible with matched arrays");
         PASS(err == nil, "no error on construction");
         PASS(ms.msLevel == 1, "ms_level stored");
-        PASS(ms.polarity == MPGOPolarityPositive, "polarity stored");
+        PASS(ms.polarity == TTIOPolarityPositive, "polarity stored");
         PASS(ms.mzArray.length == 200, "mz length retained");
 
         NSString *path = spath(@"ms");
         unlink([path fileSystemRepresentation]);
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([ms writeToGroup:[f rootGroup] name:@"spec" error:&err],
              "200-peak MassSpectrum writes to HDF5");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOMassSpectrum *back =
-            [MPGOMassSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOMassSpectrum *back =
+            [TTIOMassSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
         PASS(back != nil, "200-peak MassSpectrum reads back");
-        PASS([back isKindOfClass:[MPGOMassSpectrum class]], "decoded is MPGOMassSpectrum");
+        PASS([back isKindOfClass:[TTIOMassSpectrum class]], "decoded is TTIOMassSpectrum");
         PASS(back.mzArray.length == 200 && back.intensityArray.length == 200,
              "200-peak arrays preserved");
         PASS(back.msLevel == 1, "msLevel round-trips");
-        PASS(back.polarity == MPGOPolarityPositive, "polarity round-trips");
+        PASS(back.polarity == TTIOPolarityPositive, "polarity round-trips");
         PASS(back.scanWindow.maximum == 2000, "scanWindow.max round-trips");
         PASS(back.indexPosition == 42, "indexPosition round-trips");
         PASS(fabs(back.scanTimeSeconds - 123.456) < 1e-12, "scanTime round-trips");
@@ -97,14 +97,14 @@ void testSpectra(void)
     {
         double mz[3] = {1, 2, 3};
         double in[2] = {10, 20};
-        MPGOSignalArray *mzA = float64ArrayWithValues(mz, 3);
-        MPGOSignalArray *inA = float64ArrayWithValues(in, 2);
+        TTIOSignalArray *mzA = float64ArrayWithValues(mz, 3);
+        TTIOSignalArray *inA = float64ArrayWithValues(in, 2);
         NSError *err = nil;
-        MPGOMassSpectrum *ms =
-            [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+        TTIOMassSpectrum *ms =
+            [[TTIOMassSpectrum alloc] initWithMzArray:mzA
                                        intensityArray:inA
                                               msLevel:1
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:0
                                       scanTimeSeconds:0
@@ -113,7 +113,7 @@ void testSpectra(void)
                                                 error:&err];
         PASS(ms == nil, "mismatched mz/intensity construction returns nil");
         PASS(err != nil, "mismatched construction populates NSError");
-        PASS(err.code == MPGOErrorInvalidArgument, "error code is InvalidArgument");
+        PASS(err.code == TTIOErrorInvalidArgument, "error code is InvalidArgument");
     }
 
     // ---- 32768-point NMR FID round-trip with real/imag intact ----
@@ -127,8 +127,8 @@ void testSpectra(void)
         }
         NSData *buf = [NSData dataWithBytes:cplx length:N*2*sizeof(double)];
 
-        MPGOFreeInductionDecay *fid =
-            [[MPGOFreeInductionDecay alloc] initWithComplexBuffer:buf
+        TTIOFreeInductionDecay *fid =
+            [[TTIOFreeInductionDecay alloc] initWithComplexBuffer:buf
                                                      complexLength:N
                                                   dwellTimeSeconds:1e-4
                                                          scanCount:16
@@ -137,7 +137,7 @@ void testSpectra(void)
 
         NSString *path = spath(@"fid");
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([fid writeToGroup:[f rootGroup]
                           name:@"fid"
                      chunkSize:4096
@@ -146,9 +146,9 @@ void testSpectra(void)
              "32768-point FID writes");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOFreeInductionDecay *back =
-            [MPGOFreeInductionDecay readFromGroup:[g rootGroup] name:@"fid" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOFreeInductionDecay *back =
+            [TTIOFreeInductionDecay readFromGroup:[g rootGroup] name:@"fid" error:&err];
         PASS(back != nil, "32768-point FID reads");
         PASS(back.length == N, "FID length preserved");
         PASS(back.scanCount == 16, "scanCount round-trips");
@@ -169,19 +169,19 @@ void testSpectra(void)
         for (NSUInteger i = 0; i < total; i++) mat[i] = (double)(i % 997) * 0.001;
         NSData *matData = [NSData dataWithBytes:mat length:total * sizeof(double)];
 
-        MPGOAxisDescriptor *f1 =
-            [MPGOAxisDescriptor descriptorWithName:@"F1"
+        TTIOAxisDescriptor *f1 =
+            [TTIOAxisDescriptor descriptorWithName:@"F1"
                                               unit:@"ppm"
-                                        valueRange:[MPGOValueRange rangeWithMinimum:0 maximum:200]
-                                      samplingMode:MPGOSamplingModeUniform];
-        MPGOAxisDescriptor *f2 =
-            [MPGOAxisDescriptor descriptorWithName:@"F2"
+                                        valueRange:[TTIOValueRange rangeWithMinimum:0 maximum:200]
+                                      samplingMode:TTIOSamplingModeUniform];
+        TTIOAxisDescriptor *f2 =
+            [TTIOAxisDescriptor descriptorWithName:@"F2"
                                               unit:@"ppm"
-                                        valueRange:[MPGOValueRange rangeWithMinimum:0 maximum:12]
-                                      samplingMode:MPGOSamplingModeUniform];
+                                        valueRange:[TTIOValueRange rangeWithMinimum:0 maximum:12]
+                                      samplingMode:TTIOSamplingModeUniform];
         NSError *err = nil;
-        MPGONMR2DSpectrum *nmr2d =
-            [[MPGONMR2DSpectrum alloc] initWithIntensityMatrix:matData
+        TTIONMR2DSpectrum *nmr2d =
+            [[TTIONMR2DSpectrum alloc] initWithIntensityMatrix:matData
                                                           width:W
                                                          height:H
                                                          f1Axis:f1
@@ -193,14 +193,14 @@ void testSpectra(void)
         PASS(nmr2d != nil, "2D NMR constructible");
 
         NSString *path = spath(@"nmr2d");
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([nmr2d writeToGroup:[f rootGroup] name:@"hsqc" error:&err],
              "512x1024 2D NMR writes");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGONMR2DSpectrum *back =
-            [MPGONMR2DSpectrum readFromGroup:[g rootGroup] name:@"hsqc" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIONMR2DSpectrum *back =
+            [TTIONMR2DSpectrum readFromGroup:[g rootGroup] name:@"hsqc" error:&err];
         PASS(back != nil, "2D NMR reads back");
         PASS(back.width == W && back.height == H, "matrix dimensions preserved");
         PASS([back.intensityMatrix isEqualToData:matData], "matrix bytes byte-exact");
@@ -220,13 +220,13 @@ void testSpectra(void)
             cs[i]   = (double)i * 0.01;
             intn[i] = sin((double)i * 0.05);
         }
-        MPGOSignalArray *csA = float64ArrayWithValues(cs, N);
-        MPGOSignalArray *inA = float64ArrayWithValues(intn, N);
+        TTIOSignalArray *csA = float64ArrayWithValues(cs, N);
+        TTIOSignalArray *inA = float64ArrayWithValues(intn, N);
         free(cs); free(intn);
 
         NSError *err = nil;
-        MPGONMRSpectrum *nmr =
-            [[MPGONMRSpectrum alloc] initWithChemicalShiftArray:csA
+        TTIONMRSpectrum *nmr =
+            [[TTIONMRSpectrum alloc] initWithChemicalShiftArray:csA
                                                   intensityArray:inA
                                                      nucleusType:@"1H"
                                         spectrometerFrequencyMHz:600.13
@@ -236,14 +236,14 @@ void testSpectra(void)
         PASS(nmr != nil, "1D NMR constructible");
 
         NSString *path = spath(@"nmr");
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([nmr writeToGroup:[f rootGroup] name:@"proton" error:&err],
              "1D NMR writes");
         [f close];
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGONMRSpectrum *back =
-            [MPGONMRSpectrum readFromGroup:[g rootGroup] name:@"proton" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIONMRSpectrum *back =
+            [TTIONMRSpectrum readFromGroup:[g rootGroup] name:@"proton" error:&err];
         PASS(back != nil, "1D NMR reads");
         PASS([back.nucleusType isEqualToString:@"1H"], "nucleusType round-trips");
         PASS(back.spectrometerFrequencyMHz == 600.13, "spectrometer freq round-trips");
@@ -259,19 +259,19 @@ void testSpectra(void)
         double *t = malloc(N * sizeof(double));
         double *i = malloc(N * sizeof(double));
         for (NSUInteger k = 0; k < N; k++) { t[k] = (double)k * 0.5; i[k] = (double)k; }
-        MPGOSignalArray *tA = float64ArrayWithValues(t, N);
-        MPGOSignalArray *iA = float64ArrayWithValues(i, N);
+        TTIOSignalArray *tA = float64ArrayWithValues(t, N);
+        TTIOSignalArray *iA = float64ArrayWithValues(i, N);
         free(t); free(i);
 
-        struct { MPGOChromatogramType type; double tgt, prec, prod; const char *label; } cases[] = {
-            { MPGOChromatogramTypeTIC, 0.0,  0.0,    0.0,    "TIC" },
-            { MPGOChromatogramTypeXIC, 524.3, 0.0,   0.0,    "XIC" },
-            { MPGOChromatogramTypeSRM, 0.0,  524.3, 396.2,  "SRM" },
+        struct { TTIOChromatogramType type; double tgt, prec, prod; const char *label; } cases[] = {
+            { TTIOChromatogramTypeTIC, 0.0,  0.0,    0.0,    "TIC" },
+            { TTIOChromatogramTypeXIC, 524.3, 0.0,   0.0,    "XIC" },
+            { TTIOChromatogramTypeSRM, 0.0,  524.3, 396.2,  "SRM" },
         };
         for (int k = 0; k < 3; k++) {
             NSError *err = nil;
-            MPGOChromatogram *ch =
-                [[MPGOChromatogram alloc] initWithTimeArray:tA
+            TTIOChromatogram *ch =
+                [[TTIOChromatogram alloc] initWithTimeArray:tA
                                              intensityArray:iA
                                                        type:cases[k].type
                                                    targetMz:cases[k].tgt
@@ -281,14 +281,14 @@ void testSpectra(void)
             PASS(ch != nil, "chromatogram constructible");
 
             NSString *path = spath([NSString stringWithFormat:@"chrom_%s", cases[k].label]);
-            MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+            TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
             PASS([ch writeToGroup:[f rootGroup] name:@"ch" error:&err],
                  "chromatogram writes");
             [f close];
 
-            MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-            MPGOChromatogram *back =
-                [MPGOChromatogram readFromGroup:[g rootGroup] name:@"ch" error:&err];
+            TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+            TTIOChromatogram *back =
+                [TTIOChromatogram readFromGroup:[g rootGroup] name:@"ch" error:&err];
             PASS(back != nil, "chromatogram reads");
             PASS(back.type == cases[k].type, "chromatogram type round-trips");
             PASS(back.targetMz == cases[k].tgt, "targetMz round-trips");

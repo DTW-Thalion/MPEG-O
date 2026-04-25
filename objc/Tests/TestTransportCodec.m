@@ -19,22 +19,22 @@
 #import <string.h>
 #import <unistd.h>
 
-#import "Transport/MPGOTransportPacket.h"
-#import "Transport/MPGOAccessUnit.h"
-#import "Transport/MPGOTransportWriter.h"
-#import "Transport/MPGOTransportReader.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Spectra/MPGOSpectrum.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Core/MPGOSignalArray.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Transport/TTIOTransportPacket.h"
+#import "Transport/TTIOAccessUnit.h"
+#import "Transport/TTIOTransportWriter.h"
+#import "Transport/TTIOTransportReader.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Spectra/TTIOSpectrum.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEnums.h"
 
 static NSString *tmpPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m67_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_m67_%d_%@",
             (int)getpid(), suffix];
 }
 
@@ -87,7 +87,7 @@ static NSData *uint64LEArray(const uint64_t *values, NSUInteger count)
     return d;
 }
 
-// Build a minimal 3-spectrum MS .mpgo for round-trip testing.
+// Build a minimal 3-spectrum MS .tio for round-trip testing.
 static BOOL buildFixture(NSString *path, NSError **error)
 {
     NSUInteger n = 3;
@@ -108,9 +108,9 @@ static BOOL buildFixture(NSString *path, NSError **error)
     uint32_t lengths[3] = {4, 4, 4};
     double rts[3] = {1.0, 2.0, 3.0};
     int32_t msLevels[3] = {1, 2, 1};
-    int32_t pols[3] = {(int32_t)MPGOPolarityPositive,
-                       (int32_t)MPGOPolarityPositive,
-                       (int32_t)MPGOPolarityPositive};
+    int32_t pols[3] = {(int32_t)TTIOPolarityPositive,
+                       (int32_t)TTIOPolarityPositive,
+                       (int32_t)TTIOPolarityPositive};
     double pmzs[3] = {0.0, 500.25, 0.0};
     int32_t pcs[3] = {0, 2, 0};
     double bpis[3];
@@ -124,10 +124,10 @@ static BOOL buildFixture(NSString *path, NSError **error)
     }
     free(mzArr); free(intArr);
 
-    MPGOWrittenRun *run =
-        [[MPGOWrittenRun alloc]
-            initWithSpectrumClassName:@"MPGOMassSpectrum"
-                      acquisitionMode:(int64_t)MPGOAcquisitionModeMS1DDA
+    TTIOWrittenRun *run =
+        [[TTIOWrittenRun alloc]
+            initWithSpectrumClassName:@"TTIOMassSpectrum"
+                      acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
                           channelData:@{@"mz": mzData, @"intensity": intData}
                               offsets:uint64LEArray(offsets, 3)
                               lengths:uint32LEArray(lengths, 3)
@@ -137,7 +137,7 @@ static BOOL buildFixture(NSString *path, NSError **error)
                          precursorMzs:float64LEBuffer(pmzs, 3)
                      precursorCharges:int32LEArray(pcs, 3)
                   basePeakIntensities:float64LEBuffer(bpis, 3)];
-    return [MPGOSpectralDataset writeMinimalToPath:path
+    return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M67 round-trip fixture"
                                  isaInvestigationId:@"ISA-M67-TEST"
                                              msRuns:@{@"run_0001": run}
@@ -151,10 +151,10 @@ void testTransportCodec(void)
 {
     // ── 1. Packet header round-trip ────────────────────────────────
     {
-        MPGOTransportPacketHeader *h =
-            [[MPGOTransportPacketHeader alloc]
-                initWithPacketType:MPGOTransportPacketAccessUnit
-                              flags:(uint16_t)MPGOTransportPacketFlagHasChecksum
+        TTIOTransportPacketHeader *h =
+            [[TTIOTransportPacketHeader alloc]
+                initWithPacketType:TTIOTransportPacketAccessUnit
+                              flags:(uint16_t)TTIOTransportPacketFlagHasChecksum
                           datasetId:42
                          auSequence:12345
                       payloadLength:9999
@@ -163,11 +163,11 @@ void testTransportCodec(void)
         PASS(raw.length == 24, "packet header encodes to 24 bytes");
 
         NSError *err = nil;
-        MPGOTransportPacketHeader *d =
-            [MPGOTransportPacketHeader decodeFromBytes:(const uint8_t *)raw.bytes
+        TTIOTransportPacketHeader *d =
+            [TTIOTransportPacketHeader decodeFromBytes:(const uint8_t *)raw.bytes
                                                   length:raw.length
                                                    error:&err];
-        PASS(d != nil && d.packetType == MPGOTransportPacketAccessUnit,
+        PASS(d != nil && d.packetType == TTIOTransportPacketAccessUnit,
              "packet type round-trips");
         PASS(d.datasetId == 42 && d.auSequence == 12345 && d.payloadLength == 9999,
              "IDs + payload length round-trip");
@@ -179,10 +179,10 @@ void testTransportCodec(void)
     {
         uint8_t bad[24] = {'X','X', 0x01, 0x01};
         NSError *err = nil;
-        MPGOTransportPacketHeader *d =
-            [MPGOTransportPacketHeader decodeFromBytes:bad length:24 error:&err];
+        TTIOTransportPacketHeader *d =
+            [TTIOTransportPacketHeader decodeFromBytes:bad length:24 error:&err];
         PASS(d == nil, "bad magic: returns nil");
-        PASS(err != nil && err.code == MPGOTransportErrorBadMagic,
+        PASS(err != nil && err.code == TTIOTransportErrorBadMagic,
              "bad magic: error code BadMagic");
     }
 
@@ -190,11 +190,11 @@ void testTransportCodec(void)
     {
         // "123456789" → 0xE3069283 per Castagnoli reference
         const uint8_t v[] = "123456789";
-        uint32_t crc = MPGOTransportCRC32C(v, 9);
+        uint32_t crc = TTIOTransportCRC32C(v, 9);
         PASS(crc == 0xE3069283u,
              "CRC-32C of '123456789' == 0xE3069283");
 
-        uint32_t empty = MPGOTransportCRC32C((const uint8_t *)"", 0);
+        uint32_t empty = TTIOTransportCRC32C((const uint8_t *)"", 0);
         PASS(empty == 0, "CRC-32C of empty == 0");
     }
 
@@ -202,22 +202,22 @@ void testTransportCodec(void)
     {
         double mzVals[3] = {100.0, 200.0, 300.0};
         double intVals[3] = {1000.0, 2000.0, 3000.0};
-        MPGOTransportChannelData *mz =
-            [[MPGOTransportChannelData alloc]
+        TTIOTransportChannelData *mz =
+            [[TTIOTransportChannelData alloc]
                 initWithName:@"mz"
-                   precision:MPGOPrecisionFloat64
-                 compression:MPGOCompressionNone
+                   precision:TTIOPrecisionFloat64
+                 compression:TTIOCompressionNone
                    nElements:3
                         data:float64LEBuffer(mzVals, 3)];
-        MPGOTransportChannelData *intensity =
-            [[MPGOTransportChannelData alloc]
+        TTIOTransportChannelData *intensity =
+            [[TTIOTransportChannelData alloc]
                 initWithName:@"intensity"
-                   precision:MPGOPrecisionFloat64
-                 compression:MPGOCompressionNone
+                   precision:TTIOPrecisionFloat64
+                 compression:TTIOCompressionNone
                    nElements:3
                         data:float64LEBuffer(intVals, 3)];
-        MPGOAccessUnit *au =
-            [[MPGOAccessUnit alloc]
+        TTIOAccessUnit *au =
+            [[TTIOAccessUnit alloc]
                 initWithSpectrumClass:0
                       acquisitionMode:0
                               msLevel:2
@@ -231,8 +231,8 @@ void testTransportCodec(void)
                                pixelX:0 pixelY:0 pixelZ:0];
         NSData *raw = [au encode];
         NSError *err = nil;
-        MPGOAccessUnit *d =
-            [MPGOAccessUnit decodeFromBytes:(const uint8_t *)raw.bytes
+        TTIOAccessUnit *d =
+            [TTIOAccessUnit decodeFromBytes:(const uint8_t *)raw.bytes
                                       length:raw.length
                                        error:&err];
         PASS(d != nil, "AccessUnit decodes");
@@ -250,17 +250,17 @@ void testTransportCodec(void)
     // ── 5. MSImagePixel AU round-trip ──────────────────────────────
     {
         double one = 500.0;
-        MPGOTransportChannelData *ch =
-            [[MPGOTransportChannelData alloc]
+        TTIOTransportChannelData *ch =
+            [[TTIOTransportChannelData alloc]
                 initWithName:@"intensity"
-                   precision:MPGOPrecisionFloat64
-                 compression:MPGOCompressionNone
+                   precision:TTIOPrecisionFloat64
+                 compression:TTIOCompressionNone
                    nElements:1
                         data:float64LEBuffer(&one, 1)];
-        MPGOAccessUnit *au =
-            [[MPGOAccessUnit alloc]
+        TTIOAccessUnit *au =
+            [[TTIOAccessUnit alloc]
                 initWithSpectrumClass:4
-                      acquisitionMode:(uint8_t)MPGOAcquisitionModeImaging
+                      acquisitionMode:(uint8_t)TTIOAcquisitionModeImaging
                               msLevel:1
                              polarity:0
                         retentionTime:0.0
@@ -271,8 +271,8 @@ void testTransportCodec(void)
                              channels:@[ch]
                                pixelX:10 pixelY:20 pixelZ:0];
         NSError *err = nil;
-        MPGOAccessUnit *d =
-            [MPGOAccessUnit decodeFromBytes:(const uint8_t *)[au encode].bytes
+        TTIOAccessUnit *d =
+            [TTIOAccessUnit decodeFromBytes:(const uint8_t *)[au encode].bytes
                                       length:[au encode].length
                                        error:&err];
         PASS(d != nil && d.pixelX == 10 && d.pixelY == 20 && d.pixelZ == 0,
@@ -281,40 +281,40 @@ void testTransportCodec(void)
 
     // ── 6. End-to-end file → stream → file round-trip ──────────────
     {
-        NSString *srcPath = tmpPath(@"src.mpgo");
-        NSString *streamPath = tmpPath(@"stream.mots");
-        NSString *rtPath = tmpPath(@"rt.mpgo");
+        NSString *srcPath = tmpPath(@"src.tio");
+        NSString *streamPath = tmpPath(@"stream.tis");
+        NSString *rtPath = tmpPath(@"rt.tio");
         rmFile(srcPath); rmFile(streamPath); rmFile(rtPath);
 
         NSError *err = nil;
         BOOL ok = buildFixture(srcPath, &err);
         PASS(ok, "fixture write succeeds");
 
-        MPGOSpectralDataset *src =
-            [MPGOSpectralDataset readFromFilePath:srcPath error:&err];
+        TTIOSpectralDataset *src =
+            [TTIOSpectralDataset readFromFilePath:srcPath error:&err];
         PASS(src != nil, "fixture reopens");
 
-        MPGOTransportWriter *tw =
-            [[MPGOTransportWriter alloc] initWithOutputPath:streamPath];
+        TTIOTransportWriter *tw =
+            [[TTIOTransportWriter alloc] initWithOutputPath:streamPath];
         BOOL wrote = [tw writeDataset:src error:&err];
         [tw close];
         PASS(wrote, "transport write succeeds");
         PASS([[NSFileManager defaultManager] fileExistsAtPath:streamPath],
-             ".mots file exists");
+             ".tis file exists");
 
-        MPGOTransportReader *tr =
-            [[MPGOTransportReader alloc] initWithInputPath:streamPath];
+        TTIOTransportReader *tr =
+            [[TTIOTransportReader alloc] initWithInputPath:streamPath];
         NSArray *packets = [tr readAllPacketsWithError:&err];
         // Expect: StreamHeader + DatasetHeader + 3 AU + EndOfDataset + EndOfStream = 7
         PASS(packets != nil && packets.count == 7,
              "stream has 7 packets (header/ds/3xau/eod/eos)");
 
-        BOOL rtOk = [tr writeMpgoToPath:rtPath error:&err];
-        PASS(rtOk, "transport → .mpgo materialization succeeds");
+        BOOL rtOk = [tr writeTtioToPath:rtPath error:&err];
+        PASS(rtOk, "transport → .tio materialization succeeds");
 
-        MPGOSpectralDataset *rt =
-            [MPGOSpectralDataset readFromFilePath:rtPath error:&err];
-        PASS(rt != nil, "round-tripped .mpgo opens");
+        TTIOSpectralDataset *rt =
+            [TTIOSpectralDataset readFromFilePath:rtPath error:&err];
+        PASS(rt != nil, "round-tripped .tio opens");
         PASS([rt.title isEqualToString:@"M67 round-trip fixture"],
              "title preserved");
         PASS([rt.isaInvestigationId isEqualToString:@"ISA-M67-TEST"],
@@ -322,13 +322,13 @@ void testTransportCodec(void)
         PASS(rt.msRuns.count == 1 && rt.msRuns[@"run_0001"] != nil,
              "one MS run named run_0001");
 
-        MPGOAcquisitionRun *rtRun = rt.msRuns[@"run_0001"];
+        TTIOAcquisitionRun *rtRun = rt.msRuns[@"run_0001"];
         PASS([rtRun count] == 3, "3 spectra in round-tripped run");
 
-        MPGOSpectrum *s0 = [rtRun objectAtIndex:1];
-        PASS([s0 isKindOfClass:[MPGOMassSpectrum class]],
-             "round-tripped spectrum is MPGOMassSpectrum");
-        PASS(((MPGOMassSpectrum *)s0).msLevel == 2,
+        TTIOSpectrum *s0 = [rtRun objectAtIndex:1];
+        PASS([s0 isKindOfClass:[TTIOMassSpectrum class]],
+             "round-tripped spectrum is TTIOMassSpectrum");
+        PASS(((TTIOMassSpectrum *)s0).msLevel == 2,
              "ms_level=2 on second spectrum");
         PASS(fabs(s0.scanTimeSeconds - 2.0) < 1e-9,
              "retention time preserved");
@@ -341,10 +341,10 @@ void testTransportCodec(void)
     // ── 7. AU before StreamHeader is rejected ──────────────────────
     {
         NSMutableData *buf = [NSMutableData data];
-        MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithMutableData:buf];
+        TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithMutableData:buf];
         // Fabricate an orphan AU by reaching through fine-grained API.
-        MPGOAccessUnit *au =
-            [[MPGOAccessUnit alloc]
+        TTIOAccessUnit *au =
+            [[TTIOAccessUnit alloc]
                 initWithSpectrumClass:0 acquisitionMode:0 msLevel:1
                               polarity:0 retentionTime:1.0 precursorMz:0.0
                        precursorCharge:0 ionMobility:0.0
@@ -355,13 +355,13 @@ void testTransportCodec(void)
         [tw writeAccessUnit:au datasetId:1 auSequence:0 error:&err];
         [tw writeEndOfStreamWithError:&err];
 
-        NSString *rtPath = tmpPath(@"stream-orphan.mpgo");
+        NSString *rtPath = tmpPath(@"stream-orphan.tio");
         rmFile(rtPath);
-        MPGOTransportReader *tr = [[MPGOTransportReader alloc] initWithData:buf];
+        TTIOTransportReader *tr = [[TTIOTransportReader alloc] initWithData:buf];
         NSError *rtErr = nil;
-        BOOL ok = [tr writeMpgoToPath:rtPath error:&rtErr];
+        BOOL ok = [tr writeTtioToPath:rtPath error:&rtErr];
         PASS(!ok, "orphan AU (no StreamHeader): rejected");
-        PASS(rtErr && rtErr.code == MPGOTransportErrorMissingStreamHeader,
+        PASS(rtErr && rtErr.code == TTIOTransportErrorMissingStreamHeader,
              "orphan AU: error code MissingStreamHeader");
         rmFile(rtPath);
     }

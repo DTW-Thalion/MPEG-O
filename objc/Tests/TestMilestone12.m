@@ -1,20 +1,20 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Image/MPGOMSImage.h"
-#import "Spectra/MPGONMR2DSpectrum.h"
-#import "Spectra/MPGONMRSpectrum.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOAxisDescriptor.h"
-#import "ValueClasses/MPGOValueRange.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOIdentification.h"
-#import "Dataset/MPGOQuantification.h"
-#import "Dataset/MPGOProvenanceRecord.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOFeatureFlags.h"
-#import "HDF5/MPGOHDF5Errors.h"
+#import "Image/TTIOMSImage.h"
+#import "Spectra/TTIONMR2DSpectrum.h"
+#import "Spectra/TTIONMRSpectrum.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOAxisDescriptor.h"
+#import "ValueClasses/TTIOValueRange.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOIdentification.h"
+#import "Dataset/TTIOQuantification.h"
+#import "Dataset/TTIOProvenanceRecord.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOFeatureFlags.h"
+#import "HDF5/TTIOHDF5Errors.h"
 #import <hdf5.h>
 #import <hdf5_hl.h>
 #import <math.h>
@@ -22,13 +22,13 @@
 
 static NSString *m12path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m12_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m12_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
 void testMilestone12(void)
 {
-    // ---- 1. MSImage inherits MPGOSpectralDataset; 64x64x8 round-trip
+    // ---- 1. MSImage inherits TTIOSpectralDataset; 64x64x8 round-trip
     //         with idents + quants + provenance
     {
         const NSUInteger W = 64, H = 64, SP = 8, TS = 32;
@@ -42,26 +42,26 @@ void testMilestone12(void)
             }
         }
 
-        MPGOIdentification *ident =
-            [[MPGOIdentification alloc] initWithRunName:@"image"
+        TTIOIdentification *ident =
+            [[TTIOIdentification alloc] initWithRunName:@"image"
                                           spectrumIndex:0
                                          chemicalEntity:@"CHEBI:16526"
                                         confidenceScore:0.91
                                           evidenceChain:@[@"MS:1002217"]];
-        MPGOQuantification *quant =
-            [[MPGOQuantification alloc] initWithChemicalEntity:@"CHEBI:16526"
+        TTIOQuantification *quant =
+            [[TTIOQuantification alloc] initWithChemicalEntity:@"CHEBI:16526"
                                                       sampleRef:@"tissue_A"
                                                       abundance:1.5e6
                                             normalizationMethod:@"TIC"];
-        MPGOProvenanceRecord *prov =
-            [[MPGOProvenanceRecord alloc] initWithInputRefs:@[@"raw:slide_001"]
+        TTIOProvenanceRecord *prov =
+            [[TTIOProvenanceRecord alloc] initWithInputRefs:@[@"raw:slide_001"]
                                                     software:@"msi_convert"
                                                   parameters:@{@"tile": @32}
-                                                  outputRefs:@[@"mpgo:img_001"]
+                                                  outputRefs:@[@"ttio:img_001"]
                                                timestampUnix:1700000500];
 
-        MPGOMSImage *img =
-            [[MPGOMSImage alloc] initWithTitle:@"MSImage test"
+        TTIOMSImage *img =
+            [[TTIOMSImage alloc] initWithTitle:@"MSImage test"
                             isaInvestigationId:@"I-12"
                                identifications:@[ident]
                                quantifications:@[quant]
@@ -74,8 +74,8 @@ void testMilestone12(void)
                                     pixelSizeY:10.0
                                    scanPattern:@"raster"
                                           cube:cube];
-        PASS([img isKindOfClass:[MPGOSpectralDataset class]],
-             "MPGOMSImage is-a MPGOSpectralDataset");
+        PASS([img isKindOfClass:[TTIOSpectralDataset class]],
+             "TTIOMSImage is-a TTIOSpectralDataset");
         PASS(img.identifications.count == 1,
              "MSImage carries inherited identifications");
         PASS([img.scanPattern isEqualToString:@"raster"], "scanPattern stored");
@@ -87,7 +87,7 @@ void testMilestone12(void)
         PASS([img writeToFilePath:path error:&err],
              "inherited MSImage writes via super");
 
-        MPGOMSImage *back = [MPGOMSImage readFromFilePath:path error:&err];
+        TTIOMSImage *back = [TTIOMSImage readFromFilePath:path error:&err];
         PASS(back != nil, "inherited MSImage reads back");
         PASS(back.width == W && back.height == H && back.spectralPoints == SP,
              "dimensions round-trip");
@@ -99,7 +99,7 @@ void testMilestone12(void)
         PASS(back.pixelSizeX == 10.0, "pixelSizeX round-trips");
 
         // Tile read still works on new /study/image_cube layout
-        NSData *tile = [MPGOMSImage readTileFromFilePath:path
+        NSData *tile = [TTIOMSImage readTileFromFilePath:path
                                                       atX:0 y:0
                                                     width:TS height:TS
                                                     error:&err];
@@ -146,7 +146,7 @@ void testMilestone12(void)
         H5Dclose(did); H5Sclose(space); H5Gclose(imageGroup); H5Fclose(fid);
 
         NSError *err = nil;
-        MPGOMSImage *back = [MPGOMSImage readFromFilePath:path error:&err];
+        TTIOMSImage *back = [TTIOMSImage readFromFilePath:path error:&err];
         PASS(back != nil, "v0.1 /image_cube layout loads via fallback");
         PASS(back.width == W && back.height == H && back.spectralPoints == SP,
              "legacy dimensions");
@@ -164,20 +164,20 @@ void testMilestone12(void)
         NSData *matData = [NSData dataWithBytes:mat length:total * sizeof(double)];
         free(mat);
 
-        MPGOAxisDescriptor *f1 =
-            [MPGOAxisDescriptor descriptorWithName:@"F1"
+        TTIOAxisDescriptor *f1 =
+            [TTIOAxisDescriptor descriptorWithName:@"F1"
                                               unit:@"ppm"
-                                        valueRange:[MPGOValueRange rangeWithMinimum:0 maximum:200]
-                                      samplingMode:MPGOSamplingModeUniform];
-        MPGOAxisDescriptor *f2 =
-            [MPGOAxisDescriptor descriptorWithName:@"F2"
+                                        valueRange:[TTIOValueRange rangeWithMinimum:0 maximum:200]
+                                      samplingMode:TTIOSamplingModeUniform];
+        TTIOAxisDescriptor *f2 =
+            [TTIOAxisDescriptor descriptorWithName:@"F2"
                                               unit:@"ppm"
-                                        valueRange:[MPGOValueRange rangeWithMinimum:0 maximum:12]
-                                      samplingMode:MPGOSamplingModeUniform];
+                                        valueRange:[TTIOValueRange rangeWithMinimum:0 maximum:12]
+                                      samplingMode:TTIOSamplingModeUniform];
 
         NSError *err = nil;
-        MPGONMR2DSpectrum *hsqc =
-            [[MPGONMR2DSpectrum alloc] initWithIntensityMatrix:matData
+        TTIONMR2DSpectrum *hsqc =
+            [[TTIONMR2DSpectrum alloc] initWithIntensityMatrix:matData
                                                           width:WIDTH
                                                          height:HEIGHT
                                                          f1Axis:f1
@@ -190,9 +190,9 @@ void testMilestone12(void)
 
         NSString *path = m12path(@"hsqc");
         unlink([path fileSystemRepresentation]);
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         PASS([hsqc writeToGroup:[f rootGroup] name:@"hsqc" error:&err],
-             "HSQC writes via MPGOSpectrum writer");
+             "HSQC writes via TTIOSpectrum writer");
         [f close];
 
         // Inspect the file directly to confirm intensity_matrix_2d is a
@@ -226,9 +226,9 @@ void testMilestone12(void)
             H5Sclose(space); H5Dclose(did); H5Gclose(specGroup); H5Fclose(fid);
         }
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGONMR2DSpectrum *back =
-            [MPGONMR2DSpectrum readFromGroup:[g rootGroup] name:@"hsqc" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIONMR2DSpectrum *back =
+            [TTIONMR2DSpectrum readFromGroup:[g rootGroup] name:@"hsqc" error:&err];
         PASS(back != nil, "HSQC reads back");
         PASS(back.width == WIDTH && back.height == HEIGHT,
              "HSQC dims round-trip");
@@ -238,10 +238,10 @@ void testMilestone12(void)
         unlink([path fileSystemRepresentation]);
     }
 
-    // ---- 4. opt_native_2d_nmr flag emitted in MPGOSpectralDataset files
+    // ---- 4. opt_native_2d_nmr flag emitted in TTIOSpectralDataset files
     {
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m12_flags"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m12_flags"
                                     isaInvestigationId:@""
                                                 msRuns:@{}
                                                nmrRuns:@{}
@@ -254,8 +254,8 @@ void testMilestone12(void)
         NSError *err = nil;
         [ds writeToFilePath:path error:&err];
 
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        NSArray *features = [MPGOFeatureFlags featuresForRoot:[f rootGroup]];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        NSArray *features = [TTIOFeatureFlags featuresForRoot:[f rootGroup]];
         PASS([features containsObject:@"opt_native_2d_nmr"],
              "opt_native_2d_nmr feature flag emitted");
         PASS([features containsObject:@"opt_native_msimage_cube"],
@@ -273,18 +273,18 @@ void testMilestone12(void)
         for (NSUInteger i = 0; i < total; i++) mat[i] = (double)(i + 1);
         NSData *matData = [NSData dataWithBytes:mat length:total * sizeof(double)];
 
-        MPGOAxisDescriptor *f1 =
-            [MPGOAxisDescriptor descriptorWithName:@"F1" unit:@"ppm"
-                                        valueRange:[MPGOValueRange rangeWithMinimum:0 maximum:1]
-                                      samplingMode:MPGOSamplingModeUniform];
-        MPGOAxisDescriptor *f2 =
-            [MPGOAxisDescriptor descriptorWithName:@"F2" unit:@"ppm"
-                                        valueRange:[MPGOValueRange rangeWithMinimum:0 maximum:1]
-                                      samplingMode:MPGOSamplingModeUniform];
+        TTIOAxisDescriptor *f1 =
+            [TTIOAxisDescriptor descriptorWithName:@"F1" unit:@"ppm"
+                                        valueRange:[TTIOValueRange rangeWithMinimum:0 maximum:1]
+                                      samplingMode:TTIOSamplingModeUniform];
+        TTIOAxisDescriptor *f2 =
+            [TTIOAxisDescriptor descriptorWithName:@"F2" unit:@"ppm"
+                                        valueRange:[TTIOValueRange rangeWithMinimum:0 maximum:1]
+                                      samplingMode:TTIOSamplingModeUniform];
 
         NSError *err = nil;
-        MPGONMR2DSpectrum *small =
-            [[MPGONMR2DSpectrum alloc] initWithIntensityMatrix:matData
+        TTIONMR2DSpectrum *small =
+            [[TTIONMR2DSpectrum alloc] initWithIntensityMatrix:matData
                                                           width:WIDTH
                                                          height:HEIGHT
                                                          f1Axis:f1
@@ -295,7 +295,7 @@ void testMilestone12(void)
                                                           error:&err];
         NSString *path = m12path(@"nmr2d_legacy");
         unlink([path fileSystemRepresentation]);
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
         [small writeToGroup:[f rootGroup] name:@"spec" error:&err];
         [f close];
 
@@ -318,9 +318,9 @@ void testMilestone12(void)
             H5Fclose(fid);
         }
 
-        MPGOHDF5File *g = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGONMR2DSpectrum *back =
-            [MPGONMR2DSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
+        TTIOHDF5File *g = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIONMR2DSpectrum *back =
+            [TTIONMR2DSpectrum readFromGroup:[g rootGroup] name:@"spec" error:&err];
         PASS(back != nil, "legacy flattened 2D NMR reads via fallback");
         PASS(back.width == WIDTH && back.height == HEIGHT,
              "legacy dims preserved");

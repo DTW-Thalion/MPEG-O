@@ -5,11 +5,11 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Providers/MPGOStorageProtocols.h"
-#import "Providers/MPGOProviderRegistry.h"
-#import "Providers/MPGOSqliteProvider.h"
-#import "Providers/MPGOCompoundField.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOSqliteProvider.h"
+#import "Providers/TTIOCompoundField.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <unistd.h>
 #import <math.h>
 
@@ -17,7 +17,7 @@
 
 static NSString *sqliteTmpPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_sqlite_%d_%@.mpgo.sqlite",
+    return [NSString stringWithFormat:@"/tmp/ttio_sqlite_%d_%@.tio.sqlite",
             (int)getpid(), suffix];
 }
 
@@ -60,7 +60,7 @@ static NSData *packComplex128(const double *vals, NSUInteger pairs)
 
 static void testSqliteRegistration(void)
 {
-    NSArray *known = [[MPGOProviderRegistry sharedRegistry] knownProviderNames];
+    NSArray *known = [[TTIOProviderRegistry sharedRegistry] knownProviderNames];
     PASS([known containsObject:@"sqlite"],
          "Sqlite: registry knows sqlite");
 }
@@ -73,9 +73,9 @@ static void testSqliteLifecycle(void)
 {
     NSString *path = sqliteTmpPath(@"lifecycle");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
     PASS(p != nil, "Sqlite lifecycle: open CREATE");
     PASS([p isOpen], "Sqlite lifecycle: isOpen after CREATE");
@@ -84,8 +84,8 @@ static void testSqliteLifecycle(void)
     PASS(![p isOpen], "Sqlite lifecycle: isOpen false after close");
 
     // Re-open read-only
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     PASS(p != nil, "Sqlite lifecycle: open READ");
     [p close];
@@ -101,22 +101,22 @@ static void testSqliteGroupHierarchy(void)
 {
     NSString *path = sqliteTmpPath(@"groups");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
     PASS(p != nil, "Sqlite groups: open");
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
     PASS(root != nil, "Sqlite groups: rootGroup");
 
-    id<MPGOStorageGroup> samples = [root createGroupNamed:@"samples" error:&err];
+    id<TTIOStorageGroup> samples = [root createGroupNamed:@"samples" error:&err];
     PASS(samples != nil, "Sqlite groups: createGroup samples");
 
-    id<MPGOStorageGroup> run1 = [samples createGroupNamed:@"run1" error:&err];
+    id<TTIOStorageGroup> run1 = [samples createGroupNamed:@"run1" error:&err];
     PASS(run1 != nil, "Sqlite groups: createGroup run1");
 
-    id<MPGOStorageGroup> run2 = [samples createGroupNamed:@"run2" error:&err];
+    id<TTIOStorageGroup> run2 = [samples createGroupNamed:@"run2" error:&err];
     PASS(run2 != nil, "Sqlite groups: createGroup run2");
 
     PASS([root hasChildNamed:@"samples"], "Sqlite groups: hasChild samples");
@@ -132,8 +132,8 @@ static void testSqliteGroupHierarchy(void)
     [p close];
 
     // Reopen and verify hierarchy persisted
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
     samples = [root openGroupNamed:@"samples" error:&err];
@@ -153,21 +153,21 @@ static void testSqlitePrimitive1D(void)
 {
     NSString *path = sqliteTmpPath(@"prim1d");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
 
     double vals[] = {1.0, 2.5, 3.14159, -0.001, 1e10};
     NSUInteger n = 5;
-    id<MPGOStorageDataset> ds =
+    id<TTIOStorageDataset> ds =
         [root createDatasetNamed:@"intensities"
-                        precision:MPGOPrecisionFloat64
+                        precision:TTIOPrecisionFloat64
                            length:n
                         chunkSize:0
-                      compression:MPGOCompressionNone
+                      compression:TTIOCompressionNone
                  compressionLevel:0
                             error:&err];
     PASS(ds != nil, "Sqlite prim1D: createDataset");
@@ -182,8 +182,8 @@ static void testSqlitePrimitive1D(void)
     [p close];
 
     // Re-open read-only and verify
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
     ds = [root openDatasetNamed:@"intensities" error:&err];
@@ -218,24 +218,24 @@ static void testSqlitePrimitiveND(void)
 {
     NSString *path = sqliteTmpPath(@"primnd");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
 
     // 3×4 float32 matrix
     float mat[12];
     for (int i = 0; i < 12; i++) mat[i] = (float)i * 0.5f;
 
     NSArray *shape = @[@3, @4];
-    id<MPGOStorageDataset> ds =
+    id<TTIOStorageDataset> ds =
         [root createDatasetNDNamed:@"matrix"
-                          precision:MPGOPrecisionFloat32
+                          precision:TTIOPrecisionFloat32
                               shape:shape
                              chunks:nil
-                        compression:MPGOCompressionNone
+                        compression:TTIOCompressionNone
                    compressionLevel:0
                               error:&err];
     PASS(ds != nil, "Sqlite ND: createDatasetND");
@@ -248,8 +248,8 @@ static void testSqlitePrimitiveND(void)
 
     [p close];
 
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
     ds = [root openDatasetNamed:@"matrix" error:&err];
@@ -274,20 +274,20 @@ static void testSqliteCompound(void)
 {
     NSString *path = sqliteTmpPath(@"compound");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
 
     NSArray *fields = @[
-        [MPGOCompoundField fieldWithName:@"run_name"
-                                    kind:MPGOCompoundFieldKindVLString],
-        [MPGOCompoundField fieldWithName:@"spectrum_index"
-                                    kind:MPGOCompoundFieldKindUInt32],
-        [MPGOCompoundField fieldWithName:@"confidence_score"
-                                    kind:MPGOCompoundFieldKindFloat64],
+        [TTIOCompoundField fieldWithName:@"run_name"
+                                    kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"spectrum_index"
+                                    kind:TTIOCompoundFieldKindUInt32],
+        [TTIOCompoundField fieldWithName:@"confidence_score"
+                                    kind:TTIOCompoundFieldKindFloat64],
     ];
     NSArray *rows = @[
         @{@"run_name": @"run_A",
@@ -301,7 +301,7 @@ static void testSqliteCompound(void)
           @"confidence_score": @(0.88)},
     ];
 
-    id<MPGOStorageDataset> ds =
+    id<TTIOStorageDataset> ds =
         [root createCompoundDatasetNamed:@"hits"
                                     fields:fields
                                      count:rows.count
@@ -312,8 +312,8 @@ static void testSqliteCompound(void)
 
     [p close];
 
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
     ds = [root openDatasetNamed:@"hits" error:&err];
@@ -346,11 +346,11 @@ static void testSqliteCompound(void)
     // Fields round-trip
     PASS([[ds.compoundFields[0] name] isEqualToString:@"run_name"],
          "Sqlite compound: field[0] name");
-    PASS([ds.compoundFields[0] kind] == MPGOCompoundFieldKindVLString,
+    PASS([ds.compoundFields[0] kind] == TTIOCompoundFieldKindVLString,
          "Sqlite compound: field[0] kind VLString");
     PASS([[ds.compoundFields[1] name] isEqualToString:@"spectrum_index"],
          "Sqlite compound: field[1] name");
-    PASS([ds.compoundFields[1] kind] == MPGOCompoundFieldKindUInt32,
+    PASS([ds.compoundFields[1] kind] == TTIOCompoundFieldKindUInt32,
          "Sqlite compound: field[1] kind UInt32");
 
     [p close];
@@ -365,12 +365,12 @@ static void testSqliteGroupAttributes(void)
 {
     NSString *path = sqliteTmpPath(@"grpattr");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
 
     PASS([root setAttributeValue:@"cross-lang test"
                          forName:@"title" error:&err],
@@ -408,8 +408,8 @@ static void testSqliteGroupAttributes(void)
     [p close];
 
     // Reopen and verify persistence
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
 
@@ -432,18 +432,18 @@ static void testSqliteDatasetAttributes(void)
 {
     NSString *path = sqliteTmpPath(@"dsattr");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
-    id<MPGOStorageDataset> ds =
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageDataset> ds =
         [root createDatasetNamed:@"mz"
-                        precision:MPGOPrecisionFloat64
+                        precision:TTIOPrecisionFloat64
                            length:3
                         chunkSize:0
-                      compression:MPGOCompressionNone
+                      compression:TTIOCompressionNone
                  compressionLevel:0
                             error:&err];
     PASS(ds != nil, "Sqlite dsattr: createDataset");
@@ -474,8 +474,8 @@ static void testSqliteDatasetAttributes(void)
     [p close];
 
     // Reopen and verify
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
     ds = [root openDatasetNamed:@"mz" error:&err];
@@ -496,71 +496,71 @@ static void testSqliteAllPrecisions(void)
 {
     NSString *path = sqliteTmpPath(@"precisions");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
     PASS(p != nil, "Sqlite precisions: open");
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
 
     // FLOAT32
     {
         float v[] = {1.5f, -2.5f, 3.14f};
-        id<MPGOStorageDataset> ds =
-            [root createDatasetNamed:@"f32" precision:MPGOPrecisionFloat32
+        id<TTIOStorageDataset> ds =
+            [root createDatasetNamed:@"f32" precision:TTIOPrecisionFloat32
                               length:3 chunkSize:0
-                         compression:MPGOCompressionNone compressionLevel:0
+                         compression:TTIOCompressionNone compressionLevel:0
                                error:&err];
         [ds writeAll:packFloat32(v, 3) error:&err];
     }
     // FLOAT64
     {
         double v[] = {1.5, -2.5, 3.14159265358979};
-        id<MPGOStorageDataset> ds =
-            [root createDatasetNamed:@"f64" precision:MPGOPrecisionFloat64
+        id<TTIOStorageDataset> ds =
+            [root createDatasetNamed:@"f64" precision:TTIOPrecisionFloat64
                               length:3 chunkSize:0
-                         compression:MPGOCompressionNone compressionLevel:0
+                         compression:TTIOCompressionNone compressionLevel:0
                                error:&err];
         [ds writeAll:packFloat64(v, 3) error:&err];
     }
     // INT32
     {
         int32_t v[] = {-1000000, 0, 2147483647};
-        id<MPGOStorageDataset> ds =
-            [root createDatasetNamed:@"i32" precision:MPGOPrecisionInt32
+        id<TTIOStorageDataset> ds =
+            [root createDatasetNamed:@"i32" precision:TTIOPrecisionInt32
                               length:3 chunkSize:0
-                         compression:MPGOCompressionNone compressionLevel:0
+                         compression:TTIOCompressionNone compressionLevel:0
                                error:&err];
         [ds writeAll:packInt32(v, 3) error:&err];
     }
     // INT64
     {
         int64_t v[] = {(int64_t)-9e18, 0, (int64_t)9e18};
-        id<MPGOStorageDataset> ds =
-            [root createDatasetNamed:@"i64" precision:MPGOPrecisionInt64
+        id<TTIOStorageDataset> ds =
+            [root createDatasetNamed:@"i64" precision:TTIOPrecisionInt64
                               length:3 chunkSize:0
-                         compression:MPGOCompressionNone compressionLevel:0
+                         compression:TTIOCompressionNone compressionLevel:0
                                error:&err];
         [ds writeAll:packInt64(v, 3) error:&err];
     }
     // UINT32
     {
         uint32_t v[] = {0, 1, 4294967295U};
-        id<MPGOStorageDataset> ds =
-            [root createDatasetNamed:@"u32" precision:MPGOPrecisionUInt32
+        id<TTIOStorageDataset> ds =
+            [root createDatasetNamed:@"u32" precision:TTIOPrecisionUInt32
                               length:3 chunkSize:0
-                         compression:MPGOCompressionNone compressionLevel:0
+                         compression:TTIOCompressionNone compressionLevel:0
                                error:&err];
         [ds writeAll:packUInt32(v, 3) error:&err];
     }
     // COMPLEX128 (3 complex numbers = 6 doubles)
     {
         double v[] = {1.0, 0.0, -1.0, 2.0, 0.0, -3.14};
-        id<MPGOStorageDataset> ds =
-            [root createDatasetNamed:@"c128" precision:MPGOPrecisionComplex128
+        id<TTIOStorageDataset> ds =
+            [root createDatasetNamed:@"c128" precision:TTIOPrecisionComplex128
                               length:3 chunkSize:0
-                         compression:MPGOCompressionNone compressionLevel:0
+                         compression:TTIOCompressionNone compressionLevel:0
                                error:&err];
         [ds writeAll:packComplex128(v, 3) error:&err];
     }
@@ -568,16 +568,16 @@ static void testSqliteAllPrecisions(void)
     [p close];
 
     // Reopen and verify
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
 
     // FLOAT32
     {
-        id<MPGOStorageDataset> ds = [root openDatasetNamed:@"f32" error:&err];
+        id<TTIOStorageDataset> ds = [root openDatasetNamed:@"f32" error:&err];
         PASS(ds != nil, "Sqlite precisions: FLOAT32 open");
-        PASS(ds.precision == MPGOPrecisionFloat32, "Sqlite precisions: FLOAT32 precision");
+        PASS(ds.precision == TTIOPrecisionFloat32, "Sqlite precisions: FLOAT32 precision");
         NSData *back = [ds readAll:&err];
         PASS(back.length == 3 * sizeof(float), "Sqlite precisions: FLOAT32 length");
         const float *gv = (const float *)back.bytes;
@@ -585,9 +585,9 @@ static void testSqliteAllPrecisions(void)
     }
     // FLOAT64
     {
-        id<MPGOStorageDataset> ds = [root openDatasetNamed:@"f64" error:&err];
+        id<TTIOStorageDataset> ds = [root openDatasetNamed:@"f64" error:&err];
         PASS(ds != nil, "Sqlite precisions: FLOAT64 open");
-        PASS(ds.precision == MPGOPrecisionFloat64, "Sqlite precisions: FLOAT64 precision");
+        PASS(ds.precision == TTIOPrecisionFloat64, "Sqlite precisions: FLOAT64 precision");
         NSData *back = [ds readAll:&err];
         PASS(back.length == 3 * sizeof(double), "Sqlite precisions: FLOAT64 length");
         const double *gv = (const double *)back.bytes;
@@ -595,18 +595,18 @@ static void testSqliteAllPrecisions(void)
     }
     // INT32
     {
-        id<MPGOStorageDataset> ds = [root openDatasetNamed:@"i32" error:&err];
+        id<TTIOStorageDataset> ds = [root openDatasetNamed:@"i32" error:&err];
         PASS(ds != nil, "Sqlite precisions: INT32 open");
-        PASS(ds.precision == MPGOPrecisionInt32, "Sqlite precisions: INT32 precision");
+        PASS(ds.precision == TTIOPrecisionInt32, "Sqlite precisions: INT32 precision");
         NSData *back = [ds readAll:&err];
         const int32_t *gv = (const int32_t *)back.bytes;
         PASS(gv[0] == -1000000 && gv[2] == 2147483647, "Sqlite precisions: INT32 values");
     }
     // INT64
     {
-        id<MPGOStorageDataset> ds = [root openDatasetNamed:@"i64" error:&err];
+        id<TTIOStorageDataset> ds = [root openDatasetNamed:@"i64" error:&err];
         PASS(ds != nil, "Sqlite precisions: INT64 open");
-        PASS(ds.precision == MPGOPrecisionInt64, "Sqlite precisions: INT64 precision");
+        PASS(ds.precision == TTIOPrecisionInt64, "Sqlite precisions: INT64 precision");
         NSData *back = [ds readAll:&err];
         PASS(back.length == 3 * sizeof(int64_t), "Sqlite precisions: INT64 length");
         const int64_t *gv = (const int64_t *)back.bytes;
@@ -614,18 +614,18 @@ static void testSqliteAllPrecisions(void)
     }
     // UINT32
     {
-        id<MPGOStorageDataset> ds = [root openDatasetNamed:@"u32" error:&err];
+        id<TTIOStorageDataset> ds = [root openDatasetNamed:@"u32" error:&err];
         PASS(ds != nil, "Sqlite precisions: UINT32 open");
-        PASS(ds.precision == MPGOPrecisionUInt32, "Sqlite precisions: UINT32 precision");
+        PASS(ds.precision == TTIOPrecisionUInt32, "Sqlite precisions: UINT32 precision");
         NSData *back = [ds readAll:&err];
         const uint32_t *gv = (const uint32_t *)back.bytes;
         PASS(gv[2] == 4294967295U, "Sqlite precisions: UINT32 max value");
     }
     // COMPLEX128
     {
-        id<MPGOStorageDataset> ds = [root openDatasetNamed:@"c128" error:&err];
+        id<TTIOStorageDataset> ds = [root openDatasetNamed:@"c128" error:&err];
         PASS(ds != nil, "Sqlite precisions: COMPLEX128 open");
-        PASS(ds.precision == MPGOPrecisionComplex128, "Sqlite precisions: COMPLEX128 precision");
+        PASS(ds.precision == TTIOPrecisionComplex128, "Sqlite precisions: COMPLEX128 precision");
         NSData *back = [ds readAll:&err];
         PASS(back.length == 3 * 2 * sizeof(double), "Sqlite precisions: COMPLEX128 length");
         const double *gv = (const double *)back.bytes;
@@ -646,32 +646,32 @@ static void testSqliteReadOnlyRejectsWrites(void)
     NSError *err = nil;
 
     // Create a store with data
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
     [root createGroupNamed:@"g1" error:&err];
     [p close];
 
     // Re-open read-only
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
 
     // createGroup should fail
     err = nil;
-    id<MPGOStorageGroup> badGroup = [root createGroupNamed:@"g2" error:&err];
+    id<TTIOStorageGroup> badGroup = [root createGroupNamed:@"g2" error:&err];
     PASS(badGroup == nil, "Sqlite read-only: createGroup returns nil");
     PASS(err != nil, "Sqlite read-only: createGroup sets error");
 
     // createDataset should fail
     err = nil;
-    id<MPGOStorageDataset> badDs =
-        [root createDatasetNamed:@"d1" precision:MPGOPrecisionFloat64
+    id<TTIOStorageDataset> badDs =
+        [root createDatasetNamed:@"d1" precision:TTIOPrecisionFloat64
                           length:4 chunkSize:0
-                     compression:MPGOCompressionNone compressionLevel:0
+                     compression:TTIOCompressionNone compressionLevel:0
                            error:&err];
     PASS(badDs == nil, "Sqlite read-only: createDataset returns nil");
     PASS(err != nil, "Sqlite read-only: createDataset sets error");
@@ -687,70 +687,70 @@ static void testSqliteReadOnlyRejectsWrites(void)
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// TEST 11: MPEG-O-shaped tree round-trip
+// TEST 11: TTI-O-shaped tree round-trip
 // ────────────────────────────────────────────────────────────────────────────
 
-static void testSqliteMPGOTree(void)
+static void testSqliteTTIOTree(void)
 {
     NSString *path = sqliteTmpPath(@"tree");
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeCreate
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeCreate
             provider:@"sqlite" error:&err];
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
-    [root setAttributeValue:@"MPEG-O test run" forName:@"description" error:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
+    [root setAttributeValue:@"TTI-O test run" forName:@"description" error:&err];
 
-    id<MPGOStorageGroup> runs = [root createGroupNamed:@"runs" error:&err];
+    id<TTIOStorageGroup> runs = [root createGroupNamed:@"runs" error:&err];
 
-    id<MPGOStorageGroup> run1 = [runs createGroupNamed:@"run_001" error:&err];
+    id<TTIOStorageGroup> run1 = [runs createGroupNamed:@"run_001" error:&err];
     [run1 setAttributeValue:@(1) forName:@"run_index" error:&err];
 
     // mz dataset
     double mz[] = {100.0, 200.5, 350.8};
-    id<MPGOStorageDataset> mzDs =
-        [run1 createDatasetNamed:@"mz" precision:MPGOPrecisionFloat64
+    id<TTIOStorageDataset> mzDs =
+        [run1 createDatasetNamed:@"mz" precision:TTIOPrecisionFloat64
                           length:3 chunkSize:0
-                     compression:MPGOCompressionNone compressionLevel:0
+                     compression:TTIOCompressionNone compressionLevel:0
                            error:&err];
     [mzDs writeAll:packFloat64(mz, 3) error:&err];
     [mzDs setAttributeValue:@"MS:1000514" forName:@"accession" error:&err];
 
     // intensity dataset
     float intensity[] = {10000.0f, 52000.0f, 3800.0f};
-    id<MPGOStorageDataset> intDs =
-        [run1 createDatasetNamed:@"intensity" precision:MPGOPrecisionFloat32
+    id<TTIOStorageDataset> intDs =
+        [run1 createDatasetNamed:@"intensity" precision:TTIOPrecisionFloat32
                           length:3 chunkSize:0
-                     compression:MPGOCompressionNone compressionLevel:0
+                     compression:TTIOCompressionNone compressionLevel:0
                            error:&err];
     [intDs writeAll:packFloat32(intensity, 3) error:&err];
 
     // Identifications compound dataset
     NSArray *idFields = @[
-        [MPGOCompoundField fieldWithName:@"peptide" kind:MPGOCompoundFieldKindVLString],
-        [MPGOCompoundField fieldWithName:@"score"   kind:MPGOCompoundFieldKindFloat64],
+        [TTIOCompoundField fieldWithName:@"peptide" kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"score"   kind:TTIOCompoundFieldKindFloat64],
     ];
     NSArray *idRows = @[
         @{@"peptide": @"PEPTIDEK", @"score": @(0.99)},
         @{@"peptide": @"ACDEFGHIK", @"score": @(0.87)},
     ];
-    id<MPGOStorageGroup> ids = [run1 createGroupNamed:@"identifications" error:&err];
-    id<MPGOStorageDataset> idDs =
+    id<TTIOStorageGroup> ids = [run1 createGroupNamed:@"identifications" error:&err];
+    id<TTIOStorageDataset> idDs =
         [ids createCompoundDatasetNamed:@"psms" fields:idFields count:2 error:&err];
     [idDs writeAll:idRows error:&err];
 
     [p close];
 
     // Verify full tree
-    p = [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    p = [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     root = [p rootGroupWithError:&err];
     PASS(root != nil, "Sqlite tree: root");
 
     id<NSObject> desc = [root attributeValueForName:@"description" error:&err];
-    PASS([(NSString *)desc isEqualToString:@"MPEG-O test run"],
+    PASS([(NSString *)desc isEqualToString:@"TTI-O test run"],
          "Sqlite tree: root description");
 
     runs = [root openGroupNamed:@"runs" error:&err];
@@ -796,7 +796,7 @@ static void testSqliteCrossLanguageCompat(void)
 {
     // This test is opportunistic: the Python-written file may not exist in CI.
     // It passes trivially if the file is absent.
-    const char *xp = "/tmp/xc.mpgo.sqlite";
+    const char *xp = "/tmp/xc.tio.sqlite";
     if (access(xp, F_OK) != 0) {
         PASS(YES, "Sqlite cross-lang: file absent, skipping (OK)");
         return;
@@ -804,14 +804,14 @@ static void testSqliteCrossLanguageCompat(void)
 
     NSString *path = [NSString stringWithUTF8String:xp];
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
-            openURL:path mode:MPGOStorageOpenModeRead
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
+            openURL:path mode:TTIOStorageOpenModeRead
             provider:@"sqlite" error:&err];
     PASS(p != nil, "Sqlite cross-lang: open Python-written file");
     if (!p) return;
 
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
     PASS(root != nil, "Sqlite cross-lang: rootGroup");
 
     // Python wrote root.set_attribute("title", "cross-lang test")
@@ -821,10 +821,10 @@ static void testSqliteCrossLanguageCompat(void)
 
     // Python wrote root.create_dataset("intensity", precision=FLOAT64, length=4)
     // with data [1.5, 2.5, 3.5, 4.5]
-    id<MPGOStorageDataset> ds = [root openDatasetNamed:@"intensity" error:&err];
+    id<TTIOStorageDataset> ds = [root openDatasetNamed:@"intensity" error:&err];
     PASS(ds != nil, "Sqlite cross-lang: intensity dataset");
     if (ds) {
-        PASS(ds.precision == MPGOPrecisionFloat64,
+        PASS(ds.precision == TTIOPrecisionFloat64,
              "Sqlite cross-lang: intensity precision FLOAT64");
         NSData *back = [ds readAll:&err];
         PASS(back.length == 4 * sizeof(double),
@@ -856,7 +856,7 @@ void testSqliteProvider(void)
     testSqliteDatasetAttributes();   // 10 assertions
     testSqliteAllPrecisions();       // 21 assertions
     testSqliteReadOnlyRejectsWrites(); // 6 assertions
-    testSqliteMPGOTree();            // 15 assertions
+    testSqliteTTIOTree();            // 15 assertions
     testSqliteCrossLanguageCompat(); //  1–7 assertions (opportunistic)
 }
 // Total guaranteed: ~119 assertions

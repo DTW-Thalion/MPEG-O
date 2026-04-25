@@ -5,60 +5,60 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Run/MPGOSpectrumIndex.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOIdentification.h"
-#import "Dataset/MPGOQuantification.h"
-#import "Dataset/MPGOProvenanceRecord.h"
-#import "Dataset/MPGOCompoundIO.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "HDF5/MPGOHDF5Dataset.h"
-#import "HDF5/MPGOFeatureFlags.h"
-#import "HDF5/MPGOHDF5CompoundType.h"
-#import "Protection/MPGOAccessPolicy.h"
-#import "Protection/MPGOEncryptionManager.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Run/TTIOSpectrumIndex.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOIdentification.h"
+#import "Dataset/TTIOQuantification.h"
+#import "Dataset/TTIOProvenanceRecord.h"
+#import "Dataset/TTIOCompoundIO.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Dataset.h"
+#import "HDF5/TTIOFeatureFlags.h"
+#import "HDF5/TTIOHDF5CompoundType.h"
+#import "Protection/TTIOAccessPolicy.h"
+#import "Protection/TTIOEncryptionManager.h"
 #import <unistd.h>
 
 static NSString *m11path(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m11_%d_%@.mpgo",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m11_%d_%@.tio",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *f64ForCount(NSUInteger k, NSUInteger n)
+static TTIOSignalArray *f64ForCount(NSUInteger k, NSUInteger n)
 {
     double *buf = malloc(n * sizeof(double));
     for (NSUInteger i = 0; i < n; i++) buf[i] = 100.0 + (double)(k * 8 + i);
     NSData *d = [NSData dataWithBytes:buf length:n * sizeof(double)];
     free(buf);
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:d
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:d
                                             length:n
                                           encoding:enc
                                               axis:nil];
 }
 
-static MPGOAcquisitionRun *m11MakeRun(NSUInteger specCount)
+static TTIOAcquisitionRun *m11MakeRun(NSUInteger specCount)
 {
     NSMutableArray *spectra = [NSMutableArray array];
     for (NSUInteger k = 0; k < specCount; k++) {
-        MPGOSignalArray *mz = f64ForCount(k, 8);
-        MPGOSignalArray *in = f64ForCount(k + 1000, 8);
+        TTIOSignalArray *mz = f64ForCount(k, 8);
+        TTIOSignalArray *in = f64ForCount(k + 1000, 8);
         [spectra addObject:
-            [[MPGOMassSpectrum alloc] initWithMzArray:mz
+            [[TTIOMassSpectrum alloc] initWithMzArray:mz
                                        intensityArray:in
                                               msLevel:(k % 2 == 0 ? 1 : 2)
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       scanTimeSeconds:(double)k * 0.5
@@ -66,15 +66,15 @@ static MPGOAcquisitionRun *m11MakeRun(NSUInteger specCount)
                                       precursorCharge:0
                                                 error:NULL]];
     }
-    MPGOInstrumentConfig *cfg =
-        [[MPGOInstrumentConfig alloc] initWithManufacturer:@""
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@""
                                                      model:@""
                                               serialNumber:@""
                                                 sourceType:@""
                                               analyzerType:@""
                                               detectorType:@""];
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
                                       instrumentConfig:cfg];
 }
 
@@ -84,8 +84,8 @@ void testMilestone11(void)
     {
         NSMutableArray *idents = [NSMutableArray array];
         for (NSUInteger i = 0; i < 100; i++) {
-            MPGOIdentification *id_ =
-                [[MPGOIdentification alloc] initWithRunName:@"run_0001"
+            TTIOIdentification *id_ =
+                [[TTIOIdentification alloc] initWithRunName:@"run_0001"
                                               spectrumIndex:i
                                              chemicalEntity:[NSString stringWithFormat:@"CHEBI:%lu",
                                                              (unsigned long)(15000 + i)]
@@ -94,8 +94,8 @@ void testMilestone11(void)
             [idents addObject:id_];
         }
 
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m11_idents"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m11_idents"
                                     isaInvestigationId:@"I-42"
                                                 msRuns:@{@"run_0001": m11MakeRun(5)}
                                                nmrRuns:@{}
@@ -108,11 +108,11 @@ void testMilestone11(void)
         NSError *err = nil;
         PASS([ds writeToFilePath:path error:&err], "dataset with 100 idents writes");
 
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         PASS(back != nil, "dataset with 100 idents reads");
         PASS(back.identifications.count == 100, "100 idents round-trip");
-        MPGOIdentification *id42 = back.identifications[42];
+        TTIOIdentification *id42 = back.identifications[42];
         PASS([id42.runName isEqualToString:@"run_0001"], "ident[42].runName");
         PASS(id42.spectrumIndex == 42, "ident[42].spectrumIndex");
         PASS([id42.chemicalEntity isEqualToString:@"CHEBI:15042"], "ident[42].chemicalEntity");
@@ -127,7 +127,7 @@ void testMilestone11(void)
         NSMutableArray *quants = [NSMutableArray array];
         for (NSUInteger i = 0; i < 50; i++) {
             [quants addObject:
-                [[MPGOQuantification alloc]
+                [[TTIOQuantification alloc]
                     initWithChemicalEntity:[NSString stringWithFormat:@"CHEBI:%lu",
                                             (unsigned long)(15000 + i)]
                                  sampleRef:[NSString stringWithFormat:@"sample_%lu",
@@ -136,8 +136,8 @@ void testMilestone11(void)
                        normalizationMethod:(i % 3 == 0 ? @"median" : nil)]];
         }
 
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m11_quants"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m11_quants"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": m11MakeRun(5)}
                                                nmrRuns:@{}
@@ -150,15 +150,15 @@ void testMilestone11(void)
         NSError *err = nil;
         PASS([ds writeToFilePath:path error:&err], "dataset with 50 quants writes");
 
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         PASS(back != nil, "dataset with 50 quants reads");
         PASS(back.quantifications.count == 50, "50 quants round-trip");
-        MPGOQuantification *q17 = back.quantifications[17];
+        TTIOQuantification *q17 = back.quantifications[17];
         PASS([q17.chemicalEntity isEqualToString:@"CHEBI:15017"], "q[17].chemicalEntity");
         PASS([q17.sampleRef isEqualToString:@"sample_17"], "q[17].sampleRef");
         PASS(fabs(q17.abundance - (1000.0 + 17 * 25.0)) < 1e-12, "q[17].abundance");
-        MPGOQuantification *q15 = back.quantifications[15];
+        TTIOQuantification *q15 = back.quantifications[15];
         PASS([q15.normalizationMethod isEqualToString:@"median"],
              "q[15].normalizationMethod retained for i%3==0");
         [back closeFile];
@@ -170,7 +170,7 @@ void testMilestone11(void)
         NSMutableArray *prov = [NSMutableArray array];
         for (NSUInteger i = 0; i < 5; i++) {
             [prov addObject:
-                [[MPGOProvenanceRecord alloc]
+                [[TTIOProvenanceRecord alloc]
                     initWithInputRefs:@[[NSString stringWithFormat:@"in:%lu", (unsigned long)i]]
                              software:[NSString stringWithFormat:@"tool_%lu", (unsigned long)i]
                            parameters:@{@"param": @(i)}
@@ -178,8 +178,8 @@ void testMilestone11(void)
                         timestampUnix:1700000000 + (int64_t)i]];
         }
 
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m11_prov"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m11_prov"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": m11MakeRun(5)}
                                                nmrRuns:@{}
@@ -192,10 +192,10 @@ void testMilestone11(void)
         NSError *err = nil;
         PASS([ds writeToFilePath:path error:&err], "dataset with provenance writes");
 
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         PASS(back.provenanceRecords.count == 5, "5 prov records round-trip");
-        MPGOProvenanceRecord *r2 = back.provenanceRecords[2];
+        TTIOProvenanceRecord *r2 = back.provenanceRecords[2];
         PASS([r2.software isEqualToString:@"tool_2"], "prov[2].software");
         PASS(r2.timestampUnix == 1700000002, "prov[2].timestamp");
         PASS([r2.parameters[@"param"] integerValue] == 2, "prov[2].parameters");
@@ -205,8 +205,8 @@ void testMilestone11(void)
 
     // ---- 4. Feature flags written and readable ----
     {
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m11_flags"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m11_flags"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"r": m11MakeRun(3)}
                                                nmrRuns:@{}
@@ -219,39 +219,39 @@ void testMilestone11(void)
         NSError *err = nil;
         [ds writeToFilePath:path error:&err];
 
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOHDF5Group *root = [f rootGroup];
-        NSString *fv = [MPGOFeatureFlags formatVersionForRoot:root];
-        NSArray *features = [MPGOFeatureFlags featuresForRoot:root];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        NSString *fv = [TTIOFeatureFlags formatVersionForRoot:root];
+        NSArray *features = [TTIOFeatureFlags featuresForRoot:root];
         PASS([fv isEqualToString:@"1.1"], "format version is 1.1");
         PASS([features containsObject:@"base_v1"], "features: base_v1");
         PASS([features containsObject:@"compound_identifications"],
              "features: compound_identifications");
-        PASS([MPGOFeatureFlags root:root
+        PASS([TTIOFeatureFlags root:root
                     supportsFeature:@"compound_quantifications"],
              "supportsFeature: compound_quantifications");
-        PASS(![MPGOFeatureFlags isLegacyV1File:root], "not a legacy v0.1 file");
+        PASS(![TTIOFeatureFlags isLegacyV1File:root], "not a legacy v0.1 file");
         [f close];
         unlink([path fileSystemRepresentation]);
     }
 
     // ---- 5. v0.1 backward compatibility: legacy file with JSON attributes ----
     {
-        // Synthesize a v0.1 layout: @mpeg_o_version = "1.0.0", no
-        // @mpeg_o_features, identifications_json / quantifications_json /
+        // Synthesize a v0.1 layout: @ttio_version = "1.0.0", no
+        // @ttio_features, identifications_json / quantifications_json /
         // provenance_json as string attributes on /study.
         NSString *path = m11path(@"v01");
         unlink([path fileSystemRepresentation]);
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:path error:&err];
-        MPGOHDF5Group *root = [f rootGroup];
-        [root setStringAttribute:@"mpeg_o_version" value:@"1.0.0" error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        [root setStringAttribute:@"ttio_version" value:@"1.0.0" error:&err];
 
-        MPGOHDF5Group *study = [root createGroupNamed:@"study" error:&err];
+        TTIOHDF5Group *study = [root createGroupNamed:@"study" error:&err];
         [study setStringAttribute:@"title" value:@"legacy" error:&err];
         [study setStringAttribute:@"isa_investigation_id" value:@"" error:&err];
         // Empty ms_runs group to satisfy the reader
-        MPGOHDF5Group *msg = [study createGroupNamed:@"ms_runs" error:&err];
+        TTIOHDF5Group *msg = [study createGroupNamed:@"ms_runs" error:&err];
         [msg setStringAttribute:@"_run_names" value:@"" error:&err];
 
         NSArray *idPlist = @[ @{
@@ -266,11 +266,11 @@ void testMilestone11(void)
         [study setStringAttribute:@"identifications_json" value:idJson error:&err];
         [f close];
 
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         PASS(back != nil, "legacy v0.1 file reads via fallback");
         PASS(back.identifications.count == 1, "legacy ident count via JSON fallback");
-        MPGOIdentification *id_ = back.identifications[0];
+        TTIOIdentification *id_ = back.identifications[0];
         PASS([id_.chemicalEntity isEqualToString:@"CHEBI:99999"],
              "legacy ident entity from JSON");
         PASS(id_.spectrumIndex == 5, "legacy ident spectrumIndex");
@@ -280,8 +280,8 @@ void testMilestone11(void)
 
     // ---- 6. Compound headers queryable via hyperslab ----
     {
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m11_headers"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m11_headers"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": m11MakeRun(8)}
                                                nmrRuns:@{}
@@ -294,16 +294,16 @@ void testMilestone11(void)
         NSError *err = nil;
         [ds writeToFilePath:path error:&err];
 
-        MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-        MPGOHDF5Group *root = [f rootGroup];
-        MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
-        MPGOHDF5Group *msg = [study openGroupNamed:@"ms_runs" error:&err];
-        MPGOHDF5Group *runG = [msg openGroupNamed:@"run_0001" error:&err];
-        MPGOHDF5Group *idxG = [runG openGroupNamed:@"spectrum_index" error:&err];
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
+        TTIOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+        TTIOHDF5Group *msg = [study openGroupNamed:@"ms_runs" error:&err];
+        TTIOHDF5Group *runG = [msg openGroupNamed:@"run_0001" error:&err];
+        TTIOHDF5Group *idxG = [runG openGroupNamed:@"spectrum_index" error:&err];
         PASS([idxG hasChildNamed:@"headers"],
              "compound headers dataset written alongside parallel arrays");
 
-        NSDictionary *row3 = [MPGOCompoundIO readCompoundHeaderRow:3
+        NSDictionary *row3 = [TTIOCompoundIO readCompoundHeaderRow:3
                                                           fromGroup:idxG
                                                               error:&err];
         PASS(row3 != nil, "compound header row 3 readable via hyperslab");
@@ -320,15 +320,15 @@ void testMilestone11(void)
         NSMutableArray *idents = [NSMutableArray array];
         for (NSUInteger i = 0; i < 10000; i++) {
             [idents addObject:
-                [[MPGOIdentification alloc]
+                [[TTIOIdentification alloc]
                     initWithRunName:@"run_0001"
                       spectrumIndex:i
                      chemicalEntity:[NSString stringWithFormat:@"CHEBI:%lu", (unsigned long)i]
                     confidenceScore:0.5
                       evidenceChain:@[@"MS:1002217"]]];
         }
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m11_perf"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m11_perf"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": m11MakeRun(2)}
                                                nmrRuns:@{}
@@ -345,8 +345,8 @@ void testMilestone11(void)
         NSTimeInterval dw = -[tw timeIntervalSinceNow];
 
         NSDate *tr = [NSDate date];
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         NSTimeInterval dr = -[tr timeIntervalSinceNow];
 
         PASS(back.identifications.count == 10000, "10k idents round-trip");
@@ -358,8 +358,8 @@ void testMilestone11(void)
 
     // ---- 8. closeFile releases handle and lets the encryption path work ----
     {
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m11_close"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m11_close"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": m11MakeRun(4)}
                                                nmrRuns:@{}
@@ -372,8 +372,8 @@ void testMilestone11(void)
         NSError *err = nil;
         [ds writeToFilePath:path error:&err];
 
-        MPGOSpectralDataset *back =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         PASS(back.filePath != nil, "filePath populated after read");
         PASS([back closeFile], "closeFile succeeds");
         PASS([back closeFile], "closeFile is idempotent");
@@ -385,7 +385,7 @@ void testMilestone11(void)
         NSMutableArray *idents = [NSMutableArray array];
         for (NSUInteger i = 0; i < 20; i++) {
             [idents addObject:
-                [[MPGOIdentification alloc]
+                [[TTIOIdentification alloc]
                     initWithRunName:@"run_0001"
                       spectrumIndex:i
                      chemicalEntity:[NSString stringWithFormat:@"CHEBI:sec%lu", (unsigned long)i]
@@ -395,15 +395,15 @@ void testMilestone11(void)
         NSMutableArray *quants = [NSMutableArray array];
         for (NSUInteger i = 0; i < 10; i++) {
             [quants addObject:
-                [[MPGOQuantification alloc]
+                [[TTIOQuantification alloc]
                     initWithChemicalEntity:[NSString stringWithFormat:@"CHEBI:sec%lu", (unsigned long)i]
                                  sampleRef:@"patient_001"
                                  abundance:1.234e6 + (double)i
                        normalizationMethod:@"TIC"]];
         }
 
-        MPGOSpectralDataset *ds =
-            [[MPGOSpectralDataset alloc] initWithTitle:@"m11_enc"
+        TTIOSpectralDataset *ds =
+            [[TTIOSpectralDataset alloc] initWithTitle:@"m11_enc"
                                     isaInvestigationId:@""
                                                 msRuns:@{@"run_0001": m11MakeRun(6)}
                                                nmrRuns:@{}
@@ -420,12 +420,12 @@ void testMilestone11(void)
         for (int i = 0; i < 32; i++) rawKey[i] = (uint8_t)(i * 7 + 3);
         NSData *key = [NSData dataWithBytes:rawKey length:32];
 
-        ds.accessPolicy = [[MPGOAccessPolicy alloc]
+        ds.accessPolicy = [[TTIOAccessPolicy alloc]
                             initWithPolicy:@{ @"key_id": @"kms-42",
                                               @"subjects": @[@"clinician:alice"] }];
         err = nil;
         BOOL enc = [ds encryptWithKey:key
-                                level:MPGOEncryptionLevelDataset
+                                level:TTIOEncryptionLevelDataset
                                 error:&err];
         PASS(enc, "dataset-level encrypt succeeds");
         PASS(err == nil, "dataset encrypt no error");
@@ -434,8 +434,8 @@ void testMilestone11(void)
         // inspection in an autoreleasepool so the HDF5 handles are
         // released before the next RW reopen (MRC test harness).
         @autoreleasepool {
-            MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:&err];
-            MPGOHDF5Group *root = [f rootGroup];
+            TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+            TTIOHDF5Group *root = [f rootGroup];
             NSString *marker = [root stringAttributeNamed:@"encrypted" error:&err];
             PASS([marker isEqualToString:@"aes-256-gcm"],
                  "@encrypted marker appears on root");
@@ -443,10 +443,10 @@ void testMilestone11(void)
             PASS(apJson.length > 0, "@access_policy_json persisted");
 
             // Intensity channel is gone (replaced by *_encrypted).
-            MPGOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
-            MPGOHDF5Group *msg   = [study openGroupNamed:@"ms_runs" error:&err];
-            MPGOHDF5Group *runG  = [msg openGroupNamed:@"run_0001" error:&err];
-            MPGOHDF5Group *chans = [runG openGroupNamed:@"signal_channels" error:&err];
+            TTIOHDF5Group *study = [root openGroupNamed:@"study" error:&err];
+            TTIOHDF5Group *msg   = [study openGroupNamed:@"ms_runs" error:&err];
+            TTIOHDF5Group *runG  = [msg openGroupNamed:@"run_0001" error:&err];
+            TTIOHDF5Group *chans = [runG openGroupNamed:@"signal_channels" error:&err];
             PASS(![chans hasChildNamed:@"intensity_values"],
                  "intensity_values replaced by encrypted variant");
             PASS([chans hasChildNamed:@"intensity_values_encrypted"],
@@ -467,19 +467,19 @@ void testMilestone11(void)
         }
 
         // Decrypt round-trip: reload, decrypt, reload, compare.
-        MPGOSpectralDataset *sealed =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *sealed =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         PASS(sealed.identifications.count == 0,
              "sealed dataset reads with empty idents before decrypt");
         PASS([sealed decryptWithKey:key error:&err], "decryptWithKey succeeds");
 
-        MPGOSpectralDataset *restored =
-            [MPGOSpectralDataset readFromFilePath:path error:&err];
+        TTIOSpectralDataset *restored =
+            [TTIOSpectralDataset readFromFilePath:path error:&err];
         PASS(restored.identifications.count == 20,
              "identifications restored after decrypt");
         PASS(restored.quantifications.count == 10,
              "quantifications restored after decrypt");
-        MPGOIdentification *i0 = restored.identifications[0];
+        TTIOIdentification *i0 = restored.identifications[0];
         PASS([i0.chemicalEntity isEqualToString:@"CHEBI:sec0"],
              "restored ident content");
         [sealed closeFile];

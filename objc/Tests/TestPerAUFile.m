@@ -2,7 +2,7 @@
  * TestPerAUFile — v1.0 file-level per-AU encryption round-trip.
  *
  * Mirrors python/tests/test_per_au_file.py. Builds a plaintext
- * fixture, calls MPGOPerAUFile.encryptFilePath:... (with and
+ * fixture, calls TTIOPerAUFile.encryptFilePath:... (with and
  * without header encryption), reopens, verifies the file carries
  * the new feature flags and compound datasets, then decrypts and
  * compares plaintext signal values bit-for-bit.
@@ -14,23 +14,23 @@
 #import <unistd.h>
 #import <string.h>
 
-#import "Protection/MPGOPerAUFile.h"
-#import "Protection/MPGOPerAUEncryption.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "Providers/MPGOProviderRegistry.h"
-#import "Providers/MPGOStorageProtocols.h"
-#import "HDF5/MPGOFeatureFlags.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Spectra/MPGOSpectrum.h"
-#import "Core/MPGOSignalArray.h"
+#import "Protection/TTIOPerAUFile.h"
+#import "Protection/TTIOPerAUEncryption.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "HDF5/TTIOFeatureFlags.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Spectra/TTIOSpectrum.h"
+#import "Core/TTIOSignalArray.h"
 
 
 static NSString *tmpPath(NSString *n) {
-    return [NSString stringWithFormat:@"/tmp/mpgo_peraufile_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_peraufile_%d_%@",
             (int)getpid(), n];
 }
 static void rmFile(NSString *p) { [[NSFileManager defaultManager] removeItemAtPath:p error:NULL]; }
@@ -84,10 +84,10 @@ static BOOL buildPlaintextFixture(NSString *path, NSError **error)
         }
         bpis[i] = best;
     }
-    MPGOWrittenRun *run =
-        [[MPGOWrittenRun alloc]
-            initWithSpectrumClassName:@"MPGOMassSpectrum"
-                      acquisitionMode:(int64_t)MPGOAcquisitionModeMS1DDA
+    TTIOWrittenRun *run =
+        [[TTIOWrittenRun alloc]
+            initWithSpectrumClassName:@"TTIOMassSpectrum"
+                      acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
                           channelData:@{@"mz": f64arr(mz, total),
                                         @"intensity": f64arr(intensity, total)}
                               offsets:u64arr(offsets, n)
@@ -98,7 +98,7 @@ static BOOL buildPlaintextFixture(NSString *path, NSError **error)
                          precursorMzs:f64arr(pmzs, n)
                      precursorCharges:i32arr(pcs, n)
                   basePeakIntensities:f64arr(bpis, n)];
-    return [MPGOSpectralDataset writeMinimalToPath:path
+    return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"per-AU file round-trip fixture"
                                  isaInvestigationId:@"ISA-OBJC-PERAU"
                                              msRuns:@{@"run_0001": run}
@@ -110,13 +110,13 @@ static BOOL buildPlaintextFixture(NSString *path, NSError **error)
 
 
 // Helper: reopen the HDF5 file to inspect feature flags + children
-// without going through MPGOSpectralDataset (which may refuse
+// without going through TTIOSpectralDataset (which may refuse
 // post-encryption).
 static NSArray<NSString *> *readFeaturesFromFile(NSString *path)
 {
-    MPGOHDF5File *f = [MPGOHDF5File openReadOnlyAtPath:path error:NULL];
-    MPGOHDF5Group *root = f.rootGroup;
-    NSArray *feats = [MPGOFeatureFlags featuresForRoot:root];
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+    TTIOHDF5Group *root = f.rootGroup;
+    NSArray *feats = [TTIOFeatureFlags featuresForRoot:root];
     return feats ?: @[];
 }
 
@@ -125,12 +125,12 @@ void testPerAUFile(void)
 {
     // ── 1. Encrypt (channels only) writes segments + flag ───────
     {
-        NSString *path = tmpPath(@"src1.mpgo");
+        NSString *path = tmpPath(@"src1.tio");
         rmFile(path);
         NSError *err = nil;
         PASS(buildPlaintextFixture(path, &err), "fixture built");
 
-        BOOL ok = [MPGOPerAUFile encryptFilePath:path
+        BOOL ok = [TTIOPerAUFile encryptFilePath:path
                                               key:key42()
                                  encryptHeaders:NO
                                     providerName:nil
@@ -147,29 +147,29 @@ void testPerAUFile(void)
 
     // ── 2. Encrypt + decrypt recovers plaintext ─────────────────
     {
-        NSString *path = tmpPath(@"src2.mpgo");
+        NSString *path = tmpPath(@"src2.tio");
         rmFile(path);
         NSError *err = nil;
         buildPlaintextFixture(path, &err);
 
         // Capture original plaintext bytes before encryption mutates
         // the file.
-        MPGOSpectralDataset *src = [MPGOSpectralDataset readFromFilePath:path error:&err];
-        MPGOAcquisitionRun *run = src.msRuns[@"run_0001"];
+        TTIOSpectralDataset *src = [TTIOSpectralDataset readFromFilePath:path error:&err];
+        TTIOAcquisitionRun *run = src.msRuns[@"run_0001"];
         NSMutableData *origMz = [NSMutableData data];
         NSMutableData *origInt = [NSMutableData data];
         for (NSUInteger i = 0; i < [run count]; i++) {
-            MPGOSpectrum *sp = [run objectAtIndex:i];
+            TTIOSpectrum *sp = [run objectAtIndex:i];
             [origMz appendData:sp.signalArrays[@"mz"].buffer];
             [origInt appendData:sp.signalArrays[@"intensity"].buffer];
         }
         // Release the read handle before we reopen for in-place
-        // encryption; MPGOSpectralDataset holds the HDF5 file open
+        // encryption; TTIOSpectralDataset holds the HDF5 file open
         // otherwise.
         [src closeFile];
         src = nil;
 
-        BOOL ok = [MPGOPerAUFile encryptFilePath:path
+        BOOL ok = [TTIOPerAUFile encryptFilePath:path
                                               key:key42()
                                  encryptHeaders:NO
                                     providerName:nil
@@ -178,7 +178,7 @@ void testPerAUFile(void)
 
         err = nil;
         NSDictionary *decrypted =
-            [MPGOPerAUFile decryptFilePath:path
+            [TTIOPerAUFile decryptFilePath:path
                                          key:key42()
                                 providerName:nil
                                        error:&err];
@@ -193,11 +193,11 @@ void testPerAUFile(void)
 
     // ── 3. Wrong key fails decrypt ──────────────────────────────
     {
-        NSString *path = tmpPath(@"src3.mpgo");
+        NSString *path = tmpPath(@"src3.tio");
         rmFile(path);
         NSError *err = nil;
         buildPlaintextFixture(path, &err);
-        [MPGOPerAUFile encryptFilePath:path
+        [TTIOPerAUFile encryptFilePath:path
                                      key:key42()
                         encryptHeaders:NO
                            providerName:nil
@@ -206,7 +206,7 @@ void testPerAUFile(void)
         NSData *bad = [NSData dataWithBytes:badBytes length:32];
         err = nil;
         NSDictionary *result =
-            [MPGOPerAUFile decryptFilePath:path
+            [TTIOPerAUFile decryptFilePath:path
                                          key:bad
                                 providerName:nil
                                        error:&err];
@@ -216,12 +216,12 @@ void testPerAUFile(void)
 
     // ── 4. encryptHeaders=YES writes au_header_segments + flag ──
     {
-        NSString *path = tmpPath(@"src4.mpgo");
+        NSString *path = tmpPath(@"src4.tio");
         rmFile(path);
         NSError *err = nil;
         buildPlaintextFixture(path, &err);
 
-        BOOL ok = [MPGOPerAUFile encryptFilePath:path
+        BOOL ok = [TTIOPerAUFile encryptFilePath:path
                                               key:key42()
                                  encryptHeaders:YES
                                     providerName:nil
@@ -235,7 +235,7 @@ void testPerAUFile(void)
              "opt_encrypted_au_headers set (headers mode)");
 
         NSDictionary *decrypted =
-            [MPGOPerAUFile decryptFilePath:path
+            [TTIOPerAUFile decryptFilePath:path
                                          key:key42()
                                 providerName:nil
                                        error:&err];
@@ -243,7 +243,7 @@ void testPerAUFile(void)
         NSArray *headers = decrypted[@"run_0001"][@"__au_headers__"];
         PASS(headers.count == 5, "__au_headers__ has 5 rows");
         if (headers.count == 5) {
-            MPGOAUHeaderPlaintext *h1 = headers[1];
+            TTIOAUHeaderPlaintext *h1 = headers[1];
             PASS(h1.msLevel == 2 && h1.precursorMz == 501.0,
                  "row 1 semantic fields recovered (ms_level=2, pmz=501.0)");
             PASS(fabs(h1.retentionTime - 3.0) < 1e-12,

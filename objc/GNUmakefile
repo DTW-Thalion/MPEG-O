@@ -10,11 +10,11 @@ include $(GNUSTEP_MAKEFILES)/aggregate.make
 # gnustep-make's test-tool.make does not auto-run the binary on `make check`,
 # so we invoke it explicitly. LD_LIBRARY_PATH is extended with the in-tree
 # Source obj dir and the common gnustep-base install prefixes so the freshly
-# built libMPGO and the system libgnustep-base are both resolvable.
+# built libTTIO and the system libgnustep-base are both resolvable.
 check:: all
-	@echo "==> Running MPGO test suite"
+	@echo "==> Running TTIO test suite"
 	@LD_LIBRARY_PATH="$(CURDIR)/Source/$(GNUSTEP_OBJ_DIR):/usr/local/lib:$$LD_LIBRARY_PATH" \
-	    Tests/$(GNUSTEP_OBJ_DIR)/MPGOTests
+	    Tests/$(GNUSTEP_OBJ_DIR)/TTIOTests
 
 # ---------------------------------------------------------------------------
 # `make docs` — generate GSDoc HTML API documentation via autogsdoc.
@@ -28,7 +28,7 @@ check:: all
 # Output lands in objc/Documentation/html/.
 .PHONY: docs docs-clean
 docs:
-	@echo "==> Generating libMPGO API documentation (autogsdoc)"
+	@echo "==> Generating libTTIO API documentation (autogsdoc)"
 	$(MAKE) -C Documentation
 
 docs-clean:

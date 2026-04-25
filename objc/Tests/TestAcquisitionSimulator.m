@@ -9,27 +9,27 @@
 #import "Testing.h"
 #import <unistd.h>
 
-#import "Transport/MPGOAcquisitionSimulator.h"
-#import "Transport/MPGOTransportWriter.h"
-#import "Transport/MPGOTransportReader.h"
-#import "Transport/MPGOTransportPacket.h"
-#import "Transport/MPGOAccessUnit.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Run/MPGOAcquisitionRun.h"
+#import "Transport/TTIOAcquisitionSimulator.h"
+#import "Transport/TTIOTransportWriter.h"
+#import "Transport/TTIOTransportReader.h"
+#import "Transport/TTIOTransportPacket.h"
+#import "Transport/TTIOAccessUnit.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Run/TTIOAcquisitionRun.h"
 
 static NSString *tmp(NSString *name)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m69_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_m69_%d_%@",
             (int)getpid(), name];
 }
 
 static void rm(NSString *p) { [[NSFileManager defaultManager] removeItemAtPath:p error:NULL]; }
 
-static NSUInteger countAUs(NSArray<MPGOTransportPacketRecord *> *packets)
+static NSUInteger countAUs(NSArray<TTIOTransportPacketRecord *> *packets)
 {
     NSUInteger n = 0;
-    for (MPGOTransportPacketRecord *r in packets) {
-        if (r.header.packetType == MPGOTransportPacketAccessUnit) n++;
+    for (TTIOTransportPacketRecord *r in packets) {
+        if (r.header.packetType == TTIOTransportPacketAccessUnit) n++;
     }
     return n;
 }
@@ -39,9 +39,9 @@ void testAcquisitionSimulator(void)
     // ── 1. Scan count ─────────────────────────────────────────────
     {
         NSMutableData *buf = [NSMutableData data];
-        MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithMutableData:buf];
-        MPGOAcquisitionSimulator *sim =
-            [[MPGOAcquisitionSimulator alloc]
+        TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithMutableData:buf];
+        TTIOAcquisitionSimulator *sim =
+            [[TTIOAcquisitionSimulator alloc]
                 initWithScanRate:10.0 duration:2.0 ms1Fraction:0.3
                            mzMin:100.0 mzMax:2000.0 nPeaks:50 seed:1];
         NSError *err = nil;
@@ -49,8 +49,8 @@ void testAcquisitionSimulator(void)
         [tw close];
         PASS(n == 20, "simulator emits scan_rate * duration AUs");
 
-        MPGOTransportReader *tr = [[MPGOTransportReader alloc] initWithData:buf];
-        NSArray<MPGOTransportPacketRecord *> *packets =
+        TTIOTransportReader *tr = [[TTIOTransportReader alloc] initWithData:buf];
+        NSArray<TTIOTransportPacketRecord *> *packets =
             [tr readAllPacketsWithError:&err];
         PASS(packets != nil, "simulator output parses cleanly");
         PASS(countAUs(packets) == 20, "20 AU packets in stream");
@@ -60,15 +60,15 @@ void testAcquisitionSimulator(void)
     {
         NSMutableData *a = [NSMutableData data], *b = [NSMutableData data];
         NSError *err = nil;
-        MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithMutableData:a];
-        [[[MPGOAcquisitionSimulator alloc]
+        TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithMutableData:a];
+        [[[TTIOAcquisitionSimulator alloc]
              initWithScanRate:5.0 duration:1.0 ms1Fraction:0.3
                         mzMin:100.0 mzMax:2000.0 nPeaks:50 seed:42]
             streamToWriter:tw error:&err];
         [tw close];
 
-        tw = [[MPGOTransportWriter alloc] initWithMutableData:b];
-        [[[MPGOAcquisitionSimulator alloc]
+        tw = [[TTIOTransportWriter alloc] initWithMutableData:b];
+        [[[TTIOAcquisitionSimulator alloc]
              initWithScanRate:5.0 duration:1.0 ms1Fraction:0.3
                         mzMin:100.0 mzMax:2000.0 nPeaks:50 seed:42]
             streamToWriter:tw error:&err];
@@ -76,15 +76,15 @@ void testAcquisitionSimulator(void)
 
         // Parse both into packet records; compare payloads
         // (timestamps differ per packet).
-        MPGOTransportReader *trA = [[MPGOTransportReader alloc] initWithData:a];
-        MPGOTransportReader *trB = [[MPGOTransportReader alloc] initWithData:b];
+        TTIOTransportReader *trA = [[TTIOTransportReader alloc] initWithData:a];
+        TTIOTransportReader *trB = [[TTIOTransportReader alloc] initWithData:b];
         NSArray *pa = [trA readAllPacketsWithError:&err];
         NSArray *pb = [trB readAllPacketsWithError:&err];
         BOOL equal = (pa.count == pb.count);
         if (equal) {
             for (NSUInteger i = 0; i < pa.count && equal; i++) {
-                MPGOTransportPacketRecord *ra = pa[i];
-                MPGOTransportPacketRecord *rb = pb[i];
+                TTIOTransportPacketRecord *ra = pa[i];
+                TTIOTransportPacketRecord *rb = pb[i];
                 if (![ra.payload isEqualToData:rb.payload]) { equal = NO; break; }
             }
         }
@@ -95,14 +95,14 @@ void testAcquisitionSimulator(void)
     {
         NSMutableData *a = [NSMutableData data], *b = [NSMutableData data];
         NSError *err = nil;
-        MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithMutableData:a];
-        [[[MPGOAcquisitionSimulator alloc]
+        TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithMutableData:a];
+        [[[TTIOAcquisitionSimulator alloc]
              initWithScanRate:5.0 duration:1.0 ms1Fraction:0.3
                         mzMin:100.0 mzMax:2000.0 nPeaks:50 seed:1]
             streamToWriter:tw error:&err];
         [tw close];
-        tw = [[MPGOTransportWriter alloc] initWithMutableData:b];
-        [[[MPGOAcquisitionSimulator alloc]
+        tw = [[TTIOTransportWriter alloc] initWithMutableData:b];
+        [[[TTIOAcquisitionSimulator alloc]
              initWithScanRate:5.0 duration:1.0 ms1Fraction:0.3
                         mzMin:100.0 mzMax:2000.0 nPeaks:50 seed:2]
             streamToWriter:tw error:&err];
@@ -113,22 +113,22 @@ void testAcquisitionSimulator(void)
     // ── 4. Monotonic retention times ───────────────────────────────
     {
         NSMutableData *buf = [NSMutableData data];
-        MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithMutableData:buf];
+        TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithMutableData:buf];
         NSError *err = nil;
-        [[[MPGOAcquisitionSimulator alloc]
+        [[[TTIOAcquisitionSimulator alloc]
              initWithScanRate:20.0 duration:1.5 ms1Fraction:0.3
                         mzMin:100.0 mzMax:2000.0 nPeaks:50 seed:7]
             streamToWriter:tw error:&err];
         [tw close];
 
-        MPGOTransportReader *tr = [[MPGOTransportReader alloc] initWithData:buf];
+        TTIOTransportReader *tr = [[TTIOTransportReader alloc] initWithData:buf];
         NSArray *packets = [tr readAllPacketsWithError:&err];
         double lastRt = -1.0;
         BOOL monotonic = YES;
-        for (MPGOTransportPacketRecord *r in packets) {
-            if (r.header.packetType != MPGOTransportPacketAccessUnit) continue;
-            MPGOAccessUnit *au =
-                [MPGOAccessUnit decodeFromBytes:(const uint8_t *)r.payload.bytes
+        for (TTIOTransportPacketRecord *r in packets) {
+            if (r.header.packetType != TTIOTransportPacketAccessUnit) continue;
+            TTIOAccessUnit *au =
+                [TTIOAccessUnit decodeFromBytes:(const uint8_t *)r.payload.bytes
                                           length:r.payload.length
                                            error:NULL];
             if (au.retentionTime < lastRt) { monotonic = NO; break; }
@@ -137,31 +137,31 @@ void testAcquisitionSimulator(void)
         PASS(monotonic, "retention times non-decreasing");
     }
 
-    // ── 5. Materializes as a valid .mpgo ──────────────────────────
+    // ── 5. Materializes as a valid .tio ──────────────────────────
     {
-        NSString *mots = tmp(@"sim.mots");
-        NSString *mpgo = tmp(@"sim.mpgo");
-        rm(mots); rm(mpgo);
+        NSString *mots = tmp(@"sim.tis");
+        NSString *ttio = tmp(@"sim.tio");
+        rm(mots); rm(ttio);
 
         NSError *err = nil;
-        MPGOTransportWriter *tw = [[MPGOTransportWriter alloc] initWithOutputPath:mots];
-        NSUInteger n = [[[MPGOAcquisitionSimulator alloc] initWithSeed:42]
+        TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
+        NSUInteger n = [[[TTIOAcquisitionSimulator alloc] initWithSeed:42]
                             streamToWriter:tw error:&err];
         [tw close];
         PASS(n > 0, "default-seed simulator emits AUs");
 
-        MPGOTransportReader *tr = [[MPGOTransportReader alloc] initWithInputPath:mots];
-        BOOL ok = [tr writeMpgoToPath:mpgo error:&err];
-        PASS(ok, ".mots → .mpgo materialises");
+        TTIOTransportReader *tr = [[TTIOTransportReader alloc] initWithInputPath:mots];
+        BOOL ok = [tr writeTtioToPath:ttio error:&err];
+        PASS(ok, ".tis → .tio materialises");
         if (ok) {
-            MPGOSpectralDataset *rt =
-                [MPGOSpectralDataset readFromFilePath:mpgo error:&err];
-            PASS(rt != nil, "materialised .mpgo opens");
+            TTIOSpectralDataset *rt =
+                [TTIOSpectralDataset readFromFilePath:ttio error:&err];
+            PASS(rt != nil, "materialised .tio opens");
             PASS([rt.title isEqualToString:@"Simulated acquisition"],
                  "title preserved from simulator");
-            MPGOAcquisitionRun *run = rt.msRuns[@"simulated_run"];
+            TTIOAcquisitionRun *run = rt.msRuns[@"simulated_run"];
             PASS(run && [run count] == n, "spectrum count matches emitted AU count");
         }
-        rm(mots); rm(mpgo);
+        rm(mots); rm(ttio);
     }
 }

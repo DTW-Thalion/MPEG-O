@@ -8,17 +8,17 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Providers/MPGOStorageProtocols.h"
-#import "Providers/MPGOProviderRegistry.h"
-#import "Providers/MPGOCompoundField.h"
-#import "Providers/MPGOMemoryProvider.h"
-#import "Providers/MPGOCanonicalBytes.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOCompoundField.h"
+#import "Providers/TTIOMemoryProvider.h"
+#import "Providers/TTIOCanonicalBytes.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <unistd.h>
 
 static NSString *m43TempPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m43_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_m43_%d_%@",
             (int)getpid(), suffix];
 }
 
@@ -35,28 +35,28 @@ static NSData *canonicalPrimitiveThroughProvider(NSString *providerName,
                                                   NSUInteger count)
 {
     NSError *err = nil;
-    id<MPGOStorageProvider> p =
-        [[MPGOProviderRegistry sharedRegistry]
+    id<TTIOStorageProvider> p =
+        [[TTIOProviderRegistry sharedRegistry]
             openURL:url
-               mode:MPGOStorageOpenModeCreate
+               mode:TTIOStorageOpenModeCreate
            provider:providerName
               error:&err];
     if (!p) return nil;
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
-    id<MPGOStorageDataset> ds =
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageDataset> ds =
         [root createDatasetNamed:@"v"
-                        precision:MPGOPrecisionFloat64
+                        precision:TTIOPrecisionFloat64
                            length:count
                         chunkSize:0
-                      compression:MPGOCompressionNone
+                      compression:TTIOCompressionNone
                  compressionLevel:0
                             error:&err];
     [ds writeAll:leFloat64Bytes(values, count) error:&err];
     [p close];
 
-    p = [[MPGOProviderRegistry sharedRegistry]
+    p = [[TTIOProviderRegistry sharedRegistry]
             openURL:url
-               mode:MPGOStorageOpenModeRead
+               mode:TTIOStorageOpenModeRead
            provider:providerName
               error:&err];
     root = [p rootGroupWithError:&err];
@@ -72,12 +72,12 @@ void testCanonicalBytesCrossBackend(void)
     const double values[4] = { 1.0, -2.5, 3.14159, 1e-10 };
     NSData *expected = leFloat64Bytes(values, 4);
 
-    NSString *hdf5Path = m43TempPath(@"primitive.mpgo");
+    NSString *hdf5Path = m43TempPath(@"primitive.tio");
     NSString *memUrl   = [NSString stringWithFormat:@"memory://m43-%d", (int)getpid()];
-    NSString *sqlPath  = m43TempPath(@"primitive.mpgo.sqlite");
+    NSString *sqlPath  = m43TempPath(@"primitive.tio.sqlite");
     unlink([hdf5Path fileSystemRepresentation]);
     unlink([sqlPath fileSystemRepresentation]);
-    [MPGOMemoryProvider discardStore:memUrl];
+    [TTIOMemoryProvider discardStore:memUrl];
 
     NSData *hdf5Bytes   = canonicalPrimitiveThroughProvider(@"hdf5", hdf5Path, values, 4);
     NSData *memoryBytes = canonicalPrimitiveThroughProvider(@"memory", memUrl, values, 4);
@@ -99,14 +99,14 @@ void testCanonicalBytesCrossBackend(void)
 
     unlink([hdf5Path fileSystemRepresentation]);
     unlink([sqlPath fileSystemRepresentation]);
-    [MPGOMemoryProvider discardStore:memUrl];
+    [TTIOMemoryProvider discardStore:memUrl];
 
     // ── Compound canonical bytes via the static helper ──
-    NSArray<MPGOCompoundField *> *fields = @[
-        [MPGOCompoundField fieldWithName:@"run_name" kind:MPGOCompoundFieldKindVLString],
-        [MPGOCompoundField fieldWithName:@"spectrum_index" kind:MPGOCompoundFieldKindUInt32],
-        [MPGOCompoundField fieldWithName:@"score" kind:MPGOCompoundFieldKindFloat64],
-        [MPGOCompoundField fieldWithName:@"chem_id" kind:MPGOCompoundFieldKindVLString],
+    NSArray<TTIOCompoundField *> *fields = @[
+        [TTIOCompoundField fieldWithName:@"run_name" kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"spectrum_index" kind:TTIOCompoundFieldKindUInt32],
+        [TTIOCompoundField fieldWithName:@"score" kind:TTIOCompoundFieldKindFloat64],
+        [TTIOCompoundField fieldWithName:@"chem_id" kind:TTIOCompoundFieldKindVLString],
     ];
     NSArray<NSDictionary *> *rows = @[
         @{ @"run_name": @"runA", @"spectrum_index": @0,  @"score": @0.95, @"chem_id": @"CHEBI:15377" },
@@ -114,7 +114,7 @@ void testCanonicalBytesCrossBackend(void)
         @{ @"run_name": @"",     @"spectrum_index": @42, @"score": @-1.5, @"chem_id": @"" },
     ];
     NSData *compoundCanonical =
-        [MPGOCanonicalBytes canonicalBytesForCompoundRows:rows fields:fields];
+        [TTIOCanonicalBytes canonicalBytesForCompoundRows:rows fields:fields];
 
     // Manual assembly of the first row: "runA" (4 bytes) + 0 + 0.95 + "CHEBI:15377"
     NSMutableData *expectedFirstRow = [NSMutableData data];

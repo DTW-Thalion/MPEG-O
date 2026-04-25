@@ -1,5 +1,5 @@
-// MakeFixtures — one-shot generator for the canonical v0.2 .mpgo
-// reference fixtures under objc/Tests/Fixtures/mpgo/. Rebuilds the
+// MakeFixtures — one-shot generator for the canonical v0.2 .tio
+// reference fixtures under objc/Tests/Fixtures/ttio/. Rebuilds the
 // files deterministically (modulo HDF5 timestamps) so third-party
 // readers can smoke-test their implementations.
 //
@@ -7,48 +7,48 @@
 // Run:      objc/Tools/obj/MakeFixtures <output_dir>
 //
 // Typical usage: run from repo root with output_dir =
-// objc/Tests/Fixtures/mpgo, then commit the resulting files.
+// objc/Tests/Fixtures/ttio, then commit the resulting files.
 
 #import <Foundation/Foundation.h>
 #import <unistd.h>
-#import "Core/MPGOSignalArray.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "Spectra/MPGONMRSpectrum.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOIdentification.h"
-#import "Dataset/MPGOQuantification.h"
-#import "Dataset/MPGOProvenanceRecord.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "Protection/MPGOEncryptionManager.h"
-#import "Protection/MPGOSignatureManager.h"
+#import "Core/TTIOSignalArray.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "Spectra/TTIONMRSpectrum.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOIdentification.h"
+#import "Dataset/TTIOQuantification.h"
+#import "Dataset/TTIOProvenanceRecord.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "Protection/TTIOEncryptionManager.h"
+#import "Protection/TTIOSignatureManager.h"
 
-static MPGOSignalArray *f64(const double *src, NSUInteger n)
+static TTIOSignalArray *f64(const double *src, NSUInteger n)
 {
     NSData *buf = [NSData dataWithBytes:src length:n * sizeof(double)];
-    MPGOEncodingSpec *enc =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
-    return [[MPGOSignalArray alloc] initWithBuffer:buf
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf
                                             length:n
                                           encoding:enc
                                               axis:nil];
 }
 
-static MPGOInstrumentConfig *emptyCfg(void)
+static TTIOInstrumentConfig *emptyCfg(void)
 {
-    return [[MPGOInstrumentConfig alloc] initWithManufacturer:@"example"
-                                                        model:@"MPEG-O"
+    return [[TTIOInstrumentConfig alloc] initWithManufacturer:@"example"
+                                                        model:@"TTI-O"
                                                  serialNumber:@"0000"
                                                    sourceType:@""
                                                  analyzerType:@""
                                                  detectorType:@""];
 }
 
-static MPGOAcquisitionRun *buildMSRun(NSUInteger nSpectra, NSUInteger peaksPerSpec)
+static TTIOAcquisitionRun *buildMSRun(NSUInteger nSpectra, NSUInteger peaksPerSpec)
 {
     NSMutableArray *spectra = [NSMutableArray array];
     for (NSUInteger k = 0; k < nSpectra; k++) {
@@ -58,14 +58,14 @@ static MPGOAcquisitionRun *buildMSRun(NSUInteger nSpectra, NSUInteger peaksPerSp
             mz[i] = 100.0 + (double)i * 0.5 + (double)k * 0.01;
             in[i] = 1000.0 + (double)(k * 10 + i);
         }
-        MPGOSignalArray *mzA = f64(mz, peaksPerSpec);
-        MPGOSignalArray *inA = f64(in, peaksPerSpec);
+        TTIOSignalArray *mzA = f64(mz, peaksPerSpec);
+        TTIOSignalArray *inA = f64(in, peaksPerSpec);
         free(mz); free(in);
         [spectra addObject:
-            [[MPGOMassSpectrum alloc] initWithMzArray:mzA
+            [[TTIOMassSpectrum alloc] initWithMzArray:mzA
                                        intensityArray:inA
                                               msLevel:(k % 3 == 0 ? 1 : 2)
-                                             polarity:MPGOPolarityPositive
+                                             polarity:TTIOPolarityPositive
                                            scanWindow:nil
                                         indexPosition:k
                                       scanTimeSeconds:(double)k * 0.1
@@ -73,12 +73,12 @@ static MPGOAcquisitionRun *buildMSRun(NSUInteger nSpectra, NSUInteger peaksPerSp
                                       precursorCharge:(k % 3 == 0 ? 0 : 2)
                                                 error:NULL]];
     }
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                       acquisitionMode:MPGOAcquisitionModeMS1DDA
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
                                       instrumentConfig:emptyCfg()];
 }
 
-static MPGOAcquisitionRun *buildNMRRun(NSUInteger nSpectra, NSUInteger points)
+static TTIOAcquisitionRun *buildNMRRun(NSUInteger nSpectra, NSUInteger points)
 {
     NSMutableArray *spectra = [NSMutableArray array];
     for (NSUInteger k = 0; k < nSpectra; k++) {
@@ -88,11 +88,11 @@ static MPGOAcquisitionRun *buildNMRRun(NSUInteger nSpectra, NSUInteger points)
             cs[i]  = -1.0 + (double)i * (12.0 / (double)points);
             ins[i] = 1000.0 + (double)(k * 10 + i);
         }
-        MPGOSignalArray *csA = f64(cs, points);
-        MPGOSignalArray *inA = f64(ins, points);
+        TTIOSignalArray *csA = f64(cs, points);
+        TTIOSignalArray *inA = f64(ins, points);
         free(cs); free(ins);
         [spectra addObject:
-            [[MPGONMRSpectrum alloc]
+            [[TTIONMRSpectrum alloc]
                 initWithChemicalShiftArray:csA
                             intensityArray:inA
                                nucleusType:@"1H"
@@ -101,8 +101,8 @@ static MPGOAcquisitionRun *buildNMRRun(NSUInteger nSpectra, NSUInteger points)
                            scanTimeSeconds:(double)k * 0.5
                                      error:NULL]];
     }
-    return [[MPGOAcquisitionRun alloc] initWithSpectra:spectra
-                                       acquisitionMode:MPGOAcquisitionMode1DNMR
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:spectra
+                                       acquisitionMode:TTIOAcquisitionMode1DNMR
                                       instrumentConfig:emptyCfg()];
 }
 
@@ -115,9 +115,9 @@ static NSData *makeKey(void)
 
 static BOOL writeMinimalMS(NSString *path)
 {
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"minimal MS"
-                                isaInvestigationId:@"MPGO:minimal"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"minimal MS"
+                                isaInvestigationId:@"TTIO:minimal"
                                             msRuns:@{@"run_0001": buildMSRun(10, 8)}
                                            nmrRuns:@{}
                                    identifications:@[]
@@ -132,7 +132,7 @@ static BOOL writeFullMS(NSString *path)
     NSMutableArray *idents = [NSMutableArray array];
     for (NSUInteger i = 0; i < 10; i++) {
         [idents addObject:
-            [[MPGOIdentification alloc]
+            [[TTIOIdentification alloc]
                 initWithRunName:@"run_0001"
                   spectrumIndex:i
                  chemicalEntity:[NSString stringWithFormat:@"CHEBI:%lu",
@@ -143,7 +143,7 @@ static BOOL writeFullMS(NSString *path)
     NSMutableArray *quants = [NSMutableArray array];
     for (NSUInteger i = 0; i < 5; i++) {
         [quants addObject:
-            [[MPGOQuantification alloc]
+            [[TTIOQuantification alloc]
                 initWithChemicalEntity:[NSString stringWithFormat:@"CHEBI:%lu",
                                         (unsigned long)(15000 + i)]
                              sampleRef:@"sample_A"
@@ -151,20 +151,20 @@ static BOOL writeFullMS(NSString *path)
                    normalizationMethod:@"median"]];
     }
     NSArray *prov = @[
-        [[MPGOProvenanceRecord alloc] initWithInputRefs:@[@"raw:ABC123.raw"]
+        [[TTIOProvenanceRecord alloc] initWithInputRefs:@[@"raw:ABC123.raw"]
                                                software:@"msconvert"
                                              parameters:@{@"peak-picking": @YES}
                                              outputRefs:@[@"mzml:ABC123.mzML"]
                                           timestampUnix:1700000000],
-        [[MPGOProvenanceRecord alloc] initWithInputRefs:@[@"mzml:ABC123.mzML"]
-                                               software:@"mpgo-import"
+        [[TTIOProvenanceRecord alloc] initWithInputRefs:@[@"mzml:ABC123.mzML"]
+                                               software:@"ttio-import"
                                              parameters:@{}
-                                             outputRefs:@[@"mpgo:ABC123.mpgo"]
+                                             outputRefs:@[@"ttio:ABC123.tio"]
                                           timestampUnix:1700000300],
     ];
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"full MS with annotations"
-                                isaInvestigationId:@"MPGO:full"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"full MS with annotations"
+                                isaInvestigationId:@"TTIO:full"
                                             msRuns:@{@"run_0001": buildMSRun(12, 8)}
                                            nmrRuns:@{}
                                    identifications:idents
@@ -176,9 +176,9 @@ static BOOL writeFullMS(NSString *path)
 
 static BOOL writeNMR1D(NSString *path)
 {
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"NMR 1D example"
-                                isaInvestigationId:@"MPGO:nmr1d"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"NMR 1D example"
+                                isaInvestigationId:@"TTIO:nmr1d"
                                             msRuns:@{@"nmr_run": buildNMRRun(5, 64)}
                                            nmrRuns:@{}
                                    identifications:@[]
@@ -190,9 +190,9 @@ static BOOL writeNMR1D(NSString *path)
 
 static BOOL writeEncrypted(NSString *path)
 {
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"encrypted example"
-                                isaInvestigationId:@"MPGO:enc"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"encrypted example"
+                                isaInvestigationId:@"TTIO:enc"
                                             msRuns:@{@"run_0001": buildMSRun(10, 8)}
                                            nmrRuns:@{}
                                    identifications:@[]
@@ -201,15 +201,15 @@ static BOOL writeEncrypted(NSString *path)
                                        transitions:nil];
     if (![ds writeToFilePath:path error:NULL]) return NO;
     return [ds encryptWithKey:makeKey()
-                        level:MPGOEncryptionLevelDataset
+                        level:TTIOEncryptionLevelDataset
                         error:NULL];
 }
 
 static BOOL writeSigned(NSString *path)
 {
-    MPGOSpectralDataset *ds =
-        [[MPGOSpectralDataset alloc] initWithTitle:@"signed example"
-                                isaInvestigationId:@"MPGO:signed"
+    TTIOSpectralDataset *ds =
+        [[TTIOSpectralDataset alloc] initWithTitle:@"signed example"
+                                isaInvestigationId:@"TTIO:signed"
                                             msRuns:@{@"run_0001": buildMSRun(10, 8)}
                                            nmrRuns:@{}
                                    identifications:@[]
@@ -220,9 +220,9 @@ static BOOL writeSigned(NSString *path)
     NSData *key = makeKey();
     NSString *mzPath = @"/study/ms_runs/run_0001/signal_channels/mz_values";
     NSString *intPath = @"/study/ms_runs/run_0001/signal_channels/intensity_values";
-    if (![MPGOSignatureManager signDataset:mzPath inFile:path withKey:key error:NULL])
+    if (![TTIOSignatureManager signDataset:mzPath inFile:path withKey:key error:NULL])
         return NO;
-    if (![MPGOSignatureManager signDataset:intPath inFile:path withKey:key error:NULL])
+    if (![TTIOSignatureManager signDataset:intPath inFile:path withKey:key error:NULL])
         return NO;
     return YES;
 }
@@ -241,11 +241,11 @@ int main(int argc, const char *argv[])
                                                         error:NULL];
 
         struct { const char *name; BOOL (*fn)(NSString *); } items[] = {
-            { "minimal_ms.mpgo", writeMinimalMS },
-            { "full_ms.mpgo",    writeFullMS },
-            { "nmr_1d.mpgo",     writeNMR1D },
-            { "encrypted.mpgo",  writeEncrypted },
-            { "signed.mpgo",     writeSigned },
+            { "minimal_ms.tio", writeMinimalMS },
+            { "full_ms.tio",    writeFullMS },
+            { "nmr_1d.tio",     writeNMR1D },
+            { "encrypted.tio",  writeEncrypted },
+            { "signed.tio",     writeSigned },
         };
         for (int i = 0; i < 5; i++) {
             NSString *out = [dir stringByAppendingPathComponent:

@@ -1,7 +1,7 @@
 /*
  * TestTransportServer — v0.10 M68.5 parity backfill.
  *
- * Verifies MPGOTransportServer + MPGOTransportClient talking
+ * Verifies TTIOTransportServer + TTIOTransportClient talking
  * to each other (ObjC ↔ ObjC; no Python subprocess needed).
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -10,18 +10,18 @@
 #import "Testing.h"
 #import <unistd.h>
 
-#import "Transport/MPGOTransportServer.h"
-#import "Transport/MPGOTransportClient.h"
-#import "Transport/MPGOTransportPacket.h"
-#import "Transport/MPGOAccessUnit.h"
-#import "Dataset/MPGOSpectralDataset.h"
-#import "Dataset/MPGOWrittenRun.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Transport/TTIOTransportServer.h"
+#import "Transport/TTIOTransportClient.h"
+#import "Transport/TTIOTransportPacket.h"
+#import "Transport/TTIOAccessUnit.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "ValueClasses/TTIOEnums.h"
 
 static NSString *tmp(NSString *n) {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m685_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_m685_%d_%@",
             (int)getpid(), n];
 }
 static void rm(NSString *p) { [[NSFileManager defaultManager] removeItemAtPath:p error:NULL]; }
@@ -75,10 +75,10 @@ static BOOL buildFixture(NSString *path, NSError **error)
         }
         bpis[i] = best;
     }
-    MPGOWrittenRun *run =
-        [[MPGOWrittenRun alloc]
-            initWithSpectrumClassName:@"MPGOMassSpectrum"
-                      acquisitionMode:(int64_t)MPGOAcquisitionModeMS1DDA
+    TTIOWrittenRun *run =
+        [[TTIOWrittenRun alloc]
+            initWithSpectrumClassName:@"TTIOMassSpectrum"
+                      acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
                           channelData:@{@"mz": f64le(mz, total),
                                         @"intensity": f64le(intensity, total)}
                               offsets:u64arr(offsets, n)
@@ -89,7 +89,7 @@ static BOOL buildFixture(NSString *path, NSError **error)
                          precursorMzs:f64le(pmzs, n)
                      precursorCharges:i32arr(pcs, n)
                   basePeakIntensities:f64le(bpis, n)];
-    return [MPGOSpectralDataset writeMinimalToPath:path
+    return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M68.5 server fixture"
                                  isaInvestigationId:@"ISA-M685"
                                              msRuns:@{@"run_0001": run}
@@ -99,28 +99,28 @@ static BOOL buildFixture(NSString *path, NSError **error)
                                               error:error];
 }
 
-static NSUInteger countAUs(NSArray<MPGOTransportPacketRecord *> *packets)
+static NSUInteger countAUs(NSArray<TTIOTransportPacketRecord *> *packets)
 {
     NSUInteger n = 0;
-    for (MPGOTransportPacketRecord *r in packets) {
-        if (r.header.packetType == MPGOTransportPacketAccessUnit) n++;
+    for (TTIOTransportPacketRecord *r in packets) {
+        if (r.header.packetType == TTIOTransportPacketAccessUnit) n++;
     }
     return n;
 }
 
 void testTransportServer(void)
 {
-    NSString *mpgo = tmp(@"src.mpgo");
-    rm(mpgo);
+    NSString *ttio = tmp(@"src.tio");
+    rm(ttio);
     NSError *err = nil;
-    BOOL ok = buildFixture(mpgo, &err);
+    BOOL ok = buildFixture(ttio, &err);
     PASS(ok, "M68.5: fixture build succeeds");
     if (!ok) return;
 
     // ── 1. Unfiltered stream ──────────────────────────────────────
     {
-        MPGOTransportServer *srv =
-            [[MPGOTransportServer alloc] initWithDatasetPath:mpgo
+        TTIOTransportServer *srv =
+            [[TTIOTransportServer alloc] initWithDatasetPath:ttio
                                                          host:@"127.0.0.1"
                                                          port:0];
         NSError *startErr = nil;
@@ -130,7 +130,7 @@ void testTransportServer(void)
 
         NSString *url = [NSString stringWithFormat:@"ws://127.0.0.1:%u/",
                           (unsigned)srv.actualPort];
-        MPGOTransportClient *client = [[MPGOTransportClient alloc] initWithURL:url];
+        TTIOTransportClient *client = [[TTIOTransportClient alloc] initWithURL:url];
         NSError *fetchErr = nil;
         NSArray *packets = [client fetchPacketsWithFilters:nil timeout:10.0 error:&fetchErr];
         PASS(packets != nil, "ObjC server replies with packets");
@@ -141,8 +141,8 @@ void testTransportServer(void)
 
     // ── 2. ms_level filter ────────────────────────────────────────
     {
-        MPGOTransportServer *srv =
-            [[MPGOTransportServer alloc] initWithDatasetPath:mpgo
+        TTIOTransportServer *srv =
+            [[TTIOTransportServer alloc] initWithDatasetPath:ttio
                                                          host:@"127.0.0.1"
                                                          port:0];
         NSError *startErr = nil;
@@ -150,7 +150,7 @@ void testTransportServer(void)
 
         NSString *url = [NSString stringWithFormat:@"ws://127.0.0.1:%u/",
                           (unsigned)srv.actualPort];
-        MPGOTransportClient *client = [[MPGOTransportClient alloc] initWithURL:url];
+        TTIOTransportClient *client = [[TTIOTransportClient alloc] initWithURL:url];
         NSError *fetchErr = nil;
         NSArray *packets = [client fetchPacketsWithFilters:@{@"ms_level": @(2)}
                                                     timeout:10.0 error:&fetchErr];
@@ -161,8 +161,8 @@ void testTransportServer(void)
 
     // ── 3. RT range filter ────────────────────────────────────────
     {
-        MPGOTransportServer *srv =
-            [[MPGOTransportServer alloc] initWithDatasetPath:mpgo
+        TTIOTransportServer *srv =
+            [[TTIOTransportServer alloc] initWithDatasetPath:ttio
                                                          host:@"127.0.0.1"
                                                          port:0];
         NSError *startErr = nil;
@@ -170,7 +170,7 @@ void testTransportServer(void)
 
         NSString *url = [NSString stringWithFormat:@"ws://127.0.0.1:%u/",
                           (unsigned)srv.actualPort];
-        MPGOTransportClient *client = [[MPGOTransportClient alloc] initWithURL:url];
+        TTIOTransportClient *client = [[TTIOTransportClient alloc] initWithURL:url];
         NSError *fetchErr = nil;
         NSArray *packets = [client fetchPacketsWithFilters:@{@"rt_min": @(2.5),
                                                                 @"rt_max": @(4.0)}
@@ -182,8 +182,8 @@ void testTransportServer(void)
 
     // ── 4. max_au cap ─────────────────────────────────────────────
     {
-        MPGOTransportServer *srv =
-            [[MPGOTransportServer alloc] initWithDatasetPath:mpgo
+        TTIOTransportServer *srv =
+            [[TTIOTransportServer alloc] initWithDatasetPath:ttio
                                                          host:@"127.0.0.1"
                                                          port:0];
         NSError *startErr = nil;
@@ -191,7 +191,7 @@ void testTransportServer(void)
 
         NSString *url = [NSString stringWithFormat:@"ws://127.0.0.1:%u/",
                           (unsigned)srv.actualPort];
-        MPGOTransportClient *client = [[MPGOTransportClient alloc] initWithURL:url];
+        TTIOTransportClient *client = [[TTIOTransportClient alloc] initWithURL:url];
         NSError *fetchErr = nil;
         NSArray *packets = [client fetchPacketsWithFilters:@{@"max_au": @(2)}
                                                     timeout:10.0 error:&fetchErr];
@@ -202,8 +202,8 @@ void testTransportServer(void)
 
     // ── 5. materialize end-to-end ─────────────────────────────────
     {
-        MPGOTransportServer *srv =
-            [[MPGOTransportServer alloc] initWithDatasetPath:mpgo
+        TTIOTransportServer *srv =
+            [[TTIOTransportServer alloc] initWithDatasetPath:ttio
                                                          host:@"127.0.0.1"
                                                          port:0];
         NSError *startErr = nil;
@@ -211,15 +211,15 @@ void testTransportServer(void)
 
         NSString *url = [NSString stringWithFormat:@"ws://127.0.0.1:%u/",
                           (unsigned)srv.actualPort];
-        MPGOTransportClient *client = [[MPGOTransportClient alloc] initWithURL:url];
-        NSString *out = tmp(@"server-rt.mpgo");
+        TTIOTransportClient *client = [[TTIOTransportClient alloc] initWithURL:url];
+        NSString *out = tmp(@"server-rt.tio");
         rm(out);
         NSError *wErr = nil;
         BOOL matOk = [client streamToFilePath:out filters:nil error:&wErr];
         PASS(matOk, "stream-to-file materialisation succeeds");
         if (matOk) {
-            MPGOSpectralDataset *rt =
-                [MPGOSpectralDataset readFromFilePath:out error:&wErr];
+            TTIOSpectralDataset *rt =
+                [TTIOSpectralDataset readFromFilePath:out error:&wErr];
             PASS([rt.title isEqualToString:@"M68.5 server fixture"],
                  "title preserved");
             PASS([rt.msRuns[@"run_0001"] count] == 5, "5 spectra materialised");
@@ -229,5 +229,5 @@ void testTransportServer(void)
         [srv stopWithTimeout:2.0];
     }
 
-    rm(mpgo);
+    rm(ttio);
 }

@@ -1,52 +1,52 @@
 // Milestone 24: Chromatogram API + mzML writer completion.
 //
 // Verifies:
-//   * MPGOAcquisitionRun persists chromatograms into <run>/chromatograms/
+//   * TTIOAcquisitionRun persists chromatograms into <run>/chromatograms/
 //     with concatenated time/intensity datasets and the chromatogram_index
 //     subgroup of parallel metadata arrays.
-//   * Round-trip of 3 chromatograms (TIC + XIC + SRM) through .mpgo.
-//   * MPGOMzMLWriter emits <chromatogramList> with a second <index> block
+//   * Round-trip of 3 chromatograms (TIC + XIC + SRM) through .tio.
+//   * TTIOMzMLWriter emits <chromatogramList> with a second <index> block
 //     whose offsets are byte-correct (point at the first byte of the
 //     `<chromatogram` tag).
-//   * MPGOMzMLReader re-parses chromatograms back with correct type, target,
+//   * TTIOMzMLReader re-parses chromatograms back with correct type, target,
 //     precursor, and product m/z values.
 //   * v0.3 (no chromatograms group) files still read back as empty list.
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Core/MPGOSignalArray.h"
-#import "HDF5/MPGOHDF5File.h"
-#import "HDF5/MPGOHDF5Group.h"
-#import "Run/MPGOAcquisitionRun.h"
-#import "Run/MPGOInstrumentConfig.h"
-#import "Spectra/MPGOChromatogram.h"
-#import "Spectra/MPGOMassSpectrum.h"
-#import "ValueClasses/MPGOEnums.h"
-#import "ValueClasses/MPGOEncodingSpec.h"
-#import "Export/MPGOMzMLWriter.h"
-#import "Import/MPGOMzMLReader.h"
-#import "Dataset/MPGOSpectralDataset.h"
+#import "Core/TTIOSignalArray.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "Run/TTIOAcquisitionRun.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "Spectra/TTIOChromatogram.h"
+#import "Spectra/TTIOMassSpectrum.h"
+#import "ValueClasses/TTIOEnums.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "Export/TTIOMzMLWriter.h"
+#import "Import/TTIOMzMLReader.h"
+#import "Dataset/TTIOSpectralDataset.h"
 #import <unistd.h>
 
 static NSString *m24TempPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_test_m24_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_test_m24_%d_%@",
             (int)getpid(), suffix];
 }
 
-static MPGOSignalArray *m24SignalArray(const double *values, NSUInteger n, NSString *axis)
+static TTIOSignalArray *m24SignalArray(const double *values, NSUInteger n, NSString *axis)
 {
-    MPGOEncodingSpec *spec =
-        [MPGOEncodingSpec specWithPrecision:MPGOPrecisionFloat64
-                       compressionAlgorithm:MPGOCompressionZlib
-                                  byteOrder:MPGOByteOrderLittleEndian];
+    TTIOEncodingSpec *spec =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
     NSData *buf = [NSData dataWithBytes:values length:n * sizeof(double)];
-    MPGOAxisDescriptor *ax = nil;
+    TTIOAxisDescriptor *ax = nil;
     (void)axis;
-    return [[MPGOSignalArray alloc] initWithBuffer:buf length:n encoding:spec axis:ax];
+    return [[TTIOSignalArray alloc] initWithBuffer:buf length:n encoding:spec axis:ax];
 }
 
-static MPGOChromatogram *m24MakeChromatogram(MPGOChromatogramType type,
+static TTIOChromatogram *m24MakeChromatogram(TTIOChromatogramType type,
                                               NSUInteger n,
                                               double targetMz,
                                               double precursorMz,
@@ -58,10 +58,10 @@ static MPGOChromatogram *m24MakeChromatogram(MPGOChromatogramType type,
         t[i] = 0.1 * (double)i;
         v[i] = 100.0 + (double)(i * 7);
     }
-    MPGOSignalArray *tArr = m24SignalArray(t, n, @"time");
-    MPGOSignalArray *iArr = m24SignalArray(v, n, @"intensity");
+    TTIOSignalArray *tArr = m24SignalArray(t, n, @"time");
+    TTIOSignalArray *iArr = m24SignalArray(v, n, @"intensity");
     free(t); free(v);
-    return [[MPGOChromatogram alloc] initWithTimeArray:tArr
+    return [[TTIOChromatogram alloc] initWithTimeArray:tArr
                                          intensityArray:iArr
                                                    type:type
                                                targetMz:targetMz
@@ -72,89 +72,89 @@ static MPGOChromatogram *m24MakeChromatogram(MPGOChromatogramType type,
 
 void testMilestone24(void)
 {
-    // ---------------- Round-trip 3 chromatograms through .mpgo ----------------
+    // ---------------- Round-trip 3 chromatograms through .tio ----------------
     {
-        NSString *mpgoPath = m24TempPath(@"rt.mpgo");
-        unlink([mpgoPath fileSystemRepresentation]);
+        NSString *ttioPath = m24TempPath(@"rt.tio");
+        unlink([ttioPath fileSystemRepresentation]);
 
         // Build 3 chromatograms of different lengths and types.
         NSArray *chroms = @[
-            m24MakeChromatogram(MPGOChromatogramTypeTIC, 10, 0.0,   0.0,   0.0),
-            m24MakeChromatogram(MPGOChromatogramTypeXIC,  8, 523.25, 0.0,   0.0),
-            m24MakeChromatogram(MPGOChromatogramTypeSRM, 12, 0.0,   400.5, 185.1),
+            m24MakeChromatogram(TTIOChromatogramTypeTIC, 10, 0.0,   0.0,   0.0),
+            m24MakeChromatogram(TTIOChromatogramTypeXIC,  8, 523.25, 0.0,   0.0),
+            m24MakeChromatogram(TTIOChromatogramTypeSRM, 12, 0.0,   400.5, 185.1),
         ];
 
-        MPGOInstrumentConfig *cfg = [[MPGOInstrumentConfig alloc]
+        TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
             initWithManufacturer:@"" model:@"" serialNumber:@""
                       sourceType:@"" analyzerType:@"" detectorType:@""];
-        MPGOAcquisitionRun *run =
-            [[MPGOAcquisitionRun alloc] initWithSpectra:@[]
+        TTIOAcquisitionRun *run =
+            [[TTIOAcquisitionRun alloc] initWithSpectra:@[]
                                           chromatograms:chroms
-                                        acquisitionMode:MPGOAcquisitionModeMS1DDA
+                                        acquisitionMode:TTIOAcquisitionModeMS1DDA
                                        instrumentConfig:cfg];
         PASS(run.chromatograms.count == 3, "M24: run carries 3 chromatograms");
 
         // Write bare run into a fresh HDF5 file under /test_run/.
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:mpgoPath error:&err];
-        PASS(f != nil, "M24: create .mpgo for chromatogram round-trip");
-        MPGOHDF5Group *root = [f rootGroup];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:ttioPath error:&err];
+        PASS(f != nil, "M24: create .tio for chromatogram round-trip");
+        TTIOHDF5Group *root = [f rootGroup];
         PASS([run writeToGroup:root name:@"test_run" error:&err],
              "M24: writeToGroup includes chromatograms");
         PASS([f close], "M24: close after write");
 
         // Re-open and read back.
-        MPGOHDF5File *f2 = [MPGOHDF5File openReadOnlyAtPath:mpgoPath error:&err];
+        TTIOHDF5File *f2 = [TTIOHDF5File openReadOnlyAtPath:ttioPath error:&err];
         PASS(f2 != nil, "M24: reopen for read");
-        MPGOAcquisitionRun *read =
-            [MPGOAcquisitionRun readFromGroup:[f2 rootGroup] name:@"test_run" error:&err];
+        TTIOAcquisitionRun *read =
+            [TTIOAcquisitionRun readFromGroup:[f2 rootGroup] name:@"test_run" error:&err];
         PASS(read != nil, "M24: read back run");
         PASS(read.chromatograms.count == 3, "M24: 3 chromatograms survive round-trip");
 
-        MPGOChromatogram *c0 = read.chromatograms[0];
-        MPGOChromatogram *c1 = read.chromatograms[1];
-        MPGOChromatogram *c2 = read.chromatograms[2];
-        PASS(c0.type == MPGOChromatogramTypeTIC, "M24: c0 type TIC");
+        TTIOChromatogram *c0 = read.chromatograms[0];
+        TTIOChromatogram *c1 = read.chromatograms[1];
+        TTIOChromatogram *c2 = read.chromatograms[2];
+        PASS(c0.type == TTIOChromatogramTypeTIC, "M24: c0 type TIC");
         PASS(c0.timeArray.length == 10, "M24: c0 length 10");
-        PASS(c1.type == MPGOChromatogramTypeXIC, "M24: c1 type XIC");
+        PASS(c1.type == TTIOChromatogramTypeXIC, "M24: c1 type XIC");
         PASS(c1.targetMz == 523.25, "M24: c1 target m/z preserved");
-        PASS(c2.type == MPGOChromatogramTypeSRM, "M24: c2 type SRM");
+        PASS(c2.type == TTIOChromatogramTypeSRM, "M24: c2 type SRM");
         PASS(c2.precursorProductMz == 400.5, "M24: c2 precursor m/z preserved");
         PASS(c2.productMz == 185.1, "M24: c2 product m/z preserved");
 
         [f2 close];
-        unlink([mpgoPath fileSystemRepresentation]);
+        unlink([ttioPath fileSystemRepresentation]);
     }
 
     // ---------------- v0.3 back-compat: absence of chromatograms group ----------------
     {
-        NSString *mpgoPath = m24TempPath(@"v03.mpgo");
-        unlink([mpgoPath fileSystemRepresentation]);
+        NSString *ttioPath = m24TempPath(@"v03.tio");
+        unlink([ttioPath fileSystemRepresentation]);
 
-        MPGOInstrumentConfig *cfg = [[MPGOInstrumentConfig alloc]
+        TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
             initWithManufacturer:@"" model:@"" serialNumber:@""
                       sourceType:@"" analyzerType:@"" detectorType:@""];
-        MPGOAcquisitionRun *run =
-            [[MPGOAcquisitionRun alloc] initWithSpectra:@[]
-                                        acquisitionMode:MPGOAcquisitionModeMS1DDA
+        TTIOAcquisitionRun *run =
+            [[TTIOAcquisitionRun alloc] initWithSpectra:@[]
+                                        acquisitionMode:TTIOAcquisitionModeMS1DDA
                                        instrumentConfig:cfg];
         PASS(run.chromatograms.count == 0, "M24: default chromatograms empty");
 
         NSError *err = nil;
-        MPGOHDF5File *f = [MPGOHDF5File createAtPath:mpgoPath error:&err];
-        MPGOHDF5Group *root = [f rootGroup];
+        TTIOHDF5File *f = [TTIOHDF5File createAtPath:ttioPath error:&err];
+        TTIOHDF5Group *root = [f rootGroup];
         PASS([run writeToGroup:root name:@"v03_run" error:&err],
              "M24: v0.3-style run writes without chromatograms group");
         [f close];
 
-        MPGOHDF5File *f2 = [MPGOHDF5File openReadOnlyAtPath:mpgoPath error:&err];
-        MPGOAcquisitionRun *read =
-            [MPGOAcquisitionRun readFromGroup:[f2 rootGroup] name:@"v03_run" error:&err];
+        TTIOHDF5File *f2 = [TTIOHDF5File openReadOnlyAtPath:ttioPath error:&err];
+        TTIOAcquisitionRun *read =
+            [TTIOAcquisitionRun readFromGroup:[f2 rootGroup] name:@"v03_run" error:&err];
         PASS(read != nil, "M24: v0.3-style run reads back");
         PASS(read.chromatograms.count == 0,
              "M24: v0.3-style run has empty chromatograms list");
         [f2 close];
-        unlink([mpgoPath fileSystemRepresentation]);
+        unlink([ttioPath fileSystemRepresentation]);
     }
 
     // ---------------- mzML writer + reader round-trip ----------------
@@ -163,36 +163,36 @@ void testMilestone24(void)
         // writer produces a non-empty <spectrumList> and <chromatogramList>.
         double mzs[]  = { 100.0, 150.0, 200.0 };
         double ints[] = { 500.0, 900.0, 200.0 };
-        MPGOSignalArray *mzArr  = m24SignalArray(mzs,  3, @"mz");
-        MPGOSignalArray *inArr  = m24SignalArray(ints, 3, @"intensity");
+        TTIOSignalArray *mzArr  = m24SignalArray(mzs,  3, @"mz");
+        TTIOSignalArray *inArr  = m24SignalArray(ints, 3, @"intensity");
 
-        MPGOMassSpectrum *s1 = [[MPGOMassSpectrum alloc]
+        TTIOMassSpectrum *s1 = [[TTIOMassSpectrum alloc]
             initWithMzArray:mzArr intensityArray:inArr
-                    msLevel:1 polarity:MPGOPolarityPositive scanWindow:nil
+                    msLevel:1 polarity:TTIOPolarityPositive scanWindow:nil
               indexPosition:0 scanTimeSeconds:1.0
                 precursorMz:0.0 precursorCharge:0 error:NULL];
-        MPGOMassSpectrum *s2 = [[MPGOMassSpectrum alloc]
+        TTIOMassSpectrum *s2 = [[TTIOMassSpectrum alloc]
             initWithMzArray:mzArr intensityArray:inArr
-                    msLevel:1 polarity:MPGOPolarityPositive scanWindow:nil
+                    msLevel:1 polarity:TTIOPolarityPositive scanWindow:nil
               indexPosition:1 scanTimeSeconds:2.0
                 precursorMz:0.0 precursorCharge:0 error:NULL];
 
         NSArray *chroms = @[
-            m24MakeChromatogram(MPGOChromatogramTypeTIC, 5, 0.0,   0.0,   0.0),
-            m24MakeChromatogram(MPGOChromatogramTypeXIC, 5, 523.25,0.0,   0.0),
-            m24MakeChromatogram(MPGOChromatogramTypeSRM, 5, 0.0,   400.5, 185.1),
+            m24MakeChromatogram(TTIOChromatogramTypeTIC, 5, 0.0,   0.0,   0.0),
+            m24MakeChromatogram(TTIOChromatogramTypeXIC, 5, 523.25,0.0,   0.0),
+            m24MakeChromatogram(TTIOChromatogramTypeSRM, 5, 0.0,   400.5, 185.1),
         ];
 
-        MPGOInstrumentConfig *cfg = [[MPGOInstrumentConfig alloc]
+        TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
             initWithManufacturer:@"" model:@"" serialNumber:@""
                       sourceType:@"" analyzerType:@"" detectorType:@""];
-        MPGOAcquisitionRun *run =
-            [[MPGOAcquisitionRun alloc] initWithSpectra:@[s1, s2]
+        TTIOAcquisitionRun *run =
+            [[TTIOAcquisitionRun alloc] initWithSpectra:@[s1, s2]
                                           chromatograms:chroms
-                                        acquisitionMode:MPGOAcquisitionModeMS1DDA
+                                        acquisitionMode:TTIOAcquisitionModeMS1DDA
                                        instrumentConfig:cfg];
 
-        MPGOSpectralDataset *ds = [[MPGOSpectralDataset alloc]
+        TTIOSpectralDataset *ds = [[TTIOSpectralDataset alloc]
             initWithTitle:@"m24"
        isaInvestigationId:@"ISA-M24"
                    msRuns:@{ @"run_0001": run }
@@ -203,7 +203,7 @@ void testMilestone24(void)
               transitions:nil];
 
         NSError *err = nil;
-        NSData *mzml = [MPGOMzMLWriter dataForDataset:ds
+        NSData *mzml = [TTIOMzMLWriter dataForDataset:ds
                                       zlibCompression:NO
                                                 error:&err];
         PASS(mzml.length > 0, "M24: mzML writer produced non-empty output");
@@ -221,14 +221,14 @@ void testMilestone24(void)
              "M24: mzML indexList has chromatogram sub-index");
 
         // Feed the blob into the reader.
-        MPGOMzMLReader *rdr = [MPGOMzMLReader parseData:mzml error:&err];
+        TTIOMzMLReader *rdr = [TTIOMzMLReader parseData:mzml error:&err];
         PASS(rdr != nil, "M24: reader parsed writer output");
         PASS(rdr.chromatograms.count == 3, "M24: reader recovered 3 chromatograms");
-        MPGOChromatogram *rc1 = rdr.chromatograms[1];
-        MPGOChromatogram *rc2 = rdr.chromatograms[2];
-        PASS(rc1.type == MPGOChromatogramTypeXIC, "M24: reader typed XIC correctly");
+        TTIOChromatogram *rc1 = rdr.chromatograms[1];
+        TTIOChromatogram *rc2 = rdr.chromatograms[2];
+        PASS(rc1.type == TTIOChromatogramTypeXIC, "M24: reader typed XIC correctly");
         PASS(rc1.targetMz == 523.25,              "M24: XIC target m/z survived mzML round-trip");
-        PASS(rc2.type == MPGOChromatogramTypeSRM, "M24: reader typed SRM correctly");
+        PASS(rc2.type == TTIOChromatogramTypeSRM, "M24: reader typed SRM correctly");
         PASS(rc2.precursorProductMz == 400.5,     "M24: SRM precursor m/z survived mzML round-trip");
         PASS(rc2.productMz == 185.1,              "M24: SRM product m/z survived mzML round-trip");
     }

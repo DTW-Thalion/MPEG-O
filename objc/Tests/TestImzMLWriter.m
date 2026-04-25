@@ -10,12 +10,12 @@
 #import <unistd.h>
 #import <openssl/sha.h>
 
-#import "Export/MPGOImzMLWriter.h"
-#import "Import/MPGOImzMLReader.h"
+#import "Export/TTIOImzMLWriter.h"
+#import "Import/TTIOImzMLReader.h"
 
 
 static NSString *tmpImzML(NSString *suffix) {
-    return [NSString stringWithFormat:@"/tmp/mpgo_imzml_writer_%d_%@.imzML",
+    return [NSString stringWithFormat:@"/tmp/ttio_imzml_writer_%d_%@.imzML",
             (int)getpid(), suffix];
 }
 
@@ -23,12 +23,12 @@ static NSData *doublesToData(const double *values, NSUInteger count) {
     return [NSData dataWithBytes:values length:count * sizeof(double)];
 }
 
-static MPGOImzMLPixelSpectrum *makePixel(NSInteger x, NSInteger y,
+static TTIOImzMLPixelSpectrum *makePixel(NSInteger x, NSInteger y,
                                           const double *mz, NSUInteger mzN,
                                           const double *inten, NSUInteger intN) {
     NSError *err = nil;
-    MPGOImzMLPixelSpectrum *p =
-        [[MPGOImzMLPixelSpectrum alloc] initWithX:x y:y z:1
+    TTIOImzMLPixelSpectrum *p =
+        [[TTIOImzMLPixelSpectrum alloc] initWithX:x y:y z:1
                                              mzArray:doublesToData(mz, mzN)
                                       intensityArray:doublesToData(inten, intN)
                                                error:&err];
@@ -61,7 +61,7 @@ void testImzMLWriter(void) {
         ];
 
         NSError *err = nil;
-        MPGOImzMLWriteResult *res = [MPGOImzMLWriter
+        TTIOImzMLWriteResult *res = [TTIOImzMLWriter
             writePixels:pixels
             toImzMLPath:cPath
                 ibdPath:nil
@@ -77,23 +77,23 @@ void testImzMLWriter(void) {
         PASS(res.uuidHex.length == 32, "UUID is 32 hex chars");
 
         // Round-trip via our reader.
-        MPGOImzMLImport *imp = [MPGOImzMLReader readFromImzMLPath:cPath
+        TTIOImzMLImport *imp = [TTIOImzMLReader readFromImzMLPath:cPath
                                                           ibdPath:nil
                                                             error:&err];
-        PASS(imp != nil, "MPGOImzMLReader re-parses writer output");
+        PASS(imp != nil, "TTIOImzMLReader re-parses writer output");
         PASS([imp.mode isEqualToString:@"continuous"], "mode continuous round-trips");
         PASS([imp.uuidHex isEqualToString:res.uuidHex], "UUID round-trips");
         PASS(imp.gridMaxX == 2 && imp.gridMaxY == 2, "grid extents round-trip");
         PASS(imp.pixelSizeX == 50.0 && imp.pixelSizeY == 50.0, "pixel sizes round-trip");
         PASS(imp.spectra.count == 4, "4 pixels after re-read");
         if (imp.spectra.count == 4) {
-            MPGOImzMLPixelSpectrum *p0 = imp.spectra[0];
+            TTIOImzMLPixelSpectrum *p0 = imp.spectra[0];
             PASS(p0.mzCount == 128, "pixel 0 has 128 mz points");
             const double *csmz = p0.mzArray.bytes;
             const double *csin = p0.intensityArray.bytes;
             PASS(csmz[0] == 100.0, "shared mz[0] round-trips exactly");
             PASS(csin[0] == 0.0, "pixel 0 intensity[0] round-trips exactly");
-            MPGOImzMLPixelSpectrum *p1 = imp.spectra[1];
+            TTIOImzMLPixelSpectrum *p1 = imp.spectra[1];
             const double *p1in = p1.intensityArray.bytes;
             PASS(p1in[0] == 10.0, "pixel 1 intensity[0] round-trips exactly");
         }
@@ -111,7 +111,7 @@ void testImzMLWriter(void) {
             makePixel(2, 1, m1, 4, i1, 4),
         ];
         err = nil;
-        MPGOImzMLWriteResult *pres = [MPGOImzMLWriter
+        TTIOImzMLWriteResult *pres = [TTIOImzMLWriter
             writePixels:ppixels
             toImzMLPath:pPath ibdPath:nil mode:@"processed"
               gridMaxX:0 gridMaxY:0 gridMaxZ:0
@@ -119,7 +119,7 @@ void testImzMLWriter(void) {
              scanPattern:@"flyback"
                 uuidHex:nil error:&err];
         PASS(pres != nil, "processed-mode writer succeeds");
-        MPGOImzMLImport *pimp = [MPGOImzMLReader readFromImzMLPath:pPath
+        TTIOImzMLImport *pimp = [TTIOImzMLReader readFromImzMLPath:pPath
                                                             ibdPath:nil
                                                               error:&err];
         PASS(pimp != nil, "processed-mode round-trip parses");
@@ -142,7 +142,7 @@ void testImzMLWriter(void) {
             makePixel(2, 1, mdiv,  128, in2, 128),
         ];
         err = nil;
-        MPGOImzMLWriteResult *badRes = [MPGOImzMLWriter
+        TTIOImzMLWriteResult *badRes = [TTIOImzMLWriter
             writePixels:badPixels
             toImzMLPath:tmpImzML(@"bad") ibdPath:nil
                    mode:@"continuous"
@@ -158,7 +158,7 @@ void testImzMLWriter(void) {
         double ui[] = {1, 2};
         NSArray *upixels = @[ makePixel(1, 1, uu, 2, ui, 2) ];
         err = nil;
-        MPGOImzMLWriteResult *ures = [MPGOImzMLWriter
+        TTIOImzMLWriteResult *ures = [TTIOImzMLWriter
             writePixels:upixels toImzMLPath:uPath ibdPath:nil
                    mode:@"processed"
               gridMaxX:0 gridMaxY:0 gridMaxZ:0

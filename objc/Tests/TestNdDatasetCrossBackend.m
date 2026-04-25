@@ -9,15 +9,15 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Providers/MPGOStorageProtocols.h"
-#import "Providers/MPGOProviderRegistry.h"
-#import "Providers/MPGOMemoryProvider.h"
-#import "ValueClasses/MPGOEnums.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOMemoryProvider.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <unistd.h>
 
 static NSString *m45TempPath(NSString *suffix)
 {
-    return [NSString stringWithFormat:@"/tmp/mpgo_m45_%d_%@",
+    return [NSString stringWithFormat:@"/tmp/ttio_m45_%d_%@",
             (int)getpid(), suffix];
 }
 
@@ -63,26 +63,26 @@ static NSData *roundTripCube(NSString *providerName,
     }
 
     NSError *err = nil;
-    id<MPGOStorageProvider> p = [[MPGOProviderRegistry sharedRegistry]
+    id<TTIOStorageProvider> p = [[TTIOProviderRegistry sharedRegistry]
             openURL:url
-               mode:MPGOStorageOpenModeCreate
+               mode:TTIOStorageOpenModeCreate
            provider:providerName
               error:&err];
     if (!p) return nil;
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
-    id<MPGOStorageDataset> ds = [root createDatasetNDNamed:@"cube"
-                                                  precision:MPGOPrecisionFloat64
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageDataset> ds = [root createDatasetNDNamed:@"cube"
+                                                  precision:TTIOPrecisionFloat64
                                                       shape:shape
                                                      chunks:nil
-                                                compression:MPGOCompressionNone
+                                                compression:TTIOCompressionNone
                                            compressionLevel:0
                                                       error:&err];
     [ds writeAll:writeBuf error:&err];
     [p close];
 
-    p = [[MPGOProviderRegistry sharedRegistry]
+    p = [[TTIOProviderRegistry sharedRegistry]
             openURL:url
-               mode:MPGOStorageOpenModeRead
+               mode:TTIOStorageOpenModeRead
            provider:providerName
               error:&err];
     root = [p rootGroupWithError:&err];
@@ -97,12 +97,12 @@ void testNdDatasetCrossBackend(void)
     NSArray<NSNumber *> *shape = @[@4, @5, @6];
 
     // ── Per-backend round-trip ──
-    NSString *hdf5Path = m45TempPath(@"cube.mpgo");
+    NSString *hdf5Path = m45TempPath(@"cube.tio");
     NSString *memUrl   = [NSString stringWithFormat:@"memory://m45-%d", (int)getpid()];
-    NSString *sqlPath  = m45TempPath(@"cube.mpgo.sqlite");
+    NSString *sqlPath  = m45TempPath(@"cube.tio.sqlite");
     unlink([hdf5Path fileSystemRepresentation]);
     unlink([sqlPath fileSystemRepresentation]);
-    [MPGOMemoryProvider discardStore:memUrl];
+    [TTIOMemoryProvider discardStore:memUrl];
 
     NSData *hdf5Bytes   = roundTripCube(@"hdf5", hdf5Path, shape);
     NSData *memoryBytes = roundTripCube(@"memory", memUrl, shape);
@@ -122,23 +122,23 @@ void testNdDatasetCrossBackend(void)
 
     unlink([hdf5Path fileSystemRepresentation]);
     unlink([sqlPath fileSystemRepresentation]);
-    [MPGOMemoryProvider discardStore:memUrl];
+    [TTIOMemoryProvider discardStore:memUrl];
 
     // ── Shape preservation across open/close ──
     NSError *err = nil;
-    NSString *shapePath = m45TempPath(@"shape.mpgo");
+    NSString *shapePath = m45TempPath(@"shape.tio");
     unlink([shapePath fileSystemRepresentation]);
-    id<MPGOStorageProvider> p = [[MPGOProviderRegistry sharedRegistry]
+    id<TTIOStorageProvider> p = [[TTIOProviderRegistry sharedRegistry]
             openURL:shapePath
-               mode:MPGOStorageOpenModeCreate
+               mode:TTIOStorageOpenModeCreate
            provider:@"hdf5"
               error:&err];
-    id<MPGOStorageGroup> root = [p rootGroupWithError:&err];
-    id<MPGOStorageDataset> ds = [root createDatasetNDNamed:@"x"
-                                                  precision:MPGOPrecisionFloat64
+    id<TTIOStorageGroup> root = [p rootGroupWithError:&err];
+    id<TTIOStorageDataset> ds = [root createDatasetNDNamed:@"x"
+                                                  precision:TTIOPrecisionFloat64
                                                       shape:@[@3, @4, @5]
                                                      chunks:nil
-                                                compression:MPGOCompressionNone
+                                                compression:TTIOCompressionNone
                                            compressionLevel:0
                                                       error:&err];
     NSArray<NSNumber *> *shapeWrite = ds.shape;
@@ -151,9 +151,9 @@ void testNdDatasetCrossBackend(void)
     [ds writeAll:fill error:&err];
     [p close];
 
-    p = [[MPGOProviderRegistry sharedRegistry]
+    p = [[TTIOProviderRegistry sharedRegistry]
             openURL:shapePath
-               mode:MPGOStorageOpenModeRead
+               mode:TTIOStorageOpenModeRead
            provider:@"hdf5"
               error:&err];
     root = [p rootGroupWithError:&err];

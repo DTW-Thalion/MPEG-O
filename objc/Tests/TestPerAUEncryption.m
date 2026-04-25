@@ -12,10 +12,10 @@
 #import "Testing.h"
 #import <string.h>
 
-#import "Protection/MPGOPerAUEncryption.h"
-#import "Providers/MPGOCompoundField.h"
-#import "Providers/MPGOStorageProtocols.h"
-#import "Providers/MPGOHDF5Provider.h"
+#import "Protection/TTIOPerAUEncryption.h"
+#import "Providers/TTIOCompoundField.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "Providers/TTIOHDF5Provider.h"
 
 static NSData *makeKey(uint8_t byte)
 {
@@ -36,7 +36,7 @@ void testPerAUEncryption(void)
 
     // ── 1. AAD byte layout ───────────────────────────────────────
     {
-        NSData *aad = [MPGOPerAUEncryption aadForChannel:@"intensity"
+        NSData *aad = [TTIOPerAUEncryption aadForChannel:@"intensity"
                                                 datasetId:1
                                                auSequence:42];
         const uint8_t expected[] = {
@@ -48,7 +48,7 @@ void testPerAUEncryption(void)
              && memcmp(aad.bytes, expected, sizeof(expected)) == 0,
              "AAD for channel matches spec");
 
-        NSData *aadH = [MPGOPerAUEncryption aadForHeaderWithDatasetId:0x42
+        NSData *aadH = [TTIOPerAUEncryption aadForHeaderWithDatasetId:0x42
                                                             auSequence:0x1234];
         const uint8_t expH[] = {
             0x42, 0x00,
@@ -59,7 +59,7 @@ void testPerAUEncryption(void)
              && memcmp(aadH.bytes, expH, sizeof(expH)) == 0,
              "AAD for header matches spec");
 
-        NSData *aadP = [MPGOPerAUEncryption aadForPixelWithDatasetId:1
+        NSData *aadP = [TTIOPerAUEncryption aadForPixelWithDatasetId:1
                                                            auSequence:0];
         const uint8_t expP[] = {
             0x01, 0x00,
@@ -79,12 +79,12 @@ void testPerAUEncryption(void)
         NSData *aad = [@"test-aad" dataUsingEncoding:NSUTF8StringEncoding];
         NSData *tag = nil;
         NSError *err = nil;
-        NSData *ct = [MPGOPerAUEncryption encryptWithPlaintext:pt
+        NSData *ct = [TTIOPerAUEncryption encryptWithPlaintext:pt
                                                              key:key iv:iv aad:aad
                                                           outTag:&tag error:&err];
         PASS(ct != nil && tag.length == 16, "encryptWithPlaintext produces ciphertext + 16-byte tag");
 
-        NSData *plain = [MPGOPerAUEncryption decryptWithCiphertext:ct
+        NSData *plain = [TTIOPerAUEncryption decryptWithCiphertext:ct
                                                                 key:key iv:iv tag:tag aad:aad
                                                               error:&err];
         PASS([plain isEqualToData:pt], "decryptWithCiphertext recovers plaintext");
@@ -98,10 +98,10 @@ void testPerAUEncryption(void)
         NSData *aad = [@"aad" dataUsingEncoding:NSUTF8StringEncoding];
         NSData *tagA = nil, *tagB = nil;
         NSError *err = nil;
-        NSData *ctA = [MPGOPerAUEncryption encryptWithPlaintext:pt
+        NSData *ctA = [TTIOPerAUEncryption encryptWithPlaintext:pt
                                                               key:key iv:iv aad:aad
                                                            outTag:&tagA error:&err];
-        NSData *ctB = [MPGOPerAUEncryption encryptWithPlaintext:pt
+        NSData *ctB = [TTIOPerAUEncryption encryptWithPlaintext:pt
                                                               key:key iv:iv aad:aad
                                                            outTag:&tagB error:&err];
         PASS([ctA isEqualToData:ctB] && [tagA isEqualToData:tagB],
@@ -117,12 +117,12 @@ void testPerAUEncryption(void)
         NSData *aadB = [@"aad-b" dataUsingEncoding:NSUTF8StringEncoding];
         NSData *tag = nil;
         NSError *err = nil;
-        NSData *ct = [MPGOPerAUEncryption encryptWithPlaintext:pt
+        NSData *ct = [TTIOPerAUEncryption encryptWithPlaintext:pt
                                                              key:key iv:iv aad:aadA
                                                           outTag:&tag error:&err];
         // Wrong AAD.
         err = nil;
-        NSData *bad = [MPGOPerAUEncryption decryptWithCiphertext:ct
+        NSData *bad = [TTIOPerAUEncryption decryptWithCiphertext:ct
                                                                key:key iv:iv tag:tag aad:aadB
                                                              error:&err];
         PASS(bad == nil && err != nil, "wrong AAD rejected");
@@ -133,7 +133,7 @@ void testPerAUEncryption(void)
         mutTag[0] ^= 1;
         NSData *badTag = [NSData dataWithBytesNoCopy:mutTag length:16 freeWhenDone:YES];
         err = nil;
-        bad = [MPGOPerAUEncryption decryptWithCiphertext:ct
+        bad = [TTIOPerAUEncryption decryptWithCiphertext:ct
                                                        key:key iv:iv tag:badTag aad:aadA
                                                      error:&err];
         PASS(bad == nil && err != nil, "tag-tamper rejected");
@@ -148,7 +148,7 @@ void testPerAUEncryption(void)
         uint64_t offsets[3] = {0, 4, 8};
         uint32_t lengths[3] = {4, 4, 4};
         NSError *err = nil;
-        NSArray *segs = [MPGOPerAUEncryption encryptChannelToSegments:plain
+        NSArray *segs = [TTIOPerAUEncryption encryptChannelToSegments:plain
                                                                  offsets:offsets
                                                                  lengths:lengths
                                                                nSpectra:3
@@ -157,11 +157,11 @@ void testPerAUEncryption(void)
                                                                     key:key
                                                                   error:&err];
         PASS(segs != nil && segs.count == 3, "encryptChannelToSegments produces 3 rows");
-        MPGOChannelSegment *s0 = segs[0];
+        TTIOChannelSegment *s0 = segs[0];
         PASS(s0.iv.length == 12 && s0.tag.length == 16 && s0.ciphertext.length == 32,
              "per-row sizes: iv=12, tag=16, ct=32 bytes for 4 float64");
 
-        NSData *recovered = [MPGOPerAUEncryption decryptChannelFromSegments:segs
+        NSData *recovered = [TTIOPerAUEncryption decryptChannelFromSegments:segs
                                                                    datasetId:1
                                                                  channelName:@"intensity"
                                                                          key:key
@@ -176,7 +176,7 @@ void testPerAUEncryption(void)
         uint64_t offsets[2] = {0, 4};
         uint32_t lengths[2] = {4, 4};
         NSError *err = nil;
-        NSArray *segs = [MPGOPerAUEncryption encryptChannelToSegments:plain
+        NSArray *segs = [TTIOPerAUEncryption encryptChannelToSegments:plain
                                                                  offsets:offsets
                                                                  lengths:lengths
                                                                nSpectra:2
@@ -186,7 +186,7 @@ void testPerAUEncryption(void)
                                                                   error:&err];
         NSArray *swapped = @[segs[1], segs[0]];
         err = nil;
-        NSData *bad = [MPGOPerAUEncryption decryptChannelFromSegments:swapped
+        NSData *bad = [TTIOPerAUEncryption decryptChannelFromSegments:swapped
                                                              datasetId:1
                                                            channelName:@"mz"
                                                                    key:key
@@ -196,7 +196,7 @@ void testPerAUEncryption(void)
 
     // ── 7. Header segments pack/unpack + round-trip ────────────
     {
-        MPGOAUHeaderPlaintext *h = [[MPGOAUHeaderPlaintext alloc] init];
+        TTIOAUHeaderPlaintext *h = [[TTIOAUHeaderPlaintext alloc] init];
         h.acquisitionMode = 1;
         h.msLevel = 2;
         h.polarity = 1;
@@ -205,10 +205,10 @@ void testPerAUEncryption(void)
         h.precursorCharge = 2;
         h.ionMobility = 0.987;
         h.basePeakIntensity = 1.0e6;
-        NSData *packed = [MPGOPerAUEncryption packAUHeaderPlaintext:h];
+        NSData *packed = [TTIOPerAUEncryption packAUHeaderPlaintext:h];
         PASS(packed.length == 36, "semantic header packs to 36 bytes");
 
-        MPGOAUHeaderPlaintext *back = [MPGOPerAUEncryption unpackAUHeaderPlaintext:packed];
+        TTIOAUHeaderPlaintext *back = [TTIOPerAUEncryption unpackAUHeaderPlaintext:packed];
         PASS(back.acquisitionMode == 1 && back.msLevel == 2 && back.polarity == 1,
              "u8 fields round-trip");
         PASS(back.retentionTime == 123.456 && back.precursorMz == 500.25
@@ -217,47 +217,47 @@ void testPerAUEncryption(void)
         PASS(back.precursorCharge == 2, "precursor_charge round-trips");
 
         NSError *err = nil;
-        NSArray *segs = [MPGOPerAUEncryption encryptHeaderSegments:@[h, h]
+        NSArray *segs = [TTIOPerAUEncryption encryptHeaderSegments:@[h, h]
                                                             datasetId:1
                                                                   key:key
                                                                 error:&err];
         PASS(segs != nil && segs.count == 2, "encryptHeaderSegments produces 2 rows");
-        MPGOHeaderSegment *hs = segs[0];
+        TTIOHeaderSegment *hs = segs[0];
         PASS(hs.ciphertext.length == 36 && hs.iv.length == 12 && hs.tag.length == 16,
              "header segment sizes: 36 ct / 12 iv / 16 tag");
 
-        NSArray *backRows = [MPGOPerAUEncryption decryptHeaderSegments:segs
+        NSArray *backRows = [TTIOPerAUEncryption decryptHeaderSegments:segs
                                                               datasetId:1
                                                                     key:key
                                                                   error:&err];
         PASS(backRows != nil && backRows.count == 2, "decryptHeaderSegments round-trips");
-        MPGOAUHeaderPlaintext *r0 = backRows[0];
+        TTIOAUHeaderPlaintext *r0 = backRows[0];
         PASS(r0.msLevel == 2 && r0.precursorMz == 500.25,
              "header row decrypt preserves fields");
     }
 
     // ── 8. VL_BYTES compound through provider abstraction ───────
     {
-        NSString *path = [NSString stringWithFormat:@"/tmp/mpgo_vlbytes_%d.h5",
+        NSString *path = [NSString stringWithFormat:@"/tmp/ttio_vlbytes_%d.h5",
                           (int)getpid()];
         [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 
-        MPGOHDF5Provider *prov = [[MPGOHDF5Provider alloc] init];
+        TTIOHDF5Provider *prov = [[TTIOHDF5Provider alloc] init];
         NSError *err = nil;
         BOOL opened = [prov openURL:path
-                                 mode:MPGOStorageOpenModeCreate
+                                 mode:TTIOStorageOpenModeCreate
                                 error:&err];
         PASS(opened, "HDF5 provider opens for create");
 
-        id<MPGOStorageGroup> root = [prov rootGroupWithError:&err];
+        id<TTIOStorageGroup> root = [prov rootGroupWithError:&err];
         NSArray *fields = @[
-            [MPGOCompoundField fieldWithName:@"offset" kind:MPGOCompoundFieldKindInt64],
-            [MPGOCompoundField fieldWithName:@"length" kind:MPGOCompoundFieldKindUInt32],
-            [MPGOCompoundField fieldWithName:@"iv" kind:MPGOCompoundFieldKindVLBytes],
-            [MPGOCompoundField fieldWithName:@"tag" kind:MPGOCompoundFieldKindVLBytes],
-            [MPGOCompoundField fieldWithName:@"ciphertext" kind:MPGOCompoundFieldKindVLBytes],
+            [TTIOCompoundField fieldWithName:@"offset" kind:TTIOCompoundFieldKindInt64],
+            [TTIOCompoundField fieldWithName:@"length" kind:TTIOCompoundFieldKindUInt32],
+            [TTIOCompoundField fieldWithName:@"iv" kind:TTIOCompoundFieldKindVLBytes],
+            [TTIOCompoundField fieldWithName:@"tag" kind:TTIOCompoundFieldKindVLBytes],
+            [TTIOCompoundField fieldWithName:@"ciphertext" kind:TTIOCompoundFieldKindVLBytes],
         ];
-        id<MPGOStorageDataset> ds =
+        id<TTIOStorageDataset> ds =
             [root createCompoundDatasetNamed:@"segments"
                                         fields:fields
                                          count:2
@@ -301,7 +301,7 @@ void testPerAUEncryption(void)
              && [ctBack1 isEqualToData:[NSData dataWithBytes:ctB length:48]],
              "row 1 ciphertext (different length) preserved");
 
-        // MPGOHDF5Provider doesn't expose closeWithError: — rely on
+        // TTIOHDF5Provider doesn't expose closeWithError: — rely on
         // dealloc to close the file handle.
         prov = nil;
         [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
