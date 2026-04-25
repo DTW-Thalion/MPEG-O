@@ -69,6 +69,7 @@ extern void testMilestone78(void);
 extern void testV11EncryptionParity(void);
 extern void testV111DecryptInPlace(void);
 extern void testM79GenomicEnums(void);
+extern void testM82GenomicRun(void);
 
 int main(int argc, const char *argv[])
 {
@@ -344,6 +345,10 @@ int main(int argc, const char *argv[])
         START_SET("M79: modality + genomic enums (v0.11)")
             testM79GenomicEnums();
         END_SET("M79: modality + genomic enums (v0.11)")
+
+        START_SET("M82: GenomicRun + AlignedRead + signal channels (v0.11)")
+            testM82GenomicRun();
+        END_SET("M82: GenomicRun + AlignedRead + signal channels (v0.11)")
     }
     return 0;
 }
