@@ -212,6 +212,7 @@ cleanup:
     // accidental float64 type conversion silently corrupting the bytes.
     else if (H5Tequal(htype, H5T_NATIVE_UINT64) > 0) precision = MPGOPrecisionInt64;
     else if (H5Tequal(htype, H5T_NATIVE_UINT32) > 0) precision = MPGOPrecisionUInt32;
+    else if (H5Tequal(htype, H5T_NATIVE_UINT8)  > 0) precision = MPGOPrecisionUInt8;
     else if (H5Tget_class(htype) == H5T_COMPOUND && H5Tget_size(htype) == 2 * sizeof(double)) {
         precision = MPGOPrecisionComplex128;
     }

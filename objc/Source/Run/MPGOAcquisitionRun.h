@@ -56,6 +56,13 @@
  *  spectrum at init or read from the HDF5 attribute. */
 @property (readonly, copy) NSString *spectrumClassName;
 
+/** v0.11 M79: omics modality this run carries. Wire/storage attribute
+ *  ``@modality`` (UTF-8 string). Defaults to ``@"mass_spectrometry"``;
+ *  pre-v0.11 files lack the attribute and are interpreted as mass-spec
+ *  runs. v0.11 M74 will introduce ``@"genomics"`` for genomic-read
+ *  runs. */
+@property (readonly, copy) NSString *modality;
+
 /** NMR-only run-level metadata (zero/nil for MS runs). Propagated to
  *  every reconstructed MPGONMRSpectrum. */
 @property (readonly, copy) NSString *nucleusType;

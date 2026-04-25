@@ -569,6 +569,7 @@ _DTYPE_TO_PRECISION: dict[str, Precision] = {
     "int64": Precision.INT64,
     "int32": Precision.INT32,
     "uint32": Precision.UINT32,
+    "uint8": Precision.UINT8,
 }
 
 

@@ -129,6 +129,25 @@ v0.11.0, but the release **did not introduce any feature flags**.
   feature-flag level from hand-authored Raman/IR runs. See
   `docs/vendor-formats.md` and `docs/format-spec.md` §7a.
 
+## v0.11 (M79) — modality + genomic enums
+
+| Flag           | Required? | Since        | Semantics                                                                                          |
+|----------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
+| `opt_genomic`  | optional  | M79 (v0.11)  | The file declares genomic-modality content. Reserved by M79 so cross-language writers can stamp the flag in unison; encoders/decoders for the genomic record types ship in M74+. M79 alone wires the **read-side default**: any run group lacking `@modality` reads back as `mass_spectrometry`, while a run carrying `@modality = "genomic_sequencing"` round-trips through the `AcquisitionRun.modality` getter unchanged. The flag MUST NOT be used to gate anything that v0.10 readers depend on; pre-v0.11 files that lack the flag stay perfectly readable. |
+
+M79 also reserves on-disk integers without introducing flags:
+
+- `MPGOPrecision.UINT8 = 6` — byte-typed datasets, round-trippable
+  through every storage provider (HDF5, Memory, SQLite, Zarr).
+- `MPGOCompression` ids `4`–`8`: `RANS_ORDER0`, `RANS_ORDER1`,
+  `BASE_PACK`, `QUALITY_BINNED`, `NAME_TOKENIZED` — placeholders
+  for genomic codecs that ship with M74. Readers must surface
+  `UnsupportedCodec` for ids ≥ 4 until the matching encoder ships.
+- `MPGOAcquisitionMode.GENOMIC_WGS = 7`, `GENOMIC_WES = 8` —
+  reserved acquisition modes for whole-genome / whole-exome runs.
+- Transport `spectrumClass = 5` (GenomicRead) — generic over the
+  spectral-prefix layout; fields zero for now.
+
 ## v0.11.1 flags (M73.1)
 
 | Flag                 | Required? | Since        | Semantics                                                                                          |

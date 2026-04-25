@@ -417,6 +417,7 @@ public class Hdf5Group implements AutoCloseable {
             case INT32   -> HDF5Constants.H5T_NATIVE_INT32;
             case INT64   -> HDF5Constants.H5T_NATIVE_INT64;
             case UINT32  -> HDF5Constants.H5T_NATIVE_UINT32;
+            case UINT8   -> HDF5Constants.H5T_NATIVE_UINT8;
             case COMPLEX128 -> {
                 // Compound {double re; double im} — caller is responsible
                 // for H5Tclose() on the returned non-builtin id.
@@ -446,6 +447,10 @@ public class Hdf5Group implements AutoCloseable {
         // added H5T_NATIVE_UINT64 → MPGOPrecisionInt64 mapping).
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT64))
             return Precision.INT64;
+        // v0.11 M79: H5T_NATIVE_UINT8 is the on-disk type for genomic
+        // base/quality byte arrays.
+        if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT8))
+            return Precision.UINT8;
         // Check for compound with size == 16 (complex128)
         if ((int) H5.H5Tget_class(htid) == HDF5Constants.H5T_COMPOUND
                 && H5.H5Tget_size(htid) == 16) {

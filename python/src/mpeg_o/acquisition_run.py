@@ -308,6 +308,11 @@ class AcquisitionRun:
     instrument_config: InstrumentConfig
     nucleus_type: str = ""
     provenance_json: str = ""
+    # v0.11 M79: top-level modality string. Read-side only — write-side
+    # support arrives with GenomicRun in M74. Defaults to mass-spec for
+    # backward-compat with files written by v0.10 and earlier (which
+    # didn't carry the attribute at all).
+    modality: str = "mass_spectrometry"
     # M24: chromatogram traces. Empty list on v0.3 files (group absent).
     chromatograms: list[Chromatogram] = field(default_factory=list)
     # v0.7 M44: signal cache holds protocol datasets, not h5py.Dataset.
@@ -351,6 +356,9 @@ class AcquisitionRun:
         ) or "MPGOMassSpectrum"
         nucleus = io.read_string_attr(sgroup, "nucleus_type", default="") or ""
         prov = io.read_string_attr(sgroup, "provenance_json", default="") or ""
+        modality = io.read_string_attr(
+            sgroup, "modality", default="mass_spectrometry"
+        ) or "mass_spectrometry"
 
         idx = SpectrumIndex.read(sgroup.open_group("spectrum_index"))
 
@@ -399,6 +407,7 @@ class AcquisitionRun:
             instrument_config=config,
             nucleus_type=nucleus,
             provenance_json=prov,
+            modality=modality,
             chromatograms=_read_chromatograms(sgroup),
             _numpress_channels=numpress_channels,
         )

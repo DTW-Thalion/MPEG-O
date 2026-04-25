@@ -68,6 +68,7 @@ extern void testMilestone77(void);
 extern void testMilestone78(void);
 extern void testV11EncryptionParity(void);
 extern void testV111DecryptInPlace(void);
+extern void testM79GenomicEnums(void);
 
 int main(int argc, const char *argv[])
 {
@@ -339,6 +340,10 @@ int main(int argc, const char *argv[])
         START_SET("v1.1.1 parity: decryptInPlaceAtPath:withKey:error:")
             testV111DecryptInPlace();
         END_SET("v1.1.1 parity: decryptInPlaceAtPath:withKey:error:")
+
+        START_SET("M79: modality + genomic enums (v0.11)")
+            testM79GenomicEnums();
+        END_SET("M79: modality + genomic enums (v0.11)")
     }
     return 0;
 }

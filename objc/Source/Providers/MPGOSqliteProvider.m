@@ -96,6 +96,7 @@ static NSString *precisionName(MPGOPrecision p)
         case MPGOPrecisionInt64:      return @"INT64";
         case MPGOPrecisionUInt32:     return @"UINT32";
         case MPGOPrecisionComplex128: return @"COMPLEX128";
+        case MPGOPrecisionUInt8:      return @"UINT8";
         default:                      return @"FLOAT64";
     }
 }
@@ -110,6 +111,7 @@ static MPGOPrecision precisionFromName(const char *name)
     if (strcmp(name, "INT64")      == 0) return MPGOPrecisionInt64;
     if (strcmp(name, "UINT32")     == 0) return MPGOPrecisionUInt32;
     if (strcmp(name, "COMPLEX128") == 0) return MPGOPrecisionComplex128;
+    if (strcmp(name, "UINT8")      == 0) return MPGOPrecisionUInt8;
     return MPGOPrecisionFloat64;
 }
 
@@ -123,6 +125,7 @@ static NSUInteger precisionElementSize(MPGOPrecision p)
         case MPGOPrecisionInt64:      return 8;
         case MPGOPrecisionUInt32:     return 4;
         case MPGOPrecisionComplex128: return 16;
+        case MPGOPrecisionUInt8:      return 1;
         default:                      return 8;
     }
 }

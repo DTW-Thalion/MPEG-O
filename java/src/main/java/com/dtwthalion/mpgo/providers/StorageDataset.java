@@ -258,6 +258,10 @@ public interface StorageDataset extends AutoCloseable {
                 // little-endian packing upstream.
                 yield (byte[]) raw;
             }
+            case UINT8 -> {
+                // v0.11 M79: bytes are endian-neutral; copy through.
+                yield (byte[]) raw;
+            }
         };
     }
 

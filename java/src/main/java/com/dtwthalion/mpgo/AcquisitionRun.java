@@ -57,6 +57,13 @@ public class AcquisitionRun implements
     private final String nucleusType;
     private final double spectrometerFrequencyMHz;
 
+    // v0.11 M79: omics modality this run carries. Storage attribute
+    // {@code @modality} (UTF-8 string). Defaults to
+    // {@code "mass_spectrometry"}; pre-v0.11 files lack the attribute
+    // and are interpreted as mass-spec runs. v0.11 M74 will introduce
+    // {@code "genomics"} for genomic-read runs.
+    private final String modality;
+
     // Channel data (concatenated across all spectra)
     private final Map<String, double[]> channels;
 
@@ -82,6 +89,20 @@ public class AcquisitionRun implements
                           List<Chromatogram> chromatograms,
                           List<ProvenanceRecord> provenanceRecords,
                           String nucleusType, double spectrometerFrequencyMHz) {
+        this(name, acquisitionMode, spectrumIndex, instrumentConfig, channels,
+                chromatograms, provenanceRecords, nucleusType,
+                spectrometerFrequencyMHz, "mass_spectrometry");
+    }
+
+    /** v0.11 M79: full constructor including {@code modality}. */
+    public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
+                          SpectrumIndex spectrumIndex,
+                          InstrumentConfig instrumentConfig,
+                          Map<String, double[]> channels,
+                          List<Chromatogram> chromatograms,
+                          List<ProvenanceRecord> provenanceRecords,
+                          String nucleusType, double spectrometerFrequencyMHz,
+                          String modality) {
         this.name = name;
         this.acquisitionMode = acquisitionMode;
         this.spectrumIndex = spectrumIndex;
@@ -91,6 +112,8 @@ public class AcquisitionRun implements
         this.provenanceRecords = provenanceRecords != null ? List.copyOf(provenanceRecords) : List.of();
         this.nucleusType = nucleusType;
         this.spectrometerFrequencyMHz = spectrometerFrequencyMHz;
+        this.modality = (modality == null || modality.isEmpty())
+                ? "mass_spectrometry" : modality;
     }
 
     public String name() { return name; }
@@ -102,6 +125,8 @@ public class AcquisitionRun implements
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
     public String nucleusType() { return nucleusType; }
     public double spectrometerFrequencyMHz() { return spectrometerFrequencyMHz; }
+    /** v0.11 M79: omics modality (e.g. {@code "mass_spectrometry"}). */
+    public String modality() { return modality; }
 
     public int spectrumCount() { return spectrumIndex.count(); }
 
@@ -340,6 +365,14 @@ public class AcquisitionRun implements
             String nucleusType = runGroup.hasAttribute("nucleus_type")
                     ? (String) runGroup.getAttribute("nucleus_type") : null;
 
+            // v0.11 M79: optional @modality attribute. Pre-v0.11 runs
+            // lack it and read back as mass-spec.
+            String modality = "mass_spectrometry";
+            if (runGroup.hasAttribute("modality")) {
+                Object m = runGroup.getAttribute("modality");
+                if (m instanceof String s && !s.isEmpty()) modality = s;
+            }
+
             double freqMHz = 0;
             if (runGroup.hasChild("_spectrometer_freq_mhz")) {
                 try (StorageDataset ds = runGroup.openDataset("_spectrometer_freq_mhz")) {
@@ -354,7 +387,7 @@ public class AcquisitionRun implements
             List<ProvenanceRecord> provenance = readProvenance(runGroup);
 
             return new AcquisitionRun(runName, mode, index, config, channels,
-                    chroms, provenance, nucleusType, freqMHz);
+                    chroms, provenance, nucleusType, freqMHz, modality);
         }
     }
 

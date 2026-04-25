@@ -343,6 +343,11 @@ public final class SqliteProvider implements StorageProvider {
                 double[] arr = toDoubleArray(data);
                 for (double v : arr) buf.putDouble(v);
             }
+            case UINT8 -> {
+                // v0.11 M79: raw bytes — genomic base/quality channels.
+                byte[] arr = toByteArray(data);
+                buf.put(arr);
+            }
         }
         return buf.array();
     }
@@ -382,6 +387,12 @@ public final class SqliteProvider implements StorageProvider {
                 // Interleaved real+imag doubles, returned as double[] of length 2N.
                 double[] arr = new double[n];
                 for (int i = 0; i < n; i++) arr[i] = buf.getDouble();
+                yield arr;
+            }
+            case UINT8 -> {
+                // v0.11 M79: raw byte channel.
+                byte[] arr = new byte[n];
+                buf.get(arr);
                 yield arr;
             }
         };
@@ -667,6 +678,11 @@ public final class SqliteProvider implements StorageProvider {
         if (data instanceof long[] a) return a;
         if (data instanceof int[] a) { long[] r = new long[a.length]; for (int i=0;i<a.length;i++) r[i]=a[i]; return r; }
         throw new IllegalArgumentException("Cannot convert to long[]: " + data.getClass());
+    }
+
+    private static byte[] toByteArray(Object data) {
+        if (data instanceof byte[] a) return a;
+        throw new IllegalArgumentException("Cannot convert to byte[]: " + data.getClass());
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -1221,6 +1237,7 @@ public final class SqliteProvider implements StorageProvider {
                 case INT32, UINT32 -> new int[0];
                 case INT64 -> new long[0];
                 case COMPLEX128 -> new double[0];
+                case UINT8 -> new byte[0];
             };
         }
 

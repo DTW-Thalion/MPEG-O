@@ -183,6 +183,16 @@ class ChannelData:
 _AU_PREFIX_STRUCT = struct.Struct("<BBBBddBddB")
 _AU_PIXEL_STRUCT = struct.Struct("<III")
 
+# Named spectrum_class values. v0.11 M79 reserved the GenomicRead value;
+# the genomic-specific AU payload extension (chromosome, position, mapq,
+# flags) lands in M82.
+SPECTRUM_CLASS_MASS_SPECTRUM = 0
+SPECTRUM_CLASS_NMR_SPECTRUM = 1
+SPECTRUM_CLASS_NMR_2D = 2
+SPECTRUM_CLASS_FID = 3
+SPECTRUM_CLASS_MS_IMAGE_PIXEL = 4
+SPECTRUM_CLASS_GENOMIC_READ = 5
+
 
 @dataclass(slots=True)
 class AccessUnit:
@@ -193,7 +203,7 @@ class AccessUnit:
     """
 
     spectrum_class: int  # 0=MassSpectrum, 1=NMRSpectrum, 2=NMR2D,
-    #                     3=FID, 4=MSImagePixel
+    #                     3=FID, 4=MSImagePixel, 5=GenomicRead (v0.11 M79)
     acquisition_mode: int
     ms_level: int
     polarity: int  # wire: 0=positive, 1=negative, 2=unknown

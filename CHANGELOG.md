@@ -11,6 +11,60 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
+## [Unreleased] — M79 modality + genomic enumerations groundwork
+
+Purely additive groundwork for the v0.11 genomic milestone series
+(M74–M82). No on-disk wire change for v0.10/v1.0 content; v0.10
+readers still parse every file produced by writers that do not
+stamp the new attributes.
+
+### Added
+
+- `Precision.UINT8 = 6` across Python (`mpeg_o.enums.Precision`),
+  Java (`com.dtwthalion.mpgo.Enums.Precision`), and ObjC
+  (`MPGOPrecisionUInt8`). Wired through every storage provider
+  (HDF5, Memory, SQLite, Zarr); 1000-byte buffers round-trip
+  byte-exactly across all four backends in all three languages.
+- `Compression` ids 4–8: `RANS_ORDER0`, `RANS_ORDER1`, `BASE_PACK`,
+  `QUALITY_BINNED`, `NAME_TOKENIZED`. On-disk integers reserved by
+  M79 so cross-language readers see a stable codec table; encoder
+  / decoder implementations ship with M74.
+- `AcquisitionMode.GENOMIC_WGS = 7`, `GENOMIC_WES = 8`. Reserved
+  acquisition-mode integers for whole-genome / whole-exome runs.
+- Transport `spectrumClass = 5` (GenomicRead). The 38-byte
+  AccessUnit prefix is generic over spectral fields; genomic AUs
+  flow through the existing codec with spectral fields zeroed.
+  The MSImagePixel 12-byte extension MUST NOT activate for
+  `spectrumClass=5`.
+- `AcquisitionRun.modality` (Python / Java / ObjC). Read-side
+  contract: absence of `@modality` ⇒ `"mass_spectrometry"` (every
+  v0.10 file); an explicit `"genomic_sequencing"` round-trips
+  unchanged. Write side lands with `GenomicRun.write_to_group`
+  in M74.
+- `opt_genomic` feature flag registered in `docs/feature-flags.md`.
+  Reserved by M79; stamped by writers in M74+.
+
+### Documentation
+
+- `docs/format-spec.md` §3a — Run modality table
+  (`mass_spectrometry` default, `genomic_sequencing` reserved).
+- `docs/format-spec.md` §10.4 — five new codec rows + UINT8
+  precision addition.
+- `docs/feature-flags.md` — v0.11 M79 section listing the
+  new on-disk integer reservations and `opt_genomic`.
+
+### Tests
+
+- Python: `python/tests/test_m79_genomic_enums.py` — 18
+  parametrised invocations across 7 test cases.
+- Java: `java/src/test/java/com/dtwthalion/mpgo/M79GenomicEnumsTest.java`
+  — 10 JUnit5 methods.
+- ObjC: `objc/Tests/TestM79GenomicEnums.m` — 27 inline `PASS`
+  assertions, registered under `M79: modality + genomic enums
+  (v0.11)` in `MPGOTestRunner.m`.
+
+---
+
 ## [v1.1.1] — 2026-04-24
 
 Additive patch release that adds a persist-to-disk decryption API

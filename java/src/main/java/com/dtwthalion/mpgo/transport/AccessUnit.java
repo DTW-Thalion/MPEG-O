@@ -14,7 +14,8 @@ import java.util.List;
  * Transport-layer Access Unit: one spectrum as a transport payload.
  *
  * <p>Wire value for {@code spectrumClass}: 0=MassSpectrum,
- * 1=NMRSpectrum, 2=NMR2D, 3=FID, 4=MSImagePixel.</p>
+ * 1=NMRSpectrum, 2=NMR2D, 3=FID, 4=MSImagePixel, 5=GenomicRead
+ * (v0.11 M79).</p>
  *
  * <p>Wire value for {@code polarity} (differs from
  * {@link com.dtwthalion.mpgo.Enums.Polarity} which uses -1 for negative;
