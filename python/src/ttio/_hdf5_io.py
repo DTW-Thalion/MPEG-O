@@ -620,3 +620,19 @@ def _write_int64_channel(
         compression_level=6,
     )
     ds.write(data)
+
+
+def _write_uint64_channel(
+    group: _IOTarget, name: str, data: np.ndarray, compression: str
+) -> None:
+    """Write a UINT64 channel (used for genomic index offsets)."""
+    from .enums import Compression, Precision  # match existing local-import pattern
+    if data.dtype != np.uint64:
+        data = data.astype(np.uint64, copy=False)
+    ds = group.create_dataset(
+        name, Precision.UINT64, length=int(data.shape[0]),
+        chunk_size=65536,
+        compression=_compression_for(compression),
+        compression_level=6,
+    )
+    ds.write(data)

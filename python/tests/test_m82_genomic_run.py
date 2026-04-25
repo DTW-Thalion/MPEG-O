@@ -214,3 +214,38 @@ def test_m82_public_exports():
     assert "GenomicIndex" in ttio.__all__
     assert "GenomicRun" in ttio.__all__
     assert "WrittenGenomicRun" in ttio.__all__
+
+
+def test_genomic_index_disk_roundtrip(tmp_path: Path):
+    """GenomicIndex.write → .read returns equal columns."""
+    from ttio.genomic_index import GenomicIndex
+    from ttio.providers.hdf5 import Hdf5Provider
+
+    original = _make_index(6)
+
+    p = tmp_path / "index.h5"
+    sp = Hdf5Provider.open(str(p), mode="w")
+    try:
+        root = sp.root_group()
+        grp = root.create_group("genomic_index")
+        original.write(grp)
+    finally:
+        sp.close()
+
+    sp = Hdf5Provider.open(str(p), mode="r")
+    try:
+        root = sp.root_group()
+        grp = root.open_group("genomic_index")
+        loaded = GenomicIndex.read(grp)
+    finally:
+        sp.close()
+
+    assert loaded.count == original.count
+    np.testing.assert_array_equal(loaded.offsets, original.offsets)
+    np.testing.assert_array_equal(loaded.lengths, original.lengths)
+    np.testing.assert_array_equal(loaded.positions, original.positions)
+    np.testing.assert_array_equal(
+        loaded.mapping_qualities, original.mapping_qualities
+    )
+    np.testing.assert_array_equal(loaded.flags, original.flags)
+    assert loaded.chromosomes == original.chromosomes

@@ -92,9 +92,56 @@ class GenomicIndex:
 
     @classmethod
     def read(cls, idx_group: "StorageGroup") -> "GenomicIndex":
-        """Load from a ``genomic_index/`` StorageGroup. Implemented in Task 6."""
-        raise NotImplementedError("GenomicIndex.read is implemented in Task 6")
+        """Load all columns from a ``genomic_index/`` StorageGroup."""
+        from ttio import _hdf5_io as io
+
+        offsets_ds = idx_group.open_dataset("offsets")
+        lengths_ds = idx_group.open_dataset("lengths")
+        positions_ds = idx_group.open_dataset("positions")
+        mq_ds = idx_group.open_dataset("mapping_qualities")
+        flags_ds = idx_group.open_dataset("flags")
+
+        offsets = np.asarray(offsets_ds.read(), dtype=np.uint64)
+        lengths = np.asarray(lengths_ds.read(), dtype=np.uint32)
+        positions = np.asarray(positions_ds.read(), dtype=np.int64)
+        mapping_qualities = np.asarray(mq_ds.read(), dtype=np.uint8)
+        flags = np.asarray(flags_ds.read(), dtype=np.uint32)
+
+        chrom_rows = io.read_compound_dataset(idx_group, "chromosomes")
+        chromosomes: list[str] = []
+        for row in chrom_rows:
+            v = row["value"]
+            chromosomes.append(v.decode("utf-8") if isinstance(v, bytes) else v)
+
+        return cls(
+            offsets=offsets,
+            lengths=lengths,
+            chromosomes=chromosomes,
+            positions=positions,
+            mapping_qualities=mapping_qualities,
+            flags=flags,
+        )
 
     def write(self, idx_group: "StorageGroup") -> None:
-        """Write all columns into ``idx_group``. Implemented in Task 6."""
-        raise NotImplementedError("GenomicIndex.write is implemented in Task 6")
+        """Write all columns into ``idx_group``."""
+        from ttio import _hdf5_io as io
+        from ttio._hdf5_io import (
+            _write_uint64_channel,
+            _write_uint32_channel,
+            _write_int64_channel,
+            _write_uint8_channel,
+        )
+
+        _write_uint64_channel(idx_group, "offsets", self.offsets, "gzip")
+        _write_uint32_channel(idx_group, "lengths", self.lengths, "gzip")
+        _write_int64_channel(idx_group, "positions", self.positions, "gzip")
+        _write_uint8_channel(
+            idx_group, "mapping_qualities", self.mapping_qualities, "gzip"
+        )
+        _write_uint32_channel(idx_group, "flags", self.flags, "gzip")
+        io.write_compound_dataset(
+            idx_group,
+            "chromosomes",
+            [{"value": c} for c in self.chromosomes],
+            [("value", io.vl_str())],
+        )
