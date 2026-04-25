@@ -749,3 +749,28 @@ def test_opt_genomic_flag_absent_when_no_genomic_runs(tmp_path: Path):
         assert "opt_genomic" not in ds.feature_flags.features
     finally:
         ds.close()
+
+
+def test_streaming_iteration(tmp_path: Path):
+    """Acceptance #11: for-loop iteration yields reads in index order."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    written = _make_written_run(n_reads=1_000, paired=False)
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": written},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        names = [r.read_name for r in gr]
+        assert len(names) == 1_000
+        assert names[0] == "read_000000"
+        assert names[-1] == "read_000999"
+        # Strictly ascending by read index
+        for i, n in enumerate(names):
+            assert n == f"read_{i:06d}"
+    finally:
+        ds.close()
