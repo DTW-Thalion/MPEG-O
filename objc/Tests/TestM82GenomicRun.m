@@ -364,6 +364,43 @@ static void testBasicRoundTrip100Reads(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Acceptance #2 — region query ──────────────────────────────────
+
+static void testRegionQuery(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82rq_%d.tio", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    TTIOWrittenGenomicRun *written = makeWrittenGenomicRun(100, NO);
+    NSError *err = nil;
+    [TTIOSpectralDataset writeMinimalToPath:path
+                                        title:@"t"
+                          isaInvestigationId:@"i"
+                                      msRuns:@{}
+                                  genomicRuns:@{@"genomic_0001": written}
+                              identifications:nil
+                              quantifications:nil
+                            provenanceRecords:nil
+                                        error:&err];
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+
+    NSArray *results = [gr readsInRegion:@"chr1" start:10000 end:10500];
+    PASS(results.count > 0, "M82: region query returns reads");
+    BOOL allChr1 = YES, allInRange = YES;
+    for (TTIOAlignedRead *r in results) {
+        if (![r.chromosome isEqualToString:@"chr1"]) allChr1 = NO;
+        if (r.position < 10000 || r.position >= 10500) allInRange = NO;
+    }
+    PASS(allChr1, "M82: region query — all results on chr1");
+    PASS(allInRange, "M82: region query — all results in [10000, 10500)");
+
+    NSArray *empty = [gr readsInRegion:@"chrY" start:0 end:1000000];
+    PASS(empty.count == 0, "M82: region query empty when no match");
+
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -373,5 +410,6 @@ void testM82GenomicRun(void)
     testWrittenGenomicRunConstruction();
     testGenomicIndexDiskRoundTrip();
     testBasicRoundTrip100Reads();
+    testRegionQuery();
     // Subsequent tasks append more test functions called from here.
 }
