@@ -1,6 +1,9 @@
 """M82 GenomicRun + AlignedRead acceptance tests."""
 from __future__ import annotations
 
+from pathlib import Path
+
+import h5py
 import numpy as np
 import pytest
 
@@ -154,11 +157,6 @@ def test_written_genomic_run_construction():
     assert len(run.cigars) == 2
     assert run.signal_compression == "gzip"  # default
     assert run.provenance_records == []      # default
-
-
-from pathlib import Path
-
-import h5py
 
 
 def test_signal_channel_helpers_roundtrip(tmp_path: Path):
