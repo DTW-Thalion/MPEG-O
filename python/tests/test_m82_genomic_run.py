@@ -154,3 +154,51 @@ def test_written_genomic_run_construction():
     assert len(run.cigars) == 2
     assert run.signal_compression == "gzip"  # default
     assert run.provenance_records == []      # default
+
+
+from pathlib import Path
+
+import h5py
+
+
+def test_signal_channel_helpers_roundtrip(tmp_path: Path):
+    """uint8/uint32/int64 channel helpers round-trip via HDF5."""
+    from ttio._hdf5_io import (
+        _write_uint8_channel,
+        _write_uint32_channel,
+        _write_int64_channel,
+    )
+    from ttio.providers.hdf5 import Hdf5Provider
+
+    p = tmp_path / "channels.h5"
+    sp = Hdf5Provider.open(str(p), mode="w")
+    try:
+        root = sp.root_group()
+        grp = root.create_group("test")
+        _write_uint8_channel(
+            grp, "u8", np.array([0, 1, 254, 255], dtype=np.uint8), "gzip"
+        )
+        _write_uint32_channel(
+            grp, "u32",
+            np.array([0, 1, 2**31, 2**32 - 1], dtype=np.uint32),
+            "gzip",
+        )
+        _write_int64_channel(
+            grp, "i64",
+            np.array([-(2**62), -1, 0, 2**62], dtype=np.int64),
+            "gzip",
+        )
+    finally:
+        sp.close()
+
+    # Read back via h5py and verify exact values + dtypes
+    with h5py.File(p, "r") as f:
+        u8 = f["test/u8"][:]
+        u32 = f["test/u32"][:]
+        i64 = f["test/i64"][:]
+    assert u8.dtype == np.uint8
+    assert list(u8) == [0, 1, 254, 255]
+    assert u32.dtype == np.uint32
+    assert list(u32) == [0, 1, 2**31, 2**32 - 1]
+    assert i64.dtype == np.int64
+    assert list(i64) == [-(2**62), -1, 0, 2**62]
