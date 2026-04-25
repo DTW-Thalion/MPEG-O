@@ -84,6 +84,74 @@ def test_aligned_read_is_frozen():
         read.position = 999  # type: ignore[misc]
 
 
+def _make_written_run(
+    n_reads: int = 100,
+    read_length: int = 150,
+    chromosomes: list[str] | None = None,
+    paired: bool = False,
+) -> "WrittenGenomicRun":
+    """Build a synthetic WrittenGenomicRun with realistic structure."""
+    from ttio.written_genomic_run import WrittenGenomicRun
+
+    if chromosomes is None:
+        chromosomes = ["chr1", "chr2", "chrX"]
+    rng = np.random.default_rng(42)
+
+    # Round-robin chromosomes; positions ramp inside each.
+    chroms = [chromosomes[i % len(chromosomes)] for i in range(n_reads)]
+    positions = np.array(
+        [10_000 + (i // len(chromosomes)) * 100 for i in range(n_reads)],
+        dtype=np.int64,
+    )
+    flags = np.zeros(n_reads, dtype=np.uint32)
+    if paired:
+        flags |= 0x1  # paired
+    mapqs = np.full(n_reads, 60, dtype=np.uint8)
+
+    bases = b"ACGT"
+    seq_concat = bytes(
+        rng.choice(list(bases), size=n_reads * read_length).tolist()
+    )
+    qual_concat = bytes([30] * (n_reads * read_length))
+    sequences = np.frombuffer(seq_concat, dtype=np.uint8)
+    qualities = np.frombuffer(qual_concat, dtype=np.uint8)
+
+    offsets = np.arange(n_reads, dtype=np.uint64) * read_length
+    lengths = np.full(n_reads, read_length, dtype=np.uint32)
+
+    cigars = [f"{read_length}M" for _ in range(n_reads)]
+    read_names = [f"read_{i:06d}" for i in range(n_reads)]
+
+    if paired:
+        mate_chroms = list(chroms)  # same chrom for mate
+        mate_positions = positions + 200
+        template_lengths = np.full(n_reads, 200, dtype=np.int32)
+    else:
+        mate_chroms = ["" for _ in range(n_reads)]
+        mate_positions = np.full(n_reads, -1, dtype=np.int64)
+        template_lengths = np.zeros(n_reads, dtype=np.int32)
+
+    return WrittenGenomicRun(
+        acquisition_mode=7,  # GENOMIC_WGS
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="NA12878",
+        positions=positions,
+        mapping_qualities=mapqs,
+        flags=flags,
+        sequences=sequences,
+        qualities=qualities,
+        offsets=offsets,
+        lengths=lengths,
+        cigars=cigars,
+        read_names=read_names,
+        mate_chromosomes=mate_chroms,
+        mate_positions=mate_positions,
+        template_lengths=template_lengths,
+        chromosomes=chroms,
+    )
+
+
 def _make_index(n_reads: int = 6) -> "GenomicIndex":
     from ttio.genomic_index import GenomicIndex
     return GenomicIndex(
@@ -249,3 +317,47 @@ def test_genomic_index_disk_roundtrip(tmp_path: Path):
     )
     np.testing.assert_array_equal(loaded.flags, original.flags)
     assert loaded.chromosomes == original.chromosomes
+
+
+def test_write_minimal_creates_genomic_runs_group(tmp_path: Path):
+    """write_minimal with genomic_runs creates the expected HDF5 layout."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p,
+        title="m82-smoke",
+        isa_investigation_id="ISA-001",
+        runs={},
+        genomic_runs={"genomic_0001": _make_written_run(n_reads=10)},
+    )
+
+    with h5py.File(p, "r") as f:
+        assert "study/genomic_runs" in f
+        assert "study/genomic_runs/genomic_0001" in f
+        run = f["study/genomic_runs/genomic_0001"]
+        # Run-level attributes
+        assert int(run.attrs["acquisition_mode"]) == 7
+        assert run.attrs["modality"].decode("utf-8") == "genomic_sequencing"
+        assert int(run.attrs["spectrum_class"]) == 5
+        assert run.attrs["reference_uri"].decode("utf-8") == "GRCh38.p14"
+        assert run.attrs["platform"].decode("utf-8") == "ILLUMINA"
+        assert run.attrs["sample_name"].decode("utf-8") == "NA12878"
+        assert int(run.attrs["read_count"]) == 10
+        # Sub-groups
+        assert "genomic_index" in run
+        assert "signal_channels" in run
+        # Index columns
+        assert "offsets" in run["genomic_index"]
+        assert "chromosomes" in run["genomic_index"]
+        # Signal channels
+        assert "sequences" in run["signal_channels"]
+        assert "qualities" in run["signal_channels"]
+        assert "cigars" in run["signal_channels"]
+        assert "read_names" in run["signal_channels"]
+        assert "mate_info" in run["signal_channels"]
+
+    # _run_names CSV attribute
+    with h5py.File(p, "r") as f:
+        names = f["study/genomic_runs"].attrs["_run_names"].decode("utf-8")
+        assert names == "genomic_0001"
