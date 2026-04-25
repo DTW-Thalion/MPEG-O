@@ -2,11 +2,11 @@
 # Multi-function ObjC perf harness build+run script.
 #
 # Builds a standalone profile_objc_full binary linked against the
-# already-built libMPGO. Mirrors build_and_run_objc.sh but compiles
+# already-built libTTIO. Mirrors build_and_run_objc.sh but compiles
 # the extended harness covering every major v0.11.1 function.
 set -e
 
-ROOT="$HOME/MPEG-O"
+ROOT="$HOME/TTI-O"
 OBJC_DIR="$ROOT/objc"
 TOOLS_DIR="$ROOT/tools/perf"
 BUILD_DIR="$TOOLS_DIR/_build"
@@ -14,13 +14,13 @@ OUT_DIR="$TOOLS_DIR/_out_objc_full"
 
 mkdir -p "$BUILD_DIR" "$OUT_DIR"
 
-# --- Ensure libMPGO is built -----------------------------------------
-if ! ls "$OBJC_DIR"/Source/*obj*/libMPGO* 2>/dev/null | head -1 >/dev/null; then
-    echo "[build] libMPGO not built yet; running build.sh"
+# --- Ensure libTTIO is built -----------------------------------------
+if ! ls "$OBJC_DIR"/Source/*obj*/libTTIO* 2>/dev/null | head -1 >/dev/null; then
+    echo "[build] libTTIO not built yet; running build.sh"
     (cd "$OBJC_DIR" && ./build.sh) >/dev/null
 fi
 LIB_OBJ_DIR="$(ls -d "$OBJC_DIR"/Source/*obj* | head -1)"
-echo "[build] libMPGO found at $LIB_OBJ_DIR"
+echo "[build] libTTIO found at $LIB_OBJ_DIR"
 
 # --- Source GNUstep environment so clang sees -I/-L flags ------------
 if command -v gnustep-config >/dev/null 2>&1; then
@@ -43,7 +43,7 @@ clang -fobjc-arc \
     -I/usr/include/hdf5/serial \
     "$TOOLS_DIR/profile_objc_full.m" \
     -L/usr/local/lib \
-    -lMPGO -lhdf5_serial -lhdf5_serial_hl -lz -lcrypto -lsqlite3 -lobjc \
+    -lTTIO -lhdf5_serial -lhdf5_serial_hl -lz -lcrypto -lsqlite3 -lobjc \
     $GNU_LIB -lm \
     -o "$OUT_BIN"
 

@@ -1,0 +1,70 @@
+ttio.encoding_spec
+==================
+
+.. py:module:: ttio.encoding_spec
+
+.. autoapi-nested-parse::
+
+   ``EncodingSpec`` — storage precision, compression, byte order.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.encoding_spec.EncodingSpec
+
+
+Module Contents
+---------------
+
+.. py:class:: EncodingSpec
+
+   Describes how a signal buffer is encoded on disk.
+
+   Immutable value class pairing numeric precision, compression
+   algorithm, and byte order.
+
+   :param precision: Numeric precision of each sample.
+   :type precision: Precision, default Precision.FLOAT64
+   :param compression: Compression algorithm.
+   :type compression: Compression, default Compression.ZLIB
+   :param byte_order: Byte order on disk.
+   :type byte_order: ByteOrder, default ByteOrder.LITTLE_ENDIAN
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   The HDF5 compression level (0-9 for zlib) is a
+   provider-configuration concern and lives on
+   :class:`~ttio.providers.hdf5.Hdf5Provider` via
+   ``create_dataset(compression_level=...)``, not on this value
+   class.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOEncodingSpec`` · Java:
+   ``com.dtwthalion.ttio.EncodingSpec``.
+
+
+   .. py:attribute:: precision
+      :type:  ttio.enums.Precision
+
+
+   .. py:attribute:: compression
+      :type:  ttio.enums.Compression
+
+
+   .. py:attribute:: byte_order
+      :type:  ttio.enums.ByteOrder
+
+
+   .. py:method:: element_size() -> int
+
+      Return the size in bytes of one element at this precision.
+
+
+

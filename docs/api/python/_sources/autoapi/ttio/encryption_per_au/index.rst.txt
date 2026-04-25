@@ -1,0 +1,235 @@
+ttio.encryption_per_au
+======================
+
+.. py:module:: ttio.encryption_per_au
+
+.. autoapi-nested-parse::
+
+   v1.0 per-Access-Unit encryption primitives.
+
+   Implements ``opt_per_au_encryption`` (channel data) and
+   ``opt_encrypted_au_headers`` (AU semantic header) as specified in
+   ``docs/transport-encryption-design.md`` and
+   ``docs/format-spec.md`` §9.1.
+
+   Unlike the v0.x :mod:`ttio.encryption` module — which encrypts an
+   entire channel as one AES-GCM operation — this module generates one
+   AES-GCM operation per spectrum, producing:
+
+   - ``ChannelSegment`` rows for :class:`SpectralDataset` writers to
+     store in the ``<channel>_segments`` compound dataset.
+   - ``HeaderSegment`` rows for the optional
+     ``spectrum_index/au_header_segments`` compound.
+
+   Each AES-GCM op binds its ciphertext to its context via authenticated
+   data (AAD): ``dataset_id (u16 LE) || au_sequence (u32 LE) ||
+   purpose_tag`` where ``purpose_tag`` is either the UTF-8 channel name,
+   the literal bytes ``b"header"``, or ``b"pixel"``. Ciphertext cannot
+   be replayed against a different AU or envelope.
+
+   Cross-language equivalents: ObjC
+   ``TTIOPerAUEncryption`` · Java
+   ``com.dtwthalion.ttio.protection.PerAUEncryption``.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.encryption_per_au.encrypt_per_au_file
+   ttio.encryption_per_au.decrypt_per_au_file
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.encryption_per_au.ChannelSegment
+   ttio.encryption_per_au.HeaderSegment
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.encryption_per_au.aad_for_channel
+   ttio.encryption_per_au.aad_for_header
+   ttio.encryption_per_au.aad_for_pixel
+   ttio.encryption_per_au.encrypt_with_aad
+   ttio.encryption_per_au.decrypt_with_aad
+   ttio.encryption_per_au.encrypt_channel_to_segments
+   ttio.encryption_per_au.decrypt_channel_from_segments
+   ttio.encryption_per_au.pack_au_header_plaintext
+   ttio.encryption_per_au.unpack_au_header_plaintext
+   ttio.encryption_per_au.encrypt_header_segments
+   ttio.encryption_per_au.decrypt_header_segments
+   ttio.encryption_per_au.encrypt_per_au
+   ttio.encryption_per_au.decrypt_per_au
+
+
+Module Contents
+---------------
+
+.. py:function:: aad_for_channel(dataset_id: int, au_sequence: int, channel_name: str) -> bytes
+
+   AAD bound into AES-GCM for an encrypted channel payload.
+
+   Per ``docs/transport-spec.md`` §4.3.4:
+   ``dataset_id (u16 LE) || au_sequence (u32 LE) || channel_name_utf8``.
+
+
+.. py:function:: aad_for_header(dataset_id: int, au_sequence: int) -> bytes
+
+   AAD for the encrypted AU semantic header. Uses the literal
+   6-byte tag ``b"header"``.
+
+
+.. py:function:: aad_for_pixel(dataset_id: int, au_sequence: int) -> bytes
+
+   AAD for the encrypted MSImagePixel pixel_x/y/z envelope. Uses
+   the literal 5-byte tag ``b"pixel"``.
+
+
+.. py:function:: encrypt_with_aad(plaintext: bytes, key: bytes, aad: bytes, *, iv: bytes | None = None) -> tuple[bytes, bytes, bytes]
+
+   Encrypt ``plaintext`` with AES-256-GCM, binding ``aad`` as
+   authenticated data. Returns ``(iv, tag, ciphertext)`` with
+   ``len(iv) == 12`` and ``len(tag) == 16``.
+
+   If ``iv`` is ``None``, a fresh random nonce is generated.
+   Callers doing deterministic testing MUST supply a fixed IV.
+
+
+.. py:function:: decrypt_with_aad(iv: bytes, tag: bytes, ciphertext: bytes, key: bytes, aad: bytes) -> bytes
+
+   Decrypt + authenticate. Raises on tag mismatch.
+
+
+.. py:class:: ChannelSegment
+
+   One encrypted row of a ``<channel>_segments`` compound dataset.
+
+   ``offset`` and ``length`` describe the spectrum's slice into the
+   *plaintext* element stream; they're load-bearing for the
+   :class:`SpectrumIndex` reader path.
+
+
+   .. py:attribute:: offset
+      :type:  int
+
+
+   .. py:attribute:: length
+      :type:  int
+
+
+   .. py:attribute:: iv
+      :type:  bytes
+
+
+   .. py:attribute:: tag
+      :type:  bytes
+
+
+   .. py:attribute:: ciphertext
+      :type:  bytes
+
+
+.. py:class:: HeaderSegment
+
+   One encrypted row of ``spectrum_index/au_header_segments``.
+
+
+   .. py:attribute:: iv
+      :type:  bytes
+
+
+   .. py:attribute:: tag
+      :type:  bytes
+
+
+   .. py:attribute:: ciphertext
+      :type:  bytes
+
+
+.. py:function:: encrypt_channel_to_segments(plaintext_flat: numpy.ndarray, offsets: numpy.ndarray, lengths: numpy.ndarray, *, dataset_id: int, channel_name: str, key: bytes) -> list[ChannelSegment]
+
+   Slice ``plaintext_flat`` into per-spectrum rows and encrypt
+   each independently.
+
+   ``plaintext_flat`` is typically a float64 array of decoded signal
+   values for an entire channel; ``offsets[i]`` / ``lengths[i]`` are
+   the i-th spectrum's position. Each row is a separate AES-GCM
+   operation with a fresh IV.
+
+
+.. py:function:: decrypt_channel_from_segments(segments: list[ChannelSegment], *, dataset_id: int, channel_name: str, key: bytes) -> numpy.ndarray
+
+   Decrypt every row and concatenate plaintext float64 values.
+
+
+.. py:function:: pack_au_header_plaintext(*, acquisition_mode: int, ms_level: int, polarity: int, retention_time: float, precursor_mz: float, precursor_charge: int, ion_mobility: float, base_peak_intensity: float) -> bytes
+
+.. py:function:: unpack_au_header_plaintext(plain: bytes) -> dict
+
+.. py:function:: encrypt_header_segments(rows: list[dict], *, dataset_id: int, key: bytes) -> list[HeaderSegment]
+
+   One HeaderSegment per row. Each row is a dict with the fields
+   :func:`pack_au_header_plaintext` consumes.
+
+
+.. py:function:: decrypt_header_segments(segments: list[HeaderSegment], *, dataset_id: int, key: bytes) -> list[dict]
+
+.. py:function:: encrypt_per_au(path: str, key: bytes, *, encrypt_headers: bool = False, provider: str | None = None) -> None
+
+   Encrypt an existing plaintext .tio at ``path`` in place with
+   per-AU AES-256-GCM.
+
+   Routes through :func:`ttio.providers.open_provider` so any
+   backend that implements ``VL_BYTES`` compound fields works
+   uniformly. Today HDF5 + Memory are wired; SQLite + Zarr raise a
+   clear ``NotImplementedError`` at the compound-write boundary
+   until their JSON-backed compound paths grow base64 transport for
+   bytes.
+
+   Feature flags ``opt_per_au_encryption`` (and
+   ``opt_encrypted_au_headers`` when applicable) are set on the
+   root group via the same provider attribute API the rest of the
+   writer uses.
+
+   For each run the writer:
+
+   - Reads plaintext ``<channel>_values`` (float64), slices it per
+     spectrum using ``spectrum_index/{offsets,lengths}``, encrypts
+     each row with a fresh IV and AAD =
+     ``dataset_id || au_sequence || channel_name``.
+   - Writes a ``<channel>_segments`` compound via the provider.
+   - Deletes the plaintext ``<channel>_values`` child.
+
+   When ``encrypt_headers=True`` it additionally encrypts the six
+   semantic index arrays (retention_times, ms_levels, polarities,
+   precursor_mzs, precursor_charges, base_peak_intensities) into
+   ``spectrum_index/au_header_segments`` and deletes the plaintext
+   children. ``offsets`` and ``lengths`` remain plaintext — they
+   are structural framing, not semantic PHI.
+
+
+.. py:data:: encrypt_per_au_file
+
+.. py:function:: decrypt_per_au(path: str, key: bytes, *, provider: str | None = None) -> dict[str, dict[str, numpy.ndarray]]
+
+   Read-only: materialise the plaintext values of a per-AU
+   encrypted file. Returns ``{run_name: {channel_name: float64
+   ndarray}}``; when ``opt_encrypted_au_headers`` is set the result
+   also carries ``"__au_headers__"`` as a list of dicts.
+
+   Routes through :func:`ttio.providers.open_provider` so the
+   file can live in any backend that supports ``VL_BYTES`` compound
+   reads.
+
+
+.. py:data:: decrypt_per_au_file
+

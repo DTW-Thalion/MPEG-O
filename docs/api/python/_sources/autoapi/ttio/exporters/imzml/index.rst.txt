@@ -1,0 +1,118 @@
+ttio.exporters.imzml
+====================
+
+.. py:module:: ttio.exporters.imzml
+
+.. autoapi-nested-parse::
+
+   imzML + .ibd exporter (v0.9+).
+
+   Reverses the M59 importer: takes an :class:`ttio.importers.imzml
+   .ImzMLImport` (or an equivalent list of pixel spectra plus grid metadata)
+   and emits a paired ``.imzML`` / ``.ibd`` on disk. Both the continuous
+   mode (one shared m/z axis at the head of the .ibd, per-pixel intensity
+   arrays following) and the processed mode (per-pixel m/z + intensity)
+   are supported.
+
+   The emitted XML uses the canonical imzML IMS accessions that match what
+   real-world files (e.g. the pyimzML test corpus, imzML 1.1 spec) use:
+   ``IMS:1000080`` for the universally unique identifier and
+   ``IMS:1000042`` / ``IMS:1000043`` for the max pixel counts. The
+   importer accepts both the canonical form and the legacy form that
+   earlier TTIO synthetic tests emitted.
+
+   SPDX-License-Identifier: Apache-2.0
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOImzMLWriter`` · Java:
+   ``com.dtwthalion.ttio.exporters.ImzMLWriter``
+
+   API status: Provisional (v0.9+ — will stabilise after the first round
+   of production feedback on the imaging writer).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.exporters.imzml.WriteResult
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.exporters.imzml.write
+   ttio.exporters.imzml.write_from_import
+
+
+Module Contents
+---------------
+
+.. py:class:: WriteResult
+
+   Return value of :func:`write` — resolved paths + the UUID that
+   ties the ``.imzML`` and ``.ibd`` together.
+
+
+   .. py:attribute:: imzml_path
+      :type:  pathlib.Path
+
+
+   .. py:attribute:: ibd_path
+      :type:  pathlib.Path
+
+
+   .. py:attribute:: uuid_hex
+      :type:  str
+
+
+   .. py:attribute:: mode
+      :type:  str
+
+
+   .. py:attribute:: n_pixels
+      :type:  int
+
+
+.. py:function:: write(pixels: Iterable[ttio.importers.imzml.ImzMLPixelSpectrum], imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None, *, mode: str = 'continuous', grid_max_x: int = 0, grid_max_y: int = 0, grid_max_z: int = 1, pixel_size_x: float = 0.0, pixel_size_y: float = 0.0, scan_pattern: str = 'flyback', uuid_hex: str | None = None) -> WriteResult
+
+   Write ``pixels`` as an imzML + .ibd pair.
+
+   :param pixels: Iterable of :class:`ImzMLPixelSpectrum`. In ``mode="continuous"``
+                  the first pixel's ``mz`` array is written once at the head of
+                  the .ibd and every subsequent pixel is checked to share that
+                  exact axis (raises if not). In ``mode="processed"`` every
+                  pixel's ``mz`` and ``intensity`` arrays are stored in full.
+   :param imzml_path: Path to the ``.imzML`` output. The sibling ``.ibd`` is derived
+                      by swapping the extension unless ``ibd_path`` is given.
+   :param mode: ``"continuous"`` or ``"processed"``. Default is continuous.
+   :param grid_max_x: Pixel grid extents. When ``0``, the writer derives them from
+                      the actual pixel coordinates.
+   :param grid_max_y: Pixel grid extents. When ``0``, the writer derives them from
+                      the actual pixel coordinates.
+   :param grid_max_z: Pixel grid extents. When ``0``, the writer derives them from
+                      the actual pixel coordinates.
+   :param pixel_size_x: Spatial pixel sizes in micrometres; emitted as-is via
+                        ``IMS:1000046`` / ``IMS:1000047`` cvParams.
+   :param pixel_size_y: Spatial pixel sizes in micrometres; emitted as-is via
+                        ``IMS:1000046`` / ``IMS:1000047`` cvParams.
+   :param scan_pattern: Free-text scan pattern label (e.g. ``"flyback"``,
+                        ``"meandering"``). Default ``"flyback"``.
+   :param uuid_hex: Optional explicit UUID (32 lowercase hex characters or a
+                    standard UUID string). When ``None``, a random UUID4 is
+                    generated.
+
+
+.. py:function:: write_from_import(import_result: ttio.importers.imzml.ImzMLImport, imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None) -> WriteResult
+
+   Re-emit an :class:`ImzMLImport` to disk.
+
+   Convenience shortcut for round-trip tests and imzML-to-imzML
+   rewriters (e.g. re-baselining a corrupt UUID).
+
+

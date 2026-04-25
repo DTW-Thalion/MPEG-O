@@ -16,8 +16,8 @@ import tempfile
 
 import numpy as np
 
-from mpeg_o import AcquisitionMode, SpectralDataset, WrittenRun
-from mpeg_o.enums import EncryptionLevel
+from ttio import AcquisitionMode, SpectralDataset, WrittenRun
+from ttio.enums import EncryptionLevel
 
 
 def _report(label: str, ok: bool, extra: str = "") -> None:
@@ -28,11 +28,11 @@ def _report(label: str, ok: bool, extra: str = "") -> None:
 
 def main() -> None:
     with tempfile.TemporaryDirectory() as td:
-        p = os.path.join(td, "enc.mpgo")
+        p = os.path.join(td, "enc.tio")
         n, m = 5, 4
         rng = np.random.default_rng(1)
         run = WrittenRun(
-            spectrum_class="MPGOMassSpectrum",
+            spectrum_class="TTIOMassSpectrum",
             acquisition_mode=int(AcquisitionMode.MS1_DDA),
             channel_data={
                 "mz": np.tile(np.linspace(100, 200, m), n).astype(np.float64),

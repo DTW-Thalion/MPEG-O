@@ -1,0 +1,75 @@
+ttio.protocols.provenanceable
+=============================
+
+.. py:module:: ttio.protocols.provenanceable
+
+.. autoapi-nested-parse::
+
+   ``Provenanceable`` — W3C PROV processing-history capability.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.protocols.provenanceable.Provenanceable
+
+
+Module Contents
+---------------
+
+.. py:class:: Provenanceable
+
+   Bases: :py:obj:`Protocol`
+
+
+   Capability for objects that carry a W3C PROV-compatible chain
+   of processing records.
+
+   Every transformation applied to the data contributes an entry;
+   the chain makes the object self-documenting and supports
+   regulatory audit trails.
+
+   .. method:: add_processing_step(step)
+
+      Append a ``ProvenanceRecord`` to the chain.
+
+   .. method:: provenance_chain()
+
+      Return the full chain in insertion order.
+
+   .. method:: input_entities()
+
+      Return the distinct input entity identifiers referenced by the
+      chain.
+
+   .. method:: output_entities()
+
+      Return the distinct output entity identifiers referenced by
+      the chain.
+      
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOProvenanceable`` ·
+   Java: ``com.dtwthalion.ttio.protocols.Provenanceable``
+
+
+   .. py:method:: add_processing_step(step: ttio.provenance.ProvenanceRecord) -> None
+
+
+   .. py:method:: provenance_chain() -> list[ttio.provenance.ProvenanceRecord]
+
+
+   .. py:method:: input_entities() -> list[str]
+
+
+   .. py:method:: output_entities() -> list[str]
+
+

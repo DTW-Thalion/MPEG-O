@@ -1,4 +1,4 @@
-"""Sphinx configuration for MPEG-O Python reference documentation."""
+"""Sphinx configuration for TTI-O Python reference documentation."""
 from __future__ import annotations
 
 import sys
@@ -7,7 +7,7 @@ from pathlib import Path
 # Ensure the package is importable.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-project = "MPEG-O Python"
+project = "TTI-O Python"
 author = "DTW-Thalion"
 copyright = "2026, DTW-Thalion"
 release = "0.6.1"
@@ -27,7 +27,7 @@ napoleon_use_rtype = False
 
 # autoapi
 autoapi_type = "python"
-autoapi_dirs = ["../src/mpeg_o"]
+autoapi_dirs = ["../src/ttio"]
 autoapi_options = [
     "members",
     "undoc-members",
@@ -48,7 +48,7 @@ intersphinx_mapping = {
 
 # HTML output
 html_theme = "furo"
-html_title = "MPEG-O Python API"
+html_title = "TTI-O Python API"
 html_static_path = ["_static"]
 
 # Exclude the private _numpress module etc. from the TOC if they're noisy.

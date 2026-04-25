@@ -1,0 +1,47 @@
+ttio.exporters.nmrml
+====================
+
+.. py:module:: ttio.exporters.nmrml
+
+.. autoapi-nested-parse::
+
+   nmrML writer — Milestone 29.
+
+   Serializes an :class:`ttio.NMRSpectrum` (and optionally its FID) to
+   an nmrML XML document. Output mirrors the elements parsed by
+   ``ttio.importers.nmrml`` so it round-trips through the reader.
+
+   SPDX-License-Identifier: Apache-2.0
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIONmrMLWriter`` · Java:
+   ``com.dtwthalion.ttio.exporters.NmrMLWriter``
+
+   API status: Stable.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.exporters.nmrml.spectrum_to_bytes
+   ttio.exporters.nmrml.write_spectrum
+
+
+Module Contents
+---------------
+
+.. py:function:: spectrum_to_bytes(spectrum: ttio.nmr_spectrum.NMRSpectrum, *, fid: FreeInductionDecay | None = None, sweep_width_ppm: float = 0.0, spectrometer_frequency_mhz: float = 0.0) -> bytes
+
+   Build an nmrML byte blob from ``spectrum`` + optional ``fid``.
+
+   ``spectrometer_frequency_mhz`` is threaded through from the
+   parent :class:`AcquisitionRun`; nmrML stores frequency in Hz.
+   Pass 0.0 (the default) to omit the cvParam entirely.
+
+
+.. py:function:: write_spectrum(spectrum: ttio.nmr_spectrum.NMRSpectrum, path: str | pathlib.Path, *, fid: FreeInductionDecay | None = None, sweep_width_ppm: float = 0.0, spectrometer_frequency_mhz: float = 0.0) -> pathlib.Path
+

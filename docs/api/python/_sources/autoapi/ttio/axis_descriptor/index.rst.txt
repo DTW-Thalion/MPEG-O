@@ -1,0 +1,67 @@
+ttio.axis_descriptor
+====================
+
+.. py:module:: ttio.axis_descriptor
+
+.. autoapi-nested-parse::
+
+   ``AxisDescriptor`` — names + units + sampling metadata for one signal axis.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.axis_descriptor.AxisDescriptor
+
+
+Module Contents
+---------------
+
+.. py:class:: AxisDescriptor
+
+   Describes a single axis of a :class:`~ttio.signal_array.SignalArray`.
+
+   Immutable value class. ``name`` is a short token (``"mz"``,
+   ``"chemical_shift"``, ...) and ``unit`` is a free-form label
+   (``"m/z"``, ``"ppm"``, ``"s"``, ...).
+
+   :param name: Semantic name of the axis.
+   :type name: str
+   :param unit: Unit of the axis values.
+   :type unit: str
+   :param value_range: Numeric bounds of the axis. ``None`` when unknown.
+   :type value_range: ValueRange or None, default None
+   :param sampling_mode: Whether samples are regularly spaced.
+   :type sampling_mode: SamplingMode, default SamplingMode.UNIFORM
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOAxisDescriptor`` · Java:
+   ``com.dtwthalion.ttio.AxisDescriptor``.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: unit
+      :type:  str
+
+
+   .. py:attribute:: value_range
+      :type:  ttio.value_range.ValueRange | None
+      :value: None
+
+
+
+   .. py:attribute:: sampling_mode
+      :type:  ttio.enums.SamplingMode
+
+

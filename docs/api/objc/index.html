@@ -2,14 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>libMPGO Objective-C API Reference</title>
+    <title>libTTIO Objective-C API Reference</title>
     <link rel="stylesheet" type="text/css" href="default-styles.css" media="screen" title="Normal" />
   </head>
   <body>
     <div class="content-bar">
       <div class="content-bar-top">
         <div class="content-bar-top-body">
-          <div class="content-bar-top-body-title">libMPGO</div><br />
+          <div class="content-bar-top-body-title">libTTIO</div><br />
           <a href="#overview">Overview</a><br />
           <a href="#classes">Classes</a><br />
           <a href="#protocols">Protocols</a><br />
@@ -19,76 +19,76 @@
         <div class="content-bar-bottom-body">
           <h3 class="content-bar-index-section-header"><a name="nav-bar-classes">Jump to a class</a></h3>
           <p class="project_class_index">
-            <a rel="gsdoc" href="MPGOSpectralDataset.html#class$MPGOSpectralDataset">MPGOSpectralDataset</a><br />
-            <a rel="gsdoc" href="MPGOAcquisitionRun.html#class$MPGOAcquisitionRun">MPGOAcquisitionRun</a><br />
-            <a rel="gsdoc" href="MPGOMassSpectrum.html#class$MPGOMassSpectrum">MPGOMassSpectrum</a><br />
-            <a rel="gsdoc" href="MPGONMRSpectrum.html#class$MPGONMRSpectrum">MPGONMRSpectrum</a><br />
-            <a rel="gsdoc" href="MPGOMSImage.html#class$MPGOMSImage">MPGOMSImage</a><br />
-            <a rel="gsdoc" href="MPGOHDF5Provider.html#class$MPGOHDF5Provider">MPGOHDF5Provider</a><br />
-            <a rel="gsdoc" href="MPGOSqliteProvider.html#class$MPGOSqliteProvider">MPGOSqliteProvider</a><br />
-            <a rel="gsdoc" href="MPGOEncryptionManager.html#class$MPGOEncryptionManager">MPGOEncryptionManager</a><br />
-            <a rel="gsdoc" href="MPGOSignatureManager.html#class$MPGOSignatureManager">MPGOSignatureManager</a><br />
-            <a rel="gsdoc" href="MPGOMzMLReader.html#class$MPGOMzMLReader">MPGOMzMLReader</a><br />
-            <a rel="gsdoc" href="MPGONmrMLReader.html#class$MPGONmrMLReader">MPGONmrMLReader</a><br />
+            <a rel="gsdoc" href="TTIOSpectralDataset.html#class$TTIOSpectralDataset">TTIOSpectralDataset</a><br />
+            <a rel="gsdoc" href="TTIOAcquisitionRun.html#class$TTIOAcquisitionRun">TTIOAcquisitionRun</a><br />
+            <a rel="gsdoc" href="TTIOMassSpectrum.html#class$TTIOMassSpectrum">TTIOMassSpectrum</a><br />
+            <a rel="gsdoc" href="TTIONMRSpectrum.html#class$TTIONMRSpectrum">TTIONMRSpectrum</a><br />
+            <a rel="gsdoc" href="TTIOMSImage.html#class$TTIOMSImage">TTIOMSImage</a><br />
+            <a rel="gsdoc" href="TTIOHDF5Provider.html#class$TTIOHDF5Provider">TTIOHDF5Provider</a><br />
+            <a rel="gsdoc" href="TTIOSqliteProvider.html#class$TTIOSqliteProvider">TTIOSqliteProvider</a><br />
+            <a rel="gsdoc" href="TTIOEncryptionManager.html#class$TTIOEncryptionManager">TTIOEncryptionManager</a><br />
+            <a rel="gsdoc" href="TTIOSignatureManager.html#class$TTIOSignatureManager">TTIOSignatureManager</a><br />
+            <a rel="gsdoc" href="TTIOMzMLReader.html#class$TTIOMzMLReader">TTIOMzMLReader</a><br />
+            <a rel="gsdoc" href="TTIONmrMLReader.html#class$TTIONmrMLReader">TTIONmrMLReader</a><br />
           </p>
         </div>
       </div>
     </div>
     <div class="content-pane">
       <div class="content-pane-body">
-        <h1 id="overview">libMPGO — MPEG-O Objective-C Reference Implementation</h1>
+        <h1 id="overview">libTTIO — TTI-O Objective-C Reference Implementation</h1>
         <p>
-          libMPGO is the reference implementation of the MPEG-O multi-omics data
+          libTTIO is the reference implementation of the TTI-O multi-omics data
           standard. It provides Objective-C classes and protocols for authoring,
-          reading, querying, encrypting, and signing <code>.mpgo</code> files
+          reading, querying, encrypting, and signing <code>.tio</code> files
           (HDF5 container format).
         </p>
         <p>
           All classes listed in the left navigation are public API. Cross-language
-          equivalents in Python (<code>mpeg_o.*</code>) and Java
-          (<code>com.dtwthalion.mpgo.*</code>) are documented in the class
+          equivalents in Python (<code>ttio.*</code>) and Java
+          (<code>com.dtwthalion.ttio.*</code>) are documented in the class
           comments where they exist.
         </p>
 
         <h2 id="classes">Core classes</h2>
         <ul>
-          <li><a rel="gsdoc" href="MPGOSpectralDataset.html#class$MPGOSpectralDataset">MPGOSpectralDataset</a> — top-level container for acquisition runs</li>
-          <li><a rel="gsdoc" href="MPGOAcquisitionRun.html#class$MPGOAcquisitionRun">MPGOAcquisitionRun</a> — single LC-MS / NMR run with spectra, chromatograms, identifications</li>
-          <li><a rel="gsdoc" href="MPGOMassSpectrum.html#class$MPGOMassSpectrum">MPGOMassSpectrum</a> — mass-spectrum axis (m/z, intensity)</li>
-          <li><a rel="gsdoc" href="MPGONMRSpectrum.html#class$MPGONMRSpectrum">MPGONMRSpectrum</a> — 1D NMR spectrum</li>
-          <li><a rel="gsdoc" href="MPGOMSImage.html#class$MPGOMSImage">MPGOMSImage</a> — MS-imaging (MALDI) dataset</li>
+          <li><a rel="gsdoc" href="TTIOSpectralDataset.html#class$TTIOSpectralDataset">TTIOSpectralDataset</a> — top-level container for acquisition runs</li>
+          <li><a rel="gsdoc" href="TTIOAcquisitionRun.html#class$TTIOAcquisitionRun">TTIOAcquisitionRun</a> — single LC-MS / NMR run with spectra, chromatograms, identifications</li>
+          <li><a rel="gsdoc" href="TTIOMassSpectrum.html#class$TTIOMassSpectrum">TTIOMassSpectrum</a> — mass-spectrum axis (m/z, intensity)</li>
+          <li><a rel="gsdoc" href="TTIONMRSpectrum.html#class$TTIONMRSpectrum">TTIONMRSpectrum</a> — 1D NMR spectrum</li>
+          <li><a rel="gsdoc" href="TTIOMSImage.html#class$TTIOMSImage">TTIOMSImage</a> — MS-imaging (MALDI) dataset</li>
         </ul>
 
         <h2>Storage providers</h2>
         <ul>
-          <li><a rel="gsdoc" href="MPGOHDF5Provider.html#class$MPGOHDF5Provider">MPGOHDF5Provider</a> — canonical HDF5 back-end</li>
-          <li><a rel="gsdoc" href="MPGOSqliteProvider.html#class$MPGOSqliteProvider">MPGOSqliteProvider</a> — single-file SQLite back-end (Provisional)</li>
-          <li><a rel="gsdoc" href="MPGOMemoryProvider.html#class$MPGOMemoryProvider">MPGOMemoryProvider</a> — in-memory provider for tests</li>
+          <li><a rel="gsdoc" href="TTIOHDF5Provider.html#class$TTIOHDF5Provider">TTIOHDF5Provider</a> — canonical HDF5 back-end</li>
+          <li><a rel="gsdoc" href="TTIOSqliteProvider.html#class$TTIOSqliteProvider">TTIOSqliteProvider</a> — single-file SQLite back-end (Provisional)</li>
+          <li><a rel="gsdoc" href="TTIOMemoryProvider.html#class$TTIOMemoryProvider">TTIOMemoryProvider</a> — in-memory provider for tests</li>
         </ul>
 
         <h2>Protection</h2>
         <ul>
-          <li><a rel="gsdoc" href="MPGOEncryptionManager.html#class$MPGOEncryptionManager">MPGOEncryptionManager</a> — AES-256-GCM intensity-channel encryption</li>
-          <li><a rel="gsdoc" href="MPGOSignatureManager.html#class$MPGOSignatureManager">MPGOSignatureManager</a> — HMAC-SHA256 v2 canonical signatures</li>
-          <li><a rel="gsdoc" href="MPGOAccessPolicy.html#class$MPGOAccessPolicy">MPGOAccessPolicy</a> — access-control policy JSON</li>
-          <li><a rel="gsdoc" href="MPGOAnonymizer.html#class$MPGOAnonymizer">MPGOAnonymizer</a> — one-shot anonymization</li>
+          <li><a rel="gsdoc" href="TTIOEncryptionManager.html#class$TTIOEncryptionManager">TTIOEncryptionManager</a> — AES-256-GCM intensity-channel encryption</li>
+          <li><a rel="gsdoc" href="TTIOSignatureManager.html#class$TTIOSignatureManager">TTIOSignatureManager</a> — HMAC-SHA256 v2 canonical signatures</li>
+          <li><a rel="gsdoc" href="TTIOAccessPolicy.html#class$TTIOAccessPolicy">TTIOAccessPolicy</a> — access-control policy JSON</li>
+          <li><a rel="gsdoc" href="TTIOAnonymizer.html#class$TTIOAnonymizer">TTIOAnonymizer</a> — one-shot anonymization</li>
         </ul>
 
         <h2>Import / export</h2>
         <ul>
-          <li><a rel="gsdoc" href="MPGOMzMLReader.html#class$MPGOMzMLReader">MPGOMzMLReader</a> / <a rel="gsdoc" href="MPGOMzMLWriter.html#class$MPGOMzMLWriter">MPGOMzMLWriter</a></li>
-          <li><a rel="gsdoc" href="MPGONmrMLReader.html#class$MPGONmrMLReader">MPGONmrMLReader</a> / <a rel="gsdoc" href="MPGONmrMLWriter.html#class$MPGONmrMLWriter">MPGONmrMLWriter</a></li>
-          <li><a rel="gsdoc" href="MPGOISAExporter.html#class$MPGOISAExporter">MPGOISAExporter</a></li>
-          <li><a rel="gsdoc" href="MPGOThermoRawReader.html#class$MPGOThermoRawReader">MPGOThermoRawReader</a></li>
+          <li><a rel="gsdoc" href="TTIOMzMLReader.html#class$TTIOMzMLReader">TTIOMzMLReader</a> / <a rel="gsdoc" href="TTIOMzMLWriter.html#class$TTIOMzMLWriter">TTIOMzMLWriter</a></li>
+          <li><a rel="gsdoc" href="TTIONmrMLReader.html#class$TTIONmrMLReader">TTIONmrMLReader</a> / <a rel="gsdoc" href="TTIONmrMLWriter.html#class$TTIONmrMLWriter">TTIONmrMLWriter</a></li>
+          <li><a rel="gsdoc" href="TTIOISAExporter.html#class$TTIOISAExporter">TTIOISAExporter</a></li>
+          <li><a rel="gsdoc" href="TTIOThermoRawReader.html#class$TTIOThermoRawReader">TTIOThermoRawReader</a></li>
         </ul>
 
         <h2 id="protocols">Domain protocols</h2>
         <ul>
-          <li><a rel="gsdoc" href="MPGOCVAnnotatable.html#protocol$(MPGOCVAnnotatable)">MPGOCVAnnotatable</a> — controlled-vocabulary annotation</li>
-          <li><a rel="gsdoc" href="MPGOEncryptable.html#protocol$(MPGOEncryptable)">MPGOEncryptable</a> — intensity-channel encryption</li>
-          <li><a rel="gsdoc" href="MPGOIndexable.html#protocol$(MPGOIndexable)">MPGOIndexable</a> — spectrum-index construction</li>
-          <li><a rel="gsdoc" href="MPGOProvenanceable.html#protocol$(MPGOProvenanceable)">MPGOProvenanceable</a> — provenance metadata</li>
-          <li><a rel="gsdoc" href="MPGOStreamable.html#protocol$(MPGOStreamable)">MPGOStreamable</a> — streaming read/write</li>
+          <li><a rel="gsdoc" href="TTIOCVAnnotatable.html#protocol$(TTIOCVAnnotatable)">TTIOCVAnnotatable</a> — controlled-vocabulary annotation</li>
+          <li><a rel="gsdoc" href="TTIOEncryptable.html#protocol$(TTIOEncryptable)">TTIOEncryptable</a> — intensity-channel encryption</li>
+          <li><a rel="gsdoc" href="TTIOIndexable.html#protocol$(TTIOIndexable)">TTIOIndexable</a> — spectrum-index construction</li>
+          <li><a rel="gsdoc" href="TTIOProvenanceable.html#protocol$(TTIOProvenanceable)">TTIOProvenanceable</a> — provenance metadata</li>
+          <li><a rel="gsdoc" href="TTIOStreamable.html#protocol$(TTIOStreamable)">TTIOStreamable</a> — streaming read/write</li>
         </ul>
 
         <p>

@@ -1,0 +1,91 @@
+ttio.providers.memory
+=====================
+
+.. py:module:: ttio.providers.memory
+
+.. autoapi-nested-parse::
+
+   In-memory storage provider — Milestone 39 Part D.
+
+   Holds the full group tree in Python dicts. Useful for tests and
+   transient pipelines where no file I/O is needed, and the existence of
+   this provider alongside :class:`~ttio.providers.hdf5.Hdf5Provider`
+   is the proof that the abstraction actually works — if
+   ``SpectralDataset`` functions identically over both, the protocol
+   contract is correct.
+
+   API status: Stable (Provisional per M39 — may change before v1.0).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOMemoryProvider`` class
+   Java:        ``com.dtwthalion.ttio.providers.MemoryProvider`` class
+
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.providers.memory.MemoryProvider
+
+
+Module Contents
+---------------
+
+.. py:class:: MemoryProvider(url: str | None = None, root: _MemoryRoot | None = None)
+
+   Bases: :py:obj:`ttio.providers.base.StorageProvider`
+
+
+   In-memory provider. URLs look like ``memory://<name>``; the
+   same name opened twice returns the same tree until
+   :meth:`discard_store` wipes it or the process exits.
+
+   API status: Stable (Provisional per M39 — may change before v1.0).
+
+   Cross-language equivalents:
+     Objective-C: ``TTIOMemoryProvider``
+     Java:        ``com.dtwthalion.ttio.providers.MemoryProvider``
+
+
+   .. py:method:: open(path_or_url=None, *, mode: str = 'r', **kwargs) -> MemoryProvider
+
+      Open a MemoryProvider. Supports both factory
+      (``MemoryProvider.open(url, mode="w")``) and instance
+      (``p = MemoryProvider(); p.open(url, mode="w")``) styles per
+      Appendix B Gap 1.
+
+
+
+   .. py:method:: provider_name() -> str
+
+      Short identifier used for logging and registry lookup
+      (``"hdf5"``, ``"memory"``, ``"zarr"``, …).
+
+      Exposed as a method (not a property) to mirror the ObjC
+      ``-providerName`` selector and Java ``providerName()`` getter.
+      Appendix B Gap 5 — Provisional storage-provider convergence.
+
+
+
+   .. py:method:: root_group() -> ttio.providers.base.StorageGroup
+
+
+   .. py:method:: is_open() -> bool
+
+
+   .. py:method:: close() -> None
+
+
+   .. py:method:: discard_store(url: str) -> None
+      :staticmethod:
+
+
+      Remove a named store. Mainly useful in tests.
+
+
+

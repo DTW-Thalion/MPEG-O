@@ -1,5 +1,5 @@
 {
-    "(MPGOCVAnnotatable)" = (
+    "(TTIOCVAnnotatable)" = (
 	"-addCVParam:",
 	"-removeCVParam:",
 	"-allCVParams",
@@ -7,25 +7,25 @@
 	"-cvParamsForOntologyRef:",
 	"-hasCVParamWithAccession:"
     );
-    "(MPGOEncryptable)" = (
+    "(TTIOEncryptable)" = (
 	"-encryptWithKey:level:error:",
 	"-decryptWithKey:error:",
 	"-accessPolicy",
 	"-setAccessPolicy:"
     );
-    "(MPGOIndexable)" = (
+    "(TTIOIndexable)" = (
 	"-objectAtIndex:",
 	"-count",
 	"-objectForKey:",
 	"-objectsInRange:"
     );
-    "(MPGOProvenanceable)" = (
+    "(TTIOProvenanceable)" = (
 	"-addProcessingStep:",
 	"-provenanceChain",
 	"-inputEntities",
 	"-outputEntities"
     );
-    "(MPGOStorageDataset)" = (
+    "(TTIOStorageDataset)" = (
 	"-name",
 	"-precision",
 	"-shape",
@@ -35,12 +35,16 @@
 	"-readAll:",
 	"-readSliceAtOffset:count:error:",
 	"-writeAll:error:",
+	"-readRows:",
+	"-readCanonicalBytes:",
 	"-hasAttributeNamed:",
 	"-attributeValueForName:error:",
 	"-setAttributeValue:forName:error:",
+	"-deleteAttributeNamed:error:",
+	"-attributeNames",
 	"-close"
     );
-    "(MPGOStorageGroup)" = (
+    "(TTIOStorageGroup)" = (
 	"-name",
 	"-childNames",
 	"-hasChildNamed:",
@@ -58,33 +62,80 @@
 	"-attributeNames",
 	"-close"
     );
-    "(MPGOStorageProvider)" = (
+    "(TTIOStorageProvider)" = (
 	"-providerName",
 	"-supportsURL:",
 	"-openURL:mode:error:",
 	"-rootGroupWithError:",
 	"-isOpen",
 	"-close",
-	"-nativeHandle"
+	"-nativeHandle",
+	"-supportsChunking",
+	"-supportsCompression",
+	"-beginTransaction",
+	"-commitTransaction",
+	"-rollbackTransaction"
     );
-    "(MPGOStreamable)" = (
+    "(TTIOStreamable)" = (
 	"-nextObject",
 	"-hasMore",
 	"-currentPosition",
 	"-seekToPosition:",
 	"-reset"
     );
-    MPGOAccessPolicy = (
+    TTIOAUFilter = (
+	"+emptyFilter",
+	"+filterFromQueryJSON:",
+	"-matches:datasetId:"
+    );
+    TTIOAUHeaderPlaintext = (
+	"-acquisitionMode",
+	"-setAcquisitionMode:",
+	"-msLevel",
+	"-setMsLevel:",
+	"-polarity",
+	"-setPolarity:",
+	"-retentionTime",
+	"-setRetentionTime:",
+	"-precursorMz",
+	"-setPrecursorMz:",
+	"-precursorCharge",
+	"-setPrecursorCharge:",
+	"-ionMobility",
+	"-setIonMobility:",
+	"-basePeakIntensity",
+	"-setBasePeakIntensity:"
+    );
+    TTIOAccessPolicy = (
 	"-policy",
 	"-initWithPolicy:",
 	"-writeToFile:error:",
 	"+readFromFile:error:"
     );
-    MPGOAcquisitionRun = (
+    TTIOAccessUnit = (
+	"-spectrumClass",
+	"-acquisitionMode",
+	"-msLevel",
+	"-polarity",
+	"-retentionTime",
+	"-precursorMz",
+	"-precursorCharge",
+	"-ionMobility",
+	"-basePeakIntensity",
+	"-channels",
+	"-pixelX",
+	"-pixelY",
+	"-pixelZ",
+	"-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:",
+	"-encode",
+	"+decodeFromBytes:length:error:"
+    );
+    TTIOAcquisitionRun = (
 	"-acquisitionMode",
 	"-instrumentConfig",
 	"-spectrumIndex",
 	"-spectrumClassName",
+	"-modality",
 	"-nucleusType",
 	"-spectrometerFrequencyMHz",
 	"-signalCompression",
@@ -94,6 +145,7 @@
 	"-initWithSpectra:chromatograms:acquisitionMode:instrumentConfig:",
 	"-writeToGroup:name:error:",
 	"+readFromGroup:name:error:",
+	"+readFromStorageGroup:name:error:",
 	"-spectrumAtIndex:error:",
 	"-indicesInRetentionTimeRange:",
 	"-setPersistenceFilePath:runName:",
@@ -107,7 +159,21 @@
 	"-accessPolicy",
 	"-setAccessPolicy:"
     );
-    MPGOAnonymizationPolicy = (
+    TTIOAcquisitionSimulator = (
+	"-scanRate",
+	"-duration",
+	"-ms1Fraction",
+	"-mzMin",
+	"-mzMax",
+	"-nPeaks",
+	"-seed",
+	"-initWithScanRate:duration:ms1Fraction:mzMin:mzMax:nPeaks:seed:",
+	"-initWithSeed:",
+	"-scanCount",
+	"-streamToWriter:error:",
+	"-streamPacedToWriter:error:"
+    );
+    TTIOAnonymizationPolicy = (
 	"-redactSAAVSpectra",
 	"-setRedactSAAVSpectra:",
 	"-maskIntensityBelowQuantile",
@@ -125,7 +191,7 @@
 	"-stripMetadataFields",
 	"-setStripMetadataFields:"
     );
-    MPGOAnonymizationResult = (
+    TTIOAnonymizationResult = (
 	"-spectraRedacted",
 	"-setSpectraRedacted:",
 	"-intensitiesZeroed",
@@ -141,10 +207,10 @@
 	"-policiesApplied",
 	"-setPoliciesApplied:"
     );
-    MPGOAnonymizer = (
+    TTIOAnonymizer = (
 	"+anonymizeDataset:outputPath:policy:error:"
     );
-    MPGOAxisDescriptor = (
+    TTIOAxisDescriptor = (
 	"-name",
 	"-unit",
 	"-valueRange",
@@ -152,13 +218,29 @@
 	"-initWithName:unit:valueRange:samplingMode:",
 	"+descriptorWithName:unit:valueRange:samplingMode:"
     );
-    MPGOBase64 = (
+    TTIOBase64 = (
 	"+decodeString:",
 	"+decodeString:zlibInflate:",
 	"+encodeData:",
 	"+encodeData:zlibDeflate:"
     );
-    MPGOCVParam = (
+    TTIOBrukerTDFMetadata = (
+	"-frameCount",
+	"-ms1FrameCount",
+	"-ms2FrameCount",
+	"-retentionTimeMin",
+	"-retentionTimeMax",
+	"-instrumentVendor",
+	"-instrumentModel",
+	"-acquisitionSoftware",
+	"-properties",
+	"-globalMetadata"
+    );
+    TTIOBrukerTDFReader = (
+	"+readMetadataAtPath:error:",
+	"+importFromPath:toOutput:error:"
+    );
+    TTIOCVParam = (
 	"-ontologyRef",
 	"-accession",
 	"-name",
@@ -167,7 +249,7 @@
 	"-initWithOntologyRef:accession:name:value:unit:",
 	"+paramWithOntologyRef:accession:name:value:unit:"
     );
-    MPGOCVTermMapper = (
+    TTIOCVTermMapper = (
 	"+precisionForAccession:",
 	"+compressionForAccession:",
 	"+signalArrayNameForAccession:",
@@ -184,6 +266,13 @@
 	"+isChargeStateAccession:",
 	"+isTotalIonChromatogramAccession:",
 	"+isSelectedReactionMonitoringAccession:",
+	"+activationMethodForAccession:",
+	"+isActivationMethodAccession:",
+	"+activationAccessionForMethod:",
+	"+activationNameForMethod:",
+	"+isIsolationWindowTargetMzAccession:",
+	"+isIsolationWindowLowerOffsetAccession:",
+	"+isIsolationWindowUpperOffsetAccession:",
 	"+isSpectrometerFrequencyAccession:",
 	"+isNucleusAccession:",
 	"+isNumberOfScansAccession:",
@@ -191,7 +280,19 @@
 	"+isSweepWidthAccession:",
 	"+cvParamFromAccession:name:value:ontologyRef:unit:"
     );
-    MPGOChromatogram = (
+    TTIOCanonicalBytes = (
+	"+canonicalBytesForNumericData:precision:",
+	"+canonicalBytesForCompoundRows:fields:"
+    );
+    TTIOChannelSegment = (
+	"-offset",
+	"-length",
+	"-iv",
+	"-tag",
+	"-ciphertext",
+	"-initWithOffset:length:iv:tag:ciphertext:"
+    );
+    TTIOChromatogram = (
 	"-timeArray",
 	"-intensityArray",
 	"-type",
@@ -200,13 +301,27 @@
 	"-productMz",
 	"-initWithTimeArray:intensityArray:type:targetMz:precursorMz:productMz:error:"
     );
-    MPGOCompoundField = (
+    TTIOCipherSuite = (
+	"+isSupported:",
+	"+isRegistered:",
+	"+category:",
+	"+keyLength:",
+	"+publicKeySize:",
+	"+privateKeySize:",
+	"+nonceLength:",
+	"+tagLength:",
+	"+validateKey:algorithm:error:",
+	"+validatePublicKey:algorithm:error:",
+	"+validatePrivateKey:algorithm:error:",
+	"+allAlgorithms"
+    );
+    TTIOCompoundField = (
 	"-name",
 	"-kind",
 	"+fieldWithName:kind:",
 	"-initWithName:kind:"
     );
-    MPGOCompoundIO = (
+    TTIOCompoundIO = (
 	"+writeIdentifications:intoGroup:datasetNamed:error:",
 	"+readIdentificationsFromGroup:datasetNamed:error:",
 	"+writeQuantifications:intoGroup:datasetNamed:error:",
@@ -218,7 +333,7 @@
 	"+writeGeneric:intoGroup:datasetNamed:fields:error:",
 	"+readGenericFromGroup:datasetNamed:fields:error:"
     );
-    MPGOEncodingSpec = (
+    TTIOEncodingSpec = (
 	"-precision",
 	"-compressionAlgorithm",
 	"-byteOrder",
@@ -226,14 +341,33 @@
 	"+specWithPrecision:compressionAlgorithm:byteOrder:",
 	"-elementSize"
     );
-    MPGOEncryptionManager = (
+    TTIOEncryptedTransport = (
+	"+isPerAUEncryptedAtPath:providerName:",
+	"+writeEncryptedDataset:writer:providerName:error:",
+	"+readEncryptedToPath:fromStream:providerName:error:"
+    );
+    TTIOEncryptionManager = (
 	"+encryptData:withKey:iv:authTag:error:",
 	"+decryptData:withKey:iv:authTag:error:",
 	"+encryptIntensityChannelInRun:atFilePath:withKey:error:",
 	"+decryptIntensityChannelInRun:atFilePath:withKey:error:",
-	"+isIntensityChannelEncryptedInRun:atFilePath:"
+	"+isIntensityChannelEncryptedInRun:atFilePath:",
+	"+decryptIntensityChannelInRunInPlace:atFilePath:withKey:error:"
     );
-    MPGOFeatureFlags = (
+    TTIOFeature = (
+	"-featureId",
+	"-runName",
+	"-chemicalEntity",
+	"-retentionTimeSeconds",
+	"-expMassToCharge",
+	"-charge",
+	"-adductIon",
+	"-abundances",
+	"-evidenceRefs",
+	"-initWithFeatureId:runName:chemicalEntity:retentionTimeSeconds:expMassToCharge:charge:adductIon:abundances:evidenceRefs:",
+	"+featureWithId:runName:chemicalEntity:"
+    );
+    TTIOFeatureFlags = (
 	"+featureBaseV1",
 	"+featureCompoundIdentifications",
 	"+featureCompoundQuantifications",
@@ -247,27 +381,30 @@
 	"+featureCanonicalSignatures",
 	"+featureKeyRotation",
 	"+featureAnonymized",
+	"+featurePQCPreview",
+	"+featureMS2ActivationDetail",
 	"+formatVersionForRoot:",
 	"+featuresForRoot:",
 	"+root:supportsFeature:",
 	"+isLegacyV1File:",
 	"+writeFormatVersion:features:toRoot:error:"
     );
-    MPGOFreeInductionDecay = (
+    TTIOFreeInductionDecay = (
 	"-dwellTimeSeconds",
 	"-scanCount",
 	"-receiverGain",
 	"-initWithComplexBuffer:complexLength:dwellTimeSeconds:scanCount:receiverGain:"
     );
-    MPGOHDF5CompoundType = (
+    TTIOHDF5CompoundType = (
 	"-initWithSize:",
 	"-addField:type:offset:",
 	"-addVariableLengthStringFieldNamed:atOffset:",
+	"-addVariableLengthBytesFieldNamed:atOffset:",
 	"-typeId",
 	"-totalSize",
 	"-close"
     );
-    MPGOHDF5Dataset = (
+    TTIOHDF5Dataset = (
 	"-initWithDatasetId:precision:length:retainer:",
 	"-datasetId",
 	"-precision",
@@ -276,11 +413,13 @@
 	"-readDataWithError:",
 	"-readDataAtOffset:count:error:"
     );
-    MPGOHDF5File = (
+    TTIOHDF5File = (
 	"-path",
 	"+createAtPath:error:",
 	"+openAtPath:error:",
 	"+openReadOnlyAtPath:error:",
+	"+openS3URL:region:accessKeyId:secretAccessKey:sessionToken:error:",
+	"+isS3Supported",
 	"-rootGroup",
 	"-close",
 	"-isThreadSafe",
@@ -290,7 +429,7 @@
 	"-unlockForWriting",
 	"-owningFile"
     );
-    MPGOHDF5Group = (
+    TTIOHDF5Group = (
 	"-initWithGroupId:retainer:",
 	"-groupId",
 	"-createGroupNamed:error:",
@@ -310,11 +449,44 @@
 	"-childNames",
 	"-groupName"
     );
-    MPGOISAExporter = (
+    TTIOHDF5Provider = (
+	"+adapterForGroup:",
+	"+adapterForDataset:name:"
+    );
+    TTIOHeaderSegment = (
+	"-iv",
+	"-tag",
+	"-ciphertext",
+	"-initWithIV:tag:ciphertext:"
+    );
+    TTIOIRImage = (
+	"-width",
+	"-height",
+	"-spectralPoints",
+	"-tileSize",
+	"-cube",
+	"-wavenumbers",
+	"-pixelSizeX",
+	"-pixelSizeY",
+	"-scanPattern",
+	"-mode",
+	"-resolutionCmInv",
+	"-initWithWidth:height:spectralPoints:tileSize:cube:wavenumbers:mode:resolutionCmInv:",
+	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:mode:resolutionCmInv:cube:wavenumbers:"
+    );
+    TTIOIRSpectrum = (
+	"-wavenumberArray",
+	"-intensityArray",
+	"-mode",
+	"-resolutionCmInv",
+	"-numberOfScans",
+	"-initWithWavenumberArray:intensityArray:mode:resolutionCmInv:numberOfScans:indexPosition:scanTimeSeconds:error:"
+    );
+    TTIOISAExporter = (
 	"+bundleForDataset:error:",
 	"+writeBundleForDataset:toDirectory:error:"
     );
-    MPGOIdentification = (
+    TTIOIdentification = (
 	"-runName",
 	"-spectrumIndex",
 	"-chemicalEntity",
@@ -324,7 +496,43 @@
 	"-asPlist",
 	"+fromPlist:"
     );
-    MPGOInstrumentConfig = (
+    TTIOImzMLImport = (
+	"-mode",
+	"-uuidHex",
+	"-gridMaxX",
+	"-gridMaxY",
+	"-gridMaxZ",
+	"-pixelSizeX",
+	"-pixelSizeY",
+	"-scanPattern",
+	"-spectra",
+	"-sourceImzML",
+	"-sourceIbd"
+    );
+    TTIOImzMLPixelSpectrum = (
+	"-x",
+	"-y",
+	"-z",
+	"-mzArray",
+	"-intensityArray",
+	"-mzCount",
+	"-initWithX:y:z:mzArray:intensityArray:error:"
+    );
+    TTIOImzMLReader = (
+	"+readFromImzMLPath:ibdPath:error:"
+    );
+    TTIOImzMLWriteResult = (
+	"-imzmlPath",
+	"-ibdPath",
+	"-uuidHex",
+	"-mode",
+	"-nPixels"
+    );
+    TTIOImzMLWriter = (
+	"+writePixels:toImzMLPath:ibdPath:mode:gridMaxX:gridMaxY:gridMaxZ:pixelSizeX:pixelSizeY:scanPattern:uuidHex:error:",
+	"+writeFromImport:toImzMLPath:ibdPath:error:"
+    );
+    TTIOInstrumentConfig = (
 	"-manufacturer",
 	"-model",
 	"-serialNumber",
@@ -335,15 +543,44 @@
 	"-writeToGroup:error:",
 	"+readFromGroup:error:"
     );
-    MPGOKeyRotationManager = (
+    TTIOIsolationWindow = (
+	"-targetMz",
+	"-lowerOffset",
+	"-upperOffset",
+	"-initWithTargetMz:lowerOffset:upperOffset:",
+	"+windowWithTargetMz:lowerOffset:upperOffset:",
+	"-lowerBound",
+	"-upperBound",
+	"-width"
+    );
+    TTIOJcampDxDecode = (
+	"+hasCompression:",
+	"+decodeLines:firstx:deltax:xfactor:yfactor:outXs:outYs:error:"
+    );
+    TTIOJcampDxReader = (
+	"+readSpectrumFromPath:error:"
+    );
+    TTIOJcampDxWriter = (
+	"+writeRamanSpectrum:toPath:title:error:",
+	"+writeIRSpectrum:toPath:title:error:",
+	"+writeUVVisSpectrum:toPath:title:error:",
+	"+writeRamanSpectrum:toPath:title:encoding:error:",
+	"+writeIRSpectrum:toPath:title:encoding:error:",
+	"+writeUVVisSpectrum:toPath:title:encoding:error:"
+    );
+    TTIOKeyRotationManager = (
 	"+managerWithFile:",
 	"-enableEnvelopeEncryptionWithKEK:kekId:error:",
 	"-rotateToKEK:kekId:oldKEK:error:",
 	"-unwrapDEKWithKEK:error:",
+	"-wrapDEK:withKEK:legacyV1:error:",
+	"-enableEnvelopeEncryptionWithKEK:kekId:algorithm:error:",
+	"-unwrapDEKWithKEK:algorithm:error:",
+	"-rotateToKEK:kekId:oldKEK:oldAlgorithm:newAlgorithm:error:",
 	"-hasEnvelopeEncryption",
 	"-keyHistory"
     );
-    MPGOMSImage = (
+    TTIOMSImage = (
 	"-width",
 	"-height",
 	"-spectralPoints",
@@ -357,18 +594,21 @@
 	"+readFromFilePath:error:",
 	"+readTileFromFilePath:atX:y:width:height:error:"
     );
-    MPGOMassSpectrum = (
+    TTIOMassSpectrum = (
 	"-mzArray",
 	"-intensityArray",
 	"-msLevel",
 	"-polarity",
 	"-scanWindow",
+	"-activationMethod",
+	"-isolationWindow",
+	"-initWithMzArray:intensityArray:msLevel:polarity:scanWindow:activationMethod:isolationWindow:indexPosition:scanTimeSeconds:precursorMz:precursorCharge:error:",
 	"-initWithMzArray:intensityArray:msLevel:polarity:scanWindow:indexPosition:scanTimeSeconds:precursorMz:precursorCharge:error:"
     );
-    MPGOMemoryProvider = (
+    TTIOMemoryProvider = (
 	"+discardStore:"
     );
-    MPGOMzMLReader = (
+    TTIOMzMLReader = (
 	"+readFromFilePath:error:",
 	"+readFromURL:error:",
 	"+readFromData:error:",
@@ -377,11 +617,42 @@
 	"-dataset",
 	"-chromatograms"
     );
-    MPGOMzMLWriter = (
+    TTIOMzMLWriter = (
 	"+dataForDataset:zlibCompression:error:",
 	"+writeDataset:toPath:zlibCompression:error:"
     );
-    MPGONMR2DSpectrum = (
+    TTIOMzTabImport = (
+	"-version",
+	"-importDescription",
+	"-title",
+	"-msRunLocations",
+	"-sampleRefs",
+	"-software",
+	"-searchEngines",
+	"-identifications",
+	"-quantifications",
+	"-features",
+	"-sourcePath",
+	"-isMetabolomics"
+    );
+    TTIOMzTabReader = (
+	"+readFromFilePath:error:"
+    );
+    TTIOMzTabWriteResult = (
+	"-path",
+	"-version",
+	"-nPSMRows",
+	"-nPRTRows",
+	"-nSMLRows",
+	"-nPEPRows",
+	"-nSMFRows",
+	"-nSMERows"
+    );
+    TTIOMzTabWriter = (
+	"+writeToPath:identifications:quantifications:version:title:description:error:",
+	"+writeToPath:identifications:quantifications:features:version:title:description:error:"
+    );
+    TTIONMR2DSpectrum = (
 	"-intensityMatrix",
 	"-width",
 	"-height",
@@ -391,14 +662,14 @@
 	"-nucleusF2",
 	"-initWithIntensityMatrix:width:height:f1Axis:f2Axis:nucleusF1:nucleusF2:indexPosition:error:"
     );
-    MPGONMRSpectrum = (
+    TTIONMRSpectrum = (
 	"-chemicalShiftArray",
 	"-intensityArray",
 	"-nucleusType",
 	"-spectrometerFrequencyMHz",
 	"-initWithChemicalShiftArray:intensityArray:nucleusType:spectrometerFrequencyMHz:indexPosition:scanTimeSeconds:error:"
     );
-    MPGONmrMLReader = (
+    TTIONmrMLReader = (
 	"+readFromFilePath:error:",
 	"+readFromURL:error:",
 	"+readFromData:error:",
@@ -412,16 +683,63 @@
 	"-dwellTimeSeconds",
 	"-sweepWidthPpm"
     );
-    MPGONmrMLWriter = (
+    TTIONmrMLWriter = (
 	"+dataForSpectrum:fid:sweepWidthPPM:error:",
 	"+writeSpectrum:fid:sweepWidthPPM:toPath:error:"
     );
-    MPGONumpress = (
+    TTIONumpress = (
 	"+scaleForValueRangeMin:max:",
 	"+encodeFloat64:count:scale:outDeltas:",
 	"+decodeInt64:count:scale:outValues:"
     );
-    MPGOProvenanceRecord = (
+    TTIOPQCKemEncapResult = (
+	"-ciphertext",
+	"-sharedSecret",
+	"-initWithCiphertext:sharedSecret:"
+    );
+    TTIOPQCKeyPair = (
+	"-publicKey",
+	"-privateKey",
+	"-initWithPublicKey:privateKey:"
+    );
+    TTIOPerAUEncryption = (
+	"+aadForChannel:datasetId:auSequence:",
+	"+aadForHeaderWithDatasetId:auSequence:",
+	"+aadForPixelWithDatasetId:auSequence:",
+	"+encryptWithPlaintext:key:iv:aad:outTag:error:",
+	"+decryptWithCiphertext:key:iv:tag:aad:error:",
+	"+randomIVWithError:",
+	"+encryptChannelToSegments:offsets:lengths:nSpectra:datasetId:channelName:key:error:",
+	"+decryptChannelFromSegments:datasetId:channelName:key:error:",
+	"+packAUHeaderPlaintext:",
+	"+unpackAUHeaderPlaintext:",
+	"+encryptHeaderSegments:datasetId:key:error:",
+	"+decryptHeaderSegments:datasetId:key:error:"
+    );
+    TTIOPerAUFile = (
+	"+encryptFilePath:key:encryptHeaders:providerName:error:",
+	"+decryptFilePath:key:providerName:error:"
+    );
+    TTIOPostQuantumCrypto = (
+	"+isAvailable",
+	"+kemKeygenWithError:",
+	"+kemEncapsulateWithPublicKey:error:",
+	"+kemDecapsulateWithPrivateKey:ciphertext:error:",
+	"+sigKeygenWithError:",
+	"+sigSignWithPrivateKey:message:error:",
+	"+sigVerifyWithPublicKey:message:signature:error:"
+    );
+    TTIOProtectionMetadata = (
+	"-cipherSuite",
+	"-kekAlgorithm",
+	"-wrappedDek",
+	"-signatureAlgorithm",
+	"-publicKey",
+	"-initWithCipherSuite:kekAlgorithm:wrappedDek:signatureAlgorithm:publicKey:",
+	"-encode",
+	"+decodeFromData:"
+    );
+    TTIOProvenanceRecord = (
 	"-inputRefs",
 	"-software",
 	"-parameters",
@@ -432,13 +750,13 @@
 	"-asPlist",
 	"+fromPlist:"
     );
-    MPGOProviderRegistry = (
+    TTIOProviderRegistry = (
 	"+sharedRegistry",
 	"-registerProviderClass:forName:",
 	"-knownProviderNames",
 	"-openURL:mode:provider:error:"
     );
-    MPGOQuantification = (
+    TTIOQuantification = (
 	"-chemicalEntity",
 	"-sampleRef",
 	"-abundance",
@@ -447,7 +765,7 @@
 	"-asPlist",
 	"+fromPlist:"
     );
-    MPGOQuery = (
+    TTIOQuery = (
 	"+queryOnIndex:",
 	"-withRetentionTimeRange:",
 	"-withMsLevel:",
@@ -456,7 +774,30 @@
 	"-withBasePeakIntensityAtLeast:",
 	"-matchingIndices"
     );
-    MPGOSignalArray = (
+    TTIORamanImage = (
+	"-width",
+	"-height",
+	"-spectralPoints",
+	"-tileSize",
+	"-cube",
+	"-wavenumbers",
+	"-pixelSizeX",
+	"-pixelSizeY",
+	"-scanPattern",
+	"-excitationWavelengthNm",
+	"-laserPowerMw",
+	"-initWithWidth:height:spectralPoints:tileSize:cube:wavenumbers:excitationWavelengthNm:laserPowerMw:",
+	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:excitationWavelengthNm:laserPowerMw:cube:wavenumbers:"
+    );
+    TTIORamanSpectrum = (
+	"-wavenumberArray",
+	"-intensityArray",
+	"-excitationWavelengthNm",
+	"-laserPowerMw",
+	"-integrationTimeSec",
+	"-initWithWavenumberArray:intensityArray:excitationWavelengthNm:laserPowerMw:integrationTimeSec:indexPosition:scanTimeSeconds:error:"
+    );
+    TTIOSignalArray = (
 	"-buffer",
 	"-length",
 	"-encoding",
@@ -467,14 +808,16 @@
 	"-isEqual:",
 	"-hash"
     );
-    MPGOSignatureManager = (
+    TTIOSignatureManager = (
 	"+hmacSHA256OfData:withKey:",
 	"+signDataset:inFile:withKey:error:",
 	"+verifyDataset:inFile:withKey:error:",
+	"+signDataset:inFile:withKey:algorithm:error:",
+	"+verifyDataset:inFile:withKey:algorithm:error:",
 	"+signProvenanceInRun:inFile:withKey:error:",
 	"+verifyProvenanceInRun:inFile:withKey:error:"
     );
-    MPGOSpectralDataset = (
+    TTIOSpectralDataset = (
 	"-title",
 	"-isaInvestigationId",
 	"-msRuns",
@@ -483,9 +826,12 @@
 	"-quantifications",
 	"-provenanceRecords",
 	"-transitions",
+	"-isEncrypted",
+	"-encryptedAlgorithm",
 	"-initWithTitle:isaInvestigationId:msRuns:nmrRuns:identifications:quantifications:provenanceRecords:transitions:",
 	"-writeToFilePath:error:",
 	"+readFromFilePath:error:",
+	"+writeMinimalToPath:title:isaInvestigationId:msRuns:identifications:quantifications:provenanceRecords:error:",
 	"-closeFile",
 	"-filePath",
 	"-provider",
@@ -494,10 +840,11 @@
 	"-decryptWithKey:error:",
 	"-accessPolicy",
 	"-setAccessPolicy:",
+	"+decryptInPlaceAtPath:withKey:error:",
 	"-writeAdditionalStudyContent:error:",
 	"-readAdditionalStudyContent:error:"
     );
-    MPGOSpectrum = (
+    TTIOSpectrum = (
 	"-signalArrays",
 	"-axes",
 	"-indexPosition",
@@ -510,7 +857,7 @@
 	"-writeAdditionalAttributesToGroup:error:",
 	"-readAdditionalAttributesFromGroup:error:"
     );
-    MPGOSpectrumIndex = (
+    TTIOSpectrumIndex = (
 	"-count",
 	"-offsetAt:",
 	"-lengthAt:",
@@ -520,13 +867,18 @@
 	"-precursorMzAt:",
 	"-precursorChargeAt:",
 	"-basePeakIntensityAt:",
+	"-activationMethodAt:",
+	"-isolationWindowAt:",
+	"-hasActivationDetail",
 	"-indicesInRetentionTimeRange:",
 	"-indicesForMsLevel:",
 	"-initWithOffsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:",
+	"-initWithOffsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:activationMethods:isolationTargetMzs:isolationLowerOffsets:isolationUpperOffsets:",
 	"-writeToGroup:error:",
-	"+readFromGroup:error:"
+	"+readFromGroup:error:",
+	"+readFromStorageGroup:error:"
     );
-    MPGOStreamReader = (
+    TTIOStreamReader = (
 	"-initWithFilePath:runName:error:",
 	"-totalCount",
 	"-currentPosition",
@@ -535,24 +887,24 @@
 	"-reset",
 	"-close"
     );
-    MPGOStreamWriter = (
+    TTIOStreamWriter = (
 	"-initWithFilePath:runName:acquisitionMode:instrumentConfig:error:",
 	"-appendSpectrum:error:",
 	"-flushWithError:",
 	"-flushAndCloseWithError:",
 	"-spectrumCount"
     );
-    MPGOThermoRawReader = (
+    TTIOThermoRawReader = (
 	"+readFromFilePath:error:"
     );
-    MPGOTransition = (
+    TTIOTransition = (
 	"-precursorMz",
 	"-productMz",
 	"-collisionEnergy",
 	"-retentionTimeWindow",
 	"-initWithPrecursorMz:productMz:collisionEnergy:retentionTimeWindow:"
     );
-    MPGOTransitionList = (
+    TTIOTransitionList = (
 	"-transitions",
 	"-initWithTransitions:",
 	"-count",
@@ -560,7 +912,87 @@
 	"-asPlist",
 	"+fromPlist:"
     );
-    MPGOValueRange = (
+    TTIOTransportChannelData = (
+	"-name",
+	"-precision",
+	"-compression",
+	"-nElements",
+	"-data",
+	"-initWithName:precision:compression:nElements:data:",
+	"-appendToBuffer:",
+	"+decodeFromBytes:length:offset:"
+    );
+    TTIOTransportClient = (
+	"-initWithURL:",
+	"-fetchPacketsWithFilters:timeout:error:",
+	"-streamToFilePath:filters:error:"
+    );
+    TTIOTransportPacketHeader = (
+	"-packetType",
+	"-flags",
+	"-datasetId",
+	"-auSequence",
+	"-payloadLength",
+	"-timestampNs",
+	"-initWithPacketType:flags:datasetId:auSequence:payloadLength:timestampNs:",
+	"-encode",
+	"+decodeFromBytes:length:error:"
+    );
+    TTIOTransportPacketRecord = (
+	"-header",
+	"-payload",
+	"-initWithHeader:payload:"
+    );
+    TTIOTransportReader = (
+	"-initWithInputPath:",
+	"-initWithData:",
+	"-readAllPacketsWithError:",
+	"-writeTtioToPath:error:"
+    );
+    TTIOTransportServer = (
+	"-initWithDatasetPath:host:port:",
+	"-startAndReturnError:",
+	"-stopWithTimeout:",
+	"-actualPort"
+    );
+    TTIOTransportWriter = (
+	"-useChecksum",
+	"-setUseChecksum:",
+	"-useCompression",
+	"-setUseCompression:",
+	"-initWithOutputPath:",
+	"-initWithMutableData:",
+	"-writeDataset:error:",
+	"-writeStreamHeaderWithFormatVersion:title:isaInvestigation:features:nDatasets:error:",
+	"-writeDatasetHeaderWithDatasetId:name:acquisitionMode:spectrumClass:channelNames:instrumentJSON:expectedAUCount:error:",
+	"-writeAccessUnit:datasetId:auSequence:error:",
+	"-writeEndOfDatasetWithDatasetId:finalAUSequence:error:",
+	"-writeEndOfStreamWithError:",
+	"-close"
+    );
+    TTIOTwoDCos = (
+	"+hilbertNodaMatrixOfOrder:error:",
+	"+computeWithDynamicSpectra:perturbationPoints:spectralVariables:reference:variableAxis:perturbation:perturbationUnit:sourceModality:error:",
+	"+disrelationSpectrumFromSynchronous:asynchronous:error:"
+    );
+    TTIOTwoDimensionalCorrelationSpectrum = (
+	"-synchronousMatrix",
+	"-asynchronousMatrix",
+	"-matrixSize",
+	"-variableAxis",
+	"-perturbation",
+	"-perturbationUnit",
+	"-sourceModality",
+	"-initWithSynchronousMatrix:asynchronousMatrix:matrixSize:variableAxis:perturbation:perturbationUnit:sourceModality:indexPosition:error:"
+    );
+    TTIOUVVisSpectrum = (
+	"-wavelengthArray",
+	"-absorbanceArray",
+	"-pathLengthCm",
+	"-solvent",
+	"-initWithWavelengthArray:absorbanceArray:pathLengthCm:solvent:indexPosition:scanTimeSeconds:error:"
+    );
+    TTIOValueRange = (
 	"-minimum",
 	"-maximum",
 	"-initWithMinimum:maximum:",
@@ -568,8 +1000,30 @@
 	"-span",
 	"-containsValue:"
     );
-    MPGOVerifier = (
+    TTIOVerifier = (
 	"+verifyDataset:inFile:withKey:error:",
 	"+verifyProvenanceInRun:inFile:withKey:error:"
+    );
+    TTIOWatersMassLynxReader = (
+	"+readFromDirectoryPath:converter:error:",
+	"+readFromDirectoryPath:error:"
+    );
+    TTIOWrittenRun = (
+	"-spectrumClassName",
+	"-acquisitionMode",
+	"-channelData",
+	"-offsets",
+	"-lengths",
+	"-retentionTimes",
+	"-msLevels",
+	"-polarities",
+	"-precursorMzs",
+	"-precursorCharges",
+	"-basePeakIntensities",
+	"-nucleusType",
+	"-setNucleusType:",
+	"-signalCompression",
+	"-setSignalCompression:",
+	"-initWithSpectrumClassName:acquisitionMode:channelData:offsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:"
     );
 }

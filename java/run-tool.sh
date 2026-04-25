@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# v0.7 M51: thin wrapper that invokes a com.dtwthalion.mpgo.tools.* main
+# v0.7 M51: thin wrapper that invokes a com.dtwthalion.ttio.tools.* main
 # class with the full runtime classpath (including the system-scoped
 # jhdf5 jar). Used by the compound-parity harness to run the Java
 # dumper the same way Python and ObjC invoke their native CLIs.
@@ -15,16 +15,16 @@ here="$(cd "$(dirname "$0")" && pwd)"
 cd "$here"
 
 # Detect HDF5 jar and native libs.
-if [ -z "${MPGO_HDF5_JAR:-}" ]; then
+if [ -z "${TTIO_HDF5_JAR:-}" ]; then
     if [ -f /usr/share/java/jarhdf5.jar ]; then
-        MPGO_HDF5_JAR=/usr/share/java/jarhdf5.jar
+        TTIO_HDF5_JAR=/usr/share/java/jarhdf5.jar
     else
-        echo "run-tool.sh: set MPGO_HDF5_JAR to the jhdf5 jar path" >&2
+        echo "run-tool.sh: set TTIO_HDF5_JAR to the jhdf5 jar path" >&2
         exit 1
     fi
 fi
-if [ -z "${MPGO_HDF5_NATIVE:-}" ]; then
-    MPGO_HDF5_NATIVE=/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial
+if [ -z "${TTIO_HDF5_NATIVE:-}" ]; then
+    TTIO_HDF5_NATIVE=/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial
 fi
 
 # Ensure the project is built so target/classes exists.
@@ -40,5 +40,5 @@ if [ ! -f "$cp_file" ] || [ pom.xml -nt "$cp_file" ]; then
         -Dmdep.outputFile="$cp_file" >&2
 fi
 
-CLASSPATH="target/classes:$(cat "$cp_file"):$MPGO_HDF5_JAR"
-exec java -cp "$CLASSPATH" -Djava.library.path="$MPGO_HDF5_NATIVE" "$@"
+CLASSPATH="target/classes:$(cat "$cp_file"):$TTIO_HDF5_JAR"
+exec java -cp "$CLASSPATH" -Djava.library.path="$TTIO_HDF5_NATIVE" "$@"

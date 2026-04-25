@@ -1,0 +1,64 @@
+ttio.exporters.jcamp_dx
+=======================
+
+.. py:module:: ttio.exporters.jcamp_dx
+
+.. autoapi-nested-parse::
+
+   JCAMP-DX 5.01 exporter for 1-D Raman, IR, and UV-Vis spectra.
+
+   Emits ``##XYDATA=(X++(Y..Y))`` in one of four forms selected by the
+   ``encoding`` keyword:
+
+   - ``"affn"`` (default) — one ``(X, Y)`` pair per line, bit-accurate
+     free-format floats via ``%.10g``. No YFACTOR scaling needed.
+   - ``"pac"`` / ``"sqz"`` / ``"dif"`` — JCAMP-DX 5.01 §5.9 compressed
+     forms. Requires equispaced X (verified); picks a YFACTOR that
+     carries ~7 significant digits of integer-scaled Y precision.
+     Cross-language byte-parity-identical to the Java + ObjC writers,
+     gated by the fixtures under ``conformance/jcamp_dx/``.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOJcampDxWriter`` · Java:
+   ``com.dtwthalion.ttio.exporters.JcampDxWriter``.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.exporters.jcamp_dx.write_raman_spectrum
+   ttio.exporters.jcamp_dx.write_ir_spectrum
+   ttio.exporters.jcamp_dx.write_uv_vis_spectrum
+
+
+Module Contents
+---------------
+
+.. py:function:: write_raman_spectrum(spectrum: ttio.raman_spectrum.RamanSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn') -> None
+
+   Write ``spectrum`` to a JCAMP-DX 5.01 Raman file at ``path``.
+
+   ``encoding`` ∈ ``{"affn", "pac", "sqz", "dif"}`` — the compressed
+   forms require equispaced wavenumber sampling (M76).
+
+
+.. py:function:: write_ir_spectrum(spectrum: ttio.ir_spectrum.IRSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn') -> None
+
+   Write ``spectrum`` to a JCAMP-DX 5.01 IR file at ``path``.
+
+   ``encoding`` ∈ ``{"affn", "pac", "sqz", "dif"}`` — the compressed
+   forms require equispaced wavenumber sampling (M76).
+
+
+.. py:function:: write_uv_vis_spectrum(spectrum: ttio.uv_vis_spectrum.UVVisSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn') -> None
+
+   Write ``spectrum`` to a JCAMP-DX 5.01 UV/VIS file at ``path``.
+
+   ``encoding`` ∈ ``{"affn", "pac", "sqz", "dif"}`` — the compressed
+   forms require equispaced wavelength sampling (M76).
+
+

@@ -19,8 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
-from mpeg_o import AxisDescriptor, SignalArray, UVVisSpectrum
-from mpeg_o.exporters.jcamp_dx import write_uv_vis_spectrum
+from ttio import AxisDescriptor, SignalArray, UVVisSpectrum
+from ttio.exporters.jcamp_dx import write_uv_vis_spectrum
 
 
 def _fixture() -> UVVisSpectrum:

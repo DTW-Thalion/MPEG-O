@@ -27,7 +27,7 @@ fi
 make
 mkdir -p "$repo/docs/api/objc"
 rm -rf "$repo/docs/api/objc/"*
-cp -r html/. "$repo/docs/api/objc/"
+cp -r libTTIO/. "$repo/docs/api/objc/"
 
 echo ""
 echo "Done. Open docs/api/index.html in a browser."

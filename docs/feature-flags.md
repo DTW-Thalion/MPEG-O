@@ -1,8 +1,8 @@
-# MPEG-O Feature Flag Registry
+# TTI-O Feature Flag Registry
 
 Feature flags are declared on the HDF5 root group as the
-`@mpeg_o_features` attribute, which holds a JSON array of strings.
-Files written by libMPGO v0.2+ always emit the full set of supported
+`@ttio_features` attribute, which holds a JSON array of strings.
+Files written by libTTIO v0.2+ always emit the full set of supported
 features so downstream readers can detect capabilities at a glance.
 Later versions layer additional features on top:
 
@@ -14,7 +14,7 @@ Later versions layer additional features on top:
   ML-KEM-1024 envelope wrapping (FIPS 203), ML-DSA-87 dataset
   signatures (`v3:` prefix, FIPS 204). See `docs/pqc.md`.
 
-The on-disk `mpeg_o_format_version` attribute is **"1.2"** for files
+The on-disk `ttio_format_version` attribute is **"1.2"** for files
 written by v0.7+ writers (was `"1.1"` in v0.2 through v0.6). Readers
 treat the major/minor parts as documented in `docs/format-spec.md §1`
 — the minor bump is backward-compatible; v0.6 readers parse a v0.7
@@ -27,7 +27,7 @@ file unless it carries a required flag they don't recognise.
 | none    | **Required.** Readers that do not recognize the feature MUST refuse to open the file. |
 | `opt_`  | **Optional.** Readers may ignore the feature; files without corresponding data still parse. |
 
-A v0.1 file carries no `@mpeg_o_features` attribute at all. v0.2
+A v0.1 file carries no `@ttio_features` attribute at all. v0.2
 readers detect this and fall back to the v0.1 JSON-attribute metadata
 path (see §11 of `format-spec.md`).
 
@@ -40,8 +40,8 @@ path (see §11 of `format-spec.md`).
 | `compound_quantifications`   | required  | M11          | `/study/quantifications` is an HDF5 compound dataset (4-field struct with VL strings).             |
 | `compound_provenance`        | required  | M11          | `/study/provenance` is an HDF5 compound dataset (5-field dataset-level chain).                    |
 | `opt_compound_headers`       | optional  | M11          | Each `spectrum_index/` group carries a rank-1 `headers` compound dataset alongside the parallel arrays. |
-| `opt_native_2d_nmr`          | optional  | M12          | `MPGONMR2DSpectrum` stores its matrix as a native rank-2 HDF5 dataset (`intensity_matrix_2d`) with dimension scales. |
-| `opt_native_msimage_cube`    | optional  | M12          | `MPGOMSImage` cubes live at `/study/image_cube/` as rank-3 datasets (v0.1 location was `/image_cube/` at root). |
+| `opt_native_2d_nmr`          | optional  | M12          | `TTIONMR2DSpectrum` stores its matrix as a native rank-2 HDF5 dataset (`intensity_matrix_2d`) with dimension scales. |
+| `opt_native_msimage_cube`    | optional  | M12          | `TTIOMSImage` cubes live at `/study/image_cube/` as rank-3 datasets (v0.1 location was `/image_cube/` at root). |
 | `opt_dataset_encryption`     | optional  | M11 add-on   | Dataset-level AES-256-GCM sealing reserved for files that set `@encrypted` on the root.           |
 | `opt_digital_signatures`     | optional  | M14          | File contains one or more HMAC-SHA256 signatures in `@mpgo_signature` / `@provenance_signature` attributes. |
 | `compound_per_run_provenance`| required  | M17 (v0.3)   | Per-run provenance is stored as a compound HDF5 dataset at `/study/ms_runs/<run>/provenance/steps` using the same 5-field type as dataset-level `/study/provenance`. v0.2 readers fall back to the `@provenance_json` legacy mirror, which the writer keeps in place for signature compatibility. |
@@ -49,13 +49,13 @@ path (see §11 of `format-spec.md`).
 
 ## Adding a new feature
 
-1. Add a new `+featureXxx` class method on `MPGOFeatureFlags` that
+1. Add a new `+featureXxx` class method on `TTIOFeatureFlags` that
    returns the string constant.
 2. Decide whether the new feature is required or optional. Prefer
    optional unless the feature changes existing layout in a way a
    naive reader would mishandle.
 3. Add the string to the default feature list emitted from
-   `MPGOSpectralDataset.writeToFilePath:` if (and only if) it is
+   `TTIOSpectralDataset.writeToFilePath:` if (and only if) it is
    unconditional for every written file. Otherwise emit it
    conditionally from the writer that introduces the new content.
 4. Append a row to the registry table above, including the
@@ -118,7 +118,7 @@ v0.11.0, but the release **did not introduce any feature flags**.
 - `RamanSpectrum` / `IRSpectrum` are regular `Spectrum` subclasses
   covered by `base_v1`; they serialize into `ms_runs`-adjacent
   groups (`raman_runs`, `ir_runs`) using the same parallel-array
-  layout as existing `MPGONMRSpectrum`.
+  layout as existing `TTIONMRSpectrum`.
 - `RamanImage` / `IRImage` use dedicated HDF5 groups
   (`/study/raman_image_cube/`, `/study/ir_image_cube/`) with the
   same rank-3 + chunked layout as `opt_native_msimage_cube` but are
@@ -137,13 +137,13 @@ v0.11.0, but the release **did not introduce any feature flags**.
 
 M79 also reserves on-disk integers without introducing flags:
 
-- `MPGOPrecision.UINT8 = 6` — byte-typed datasets, round-trippable
+- `TTIOPrecision.UINT8 = 6` — byte-typed datasets, round-trippable
   through every storage provider (HDF5, Memory, SQLite, Zarr).
-- `MPGOCompression` ids `4`–`8`: `RANS_ORDER0`, `RANS_ORDER1`,
+- `TTIOCompression` ids `4`–`8`: `RANS_ORDER0`, `RANS_ORDER1`,
   `BASE_PACK`, `QUALITY_BINNED`, `NAME_TOKENIZED` — placeholders
   for genomic codecs that ship with M74. Readers must surface
   `UnsupportedCodec` for ids ≥ 4 until the matching encoder ships.
-- `MPGOAcquisitionMode.GENOMIC_WGS = 7`, `GENOMIC_WES = 8` —
+- `TTIOAcquisitionMode.GENOMIC_WGS = 7`, `GENOMIC_WES = 8` —
   reserved acquisition modes for whole-genome / whole-exome runs.
 - Transport `spectrumClass = 5` (GenomicRead) — generic over the
   spectral-prefix layout; fields zero for now.
@@ -152,7 +152,7 @@ M79 also reserves on-disk integers without introducing flags:
 
 | Flag                 | Required? | Since        | Semantics                                                                                          |
 |----------------------|-----------|--------------|----------------------------------------------------------------------------------------------------|
-| `opt_native_2d_cos`  | optional  | M73.1 (v0.11.1) | File contains one or more `TwoDimensionalCorrelationSpectrum` objects. Each is serialised as an `MPGOSpectrum` subclass carrying three named signal arrays — `variable_axis` (rank-1 float64 of length N), `synchronous` (rank-2 float64 row-major N×N, in-phase), and `asynchronous` (rank-2 float64 row-major N×N, quadrature). The `opt_` prefix means pre-v0.11.1 readers ignore the class-specific attributes and fall back to the generic `Spectrum` deserialiser; they see the arrays as opaque named channels and round-trip them unchanged. |
+| `opt_native_2d_cos`  | optional  | M73.1 (v0.11.1) | File contains one or more `TwoDimensionalCorrelationSpectrum` objects. Each is serialised as an `TTIOSpectrum` subclass carrying three named signal arrays — `variable_axis` (rank-1 float64 of length N), `synchronous` (rank-2 float64 row-major N×N, in-phase), and `asynchronous` (rank-2 float64 row-major N×N, quadrature). The `opt_` prefix means pre-v0.11.1 readers ignore the class-specific attributes and fall back to the generic `Spectrum` deserialiser; they see the arrays as opaque named channels and round-trip them unchanged. |
 
 `UVVisSpectrum` did **not** introduce a new flag — like Raman / IR
 spectra it rides the `base_v1` parallel-array layout keyed on

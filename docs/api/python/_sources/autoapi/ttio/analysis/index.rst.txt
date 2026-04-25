@@ -1,0 +1,26 @@
+ttio.analysis
+=============
+
+.. py:module:: ttio.analysis
+
+.. autoapi-nested-parse::
+
+   Analysis subpackage (Apache-2.0).
+
+   - 2D-COS (M77): generalised synchronous / asynchronous decomposition from
+     a perturbation series (Noda's Hilbert-transform approach) plus a
+     disrelation-based significance metric.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/ttio/analysis/two_d_cos/index
+
+

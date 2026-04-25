@@ -2,8 +2,8 @@
 # Multi-function Java perf harness build+run script.
 set -eu
 
-JAVA_DIR="$HOME/MPEG-O/java"
-TOOLS_DIR="$HOME/MPEG-O/tools/perf"
+JAVA_DIR="$HOME/TTI-O/java"
+TOOLS_DIR="$HOME/TTI-O/tools/perf"
 BUILD_DIR="$TOOLS_DIR/_build"
 OUT_DIR="$TOOLS_DIR/_out_java_full"
 

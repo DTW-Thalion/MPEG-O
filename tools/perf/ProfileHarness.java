@@ -1,5 +1,5 @@
 /*
- * Java profiling harness for MPEG-O. Matches the Python + ObjC
+ * Java profiling harness for TTI-O. Matches the Python + ObjC
  * harnesses: 10K spectra, 16 peaks, HDF5 backend.
  *
  * Run with JFR enabled:
@@ -11,12 +11,12 @@
  */
 package tools.perf;
 
-import com.dtwthalion.mpgo.AcquisitionRun;
-import com.dtwthalion.mpgo.SignalArray;
-import com.dtwthalion.mpgo.SpectralDataset;
-import com.dtwthalion.mpgo.Spectrum;
-import com.dtwthalion.mpgo.SpectrumIndex;
-import com.dtwthalion.mpgo.Enums.AcquisitionMode;
+import com.dtwthalion.tio.AcquisitionRun;
+import com.dtwthalion.tio.SignalArray;
+import com.dtwthalion.tio.SpectralDataset;
+import com.dtwthalion.tio.Spectrum;
+import com.dtwthalion.tio.SpectrumIndex;
+import com.dtwthalion.tio.Enums.AcquisitionMode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -67,14 +67,14 @@ public final class ProfileHarness {
                 idx, null, channels, List.of(), List.of(), null, 0);
     }
 
-    private static void workload(Path mpgo, int n, int peaks, long[] t) throws Exception {
+    private static void workload(Path ttio, int n, int peaks, long[] t) throws Exception {
         long s = System.nanoTime();
         AcquisitionRun run = makeRun(n, peaks);
         t[0] = System.nanoTime() - s;                               // build
 
         s = System.nanoTime();
         try (SpectralDataset ds = SpectralDataset.create(
-                mpgo.toString(), "stress", "ISA-STRESS",
+                ttio.toString(), "stress", "ISA-STRESS",
                 List.of(run), List.of(), List.of(), List.of())) {
             // written on close
         }
@@ -82,7 +82,7 @@ public final class ProfileHarness {
 
         s = System.nanoTime();
         long sampled = 0;
-        try (SpectralDataset ds = SpectralDataset.open(mpgo.toString())) {
+        try (SpectralDataset ds = SpectralDataset.open(ttio.toString())) {
             AcquisitionRun back = ds.msRuns().get("r");
             if (back.spectrumCount() != n) {
                 throw new IllegalStateException("expected " + n + " got " + back.spectrumCount());
@@ -118,19 +118,19 @@ public final class ProfileHarness {
 
         // Warm up — gives HotSpot time to compile hot methods.
         for (int i = 0; i < warmups; i++) {
-            Path warm = outDir.resolve("warm_" + i + ".mpgo");
+            Path warm = outDir.resolve("warm_" + i + ".tio");
             Files.deleteIfExists(warm);
             workload(warm, n, peaks, new long[3]);
             Files.deleteIfExists(warm);
         }
 
-        Path mpgo = outDir.resolve("stress.mpgo");
-        Files.deleteIfExists(mpgo);
+        Path ttio = outDir.resolve("stress.tio");
+        Files.deleteIfExists(ttio);
 
         long[] t = new long[3];
-        workload(mpgo, n, peaks, t);
+        workload(ttio, n, peaks, t);
 
-        long size = Files.size(mpgo);
+        long size = Files.size(ttio);
         System.out.println("=".repeat(78));
         System.out.printf("Java profile: n=%d, peaks=%d, file=%.2f MB, warmups=%d%n",
                           n, peaks, size / 1e6, warmups);

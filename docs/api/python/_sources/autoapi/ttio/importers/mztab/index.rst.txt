@@ -1,0 +1,183 @@
+ttio.importers.mztab
+====================
+
+.. py:module:: ttio.importers.mztab
+
+.. autoapi-nested-parse::
+
+   mzTab importer (v0.9 M60).
+
+   mzTab is a results-level interchange format from PSI. It is a
+   tab-separated text file divided into sections by a one-line prefix:
+
+   * ``MTD`` — metadata (key / value lines)
+   * ``PRH`` / ``PRT`` — protein header / row    (mzTab 1.0)
+   * ``PEH`` / ``PEP`` — peptide header / row    (mzTab 1.0)
+   * ``PSH`` / ``PSM`` — PSM header / row        (mzTab 1.0)
+   * ``SMH`` / ``SML`` — small-molecule header / row (mzTab-M 2.0)
+   * ``COM`` — comment line, ignored
+   * anything else — treated as a malformed-row warning, skipped
+
+   Per HANDOFF binding decision 47 (mzTab version detection):
+   ``MTD\tmzTab-version\t1.0`` selects the proteomics dialect;
+   ``MTD\tmzTab-version\t2.0.0-M`` selects the metabolomics dialect.
+   The reader detects on the metadata line and dispatches accordingly.
+
+   Mapping into TTI-O records
+   ---------------------------
+
+   | mzTab section | TTI-O record               | Notes                                                         |
+   |---------------|------------------------------|---------------------------------------------------------------|
+   | PSM           | :class:`Identification`     | ``run_name`` from ``spectra_ref``; score from best search engine score |
+   | PRT           | :class:`Quantification`     | one record per ``protein_abundance_assay[N]`` column           |
+   | PEP           | :class:`Feature`            | peptide-level feature (v0.12.0 M78)                            |
+   | SML           | :class:`Identification`     | metabolite annotation; ``run_name='metabolomics'`` placeholder |
+   | SML abundance | :class:`Quantification`     | one record per ``abundance_study_variable[N]`` column          |
+   | SMF           | :class:`Feature`            | small-molecule feature row (v0.12.0 M78)                       |
+   | SME           | :class:`Identification`     | small-molecule evidence row (v0.12.0 M78)                      |
+   | MTD           | :class:`ProvenanceRecord`   | software, search engine and ms_run locations                   |
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOMzTabReader``
+   Java:        ``com.dtwthalion.ttio.importers.MzTabReader``
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.importers.mztab.MzTabParseError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.mztab.MzTabImport
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.mztab.read
+
+
+Module Contents
+---------------
+
+.. py:exception:: MzTabParseError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Raised when the mzTab document is structurally invalid.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:class:: MzTabImport
+
+   In-memory representation of a parsed mzTab file.
+
+
+   .. py:attribute:: version
+      :type:  str
+
+
+   .. py:attribute:: description
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: ms_run_locations
+      :type:  dict[int, str]
+
+
+   .. py:attribute:: sample_refs
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:attribute:: software
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:attribute:: search_engines
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:attribute:: identifications
+      :type:  list[ttio.identification.Identification]
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list[ttio.quantification.Quantification]
+      :value: []
+
+
+
+   .. py:attribute:: features
+      :type:  list[ttio.feature.Feature]
+      :value: []
+
+
+
+   .. py:attribute:: provenance
+      :type:  list[ttio.provenance.ProvenanceRecord]
+      :value: []
+
+
+
+   .. py:attribute:: source_path
+      :type:  str
+      :value: ''
+
+
+
+   .. py:property:: is_metabolomics
+      :type: bool
+
+
+
+   .. py:method:: to_ttio(path: str | pathlib.Path, *, title: str | None = None, isa_investigation_id: str = '', link_to: ttio.spectral_dataset.SpectralDataset | None = None) -> pathlib.Path
+
+      Write the imported records to an .tio container.
+
+      When ``link_to`` is ``None`` an identifications-only container
+      is emitted (no spectra runs). When a :class:`SpectralDataset`
+      is supplied, its existing runs + identifications are merged
+      with the mzTab records before writing — useful for splicing
+      results back into the dataset that produced them. The merge
+      preserves spectra_ref → run_name mappings recorded in the
+      ``MTD ms_run[N]-location`` lines whenever the basename
+      matches a run in the linked dataset.
+
+
+
+.. py:function:: read(path: str | pathlib.Path) -> MzTabImport
+
+   Parse an mzTab file and return an :class:`MzTabImport`.
+
+

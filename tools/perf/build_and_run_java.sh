@@ -2,14 +2,14 @@
 # Java profiling harness build+run script.
 set -eu
 
-JAVA_DIR="$HOME/MPEG-O/java"
-TOOLS_DIR="$HOME/MPEG-O/tools/perf"
-BUILD_DIR="$HOME/MPEG-O/tools/perf/_build"
-OUT_DIR="$HOME/MPEG-O/tools/perf/_out_java"
+JAVA_DIR="$HOME/TTI-O/java"
+TOOLS_DIR="$HOME/TTI-O/tools/perf"
+BUILD_DIR="$HOME/TTI-O/tools/perf/_build"
+OUT_DIR="$HOME/TTI-O/tools/perf/_out_java"
 
 mkdir -p "$BUILD_DIR" "$OUT_DIR"
 
-# Classpath: all runtime deps + compiled mpgo classes.
+# Classpath: all runtime deps + compiled ttio classes.
 CP_FILE="$JAVA_DIR/target/runtime-classpath.txt"
 if [[ ! -s "$CP_FILE" ]]; then
     echo "runtime-classpath.txt missing — run 'mvn test-compile' first" >&2

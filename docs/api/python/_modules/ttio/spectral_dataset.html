@@ -1,0 +1,1478 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>ttio.spectral_dataset - TTI-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">TTI-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  <span class="sidebar-brand-text">TTI-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/ttio/index.html">ttio</a><input aria-label="Toggle navigation of ttio" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/access_policy/index.html">ttio.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/acquisition_run/index.html">ttio.acquisition_run</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/analysis/index.html">ttio.analysis</a><input aria-label="Toggle navigation of ttio.analysis" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/analysis/two_d_cos/index.html">ttio.analysis.two_d_cos</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/anonymization/index.html">ttio.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/axis_descriptor/index.html">ttio.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/chromatogram/index.html">ttio.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/cipher_suite/index.html">ttio.cipher_suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/cv_param/index.html">ttio.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encoding_spec/index.html">ttio.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encryption/index.html">ttio.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encryption_per_au/index.html">ttio.encryption_per_au</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/enums/index.html">ttio.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/imzml/index.html">ttio.exporters.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/isa/index.html">ttio.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/mzml/index.html">ttio.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/mztab/index.html">ttio.exporters.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/feature/index.html">ttio.feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/feature_flags/index.html">ttio.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/fid/index.html">ttio.fid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/imzml/index.html">ttio.importers.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/mzml/index.html">ttio.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/mztab/index.html">ttio.importers.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ir_image/index.html">ttio.ir_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ir_spectrum/index.html">ttio.ir_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/isolation_window/index.html">ttio.isolation_window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/key_rotation/index.html">ttio.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/mass_spectrum/index.html">ttio.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ms_image/index.html">ttio.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/nmr_2d/index.html">ttio.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/pqc/index.html">ttio.pqc</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/indexable/index.html">ttio.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/provenanceable/index.html">ttio.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/streamable/index.html">ttio.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/provenance/index.html">ttio.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/base/index.html">ttio.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/hdf5/index.html">ttio.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/memory/index.html">ttio.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/registry/index.html">ttio.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/sqlite/index.html">ttio.providers.sqlite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/zarr/index.html">ttio.providers.zarr</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/quantification/index.html">ttio.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/query/index.html">ttio.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/raman_image/index.html">ttio.raman_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/raman_spectrum/index.html">ttio.raman_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/signal_array/index.html">ttio.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/signatures/index.html">ttio.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/spectral_dataset/index.html">ttio.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/spectrum/index.html">ttio.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/stream_reader/index.html">ttio.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/stream_writer/index.html">ttio.stream_writer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_encode_cli/index.html">ttio.tools.transport_encode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_server_cli/index.html">ttio.tools.transport_server_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/transition_list/index.html">ttio.transition_list</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/client/index.html">ttio.transport.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/codec/index.html">ttio.transport.codec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/encrypted/index.html">ttio.transport.encrypted</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/packets/index.html">ttio.transport.packets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/server/index.html">ttio.transport.server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/simulator/index.html">ttio.transport.simulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/value_range/index.html">ttio.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/verifier/index.html">ttio.verifier</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for ttio.spectral_dataset</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;``SpectralDataset`` — root ``.tio`` reader / writer façade.</span>
+
+<span class="sd">This class is the main public entry point. It owns the underlying</span>
+<span class="sd">``h5py.File`` handle, provides mapping-style access to runs, and exposes the</span>
+<span class="sd">feature-flag / identifications / quantifications / provenance metadata.</span>
+
+<span class="sd">Only reading and minimal writing are implemented in M16. Full writing</span>
+<span class="sd">support (feature flags, compound datasets, signal channels for new runs)</span>
+<span class="sd">uses the same helpers in :mod:`_hdf5_io` and is fleshed out alongside the</span>
+<span class="sd">mzML/nmrML importers in M16.7.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">types</span><span class="w"> </span><span class="kn">import</span> <span class="n">TracebackType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">Mapping</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_hdf5_io</span> <span class="k">as</span> <span class="n">io</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">._rwlock</span><span class="w"> </span><span class="kn">import</span> <span class="n">RWLock</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.access_policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">AccessPolicy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.acquisition_run</span><span class="w"> </span><span class="kn">import</span> <span class="n">AcquisitionRun</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.enums</span><span class="w"> </span><span class="kn">import</span> <span class="n">EncryptionLevel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.feature_flags</span><span class="w"> </span><span class="kn">import</span> <span class="n">FeatureFlags</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.identification</span><span class="w"> </span><span class="kn">import</span> <span class="n">Identification</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.providers</span><span class="w"> </span><span class="kn">import</span> <span class="n">StorageProvider</span><span class="p">,</span> <span class="n">open_provider</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.providers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">StorageGroup</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.providers.hdf5</span><span class="w"> </span><span class="kn">import</span> <span class="n">Hdf5Provider</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.provenance</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProvenanceRecord</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.quantification</span><span class="w"> </span><span class="kn">import</span> <span class="n">Quantification</span>
+
+<span class="c1"># M23 sentinel: returned by ``read_lock``/``write_lock`` when ``thread_safe``</span>
+<span class="c1"># is False so call sites can use ``with ds.read_lock(): ...`` unconditionally.</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_NullGuard</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;_NullGuard&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">exc</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+
+<span class="n">_NULL_GUARD</span> <span class="o">=</span> <span class="n">_NullGuard</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_split_run_names</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">()</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">name</span><span class="p">)</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="SpectralDataset">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SpectralDataset</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Root container for an TTI-O ``.tio`` file.</span>
+
+<span class="sd">    Owns a top-level ``study/`` group plus zero or more named MS</span>
+<span class="sd">    acquisition runs, zero or more named NMR-spectrum collections,</span>
+<span class="sd">    the dataset-wide identifications, quantifications, provenance</span>
+<span class="sd">    records, and an optional transition list.</span>
+
+<span class="sd">    Persistence uses a</span>
+<span class="sd">    :class:`~ttio.providers.base.StorageProvider` (HDF5 by</span>
+<span class="sd">    default); callers may supply another via the ``provider`` kwarg.</span>
+
+<span class="sd">    Notes</span>
+<span class="sd">    -----</span>
+<span class="sd">    API status: Stable. ``Encryptable`` conformance is delivered in</span>
+<span class="sd">    slice 41.5 when the encryption manager lands in Python.</span>
+
+<span class="sd">    Cross-language equivalents</span>
+<span class="sd">    --------------------------</span>
+<span class="sd">    Objective-C: ``TTIOSpectralDataset`` · Java:</span>
+<span class="sd">    ``com.dtwthalion.ttio.SpectralDataset``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="SpectralDataset.path">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.path">[docs]</a>
+    <span class="n">path</span><span class="p">:</span> <span class="n">Path</span></div>
+
+    <span class="c1"># ``file`` is the legacy h5py handle. v0.9 M64.5: when the dataset</span>
+    <span class="c1"># was opened via a non-HDF5 provider (memory/sqlite/zarr) this is</span>
+    <span class="c1"># ``None`` and call sites must use :attr:`provider` instead. New</span>
+    <span class="c1"># code paths route through the StorageGroup protocol.</span>
+<div class="viewcode-block" id="SpectralDataset.file">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.file">[docs]</a>
+    <span class="n">file</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span> <span class="o">|</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="SpectralDataset.feature_flags">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.feature_flags">[docs]</a>
+    <span class="n">feature_flags</span><span class="p">:</span> <span class="n">FeatureFlags</span></div>
+
+<div class="viewcode-block" id="SpectralDataset.title">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.title">[docs]</a>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="SpectralDataset.isa_investigation_id">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.isa_investigation_id">[docs]</a>
+    <span class="n">isa_investigation_id</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="SpectralDataset.ms_runs">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.ms_runs">[docs]</a>
+    <span class="n">ms_runs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AcquisitionRun</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SpectralDataset.nmr_runs">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.nmr_runs">[docs]</a>
+    <span class="n">nmr_runs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AcquisitionRun</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="SpectralDataset.encrypted_algorithm">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.encrypted_algorithm">[docs]</a>
+    <span class="n">encrypted_algorithm</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
+
+    <span class="n">_closed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">_remote_fileobj</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># fsspec file-like kept alive when remote</span>
+    <span class="n">_lock</span><span class="p">:</span> <span class="n">RWLock</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># M23: set when opened with thread_safe=True</span>
+<div class="viewcode-block" id="SpectralDataset.provider">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.provider">[docs]</a>
+    <span class="n">provider</span><span class="p">:</span> <span class="n">StorageProvider</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># M39: owning storage provider</span></div>
+
+    <span class="c1"># ``provider`` is the backend abstraction introduced in M39. ``file``</span>
+    <span class="c1"># remains the canonical h5py handle for byte-level code (signatures,</span>
+    <span class="c1"># encryption, signal-channel codecs) that isn&#39;t expressed through the</span>
+    <span class="c1"># protocol; it is the provider&#39;s native handle when ``provider`` is</span>
+    <span class="c1"># set. New call sites should reach for ``provider.root_group()`` or</span>
+    <span class="c1"># ``provider.native_handle()`` instead of ``file`` directly.</span>
+    <span class="c1"># M41.5: Encryptable conformance.</span>
+    <span class="n">_access_policy</span><span class="p">:</span> <span class="n">AccessPolicy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------- lifecycle</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SpectralDataset.open">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.open">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">open</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">thread_safe</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">writable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">fsspec_kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SpectralDataset&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Open a ``.tio`` dataset from a local path or cloud URL.</span>
+
+<span class="sd">        URLs with a scheme recognised by :data:`ttio.remote.REMOTE_SCHEMES`</span>
+<span class="sd">        (``s3://``, ``http(s)://``, ``gs://``, ``az://``, ``file://``) are</span>
+<span class="sd">        routed through fsspec and read lazily — only the HDF5 metadata and</span>
+<span class="sd">        any actively touched chunks are fetched. Extra keyword arguments are</span>
+<span class="sd">        forwarded to :func:`fsspec.open` and are typically used for</span>
+<span class="sd">        cloud-backend options (``anon=True``, ``key=...``, ...).</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        writable:</span>
+<span class="sd">            If ``True``, open the file in read-write mode (``&quot;r+&quot;``) so</span>
+<span class="sd">            that in-place operations such as</span>
+<span class="sd">            :meth:`AcquisitionRun.encrypt_with_key` can write back to the</span>
+<span class="sd">            same file handle. Ignored for remote URLs (which are always</span>
+<span class="sd">            read-only). Default: ``False``.</span>
+
+<span class="sd">        M39: a :class:`~ttio.providers.Hdf5Provider` is constructed for</span>
+<span class="sd">        the target and exposed as ``dataset.provider``. The legacy</span>
+<span class="sd">        ``dataset.file`` attribute continues to point at the underlying</span>
+<span class="sd">        ``h5py.File`` (= ``provider.native_handle()``).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.remote</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_remote_url</span><span class="p">,</span> <span class="n">open_remote_file</span>
+
+        <span class="k">if</span> <span class="n">is_remote_url</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+            <span class="n">fileobj</span> <span class="o">=</span> <span class="n">open_remote_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="o">**</span><span class="n">fsspec_kwargs</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">f</span> <span class="o">=</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">fileobj</span><span class="p">,</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">fileobj</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="k">raise</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">provider</span> <span class="o">=</span> <span class="n">Hdf5Provider</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+                <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_from_open_file</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)),</span> <span class="n">f</span><span class="p">,</span>
+                                           <span class="n">remote_fileobj</span><span class="o">=</span><span class="n">fileobj</span><span class="p">,</span>
+                                           <span class="n">thread_safe</span><span class="o">=</span><span class="n">thread_safe</span><span class="p">,</span>
+                                           <span class="n">provider</span><span class="o">=</span><span class="n">provider</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">f</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="n">fileobj</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="k">raise</span>
+
+        <span class="c1"># v0.9 M64.5: URL scheme detection routes non-HDF5 providers</span>
+        <span class="c1"># (``memory://...``, ``sqlite://...``, ``dir://...``) through</span>
+        <span class="c1"># the storage protocol. Bare paths still open via HDF5 for</span>
+        <span class="c1"># byte-parity with pre-M64.5 files.</span>
+        <span class="n">path_str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">mode</span> <span class="o">=</span> <span class="s2">&quot;r+&quot;</span> <span class="k">if</span> <span class="n">writable</span> <span class="k">else</span> <span class="s2">&quot;r&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;://&quot;</span> <span class="ow">in</span> <span class="n">path_str</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">path_str</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;file://&quot;</span><span class="p">):</span>
+            <span class="n">provider</span> <span class="o">=</span> <span class="n">open_provider</span><span class="p">(</span><span class="n">path_str</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_from_provider</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">path_str</span><span class="p">),</span> <span class="n">provider</span><span class="p">,</span>
+                                           <span class="n">thread_safe</span><span class="o">=</span><span class="n">thread_safe</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                <span class="n">provider</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="k">raise</span>
+
+        <span class="n">p</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">provider</span> <span class="o">=</span> <span class="n">Hdf5Provider</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">)</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">native_handle</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_from_open_file</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">f</span><span class="p">,</span> <span class="n">thread_safe</span><span class="o">=</span><span class="n">thread_safe</span><span class="p">,</span>
+                                         <span class="n">provider</span><span class="o">=</span><span class="n">provider</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="n">provider</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="k">raise</span></div>
+
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_from_provider</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">provider</span><span class="p">:</span> <span class="n">StorageProvider</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">thread_safe</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SpectralDataset&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Open-side constructor for non-HDF5 providers.</span>
+
+<span class="sd">        Reads everything through the :class:`StorageGroup` protocol so</span>
+<span class="sd">        Memory / SQLite / Zarr backends work without touching h5py.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">root_group</span><span class="p">()</span>
+        <span class="n">version</span><span class="p">,</span> <span class="n">features</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_feature_flags</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
+        <span class="n">flags</span> <span class="o">=</span> <span class="n">FeatureFlags</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="n">version</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span>
+        <span class="n">encrypted</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="s2">&quot;encrypted&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">root</span><span class="o">.</span><span class="n">has_child</span><span class="p">(</span><span class="s2">&quot;study&quot;</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: missing /study group; not an .tio file&quot;</span><span class="p">)</span>
+        <span class="n">study</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;study&quot;</span><span class="p">)</span>
+        <span class="n">title</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">isa</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;isa_investigation_id&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="n">ms_runs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AcquisitionRun</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">study</span><span class="o">.</span><span class="n">has_child</span><span class="p">(</span><span class="s2">&quot;ms_runs&quot;</span><span class="p">):</span>
+            <span class="n">ms_group</span> <span class="o">=</span> <span class="n">study</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;ms_runs&quot;</span><span class="p">)</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="n">_split_run_names</span><span class="p">(</span>
+                <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">ms_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">ms_group</span><span class="o">.</span><span class="n">has_child</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+                    <span class="n">run</span> <span class="o">=</span> <span class="n">AcquisitionRun</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">ms_group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">run</span><span class="o">.</span><span class="n">_set_persistence_context</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">ms_runs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">run</span>
+
+        <span class="n">nmr_runs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AcquisitionRun</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="n">study</span><span class="o">.</span><span class="n">has_child</span><span class="p">(</span><span class="s2">&quot;nmr_runs&quot;</span><span class="p">):</span>
+            <span class="n">nmr_group</span> <span class="o">=</span> <span class="n">study</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;nmr_runs&quot;</span><span class="p">)</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="n">_split_run_names</span><span class="p">(</span>
+                <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">nmr_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+            <span class="p">)</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">nmr_group</span><span class="o">.</span><span class="n">has_child</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+                    <span class="n">run</span> <span class="o">=</span> <span class="n">AcquisitionRun</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">nmr_group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="n">name</span><span class="p">),</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">run</span><span class="o">.</span><span class="n">_set_persistence_context</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">nmr_runs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">run</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span>
+            <span class="n">file</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># non-HDF5 providers don&#39;t expose h5py.File</span>
+            <span class="n">feature_flags</span><span class="o">=</span><span class="n">flags</span><span class="p">,</span>
+            <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">,</span>
+            <span class="n">isa_investigation_id</span><span class="o">=</span><span class="n">isa</span><span class="p">,</span>
+            <span class="n">ms_runs</span><span class="o">=</span><span class="n">ms_runs</span><span class="p">,</span>
+            <span class="n">nmr_runs</span><span class="o">=</span><span class="n">nmr_runs</span><span class="p">,</span>
+            <span class="n">encrypted_algorithm</span><span class="o">=</span><span class="n">encrypted</span><span class="p">,</span>
+            <span class="n">_remote_fileobj</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+            <span class="n">_lock</span><span class="o">=</span><span class="p">(</span><span class="n">RWLock</span><span class="p">()</span> <span class="k">if</span> <span class="n">thread_safe</span> <span class="k">else</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">provider</span><span class="o">=</span><span class="n">provider</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_from_open_file</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="n">f</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">,</span>
+        <span class="n">remote_fileobj</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">thread_safe</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">provider</span><span class="p">:</span> <span class="n">StorageProvider</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SpectralDataset&quot;</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">,</span> <span class="n">features</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_feature_flags</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="n">flags</span> <span class="o">=</span> <span class="n">FeatureFlags</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="n">version</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span>
+        <span class="n">encrypted</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s2">&quot;encrypted&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="s2">&quot;study&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">: missing /study group; not a v0.2+ .tio file&quot;</span><span class="p">)</span>
+        <span class="n">study</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s2">&quot;study&quot;</span><span class="p">]</span>
+
+        <span class="n">title</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">isa</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;isa_investigation_id&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="c1"># Resolve the canonical file path for the persistence context that</span>
+        <span class="c1"># enables AcquisitionRun.encrypt_with_key / decrypt_with_key.</span>
+        <span class="n">file_path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+
+        <span class="n">ms_runs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AcquisitionRun</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="s2">&quot;ms_runs&quot;</span> <span class="ow">in</span> <span class="n">study</span><span class="p">:</span>
+            <span class="n">ms_group</span> <span class="o">=</span> <span class="n">study</span><span class="p">[</span><span class="s2">&quot;ms_runs&quot;</span><span class="p">]</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="n">_split_run_names</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">ms_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">ms_group</span><span class="p">:</span>
+                    <span class="n">run</span> <span class="o">=</span> <span class="n">AcquisitionRun</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">ms_group</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">run</span><span class="o">.</span><span class="n">_set_persistence_context</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">ms_runs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">run</span>
+
+        <span class="n">nmr_runs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AcquisitionRun</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="s2">&quot;nmr_runs&quot;</span> <span class="ow">in</span> <span class="n">study</span><span class="p">:</span>
+            <span class="n">nmr_group</span> <span class="o">=</span> <span class="n">study</span><span class="p">[</span><span class="s2">&quot;nmr_runs&quot;</span><span class="p">]</span>
+            <span class="n">names</span> <span class="o">=</span> <span class="n">_split_run_names</span><span class="p">(</span><span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">nmr_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">nmr_group</span><span class="p">:</span>
+                    <span class="n">run</span> <span class="o">=</span> <span class="n">AcquisitionRun</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">nmr_group</span><span class="p">[</span><span class="n">name</span><span class="p">],</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">run</span><span class="o">.</span><span class="n">_set_persistence_context</span><span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+                    <span class="n">nmr_runs</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">run</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">path</span><span class="o">=</span><span class="n">path</span><span class="p">,</span>
+            <span class="n">file</span><span class="o">=</span><span class="n">f</span><span class="p">,</span>
+            <span class="n">feature_flags</span><span class="o">=</span><span class="n">flags</span><span class="p">,</span>
+            <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">,</span>
+            <span class="n">isa_investigation_id</span><span class="o">=</span><span class="n">isa</span><span class="p">,</span>
+            <span class="n">ms_runs</span><span class="o">=</span><span class="n">ms_runs</span><span class="p">,</span>
+            <span class="n">nmr_runs</span><span class="o">=</span><span class="n">nmr_runs</span><span class="p">,</span>
+            <span class="n">encrypted_algorithm</span><span class="o">=</span><span class="n">encrypted</span><span class="p">,</span>
+            <span class="n">_remote_fileobj</span><span class="o">=</span><span class="n">remote_fileobj</span><span class="p">,</span>
+            <span class="n">_lock</span><span class="o">=</span><span class="p">(</span><span class="n">RWLock</span><span class="p">()</span> <span class="k">if</span> <span class="n">thread_safe</span> <span class="k">else</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">provider</span><span class="o">=</span><span class="n">provider</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="c1"># ----------------------------------------------------- thread safety (M23)</span>
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="SpectralDataset.is_thread_safe">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.is_thread_safe">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_thread_safe</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True iff this dataset was opened with ``thread_safe=True``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.read_lock">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.read_lock">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">read_lock</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Context manager acquiring the shared read lock.</span>
+
+<span class="sd">        A no-op when ``thread_safe`` was not set at open time, so call sites</span>
+<span class="sd">        can use ``with ds.read_lock(): ...`` unconditionally.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="o">.</span><span class="n">read</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">_NULL_GUARD</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.write_lock">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.write_lock">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_lock</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Context manager acquiring the exclusive write lock (no-op when</span>
+<span class="sd">        ``thread_safe`` was not set at open time).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span><span class="o">.</span><span class="n">write</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lock</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">_NULL_GUARD</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.close">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.close">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">write_lock</span><span class="p">():</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span><span class="p">:</span>
+                <span class="c1"># Close via the provider when we have one — it owns the</span>
+                <span class="c1"># h5py.File and any fsspec file-like. Fall back to direct</span>
+                <span class="c1"># close for legacy instances constructed without M39.</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">provider</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">provider</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_remote_fileobj</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_remote_fileobj</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+                    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+                        <span class="k">pass</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_remote_fileobj</span> <span class="o">=</span> <span class="kc">None</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span> <span class="o">=</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.__enter__">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.__enter__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SpectralDataset&quot;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.__exit__">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.__exit__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__exit__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">exc_type</span><span class="p">:</span> <span class="nb">type</span><span class="p">[</span><span class="ne">BaseException</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">exc</span><span class="p">:</span> <span class="ne">BaseException</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">tb</span><span class="p">:</span> <span class="n">TracebackType</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.__del__">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.__del__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">pass</span></div>
+
+
+    <span class="c1"># --------------------------------------------------------------- queries</span>
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="SpectralDataset.is_encrypted">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.is_encrypted">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_encrypted</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">encrypted_algorithm</span><span class="p">)</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="SpectralDataset.all_runs">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.all_runs">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">all_runs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AcquisitionRun</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Union of MS and NMR runs, keyed by run name.&quot;&quot;&quot;</span>
+        <span class="n">merged</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">AcquisitionRun</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ms_runs</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">nmr_runs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">merged</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">merged</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_study_target</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the IO target representing ``/study``.</span>
+
+<span class="sd">        For HDF5-backed datasets this is the raw ``h5py.Group``; for</span>
+<span class="sd">        provider-backed datasets it is a :class:`StorageGroup`. The</span>
+<span class="sd">        helpers in :mod:`_hdf5_io` accept either form.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="p">[</span><span class="s2">&quot;study&quot;</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">provider</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>  <span class="c1"># invariant: file or provider is set</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">provider</span><span class="o">.</span><span class="n">root_group</span><span class="p">()</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;study&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_study_has_child</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">name</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="p">[</span><span class="s2">&quot;study&quot;</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">provider</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">provider</span><span class="o">.</span><span class="n">root_group</span><span class="p">()</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;study&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">has_child</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SpectralDataset.identifications">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.identifications">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">identifications</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Identification</span><span class="p">]:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_lock</span><span class="p">():</span>
+            <span class="n">study</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_study_target</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_study_has_child</span><span class="p">(</span><span class="s2">&quot;identifications&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">[</span>
+                    <span class="n">Identification</span><span class="p">(</span>
+                        <span class="n">run_name</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;run_name&quot;</span><span class="p">],</span>
+                        <span class="n">spectrum_index</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;spectrum_index&quot;</span><span class="p">]),</span>
+                        <span class="n">chemical_entity</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;chemical_entity&quot;</span><span class="p">],</span>
+                        <span class="n">confidence_score</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;confidence_score&quot;</span><span class="p">]),</span>
+                        <span class="n">evidence_chain</span><span class="o">=</span><span class="n">_maybe_json_list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;evidence_chain_json&quot;</span><span class="p">,</span> <span class="s2">&quot;[]&quot;</span><span class="p">)),</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">io</span><span class="o">.</span><span class="n">read_compound_dataset</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;identifications&quot;</span><span class="p">)</span>
+                <span class="p">]</span>
+            <span class="n">blob</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;identifications_json&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">_decode_identifications_json</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span> <span class="k">if</span> <span class="n">blob</span> <span class="k">else</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.quantifications">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.quantifications">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">quantifications</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Quantification</span><span class="p">]:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_lock</span><span class="p">():</span>
+            <span class="n">study</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_study_target</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_study_has_child</span><span class="p">(</span><span class="s2">&quot;quantifications&quot;</span><span class="p">):</span>
+                <span class="k">return</span> <span class="p">[</span>
+                    <span class="n">Quantification</span><span class="p">(</span>
+                        <span class="n">chemical_entity</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;chemical_entity&quot;</span><span class="p">],</span>
+                        <span class="n">sample_ref</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;sample_ref&quot;</span><span class="p">],</span>
+                        <span class="n">abundance</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;abundance&quot;</span><span class="p">]),</span>
+                        <span class="n">normalization_method</span><span class="o">=</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;normalization_method&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">),</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">io</span><span class="o">.</span><span class="n">read_compound_dataset</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;quantifications&quot;</span><span class="p">)</span>
+                <span class="p">]</span>
+            <span class="n">blob</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;quantifications_json&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">_decode_quantifications_json</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span> <span class="k">if</span> <span class="n">blob</span> <span class="k">else</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.provenance">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.provenance">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">provenance</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]:</span>
+        <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_lock</span><span class="p">():</span>
+            <span class="n">study</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_study_target</span><span class="p">()</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_study_has_child</span><span class="p">(</span><span class="s2">&quot;provenance&quot;</span><span class="p">):</span>
+                <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">io</span><span class="o">.</span><span class="n">read_compound_dataset</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;provenance&quot;</span><span class="p">):</span>
+                    <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                        <span class="n">ProvenanceRecord</span><span class="p">(</span>
+                            <span class="n">timestamp_unix</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;timestamp_unix&quot;</span><span class="p">]),</span>
+                            <span class="n">software</span><span class="o">=</span><span class="n">r</span><span class="p">[</span><span class="s2">&quot;software&quot;</span><span class="p">],</span>
+                            <span class="n">parameters</span><span class="o">=</span><span class="n">_maybe_json_dict</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters_json&quot;</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">)),</span>
+                            <span class="n">input_refs</span><span class="o">=</span><span class="n">_maybe_json_list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;input_refs_json&quot;</span><span class="p">,</span> <span class="s2">&quot;[]&quot;</span><span class="p">)),</span>
+                            <span class="n">output_refs</span><span class="o">=</span><span class="n">_maybe_json_list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_refs_json&quot;</span><span class="p">,</span> <span class="s2">&quot;[]&quot;</span><span class="p">)),</span>
+                        <span class="p">)</span>
+                    <span class="p">)</span>
+                <span class="k">return</span> <span class="n">out</span>
+            <span class="n">blob</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;provenance_json&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">_decode_provenance_json</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span> <span class="k">if</span> <span class="n">blob</span> <span class="k">else</span> <span class="p">[]</span></div>
+
+
+    <span class="c1"># ---- Encryptable conformance ----</span>
+
+<div class="viewcode-block" id="SpectralDataset.encrypt_with_key">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.encrypt_with_key">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encrypt_with_key</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">level</span><span class="p">:</span> <span class="n">EncryptionLevel</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Encrypt protectable content at the given granularity.</span>
+
+<span class="sd">        For DATASET-level encryption (ObjC ``TTIOEncryptionLevelDataset``),</span>
+<span class="sd">        encrypts every MS run&#39;s intensity channel in place. For finer-grained</span>
+<span class="sd">        levels, callers should use ``run.encrypt_with_key`` directly.</span>
+
+<span class="sd">        Matches ObjC ``-[TTIOSpectralDataset encryptWithKey:level:error:]``:</span>
+<span class="sd">        after run-level encryption, marks the root with</span>
+<span class="sd">        ``encrypted=&quot;aes-256-gcm&quot;`` so :attr:`is_encrypted` and</span>
+<span class="sd">        :attr:`encrypted_algorithm` round-trip across close/reopen.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">run</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ms_runs</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="n">run</span><span class="o">.</span><span class="n">encrypt_with_key</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">level</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_mark_root_encrypted</span><span class="p">()</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mark_root_encrypted</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Persist ``encrypted=&lt;algorithm&gt;`` on the root, mirroring ObjC&#39;s</span>
+<span class="sd">        ``-[TTIOSpectralDataset markRootEncryptedWithError:]``.</span>
+
+<span class="sd">        Updates the in-memory ``encrypted_algorithm`` field as well so</span>
+<span class="sd">        :attr:`is_encrypted` becomes True without requiring a reopen.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.encryption</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_ENCRYPTION_ALGORITHM</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="p">,</span> <span class="s2">&quot;encrypted&quot;</span><span class="p">,</span> <span class="n">DEFAULT_ENCRYPTION_ALGORITHM</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">provider</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">provider</span><span class="o">.</span><span class="n">root_group</span><span class="p">()</span><span class="o">.</span><span class="n">set_attribute</span><span class="p">(</span><span class="s2">&quot;encrypted&quot;</span><span class="p">,</span> <span class="n">DEFAULT_ENCRYPTION_ALGORITHM</span><span class="p">)</span>
+        <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;encrypted_algorithm&quot;</span><span class="p">,</span> <span class="n">DEFAULT_ENCRYPTION_ALGORITHM</span><span class="p">)</span>
+
+<div class="viewcode-block" id="SpectralDataset.decrypt_with_key">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.decrypt_with_key">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decrypt_with_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Decrypt every MS run&#39;s intensity channel.</span>
+
+<span class="sd">        Returns a mapping of ``{run_name: plaintext_bytes}``. The on-disk</span>
+<span class="sd">        file is NOT modified — decryption is read-only.</span>
+
+<span class="sd">        Side effect: each run&#39;s decrypted channel is cached in memory so</span>
+<span class="sd">        ``run.object_at_index(i).intensity_array`` works without re-decrypting</span>
+<span class="sd">        (Option 1 of the MCP-Server M5 handoff; mirrors ObjC</span>
+<span class="sd">        ``-[TTIOSpectralDataset decryptWithKey:]`` rehydration semantics).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span><span class="n">name</span><span class="p">:</span> <span class="n">run</span><span class="o">.</span><span class="n">decrypt_with_key</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">run</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">ms_runs</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span></div>
+
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SpectralDataset.decrypt_in_place">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.decrypt_in_place">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decrypt_in_place</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Strip AES-256-GCM encryption from a ``.tio`` file on disk.</span>
+
+<span class="sd">        For every MS run with an encrypted intensity channel, replaces</span>
+<span class="sd">        ``intensity_values_encrypted`` + IV + tag with a plaintext</span>
+<span class="sd">        ``intensity_values`` dataset, then clears the root ``@encrypted``</span>
+<span class="sd">        attribute. After this call the file is byte-compatible with the</span>
+<span class="sd">        pre-encryption state and :attr:`is_encrypted` is ``False`` when</span>
+<span class="sd">        reopened.</span>
+
+<span class="sd">        Symmetric with :meth:`encrypt_with_key`: that method leaves the</span>
+<span class="sd">        root ``@encrypted`` attribute set, this one removes it.</span>
+
+<span class="sd">        The file must not be held open by another writer.</span>
+
+<span class="sd">        Raises ``FileNotFoundError`` if the file does not exist,</span>
+<span class="sd">        ``ValueError`` if ``key`` is not 32 bytes or any channel&#39;s tag</span>
+<span class="sd">        does not verify.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.encryption</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">AES_KEY_LEN</span><span class="p">,</span>
+            <span class="n">decrypt_intensity_channel_in_run_in_place</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">!=</span> <span class="n">AES_KEY_LEN</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;AES-256-GCM key must be </span><span class="si">{</span><span class="n">AES_KEY_LEN</span><span class="si">}</span><span class="s2"> bytes, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">p</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">p</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">FileNotFoundError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File not found: </span><span class="si">{</span><span class="n">p</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="s2">&quot;r&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">ms_group</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;study/ms_runs&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">ms_group</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">run_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">names_attr</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span>
+                    <span class="n">ms_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;&quot;</span>
+                <span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+                <span class="n">run_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">names_attr</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">n</span><span class="p">]</span>
+
+        <span class="k">for</span> <span class="n">run_name</span> <span class="ow">in</span> <span class="n">run_names</span><span class="p">:</span>
+            <span class="n">decrypt_intensity_channel_in_run_in_place</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="s2">&quot;r+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">&quot;encrypted&quot;</span> <span class="ow">in</span> <span class="n">f</span><span class="o">.</span><span class="n">attrs</span><span class="p">:</span>
+                <span class="k">del</span> <span class="n">f</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">&quot;encrypted&quot;</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.access_policy">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.access_policy">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">access_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AccessPolicy</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the current access policy, or ``None`` if not set.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_access_policy</span></div>
+
+
+<div class="viewcode-block" id="SpectralDataset.set_access_policy">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.set_access_policy">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">set_access_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">AccessPolicy</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Replace the current access policy.&quot;&quot;&quot;</span>
+        <span class="nb">object</span><span class="o">.</span><span class="fm">__setattr__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_access_policy&quot;</span><span class="p">,</span> <span class="n">policy</span><span class="p">)</span></div>
+
+
+    <span class="c1"># ---------------------------------------------------------------- writer</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="SpectralDataset.write_minimal">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.write_minimal">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">write_minimal</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">title</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">isa_investigation_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">runs</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;WrittenRun&quot;</span><span class="p">],</span>
+        <span class="n">identifications</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Identification</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">quantifications</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Quantification</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">provenance</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">features</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">provider</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">StorageProvider</span> <span class="o">=</span> <span class="s2">&quot;hdf5&quot;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write a minimal v1.1 ``.tio`` file from in-memory data.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        provider</span>
+<span class="sd">            v0.9 M64.5: which storage backend to write through. The</span>
+<span class="sd">            string ``&quot;hdf5&quot;`` (default) keeps byte-for-byte parity with</span>
+<span class="sd">            pre-M64.5 files. Other values dispatch through</span>
+<span class="sd">            :func:`open_provider` — ``&quot;memory&quot;``, ``&quot;sqlite&quot;``,</span>
+<span class="sd">            ``&quot;zarr&quot;``, or any registered backend. A pre-opened</span>
+<span class="sd">            :class:`StorageProvider` may also be passed; the caller</span>
+<span class="sd">            owns its lifecycle in that case.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+        <span class="n">feature_list</span> <span class="o">=</span> <span class="n">features</span> <span class="ow">or</span> <span class="p">[</span>
+            <span class="s2">&quot;base_v1&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;compound_identifications&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;compound_quantifications&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;compound_provenance&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;compound_per_run_provenance&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;opt_compound_headers&quot;</span><span class="p">,</span>
+        <span class="p">]</span>
+
+        <span class="c1"># M74 Slice E: if any run carries the four optional</span>
+        <span class="c1"># activation/isolation columns, advertise the</span>
+        <span class="c1"># opt_ms2_activation_detail feature flag and bump the format</span>
+        <span class="c1"># version to 1.3 so readers know to look for them. Files without</span>
+        <span class="c1"># M74 content keep the legacy 1.1 layout so existing byte-parity</span>
+        <span class="c1"># tests continue to pass.</span>
+        <span class="n">any_m74</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="n">run</span><span class="o">.</span><span class="n">activation_methods</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">run</span> <span class="ow">in</span> <span class="n">runs</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">features</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">any_m74</span><span class="p">:</span>
+            <span class="n">feature_list</span> <span class="o">=</span> <span class="n">feature_list</span> <span class="o">+</span> <span class="p">[</span><span class="s2">&quot;opt_ms2_activation_detail&quot;</span><span class="p">]</span>
+        <span class="n">format_version</span> <span class="o">=</span> <span class="s2">&quot;1.3&quot;</span> <span class="k">if</span> <span class="n">any_m74</span> <span class="k">else</span> <span class="s2">&quot;1.1&quot;</span>
+
+        <span class="c1"># HDF5 fast path keeps the legacy byte layout (fixed-length</span>
+        <span class="c1"># string attrs, padded compound types) so existing tests and</span>
+        <span class="c1"># cross-language readers continue to round-trip bit-for-bit.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">provider</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">provider</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;hdf5&quot;</span><span class="p">,</span> <span class="s2">&quot;h5&quot;</span><span class="p">,</span> <span class="s2">&quot;h5py&quot;</span><span class="p">):</span>
+            <span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="n">io</span><span class="o">.</span><span class="n">write_feature_flags</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">format_version</span><span class="p">,</span> <span class="n">feature_list</span><span class="p">)</span>
+                <span class="n">study</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;study&quot;</span><span class="p">)</span>
+                <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="n">title</span><span class="p">)</span>
+                <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;isa_investigation_id&quot;</span><span class="p">,</span> <span class="n">isa_investigation_id</span><span class="p">)</span>
+
+                <span class="n">ms_group</span> <span class="o">=</span> <span class="n">study</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;ms_runs&quot;</span><span class="p">)</span>
+                <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">ms_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">runs</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+                <span class="k">for</span> <span class="n">rname</span><span class="p">,</span> <span class="n">run</span> <span class="ow">in</span> <span class="n">runs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="n">_write_run</span><span class="p">(</span><span class="n">ms_group</span><span class="p">,</span> <span class="n">rname</span><span class="p">,</span> <span class="n">run</span><span class="p">)</span>
+
+                <span class="n">nmr_group</span> <span class="o">=</span> <span class="n">study</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;nmr_runs&quot;</span><span class="p">)</span>
+                <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">nmr_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">identifications</span><span class="p">:</span>
+                    <span class="n">_write_identifications</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="n">identifications</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">quantifications</span><span class="p">:</span>
+                    <span class="n">_write_quantifications</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="n">quantifications</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">provenance</span><span class="p">:</span>
+                    <span class="n">_write_provenance</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="n">provenance</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">p</span>
+
+        <span class="c1"># Provider-driven write path — Memory / SQLite / Zarr / future.</span>
+        <span class="c1"># Use the raw ``path`` string rather than ``Path(path)`` because</span>
+        <span class="c1"># ``Path(&quot;memory://x&quot;)`` collapses ``//`` → ``/``, breaking the</span>
+        <span class="c1"># MemoryProvider URL convention.</span>
+        <span class="n">owns_provider</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">provider</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">url</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+            <span class="n">sp</span> <span class="o">=</span> <span class="n">open_provider</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">provider</span><span class="o">=</span><span class="n">provider</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;w&quot;</span><span class="p">)</span>
+            <span class="n">owns_provider</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sp</span> <span class="o">=</span> <span class="n">provider</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">root</span> <span class="o">=</span> <span class="n">sp</span><span class="o">.</span><span class="n">root_group</span><span class="p">()</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_feature_flags</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">format_version</span><span class="p">,</span> <span class="n">feature_list</span><span class="p">)</span>
+            <span class="n">study</span> <span class="o">=</span> <span class="n">root</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;study&quot;</span><span class="p">)</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="n">title</span><span class="p">)</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;isa_investigation_id&quot;</span><span class="p">,</span> <span class="n">isa_investigation_id</span><span class="p">)</span>
+
+            <span class="n">ms_group</span> <span class="o">=</span> <span class="n">study</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;ms_runs&quot;</span><span class="p">)</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">ms_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">runs</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+            <span class="k">for</span> <span class="n">rname</span><span class="p">,</span> <span class="n">run</span> <span class="ow">in</span> <span class="n">runs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">_write_run</span><span class="p">(</span><span class="n">ms_group</span><span class="p">,</span> <span class="n">rname</span><span class="p">,</span> <span class="n">run</span><span class="p">)</span>
+
+            <span class="n">nmr_group</span> <span class="o">=</span> <span class="n">study</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;nmr_runs&quot;</span><span class="p">)</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">nmr_group</span><span class="p">,</span> <span class="s2">&quot;_run_names&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">identifications</span><span class="p">:</span>
+                <span class="n">_write_identifications</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="n">identifications</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">quantifications</span><span class="p">:</span>
+                <span class="n">_write_quantifications</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="n">quantifications</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">provenance</span><span class="p">:</span>
+                <span class="n">_write_provenance</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="n">provenance</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">owns_provider</span><span class="p">:</span>
+                <span class="n">sp</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">p</span></div>
+</div>
+
+
+
+<span class="c1"># ------------------------------------------------------------ writer helpers</span>
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="WrittenRun">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WrittenRun</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Simple container passed to :meth:`SpectralDataset.write_minimal`.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="WrittenRun.spectrum_class">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.spectrum_class">[docs]</a>
+    <span class="n">spectrum_class</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># &quot;TTIOMassSpectrum&quot; or &quot;TTIONMRSpectrum&quot;</span></div>
+
+<div class="viewcode-block" id="WrittenRun.acquisition_mode">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.acquisition_mode">[docs]</a>
+    <span class="n">acquisition_mode</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="WrittenRun.channel_data">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.channel_data">[docs]</a>
+    <span class="n">channel_data</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]</span>  <span class="c1"># concatenated signal buffers</span></div>
+
+<div class="viewcode-block" id="WrittenRun.offsets">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.offsets">[docs]</a>
+    <span class="n">offsets</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="WrittenRun.lengths">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.lengths">[docs]</a>
+    <span class="n">lengths</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="WrittenRun.retention_times">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.retention_times">[docs]</a>
+    <span class="n">retention_times</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="WrittenRun.ms_levels">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.ms_levels">[docs]</a>
+    <span class="n">ms_levels</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="WrittenRun.polarities">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.polarities">[docs]</a>
+    <span class="n">polarities</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="WrittenRun.precursor_mzs">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.precursor_mzs">[docs]</a>
+    <span class="n">precursor_mzs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="WrittenRun.precursor_charges">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.precursor_charges">[docs]</a>
+    <span class="n">precursor_charges</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+<div class="viewcode-block" id="WrittenRun.base_peak_intensities">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.base_peak_intensities">[docs]</a>
+    <span class="n">base_peak_intensities</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
+
+    <span class="c1"># v0.11 M74: optional parallel per-spectrum arrays. Writer emits the</span>
+    <span class="c1"># four datasets only when all four are non-None (schema-gating per</span>
+    <span class="c1"># the opt_ms2_activation_detail feature flag).</span>
+<div class="viewcode-block" id="WrittenRun.activation_methods">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.activation_methods">[docs]</a>
+    <span class="n">activation_methods</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="WrittenRun.isolation_target_mzs">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.isolation_target_mzs">[docs]</a>
+    <span class="n">isolation_target_mzs</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="WrittenRun.isolation_lower_offsets">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.isolation_lower_offsets">[docs]</a>
+    <span class="n">isolation_lower_offsets</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="WrittenRun.isolation_upper_offsets">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.isolation_upper_offsets">[docs]</a>
+    <span class="n">isolation_upper_offsets</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="WrittenRun.nucleus_type">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.nucleus_type">[docs]</a>
+    <span class="n">nucleus_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
+
+<div class="viewcode-block" id="WrittenRun.provenance_records">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.provenance_records">[docs]</a>
+    <span class="n">provenance_records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+    <span class="c1"># v0.3 M21: signal compression codec. Valid values are the strings</span>
+    <span class="c1"># recognised by :func:`ttio._hdf5_io.write_signal_channel` plus</span>
+    <span class="c1"># the TTIO-level ``&quot;numpress_delta&quot;`` codec, which transforms the</span>
+    <span class="c1"># float64 buffer into an int64 first-difference array and stores</span>
+    <span class="c1"># the fixed-point scaling factor on the signal_channels group.</span>
+<div class="viewcode-block" id="WrittenRun.signal_compression">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.signal_compression">[docs]</a>
+    <span class="n">signal_compression</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gzip&quot;</span></div>
+
+    <span class="c1"># v0.4 M24: optional chromatogram traces for this run. Empty list</span>
+    <span class="c1"># results in no /chromatograms/ group, preserving byte parity with</span>
+    <span class="c1"># v0.3 files written by callers that don&#39;t supply chromatograms.</span>
+<div class="viewcode-block" id="WrittenRun.chromatograms">
+<a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.chromatograms">[docs]</a>
+    <span class="n">chromatograms</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>  <span class="c1"># list[Chromatogram]</span></div>
+</div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_write_run</span><span class="p">(</span><span class="n">parent</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">run</span><span class="p">:</span> <span class="n">WrittenRun</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">parent</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_int_attr</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="s2">&quot;acquisition_mode&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">acquisition_mode</span><span class="p">)</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_int_attr</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="s2">&quot;spectrum_count&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">run</span><span class="o">.</span><span class="n">offsets</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="s2">&quot;spectrum_class&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">spectrum_class</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">run</span><span class="o">.</span><span class="n">nucleus_type</span><span class="p">:</span>
+        <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="s2">&quot;nucleus_type&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">nucleus_type</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">run</span><span class="o">.</span><span class="n">provenance_records</span><span class="p">:</span>
+        <span class="n">prov</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;provenance&quot;</span><span class="p">)</span>
+        <span class="n">_write_provenance</span><span class="p">(</span><span class="n">prov</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">provenance_records</span><span class="p">,</span> <span class="n">dataset_name</span><span class="o">=</span><span class="s2">&quot;steps&quot;</span><span class="p">)</span>
+        <span class="c1"># Legacy @provenance_json mirror so ObjC signature manager and</span>
+        <span class="c1"># v0.2 readers keep working — matches TTIOAcquisitionRun.m.</span>
+        <span class="n">legacy</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">([</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;inputRefs&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">input_refs</span><span class="p">,</span>
+                <span class="s2">&quot;software&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">software</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">parameters</span><span class="p">,</span>
+                <span class="s2">&quot;outputRefs&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">output_refs</span><span class="p">,</span>
+                <span class="s2">&quot;timestampUnix&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">timestamp_unix</span><span class="p">),</span>
+            <span class="p">}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">run</span><span class="o">.</span><span class="n">provenance_records</span>
+        <span class="p">])</span>
+        <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="s2">&quot;provenance_json&quot;</span><span class="p">,</span> <span class="n">legacy</span><span class="p">)</span>
+
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;instrument_config&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">field_name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;manufacturer&quot;</span><span class="p">,</span> <span class="s2">&quot;model&quot;</span><span class="p">,</span> <span class="s2">&quot;serial_number&quot;</span><span class="p">,</span>
+                       <span class="s2">&quot;source_type&quot;</span><span class="p">,</span> <span class="s2">&quot;analyzer_type&quot;</span><span class="p">,</span> <span class="s2">&quot;detector_type&quot;</span><span class="p">):</span>
+        <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">field_name</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;spectrum_index&quot;</span><span class="p">)</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_int_attr</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="s2">&quot;count&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">run</span><span class="o">.</span><span class="n">offsets</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="n">columns</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;offsets&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">offsets</span><span class="p">,</span> <span class="s2">&quot;&lt;u8&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;lengths&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">lengths</span><span class="p">,</span> <span class="s2">&quot;&lt;u4&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;retention_times&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">retention_times</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;ms_levels&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">ms_levels</span><span class="p">,</span> <span class="s2">&quot;&lt;i4&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;polarities&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">polarities</span><span class="p">,</span> <span class="s2">&quot;&lt;i4&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;precursor_mzs&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">precursor_mzs</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;precursor_charges&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">precursor_charges</span><span class="p">,</span> <span class="s2">&quot;&lt;i4&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;base_peak_intensities&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">base_peak_intensities</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+    <span class="p">]</span>
+    <span class="c1"># M74 schema-gating: only emit the four optional columns when all</span>
+    <span class="c1"># four are supplied. The opt_ms2_activation_detail feature flag is</span>
+    <span class="c1"># the author-level gate; this block translates that gate into</span>
+    <span class="c1"># physical column presence on disk.</span>
+    <span class="n">m74_cols</span> <span class="o">=</span> <span class="p">(</span><span class="n">run</span><span class="o">.</span><span class="n">activation_methods</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">isolation_target_mzs</span><span class="p">,</span>
+                <span class="n">run</span><span class="o">.</span><span class="n">isolation_lower_offsets</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">isolation_upper_offsets</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">c</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">m74_cols</span><span class="p">):</span>
+        <span class="n">columns</span> <span class="o">+=</span> <span class="p">[</span>
+            <span class="p">(</span><span class="s2">&quot;activation_methods&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">activation_methods</span><span class="p">,</span> <span class="s2">&quot;&lt;i4&quot;</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">&quot;isolation_target_mzs&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">isolation_target_mzs</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">&quot;isolation_lower_offsets&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">isolation_lower_offsets</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+            <span class="p">(</span><span class="s2">&quot;isolation_upper_offsets&quot;</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">isolation_upper_offsets</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+        <span class="p">]</span>
+    <span class="k">elif</span> <span class="nb">any</span><span class="p">(</span><span class="n">c</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">m74_cols</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;WrittenRun M74 columns must be either all-None or all-set; &quot;</span>
+            <span class="s2">&quot;partial population is not a valid schema state.&quot;</span>
+        <span class="p">)</span>
+    <span class="k">for</span> <span class="n">dname</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">columns</span><span class="p">:</span>
+        <span class="n">io</span><span class="o">.</span><span class="n">write_signal_channel</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="n">dname</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+                                <span class="n">chunk_size</span><span class="o">=</span><span class="n">io</span><span class="o">.</span><span class="n">DEFAULT_INDEX_CHUNK</span><span class="p">)</span>
+
+    <span class="n">sig</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">sig</span><span class="p">,</span> <span class="s2">&quot;channel_names&quot;</span><span class="p">,</span> <span class="s2">&quot;,&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">run</span><span class="o">.</span><span class="n">channel_data</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+    <span class="n">codec</span> <span class="o">=</span> <span class="n">run</span><span class="o">.</span><span class="n">signal_compression</span>
+    <span class="k">for</span> <span class="n">cname</span><span class="p">,</span> <span class="n">buffer</span> <span class="ow">in</span> <span class="n">run</span><span class="o">.</span><span class="n">channel_data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">codec</span> <span class="o">==</span> <span class="s2">&quot;numpress_delta&quot;</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">._numpress</span><span class="w"> </span><span class="kn">import</span> <span class="n">encode</span> <span class="k">as</span> <span class="n">_np_encode</span>
+            <span class="n">deltas</span><span class="p">,</span> <span class="n">scale</span> <span class="o">=</span> <span class="n">_np_encode</span><span class="p">(</span><span class="n">buffer</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
+            <span class="n">ds_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cname</span><span class="si">}</span><span class="s2">_values&quot;</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_signal_channel</span><span class="p">(</span>
+                <span class="n">sig</span><span class="p">,</span> <span class="n">ds_name</span><span class="p">,</span> <span class="n">deltas</span><span class="p">,</span> <span class="n">compression</span><span class="o">=</span><span class="s2">&quot;gzip&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="c1"># Per-channel fixed-point attribute, matching the ObjC</span>
+            <span class="c1"># writer&#39;s ``@&lt;chName&gt;_numpress_fixed_point``.</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_int_attr</span><span class="p">(</span><span class="n">sig</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cname</span><span class="si">}</span><span class="s2">_numpress_fixed_point&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">scale</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">io</span><span class="o">.</span><span class="n">write_signal_channel</span><span class="p">(</span>
+                <span class="n">sig</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cname</span><span class="si">}</span><span class="s2">_values&quot;</span><span class="p">,</span>
+                <span class="n">buffer</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+                <span class="n">compression</span><span class="o">=</span><span class="n">codec</span><span class="p">,</span>
+            <span class="p">)</span>
+
+    <span class="c1"># M24: chromatograms</span>
+    <span class="k">if</span> <span class="n">run</span><span class="o">.</span><span class="n">chromatograms</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.acquisition_run</span><span class="w"> </span><span class="kn">import</span> <span class="n">write_chromatograms_to_run_group</span>
+        <span class="n">write_chromatograms_to_run_group</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">run</span><span class="o">.</span><span class="n">chromatograms</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_write_identifications</span><span class="p">(</span><span class="n">study</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span> <span class="n">records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Identification</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;run_name&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+        <span class="p">(</span><span class="s2">&quot;spectrum_index&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;u4&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;chemical_entity&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+        <span class="p">(</span><span class="s2">&quot;confidence_score&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;evidence_chain_json&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+    <span class="p">]</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_compound_dataset</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;identifications&quot;</span><span class="p">,</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;run_name&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">run_name</span><span class="p">,</span>
+            <span class="s2">&quot;spectrum_index&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">spectrum_index</span><span class="p">),</span>
+            <span class="s2">&quot;chemical_entity&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">,</span>
+            <span class="s2">&quot;confidence_score&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">confidence_score</span><span class="p">),</span>
+            <span class="s2">&quot;evidence_chain_json&quot;</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">evidence_chain</span><span class="p">),</span>
+        <span class="p">}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span>
+    <span class="p">],</span> <span class="n">fields</span><span class="p">)</span>
+    <span class="c1"># M37: emit @identifications_json mirror so Java (JHI5 1.10 cannot</span>
+    <span class="c1"># marshal compound-with-VL reads) can recover the full record set.</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;identifications_json&quot;</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">([</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;run_name&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">run_name</span><span class="p">,</span>
+            <span class="s2">&quot;spectrum_index&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">spectrum_index</span><span class="p">),</span>
+            <span class="s2">&quot;chemical_entity&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">,</span>
+            <span class="s2">&quot;confidence_score&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">confidence_score</span><span class="p">),</span>
+            <span class="s2">&quot;evidence_chain&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">evidence_chain</span><span class="p">),</span>
+        <span class="p">}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span>
+    <span class="p">]))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_write_quantifications</span><span class="p">(</span><span class="n">study</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span> <span class="n">records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Quantification</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;chemical_entity&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+        <span class="p">(</span><span class="s2">&quot;sample_ref&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+        <span class="p">(</span><span class="s2">&quot;abundance&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;f8&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;normalization_method&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+    <span class="p">]</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_compound_dataset</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;quantifications&quot;</span><span class="p">,</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;chemical_entity&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">,</span>
+            <span class="s2">&quot;sample_ref&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">sample_ref</span><span class="p">,</span>
+            <span class="s2">&quot;abundance&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">abundance</span><span class="p">),</span>
+            <span class="s2">&quot;normalization_method&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">normalization_method</span><span class="p">,</span>
+        <span class="p">}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span>
+    <span class="p">],</span> <span class="n">fields</span><span class="p">)</span>
+    <span class="c1"># M37: JSON mirror (see _write_identifications)</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;quantifications_json&quot;</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">([</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;chemical_entity&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">,</span>
+            <span class="s2">&quot;sample_ref&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">sample_ref</span><span class="p">,</span>
+            <span class="s2">&quot;abundance&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">abundance</span><span class="p">),</span>
+            <span class="o">**</span><span class="p">({</span><span class="s2">&quot;normalization_method&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">normalization_method</span><span class="p">}</span>
+               <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">normalization_method</span> <span class="k">else</span> <span class="p">{}),</span>
+        <span class="p">}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span>
+    <span class="p">]))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_write_provenance</span><span class="p">(</span>
+    <span class="n">study</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Group</span><span class="p">,</span>
+    <span class="n">records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">dataset_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;provenance&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="p">(</span><span class="s2">&quot;timestamp_unix&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;i8&quot;</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">&quot;software&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+        <span class="p">(</span><span class="s2">&quot;parameters_json&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+        <span class="p">(</span><span class="s2">&quot;input_refs_json&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+        <span class="p">(</span><span class="s2">&quot;output_refs_json&quot;</span><span class="p">,</span> <span class="n">io</span><span class="o">.</span><span class="n">vl_str</span><span class="p">()),</span>
+    <span class="p">]</span>
+    <span class="n">io</span><span class="o">.</span><span class="n">write_compound_dataset</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="n">dataset_name</span><span class="p">,</span> <span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;timestamp_unix&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">timestamp_unix</span><span class="p">),</span>
+            <span class="s2">&quot;software&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">software</span><span class="p">,</span>
+            <span class="s2">&quot;parameters_json&quot;</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">parameters</span><span class="p">),</span>
+            <span class="s2">&quot;input_refs_json&quot;</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">input_refs</span><span class="p">),</span>
+            <span class="s2">&quot;output_refs_json&quot;</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">output_refs</span><span class="p">),</span>
+        <span class="p">}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span>
+    <span class="p">],</span> <span class="n">fields</span><span class="p">)</span>
+    <span class="c1"># M37: JSON mirror. Only emitted for the top-level /study/provenance</span>
+    <span class="c1"># dataset; per-run provenance (§6.4) stays compound-only because the</span>
+    <span class="c1"># Java reader never descends into run-level compound datasets.</span>
+    <span class="k">if</span> <span class="n">dataset_name</span> <span class="o">==</span> <span class="s2">&quot;provenance&quot;</span><span class="p">:</span>
+        <span class="n">io</span><span class="o">.</span><span class="n">write_fixed_string_attr</span><span class="p">(</span><span class="n">study</span><span class="p">,</span> <span class="s2">&quot;provenance_json&quot;</span><span class="p">,</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">([</span>
+            <span class="p">{</span>
+                <span class="s2">&quot;timestamp_unix&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">timestamp_unix</span><span class="p">),</span>
+                <span class="s2">&quot;software&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">software</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="n">r</span><span class="o">.</span><span class="n">parameters</span><span class="p">,</span>
+                <span class="s2">&quot;input_refs&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">input_refs</span><span class="p">),</span>
+                <span class="s2">&quot;output_refs&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">output_refs</span><span class="p">),</span>
+            <span class="p">}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">records</span>
+        <span class="p">]))</span>
+
+
+<span class="c1"># --------------------------------------------------------- JSON fallback ---</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_maybe_json_list</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="p">[]</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parsed</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">parsed</span><span class="p">]</span>
+    <span class="k">return</span> <span class="p">[]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_maybe_json_dict</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">object</span><span class="p">]:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">parsed</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="k">else</span> <span class="p">{}</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="n">parsed</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parsed</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_decode_identifications_json</span><span class="p">(</span><span class="n">blob</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Identification</span><span class="p">]:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Identification</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="p">[]:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Identification</span><span class="p">(</span>
+            <span class="n">run_name</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;run_name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="n">spectrum_index</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;spectrum_index&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span>
+            <span class="n">chemical_entity</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;chemical_entity&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="n">confidence_score</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;confidence_score&quot;</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)),</span>
+            <span class="n">evidence_chain</span><span class="o">=</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;evidence_chain&quot;</span><span class="p">,</span> <span class="p">[])],</span>
+        <span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_decode_quantifications_json</span><span class="p">(</span><span class="n">blob</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Quantification</span><span class="p">]:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Quantification</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="p">[]:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">Quantification</span><span class="p">(</span>
+            <span class="n">chemical_entity</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;chemical_entity&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="n">sample_ref</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;sample_ref&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="n">abundance</span><span class="o">=</span><span class="nb">float</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;abundance&quot;</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)),</span>
+            <span class="n">normalization_method</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;normalization_method&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+        <span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_decode_provenance_json</span><span class="p">(</span><span class="n">blob</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]:</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">json</span><span class="o">.</span><span class="n">JSONDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">items</span> <span class="o">=</span> <span class="n">data</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
+        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ProvenanceRecord</span><span class="p">(</span>
+            <span class="n">timestamp_unix</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;timestamp_unix&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span>
+            <span class="n">software</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;software&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)),</span>
+            <span class="n">parameters</span><span class="o">=</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">,</span> <span class="p">{})</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parameters&quot;</span><span class="p">),</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="p">{},</span>
+            <span class="n">input_refs</span><span class="o">=</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;input_refs&quot;</span><span class="p">,</span> <span class="p">[])],</span>
+            <span class="n">output_refs</span><span class="o">=</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_refs&quot;</span><span class="p">,</span> <span class="p">[])],</span>
+        <span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DTW-Thalion
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=2bd037f0"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

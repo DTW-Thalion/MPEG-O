@@ -1,0 +1,90 @@
+ttio.transport.server
+=====================
+
+.. py:module:: ttio.transport.server
+
+.. autoapi-nested-parse::
+
+   WebSocket transport server (v0.10 M68).
+
+   The server hosts a single :class:`SpectralDataset` and accepts one or
+   more simultaneous WebSocket clients. Each client sends a JSON query
+   message describing optional filters; the server then streams the
+   dataset's transport packets back as one binary WebSocket frame per
+   packet.
+
+   Wire flow:
+
+   1. Client connects.
+   2. Client sends text frame: ``{"type": "query", "filters": {...}}``
+      (empty filters = full stream).
+   3. Server emits StreamHeader, all DatasetHeaders, then AUs (filtered
+      by the query), EndOfDataset per dataset, and EndOfStream.
+   4. Connection closes.
+
+   ``StreamHeader`` / ``DatasetHeader`` / ``EndOfDataset`` /
+   ``EndOfStream`` are always emitted so the client has a complete
+   container skeleton regardless of filter selectivity (§7 of
+   ``docs/transport-spec.md``).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.server.TransportServer
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.transport.server.serving
+
+
+Module Contents
+---------------
+
+.. py:class:: TransportServer(dataset_source: ttio.spectral_dataset.SpectralDataset | str | pathlib.Path, *, host: str = 'localhost', port: int = 9700)
+
+   WebSocket server streaming a :class:`SpectralDataset` on demand.
+
+
+   .. py:property:: port
+      :type: int
+
+
+
+   .. py:property:: host
+      :type: str
+
+
+
+   .. py:method:: start() -> None
+      :async:
+
+
+      Start serving. Returns once the socket is listening.
+
+
+
+   .. py:method:: wait_closed() -> None
+      :async:
+
+
+
+   .. py:method:: stop() -> None
+      :async:
+
+
+
+.. py:function:: serving(dataset_source: ttio.spectral_dataset.SpectralDataset | str | pathlib.Path, *, host: str = 'localhost', port: int = 0) -> AsyncIterator[TransportServer]
+   :async:
+
+
+   Async context manager: start a server, yield it, stop on exit.
+
+

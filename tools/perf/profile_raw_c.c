@@ -2,7 +2,7 @@
  * Pure-C libhdf5 harness — same workload as profile_python.py /
  * ProfileHarness.java / profile_objc.m, but bypassing every
  * language binding so we see libhdf5's own floor. If ObjC is
- * significantly slower than this, the MPGOHDF5 wrapper is
+ * significantly slower than this, the TTIOHDF5 wrapper is
  * overhead; if not, ObjC is already at the native floor and the
  * remaining cross-language variance is JHDF5 vs direct-link noise.
  *
@@ -113,7 +113,7 @@ static void workload(const char *path, size_t n, size_t peaks,
     hid_t run = H5Gcreate2(ms_runs, "r", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     set_i64_attr(run, "acquisition_mode", 0);
     set_i64_attr(run, "spectrum_count", (long long)n);
-    set_str_attr(run, "spectrum_class", "MPGOMassSpectrum");
+    set_str_attr(run, "spectrum_class", "TTIOMassSpectrum");
 
     hid_t cfg = H5Gcreate2(run, "instrument_config", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     set_str_attr(cfg, "manufacturer", "");
@@ -189,7 +189,7 @@ int main(int argc, char **argv)
     }
 
     char path[512];
-    snprintf(path, sizeof(path), "%s/mpgo_profile_rawc_out/stress.mpgo",
+    snprintf(path, sizeof(path), "%s/mpgo_profile_rawc_out/stress.tio",
              getenv("HOME") ? getenv("HOME") : "/tmp");
     char dir[512];
     snprintf(dir, sizeof(dir), "%s/mpgo_profile_rawc_out",

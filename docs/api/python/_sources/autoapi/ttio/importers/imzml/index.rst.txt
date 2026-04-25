@@ -1,0 +1,225 @@
+ttio.importers.imzml
+====================
+
+.. py:module:: ttio.importers.imzml
+
+.. autoapi-nested-parse::
+
+   imzML + .ibd importer (v0.9 M59).
+
+   imzML is the dominant interchange format for mass-spectrometry imaging
+   data. The format is a pair of files:
+
+   * ``.imzML`` — XML metadata that mirrors mzML's structure but adds a
+     ``<scanSettings>`` block carrying the pixel grid (max count of x, y,
+     z) and per-spectrum coordinates. Each ``<spectrum>`` element points
+     at byte offsets in a sibling binary file.
+   * ``.ibd``   — concatenated binary mass / intensity arrays plus a
+     16-byte UUID header that must match the UUID encoded in the .imzML.
+
+   Two storage modes are supported by the spec:
+
+   * **Continuous** — a single shared m/z axis stored once at the start of
+     the .ibd; per-pixel intensity arrays follow.
+   * **Processed** — every pixel carries its own m/z + intensity arrays.
+
+   This importer covers both. For the v0.9 storage layer it produces one
+   spectrum per pixel; the spatial grid (x, y, optionally z) and the
+   ``IMS:1000030`` continuous / ``IMS:1000031`` processed designation are
+   preserved as a per-run :class:`ProvenanceRecord` parameter dict.
+   A future MSImage cube writer (tracked under HANDOFF M64.5 caller
+   refactor) will be able to read this back into a true 3-D
+   ``[height, width, spectral_points]`` dataset.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOImzMLReader`` (Import/) — *deferred to M59 follow-up*
+   Java:        ``ImzMLReader.java`` (importers/) — *deferred to M59 follow-up*
+
+   The spec defines exactly the file layout we depend on; both ports can
+   follow this Python module verbatim.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.importers.imzml.ImzMLParseError
+   ttio.importers.imzml.ImzMLBinaryError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.imzml.ImzMLPixelSpectrum
+   ttio.importers.imzml.ImzMLImport
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.imzml.read
+
+
+Module Contents
+---------------
+
+.. py:exception:: ImzMLParseError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Raised when the imzML XML is structurally invalid for our needs.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:exception:: ImzMLBinaryError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Raised when the .ibd binary disagrees with the .imzML metadata.
+
+   Covers UUID mismatches and offset / length values that would read
+   past the end of the .ibd (HANDOFF gotcha 48-49).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:class:: ImzMLPixelSpectrum
+
+   One pixel's parsed spectrum + spatial coordinates.
+
+
+   .. py:attribute:: x
+      :type:  int
+
+
+   .. py:attribute:: y
+      :type:  int
+
+
+   .. py:attribute:: z
+      :type:  int
+
+
+   .. py:attribute:: mz
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: intensity
+      :type:  numpy.ndarray
+
+
+.. py:class:: ImzMLImport
+
+   Result of parsing an imzML + .ibd pair.
+
+   .. attribute:: mode
+
+      Either ``"continuous"`` or ``"processed"``.
+
+   .. attribute:: uuid_hex
+
+      16-byte UUID encoded as 32 lowercase hex characters. Cross-
+      validated between the .imzML and the .ibd header (HANDOFF
+      gotcha 49 — mismatch is a hard error, not a warning).
+
+   .. attribute:: grid_max_x / grid_max_y / grid_max_z
+
+      Pixel grid extents declared in the .imzML. Used by downstream
+      MSImage writers to allocate the cube.
+
+   .. attribute:: pixel_size_x / pixel_size_y
+
+      Spatial pixel size in micrometres (or whatever unit the
+      producer claimed; we pass the value through unchanged).
+
+   .. attribute:: scan_pattern
+
+      Free-text label, e.g. ``"flyback"`` / ``"meandering"``.
+
+   .. attribute:: spectra
+
+      One :class:`ImzMLPixelSpectrum` per ``<spectrum>`` element.
+
+   .. attribute:: source_imzml / source_ibd
+
+      Resolved Path objects for traceability.
+
+
+   .. py:attribute:: mode
+      :type:  str
+
+
+   .. py:attribute:: uuid_hex
+      :type:  str
+
+
+   .. py:attribute:: grid_max_x
+      :type:  int
+
+
+   .. py:attribute:: grid_max_y
+      :type:  int
+
+
+   .. py:attribute:: grid_max_z
+      :type:  int
+
+
+   .. py:attribute:: pixel_size_x
+      :type:  float
+
+
+   .. py:attribute:: pixel_size_y
+      :type:  float
+
+
+   .. py:attribute:: scan_pattern
+      :type:  str
+
+
+   .. py:attribute:: spectra
+      :type:  list[ImzMLPixelSpectrum]
+      :value: []
+
+
+
+   .. py:attribute:: source_imzml
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: source_ibd
+      :type:  str
+      :value: ''
+
+
+
+   .. py:method:: to_ttio(path: str | pathlib.Path, *, title: str | None = None, isa_investigation_id: str = '') -> pathlib.Path
+
+      Write the imported pixels to an .tio as a single MS run.
+
+
+
+.. py:function:: read(imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None) -> ImzMLImport
+
+   Parse an imzML + .ibd pair and return an :class:`ImzMLImport`.
+
+   :param imzml_path: Path to the ``.imzML`` XML metadata file.
+   :param ibd_path: Optional explicit path to the binary file. When ``None``, the
+                    sibling ``<stem>.ibd`` is used. UUID matching is still
+                    enforced regardless of how the .ibd was located.
+
+

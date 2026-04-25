@@ -1,7 +1,7 @@
 # Storage Providers
 
-MPEG-O separates the data model from the storage backend. The
-`mpeg_o.providers` package (and its Objective-C / Java equivalents)
+TTI-O separates the data model from the storage backend. The
+`ttio.providers` package (and its Objective-C / Java equivalents)
 defines a protocol contract — `StorageProvider`, `StorageGroup`,
 `StorageDataset` — that every backend implements. Four providers
 ship across all three language implementations (HDF5, Memory, SQLite,
@@ -50,11 +50,11 @@ Cross-backend test coverage:
 ## URL scheme routing
 
 ```python
-from mpeg_o.providers import open_provider
+from ttio.providers import open_provider
 
 # HDF5 (default for bare paths and file:// URLs)
-p = open_provider("/path/to/file.mpgo", mode="r")
-p = open_provider("file:///path/to/file.mpgo", mode="r")
+p = open_provider("/path/to/file.tio", mode="r")
+p = open_provider("file:///path/to/file.tio", mode="r")
 
 # Memory
 p = open_provider("memory://pipeline-state", mode="w")
@@ -110,14 +110,14 @@ Scope of the Java + ObjC ZarrProviders:
 ## Writing a new provider
 
 1. Subclass `StorageProvider`, `StorageGroup`, `StorageDataset` in
-   `python/src/mpeg_o/providers/<name>.py`.
-2. Add a `[project.entry-points."mpeg_o.providers"]` entry in
+   `python/src/ttio/providers/<name>.py`.
+2. Add a `[project.entry-points."ttio.providers"]` entry in
    `python/pyproject.toml`.
 3. Make `python/tests/test_zarr_provider.py` (or a peer) pass against
    your backend. The contract tests cover group/attribute/primitive/
    compound/N-D round-trips plus canonical-bytes parity.
 4. Cross-language parity: once the Python impl is stable, port to
-   Java (`java/src/main/java/com/dtwthalion/mpgo/providers/`) and
+   Java (`java/src/main/java/com/dtwthalion/ttio/providers/`) and
    Objective-C (`objc/Source/Providers/`). Both mirror the Python
    class and method shapes.
 

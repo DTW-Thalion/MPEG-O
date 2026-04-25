@@ -1,0 +1,72 @@
+ttio.transport.encrypted
+========================
+
+.. py:module:: ttio.transport.encrypted
+
+.. autoapi-nested-parse::
+
+   v1.0 encrypted transport paths.
+
+   Bypasses the high-level :class:`Spectrum` / :class:`SignalArray`
+   decode machinery (which requires the key to materialise) and reads
+   HDF5 segment compounds directly, so encrypted bytes travel through
+   transport without being decrypted in transit.
+
+   Cross-language equivalents: ObjC
+   ``TTIOEncryptedTransport`` · Java
+   ``com.dtwthalion.ttio.transport.EncryptedTransport``.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.transport.encrypted.is_per_au_encrypted
+   ttio.transport.encrypted.write_encrypted_dataset
+   ttio.transport.encrypted.read_encrypted_to_file
+
+
+Module Contents
+---------------
+
+.. py:function:: is_per_au_encrypted(path: str | pathlib.Path, *, provider: str | None = None) -> bool
+
+   Return True if the file on disk carries ``opt_per_au_encryption``.
+
+   Routes through :func:`ttio.providers.open_provider` so any
+   backend works uniformly.
+
+
+.. py:function:: write_encrypted_dataset(writer: ttio.transport.codec.TransportWriter, ttio_path: str | pathlib.Path, *, provider: str | None = None) -> None
+
+   Emit a full transport stream from a per-AU-encrypted .tio
+   file. Bypasses :class:`SpectralDataset.open` (which would refuse
+   the file because the plaintext ``<channel>_values`` are absent)
+   and walks the source via the StorageProvider abstraction so every
+   backend that supports VL_BYTES compound reads works.
+
+   ProtectionMetadata is emitted after ``StreamHeader``; encrypted
+   AUs carry the flag bits defined in ``docs/transport-spec.md``
+   §3.1.1.
+
+
+.. py:function:: read_encrypted_to_file(stream_source, output_path: str | pathlib.Path, *, provider: str | None = None) -> dict
+
+   Materialise an encrypted transport stream into a new .tio
+   file preserving the encrypted ChannelData bytes verbatim. Routes
+   through :func:`ttio.providers.open_provider` so the output
+   can live in any backend that supports VL_BYTES compound writes.
+
+   ``stream_source`` may be a ``BinaryIO`` or a path to a ``.tis``
+   file. The output file is written with ``opt_per_au_encryption``
+   (and ``opt_encrypted_au_headers`` when the source stream used
+   encrypted headers). The receiver does NOT decrypt in transit —
+   the emitted file carries the same ciphertext the sender stored.
+
+   Returns a metadata dict summarising the stream
+   (``{"title", "runs": {run_name: {"n_spectra", "channels"}}}``)
+   mainly for testing / introspection.
+
+

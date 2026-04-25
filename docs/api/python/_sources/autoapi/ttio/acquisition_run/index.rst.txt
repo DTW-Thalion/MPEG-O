@@ -1,0 +1,480 @@
+ttio.acquisition_run
+====================
+
+.. py:module:: ttio.acquisition_run
+
+.. autoapi-nested-parse::
+
+   ``AcquisitionRun`` — lazy view over one ``/study/ms_runs/<name>/`` group.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.acquisition_run.SpectrumIndex
+   ttio.acquisition_run.AcquisitionRun
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.acquisition_run.write_chromatograms_to_run_group
+
+
+Module Contents
+---------------
+
+.. py:class:: SpectrumIndex
+
+   Parallel per-spectrum arrays loaded eagerly at run open time.
+
+   The arrays map 1:1 to the datasets under
+   ``/study/ms_runs/<name>/spectrum_index/`` described in §4 of
+   ``docs/format-spec.md``. They are small (length = spectrum_count) and
+   cheap to hold in memory; signal channels remain lazy.
+
+   :param offsets: Starting element index of each spectrum in the mz_values channel.
+   :type offsets: numpy.ndarray
+   :param lengths: Number of elements (peaks) in each spectrum.
+   :type lengths: numpy.ndarray
+   :param retention_times: Retention time in seconds for each spectrum.
+   :type retention_times: numpy.ndarray
+   :param ms_levels: MS level (1, 2, …) for each spectrum.
+   :type ms_levels: numpy.ndarray
+   :param polarities: Polarity (1=positive, -1=negative, 0=unknown) for each spectrum.
+   :type polarities: numpy.ndarray
+   :param precursor_mzs: Precursor m/z for each spectrum (0.0 for MS1).
+   :type precursor_mzs: numpy.ndarray
+   :param precursor_charges: Precursor charge state for each spectrum (0 for MS1).
+   :type precursor_charges: numpy.ndarray
+   :param base_peak_intensities: Base-peak intensity for each spectrum.
+   :type base_peak_intensities: numpy.ndarray
+   :param activation_methods: (M74, optional) Activation method int value per spectrum; see
+                              :class:`~ttio.enums.ActivationMethod`. Present only when the
+                              file was written with the ``opt_ms2_activation_detail`` feature
+                              flag; absent columns indicate MS1-only or legacy files.
+   :type activation_methods: numpy.ndarray | None
+   :param isolation_target_mzs: (M74, optional) Target m/z of the isolation window per spectrum.
+                                Zero when no isolation applied.
+   :type isolation_target_mzs: numpy.ndarray | None
+   :param isolation_lower_offsets: (M74, optional) Lower offset of the isolation window per
+                                   spectrum. Zero when no isolation applied.
+   :type isolation_lower_offsets: numpy.ndarray | None
+   :param isolation_upper_offsets: (M74, optional) Upper offset of the isolation window per
+                                   spectrum. Zero when no isolation applied.
+   :type isolation_upper_offsets: numpy.ndarray | None
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSpectrumIndex`` ·
+   Java: ``com.dtwthalion.ttio.SpectrumIndex``.
+
+
+   .. py:attribute:: offsets
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: retention_times
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: ms_levels
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: polarities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: precursor_mzs
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: precursor_charges
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: base_peak_intensities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: activation_methods
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:attribute:: isolation_target_mzs
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:attribute:: isolation_lower_offsets
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:attribute:: isolation_upper_offsets
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:property:: count
+      :type: int
+
+
+
+   .. py:method:: offset_at(index: int) -> int
+
+      Return element offset of spectrum ``index`` in mz_values.
+
+
+
+   .. py:method:: length_at(index: int) -> int
+
+      Return element count (peaks) of spectrum ``index``.
+
+
+
+   .. py:method:: retention_time_at(index: int) -> float
+
+      Return retention time in seconds of spectrum ``index``.
+
+
+
+   .. py:method:: ms_level_at(index: int) -> int
+
+      Return MS level of spectrum ``index``.
+
+
+
+   .. py:method:: polarity_at(index: int) -> ttio.enums.Polarity
+
+      Return :class:`~ttio.enums.Polarity` of spectrum ``index``.
+
+
+
+   .. py:method:: precursor_mz_at(index: int) -> float
+
+      Return precursor m/z of spectrum ``index`` (0.0 for MS1).
+
+
+
+   .. py:method:: precursor_charge_at(index: int) -> int
+
+      Return precursor charge state of spectrum ``index`` (0 for MS1).
+
+
+
+   .. py:method:: base_peak_intensity_at(index: int) -> float
+
+      Return base-peak intensity of spectrum ``index``.
+
+
+
+   .. py:method:: activation_method_at(index: int) -> ttio.enums.ActivationMethod
+
+      Return :class:`~ttio.enums.ActivationMethod` of spectrum
+      ``index``. Returns ``ActivationMethod.NONE`` when the M74
+      column is absent (legacy file or MS1-only run).
+
+
+
+   .. py:method:: isolation_window_at(index: int) -> ttio.isolation_window.IsolationWindow | None
+
+      Return :class:`~ttio.isolation_window.IsolationWindow` of
+      spectrum ``index``, or ``None`` when the M74 columns are absent
+      or the stored target+offsets are all zero (MS1 sentinel).
+
+
+
+   .. py:method:: indices_in_retention_time_range(value_range: ttio.value_range.ValueRange) -> list[int]
+
+      Return indices whose retention time lies in
+      ``[value_range.minimum, value_range.maximum]`` (inclusive).
+
+
+
+   .. py:method:: indices_for_ms_level(ms_level: int) -> list[int]
+
+      Return indices whose ``ms_level`` equals ``ms_level``.
+
+
+
+   .. py:method:: read(idx_group: ttio.providers.base.StorageGroup | h5py.Group) -> SpectrumIndex
+      :classmethod:
+
+
+      Load all index columns.
+
+      Accepts either a :class:`StorageGroup` (v0.7 M44 protocol path)
+      or an :class:`h5py.Group` (legacy). The h5py path is retained
+      via ``_native_h5py`` so existing callers that dereferenced
+      child groups with ``group["spectrum_index"]`` continue to work.
+
+
+
+.. py:class:: AcquisitionRun
+
+   Lazy view over one acquisition run inside an ``.tio`` file.
+
+   Conforms to :class:`~ttio.protocols.Indexable`,
+   :class:`~ttio.protocols.Streamable`, and
+   :class:`~ttio.protocols.Provenanceable`.
+   :class:`~ttio.protocols.Encryptable` conformance is delivered
+   in slice 41.5 when the encryption manager subsystem lands.
+
+   Spectrum access is zero-copy-aware: the spectrum index is
+   pre-loaded into numpy arrays at open time but signal channels are
+   sliced on demand, so random access to spectrum ``i`` touches only
+   the dataset bytes it needs.
+
+   .. rubric:: Notes
+
+   API status: Stable (Encryptable surface pending).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOAcquisitionRun`` · Java:
+   ``com.dtwthalion.ttio.AcquisitionRun``.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: group
+      :type:  ttio.providers.base.StorageGroup
+
+
+   .. py:attribute:: spectrum_class
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  ttio.enums.AcquisitionMode
+
+
+   .. py:attribute:: index
+      :type:  SpectrumIndex
+
+
+   .. py:attribute:: channel_names
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:attribute:: instrument_config
+      :type:  ttio.instrument_config.InstrumentConfig
+
+
+   .. py:attribute:: nucleus_type
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: provenance_json
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: modality
+      :type:  str
+      :value: 'mass_spectrometry'
+
+
+
+   .. py:attribute:: chromatograms
+      :type:  list[ttio.chromatogram.Chromatogram]
+      :value: []
+
+
+
+   .. py:method:: open(group: ttio.providers.base.StorageGroup | h5py.Group, name: str) -> AcquisitionRun
+      :classmethod:
+
+
+      Open a run from a storage-provider group (v0.7 M44, v0.9 M64.5).
+
+      Accepts either a :class:`StorageGroup` (protocol path) or an
+      :class:`h5py.Group` (legacy path — wrapped transparently via
+      :class:`~ttio.providers.hdf5._Group`). v0.9 M64.5 made every
+      cold-path read route through the StorageGroup protocol so
+      Memory / SQLite / Zarr backends work without touching h5py.
+
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: __iter__() -> Iterator[ttio.spectrum.Spectrum]
+
+
+   .. py:method:: provenance() -> list[ttio.provenance.ProvenanceRecord]
+
+      Per-run provenance records.
+
+      Prefers the v0.3 compound layout at ``<run>/provenance/steps`` and
+      falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2
+      files (no per-run provenance of any kind) return an empty list.
+
+
+
+   .. py:method:: __getitem__(i: int) -> ttio.spectrum.Spectrum
+
+
+   .. py:method:: object_at_index(index: int) -> ttio.spectrum.Spectrum
+
+      Return the spectrum at ``index``. Negative indices are supported.
+
+
+
+   .. py:method:: count() -> int
+
+      Return the total number of spectra.
+
+
+
+   .. py:method:: object_for_key(key: object) -> ttio.spectrum.Spectrum
+      :abstractmethod:
+
+
+      Not supported — AcquisitionRun uses integer indexing only.
+
+
+
+   .. py:method:: objects_in_range(start: int, stop: int) -> list[ttio.spectrum.Spectrum]
+
+      Return spectra in the half-open slice ``[start, stop)``.
+
+
+
+   .. py:method:: next_object() -> ttio.spectrum.Spectrum
+
+      Return the next spectrum and advance the cursor.
+
+
+
+   .. py:method:: has_more() -> bool
+
+      Return ``True`` if ``next_object`` can be called.
+
+
+
+   .. py:method:: current_position() -> int
+
+      0-based position of the next spectrum to be yielded.
+
+
+
+   .. py:method:: seek_to_position(position: int) -> bool
+
+      Reposition the cursor. Returns ``True`` on success.
+
+
+
+   .. py:method:: reset() -> None
+
+      Reposition the cursor to 0.
+
+
+
+   .. py:method:: add_processing_step(step: ttio.provenance.ProvenanceRecord) -> None
+
+      Append a processing step to this run's provenance chain.
+
+
+
+   .. py:method:: provenance_chain() -> list[ttio.provenance.ProvenanceRecord]
+
+      Return this run's provenance records in insertion order.
+
+
+
+   .. py:method:: input_entities() -> list[str]
+
+      Distinct input entity identifiers referenced by the chain.
+
+
+
+   .. py:method:: output_entities() -> list[str]
+
+      Distinct output entity identifiers referenced by the chain.
+
+
+
+   .. py:method:: encrypt_with_key(key: bytes, level: ttio.enums.EncryptionLevel) -> None
+
+      Encrypt this run's intensity channel in place.
+
+      Operates through the already-open HDF5 group so no second file
+      handle is required — the file must be open for writing (``"r+"``
+      or ``"w"``). Matches ObjC
+      ``-[TTIOAcquisitionRun encryptWithKey:level:error:]`` semantics.
+
+      Requires a persistence context — call only after opening via
+      :meth:`SpectralDataset.open`.
+
+
+
+   .. py:method:: decrypt_with_key(key: bytes) -> bytes
+
+      Decrypt this run's intensity channel.
+
+      Returns the plaintext bytes. The on-disk file is NOT modified.
+      Operates through the already-open HDF5 group. Matches ObjC
+      ``-[TTIOAcquisitionRun decryptWithKey:]`` semantics (NSData → bytes).
+
+      Side effect: the decrypted ndarray is cached on the run so
+      subsequent :meth:`object_at_index` calls can return
+      :class:`SignalArray` views without re-decrypting. See the M5
+      handoff note — spectra become readable through the normal API
+      path after decrypt.
+
+      Requires a persistence context — call only after opening via
+      :meth:`SpectralDataset.open`.
+
+
+
+   .. py:method:: access_policy() -> ttio.access_policy.AccessPolicy | None
+
+      Return the current access policy, or ``None`` if not set.
+
+
+
+   .. py:method:: set_access_policy(policy: ttio.access_policy.AccessPolicy | None) -> None
+
+      Replace the current access policy.
+
+
+
+.. py:function:: write_chromatograms_to_run_group(run_group, chromatograms: list[ttio.chromatogram.Chromatogram]) -> None
+
+   Write ``chromatograms`` under ``<run>/chromatograms/``.
+
+   Does nothing when the list is empty so v0.3 readers continue to see
+   the absence of the group. v0.9 M64.5: the ``run_group`` argument
+   accepts either an ``h5py.Group`` or a
+   :class:`~ttio.providers.base.StorageGroup`. The HDF5 path keeps
+   the legacy byte layout; non-HDF5 providers route through
+   :meth:`StorageGroup.create_dataset` so the same logical data lands
+   in Memory / SQLite / Zarr backends.
+
+

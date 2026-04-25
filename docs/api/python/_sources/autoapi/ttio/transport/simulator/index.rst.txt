@@ -1,0 +1,148 @@
+ttio.transport.simulator
+========================
+
+.. py:module:: ttio.transport.simulator
+
+.. autoapi-nested-parse::
+
+   Acquisition simulator (v0.10 M69).
+
+   Produces synthetic TTI-O transport packets that mimic an LC-MS
+   instrument acquiring in real time. Two output modes:
+
+   - ``stream_to_writer(writer)`` — synchronous; produce every packet
+     as fast as the writer can accept, no wall-clock pacing. Intended
+     for offline fixture generation.
+   - ``stream(output)`` — async, produces packets at the configured
+     scan rate in wall-clock time. Intended for live-streaming via a
+     WebSocket, a ``TransportWriter`` hooked to a network sink, or any
+     other async sink.
+
+   Cross-language equivalents: Java
+   ``com.dtwthalion.ttio.transport.AcquisitionSimulator``, ObjC
+   ``TTIOAcquisitionSimulator``.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.simulator.SimulatorConfig
+   ttio.transport.simulator.AcquisitionSimulator
+
+
+Module Contents
+---------------
+
+.. py:class:: SimulatorConfig
+
+   Reproducible simulator parameters.
+
+
+   .. py:attribute:: scan_rate
+      :type:  float
+      :value: 10.0
+
+
+
+   .. py:attribute:: duration
+      :type:  float
+      :value: 10.0
+
+
+
+   .. py:attribute:: ms1_fraction
+      :type:  float
+      :value: 0.3
+
+
+
+   .. py:attribute:: mz_min
+      :type:  float
+      :value: 100.0
+
+
+
+   .. py:attribute:: mz_max
+      :type:  float
+      :value: 2000.0
+
+
+
+   .. py:attribute:: n_peaks
+      :type:  int
+      :value: 200
+
+
+
+   .. py:attribute:: seed
+      :type:  int
+      :value: 42
+
+
+
+   .. py:property:: scan_count
+      :type: int
+
+
+
+   .. py:property:: scan_interval
+      :type: float
+
+
+
+.. py:class:: AcquisitionSimulator(*, scan_rate: float = 10.0, duration: float = 10.0, ms1_fraction: float = 0.3, mz_range: tuple[float, float] = (100.0, 2000.0), n_peaks: int = 200, seed: int = 42)
+
+   Simulates an LC-MS instrument producing spectra in real-time.
+
+
+   .. py:attribute:: RUN_NAME
+      :value: 'simulated_run'
+
+
+
+   .. py:attribute:: DATASET_ID
+      :value: 1
+
+
+
+   .. py:attribute:: FORMAT_VERSION
+      :value: '1.2'
+
+
+
+   .. py:attribute:: TITLE
+      :value: 'Simulated acquisition'
+
+
+
+   .. py:attribute:: ISA_INVESTIGATION_ID
+      :value: 'ISA-SIMULATOR'
+
+
+
+   .. py:property:: config
+      :type: SimulatorConfig
+
+
+
+   .. py:method:: stream_to_writer(writer: ttio.transport.codec.TransportWriter) -> int
+
+      Emit the full packet sequence to ``writer`` and return the
+      number of AUs produced. No wall-clock pacing — useful for
+      generating fixtures deterministically.
+
+
+
+   .. py:method:: stream(writer: ttio.transport.codec.TransportWriter) -> int
+      :async:
+
+
+      Async pacing: emit AUs at ``scan_rate`` Hz in wall-clock
+      time. Returns the total AU count once ``duration`` seconds
+      have elapsed (or the scan budget is exhausted).
+
+
+

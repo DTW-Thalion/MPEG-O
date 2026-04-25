@@ -1,0 +1,95 @@
+ttio.verifier
+=============
+
+.. py:module:: ttio.verifier
+
+.. autoapi-nested-parse::
+
+   ``Verifier`` — high-level sign/verify status wrapper.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.verifier.VerificationStatus
+   ttio.verifier.Verifier
+
+
+Module Contents
+---------------
+
+.. py:class:: VerificationStatus
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Sign-and-verify cycle outcome.
+
+   Cross-language: ObjC ``TTIOVerificationStatus`` · Java
+   ``com.dtwthalion.ttio.protection.Verifier.Status``.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: VALID
+      :value: 0
+
+
+
+   .. py:attribute:: INVALID
+      :value: 1
+
+
+
+   .. py:attribute:: NOT_SIGNED
+      :value: 2
+
+
+
+   .. py:attribute:: ERROR
+      :value: 3
+
+
+
+.. py:class:: Verifier
+
+   High-level verification API.
+
+   Collapses the three outcomes of a sign-and-verify cycle
+   (valid / invalid / not-signed) into a single enum, plus an error
+   fallback for I/O failures. Use this instead of
+   :mod:`ttio.signatures` when you want to render a status to an
+   end user.
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOVerifier`` · Java:
+   ``com.dtwthalion.ttio.protection.Verifier``.
+
+
+   .. py:method:: verify(data: bytes, signature: str | None, key: bytes) -> VerificationStatus
+      :staticmethod:
+
+
+      Verify a signature string against data and key.
+
+      :param data: Original bytes (never ``None``).
+      :type data: bytes
+      :param signature: Signature string from ``@ttio_signature`` or
+                        ``@provenance_signature``. ``None`` or empty returns
+                        :attr:`VerificationStatus.NOT_SIGNED`.
+      :type signature: str or None
+      :param key: 32-byte HMAC key.
+      :type key: bytes
+
+      :returns: *VerificationStatus*
+
+
+

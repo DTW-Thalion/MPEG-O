@@ -1,0 +1,40 @@
+ttio.tools.ttio_sign_cli
+========================
+
+.. py:module:: ttio.tools.ttio_sign_cli
+
+.. autoapi-nested-parse::
+
+   ``ttio-sign`` — HMAC-SHA256 signer for TTI-O datasets (M75).
+
+   Python equivalent of the Objective-C ``TtioSign`` tool. Opens an
+   ``.tio`` file, navigates to the HDF5 dataset path, and signs it in
+   place with the v0.3 canonical HMAC-SHA256 path (``v2:`` prefix).
+
+   Usage::
+
+       ttio-sign <path-to.tio> <dataset-path> <key-hex>
+
+   ``<key-hex>`` is 64 hexadecimal characters (32 bytes, HMAC-SHA256 key).
+
+   Exit codes
+   ----------
+   - ``0`` — signed successfully.
+   - ``1`` — sign failed (I/O, dataset missing, etc).
+   - ``2`` — usage error.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.ttio_sign_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

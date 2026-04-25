@@ -1,0 +1,115 @@
+ttio.feature
+============
+
+.. py:module:: ttio.feature
+
+.. autoapi-nested-parse::
+
+   ``Feature`` — detected peak / peptide-feature / small-molecule feature record.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.feature.Feature
+
+
+Module Contents
+---------------
+
+.. py:class:: Feature
+
+   A feature-level observation: a peak detected in one run, with
+   retention time + m/z + charge + per-sample abundances.
+
+   ``Feature`` sits between :class:`Identification` (spectrum-level)
+   and :class:`Quantification` (entity-level): it is the row-level
+   record required by mzTab's PEP section (peptide-level
+   quantification in the 1.0 proteomics dialect) and by mzTab-M's
+   SMF/SME sections (small-molecule feature + evidence in the
+   2.0.0-M metabolomics dialect).
+
+   :param feature_id: Identifier unique within a single file (typically the mzTab
+                      ``PEP_ID`` or ``SMF_ID`` value as a string).
+   :type feature_id: str
+   :param run_name: Acquisition run this feature was detected in.
+   :type run_name: str
+   :param chemical_entity: Peptide sequence, CHEBI accession, chemical name, or formula
+                           — whatever the source file assigned.
+   :type chemical_entity: str
+   :param retention_time_seconds: Apex retention time in seconds. ``0.0`` if the source did not
+                                  record one.
+   :type retention_time_seconds: float
+   :param exp_mass_to_charge: Experimental (observed) precursor m/z. ``0.0`` if unavailable.
+   :type exp_mass_to_charge: float
+   :param charge: Precursor charge state. ``0`` if unknown.
+   :type charge: int
+   :param adduct_ion: Adduct annotation (e.g. ``"[M+H]1+"``). Empty for proteomics
+                      peptide features.
+   :type adduct_ion: str, default ""
+   :param abundances: Per-sample abundances keyed by sample/study-variable label.
+   :type abundances: dict[str, float], default {}
+   :param evidence_refs: References that support this feature — mzTab-M ``SME_ID``
+                         values for metabolomics, ``spectra_ref`` entries for
+                         proteomics.
+   :type evidence_refs: list[str], default []
+
+   .. rubric:: Notes
+
+   API status: Provisional (v0.12.0 M78).
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOFeature`` · Java:
+   ``com.dtwthalion.ttio.Feature``.
+
+
+   .. py:attribute:: feature_id
+      :type:  str
+
+
+   .. py:attribute:: run_name
+      :type:  str
+
+
+   .. py:attribute:: chemical_entity
+      :type:  str
+
+
+   .. py:attribute:: retention_time_seconds
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: exp_mass_to_charge
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: charge
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: adduct_ion
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: abundances
+      :type:  dict[str, float]
+
+
+   .. py:attribute:: evidence_refs
+      :type:  list[str]
+      :value: []
+
+
+

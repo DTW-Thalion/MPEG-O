@@ -1,0 +1,31 @@
+ttio.tools
+==========
+
+.. py:module:: ttio.tools
+
+.. autoapi-nested-parse::
+
+   Command-line tools for TTI-O.
+
+   v0.7 M51 — cross-language byte-parity tooling. Each module under this
+   package has Objective-C and Java equivalents with matching output.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/ttio/tools/dump_identifications/index
+   /autoapi/ttio/tools/per_au_cli/index
+   /autoapi/ttio/tools/simulator_cli/index
+   /autoapi/ttio/tools/transport_decode_cli/index
+   /autoapi/ttio/tools/transport_encode_cli/index
+   /autoapi/ttio/tools/transport_server_cli/index
+   /autoapi/ttio/tools/ttio_pqc_cli/index
+   /autoapi/ttio/tools/ttio_sign_cli/index
+   /autoapi/ttio/tools/ttio_verify_cli/index
+
+

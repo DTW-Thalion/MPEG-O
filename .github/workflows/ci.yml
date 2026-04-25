@@ -1,4 +1,4 @@
-name: MPGO CI
+name: TTIO CI
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
 
     # We mirror the canonical developer setup: clang + libobjc2 +
     # gnustep-make + gnustep-base built from source. This is the path the
-    # MPGO preamble's runtime auto-detect identifies as `gnustep-2.0`
+    # TTIO preamble's runtime auto-detect identifies as `gnustep-2.0`
     # (non-fragile ABI), which enables `-fblocks` and avoids the layered
     # incompatibilities of Ubuntu's apt gnustep-1.8 / GCC libobjc combo.
     #
@@ -127,7 +127,7 @@ jobs:
           ls -l ${INSTALL_PREFIX}/lib/libgnustep-base.so* || true
 
       # M23: probe H5is_library_threadsafe() and log the result. apt's
-      # libhdf5-dev is serial; MPGOHDF5File detects that at open time and
+      # libhdf5-dev is serial; TTIOHDF5File detects that at open time and
       # falls back to exclusive-only wrapper locking (see -isThreadSafe).
       # The log makes the runtime mode visible in every CI run.
       - name: Probe HDF5 thread-safety (informational)
@@ -150,7 +150,7 @@ jobs:
         working-directory: objc
         run: ./check-deps.sh
 
-      - name: Build libMPGO
+      - name: Build libTTIO
         working-directory: objc
         run: ./build.sh
 
@@ -285,8 +285,8 @@ jobs:
     runs-on: ubuntu-latest
 
     # Runs the Python test suite against a freshly-built Objective-C
-    # tree so the cross-language tests that subprocess into MpgoVerify
-    # and MpgoSign can actually find the binaries. This catches any
+    # tree so the cross-language tests that subprocess into TtioVerify
+    # and TtioSign can actually find the binaries. This catches any
     # byte-level divergence between the two writers / signers /
     # codecs before a release tag is pushed.
     env:
@@ -368,7 +368,7 @@ jobs:
       - name: Refresh dynamic linker cache
         run: sudo ldconfig
 
-      - name: Build libMPGO + tools
+      - name: Build libTTIO + tools
         working-directory: objc
         run: ./build.sh
 

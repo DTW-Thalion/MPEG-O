@@ -1,0 +1,156 @@
+ttio.ms_image
+=============
+
+.. py:module:: ttio.ms_image
+
+.. autoapi-nested-parse::
+
+   ``MSImage`` — mass-spectrometry imaging cube.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.ms_image.MSImage
+
+
+Module Contents
+---------------
+
+.. py:class:: MSImage
+
+   Mass-spectrometry imaging dataset: a ``width × height`` grid of
+   pixels, each pixel a spectral profile of ``spectral_points`` values.
+
+   :param width: Image grid dimensions in pixels.
+   :type width: int, default 0
+   :param height: Image grid dimensions in pixels.
+   :type height: int, default 0
+   :param spectral_points: Number of float64 values per pixel.
+   :type spectral_points: int, default 0
+   :param intensity: Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
+   :type intensity: numpy.ndarray, default empty rank-3 array
+   :param pixel_size_x: Spatial pixel size (implementation-defined units).
+   :type pixel_size_x: float, default 0.0
+   :param pixel_size_y: Spatial pixel size (implementation-defined units).
+   :type pixel_size_y: float, default 0.0
+   :param scan_pattern: Scan pattern label (e.g. ``"raster"``, ``"random_access"``).
+   :type scan_pattern: str, default ""
+   :param tile_size: HDF5 chunk tile size for reads; 0 means native cube chunks.
+   :type tile_size: int, default 0
+   :param title: Dataset-level metadata. In Objective-C these are inherited
+                 from ``TTIOSpectralDataset``; in Python they are composed
+                 directly onto ``MSImage``.
+   :type title: str, default ""
+   :param isa_investigation_id: Dataset-level metadata. In Objective-C these are inherited
+                                from ``TTIOSpectralDataset``; in Python they are composed
+                                directly onto ``MSImage``.
+   :type isa_investigation_id: str, default ""
+   :param identifications: Dataset-level identifications (composed — see Notes).
+   :type identifications: list, default []
+   :param quantifications: Dataset-level quantifications (composed).
+   :type quantifications: list, default []
+   :param provenance_records: Dataset-level provenance records (composed).
+   :type provenance_records: list, default []
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   **Composition vs inheritance.** In Objective-C ``TTIOMSImage``
+   inherits from ``TTIOSpectralDataset`` so dataset-level fields come
+   for free. In Python, ``SpectralDataset`` is a file-handle wrapper
+   whose lifecycle does not map cleanly to an MSImage subclass;
+   composition is used here (the five dataset-level fields live on
+   ``MSImage`` directly). This is a known stylistic difference
+   between the language implementations, recorded in
+   :doc:`/api-review-v0.6`.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOMSImage`` · Java:
+   ``com.dtwthalion.ttio.MSImage``.
+
+
+   .. py:attribute:: width
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: height
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: spectral_points
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_size_x
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: pixel_size_y
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: intensity
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: scan_pattern
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: tile_size
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: identifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: provenance_records
+      :type:  list
+      :value: []
+
+
+
+   .. py:method:: __post_init__() -> None
+
+

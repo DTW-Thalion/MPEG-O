@@ -1,0 +1,126 @@
+ttio.transport.codec
+====================
+
+.. py:module:: ttio.transport.codec
+
+.. autoapi-nested-parse::
+
+   Transport-stream codec: file ↔ transport bytes.
+
+   The writer walks a :class:`SpectralDataset` and emits the full
+   packet sequence specified in ``docs/transport-spec.md``. The reader
+   ingests a packet stream and materializes it back into a ``.tio``
+   file via :meth:`SpectralDataset.write_minimal`.
+
+   Scope:
+
+   - Signal data is emitted as ``float64``. On-wire compression via
+     ``Compression.ZLIB`` is opt-in (``TransportWriter(use_compression=True)``)
+     and handled automatically by :class:`TransportReader` regardless.
+   - ProtectionMetadata / Annotation / Provenance / Chromatogram
+     packet slots are defined on the wire but writer emission and
+     reader materialization of encrypted AUs remain v1.0 integration
+     items (the wire is stable as of M71).
+   - Selective-access filtering lives in M68 (server) and M71 (filter
+     enforcement).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.codec.TransportWriter
+   ttio.transport.codec.TransportReader
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.transport.codec.file_to_transport
+   ttio.transport.codec.transport_to_file
+
+
+Module Contents
+---------------
+
+.. py:class:: TransportWriter(output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False)
+
+   Serialize a :class:`SpectralDataset` as a transport byte stream.
+
+
+   .. py:property:: use_compression
+      :type: bool
+
+
+
+   .. py:method:: __enter__() -> TransportWriter
+
+
+   .. py:method:: __exit__(*exc: object) -> None
+
+
+   .. py:method:: close() -> None
+
+
+   .. py:method:: write_stream_header(*, format_version: str, title: str, isa_investigation: str, features: list[str], n_datasets: int) -> None
+
+
+   .. py:method:: write_dataset_header(*, dataset_id: int, name: str, acquisition_mode: int, spectrum_class: str, channel_names: list[str], instrument_json: str, expected_au_count: int = 0) -> None
+
+
+   .. py:method:: write_access_unit(*, dataset_id: int, au_sequence: int, au: ttio.transport.packets.AccessUnit) -> None
+
+
+   .. py:method:: write_end_of_dataset(*, dataset_id: int, final_au_sequence: int) -> None
+
+
+   .. py:method:: write_end_of_stream() -> None
+
+
+   .. py:method:: write_dataset(dataset: ttio.spectral_dataset.SpectralDataset) -> None
+
+      Walk ``dataset`` and emit the full packet sequence.
+
+
+
+.. py:class:: TransportReader(source: BinaryIO | str | pathlib.Path)
+
+   Deserialize a transport byte stream.
+
+   The low-level API :meth:`iter_packets` yields ``(header, payload)``
+   pairs. The high-level :meth:`read_to_dataset` materializes the
+   stream into a new ``.tio`` file.
+
+
+   .. py:method:: __enter__() -> TransportReader
+
+
+   .. py:method:: __exit__(*exc: object) -> None
+
+
+   .. py:method:: close() -> None
+
+
+   .. py:method:: iter_packets() -> Iterator[tuple[ttio.transport.packets.PacketHeader, bytes]]
+
+
+   .. py:method:: read_to_dataset(*, output_path: str | pathlib.Path, provider: str = 'hdf5') -> ttio.spectral_dataset.SpectralDataset
+
+      Materialize the stream into a ``.tio`` file at ``output_path``.
+
+
+
+.. py:function:: file_to_transport(ttio_path: str | pathlib.Path, output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False) -> None
+
+   Convert a ``.tio`` file to a transport stream.
+
+
+.. py:function:: transport_to_file(source: BinaryIO | str | pathlib.Path, ttio_path: str | pathlib.Path, *, provider: str = 'hdf5') -> ttio.spectral_dataset.SpectralDataset
+
+   Convert a transport stream to a ``.tio`` file.
+
+

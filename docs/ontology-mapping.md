@@ -1,8 +1,8 @@
-# MPEG-O Ontology Mapping
+# TTI-O Ontology Mapping
 
-MPEG-O defers semantic richness to external, well-curated ontologies. Any class conforming to `MPGOCVAnnotatable` can be tagged with any number of CV parameters, each referencing a specific term in a specific ontology.
+TTI-O defers semantic richness to external, well-curated ontologies. Any class conforming to `TTIOCVAnnotatable` can be tagged with any number of CV parameters, each referencing a specific term in a specific ontology.
 
-This document lists the primary ontologies that MPEG-O readers and writers should recognize, and gives common accession examples.
+This document lists the primary ontologies that TTI-O readers and writers should recognize, and gives common accession examples.
 
 ---
 
@@ -27,10 +27,10 @@ This document lists the primary ontologies that MPEG-O readers and writers shoul
 
 | Accession | Name | Attached To |
 |---|---|---|
-| `MS:1000514` | m/z array | `MPGOMassSpectrum.mzArray` |
-| `MS:1000515` | intensity array | `MPGOMassSpectrum.intensityArray` |
-| `MS:1000595` | time array | `MPGOChromatogram.timeArray` |
-| `MS:1002816` | mean ion mobility array | `MPGOMassSpectrum.ionMobilityArray` |
+| `MS:1000514` | m/z array | `TTIOMassSpectrum.mzArray` |
+| `MS:1000515` | intensity array | `TTIOMassSpectrum.intensityArray` |
+| `MS:1000595` | time array | `TTIOChromatogram.timeArray` |
+| `MS:1002816` | mean ion mobility array | `TTIOMassSpectrum.ionMobilityArray` |
 
 ### MS instrument components (PSI-MS)
 
@@ -79,10 +79,10 @@ This document lists the primary ontologies that MPEG-O readers and writers shoul
 Identifications reference chemical entities by accession:
 
 ```objc
-MPGOIdentification *id1 = [MPGOIdentification new];
+TTIOIdentification *id1 = [TTIOIdentification new];
 [id1 setChemicalEntity:@"CHEBI:17234"];   // D-glucose
 [id1 setConfidenceScore:0.97];
-[id1 addCVParam:[MPGOCVParam paramWithOntologyRef:@"MS"
+[id1 addCVParam:[TTIOCVParam paramWithOntologyRef:@"MS"
                                          accession:@"MS:1002356"
                                               name:@"PSM-level FDR"
                                              value:@(0.01)
@@ -93,18 +93,18 @@ MPGOIdentification *id1 = [MPGOIdentification new];
 
 ## BFO Alignment
 
-MPEG-O's primitives align to upper-level BFO categories:
+TTI-O's primitives align to upper-level BFO categories:
 
-| MPEG-O class | BFO category |
+| TTI-O class | BFO category |
 |---|---|
-| `MPGOSignalArray` | `BFO:0000031` (generically dependent continuant — an information artifact) |
-| `MPGOSpectrum` | `BFO:0000031` |
-| `MPGOAcquisitionRun` | `BFO:0000015` (process) |
-| `MPGOProvenanceRecord` | `BFO:0000015` (process) — each record denotes a processing activity |
-| `MPGOIdentification` | `BFO:0000031` (assertion artifact) |
-| `MPGOInstrumentConfig` | `BFO:0000040` (material entity) via the represented instrument |
+| `TTIOSignalArray` | `BFO:0000031` (generically dependent continuant — an information artifact) |
+| `TTIOSpectrum` | `BFO:0000031` |
+| `TTIOAcquisitionRun` | `BFO:0000015` (process) |
+| `TTIOProvenanceRecord` | `BFO:0000015` (process) — each record denotes a processing activity |
+| `TTIOIdentification` | `BFO:0000031` (assertion artifact) |
+| `TTIOInstrumentConfig` | `BFO:0000040` (material entity) via the represented instrument |
 
-This alignment is **optional** — MPEG-O files remain valid without any BFO annotation — but supports integration with upper-ontology-aware knowledge graphs.
+This alignment is **optional** — TTI-O files remain valid without any BFO annotation — but supports integration with upper-ontology-aware knowledge graphs.
 
 ---
 

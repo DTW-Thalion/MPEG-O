@@ -1,11 +1,11 @@
-# MPEG-O
+# TTI-O
 
-[![MPGO CI](https://github.com/DTW-Thalion/MPEG-O/actions/workflows/ci.yml/badge.svg)](https://github.com/DTW-Thalion/MPEG-O/actions/workflows/ci.yml)
+[![TTIO CI](https://github.com/DTW-Thalion/TTI-O/actions/workflows/ci.yml/badge.svg)](https://github.com/DTW-Thalion/TTI-O/actions/workflows/ci.yml)
 [![License: LGPL v3 (core) / Apache-2.0 (import/export)](https://img.shields.io/badge/License-LGPL_v3_%2F_Apache--2.0-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Java: 17+](https://img.shields.io/badge/java-17%2B-blue.svg)](https://www.java.com/)
 
-**MPEG-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS), nuclear magnetic resonance (NMR), and vibrational spectroscopy (Raman + IR) data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of analytical spectroscopy and spectrometry.
+**TTI-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS), nuclear magnetic resonance (NMR), and vibrational spectroscopy (Raman + IR) data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of analytical spectroscopy and spectrometry.
 
 The standard is built around **six shared data primitives** and an **HDF5-based container** that mirrors the MPEG-G file model.
 
@@ -20,18 +20,18 @@ The standard is built around **six shared data primitives** and an **HDF5-based 
 | **Identification** | Link from a spectrum (or spectrum region) to a chemical entity, with confidence score and evidence chain. |
 | **ProvenanceRecord** | W3C PROV-compatible record of processing history: input entities → activity → output entities. |
 
-## MPEG-G → MPEG-O Architectural Mapping
+## MPEG-G → TTI-O Architectural Mapping
 
-| MPEG-G Concept | MPEG-O Equivalent |
+| MPEG-G Concept | TTI-O Equivalent |
 |---|---|
-| File | `.mpgo` HDF5 container |
-| Dataset Group | `MPGOSpectralDataset` (= ISA Investigation / Study root) |
-| Dataset | `MPGOAcquisitionRun` |
-| Access Unit | `MPGOSpectrumIndex` entry + associated signal-channel slice |
+| File | `.tio` HDF5 container |
+| Dataset Group | `TTIOSpectralDataset` (= ISA Investigation / Study root) |
+| Dataset | `TTIOAcquisitionRun` |
+| Access Unit | `TTIOSpectrumIndex` entry + associated signal-channel slice |
 | Descriptor Streams | `/signal_channels/` HDF5 datasets (m/z, intensity, ion mobility, scan metadata) |
 | Data Classes | Acquisition modes (MS1, MS2, DIA, SRM, 1D-NMR, 2D-NMR, Raman, IR, …) |
-| Multi-level Protection | `MPGOEncryptable` protocol with per-dataset, per-stream, and per-AU encryption |
-| Compressed-domain Query | `MPGOQuery` scanning AU headers without decompressing signal data |
+| Multi-level Protection | `TTIOEncryptable` protocol with per-dataset, per-stream, and per-AU encryption |
+| Compressed-domain Query | `TTIOQuery` scanning AU headers without decompressing signal data |
 
 ## Implementation Streams
 
@@ -41,7 +41,7 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 |---|---|---|
 | **Objective-C (GNUstep)** | **Normative reference — v1.0.0, full suite passing (1704/0).** | `objc/` |
 | **Python (`mpeg-o`)**     | **v1.0.0 — full parity with ObjC and Java, 875 tests passing.** | `python/` |
-| **Java (`com.dtwthalion.mpgo`)** | **v1.0.0 — full parity with ObjC and Python, 373 tests, JDK 17, Maven.** | `java/` |
+| **Java (`com.dtwthalion.tio`)** | **v1.0.0 — full parity with ObjC and Python, 373 tests, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages
@@ -52,7 +52,7 @@ decrypt × headers and JCAMP-DX Raman/IR). See
 
 ## Features
 
-All features below are available today in the current release of MPEG-O across
+All features below are available today in the current release of TTI-O across
 the three implementation streams unless flagged otherwise. For the
 release-by-release narrative (*which version introduced what*), see
 [`docs/version-history.md`](docs/version-history.md).
@@ -70,7 +70,7 @@ release-by-release narrative (*which version introduced what*), see
 ### The six data primitives
 
 * **SignalArray** — atomic typed-buffer unit conforming to `CVAnnotatable`; round-trips with axis descriptors and CV annotations. Supports `float32` / `float64` / `int32` / `int64` / `uint32` / `complex128`.
-* **Spectrum** — named dictionary of SignalArrays with coordinate axes and CV metadata; specialized by MS / NMR / Raman / IR / UV-Vis / 2D-COS subclasses and persisted through the generic path with `@mpgo_class` attributes.
+* **Spectrum** — named dictionary of SignalArrays with coordinate axes and CV metadata; specialized by MS / NMR / Raman / IR / UV-Vis / 2D-COS subclasses and persisted through the generic path with `@ttio_class` attributes.
 * **AcquisitionRun** — ordered, indexable, streamable collection of Spectrum objects sharing an instrument configuration and provenance chain. Accepts any Spectrum subclass; signal-channel serialization is name-driven. Conforms to `Indexable` + `Streamable` + `Provenanceable` + `Encryptable` with per-run provenance chains.
 * **CVAnnotation** — controlled-vocabulary parameter (ontology reference + accession + value + unit) attachable to any annotatable object. PSI-MS / nmrCV / Unimod accessions mapped via `CVTermMapper`.
 * **Identification** — link from a spectrum (or region) to a chemical entity, with confidence score and evidence chain. Persisted as a native HDF5 compound dataset.
@@ -78,13 +78,13 @@ release-by-release narrative (*which version introduced what*), see
 
 ### Container, storage providers, and I/O
 
-* **`.mpgo` HDF5 container** — root `SpectralDataset` holds named MS runs, NMR/Raman/IR/UV-Vis spectrum collections, identifications, quantifications, PROV provenance records, and SRM/MRM transition lists. Fully specified in [`docs/format-spec.md`](docs/format-spec.md); current container version is **1.3** (legacy files at 1.1 still round-trip).
-* **Feature flags** — root-level `@mpeg_o_format_version` + JSON `@mpeg_o_features`. `opt_`-prefixed flags are informational; unprefixed flags are required. Registry at [`docs/feature-flags.md`](docs/feature-flags.md).
+* **`.tio` HDF5 container** — root `SpectralDataset` holds named MS runs, NMR/Raman/IR/UV-Vis spectrum collections, identifications, quantifications, PROV provenance records, and SRM/MRM transition lists. Fully specified in [`docs/format-spec.md`](docs/format-spec.md); current container version is **1.3** (legacy files at 1.1 still round-trip).
+* **Feature flags** — root-level `@ttio_format_version` + JSON `@ttio_features`. `opt_`-prefixed flags are informational; unprefixed flags are required. Registry at [`docs/feature-flags.md`](docs/feature-flags.md).
 * **Storage-provider abstraction** — `StorageProvider` / `StorageGroup` / `StorageDataset` protocols. Four interchangeable backends: **HDF5** (reference), **Memory** (transient), **SQLite** (full group/dataset/attribute/compound tree as rows), **Zarr v3** (on-disk + in-memory + S3). `open_provider("scheme://...")` dispatches by URL scheme.
 * **Byte-level canonical bytes** — `read_canonical_bytes()` returns a little-endian byte stream regardless of backend or host endianness; every provider returns bit-equal bytes for the same logical data — the protocol-native path for signatures and encryption.
 * **Full-rank N-D datasets** — `create_dataset_nd` works across all providers via a flat-BLOB + `@__shape_<name>__` attribute pattern.
 * **VL_BYTES compound field kind** — variable-length byte segments in compound rows across all providers; Java's HDF5 provider uses a native `hvl_t` raw-buffer pool to work around JHI5 1.10's marshalling gap.
-* **Cloud-native access** — Python `SpectralDataset.open("s3://bucket/run.mpgo")` routes through `fsspec` (HTTP / S3 / GCS / Azure); alternatively stream HDF5 metadata + chunks directly over S3 / HTTPS via libhdf5's **ROS3 VFD**. Benchmark: 10 random spectra from a 15 MB remote file in ~50 ms, ~24% of bytes transferred.
+* **Cloud-native access** — Python `SpectralDataset.open("s3://bucket/run.tio")` routes through `fsspec` (HTTP / S3 / GCS / Azure); alternatively stream HDF5 metadata + chunks directly over S3 / HTTPS via libhdf5's **ROS3 VFD**. Benchmark: 10 random spectra from a 15 MB remote file in ~50 ms, ~24% of bytes transferred.
 * **Thread safety** — `HDF5File` carries a `pthread_rwlock_t` serializing writes and allowing concurrent reads; Python side opt-in via `SpectralDataset.open(..., thread_safe=True)` with a writer-preferring `RWLock`. Degrades to exclusive locking on non-threadsafe libhdf5 builds.
 * **Chunked + compressed storage** — zlib via HDF5, plus optional **LZ4** (filter 32004; ~35× faster write / ~2× faster read than zlib) and **Numpress-delta** (sub-ppm relative error for m/z). Both cross-language byte-identical between ObjC and Python. LZ4 skips cleanly at runtime when the plugin isn't loadable.
 * **Streaming + query** — `StreamWriter` / `StreamReader` for incremental write + sequential read over runs of arbitrary size. `Query` evaluates compressed-domain predicates (RT range, MS level, polarity, precursor m/z range, base peak threshold) over the in-memory index without touching signal channels; a 10k-spectrum scan runs in ~0.2 ms in CI.
@@ -106,10 +106,10 @@ release-by-release narrative (*which version introduced what*), see
 * **mzTab** — proteomics 1.0 and metabolomics 2.0.0-M dialects.
 * **ISA-Tab / ISA-JSON** — investigation/study/assay TSV files + ISA-JSON from a `SpectralDataset`. Licensed Apache-2.0.
 
-### Streaming transport (`.mots`)
+### Streaming transport (`.tis`)
 
 * **Packet codec** — 24-byte headers, nine packet types: StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, EndOfStream. Three-language parity; bidirectional conformance matrix (any writer × any reader). Optional CRC-32C per packet. See [`docs/transport-spec.md`](docs/transport-spec.md).
-* **WebSocket client + server** — libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). Stream `.mpgo` as `.mots` over `ws://` / `wss://`.
+* **WebSocket client + server** — libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). Stream `.tio` as `.tis` over `ws://` / `wss://`.
 * **Acquisition simulator** — replays a fixture at wall-clock pace to exercise client/server scheduling.
 * **Selective access** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`.
 
@@ -128,11 +128,11 @@ release-by-release narrative (*which version introduced what*), see
 
 ### Cross-language conformance
 
-* **Three-language parity** — Objective-C (GNUstep) normative reference, Python (`mpeg-o`, Python 3.11+), Java (`com.dtwthalion.mpgo`, JDK 17 + Maven). Every cross-language round-trip test passes byte-for-byte, driven by shared format fixtures.
-* **Compound byte-parity harness** — three dumper CLIs (Python `python -m mpeg_o.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `MpgoDumpIdentifications`) emit identifications / quantifications / provenance as byte-identical canonical JSON; pairwise-diffed in CI.
-* **Per-AU encryption CLIs** — `per_au_cli` (Python), `PerAUCli` (Java), `MpgoPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" dump for byte-compare; `transcode --rekey` rotates DEKs.
+* **Three-language parity** — Objective-C (GNUstep) normative reference, Python (`mpeg-o`, Python 3.11+), Java (`com.dtwthalion.tio`, JDK 17 + Maven). Every cross-language round-trip test passes byte-for-byte, driven by shared format fixtures.
+* **Compound byte-parity harness** — three dumper CLIs (Python `python -m ttio.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `TtioDumpIdentifications`) emit identifications / quantifications / provenance as byte-identical canonical JSON; pairwise-diffed in CI.
+* **Per-AU encryption CLIs** — `per_au_cli` (Python), `PerAUCli` (Java), `TtioPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" dump for byte-compare; `transcode --rekey` rotates DEKs.
 * **PQC conformance matrix** — 32-cell verification across languages × providers (primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence).
-* **JCAMP-DX conformance** — 6 integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `MpgoJcampDxDump`.
+* **JCAMP-DX conformance** — 6 integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `TtioJcampDxDump`.
 * **API stability audit** — every public API classified Stable / Provisional / Deprecated in [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md).
 
 ### Foundation
@@ -142,7 +142,7 @@ release-by-release narrative (*which version introduced what*), see
 
 ### Format compatibility
 
-Every version's files remain readable by later versions. Readers open v0.1–v0.11 files without ceremony. The current container version is 1.3; legacy v0.2 files at 1.1 and v0.10 per-AU-encrypted files still round-trip. Vibrational-spectroscopy and UV/Vis groups under `/study/` are silently ignored by pre-v0.11 readers (they don't match any known layout); `RamanSpectrum`, `IRSpectrum`, `UVVisSpectrum`, and `TwoDimensionalCorrelationSpectrum` persist through the generic Spectrum path with `@mpgo_class` attributes, so pre-v0.11 readers fall back to the base class rather than failing. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
+Every version's files remain readable by later versions. Readers open v0.1–v0.11 files without ceremony. The current container version is 1.3; legacy v0.2 files at 1.1 and v0.10 per-AU-encrypted files still round-trip. Vibrational-spectroscopy and UV/Vis groups under `/study/` are silently ignored by pre-v0.11 readers (they don't match any known layout); `RamanSpectrum`, `IRSpectrum`, `UVVisSpectrum`, and `TwoDimensionalCorrelationSpectrum` persist through the generic Spectrum path with `@ttio_class` attributes, so pre-v0.11 readers fall back to the base class rather than failing. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
 
 ### Continuous integration
 
@@ -163,7 +163,7 @@ Individual extras:
 | Extra     | Pulls in                                    | Needed for                                            |
 |-----------|---------------------------------------------|-------------------------------------------------------|
 | `crypto`  | `cryptography>=41.0`                        | AES-256-GCM encryption / decryption of signal channels |
-| `import`  | `lxml`                                      | mzML / nmrML importers (`mpeg_o.importers`)           |
+| `import`  | `lxml`                                      | mzML / nmrML importers (`ttio.importers`)           |
 | `cloud`   | `fsspec`, `s3fs`, `aiohttp`                 | `s3://` / `http(s)://` / `gs://` / `az://` open paths |
 | `codecs`  | `hdf5plugin>=4.0`                           | LZ4 signal-channel compression                        |
 | `zarr`    | `zarr>=3.0`                                 | `ZarrProvider` — `zarr://`, `zarr+s3://`, `zarr+memory://` URLs (Zarr v3 on-disk format) |
@@ -171,16 +171,16 @@ Individual extras:
 ### Python quick start
 
 ```python
-from mpeg_o import SpectralDataset
+from ttio import SpectralDataset
 
-with SpectralDataset.open("example.mpgo") as ds:
+with SpectralDataset.open("example.tio") as ds:
     run = ds.ms_runs["run_0001"]
     spectrum = run[0]                      # lazy read
     mz = spectrum.mz_array.data            # numpy float64
     intensity = spectrum.intensity_array.data
 
 # Cloud-native access through fsspec:
-with SpectralDataset.open("s3://my-bucket/run.mpgo", anon=False) as ds:
+with SpectralDataset.open("s3://my-bucket/run.tio", anon=False) as ds:
     ...
 ```
 
@@ -204,7 +204,7 @@ mvn verify -B
 
 ## Building the Objective-C Reference Implementation
 
-Requires **GNUstep Base**, **GNUstep Make**, a compatible **Objective-C compiler** (clang, ARC required), **libhdf5** (≥ 1.10), **zlib**, and **OpenSSL/libcrypto**. Optional: the LZ4 HDF5 filter plugin (filter id 32004) for `MPGOCompressionLZ4` support; M21 tests skip cleanly when the plugin isn't loadable.
+Requires **GNUstep Base**, **GNUstep Make**, a compatible **Objective-C compiler** (clang, ARC required), **libhdf5** (≥ 1.10), **zlib**, and **OpenSSL/libcrypto**. Optional: the LZ4 HDF5 filter plugin (filter id 32004) for `TTIOCompressionLZ4` support; M21 tests skip cleanly when the plugin isn't loadable.
 
 ### Ubuntu / Debian / WSL
 
@@ -224,7 +224,7 @@ compiler (the build requires ARC, which `gcc`'s `gobjc` does not support).
 
 ```bash
 cd objc
-./build.sh           # build libMPGO and the test runner
+./build.sh           # build libTTIO and the test runner
 ./build.sh check     # build, then run the test suite
 ```
 
@@ -269,8 +269,8 @@ works on both Debian/Ubuntu's apt packages and source builds against
 - [`docs/container-design.md`](docs/container-design.md) — HDF5 container layout
 - [`docs/class-hierarchy.md`](docs/class-hierarchy.md) — UML-style class descriptions
 - [`docs/ontology-mapping.md`](docs/ontology-mapping.md) — CV annotation and BFO/PSI-MS/nmrCV mapping
-- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.mpgo` format specification (v1.3 container)
-- [`docs/transport-spec.md`](docs/transport-spec.md) — `.mots` streaming transport format (v0.10)
+- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.tio` format specification (v1.3 container)
+- [`docs/transport-spec.md`](docs/transport-spec.md) — `.tis` streaming transport format (v0.10)
 - [`docs/transport-encryption-design.md`](docs/transport-encryption-design.md) — Per-AU encryption design (v1.0 scope, shipped in v0.10.0)
 - [`docs/feature-flags.md`](docs/feature-flags.md) — Feature-flag registry
 - [`docs/providers.md`](docs/providers.md) — Storage provider feature matrix (HDF5 / Memory / SQLite / Zarr) and compound-field-kind support

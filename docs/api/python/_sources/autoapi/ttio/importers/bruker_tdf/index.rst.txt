@@ -1,0 +1,189 @@
+ttio.importers.bruker_tdf
+=========================
+
+.. py:module:: ttio.importers.bruker_tdf
+
+.. autoapi-nested-parse::
+
+   Bruker timsTOF TDF importer — v0.8 M53.
+
+   Bruker's .d directory format holds two files:
+
+   * ``analysis.tdf``     — a plain SQLite database with metadata tables
+     (``Frames``, ``Precursors``, ``Properties``, ``GlobalMetadata``, etc.).
+   * ``analysis.tdf_bin`` or ``analysis.tdf_raw`` — a binary blob with
+     ZSTD-compressed frame data + scan-to-ion-index mapping.
+
+   The SQLite metadata is openly readable with the standard
+   :mod:`sqlite3` module. The binary decompression is delegated to the
+   ``opentimspy`` + ``opentims-bruker-bridge`` packages (install with
+   ``pip install 'ttio[bruker]'``) which wrap the open-source
+   ``libtimsdata.so`` implementation of the documented frame layout.
+
+   Output
+   ------
+   Each MS1 frame becomes one :class:`~ttio.spectral_dataset.WrittenRun`
+   entry with three parallel signal channels:
+
+   * ``mz`` — peak m/z values (float64 Da)
+   * ``intensity`` — raw peak intensities (float64)
+   * ``inv_ion_mobility`` — inverse reduced ion mobility 1/K₀
+     (float64 Vs/cm²) — the third signal channel is new in v0.8 M53.
+
+   Ion mobility is preserved per-peak, not per-spectrum, because
+   timsTOF frames are 2-D acquisitions (multiple ion-mobility slices
+   per retention-time step). The parallel-arrays layout round-trips
+   exactly through the HDF5, Memory, SQLite, and Zarr providers.
+
+   Scope
+   -----
+   * MS1 frames are extracted; MS2 precursor/fragment relationships are
+     captured as instrument metadata but not yet exploded into the
+     per-spectrum ``precursor_mz`` field. A follow-up milestone will
+     thread MS2 into the precursor compound schema.
+   * Retention time comes from the ``Frames.Time`` column in seconds.
+   * Instrument config is populated from the ``Properties`` and
+     ``GlobalMetadata`` tables — vendor strings preserved verbatim.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOBrukerTDFReader`` · Java:
+   ``com.dtwthalion.ttio.importers.BrukerTDFReader``.
+   Both Java and ObjC readers parse the SQLite metadata natively (via
+   ``sqlite-jdbc`` and ``libsqlite3`` respectively); binary frame data
+   extraction delegates to this Python module via subprocess, matching
+   the ThermoRawReader pattern (M38).
+
+   API status: Provisional (v0.8 M53). Binary decompression via
+   ``opentimspy`` is the only supported path in v0.8; a native-C port
+   of the frame decoder is deferred to v0.9.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.importers.bruker_tdf.BrukerTDFUnavailableError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.bruker_tdf.BrukerTDFMetadata
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.bruker_tdf.read_metadata
+   ttio.importers.bruker_tdf.read
+
+
+Module Contents
+---------------
+
+.. py:exception:: BrukerTDFUnavailableError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Raised when ``opentimspy`` is not installed and binary frame
+   extraction is requested. Metadata-only reads via
+   :func:`read_metadata` remain available without the optional
+   dependency.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:class:: BrukerTDFMetadata
+
+   Summary of an ``analysis.tdf`` metadata snapshot.
+
+
+   .. py:attribute:: frame_count
+      :type:  int
+
+
+   .. py:attribute:: ms1_frame_count
+      :type:  int
+
+
+   .. py:attribute:: ms2_frame_count
+      :type:  int
+
+
+   .. py:attribute:: retention_time_min
+      :type:  float
+
+
+   .. py:attribute:: retention_time_max
+      :type:  float
+
+
+   .. py:attribute:: mobility_range
+      :type:  tuple[float, float]
+
+
+   .. py:attribute:: mz_range
+      :type:  tuple[float, float]
+
+
+   .. py:attribute:: instrument_vendor
+      :type:  str
+
+
+   .. py:attribute:: instrument_model
+      :type:  str
+
+
+   .. py:attribute:: acquisition_software
+      :type:  str
+
+
+   .. py:attribute:: properties
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: global_metadata
+      :type:  dict[str, str]
+
+
+.. py:function:: read_metadata(d_dir: str | pathlib.Path) -> BrukerTDFMetadata
+
+   Read the SQLite metadata from an ``analysis.tdf`` without
+   opening the binary blob. Works on any host that has the standard
+   :mod:`sqlite3` module — no ``opentimspy`` required.
+
+
+.. py:function:: read(d_dir: str | pathlib.Path, output_path: str | pathlib.Path, *, title: str | None = None, ms2: bool = False) -> pathlib.Path
+
+   Import a Bruker ``.d`` directory to an ``.tio`` file.
+
+   Requires the optional ``opentimspy`` + ``opentims-bruker-bridge``
+   dependencies (``pip install 'ttio[bruker]'``). Raises
+   :class:`BrukerTDFUnavailableError` otherwise — use
+   :func:`read_metadata` for the metadata-only fallback.
+
+   One spectrum is produced per MS1 frame by default. Each spectrum
+   stores three parallel signal channels:
+   ``mz`` / ``intensity`` / ``inv_ion_mobility``. The last is the
+   new v0.8 addition — ion mobility is preserved per-peak so the
+   2-D tims geometry survives the round trip.
+
+   Args:
+       d_dir: Path to the Bruker ``.d`` directory.
+       output_path: Target ``.tio`` file path.
+       title: Optional study title; defaults to the ``.d`` stem.
+       ms2: If True, also emit MS2 fragment frames as a second run.
+            Defaults to MS1-only; MS2 precursor threading is a v0.9
+            concern (see module docstring).
+
+

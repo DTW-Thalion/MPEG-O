@@ -1,0 +1,343 @@
+ttio.providers.sqlite
+=====================
+
+.. py:module:: ttio.providers.sqlite
+
+.. autoapi-nested-parse::
+
+   SQLite storage provider — Milestone 41 stress-test of Provisional ABCs.
+
+   Stores the full TTI-O group/dataset tree in a single SQLite file.
+   Groups and datasets are rows in relational tables; primitive dataset
+   data is stored as little-endian BLOBs; compound datasets are stored as
+   JSON arrays of row-dicts.
+
+   This implementation deliberately uses no external dependencies beyond
+   the Python standard library and numpy — sqlite3 ships with CPython.
+
+   Schema version: 1
+   Provider identifier: ttio.providers.sqlite
+
+   API status: Provisional (stress-test — not for production use yet).
+
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.providers.sqlite.SqliteDataset
+   ttio.providers.sqlite.SqliteGroup
+   ttio.providers.sqlite.SqliteProvider
+
+
+Module Contents
+---------------
+
+.. py:class:: SqliteDataset(conn: sqlite3.Connection, dataset_id: int, name: str, precision: ttio.enums.Precision | None, shape: tuple[int, Ellipsis], fields: tuple[ttio.providers.base.CompoundField, Ellipsis] | None, read_only: bool = False)
+
+   Bases: :py:obj:`ttio.providers.base.StorageDataset`
+
+
+   A dataset row backed by a SQLite ``datasets`` table entry.
+
+   Primitive datasets store data as a little-endian BLOB.
+   Compound datasets store rows as a JSON array of dicts.
+
+
+   .. py:property:: name
+      :type: str
+
+
+
+   .. py:property:: precision
+      :type: ttio.enums.Precision | None
+
+
+      Element precision for primitive datasets; ``None`` for
+      compound datasets (use :meth:`compound_fields` there).
+
+
+   .. py:property:: shape
+      :type: tuple[int, Ellipsis]
+
+
+      Full shape tuple. 1-D datasets return ``(N,)``.
+
+
+   .. py:property:: chunks
+      :type: tuple[int, Ellipsis] | None
+
+
+      Chunk shape, or ``None`` for contiguous storage. Default
+      ``None`` — providers that care override.
+
+
+   .. py:property:: compound_fields
+      :type: tuple[ttio.providers.base.CompoundField, Ellipsis] | None
+
+
+      Field schema for compound datasets, or ``None`` for
+      primitive datasets.
+
+
+   .. py:method:: read(offset: int = 0, count: int = -1) -> numpy.ndarray
+
+      Read ``count`` elements starting at ``offset``.
+
+      For primitive datasets returns a numpy array.
+      For compound datasets returns a list of dicts (not a structured
+      ndarray) — the provider stores JSON, not numpy-structured bytes,
+      so a full structured ndarray cannot be reconstructed without the
+      full round-trip encoding overhead.  This is an **interface gap**
+      noted in the report.
+
+
+
+   .. py:method:: write(data: Any) -> None
+
+      Write the full dataset.
+
+      For primitive datasets, ``data`` must be array-like; for compound
+      datasets, ``data`` must be a list of dicts.
+
+
+
+   .. py:method:: has_attribute(name: str) -> bool
+
+
+   .. py:method:: get_attribute(name: str) -> Any
+
+
+   .. py:method:: set_attribute(name: str, value: Any) -> None
+
+
+   .. py:method:: attribute_names() -> list[str]
+
+      List attribute names; empty list if none. Appendix B Gap 8.
+
+
+
+   .. py:method:: delete_attribute(name: str) -> None
+
+      Remove an attribute. No-op if absent. Appendix B Gap 8.
+
+
+
+   .. py:method:: close() -> None
+
+      No-op — connection is owned by the provider.
+
+
+
+.. py:class:: SqliteGroup(conn: sqlite3.Connection, group_id: int, name: str, read_only: bool = False)
+
+   Bases: :py:obj:`ttio.providers.base.StorageGroup`
+
+
+   A row in the ``groups`` table, exposed as a StorageGroup.
+
+
+   .. py:property:: name
+      :type: str
+
+
+
+   .. py:method:: child_names() -> list[str]
+
+
+   .. py:method:: has_child(name: str) -> bool
+
+
+   .. py:method:: open_group(name: str) -> SqliteGroup
+
+
+   .. py:method:: create_group(name: str) -> SqliteGroup
+
+
+   .. py:method:: delete_child(name: str) -> None
+
+
+   .. py:method:: open_dataset(name: str) -> SqliteDataset
+
+
+   .. py:method:: create_dataset(name: str, precision: ttio.enums.Precision, length: int, *, chunk_size: int = 0, compression: ttio.enums.Compression = Compression.NONE, compression_level: int = 6) -> SqliteDataset
+
+      Create a primitive 1-D dataset.
+
+      ``chunk_size == 0`` selects a contiguous (unchunked) layout.
+      ``compression == NONE`` disables filters regardless of
+      ``compression_level``.
+
+
+
+   .. py:method:: create_dataset_nd(name: str, precision: ttio.enums.Precision, shape: tuple[int, Ellipsis], *, chunks: tuple[int, Ellipsis] | None = None, compression: ttio.enums.Compression = Compression.NONE, compression_level: int = 6) -> SqliteDataset
+
+      Create a multi-dimensional dataset. 1-D path delegates to
+      :meth:`create_dataset` for backward compat; overrides extend
+      to higher ranks.
+
+
+
+   .. py:method:: create_compound_dataset(name: str, fields: list[ttio.providers.base.CompoundField], count: int) -> SqliteDataset
+
+      Create a 1-D compound dataset with the given field schema.
+
+
+
+   .. py:method:: has_attribute(name: str) -> bool
+
+
+   .. py:method:: get_attribute(name: str) -> Any
+
+
+   .. py:method:: set_attribute(name: str, value: Any) -> None
+
+
+   .. py:method:: delete_attribute(name: str) -> None
+
+
+   .. py:method:: attribute_names() -> list[str]
+
+
+   .. py:method:: close() -> None
+
+      No-op — connection is owned by the provider.
+
+
+
+.. py:class:: SqliteProvider
+
+   Bases: :py:obj:`ttio.providers.base.StorageProvider`
+
+
+   SQLite-backed storage provider.
+
+   Each TTI-O file is a single ``.tio.sqlite`` SQLite database.
+
+   Usage::
+
+       p = SqliteProvider()
+       p.open("/path/to/data.tio.sqlite", mode="w")
+       root = p.root_group()
+       ...
+       p.close()
+
+   Or as a context manager::
+
+       with SqliteProvider.open("/path/to/data.tio.sqlite", mode="r") as p:
+           ...
+
+   URL form ``sqlite:///abs/path/to/data.tio.sqlite`` is also
+   accepted by :meth:`open`.
+
+   API status: Provisional (stress-test).
+   SPDX-License-Identifier: LGPL-3.0-or-later
+
+
+   .. py:method:: open(path_or_url=None, *, mode: str = 'r', **kwargs) -> SqliteProvider
+
+      Open or create a SQLite backing store.
+
+      Supports two call styles:
+
+      *Instance style* (mutates self, return value = self)::
+
+          p = SqliteProvider()
+          p.open("/path/to/data.tio.sqlite", mode="w")
+
+      *Class style* (creates new instance)::
+
+          p = SqliteProvider.open("/path/to/data.tio.sqlite", mode="w")
+
+      ``mode`` semantics:
+
+      * ``"r"``        — read-only; file must exist.
+      * ``"r+"``/``"rw"`` — read/write; file must exist.
+      * ``"w"``        — create or truncate.
+      * ``"a"``        — read/write; create if absent.
+
+      Implementation note: per Appendix B Gap 1, this method
+      intentionally does NOT use ``@classmethod`` so that the
+      instance-mutating call style works. When called as
+      ``SqliteProvider.open(path)``, Python passes the path string as
+      the first positional argument; we detect this via ``isinstance``
+      and construct a new instance accordingly.
+
+
+
+   .. py:method:: close() -> None
+
+
+   .. py:method:: provider_name() -> str
+
+      Short identifier used for logging and registry lookup
+      (``"hdf5"``, ``"memory"``, ``"zarr"``, …).
+
+      Exposed as a method (not a property) to mirror the ObjC
+      ``-providerName`` selector and Java ``providerName()`` getter.
+      Appendix B Gap 5 — Provisional storage-provider convergence.
+
+
+
+   .. py:method:: is_open() -> bool
+
+
+   .. py:method:: root_group() -> SqliteGroup
+
+
+   .. py:method:: native_handle() -> sqlite3.Connection | None
+
+      Return the raw ``sqlite3.Connection``. Escape hatch.
+
+
+
+   .. py:method:: begin_transaction() -> None
+
+      Start a write-batching transaction. Calls to
+      :meth:`StorageGroup.create_dataset`,
+      :meth:`StorageDataset.write`, and attribute setters are
+      buffered until :meth:`commit_transaction` is invoked.
+
+      Default no-op for backends that have no transactional model
+      (HDF5, in-memory). SQLite overrides this to issue ``BEGIN``
+      on the underlying connection — callers that wrap bulk loads
+      in ``begin_transaction`` / ``commit_transaction`` get the
+      SQLite batch speedup without the Python provider's implicit
+      per-write commit.
+
+      Nested transactions are not required to be supported; a
+      provider may raise if called twice without an intervening
+      commit or rollback.
+
+
+
+   .. py:method:: commit_transaction() -> None
+
+      Commit and end an open transaction started by
+      :meth:`begin_transaction`. Default no-op.
+
+
+
+   .. py:method:: rollback_transaction() -> None
+
+      Roll back and end an open transaction started by
+      :meth:`begin_transaction`. Default no-op; backends without
+      transactional semantics have no changes to roll back.
+
+
+
+   .. py:method:: supports_url(url: str) -> bool
+      :staticmethod:
+
+
+      Return True for ``sqlite://`` URLs and recognised file extensions.
+
+
+
+   .. py:method:: __repr__() -> str
+
+

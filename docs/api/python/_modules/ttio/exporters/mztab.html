@@ -1,0 +1,958 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>ttio.exporters.mztab - TTI-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">TTI-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">TTI-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../autoapi/ttio/index.html">ttio</a><input aria-label="Toggle navigation of ttio" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/access_policy/index.html">ttio.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/acquisition_run/index.html">ttio.acquisition_run</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/analysis/index.html">ttio.analysis</a><input aria-label="Toggle navigation of ttio.analysis" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/analysis/two_d_cos/index.html">ttio.analysis.two_d_cos</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/anonymization/index.html">ttio.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/axis_descriptor/index.html">ttio.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/chromatogram/index.html">ttio.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cipher_suite/index.html">ttio.cipher_suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cv_param/index.html">ttio.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encoding_spec/index.html">ttio.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption/index.html">ttio.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption_per_au/index.html">ttio.encryption_per_au</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/enums/index.html">ttio.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/imzml/index.html">ttio.exporters.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/isa/index.html">ttio.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mzml/index.html">ttio.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mztab/index.html">ttio.exporters.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature/index.html">ttio.feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature_flags/index.html">ttio.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/fid/index.html">ttio.fid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/imzml/index.html">ttio.importers.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mzml/index.html">ttio.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mztab/index.html">ttio.importers.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_image/index.html">ttio.ir_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_spectrum/index.html">ttio.ir_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/isolation_window/index.html">ttio.isolation_window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/key_rotation/index.html">ttio.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/mass_spectrum/index.html">ttio.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ms_image/index.html">ttio.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_2d/index.html">ttio.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/pqc/index.html">ttio.pqc</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/indexable/index.html">ttio.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/provenanceable/index.html">ttio.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/streamable/index.html">ttio.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/provenance/index.html">ttio.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/base/index.html">ttio.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/hdf5/index.html">ttio.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/memory/index.html">ttio.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/registry/index.html">ttio.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/sqlite/index.html">ttio.providers.sqlite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/zarr/index.html">ttio.providers.zarr</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/quantification/index.html">ttio.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/query/index.html">ttio.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_image/index.html">ttio.raman_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_spectrum/index.html">ttio.raman_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signal_array/index.html">ttio.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signatures/index.html">ttio.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectral_dataset/index.html">ttio.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectrum/index.html">ttio.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_reader/index.html">ttio.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_writer/index.html">ttio.stream_writer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_encode_cli/index.html">ttio.tools.transport_encode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_server_cli/index.html">ttio.tools.transport_server_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/transition_list/index.html">ttio.transition_list</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/client/index.html">ttio.transport.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/codec/index.html">ttio.transport.codec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/encrypted/index.html">ttio.transport.encrypted</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/packets/index.html">ttio.transport.packets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/server/index.html">ttio.transport.server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/simulator/index.html">ttio.transport.simulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/value_range/index.html">ttio.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/verifier/index.html">ttio.verifier</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for ttio.exporters.mztab</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;mzTab exporter (v0.9+).</span>
+
+<span class="sd">Reverses the M60 importer: takes a :class:`SpectralDataset`&#39;s</span>
+<span class="sd">``identifications`` + ``quantifications`` (and optionally its</span>
+<span class="sd">provenance records) and emits a mzTab file. Both the proteomics</span>
+<span class="sd">1.0 dialect (MTD + PSH/PSM + PRH/PRT sections) and the</span>
+<span class="sd">metabolomics 2.0.0-M dialect (MTD + SMH/SML) are supported.</span>
+
+<span class="sd">SPDX-License-Identifier: Apache-2.0</span>
+
+<span class="sd">Cross-language equivalents</span>
+<span class="sd">--------------------------</span>
+<span class="sd">Objective-C: ``TTIOMzTabWriter`` · Java:</span>
+<span class="sd">``com.dtwthalion.ttio.exporters.MzTabWriter``</span>
+
+<span class="sd">API status: Provisional (v0.9+).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Mapping</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">..feature</span><span class="w"> </span><span class="kn">import</span> <span class="n">Feature</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..identification</span><span class="w"> </span><span class="kn">import</span> <span class="n">Identification</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..provenance</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProvenanceRecord</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..quantification</span><span class="w"> </span><span class="kn">import</span> <span class="n">Quantification</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..spectral_dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">SpectralDataset</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;write_dataset&quot;</span><span class="p">,</span> <span class="s2">&quot;write&quot;</span><span class="p">,</span> <span class="s2">&quot;dataset_to_bytes&quot;</span><span class="p">,</span> <span class="s2">&quot;WriteResult&quot;</span><span class="p">]</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="WriteResult">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WriteResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Paths + dialect emitted.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="WriteResult.path">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult.path">[docs]</a>
+    <span class="n">path</span><span class="p">:</span> <span class="n">Path</span></div>
+
+<div class="viewcode-block" id="WriteResult.version">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult.version">[docs]</a>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="WriteResult.n_psm_rows">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult.n_psm_rows">[docs]</a>
+    <span class="n">n_psm_rows</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="WriteResult.n_prt_rows">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult.n_prt_rows">[docs]</a>
+    <span class="n">n_prt_rows</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="WriteResult.n_sml_rows">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult.n_sml_rows">[docs]</a>
+    <span class="n">n_sml_rows</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="WriteResult.n_pep_rows">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult.n_pep_rows">[docs]</a>
+    <span class="n">n_pep_rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="WriteResult.n_smf_rows">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult.n_smf_rows">[docs]</a>
+    <span class="n">n_smf_rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="WriteResult.n_sme_rows">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.WriteResult.n_sme_rows">[docs]</a>
+    <span class="n">n_sme_rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+</div>
+
+
+
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+<span class="c1"># Public entry points.</span>
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+
+<div class="viewcode-block" id="write_dataset">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.write_dataset">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">write_dataset</span><span class="p">(</span>
+    <span class="n">dataset</span><span class="p">:</span> <span class="n">SpectralDataset</span><span class="p">,</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;1.0&quot;</span><span class="p">,</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">features</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Feature</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">WriteResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write ``dataset``&#39;s identifications + quantifications as mzTab.</span>
+
+<span class="sd">    ``identifications`` / ``quantifications`` are method accessors on</span>
+<span class="sd">    :class:`SpectralDataset`; call them here so the writer&#39;s caller</span>
+<span class="sd">    doesn&#39;t need to know. ``provenance`` may be a list *or* a method,</span>
+<span class="sd">    depending on how the dataset was constructed. ``features`` is</span>
+<span class="sd">    optional — :class:`SpectralDataset` does not yet store feature</span>
+<span class="sd">    rows, so callers must thread them in explicitly.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">ids</span> <span class="o">=</span> <span class="n">_maybe_call</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;identifications&quot;</span><span class="p">)</span>
+    <span class="n">qts</span> <span class="o">=</span> <span class="n">_maybe_call</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;quantifications&quot;</span><span class="p">)</span>
+    <span class="n">pvs</span> <span class="o">=</span> <span class="n">_maybe_call</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;provenance&quot;</span><span class="p">)</span>
+    <span class="n">feats</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">features</span> <span class="ow">or</span> <span class="n">_maybe_call</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;features&quot;</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">write</span><span class="p">(</span>
+        <span class="n">path</span><span class="p">,</span>
+        <span class="n">identifications</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span>
+        <span class="n">quantifications</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">qts</span><span class="p">),</span>
+        <span class="n">provenance</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">pvs</span><span class="p">),</span>
+        <span class="n">features</span><span class="o">=</span><span class="n">feats</span><span class="p">,</span>
+        <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">,</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">title</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_maybe_call</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="nb">object</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterable</span><span class="p">:</span>
+    <span class="n">attr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">attr</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">attr</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">attr</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">TypeError</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">attr</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">attr</span>
+    <span class="k">return</span> <span class="n">result</span> <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">[]</span>
+
+
+<div class="viewcode-block" id="write">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.write">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">identifications</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Identification</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">quantifications</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Quantification</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">provenance</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">features</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Feature</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;1.0&quot;</span><span class="p">,</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">ms_run_locations</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">WriteResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write mzTab text to ``path``. See :func:`dataset_to_bytes` for</span>
+<span class="sd">    the content-model details.&quot;&quot;&quot;</span>
+    <span class="n">blob</span> <span class="o">=</span> <span class="n">dataset_to_bytes</span><span class="p">(</span>
+        <span class="n">identifications</span><span class="o">=</span><span class="n">identifications</span><span class="p">,</span>
+        <span class="n">quantifications</span><span class="o">=</span><span class="n">quantifications</span><span class="p">,</span>
+        <span class="n">provenance</span><span class="o">=</span><span class="n">provenance</span><span class="p">,</span>
+        <span class="n">features</span><span class="o">=</span><span class="n">features</span><span class="p">,</span>
+        <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">,</span>
+        <span class="n">title</span><span class="o">=</span><span class="n">title</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="n">description</span><span class="p">,</span>
+        <span class="n">ms_run_locations</span><span class="o">=</span><span class="n">ms_run_locations</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span>
+    <span class="c1"># Count row kinds for the return receipt.</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="n">blob</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">&quot;replace&quot;</span><span class="p">)</span>
+    <span class="n">n_psm</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">ln</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span> <span class="k">if</span> <span class="n">ln</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;PSM</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">))</span>
+    <span class="n">n_prt</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">ln</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span> <span class="k">if</span> <span class="n">ln</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;PRT</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">))</span>
+    <span class="n">n_sml</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">ln</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span> <span class="k">if</span> <span class="n">ln</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SML</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">))</span>
+    <span class="n">n_pep</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">ln</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span> <span class="k">if</span> <span class="n">ln</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;PEP</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">))</span>
+    <span class="n">n_smf</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">ln</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span> <span class="k">if</span> <span class="n">ln</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SMF</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">))</span>
+    <span class="n">n_sme</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">ln</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span> <span class="k">if</span> <span class="n">ln</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SME</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">WriteResult</span><span class="p">(</span>
+        <span class="n">path</span><span class="o">=</span><span class="n">out</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">,</span>
+        <span class="n">n_psm_rows</span><span class="o">=</span><span class="n">n_psm</span><span class="p">,</span> <span class="n">n_prt_rows</span><span class="o">=</span><span class="n">n_prt</span><span class="p">,</span> <span class="n">n_sml_rows</span><span class="o">=</span><span class="n">n_sml</span><span class="p">,</span>
+        <span class="n">n_pep_rows</span><span class="o">=</span><span class="n">n_pep</span><span class="p">,</span> <span class="n">n_smf_rows</span><span class="o">=</span><span class="n">n_smf</span><span class="p">,</span> <span class="n">n_sme_rows</span><span class="o">=</span><span class="n">n_sme</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="dataset_to_bytes">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/mztab/index.html#ttio.exporters.mztab.dataset_to_bytes">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dataset_to_bytes</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">identifications</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Identification</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">quantifications</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Quantification</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">provenance</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">features</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">Feature</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;1.0&quot;</span><span class="p">,</span>
+    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+    <span class="n">ms_run_locations</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build the mzTab text blob.</span>
+
+<span class="sd">    Dialect rules (per HANDOFF binding decision 47):</span>
+
+<span class="sd">    * ``version=&quot;1.0&quot;`` — proteomics. Emit PSM rows for each</span>
+<span class="sd">      :class:`Identification` and PRT rows for each</span>
+<span class="sd">      :class:`Quantification`. Assay indices are derived from the</span>
+<span class="sd">      ``sample_ref`` column: the first unique ``sample_ref`` value</span>
+<span class="sd">      becomes ``protein_abundance_assay[1]``, the second ``[2]``, etc.</span>
+<span class="sd">    * ``version=&quot;2.0.0-M&quot;`` — metabolomics. Emit SML rows that carry</span>
+<span class="sd">      both the identification and the (per-sample) abundances for</span>
+<span class="sd">      the same ``chemical_entity`` on one row.</span>
+
+<span class="sd">    Any provenance records are threaded into the MTD section as</span>
+<span class="sd">    ``software[N]`` lines. Run names referenced by</span>
+<span class="sd">    ``Identification.run_name`` turn into ``MTD\\tms_run[N]-location``</span>
+<span class="sd">    entries; callers can override this mapping with</span>
+<span class="sd">    ``ms_run_locations``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">version</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;1.0&quot;</span><span class="p">,</span> <span class="s2">&quot;2.0.0-M&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;unsupported mzTab version </span><span class="si">{</span><span class="n">version</span><span class="si">!r}</span><span class="s2">; expected &#39;1.0&#39; or &#39;2.0.0-M&#39;&quot;</span>
+        <span class="p">)</span>
+
+    <span class="n">idents</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">identifications</span><span class="p">)</span>
+    <span class="n">quants</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">quantifications</span><span class="p">)</span>
+    <span class="n">provs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">provenance</span><span class="p">)</span>
+    <span class="n">feats</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">features</span><span class="p">)</span>
+
+    <span class="n">lines</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1"># Run names referenced downstream (PSM/SML). Also seed from the</span>
+    <span class="c1"># caller&#39;s override mapping so deterministic fixtures work.</span>
+    <span class="n">run_name_to_idx</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">ms_run_locations</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">loc</span> <span class="ow">in</span> <span class="n">ms_run_locations</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="c1"># Each provided location gets a placeholder run name so the</span>
+            <span class="c1"># MTD block emits every one the caller declared.</span>
+            <span class="n">run_name_to_idx</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;ms_run[</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">idx</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_run_index</span><span class="p">(</span><span class="n">run_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">run_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">run_name_to_idx</span><span class="p">:</span>
+            <span class="n">run_name_to_idx</span><span class="p">[</span><span class="n">run_name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">run_name_to_idx</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">run_name_to_idx</span><span class="p">[</span><span class="n">run_name</span><span class="p">]</span>
+
+    <span class="c1"># Pre-resolve indices so MTD ms_run lines come out in stable order.</span>
+    <span class="k">for</span> <span class="n">ident</span> <span class="ow">in</span> <span class="n">idents</span><span class="p">:</span>
+        <span class="n">_run_index</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">run_name</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">feat</span> <span class="ow">in</span> <span class="n">feats</span><span class="p">:</span>
+        <span class="n">_run_index</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">run_name</span><span class="p">)</span>
+
+    <span class="c1"># Sample indices for quantification assays.</span>
+    <span class="n">sample_to_idx</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sample_index</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">s</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sample_to_idx</span><span class="p">:</span>
+            <span class="n">sample_to_idx</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample_to_idx</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">return</span> <span class="n">sample_to_idx</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">quants</span><span class="p">:</span>
+        <span class="n">_sample_index</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">sample_ref</span> <span class="ow">or</span> <span class="s2">&quot;sample&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">feat</span> <span class="ow">in</span> <span class="n">feats</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">sample</span> <span class="ow">in</span> <span class="n">feat</span><span class="o">.</span><span class="n">abundances</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+            <span class="n">_sample_index</span><span class="p">(</span><span class="n">sample</span> <span class="ow">or</span> <span class="s2">&quot;sample&quot;</span><span class="p">)</span>
+
+    <span class="c1"># ── MTD ───────────────────────────────────────────────────────────</span>
+    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">mzTab-version</span><span class="se">\t</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">mzTab-mode</span><span class="se">\t</span><span class="s2">Summary&quot;</span><span class="p">)</span>
+    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">mzTab-type</span><span class="se">\t</span><span class="s2">Identification&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">version</span> <span class="o">==</span> <span class="s2">&quot;1.0&quot;</span><span class="p">:</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">mzTab-ID</span><span class="se">\t</span><span class="s2">ttio-export&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">title</span><span class="p">:</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">title</span><span class="se">\t</span><span class="si">{</span><span class="n">_escape_tsv</span><span class="p">(</span><span class="n">title</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">description</span><span class="p">:</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">description</span><span class="se">\t</span><span class="si">{</span><span class="n">_escape_tsv</span><span class="p">(</span><span class="n">description</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">software[1]</span><span class="se">\t</span><span class="s2">[MS, MS:1000799, custom unreleased software tool, ttio]&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Declare every ms_run in the metadata section, keyed by the</span>
+    <span class="c1"># stable index assigned above.</span>
+    <span class="c1"># Also honour explicit location overrides.</span>
+    <span class="n">locations</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">ms_run_locations</span> <span class="ow">or</span> <span class="p">{})</span>
+    <span class="k">for</span> <span class="n">run_name</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">run_name_to_idx</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">kv</span><span class="p">:</span> <span class="n">kv</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">loc</span> <span class="o">=</span> <span class="n">locations</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;file://</span><span class="si">{</span><span class="n">run_name</span><span class="si">}</span><span class="s2">.mzML&quot;</span><span class="p">)</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">ms_run[</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">]-location</span><span class="se">\t</span><span class="si">{</span><span class="n">loc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Assay / sample declarations for quantifications.</span>
+    <span class="c1"># The reader parses ``assay[N]-sample_ref`` (proteomics) and</span>
+    <span class="c1"># ``study_variable[N]-description`` (metabolomics) so it can</span>
+    <span class="c1"># round-trip the original sample label.</span>
+    <span class="k">if</span> <span class="n">quants</span> <span class="ow">or</span> <span class="n">feats</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">sample</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">sample_to_idx</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">kv</span><span class="p">:</span> <span class="n">kv</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">assay[</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">]-sample_ref</span><span class="se">\t</span><span class="si">{</span><span class="n">_escape_tsv</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">assay[</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">]-quantification_reagent</span><span class="se">\t</span><span class="s2">&quot;</span>
+                         <span class="sa">f</span><span class="s2">&quot;[MS, MS:1002038, unlabeled sample, </span><span class="si">{</span><span class="n">_escape_tsv</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">assay[</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">]-ms_run_ref</span><span class="se">\t</span><span class="s2">ms_run[1]&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">version</span> <span class="o">==</span> <span class="s2">&quot;2.0.0-M&quot;</span><span class="p">:</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">study_variable[</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">]-description</span><span class="se">\t</span><span class="si">{</span><span class="n">_escape_tsv</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">study_variable[</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">]-assay_refs</span><span class="se">\t</span><span class="s2">assay[</span><span class="si">{</span><span class="n">idx</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Threaded provenance (optional software entries past index 1).</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">rec</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">provs</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+        <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MTD</span><span class="se">\t</span><span class="s2">software[</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">]</span><span class="se">\t</span><span class="s2">[MS, MS:1001456, software analysis, &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">_escape_tsv</span><span class="p">(</span><span class="n">rec</span><span class="o">.</span><span class="n">software</span><span class="p">)</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+
+    <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>  <span class="c1"># blank separator</span>
+
+    <span class="n">n_psm</span> <span class="o">=</span> <span class="n">n_prt</span> <span class="o">=</span> <span class="n">n_sml</span> <span class="o">=</span> <span class="n">n_pep</span> <span class="o">=</span> <span class="n">n_smf</span> <span class="o">=</span> <span class="n">n_sme</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">if</span> <span class="n">version</span> <span class="o">==</span> <span class="s2">&quot;1.0&quot;</span><span class="p">:</span>
+        <span class="c1"># ── PSH + PSM (proteomics identifications) ─────────────────────</span>
+        <span class="k">if</span> <span class="n">idents</span><span class="p">:</span>
+            <span class="n">psh</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;PSH&quot;</span><span class="p">,</span> <span class="s2">&quot;sequence&quot;</span><span class="p">,</span> <span class="s2">&quot;PSM_ID&quot;</span><span class="p">,</span> <span class="s2">&quot;accession&quot;</span><span class="p">,</span> <span class="s2">&quot;unique&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;database&quot;</span><span class="p">,</span> <span class="s2">&quot;database_version&quot;</span><span class="p">,</span> <span class="s2">&quot;search_engine&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;search_engine_score[1]&quot;</span><span class="p">,</span> <span class="s2">&quot;modifications&quot;</span><span class="p">,</span> <span class="s2">&quot;retention_time&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;charge&quot;</span><span class="p">,</span> <span class="s2">&quot;exp_mass_to_charge&quot;</span><span class="p">,</span> <span class="s2">&quot;calc_mass_to_charge&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;spectra_ref&quot;</span><span class="p">,</span> <span class="s2">&quot;pre&quot;</span><span class="p">,</span> <span class="s2">&quot;post&quot;</span><span class="p">,</span> <span class="s2">&quot;start&quot;</span><span class="p">,</span> <span class="s2">&quot;end&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">psh</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">ident</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">idents</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+                <span class="n">run_idx</span> <span class="o">=</span> <span class="n">_run_index</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">run_name</span><span class="p">)</span>
+                <span class="n">evidence</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">evidence_chain</span> <span class="ow">or</span> <span class="p">[])</span>
+                <span class="n">search_engine</span> <span class="o">=</span> <span class="n">evidence</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">evidence</span> <span class="k">else</span> <span class="s2">&quot;[MS, MS:1001083, mascot, ]&quot;</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="s2">&quot;PSM&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;&quot;</span><span class="p">,</span>  <span class="c1"># sequence (unknown at this layer)</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">),</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">),</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">search_engine</span><span class="p">),</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">confidence_score</span><span class="p">)</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;ms_run[</span><span class="si">{</span><span class="n">run_idx</span><span class="si">}</span><span class="s2">]:index=</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">spectrum_index</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                <span class="p">]</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">))</span>
+                <span class="n">n_psm</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># ── PRH + PRT (proteomics quantifications) ─────────────────────</span>
+        <span class="k">if</span> <span class="n">quants</span><span class="p">:</span>
+            <span class="c1"># Group quantifications by chemical_entity so each protein</span>
+            <span class="c1"># has one PRT row with per-assay abundance columns.</span>
+            <span class="n">entity_quants</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">quants</span><span class="p">:</span>
+                <span class="n">sample_idx</span> <span class="o">=</span> <span class="n">sample_to_idx</span><span class="p">[</span><span class="n">q</span><span class="o">.</span><span class="n">sample_ref</span> <span class="ow">or</span> <span class="s2">&quot;sample&quot;</span><span class="p">]</span>
+                <span class="n">entity_quants</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">,</span> <span class="p">{})[</span><span class="n">sample_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">abundance</span>
+
+            <span class="n">n_assays</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample_to_idx</span><span class="p">)</span>
+            <span class="n">prh</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;PRH&quot;</span><span class="p">,</span> <span class="s2">&quot;accession&quot;</span><span class="p">,</span> <span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;taxid&quot;</span><span class="p">,</span> <span class="s2">&quot;species&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;database&quot;</span><span class="p">,</span> <span class="s2">&quot;database_version&quot;</span><span class="p">,</span> <span class="s2">&quot;search_engine&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;best_search_engine_score[1]&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;ambiguity_members&quot;</span><span class="p">,</span> <span class="s2">&quot;modifications&quot;</span><span class="p">,</span> <span class="s2">&quot;protein_coverage&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_assays</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">prh</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;protein_abundance_assay[</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">prh</span><span class="p">))</span>
+
+            <span class="k">for</span> <span class="n">entity</span><span class="p">,</span> <span class="n">abundances</span> <span class="ow">in</span> <span class="n">entity_quants</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="s2">&quot;PRT&quot;</span><span class="p">,</span> <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">entity</span><span class="p">),</span>
+                    <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                <span class="p">]</span>
+                <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_assays</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">abundances</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">abundances</span> <span class="k">else</span> <span class="s2">&quot;null&quot;</span><span class="p">)</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">))</span>
+                <span class="n">n_prt</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># ── PEH + PEP (proteomics peptide features, M78) ───────────────</span>
+        <span class="k">if</span> <span class="n">feats</span><span class="p">:</span>
+            <span class="n">n_assays</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample_to_idx</span><span class="p">)</span>
+            <span class="n">peh</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;PEH&quot;</span><span class="p">,</span> <span class="s2">&quot;sequence&quot;</span><span class="p">,</span> <span class="s2">&quot;accession&quot;</span><span class="p">,</span> <span class="s2">&quot;unique&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;database&quot;</span><span class="p">,</span> <span class="s2">&quot;database_version&quot;</span><span class="p">,</span> <span class="s2">&quot;search_engine&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;best_search_engine_score[1]&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;modifications&quot;</span><span class="p">,</span> <span class="s2">&quot;retention_time&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;charge&quot;</span><span class="p">,</span> <span class="s2">&quot;mass_to_charge&quot;</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;spectra_ref&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_assays</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">peh</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;peptide_abundance_assay[</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">peh</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">feat</span> <span class="ow">in</span> <span class="n">feats</span><span class="p">:</span>
+                <span class="n">run_idx</span> <span class="o">=</span> <span class="n">_run_index</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">run_name</span><span class="p">)</span>
+                <span class="n">spectra_ref</span> <span class="o">=</span> <span class="n">feat</span><span class="o">.</span><span class="n">evidence_refs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">feat</span><span class="o">.</span><span class="n">evidence_refs</span> <span class="k">else</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;ms_run[</span><span class="si">{</span><span class="n">run_idx</span><span class="si">}</span><span class="s2">]:index=0&quot;</span>
+                <span class="p">)</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="s2">&quot;PEP&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">),</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">retention_time_seconds</span><span class="p">)</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">charge</span><span class="p">)),</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">exp_mass_to_charge</span><span class="p">)</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">spectra_ref</span><span class="p">),</span>
+                <span class="p">]</span>
+                <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_assays</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">sample</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+                        <span class="p">(</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">sample_to_idx</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">idx</span> <span class="o">==</span> <span class="n">k</span><span class="p">),</span> <span class="kc">None</span>
+                    <span class="p">)</span>
+                    <span class="n">v</span> <span class="o">=</span> <span class="n">feat</span><span class="o">.</span><span class="n">abundances</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span> <span class="k">if</span> <span class="n">sample</span> <span class="k">else</span> <span class="kc">None</span>
+                    <span class="n">row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;null&quot;</span><span class="p">)</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">))</span>
+                <span class="n">n_pep</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>  <span class="c1"># 2.0.0-M metabolomics</span>
+        <span class="c1"># ── SMH + SML ──────────────────────────────────────────────────</span>
+        <span class="n">entity_quants</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">quants</span><span class="p">:</span>
+            <span class="n">sample_idx</span> <span class="o">=</span> <span class="n">sample_to_idx</span><span class="p">[</span><span class="n">q</span><span class="o">.</span><span class="n">sample_ref</span> <span class="ow">or</span> <span class="s2">&quot;sample&quot;</span><span class="p">]</span>
+            <span class="n">entity_quants</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">,</span> <span class="p">{})[</span><span class="n">sample_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">abundance</span>
+
+        <span class="c1"># Also include identifications whose entity doesn&#39;t have a quant</span>
+        <span class="c1"># record so every identification survives round-trip.</span>
+        <span class="k">for</span> <span class="n">ident</span> <span class="ow">in</span> <span class="n">idents</span><span class="p">:</span>
+            <span class="n">entity_quants</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">,</span> <span class="p">{})</span>
+
+        <span class="k">if</span> <span class="n">entity_quants</span><span class="p">:</span>
+            <span class="n">n_svs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample_to_idx</span><span class="p">)</span>
+            <span class="n">smh</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;SMH&quot;</span><span class="p">,</span> <span class="s2">&quot;SML_ID&quot;</span><span class="p">,</span> <span class="s2">&quot;SMF_ID_REFS&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;database_identifier&quot;</span><span class="p">,</span> <span class="s2">&quot;chemical_formula&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;smiles&quot;</span><span class="p">,</span> <span class="s2">&quot;inchi&quot;</span><span class="p">,</span> <span class="s2">&quot;chemical_name&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;uri&quot;</span><span class="p">,</span> <span class="s2">&quot;theoretical_neutral_mass&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;adduct_ions&quot;</span><span class="p">,</span> <span class="s2">&quot;reliability&quot;</span><span class="p">,</span> <span class="s2">&quot;best_id_confidence_measure&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;best_id_confidence_value&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_svs</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">smh</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;abundance_study_variable[</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+                <span class="n">smh</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;abundance_variation_study_variable[</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">smh</span><span class="p">))</span>
+
+            <span class="c1"># Lookup identifications by entity for confidence values.</span>
+            <span class="n">confidence_by_entity</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+            <span class="k">for</span> <span class="n">ident</span> <span class="ow">in</span> <span class="n">idents</span><span class="p">:</span>
+                <span class="n">current</span> <span class="o">=</span> <span class="n">confidence_by_entity</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+                <span class="n">confidence_by_entity</span><span class="p">[</span><span class="n">ident</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">]</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span>
+                    <span class="n">current</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">confidence_score</span><span class="p">)</span>
+                <span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">sml_id</span><span class="p">,</span> <span class="p">(</span><span class="n">entity</span><span class="p">,</span> <span class="n">abundances</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">entity_quants</span><span class="o">.</span><span class="n">items</span><span class="p">(),</span>
+                                                            <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+                <span class="n">confidence</span> <span class="o">=</span> <span class="n">confidence_by_entity</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">entity</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="s2">&quot;SML&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">sml_id</span><span class="p">),</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">entity</span><span class="p">),</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="s2">&quot;[MS, MS:1001090, null, ]&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">confidence</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="p">]</span>
+                <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_svs</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">abundances</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">abundances</span> <span class="k">else</span> <span class="s2">&quot;null&quot;</span><span class="p">)</span>
+                    <span class="n">row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;null&quot;</span><span class="p">)</span>  <span class="c1"># variation placeholder</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">))</span>
+                <span class="n">n_sml</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># ── SFH + SMF (small-molecule features, M78) ───────────────────</span>
+        <span class="k">if</span> <span class="n">feats</span><span class="p">:</span>
+            <span class="n">n_assays</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">sample_to_idx</span><span class="p">)</span>
+            <span class="n">sfh</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;SFH&quot;</span><span class="p">,</span> <span class="s2">&quot;SMF_ID&quot;</span><span class="p">,</span> <span class="s2">&quot;SME_ID_REFS&quot;</span><span class="p">,</span> <span class="s2">&quot;SME_ID_REF_ambiguity_code&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;adduct_ion&quot;</span><span class="p">,</span> <span class="s2">&quot;isotopomer&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;exp_mass_to_charge&quot;</span><span class="p">,</span> <span class="s2">&quot;charge&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;retention_time_in_seconds&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;retention_time_in_seconds_start&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;retention_time_in_seconds_end&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_assays</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">sfh</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;abundance_assay[</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sfh</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">feat</span> <span class="ow">in</span> <span class="n">feats</span><span class="p">:</span>
+                <span class="n">sme_refs</span> <span class="o">=</span> <span class="s2">&quot;|&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">evidence_refs</span><span class="p">)</span> <span class="k">if</span> <span class="n">feat</span><span class="o">.</span><span class="n">evidence_refs</span> <span class="k">else</span> <span class="s2">&quot;null&quot;</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="s2">&quot;SMF&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">feature_id</span><span class="p">),</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">sme_refs</span><span class="p">),</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">adduct_ion</span><span class="p">)</span> <span class="k">if</span> <span class="n">feat</span><span class="o">.</span><span class="n">adduct_ion</span> <span class="k">else</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">exp_mass_to_charge</span><span class="p">)</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">charge</span><span class="p">)),</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">float</span><span class="p">(</span><span class="n">feat</span><span class="o">.</span><span class="n">retention_time_seconds</span><span class="p">)</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                <span class="p">]</span>
+                <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_assays</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">sample</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+                        <span class="p">(</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">sample_to_idx</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">idx</span> <span class="o">==</span> <span class="n">k</span><span class="p">),</span> <span class="kc">None</span>
+                    <span class="p">)</span>
+                    <span class="n">v</span> <span class="o">=</span> <span class="n">feat</span><span class="o">.</span><span class="n">abundances</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span> <span class="k">if</span> <span class="n">sample</span> <span class="k">else</span> <span class="kc">None</span>
+                    <span class="n">row</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">v</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;null&quot;</span><span class="p">)</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">))</span>
+                <span class="n">n_smf</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="c1"># ── SEH + SME (small-molecule evidence, M78) ───────────────────</span>
+        <span class="c1"># Only emit when features are also present; plain SML-only</span>
+        <span class="c1"># exports keep their annotations in the SML section so the</span>
+        <span class="c1"># round-trip doesn&#39;t double-count identifications.</span>
+        <span class="n">sme_idents</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">idents</span> <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SME_ID=&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">i</span><span class="o">.</span><span class="n">evidence_chain</span><span class="p">)]</span>
+        <span class="n">plain_idents</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">idents</span> <span class="k">if</span> <span class="n">i</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">sme_idents</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">feats</span> <span class="ow">and</span> <span class="p">(</span><span class="n">sme_idents</span> <span class="ow">or</span> <span class="n">plain_idents</span><span class="p">):</span>
+            <span class="n">seh</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="s2">&quot;SEH&quot;</span><span class="p">,</span> <span class="s2">&quot;SME_ID&quot;</span><span class="p">,</span> <span class="s2">&quot;evidence_input_id&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;database_identifier&quot;</span><span class="p">,</span> <span class="s2">&quot;chemical_formula&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;smiles&quot;</span><span class="p">,</span> <span class="s2">&quot;inchi&quot;</span><span class="p">,</span> <span class="s2">&quot;chemical_name&quot;</span><span class="p">,</span> <span class="s2">&quot;uri&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;derivatized_form&quot;</span><span class="p">,</span> <span class="s2">&quot;adduct_ion&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;exp_mass_to_charge&quot;</span><span class="p">,</span> <span class="s2">&quot;charge&quot;</span><span class="p">,</span> <span class="s2">&quot;calc_mass_to_charge&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;spectra_ref&quot;</span><span class="p">,</span> <span class="s2">&quot;identification_method&quot;</span><span class="p">,</span> <span class="s2">&quot;ms_level&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;id_confidence_measure[1]&quot;</span><span class="p">,</span> <span class="s2">&quot;rank&quot;</span><span class="p">,</span>
+            <span class="p">]</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">seh</span><span class="p">))</span>
+            <span class="n">emitted</span> <span class="o">=</span> <span class="mi">0</span>
+
+            <span class="k">def</span><span class="w"> </span><span class="nf">_sme_row</span><span class="p">(</span><span class="n">sme_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ident</span><span class="p">:</span> <span class="n">Identification</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">nonlocal</span> <span class="n">emitted</span>
+                <span class="c1"># Derive display name / formula from evidence if present.</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+                <span class="n">formula</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+                <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">ident</span><span class="o">.</span><span class="n">evidence_chain</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;name=&quot;</span><span class="p">):</span>
+                        <span class="n">name</span> <span class="o">=</span> <span class="n">e</span><span class="p">[</span><span class="mi">5</span><span class="p">:]</span>
+                    <span class="k">elif</span> <span class="n">e</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;formula=&quot;</span><span class="p">):</span>
+                        <span class="n">formula</span> <span class="o">=</span> <span class="n">e</span><span class="p">[</span><span class="mi">8</span><span class="p">:]</span>
+                <span class="n">rank</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="n">score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">confidence_score</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">score</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">inferred</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="n">score</span> <span class="k">if</span> <span class="n">score</span> <span class="o">&lt;=</span> <span class="mf">1.0</span> <span class="k">else</span> <span class="mf">1.0</span>
+                    <span class="n">rank</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">round</span><span class="p">(</span><span class="n">inferred</span><span class="p">))</span>
+                <span class="n">spectra_ref</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;ms_run[</span><span class="si">{</span><span class="n">_run_index</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">run_name</span><span class="p">)</span><span class="si">}</span><span class="s2">]:index=&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">spectrum_index</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+                <span class="n">row</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="s2">&quot;SME&quot;</span><span class="p">,</span> <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">sme_id</span><span class="p">),</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">ident</span><span class="o">.</span><span class="n">chemical_entity</span><span class="p">),</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">formula</span><span class="p">)</span> <span class="k">if</span> <span class="n">formula</span> <span class="k">else</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">name</span><span class="p">)</span> <span class="k">if</span> <span class="n">name</span> <span class="k">else</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="n">_escape_tsv</span><span class="p">(</span><span class="n">spectra_ref</span><span class="p">),</span>
+                    <span class="s2">&quot;null&quot;</span><span class="p">,</span> <span class="s2">&quot;null&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">score</span><span class="si">:</span><span class="s2">g</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="nb">str</span><span class="p">(</span><span class="n">rank</span><span class="p">),</span>
+                <span class="p">]</span>
+                <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">row</span><span class="p">))</span>
+                <span class="n">emitted</span> <span class="o">+=</span> <span class="mi">1</span>
+
+            <span class="k">for</span> <span class="n">ident</span> <span class="ow">in</span> <span class="n">sme_idents</span><span class="p">:</span>
+                <span class="n">sme_id</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+                    <span class="p">(</span><span class="n">e</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;SME_ID=&quot;</span><span class="p">):]</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">ident</span><span class="o">.</span><span class="n">evidence_chain</span>
+                     <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SME_ID=&quot;</span><span class="p">)),</span>
+                    <span class="sa">f</span><span class="s2">&quot;sme_</span><span class="si">{</span><span class="n">emitted</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">_sme_row</span><span class="p">(</span><span class="n">sme_id</span><span class="p">,</span> <span class="n">ident</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">ident</span> <span class="ow">in</span> <span class="n">plain_idents</span><span class="p">:</span>
+                <span class="n">_sme_row</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;sme_</span><span class="si">{</span><span class="n">emitted</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">ident</span><span class="p">)</span>
+
+            <span class="n">n_sme</span> <span class="o">=</span> <span class="n">emitted</span>
+            <span class="n">lines</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+    <span class="c1"># trailing newline after the last row for POSIX-clean files</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">lines</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">):</span>
+        <span class="n">text</span> <span class="o">+=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+<span class="c1"># Helpers.</span>
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_escape_tsv</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;mzTab is TSV; replace tab + newline so a cell never breaks the</span>
+<span class="sd">    row/column grammar. Keeps the format round-trip-friendly without</span>
+<span class="sd">    introducing quoting (mzTab doesn&#39;t specify a quote convention).&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">value</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot; &quot;</span><span class="p">)</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DTW-Thalion
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=2bd037f0"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

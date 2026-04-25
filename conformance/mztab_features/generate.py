@@ -20,8 +20,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 sys.path.insert(0, str(REPO / "python" / "src"))
 
-from mpeg_o import Feature, Identification, Quantification  # noqa: E402
-from mpeg_o.exporters import mztab  # noqa: E402
+from ttio import Feature, Identification, Quantification  # noqa: E402
+from ttio.exporters import mztab  # noqa: E402
 
 
 def proteomics_payload():

@@ -8,7 +8,7 @@ shared_obj/
 
 # autogsdoc output
 objc/Documentation/html/
-objc/Documentation/libMPGO/
+objc/Documentation/libTTIO/
 objc/Documentation/*.gsdoc
 objc/Documentation/*.igsdoc
 

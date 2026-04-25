@@ -1,0 +1,864 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>ttio.exporters.imzml - TTI-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">TTI-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">TTI-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../autoapi/ttio/index.html">ttio</a><input aria-label="Toggle navigation of ttio" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/access_policy/index.html">ttio.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/acquisition_run/index.html">ttio.acquisition_run</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/analysis/index.html">ttio.analysis</a><input aria-label="Toggle navigation of ttio.analysis" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/analysis/two_d_cos/index.html">ttio.analysis.two_d_cos</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/anonymization/index.html">ttio.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/axis_descriptor/index.html">ttio.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/chromatogram/index.html">ttio.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cipher_suite/index.html">ttio.cipher_suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cv_param/index.html">ttio.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encoding_spec/index.html">ttio.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption/index.html">ttio.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption_per_au/index.html">ttio.encryption_per_au</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/enums/index.html">ttio.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/imzml/index.html">ttio.exporters.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/isa/index.html">ttio.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mzml/index.html">ttio.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mztab/index.html">ttio.exporters.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature/index.html">ttio.feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature_flags/index.html">ttio.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/fid/index.html">ttio.fid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/imzml/index.html">ttio.importers.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mzml/index.html">ttio.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mztab/index.html">ttio.importers.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_image/index.html">ttio.ir_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_spectrum/index.html">ttio.ir_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/isolation_window/index.html">ttio.isolation_window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/key_rotation/index.html">ttio.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/mass_spectrum/index.html">ttio.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ms_image/index.html">ttio.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_2d/index.html">ttio.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/pqc/index.html">ttio.pqc</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/indexable/index.html">ttio.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/provenanceable/index.html">ttio.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/streamable/index.html">ttio.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/provenance/index.html">ttio.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/base/index.html">ttio.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/hdf5/index.html">ttio.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/memory/index.html">ttio.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/registry/index.html">ttio.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/sqlite/index.html">ttio.providers.sqlite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/zarr/index.html">ttio.providers.zarr</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/quantification/index.html">ttio.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/query/index.html">ttio.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_image/index.html">ttio.raman_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_spectrum/index.html">ttio.raman_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signal_array/index.html">ttio.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signatures/index.html">ttio.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectral_dataset/index.html">ttio.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectrum/index.html">ttio.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_reader/index.html">ttio.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_writer/index.html">ttio.stream_writer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_encode_cli/index.html">ttio.tools.transport_encode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_server_cli/index.html">ttio.tools.transport_server_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/transition_list/index.html">ttio.transition_list</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/client/index.html">ttio.transport.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/codec/index.html">ttio.transport.codec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/encrypted/index.html">ttio.transport.encrypted</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/packets/index.html">ttio.transport.packets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/server/index.html">ttio.transport.server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/simulator/index.html">ttio.transport.simulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/value_range/index.html">ttio.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/verifier/index.html">ttio.verifier</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for ttio.exporters.imzml</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;imzML + .ibd exporter (v0.9+).</span>
+
+<span class="sd">Reverses the M59 importer: takes an :class:`ttio.importers.imzml</span>
+<span class="sd">.ImzMLImport` (or an equivalent list of pixel spectra plus grid metadata)</span>
+<span class="sd">and emits a paired ``.imzML`` / ``.ibd`` on disk. Both the continuous</span>
+<span class="sd">mode (one shared m/z axis at the head of the .ibd, per-pixel intensity</span>
+<span class="sd">arrays following) and the processed mode (per-pixel m/z + intensity)</span>
+<span class="sd">are supported.</span>
+
+<span class="sd">The emitted XML uses the canonical imzML IMS accessions that match what</span>
+<span class="sd">real-world files (e.g. the pyimzML test corpus, imzML 1.1 spec) use:</span>
+<span class="sd">``IMS:1000080`` for the universally unique identifier and</span>
+<span class="sd">``IMS:1000042`` / ``IMS:1000043`` for the max pixel counts. The</span>
+<span class="sd">importer accepts both the canonical form and the legacy form that</span>
+<span class="sd">earlier TTIO synthetic tests emitted.</span>
+
+<span class="sd">SPDX-License-Identifier: Apache-2.0</span>
+
+<span class="sd">Cross-language equivalents</span>
+<span class="sd">--------------------------</span>
+<span class="sd">Objective-C: ``TTIOImzMLWriter`` · Java:</span>
+<span class="sd">``com.dtwthalion.ttio.exporters.ImzMLWriter``</span>
+
+<span class="sd">API status: Provisional (v0.9+ — will stabilise after the first round</span>
+<span class="sd">of production feedback on the imaging writer).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">struct</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">uuid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterable</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">..importers.imzml</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImzMLImport</span><span class="p">,</span> <span class="n">ImzMLPixelSpectrum</span>
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;write&quot;</span><span class="p">,</span> <span class="s2">&quot;write_from_import&quot;</span><span class="p">,</span> <span class="s2">&quot;WriteResult&quot;</span><span class="p">]</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="WriteResult">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/imzml/index.html#ttio.exporters.imzml.WriteResult">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">WriteResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return value of :func:`write` — resolved paths + the UUID that</span>
+<span class="sd">    ties the ``.imzML`` and ``.ibd`` together.&quot;&quot;&quot;</span>
+<div class="viewcode-block" id="WriteResult.imzml_path">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/imzml/index.html#ttio.exporters.imzml.WriteResult.imzml_path">[docs]</a>
+    <span class="n">imzml_path</span><span class="p">:</span> <span class="n">Path</span></div>
+
+<div class="viewcode-block" id="WriteResult.ibd_path">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/imzml/index.html#ttio.exporters.imzml.WriteResult.ibd_path">[docs]</a>
+    <span class="n">ibd_path</span><span class="p">:</span> <span class="n">Path</span></div>
+
+<div class="viewcode-block" id="WriteResult.uuid_hex">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/imzml/index.html#ttio.exporters.imzml.WriteResult.uuid_hex">[docs]</a>
+    <span class="n">uuid_hex</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="WriteResult.mode">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/imzml/index.html#ttio.exporters.imzml.WriteResult.mode">[docs]</a>
+    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="WriteResult.n_pixels">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/imzml/index.html#ttio.exporters.imzml.WriteResult.n_pixels">[docs]</a>
+    <span class="n">n_pixels</span><span class="p">:</span> <span class="nb">int</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="write">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/imzml/index.html#ttio.exporters.imzml.write">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span>
+    <span class="n">pixels</span><span class="p">:</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">ImzMLPixelSpectrum</span><span class="p">],</span>
+    <span class="n">imzml_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">ibd_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;continuous&quot;</span><span class="p">,</span>
+    <span class="n">grid_max_x</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">grid_max_y</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">grid_max_z</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">pixel_size_x</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">pixel_size_y</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">scan_pattern</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;flyback&quot;</span><span class="p">,</span>
+    <span class="n">uuid_hex</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">WriteResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write ``pixels`` as an imzML + .ibd pair.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    pixels</span>
+<span class="sd">        Iterable of :class:`ImzMLPixelSpectrum`. In ``mode=&quot;continuous&quot;``</span>
+<span class="sd">        the first pixel&#39;s ``mz`` array is written once at the head of</span>
+<span class="sd">        the .ibd and every subsequent pixel is checked to share that</span>
+<span class="sd">        exact axis (raises if not). In ``mode=&quot;processed&quot;`` every</span>
+<span class="sd">        pixel&#39;s ``mz`` and ``intensity`` arrays are stored in full.</span>
+<span class="sd">    imzml_path</span>
+<span class="sd">        Path to the ``.imzML`` output. The sibling ``.ibd`` is derived</span>
+<span class="sd">        by swapping the extension unless ``ibd_path`` is given.</span>
+<span class="sd">    mode</span>
+<span class="sd">        ``&quot;continuous&quot;`` or ``&quot;processed&quot;``. Default is continuous.</span>
+<span class="sd">    grid_max_x, grid_max_y, grid_max_z</span>
+<span class="sd">        Pixel grid extents. When ``0``, the writer derives them from</span>
+<span class="sd">        the actual pixel coordinates.</span>
+<span class="sd">    pixel_size_x, pixel_size_y</span>
+<span class="sd">        Spatial pixel sizes in micrometres; emitted as-is via</span>
+<span class="sd">        ``IMS:1000046`` / ``IMS:1000047`` cvParams.</span>
+<span class="sd">    scan_pattern</span>
+<span class="sd">        Free-text scan pattern label (e.g. ``&quot;flyback&quot;``,</span>
+<span class="sd">        ``&quot;meandering&quot;``). Default ``&quot;flyback&quot;``.</span>
+<span class="sd">    uuid_hex</span>
+<span class="sd">        Optional explicit UUID (32 lowercase hex characters or a</span>
+<span class="sd">        standard UUID string). When ``None``, a random UUID4 is</span>
+<span class="sd">        generated.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;continuous&quot;</span><span class="p">,</span> <span class="s2">&quot;processed&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;imzML writer mode must be &#39;continuous&#39; or &#39;processed&#39;, got </span><span class="si">{</span><span class="n">mode</span><span class="si">!r}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+
+    <span class="n">imzml</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">imzml_path</span><span class="p">)</span>
+    <span class="n">ibd</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">ibd_path</span><span class="p">)</span> <span class="k">if</span> <span class="n">ibd_path</span> <span class="k">else</span> <span class="n">imzml</span><span class="o">.</span><span class="n">with_suffix</span><span class="p">(</span><span class="s2">&quot;.ibd&quot;</span><span class="p">)</span>
+    <span class="n">pixel_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">pixels</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">pixel_list</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;imzML writer: at least one pixel spectrum is required&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">uuid_hex</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">uuid_hex</span> <span class="o">=</span> <span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="o">.</span><span class="n">hex</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">uuid_hex</span> <span class="o">=</span> <span class="n">_normalise_uuid</span><span class="p">(</span><span class="n">uuid_hex</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">uuid_hex</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">32</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;uuid_hex must be 32 hex chars, got </span><span class="si">{</span><span class="n">uuid_hex</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Derive grid extents from pixel coordinates when not specified.</span>
+    <span class="k">if</span> <span class="n">grid_max_x</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">grid_max_x</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">x</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">pixel_list</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">grid_max_y</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">grid_max_y</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">y</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">pixel_list</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">grid_max_z</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">grid_max_z</span> <span class="o">=</span> <span class="nb">max</span><span class="p">((</span><span class="n">p</span><span class="o">.</span><span class="n">z</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">pixel_list</span><span class="p">),</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># ── .ibd layout ────────────────────────────────────────────────────</span>
+    <span class="c1"># Byte 0-15: UUID (raw 16 bytes, not hex)</span>
+    <span class="c1"># Continuous mode: shared m/z axis, then intensity[0], intensity[1], ...</span>
+    <span class="c1"># Processed mode: mz[0], intensity[0], mz[1], intensity[1], ...</span>
+    <span class="c1"># m/z and intensity are both little-endian float64.</span>
+    <span class="n">ibd_parts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">bytes</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="nb">bytes</span><span class="o">.</span><span class="n">fromhex</span><span class="p">(</span><span class="n">uuid_hex</span><span class="p">)]</span>
+    <span class="n">offsets</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1">#   per pixel: (mz_offset, mz_length, int_offset, int_length)</span>
+
+    <span class="n">cursor</span> <span class="o">=</span> <span class="mi">16</span>  <span class="c1"># bytes</span>
+
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;continuous&quot;</span><span class="p">:</span>
+        <span class="c1"># Validate shared axis, write once.</span>
+        <span class="n">shared_mz</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">pixel_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">mz</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+        <span class="n">shared_mz_bytes</span> <span class="o">=</span> <span class="n">shared_mz</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+        <span class="n">mz_offset</span> <span class="o">=</span> <span class="n">cursor</span>
+        <span class="n">mz_len</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">shared_mz</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="n">ibd_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shared_mz_bytes</span><span class="p">)</span>
+        <span class="n">cursor</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shared_mz_bytes</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">pix</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">pixel_list</span><span class="p">):</span>
+            <span class="n">mz_i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">pix</span><span class="o">.</span><span class="n">mz</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">mz_i</span><span class="o">.</span><span class="n">size</span> <span class="o">!=</span> <span class="n">mz_len</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">array_equal</span><span class="p">(</span><span class="n">mz_i</span><span class="p">,</span> <span class="n">shared_mz</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;continuous-mode imzML requires all pixels to share the &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;same m/z axis; pixel </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> (x=</span><span class="si">{</span><span class="n">pix</span><span class="o">.</span><span class="n">x</span><span class="si">}</span><span class="s2">, y=</span><span class="si">{</span><span class="n">pix</span><span class="o">.</span><span class="n">y</span><span class="si">}</span><span class="s2">) differs&quot;</span>
+                <span class="p">)</span>
+            <span class="n">inten</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">pix</span><span class="o">.</span><span class="n">intensity</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+            <span class="n">inten_bytes</span> <span class="o">=</span> <span class="n">inten</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+            <span class="n">int_offset</span> <span class="o">=</span> <span class="n">cursor</span>
+            <span class="n">ibd_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">inten_bytes</span><span class="p">)</span>
+            <span class="n">cursor</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">inten_bytes</span><span class="p">)</span>
+            <span class="n">offsets</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">mz_offset</span><span class="p">,</span> <span class="n">mz_len</span><span class="p">,</span> <span class="n">int_offset</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">inten</span><span class="o">.</span><span class="n">size</span><span class="p">)))</span>
+    <span class="k">else</span><span class="p">:</span>  <span class="c1"># processed</span>
+        <span class="k">for</span> <span class="n">pix</span> <span class="ow">in</span> <span class="n">pixel_list</span><span class="p">:</span>
+            <span class="n">mz_i</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">pix</span><span class="o">.</span><span class="n">mz</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+            <span class="n">inten</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">pix</span><span class="o">.</span><span class="n">intensity</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">mz_i</span><span class="o">.</span><span class="n">size</span> <span class="o">!=</span> <span class="n">inten</span><span class="o">.</span><span class="n">size</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;processed-mode pixel at (x=</span><span class="si">{</span><span class="n">pix</span><span class="o">.</span><span class="n">x</span><span class="si">}</span><span class="s2">, y=</span><span class="si">{</span><span class="n">pix</span><span class="o">.</span><span class="n">y</span><span class="si">}</span><span class="s2">): mz (</span><span class="si">{</span><span class="n">mz_i</span><span class="o">.</span><span class="n">size</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot; and intensity (</span><span class="si">{</span><span class="n">inten</span><span class="o">.</span><span class="n">size</span><span class="si">}</span><span class="s2">) arrays must be the same length&quot;</span>
+                <span class="p">)</span>
+            <span class="n">mz_bytes</span> <span class="o">=</span> <span class="n">mz_i</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+            <span class="n">mz_offset</span> <span class="o">=</span> <span class="n">cursor</span>
+            <span class="n">ibd_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mz_bytes</span><span class="p">)</span>
+            <span class="n">cursor</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">mz_bytes</span><span class="p">)</span>
+            <span class="n">inten_bytes</span> <span class="o">=</span> <span class="n">inten</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+            <span class="n">int_offset</span> <span class="o">=</span> <span class="n">cursor</span>
+            <span class="n">ibd_parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">inten_bytes</span><span class="p">)</span>
+            <span class="n">cursor</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">inten_bytes</span><span class="p">)</span>
+            <span class="n">offsets</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">mz_offset</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">mz_i</span><span class="o">.</span><span class="n">size</span><span class="p">),</span>
+                            <span class="n">int_offset</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">inten</span><span class="o">.</span><span class="n">size</span><span class="p">)))</span>
+
+    <span class="n">ibd_bytes</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ibd_parts</span><span class="p">)</span>
+    <span class="n">ibd</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">ibd_bytes</span><span class="p">)</span>
+    <span class="c1"># IMS:1000091 &quot;ibd SHA-1&quot; is a common audit cvParam; compute it so</span>
+    <span class="c1"># downstream validators see a match.</span>
+    <span class="n">ibd_sha1</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha1</span><span class="p">(</span><span class="n">ibd_bytes</span><span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+
+    <span class="c1"># ── .imzML XML ────────────────────────────────────────────────────</span>
+    <span class="n">xml</span> <span class="o">=</span> <span class="n">_build_imzml_xml</span><span class="p">(</span>
+        <span class="n">uuid_hex</span><span class="o">=</span><span class="n">uuid_hex</span><span class="p">,</span>
+        <span class="n">ibd_sha1</span><span class="o">=</span><span class="n">ibd_sha1</span><span class="p">,</span>
+        <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span>
+        <span class="n">grid_max_x</span><span class="o">=</span><span class="n">grid_max_x</span><span class="p">,</span>
+        <span class="n">grid_max_y</span><span class="o">=</span><span class="n">grid_max_y</span><span class="p">,</span>
+        <span class="n">grid_max_z</span><span class="o">=</span><span class="n">grid_max_z</span><span class="p">,</span>
+        <span class="n">pixel_size_x</span><span class="o">=</span><span class="n">pixel_size_x</span><span class="p">,</span>
+        <span class="n">pixel_size_y</span><span class="o">=</span><span class="n">pixel_size_y</span><span class="p">,</span>
+        <span class="n">scan_pattern</span><span class="o">=</span><span class="n">scan_pattern</span><span class="p">,</span>
+        <span class="n">pixels</span><span class="o">=</span><span class="n">pixel_list</span><span class="p">,</span>
+        <span class="n">offsets</span><span class="o">=</span><span class="n">offsets</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">imzml</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">xml</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">WriteResult</span><span class="p">(</span>
+        <span class="n">imzml_path</span><span class="o">=</span><span class="n">imzml</span><span class="p">,</span>
+        <span class="n">ibd_path</span><span class="o">=</span><span class="n">ibd</span><span class="p">,</span>
+        <span class="n">uuid_hex</span><span class="o">=</span><span class="n">uuid_hex</span><span class="p">,</span>
+        <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">,</span>
+        <span class="n">n_pixels</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">pixel_list</span><span class="p">),</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="write_from_import">
+<a class="viewcode-back" href="../../../autoapi/ttio/exporters/imzml/index.html#ttio.exporters.imzml.write_from_import">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">write_from_import</span><span class="p">(</span>
+    <span class="n">import_result</span><span class="p">:</span> <span class="n">ImzMLImport</span><span class="p">,</span>
+    <span class="n">imzml_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+    <span class="n">ibd_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">WriteResult</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Re-emit an :class:`ImzMLImport` to disk.</span>
+
+<span class="sd">    Convenience shortcut for round-trip tests and imzML-to-imzML</span>
+<span class="sd">    rewriters (e.g. re-baselining a corrupt UUID).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">write</span><span class="p">(</span>
+        <span class="n">import_result</span><span class="o">.</span><span class="n">spectra</span><span class="p">,</span>
+        <span class="n">imzml_path</span><span class="o">=</span><span class="n">imzml_path</span><span class="p">,</span>
+        <span class="n">ibd_path</span><span class="o">=</span><span class="n">ibd_path</span><span class="p">,</span>
+        <span class="n">mode</span><span class="o">=</span><span class="n">import_result</span><span class="o">.</span><span class="n">mode</span><span class="p">,</span>
+        <span class="n">grid_max_x</span><span class="o">=</span><span class="n">import_result</span><span class="o">.</span><span class="n">grid_max_x</span><span class="p">,</span>
+        <span class="n">grid_max_y</span><span class="o">=</span><span class="n">import_result</span><span class="o">.</span><span class="n">grid_max_y</span><span class="p">,</span>
+        <span class="n">grid_max_z</span><span class="o">=</span><span class="n">import_result</span><span class="o">.</span><span class="n">grid_max_z</span><span class="p">,</span>
+        <span class="n">pixel_size_x</span><span class="o">=</span><span class="n">import_result</span><span class="o">.</span><span class="n">pixel_size_x</span><span class="p">,</span>
+        <span class="n">pixel_size_y</span><span class="o">=</span><span class="n">import_result</span><span class="o">.</span><span class="n">pixel_size_y</span><span class="p">,</span>
+        <span class="n">scan_pattern</span><span class="o">=</span><span class="n">import_result</span><span class="o">.</span><span class="n">scan_pattern</span><span class="p">,</span>
+        <span class="n">uuid_hex</span><span class="o">=</span><span class="n">import_result</span><span class="o">.</span><span class="n">uuid_hex</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+<span class="c1"># Helpers.</span>
+<span class="c1"># --------------------------------------------------------------------------- #</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_normalise_uuid</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Strip ``{}``, dashes, whitespace and lowercase the hex string.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;{&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;}&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_imzml_xml</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">uuid_hex</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">ibd_sha1</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">grid_max_x</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">grid_max_y</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">grid_max_z</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">pixel_size_x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">pixel_size_y</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">scan_pattern</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">pixels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ImzMLPixelSpectrum</span><span class="p">],</span>
+    <span class="n">offsets</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="n">mode_acc</span> <span class="o">=</span> <span class="s2">&quot;IMS:1000030&quot;</span> <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;continuous&quot;</span> <span class="k">else</span> <span class="s2">&quot;IMS:1000031&quot;</span>
+    <span class="n">mode_name</span> <span class="o">=</span> <span class="s2">&quot;continuous&quot;</span> <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s2">&quot;continuous&quot;</span> <span class="k">else</span> <span class="s2">&quot;processed&quot;</span>
+
+    <span class="n">parts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="s1">&#39;&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;&lt;mzML xmlns=&quot;http://psi.hupo.org/ms/mzml&quot;&#39;</span>
+        <span class="s1">&#39; xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;&#39;</span>
+        <span class="s1">&#39; xsi:schemaLocation=&quot;http://psi.hupo.org/ms/mzml&#39;</span>
+        <span class="s1">&#39; http://psidev.info/files/ms/mzML/xsd/mzML1.1.0.xsd&quot;&#39;</span>
+        <span class="s1">&#39; version=&quot;1.1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;cvList count=&quot;3&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;cv id=&quot;MS&quot; fullName=&quot;Proteomics Standards Initiative Mass Spectrometry Ontology&quot;&#39;</span>
+        <span class="s1">&#39; version=&quot;4.1.0&quot;&#39;</span>
+        <span class="s1">&#39; URI=&quot;https://raw.githubusercontent.com/HUPO-PSI/psi-ms-CV/master/psi-ms.obo&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;cv id=&quot;UO&quot; fullName=&quot;Unit Ontology&quot; version=&quot;2020-03-10&quot;&#39;</span>
+        <span class="s1">&#39; URI=&quot;http://ontologies.berkeleybop.org/uo.obo&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;cv id=&quot;IMS&quot; fullName=&quot;Mass Spectrometry Imaging Ontology&quot;&#39;</span>
+        <span class="s1">&#39; version=&quot;1.1.0&quot;&#39;</span>
+        <span class="s1">&#39; URI=&quot;https://raw.githubusercontent.com/imzML/imzML/master/imagingMS.obo&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;/cvList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;fileDescription&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;fileContent&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000579&quot; name=&quot;MS1 spectrum&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000080&quot;&#39;</span>
+        <span class="sa">f</span><span class="s1">&#39; name=&quot;universally unique identifier&quot; value=&quot;</span><span class="si">{</span><span class="n">uuid_hex</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000091&quot; name=&quot;ibd SHA-1&quot;&#39;</span>
+        <span class="sa">f</span><span class="s1">&#39; value=&quot;</span><span class="si">{</span><span class="n">ibd_sha1</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;</span><span class="si">{</span><span class="n">mode_acc</span><span class="si">}</span><span class="s1">&quot; name=&quot;</span><span class="si">{</span><span class="n">mode_name</span><span class="si">}</span><span class="s1">&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;/fileContent&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;/fileDescription&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="c1"># Real-world imzML tools (pyimzml, MSIqr, etc.) resolve every</span>
+        <span class="c1"># &lt;binaryDataArray&gt;&#39;s meaning via &lt;referenceableParamGroupRef&gt;</span>
+        <span class="c1"># and fail hard when the ref target is missing. Emit the two</span>
+        <span class="c1"># group declarations here; each per-spectrum binaryDataArray</span>
+        <span class="c1"># below also references one of these IDs AND emits inline</span>
+        <span class="c1"># cvParams so simple readers (including our own importer) work</span>
+        <span class="c1"># without a ref-resolution pass.</span>
+        <span class="s1">&#39;  &lt;referenceableParamGroupList count=&quot;2&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;referenceableParamGroup id=&quot;mzArray&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000523&quot; name=&quot;64-bit float&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000576&quot; name=&quot;no compression&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000514&quot; name=&quot;m/z array&quot;&#39;</span>
+        <span class="s1">&#39; unitCvRef=&quot;MS&quot; unitAccession=&quot;MS:1000040&quot; unitName=&quot;m/z&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000101&quot; name=&quot;external data&quot; value=&quot;true&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;/referenceableParamGroup&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;referenceableParamGroup id=&quot;intensityArray&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000523&quot; name=&quot;64-bit float&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000576&quot; name=&quot;no compression&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000515&quot; name=&quot;intensity array&quot;&#39;</span>
+        <span class="s1">&#39; unitCvRef=&quot;MS&quot; unitAccession=&quot;MS:1000131&quot; unitName=&quot;number of detector counts&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000101&quot; name=&quot;external data&quot; value=&quot;true&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;/referenceableParamGroup&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;/referenceableParamGroupList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;softwareList count=&quot;1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;software id=&quot;ttio&quot; version=&quot;0.9.0&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000799&quot;&#39;</span>
+        <span class="s1">&#39; name=&quot;custom unreleased software tool&quot; value=&quot;ttio&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;/software&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;/softwareList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;scanSettingsList count=&quot;1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;scanSettings id=&quot;scansettings1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="c1"># Scan pattern — IMS:1000040 is what our importer looks for,</span>
+        <span class="c1"># even though pyimzml flags its canonical name as &quot;linescan</span>
+        <span class="c1"># sequence&quot;. Emit both forms (cvParam + userParam) so every</span>
+        <span class="c1"># reader finds the value without triggering ontology warnings.</span>
+        <span class="sa">f</span><span class="s1">&#39;      &lt;userParam name=&quot;scan pattern&quot;&#39;</span>
+        <span class="sa">f</span><span class="s1">&#39; value=&quot;</span><span class="si">{</span><span class="n">_xml_escape</span><span class="p">(</span><span class="n">scan_pattern</span><span class="p">)</span><span class="si">}</span><span class="s1">&quot; type=&quot;xsd:string&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000040&quot;&#39;</span>
+        <span class="sa">f</span><span class="s1">&#39; name=&quot;linescan sequence&quot; value=&quot;</span><span class="si">{</span><span class="n">_xml_escape</span><span class="p">(</span><span class="n">scan_pattern</span><span class="p">)</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000042&quot; name=&quot;max count of pixels x&quot;&#39;</span>
+        <span class="sa">f</span><span class="s1">&#39; value=&quot;</span><span class="si">{</span><span class="n">grid_max_x</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000043&quot; name=&quot;max count of pixels y&quot;&#39;</span>
+        <span class="sa">f</span><span class="s1">&#39; value=&quot;</span><span class="si">{</span><span class="n">grid_max_y</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="n">pixel_size_x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000046&quot; name=&quot;pixel size (x)&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; value=&quot;</span><span class="si">{</span><span class="n">pixel_size_x</span><span class="si">:</span><span class="s1">g</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; unitCvRef=&quot;UO&quot; unitAccession=&quot;UO:0000017&quot; unitName=&quot;micrometer&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">pixel_size_y</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;      &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000047&quot; name=&quot;pixel size y&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; value=&quot;</span><span class="si">{</span><span class="n">pixel_size_y</span><span class="si">:</span><span class="s1">g</span><span class="si">}</span><span class="s1">&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; unitCvRef=&quot;UO&quot; unitAccession=&quot;UO:0000017&quot; unitName=&quot;micrometer&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+    <span class="n">parts</span> <span class="o">+=</span> <span class="p">[</span>
+        <span class="s1">&#39;    &lt;/scanSettings&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;/scanSettingsList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;instrumentConfigurationList count=&quot;1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;instrumentConfiguration id=&quot;IC1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000031&quot; name=&quot;instrument model&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;/instrumentConfiguration&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;/instrumentConfigurationList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;dataProcessingList count=&quot;1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;dataProcessing id=&quot;dp_export&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;processingMethod order=&quot;0&quot; softwareRef=&quot;ttio&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;        &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000544&quot; name=&quot;Conversion to mzML&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;      &lt;/processingMethod&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;    &lt;/dataProcessing&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;/dataProcessingList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;run id=&quot;ttio_imzml_export&quot; defaultInstrumentConfigurationRef=&quot;IC1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="sa">f</span><span class="s1">&#39;    &lt;spectrumList count=&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pixels</span><span class="p">)</span><span class="si">}</span><span class="s1">&quot; defaultDataProcessingRef=&quot;dp_export&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+
+    <span class="c1"># Per-spectrum (pixel) blocks.</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">pix</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">pixels</span><span class="p">):</span>
+        <span class="n">mz_offset</span><span class="p">,</span> <span class="n">mz_length</span><span class="p">,</span> <span class="n">int_offset</span><span class="p">,</span> <span class="n">int_length</span> <span class="o">=</span> <span class="n">offsets</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">mz_enc_len</span> <span class="o">=</span> <span class="n">mz_length</span> <span class="o">*</span> <span class="mi">8</span>
+        <span class="n">int_enc_len</span> <span class="o">=</span> <span class="n">int_length</span> <span class="o">*</span> <span class="mi">8</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;      &lt;spectrum id=&quot;Scan=</span><span class="si">{</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s1">&quot; index=&quot;</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">&quot; defaultArrayLength=&quot;0&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="s1">&#39;        &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000579&quot; name=&quot;MS1 spectrum&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="s1">&#39;        &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000511&quot; name=&quot;ms level&quot; value=&quot;1&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;        &lt;scanList count=&quot;1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="s1">&#39;          &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000795&quot; name=&quot;no combination&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;          &lt;scan instrumentConfigurationRef=&quot;IC1&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000050&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; name=&quot;position x&quot; value=&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">pix</span><span class="o">.</span><span class="n">x</span><span class="p">)</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000051&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; name=&quot;position y&quot; value=&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">pix</span><span class="o">.</span><span class="n">y</span><span class="p">)</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">pix</span><span class="o">.</span><span class="n">z</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000052&quot;&#39;</span>
+                <span class="sa">f</span><span class="s1">&#39; name=&quot;position z&quot; value=&quot;</span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">pix</span><span class="o">.</span><span class="n">z</span><span class="p">)</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+            <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;          &lt;/scan&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;        &lt;/scanList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;        &lt;binaryDataArrayList count=&quot;2&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="c1"># m/z array — the referenceableParamGroupRef lets strict tools</span>
+        <span class="c1"># (pyimzml, MSIqr) identify which binaryDataArray is which; the</span>
+        <span class="c1"># inline cvParams let simple readers identify it without</span>
+        <span class="c1"># resolving the ref.</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;          &lt;binaryDataArray encodedLength=&quot;0&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;referenceableParamGroupRef ref=&quot;mzArray&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000523&quot;&#39;</span>
+                     <span class="s1">&#39; name=&quot;64-bit float&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000576&quot;&#39;</span>
+                     <span class="s1">&#39; name=&quot;no compression&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000514&quot;&#39;</span>
+                     <span class="s1">&#39; name=&quot;m/z array&quot; value=&quot;&quot;&#39;</span>
+                     <span class="s1">&#39; unitCvRef=&quot;MS&quot; unitAccession=&quot;MS:1000040&quot; unitName=&quot;m/z&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000101&quot;&#39;</span>
+                     <span class="s1">&#39; name=&quot;external data&quot; value=&quot;true&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000102&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; name=&quot;external offset&quot; value=&quot;</span><span class="si">{</span><span class="n">mz_offset</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000103&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; name=&quot;external array length&quot; value=&quot;</span><span class="si">{</span><span class="n">mz_length</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000104&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; name=&quot;external encoded length&quot; value=&quot;</span><span class="si">{</span><span class="n">mz_enc_len</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;binary/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;          &lt;/binaryDataArray&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="c1"># intensity array</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;          &lt;binaryDataArray encodedLength=&quot;0&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;referenceableParamGroupRef ref=&quot;intensityArray&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000523&quot;&#39;</span>
+                     <span class="s1">&#39; name=&quot;64-bit float&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000576&quot;&#39;</span>
+                     <span class="s1">&#39; name=&quot;no compression&quot; value=&quot;&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;MS&quot; accession=&quot;MS:1000515&quot;&#39;</span>
+                     <span class="s1">&#39; name=&quot;intensity array&quot; value=&quot;&quot;&#39;</span>
+                     <span class="s1">&#39; unitCvRef=&quot;MS&quot; unitAccession=&quot;MS:1000131&quot;&#39;</span>
+                     <span class="s1">&#39; unitName=&quot;number of detector counts&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000101&quot;&#39;</span>
+                     <span class="s1">&#39; name=&quot;external data&quot; value=&quot;true&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000102&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; name=&quot;external offset&quot; value=&quot;</span><span class="si">{</span><span class="n">int_offset</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000103&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; name=&quot;external array length&quot; value=&quot;</span><span class="si">{</span><span class="n">int_length</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s1">&#39;            &lt;cvParam cvRef=&quot;IMS&quot; accession=&quot;IMS:1000104&quot;&#39;</span>
+            <span class="sa">f</span><span class="s1">&#39; name=&quot;external encoded length&quot; value=&quot;</span><span class="si">{</span><span class="n">int_enc_len</span><span class="si">}</span><span class="s1">&quot;/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+        <span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;            &lt;binary/&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;          &lt;/binaryDataArray&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;        &lt;/binaryDataArrayList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;      &lt;/spectrum&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
+
+    <span class="n">parts</span> <span class="o">+=</span> <span class="p">[</span>
+        <span class="s1">&#39;    &lt;/spectrumList&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;  &lt;/run&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;&lt;/mzML&gt;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_xml_escape</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">s</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&amp;&quot;</span><span class="p">,</span> <span class="s2">&quot;&amp;amp;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&lt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&amp;lt;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&amp;gt;&quot;</span><span class="p">)</span>
+             <span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;&quot;&#39;</span><span class="p">,</span> <span class="s2">&quot;&amp;quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;&#39;&quot;</span><span class="p">,</span> <span class="s2">&quot;&amp;apos;&quot;</span><span class="p">))</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DTW-Thalion
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=2bd037f0"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

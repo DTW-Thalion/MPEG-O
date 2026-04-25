@@ -1,0 +1,47 @@
+ttio.tools.dump_identifications
+===============================
+
+.. py:module:: ttio.tools.dump_identifications
+
+.. autoapi-nested-parse::
+
+   M51 compound parity dumper — Python reference.
+
+   Reads an ``.tio`` file and emits ``/study/identifications``,
+   ``/study/quantifications``, and ``/study/provenance`` as deterministic
+   JSON to stdout. The output is byte-identical to the Objective-C
+   ``TtioDumpIdentifications`` and Java ``DumpIdentifications`` tools.
+
+   Usage
+   -----
+   ::
+
+       python -m ttio.tools.dump_identifications <path-to.tio>
+
+   Exit codes
+   ----------
+   - ``0`` — wrote output successfully.
+   - ``1`` — argument error.
+   - ``2`` — open/read failure.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.dump_identifications.dump
+   ttio.tools.dump_identifications.main
+
+
+Module Contents
+---------------
+
+.. py:function:: dump(path: str | pathlib.Path) -> str
+
+   Return the canonical JSON for the dataset at ``path``.
+
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

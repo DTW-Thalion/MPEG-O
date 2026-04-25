@@ -1,4 +1,4 @@
-# MPEG-O v0.6 API Review
+# TTI-O v0.6 API Review
 
 > **Milestone:** M41 (API Review checkpoint)  
 > **Final slice:** M41.8 — commit `13c024e`  
@@ -7,7 +7,7 @@
 
 This document is the headline deliverable of Milestone 41. It answers the
 question: "If I am using Python class X, what is its equivalent in Java and
-Objective-C?" For every public class in the MPEG-O v0.6 surface, the
+Objective-C?" For every public class in the TTI-O v0.6 surface, the
 three-column tables below give the ObjC, Python, and Java identifiers, their
 stability classification, and any method-level parity notes. Resolved
 inconsistencies are listed under each subsystem; deferred items are called out
@@ -23,8 +23,8 @@ Three language implementations are reviewed:
 
 - **Objective-C** — normative reference. ObjC headers define the canonical API
   shape. All parity decisions in M41 were resolved against ObjC.
-- **Python** — `mpeg_o.*` package, Python 3.11+, NumPy-style docstrings.
-- **Java** — `com.dtwthalion.mpgo.*`, JDK 17, Javadoc.
+- **Python** — `ttio.*` package, Python 3.11+, NumPy-style docstrings.
+- **Java** — `com.dtwthalion.tio.*`, JDK 17, Javadoc.
 
 The review covers all eight subsystems addressed in M41 slices 41.1 through
 41.8. Internal helpers (see §1.3 below) are excluded from the parity guarantee.
@@ -53,13 +53,13 @@ Every public API surface carries one of three stability labels:
 
   | Helper | Language | Notes |
   |---|---|---|
-  | `mpeg_o.importers._base64_zlib` | Python | Private module (underscore-prefixed) |
-  | `mpeg_o._numpress` | Python | Private module |
-  | `mpeg_o._hdf5_io` | Python | Private HDF5 compound-IO helper |
-  | `com.dtwthalion.mpgo.MiniJson` | Java | Internal JSON micro-parser |
-  | `com.dtwthalion.mpgo.hdf5.Hdf5CompoundIO` | Java | Internal HDF5 compound-IO |
-  | `MPGOBase64` | ObjC | ObjC wrapper; Java uses `java.util.Base64` stdlib directly |
-  | `MPGOHDF5File` | ObjC | ObjC HDF5 file handle; Java has `Hdf5File` in hdf5 subpackage |
+  | `ttio.importers._base64_zlib` | Python | Private module (underscore-prefixed) |
+  | `ttio._numpress` | Python | Private module |
+  | `ttio._hdf5_io` | Python | Private HDF5 compound-IO helper |
+  | `com.dtwthalion.tio.MiniJson` | Java | Internal JSON micro-parser |
+  | `com.dtwthalion.tio.hdf5.Hdf5CompoundIO` | Java | Internal HDF5 compound-IO |
+  | `TTIOBase64` | ObjC | ObjC wrapper; Java uses `java.util.Base64` stdlib directly |
+  | `TTIOHDF5File` | ObjC | ObjC HDF5 file handle; Java has `Hdf5File` in hdf5 subpackage |
 
 ### Three-language namespace rule
 
@@ -74,13 +74,13 @@ When a class exists in only one or two languages, the missing cell is noted as
 
 | Language | Top-level namespace | Class-naming convention |
 |---|---|---|
-| Objective-C | `MPGO` prefix | `MPGOClassName` — no namespaces in ObjC; prefix is the namespace |
-| Python | `mpeg_o.*` packages | `snake_case` modules, `PascalCase` classes |
-| Java | `com.dtwthalion.mpgo.*` | `PascalCase` classes; subpackages: `protocols`, `protection`, `providers`, `importers`, `exporters`, `hdf5` |
+| Objective-C | `TTIO` prefix | `TTIOClassName` — no namespaces in ObjC; prefix is the namespace |
+| Python | `ttio.*` packages | `snake_case` modules, `PascalCase` classes |
+| Java | `com.dtwthalion.tio.*` | `PascalCase` classes; subpackages: `protocols`, `protection`, `providers`, `importers`, `exporters`, `hdf5` |
 
 **Note on Java groupId:** The Java artifact groupId migrates from
 `com.dtwthalion` to `global.thalion` in M40 (pending). This document uses the
-current `com.dtwthalion.mpgo.*` names throughout. A one-line update to this
+current `com.dtwthalion.tio.*` names throughout. A one-line update to this
 table and the parity cells below is the only change needed when M40 lands.
 
 ---
@@ -97,21 +97,21 @@ table and the parity cells below is the only change needed when M40 lands.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOCVAnnotatable` | `mpeg_o.protocols.CVAnnotatable` | `com.dtwthalion.mpgo.protocols.CVAnnotatable` | Stable |
-| `MPGOEncryptable` | `mpeg_o.protocols.Encryptable` | `com.dtwthalion.mpgo.protocols.Encryptable` | Stable |
-| `MPGOIndexable` | `mpeg_o.protocols.Indexable` | `com.dtwthalion.mpgo.protocols.Indexable` | Stable |
-| `MPGOProvenanceable` | `mpeg_o.protocols.Provenanceable` | `com.dtwthalion.mpgo.protocols.Provenanceable` | Stable |
-| `MPGOStreamable` | `mpeg_o.protocols.Streamable` | `com.dtwthalion.mpgo.protocols.Streamable` | Stable |
+| `TTIOCVAnnotatable` | `ttio.protocols.CVAnnotatable` | `com.dtwthalion.tio.protocols.CVAnnotatable` | Stable |
+| `TTIOEncryptable` | `ttio.protocols.Encryptable` | `com.dtwthalion.tio.protocols.Encryptable` | Stable |
+| `TTIOIndexable` | `ttio.protocols.Indexable` | `com.dtwthalion.tio.protocols.Indexable` | Stable |
+| `TTIOProvenanceable` | `ttio.protocols.Provenanceable` | `com.dtwthalion.tio.protocols.Provenanceable` | Stable |
+| `TTIOStreamable` | `ttio.protocols.Streamable` | `com.dtwthalion.tio.protocols.Streamable` | Stable |
 
 #### Value Classes
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOAxisDescriptor` | `mpeg_o.axis_descriptor.AxisDescriptor` | `com.dtwthalion.mpgo.AxisDescriptor` | Stable |
-| `MPGOCVParam` | `mpeg_o.cv_param.CVParam` | `com.dtwthalion.mpgo.CVParam` | Stable |
-| `MPGOEncodingSpec` | `mpeg_o.encoding_spec.EncodingSpec` | `com.dtwthalion.mpgo.EncodingSpec` | Stable |
-| `MPGOValueRange` | `mpeg_o.value_range.ValueRange` | `com.dtwthalion.mpgo.ValueRange` | Stable |
-| `MPGOEnums` (enums module) | `mpeg_o.enums` | `com.dtwthalion.mpgo.Enums` | Stable |
+| `TTIOAxisDescriptor` | `ttio.axis_descriptor.AxisDescriptor` | `com.dtwthalion.tio.AxisDescriptor` | Stable |
+| `TTIOCVParam` | `ttio.cv_param.CVParam` | `com.dtwthalion.tio.CVParam` | Stable |
+| `TTIOEncodingSpec` | `ttio.encoding_spec.EncodingSpec` | `com.dtwthalion.tio.EncodingSpec` | Stable |
+| `TTIOValueRange` | `ttio.value_range.ValueRange` | `com.dtwthalion.tio.ValueRange` | Stable |
+| `TTIOEnums` (enums module) | `ttio.enums` | `com.dtwthalion.tio.Enums` | Stable |
 
 #### Method-level notes
 
@@ -154,7 +154,7 @@ in Python (M41.1); `compression_level` dropped (moved to provider config);
 Java both gain `ByteOrder` enum and `Compression.NUMPRESS_DELTA`.
 
 **ValueRange** — Java gains `span()` and `contains(double)` methods to match
-ObjC `MPGOValueRange`; Python already had equivalents.
+ObjC `TTIOValueRange`; Python already had equivalents.
 
 #### Fixes applied in M41.1
 
@@ -174,8 +174,8 @@ ObjC `MPGOValueRange`; Python already had equivalents.
 - Python and Java both gained `Compression.NUMPRESS_DELTA` enum value.
 - Python and Java gained `ByteOrder` enum (`LITTLE_ENDIAN`, `BIG_ENDIAN`).
 - Java `ValueRange` gained `span()` and `contains(double)` to match ObjC.
-- Python `protocols` subpackage created (`mpeg_o.protocols.__init__.py`).
-- Java `protocols` package created (`com.dtwthalion.mpgo.protocols`).
+- Python `protocols` subpackage created (`ttio.protocols.__init__.py`).
+- Java `protocols` package created (`com.dtwthalion.tio.protocols`).
 - All five domain protocol interfaces created in Python and Java.
 
 #### Deferred
@@ -193,14 +193,14 @@ ObjC `MPGOValueRange`; Python already had equivalents.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOSignalArray` | `mpeg_o.signal_array.SignalArray` | `com.dtwthalion.mpgo.SignalArray` | Stable |
-| `MPGONumpress` | `mpeg_o._numpress` (internal) | `com.dtwthalion.mpgo.NumpressCodec` | Internal (Python); Stable (Java/ObjC public surface) |
-| `MPGOSpectrum` | `mpeg_o.spectrum.Spectrum` | `com.dtwthalion.mpgo.Spectrum` | Stable |
-| `MPGOMassSpectrum` | `mpeg_o.mass_spectrum.MassSpectrum` | `com.dtwthalion.mpgo.MassSpectrum` | Stable |
-| `MPGONMRSpectrum` | `mpeg_o.nmr_spectrum.NMRSpectrum` | `com.dtwthalion.mpgo.NMRSpectrum` | Stable |
-| `MPGONMR2DSpectrum` | `mpeg_o.nmr_2d.NMR2DSpectrum` | `com.dtwthalion.mpgo.NMR2DSpectrum` | Stable |
-| `MPGOFreeInductionDecay` | `mpeg_o.fid.FreeInductionDecay` | `com.dtwthalion.mpgo.FreeInductionDecay` | Stable |
-| `MPGOChromatogram` | `mpeg_o.chromatogram.Chromatogram` | `com.dtwthalion.mpgo.Chromatogram` | Stable |
+| `TTIOSignalArray` | `ttio.signal_array.SignalArray` | `com.dtwthalion.tio.SignalArray` | Stable |
+| `TTIONumpress` | `ttio._numpress` (internal) | `com.dtwthalion.tio.NumpressCodec` | Internal (Python); Stable (Java/ObjC public surface) |
+| `TTIOSpectrum` | `ttio.spectrum.Spectrum` | `com.dtwthalion.tio.Spectrum` | Stable |
+| `TTIOMassSpectrum` | `ttio.mass_spectrum.MassSpectrum` | `com.dtwthalion.tio.MassSpectrum` | Stable |
+| `TTIONMRSpectrum` | `ttio.nmr_spectrum.NMRSpectrum` | `com.dtwthalion.tio.NMRSpectrum` | Stable |
+| `TTIONMR2DSpectrum` | `ttio.nmr_2d.NMR2DSpectrum` | `com.dtwthalion.tio.NMR2DSpectrum` | Stable |
+| `TTIOFreeInductionDecay` | `ttio.fid.FreeInductionDecay` | `com.dtwthalion.tio.FreeInductionDecay` | Stable |
+| `TTIOChromatogram` | `ttio.chromatogram.Chromatogram` | `com.dtwthalion.tio.Chromatogram` | Stable |
 
 #### Method-level notes
 
@@ -289,10 +289,10 @@ returning `SignalArray`. Fields retained: `chromatogram_type`, `target_mz`,
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOAcquisitionRun` | `mpeg_o.acquisition_run.AcquisitionRun` | `com.dtwthalion.mpgo.AcquisitionRun` | Stable |
-| `MPGOInstrumentConfig` | `mpeg_o.instrument_config.InstrumentConfig` | `com.dtwthalion.mpgo.InstrumentConfig` | Stable |
-| `MPGOSpectrumIndex` | `mpeg_o.acquisition_run.SpectrumIndex` | `com.dtwthalion.mpgo.SpectrumIndex` | Stable |
-| `MPGOMSImage` | `mpeg_o.ms_image.MSImage` | `com.dtwthalion.mpgo.MSImage` | Stable |
+| `TTIOAcquisitionRun` | `ttio.acquisition_run.AcquisitionRun` | `com.dtwthalion.tio.AcquisitionRun` | Stable |
+| `TTIOInstrumentConfig` | `ttio.instrument_config.InstrumentConfig` | `com.dtwthalion.tio.InstrumentConfig` | Stable |
+| `TTIOSpectrumIndex` | `ttio.acquisition_run.SpectrumIndex` | `com.dtwthalion.tio.SpectrumIndex` | Stable |
+| `TTIOMSImage` | `ttio.ms_image.MSImage` | `com.dtwthalion.tio.MSImage` | Stable |
 
 #### Method-level notes
 
@@ -316,7 +316,7 @@ both languages:
 | `indicesInRetentionTimeRange:` | `indices_in_retention_time_range(vr)` | `indicesInRetentionTimeRange(ValueRange)` |
 | `indicesForMsLevel:` | `indices_for_ms_level(level)` | `indicesForMsLevel(int)` |
 
-**MSImage** — ObjC `MPGOMSImage` inherits from `MPGOSpectralDataset`.
+**MSImage** — ObjC `TTIOMSImage` inherits from `TTIOSpectralDataset`.
 Python and Java use composition instead (see Known Stylistic Differences §4).
 Dataset-level fields added to Python and Java `MSImage` as direct members:
 
@@ -361,13 +361,13 @@ and xref parity only in this slice.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOIdentification` | `mpeg_o.identification.Identification` | `com.dtwthalion.mpgo.Identification` | Stable |
-| `MPGOProvenanceRecord` | `mpeg_o.provenance.ProvenanceRecord` | `com.dtwthalion.mpgo.ProvenanceRecord` | Stable |
-| `MPGOQuantification` | `mpeg_o.quantification.Quantification` | `com.dtwthalion.mpgo.Quantification` | Stable |
-| `MPGOTransitionList` | `mpeg_o.transition_list.TransitionList` | `com.dtwthalion.mpgo.TransitionList` | Stable |
-| `MPGOTransition` (nested) | `mpeg_o.transition_list.Transition` | `com.dtwthalion.mpgo.TransitionList.Transition` | Stable |
-| `MPGOSpectralDataset` | `mpeg_o.spectral_dataset.SpectralDataset` | `com.dtwthalion.mpgo.SpectralDataset` | Stable |
-| `MPGOCompoundIO` | `mpeg_o._hdf5_io` (internal) | `com.dtwthalion.mpgo.hdf5.Hdf5CompoundIO` (internal) | Internal |
+| `TTIOIdentification` | `ttio.identification.Identification` | `com.dtwthalion.tio.Identification` | Stable |
+| `TTIOProvenanceRecord` | `ttio.provenance.ProvenanceRecord` | `com.dtwthalion.tio.ProvenanceRecord` | Stable |
+| `TTIOQuantification` | `ttio.quantification.Quantification` | `com.dtwthalion.tio.Quantification` | Stable |
+| `TTIOTransitionList` | `ttio.transition_list.TransitionList` | `com.dtwthalion.tio.TransitionList` | Stable |
+| `TTIOTransition` (nested) | `ttio.transition_list.Transition` | `com.dtwthalion.tio.TransitionList.Transition` | Stable |
+| `TTIOSpectralDataset` | `ttio.spectral_dataset.SpectralDataset` | `com.dtwthalion.tio.SpectralDataset` | Stable |
+| `TTIOCompoundIO` | `ttio._hdf5_io` (internal) | `com.dtwthalion.tio.hdf5.Hdf5CompoundIO` (internal) | Internal |
 
 #### Method-level notes
 
@@ -398,7 +398,7 @@ dropped non-ObjC `name` field (pre-release, no callers). Both langs gained
 **SpectralDataset** — docstring + xref parity only in this slice; `Encryptable`
 conformance deferred to M41.5.
 
-**CompoundIO** — ObjC has a public `MPGOCompoundIO` class. Python's equivalent
+**CompoundIO** — ObjC has a public `TTIOCompoundIO` class. Python's equivalent
 is underscore-prefixed (`_hdf5_io.py`); Java's is in the `hdf5` subpackage
 (`Hdf5CompoundIO`). These are **Internal** and carry no parity guarantee.
 Documented as a known stylistic difference (§4).
@@ -434,17 +434,17 @@ Documented as a known stylistic difference (§4).
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOAccessPolicy` | `mpeg_o.access_policy.AccessPolicy` | `com.dtwthalion.mpgo.protection.AccessPolicy` | Stable |
-| `MPGOAnonymizer` | `mpeg_o.anonymization` (module) | `com.dtwthalion.mpgo.protection.Anonymizer` | Stable |
-| `MPGOEncryptionManager` | `mpeg_o.encryption` (module) | `com.dtwthalion.mpgo.protection.EncryptionManager` | Stable |
-| `MPGOKeyRotationManager` | `mpeg_o.key_rotation` (module) | `com.dtwthalion.mpgo.protection.KeyRotationManager` | Stable |
-| `MPGOSignatureManager` | `mpeg_o.signatures` (module) | `com.dtwthalion.mpgo.protection.SignatureManager` | Stable |
-| `MPGOVerifier` | `mpeg_o.verifier.Verifier` | `com.dtwthalion.mpgo.protection.Verifier` | Stable |
-| `MPGOVerificationStatus` | `mpeg_o.verifier.VerificationStatus` | `com.dtwthalion.mpgo.protection.VerificationStatus` | Stable |
+| `TTIOAccessPolicy` | `ttio.access_policy.AccessPolicy` | `com.dtwthalion.tio.protection.AccessPolicy` | Stable |
+| `TTIOAnonymizer` | `ttio.anonymization` (module) | `com.dtwthalion.tio.protection.Anonymizer` | Stable |
+| `TTIOEncryptionManager` | `ttio.encryption` (module) | `com.dtwthalion.tio.protection.EncryptionManager` | Stable |
+| `TTIOKeyRotationManager` | `ttio.key_rotation` (module) | `com.dtwthalion.tio.protection.KeyRotationManager` | Stable |
+| `TTIOSignatureManager` | `ttio.signatures` (module) | `com.dtwthalion.tio.protection.SignatureManager` | Stable |
+| `TTIOVerifier` | `ttio.verifier.Verifier` | `com.dtwthalion.tio.protection.Verifier` | Stable |
+| `TTIOVerificationStatus` | `ttio.verifier.VerificationStatus` | `com.dtwthalion.tio.protection.VerificationStatus` | Stable |
 
 **Note on manager idioms:** ObjC uses class methods (e.g.
-`+[MPGOEncryptionManager encryptData:withKey:error:]`). Python uses module-level
-functions (e.g. `mpeg_o.encryption.encrypt_bytes(plaintext, key)`).
+`+[TTIOEncryptionManager encryptData:withKey:error:]`). Python uses module-level
+functions (e.g. `ttio.encryption.encrypt_bytes(plaintext, key)`).
 Java uses a mix of static and instance methods. These are preserved as known
 stylistic differences (§4).
 
@@ -454,7 +454,7 @@ stylistic differences (§4).
 in this slice for both Python and Java; surface only in M41.5 (raising
 stubs on `encrypt_with_key` / `decrypt_with_key`), **full delegation
 completed post-M41.9** via new `encrypt_intensity_channel_in_run` helper on
-`mpeg_o.encryption` / `EncryptionManager.encryptIntensityChannelInRun`.
+`ttio.encryption` / `EncryptionManager.encryptIntensityChannelInRun`.
 
 | ObjC method | Python method | Java method | Status |
 |---|---|---|---|
@@ -502,9 +502,9 @@ slice. `VerificationStatus` enum with 4 states
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOQuery` | `mpeg_o.query.Query` | `com.dtwthalion.mpgo.Query` | Stable |
-| `MPGOStreamReader` | `mpeg_o.stream_reader.StreamReader` | `com.dtwthalion.mpgo.StreamReader` | Stable |
-| `MPGOStreamWriter` | `mpeg_o.stream_writer.StreamWriter` | `com.dtwthalion.mpgo.StreamWriter` | Stable |
+| `TTIOQuery` | `ttio.query.Query` | `com.dtwthalion.tio.Query` | Stable |
+| `TTIOStreamReader` | `ttio.stream_reader.StreamReader` | `com.dtwthalion.tio.StreamReader` | Stable |
+| `TTIOStreamWriter` | `ttio.stream_writer.StreamWriter` | `com.dtwthalion.tio.StreamWriter` | Stable |
 
 #### Method-level notes
 
@@ -528,7 +528,7 @@ applied filters, returning `list[int]`/`List<Integer>`.
 
 **StreamWriter** — incremental append + whole-file regenerative flush.
 `append_spectrum` / `appendSpectrum` buffers in memory. `flush()`
-materializes the `.mpgo` file by packing buffered spectra into an
+materializes the `.tio` file by packing buffered spectra into an
 `AcquisitionRun` and delegating to Python `SpectralDataset.write_minimal`
 / Java `SpectralDataset.create`. **Full integration completed post-M41.9**;
 all surface methods are functional.
@@ -554,7 +554,7 @@ adapted accordingly.
 
 - None. `StreamWriter.flush` integration with `SpectralDataset` write path
   was surface-only in M41.6; **fully implemented post-M41.9** —
-  `flush()` now materializes a valid `.mpgo` file.
+  `flush()` now materializes a valid `.tio` file.
 
 ---
 
@@ -566,13 +566,13 @@ adapted accordingly.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOStorageProvider` | `mpeg_o.providers.StorageProvider` | `com.dtwthalion.mpgo.providers.StorageProvider` | Provisional (per M39) |
-| `MPGOStorageGroup` | `mpeg_o.providers.StorageGroup` | `com.dtwthalion.mpgo.providers.StorageGroup` | Provisional (per M39) |
-| `MPGOStorageDataset` | `mpeg_o.providers.StorageDataset` | `com.dtwthalion.mpgo.providers.StorageDataset` | Provisional (per M39) |
-| `MPGOCompoundField` | `mpeg_o.providers.CompoundField` | `com.dtwthalion.mpgo.providers.CompoundField` | Provisional (per M39) |
-| `MPGOHDF5Provider` | `mpeg_o.providers.Hdf5Provider` | `com.dtwthalion.mpgo.providers.Hdf5Provider` | Provisional (per M39) |
-| `MPGOMemoryProvider` | `mpeg_o.providers.MemoryProvider` | `com.dtwthalion.mpgo.providers.MemoryProvider` | Provisional (per M39) |
-| `MPGOProviderRegistry` | `mpeg_o.providers` (module-level) | `com.dtwthalion.mpgo.providers.ProviderRegistry` | Provisional (per M39) |
+| `TTIOStorageProvider` | `ttio.providers.StorageProvider` | `com.dtwthalion.tio.providers.StorageProvider` | Provisional (per M39) |
+| `TTIOStorageGroup` | `ttio.providers.StorageGroup` | `com.dtwthalion.tio.providers.StorageGroup` | Provisional (per M39) |
+| `TTIOStorageDataset` | `ttio.providers.StorageDataset` | `com.dtwthalion.tio.providers.StorageDataset` | Provisional (per M39) |
+| `TTIOCompoundField` | `ttio.providers.CompoundField` | `com.dtwthalion.tio.providers.CompoundField` | Provisional (per M39) |
+| `TTIOHDF5Provider` | `ttio.providers.Hdf5Provider` | `com.dtwthalion.tio.providers.Hdf5Provider` | Provisional (per M39) |
+| `TTIOMemoryProvider` | `ttio.providers.MemoryProvider` | `com.dtwthalion.tio.providers.MemoryProvider` | Provisional (per M39) |
+| `TTIOProviderRegistry` | `ttio.providers` (module-level) | `com.dtwthalion.tio.providers.ProviderRegistry` | Provisional (per M39) |
 
 **Note on Provisional status:** All storage-provider classes are marked
 `API status: Provisional — may change before v1.0.` in their docstrings.
@@ -583,8 +583,8 @@ and cross-language xref blocks.
 
 **ProviderRegistry** — an intentional language-idiomatic divergence (see §4):
 ObjC and Java use a `ProviderRegistry` class with class/static methods.
-Python uses module-level functions (`mpeg_o.providers.register_provider(name, factory)`,
-`mpeg_o.providers.open_provider(url)`, `mpeg_o.providers.discover_providers()`).
+Python uses module-level functions (`ttio.providers.register_provider(name, factory)`,
+`ttio.providers.open_provider(url)`, `ttio.providers.discover_providers()`).
 This is a known stylistic difference, not a parity gap.
 
 **StorageProvider / StorageGroup / StorageDataset** — abstract interfaces in
@@ -617,15 +617,15 @@ record). Fields `name` and `kind` match across all three; `kind` is a
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `MPGOMzMLReader` | `mpeg_o.importers.mzml` (module) | `com.dtwthalion.mpgo.importers.MzMLReader` | Stable |
-| `MPGOMzMLWriter` | `mpeg_o.exporters.mzml` (module) | `com.dtwthalion.mpgo.exporters.MzMLWriter` | Stable |
-| `MPGONmrMLReader` | `mpeg_o.importers.nmrml` (module) | `com.dtwthalion.mpgo.importers.NmrMLReader` | Stable |
-| `MPGONmrMLWriter` | `mpeg_o.exporters.nmrml` (module) | `com.dtwthalion.mpgo.exporters.NmrMLWriter` | Stable |
-| `MPGOThermoRawReader` | `mpeg_o.importers.thermo_raw` (module) | `com.dtwthalion.mpgo.importers.ThermoRawReader` | Stable |
-| `MPGOISAExporter` | `mpeg_o.exporters.isa` (module) | `com.dtwthalion.mpgo.exporters.ISAExporter` | Stable |
-| `MPGOCVTermMapper` | `mpeg_o.importers.cv_term_mapper` (module) | `com.dtwthalion.mpgo.importers.CVTermMapper` | Stable |
-| `MPGOBase64` | `mpeg_o.importers._base64_zlib` (internal) | `java.util.Base64` (stdlib, no wrapper) | Internal |
-| — | `mpeg_o.importers.ImportResult` | — | Internal (Python-only helper) |
+| `TTIOMzMLReader` | `ttio.importers.mzml` (module) | `com.dtwthalion.tio.importers.MzMLReader` | Stable |
+| `TTIOMzMLWriter` | `ttio.exporters.mzml` (module) | `com.dtwthalion.tio.exporters.MzMLWriter` | Stable |
+| `TTIONmrMLReader` | `ttio.importers.nmrml` (module) | `com.dtwthalion.tio.importers.NmrMLReader` | Stable |
+| `TTIONmrMLWriter` | `ttio.exporters.nmrml` (module) | `com.dtwthalion.tio.exporters.NmrMLWriter` | Stable |
+| `TTIOThermoRawReader` | `ttio.importers.thermo_raw` (module) | `com.dtwthalion.tio.importers.ThermoRawReader` | Stable |
+| `TTIOISAExporter` | `ttio.exporters.isa` (module) | `com.dtwthalion.tio.exporters.ISAExporter` | Stable |
+| `TTIOCVTermMapper` | `ttio.importers.cv_term_mapper` (module) | `com.dtwthalion.tio.importers.CVTermMapper` | Stable |
+| `TTIOBase64` | `ttio.importers._base64_zlib` (internal) | `java.util.Base64` (stdlib, no wrapper) | Internal |
+| — | `ttio.importers.ImportResult` | — | Internal (Python-only helper) |
 
 #### Method-level notes
 
@@ -639,7 +639,7 @@ helper for dispatch code that needs to distinguish "unknown cvParam" from
 membership-check-first dispatch pattern. No remaining cross-language
 behavior divergences in the v0.6 surface.
 
-**Base64** — ObjC wraps Base64 in `MPGOBase64` (public). Python has a private
+**Base64** — ObjC wraps Base64 in `TTIOBase64` (public). Python has a private
 `_base64_zlib` helper (internal). Java uses `java.util.Base64` from the
 standard library directly with no wrapper class. Round-trip byte compatibility
 is verified by cross-compat tests (8/8). This is documented as an Internal
@@ -722,22 +722,22 @@ These are idiomatic language conveniences. No cross-language parity requirement.
 ### 4.5 Registry idiom
 
 The storage-provider registry diverges intentionally:
-- ObjC: `MPGOProviderRegistry` class with class methods.
-- Java: `com.dtwthalion.mpgo.providers.ProviderRegistry` class with static
+- ObjC: `TTIOProviderRegistry` class with class methods.
+- Java: `com.dtwthalion.tio.providers.ProviderRegistry` class with static
   methods.
-- Python: module-level functions in `mpeg_o.providers` (`register_provider()`,
+- Python: module-level functions in `ttio.providers` (`register_provider()`,
   `open_provider()`, `discover_providers()`).
 
 ### 4.6 Base64 handling
 
-ObjC provides a public `MPGOBase64` wrapper class. Java uses `java.util.Base64`
+ObjC provides a public `TTIOBase64` wrapper class. Java uses `java.util.Base64`
 from the standard library with no wrapper. Python has a private
-`mpeg_o.importers._base64_zlib` helper that is not part of the public API.
+`ttio.importers._base64_zlib` helper that is not part of the public API.
 Round-trip byte compatibility is verified by cross-compat fixtures.
 
 ### 4.7 MSImage inheritance vs composition
 
-ObjC: `MPGOMSImage` inherits from `MPGOSpectralDataset` — file-container
+ObjC: `TTIOMSImage` inherits from `TTIOSpectralDataset` — file-container
 semantics propagate via inheritance.
 
 Python and Java: `SpectralDataset` is a resource-holding file handle whose
@@ -751,9 +751,9 @@ in v0.6 or v1.0 without rearchitecting the Python/Java `SpectralDataset`.
 
 ### 4.8 CompoundIO accessibility
 
-ObjC `MPGOCompoundIO` is a public class. Python's equivalent is
-`mpeg_o._hdf5_io` (private by underscore convention). Java's equivalent is
-`com.dtwthalion.mpgo.hdf5.Hdf5CompoundIO` (in an `hdf5` subpackage,
+ObjC `TTIOCompoundIO` is a public class. Python's equivalent is
+`ttio._hdf5_io` (private by underscore convention). Java's equivalent is
+`com.dtwthalion.tio.hdf5.Hdf5CompoundIO` (in an `hdf5` subpackage,
 effectively semi-internal). No parity requirement across these three; they are
 all classified as **Internal**.
 
@@ -772,7 +772,7 @@ deliberately left as-is.
 `encrypt_with_key` / `decrypt_with_key` on `AcquisitionRun` and
 `SpectralDataset` raised `NotImplementedError` / `UnsupportedOperationException`
 during M41.5 (surface only). **Fully implemented post-M41.9** via new
-`encrypt_intensity_channel_in_run` helper on `mpeg_o.encryption` / Java
+`encrypt_intensity_channel_in_run` helper on `ttio.encryption` / Java
 `EncryptionManager.encryptIntensityChannelInRun`, plus persistence-context
 wiring on `AcquisitionRun` + `SpectralDataset`. All three languages now
 perform real AES-256-GCM encryption of the intensity channel with
@@ -787,7 +787,7 @@ the persistence context).
 `StreamWriter.flush()` raised during M41.6 pending the write-path
 integration. **Fully implemented post-M41.9**: `flush()` in both
 Python and Java packs buffered `MassSpectrum` objects into an
-`AcquisitionRun` and materializes a valid `.mpgo` file by delegating
+`AcquisitionRun` and materializes a valid `.tio` file by delegating
 to Python's `SpectralDataset.write_minimal` / Java's
 `SpectralDataset.create`.
 The ObjC `flushWithError:` has the same deferred status. Not a divergence.
@@ -808,7 +808,7 @@ the v0.6 surface.
 
 ## 5. Appendix — Audit Methodology
 
-This review was conducted as part of Milestone 41 of MPEG-O v0.6 development.
+This review was conducted as part of Milestone 41 of TTI-O v0.6 development.
 For each of the eight subsystems (slices 41.1–41.8), Objective-C headers were
 read as the normative reference; Python and Java counterparts were audited for
 class-shape parity, field/property parity, and method-surface parity.
@@ -832,8 +832,8 @@ bring counts to Python 187, Java 128.
 
 To reproduce this review for a future milestone: read ObjC headers in
 `objc/Source/` as normative; compare field names, method names, and parameter
-types against Python `python/src/mpeg_o/` and Java
-`java/src/main/java/com/dtwthalion/mpgo/`; apply the same five-category
+types against Python `python/src/ttio/` and Java
+`java/src/main/java/com/dtwthalion/ttio/`; apply the same five-category
 classification; preserve all entries in §4 unless a consensus decision to
 align exists.
 
@@ -851,13 +851,13 @@ interface gaps documented rather than discovered mid-migration.
 
 | Language | File | Tests |
 |---|---|---|
-| Python | `mpeg_o/providers/sqlite.py` (700 LoC) | 24 tests |
-| Java | `com.dtwthalion.mpgo.providers.SqliteProvider` (670 LoC) | 24 tests |
-| Objective-C | `MPGOSqliteProvider.m` (~850 LoC) | 132 assertions |
+| Python | `ttio/providers/sqlite.py` (700 LoC) | 24 tests |
+| Java | `com.dtwthalion.tio.providers.SqliteProvider` (670 LoC) | 24 tests |
+| Objective-C | `TTIOSqliteProvider.m` (~850 LoC) | 132 assertions |
 
 Schema identical across all three (DDL, PRAGMAs, little-endian BLOB layout,
 JSON compound encoding). Cross-language compat verified manually: a
-`.mpgo.sqlite` written by any implementation is byte-identically readable
+`.tio.sqlite` written by any implementation is byte-identically readable
 by the other two.
 
 **Commits:**
@@ -954,7 +954,7 @@ a native handle for byte-level callers (signatures, encryption); SQLite's
 `sqlite3 *` requires either an `NSValue` wrapper or a custom opaque
 wrapper class. Currently returns `nil` and is documented.
 
-**Gap 13 — `deleteAttributeNamed` missing from ObjC `<MPGOStorageDataset>`
+**Gap 13 — `deleteAttributeNamed` missing from ObjC `<TTIOStorageDataset>`
 protocol.** Matches gap 8 in Java. Systemic across the two typed
 languages — the Python ABC has it, ObjC and Java protocols don't.
 

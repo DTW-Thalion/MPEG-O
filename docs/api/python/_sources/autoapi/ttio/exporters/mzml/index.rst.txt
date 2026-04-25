@@ -1,0 +1,54 @@
+ttio.exporters.mzml
+===================
+
+.. py:module:: ttio.exporters.mzml
+
+.. autoapi-nested-parse::
+
+   mzML writer — Python port of ``TTIOMzMLWriter``.
+
+   Serializes a :class:`ttio.SpectralDataset` to an ``indexedmzML`` file,
+   mirroring the XML structure produced by the Objective-C reference
+   implementation. The text is assembled by hand (rather than through
+   ``xml.etree``) so byte offsets can be tracked precisely for the
+   ``<indexList>`` entries — ``indexedmzML`` requires offsets into the raw
+   UTF-8 byte stream, not into a DOM model.
+
+   SPDX-License-Identifier: Apache-2.0
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOMzMLWriter`` · Java:
+   ``com.dtwthalion.ttio.exporters.MzMLWriter``
+
+   API status: Stable.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.exporters.mzml.write_dataset
+   ttio.exporters.mzml.dataset_to_bytes
+
+
+Module Contents
+---------------
+
+.. py:function:: write_dataset(dataset: ttio.spectral_dataset.SpectralDataset, path: str | pathlib.Path, *, zlib_compression: bool = False) -> pathlib.Path
+
+   Serialize ``dataset`` to ``path`` as indexed mzML.
+
+   The first ``TTIOMassSpectrum``-class run in ``dataset.ms_runs`` is
+   exported. Additional runs, NMR runs, MSImage cubes, and chromatograms
+   are deliberately skipped for M19; extending the writer to cover them
+   is straightforward.
+
+
+.. py:function:: dataset_to_bytes(dataset: ttio.spectral_dataset.SpectralDataset, *, zlib_compression: bool = False) -> bytes
+
+   Build an indexed-mzML byte blob from ``dataset``.
+
+

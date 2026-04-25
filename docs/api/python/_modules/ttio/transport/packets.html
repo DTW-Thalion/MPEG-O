@@ -1,0 +1,875 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>ttio.transport.packets - TTI-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">TTI-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">TTI-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../autoapi/ttio/index.html">ttio</a><input aria-label="Toggle navigation of ttio" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/access_policy/index.html">ttio.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/acquisition_run/index.html">ttio.acquisition_run</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/analysis/index.html">ttio.analysis</a><input aria-label="Toggle navigation of ttio.analysis" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/analysis/two_d_cos/index.html">ttio.analysis.two_d_cos</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/anonymization/index.html">ttio.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/axis_descriptor/index.html">ttio.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/chromatogram/index.html">ttio.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cipher_suite/index.html">ttio.cipher_suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cv_param/index.html">ttio.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encoding_spec/index.html">ttio.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption/index.html">ttio.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption_per_au/index.html">ttio.encryption_per_au</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/enums/index.html">ttio.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/imzml/index.html">ttio.exporters.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/isa/index.html">ttio.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mzml/index.html">ttio.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mztab/index.html">ttio.exporters.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature/index.html">ttio.feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature_flags/index.html">ttio.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/fid/index.html">ttio.fid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/imzml/index.html">ttio.importers.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mzml/index.html">ttio.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mztab/index.html">ttio.importers.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_image/index.html">ttio.ir_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_spectrum/index.html">ttio.ir_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/isolation_window/index.html">ttio.isolation_window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/key_rotation/index.html">ttio.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/mass_spectrum/index.html">ttio.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ms_image/index.html">ttio.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_2d/index.html">ttio.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/pqc/index.html">ttio.pqc</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/indexable/index.html">ttio.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/provenanceable/index.html">ttio.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/streamable/index.html">ttio.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/provenance/index.html">ttio.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/base/index.html">ttio.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/hdf5/index.html">ttio.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/memory/index.html">ttio.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/registry/index.html">ttio.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/sqlite/index.html">ttio.providers.sqlite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/zarr/index.html">ttio.providers.zarr</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/quantification/index.html">ttio.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/query/index.html">ttio.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_image/index.html">ttio.raman_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_spectrum/index.html">ttio.raman_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signal_array/index.html">ttio.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signatures/index.html">ttio.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectral_dataset/index.html">ttio.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectrum/index.html">ttio.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_reader/index.html">ttio.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_writer/index.html">ttio.stream_writer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_encode_cli/index.html">ttio.tools.transport_encode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_server_cli/index.html">ttio.tools.transport_server_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/transition_list/index.html">ttio.transition_list</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/client/index.html">ttio.transport.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/codec/index.html">ttio.transport.codec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/encrypted/index.html">ttio.transport.encrypted</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/packets/index.html">ttio.transport.packets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/server/index.html">ttio.transport.server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/simulator/index.html">ttio.transport.simulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/value_range/index.html">ttio.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/verifier/index.html">ttio.verifier</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for ttio.transport.packets</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Packet encoding primitives for the TTI-O transport format.</span>
+
+<span class="sd">All integers and floats are little-endian on the wire. Strings are</span>
+<span class="sd">UTF-8 with explicit ``uint16`` or ``uint32`` length prefixes and are</span>
+<span class="sd">NOT NUL-terminated.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">struct</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntEnum</span><span class="p">,</span> <span class="n">IntFlag</span>
+
+<div class="viewcode-block" id="HEADER_MAGIC">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.HEADER_MAGIC">[docs]</a>
+<span class="n">HEADER_MAGIC</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;TI&quot;</span></div>
+
+<div class="viewcode-block" id="VERSION">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.VERSION">[docs]</a>
+<span class="n">VERSION</span> <span class="o">=</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="HEADER_SIZE">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.HEADER_SIZE">[docs]</a>
+<span class="n">HEADER_SIZE</span> <span class="o">=</span> <span class="mi">24</span></div>
+
+
+<span class="c1"># Little-endian, 2-byte magic, uint8 version, uint8 packet_type,</span>
+<span class="c1"># uint16 flags, uint16 dataset_id, uint32 au_sequence, uint32</span>
+<span class="c1"># payload_length, uint64 timestamp_ns.</span>
+<span class="n">_HEADER_FMT</span> <span class="o">=</span> <span class="s2">&quot;&lt;2sBBHHIIQ&quot;</span>
+<span class="n">_HEADER_STRUCT</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">Struct</span><span class="p">(</span><span class="n">_HEADER_FMT</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="PacketType">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PacketType</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Transport packet types. See ``docs/transport-spec.md`` §3.2.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PacketType.STREAM_HEADER">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.STREAM_HEADER">[docs]</a>
+    <span class="n">STREAM_HEADER</span> <span class="o">=</span> <span class="mh">0x01</span></div>
+
+<div class="viewcode-block" id="PacketType.DATASET_HEADER">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.DATASET_HEADER">[docs]</a>
+    <span class="n">DATASET_HEADER</span> <span class="o">=</span> <span class="mh">0x02</span></div>
+
+<div class="viewcode-block" id="PacketType.ACCESS_UNIT">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.ACCESS_UNIT">[docs]</a>
+    <span class="n">ACCESS_UNIT</span> <span class="o">=</span> <span class="mh">0x03</span></div>
+
+<div class="viewcode-block" id="PacketType.PROTECTION_METADATA">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.PROTECTION_METADATA">[docs]</a>
+    <span class="n">PROTECTION_METADATA</span> <span class="o">=</span> <span class="mh">0x04</span></div>
+
+<div class="viewcode-block" id="PacketType.ANNOTATION">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.ANNOTATION">[docs]</a>
+    <span class="n">ANNOTATION</span> <span class="o">=</span> <span class="mh">0x05</span></div>
+
+<div class="viewcode-block" id="PacketType.PROVENANCE">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.PROVENANCE">[docs]</a>
+    <span class="n">PROVENANCE</span> <span class="o">=</span> <span class="mh">0x06</span></div>
+
+<div class="viewcode-block" id="PacketType.CHROMATOGRAM">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.CHROMATOGRAM">[docs]</a>
+    <span class="n">CHROMATOGRAM</span> <span class="o">=</span> <span class="mh">0x07</span></div>
+
+<div class="viewcode-block" id="PacketType.END_OF_DATASET">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.END_OF_DATASET">[docs]</a>
+    <span class="n">END_OF_DATASET</span> <span class="o">=</span> <span class="mh">0x08</span></div>
+
+<div class="viewcode-block" id="PacketType.END_OF_STREAM">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketType.END_OF_STREAM">[docs]</a>
+    <span class="n">END_OF_STREAM</span> <span class="o">=</span> <span class="mh">0xFF</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="PacketFlag">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketFlag">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PacketFlag</span><span class="p">(</span><span class="n">IntFlag</span><span class="p">):</span>
+<div class="viewcode-block" id="PacketFlag.ENCRYPTED">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketFlag.ENCRYPTED">[docs]</a>
+    <span class="n">ENCRYPTED</span> <span class="o">=</span> <span class="mh">0x0001</span></div>
+
+<div class="viewcode-block" id="PacketFlag.COMPRESSED">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketFlag.COMPRESSED">[docs]</a>
+    <span class="n">COMPRESSED</span> <span class="o">=</span> <span class="mh">0x0002</span></div>
+
+<div class="viewcode-block" id="PacketFlag.HAS_CHECKSUM">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketFlag.HAS_CHECKSUM">[docs]</a>
+    <span class="n">HAS_CHECKSUM</span> <span class="o">=</span> <span class="mh">0x0004</span></div>
+
+    <span class="c1"># v1.0: set in addition to ENCRYPTED when the AU&#39;s semantic header</span>
+    <span class="c1"># fields are also AES-GCM encrypted. See transport-spec §4.3.3.</span>
+    <span class="c1"># Readers MUST reject ENCRYPTED_HEADER without ENCRYPTED.</span>
+<div class="viewcode-block" id="PacketFlag.ENCRYPTED_HEADER">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketFlag.ENCRYPTED_HEADER">[docs]</a>
+    <span class="n">ENCRYPTED_HEADER</span> <span class="o">=</span> <span class="mh">0x0008</span></div>
+</div>
+
+
+
+<span class="c1"># -------------------------------------------------------------- CRC-32C</span>
+
+<span class="n">_CRC32C_POLY_REFLECTED</span> <span class="o">=</span> <span class="mh">0x82F63B78</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_crc32c_table</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+    <span class="n">table</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">crc</span> <span class="o">=</span> <span class="n">b</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">8</span><span class="p">):</span>
+            <span class="n">crc</span> <span class="o">=</span> <span class="p">(</span><span class="n">crc</span> <span class="o">&gt;&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">^</span> <span class="p">(</span><span class="n">_CRC32C_POLY_REFLECTED</span> <span class="k">if</span> <span class="n">crc</span> <span class="o">&amp;</span> <span class="mi">1</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">table</span><span class="p">[</span><span class="n">b</span><span class="p">]</span> <span class="o">=</span> <span class="n">crc</span>
+    <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+
+
+<span class="n">_CRC32C_TABLE</span> <span class="o">=</span> <span class="n">_build_crc32c_table</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="crc32c">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.crc32c">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">crc32c</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;CRC-32C (Castagnoli, reflected) of ``data``.</span>
+
+<span class="sd">    Matches ``google-crc32c`` and ``java.util.zip.CRC32C`` output.</span>
+<span class="sd">    Used when :attr:`PacketFlag.HAS_CHECKSUM` is set.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">crc</span> <span class="o">=</span> <span class="mh">0xFFFFFFFF</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="n">_CRC32C_TABLE</span>
+    <span class="k">for</span> <span class="n">byte</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+        <span class="n">crc</span> <span class="o">=</span> <span class="p">(</span><span class="n">crc</span> <span class="o">&gt;&gt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">^</span> <span class="n">table</span><span class="p">[(</span><span class="n">crc</span> <span class="o">^</span> <span class="n">byte</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">crc</span> <span class="o">^</span> <span class="mh">0xFFFFFFFF</span></div>
+
+
+
+<span class="c1"># -------------------------------------------------------------- PacketHeader</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="PacketHeader">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PacketHeader</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;24-byte transport packet header.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="PacketHeader.packet_type">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader.packet_type">[docs]</a>
+    <span class="n">packet_type</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="PacketHeader.flags">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader.flags">[docs]</a>
+    <span class="n">flags</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="PacketHeader.dataset_id">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader.dataset_id">[docs]</a>
+    <span class="n">dataset_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="PacketHeader.au_sequence">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader.au_sequence">[docs]</a>
+    <span class="n">au_sequence</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="PacketHeader.payload_length">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader.payload_length">[docs]</a>
+    <span class="n">payload_length</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="PacketHeader.timestamp_ns">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader.timestamp_ns">[docs]</a>
+    <span class="n">timestamp_ns</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+
+<div class="viewcode-block" id="PacketHeader.to_bytes">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader.to_bytes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_HEADER_STRUCT</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span>
+            <span class="n">HEADER_MAGIC</span><span class="p">,</span>
+            <span class="n">VERSION</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">packet_type</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">flags</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFF</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dataset_id</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFF</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">au_sequence</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">payload_length</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">timestamp_ns</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFFFFFFFFFF</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="PacketHeader.from_bytes">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.PacketHeader.from_bytes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_bytes</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;PacketHeader&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">HEADER_SIZE</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;packet header needs </span><span class="si">{</span><span class="n">HEADER_SIZE</span><span class="si">}</span><span class="s2"> bytes, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="n">magic</span><span class="p">,</span> <span class="n">version</span><span class="p">,</span> <span class="n">ptype</span><span class="p">,</span> <span class="n">flags</span><span class="p">,</span> <span class="n">did</span><span class="p">,</span> <span class="n">aus</span><span class="p">,</span> <span class="n">plen</span><span class="p">,</span> <span class="n">ts</span> <span class="o">=</span> <span class="n">_HEADER_STRUCT</span><span class="o">.</span><span class="n">unpack_from</span><span class="p">(</span>
+            <span class="n">data</span><span class="p">,</span> <span class="mi">0</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">magic</span> <span class="o">!=</span> <span class="n">HEADER_MAGIC</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;invalid packet magic: </span><span class="si">{</span><span class="n">magic</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">version</span> <span class="o">!=</span> <span class="n">VERSION</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;unsupported transport version: </span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="n">ptype</span><span class="p">,</span> <span class="n">flags</span><span class="p">,</span> <span class="n">did</span><span class="p">,</span> <span class="n">aus</span><span class="p">,</span> <span class="n">plen</span><span class="p">,</span> <span class="n">ts</span><span class="p">)</span></div>
+</div>
+
+
+
+<span class="c1"># -------------------------------------------------------------- ChannelData</span>
+
+
+<span class="n">_CHANNEL_NAMELEN_STRUCT</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">Struct</span><span class="p">(</span><span class="s2">&quot;&lt;H&quot;</span><span class="p">)</span>
+<span class="n">_CHANNEL_SUFFIX_STRUCT</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">Struct</span><span class="p">(</span><span class="s2">&quot;&lt;BBII&quot;</span><span class="p">)</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="ChannelData">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.ChannelData">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ChannelData</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One signal channel inside an :class:`AccessUnit`.</span>
+
+<span class="sd">    ``precision`` and ``compression`` are the wire encoding — the</span>
+<span class="sd">    :attr:`data` bytes are already encoded. The codec does not</span>
+<span class="sd">    transcode channels; round-tripping preserves the source encoding.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="ChannelData.name">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.ChannelData.name">[docs]</a>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="ChannelData.precision">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.ChannelData.precision">[docs]</a>
+    <span class="n">precision</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># matches ``Precision`` enum</span></div>
+
+<div class="viewcode-block" id="ChannelData.compression">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.ChannelData.compression">[docs]</a>
+    <span class="n">compression</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># matches ``Compression`` enum</span></div>
+
+<div class="viewcode-block" id="ChannelData.n_elements">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.ChannelData.n_elements">[docs]</a>
+    <span class="n">n_elements</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="ChannelData.data">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.ChannelData.data">[docs]</a>
+    <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span></div>
+
+
+<div class="viewcode-block" id="ChannelData.to_bytes">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.ChannelData.to_bytes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+        <span class="n">name_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">((</span>
+            <span class="n">_CHANNEL_NAMELEN_STRUCT</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">name_bytes</span><span class="p">)),</span>
+            <span class="n">name_bytes</span><span class="p">,</span>
+            <span class="n">_CHANNEL_SUFFIX_STRUCT</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span>
+                <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">precision</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+                <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">compression</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+                <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n_elements</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">,</span>
+                <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">data</span><span class="p">,</span>
+        <span class="p">))</span></div>
+
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="ChannelData.from_buffer">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.ChannelData.from_buffer">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_buffer</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">buf</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="s2">&quot;ChannelData&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+        <span class="p">(</span><span class="n">name_len</span><span class="p">,)</span> <span class="o">=</span> <span class="n">_CHANNEL_NAMELEN_STRUCT</span><span class="o">.</span><span class="n">unpack_from</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span>
+        <span class="n">offset</span> <span class="o">+=</span> <span class="mi">2</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">name_len</span><span class="p">])</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+        <span class="n">offset</span> <span class="o">+=</span> <span class="n">name_len</span>
+        <span class="n">precision</span><span class="p">,</span> <span class="n">compression</span><span class="p">,</span> <span class="n">n_elements</span><span class="p">,</span> <span class="n">data_length</span> <span class="o">=</span> <span class="n">_CHANNEL_SUFFIX_STRUCT</span><span class="o">.</span><span class="n">unpack_from</span><span class="p">(</span>
+            <span class="n">buf</span><span class="p">,</span> <span class="n">offset</span>
+        <span class="p">)</span>
+        <span class="n">offset</span> <span class="o">+=</span> <span class="mi">10</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">data_length</span><span class="p">])</span>
+        <span class="n">offset</span> <span class="o">+=</span> <span class="n">data_length</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="bp">cls</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="n">precision</span><span class="p">,</span> <span class="n">compression</span><span class="o">=</span><span class="n">compression</span><span class="p">,</span>
+                <span class="n">n_elements</span><span class="o">=</span><span class="n">n_elements</span><span class="p">,</span> <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">),</span>
+            <span class="n">offset</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<span class="c1"># -------------------------------------------------------------- AccessUnit</span>
+
+<span class="c1"># AU fixed-prefix layout (§4.3): spectrum_class(u8) + acquisition_mode(u8) +</span>
+<span class="c1"># ms_level(u8) + polarity(u8) + retention_time(f64) + precursor_mz(f64) +</span>
+<span class="c1"># precursor_charge(u8) + ion_mobility(f64) + base_peak_intensity(f64) +</span>
+<span class="c1"># n_channels(u8). Total 38 bytes.</span>
+<span class="n">_AU_PREFIX_STRUCT</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">Struct</span><span class="p">(</span><span class="s2">&quot;&lt;BBBBddBddB&quot;</span><span class="p">)</span>
+<span class="n">_AU_PIXEL_STRUCT</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">Struct</span><span class="p">(</span><span class="s2">&quot;&lt;III&quot;</span><span class="p">)</span>
+
+<span class="c1"># Named spectrum_class values. v0.11 M79 reserved the GenomicRead value;</span>
+<span class="c1"># the genomic-specific AU payload extension (chromosome, position, mapq,</span>
+<span class="c1"># flags) lands in M82.</span>
+<div class="viewcode-block" id="SPECTRUM_CLASS_MASS_SPECTRUM">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.SPECTRUM_CLASS_MASS_SPECTRUM">[docs]</a>
+<span class="n">SPECTRUM_CLASS_MASS_SPECTRUM</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="SPECTRUM_CLASS_NMR_SPECTRUM">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.SPECTRUM_CLASS_NMR_SPECTRUM">[docs]</a>
+<span class="n">SPECTRUM_CLASS_NMR_SPECTRUM</span> <span class="o">=</span> <span class="mi">1</span></div>
+
+<div class="viewcode-block" id="SPECTRUM_CLASS_NMR_2D">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.SPECTRUM_CLASS_NMR_2D">[docs]</a>
+<span class="n">SPECTRUM_CLASS_NMR_2D</span> <span class="o">=</span> <span class="mi">2</span></div>
+
+<div class="viewcode-block" id="SPECTRUM_CLASS_FID">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.SPECTRUM_CLASS_FID">[docs]</a>
+<span class="n">SPECTRUM_CLASS_FID</span> <span class="o">=</span> <span class="mi">3</span></div>
+
+<div class="viewcode-block" id="SPECTRUM_CLASS_MS_IMAGE_PIXEL">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.SPECTRUM_CLASS_MS_IMAGE_PIXEL">[docs]</a>
+<span class="n">SPECTRUM_CLASS_MS_IMAGE_PIXEL</span> <span class="o">=</span> <span class="mi">4</span></div>
+
+<div class="viewcode-block" id="SPECTRUM_CLASS_GENOMIC_READ">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.SPECTRUM_CLASS_GENOMIC_READ">[docs]</a>
+<span class="n">SPECTRUM_CLASS_GENOMIC_READ</span> <span class="o">=</span> <span class="mi">5</span></div>
+
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="AccessUnit">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AccessUnit</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One spectrum as a transport-layer value.</span>
+
+<span class="sd">    The fixed-prefix fields are the **filter keys** a server uses for</span>
+<span class="sd">    selective access. Channel bytes travel in :attr:`channels`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="AccessUnit.spectrum_class">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.spectrum_class">[docs]</a>
+    <span class="n">spectrum_class</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># 0=MassSpectrum, 1=NMRSpectrum, 2=NMR2D,</span></div>
+
+    <span class="c1">#                     3=FID, 4=MSImagePixel, 5=GenomicRead (v0.11 M79)</span>
+<div class="viewcode-block" id="AccessUnit.acquisition_mode">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.acquisition_mode">[docs]</a>
+    <span class="n">acquisition_mode</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="AccessUnit.ms_level">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.ms_level">[docs]</a>
+    <span class="n">ms_level</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="AccessUnit.polarity">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.polarity">[docs]</a>
+    <span class="n">polarity</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># wire: 0=positive, 1=negative, 2=unknown</span></div>
+
+<div class="viewcode-block" id="AccessUnit.retention_time">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.retention_time">[docs]</a>
+    <span class="n">retention_time</span><span class="p">:</span> <span class="nb">float</span></div>
+
+<div class="viewcode-block" id="AccessUnit.precursor_mz">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.precursor_mz">[docs]</a>
+    <span class="n">precursor_mz</span><span class="p">:</span> <span class="nb">float</span></div>
+
+<div class="viewcode-block" id="AccessUnit.precursor_charge">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.precursor_charge">[docs]</a>
+    <span class="n">precursor_charge</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="AccessUnit.ion_mobility">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.ion_mobility">[docs]</a>
+    <span class="n">ion_mobility</span><span class="p">:</span> <span class="nb">float</span></div>
+
+<div class="viewcode-block" id="AccessUnit.base_peak_intensity">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.base_peak_intensity">[docs]</a>
+    <span class="n">base_peak_intensity</span><span class="p">:</span> <span class="nb">float</span></div>
+
+<div class="viewcode-block" id="AccessUnit.channels">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.channels">[docs]</a>
+    <span class="n">channels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ChannelData</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
+
+
+    <span class="c1"># MSImagePixel extension (written only when ``spectrum_class == 4``).</span>
+<div class="viewcode-block" id="AccessUnit.pixel_x">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.pixel_x">[docs]</a>
+    <span class="n">pixel_x</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="AccessUnit.pixel_y">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.pixel_y">[docs]</a>
+    <span class="n">pixel_y</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+<div class="viewcode-block" id="AccessUnit.pixel_z">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.pixel_z">[docs]</a>
+    <span class="n">pixel_z</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+
+<div class="viewcode-block" id="AccessUnit.to_bytes">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.to_bytes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="n">_AU_PREFIX_STRUCT</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spectrum_class</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">acquisition_mode</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ms_level</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">polarity</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+            <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">retention_time</span><span class="p">),</span>
+            <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">precursor_mz</span><span class="p">),</span>
+            <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">precursor_charge</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+            <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ion_mobility</span><span class="p">),</span>
+            <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">base_peak_intensity</span><span class="p">),</span>
+            <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">body</span> <span class="o">=</span> <span class="n">prefix</span> <span class="o">+</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ch</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">()</span> <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">spectrum_class</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">body</span> <span class="o">+=</span> <span class="n">_AU_PIXEL_STRUCT</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span>
+                <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel_x</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">,</span>
+                <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel_y</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">,</span>
+                <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel_z</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">body</span></div>
+
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="AccessUnit.from_bytes">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.from_bytes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_bytes</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AccessUnit&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">38</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;access unit payload too short: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="p">(</span>
+            <span class="n">spectrum_class</span><span class="p">,</span> <span class="n">acquisition_mode</span><span class="p">,</span> <span class="n">ms_level</span><span class="p">,</span> <span class="n">polarity</span><span class="p">,</span>
+            <span class="n">retention_time</span><span class="p">,</span> <span class="n">precursor_mz</span><span class="p">,</span>
+            <span class="n">precursor_charge</span><span class="p">,</span>
+            <span class="n">ion_mobility</span><span class="p">,</span> <span class="n">base_peak_intensity</span><span class="p">,</span>
+            <span class="n">n_channels</span><span class="p">,</span>
+        <span class="p">)</span> <span class="o">=</span> <span class="n">_AU_PREFIX_STRUCT</span><span class="o">.</span><span class="n">unpack_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">offset</span> <span class="o">=</span> <span class="mi">38</span>
+        <span class="n">channels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ChannelData</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_channels</span><span class="p">):</span>
+            <span class="n">ch</span><span class="p">,</span> <span class="n">offset</span> <span class="o">=</span> <span class="n">ChannelData</span><span class="o">.</span><span class="n">from_buffer</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span>
+            <span class="n">channels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span>
+        <span class="n">pixel_x</span> <span class="o">=</span> <span class="n">pixel_y</span> <span class="o">=</span> <span class="n">pixel_z</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">spectrum_class</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">-</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="mi">12</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;MSImagePixel AU missing pixel coordinates&quot;</span><span class="p">)</span>
+            <span class="n">pixel_x</span><span class="p">,</span> <span class="n">pixel_y</span><span class="p">,</span> <span class="n">pixel_z</span> <span class="o">=</span> <span class="n">_AU_PIXEL_STRUCT</span><span class="o">.</span><span class="n">unpack_from</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span>
+            <span class="n">offset</span> <span class="o">+=</span> <span class="mi">12</span>
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">spectrum_class</span><span class="o">=</span><span class="n">spectrum_class</span><span class="p">,</span>
+            <span class="n">acquisition_mode</span><span class="o">=</span><span class="n">acquisition_mode</span><span class="p">,</span>
+            <span class="n">ms_level</span><span class="o">=</span><span class="n">ms_level</span><span class="p">,</span>
+            <span class="n">polarity</span><span class="o">=</span><span class="n">polarity</span><span class="p">,</span>
+            <span class="n">retention_time</span><span class="o">=</span><span class="n">retention_time</span><span class="p">,</span>
+            <span class="n">precursor_mz</span><span class="o">=</span><span class="n">precursor_mz</span><span class="p">,</span>
+            <span class="n">precursor_charge</span><span class="o">=</span><span class="n">precursor_charge</span><span class="p">,</span>
+            <span class="n">ion_mobility</span><span class="o">=</span><span class="n">ion_mobility</span><span class="p">,</span>
+            <span class="n">base_peak_intensity</span><span class="o">=</span><span class="n">base_peak_intensity</span><span class="p">,</span>
+            <span class="n">channels</span><span class="o">=</span><span class="n">channels</span><span class="p">,</span>
+            <span class="n">pixel_x</span><span class="o">=</span><span class="n">pixel_x</span><span class="p">,</span>
+            <span class="n">pixel_y</span><span class="o">=</span><span class="n">pixel_y</span><span class="p">,</span>
+            <span class="n">pixel_z</span><span class="o">=</span><span class="n">pixel_z</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<span class="c1"># -------------------------------------------------------------- helpers</span>
+
+
+<div class="viewcode-block" id="now_ns">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.now_ns">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">now_ns</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">time</span><span class="o">.</span><span class="n">time_ns</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="pack_string">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.pack_string">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">pack_string</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">width</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode a UTF-8 string with a length prefix (``width=2`` → uint16,</span>
+<span class="sd">    ``width=4`` → uint32). Matches the ``{uint&lt;N&gt; len, bytes[len]}``</span>
+<span class="sd">    wire convention used throughout the transport format.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">encoded</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">width</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mh">0xFFFF</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;string too long for uint16 prefix: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="s2">&quot;&lt;H&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">encoded</span><span class="p">))</span> <span class="o">+</span> <span class="n">encoded</span>
+    <span class="k">if</span> <span class="n">width</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">struct</span><span class="o">.</span><span class="n">pack</span><span class="p">(</span><span class="s2">&quot;&lt;I&quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xFFFFFFFF</span><span class="p">)</span> <span class="o">+</span> <span class="n">encoded</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;unsupported prefix width: </span><span class="si">{</span><span class="n">width</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="unpack_string">
+<a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.unpack_string">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">unpack_string</span><span class="p">(</span><span class="n">buf</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">width</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inverse of :func:`pack_string`.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">width</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="p">(</span><span class="n">length</span><span class="p">,)</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack_from</span><span class="p">(</span><span class="s2">&quot;&lt;H&quot;</span><span class="p">,</span> <span class="n">buf</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span>
+        <span class="n">offset</span> <span class="o">+=</span> <span class="mi">2</span>
+    <span class="k">elif</span> <span class="n">width</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="p">(</span><span class="n">length</span><span class="p">,)</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">unpack_from</span><span class="p">(</span><span class="s2">&quot;&lt;I&quot;</span><span class="p">,</span> <span class="n">buf</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span>
+        <span class="n">offset</span> <span class="o">+=</span> <span class="mi">4</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;unsupported prefix width: </span><span class="si">{</span><span class="n">width</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">value</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">length</span><span class="p">])</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">value</span><span class="p">,</span> <span class="n">offset</span> <span class="o">+</span> <span class="n">length</span></div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DTW-Thalion
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=2bd037f0"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

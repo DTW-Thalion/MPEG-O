@@ -1,7 +1,7 @@
-# MPEG-O `.mpgo` File Format Specification — v0.10.0
+# TTI-O `.tio` File Format Specification — v0.10.0
 
-This document specifies the on-disk layout of an `.mpgo` file as written
-by libMPGO v0.10.0. It is detailed enough for a reader implemented in a
+This document specifies the on-disk layout of an `.tio` file as written
+by libTTIO v0.10.0. It is detailed enough for a reader implemented in a
 different language (Python, Java, Rust, Go) to open, validate, and fully
 decode a file without consulting the reference source. Three
 interoperable implementations (ObjC, Python, Java) read and write this
@@ -15,7 +15,7 @@ disk:
   LZ4 / Numpress-delta compression codecs.
 - **v0.4** — envelope encryption + key rotation, spectral anonymization,
   nmrML writer, chromatogram API.
-- **v0.7** — `mpeg_o_format_version` bumps from `"1.1"` to `"1.2"`; the
+- **v0.7** — `ttio_format_version` bumps from `"1.1"` to `"1.2"`; the
   versioned wrapped-key blob (§10b) replaces the fixed 60-byte v1.1
   blob; `read_canonical_bytes` becomes the byte-level contract for
   signatures and encryption (§10c).
@@ -23,7 +23,7 @@ disk:
   ML-KEM-1024 for KEM, ML-DSA-87 for signatures); see `docs/pqc.md`.
 - **v0.9** — provider abstraction hardening: SQLite and Zarr v3
   backends in all three languages.
-- **v0.10** — streaming transport layer (`.mots`; see
+- **v0.10** — streaming transport layer (`.tis`; see
   `docs/transport-spec.md`) and v1.0 per-Access-Unit encryption
   (`opt_per_au_encryption`, optional `opt_encrypted_au_headers`).
   Adds the `VL_BYTES` compound field kind and the
@@ -35,9 +35,9 @@ Every feature added after v0.2 is gated by a feature flag (see
 `docs/feature-flags.md`) so readers can detect capability support at
 open time.
 
-A conforming `.mpgo` file is a plain HDF5 file (format 1.x) with the
+A conforming `.tio` file is a plain HDF5 file (format 1.x) with the
 group, dataset, and attribute hierarchy described below. Any program
-that can read HDF5 can introspect an `.mpgo` file with `h5dump`.
+that can read HDF5 can introspect an `.tio` file with `h5dump`.
 
 ---
 
@@ -47,8 +47,8 @@ Every v0.2+ file carries two attributes on the root group `/`:
 
 | Attribute                | Type              | Value                              |
 |--------------------------|-------------------|------------------------------------|
-| `mpeg_o_format_version`  | fixed-len string  | `"1.2"` in v0.7; `"1.1"` in v0.2–v0.6 (major.minor) |
-| `mpeg_o_features`        | fixed-len string  | JSON array of feature strings      |
+| `ttio_format_version`  | fixed-len string  | `"1.2"` in v0.7; `"1.1"` in v0.2–v0.6 (major.minor) |
+| `ttio_features`        | fixed-len string  | JSON array of feature strings      |
 
 **Version semantics:**
 
@@ -58,8 +58,8 @@ Every v0.2+ file carries two attributes on the root group `/`:
   readers may ignore new attributes/datasets they do not understand.
 
 **v0.1 detection:** files written by v0.1 code carry
-`@mpeg_o_version = "1.0.0"` instead and have no `@mpeg_o_features`.
-v0.2 readers detect the absence of `@mpeg_o_features` and fall back
+`@ttio_version = "1.0.0"` instead and have no `@ttio_features`.
+v0.2 readers detect the absence of `@ttio_features` and fall back
 to the v0.1 JSON metadata path (see §5).
 
 **Feature flags** are documented in
@@ -74,8 +74,8 @@ are informational; readers may ignore them.
 
 ```
 /                                       (root group)
-├── @mpeg_o_format_version              ("1.1")
-├── @mpeg_o_features                    (JSON array)
+├── @ttio_format_version              ("1.1")
+├── @ttio_features                    (JSON array)
 ├── @encrypted                          ("aes-256-gcm") — optional
 ├── @access_policy_json                 (JSON) — optional
 └── study/                              (group, required)
@@ -104,7 +104,7 @@ are informational; readers may ignore them.
 
 Runs under `/study/ms_runs/` may contain any spectrum subclass, not
 just mass spectra, despite the legacy name. NMR runs written via
-`MPGOSpectralDataset.msRuns` (the post-M10 idiom) land here. The
+`TTIOSpectralDataset.msRuns` (the post-M10 idiom) land here. The
 `/study/nmr_runs/` dict is retained for backward compatibility with
 files written by pre-M10 code.
 
@@ -116,9 +116,9 @@ Each `/study/ms_runs/<name>/` group contains:
 
 ```
 <run_name>/
-├── @acquisition_mode                   (int64; MPGOAcquisitionMode enum)
+├── @acquisition_mode                   (int64; TTIOAcquisitionMode enum)
 ├── @spectrum_count                     (int64)
-├── @spectrum_class                     (string)  e.g. "MPGOMassSpectrum"
+├── @spectrum_class                     (string)  e.g. "TTIOMassSpectrum"
 ├── @nucleus_type                       (string) — optional, NMR only
 ├── @provenance_json                    (string) — optional
 ├── @provenance_signature               (base64 HMAC) — optional
@@ -133,11 +133,11 @@ Each `/study/ms_runs/<name>/` group contains:
 
 | String                  | Meaning                                           |
 |-------------------------|---------------------------------------------------|
-| `MPGOMassSpectrum`      | MS spectra; required channels `mz` + `intensity` |
-| `MPGONMRSpectrum`       | 1-D NMR; required channels `chemical_shift` + `intensity` |
+| `TTIOMassSpectrum`      | MS spectra; required channels `mz` + `intensity` |
+| `TTIONMRSpectrum`       | 1-D NMR; required channels `chemical_shift` + `intensity` |
 
 Absence of `@spectrum_class` triggers v0.1 fallback: the reader
-assumes `MPGOMassSpectrum` and hardcoded `mz_values`/`intensity_values`
+assumes `TTIOMassSpectrum` and hardcoded `mz_values`/`intensity_values`
 channel names.
 
 **Instrument config** holds only string attributes
@@ -247,7 +247,7 @@ chromatograms/
 └── chromatogram_index/                 (subgroup, parallel metadata arrays)
     ├── offsets                          (int64[count])
     ├── lengths                          (uint32[count])
-    ├── types                            (int32[count]; MPGOChromatogramType enum)
+    ├── types                            (int32[count]; TTIOChromatogramType enum)
     ├── target_mzs                       (float64[count]; XIC target m/z, 0.0 otherwise)
     ├── precursor_mzs                    (float64[count]; SRM precursor, 0.0 otherwise)
     └── product_mzs                      (float64[count]; SRM product, 0.0 otherwise)
@@ -256,7 +256,7 @@ chromatograms/
 Chromatogram `i`'s time/intensity slice is
 `time_values[offsets[i] .. offsets[i] + lengths[i])`.
 
-**MPGOChromatogramType enum**: 0 = TIC, 1 = XIC, 2 = SRM.
+**TTIOChromatogramType enum**: 0 = TIC, 1 = XIC, 2 = SRM.
 
 ---
 
@@ -297,7 +297,7 @@ variable-length blob:
 
 ```
 offset  len  field
-0       2    magic         = 0x4D 0x57  ('M','W' — MPGO Wrap)
+0       2    magic         = 0x4D 0x57  ('M','W' — TTIO Wrap)
 2       1    version       = 0x02
 3       2    algorithm_id  (big-endian)
                0x0000 = AES-256-GCM
@@ -433,7 +433,7 @@ Feature flag: `compound_per_run_provenance`.
 
 ## 7. Image cube (MSImage)
 
-`/study/image_cube/` is present when the dataset is an `MPGOMSImage`.
+`/study/image_cube/` is present when the dataset is an `TTIOMSImage`.
 
 ```
 image_cube/
@@ -463,8 +463,8 @@ Feature flag (opt_): `opt_native_msimage_cube`.
 ## 7a. Vibrational imaging cubes (M73, v0.11)
 
 `/study/raman_image_cube/` is present when the dataset carries an
-`MPGORamanImage`, and `/study/ir_image_cube/` when it carries an
-`MPGOIRImage`. Both groups share the MSImage cube layout but add
+`TTIORamanImage`, and `/study/ir_image_cube/` when it carries an
+`TTIOIRImage`. Both groups share the MSImage cube layout but add
 the modality-specific scalars and a shared wavenumber axis.
 
 ```
@@ -497,13 +497,13 @@ a Raman map or an IR map, not both.
 
 ## 7b. UV-Vis spectra (M73.1, v0.11.1)
 
-`MPGOUVVisSpectrum` is a plain `MPGOSpectrum` subclass — no new
+`TTIOUVVisSpectrum` is a plain `TTIOSpectrum` subclass — no new
 group layout is required. It rides the generic `Spectrum`
 persistence path, keyed by the following named signal arrays:
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "MPGOUVVisSpectrum"
+├── @mpgo_class = "TTIOUVVisSpectrum"
 ├── @path_length_cm   (float64, optional)
 ├── @solvent          (VL string, optional)
 └── arrays/
@@ -518,13 +518,13 @@ No feature flag — pre-v0.11.1 readers open the group as a generic
 
 ## 7c. Two-dimensional correlation spectra (M73.1, v0.11.1)
 
-`MPGOTwoDimensionalCorrelationSpectrum` is an `MPGOSpectrum`
+`TTIOTwoDimensionalCorrelationSpectrum` is an `TTIOSpectrum`
 subclass that carries a 1-D variable axis and two rank-2
 correlation matrices of equal size.
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "MPGOTwoDimensionalCorrelationSpectrum"
+├── @mpgo_class = "TTIOTwoDimensionalCorrelationSpectrum"
 ├── arrays/
 │   ├── variable_axis  (float64[N])
 │   ├── synchronous    (float64[N][N], row-major; in-phase, symmetric)
@@ -544,13 +544,13 @@ generic `Spectrum` and round-trip them unchanged.
 
 ## 8. Native 2-D NMR
 
-An `MPGONMR2DSpectrum` group (written via the generic
-`MPGOSpectrum` persistence path under
+An `TTIONMR2DSpectrum` group (written via the generic
+`TTIOSpectrum` persistence path under
 `/study/nmr_runs/<run>/spec_NNNNNN/`) carries:
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "MPGONMR2DSpectrum"
+├── @mpgo_class = "TTIONMR2DSpectrum"
 ├── @matrix_width, @matrix_height
 ├── @nucleus_f1, @nucleus_f2
 ├── arrays/
@@ -574,7 +574,7 @@ to the flattened `intensity_matrix` in `arrays/` otherwise.
 
 ## 9. Encryption
 
-`MPGOSpectralDataset.encryptWithKey:level:error:` performs two
+`TTIOSpectralDataset.encryptWithKey:level:error:` performs two
 operations in a single call:
 
 1. **Per-run intensity channel encryption.** For each run under
@@ -594,7 +594,7 @@ operations in a single call:
 After encryption the root group carries:
 
 - `@encrypted = "aes-256-gcm"`
-- `@access_policy_json` (JSON representation of `MPGOAccessPolicy`)
+- `@access_policy_json` (JSON representation of `TTIOAccessPolicy`)
 
 `decryptWithKey:` reverses both operations.
 
@@ -659,7 +659,7 @@ The legacy decryption code remains for migration; see the
 
 ## 10. Digital signatures
 
-`MPGOSignatureManager.signDataset:inFile:withKey:error:` computes an
+`TTIOSignatureManager.signDataset:inFile:withKey:error:` computes an
 HMAC-SHA256 over a canonical byte stream derived from the target
 dataset and stores a **prefixed** base64 MAC in `@mpgo_signature`.
 Provenance chain signing stores its MAC in `@provenance_signature`
@@ -689,7 +689,7 @@ The v0.3 signer adds both `opt_digital_signatures` and
 
 Signatures without the `v2:` prefix are treated as v0.2 native-byte
 HMACs and verified by hashing `H5Dread` output in the dataset's
-native type. This is how the v0.2 `signed.mpgo` reference fixture
+native type. This is how the v0.2 `signed.tio` reference fixture
 continues to verify under v0.3 readers.
 
 ### 10.2b v3 post-quantum signatures (v0.8 M49)
@@ -711,8 +711,8 @@ full story.
 
 ### 10.3 Cross-language parity
 
-The MPGO Objective-C and Python implementations produce byte-identical
-`v2:` MACs for the same input (see the `MpgoSign` CLI test harness
+The TTIO Objective-C and Python implementations produce byte-identical
+`v2:` MACs for the same input (see the `TtioSign` CLI test harness
 under `objc/Tools/` and `python/tests/test_canonical_signatures.py`).
 
 Feature flags: `opt_digital_signatures` (first sign), plus
@@ -725,8 +725,8 @@ Feature flags: `opt_digital_signatures` (first sign), plus
 All cryptographic paths — signatures and dataset / envelope encryption
 — consume their input through the `StorageDataset.read_canonical_bytes`
 method defined by the protocol abstraction
-(`MPGOStorageDataset`, `com.dtwthalion.mpgo.providers.StorageDataset`,
-`mpeg_o.providers.base.StorageDataset`). The canonical stream is:
+(`TTIOStorageDataset`, `com.dtwthalion.tio.providers.StorageDataset`,
+`ttio.providers.base.StorageDataset`). The canonical stream is:
 
 - **Primitive numeric datasets** — little-endian packed values.
 - **Compound datasets** — rows in storage order; fields in declaration
@@ -756,7 +756,7 @@ HDF5 filter pipeline or a dedicated per-channel attribute:
 |------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **zlib** (default)     | `H5P_DEFLATE` filter at level 6. Lossless. Readable by any HDF5 library without extra plugins.                                                                                |
 | **LZ4**                | HDF5 filter id **32004**. Requires the LZ4 filter plugin (`libh5lz4.so`) to be loadable at runtime via `HDF5_PLUGIN_PATH`. Lossless. ~35× faster write / ~2× faster read than zlib, at ~20% larger files on random data. |
-| **Numpress-delta**     | Per-channel transform implemented inside MPGO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. |
+| **Numpress-delta**     | Per-channel transform implemented inside TTIO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. |
 | **rANS-order0**        | Reserved (M79, v0.11). Range-asymmetric numeral systems entropy coder, order-0 (per-byte) frequency model. Used by genomic codecs in M74+. v0.11 reserves codec id `4`; encoder/decoder land with M74. |
 | **rANS-order1**        | Reserved (M79, v0.11). Order-1 (preceding-byte context) rANS variant. Codec id `5`. |
 | **base-pack**          | Reserved (M79, v0.11). 2-bit ACGT packed-base codec for genomic read sequences. Codec id `6`. Lossless on the canonical alphabet `{A,C,G,T}`; reads containing `N` are diverted to a sidecar mask dataset (defined in M74). |
@@ -770,7 +770,7 @@ v0.11 reader without M74 returns an `UnsupportedCodec` error.
 
 ### Precision additions (M79, v0.11)
 
-`MPGOPrecision` gains `UINT8` (id `6`) for byte-typed datasets —
+`TTIOPrecision` gains `UINT8` (id `6`) for byte-typed datasets —
 genomic packed-base buffers, quality-score arrays, and any future
 per-element symbol stream that does not need wider integers. The
 existing storage providers (HDF5, Memory, SQLite, Zarr) honour
@@ -787,13 +787,13 @@ raw payload (endian-neutral).
    zlib on top.
 
 Decoding is the exact inverse: cumsum the int64 array, cast to
-double, divide by the scale. The MPGO ObjC and Python encoders agree
+double, divide by the scale. The TTIO ObjC and Python encoders agree
 byte-for-byte on any input (see `test_numpress_scale_matches_objc_formula`).
 
 ## 11. Backward compatibility
 
 A v0.2 reader recognizes a v0.1 file by the absence of
-`@mpeg_o_features`. The fallback paths:
+`@ttio_features`. The fallback paths:
 
 | v0.2 location                              | v0.1 fallback                              |
 |--------------------------------------------|--------------------------------------------|
@@ -804,7 +804,7 @@ A v0.2 reader recognizes a v0.1 file by the absence of
 | `spectrum_index/headers` compound dataset  | parallel 1-D datasets only (still present) |
 | `intensity_matrix_2d` rank-2 dataset       | `arrays/intensity_matrix` flattened 1-D    |
 
-All v0.1 files written by libMPGO v0.1.0-alpha are readable by v0.2.0
+All v0.1 files written by libTTIO v0.1.0-alpha are readable by v0.2.0
 code without modification.
 
 ### 11.1 Compound JSON mirror (v0.6 / M37)
@@ -843,7 +843,7 @@ will go through the compound dataset directly.
 ### 11.2 Per-AU encrypted layout (v0.10+)
 
 A v0.10 reader recognises a per-AU-encrypted file by
-`opt_per_au_encryption` in `@mpeg_o_features`. The channel layout
+`opt_per_au_encryption` in `@ttio_features`. The channel layout
 under `signal_channels/` flips from plaintext `<channel>_values`
 to the `<channel>_segments` compound (§9.1) with VL_BYTES members
 for `iv` / `tag` / `ciphertext`. Pre-v0.10 readers without
@@ -858,7 +858,7 @@ absent; the semantic header travels in the
 and `lengths` remain plaintext because they frame the compound
 rows.
 
-Migration: `python -m mpeg_o.tools.per_au_cli transcode` rewrites
+Migration: `python -m ttio.tools.per_au_cli transcode` rewrites
 a plaintext or previously-encrypted file through the v0.10 path,
 with optional `--rekey`. v0.x `opt_dataset_encryption` files must
 be decrypted via the v0.x `SpectralDataset.decrypt()` API first —
@@ -870,10 +870,10 @@ must be materialised to re-slice per-spectrum).
 ## 12. Example `h5dump` output (minimal MS file)
 
 ```
-HDF5 "minimal_ms.mpgo" {
+HDF5 "minimal_ms.tio" {
 GROUP "/" {
-   ATTRIBUTE "mpeg_o_format_version" { DATATYPE H5T_STRING ... DATA { "1.1" } }
-   ATTRIBUTE "mpeg_o_features" { DATA { "[\"base_v1\",\"compound_identifications\",...]" } }
+   ATTRIBUTE "ttio_format_version" { DATATYPE H5T_STRING ... DATA { "1.1" } }
+   ATTRIBUTE "ttio_features" { DATA { "[\"base_v1\",\"compound_identifications\",...]" } }
    GROUP "study" {
       ATTRIBUTE "title" { ... }
       GROUP "ms_runs" {
@@ -881,7 +881,7 @@ GROUP "/" {
          GROUP "run_0001" {
             ATTRIBUTE "acquisition_mode"  { DATA { 0 } }
             ATTRIBUTE "spectrum_count"    { DATA { 10 } }
-            ATTRIBUTE "spectrum_class"    { DATA { "MPGOMassSpectrum" } }
+            ATTRIBUTE "spectrum_class"    { DATA { "TTIOMassSpectrum" } }
             GROUP "instrument_config" { ... }
             GROUP "spectrum_index" {
                DATASET "offsets"               { DATATYPE H5T_STD_U64LE ... }
@@ -912,14 +912,14 @@ GROUP "/" {
 ## 13. Conformance checklist for a new reader
 
 1. Open the file with any HDF5 library.
-2. Read `@mpeg_o_format_version`. If absent, treat as v0.1.
-3. Read `@mpeg_o_features` as a JSON array. Refuse the file if any
+2. Read `@ttio_format_version`. If absent, treat as v0.1.
+3. Read `@ttio_features` as a JSON array. Refuse the file if any
    non-`opt_`-prefixed feature is unknown.
 4. Open `/study/`. Read `@title`, `@isa_investigation_id`.
 5. Enumerate runs under `/study/ms_runs/` via the `_run_names`
    attribute.
 6. For each run, read `@spectrum_class` (default
-   `MPGOMassSpectrum`). Read `spectrum_index/` parallel datasets.
+   `TTIOMassSpectrum`). Read `spectrum_index/` parallel datasets.
 7. Read `signal_channels/@channel_names` (default `"mz,intensity"`).
 8. For random access to spectrum `i`: slice each
    `<channel>_values[offsets[i] : offsets[i] + lengths[i]]` and

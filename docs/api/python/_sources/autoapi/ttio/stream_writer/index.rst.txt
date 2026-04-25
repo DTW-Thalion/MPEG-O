@@ -1,0 +1,83 @@
+ttio.stream_writer
+==================
+
+.. py:module:: ttio.stream_writer
+
+.. autoapi-nested-parse::
+
+   ``StreamWriter`` — incremental append writer for .tio files.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.stream_writer.StreamWriter
+
+
+Module Contents
+---------------
+
+.. py:class:: StreamWriter(file_path: str, run_name: str, acquisition_mode: ttio.enums.AcquisitionMode, instrument_config: ttio.instrument_config.InstrumentConfig)
+
+   Incrementally append mass spectra to an ``.tio`` file.
+
+   Spectra accumulate in memory until :meth:`flush` is called. On
+   each flush the file is rewritten so that the run group reflects
+   every spectrum buffered so far — the file remains a valid
+   ``.tio`` after each flush.
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   For v0.6 the writer's flush is whole-file regenerative: simple,
+   correct, and bounded for the streaming-demo case (≤ a few
+   thousand spectra). A future milestone may switch to extendable
+   HDF5 datasets.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOStreamWriter`` · Java:
+   ``com.dtwthalion.ttio.StreamWriter``.
+
+
+   .. py:method:: append_spectrum(spectrum: ttio.mass_spectrum.MassSpectrum) -> None
+
+      Buffer a spectrum. Call :meth:`flush` to persist.
+
+
+
+   .. py:property:: spectrum_count
+      :type: int
+
+
+      Number of buffered spectra.
+
+
+   .. py:method:: flush() -> None
+
+      Rewrite the target file with all buffered spectra so far.
+
+      Converts each buffered :class:`~ttio.mass_spectrum.MassSpectrum`
+      into an :class:`~ttio.importers.import_result.ImportedSpectrum`,
+      packs them into a :class:`~ttio.spectral_dataset.WrittenRun`, and
+      delegates to :meth:`~ttio.spectral_dataset.SpectralDataset.write_minimal`
+      so the target file is a valid ``.tio`` after each call.
+
+
+
+   .. py:method:: flush_and_close() -> None
+
+      Flush one final time and release resources.
+
+
+
+   .. py:method:: close() -> None
+
+      Release resources without flushing.
+
+
+

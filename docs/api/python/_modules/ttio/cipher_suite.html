@@ -1,0 +1,737 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>ttio.cipher_suite - TTI-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">TTI-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  <span class="sidebar-brand-text">TTI-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/ttio/index.html">ttio</a><input aria-label="Toggle navigation of ttio" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/access_policy/index.html">ttio.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/acquisition_run/index.html">ttio.acquisition_run</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/analysis/index.html">ttio.analysis</a><input aria-label="Toggle navigation of ttio.analysis" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/analysis/two_d_cos/index.html">ttio.analysis.two_d_cos</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/anonymization/index.html">ttio.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/axis_descriptor/index.html">ttio.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/chromatogram/index.html">ttio.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/cipher_suite/index.html">ttio.cipher_suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/cv_param/index.html">ttio.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encoding_spec/index.html">ttio.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encryption/index.html">ttio.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encryption_per_au/index.html">ttio.encryption_per_au</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/enums/index.html">ttio.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/imzml/index.html">ttio.exporters.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/isa/index.html">ttio.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/mzml/index.html">ttio.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/mztab/index.html">ttio.exporters.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/feature/index.html">ttio.feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/feature_flags/index.html">ttio.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/fid/index.html">ttio.fid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/imzml/index.html">ttio.importers.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/mzml/index.html">ttio.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/mztab/index.html">ttio.importers.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ir_image/index.html">ttio.ir_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ir_spectrum/index.html">ttio.ir_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/isolation_window/index.html">ttio.isolation_window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/key_rotation/index.html">ttio.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/mass_spectrum/index.html">ttio.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ms_image/index.html">ttio.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/nmr_2d/index.html">ttio.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/pqc/index.html">ttio.pqc</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/indexable/index.html">ttio.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/provenanceable/index.html">ttio.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/streamable/index.html">ttio.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/provenance/index.html">ttio.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/base/index.html">ttio.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/hdf5/index.html">ttio.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/memory/index.html">ttio.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/registry/index.html">ttio.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/sqlite/index.html">ttio.providers.sqlite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/zarr/index.html">ttio.providers.zarr</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/quantification/index.html">ttio.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/query/index.html">ttio.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/raman_image/index.html">ttio.raman_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/raman_spectrum/index.html">ttio.raman_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/signal_array/index.html">ttio.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/signatures/index.html">ttio.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/spectral_dataset/index.html">ttio.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/spectrum/index.html">ttio.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/stream_reader/index.html">ttio.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/stream_writer/index.html">ttio.stream_writer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_encode_cli/index.html">ttio.tools.transport_encode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_server_cli/index.html">ttio.tools.transport_server_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/transition_list/index.html">ttio.transition_list</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/client/index.html">ttio.transport.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/codec/index.html">ttio.transport.codec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/encrypted/index.html">ttio.transport.encrypted</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/packets/index.html">ttio.transport.packets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/server/index.html">ttio.transport.server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/simulator/index.html">ttio.transport.simulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/value_range/index.html">ttio.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/verifier/index.html">ttio.verifier</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for ttio.cipher_suite</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Cipher-suite catalog and algorithm-dispatched parameter helpers (v0.7 M48).</span>
+
+<span class="sd">Pre-v0.7, encryption / signing / key-wrap APIs accepted an implicit</span>
+<span class="sd">fixed algorithm (AES-256-GCM for bulk, HMAC-SHA256 for signatures,</span>
+<span class="sd">AES-KW-style wrap for KEK). Key sizes and nonce lengths were</span>
+<span class="sd">hardcoded module-level constants.</span>
+
+<span class="sd">v0.7 M48 generalises the public API with an ``algorithm=`` keyword</span>
+<span class="sd">parameter backed by this catalog. The intent was to shape the</span>
+<span class="sd">parameter hole so M49&#39;s post-quantum binding is a pure plug-in — no</span>
+<span class="sd">API change — once ML-KEM-1024 / ML-DSA-87 are ready.</span>
+
+<span class="sd">v0.8 M49 activates the post-quantum entries. ``&quot;ml-kem-1024&quot;`` (FIPS</span>
+<span class="sd">203) and ``&quot;ml-dsa-87&quot;`` (FIPS 204) transition from</span>
+<span class="sd">``status=&quot;reserved&quot;`` to ``status=&quot;active&quot;``. Activation requires</span>
+<span class="sd">the optional ``[pqc]`` extra (``pip install &#39;ttio[pqc]&#39;`` pulls in</span>
+<span class="sd">``liboqs-python``, which in turn needs a system liboqs 0.14+). Without</span>
+<span class="sd">that extra, :mod:`ttio.pqc` import raises</span>
+<span class="sd">:class:`~ttio.pqc.PQCUnavailableError` and all PQC entry points fail</span>
+<span class="sd">cleanly — the catalog still lists the entries but the sign/wrap code</span>
+<span class="sd">paths refuse to run.</span>
+
+<span class="sd">``&quot;shake256&quot;`` remains reserved (no consumer yet in the protection</span>
+<span class="sd">APIs; a v0.9 domain-separator primitive may activate it).</span>
+
+<span class="sd">Design notes (binding decision 39):</span>
+<span class="sd">* ``CipherSuite`` is a **static allow-list**, not a plugin registry.</span>
+<span class="sd">  Adding a new algorithm is a source-code change. Runtime</span>
+<span class="sd">  registration would let callers push FIPS-unapproved algorithms</span>
+<span class="sd">  through production code; that complexity is deferred to v0.8+.</span>
+
+<span class="sd">Cross-language equivalents:</span>
+<span class="sd">* ObjC: ``TTIOCipherSuite`` (:file:`objc/Source/Protection/TTIOCipherSuite.h`)</span>
+<span class="sd">* Java: ``com.dtwthalion.ttio.protection.CipherSuite``</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Literal</span>
+
+
+<div class="viewcode-block" id="UnsupportedAlgorithmError">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.UnsupportedAlgorithmError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">UnsupportedAlgorithmError</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when a caller specifies an algorithm not in the static</span>
+<span class="sd">    catalog — either misspelled, or reserved for a later milestone</span>
+<span class="sd">    (e.g., ML-KEM-1024 prior to M49).&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="InvalidKeyError">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.InvalidKeyError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">InvalidKeyError</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when a key length does not match the selected algorithm.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="Category">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.Category">[docs]</a>
+<span class="n">Category</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;AEAD&quot;</span><span class="p">,</span> <span class="s2">&quot;KEM&quot;</span><span class="p">,</span> <span class="s2">&quot;MAC&quot;</span><span class="p">,</span> <span class="s2">&quot;Signature&quot;</span><span class="p">,</span> <span class="s2">&quot;Hash&quot;</span><span class="p">,</span> <span class="s2">&quot;XOF&quot;</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="Status">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.Status">[docs]</a>
+<span class="n">Status</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;active&quot;</span><span class="p">,</span> <span class="s2">&quot;reserved&quot;</span><span class="p">]</span></div>
+
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">_Entry</span><span class="p">:</span>
+    <span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">category</span><span class="p">:</span> <span class="n">Category</span>
+    <span class="n">key_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span>  <span class="c1"># symmetric key or (for KEM/Signature) PUBLIC key length</span>
+    <span class="n">nonce_size</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">tag_size</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># for AEAD; signature size for signatures</span>
+    <span class="n">status</span><span class="p">:</span> <span class="n">Status</span>
+    <span class="n">notes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">private_key_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>  <span class="c1"># KEM / Signature only</span>
+
+
+<span class="c1"># ── The catalog ─────────────────────────────────────────────────────</span>
+
+<span class="n">_CATALOG</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">_Entry</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="c1"># Bulk / AEAD</span>
+    <span class="s2">&quot;aes-256-gcm&quot;</span><span class="p">:</span> <span class="n">_Entry</span><span class="p">(</span>
+        <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;aes-256-gcm&quot;</span><span class="p">,</span>
+        <span class="n">category</span><span class="o">=</span><span class="s2">&quot;AEAD&quot;</span><span class="p">,</span>
+        <span class="n">key_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+        <span class="n">nonce_size</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span>
+        <span class="n">tag_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+        <span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
+        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;Default for bulk encryption and envelope wrapping.&quot;</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="c1"># KEM</span>
+    <span class="s2">&quot;ml-kem-1024&quot;</span><span class="p">:</span> <span class="n">_Entry</span><span class="p">(</span>
+        <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;ml-kem-1024&quot;</span><span class="p">,</span>
+        <span class="n">category</span><span class="o">=</span><span class="s2">&quot;KEM&quot;</span><span class="p">,</span>
+        <span class="n">key_size</span><span class="o">=</span><span class="mi">1568</span><span class="p">,</span>            <span class="c1"># public-key size</span>
+        <span class="n">private_key_size</span><span class="o">=</span><span class="mi">3168</span><span class="p">,</span>    <span class="c1"># ML-KEM-1024 decapsulation key</span>
+        <span class="n">nonce_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">tag_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>               <span class="c1"># ciphertext length is 1568, handled at the blob layer</span>
+        <span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
+        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;NIST FIPS 203 ML-KEM-1024. v0.8 M49; requires [pqc] extra &quot;</span>
+              <span class="s2">&quot;(liboqs-python + liboqs ≥ 0.14). Java path is Bouncy Castle &quot;</span>
+              <span class="s2">&quot;(org.bouncycastle:bcprov-jdk18on ≥ 1.79).&quot;</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="c1"># MAC / Signature</span>
+    <span class="s2">&quot;hmac-sha256&quot;</span><span class="p">:</span> <span class="n">_Entry</span><span class="p">(</span>
+        <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;hmac-sha256&quot;</span><span class="p">,</span>
+        <span class="n">category</span><span class="o">=</span><span class="s2">&quot;MAC&quot;</span><span class="p">,</span>
+        <span class="n">key_size</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>    <span class="c1"># up to 64 bytes; HMAC tolerates variable</span>
+        <span class="n">nonce_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">tag_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+        <span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
+        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;Default for v2 canonical signatures.&quot;</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="s2">&quot;ml-dsa-87&quot;</span><span class="p">:</span> <span class="n">_Entry</span><span class="p">(</span>
+        <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;ml-dsa-87&quot;</span><span class="p">,</span>
+        <span class="n">category</span><span class="o">=</span><span class="s2">&quot;Signature&quot;</span><span class="p">,</span>
+        <span class="n">key_size</span><span class="o">=</span><span class="mi">2592</span><span class="p">,</span>            <span class="c1"># FIPS 204 ML-DSA-87 public key</span>
+        <span class="n">private_key_size</span><span class="o">=</span><span class="mi">4896</span><span class="p">,</span>    <span class="c1"># FIPS 204 ML-DSA-87 signing key</span>
+        <span class="n">nonce_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">tag_size</span><span class="o">=</span><span class="mi">4627</span><span class="p">,</span>            <span class="c1"># ML-DSA-87 signature size</span>
+        <span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
+        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;NIST FIPS 204 ML-DSA-87. v0.8 M49; requires [pqc] extra on &quot;</span>
+              <span class="s2">&quot;Python / ObjC (liboqs), Bouncy Castle on Java. Emits v3: &quot;</span>
+              <span class="s2">&quot;signature-attribute prefix.&quot;</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="c1"># Hash</span>
+    <span class="s2">&quot;sha-256&quot;</span><span class="p">:</span> <span class="n">_Entry</span><span class="p">(</span>
+        <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;sha-256&quot;</span><span class="p">,</span>
+        <span class="n">category</span><span class="o">=</span><span class="s2">&quot;Hash&quot;</span><span class="p">,</span>
+        <span class="n">key_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">nonce_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">tag_size</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+        <span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
+        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;Default hash primitive for canonical transcripts.&quot;</span><span class="p">,</span>
+    <span class="p">),</span>
+    <span class="s2">&quot;shake256&quot;</span><span class="p">:</span> <span class="n">_Entry</span><span class="p">(</span>
+        <span class="n">algorithm</span><span class="o">=</span><span class="s2">&quot;shake256&quot;</span><span class="p">,</span>
+        <span class="n">category</span><span class="o">=</span><span class="s2">&quot;XOF&quot;</span><span class="p">,</span>
+        <span class="n">key_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">nonce_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">tag_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>      <span class="c1"># variable-length output</span>
+        <span class="n">status</span><span class="o">=</span><span class="s2">&quot;reserved&quot;</span><span class="p">,</span>
+        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;SHA-3 family extendable-output function; reserved for M49.&quot;</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">}</span>
+
+
+<span class="c1"># ── Public catalog API ──────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="is_supported">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.is_supported">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_supported</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True iff ``algorithm`` is a known catalog entry with</span>
+<span class="sd">    ``status=&quot;active&quot;``. Reserved entries return False.&quot;&quot;&quot;</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">_CATALOG</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">entry</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">entry</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;active&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="is_registered">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.is_registered">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_registered</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return True iff ``algorithm`` is listed in the catalog,</span>
+<span class="sd">    including reserved entries. Useful for error messages that want</span>
+<span class="sd">    to distinguish &#39;unknown&#39; from &#39;not yet implemented&#39;.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">algorithm</span> <span class="ow">in</span> <span class="n">_CATALOG</span></div>
+
+
+
+<div class="viewcode-block" id="category">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.category">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">category</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Category</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the algorithm&#39;s category identifier.&quot;&quot;&quot;</span>
+    <span class="n">_require</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_CATALOG</span><span class="p">[</span><span class="n">algorithm</span><span class="p">]</span><span class="o">.</span><span class="n">category</span></div>
+
+
+
+<div class="viewcode-block" id="key_length">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.key_length">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">key_length</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the fixed key length for this algorithm, or ``None`` if</span>
+<span class="sd">    the algorithm tolerates variable-length keys (HMAC).&quot;&quot;&quot;</span>
+    <span class="n">_require</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_CATALOG</span><span class="p">[</span><span class="n">algorithm</span><span class="p">]</span><span class="o">.</span><span class="n">key_size</span></div>
+
+
+
+<div class="viewcode-block" id="nonce_length">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.nonce_length">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">nonce_length</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the nonce / IV length in bytes. Zero for non-AEAD</span>
+<span class="sd">    primitives. Replaces the module-level ``AES_IV_LEN = 12``</span>
+<span class="sd">    constant scattered through pre-v0.7 code.&quot;&quot;&quot;</span>
+    <span class="n">_require</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_CATALOG</span><span class="p">[</span><span class="n">algorithm</span><span class="p">]</span><span class="o">.</span><span class="n">nonce_size</span></div>
+
+
+
+<div class="viewcode-block" id="tag_length">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.tag_length">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">tag_length</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the authentication-tag or signature length in bytes.</span>
+<span class="sd">    Zero for hashes and XOFs whose output size is variable.&quot;&quot;&quot;</span>
+    <span class="n">_require</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_CATALOG</span><span class="p">[</span><span class="n">algorithm</span><span class="p">]</span><span class="o">.</span><span class="n">tag_size</span></div>
+
+
+
+<div class="viewcode-block" id="validate_key">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.validate_key">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_key</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raise :class:`InvalidKeyError` if ``key`` does not match the</span>
+<span class="sd">    algorithm&#39;s required length. Replaces inline ``len(key) == 32``</span>
+<span class="sd">    checks.</span>
+
+<span class="sd">    For algorithms with variable-length keys (HMAC), imposes a sanity</span>
+<span class="sd">    minimum of 1 byte and logs when the key is unusually short (&lt; 16</span>
+<span class="sd">    bytes). For reserved-status algorithms, raises</span>
+<span class="sd">    :class:`UnsupportedAlgorithmError` so callers don&#39;t silently run</span>
+<span class="sd">    against stub code paths.</span>
+
+<span class="sd">    Asymmetric algorithms (category KEM / Signature) have two key</span>
+<span class="sd">    shapes — public and private. ``validate_key`` on a KEM / Signature</span>
+<span class="sd">    algorithm raises :class:`InvalidKeyError` directing the caller to</span>
+<span class="sd">    :func:`validate_public_key` or :func:`validate_private_key`; this</span>
+<span class="sd">    keeps role confusion out of the symmetric-focused call sites.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">_require_active</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">category</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;KEM&quot;</span><span class="p">,</span> <span class="s2">&quot;Signature&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">InvalidKeyError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2"> is asymmetric — use validate_public_key &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;or validate_private_key instead of validate_key&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">key_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">InvalidKeyError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">}</span><span class="s2">: key must be non-empty (got 0 bytes)&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">!=</span> <span class="n">entry</span><span class="o">.</span><span class="n">key_size</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InvalidKeyError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">}</span><span class="s2">: key must be </span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">key_size</span><span class="si">}</span><span class="s2"> bytes &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="validate_public_key">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.validate_public_key">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_public_key</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raise :class:`InvalidKeyError` if ``key`` is not the right length</span>
+<span class="sd">    for ``algorithm``&#39;s public key (KEM encapsulation / signature</span>
+<span class="sd">    verification). Symmetric algorithms raise immediately — use</span>
+<span class="sd">    :func:`validate_key`.&quot;&quot;&quot;</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">_require_active</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">category</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;KEM&quot;</span><span class="p">,</span> <span class="s2">&quot;Signature&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">InvalidKeyError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2"> is symmetric; use validate_key instead&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">!=</span> <span class="n">entry</span><span class="o">.</span><span class="n">key_size</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InvalidKeyError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">}</span><span class="s2">: public key must be </span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">key_size</span><span class="si">}</span><span class="s2"> bytes &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="validate_private_key">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.validate_private_key">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_private_key</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raise :class:`InvalidKeyError` if ``key`` is not the right length</span>
+<span class="sd">    for ``algorithm``&#39;s private key (KEM decapsulation / signing).</span>
+<span class="sd">    Symmetric algorithms raise immediately — use :func:`validate_key`.&quot;&quot;&quot;</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">_require_active</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">category</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;KEM&quot;</span><span class="p">,</span> <span class="s2">&quot;Signature&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">InvalidKeyError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2"> is symmetric; use validate_key instead&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">private_key_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InvalidKeyError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">}</span><span class="s2">: private_key_size is not declared in the catalog&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="o">!=</span> <span class="n">entry</span><span class="o">.</span><span class="n">private_key_size</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">InvalidKeyError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">}</span><span class="s2">: private key must be </span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">private_key_size</span><span class="si">}</span><span class="s2"> bytes &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="public_key_size">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.public_key_size">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">public_key_size</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the asymmetric public-key length in bytes. Raises for</span>
+<span class="sd">    symmetric algorithms.&quot;&quot;&quot;</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">_require</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">category</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;KEM&quot;</span><span class="p">,</span> <span class="s2">&quot;Signature&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">UnsupportedAlgorithmError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2"> is symmetric — no public key&quot;</span>
+        <span class="p">)</span>
+    <span class="k">assert</span> <span class="n">entry</span><span class="o">.</span><span class="n">key_size</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">entry</span><span class="o">.</span><span class="n">key_size</span></div>
+
+
+
+<div class="viewcode-block" id="private_key_size">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.private_key_size">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">private_key_size</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the asymmetric private-key length in bytes. Raises for</span>
+<span class="sd">    symmetric algorithms.&quot;&quot;&quot;</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">_require</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">category</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;KEM&quot;</span><span class="p">,</span> <span class="s2">&quot;Signature&quot;</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">UnsupportedAlgorithmError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2"> is symmetric — no private key&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">private_key_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">UnsupportedAlgorithmError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2"> catalog entry is missing private_key_size&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">entry</span><span class="o">.</span><span class="n">private_key_size</span></div>
+
+
+
+<div class="viewcode-block" id="algorithms">
+<a class="viewcode-back" href="../../autoapi/ttio/cipher_suite/index.html#ttio.cipher_suite.algorithms">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">algorithms</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="n">Status</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return catalog entries, optionally filtered by status.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">status</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">_CATALOG</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">_CATALOG</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="n">status</span><span class="p">]</span></div>
+
+
+
+<span class="c1"># ── Internal ────────────────────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_require</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_Entry</span><span class="p">:</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">_CATALOG</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">UnsupportedAlgorithmError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;unknown algorithm: </span><span class="si">{</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(catalog: </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">_CATALOG</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="si">}</span><span class="s2">)&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">entry</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_require_active</span><span class="p">(</span><span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_Entry</span><span class="p">:</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">_require</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span><span class="o">.</span><span class="n">status</span> <span class="o">!=</span> <span class="s2">&quot;active&quot;</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">UnsupportedAlgorithmError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2"> is in the catalog but has status &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">entry</span><span class="o">.</span><span class="n">status</span><span class="si">}</span><span class="s2">&#39; — this build does not ship the primitive. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(reserved algorithms activate in later milestones, &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;e.g. M49 for ml-kem-1024 / ml-dsa-87)&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">entry</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, DTW-Thalion
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=2bd037f0"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

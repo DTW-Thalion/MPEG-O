@@ -1,0 +1,46 @@
+ttio.tools.ttio_verify_cli
+==========================
+
+.. py:module:: ttio.tools.ttio_verify_cli
+
+.. autoapi-nested-parse::
+
+   ``ttio-verify`` — HMAC-SHA256 signature verifier (M75).
+
+   Python CLI frontend for :class:`ttio.verifier.Verifier`. Opens a
+   ``.tio`` file, navigates to the given HDF5 dataset, reads the
+   ``@ttio_signature`` attribute, and reports the :class:`VerificationStatus`.
+
+   Usage::
+
+       ttio-verify <path-to.tio> <dataset-path> <key-hex>
+
+   ``<key-hex>`` is 64 hexadecimal characters (32-byte HMAC-SHA256 key).
+
+   Output
+   ------
+   Prints the status name (``VALID``, ``INVALID``, ``NOT_SIGNED``, ``ERROR``)
+   to stdout.
+
+   Exit codes (mirror :class:`ttio.verifier.VerificationStatus`)
+   --------------------------------------------------------------
+   - ``0`` — ``VALID``.
+   - ``1`` — ``INVALID``.
+   - ``2`` — ``NOT_SIGNED``.
+   - ``3`` — ``ERROR`` (I/O failure, dataset missing, key-shape mismatch).
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.ttio_verify_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+
