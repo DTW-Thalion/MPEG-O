@@ -125,20 +125,14 @@ class GenomicIndex:
     def write(self, idx_group: "StorageGroup") -> None:
         """Write all columns into ``idx_group``."""
         from ttio import _hdf5_io as io
-        from ttio._hdf5_io import (
-            _write_uint64_channel,
-            _write_uint32_channel,
-            _write_int64_channel,
-            _write_uint8_channel,
-        )
 
-        _write_uint64_channel(idx_group, "offsets", self.offsets, "gzip")
-        _write_uint32_channel(idx_group, "lengths", self.lengths, "gzip")
-        _write_int64_channel(idx_group, "positions", self.positions, "gzip")
-        _write_uint8_channel(
+        io._write_uint64_channel(idx_group, "offsets", self.offsets, "gzip")
+        io._write_uint32_channel(idx_group, "lengths", self.lengths, "gzip")
+        io._write_int64_channel(idx_group, "positions", self.positions, "gzip")
+        io._write_uint8_channel(
             idx_group, "mapping_qualities", self.mapping_qualities, "gzip"
         )
-        _write_uint32_channel(idx_group, "flags", self.flags, "gzip")
+        io._write_uint32_channel(idx_group, "flags", self.flags, "gzip")
         io.write_compound_dataset(
             idx_group,
             "chromosomes",
