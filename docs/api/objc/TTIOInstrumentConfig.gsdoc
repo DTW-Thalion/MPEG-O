@@ -24,7 +24,7 @@
           the parent run group. API status: Stable. Cross-language
           equivalents: Python:
           ttio.instrument_config.InstrumentConfig
-          Java: com.dtwthalion.tio.InstrumentConfig
+          Java: com.dtwthalion.ttio.InstrumentConfig
         </desc>
         <method type="instancetype" factory="yes">
           <sel>readFromGroup:</sel>

@@ -25,7 +25,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.exporters.jcamp_dx.write_*_spectrum
- *   Java:   com.dtwthalion.tio.exporters.JcampDxWriter
+ *   Java:   com.dtwthalion.ttio.exporters.JcampDxWriter
  */
 @interface TTIOJcampDxWriter : NSObject
 

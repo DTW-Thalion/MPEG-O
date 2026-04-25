@@ -12,7 +12,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.transport.client.TransportClient
- *   Java:   com.dtwthalion.tio.transport.TransportClient
+ *   Java:   com.dtwthalion.ttio.transport.TransportClient
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

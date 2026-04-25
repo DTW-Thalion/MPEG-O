@@ -23,7 +23,7 @@
           render a status to an end user. API status: Stable.
           Cross-language equivalents: Python:
           ttio.verifier.Verifier Java:
-          com.dtwthalion.tio.protection.Verifier
+          com.dtwthalion.ttio.protection.Verifier
         </desc>
         <method type="TTIOVerificationStatus" factory="yes">
           <sel>verifyDataset:</sel>

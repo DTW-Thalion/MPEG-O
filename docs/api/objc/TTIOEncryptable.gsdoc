@@ -26,7 +26,7 @@
           scan metadata readable for indexing and search). API
           status: Stable. Cross-language equivalents: Python:
           ttio.protocols.Encryptable Java:
-          com.dtwthalion.tio.protocols.Encryptable
+          com.dtwthalion.ttio.protocols.Encryptable
         </desc>
         <method type="TTIOAccessPolicy*">
           <sel>accessPolicy</sel>

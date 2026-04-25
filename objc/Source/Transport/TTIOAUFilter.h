@@ -1,7 +1,7 @@
 /*
  * TTIOAUFilter — v0.10 M68.5. Parallel to Python
  * ttio.transport.filters.AUFilter and Java
- * com.dtwthalion.tio.transport.AUFilter.
+ * com.dtwthalion.ttio.transport.AUFilter.
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

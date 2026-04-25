@@ -17,7 +17,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.stream_reader.StreamReader
- *   Java:   com.dtwthalion.tio.StreamReader
+ *   Java:   com.dtwthalion.ttio.StreamReader
  */
 @interface TTIOStreamReader : NSObject
 

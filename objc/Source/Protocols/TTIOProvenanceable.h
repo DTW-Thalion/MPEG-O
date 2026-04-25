@@ -15,7 +15,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.protocols.Provenanceable
- *   Java:   com.dtwthalion.tio.protocols.Provenanceable
+ *   Java:   com.dtwthalion.ttio.protocols.Provenanceable
  */
 @protocol TTIOProvenanceable <NSObject>
 

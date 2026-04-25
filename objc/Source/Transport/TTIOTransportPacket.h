@@ -7,7 +7,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.transport.packets.PacketHeader + PacketType
- *   Java:   com.dtwthalion.tio.transport.PacketHeader + PacketType
+ *   Java:   com.dtwthalion.ttio.transport.PacketHeader + PacketType
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

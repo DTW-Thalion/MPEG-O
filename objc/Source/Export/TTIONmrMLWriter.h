@@ -31,7 +31,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.exporters.nmrml
- *   Java:   com.dtwthalion.tio.exporters.NmrMLWriter
+ *   Java:   com.dtwthalion.ttio.exporters.NmrMLWriter
  */
 @interface TTIONmrMLWriter : NSObject
 

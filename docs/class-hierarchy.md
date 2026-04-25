@@ -234,7 +234,7 @@ TTIOSpectralDataset
 Added in v0.10.0 across all three languages. Names shown are the
 ObjC surface; Python uses snake_case in `ttio.transport` /
 `ttio.encryption_per_au`, Java uses PascalCase in
-`com.dtwthalion.tio.transport` / `.protection`.
+`com.dtwthalion.ttio.transport` / `.protection`.
 
 **Transport codec + networking** (`TTIOTransport*`; see
 `docs/transport-spec.md`):
@@ -254,7 +254,7 @@ TTIOAUFilter               (selective access predicate)
 ```
 
 **Per-AU encryption** (`TTIOPerAU*` /
-`com.dtwthalion.tio.protection.PerAU*` /
+`com.dtwthalion.ttio.protection.PerAU*` /
 `ttio.encryption_per_au`; see
 `docs/transport-encryption-design.md`):
 
@@ -278,7 +278,7 @@ objects.
 Four concrete classes add Raman and IR support alongside the
 existing MS / NMR hierarchy. Python uses snake_case in
 `ttio.{raman_spectrum,ir_spectrum,raman_image,ir_image}`; Java
-uses PascalCase in `com.dtwthalion.tio.{RamanSpectrum,IRSpectrum,
+uses PascalCase in `com.dtwthalion.ttio.{RamanSpectrum,IRSpectrum,
 RamanImage,IRImage}`.
 
 - **TTIORamanSpectrum / TTIOIRSpectrum** — `TTIOSpectrum`
@@ -291,7 +291,7 @@ RamanImage,IRImage}`.
   `docs/format-spec.md` §7a.
 - **JCAMP-DX 5.01 AFFN bridge** — `TTIOJcampDxReader` /
   `TTIOJcampDxWriter` (plus `ttio.importers/exporters.jcamp_dx`
-  and `com.dtwthalion.tio.{importers,exporters}.JcampDx*`). All
+  and `com.dtwthalion.ttio.{importers,exporters}.JcampDx*`). All
   three writers emit byte-identical output for the same logical
   spectrum and all three readers parse each other's output
   bit-for-bit (see

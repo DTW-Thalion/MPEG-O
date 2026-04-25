@@ -26,7 +26,7 @@
           . API status: Stable (Provisional per M39 — may change
           before v1.0). Cross-language equivalents: Python:
           ttio.providers.hdf5.Hdf5Provider
-          Java: com.dtwthalion.tio.providers.Hdf5Provider
+          Java: com.dtwthalion.ttio.providers.Hdf5Provider
         </desc>
         <method type="id&lt;TTIOStorageDataset&gt;" factory="yes">
           <sel>adapterForDataset:</sel>

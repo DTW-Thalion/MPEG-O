@@ -19,7 +19,7 @@
           One field inside a compound-dataset record. API status:
           Stable. Cross-language equivalents: Python:
           ttio.providers.base.CompoundField
-          Java: com.dtwthalion.tio.providers.CompoundField
+          Java: com.dtwthalion.ttio.providers.CompoundField
         </desc>
         <method type="instancetype" factory="yes">
           <sel>fieldWithName:</sel>

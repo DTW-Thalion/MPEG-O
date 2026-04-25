@@ -19,7 +19,7 @@
           plus excitation laser wavelength, laser power, and
           detector integration time. Cross-language
           equivalents: Java:
-          com.dtwthalion.tio.RamanSpectrum
+          com.dtwthalion.ttio.RamanSpectrum
           Python: ttio.raman_spectrum.RamanSpectrum
         </desc>
         <method type="double">

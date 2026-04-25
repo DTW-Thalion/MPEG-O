@@ -26,7 +26,7 @@
           reads. Buffer layout (row-major): `cube[(y * width +
           x) * spectralPoints + s]`. Cross-language equivalents:
           Python: ttio.raman_image.RamanImage Java:
-          com.dtwthalion.tio.RamanImage
+          com.dtwthalion.ttio.RamanImage
         </desc>
         <method type="NSData*">
           <sel>cube</sel>

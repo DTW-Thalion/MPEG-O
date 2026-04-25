@@ -2,7 +2,7 @@
  * TtioTransportServer — v0.10 M68.5 ObjC transport server CLI.
  *
  * Parallel to Python ``python -m ttio.tools.transport_server_cli``
- * and Java ``com.dtwthalion.tio.tools.TransportServerCli``.
+ * and Java ``com.dtwthalion.ttio.tools.TransportServerCli``.
  *
  * Usage: TtioTransportServer <path.tio> [--host 127.0.0.1] [--port 0]
  *

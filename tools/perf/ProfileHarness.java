@@ -11,12 +11,12 @@
  */
 package tools.perf;
 
-import com.dtwthalion.tio.AcquisitionRun;
-import com.dtwthalion.tio.SignalArray;
-import com.dtwthalion.tio.SpectralDataset;
-import com.dtwthalion.tio.Spectrum;
-import com.dtwthalion.tio.SpectrumIndex;
-import com.dtwthalion.tio.Enums.AcquisitionMode;
+import com.dtwthalion.ttio.AcquisitionRun;
+import com.dtwthalion.ttio.SignalArray;
+import com.dtwthalion.ttio.SpectralDataset;
+import com.dtwthalion.ttio.Spectrum;
+import com.dtwthalion.ttio.SpectrumIndex;
+import com.dtwthalion.ttio.Enums.AcquisitionMode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

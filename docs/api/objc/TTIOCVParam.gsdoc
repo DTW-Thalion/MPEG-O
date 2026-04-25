@@ -23,7 +23,7 @@
           implementation lands in Milestone 1. API
           status: Stable. Cross-language equivalents: Python:
           ttio.cv_param.CVParam Java:
-          com.dtwthalion.tio.CVParam
+          com.dtwthalion.ttio.CVParam
         </desc>
         <method type="instancetype" factory="yes">
           <sel>paramWithOntologyRef:</sel>

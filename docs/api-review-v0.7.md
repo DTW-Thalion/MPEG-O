@@ -63,7 +63,7 @@ catching arbitrary runtime errors.
 Python module docstrings and ObjC header comments uniformly carry
 "API status: Stable" + "Cross-language equivalents" blocks. Java coverage
 was patchy pre-v0.7; M50.4 completes an audit pass so every public type
-in `com.dtwthalion.tio.*` carries a `@since` tag matching its
+in `com.dtwthalion.ttio.*` carries a `@since` tag matching its
 introducing milestone (v0.5, v0.6, v0.6.1, or v0.7).
 
 ---
@@ -179,7 +179,7 @@ The harness:
    fixture via `SpectralDataset.write_minimal`.
 2. Three dumpers — `python -m ttio.tools.dump_identifications`,
    `objc/Tools/obj/TtioDumpIdentifications`, and
-   `com.dtwthalion.tio.tools.DumpIdentifications` (invoked via
+   `com.dtwthalion.ttio.tools.DumpIdentifications` (invoked via
    `java/run-tool.sh`) — emit the same deterministic JSON to stdout.
 3. `python/tests/test_compound_writer_parity.py` diffs the three outputs
    pairwise; any non-zero diff fails the test.

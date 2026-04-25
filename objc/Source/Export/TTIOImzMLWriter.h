@@ -17,7 +17,7 @@
  * Cross-language equivalents
  * --------------------------
  * Python: ttio.exporters.imzml  ·
- * Java:   com.dtwthalion.tio.exporters.ImzMLWriter
+ * Java:   com.dtwthalion.ttio.exporters.ImzMLWriter
  *
  * @since 0.9
  */

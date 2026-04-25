@@ -21,7 +21,7 @@ stamp the new attributes.
 ### Added
 
 - `Precision.UINT8 = 6` across Python (`ttio.enums.Precision`),
-  Java (`com.dtwthalion.tio.Enums.Precision`), and ObjC
+  Java (`com.dtwthalion.ttio.Enums.Precision`), and ObjC
   (`TTIOPrecisionUInt8`). Wired through every storage provider
   (HDF5, Memory, SQLite, Zarr); 1000-byte buffers round-trip
   byte-exactly across all four backends in all three languages.
@@ -243,7 +243,7 @@ provenance chain, hyperspectral analysis primitives).
 
 - **M75 — Python CLI parity polish (2026-04-23).** Three new
   `console_scripts` registered in `python/pyproject.toml` close the
-  last CLI-surface gap with the Java (`com.dtwthalion.tio.tools.*`)
+  last CLI-surface gap with the Java (`com.dtwthalion.ttio.tools.*`)
   and Objective-C (`objc/Tools/Ttio*`) tool families:
 
     - `ttio-sign` — HMAC-SHA256 canonical-byte signer. Mirrors ObjC
@@ -328,7 +328,7 @@ provenance chain, hyperspectral analysis primitives).
       where both matrices vanish.
     - **Cross-language parity.** Python
       (`ttio.analysis.two_d_cos`) uses NumPy BLAS; Java
-      (`com.dtwthalion.tio.analysis.TwoDCos`) and Objective-C
+      (`com.dtwthalion.ttio.analysis.TwoDCos`) and Objective-C
       (`Analysis/TTIOTwoDCos`) use plain nested loops with the
       Hilbert-Noda weight folded into the asynchronous multiply.
       Because BLAS accumulation order differs across
@@ -437,7 +437,7 @@ bit-identical on the round-trip path.
   false-trigger), then delegates to a per-language decoder:
 
     - Python: `ttio.importers._jcamp_decode.decode_xydata`
-    - Java: `com.dtwthalion.tio.importers.JcampDxDecode.decode`
+    - Java: `com.dtwthalion.ttio.importers.JcampDxDecode.decode`
     - Objective-C: `TTIOJcampDxDecode +decodeLines:…`
 
   Implements the full SQZ alphabet (`@`, `A–I`, `a–i`), DIF alphabet
@@ -751,7 +751,7 @@ on-disk format from v2 to v3.
 - **M54 + M54.1** 32-cell cross-language × cross-provider PQC
   conformance matrix: primitive ML-DSA / ML-KEM, v3 signatures on
   HDF5 / Zarr / SQLite, v2+v3 coexistence, v0.7 backward-compat.
-  New `com.dtwthalion.tio.tools.PQCTool` (Java) and
+  New `com.dtwthalion.ttio.tools.PQCTool` (Java) and
   `TtioPQCTool` (ObjC) CLIs drive the harness. New Python
   `sign_storage_dataset` / `verify_storage_dataset` provider-agnostic
   helpers.

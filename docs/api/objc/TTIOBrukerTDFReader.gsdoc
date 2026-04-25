@@ -116,7 +116,7 @@
           Bruker's scan-to-ion index) is a v0.9 concern. API
           status: Provisional (v0.8 M53). Cross-language
           equivalents: Python: ttio.importers.bruker_tdf
-          Java: com.dtwthalion.tio.importers.BrukerTDFReader
+          Java: com.dtwthalion.ttio.importers.BrukerTDFReader
         </desc>
         <method type="BOOL" factory="yes">
           <sel>importFromPath:</sel>

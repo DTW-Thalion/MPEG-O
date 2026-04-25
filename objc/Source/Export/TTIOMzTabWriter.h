@@ -8,7 +8,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.exporters.mztab
- *   Java:   com.dtwthalion.tio.exporters.MzTabWriter
+ *   Java:   com.dtwthalion.ttio.exporters.MzTabWriter
  *
  * SPDX-License-Identifier: Apache-2.0
  */

@@ -34,7 +34,7 @@
           NSError on malformed input. API status: Stable.
           Cross-language equivalents: Python:
           ttio.importers.nmrml Java:
-          com.dtwthalion.tio.importers.NmrMLReader
+          com.dtwthalion.ttio.importers.NmrMLReader
         </desc>
         <method type="instancetype" factory="yes">
           <sel>parseData:</sel>

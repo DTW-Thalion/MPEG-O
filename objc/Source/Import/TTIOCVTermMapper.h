@@ -32,7 +32,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.importers.cv_term_mapper
- *   Java:   com.dtwthalion.tio.importers.CVTermMapper
+ *   Java:   com.dtwthalion.ttio.importers.CVTermMapper
  */
 @interface TTIOCVTermMapper : NSObject
 

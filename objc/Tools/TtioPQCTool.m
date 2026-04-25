@@ -3,7 +3,7 @@
  *
  * Invoked by the cross-language conformance harness
  * (python/tests/test_m54_pqc_conformance.py) as the ObjC counterpart
- * of the Java com.dtwthalion.tio.tools.PQCTool. Subcommands match the
+ * of the Java com.dtwthalion.ttio.tools.PQCTool. Subcommands match the
  * Java tool 1:1 so the pytest harness can drive both with identical
  * argument strings.
  *

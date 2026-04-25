@@ -37,7 +37,7 @@
           straightforward follow-up. API status:
           Stable. Cross-language equivalents: Python:
           ttio.exporters.mzml Java:
-          com.dtwthalion.tio.exporters.MzMLWriter
+          com.dtwthalion.ttio.exporters.MzMLWriter
         </desc>
         <method type="NSData*" factory="yes">
           <sel>dataForDataset:</sel>

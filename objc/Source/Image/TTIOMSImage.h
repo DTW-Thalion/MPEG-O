@@ -25,7 +25,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.ms_image.MSImage
- *   Java:   com.dtwthalion.tio.MSImage
+ *   Java:   com.dtwthalion.ttio.MSImage
  */
 @interface TTIOMSImage : TTIOSpectralDataset
 

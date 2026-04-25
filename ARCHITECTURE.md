@@ -11,7 +11,7 @@ As of v0.11.1 there are three interoperable reference implementations:
   Apache-2.0 importers/exporters) — a full reader/writer on top of
   `h5py` + `numpy` that mirrors the Objective-C class hierarchy
   1-to-1. 765 tests passing.
-- **Java (`com.dtwthalion.tio`)** (`java/`, LGPL-3.0 core +
+- **Java (`com.dtwthalion.ttio`)** (`java/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
   mirroring the ObjC/Python class hierarchy. 331 tests passing.
   Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
@@ -155,7 +155,7 @@ Providers register via platform-native discovery:
 * **Python** — `importlib.metadata` entry points
   (`project.entry-points."ttio.providers"` in `pyproject.toml`).
 * **Java** — `java.util.ServiceLoader` with a service file at
-  `META-INF/services/com.dtwthalion.tio.providers.StorageProvider`.
+  `META-INF/services/com.dtwthalion.ttio.providers.StorageProvider`.
 * **ObjC** — `+load` registration into `TTIOProviderRegistry`.
 
 Each language exposes the same **capability floor**:
@@ -462,40 +462,40 @@ snake_case module names.
 
 | ObjC Class | Java Class | Package |
 |------------|-----------|---------|
-| `TTIOSignalArray` | `SignalArray` | `com.dtwthalion.tio` |
-| `TTIOSpectrum` | `Spectrum` | `com.dtwthalion.tio` |
-| `TTIOMassSpectrum` | `MassSpectrum` | `com.dtwthalion.tio` |
-| `TTIONMRSpectrum` | `NMRSpectrum` | `com.dtwthalion.tio` |
-| `TTIONMR2DSpectrum` | `NMR2DSpectrum` | `com.dtwthalion.tio` |
-| `TTIORamanSpectrum` (v0.11) | `RamanSpectrum` | `com.dtwthalion.tio` |
-| `TTIOIRSpectrum` (v0.11) | `IRSpectrum` | `com.dtwthalion.tio` |
-| `TTIOUVVisSpectrum` (v0.11.1) | `UVVisSpectrum` | `com.dtwthalion.tio` |
-| `TTIOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TwoDimensionalCorrelationSpectrum` | `com.dtwthalion.tio` |
-| `TTIOFreeInductionDecay` | `FreeInductionDecay` | `com.dtwthalion.tio` |
-| `TTIOChromatogram` | `Chromatogram` | `com.dtwthalion.tio` |
-| `TTIOSpectrumIndex` | `SpectrumIndex` | `com.dtwthalion.tio` |
-| `TTIOAcquisitionRun` | `AcquisitionRun` | `com.dtwthalion.tio` |
-| `TTIOSpectralDataset` | `SpectralDataset` | `com.dtwthalion.tio` |
-| `TTIOMSImage` | `MSImage` | `com.dtwthalion.tio` |
-| `TTIORamanImage` (v0.11) | `RamanImage` | `com.dtwthalion.tio` |
-| `TTIOIRImage` (v0.11) | `IRImage` | `com.dtwthalion.tio` |
-| `TTIOFeatureFlags` | `FeatureFlags` | `com.dtwthalion.tio` |
-| `TTIOIdentification` | `Identification` | `com.dtwthalion.tio` (record) |
-| `TTIOQuantification` | `Quantification` | `com.dtwthalion.tio` (record) |
-| `TTIOProvenanceRecord` | `ProvenanceRecord` | `com.dtwthalion.tio` (record) |
-| `TTIOEncryptionManager` | `EncryptionManager` | `com.dtwthalion.tio.protection` |
-| `TTIOSignatureManager` | `SignatureManager` | `com.dtwthalion.tio.protection` |
-| `TTIOKeyRotationManager` | `KeyRotationManager` | `com.dtwthalion.tio.protection` |
-| `TTIOAnonymizer` | `Anonymizer` | `com.dtwthalion.tio.protection` |
-| `TTIOMzMLReader` | `MzMLReader` | `com.dtwthalion.tio.importers` |
-| `TTIOMzMLWriter` | `MzMLWriter` | `com.dtwthalion.tio.exporters` |
-| `TTIONmrMLReader` | `NmrMLReader` | `com.dtwthalion.tio.importers` |
-| `TTIONmrMLWriter` | `NmrMLWriter` | `com.dtwthalion.tio.exporters` |
-| `TTIOISAExporter` | `ISAExporter` | `com.dtwthalion.tio.exporters` |
-| `TTIONumpress` | `NumpressCodec` | `com.dtwthalion.tio` |
-| `TTIOHDF5File` | `Hdf5File` | `com.dtwthalion.tio.hdf5` |
-| `TTIOHDF5Group` | `Hdf5Group` | `com.dtwthalion.tio.hdf5` |
-| `TTIOHDF5Dataset` | `Hdf5Dataset` | `com.dtwthalion.tio.hdf5` |
+| `TTIOSignalArray` | `SignalArray` | `com.dtwthalion.ttio` |
+| `TTIOSpectrum` | `Spectrum` | `com.dtwthalion.ttio` |
+| `TTIOMassSpectrum` | `MassSpectrum` | `com.dtwthalion.ttio` |
+| `TTIONMRSpectrum` | `NMRSpectrum` | `com.dtwthalion.ttio` |
+| `TTIONMR2DSpectrum` | `NMR2DSpectrum` | `com.dtwthalion.ttio` |
+| `TTIORamanSpectrum` (v0.11) | `RamanSpectrum` | `com.dtwthalion.ttio` |
+| `TTIOIRSpectrum` (v0.11) | `IRSpectrum` | `com.dtwthalion.ttio` |
+| `TTIOUVVisSpectrum` (v0.11.1) | `UVVisSpectrum` | `com.dtwthalion.ttio` |
+| `TTIOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TwoDimensionalCorrelationSpectrum` | `com.dtwthalion.ttio` |
+| `TTIOFreeInductionDecay` | `FreeInductionDecay` | `com.dtwthalion.ttio` |
+| `TTIOChromatogram` | `Chromatogram` | `com.dtwthalion.ttio` |
+| `TTIOSpectrumIndex` | `SpectrumIndex` | `com.dtwthalion.ttio` |
+| `TTIOAcquisitionRun` | `AcquisitionRun` | `com.dtwthalion.ttio` |
+| `TTIOSpectralDataset` | `SpectralDataset` | `com.dtwthalion.ttio` |
+| `TTIOMSImage` | `MSImage` | `com.dtwthalion.ttio` |
+| `TTIORamanImage` (v0.11) | `RamanImage` | `com.dtwthalion.ttio` |
+| `TTIOIRImage` (v0.11) | `IRImage` | `com.dtwthalion.ttio` |
+| `TTIOFeatureFlags` | `FeatureFlags` | `com.dtwthalion.ttio` |
+| `TTIOIdentification` | `Identification` | `com.dtwthalion.ttio` (record) |
+| `TTIOQuantification` | `Quantification` | `com.dtwthalion.ttio` (record) |
+| `TTIOProvenanceRecord` | `ProvenanceRecord` | `com.dtwthalion.ttio` (record) |
+| `TTIOEncryptionManager` | `EncryptionManager` | `com.dtwthalion.ttio.protection` |
+| `TTIOSignatureManager` | `SignatureManager` | `com.dtwthalion.ttio.protection` |
+| `TTIOKeyRotationManager` | `KeyRotationManager` | `com.dtwthalion.ttio.protection` |
+| `TTIOAnonymizer` | `Anonymizer` | `com.dtwthalion.ttio.protection` |
+| `TTIOMzMLReader` | `MzMLReader` | `com.dtwthalion.ttio.importers` |
+| `TTIOMzMLWriter` | `MzMLWriter` | `com.dtwthalion.ttio.exporters` |
+| `TTIONmrMLReader` | `NmrMLReader` | `com.dtwthalion.ttio.importers` |
+| `TTIONmrMLWriter` | `NmrMLWriter` | `com.dtwthalion.ttio.exporters` |
+| `TTIOISAExporter` | `ISAExporter` | `com.dtwthalion.ttio.exporters` |
+| `TTIONumpress` | `NumpressCodec` | `com.dtwthalion.ttio` |
+| `TTIOHDF5File` | `Hdf5File` | `com.dtwthalion.ttio.hdf5` |
+| `TTIOHDF5Group` | `Hdf5Group` | `com.dtwthalion.ttio.hdf5` |
+| `TTIOHDF5Dataset` | `Hdf5Dataset` | `com.dtwthalion.ttio.hdf5` |
 
 Java uses `AutoCloseable` + try-with-resources instead of ObjC `-dealloc`. Thread
 safety via `ReentrantReadWriteLock` on `Hdf5File` (same model as ObjC's

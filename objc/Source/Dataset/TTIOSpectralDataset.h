@@ -30,7 +30,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.spectral_dataset.SpectralDataset
- *   Java:   com.dtwthalion.tio.SpectralDataset
+ *   Java:   com.dtwthalion.ttio.SpectralDataset
  */
 @interface TTIOSpectralDataset : NSObject <TTIOEncryptable>
 
