@@ -570,3 +570,26 @@ def test_paired_end_mate_info(tmp_path: Path):
         assert read.template_length == int(written.template_lengths[0])
     finally:
         ds.close()
+
+
+def test_large_run_10k_reads(tmp_path: Path):
+    """Acceptance #5: 10K-read run iterates and spot-checks correctly."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    written = _make_written_run(n_reads=10_000, paired=False)
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": written},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == 10_000
+        for i in (0, 5_000, 9_999):
+            read = gr[i]
+            assert read.read_name == f"read_{i:06d}"
+            assert read.position == int(written.positions[i])
+    finally:
+        ds.close()
