@@ -663,3 +663,57 @@ def test_multi_provider_roundtrip(tmp_path: Path, provider: str):
         assert read.position == int(written.positions[42])
     finally:
         ds.close()
+
+
+def _make_minimal_ms_run(n_spectra: int = 5):
+    """Smallest valid WrittenRun for multi-omics co-existence tests."""
+    from ttio.spectral_dataset import WrittenRun
+    from ttio.enums import AcquisitionMode
+
+    rng = np.random.default_rng(0)
+    n_peaks_per_spectrum = 50
+    total = n_spectra * n_peaks_per_spectrum
+    return WrittenRun(
+        spectrum_class="TTIOMassSpectrum",
+        acquisition_mode=int(AcquisitionMode.MS1_DDA),
+        channel_data={
+            "mz": rng.uniform(100.0, 1000.0, total).astype(np.float64),
+            "intensity": rng.uniform(0.0, 10000.0, total).astype(np.float64),
+        },
+        offsets=np.arange(n_spectra, dtype=np.uint64) * n_peaks_per_spectrum,
+        lengths=np.full(n_spectra, n_peaks_per_spectrum, dtype=np.uint32),
+        retention_times=np.linspace(0.0, 60.0, n_spectra),
+        ms_levels=np.ones(n_spectra, dtype=np.int32),
+        polarities=np.ones(n_spectra, dtype=np.int32),
+        precursor_mzs=np.zeros(n_spectra, dtype=np.float64),
+        precursor_charges=np.zeros(n_spectra, dtype=np.int32),
+        base_peak_intensities=np.full(n_spectra, 1000.0, dtype=np.float64),
+    )
+
+
+def test_multi_omics_file(tmp_path: Path):
+    """Acceptance #8: ms_run + genomic_run coexist, both readable."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    ms_run = _make_minimal_ms_run(n_spectra=5)
+    g_run = _make_written_run(n_reads=100, paired=False)
+
+    p = tmp_path / "multi.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={"run_0001": ms_run},
+        genomic_runs={"genomic_0001": g_run},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        # MS side untouched
+        assert "run_0001" in ds.ms_runs
+        assert len(ds.ms_runs["run_0001"]) == 5
+        # Genomic side
+        assert "genomic_0001" in ds.genomic_runs
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == 100
+        assert gr[0].chromosome == g_run.chromosomes[0]
+    finally:
+        ds.close()
