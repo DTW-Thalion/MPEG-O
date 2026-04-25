@@ -204,13 +204,15 @@ cleanup:
     else if (H5Tequal(htype, H5T_NATIVE_DOUBLE) > 0) precision = TTIOPrecisionFloat64;
     else if (H5Tequal(htype, H5T_NATIVE_INT32)  > 0) precision = TTIOPrecisionInt32;
     else if (H5Tequal(htype, H5T_NATIVE_INT64)  > 0) precision = TTIOPrecisionInt64;
-    // H5T_NATIVE_UINT64 and H5T_NATIVE_INT64 are bit-identical on disk for
-    // non-negative values; the format-spec writes spectrum_index/offsets
-    // as uint64[N] (§ 6), so Python emits the native uint64 type while the
-    // ObjC writer historically emitted int64. Treat either type as Int64
-    // here so readers can round-trip cross-language fixtures without an
-    // accidental float64 type conversion silently corrupting the bytes.
-    else if (H5Tequal(htype, H5T_NATIVE_UINT64) > 0) precision = TTIOPrecisionInt64;
+    // M82: UINT64 datasets (genomic_index/offsets) round-trip as UINT64.
+    // Pre-M82 spectrum_index/offsets were written by Python as native
+    // uint64 but lacked an ObjC TTIOPrecisionUInt64 enum value, so they
+    // were read back as INT64 (bit-identical for non-negative offsets).
+    // M82 added the UINT64 enum value so genomic data round-trips with
+    // its declared precision. The pre-M82 spectrum_index files still
+    // read back correctly because the on-disk bytes are identical and
+    // SpectrumIndex's internal ivars treat them as uint64 either way.
+    else if (H5Tequal(htype, H5T_NATIVE_UINT64) > 0) precision = TTIOPrecisionUInt64;
     else if (H5Tequal(htype, H5T_NATIVE_UINT32) > 0) precision = TTIOPrecisionUInt32;
     else if (H5Tequal(htype, H5T_NATIVE_UINT8)  > 0) precision = TTIOPrecisionUInt8;
     else if (H5Tget_class(htype) == H5T_COMPOUND && H5Tget_size(htype) == 2 * sizeof(double)) {
