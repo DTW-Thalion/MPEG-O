@@ -597,6 +597,45 @@ static void testRandomAccessRead(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Cross-language fixture read (M82.1 Python → M82.2 ObjC) ────────
+
+static void testCrossLanguageFixtureRead(void)
+{
+    NSString *fixturePath = @"/home/toddw/TTI-O/python/tests/fixtures/genomic/m82_100reads.tio";
+    if (![[NSFileManager defaultManager] fileExistsAtPath:fixturePath]) {
+        printf("SKIP: cross-language fixture not found at %s\n",
+               fixturePath.UTF8String);
+        return;
+    }
+
+    NSError *err = nil;
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:fixturePath
+                                                                error:&err];
+    PASS(ds != nil, "M82 cross-lang: Python-written fixture opens in ObjC");
+    PASS(ds.genomicRuns[@"genomic_0001"] != nil,
+         "M82 cross-lang: genomic_0001 run present");
+
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr.readCount == 100, "M82 cross-lang: 100 reads from Python");
+    PASS([gr.referenceUri isEqualToString:@"GRCh38.p14"],
+         "M82 cross-lang: referenceUri matches Python");
+    PASS([gr.platform isEqualToString:@"ILLUMINA"],
+         "M82 cross-lang: platform matches Python");
+    PASS([gr.sampleName isEqualToString:@"NA12878"],
+         "M82 cross-lang: sampleName matches Python");
+    PASS(gr.acquisitionMode == TTIOAcquisitionModeGenomicWGS,
+         "M82 cross-lang: acquisitionMode matches Python");
+
+    TTIOAlignedRead *first = [gr readAtIndex:0 error:&err];
+    PASS(first != nil, "M82 cross-lang: read 0 materialises");
+    PASS(first.sequence.length == 150,
+         "M82 cross-lang: read 0 length 150");
+    PASS([first.cigar isEqualToString:@"150M"],
+         "M82 cross-lang: read 0 cigar 150M");
+    PASS([first.readName isEqualToString:@"read_000000"],
+         "M82 cross-lang: read 0 name matches Python");
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -612,5 +651,5 @@ void testM82GenomicRun(void)
     testEmptyRun();
     testPreM82BackwardCompat();
     testRandomAccessRead();
-    // Subsequent tasks append more test functions called from here.
+    testCrossLanguageFixtureRead();
 }
