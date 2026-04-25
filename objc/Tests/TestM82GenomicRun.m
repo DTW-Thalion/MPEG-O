@@ -566,6 +566,37 @@ static void testPreM82BackwardCompat(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Random-access read on a 1000-read run ─────────────────────────
+
+static void testRandomAccessRead(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82ra_%d.tio", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    TTIOWrittenGenomicRun *written = makeWrittenGenomicRun(1000, NO);
+    NSError *err = nil;
+    [TTIOSpectralDataset writeMinimalToPath:path
+                                        title:@"t"
+                          isaInvestigationId:@"i"
+                                      msRuns:@{}
+                                  genomicRuns:@{@"genomic_0001": written}
+                              identifications:nil
+                              quantifications:nil
+                            provenanceRecords:nil
+                                        error:&err];
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr.readCount == 1000, "M82: 1000-read run readable");
+
+    TTIOAlignedRead *r500 = [gr readAtIndex:500 error:&err];
+    PASS(r500 != nil, "M82: read at index 500 succeeds");
+    PASS([r500.readName isEqualToString:@"read_000500"],
+         "M82: random-access read_000500");
+    PASS(r500.sequence.length == 150, "M82: read 500 sequence length 150");
+
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -580,5 +611,6 @@ void testM82GenomicRun(void)
     testPairedEndMateInfo();
     testEmptyRun();
     testPreM82BackwardCompat();
+    testRandomAccessRead();
     // Subsequent tasks append more test functions called from here.
 }
