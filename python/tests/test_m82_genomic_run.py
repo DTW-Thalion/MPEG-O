@@ -546,3 +546,27 @@ def test_flag_filter(tmp_path: Path):
         assert sorted(reverse) == [3, 9]
     finally:
         ds.close()
+
+
+def test_paired_end_mate_info(tmp_path: Path):
+    """Acceptance #4: mate_chromosome / mate_position / template_length round-trip."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    written = _make_written_run(n_reads=100, paired=True)
+
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": written},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        read = gr[0]
+        assert read.is_paired is True
+        assert read.mate_chromosome == written.mate_chromosomes[0]
+        assert read.mate_position == int(written.mate_positions[0])
+        assert read.template_length == int(written.template_lengths[0])
+    finally:
+        ds.close()
