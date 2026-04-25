@@ -1224,14 +1224,19 @@ ObjC normative implementation matching the Python reference shipped in M82.1.
   integer directly via the underlying TTIOHDF5Group when the storage
   group unwraps. Documented for a future cleanup pass.
 
+### Added in follow-up after the initial M82.2 commit
+
+- **Memory provider end-to-end via writeMinimal** — `+writeMinimalToPath:`
+  now detects `memory://` / `sqlite://` / `zarr://` URL prefixes and
+  routes through a new `+writeMinimalGenomicViaProviderURL:` helper
+  that uses `TTIOProviderRegistry` and the StorageGroup protocol.
+  Currently genomic-only on the non-HDF5 path. `+readViaProviderURL:`
+  also gained `genomic_runs/` reading. ObjC test count now 1935.
+
 ### Out of scope (deferred)
 
-- **Memory provider end-to-end via writeMinimal** — current ObjC
-  `+writeMinimalToPath:` hard-codes HDF5Provider; Python M82.1 has
-  `write_minimal(provider=...)` which ObjC doesn't yet have. Direct
-  Memory-backed `TTIOGenomicIndex.write/read` works through the
-  storage protocol; full multi-genomicRun-via-Memory writeMinimal is
-  a follow-up.
+- **MS runs via memory:// / sqlite:// / zarr://** — would require the
+  HDF5-direct → StorageGroup writer refactor for the MS path.
 - **Java implementation** (M82.3).
 - **3×3 cross-language conformance matrix** (M82.4) — only
   ObjC-reads-Python is covered here.

@@ -158,13 +158,18 @@ context describing the migration itself.
 - **Backward compat:** Pre-M82 files open with empty `genomicRuns`
   dict (verified). Existing 1827-test ObjC suite still passes
   unchanged; M82.2 only adds, never modifies existing behavior.
-- **Out of scope (deferred):** Memory provider round-trip via
-  `+writeMinimalToPath:` — current ObjC `writeMinimal` hard-codes
-  HDF5Provider; needs a `provider:` parameter overload for parity
-  with Python M82.1's `write_minimal(..., provider=...)`. Direct
-  Memory-backed `TTIOGenomicIndex.write/read` works (Task 4 test
-  validates the provider-agnostic path), but full
-  multi-genomicRun-via-Memory writeMinimal is a small follow-up.
+- **Added:** Memory provider end-to-end via `+writeMinimalToPath:`.
+  When the path starts with `memory://` (or `sqlite://` / `zarr://`),
+  `+writeMinimalToPath:` routes through a new provider-agnostic
+  helper `+writeMinimalGenomicViaProviderURL:...` that uses
+  `TTIOProviderRegistry` + the StorageGroup protocol throughout.
+  Currently genomic-only on the non-HDF5 path (no MS runs / idents /
+  quants / provenance via memory://); MS run support requires the
+  HDF5-direct → StorageGroup writer refactor and is a future
+  cleanup. `+readFromFilePath:` already routed non-HDF5 URLs through
+  `+readViaProviderURL:` (M64.5); now that path also reads
+  `genomic_runs/` and populates `ds.genomicRuns`. Verified:
+  100-read memory:// round-trip with all field assertions.
 - **Out of scope (M82.3/.4):** Java implementation; cross-language
   conformance matrix beyond the ObjC-reads-Python fixture covered
   here.
