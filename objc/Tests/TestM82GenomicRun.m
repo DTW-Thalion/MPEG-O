@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #import "Genomics/TTIOAlignedRead.h"
+#import "Genomics/TTIOGenomicIndex.h"
 
 // ── AlignedRead value class ────────────────────────────────────────
 
@@ -81,10 +82,62 @@ static void testAlignedReadEquality(void)
     PASS(a.hash == b.hash, "M82: equal AlignedReads have equal hash");
 }
 
+// ── GenomicIndex (in-memory) ───────────────────────────────────────
+
+static TTIOGenomicIndex *makeIndex6(void)
+{
+    uint64_t offsets[6]    = {0, 150, 300, 450, 600, 750};
+    uint32_t lengths[6]    = {150, 150, 150, 150, 150, 150};
+    int64_t  positions[6]  = {100, 15000, 100, 200, 100, 25000};
+    uint8_t  mapqs[6]      = {60, 60, 0, 60, 60, 60};
+    uint32_t flags[6]      = {0, 0, 0x4, 0x10, 0x1, 0};
+    NSArray *chroms = @[@"chr1", @"chr1", @"chr2", @"chr2", @"chrX", @"chr1"];
+
+    return [[TTIOGenomicIndex alloc]
+        initWithOffsets:[NSData dataWithBytes:offsets length:sizeof(offsets)]
+                lengths:[NSData dataWithBytes:lengths length:sizeof(lengths)]
+            chromosomes:chroms
+              positions:[NSData dataWithBytes:positions length:sizeof(positions)]
+       mappingQualities:[NSData dataWithBytes:mapqs length:sizeof(mapqs)]
+                  flags:[NSData dataWithBytes:flags length:sizeof(flags)]];
+}
+
+static void testGenomicIndexInMemory(void)
+{
+    TTIOGenomicIndex *idx = makeIndex6();
+    PASS(idx.count == 6, "M82: GenomicIndex count");
+    PASS([idx offsetAt:0] == 0, "M82: offsetAt[0]");
+    PASS([idx lengthAt:5] == 150, "M82: lengthAt[5]");
+    PASS([idx positionAt:1] == 15000, "M82: positionAt[1]");
+    PASS([idx mappingQualityAt:2] == 0, "M82: mappingQualityAt[2]");
+    PASS([idx flagsAt:3] == 0x10, "M82: flagsAt[3]");
+    PASS([[idx chromosomeAt:4] isEqualToString:@"chrX"], "M82: chromosomeAt[4]");
+
+    NSIndexSet *region = [idx indicesForRegion:@"chr1" start:10000 end:20000];
+    PASS([region containsIndex:1] && region.count == 1,
+         "M82: indicesForRegion narrows correctly");
+
+    NSIndexSet *empty = [idx indicesForRegion:@"chrY" start:0 end:1000000];
+    PASS(empty.count == 0, "M82: indicesForRegion empty when no match");
+
+    NSIndexSet *unmapped = [idx indicesForUnmapped];
+    PASS([unmapped containsIndex:2] && unmapped.count == 1,
+         "M82: indicesForUnmapped");
+
+    NSIndexSet *reverse = [idx indicesForFlag:0x10];
+    PASS([reverse containsIndex:3] && reverse.count == 1,
+         "M82: indicesForFlag(reverse)");
+
+    NSIndexSet *paired = [idx indicesForFlag:0x1];
+    PASS([paired containsIndex:4] && paired.count == 1,
+         "M82: indicesForFlag(paired)");
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
     testAlignedReadFlagAccessors();
     testAlignedReadEquality();
+    testGenomicIndexInMemory();
     // Subsequent tasks append more test functions called from here.
 }
