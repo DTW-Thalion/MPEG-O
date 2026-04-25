@@ -13,10 +13,73 @@
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOGenomicRun.h"
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
+#import "Run/TTIOAcquisitionRun.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOProviderRegistry.h"
 #include <unistd.h>
 #include <string.h>
+
+// ── Helpers for constructing minimal TTIOWrittenRun (for multi-omics)
+
+static NSData *_f64le(const double *v, NSUInteger n)
+{
+    NSMutableData *d = [NSMutableData dataWithCapacity:n * 8];
+    for (NSUInteger i = 0; i < n; i++) [d appendBytes:&v[i] length:8];
+    return d;
+}
+
+static NSData *_i32arr(const int32_t *v, NSUInteger n)
+{
+    NSMutableData *d = [NSMutableData dataWithCapacity:n * 4];
+    for (NSUInteger i = 0; i < n; i++) [d appendBytes:&v[i] length:4];
+    return d;
+}
+
+static NSData *_u32arr(const uint32_t *v, NSUInteger n)
+{
+    NSMutableData *d = [NSMutableData dataWithCapacity:n * 4];
+    for (NSUInteger i = 0; i < n; i++) [d appendBytes:&v[i] length:4];
+    return d;
+}
+
+static NSData *_u64arr(const uint64_t *v, NSUInteger n)
+{
+    NSMutableData *d = [NSMutableData dataWithCapacity:n * 8];
+    for (NSUInteger i = 0; i < n; i++) [d appendBytes:&v[i] length:8];
+    return d;
+}
+
+static TTIOWrittenRun *makeMinimalMSRun(void)
+{
+    NSUInteger n = 5, p = 3, total = n * p;
+    double mz[15], intensity[15];
+    for (NSUInteger i = 0; i < total; i++) {
+        mz[i] = 100.0 + i;
+        intensity[i] = 100.0 * (i + 1);
+    }
+    uint64_t offsets[5] = {0, 3, 6, 9, 12};
+    uint32_t lengths[5] = {3, 3, 3, 3, 3};
+    double rts[5] = {1.0, 2.0, 3.0, 4.0, 5.0};
+    int32_t msLevels[5] = {1, 2, 1, 2, 1};
+    int32_t pols[5] = {1, 1, 1, 1, 1};
+    double pmzs[5] = {0.0, 510.0, 0.0, 530.0, 0.0};
+    int32_t pcs[5] = {0, 2, 0, 2, 0};
+    double bpis[5] = {300.0, 600.0, 900.0, 1200.0, 1500.0};
+    return [[TTIOWrittenRun alloc]
+        initWithSpectrumClassName:@"TTIOMassSpectrum"
+                  acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
+                      channelData:@{@"mz": _f64le(mz, total),
+                                    @"intensity": _f64le(intensity, total)}
+                          offsets:_u64arr(offsets, n)
+                          lengths:_u32arr(lengths, n)
+                   retentionTimes:_f64le(rts, n)
+                         msLevels:_i32arr(msLevels, n)
+                       polarities:_i32arr(pols, n)
+                     precursorMzs:_f64le(pmzs, n)
+                 precursorCharges:_i32arr(pcs, n)
+              basePeakIntensities:_f64le(bpis, n)];
+}
 
 // ── AlignedRead value class ────────────────────────────────────────
 
@@ -636,6 +699,35 @@ static void testCrossLanguageFixtureRead(void)
          "M82 cross-lang: read 0 name matches Python");
 }
 
+// ── Acceptance #5 — multi-omics file (ms_run + genomic_run) ───────
+
+static void testMultiOmicsFile(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82mo_%d.tio", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    TTIOWrittenRun *msRun = makeMinimalMSRun();
+    TTIOWrittenGenomicRun *gRun = makeWrittenGenomicRun(100, NO);
+    NSError *err = nil;
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                  title:@"multi-omics"
+                                    isaInvestigationId:@"ISA-MO"
+                                                msRuns:@{@"run_0001": msRun}
+                                            genomicRuns:@{@"genomic_0001": gRun}
+                                        identifications:nil
+                                        quantifications:nil
+                                      provenanceRecords:nil
+                                                  error:&err];
+    PASS(ok, "M82: multi-omics writeMinimal succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    PASS(ds.msRuns[@"run_0001"] != nil, "M82: ms_run readable in multi-omics");
+    PASS(ds.genomicRuns[@"genomic_0001"].readCount == 100,
+         "M82: genomic_run readable in multi-omics with correct readCount");
+
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -652,4 +744,5 @@ void testM82GenomicRun(void)
     testPreM82BackwardCompat();
     testRandomAccessRead();
     testCrossLanguageFixtureRead();
+    testMultiOmicsFile();
 }
