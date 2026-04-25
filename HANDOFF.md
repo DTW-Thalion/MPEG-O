@@ -23,12 +23,15 @@ historical M80 plan if needed.
 | `87068e4` | Phase 4 — Docs + repo                                |
 | `f3267ab` | Phase 4 fixup — sed-order bug across 378 files       |
 
-### M81 — Java reverse-DNS correction (1 commit)
+### M81 — Java reverse-DNS correction (2 commits)
 
 | Commit    | Change                                                 |
 |-----------|--------------------------------------------------------|
 | `9c2ad31` | `com.dtwthalion.ttio` → `global.thalion.ttio`,         |
 |           | pom.xml groupId, 158 .java moves, doc regen           |
+| `1100cd4` | Cleanup: stale `mpeg-o` PyPI refs (Java exporter       |
+|           | parity bug + 16 docs/CI files), 2 stale slash-form     |
+|           | path checks in Python tests, run-tool.sh +x restored   |
 
 ### Renames applied
 
