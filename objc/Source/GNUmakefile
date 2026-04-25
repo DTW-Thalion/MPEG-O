@@ -41,6 +41,7 @@ libTTIO_HEADER_FILES = \
 	Genomics/TTIOAlignedRead.h \
 	Genomics/TTIOGenomicIndex.h \
 	Genomics/TTIOWrittenGenomicRun.h \
+	Genomics/TTIOGenomicRun.h \
 	Dataset/TTIOFeature.h \
 	Dataset/TTIOIdentification.h \
 	Dataset/TTIOQuantification.h \
@@ -135,6 +136,7 @@ libTTIO_OBJC_FILES = \
 	Genomics/TTIOAlignedRead.m \
 	Genomics/TTIOGenomicIndex.m \
 	Genomics/TTIOWrittenGenomicRun.m \
+	Genomics/TTIOGenomicRun.m \
 	Dataset/TTIOFeature.m \
 	Dataset/TTIOIdentification.m \
 	Dataset/TTIOQuantification.m \
