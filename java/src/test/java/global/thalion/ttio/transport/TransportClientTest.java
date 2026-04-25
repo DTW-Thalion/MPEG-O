@@ -92,7 +92,7 @@ class TransportClientTest {
     private static ServerHandle startPythonServer(Path ttioPath) throws IOException {
         // Use the venv's python if available, otherwise system python3.
         Path venvPython = Path.of(System.getProperty("user.home"),
-                "MPEG-O", "python", ".venv", "bin", "python");
+                "TTI-O", "python", ".venv", "bin", "python");
         String pythonBin = Files.isExecutable(venvPython)
                 ? venvPython.toString() : "python3";
         ProcessBuilder pb = new ProcessBuilder(

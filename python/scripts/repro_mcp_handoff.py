@@ -2,7 +2,7 @@
 
 Run with the in-tree venv:
 
-    cd /home/toddw/MPEG-O/python && source .venv/bin/activate
+    cd /home/toddw/TTI-O/python && source .venv/bin/activate
     python scripts/repro_mcp_handoff.py
 
 Walks Issue A (is_encrypted lost on reopen) and Issue B (intensity_array

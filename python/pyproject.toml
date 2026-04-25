@@ -59,9 +59,9 @@ network = ["websockets>=12.0"]
 all = ["ttio[crypto,import,cloud,codecs,zarr,pqc,bruker]"]
 
 [project.urls]
-Homepage = "https://github.com/DTW-Thalion/MPEG-O"
-Repository = "https://github.com/DTW-Thalion/MPEG-O"
-Issues = "https://github.com/DTW-Thalion/MPEG-O/issues"
+Homepage = "https://github.com/DTW-Thalion/TTI-O"
+Repository = "https://github.com/DTW-Thalion/TTI-O"
+Issues = "https://github.com/DTW-Thalion/TTI-O/issues"
 
 [project.entry-points."ttio.providers"]
 hdf5 = "ttio.providers.hdf5:Hdf5Provider"
