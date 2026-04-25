@@ -751,6 +751,50 @@ def test_opt_genomic_flag_absent_when_no_genomic_runs(tmp_path: Path):
         ds.close()
 
 
+def test_random_access_uses_hyperslab(tmp_path: Path):
+    """Acceptance #12: __getitem__ reads only the read's slice, not the full channel.
+
+    Verifies by recording the offset/count arguments to the sequences dataset's
+    read() and asserting they match offsets[i]..offsets[i]+lengths[i].
+    """
+    from ttio.spectral_dataset import SpectralDataset
+
+    written = _make_written_run(n_reads=1_000, paired=False)
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": written},
+    )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+
+        # Trigger lazy-cache the sequences dataset, then patch its .read
+        # method to record args.
+        seq_ds = gr._signal_dataset("sequences")
+        recorded: list[tuple[int, int]] = []
+        original = seq_ds.read
+
+        def _spy(offset=0, count=-1):
+            recorded.append((int(offset), int(count)))
+            return original(offset=offset, count=count)
+
+        seq_ds.read = _spy  # type: ignore[method-assign]
+
+        read = gr[500]
+
+        # Exactly one read call against sequences for read 500
+        assert len(recorded) == 1
+        expected_offset = int(written.offsets[500])
+        expected_count = int(written.lengths[500])
+        assert recorded[0] == (expected_offset, expected_count)
+        # And the actual read content matches
+        assert len(read.sequence) == expected_count
+    finally:
+        ds.close()
+
+
 def test_streaming_iteration(tmp_path: Path):
     """Acceptance #11: for-loop iteration yields reads in index order."""
     from ttio.spectral_dataset import SpectralDataset
