@@ -39,6 +39,7 @@ libTTIO_HEADER_FILES = \
 	Run/TTIOSpectrumIndex.h \
 	Run/TTIOAcquisitionRun.h \
 	Genomics/TTIOAlignedRead.h \
+	Genomics/TTIOGenomicIndex.h \
 	Dataset/TTIOFeature.h \
 	Dataset/TTIOIdentification.h \
 	Dataset/TTIOQuantification.h \
@@ -131,6 +132,7 @@ libTTIO_OBJC_FILES = \
 	Run/TTIOSpectrumIndex.m \
 	Run/TTIOAcquisitionRun.m \
 	Genomics/TTIOAlignedRead.m \
+	Genomics/TTIOGenomicIndex.m \
 	Dataset/TTIOFeature.m \
 	Dataset/TTIOIdentification.m \
 	Dataset/TTIOQuantification.m \
