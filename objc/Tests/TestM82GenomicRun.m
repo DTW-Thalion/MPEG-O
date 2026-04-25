@@ -490,6 +490,54 @@ static void testPairedEndMateInfo(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Acceptance #6 — empty run ─────────────────────────────────────
+
+static void testEmptyRun(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82er_%d.tio", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    TTIOWrittenGenomicRun *empty = [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                   referenceUri:@"GRCh38.p14"
+                       platform:@"ILLUMINA"
+                     sampleName:@"NA12878"
+                      positions:[NSData data]
+               mappingQualities:[NSData data]
+                          flags:[NSData data]
+                      sequences:[NSData data]
+                      qualities:[NSData data]
+                        offsets:[NSData data]
+                        lengths:[NSData data]
+                         cigars:@[]
+                      readNames:@[]
+                mateChromosomes:@[]
+                  matePositions:[NSData data]
+                templateLengths:[NSData data]
+                    chromosomes:@[]
+              signalCompression:TTIOCompressionZlib];
+
+    NSError *err = nil;
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                  title:@"t"
+                                    isaInvestigationId:@"i"
+                                                msRuns:@{}
+                                            genomicRuns:@{@"genomic_0001": empty}
+                                        identifications:nil
+                                        quantifications:nil
+                                      provenanceRecords:nil
+                                                  error:&err];
+    PASS(ok, "M82: empty run writeMinimal succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    PASS(ds != nil, "M82: empty run readFromFilePath succeeds");
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M82: empty run accessible via genomicRuns");
+    PASS(gr.readCount == 0, "M82: empty run readCount is 0");
+
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -502,5 +550,6 @@ void testM82GenomicRun(void)
     testRegionQuery();
     testFlagFilter();
     testPairedEndMateInfo();
+    testEmptyRun();
     // Subsequent tasks append more test functions called from here.
 }
