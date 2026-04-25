@@ -601,9 +601,14 @@ class SpectralDataset:
 
         # M82: opt_genomic feature flag + version bump when genomic_runs present.
         has_genomic = bool(genomic_runs)
-        if features is None and has_genomic:
+        # M82: opt_genomic is the canonical advertisement of genomic content.
+        # Add it whenever genomic_runs is non-empty, even if the caller supplied
+        # their own features list (idempotent — no duplicate if already present).
+        if has_genomic and "opt_genomic" not in feature_list:
             feature_list = feature_list + ["opt_genomic"]
-        # Conservative version bump: 1.4 when M82 content present.
+        # M82: bump to 1.4 when genomic content present. 1.4 implies 1.3 (M74)
+        # implies 1.1 (base). Readers gate features by feature flag list, not by
+        # version equality.
         if has_genomic:
             format_version = "1.4"
 

@@ -356,8 +356,40 @@ def test_write_minimal_creates_genomic_runs_group(tmp_path: Path):
         assert "cigars" in run["signal_channels"]
         assert "read_names" in run["signal_channels"]
         assert "mate_info" in run["signal_channels"]
-
-    # _run_names CSV attribute
-    with h5py.File(p, "r") as f:
+        assert "positions" in run["signal_channels"]
+        assert "flags" in run["signal_channels"]
+        assert "mapping_qualities" in run["signal_channels"]
+        # _run_names CSV attribute
         names = f["study/genomic_runs"].attrs["_run_names"].decode("utf-8")
         assert names == "genomic_0001"
+
+
+def test_write_minimal_genomic_sets_format_version_and_flag(tmp_path: Path):
+    """opt_genomic flag added; format_version bumps to 1.4 when genomic runs present."""
+    import json
+    from ttio.spectral_dataset import SpectralDataset
+
+    p = tmp_path / "g.tio"
+    SpectralDataset.write_minimal(
+        p,
+        title="t",
+        isa_investigation_id="i",
+        runs={},
+        genomic_runs={"genomic_0001": _make_written_run(n_reads=5)},
+    )
+
+    # Read feature flags + format version via raw h5py.
+    # write_feature_flags stores: root attr "ttio_format_version" (string)
+    # and root attr "ttio_features" (JSON-encoded list of strings).
+    with h5py.File(p, "r") as f:
+        format_version = f.attrs["ttio_format_version"]
+        # The attribute is a fixed-length bytes value; decode if needed.
+        if isinstance(format_version, bytes):
+            format_version = format_version.decode("utf-8")
+        features_raw = f.attrs["ttio_features"]
+        if isinstance(features_raw, bytes):
+            features_raw = features_raw.decode("utf-8")
+        feature_list = json.loads(features_raw)
+
+    assert format_version == "1.4"
+    assert "opt_genomic" in feature_list
