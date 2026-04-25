@@ -40,7 +40,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.key_rotation
- *   Java:   com.dtwthalion.tio.protection.KeyRotationManager
+ *   Java:   com.dtwthalion.ttio.protection.KeyRotationManager
  */
 @interface TTIOKeyRotationManager : NSObject
 

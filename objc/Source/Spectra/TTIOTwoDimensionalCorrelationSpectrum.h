@@ -12,7 +12,7 @@
  * size-by-size row-major float64 buffers.
  *
  * Cross-language equivalents:
- *   Java:   com.dtwthalion.tio.TwoDimensionalCorrelationSpectrum
+ *   Java:   com.dtwthalion.ttio.TwoDimensionalCorrelationSpectrum
  *   Python: ttio.two_dimensional_correlation_spectrum
  *           .TwoDimensionalCorrelationSpectrum
  */

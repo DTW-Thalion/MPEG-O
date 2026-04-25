@@ -13,7 +13,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.axis_descriptor.AxisDescriptor
- *   Java:   com.dtwthalion.tio.AxisDescriptor
+ *   Java:   com.dtwthalion.ttio.AxisDescriptor
  */
 @interface TTIOAxisDescriptor : NSObject <NSCoding, NSCopying>
 

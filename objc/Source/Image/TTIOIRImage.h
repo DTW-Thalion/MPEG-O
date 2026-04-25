@@ -17,7 +17,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.ir_image.IRImage
- *   Java:   com.dtwthalion.tio.IRImage
+ *   Java:   com.dtwthalion.ttio.IRImage
  */
 @interface TTIOIRImage : TTIOSpectralDataset
 

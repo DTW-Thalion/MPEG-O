@@ -23,7 +23,7 @@
           Length is the number of complex points (i.e. half the
           number of doubles in the buffer). Cross-language
           equivalents: Python: ttio.fid.FreeInductionDecay
-          Java: com.dtwthalion.tio.FreeInductionDecay
+          Java: com.dtwthalion.ttio.FreeInductionDecay
         </desc>
         <method type="double">
           <sel>dwellTimeSeconds</sel>

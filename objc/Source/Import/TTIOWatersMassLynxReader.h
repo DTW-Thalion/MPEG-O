@@ -33,7 +33,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.importers.waters_masslynx
- *   Java:   com.dtwthalion.tio.importers.WatersMassLynxReader
+ *   Java:   com.dtwthalion.ttio.importers.WatersMassLynxReader
  */
 @interface TTIOWatersMassLynxReader : NSObject
 

@@ -3,7 +3,7 @@
  *
  * Decode an TTI-O transport stream into a .tio file. Parallel to
  * Python ttio.tools.transport_decode_cli and Java
- * com.dtwthalion.tio.tools.TransportDecodeCli.
+ * com.dtwthalion.ttio.tools.TransportDecodeCli.
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

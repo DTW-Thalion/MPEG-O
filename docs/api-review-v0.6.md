@@ -24,7 +24,7 @@ Three language implementations are reviewed:
 - **Objective-C** — normative reference. ObjC headers define the canonical API
   shape. All parity decisions in M41 were resolved against ObjC.
 - **Python** — `ttio.*` package, Python 3.11+, NumPy-style docstrings.
-- **Java** — `com.dtwthalion.tio.*`, JDK 17, Javadoc.
+- **Java** — `com.dtwthalion.ttio.*`, JDK 17, Javadoc.
 
 The review covers all eight subsystems addressed in M41 slices 41.1 through
 41.8. Internal helpers (see §1.3 below) are excluded from the parity guarantee.
@@ -56,8 +56,8 @@ Every public API surface carries one of three stability labels:
   | `ttio.importers._base64_zlib` | Python | Private module (underscore-prefixed) |
   | `ttio._numpress` | Python | Private module |
   | `ttio._hdf5_io` | Python | Private HDF5 compound-IO helper |
-  | `com.dtwthalion.tio.MiniJson` | Java | Internal JSON micro-parser |
-  | `com.dtwthalion.tio.hdf5.Hdf5CompoundIO` | Java | Internal HDF5 compound-IO |
+  | `com.dtwthalion.ttio.MiniJson` | Java | Internal JSON micro-parser |
+  | `com.dtwthalion.ttio.hdf5.Hdf5CompoundIO` | Java | Internal HDF5 compound-IO |
   | `TTIOBase64` | ObjC | ObjC wrapper; Java uses `java.util.Base64` stdlib directly |
   | `TTIOHDF5File` | ObjC | ObjC HDF5 file handle; Java has `Hdf5File` in hdf5 subpackage |
 
@@ -76,11 +76,11 @@ When a class exists in only one or two languages, the missing cell is noted as
 |---|---|---|
 | Objective-C | `TTIO` prefix | `TTIOClassName` — no namespaces in ObjC; prefix is the namespace |
 | Python | `ttio.*` packages | `snake_case` modules, `PascalCase` classes |
-| Java | `com.dtwthalion.tio.*` | `PascalCase` classes; subpackages: `protocols`, `protection`, `providers`, `importers`, `exporters`, `hdf5` |
+| Java | `com.dtwthalion.ttio.*` | `PascalCase` classes; subpackages: `protocols`, `protection`, `providers`, `importers`, `exporters`, `hdf5` |
 
 **Note on Java groupId:** The Java artifact groupId migrates from
 `com.dtwthalion` to `global.thalion` in M40 (pending). This document uses the
-current `com.dtwthalion.tio.*` names throughout. A one-line update to this
+current `com.dtwthalion.ttio.*` names throughout. A one-line update to this
 table and the parity cells below is the only change needed when M40 lands.
 
 ---
@@ -97,21 +97,21 @@ table and the parity cells below is the only change needed when M40 lands.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOCVAnnotatable` | `ttio.protocols.CVAnnotatable` | `com.dtwthalion.tio.protocols.CVAnnotatable` | Stable |
-| `TTIOEncryptable` | `ttio.protocols.Encryptable` | `com.dtwthalion.tio.protocols.Encryptable` | Stable |
-| `TTIOIndexable` | `ttio.protocols.Indexable` | `com.dtwthalion.tio.protocols.Indexable` | Stable |
-| `TTIOProvenanceable` | `ttio.protocols.Provenanceable` | `com.dtwthalion.tio.protocols.Provenanceable` | Stable |
-| `TTIOStreamable` | `ttio.protocols.Streamable` | `com.dtwthalion.tio.protocols.Streamable` | Stable |
+| `TTIOCVAnnotatable` | `ttio.protocols.CVAnnotatable` | `com.dtwthalion.ttio.protocols.CVAnnotatable` | Stable |
+| `TTIOEncryptable` | `ttio.protocols.Encryptable` | `com.dtwthalion.ttio.protocols.Encryptable` | Stable |
+| `TTIOIndexable` | `ttio.protocols.Indexable` | `com.dtwthalion.ttio.protocols.Indexable` | Stable |
+| `TTIOProvenanceable` | `ttio.protocols.Provenanceable` | `com.dtwthalion.ttio.protocols.Provenanceable` | Stable |
+| `TTIOStreamable` | `ttio.protocols.Streamable` | `com.dtwthalion.ttio.protocols.Streamable` | Stable |
 
 #### Value Classes
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOAxisDescriptor` | `ttio.axis_descriptor.AxisDescriptor` | `com.dtwthalion.tio.AxisDescriptor` | Stable |
-| `TTIOCVParam` | `ttio.cv_param.CVParam` | `com.dtwthalion.tio.CVParam` | Stable |
-| `TTIOEncodingSpec` | `ttio.encoding_spec.EncodingSpec` | `com.dtwthalion.tio.EncodingSpec` | Stable |
-| `TTIOValueRange` | `ttio.value_range.ValueRange` | `com.dtwthalion.tio.ValueRange` | Stable |
-| `TTIOEnums` (enums module) | `ttio.enums` | `com.dtwthalion.tio.Enums` | Stable |
+| `TTIOAxisDescriptor` | `ttio.axis_descriptor.AxisDescriptor` | `com.dtwthalion.ttio.AxisDescriptor` | Stable |
+| `TTIOCVParam` | `ttio.cv_param.CVParam` | `com.dtwthalion.ttio.CVParam` | Stable |
+| `TTIOEncodingSpec` | `ttio.encoding_spec.EncodingSpec` | `com.dtwthalion.ttio.EncodingSpec` | Stable |
+| `TTIOValueRange` | `ttio.value_range.ValueRange` | `com.dtwthalion.ttio.ValueRange` | Stable |
+| `TTIOEnums` (enums module) | `ttio.enums` | `com.dtwthalion.ttio.Enums` | Stable |
 
 #### Method-level notes
 
@@ -175,7 +175,7 @@ ObjC `TTIOValueRange`; Python already had equivalents.
 - Python and Java gained `ByteOrder` enum (`LITTLE_ENDIAN`, `BIG_ENDIAN`).
 - Java `ValueRange` gained `span()` and `contains(double)` to match ObjC.
 - Python `protocols` subpackage created (`ttio.protocols.__init__.py`).
-- Java `protocols` package created (`com.dtwthalion.tio.protocols`).
+- Java `protocols` package created (`com.dtwthalion.ttio.protocols`).
 - All five domain protocol interfaces created in Python and Java.
 
 #### Deferred
@@ -193,14 +193,14 @@ ObjC `TTIOValueRange`; Python already had equivalents.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOSignalArray` | `ttio.signal_array.SignalArray` | `com.dtwthalion.tio.SignalArray` | Stable |
-| `TTIONumpress` | `ttio._numpress` (internal) | `com.dtwthalion.tio.NumpressCodec` | Internal (Python); Stable (Java/ObjC public surface) |
-| `TTIOSpectrum` | `ttio.spectrum.Spectrum` | `com.dtwthalion.tio.Spectrum` | Stable |
-| `TTIOMassSpectrum` | `ttio.mass_spectrum.MassSpectrum` | `com.dtwthalion.tio.MassSpectrum` | Stable |
-| `TTIONMRSpectrum` | `ttio.nmr_spectrum.NMRSpectrum` | `com.dtwthalion.tio.NMRSpectrum` | Stable |
-| `TTIONMR2DSpectrum` | `ttio.nmr_2d.NMR2DSpectrum` | `com.dtwthalion.tio.NMR2DSpectrum` | Stable |
-| `TTIOFreeInductionDecay` | `ttio.fid.FreeInductionDecay` | `com.dtwthalion.tio.FreeInductionDecay` | Stable |
-| `TTIOChromatogram` | `ttio.chromatogram.Chromatogram` | `com.dtwthalion.tio.Chromatogram` | Stable |
+| `TTIOSignalArray` | `ttio.signal_array.SignalArray` | `com.dtwthalion.ttio.SignalArray` | Stable |
+| `TTIONumpress` | `ttio._numpress` (internal) | `com.dtwthalion.ttio.NumpressCodec` | Internal (Python); Stable (Java/ObjC public surface) |
+| `TTIOSpectrum` | `ttio.spectrum.Spectrum` | `com.dtwthalion.ttio.Spectrum` | Stable |
+| `TTIOMassSpectrum` | `ttio.mass_spectrum.MassSpectrum` | `com.dtwthalion.ttio.MassSpectrum` | Stable |
+| `TTIONMRSpectrum` | `ttio.nmr_spectrum.NMRSpectrum` | `com.dtwthalion.ttio.NMRSpectrum` | Stable |
+| `TTIONMR2DSpectrum` | `ttio.nmr_2d.NMR2DSpectrum` | `com.dtwthalion.ttio.NMR2DSpectrum` | Stable |
+| `TTIOFreeInductionDecay` | `ttio.fid.FreeInductionDecay` | `com.dtwthalion.ttio.FreeInductionDecay` | Stable |
+| `TTIOChromatogram` | `ttio.chromatogram.Chromatogram` | `com.dtwthalion.ttio.Chromatogram` | Stable |
 
 #### Method-level notes
 
@@ -289,10 +289,10 @@ returning `SignalArray`. Fields retained: `chromatogram_type`, `target_mz`,
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOAcquisitionRun` | `ttio.acquisition_run.AcquisitionRun` | `com.dtwthalion.tio.AcquisitionRun` | Stable |
-| `TTIOInstrumentConfig` | `ttio.instrument_config.InstrumentConfig` | `com.dtwthalion.tio.InstrumentConfig` | Stable |
-| `TTIOSpectrumIndex` | `ttio.acquisition_run.SpectrumIndex` | `com.dtwthalion.tio.SpectrumIndex` | Stable |
-| `TTIOMSImage` | `ttio.ms_image.MSImage` | `com.dtwthalion.tio.MSImage` | Stable |
+| `TTIOAcquisitionRun` | `ttio.acquisition_run.AcquisitionRun` | `com.dtwthalion.ttio.AcquisitionRun` | Stable |
+| `TTIOInstrumentConfig` | `ttio.instrument_config.InstrumentConfig` | `com.dtwthalion.ttio.InstrumentConfig` | Stable |
+| `TTIOSpectrumIndex` | `ttio.acquisition_run.SpectrumIndex` | `com.dtwthalion.ttio.SpectrumIndex` | Stable |
+| `TTIOMSImage` | `ttio.ms_image.MSImage` | `com.dtwthalion.ttio.MSImage` | Stable |
 
 #### Method-level notes
 
@@ -361,13 +361,13 @@ and xref parity only in this slice.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOIdentification` | `ttio.identification.Identification` | `com.dtwthalion.tio.Identification` | Stable |
-| `TTIOProvenanceRecord` | `ttio.provenance.ProvenanceRecord` | `com.dtwthalion.tio.ProvenanceRecord` | Stable |
-| `TTIOQuantification` | `ttio.quantification.Quantification` | `com.dtwthalion.tio.Quantification` | Stable |
-| `TTIOTransitionList` | `ttio.transition_list.TransitionList` | `com.dtwthalion.tio.TransitionList` | Stable |
-| `TTIOTransition` (nested) | `ttio.transition_list.Transition` | `com.dtwthalion.tio.TransitionList.Transition` | Stable |
-| `TTIOSpectralDataset` | `ttio.spectral_dataset.SpectralDataset` | `com.dtwthalion.tio.SpectralDataset` | Stable |
-| `TTIOCompoundIO` | `ttio._hdf5_io` (internal) | `com.dtwthalion.tio.hdf5.Hdf5CompoundIO` (internal) | Internal |
+| `TTIOIdentification` | `ttio.identification.Identification` | `com.dtwthalion.ttio.Identification` | Stable |
+| `TTIOProvenanceRecord` | `ttio.provenance.ProvenanceRecord` | `com.dtwthalion.ttio.ProvenanceRecord` | Stable |
+| `TTIOQuantification` | `ttio.quantification.Quantification` | `com.dtwthalion.ttio.Quantification` | Stable |
+| `TTIOTransitionList` | `ttio.transition_list.TransitionList` | `com.dtwthalion.ttio.TransitionList` | Stable |
+| `TTIOTransition` (nested) | `ttio.transition_list.Transition` | `com.dtwthalion.ttio.TransitionList.Transition` | Stable |
+| `TTIOSpectralDataset` | `ttio.spectral_dataset.SpectralDataset` | `com.dtwthalion.ttio.SpectralDataset` | Stable |
+| `TTIOCompoundIO` | `ttio._hdf5_io` (internal) | `com.dtwthalion.ttio.hdf5.Hdf5CompoundIO` (internal) | Internal |
 
 #### Method-level notes
 
@@ -434,13 +434,13 @@ Documented as a known stylistic difference (§4).
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOAccessPolicy` | `ttio.access_policy.AccessPolicy` | `com.dtwthalion.tio.protection.AccessPolicy` | Stable |
-| `TTIOAnonymizer` | `ttio.anonymization` (module) | `com.dtwthalion.tio.protection.Anonymizer` | Stable |
-| `TTIOEncryptionManager` | `ttio.encryption` (module) | `com.dtwthalion.tio.protection.EncryptionManager` | Stable |
-| `TTIOKeyRotationManager` | `ttio.key_rotation` (module) | `com.dtwthalion.tio.protection.KeyRotationManager` | Stable |
-| `TTIOSignatureManager` | `ttio.signatures` (module) | `com.dtwthalion.tio.protection.SignatureManager` | Stable |
-| `TTIOVerifier` | `ttio.verifier.Verifier` | `com.dtwthalion.tio.protection.Verifier` | Stable |
-| `TTIOVerificationStatus` | `ttio.verifier.VerificationStatus` | `com.dtwthalion.tio.protection.VerificationStatus` | Stable |
+| `TTIOAccessPolicy` | `ttio.access_policy.AccessPolicy` | `com.dtwthalion.ttio.protection.AccessPolicy` | Stable |
+| `TTIOAnonymizer` | `ttio.anonymization` (module) | `com.dtwthalion.ttio.protection.Anonymizer` | Stable |
+| `TTIOEncryptionManager` | `ttio.encryption` (module) | `com.dtwthalion.ttio.protection.EncryptionManager` | Stable |
+| `TTIOKeyRotationManager` | `ttio.key_rotation` (module) | `com.dtwthalion.ttio.protection.KeyRotationManager` | Stable |
+| `TTIOSignatureManager` | `ttio.signatures` (module) | `com.dtwthalion.ttio.protection.SignatureManager` | Stable |
+| `TTIOVerifier` | `ttio.verifier.Verifier` | `com.dtwthalion.ttio.protection.Verifier` | Stable |
+| `TTIOVerificationStatus` | `ttio.verifier.VerificationStatus` | `com.dtwthalion.ttio.protection.VerificationStatus` | Stable |
 
 **Note on manager idioms:** ObjC uses class methods (e.g.
 `+[TTIOEncryptionManager encryptData:withKey:error:]`). Python uses module-level
@@ -502,9 +502,9 @@ slice. `VerificationStatus` enum with 4 states
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOQuery` | `ttio.query.Query` | `com.dtwthalion.tio.Query` | Stable |
-| `TTIOStreamReader` | `ttio.stream_reader.StreamReader` | `com.dtwthalion.tio.StreamReader` | Stable |
-| `TTIOStreamWriter` | `ttio.stream_writer.StreamWriter` | `com.dtwthalion.tio.StreamWriter` | Stable |
+| `TTIOQuery` | `ttio.query.Query` | `com.dtwthalion.ttio.Query` | Stable |
+| `TTIOStreamReader` | `ttio.stream_reader.StreamReader` | `com.dtwthalion.ttio.StreamReader` | Stable |
+| `TTIOStreamWriter` | `ttio.stream_writer.StreamWriter` | `com.dtwthalion.ttio.StreamWriter` | Stable |
 
 #### Method-level notes
 
@@ -566,13 +566,13 @@ adapted accordingly.
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOStorageProvider` | `ttio.providers.StorageProvider` | `com.dtwthalion.tio.providers.StorageProvider` | Provisional (per M39) |
-| `TTIOStorageGroup` | `ttio.providers.StorageGroup` | `com.dtwthalion.tio.providers.StorageGroup` | Provisional (per M39) |
-| `TTIOStorageDataset` | `ttio.providers.StorageDataset` | `com.dtwthalion.tio.providers.StorageDataset` | Provisional (per M39) |
-| `TTIOCompoundField` | `ttio.providers.CompoundField` | `com.dtwthalion.tio.providers.CompoundField` | Provisional (per M39) |
-| `TTIOHDF5Provider` | `ttio.providers.Hdf5Provider` | `com.dtwthalion.tio.providers.Hdf5Provider` | Provisional (per M39) |
-| `TTIOMemoryProvider` | `ttio.providers.MemoryProvider` | `com.dtwthalion.tio.providers.MemoryProvider` | Provisional (per M39) |
-| `TTIOProviderRegistry` | `ttio.providers` (module-level) | `com.dtwthalion.tio.providers.ProviderRegistry` | Provisional (per M39) |
+| `TTIOStorageProvider` | `ttio.providers.StorageProvider` | `com.dtwthalion.ttio.providers.StorageProvider` | Provisional (per M39) |
+| `TTIOStorageGroup` | `ttio.providers.StorageGroup` | `com.dtwthalion.ttio.providers.StorageGroup` | Provisional (per M39) |
+| `TTIOStorageDataset` | `ttio.providers.StorageDataset` | `com.dtwthalion.ttio.providers.StorageDataset` | Provisional (per M39) |
+| `TTIOCompoundField` | `ttio.providers.CompoundField` | `com.dtwthalion.ttio.providers.CompoundField` | Provisional (per M39) |
+| `TTIOHDF5Provider` | `ttio.providers.Hdf5Provider` | `com.dtwthalion.ttio.providers.Hdf5Provider` | Provisional (per M39) |
+| `TTIOMemoryProvider` | `ttio.providers.MemoryProvider` | `com.dtwthalion.ttio.providers.MemoryProvider` | Provisional (per M39) |
+| `TTIOProviderRegistry` | `ttio.providers` (module-level) | `com.dtwthalion.ttio.providers.ProviderRegistry` | Provisional (per M39) |
 
 **Note on Provisional status:** All storage-provider classes are marked
 `API status: Provisional — may change before v1.0.` in their docstrings.
@@ -617,13 +617,13 @@ record). Fields `name` and `kind` match across all three; `kind` is a
 
 | Objective-C | Python | Java | Stability |
 |---|---|---|---|
-| `TTIOMzMLReader` | `ttio.importers.mzml` (module) | `com.dtwthalion.tio.importers.MzMLReader` | Stable |
-| `TTIOMzMLWriter` | `ttio.exporters.mzml` (module) | `com.dtwthalion.tio.exporters.MzMLWriter` | Stable |
-| `TTIONmrMLReader` | `ttio.importers.nmrml` (module) | `com.dtwthalion.tio.importers.NmrMLReader` | Stable |
-| `TTIONmrMLWriter` | `ttio.exporters.nmrml` (module) | `com.dtwthalion.tio.exporters.NmrMLWriter` | Stable |
-| `TTIOThermoRawReader` | `ttio.importers.thermo_raw` (module) | `com.dtwthalion.tio.importers.ThermoRawReader` | Stable |
-| `TTIOISAExporter` | `ttio.exporters.isa` (module) | `com.dtwthalion.tio.exporters.ISAExporter` | Stable |
-| `TTIOCVTermMapper` | `ttio.importers.cv_term_mapper` (module) | `com.dtwthalion.tio.importers.CVTermMapper` | Stable |
+| `TTIOMzMLReader` | `ttio.importers.mzml` (module) | `com.dtwthalion.ttio.importers.MzMLReader` | Stable |
+| `TTIOMzMLWriter` | `ttio.exporters.mzml` (module) | `com.dtwthalion.ttio.exporters.MzMLWriter` | Stable |
+| `TTIONmrMLReader` | `ttio.importers.nmrml` (module) | `com.dtwthalion.ttio.importers.NmrMLReader` | Stable |
+| `TTIONmrMLWriter` | `ttio.exporters.nmrml` (module) | `com.dtwthalion.ttio.exporters.NmrMLWriter` | Stable |
+| `TTIOThermoRawReader` | `ttio.importers.thermo_raw` (module) | `com.dtwthalion.ttio.importers.ThermoRawReader` | Stable |
+| `TTIOISAExporter` | `ttio.exporters.isa` (module) | `com.dtwthalion.ttio.exporters.ISAExporter` | Stable |
+| `TTIOCVTermMapper` | `ttio.importers.cv_term_mapper` (module) | `com.dtwthalion.ttio.importers.CVTermMapper` | Stable |
 | `TTIOBase64` | `ttio.importers._base64_zlib` (internal) | `java.util.Base64` (stdlib, no wrapper) | Internal |
 | — | `ttio.importers.ImportResult` | — | Internal (Python-only helper) |
 
@@ -723,7 +723,7 @@ These are idiomatic language conveniences. No cross-language parity requirement.
 
 The storage-provider registry diverges intentionally:
 - ObjC: `TTIOProviderRegistry` class with class methods.
-- Java: `com.dtwthalion.tio.providers.ProviderRegistry` class with static
+- Java: `com.dtwthalion.ttio.providers.ProviderRegistry` class with static
   methods.
 - Python: module-level functions in `ttio.providers` (`register_provider()`,
   `open_provider()`, `discover_providers()`).
@@ -753,7 +753,7 @@ in v0.6 or v1.0 without rearchitecting the Python/Java `SpectralDataset`.
 
 ObjC `TTIOCompoundIO` is a public class. Python's equivalent is
 `ttio._hdf5_io` (private by underscore convention). Java's equivalent is
-`com.dtwthalion.tio.hdf5.Hdf5CompoundIO` (in an `hdf5` subpackage,
+`com.dtwthalion.ttio.hdf5.Hdf5CompoundIO` (in an `hdf5` subpackage,
 effectively semi-internal). No parity requirement across these three; they are
 all classified as **Internal**.
 
@@ -852,7 +852,7 @@ interface gaps documented rather than discovered mid-migration.
 | Language | File | Tests |
 |---|---|---|
 | Python | `ttio/providers/sqlite.py` (700 LoC) | 24 tests |
-| Java | `com.dtwthalion.tio.providers.SqliteProvider` (670 LoC) | 24 tests |
+| Java | `com.dtwthalion.ttio.providers.SqliteProvider` (670 LoC) | 24 tests |
 | Objective-C | `TTIOSqliteProvider.m` (~850 LoC) | 132 assertions |
 
 Schema identical across all three (DDL, PRAGMAs, little-endian BLOB layout,

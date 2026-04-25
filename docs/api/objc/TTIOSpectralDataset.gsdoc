@@ -36,7 +36,7 @@
           M41.5 in non-ObjC implementations. Cross-language
           equivalents: Python:
           ttio.spectral_dataset.SpectralDataset
-          Java: com.dtwthalion.tio.SpectralDataset
+          Java: com.dtwthalion.ttio.SpectralDataset
         </desc>
         <method type="BOOL" factory="yes">
           <sel>decryptInPlaceAtPath:</sel>

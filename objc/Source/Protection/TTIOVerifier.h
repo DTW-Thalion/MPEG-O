@@ -21,7 +21,7 @@ typedef NS_ENUM(NSUInteger, TTIOVerificationStatus) {
  *
  * Cross-language equivalents:
  *   Python: ttio.verifier.Verifier
- *   Java:   com.dtwthalion.tio.protection.Verifier
+ *   Java:   com.dtwthalion.ttio.protection.Verifier
  */
 @interface TTIOVerifier : NSObject
 

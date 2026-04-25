@@ -10,7 +10,7 @@
  * arrays plus optical-path-length and solvent metadata.
  *
  * Cross-language equivalents:
- *   Java:   com.dtwthalion.tio.UVVisSpectrum
+ *   Java:   com.dtwthalion.ttio.UVVisSpectrum
  *   Python: ttio.uv_vis_spectrum.UVVisSpectrum
  */
 @interface TTIOUVVisSpectrum : TTIOSpectrum

@@ -29,7 +29,7 @@
           is correct. API status: Stable (Provisional per M39 — may
           change before v1.0). Cross-language equivalents:
           Python: ttio.providers.memory.MemoryProvider Java:
-          com.dtwthalion.tio.providers.MemoryProvider
+          com.dtwthalion.ttio.providers.MemoryProvider
         </desc>
         <method type="void" factory="yes">
           <sel>discardStore:</sel>

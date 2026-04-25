@@ -6,7 +6,7 @@
  * (single ``zarr.json`` per node, ``c/N1/N2/...`` chunk paths,
  * canonical dtype names) and matches the Python
  * ``ttio.providers.zarr.ZarrProvider`` and the Java
- * ``com.dtwthalion.tio.providers.ZarrProvider``, so all three can
+ * ``com.dtwthalion.ttio.providers.ZarrProvider``, so all three can
  * cross-read one another's stores byte-for-byte.
  *
  * Scope:
@@ -26,7 +26,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.providers.zarr.ZarrProvider
- *   Java:   com.dtwthalion.tio.providers.ZarrProvider
+ *   Java:   com.dtwthalion.ttio.providers.ZarrProvider
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

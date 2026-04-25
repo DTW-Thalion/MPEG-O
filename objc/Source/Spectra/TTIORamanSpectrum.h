@@ -11,7 +11,7 @@
  * time.
  *
  * Cross-language equivalents:
- *   Java:   com.dtwthalion.tio.RamanSpectrum
+ *   Java:   com.dtwthalion.ttio.RamanSpectrum
  *   Python: ttio.raman_spectrum.RamanSpectrum
  */
 @interface TTIORamanSpectrum : TTIOSpectrum

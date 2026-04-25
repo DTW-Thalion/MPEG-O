@@ -8,7 +8,7 @@
  *
  * Generates a synthetic TTI-O transport stream. Parallel to Python
  * ``python -m ttio.tools.simulator_cli`` and Java
- * ``com.dtwthalion.tio.tools.SimulatorCli``.
+ * ``com.dtwthalion.ttio.tools.SimulatorCli``.
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

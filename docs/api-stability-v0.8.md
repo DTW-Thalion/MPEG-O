@@ -182,7 +182,7 @@ All three languages expose a parallel surface — see
 | CLI | Language | Since | Notes |
 |---|---|---|---|
 | `python -m ttio.tools.per_au_cli {encrypt,decrypt,send,recv,transcode}` | Python | v0.10 | `decrypt` emits a canonical "MPAD" binary dump (see that module's docstring) used by the cross-language conformance harness. |
-| `com.dtwthalion.tio.tools.PerAUCli` | Java | v0.10 | Same subcommand surface, same MPAD output. |
+| `com.dtwthalion.ttio.tools.PerAUCli` | Java | v0.10 | Same subcommand surface, same MPAD output. |
 | `TtioPerAU` | ObjC | v0.10 | Same. |
 
 ---

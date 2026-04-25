@@ -36,7 +36,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.pqc
- *   Java:   com.dtwthalion.tio.protection.PostQuantumCrypto
+ *   Java:   com.dtwthalion.ttio.protection.PostQuantumCrypto
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

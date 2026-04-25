@@ -32,7 +32,7 @@
           ``ProvenanceRecord`` documenting which
           policies ran. API status: Stable. Cross-language
           equivalents: Python: ttio.anonymization Java:
-          com.dtwthalion.tio.protection.Anonymizer
+          com.dtwthalion.ttio.protection.Anonymizer
         </desc>
         <method type="NSInteger">
           <sel>coarsenChemicalShiftDecimals</sel>

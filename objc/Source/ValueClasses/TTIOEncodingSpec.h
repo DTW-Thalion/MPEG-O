@@ -12,7 +12,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.encoding_spec.EncodingSpec
- *   Java:   com.dtwthalion.tio.EncodingSpec
+ *   Java:   com.dtwthalion.ttio.EncodingSpec
  */
 @interface TTIOEncodingSpec : NSObject <NSCoding, NSCopying>
 

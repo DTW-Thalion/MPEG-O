@@ -76,7 +76,7 @@
           under /study/transitions/. API status: Stable.
           Cross-language equivalents: Python:
           ttio.transition_list.TransitionList
-          Java: com.dtwthalion.tio.TransitionList
+          Java: com.dtwthalion.ttio.TransitionList
         </desc>
         <method type="instancetype" factory="yes">
           <sel>fromPlist:</sel>

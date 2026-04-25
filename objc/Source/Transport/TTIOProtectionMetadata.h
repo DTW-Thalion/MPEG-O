@@ -4,7 +4,7 @@
  * ProtectionMetadata packet payload per
  * docs/transport-spec.md §4.4. Cross-language equivalents:
  * Python helpers in tests/test_transport_selective_access.py,
- * Java com.dtwthalion.tio.transport.ProtectionMetadata.
+ * Java com.dtwthalion.ttio.transport.ProtectionMetadata.
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

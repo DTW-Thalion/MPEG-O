@@ -725,7 +725,7 @@ Feature flags: `opt_digital_signatures` (first sign), plus
 All cryptographic paths — signatures and dataset / envelope encryption
 — consume their input through the `StorageDataset.read_canonical_bytes`
 method defined by the protocol abstraction
-(`TTIOStorageDataset`, `com.dtwthalion.tio.providers.StorageDataset`,
+(`TTIOStorageDataset`, `com.dtwthalion.ttio.providers.StorageDataset`,
 `ttio.providers.base.StorageDataset`). The canonical stream is:
 
 - **Primitive numeric datasets** — little-endian packed values.

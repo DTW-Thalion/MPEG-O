@@ -25,7 +25,7 @@
           of scans NMR:1000004 — dwell time (seconds) NMR:1400014 —
           sweep width (ppm) API status: Stable. Cross-language
           equivalents: Python: ttio.exporters.nmrml Java:
-          com.dtwthalion.tio.exporters.NmrMLWriter
+          com.dtwthalion.ttio.exporters.NmrMLWriter
         </desc>
         <method type="NSData*" factory="yes">
           <sel>dataForSpectrum:</sel>

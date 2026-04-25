@@ -19,7 +19,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.raman_image.RamanImage
- *   Java:   com.dtwthalion.tio.RamanImage
+ *   Java:   com.dtwthalion.ttio.RamanImage
  */
 @interface TTIORamanImage : TTIOSpectralDataset
 

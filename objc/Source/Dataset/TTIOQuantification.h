@@ -12,7 +12,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.quantification.Quantification
- *   Java:   com.dtwthalion.tio.Quantification
+ *   Java:   com.dtwthalion.ttio.Quantification
  */
 @interface TTIOQuantification : NSObject <NSCopying>
 

@@ -22,7 +22,7 @@
           chosen to carry ~7 significant digits of
           integer-scaled Y precision. Cross-language
           equivalents: Java:
-          com.dtwthalion.tio.exporters.JcampDxEncoding
+          com.dtwthalion.ttio.exporters.JcampDxEncoding
           Python: encoding="..." keyword on write_*_spectrum
           <deflist>
             <term><em>TTIOJcampDxEncodingAFFN</em></term>

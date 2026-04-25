@@ -355,7 +355,7 @@ security implications, not a streaming-time default.
 
 ### 8.4 Java port
 
-- [x] `com.dtwthalion.tio.protection.EncryptionManager` —
+- [x] `com.dtwthalion.ttio.protection.EncryptionManager` —
   add `encryptPerAU(key)`.
 - [x] `TransportWriter` / `TransportReader` updates.
 - [x] Tests: mirror Python coverage in

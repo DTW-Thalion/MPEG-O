@@ -34,7 +34,7 @@
           spectralPoints + s]`. API status: Stable.
           Cross-language equivalents: Python:
           ttio.ms_image.MSImage Java:
-          com.dtwthalion.tio.MSImage
+          com.dtwthalion.ttio.MSImage
         </desc>
         <method type="instancetype" factory="yes">
           <sel>readFromFilePath:</sel>

@@ -31,7 +31,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.transition_list.TransitionList
- *   Java:   com.dtwthalion.tio.TransitionList
+ *   Java:   com.dtwthalion.ttio.TransitionList
  */
 @interface TTIOTransitionList : NSObject
 

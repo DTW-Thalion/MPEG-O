@@ -17,7 +17,7 @@
  *   Python: ttio.providers — module-level functions
  *           (discover_providers, open_provider, register_provider)
  *           — idiomatic for Python packaging.
- *   Java:   com.dtwthalion.tio.providers.ProviderRegistry class
+ *   Java:   com.dtwthalion.ttio.providers.ProviderRegistry class
  */
 @interface TTIOProviderRegistry : NSObject
 

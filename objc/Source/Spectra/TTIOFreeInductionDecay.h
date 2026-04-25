@@ -13,7 +13,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.fid.FreeInductionDecay
- *   Java:   com.dtwthalion.tio.FreeInductionDecay
+ *   Java:   com.dtwthalion.ttio.FreeInductionDecay
  */
 @interface TTIOFreeInductionDecay : TTIOSignalArray
 

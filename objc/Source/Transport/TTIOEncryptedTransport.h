@@ -9,7 +9,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.transport.encrypted
- *   Java:   com.dtwthalion.tio.transport.EncryptedTransport
+ *   Java:   com.dtwthalion.ttio.transport.EncryptedTransport
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

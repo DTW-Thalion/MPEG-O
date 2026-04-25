@@ -26,7 +26,7 @@
           streaming through runs larger than memory. API
           status: Stable. Cross-language equivalents: Python:
           ttio.stream_reader.StreamReader
-          Java: com.dtwthalion.tio.StreamReader
+          Java: com.dtwthalion.ttio.StreamReader
         </desc>
         <method type="BOOL">
           <sel>atEnd</sel>

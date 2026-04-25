@@ -31,7 +31,7 @@
           matchingIndices]; API status: Stable.
           Cross-language equivalents: Python:
           ttio.query.Query Java:
-          com.dtwthalion.tio.Query
+          com.dtwthalion.ttio.Query
         </desc>
         <method type="instancetype" factory="yes">
           <sel>queryOnIndex:</sel>

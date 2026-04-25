@@ -3,7 +3,7 @@
  *
  * Encode a .tio file as an TTI-O transport stream. Parallel to
  * Python ttio.tools.transport_encode_cli and Java
- * com.dtwthalion.tio.tools.TransportEncodeCli.
+ * com.dtwthalion.ttio.tools.TransportEncodeCli.
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

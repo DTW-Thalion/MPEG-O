@@ -27,7 +27,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.query.Query
- *   Java:   com.dtwthalion.tio.Query
+ *   Java:   com.dtwthalion.ttio.Query
  */
 @interface TTIOQuery : NSObject
 

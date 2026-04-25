@@ -23,7 +23,7 @@
           status: Stable (Provisional per M39 — may change
           before v1.0). Cross-language equivalents: Python:
           ttio.providers.base.StorageDataset
-          Java: com.dtwthalion.tio.providers.StorageDataset
+          Java: com.dtwthalion.ttio.providers.StorageDataset
         </desc>
         <method type="NSArray&lt;NSString*&gt;*">
           <sel>attributeNames</sel>
@@ -206,7 +206,7 @@
           Stable (Provisional per M39 — may change before v1.0).
           Cross-language equivalents: Python:
           ttio.providers.base.StorageGroup
-          Java: com.dtwthalion.tio.providers.StorageGroup
+          Java: com.dtwthalion.ttio.providers.StorageGroup
         </desc>
         <method type="NSArray&lt;NSString*&gt;*">
           <sel>attributeNames</sel>
@@ -384,7 +384,7 @@
           status: Stable (Provisional per M39 — may change
           before v1.0). Cross-language equivalents: Python:
           ttio.providers.base.StorageProvider
-          Java: com.dtwthalion.tio.providers.StorageProvider
+          Java: com.dtwthalion.ttio.providers.StorageProvider
         </desc>
         <method type="void">
           <sel>beginTransaction</sel>

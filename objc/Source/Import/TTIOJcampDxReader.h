@@ -19,7 +19,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.importers.jcamp_dx.read_spectrum
- *   Java:   com.dtwthalion.tio.importers.JcampDxReader
+ *   Java:   com.dtwthalion.ttio.importers.JcampDxReader
  */
 @interface TTIOJcampDxReader : NSObject
 

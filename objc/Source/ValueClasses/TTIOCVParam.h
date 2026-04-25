@@ -12,7 +12,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.cv_param.CVParam
- *   Java:   com.dtwthalion.tio.CVParam
+ *   Java:   com.dtwthalion.ttio.CVParam
  */
 @interface TTIOCVParam : NSObject <NSCoding, NSCopying>
 

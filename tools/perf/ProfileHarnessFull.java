@@ -17,26 +17,26 @@
  */
 package tools.perf;
 
-import com.dtwthalion.tio.AcquisitionRun;
-import com.dtwthalion.tio.IRSpectrum;
-import com.dtwthalion.tio.RamanSpectrum;
-import com.dtwthalion.tio.SignalArray;
-import com.dtwthalion.tio.SpectralDataset;
-import com.dtwthalion.tio.Spectrum;
-import com.dtwthalion.tio.SpectrumIndex;
-import com.dtwthalion.tio.TwoDimensionalCorrelationSpectrum;
-import com.dtwthalion.tio.UVVisSpectrum;
-import com.dtwthalion.tio.Enums.AcquisitionMode;
-import com.dtwthalion.tio.Enums.IRMode;
-import com.dtwthalion.tio.Enums.SamplingMode;
-import com.dtwthalion.tio.AxisDescriptor;
-import com.dtwthalion.tio.ValueRange;
-import com.dtwthalion.tio.exporters.JcampDxWriter;
-import com.dtwthalion.tio.importers.JcampDxReader;
-import com.dtwthalion.tio.protection.PerAUFile;
-import com.dtwthalion.tio.protection.SignatureManager;
-import com.dtwthalion.tio.transport.TransportReader;
-import com.dtwthalion.tio.transport.TransportWriter;
+import com.dtwthalion.ttio.AcquisitionRun;
+import com.dtwthalion.ttio.IRSpectrum;
+import com.dtwthalion.ttio.RamanSpectrum;
+import com.dtwthalion.ttio.SignalArray;
+import com.dtwthalion.ttio.SpectralDataset;
+import com.dtwthalion.ttio.Spectrum;
+import com.dtwthalion.ttio.SpectrumIndex;
+import com.dtwthalion.ttio.TwoDimensionalCorrelationSpectrum;
+import com.dtwthalion.ttio.UVVisSpectrum;
+import com.dtwthalion.ttio.Enums.AcquisitionMode;
+import com.dtwthalion.ttio.Enums.IRMode;
+import com.dtwthalion.ttio.Enums.SamplingMode;
+import com.dtwthalion.ttio.AxisDescriptor;
+import com.dtwthalion.ttio.ValueRange;
+import com.dtwthalion.ttio.exporters.JcampDxWriter;
+import com.dtwthalion.ttio.importers.JcampDxReader;
+import com.dtwthalion.ttio.protection.PerAUFile;
+import com.dtwthalion.ttio.protection.SignatureManager;
+import com.dtwthalion.ttio.transport.TransportReader;
+import com.dtwthalion.ttio.transport.TransportWriter;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;

@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
  *
  * Cross-language equivalents:
  *   Python: ttio.importers.bruker_tdf
- *   Java:   com.dtwthalion.tio.importers.BrukerTDFReader
+ *   Java:   com.dtwthalion.ttio.importers.BrukerTDFReader
  */
 @interface TTIOBrukerTDFReader : NSObject
 

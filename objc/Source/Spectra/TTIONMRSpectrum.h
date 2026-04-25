@@ -28,7 +28,7 @@
 
 /*
  * Cross-language equivalents:
- *   Java:   com.dtwthalion.tio.NMRSpectrum
+ *   Java:   com.dtwthalion.ttio.NMRSpectrum
  *   Python: ttio.nmr_spectrum.NMRSpectrum
  */
 

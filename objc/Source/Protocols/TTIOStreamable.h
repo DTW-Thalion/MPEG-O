@@ -12,7 +12,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.protocols.Streamable
- *   Java:   com.dtwthalion.tio.protocols.Streamable
+ *   Java:   com.dtwthalion.ttio.protocols.Streamable
  */
 @protocol TTIOStreamable <NSObject>
 

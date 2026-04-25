@@ -24,7 +24,7 @@
  *
  * Cross-language equivalents:
  *   Python: ttio.stream_writer.StreamWriter
- *   Java:   com.dtwthalion.tio.StreamWriter
+ *   Java:   com.dtwthalion.ttio.StreamWriter
  */
 @interface TTIOStreamWriter : NSObject
 

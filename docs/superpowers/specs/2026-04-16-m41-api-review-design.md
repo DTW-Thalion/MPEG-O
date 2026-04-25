@@ -165,7 +165,7 @@ values, and error conditions.
  *
  * Cross-language equivalents:
  *   Python: ttio.spectrum.Spectrum
- *   Java:   com.dtwthalion.tio.Spectrum
+ *   Java:   com.dtwthalion.ttio.Spectrum
  */
 @interface TTIOSpectrum : NSObject
 ```
@@ -295,7 +295,7 @@ Stamped in two places:
 ## 2. Namespace summary
    - ObjC:   TTIO* (Foundation-based, prefix convention)
    - Python: ttio.* (single top-level package)
-   - Java:   com.dtwthalion.tio.* (groupId migrates to global.thalion in M40)
+   - Java:   com.dtwthalion.ttio.* (groupId migrates to global.thalion in M40)
 
 ## 3. Per-subsystem parity
    One section per slice 41.1 .. 41.8. Each section has:
