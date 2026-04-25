@@ -17,6 +17,7 @@
 #import "Run/TTIOAcquisitionRun.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOMemoryProvider.h"
 #include <unistd.h>
 #include <string.h>
 
@@ -728,6 +729,45 @@ static void testMultiOmicsFile(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Acceptance #7 — Memory provider 100-read round-trip ───────────
+
+static void testMemoryProviderRoundTrip(void)
+{
+    NSString *url = [NSString stringWithFormat:@"memory://m82mp-%d", (int)getpid()];
+    [TTIOMemoryProvider discardStore:url];
+
+    TTIOWrittenGenomicRun *written = makeWrittenGenomicRun(100, NO);
+    NSError *err = nil;
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:url
+                                                  title:@"t"
+                                    isaInvestigationId:@"i"
+                                                msRuns:@{}
+                                            genomicRuns:@{@"genomic_0001": written}
+                                        identifications:nil
+                                        quantifications:nil
+                                      provenanceRecords:nil
+                                                  error:&err];
+    PASS(ok, "M82: memory:// writeMinimal succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:url error:&err];
+    PASS(ds != nil, "M82: memory:// readFromFilePath succeeds");
+
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M82: memory:// genomicRuns dict populated");
+    PASS(gr.readCount == 100, "M82: memory:// readCount round-trips");
+    PASS([gr.referenceUri isEqualToString:@"GRCh38.p14"],
+         "M82: memory:// referenceUri round-trips");
+
+    TTIOAlignedRead *r42 = [gr readAtIndex:42 error:&err];
+    PASS(r42 != nil, "M82: memory:// readAtIndex[42] succeeds");
+    PASS([r42.readName isEqualToString:@"read_000042"],
+         "M82: memory:// read[42] name matches");
+    PASS([r42.chromosome isEqualToString:written.chromosomes[42]],
+         "M82: memory:// read[42] chromosome matches");
+
+    [TTIOMemoryProvider discardStore:url];
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -745,4 +785,5 @@ void testM82GenomicRun(void)
     testRandomAccessRead();
     testCrossLanguageFixtureRead();
     testMultiOmicsFile();
+    testMemoryProviderRoundTrip();
 }
