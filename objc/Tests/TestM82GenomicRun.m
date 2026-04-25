@@ -459,6 +459,37 @@ static void testFlagFilter(void)
     unlink([path fileSystemRepresentation]);
 }
 
+// ── Acceptance #4 — paired-end mate info ──────────────────────────
+
+static void testPairedEndMateInfo(void)
+{
+    NSString *path = [NSString stringWithFormat:@"/tmp/ttio_m82pe_%d.tio", (int)getpid()];
+    unlink([path fileSystemRepresentation]);
+
+    TTIOWrittenGenomicRun *written = makeWrittenGenomicRun(100, YES);  // paired
+    NSError *err = nil;
+    [TTIOSpectralDataset writeMinimalToPath:path
+                                        title:@"t"
+                          isaInvestigationId:@"i"
+                                      msRuns:@{}
+                                  genomicRuns:@{@"genomic_0001": written}
+                              identifications:nil
+                              quantifications:nil
+                            provenanceRecords:nil
+                                        error:&err];
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    TTIOAlignedRead *r0 = [gr readAtIndex:0 error:&err];
+
+    PASS([r0 isPaired], "M82: read[0] is paired");
+    PASS([r0.mateChromosome isEqualToString:written.mateChromosomes[0]],
+         "M82: mateChromosome round-trips");
+    PASS(r0.matePosition == 10200, "M82: matePosition round-trips");
+    PASS(r0.templateLength == 200, "M82: templateLength round-trips");
+
+    unlink([path fileSystemRepresentation]);
+}
+
 void testM82GenomicRun(void)
 {
     testAlignedReadBasicFields();
@@ -470,5 +501,6 @@ void testM82GenomicRun(void)
     testBasicRoundTrip100Reads();
     testRegionQuery();
     testFlagFilter();
+    testPairedEndMateInfo();
     // Subsequent tasks append more test functions called from here.
 }
