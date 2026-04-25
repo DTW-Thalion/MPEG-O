@@ -200,3 +200,17 @@ def test_signal_channel_helpers_roundtrip(tmp_path: Path):
     assert list(u32) == [0, 1, 2**31, 2**32 - 1]
     assert i64.dtype == np.int64
     assert list(i64) == [-(2**62), -1, 0, 2**62]
+
+
+def test_m82_public_exports():
+    """The four new public types must be importable from `ttio`."""
+    import ttio
+    assert hasattr(ttio, "AlignedRead")
+    assert hasattr(ttio, "GenomicIndex")
+    assert hasattr(ttio, "GenomicRun")
+    assert hasattr(ttio, "WrittenGenomicRun")
+    # __all__ membership
+    assert "AlignedRead" in ttio.__all__
+    assert "GenomicIndex" in ttio.__all__
+    assert "GenomicRun" in ttio.__all__
+    assert "WrittenGenomicRun" in ttio.__all__
