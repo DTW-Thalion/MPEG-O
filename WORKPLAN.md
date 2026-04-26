@@ -1397,6 +1397,89 @@ are settled.
 
 ### Next
 
-M82 series complete. Next candidates: format-spec promotion of the
-genomic layout, MS-on-non-HDF5 writer refactor, base-packing codec,
-or moving on to a separate milestone.
+M82 series complete. Documented follow-on candidates below — each
+gets its own milestone when scheduled. The codec milestone is the
+load-bearing one (it is the only deferral that makes M82 outputs
+look amateur next to comparable formats).
+
+---
+
+## Pending follow-on milestones (post-M82)
+
+### Genomic codec milestone (UNSCHEDULED — load-bearing for M82 file size)
+
+M82 stores genomic data **uncompressed**: one ASCII byte per base in
+`signal_channels/sequences`, raw Phred bytes in
+`signal_channels/qualities`, VL_STRING in the `read_names` and
+`cigars` compounds. M79 reserved five codec enum slots
+(`RANS_ORDER0=4`, `RANS_ORDER1=5`, `BASE_PACK=6`,
+`QUALITY_BINNED=7`, `NAME_TOKENIZED=8`) but **no encoder or decoder
+exists in any of the three languages**. The format-spec line that
+said "encoder/decoder land with M74" is stale — M74 shipped as MS
+activation/isolation work, not codecs.
+
+**CRAM 3.1 is not covered by the reserved slots.** The reserved
+names map to CRAM-3.0-era codecs; CRAM 3.1 adds rANS-Nx16 streams
+(four variants — order 0/1 × stripe/RLE), the fqzcomp-derived
+quality codec, and adaptive arithmetic. Reaching CRAM 3.1 parity
+requires additional enum slots (codec ids `9`+) on top of
+implementing the five existing reservations.
+
+#### Scope sketch
+
+- [ ] **Phase 1 — CRAM-3.0-era reservations (M79 slots 4–8).**
+      Implement encoder + decoder for each of the five reserved
+      slots in all three languages, with a cross-language
+      conformance matrix mirroring the M82.4 pattern (every writer
+      readable by every reader). Wire each codec into the
+      provider-agnostic compression pipeline so genomic channels can
+      opt in via `WrittenGenomicRun.signal_compression` (currently
+      ZLIB-only).
+- [ ] **Phase 2 — CRAM 3.1 codec set.** Reserve new enum slots:
+      `RANS_NX16_ORDER0`, `RANS_NX16_ORDER1`,
+      `RANS_NX16_ORDER0_STRIPE`, `RANS_NX16_ORDER1_STRIPE` (or
+      collapsed variants), `FQZCOMP`, `ADAPTIVE_ARITHMETIC`. Codec
+      id range `9`+. Implement, conform, document.
+- [ ] **Phase 3 — Sidecar mask dataset for non-canonical bases.**
+      Reads containing `N` (or IUPAC ambiguity codes) bypass
+      `BASE_PACK`; the mask dataset format needs to be specified
+      and round-tripped before BASE_PACK can be the default
+      sequence codec.
+- [ ] **Format-spec update.** §10.4 currently says "NOT YET
+      IMPLEMENTED" for slots 4–8 (post-this-doc-pass). When each
+      lands, flip the row. Add §10.5 for the CRAM 3.1 additions.
+
+#### Why this is load-bearing
+
+A 100-read × 150 bp `m82_100reads.tio` is currently 61 KB
+uncompressed; the equivalent BAM/CRAM is ~6–10 KB. For 10 M reads
+the uncompressed gap becomes prohibitive (~3 GB vs. ~300 MB).
+Without this milestone, M82 is functionally complete but not
+practically deployable for production-scale sequencing data.
+
+### MS runs via memory:// / sqlite:// / zarr:// (UNSCHEDULED)
+
+Same gap noted in M82.2 / M82.3 / M82.4 / M82.5. The MS write path
+inside `SpectralDataset.create` still uses HDF5-direct calls for
+the `/study/ms_runs/` subgroup; only genomic runs were lifted onto
+the StorageGroup protocol in M82. A separate writer refactor would
+unlock MS round-trips on Memory / SQLite / Zarr, matching what
+genomic runs already do.
+
+### Format-spec promotion of the genomic layout (LOW PRIORITY)
+
+`docs/M82.md` describes `/study/genomic_runs/<name>/` for users.
+`docs/format-spec.md` does not yet have the equivalent normative
+section. Promote the layout (acquisition_mode / modality /
+reference_uri / platform / sample_name attrs, genomic_index/
+subgroup, signal_channels/ subgroup with the three compounds) into
+format-spec proper so third-party reader implementers can work from
+the spec without reading M82.md.
+
+### Multi-omics join helpers (UNSCHEDULED, ANALYSIS LAYER)
+
+A `.tio` file can hold both MS and genomic runs side-by-side, but
+the API does not yet provide convenience for joining (e.g. "find
+the protein identification whose peptide maps to this genomic
+locus"). This is out-of-band of M82 and would be a separate
+analysis milestone with its own data-model decisions.
