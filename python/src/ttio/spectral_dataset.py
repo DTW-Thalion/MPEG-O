@@ -876,11 +876,13 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         parent = _H5Group(parent)
 
     # M86: validate any per-channel codec overrides before we touch
-    # the file. Only sequences/qualities can be overridden; the
-    # accepted codec set is per-channel (Phase D §119): sequences
-    # gets the three byte-stream codecs (RANS_ORDER0/1 + BASE_PACK);
-    # qualities gets those plus QUALITY_BINNED. Anything else is a
-    # caller error and must surface immediately (Binding Decision §88).
+    # the file. Only sequences/qualities/read_names can be overridden;
+    # the accepted codec set is per-channel (Phase D §119, Phase E
+    # §113): sequences gets the three byte-stream codecs
+    # (RANS_ORDER0/1 + BASE_PACK); qualities gets those plus
+    # QUALITY_BINNED; read_names gets NAME_TOKENIZED only. Anything
+    # else is a caller error and must surface immediately
+    # (Binding Decision §88).
     from .enums import Compression as _Compression
     _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL = {
         "sequences": frozenset({
@@ -894,12 +896,21 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _Compression.BASE_PACK,
             _Compression.QUALITY_BINNED,
         }),
+        # M86 Phase E: NAME_TOKENIZED is only valid on read_names
+        # (Binding Decision §113). The codec tokenises UTF-8 strings
+        # and would mis-tokenise binary byte streams like sequences/
+        # qualities. The other byte-channel codecs are not valid here
+        # because the source data is list[str], not bytes.
+        "read_names": frozenset({
+            _Compression.NAME_TOKENIZED,
+        }),
     }
     for ch_name, codec in run.signal_codec_overrides.items():
         if ch_name not in _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL:
             raise ValueError(
                 f"signal_codec_overrides: channel '{ch_name}' not supported "
-                f"(only sequences and qualities can use TTIO codecs)"
+                f"(only sequences, qualities, and read_names can use "
+                f"TTIO codecs)"
             )
         try:
             codec_enum = _Compression(codec)
@@ -926,6 +937,26 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                     "sequence via Phred-bin quantisation. Use the "
                     "'qualities' channel for QUALITY_BINNED, or "
                     "RANS_ORDER0/RANS_ORDER1/BASE_PACK on sequences."
+                )
+            # Phase E Binding Decision §113: explicit message for
+            # (sequences|qualities, NAME_TOKENIZED) — naming the
+            # codec, the channel, and the wrong-input-type rationale.
+            if (
+                codec_enum == _Compression.NAME_TOKENIZED
+                and ch_name in ("sequences", "qualities")
+            ):
+                raise ValueError(
+                    f"signal_codec_overrides['{ch_name}']: codec "
+                    f"NAME_TOKENIZED is not valid on the '{ch_name}' "
+                    "channel — NAME_TOKENIZED tokenises UTF-8 read "
+                    "name strings (digit runs vs string runs), not "
+                    "binary byte streams like ACGT sequence bytes or "
+                    "Phred quality scores. Applying it to "
+                    f"'{ch_name}' would mis-tokenise the data and "
+                    "fall back to verbatim, producing nonsensical "
+                    "compression. Use the 'read_names' channel for "
+                    "NAME_TOKENIZED, or RANS_ORDER0/RANS_ORDER1/"
+                    f"BASE_PACK on '{ch_name}'."
                 )
             raise ValueError(
                 f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
@@ -981,12 +1012,39 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         [{"value": c} for c in run.cigars],
         [("value", io.vl_str())],
     )
-    io.write_compound_dataset(
-        sc,
-        "read_names",
-        [{"value": n} for n in run.read_names],
-        [("value", io.vl_str())],
-    )
+    # M86 Phase E: schema lift for read_names. When the
+    # NAME_TOKENIZED override is set, replace the M82 compound
+    # dataset with a flat 1-D uint8 dataset of the same name
+    # carrying the codec output, plus an @compression == 8
+    # attribute (Binding Decisions §111, §113). The two layouts
+    # are mutually exclusive within a single run; readers
+    # dispatch on dataset shape (compound vs uint8). No HDF5
+    # filter is applied — codec output is high-entropy
+    # (Binding Decision §87).
+    if "read_names" in run.signal_codec_overrides:
+        from .codecs import name_tokenizer as _nt
+        from .enums import Precision as _Precision
+        encoded = _nt.encode(list(run.read_names))
+        arr = np.frombuffer(encoded, dtype=np.uint8)
+        ds = sc.create_dataset(
+            "read_names",
+            _Precision.UINT8,
+            length=int(arr.shape[0]),
+            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=_Compression.NONE,
+        )
+        ds.write(arr)
+        io.write_int_attr(
+            ds, "compression",
+            int(_Compression.NAME_TOKENIZED), dtype="<u1",
+        )
+    else:
+        io.write_compound_dataset(
+            sc,
+            "read_names",
+            [{"value": n} for n in run.read_names],
+            [("value", io.vl_str())],
+        )
     io.write_compound_dataset(
         sc,
         "mate_info",

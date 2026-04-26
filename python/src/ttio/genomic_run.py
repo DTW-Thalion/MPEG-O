@@ -62,6 +62,19 @@ class GenomicRun:
     _decoded_byte_channels: dict[str, bytes] = field(
         default_factory=dict, repr=False, compare=False,
     )
+    # M86 Phase E: lazy decode cache for the read_names channel when
+    # it carries a NAME_TOKENIZED codec override. Held as a
+    # ``list[str]`` because the codec returns the decoded names
+    # already split into per-read entries (different value type from
+    # ``_decoded_byte_channels``, which holds raw concatenated
+    # bytes). Per Binding Decision §114 the two caches are kept
+    # separate. ``None`` until first access; when populated, the
+    # whole list is materialised in memory (a few hundred MB for
+    # 10M reads — acceptable for typical genomic workloads, see
+    # Gotcha §125).
+    _decoded_read_names: list[str] | None = field(
+        default=None, repr=False, compare=False,
+    )
 
     # ------------------------------------------------------------------
     # Sequence protocol
@@ -104,8 +117,7 @@ class GenomicRun:
         cigars = self._compound("cigars")
         cigar = cigars[i]["value"]
 
-        names = self._compound("read_names")
-        read_name = names[i]["value"]
+        read_name = self._read_name_at(i)
 
         mates = self._compound("mate_info")
         mate = mates[i]
@@ -258,3 +270,50 @@ class GenomicRun:
             sig = self.group.open_group("signal_channels")
             self._compound_cache[name] = io.read_compound_dataset(sig, name)
         return self._compound_cache[name]
+
+    def _read_name_at(self, i: int) -> str:
+        """Return the read name at index ``i``, dispatching on shape.
+
+        M86 Phase E: read_names has two on-disk layouts (Binding
+        Decisions §111, §112):
+
+        - **M82 compound** (no override): VL_STRING-in-compound
+          dataset, read whole-and-cache via :meth:`_compound`.
+        - **NAME_TOKENIZED** (override active): flat 1-D uint8
+          dataset, decoded once on first access and cached as a
+          ``list[str]`` on this :class:`GenomicRun` instance per
+          Binding Decision §114.
+
+        Dispatch is on dataset shape — a 1-D uint8 dataset routes
+        through the codec path; anything else falls through to the
+        compound path. The :attr:`_decoded_read_names` cache holds
+        the entire decoded list across calls.
+        """
+        cached = self._decoded_read_names
+        if cached is not None:
+            return cached[i]
+
+        sig = self.group.open_group("signal_channels")
+        ds = sig.open_dataset("read_names")
+
+        # Shape dispatch: precision == UINT8 → codec path; otherwise
+        # the dataset is the M82 compound (precision is None for
+        # compound datasets, since they have no scalar Precision).
+        from .enums import Compression, Precision
+        if ds.precision == Precision.UINT8:
+            from . import _hdf5_io as io
+            codec_id = io.read_int_attr(ds, "compression", default=0) or 0
+            if codec_id == int(Compression.NAME_TOKENIZED):
+                from .codecs import name_tokenizer as _nt
+                all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+                self._decoded_read_names = _nt.decode(all_bytes)
+                return self._decoded_read_names[i]
+            raise ValueError(
+                f"signal_channel 'read_names': @compression={codec_id} "
+                "is not a supported TTIO codec id for the read_names "
+                "channel (only NAME_TOKENIZED = 8 is recognised)"
+            )
+
+        # Compound path (M82, no override).
+        names = self._compound("read_names")
+        return names[i]["value"]
