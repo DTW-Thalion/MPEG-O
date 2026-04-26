@@ -48,6 +48,19 @@
 // Optional codec choice — defaults to TTIOCompressionZlib
 @property (readonly) TTIOCompression signalCompression;
 
+/**
+ * M86: per-channel codec opt-in. Maps channel name (NSString *) to a
+ * boxed TTIOCompression value (NSNumber *). Only @"sequences" and
+ * @"qualities" are accepted as channel keys; only RansOrder0,
+ * RansOrder1, BasePack are accepted as codec values. Channels not in
+ * this dictionary use the existing signalCompression path. Defaults
+ * to an empty dictionary.
+ *
+ * Cross-language equivalent of Python's
+ * ``WrittenGenomicRun.signal_codec_overrides``.
+ */
+@property (readonly, copy) NSDictionary<NSString *, NSNumber *> *signalCodecOverrides;
+
 @property (readonly) NSUInteger readCount;
 
 - (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode
@@ -68,6 +81,27 @@
                           templateLengths:(NSData *)templateLengths
                               chromosomes:(NSArray<NSString *> *)chromosomes
                        signalCompression:(TTIOCompression)signalCompression;
+
+/** M86: same as the 17-arg initialiser plus per-channel codec overrides. */
+- (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode
+                            referenceUri:(NSString *)referenceUri
+                                platform:(NSString *)platform
+                              sampleName:(NSString *)sampleName
+                                positions:(NSData *)positions
+                         mappingQualities:(NSData *)mappingQualities
+                                    flags:(NSData *)flags
+                                sequences:(NSData *)sequences
+                                qualities:(NSData *)qualities
+                                  offsets:(NSData *)offsets
+                                  lengths:(NSData *)lengths
+                                   cigars:(NSArray<NSString *> *)cigars
+                                readNames:(NSArray<NSString *> *)readNames
+                          mateChromosomes:(NSArray<NSString *> *)mateChromosomes
+                            matePositions:(NSData *)matePositions
+                          templateLengths:(NSData *)templateLengths
+                              chromosomes:(NSArray<NSString *> *)chromosomes
+                       signalCompression:(TTIOCompression)signalCompression
+                     signalCodecOverrides:(NSDictionary<NSString *, NSNumber *> *)signalCodecOverrides;
 
 @end
 
