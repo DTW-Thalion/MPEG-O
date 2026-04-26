@@ -8,6 +8,7 @@
 #import "HDF5/TTIOHDF5Dataset.h"
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
+#import "Codecs/TTIOQuality.h"   // M86 Phase D
 #import <hdf5.h>
 
 @implementation TTIOGenomicRun {
@@ -228,6 +229,9 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
             break;
         case 6: // TTIOCompressionBasePack
             decoded = TTIOBasePackDecode(encoded, &decErr);
+            break;
+        case 7: // TTIOCompressionQualityBinned (M86 Phase D)
+            decoded = TTIOQualityDecode(encoded, &decErr);
             break;
         default:
             if (error) *error = [NSError

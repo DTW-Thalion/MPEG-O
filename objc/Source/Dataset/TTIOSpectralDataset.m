@@ -25,6 +25,7 @@
 #import "Genomics/TTIOWrittenGenomicRun.h"     // M82
 #import "Codecs/TTIORans.h"                    // M86
 #import "Codecs/TTIOBasePack.h"                // M86
+#import "Codecs/TTIOQuality.h"                 // M86 Phase D
 #import <hdf5.h>
 
 // Internal SPI surfaced by TTIOAcquisitionRun for the dataset-level
@@ -72,18 +73,31 @@ static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
     return s;
 }
 
-static NSSet *_TTIO_M86_AllowedOverrideCodecs(void)
+/** Per-channel allowed-codec map (M86 Phase D §119). Sequences accepts
+ *  the three byte-stream codecs from Phase A (rANS-0/1, BASE_PACK).
+ *  Qualities additionally accepts QUALITY_BINNED (M85 Phase A codec id
+ *  7), wired here in Phase D. NAME_TOKENIZED (id 8) is intentionally
+ *  excluded from both — its wiring belongs to M86 Phase E and the
+ *  read_names channel, not the byte-channel pipeline. */
+static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideCodecsByChannel(void)
 {
-    static NSSet *s = nil;
+    static NSDictionary *d = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        s = [NSSet setWithArray:@[
+        NSSet *seqAllowed = [NSSet setWithArray:@[
             @(TTIOCompressionRansOrder0),
             @(TTIOCompressionRansOrder1),
             @(TTIOCompressionBasePack),
         ]];
+        NSSet *qualAllowed = [NSSet setWithArray:@[
+            @(TTIOCompressionRansOrder0),
+            @(TTIOCompressionRansOrder1),
+            @(TTIOCompressionBasePack),
+            @(TTIOCompressionQualityBinned),
+        ]];
+        d = @{ @"sequences": seqAllowed, @"qualities": qualAllowed };
     });
-    return s;
+    return d;
 }
 
 /** Validate the per-channel codec overrides BEFORE any HDF5 mutation.
@@ -92,8 +106,9 @@ static NSSet *_TTIO_M86_AllowedOverrideCodecs(void)
 static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *overrides)
 {
     if (overrides.count == 0) return;
-    NSSet *allowedChans  = _TTIO_M86_AllowedOverrideChannels();
-    NSSet *allowedCodecs = _TTIO_M86_AllowedOverrideCodecs();
+    NSSet *allowedChans = _TTIO_M86_AllowedOverrideChannels();
+    NSDictionary<NSString *, NSSet<NSNumber *> *> *allowedByChan =
+        _TTIO_M86_AllowedOverrideCodecsByChannel();
     for (NSString *chName in overrides) {
         if (![allowedChans containsObject:chName]) {
             [NSException raise:NSInvalidArgumentException
@@ -108,12 +123,36 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
                                @"must be an NSNumber-boxed TTIOCompression",
                                chName];
         }
-        if (![allowedCodecs containsObject:codecBox]) {
+        NSSet<NSNumber *> *allowed = allowedByChan[chName];
+        if (![allowed containsObject:codecBox]) {
+            // Phase D Binding Decision §110: explicit message for the
+            // (sequences, QUALITY_BINNED) category error — names the
+            // codec, the channel, and the lossy-quantisation rationale.
+            TTIOCompression codec =
+                (TTIOCompression)[codecBox unsignedIntegerValue];
+            if (codec == TTIOCompressionQualityBinned
+                && [chName isEqualToString:@"sequences"]) {
+                [NSException raise:NSInvalidArgumentException
+                            format:@"signalCodecOverrides['%@']: codec "
+                                   @"QUALITY_BINNED is not valid on the "
+                                   @"'%@' channel — quality binning is "
+                                   @"lossy and only applies to Phred "
+                                   @"quality scores. Applying it to ACGT "
+                                   @"sequence bytes would silently destroy "
+                                   @"the sequence via Phred-bin "
+                                   @"quantisation. Use the 'qualities' "
+                                   @"channel for QUALITY_BINNED, or "
+                                   @"RansOrder0/RansOrder1/BasePack on "
+                                   @"sequences.", chName, chName];
+            }
             [NSException raise:NSInvalidArgumentException
                         format:@"signalCodecOverrides['%@']: codec %@ "
-                               @"not supported (only RansOrder0, "
-                               @"RansOrder1, BasePack)",
-                               chName, codecBox];
+                               @"not supported on the '%@' channel "
+                               @"(allowed: RansOrder0, RansOrder1, "
+                               @"BasePack%@)",
+                               chName, codecBox, chName,
+                               [chName isEqualToString:@"qualities"]
+                                   ? @", QualityBinned" : @""];
         }
     }
 }
@@ -128,6 +167,8 @@ static NSData *_TTIO_M86_EncodeWithCodec(NSData *raw, TTIOCompression codec)
             return TTIORansEncode(raw, 1);
         case TTIOCompressionBasePack:
             return TTIOBasePackEncode(raw);
+        case TTIOCompressionQualityBinned:           // M86 Phase D
+            return TTIOQualityEncode(raw);
         default:
             [NSException raise:NSInvalidArgumentException
                         format:@"_TTIO_M86_EncodeWithCodec: codec %lu not "
