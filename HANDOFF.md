@@ -1,672 +1,733 @@
-# HANDOFF — M85 Phase A: Clean-Room QUALITY_BINNED Codec (Illumina-8)
+# HANDOFF — M85 Phase B: Clean-Room NAME_TOKENIZED Codec (Lean Columnar)
 
-**Scope:** Clean-room implementation of the QUALITY_BINNED genomic
-quality-score codec — fixed 8-bin Phred quantisation (CRUMBLE-derived
-Illumina mapping) with 4-bit-packed bin indices. Lossy by
-construction. Three languages (Python reference, ObjC normative,
-Java parity), wire-byte conformance fixtures shared across all
-three.
+**Scope:** Clean-room implementation of the NAME_TOKENIZED genomic
+read-name codec — a lean two-token-type columnar tokeniser
+(numeric digit-runs + string non-digit-runs) with per-column type
+detection (columnar mode vs verbatim fallback), delta-encoded
+numeric columns, and dictionary-encoded string columns. Three
+languages (Python reference, ObjC normative, Java parity), with
+cross-language byte-exact conformance fixtures.
 
-**Branch from:** `main` after M86 Phase A docs (`0de6fde`).
+**Branch from:** `main` after M85 Phase A docs (`9c0b450`).
 
-**IP provenance:** Clean-room implementation. Phred-score bin
-tables in this rough shape have been published in many places —
-Illumina's reduced-representation guidance, James Bonfield's
-CRUMBLE paper (Bioinformatics 2019), HTSlib's `qual_quants` field,
-NCBI SRA's `lossy.sra` quality binning. The exact 8-bin table this
-codec uses is documented inline (§3) and is the public-domain
-"Illumina-8 / CRUMBLE-style" mapping. **No htslib, no CRUMBLE, no
-SRA toolkit source consulted at any point.** The 4-bit packing
-geometry is the natural choice for an 8-bin index alphabet and is
-not derived from any reference.
+**IP provenance:** Clean-room implementation. Two-token-type
+tokenisation (digit-runs vs non-digit-runs) is the simplest
+possible structural split of an ASCII string and is decades-old
+prior art. Per-column type detection is straightforward. Delta
+encoding for monotonic integer columns and dictionary encoding for
+repeat-heavy string columns are both standard data-compression
+techniques. **No htslib, no CRAM tools-Java, no SRA toolkit, no
+samtools, no Bonfield 2022 reference source consulted at any
+point.** This codec is *inspired by* CRAM 3.1's name tokenisation
+algorithm in spirit but does NOT aim for CRAM-3.1 wire compatibility
+(see §10 for the explicit non-goals).
 
 ---
 
-## 1. Background
+## 1. Background and scope discipline
 
-M84 in the original WORKPLAN sketch was scoped as
-`Base-Packing + Quality Quantiser Codecs`, but the milestone we
-shipped on 2026-04-26 covered only BASE_PACK. Quality quantisation
-slipped to M85.
+M85 Phase A (commits `9cfb08bd..9c0b450`) shipped the
+QUALITY_BINNED codec (M79 slot 7). Phase B closes the genomic
+codec stack started in M83 by shipping NAME_TOKENIZED (M79 slot
+8) — the encoder + decoder for read-name compression.
 
-The current M85 in WORKPLAN (line 120) lists name-tokenizer as the
-sole scope. M85 is now restructured into two phases — same shape
-as M86:
-
-- **M85 Phase A (THIS milestone)** — `quality_binned` codec.
-  Catches up on the missed M84 piece. Comparable in scope to
-  BASE_PACK. Lossy by construction; round-trip via fixed
-  bin-centre mapping.
-- **M85 Phase B (DEFERRED)** — `name_tokenizer` codec
-  (CRAM 3.1-style, Bonfield 2022). Substantially larger;
-  separate future milestone after Phase A ships.
-
-M79 reserved `Compression.QUALITY_BINNED = 7`. Phase A ships the
-encoder, decoder, and cross-language fixtures for that slot. A
-future M86 Phase D will wire it into the `qualities` channel of
-`signal_channels/`.
+The original M85 sketch in WORKPLAN said "≥ 20:1 on structured
+Illumina names" referencing the CRAM 3.1 / Bonfield 2022
+algorithm. M85 Phase B as scoped here aims for **5–10:1** on the
+same input via a much simpler algorithm. Reaching the 20:1
+target requires the full Bonfield-style encoder (eight token
+types, per-token-type encoding variants, MATCH / DUP
+optimisations, leading-zero tracking) which is multi-thousand
+lines per language and warrants its own future optimisation
+milestone. Phase B ships a working primitive in M79 slot 8 with
+the simpler approach so the codec stack is conceptually
+complete; the optimisation can come later without changing
+external API.
 
 ---
 
 ## 2. Algorithm
 
-QUALITY_BINNED reduces a stream of Phred scores (typically 0–40,
-occasionally 0–93) to 4-bit bin indices. The 8-bin scheme means
-each input byte maps to a 3-bit number, but the wire stores 4 bits
-per index for trivial unpacking — see §3 binding decision §94 for
-the rationale.
+### 2.1 Tokenisation rules
 
-### Pack mapping
+Each read name is tokenised into a sequence of tokens by walking
+the bytes left-to-right.
 
-Each input byte (Phred score in 0..255, though typical genomic
-data is 0..93) maps to one of 8 bin indices via a fixed table. The
-decoder maps each bin index to a fixed bin centre — round-trip is
-NOT byte-exact for arbitrary Phred input. Round-trip semantics:
-`decode(encode(x)) == bin_centre[bin_of[x]]`. So Phred 7 round-trips
-through bin 1 to Phred 5 (its bin centre). This is intended; quality
-binning is a lossy compression scheme.
+**Numeric token criterion.** A numeric token is a maximal
+contiguous run of ASCII digits `0`..`9` that is either (a) the
+single character `"0"`, or (b) a digit-run of length ≥ 1 whose
+first character is NOT `"0"`. In other words, a digit-run with a
+leading zero and length ≥ 2 (like `"007"` or `"01"`) is **not** a
+valid numeric token — those characters are part of the
+surrounding string token instead.
 
-### Bin table (Illumina-8 / CRUMBLE-derived)
+**String token criterion.** Everything that isn't a numeric token
+is absorbed into a string token. Specifically, a string token is
+a maximal contiguous run of bytes such that (a) the run contains
+no valid numeric token as a sub-sequence, and (b) it is bordered
+on either side by either a valid numeric token or the start/end
+of the name.
 
-```
-Bin  Phred range   Centre  Notes
-───  ───────────   ──────  ─────────────────────────────
- 0       0..1         0    "no information"
- 1       2..9         5    low-confidence
- 2      10..19       15    standard low / older platforms
- 3      20..24       22    standard medium-low
- 4      25..29       27    standard medium
- 5      30..34       32    standard medium-high
- 6      35..39       37    high
- 7     40..255       40    capped at Phred 40 — saturates here
-```
+**Token alternation.** After parsing, tokens always alternate
+between numeric and string types. The first token may be either
+type. An empty name (`""`) yields an empty token list.
 
-Bin index for Phred p:
-```
-if p <= 1:       0
-elif p <= 9:     1
-elif p <= 19:    2
-elif p <= 24:    3
-elif p <= 29:    4
-elif p <= 34:    5
-elif p <= 39:    6
-else:            7
-```
+**Tokenisation algorithm (operational):** walk the input
+character-by-character. Maintain two states: "in string token"
+and "in numeric token". In the string state, accumulate bytes
+into the current string buffer; when you encounter a digit, peek
+ahead to find the maximal digit-run; if that digit-run is a
+valid numeric token (per the criterion above), close the current
+string token and emit, then enter the numeric state for the
+digit-run; otherwise, append the digit-run to the current string
+buffer and continue. In the numeric state, the current numeric
+token ends at the first non-digit; close it and either start a
+string token or end-of-name.
 
-Bin centre for index b: `[0, 5, 15, 22, 27, 32, 37, 40][b]`.
+Worked examples:
 
-The encoder emits the bin index for each input byte, then 4-bit-
-packs the indices (two per byte, big-endian within byte — first
-input quality occupies the high nibble).
+| Read name                 | Tokens                                                   |
+|---------------------------|----------------------------------------------------------|
+| `READ:1:2`                | `["READ:", 1, ":", 2]`                                   |
+| `ILLUMINA:LANE1:TILE2:33` | `["ILLUMINA:LANE", 1, ":TILE", 2, ":", 33]`              |
+| `r0`                      | `["r", 0]`                                               |
+| `r007`                    | `["r007"]` — `"007"` is invalid numeric (leading zero), absorbed into string |
+| `r007:1`                  | `["r007:", 1]` — the `"007"` joins the surrounding string, `"1"` is valid numeric |
+| `r010:4`                  | `["r010:", 4]` — same shape: `"010"` invalid numeric, `"4"` valid |
+| `123abc`                  | `[123, "abc"]`                                           |
+| `abc`                     | `["abc"]`                                                |
+| `42`                      | `[42]`                                                   |
+| `0`                       | `[0]` — single `"0"` is a valid numeric token (value 0)  |
+| `0042`                    | `["0042"]` — leading-zero run of length 4 is a string token |
+| `""` (empty name)         | `[]`                                                     |
 
-### Bit order within a byte
+### 2.2 Per-column type detection
 
-**Big-endian within byte.** The first input quality score occupies
-the high nibble; the second occupies the low nibble. Worked
-examples:
+The codec operates on a *batch* of read names. To use the
+columnar mode, all reads in the batch must satisfy:
 
-| Input bytes (Phred)    | Bin indices    | Packed         | Hex  |
-|------------------------|----------------|----------------|------|
-| `0 5`                  | `0 1`          | `0b 0000 0001` | 0x01 |
-| `40 30`                | `7 5`          | `0b 0111 0101` | 0x75 |
-| `0 0 5 5`              | `0 0 1 1`      | `0x00 0x11`    | —    |
-| `40` (single)          | `7` + padding  | `0b 0111 0000` | 0x70 |
+1. **Same token count.** All reads have exactly the same number
+   of tokens.
+2. **Same per-column type.** For each column index `i`, the
+   token at position `i` has the same type (numeric vs string)
+   across all reads.
 
-The padding bits (low nibble of the final byte when the input has
-odd length) are zero.
+If both conditions hold, the codec emits a **columnar** wire
+stream. Otherwise it falls back to **verbatim** mode (each name
+emitted as a length-prefixed byte sequence).
 
-### Decode
+The codec evaluates these conditions during encode and chooses
+the mode automatically. A future caller-facing flag could force
+verbatim mode, but Phase B does not expose it.
 
-1. Read the header. Validate `version == 0`, `scheme_id == 0`,
-   total stream length == `6 + ceil(original_length / 2)`. Reject
-   mismatches.
-2. Allocate output of size `original_length`. Walk the packed
-   body left-to-right: for each byte, extract the high nibble as
-   bin index for output position `2*i`, and the low nibble as bin
-   index for output position `2*i + 1`. Stop after
-   `original_length` indices are emitted (the last byte may be
-   half-used).
-3. Map each bin index through the bin-centre table to produce the
-   output Phred bytes.
+### 2.3 Columnar encoding
 
-### Edge cases
+For each column:
 
-- **Empty input** → 6-byte header only.
-- **Odd-length input** → final body byte has its low nibble
-  padded to zero. Decoder ignores the padding because it knows
-  `original_length`.
-- **Phred values > 40** → clamped to bin 7 (output Phred = 40).
-  Lossy but well-defined.
-- **All identical** → wire size = 6 + ceil(orig / 2). For 1 MB of
-  identical Phred scores, that's roughly 0.5 MB. (Compression on
-  identical data isn't the use case; rANS afterwards in the M86
-  pipeline does that.)
+- **Numeric column:** For the first read, emit the numeric value
+  as a base-128 varint (LEB128, unsigned). For each subsequent
+  read, emit `(value - previous_value)` as a zigzag-encoded
+  signed base-128 varint. The previous-value state is per-column.
+- **String column:** Maintain a per-column dictionary that maps
+  string tokens to integer codes 0..D-1 in insertion order. For
+  each read, look up the column's token in the dictionary; if
+  present, emit the dict code as varint. If absent, append it to
+  the dictionary and emit `D` (the new index) as varint, followed
+  immediately by the literal bytes (varint length + bytes). The
+  decoder mirrors this: when reading a code, if it's < current
+  dict size, look up; if it equals current dict size, read the
+  next varint as length and read the literal bytes.
 
----
+### 2.4 Verbatim encoding
 
-## 3. Wire Format (cross-language contract)
+For each read in order, emit a varint length followed by the raw
+bytes of the read name. Used when columnar conditions don't
+hold.
 
-Big-endian throughout. Self-contained — the decoder needs no
-external metadata.
+### 2.5 Decode
 
-```
-Offset  Size  Field
-──────  ────  ───────────────────────────────────────────
-0       1     version            (0x00)
-1       1     scheme_id          (0x00 = "illumina-8")
-2       4     original_length    (uint32 BE — input byte count)
-6       var   packed_indices     (ceil(original_length / 2) bytes)
-```
-
-Total length = `6 + ceil(original_length / 2)` bytes.
-
-Empty input → exactly 6 bytes (header only).
-
-Invariant: total stream length must equal
-`6 + ((original_length + 1) >> 1)`. The decoder MUST validate this
-and reject mismatched streams.
+1. Read header. Validate version, scheme_id, total length matches
+   the lengths recorded in the header.
+2. Read mode byte:
+   - `0x00` (columnar): read the per-column type table; for each
+     column in order, materialise N_reads tokens (numeric:
+     reverse the delta encoding from the seed value; string:
+     reverse the inline-dictionary protocol). Then for each
+     read index, concatenate its column tokens in order to
+     reconstruct the name.
+   - `0x01` (verbatim): for each of N_reads reads, read a
+     varint length and that many bytes.
+3. Return the list of names.
 
 ---
 
-## 4. Binding Decisions (continued from M86 §86–§90)
+## 3. Wire format (cross-language contract)
 
-| #  | Decision | Rationale |
-|----|----------|-----------|
-| 91 | Single fixed bin scheme in v0: scheme_id `0x00` = "Illumina-8" with the bin ranges and centres documented in §2. | Simpler than parameterised binning. Future schemes (NCBI 4-bin, Bonfield variable-width, etc.) get distinct scheme_ids. The wire format permits up to 256 schemes; only one is defined now. |
-| 92 | Bin table is **NOT** included in the wire stream — it's implicit from the scheme_id. | Saves 16 bytes per stream and prevents accidental encode/decode mismatches across implementations. Each language hardcodes the table for scheme 0x00 and verifies it on first use of the codec. |
-| 93 | Phred values > 40 clamp to bin 7 (centre = 40). | Most genomic data uses Phred 0–40. Q41+ is uncommon (PacBio/HiFi can produce Q60+ but those usually pre-quantise). Losing the saturation precision is the documented lossy semantics. |
-| 94 | **4-bit-packed indices, not 3-bit-packed**, even though only 8 bins are used. | 4-bit aligns to nibble boundaries, two indices per byte, no bit-juggling across byte boundaries. 3-bit would save 25% more space but require complex bit math. The 4-bit choice trades 25% of the standalone size win for trivial pack/unpack code; the M86 pipeline composes rANS afterwards which recovers most of the difference. |
-| 95 | First input quality occupies the **high nibble** of its body byte (big-endian within byte). | Matches BASE_PACK's bit-order convention (Binding Decision §82) — left-to-right reading order maps to high-to-low bits. Cross-codec consistency makes hex dumps less surprising. |
-| 96 | Padding bits in the final body byte (when input has odd length) are zero. | Deterministic encoder output without recording the padding state. Decoder uses `original_length` to know how many indices to consume. |
-| 97 | Lossy round-trip: `decode(encode(x)) == bin_centre[bin_of[x]]`, NOT `x`. | Quality binning is fundamentally lossy. Tests must use bin-centre inputs OR assert against the known lossy mapping, not byte-exact round-trip on arbitrary input. |
+Big-endian for all multi-byte fixed-width fields; varints
+unsigned LEB128 (low 7 bits of value first, top bit = continuation
+flag). Signed varints (deltas) use zigzag encoding:
+`encode(n) = (n << 1) ^ (n >> 63)` (two's-complement arithmetic
+shift), then unsigned LEB128. Self-contained — the decoder needs
+no external metadata.
+
+```
+Offset      Size  Field
+──────      ────  ───────────────────────────────────────────
+0           1     version            (0x00)
+1           1     scheme_id          (0x00 = "lean-columnar")
+2           1     mode               (0x00 = columnar, 0x01 = verbatim)
+3           4     n_reads            (uint32 BE)
+7           var   body               (mode-dependent, see below)
+```
+
+### 3.1 Columnar body (mode = 0x00)
+
+```
+Offset (rel)  Size  Field
+────────────  ────  ───────────────────────────────────────
+0             1     n_columns          (uint8; 1..255)
+1             n     column_type_table  (n_columns × uint8: 0=numeric, 1=string)
+1+n           var   columns            (per-column streams in column order)
+```
+
+For each column:
+
+- **Numeric column:** `varint(first_value)` followed by
+  `(n_reads - 1) × svarint(delta_i)` where
+  `delta_i = value_i - value_{i-1}`. Total
+  `1 + (n_reads - 1)` varints, all back-to-back.
+- **String column:** `n_reads × <code_or_literal>` where each
+  entry is `varint(code)`, optionally followed by
+  `varint(length) + length bytes` if `code` equals the current
+  dictionary size at that point in the stream (literal-and-add
+  protocol).
+
+The columns are emitted in column order with no separators
+between them. The decoder knows when each column ends because it
+knows `n_reads` and walks the appropriate number of tokens per
+column.
+
+### 3.2 Verbatim body (mode = 0x01)
+
+```
+Offset (rel)  Field
+────────────  ───────────────────────────────────────
+0             n_reads × { varint(length), length bytes }
+```
+
+### 3.3 Edge cases
+
+- **Empty input** (zero reads): header only, n_reads = 0,
+  columnar body with `n_columns = 0` (or verbatim body with
+  zero entries — encoder picks columnar with `n_columns = 0`
+  for determinism). Total wire = 8 bytes (7-byte header + 1-byte
+  n_columns).
+- **Single read:** Always uses columnar mode since the
+  per-column type test is trivially satisfied for one read.
+  Numeric columns emit only the seed value (no deltas). String
+  columns emit a single literal entry.
+- **Tokenisation produces zero tokens:** Only happens for the
+  empty string `""`. In a multi-read batch, an empty name will
+  trigger fallback to verbatim mode unless ALL reads are empty.
+- **Numeric value > 2^63 - 1:** The plain digit-run is
+  reinterpreted as a string token (delta arithmetic uses int64;
+  the encoder must check magnitude during tokenisation and
+  demote oversize numeric tokens to string).
+
+---
+
+## 4. Binding Decisions (continued from M85 Phase A §91–§97)
+
+| #   | Decision | Rationale |
+|-----|----------|-----------|
+| 98  | Two token types only: numeric (digit-run no-leading-zero) and string (everything else, including leading-zero digit-runs). | Simplest possible deterministic split. CRAM 3.1's eight types add complexity for marginal compression gain and are outside Phase B scope. |
+| 99  | Per-column type detection is a binary choice (columnar vs verbatim) for the entire batch. | Avoids per-column-pair fallback decisions whose cross-language consistency would be load-bearing for byte-exact conformance. Either the whole batch fits the columnar shape or none of it does. |
+| 100 | Numeric columns delta-encode against the immediately preceding read in the same column; first read emits the seed value verbatim. | Standard delta encoding. Best for monotonic columns (lane numbers, tile numbers, X/Y coordinates). For non-monotonic columns the deltas are larger but still encode losslessly. |
+| 101 | Zigzag encoding for signed deltas; LEB128 unsigned varint everywhere else. | Zigzag maps negatives to small positives so `+1` and `-1` both encode in one byte. LEB128 is the most widely understood unsigned varint format and all three languages have trivial implementations. |
+| 102 | String columns use an inline dictionary: codes are assigned in insertion order; new strings are emitted with code == current dict size, followed by literal length + bytes. | Mirrors LZW / DEFLATE's literal-or-reference protocol. Enables single-pass encode and decode without a separate dictionary header. |
+| 103 | Numeric tokens with leading zeros (e.g., `"007"`, `"01"`) are treated as string tokens, not numeric. | Preserves the leading-zero formatting losslessly without needing per-token metadata for the leading-zero count. Costs marginal compression on a niche input pattern. |
+| 104 | Numeric tokens > 2^63 - 1 are demoted to string tokens. | Delta arithmetic uses int64 for cross-language portability. Tokens that don't fit are vanishingly rare on real read names (lane / tile / coord values are in single-digit thousands). |
+| 105 | Dictionary state is per-column, not global. | Each column has its own value distribution; sharing a dictionary across columns would conflate them and reduce hit rate. Per-column is also easier to decode (no need to track which column an entry was inserted from). |
+| 106 | Mode (columnar vs verbatim) is determined by the encoder; no caller flag in v0. | Encoder tests the per-column type conditions and picks. Simpler API. A future scheme_id or v1 wire format could expose a force-mode flag if needed. |
+| 107 | All multi-byte fixed-width fields are big-endian; varints are LEB128 (unsigned) or LEB128-of-zigzag (signed). | Consistent with M83/M84/M85A wire formats (big-endian) plus the most widely-implemented varint format. |
 
 ---
 
 ## 5. Python Implementation
 
-### 5.1 `python/src/ttio/codecs/quality.py` (new file)
+### 5.1 `python/src/ttio/codecs/name_tokenizer.py` (new file)
 
-Public API — mirrors the rANS / BASE_PACK module shape:
+Public API — mirrors the rANS / BASE_PACK / quality module shape,
+but operates on lists of strings rather than bytes:
 
 ```python
-def encode(data: bytes) -> bytes:
-    """Encode `data` (Phred score bytes) using QUALITY_BINNED.
+def encode(names: list[str]) -> bytes:
+    """Encode a list of read names using NAME_TOKENIZED.
 
-    Maps each input byte through the Illumina-8 bin table, packs
-    bin indices 4-bits-per-index (big-endian within byte). Returns
-    a self-contained byte string per the wire format in
-    HANDOFF.md §3.
+    Tokenises each name into numeric and string runs, detects per-
+    column type, and emits either a columnar or verbatim stream
+    per the wire format in HANDOFF.md §3. Returns a self-contained
+    byte string.
 
-    Lossy: round-trip via bin centres. ``decode(encode(x)) ==
-    bin_centre[bin_of[x]]`` for each byte x.
+    Names must be valid UTF-8 strings; non-UTF-8 bytes round-trip
+    is not supported in v0 of this codec. Empty list of names
+    produces an 8-byte stream.
     """
 
-def decode(encoded: bytes) -> bytes:
+def decode(encoded: bytes) -> list[str]:
     """Decode a stream produced by encode().
 
-    Reads the header, unpacks the 4-bit bin indices, maps each
-    through the bin-centre table. Raises ValueError on malformed
-    input (bad version, bad scheme_id, length mismatch, truncated
-    stream).
+    Returns the list of read names in the original order. Raises
+    ValueError on malformed input.
     """
 ```
 
 Implementation notes:
 
-- Use `bytes.translate` with a 256-entry lookup table for the
-  byte→bin-index mapping. That's the same pattern the M84
-  base_pack.py uses for ACGT.
-- For the 4-bit pack: iterate two indices at a time; pack
-  `(idx0 << 4) | idx1`. For odd input, last byte is `(last_idx
-  << 4)`.
-- For the unpack: iterate body bytes; emit `[byte >> 4, byte &
-  0x0F]` per byte. Stop after `original_length` emissions.
-- Bin-centre map for decode: `bytes([0, 5, 15, 22, 27, 32, 37,
-  40])` then `output.translate(centre_map)`.
-- Header: `struct.pack(">BBI", 0, 0, orig_len)` — 6 bytes.
-- Decode validation: check first two bytes; check
-  `len(encoded) == 6 + (orig_len + 1) // 2`; raise `ValueError`
-  with a clear message on any failure.
+- The natural ASCII assumption: read names are usually 7-bit
+  ASCII (Illumina, PacBio, Oxford Nanopore all conform). For v0,
+  encode strings via `.encode('ascii')` and decode via
+  `.decode('ascii')`. Reject non-ASCII strings on encode with a
+  clear error.
+- Use a small helper `_tokenize(name: str) -> list[tuple[str, int|str]]`
+  that returns `[("num", value)]` or `[("str", text)]` per token,
+  walking the input character by character.
+- Use `varint(int)` / `read_varint(bytes, offset)` helpers for
+  LEB128. Use `zigzag_encode(int)` / `zigzag_decode(int)` for
+  signed delta values.
+- Numeric overflow check: after parsing each digit-run, check
+  `value < (1 << 63)`. If not, demote to string.
+- Detect column conformity in a single pass over all tokenised
+  names; if any read fails, set a `columnar = False` flag and
+  emit verbatim.
 
 ### 5.2 Module re-exports
 
 In `python/src/ttio/codecs/__init__.py`:
-- Add: `from .quality import encode as quality_encode, decode as quality_decode`
-- Update docstring: change `quality       — Phred score quantisation (M84, future)` to `quality       — Phred score quantisation (M85 Phase A)`.
+- Add: `from .name_tokenizer import encode as name_tok_encode, decode as name_tok_decode`
+- Update docstring: change `name_tok       — Read name tokenisation (M85 Phase B, future)` to `name_tok       — Read name tokenisation (M85 Phase B)`.
 
-### 5.3 `python/tests/test_m85_quality.py` (new file)
+### 5.3 `python/tests/test_m85b_name_tokenizer.py` (new file)
 
-13 pytest cases per §7.1 below.
+12 pytest cases per §7.1 below.
 
 ---
 
 ## 6. Objective-C and Java Implementations
 
-### 6.1 ObjC — `objc/Source/Codecs/TTIOQuality.{h,m}` (new files)
-
-Same shape as `TTIOBasePack.{h,m}`:
+### 6.1 ObjC — `objc/Source/Codecs/TTIONameTokenizer.{h,m}` (new files)
 
 ```objc
-NSData * _Nonnull TTIOQualityEncode(NSData * _Nonnull data);
+NSData * _Nonnull TTIONameTokenizerEncode(NSArray<NSString *> * _Nonnull names);
 
-NSData * _Nullable TTIOQualityDecode(NSData * _Nonnull encoded,
-                                     NSError * _Nullable * _Nullable error);
+NSArray<NSString *> * _Nullable TTIONameTokenizerDecode(NSData * _Nonnull encoded,
+                                                         NSError * _Nullable * _Nullable error);
 ```
 
-C-core encoder/decoder wrapped by ObjC entry points. Static
-256-entry pack lookup table; 8-entry centre lookup table. Wire into
-`objc/Source/GNUmakefile` (add `Codecs/TTIOQuality.h` to
-`libTTIO_HEADER_FILES`, `Codecs/TTIOQuality.m` to
-`libTTIO_OBJC_FILES`).
+C-core tokenisation walked through `const char *` buffers.
+Per-column streams accumulated into `NSMutableData` buffers and
+concatenated. Use a small `varint_write`/`varint_read` C helper
+pair plus zigzag encode/decode. Wire into `objc/Source/GNUmakefile`
+(add `Codecs/TTIONameTokenizer.h` / `.m` to the same lists as the
+M83/M84/M85A entries already there).
 
-Tests in `objc/Tests/TestM85Quality.m`. Style mirrors
-`TestM84BasePack.m`. Wire into `TTIOTestRunner.m` as `extern void
-testM85Quality(void);` + `START_SET("M85: QUALITY_BINNED codec")
-testM85Quality(); END_SET("M85: QUALITY_BINNED codec")` block in
-`main`. Add `TestM85Quality.m` to `objc/Tests/GNUmakefile`'s
-`TTIOTests_OBJC_FILES`. Target ≥ 30 new assertions across the 13
-tests.
+Tests in `objc/Tests/TestM85bNameTokenizer.m`. Style mirrors
+`TestM85Quality.m`. Wire into `TTIOTestRunner.m` as `extern void
+testM85bNameTokenizer(void);` + a `START_SET("M85B:
+NAME_TOKENIZED codec") testM85bNameTokenizer(); END_SET("M85B:
+NAME_TOKENIZED codec")` block in `main`. Add to
+`objc/Tests/GNUmakefile`'s `TTIOTests_OBJC_FILES`. Target ≥ 30
+new assertions across the 12 tests.
 
-### 6.2 Java — `java/src/main/java/global/thalion/ttio/codecs/Quality.java` (new file)
+### 6.2 Java — `java/src/main/java/global/thalion/ttio/codecs/NameTokenizer.java` (new file)
 
 ```java
 package global.thalion.ttio.codecs;
 
-public final class Quality {
-    public static byte[] encode(byte[] data) { ... }
-    public static byte[] decode(byte[] encoded) { ... }
-    private Quality() {}
+import java.util.List;
+
+public final class NameTokenizer {
+    public static byte[] encode(List<String> names) { ... }
+    public static List<String> decode(byte[] encoded) { ... }
+    private NameTokenizer() {}
 }
 ```
 
-Use `ByteBuffer` with `ByteOrder.BIG_ENDIAN` for header
-serialisation. Use `Byte.toUnsignedInt(b)` whenever reading a byte
-as a Phred score (since Java `byte` is signed and Phred 128+ would
-otherwise sign-extend negative).
+Use `ByteBuffer` for the 7-byte header (BIG_ENDIAN). Use
+`Long.parseUnsignedLong` defensively if needed; numeric tokens
+parse as `long`. Use `Byte.toUnsignedInt(b)` whenever reading a
+byte during varint decode.
 
 Tests in
-`java/src/test/java/global/thalion/ttio/codecs/QualityTest.java`.
-JUnit 5. Same 13 test cases as Python; ≥ 12 test methods, ≥ 40
-assertions.
+`java/src/test/java/global/thalion/ttio/codecs/NameTokenizerTest.java`.
+JUnit 5. Same 12 cases; ≥ 12 test methods, ≥ 40 assertions.
 
 ---
 
 ## 7. Tests
 
-### 7.1 Python — `python/tests/test_m85_quality.py`
+### 7.1 Python — `python/tests/test_m85b_name_tokenizer.py`
 
-All 13 use pytest:
+All 12 use pytest:
 
-1. **`round_trip_pure_centre_bytes`** — input is `bytes([0, 5, 15,
-   22, 27, 32, 37, 40] * 32)` (256 bytes of pure bin centres).
-   `decode(encode(data)) == data` byte-exact (no information lost
-   on bin-centre input).
-2. **`round_trip_arbitrary_phred`** — input is `bytes(range(50))`
-   (50 bytes 0..49). Compute the expected lossy round-trip
-   manually: each byte x maps to its bin index then to its bin
-   centre. Assert `decode(encode(data)) == expected_centres`.
-3. **`round_trip_clamped`** — input includes Phred 50, 60, 93,
-   100, 200, 255. All map to bin 7, centre 40. Verify.
-4. **`round_trip_empty`** — `b""` → 6-byte header → `b""`.
-5. **`round_trip_single_byte`** — each Phred value at a bin centre
-   round-trips: 0→0, 5→5, 15→15, 22→22, 27→27, 32→32, 37→37,
-   40→40. All produce 7-byte streams (6 header + 1 body, low
-   nibble = 0 padding).
-6. **`padding_tail_patterns`** — 1, 2, 3, 4 byte inputs verify
-   the padding behaviour. Specifically: `b"\x00"` → body byte
-   `0x00`; `b"\x05"` → body byte `0x10` (bin 1 in high nibble,
-   padding zero in low nibble); `b"\x05\x05"` → body byte `0x11`
-   (no padding); `b"\x05\x05\x05"` → body bytes `0x11 0x10`
-   (padding zero in low nibble of second body byte).
-7. **`compression_ratio`** — generate 1 MiB of arbitrary Phred
-   bytes (via `os.urandom` mod 41 to keep them in range). Verify
-   `len(encode(data))` equals `6 + (len(data) + 1) // 2` exactly.
-   Should be slightly over 50% of the input.
-8. **`canonical_vector_a`** — encode `data_a`, compare bytes-equal
-   to fixture `quality_a.bin`.
-9. **`canonical_vector_b`** — same with `quality_b.bin`.
-10. **`canonical_vector_c`** — same with `quality_c.bin`.
-11. **`canonical_vector_d`** — same with `quality_d.bin` (= 6
-    bytes total).
-12. **`decode_malformed`** — five sub-cases, each
+1. **`round_trip_columnar_basic`** — names `["READ:1:2", "READ:1:3",
+   "READ:1:4"]` round-trip exactly. Wire size << 24 bytes (raw
+   sum). Verify mode byte is 0x00 (columnar).
+2. **`round_trip_columnar_illumina`** — 100 deterministic
+   Illumina-style names like
+   `f"INSTR:RUN:LANE:{tile}:{x}:{y}"` for `tile in 0..9`,
+   `x in 0..9`, `y in 0..9` (100 reads × 6 columns including
+   instrument string and run/lane values). Round-trip exact.
+   Verify columnar mode used; compression ratio ≥ 5:1 vs the
+   sum of raw lengths (Binding Decision §99 makes this work for
+   structured input).
+3. **`round_trip_verbatim_ragged`** — names
+   `["A", "AB", "AB:C", "AB:C:D"]` round-trip exact. The token
+   counts vary across reads, so columnar mode condition fails;
+   verify mode byte is 0x01 (verbatim).
+4. **`round_trip_verbatim_type_mismatch`** — names
+   `["a:1", "a:b", "a:1"]` round-trip exact. Same token count
+   but column 1's type varies (numeric/string/numeric); verify
+   verbatim fallback.
+5. **`round_trip_empty_list`** — `[]` round-trips. Wire = 8
+   bytes (header + 1-byte n_columns = 0).
+6. **`round_trip_single_read`** — `["only"]` and `["only:42"]`
+   each round-trip. Single-read batch always picks columnar mode.
+7. **`round_trip_leading_zero`** — names `["r007", "r008", "r009"]`
+   round-trip exact. The leading-zero digit-run is treated as
+   string per Binding Decision §103, so columnar mode with 1
+   string column is used.
+8. **`round_trip_oversize_numeric`** — names with a numeric
+   token > 2^63-1 (e.g., a 20-digit decimal string) round-trip;
+   the oversize numeric is demoted to string per §104.
+9. **`canonical_vector_a`** — encode `vector_a` (defined below),
+   compare bytes-equal to fixture `name_tok_a.bin`.
+10. **`canonical_vector_b`** — same with `vector_b` and
+    `name_tok_b.bin`.
+11. **`canonical_vector_c`** — same with `vector_c` and
+    `name_tok_c.bin`.
+12. **`canonical_vector_d`** — same with `vector_d` (empty list)
+    and `name_tok_d.bin`.
+13. **`decode_malformed`** — five sub-cases, each
     `pytest.raises(ValueError)`:
-    - Stream shorter than the 6-byte header.
-    - Bad version byte (0x01 instead of 0x00).
-    - Bad scheme_id (0xFF instead of 0x00).
-    - `original_length` says 4 but actual body is 5 bytes
-      (mismatch with `ceil(orig/2)`).
-    - Original_length 5 but body is only 2 bytes (truncation).
-13. **`throughput`** — encode 10 MiB of arbitrary Phred bytes,
-    log MB/s. Soft target encode ≥ 50 MB/s, decode ≥ 100 MB/s.
-    Print actual.
+    - Stream shorter than 7-byte header.
+    - Bad version byte (0x01).
+    - Bad scheme_id (0xFF).
+    - Bad mode byte (0xFF).
+    - Truncated body (varint runs off end of stream).
+14. **`throughput`** — encode 100 000 deterministic Illumina-style
+    names, log encode + decode time and resulting compression
+    ratio. PASS if encode ≥ 5 MB/s. Print actual.
 
-### 7.2 ObjC — `objc/Tests/TestM85Quality.m`
+### 7.2 ObjC — `objc/Tests/TestM85bNameTokenizer.m`
 
-Same 13 cases. Throughput soft target encode ≥ 300 MB/s, decode ≥
-500 MB/s. Hard floor encode ≥ 150 MB/s, decode ≥ 250 MB/s.
+Same 14 cases. Throughput soft target encode ≥ 50 MB/s, decode ≥
+100 MB/s. Hard floor encode ≥ 25 MB/s, decode ≥ 50 MB/s.
 
-### 7.3 Java — `java/src/test/java/global/thalion/ttio/codecs/QualityTest.java`
+### 7.3 Java —
+`java/src/test/java/global/thalion/ttio/codecs/NameTokenizerTest.java`
 
-Same 13 cases. Throughput logged, no hard threshold.
-
-### 7.4 Cross-language byte-exact conformance
-
-The four canonical fixtures are the contract.
+Same 14 cases. Throughput logged, no hard threshold.
 
 ---
 
 ## 8. Canonical Test Vectors
 
-All four fixtures are generated by the Python encoder and committed
-under `python/tests/fixtures/codecs/`. ObjC and Java each get
-verbatim copies under their fixture directories.
+All four fixtures are generated by the Python encoder and
+committed under `python/tests/fixtures/codecs/`. ObjC and Java
+each get verbatim copies under their fixture directories.
 
-### Vector A — pure bin centres, 256 bytes
-
-```python
-data_a = bytes([0, 5, 15, 22, 27, 32, 37, 40]) * 32
-```
-
-Expected wire size: `6 + 128 = 134 bytes`. Body bytes are all
-`0x01 0x23 0x45 0x67 ...` patterns from packed bin pairs.
-
-### Vector B — Illumina-realistic Phred profile, 1024 bytes
-
-A typical Phred-quality profile drops at the read end. Construct
-deterministically:
+### Vector A — small columnar Illumina-like, 5 reads
 
 ```python
-import hashlib
-seed = hashlib.sha256(b"ttio-quality-vector-b").digest()  # 32 bytes
-data_b_bytes = bytearray()
-for i in range(1024):
-    # First half: Phred 30..40 (mostly bin 5, 6, 7)
-    # Second half: Phred 15..30 (mostly bin 2, 3, 4, 5)
-    if i < 512:
-        base = 30 + (seed[i % 32] % 11)   # 30..40
-    else:
-        base = 15 + (seed[i % 32] % 16)   # 15..30
-    data_b_bytes.append(base)
-data_b = bytes(data_b_bytes)
+vector_a = [
+    "INSTR:RUN:1:101:1000:2000",
+    "INSTR:RUN:1:101:1000:2001",
+    "INSTR:RUN:1:101:1001:2000",
+    "INSTR:RUN:1:101:1001:2001",
+    "INSTR:RUN:1:102:1000:2000",
+]
 ```
 
-Expected wire size: `6 + 512 = 518 bytes`. mask_count style metric
-n/a (no mask in QUALITY_BINNED).
+5 reads × 6 columns (3 string columns + 3 numeric columns
+including lane=1, tile=101..102, x=1000..1001, y=2000..2001).
+Columnar mode. Expected wire size: small (the deltas are
+mostly 0 or 1).
 
-### Vector C — edge-case Phred values, 64 bytes
-
-Hand-constructed to exercise every bin transition and saturation,
-exactly 64 bytes:
+### Vector B — verbatim fallback (ragged), 4 reads
 
 ```python
-data_c = bytes([
-    # 24 bytes covering every bin boundary (low + high edge of each bin)
-    0,  1,         # bin 0 edges
-    2,  5,  9,     # bin 1 low/centre/high
-    10, 15, 19,    # bin 2 low/centre/high
-    20, 22, 24,    # bin 3 low/centre/high
-    25, 27, 29,    # bin 4 low/centre/high
-    30, 32, 34,    # bin 5 low/centre/high
-    35, 37, 39,    # bin 6 low/centre/high
-    40, 41, 50, 60, 93, 100, 200, 255,  # bin 7 + saturation (8 bytes)
-    # 32 bytes of bin centres (4 cycles of the 8 centres)
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-])
-assert len(data_c) == 64
+vector_b = [
+    "A",
+    "AB",
+    "AB:C",
+    "AB:C:D",
+]
 ```
 
-Count check: 2 + 3 + 3 + 3 + 3 + 3 + 3 + 8 = 28 bytes for the
-boundary-coverage section. (Bin 0 contributes only the two values
-0 and 1, since `1` is both the centre and the high edge — the
-table above lists each bin distinctly.) Then 32 bytes of bin
-centres = 28 + 32 = **60**. Need 4 more bytes — append four more
-centres `0, 5, 15, 22`. Final input:
+Different token counts per read → verbatim mode.
+
+### Vector C — leading-zero absorbed into string column, 6 reads
 
 ```python
-data_c = bytes([
-    0,  1,
-    2,  5,  9,
-    10, 15, 19,
-    20, 22, 24,
-    25, 27, 29,
-    30, 32, 34,
-    35, 37, 39,
-    40, 41, 50, 60, 93, 100, 200, 255,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22,
-])
-assert len(data_c) == 64, f"expected 64, got {len(data_c)}"
+vector_c = [
+    "r007:1",
+    "r008:2",
+    "r009:3",
+    "r010:4",
+    "r011:5",
+    "r012:6",
+]
 ```
 
-Expected wire size: `6 + 32 = 38 bytes` (64 input bytes → 32
-packed body bytes).
+Each name has a leading-zero digit-run inside the prefix
+(`"007"`, `"008"`, `"010"`, etc.) that gets absorbed into the
+surrounding string token per §2.1. Tokenisation result for each
+name: `["rNNN:", M]` — a 2-column shape (string, numeric). All 6
+reads share this shape so columnar mode is used; the string
+column has 6 distinct dictionary entries and the numeric column
+has deltas of `+1`. This vector exercises the leading-zero rule
+specifically.
 
-### Vector D — empty
+### Vector D — empty list
 
 ```python
-data_d = b""
+vector_d = []
 ```
 
-Expected wire size: 6 bytes (header only).
+Expected wire size: 8 bytes (header + n_columns=0).
 
 ### Reference output generation
 
 ```python
-import hashlib
-from ttio.codecs.quality import encode, decode
+from ttio.codecs.name_tokenizer import encode, decode
 
-# Bin and centre tables for the lossy round-trip check.
-_BIN_OF = [0]*2 + [1]*8 + [2]*10 + [3]*5 + [4]*5 + [5]*5 + [6]*5 + [7]*(256-40)
-_CENTRE = [0, 5, 15, 22, 27, 32, 37, 40]
-
-def lossy_expected(data):
-    return bytes(_CENTRE[_BIN_OF[b]] for b in data)
-
-# Vector A — pure bin centres
-data_a = bytes([0, 5, 15, 22, 27, 32, 37, 40]) * 32
-assert len(data_a) == 256
-
-# Vector B — Illumina-realistic Phred profile
-seed = hashlib.sha256(b"ttio-quality-vector-b").digest()
-data_b_bytes = bytearray()
-for i in range(1024):
-    if i < 512:
-        base = 30 + (seed[i % 32] % 11)
-    else:
-        base = 15 + (seed[i % 32] % 16)
-    data_b_bytes.append(base)
-data_b = bytes(data_b_bytes)
-
-# Vector C — exact 64-byte sequence per HANDOFF.md §8
-data_c = bytes([
-    0,  1,
-    2,  5,  9,
-    10, 15, 19,
-    20, 22, 24,
-    25, 27, 29,
-    30, 32, 34,
-    35, 37, 39,
-    40, 41, 50, 60, 93, 100, 200, 255,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22, 27, 32, 37, 40,
-    0, 5, 15, 22,
-])
-assert len(data_c) == 64
-
-# Vector D — empty
-data_d = b""
-
-for name, data in [("a", data_a), ("b", data_b), ("c", data_c), ("d", data_d)]:
-    enc = encode(data)
-    assert decode(enc) == lossy_expected(data), f"{name}: lossy round-trip failed"
-    open(f"tests/fixtures/codecs/quality_{name}.bin", "wb").write(enc)
-    print(f"{name}: {len(data)} -> {len(enc)} bytes")
+vectors = {
+    "a": [
+        "INSTR:RUN:1:101:1000:2000",
+        "INSTR:RUN:1:101:1000:2001",
+        "INSTR:RUN:1:101:1001:2000",
+        "INSTR:RUN:1:101:1001:2001",
+        "INSTR:RUN:1:102:1000:2000",
+    ],
+    "b": ["A", "AB", "AB:C", "AB:C:D"],
+    "c": ["r007:1", "r008:2", "r009:3", "r010:4", "r011:5", "r012:6"],
+    "d": [],
+}
+for name, names in vectors.items():
+    enc = encode(names)
+    assert decode(enc) == names, f"{name}: round-trip failed"
+    open(f"tests/fixtures/codecs/name_tok_{name}.bin", "wb").write(enc)
+    print(f"{name}: {len(names)} names -> {len(enc)} bytes")
 ```
 
 The four input vectors A/B/C/D are deterministic and pinned by
 this script. ObjC and Java tests must construct the same input
-bytes (using the same SHA-256 salt for B and the same literal
-sequences for A, C, D) and compare encoder output against the
-committed `.bin` fixtures.
+strings and compare encoder output against the committed `.bin`
+fixtures.
 
 ---
 
-## 9. Integration Point (Forward Reference)
+## 9. Documentation
 
-M85 Phase A does NOT wire QUALITY_BINNED into the genomic
-signal-channel pipeline — that's a future M86 phase (call it
-M86 Phase D, separate from Phase A which wired rANS + BASE_PACK).
-M85 Phase A delivers QUALITY_BINNED as a standalone primitive.
-
-When M86 Phase D lands, a `signal_channels/qualities` dataset's
-`@compression == 7` will route the raw bytes through
-`quality.decode()`. The current M82 storage (raw Phred bytes)
-remains the `@compression == 0` (NONE) case.
-
----
-
-## 10. Documentation
-
-### 10.1 `docs/codecs/quality.md` (new)
+### 9.1 `docs/codecs/name_tokenizer.md` (new)
 
 Codec specification document, parallel structure to
-`docs/codecs/rans.md` and `docs/codecs/base_pack.md`:
+`docs/codecs/quality.md`:
 
-- Algorithm summary (8-bin Illumina-style + 4-bit packing)
-- Bin table (Phred ranges → bin index → bin centre)
-- Lossy round-trip explanation with worked examples
-- Wire format diagram
-- 4-bit-vs-3-bit rationale (Binding Decision §94)
+- Algorithm summary (two token types, columnar vs verbatim
+  modes, delta-encoded numerics, dict-encoded strings)
+- Tokenisation rules with worked examples
+- Per-column type detection rule (binary choice: columnar vs
+  verbatim)
+- Wire format diagram (header + per-mode body)
+- Varint and zigzag-varint encoding reference
+- Ten binding decisions §98–§107 with rationale
 - IP provenance statement
 - Cross-language conformance contract
 - Performance targets per language
 - Public API in each of the three languages
+- "Wired into" / forward references — codec ships as a
+  standalone primitive in M85 Phase B; future M86 phase to wire
+  into `signal_channels/read_names`
 
-### 10.2 `CHANGELOG.md`
+### 9.2 `CHANGELOG.md`
 
-Add M85 Phase A entry under `[Unreleased]`. Update the Unreleased
-header to mention M85 Phase A. Format mirrors the M83/M84/M86
-entries.
+Add M85 Phase B entry under `[Unreleased]`. Update the
+Unreleased header to mention M85 Phase B. Format mirrors
+M85 Phase A.
 
-### 10.3 `docs/format-spec.md` §10.4
+### 9.3 `docs/format-spec.md` §10.4
 
-Flip the **quality-binned** row from "Reserved enum slot … NOT
-YET IMPLEMENTED" to "Implemented in M85 Phase A …" with a pointer
-to `docs/codecs/quality.md`. Update the trailing summary
-paragraph: ids `4`, `5`, `6`, `7` now ship as standalone
-primitives; id `8` (name-tokenized) remains reserved-only and is
-deferred to M85 Phase B.
+Flip the **name-tokenized** row from "Reserved enum slot … NOT
+YET IMPLEMENTED" to "Implemented in M85 Phase B …" with a
+pointer to `docs/codecs/name_tokenizer.md`. Update the trailing
+summary paragraph: ids `4`, `5`, `6`, `7`, `8` now ALL ship as
+standalone primitives; the genomic codec library is
+conceptually complete. Pipeline-wiring status unchanged
+(ids 4/5/6 wired by M86 Phase A; ids 7/8 await future M86
+phases).
 
-### 10.4 `python/src/ttio/codecs/__init__.py`
+### 9.4 `python/src/ttio/codecs/__init__.py`
 
 Update the docstring listing: change
-`quality       — Phred score quantisation (M84, future)` to
-`quality       — Phred score quantisation (M85 Phase A)`.
+`name_tok       — Read name tokenisation (M85 Phase B, future)`
+to `name_tok       — Read name tokenisation (M85 Phase B)`.
 
-### 10.5 `WORKPLAN.md`
+### 9.5 `WORKPLAN.md`
 
-The M85 section needs restructuring to reflect Phase A shipping
-and Phase B (name-tokenizer) deferring. Format mirrors the M86
-restructure landed in `0de6fde`:
+The M85 section needs Phase B status flipped:
 
 ```
-### M85 — Quality Quantiser + Name Tokeniser Codecs
+#### Phase B — name_tokenizer codec (SHIPPED 2026-04-26)
 
-**Status: Phase A shipped (2026-04-26). Phase B deferred.**
-
-#### Phase A — quality_binned codec (SHIPPED)
-- [x] ttio.codecs.quality — fixed Illumina-8 bin table (CRUMBLE-
-      derived), 4-bit-packed indices, lossy by construction.
-- [x] All three languages, cross-language byte-exact fixtures.
+- [x] ttio.codecs.name_tokenizer — lean two-token-type columnar
+      codec (numeric digit-runs + string non-digit-runs), per-
+      column type detection, delta-encoded numerics, dict-encoded
+      strings.
+- [x] Compression target was originally ≥ 20:1 (CRAM 3.1 / Bonfield
+      2022 style); achieved ~5-10:1 with the lean implementation.
+      Future optimisation milestone could close the gap by
+      adding the full Bonfield token-type set (DELTA0, MATCH,
+      DUP, ALPHA-vs-CHAR distinction).
+- [x] All three languages, cross-language byte-exact fixtures
+      (name_tok_{a,b,c,d}.bin).
 - (commit refs)
-
-#### Phase B — name_tokenizer codec (DEFERRED)
-- ttio.codecs.name_tokenizer: CRAM 3.1-style read name compression.
-  ... (existing wishlist preserved)
 ```
-
-Also: update the M84 acceptance-criteria text in WORKPLAN if the
-M84 entry's "Quality Quantiser" half was acknowledged anywhere.
-(Spot-check during the docs phase; if no concrete claim was made,
-no edit needed.)
 
 ---
 
-## 11. Gotchas (continued from M86 §96–§102)
+## 10. Out of Scope (explicit non-goals)
 
-103. **Lossy round-trip is a feature.** Tests must NOT assert
-     `decode(encode(arbitrary)) == arbitrary`. Use bin-centre
-     inputs for byte-exact round-trips, or assert against the
-     expected lossy output. Mistaken assertions will produce
-     "test passes for trivial inputs but fails for real Phred
-     data" bugs.
+- **CRAM 3.1 wire compatibility.** This codec's wire format is
+  TTI-O native, not CRAM-3.1-compatible. samtools cannot read
+  TTI-O `name_tokenizer.encode()` output and vice versa. If
+  CRAM-3.1 interop is needed, that's a future converter
+  milestone (probably alongside the SAM/BAM/CRAM importer/
+  exporter milestones M87/M88).
+- **The full Bonfield 2022 token type set.** No DIGIT0, no MATCH,
+  no DUP, no ALPHA-vs-CHAR distinction, no per-token-type
+  encoding variants. The lean two-type tokeniser ships ~5-10:1
+  on structured input; the 20:1 WORKPLAN target is a future
+  optimisation milestone if/when needed.
+- **Per-column rANS.** The output of this codec is the raw
+  varint streams plus literals. A future M86 phase wiring this
+  into a `read_names` channel could compose with rANS
+  afterwards for further compression.
+- **Caller-facing mode flag.** The encoder picks columnar or
+  verbatim automatically. Phase B doesn't expose a force-mode
+  parameter.
+- **UTF-8 / non-ASCII names.** v0 of scheme 0x00 requires
+  7-bit ASCII names. Non-ASCII bytes raise on encode. Real
+  genomic data uses ASCII; this is not a meaningful
+  restriction.
+- **Streaming encode/decode.** The codec operates on the full
+  list of names in one shot (encode requires a second pass for
+  per-column type detection; decode produces the full list). A
+  future streaming interface would require a different wire
+  format.
+- **Pipeline wiring into `signal_channels/read_names`.** That
+  belongs in a future M86 phase (alongside the integer-channel
+  and quality-channel wiring deferred from M86 Phase A).
 
-104. **Phred 41+ saturates to bin 7 / centre 40.** PacBio HiFi
-     produces Phred 60+ scores; those will round-trip to 40 with
-     this codec. Document. Future scheme_ids may add wider
-     ranges; for v0 of scheme 0x00, saturation is the spec.
+---
 
-105. **Padding-bit determinism.** Final body byte's low nibble
-     MUST be zero when input has odd length. Encoder bugs that
-     leave stack garbage there will fail the cross-language
-     fixture comparison. Tests must include a 1-byte input
-     (which packs to a single high-nibble plus zero padding).
+## 11. Gotchas
 
-106. **Header is fixed size: 6 bytes.** No optional fields; no
-     embedded bin table. Future scheme_ids may extend the
-     header (in which case version bumps to 0x01); v0 is the
-     6-byte header documented in §3.
+108. **Per-column type detection scans all reads twice.** First
+     pass tokenises each name into a list of tokens. Second
+     pass checks token counts and per-column types match
+     across all reads. If either check fails, fallback to
+     verbatim. Don't confuse the per-column type with the
+     value type at any single position — what matters is
+     whether ALL reads have the same shape.
 
-107. **Java unsigned-byte gotcha.** Phred values must be read as
-     unsigned bytes from `byte[]`. `Byte.toUnsignedInt(b)` is
-     the canonical idiom. Without it, Phred 200+ would
-     sign-extend to a negative int and crash the bin-table
-     lookup.
+109. **Numeric overflow check happens during tokenisation, not
+     after.** If a digit-run is so long it doesn't fit in
+     int64, treat it as a string token at that point — don't
+     try to parse and then catch the exception. This keeps
+     the tokeniser deterministic across languages with
+     different exception models.
 
-108. **No MPGO remnants.** M83 audited the ObjC tree; nothing
-     to clean.
+110. **Leading-zero detection is exact.** A digit-run of length
+     >= 2 starting with `'0'` is a string token. Length-1
+     `"0"` is a valid numeric token (value 0). Length-2 `"01"`
+     is a string. This rule must be byte-exact across the
+     three implementations or fixtures will mismatch.
+
+111. **Empty-list batches use columnar mode** with `n_columns
+     = 0`, NOT verbatim mode. Determinism: the encoder always
+     prefers columnar when it's eligible, and an empty batch
+     is trivially eligible. Wire size = 8 bytes
+     (7-byte header + 1-byte n_columns = 0).
+
+112. **Decoder must validate the encoded total length matches
+     the consumed bytes.** After consuming the header and
+     either columnar or verbatim body, check that all bytes
+     have been read. Trailing bytes mean malformed input;
+     raise.
+
+113. **Inline dictionary new-entry detection uses `code ==
+     current_dict_size`, NOT `code > current_dict_size`.**
+     The decoder maintains a per-column dict size counter; a
+     code exactly equal to the counter signals "new entry,
+     read literal next". Anything > counter is malformed
+     (raise).
+
+114. **Java sign-extension on byte → int during varint decode.**
+     Use `Byte.toUnsignedInt(b)` everywhere a byte's bit
+     pattern feeds into a varint accumulator. Without it,
+     bytes ≥ 0x80 (the continuation bit) sign-extend to
+     negative ints and corrupt the decode. This is the
+     same gotcha as M85 Phase A §107 in a new context.
+
+115. **String-token bytes ARE literal bytes in the dictionary
+     entry, not a length-prefixed string.** Wait — they are
+     length-prefixed (varint length followed by bytes). The
+     length is the byte count. Don't accidentally write the
+     character count if the encoding is multi-byte (since v0
+     is ASCII-only, byte count == character count, but be
+     explicit in the implementation that "length" means
+     bytes).
+
+116. **Empty string token is impossible** under the
+     tokenisation rules (every token is a maximal run of at
+     least one character). The dictionary will never see an
+     empty string entry. Decoder doesn't need to special-case
+     it.
 
 ---
 
 ## Acceptance Criteria
 
 ### Python
-- [ ] All existing tests pass (zero regressions vs `0de6fde`).
-- [ ] `quality.encode` / `quality.decode` ship in
-      `python/src/ttio/codecs/quality.py` with the wire format
-      from §3.
-- [ ] All 13 tests in `python/tests/test_m85_quality.py` pass.
-- [ ] All four canonical fixtures
-      (`quality_{a,b,c,d}.bin`) committed and match the encoder
+- [ ] All existing tests pass (zero regressions vs `9c0b450`).
+- [ ] `name_tokenizer.encode` / `name_tokenizer.decode` ship in
+      `python/src/ttio/codecs/name_tokenizer.py`.
+- [ ] All 14 tests in `python/tests/test_m85b_name_tokenizer.py`
+      pass.
+- [ ] All four canonical fixtures committed and match encoder
       output byte-exact.
 - [ ] Decode malformed (5 sub-cases) raises ValueError.
-- [ ] Throughput logged (encode ≥ 50 MB/s, decode ≥ 100 MB/s).
+- [ ] Throughput logged (encode ≥ 5 MB/s on 100k Illumina names).
 - [ ] Module re-export + docstring updated in
       `python/src/ttio/codecs/__init__.py`.
 
 ### Objective-C
-- [ ] All existing tests pass (zero regressions vs the 2119
-      PASS baseline + 2 pre-existing M38 Thermo failures).
-- [ ] `TTIOQualityEncode` / `TTIOQualityDecode` ship.
-- [ ] All 13 tests in `TestM85Quality.m` pass byte-exact against
-      the Python fixtures.
+- [ ] All existing tests pass (zero regressions vs the 2194 PASS
+      baseline + 2 pre-existing M38 Thermo failures).
+- [ ] `TTIONameTokenizerEncode` / `TTIONameTokenizerDecode` ship.
+- [ ] All 14 tests in `TestM85bNameTokenizer.m` pass byte-exact
+      against the Python fixtures.
 - [ ] Malformed input → NSError, no crash, all 5 sub-cases.
-- [ ] Throughput: encode ≥ 150 MB/s hard floor (soft ≥ 300);
-      decode ≥ 250 MB/s hard floor (soft ≥ 500).
+- [ ] Throughput: encode ≥ 25 MB/s hard floor (soft ≥ 50);
+      decode ≥ 50 MB/s hard floor (soft ≥ 100).
 - [ ] ≥ 30 new assertions.
 
 ### Java
-- [ ] All existing tests pass (zero regressions vs the 441/0/0/0
-      baseline → ≥ 454/0/0/0 after M85 Phase A).
-- [ ] `Quality.encode` / `Quality.decode` ship.
+- [ ] All existing tests pass (zero regressions vs the 454/0/0/0
+      baseline → ≥ 468/0/0/0 after M85 Phase B).
+- [ ] `NameTokenizer.encode` / `NameTokenizer.decode` ship.
 - [ ] All four canonical vectors match Python fixtures byte-exact.
 - [ ] Malformed input → IllegalArgumentException, all 5 sub-cases.
 - [ ] ≥ 12 test methods, ≥ 40 assertions.
@@ -675,35 +736,13 @@ no edit needed.)
 - [ ] Python, ObjC, and Java produce identical encoded bytes for
       vectors A, B, C, D.
 - [ ] Fixture files committed under
-      `python/tests/fixtures/codecs/quality_*.bin` and copied
+      `python/tests/fixtures/codecs/name_tok_*.bin` and copied
       verbatim to `objc/Tests/Fixtures/` and
       `java/src/test/resources/ttio/codecs/`.
-- [ ] `docs/codecs/quality.md` committed and complete.
-- [ ] `CHANGELOG.md` M85 Phase A entry committed under
+- [ ] `docs/codecs/name_tokenizer.md` committed.
+- [ ] `CHANGELOG.md` M85 Phase B entry committed under
       `[Unreleased]`.
-- [ ] `docs/format-spec.md` §10.4 quality-binned row flipped to
+- [ ] `docs/format-spec.md` §10.4 name-tokenized row flipped to
       "implemented".
 - [ ] `python/src/ttio/codecs/__init__.py` docstring updated.
-- [ ] `WORKPLAN.md` M85 section restructured into Phase A
-      (shipped) and Phase B (deferred).
-
----
-
-## Out of Scope
-
-- **Name-tokenizer codec.** That's M85 Phase B, a separate future
-  milestone. Bonfield 2022 is substantially larger than
-  quality_binned and warrants its own plan.
-- **Wiring quality_binned into the genomic pipeline.** That's a
-  future M86 phase, not M85 Phase A.
-- **Variable bin schemes.** Only scheme_id `0x00` (Illumina-8) is
-  defined in v0. Future scheme_ids can add NCBI 4-bin, Bonfield
-  variable-width, etc.
-- **Quality scores > Phred 40.** Saturate to bin 7. Future codecs
-  with wider Phred range support are out of scope.
-- **rANS / Huffman composition inside the codec.** Standalone
-  size win is the 4-bit packing alone (~50%). Further compression
-  comes from M86 piping the output through rANS_order0; that's
-  composition, not codec scope.
-- **Performance optimisation beyond the targets.** SIMD,
-  vectorised pack/unpack tables, GPU offload — all out of scope.
+- [ ] `WORKPLAN.md` M85 Phase B status flipped to SHIPPED.
