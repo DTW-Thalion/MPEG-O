@@ -105,7 +105,8 @@ libTTIO_HEADER_FILES = \
 	Transport/TTIOEncryptedTransport.h \
 	Analysis/TTIOTwoDCos.h \
 	Codecs/TTIORans.h \
-	Codecs/TTIOBasePack.h
+	Codecs/TTIOBasePack.h \
+	Codecs/TTIOQuality.h
 
 libTTIO_OBJC_FILES = \
 	ValueClasses/TTIOCVParam.m \
@@ -200,7 +201,8 @@ libTTIO_OBJC_FILES = \
 	Transport/TTIOEncryptedTransport.m \
 	Analysis/TTIOTwoDCos.m \
 	Codecs/TTIORans.m \
-	Codecs/TTIOBasePack.m
+	Codecs/TTIOBasePack.m \
+	Codecs/TTIOQuality.m
 
 libTTIO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
 

@@ -72,6 +72,7 @@ extern void testM79GenomicEnums(void);
 extern void testM82GenomicRun(void);
 extern void testM83Rans(void);
 extern void testM84BasePack(void);
+extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
 
 int main(int argc, const char *argv[])
@@ -360,6 +361,10 @@ int main(int argc, const char *argv[])
         START_SET("M84: BASE_PACK codec")
             testM84BasePack();
         END_SET("M84: BASE_PACK codec")
+
+        START_SET("M85: QUALITY_BINNED codec")
+            testM85Quality();
+        END_SET("M85: QUALITY_BINNED codec")
 
         START_SET("M86: codec wiring")
             testM86GenomicCodecWiring();

@@ -69,6 +69,7 @@ TTIOTests_OBJC_FILES = \
 	TestM82GenomicRun.m \
 	TestM83Rans.m \
 	TestM84BasePack.m \
+	TestM85Quality.m \
 	TestM86GenomicCodecWiring.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
