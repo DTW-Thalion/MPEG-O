@@ -1,184 +1,226 @@
-# HANDOFF — M86 Phase D: Wire QUALITY_BINNED into the qualities channel
+# HANDOFF — M86 Phase E: Wire NAME_TOKENIZED into the read_names channel
 
-**Scope:** Extend the M86 Phase A pipeline-wiring infrastructure
-to dispatch `Compression.QUALITY_BINNED` (M79 codec id `7`) on
-the `signal_channels/qualities` byte channel of genomic runs.
-Phase A already shipped the `signal_codec_overrides` dict,
-the `@compression` attribute, and the lazy-decode cache for the
-byte channels (sequences and qualities); Phase D adds one new
-codec id to the validation + dispatch branches in all three
-languages.
+**Scope:** Wire `Compression.NAME_TOKENIZED` (M79 codec id `8`,
+shipped standalone in M85 Phase B) into the
+`signal_channels/read_names` channel of genomic runs. Unlike
+M86 Phase A and Phase D (which extended dispatch on existing
+flat byte channels), Phase E lifts `read_names` from
+VL_STRING-in-compound storage to a flat 1-D uint8 dataset that
+can carry the `@compression` attribute. Three languages (Python
+reference, ObjC normative, Java parity), with one
+cross-language conformance fixture.
 
-**Branch from:** `main` after M85 Phase B docs (`bd9941f`).
+**Branch from:** `main` after M86 Phase D docs (`ebc8768`).
 
-**IP provenance:** Pure integration work — no new codec
-implementation. Uses the M85 Phase A QUALITY_BINNED codec
-(`python/src/ttio/codecs/quality.py`,
-`objc/Source/Codecs/TTIOQuality.{h,m}`,
-`java/src/main/java/global/thalion/ttio/codecs/Quality.java`)
-which is already clean-room and already cross-language
-conformant.
+**IP provenance:** Pure integration work + small schema
+adaptation. Reuses the M85 Phase B NAME_TOKENIZED codec
+(`name_tokenizer.encode`/`decode` returning `list[str]` ↔
+`bytes`) and the M86 Phase A wiring infrastructure
+(`signal_codec_overrides`, `@compression` attribute, lazy-decode
+cache pattern). No new codec implementation; no third-party
+source consulted.
 
 ---
 
 ## 1. Background
 
-M86 Phase A (commits `31b0fa48..0de6fde`) wired three codec ids
-(4 / 5 / 6 = RANS_ORDER0, RANS_ORDER1, BASE_PACK) into the
-`sequences` and `qualities` byte channels of genomic runs.
-The validation block at the top of the genomic-run write path
-accepts:
+M82 stores read names as a compound HDF5 dataset:
+`signal_channels/read_names` has shape `[n_reads]` and dtype
+`{value: VL_STRING}`. The compound shape was historical
+(originally allowed multiple per-read fields); in v0.11+ it's
+effectively a single VL_STRING column.
 
-- channel name ∈ {`"sequences"`, `"qualities"`}
-- codec value ∈ {`RANS_ORDER0`, `RANS_ORDER1`, `BASE_PACK`}
+M86 Phase A's `@compression` attribute scheme (Binding Decision
+§86 — attribute on the dataset, holding the M79 codec id) works
+for flat 1-D uint8 datasets. A compound dataset can technically
+carry attributes too, but the codec output is a flat byte stream
+(not a row-per-name compound), so attaching `@compression == 8`
+to a compound dataset would be misleading: the dataset shape
+itself wouldn't match what the codec produces.
 
-M85 Phase A (commits `9cfb08bd..9c0b450`) shipped the
-QUALITY_BINNED codec (M79 slot 7) as a standalone primitive,
-explicitly noting that pipeline-wiring would be a future M86
-phase. M85 Phase B (commits `cf665e7..bd9941f`) did the same for
-NAME_TOKENIZED (M79 slot 8).
+Phase E resolves this with a **schema lift**: when
+`signal_codec_overrides["read_names"]` is set, the writer skips
+the M82 compound layout and instead writes a flat 1-D uint8
+dataset (still named `read_names`) containing the codec output.
+The decoder dispatches on dataset shape:
 
-M86 Phase D extends the M86 Phase A validation + dispatch to
-also accept `Compression.QUALITY_BINNED` for the `qualities`
-channel. Restrictions (deliberate per §3 binding decisions):
+- Compound (`{value: VL_STRING}`) → existing M82 read path.
+- Flat 1-D uint8 with `@compression == 8` → codec dispatch.
 
-- QUALITY_BINNED is **only valid on the `qualities` channel**,
-  not `sequences`. Applying QUALITY_BINNED to a sequences
-  channel would silently destroy the ACGT data via Phred-bin
-  quantisation; the validation rejects this combination
-  outright.
-- The other three codec ids (4 / 5 / 6) continue to apply to
-  both `sequences` and `qualities` per Phase A.
+This is consistent with M86 Phase A's "write-forward, no
+back-compat shim" discipline (Binding Decision §90): files
+written with the override are unreadable by pre-M86 readers.
+Files without the override remain identical to M82 / Phase A
+output.
 
-NAME_TOKENIZED wiring is M86 Phase E (still deferred) and
-requires lifting `signal_channels/read_names` from
-VL_STRING-in-compound storage to a flat byte dataset so it can
-carry the `@compression` attribute. Phase D does not touch
-read_names.
+`cigars` and `mate_info` are out of scope for Phase E — they're
+still VL_STRING-in-compound and have no codec match yet
+(`cigars` would want an RLE-then-rANS pipeline, `mate_info` is
+an integer-tuple compound). They continue to use the existing
+compound-write path.
 
 ---
 
 ## 2. Design
 
-### 2.1 No wire format changes
+### 2.1 Schema lift on write
 
-Phase D uses the same `@compression` attribute scheme as Phase A
-(uint8 attribute on the dataset, holding the M79 codec id). A
-qualities channel encoded with QUALITY_BINNED has
-`@compression == 7` and the dataset bytes are the
-self-contained QUALITY_BINNED stream from M85 Phase A's
-`docs/codecs/quality.md` §2.
-
-### 2.2 Validation extension
-
-The override-validation block in `_write_genomic_run` (Python),
-`writeGenomicRun` / `writeGenomicRunStorage` (ObjC), and
-`SpectralDataset` (Java) gains a per-channel codec-applicability
-check:
+In `_write_genomic_run` (Python equivalent in each language),
+after the validation block, branch on whether `read_names` is
+in `signal_codec_overrides`:
 
 ```
-allowed_codecs_for_channel = {
-    "sequences": {RANS_ORDER0, RANS_ORDER1, BASE_PACK},
-    "qualities": {RANS_ORDER0, RANS_ORDER1, BASE_PACK, QUALITY_BINNED},
+if "read_names" in signal_codec_overrides:
+    encoded = name_tokenizer.encode(run.read_names)  # list[str] → bytes
+    arr = np.frombuffer(encoded, dtype=np.uint8)
+    ds = sc.create_dataset(
+        "read_names", Precision.UINT8, length=arr.shape[0],
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=None,           # no HDF5 filter
+    )
+    ds.write(arr)
+    write_int_attr(ds, "compression", int(Compression.NAME_TOKENIZED))
+else:
+    # Existing M82 compound write path (unchanged).
+    write_compound_dataset(sc, "read_names",
+                           [{"value": n} for n in run.read_names],
+                           [("value", io.vl_str())])
+```
+
+The flat dataset shares its name (`read_names`) with the M82
+compound; they are mutually exclusive within a single run.
+
+### 2.2 Schema dispatch on read
+
+In `GenomicRun.__getitem__` (and any other call site that reads
+`read_names`), introduce a `_read_name_at(i)` helper that:
+
+```
+def _read_name_at(self, i: int) -> str:
+    cached = self._decoded_read_names
+    if cached is not None:
+        return cached[i]
+
+    sig = self.group.open_group("signal_channels")
+    ds = sig.open_dataset("read_names")  # or open_compound?
+
+    # Dispatch on dataset shape / attribute presence.
+    if _looks_like_codec_dataset(ds):
+        codec_id = read_int_attr_or_zero(ds, "compression")
+        if codec_id == Compression.NAME_TOKENIZED:
+            from .codecs.name_tokenizer import decode as _dec
+            all_bytes = bytes(ds.read(offset=0, count=ds.length))
+            self._decoded_read_names = _dec(all_bytes)
+            return self._decoded_read_names[i]
+        else:
+            raise ValueError(f"@compression={codec_id} on read_names is not supported")
+
+    # Fall through to compound path (M82, no override).
+    names = self._compound("read_names")
+    return names[i]["value"]
+```
+
+The `_decoded_read_names` cache is a per-`GenomicRun`-instance
+`list[str]` (not `bytes`, because the codec returns a list). The
+existing `_decoded_byte_channels` cache from Phase A/D is for
+byte channels and is unaffected.
+
+`_looks_like_codec_dataset(ds)` returns True iff the dataset is
+a 1-D uint8 dataset (vs a compound). Each language has slightly
+different shape-introspection APIs; the implementer picks the
+appropriate predicate per language.
+
+### 2.3 Validation extension
+
+The per-channel allowed-codec map gains a new entry:
+
+```
+_ALLOWED_OVERRIDE_CODECS_BY_CHANNEL = {
+    "sequences":  {RANS_ORDER0, RANS_ORDER1, BASE_PACK},
+    "qualities":  {RANS_ORDER0, RANS_ORDER1, BASE_PACK, QUALITY_BINNED},
+    "read_names": {NAME_TOKENIZED},   # new in Phase E
 }
 ```
 
-For each `(channel_name, codec)` entry in
-`signal_codec_overrides`:
+NAME_TOKENIZED is **only valid on the `read_names` channel**;
+applying it to `sequences` or `qualities` would mis-tokenise
+binary byte streams. The other byte-channel codecs (4/5/6/7)
+are NOT valid on `read_names` because the source data is
+`list[str]`, not `bytes` — there's no universal byte
+serialisation step that works for all callers.
 
-1. Reject if `channel_name not in {"sequences", "qualities"}`
-   (unchanged from Phase A).
-2. Reject if `codec not in allowed_codecs_for_channel[channel_name]`.
-   Phase D adds the `qualities`-only QUALITY_BINNED branch.
-3. Otherwise, accept and dispatch to the codec.
+The error message for an invalid `(channel, codec)` combination
+follows the Phase D pattern: name the codec, name the channel,
+explain the rationale.
 
-The error message for "QUALITY_BINNED on sequences" is
-explicit: it names the codec, the channel, and explains that
-quality binning is lossy and only applies to Phred quality
-scores.
+### 2.4 Lossless round-trip
 
-### 2.3 Encode dispatch extension
+NAME_TOKENIZED is a lossless codec (M85 Phase B §1). When wired
+into `read_names`, the channel round-trips byte-exact for any
+input list of ASCII names. This is a stronger guarantee than
+Phase D (QUALITY_BINNED is lossy) and matches M82's existing
+VL_STRING semantics.
 
-The `_write_byte_channel_with_codec` helper (Python),
-`writeByteChannelWithCodec` (Java), and the equivalent ObjC
-dispatch site gain one new branch:
+### 2.5 Other read-side call sites
 
-```python
-elif codec_override == Compression.QUALITY_BINNED:
-    from .codecs.quality import encode as _enc
-    encoded = _enc(bytes(data))
-```
+The existing M82 read path may call `_compound("read_names")`
+from places other than `__getitem__` — bulk reads, region
+queries, etc. All call sites need to route through
+`_read_name_at(i)` (or a bulk equivalent
+`_all_read_names()`). The implementer audits the existing call
+sites and updates them.
 
-Behaviour: encode the raw uint8 buffer through
-`quality.encode()`, write the encoded bytes as an unfiltered
-uint8 dataset, set `@compression = 7` on the dataset.
-
-### 2.4 Decode dispatch extension
-
-The `_byte_channel_slice` helper on `GenomicRun` (Python) gains
-one new branch:
-
-```python
-elif codec_id == Compression.QUALITY_BINNED:
-    from .codecs.quality import decode as _dec
-    decoded = _dec(all_bytes)
-```
-
-Same pattern in ObjC `byteChannelSliceNamed:offset:count:error:`
-and Java `byteChannelSlice`. The lazy-decode cache from Phase A
-caches the decoded buffer on the `GenomicRun` instance; no new
-caching infrastructure is needed.
-
-### 2.5 Lossy round-trip semantics propagate
-
-QUALITY_BINNED is lossy by construction (M85 Phase A §97). When
-QUALITY_BINNED is wired into the qualities channel, the
-round-trip semantics of `AlignedRead.qualities` change for that
-channel:
-
-- Without override: byte-exact round-trip.
-- With QUALITY_BINNED override: each byte round-trips to its
-  bin centre per the Illumina-8 table.
-
-This is a documented behaviour of the codec, not an M86-specific
-issue. Tests must use bin-centre inputs for byte-exact round-trip
-assertions OR assert the expected lossy mapping (per M85 Phase A
-§7.1 #2).
+For bulk reads, lazy-decode-once-then-slice is fine: the
+decoded list is materialised on first access regardless. A
+bulk-read call to `_all_read_names()` returns the cached list
+directly.
 
 ---
 
-## 3. Binding Decisions (continued from M85 Phase B §98–§107)
+## 3. Binding Decisions (continued from M86 Phase D §108–§110)
 
 | #   | Decision | Rationale |
 |-----|----------|-----------|
-| 108 | QUALITY_BINNED applies **only** to the `qualities` channel; the validation rejects QUALITY_BINNED on `sequences`. | QUALITY_BINNED quantises bytes through a Phred-specific bin table (8 bins, centres 0/5/15/22/27/32/37/40). Applying it to ACGT sequence bytes (`A`=0x41=65, `C`=0x43=67, `G`=0x47=71, `T`=0x54=84) would map all four to bin 7 / centre 40, silently destroying the sequence. The validation prevents this category error at the write-path entry point; the codec itself remains byte-in-byte-out so other future contexts could use it without restriction. |
-| 109 | The other three codec ids (4 / 5 / 6) continue to apply to **both** `sequences` and `qualities` per Phase A. | RANS is a generic byte-stream entropy coder; BASE_PACK is byte-lossless on any input (with sidecar mask). Both work on either channel without category error. Phase D adds QUALITY_BINNED as a new codec applicability, not a restriction on existing applicabilities. |
-| 110 | The error message for an invalid `(channel, codec)` combination names the codec, the channel, and the reason. | Better UX than "unsupported codec for channel" alone. The Phase A-style error for invalid channel name (e.g., `signal_codec_overrides={"positions": ...}`) and Phase A-style error for non-codec value (e.g., `LZ4`) remain unchanged; the new Phase D-specific error is for `(sequences, QUALITY_BINNED)` and adds a hint about quality binning being lossy. |
+| 111 | When `signal_codec_overrides["read_names"]` is set, the writer **replaces** the M82 compound `read_names` dataset with a flat 1-D uint8 dataset of the same name. The two layouts are mutually exclusive within a single run. | The codec output is a flat byte stream; the `@compression` attribute scheme (Binding Decision §86) requires a flat dataset. Keeping the same dataset name lets the read-side dispatch on shape rather than name lookup. |
+| 112 | Read-side dispatch is on **dataset shape** (compound vs 1-D uint8), not on attribute presence alone. A flat 1-D uint8 dataset *without* `@compression` is malformed (since M82 used compound exclusively). | Shape is a stronger signal than attribute presence: it catches both "missing attribute" (corrupt write) and "wrong codec id" (e.g., writing `@compression == 4` on read_names) by routing through the codec dispatch and letting the codec dispatch reject the value. |
+| 113 | NAME_TOKENIZED is **only valid on the `read_names` channel**; not on sequences or qualities. | NAME_TOKENIZED expects to tokenise UTF-8 strings (in v0, ASCII-only). Applying it to a binary byte stream like sequences (ACGT bytes) or qualities (Phred bytes) would mis-tokenise the data — every byte that happens to be a digit would split into a token, and the per-column type detection would fall back to verbatim, producing nonsensical compression. The validation rejects these combinations. |
+| 114 | The decoded read-names list is cached per-`GenomicRun`-instance as `_decoded_read_names: list[str] \| None`. This cache is **separate** from the M86 Phase A `_decoded_byte_channels: dict[str, bytes]` cache. | Different value type (`list[str]` vs `bytes`); different semantics (the read_names cache holds the entire decoded list, indexed by read number; the byte-channel cache holds the entire concatenated buffer, sliced by per-read offset/length). Sharing the cache structure would conflate them. |
 
 ---
 
-## 4. API surface (no changes for callers)
+## 4. API surface (unchanged for callers; new value accepted)
 
 ### 4.1 Python
 
-The `WrittenGenomicRun.signal_codec_overrides` field signature is
-unchanged. Callers can now pass `Compression.QUALITY_BINNED` as
-the value for the `"qualities"` key:
+The `WrittenGenomicRun.signal_codec_overrides` field signature
+is unchanged. Callers can now pass `Compression.NAME_TOKENIZED`
+as the value for the `"read_names"` key:
 
 ```python
 run = WrittenGenomicRun(
     # ... existing fields ...
     signal_codec_overrides={
-        "qualities": Compression.QUALITY_BINNED,  # new in Phase D
+        "read_names": Compression.NAME_TOKENIZED,  # new in Phase E
     },
 )
+```
+
+Mixed overrides work — sequences + qualities + read_names can
+all opt into different codecs in the same run:
+
+```python
+signal_codec_overrides={
+    "sequences":  Compression.BASE_PACK,
+    "qualities":  Compression.QUALITY_BINNED,
+    "read_names": Compression.NAME_TOKENIZED,
+}
 ```
 
 ### 4.2 Objective-C
 
 ```objc
 writtenRun.signalCodecOverrides = @{
-    @"qualities": @(TTIOCompressionQUALITY_BINNED),  // new in Phase D
+    @"read_names": @(TTIOCompressionNAME_TOKENIZED),  // new in Phase E
 };
 ```
 
@@ -186,198 +228,259 @@ writtenRun.signalCodecOverrides = @{
 
 ```java
 writtenRun.setSignalCodecOverrides(Map.of(
-    "qualities", Compression.QUALITY_BINNED  // new in Phase D
+    "read_names", Compression.NAME_TOKENIZED  // new in Phase E
 ));
 ```
 
 ---
 
-## 5. Tests
+## 5. On-disk schema (the schema lift)
 
-### 5.1 Python — extend `python/tests/test_m86_genomic_codec_wiring.py`
+### 5.1 M82 baseline (no override) — unchanged
 
-Add the following test cases (numbering continues from the
-existing M86 Phase A test suite):
+```
+/study/genomic_runs/<name>/signal_channels/
+    read_names: COMPOUND[n_reads] {
+        value: VL_STRING
+    }
+```
 
-12. **`test_round_trip_qualities_quality_binned`** — write a run
-    with `signal_codec_overrides={"qualities": Compression.QUALITY_BINNED}`
-    using bin-centre Phred values
-    (`bytes([0,5,15,22,27,32,37,40] * 125)` for 1000 reads × 1
-    quality byte each, or whatever shape the existing M86 helper
-    builds). Reopen, iterate all reads, verify each
-    `aligned_read.qualities` matches the original input (byte-exact
-    since the input is all bin centres, which round-trip exactly
-    per QUALITY_BINNED §97).
-13. **`test_round_trip_qualities_quality_binned_lossy`** — write
-    a run with arbitrary Phred values (`bytes(range(0, 50))`
-    cycled) using the QUALITY_BINNED override. Reopen, iterate
-    all reads, verify each `aligned_read.qualities` matches the
-    expected lossy mapping (each input byte → bin centre).
-14. **`test_size_win_quality_binned`** — write a 1000-read × 100
-    Phred-byte qualities channel both with and without
-    QUALITY_BINNED. Verify the QUALITY_BINNED file's
-    `signal_channels/qualities` dataset is ~50% the size of the
-    uncompressed equivalent (the codec is 4-bit-packed; the
-    actual ratio depends on header overhead per read).
-15. **`test_attribute_set_correctly_quality_binned`** — open the
-    underlying h5py file, verify the qualities dataset has
-    `@compression == 7`.
-16. **`test_reject_quality_binned_on_sequences`** — write with
-    `signal_codec_overrides={"sequences": Compression.QUALITY_BINNED}`
-    must raise `ValueError` at write time with a clear message
-    naming the codec, the channel, and the lossy-quantisation
-    rationale.
-17. **`test_mixed_quality_binned_with_rans`** — write with
-    `signal_codec_overrides={"sequences": Compression.BASE_PACK,
-    "qualities": Compression.QUALITY_BINNED}`. Both round-trip
-    correctly. This exercises the mixed-codec path with
-    QUALITY_BINNED.
+### 5.2 Phase E with NAME_TOKENIZED override
 
-Update the `test_cross_language_fixtures` test to also load and
-verify a fourth fixture: `m86_codec_quality_binned.tio` (see
-§6).
+```
+/study/genomic_runs/<name>/signal_channels/
+    read_names: UINT8[encoded_length], no HDF5 filter
+        @compression: UINT8 = 8 (NAME_TOKENIZED)
+```
 
-### 5.2 ObjC — extend `objc/Tests/TestM86GenomicCodecWiring.m`
+The `encoded_length` is whatever
+`name_tokenizer.encode(run.read_names)` produces. The dataset
+bytes ARE the self-contained NAME_TOKENIZED stream from M85
+Phase B's `docs/codecs/name_tokenizer.md` §2.
 
-Same six new test cases. Cross-language fixture loaded from
-`objc/Tests/Fixtures/genomic/m86_codec_quality_binned.tio`
-(verbatim copy of the Python-generated fixture).
+### 5.3 Both layouts use the same dataset name
 
-### 5.3 Java — extend
+This is intentional (Binding Decision §111). A reader cannot
+distinguish the two by name; it must inspect the dataset shape
+or the `@compression` attribute presence.
+
+---
+
+## 6. Tests
+
+### 6.1 Python — extend `python/tests/test_m86_genomic_codec_wiring.py`
+
+Add 6 new test methods (numbering continues from the M86 Phase
+D suite, which ended around test #17):
+
+18. **`test_round_trip_read_names_name_tokenized`** — write a
+    run with `signal_codec_overrides={"read_names":
+    Compression.NAME_TOKENIZED}` using structured Illumina-like
+    names. Reopen, iterate all reads, verify each
+    `aligned_read.read_name` matches the original input
+    byte-exact.
+19. **`test_size_win_name_tokenized`** — write a 1000-read run
+    with structured Illumina-style names both with and without
+    NAME_TOKENIZED. Verify the encoded `read_names` dataset is
+    significantly smaller (target: NAME_TOKENIZED dataset < 50%
+    of the M82-compound storage size). The exact ratio depends
+    on HDF5 VL_STRING overhead; just verify it's a meaningful
+    win.
+20. **`test_attribute_set_correctly_name_tokenized`** — write
+    with the NAME_TOKENIZED override; open the underlying h5py
+    file directly; verify the `read_names` dataset is 1-D uint8
+    (not compound) and has `@compression == 8`.
+21. **`test_back_compat_read_names_unchanged`** — write without
+    the read_names override (empty `signal_codec_overrides`,
+    or only sequences/qualities overrides). Verify `read_names`
+    is still written as the M82 compound (round-trip via the
+    existing read path).
+22. **`test_reject_name_tokenized_on_sequences`** —
+    `signal_codec_overrides={"sequences":
+    Compression.NAME_TOKENIZED}` raises `ValueError` at write
+    time with a clear lossy/wrong-channel message per Binding
+    Decision §113.
+23. **`test_mixed_all_three_overrides`** — write with all three
+    overrides at once: sequences=BASE_PACK,
+    qualities=QUALITY_BINNED, read_names=NAME_TOKENIZED. All
+    three round-trip correctly. This exercises the full codec
+    stack on a single file.
+
+Plus extend the existing `test_cross_language_fixtures`
+parametrisation to also load
+`m86_codec_name_tokenized.tio`.
+
+### 6.2 ObjC — extend
+`objc/Tests/TestM86GenomicCodecWiring.m`
+
+Same 6 new test cases. Cross-language fixture loaded from
+`objc/Tests/Fixtures/genomic/m86_codec_name_tokenized.tio`.
+Target ≥ 15 new assertions across the 6 tests.
+
+### 6.3 Java — extend
 `java/src/test/java/global/thalion/ttio/genomics/M86CodecWiringTest.java`
 
-Same six new test cases. Cross-language fixture loaded from
-`java/src/test/resources/ttio/fixtures/genomic/m86_codec_quality_binned.tio`.
+Same 6 new test cases. Cross-language fixture loaded from
+`java/src/test/resources/ttio/fixtures/genomic/m86_codec_name_tokenized.tio`.
 
-### 5.4 Cross-language conformance fixture
+### 6.4 Cross-language conformance fixture
 
 Generate one new fixture from the Python writer:
-`python/tests/fixtures/genomic/m86_codec_quality_binned.tio`.
-A 10-read × 100-bp run with bin-centre qualities (so the
-round-trip is byte-exact on the read side; cross-language
-verification is meaningful).
+`python/tests/fixtures/genomic/m86_codec_name_tokenized.tio`. A
+10-read × 100-bp run with structured Illumina-style names like
+`f"INSTR:RUN:1:{tile}:{x}:{y}"` (5 columns: 4 string + numeric
++ … wait, that's 6 columns). Use a deterministic generator so
+ObjC and Java can construct the same input names.
 
 ---
 
-## 6. Documentation
+## 7. Documentation
 
-### 6.1 `docs/codecs/quality.md`
+### 7.1 `docs/codecs/name_tokenizer.md`
 
-Update §7 ("Wired into / forward references"): change
-"M86 Phase D (deferred)" to "M86 Phase D (shipped 2026-04-26)"
-with the actual usage pointing at `signal_codec_overrides`.
+Update §8 ("Wired into / forward references"): change "M86 Phase
+E (deferred)" to "M86 Phase E (shipped 2026-04-26)" with the
+actual usage pointing at `signal_codec_overrides`.
 
-### 6.2 `docs/format-spec.md`
+### 7.2 `docs/format-spec.md`
 
-Update §10.4 trailing summary to note that codec ids 4 / 5 / 6 / 7
-are now all wired into the byte-channel pipeline (qualities
-specifically); id 8 (NAME_TOKENIZED) remains
-standalone-primitive-only awaiting Phase E.
+Update §10.4 trailing summary: ids 4/5/6/7/8 are now ALL wired
+into the genomic signal-channel pipeline. The `read_names`
+channel uses a schema-lift pattern (compound → flat uint8) when
+the override is set; document this in §10.5 or a new §10.6.
 
-### 6.3 `CHANGELOG.md`
+Add a new §10.6 (or extend §10.5) that documents the
+schema-lift pattern for `read_names`:
 
-Add M86 Phase D entry under `[Unreleased]`. Update the Unreleased
-header. Format mirrors M86 Phase A.
+> ### 10.6 `read_names` schema lift under NAME_TOKENIZED (M86 Phase E)
+>
+> `signal_channels/read_names` has two on-disk layouts depending
+> on whether NAME_TOKENIZED was used at write time:
+>
+> - **No override (M82 default):** compound dataset of shape
+>   `[n_reads]` with field `{value: VL_STRING}`. Backward
+>   compatible with M82 readers.
+> - **NAME_TOKENIZED override active:** flat 1-D `UINT8` dataset
+>   of length = `name_tokenizer.encode()` output size, with
+>   `@compression == 8` attribute. The dataset bytes are the
+>   self-contained NAME_TOKENIZED stream.
+>
+> Readers dispatch on dataset shape: a 1-D `UINT8` dataset
+> requires the codec dispatch path; a compound dataset uses the
+> M82 read path. Pre-M86 readers that only know the compound
+> layout will silently misinterpret a flat-uint8 read_names
+> channel as a corrupt compound — the `@compression` attribute
+> is the canonical signal for codec-aware dispatch.
+>
+> Other VL_STRING channels (`cigars`, `mate_info`) do NOT
+> currently support a codec override; they remain in compound
+> storage.
 
-### 6.4 `WORKPLAN.md`
+### 7.3 `CHANGELOG.md`
 
-Update the M86 section to reflect Phase D shipping. The "Phase B
-— integer channels" and "Phase C — VL_STRING channels" deferred
-items remain as written; add a new "Phase D — QUALITY_BINNED
-wiring (SHIPPED 2026-04-26)" subsection. Phase E
-(NAME_TOKENIZED wiring + read_names schema lift) remains
-deferred.
+Add M86 Phase E entry under `[Unreleased]`.
+
+### 7.4 `WORKPLAN.md`
+
+The M86 section needs Phase E status flipped from DEFERRED to
+SHIPPED. Update the "Phases A and D shipped" header to
+"Phases A, D, and E shipped".
 
 ---
 
-## 7. Out of scope
+## 8. Out of scope
 
-- **NAME_TOKENIZED wiring (Phase E).** Requires lifting
-  `read_names` from VL_STRING-in-compound to flat byte dataset.
-  Separate future milestone.
+- **Cigars and mate_info codec wiring.** These remain in
+  VL_STRING-in-compound storage; no codec match yet (cigars want
+  RLE-then-rANS, mate_info is an integer compound). Future
+  milestones.
 - **Integer-channel codecs (Phase B).** `positions`, `flags`,
   `mapping_qualities` continue to use HDF5 ZLIB.
-- **Cigars / mate_info channel codecs.** No M79 codec applies
-  to these structurally-VL channels.
-- **MS-side wiring.** This milestone is genomic-only; the MS
-  signal-channel path is unchanged.
+- **MS-side wiring.** Genomic-only.
 
 ---
 
-## 8. Acceptance Criteria
+## 9. Acceptance Criteria
 
 ### Python
-- [ ] All existing tests pass (zero regressions vs `bd9941f`).
+- [ ] All existing tests pass (zero regressions vs `ebc8768`).
 - [ ] All 6 new tests in
-      `python/tests/test_m86_genomic_codec_wiring.py` pass
-      (12–17 plus the cross-language-fixture extension).
-- [ ] `m86_codec_quality_binned.tio` fixture committed.
-- [ ] Validation rejects `(sequences, QUALITY_BINNED)` with a
-      clear error message.
+      `python/tests/test_m86_genomic_codec_wiring.py` pass.
+- [ ] `m86_codec_name_tokenized.tio` fixture committed.
+- [ ] Validation rejects `(sequences, NAME_TOKENIZED)` and
+      `(qualities, NAME_TOKENIZED)`.
+- [ ] Back-compat: empty overrides path leaves `read_names` as
+      the M82 compound; round-trip via existing read code.
 
 ### Objective-C
-- [ ] All existing tests pass (zero regressions vs the 2258
-      PASS baseline + 2 pre-existing M38 Thermo failures).
-- [ ] 6 new test cases in `TestM86GenomicCodecWiring.m` pass
-      byte-exact against the Python fixture for QUALITY_BINNED.
-- [ ] Validation rejects `(sequences, QUALITY_BINNED)`.
+- [ ] All existing tests pass (zero regressions vs the 2290 PASS
+      baseline + 2 pre-existing M38 Thermo failures).
+- [ ] 6 new test methods in `TestM86GenomicCodecWiring.m` pass.
+- [ ] Cross-language fixture reads byte-exact (round-trip
+      correct on all 10 read names).
 - [ ] ≥ 15 new assertions across the 6 new tests.
 
 ### Java
-- [ ] All existing tests pass (zero regressions vs the 468/0/0/0
-      baseline → ≥ 474/0/0/0 after M86 Phase D).
+- [ ] All existing tests pass (zero regressions vs the 475/0/0/0
+      baseline → ≥ 481/0/0/0 after M86 Phase E).
 - [ ] 6 new test methods in `M86CodecWiringTest.java` pass.
-- [ ] Validation rejects `(sequences, QUALITY_BINNED)`.
+- [ ] Cross-language fixture reads byte-exact.
 
 ### Cross-Language
 - [ ] All three implementations read
-      `m86_codec_quality_binned.tio` byte-exact-on-decoded-data
-      (the qualities channel decodes to the bin-centre values
-      that match the original input).
-- [ ] `docs/codecs/quality.md` §7 updated to reflect M86 Phase
-      D shipped.
-- [ ] `docs/format-spec.md` summary updated.
-- [ ] `CHANGELOG.md` M86 Phase D entry committed.
-- [ ] `WORKPLAN.md` M86 Phase D status flipped to SHIPPED.
+      `m86_codec_name_tokenized.tio` byte-exact-on-decoded-names
+      (every read's `read_name` field matches the original
+      Python input list).
+- [ ] `docs/codecs/name_tokenizer.md` §8 updated to reflect M86
+      Phase E shipped.
+- [ ] `docs/format-spec.md` summary updated; new §10.6 documents
+      the schema-lift pattern.
+- [ ] `CHANGELOG.md` M86 Phase E entry committed.
+- [ ] `WORKPLAN.md` M86 Phase E status flipped to SHIPPED.
 
 ---
 
-## 9. Gotchas
+## 10. Gotchas
 
-117. **QUALITY_BINNED on the qualities channel changes round-trip
-     semantics for that file.** The qualities dataset becomes
-     lossy. Tests that assert byte-exact qualities round-trip
-     must use bin-centre input or assert the lossy mapping. The
-     M86 Phase A behaviour is unchanged for files that don't
-     opt in.
+122. **Schema lift means the `read_names` dataset shape changes
+     based on the override.** A v0.12 file with the override
+     has a flat uint8 dataset; without the override it has the
+     M82 compound. Readers MUST inspect dataset shape (or the
+     `@compression` attribute) before assuming compound layout.
+     Pre-M86-Phase-E readers that hard-code the compound shape
+     will fail when they hit the flat-uint8 layout.
 
-118. **The qualities channel is 1 byte per base, indexed by
-     read length.** A 100-base read contributes 100 bytes to the
-     qualities buffer. The QUALITY_BINNED encoder operates on
-     the entire concatenated qualities buffer for the run; the
-     resulting wire stream is `6 + ceil(total_qualities_bytes /
-     2)`. Per-read slice access still works because the
-     `_byte_channel_slice` helper decodes the whole channel
-     once on first access (Phase A's lazy-decode cache).
+123. **`_decoded_read_names` cache holds a `list[str]`, not a
+     `dict[str, bytes]` like Phase A/D's
+     `_decoded_byte_channels`.** Don't try to reuse the byte-
+     channel cache; the value type is different. Per Binding
+     Decision §114, keep them separate.
 
-119. **The validation block now needs a per-channel allowed-codec
-     set.** Phase A used a flat
-     `_ALLOWED_OVERRIDE_CODECS = {RANS_ORDER0, RANS_ORDER1,
-     BASE_PACK}` set. Phase D introduces a per-channel set:
-     sequences gets the original three; qualities gets those
-     plus QUALITY_BINNED. Make sure the data structure
-     transition keeps the existing tests green (sequences +
-     RANS / BASE_PACK still work).
+124. **NAME_TOKENIZED's per-batch encoding means the entire
+     read_names list must be passed to `encode()` in one shot.**
+     Streaming write of read names would require a different
+     codec design. Phase E assumes the writer has the full list
+     at hand (which it does, because `WrittenGenomicRun`
+     already has `read_names: list[str]` as a field).
 
-120. **The cross-language fixture for QUALITY_BINNED uses
-     bin-centre quality values** so the round-trip is
-     byte-exact on the read side. ObjC and Java tests must
-     produce the same bin-centre input deterministically (e.g.,
-     `bytes([0,5,15,22,27,32,37,40] * 125)` — 1000 bytes).
+125. **Bulk read paths (region queries, etc.) need to materialise
+     the decoded list once on first access.** The lazy-decode
+     cache is per-instance; a region query iterates a subset of
+     read indices but still triggers the whole-list decode on
+     first access. For 10M reads this is potentially a few
+     hundred MB of decoded strings in RAM — acceptable for
+     typical genomic workloads, document the implication in the
+     `GenomicRun` docstring.
 
-121. **No M85 Phase B wiring in this milestone.** NAME_TOKENIZED
-     remains standalone-primitive-only. Don't accidentally add
-     `Compression.NAME_TOKENIZED` to the validation; it would
-     pass the type check but the dispatch branch isn't there
-     and the read_names channel doesn't have @compression
-     support yet. Phase E covers that.
+126. **Other call sites that touch `read_names` need updating.**
+     Audit: search for `_compound("read_names")` and
+     `read_names` access in each language's codebase; route all
+     through the new `_read_name_at(i)` (or
+     `_all_read_names()`) helper. Don't leave a Phase A
+     compound-only path in `region_query` etc.
+
+127. **NAME_TOKENIZED's lossless guarantee differs from
+     QUALITY_BINNED's lossy semantics.** Round-trip is
+     byte-exact on the decoded `aligned_read.read_name` field,
+     so byte-equality assertions in tests are valid (no
+     bin-centre adjustment needed).
