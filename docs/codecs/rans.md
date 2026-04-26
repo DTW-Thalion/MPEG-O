@@ -316,6 +316,20 @@ input.
   ONLY rANS codecs (other codecs are wrong-content for
   integer fields). See `docs/format-spec.md` §10.7 for the
   int↔byte serialisation contract.
+- **M86 Phase C** (shipped 2026-04-26) — rANS order-0 and
+  order-1 are now also wired into the **cigars channel** (a
+  list of CIGAR strings) via length-prefix-concat
+  serialisation: each CIGAR is emitted as `varint(len) +
+  bytes` and the concatenated stream is fed to rANS. **rANS is
+  the recommended default for cigars on real WGS data**
+  (mixed indels/clips break NAME_TOKENIZED's columnar mode
+  back to verbatim/no-compression; rANS exploits byte-level
+  repetition over the limited CIGAR alphabet for ~3-17×
+  compression). NAME_TOKENIZED is the niche choice when
+  CIGARs are known to be uniform (e.g. perfect-match-only
+  synthetic data). See `docs/codecs/name_tokenizer.md` §8 for
+  the full selection table, and `docs/format-spec.md` §10.8
+  for the cigars schema-lift contract.
 - **M84** (shipped) — base-pack codec (2-bit nucleotide packing
   + sidecar mask), see `docs/codecs/base_pack.md`.
 - **M85** (shipped) — quality-quantiser

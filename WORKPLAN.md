@@ -200,7 +200,7 @@ higher compression ratios.
 
 ### M86 — Codec Integration into Signal Channel Pipeline
 
-**Status: Phases A, B, D, and E shipped (2026-04-26). Phase C deferred.**
+**Status: Phases A, B, C (cigars), D, and E shipped (2026-04-26). Phase C (mate_info) deferred.**
 
 #### Phase A — byte channels (SHIPPED 2026-04-26)
 
@@ -299,11 +299,50 @@ benefit transparently.
 Commits: `798ec88` (Python), `46076b1` (Java), `6213711`
 (ObjC), plus M86 Phase B docs landing alongside.
 
-#### Phase C — VL_STRING / compound channels (DEFERRED)
+#### Phase C — VL_STRING / compound channels (PARTIAL: cigars SHIPPED 2026-04-26; mate_info DEFERRED)
 
-`cigars` and `mate_info` continue to use the existing
-compound-write path. `cigars` would want an RLE-then-rANS
-pipeline; `mate_info` lacks an obvious codec match.
+**cigars (SHIPPED):**
+
+- [x] Schema-lift cigars from M82 compound to flat 1-D uint8
+      via `@compression` attribute, mirroring Phase E for
+      read_names.
+- [x] cigars accepts THREE codec choices:
+      `Compression.RANS_ORDER0`, `Compression.RANS_ORDER1`,
+      `Compression.NAME_TOKENIZED`.
+- [x] rANS path uses length-prefix-concat serialisation
+      (`varint(asciiLen) + asciiBytes` per CIGAR), then
+      `Rans.encode(bytes, order)`. Reader reverses.
+- [x] NAME_TOKENIZED path calls `NameTokenizer.encode(cigars)`
+      directly (codec's own self-describing wire format).
+- [x] Validation rejects `(cigars, BASE_PACK)` and
+      `(cigars, QUALITY_BINNED)` with clear messages.
+- [x] `_decoded_cigars: list[str]` lazy cache (separate from
+      `_decoded_read_names` per Binding Decision §123).
+- [x] All three languages, two cross-language fixtures (one
+      per codec path) — both read byte-exact across all three
+      implementations.
+- [x] Codec selection guidance documented in `docs/codecs/`
+      and `docs/format-spec.md` §10.8: rANS is the
+      recommended default for real WGS data; NAME_TOKENIZED
+      is the niche choice for known-uniform CIGARs.
+- [x] Empirical compression on 1000-read mixed CIGARs (80%
+      "100M" + 10% "99M1D" + 10% "50M50S"), byte-identical
+      across all three languages via M83 + M85B conformance:
+      RANS_ORDER1 = 1111 bytes (~17× smaller than M82
+      compound baseline ~18-29 KB); NAME_TOKENIZED falls back
+      to verbatim mode and produces 5307 bytes.
+
+Commits: `61fb946` (Python), `133762e` (Java), `f5ff91f`
+(ObjC), plus M86 Phase C docs landing alongside.
+
+**mate_info (DEFERRED):**
+
+`mate_info` is a 3-field compound (chrom VL_STRING + pos
+int64 + tlen int32). Compressing it cleanly requires either
+per-field schema decomposition (lift the compound to three
+flat datasets, each with its own `@compression`) or
+per-compound-field codec dispatch (no infrastructure for this
+exists). Both are substantial new design work; deferred.
 
 #### Phase E — NAME_TOKENIZED wiring + read_names schema lift (SHIPPED 2026-04-26)
 

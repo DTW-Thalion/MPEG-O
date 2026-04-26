@@ -353,24 +353,56 @@ on malformed input. `NameTokenizer.encode(List<String>)` throws
 
 ## 8. Wired into / forward references
 
-- **M86 Phase E (shipped 2026-04-26)** — NAME_TOKENIZED is now
-  wired into the genomic signal-channel write/read path for the
-  `read_names` channel via a **schema lift**: when the override
-  is set, the writer replaces the M82 compound `read_names`
-  dataset with a flat 1-D uint8 dataset of the same name
-  containing the codec output, and sets `@compression == 8` on
-  it. The reader dispatches on dataset shape (compound → M82
-  path; 1-D uint8 → codec dispatch). Use
-  `WrittenGenomicRun.signal_codec_overrides={"read_names":
-  Compression.NAME_TOKENIZED}` at write time. The codec is
-  **rejected on the `sequences` and `qualities` channels**
-  (Binding Decision §113): NAME_TOKENIZED tokenises UTF-8
-  strings, not binary byte streams. Compression on 1000
-  structured Illumina names: NAME_TOKENIZED dataset is roughly
-  20–50% of the M82 compound footprint depending on baseline
-  methodology (H5 storage-size vs file-size delta — see
-  `docs/format-spec.md` §10.6 for the schema-lift on-disk
-  contract).
+- **M86 Phase E (shipped 2026-04-26)** — NAME_TOKENIZED is
+  wired into the genomic signal-channel write/read path for
+  the `read_names` channel via a **schema lift**: when the
+  override is set, the writer replaces the M82 compound
+  `read_names` dataset with a flat 1-D uint8 dataset of the
+  same name containing the codec output, and sets
+  `@compression == 8` on it. Compression on 1000 structured
+  Illumina names: NAME_TOKENIZED dataset is roughly 20–50% of
+  the M82 compound footprint depending on baseline
+  methodology. See `docs/format-spec.md` §10.6 for the
+  schema-lift on-disk contract.
+- **M86 Phase C (shipped 2026-04-26)** — NAME_TOKENIZED is
+  also wired into the **cigars channel** via the same
+  schema-lift pattern. **rANS is the recommended default for
+  cigars on real WGS data** (see selection table below);
+  NAME_TOKENIZED is the niche choice when CIGARs are known to
+  be uniform.
+
+### Codec selection guidance for `cigars` (M86 Phase C)
+
+The cigars channel accepts THREE codecs: `RANS_ORDER0`,
+`RANS_ORDER1`, `NAME_TOKENIZED`. Pick based on input
+characteristics:
+
+| Workload                              | Best choice    | Reason |
+|---------------------------------------|----------------|--------|
+| All reads identical CIGAR (synthetic) | NAME_TOKENIZED | Columnar mode → 1-entry dict + delta=0 → tiny wire (~37 bytes for 10 reads) |
+| Mostly uniform with same token-count shape | NAME_TOKENIZED | Columnar mode still hits |
+| **Mixed token-count (typical real WGS with indels/soft-clips)** | **RANS_ORDER1** | NAME_TOKENIZED falls back to verbatim → no compression. rANS exploits byte-level repetition over the limited CIGAR alphabet (digits + ~9 operator letters MIDNSHP=X). |
+| Tiny dataset (< 100 reads)            | NAME_TOKENIZED | rANS's 1024-byte order-0 freq table dominates on small inputs |
+| Large dataset (> 1000 reads)          | **RANS_ORDER1** | Per-read overhead amortises; byte-level repetition wins |
+| Unknown / general default             | **RANS_ORDER1** | More robust across input distributions |
+
+**Empirical numbers** (1000-read mixed CIGARs: 80% `"100M"` +
+10% `"99M1D"` + 10% `"50M50S"`, measured byte-identical
+across Python / ObjC / Java via M83 + M85B conformance):
+
+- M82 compound (no override): ~18-29 KB depending on HDF5
+  filter behaviour and storage-size methodology.
+- NAME_TOKENIZED (verbatim mode kicks in due to mixed
+  token-counts): **5307 bytes**.
+- RANS_ORDER1: **1111 bytes** (~17× smaller than baseline,
+  ~5× smaller than NAME_TOKENIZED on this realistic input).
+
+**The honest summary:** for real WGS data, **`RANS_ORDER1` is
+the better default** because real CIGARs have indels and
+clips that break NAME_TOKENIZED's columnar mode. Use
+`NAME_TOKENIZED` only when you've verified your CIGARs are
+uniform (e.g. a perfect-match-only filtered subset, or
+synthetic data).
 - **Future optimisation milestone (deferred)** — full Bonfield
   2022 / CRAM 3.1 token type set for ≥ 20:1 compression on
   structured Illumina names. Multi-thousand lines per language

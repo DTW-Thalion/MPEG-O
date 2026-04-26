@@ -781,26 +781,31 @@ channel is:
   `sequences` because Phred-bin quantisation would silently
   destroy ACGT data (M86 Phase D).
 - Id `8` (name-tokenized) applies to the `read_names` channel
-  only — validation rejects NAME_TOKENIZED on `sequences` and
-  `qualities` because the codec tokenises UTF-8 strings, not
-  binary byte streams (M86 Phase E). The `read_names` channel
-  uses a schema-lift pattern (compound → flat uint8); see
-  §10.6.
+  (M86 Phase E) AND the `cigars` channel (M86 Phase C) —
+  validation rejects NAME_TOKENIZED on sequences/qualities/
+  integer channels because the codec tokenises UTF-8 strings,
+  not binary byte streams. Both channels use a schema-lift
+  pattern (compound → flat uint8).
 - Ids `4` and `5` (rANS order-0/1) also apply to the **integer
   channels** `positions` (int64), `flags` (uint32), and
   `mapping_qualities` (uint8) via the int↔byte serialisation
   contract in §10.7 (M86 Phase B). Validation rejects ids `6`,
-  `7`, `8` on integer channels (wrong-content codecs for
-  integer fields).
+  `7`, `8` on integer channels.
+- Ids `4` and `5` ALSO apply to the **cigars channel** via a
+  length-prefix-concat serialisation contract — see §10.8 for
+  the codec-selection guidance (rANS is the recommended
+  default; NAME_TOKENIZED is the niche choice for uniform
+  CIGARs).
 
-See §10.5 for the byte-channel `@compression` attribute scheme,
-§10.6 for the `read_names` schema-lift pattern, and §10.7 for
-the integer-channel serialisation contract.
+See §10.5 for the byte-channel `@compression` attribute
+scheme, §10.6 for the `read_names` schema-lift pattern, §10.7
+for the integer-channel serialisation contract, and §10.8 for
+the cigars channel and codec-selection guidance.
 
-The remaining VL_STRING channels (`cigars`, `mate_info`)
-continue to use HDF5-filter ZLIB; no codec match exists yet
-(`cigars` would want an RLE-then-rANS pipeline; `mate_info` is
-an integer-tuple compound).
+The remaining VL_STRING channel `mate_info` continues to use
+HDF5-filter ZLIB; no codec match exists yet (it's a 3-field
+integer-tuple compound, would require per-field schema
+decomposition or per-compound-field dispatch).
 
 > **Note on CRAM 3.1 specifically.** The reserved names above map
 > to CRAM-3.0-era codecs. CRAM 3.1 adds the rANS-Nx16 streams (four
@@ -946,6 +951,108 @@ dtype strings `<i8`, `<u4`, `<u1`; ObjC:
 `ByteBuffer.LITTLE_ENDIAN` with `putLong`/`putInt`/`put`).
 Cross-language byte-exact fixture conformance is verified by
 the M86 Phase B test suite.
+
+## 10.8 cigars channel codec wiring (M86 Phase C)
+
+The `cigars` channel under `signal_channels/` accepts THREE
+codec choices via `@compression`. Each uses the same
+schema-lift pattern as `read_names` (compound → flat 1-D
+uint8) but with three possible decode paths.
+
+### 10.8.1 On-disk schema
+
+**No override (M82 default):** compound dataset of shape
+`[n_reads]` with field `{value: VL_STRING}`. Backward
+compatible with M82 readers.
+
+**Override active (any of the three accepted codecs):** flat
+1-D `UINT8` dataset of length = encoded byte count, with
+`@compression` attribute set to the codec id. **No HDF5
+filter** is applied.
+
+| `@compression` | Codec          | Decode path |
+|----------------|----------------|-------------|
+| `4`            | RANS_ORDER0    | `Rans.decode(stream)` → walk varint-length-prefix entries → `list[str]` |
+| `5`            | RANS_ORDER1    | same as above |
+| `8`            | NAME_TOKENIZED | `NameTokenizer.decode(stream)` → `list[str]` (codec's own self-describing wire format) |
+
+The same dataset name (`cigars`) is used in all three cases;
+the `@compression` value disambiguates the decode path. A
+1-D `UINT8` dataset with an `@compression` value not in
+{4, 5, 8} is malformed.
+
+### 10.8.2 The rANS-on-cigars serialisation contract
+
+When the override is `RANS_ORDER0` or `RANS_ORDER1`, the
+encoder serialises the `list[str]` of CIGARs to a flat byte
+stream using length-prefix concatenation:
+
+```
+For each cigar in cigars:
+    emit varint(len(cigar.encode('ascii')))
+    emit cigar.encode('ascii')
+```
+
+Varints are unsigned LEB128 (low 7 bits + continuation
+flag — same as M85 Phase B's NAME_TOKENIZED varints). The
+serialised buffer is then encoded via `Rans.encode(buf,
+order)`. The decoder reverses: `Rans.decode(stream)` → byte
+buffer → walk varint-length-prefix entries until exhausted.
+
+CIGAR strings are 7-bit ASCII per the SAM spec; encoders
+reject non-ASCII input.
+
+This is **wire-level distinct from NAME_TOKENIZED's verbatim
+mode** (which has a 7-byte NAME_TOKENIZED header before the
+length-prefix entries). The rANS-on-cigars path uses raw
+length-prefix-concat directly because rANS's own
+self-contained header already records the original byte
+count.
+
+### 10.8.3 Codec selection guidance
+
+Different CIGAR distributions favour different codecs:
+
+| Workload                              | Best choice      |
+|---------------------------------------|------------------|
+| All reads identical CIGAR (synthetic) | `NAME_TOKENIZED` |
+| Tiny dataset (< 100 reads), uniform   | `NAME_TOKENIZED` |
+| **Mixed token-count (real WGS)**      | **`RANS_ORDER1`** |
+| Large dataset (> 1000 reads)          | **`RANS_ORDER1`** |
+| Unknown / general default             | **`RANS_ORDER1`** |
+
+NAME_TOKENIZED's columnar mode wins big on uniform-CIGAR
+inputs (single dictionary entry + delta=0 numeric column
+gives ~2 bytes per read). But mixed token-count input (real
+WGS data with indels and clips) sends NAME_TOKENIZED to its
+verbatim fallback mode — essentially raw bytes with a tiny
+header, no compression.
+
+**rANS is the recommended default for real data** because it
+exploits byte-level repetition over the limited CIGAR
+alphabet (digits 0-9 + ~9 operator letters MIDNSHP=X)
+regardless of token-count uniformity. Empirical numbers
+(measured byte-identical across Python / ObjC / Java via
+M83 + M85B conformance, 1000-read mixed CIGARs):
+
+- M82 compound (no override): ~18-29 KB depending on HDF5
+  filter behaviour.
+- NAME_TOKENIZED (verbatim mode kicks in): **5307 bytes**.
+- RANS_ORDER1: **1111 bytes** (~17× smaller than baseline).
+
+### 10.8.4 Read-side dispatch
+
+Readers MUST inspect dataset shape (compound vs 1-D uint8)
+before assuming the M82 layout. If 1-D uint8, dispatch on
+`@compression`:
+- 4 or 5: `Rans.decode` then walk varint-length-prefix.
+- 8: `NameTokenizer.decode`.
+- Other or absent: malformed (raise).
+
+Pre-M86-Phase-C readers that hard-code the compound layout
+will fail when they hit the flat-uint8 layout. Discipline
+matches M80 / M82 / M86 Phase A/E (write-forward, no
+back-compat shim).
 
 ### Precision additions (M79, v0.11)
 
