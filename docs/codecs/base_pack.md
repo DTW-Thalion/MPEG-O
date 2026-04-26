@@ -331,14 +331,19 @@ malformed input.
 
 ---
 
-## 7. Forward references
+## 7. Wired into / forward references
 
-- **M86** (deferred) — wire BASE_PACK into the genomic
-  signal-channel write/read path. A `signal_channels/sequences`
-  dataset's `@compression` attribute will hold `6` per the M79
-  enum value; the read path will call `base_pack.decode()` on the
-  raw dataset bytes. The current M82 storage (one ASCII byte per
-  base) becomes the `@compression == 0` (NONE) case.
+- **M86** (shipped) — BASE_PACK is now wired into the genomic
+  signal-channel write/read path for the `sequences` byte
+  channel (and is also accepted on the `qualities` channel, where
+  it is byte-lossless but space-inefficient on Phred data). Use
+  `WrittenGenomicRun.signal_codec_overrides={"sequences":
+  Compression.BASE_PACK}` at write time; the reader dispatches
+  on the per-dataset `@compression` attribute (value `6` per the
+  M79 enum) automatically. The current M82 default storage (one
+  ASCII byte per base, no override) remains the `@compression`
+  absent case. See `docs/format-spec.md` §10.5 for the on-disk
+  attribute scheme.
 - **M85** (deferred) — `quality-binned` codec (M79 slot 7) for
   Phred-score quantisation, and `name-tokenized` codec (slot 8)
   for read-name prefix factoring. Same 3-language clean-room
