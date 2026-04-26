@@ -26,6 +26,7 @@
 #import "Codecs/TTIORans.h"                    // M86
 #import "Codecs/TTIOBasePack.h"                // M86
 #import "Codecs/TTIOQuality.h"                 // M86 Phase D
+#import "Codecs/TTIONameTokenizer.h"            // M86 Phase E
 #import <hdf5.h>
 
 // Internal SPI surfaced by TTIOAcquisitionRun for the dataset-level
@@ -68,17 +69,23 @@ static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
     static NSSet *s = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        s = [NSSet setWithArray:@[@"sequences", @"qualities"]];
+        // M86 Phase E: read_names joins sequences/qualities as an
+        // override-eligible channel, but its only valid codec is
+        // NAME_TOKENIZED (Binding Decision §113).
+        s = [NSSet setWithArray:@[@"sequences", @"qualities", @"read_names"]];
     });
     return s;
 }
 
-/** Per-channel allowed-codec map (M86 Phase D §119). Sequences accepts
- *  the three byte-stream codecs from Phase A (rANS-0/1, BASE_PACK).
- *  Qualities additionally accepts QUALITY_BINNED (M85 Phase A codec id
- *  7), wired here in Phase D. NAME_TOKENIZED (id 8) is intentionally
- *  excluded from both — its wiring belongs to M86 Phase E and the
- *  read_names channel, not the byte-channel pipeline. */
+/** Per-channel allowed-codec map (M86 Phase D §119, Phase E §113).
+ *  Sequences accepts the three byte-stream codecs from Phase A
+ *  (rANS-0/1, BASE_PACK). Qualities additionally accepts
+ *  QUALITY_BINNED (M85 Phase A codec id 7), wired here in Phase D.
+ *  read_names accepts only NAME_TOKENIZED (id 8) — the codec
+ *  tokenises UTF-8 strings (digit-runs vs string-runs) and is not
+ *  meaningful on the byte-stream channels (Binding Decision §113);
+ *  conversely the byte-stream codecs are not valid on read_names
+ *  because the source data is NSArray<NSString *>, not NSData. */
 static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideCodecsByChannel(void)
 {
     static NSDictionary *d = nil;
@@ -95,7 +102,14 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @(TTIOCompressionBasePack),
             @(TTIOCompressionQualityBinned),
         ]];
-        d = @{ @"sequences": seqAllowed, @"qualities": qualAllowed };
+        NSSet *nameAllowed = [NSSet setWithArray:@[
+            @(TTIOCompressionNameTokenized),
+        ]];
+        d = @{
+            @"sequences":  seqAllowed,
+            @"qualities":  qualAllowed,
+            @"read_names": nameAllowed,
+        };
     });
     return d;
 }
@@ -113,8 +127,8 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
         if (![allowedChans containsObject:chName]) {
             [NSException raise:NSInvalidArgumentException
                         format:@"signalCodecOverrides: channel '%@' not "
-                               @"supported (only sequences and qualities "
-                               @"can use TTIO codecs)", chName];
+                               @"supported (only sequences, qualities, and "
+                               @"read_names can use TTIO codecs)", chName];
         }
         NSNumber *codecBox = overrides[chName];
         if (![codecBox isKindOfClass:[NSNumber class]]) {
@@ -145,14 +159,45 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
                                    @"RansOrder0/RansOrder1/BasePack on "
                                    @"sequences.", chName, chName];
             }
+            // M86 Phase E Binding Decision §113: explicit message for
+            // (sequences|qualities, NAME_TOKENIZED) — names the codec,
+            // the channel, points at the read_names channel, and
+            // explains the wrong-input-type rationale.
+            if (codec == TTIOCompressionNameTokenized
+                && ([chName isEqualToString:@"sequences"]
+                    || [chName isEqualToString:@"qualities"])) {
+                [NSException raise:NSInvalidArgumentException
+                            format:@"signalCodecOverrides['%@']: codec "
+                                   @"NAME_TOKENIZED is not valid on the "
+                                   @"'%@' channel — NAME_TOKENIZED "
+                                   @"tokenises UTF-8 read name strings "
+                                   @"(digit runs vs string runs), not "
+                                   @"binary byte streams like ACGT "
+                                   @"sequence bytes or Phred quality "
+                                   @"scores. Applying it to '%@' would "
+                                   @"mis-tokenise the data and fall back "
+                                   @"to verbatim, producing nonsensical "
+                                   @"compression. Use the read_names "
+                                   @"channel for NAME_TOKENIZED, or "
+                                   @"RansOrder0/RansOrder1/BasePack on "
+                                   @"'%@'.",
+                                   chName, chName, chName, chName];
+            }
+            if ([chName isEqualToString:@"read_names"]) {
+                [NSException raise:NSInvalidArgumentException
+                            format:@"signalCodecOverrides['%@']: codec %@ "
+                                   @"not supported on the '%@' channel "
+                                   @"(allowed: NameTokenized)",
+                                   chName, codecBox, chName];
+            }
+            NSString *allowedTail =
+                [chName isEqualToString:@"qualities"] ? @", QualityBinned" : @"";
             [NSException raise:NSInvalidArgumentException
                         format:@"signalCodecOverrides['%@']: codec %@ "
                                @"not supported on the '%@' channel "
                                @"(allowed: RansOrder0, RansOrder1, "
                                @"BasePack%@)",
-                               chName, codecBox, chName,
-                               [chName isEqualToString:@"qualities"]
-                                   ? @", QualityBinned" : @""];
+                               chName, codecBox, chName, allowedTail];
         }
     }
 }
@@ -689,13 +734,43 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                                                                  error:error];
     if (!cigarDs || ![cigarDs writeAll:cigarRows error:error]) return NO;
 
-    NSMutableArray *nameRows = [NSMutableArray arrayWithCapacity:run.readNames.count];
-    for (NSString *rn in run.readNames) [nameRows addObject:@{@"value": rn}];
-    id<TTIOStorageDataset> nameDs = [sc createCompoundDatasetNamed:@"read_names"
-                                                               fields:vlValueField
-                                                                count:run.readNames.count
-                                                                error:error];
-    if (!nameDs || ![nameDs writeAll:nameRows error:error]) return NO;
+    // M86 Phase E: schema lift for read_names on the provider/storage
+    // path (memory:// / sqlite:// / zarr://). Same dispatch as the
+    // HDF5 fast path above. The protocol's setAttributeValue:forName:
+    // boxes the @compression attribute as NSNumber → int64 in the
+    // HDF5 backend; non-HDF5 backends store the integer directly.
+    NSNumber *readNamesOverride = run.signalCodecOverrides[@"read_names"];
+    if (readNamesOverride != nil) {
+        NSData *encoded = TTIONameTokenizerEncode(run.readNames);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2031
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"M86 Phase E: NAME_TOKENIZED encode of "
+                           @"read_names returned nil"}];
+            return NO;
+        }
+        id<TTIOStorageDataset> nameDs = [sc createDatasetNamed:@"read_names"
+                                                     precision:TTIOPrecisionUInt8
+                                                        length:encoded.length
+                                                     chunkSize:65536
+                                                   compression:TTIOCompressionNone
+                                              compressionLevel:0
+                                                         error:error];
+        if (!nameDs) return NO;
+        if (![nameDs writeAll:encoded error:error]) return NO;
+        if (![nameDs setAttributeValue:@((uint8_t)TTIOCompressionNameTokenized)
+                               forName:@"compression"
+                                 error:error]) return NO;
+    } else {
+        NSMutableArray *nameRows = [NSMutableArray arrayWithCapacity:run.readNames.count];
+        for (NSString *rn in run.readNames) [nameRows addObject:@{@"value": rn}];
+        id<TTIOStorageDataset> nameDs = [sc createCompoundDatasetNamed:@"read_names"
+                                                                   fields:vlValueField
+                                                                    count:run.readNames.count
+                                                                    error:error];
+        if (!nameDs || ![nameDs writeAll:nameRows error:error]) return NO;
+    }
 
     NSArray *mateFields = @[
         [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
@@ -943,11 +1018,45 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                               intoGroup:sc datasetNamed:@"cigars"
                                   fields:vlValueField error:error]) return NO;
 
-    NSMutableArray *nameRows = [NSMutableArray arrayWithCapacity:run.readNames.count];
-    for (NSString *rn in run.readNames) [nameRows addObject:@{@"value": rn}];
-    if (![TTIOCompoundIO writeGeneric:nameRows
-                              intoGroup:sc datasetNamed:@"read_names"
-                                  fields:vlValueField error:error]) return NO;
+    // M86 Phase E: schema lift for read_names. When the
+    // NAME_TOKENIZED override is set, replace the M82 compound
+    // dataset with a flat 1-D uint8 dataset of the same name
+    // carrying the codec output, plus an @compression == 8
+    // attribute (Binding Decisions §111, §113). The two layouts
+    // are mutually exclusive within a single run; readers
+    // dispatch on dataset shape (compound vs uint8). No HDF5
+    // filter is applied — codec output is high-entropy
+    // (Binding Decision §87).
+    NSNumber *readNamesOverride = run.signalCodecOverrides[@"read_names"];
+    if (readNamesOverride != nil) {
+        NSData *encoded = TTIONameTokenizerEncode(run.readNames);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2030
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"M86 Phase E: NAME_TOKENIZED encode of "
+                           @"read_names returned nil"}];
+            return NO;
+        }
+        TTIOHDF5Dataset *nameDs = [sc createDatasetNamed:@"read_names"
+                                               precision:TTIOPrecisionUInt8
+                                                  length:encoded.length
+                                               chunkSize:65536
+                                             compression:TTIOCompressionNone
+                                        compressionLevel:0
+                                                   error:error];
+        if (!nameDs) return NO;
+        if (![nameDs writeData:encoded error:error]) return NO;
+        if (!_TTIO_M86_WriteUInt8Attribute([nameDs datasetId], "compression",
+                                           (uint8_t)TTIOCompressionNameTokenized,
+                                           error)) return NO;
+    } else {
+        NSMutableArray *nameRows = [NSMutableArray arrayWithCapacity:run.readNames.count];
+        for (NSString *rn in run.readNames) [nameRows addObject:@{@"value": rn}];
+        if (![TTIOCompoundIO writeGeneric:nameRows
+                                  intoGroup:sc datasetNamed:@"read_names"
+                                      fields:vlValueField error:error]) return NO;
+    }
 
     // mate_info compound: chrom (VL str) + pos (int64) + tlen (int32 → boxed as int64 via VLString-or-int64 schema).
     NSArray *mateFields = @[

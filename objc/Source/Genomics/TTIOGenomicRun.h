@@ -39,6 +39,16 @@
 - (TTIOAlignedRead *)readAtIndex:(NSUInteger)index
                             error:(NSError **)error;
 
+/** Return the read name at `index`. Dispatches on the on-disk
+ *  read_names dataset shape (M86 Phase E):
+ *    - Compound `{value: VL_STRING}`: existing M82 read path.
+ *    - Flat 1-D uint8 with `@compression == 8`: NAME_TOKENIZED
+ *      decode-once-and-cache. The decoded list is materialised on
+ *      first call and held for the lifetime of this run instance
+ *      per Binding Decision §114. */
+- (NSString *)readNameAtIndex:(NSUInteger)index
+                         error:(NSError **)error;
+
 /** Reads on `chromosome` whose mapping position is in [start, end). */
 - (NSArray<TTIOAlignedRead *> *)readsInRegion:(NSString *)chromosome
                                           start:(int64_t)start
