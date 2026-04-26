@@ -757,16 +757,27 @@ HDF5 filter pipeline or a dedicated per-channel attribute:
 | **zlib** (default)     | `H5P_DEFLATE` filter at level 6. Lossless. Readable by any HDF5 library without extra plugins.                                                                                |
 | **LZ4**                | HDF5 filter id **32004**. Requires the LZ4 filter plugin (`libh5lz4.so`) to be loadable at runtime via `HDF5_PLUGIN_PATH`. Lossless. ~35× faster write / ~2× faster read than zlib, at ~20% larger files on random data. |
 | **Numpress-delta**     | Per-channel transform implemented inside TTIO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. |
-| **rANS-order0**        | Reserved (M79, v0.11). Range-asymmetric numeral systems entropy coder, order-0 (per-byte) frequency model. Used by genomic codecs in M74+. v0.11 reserves codec id `4`; encoder/decoder land with M74. |
-| **rANS-order1**        | Reserved (M79, v0.11). Order-1 (preceding-byte context) rANS variant. Codec id `5`. |
-| **base-pack**          | Reserved (M79, v0.11). 2-bit ACGT packed-base codec for genomic read sequences. Codec id `6`. Lossless on the canonical alphabet `{A,C,G,T}`; reads containing `N` are diverted to a sidecar mask dataset (defined in M74). |
-| **quality-binned**     | Reserved (M79, v0.11). Illumina-style quality-score binning that maps 40 raw Phred levels onto a small number of bins (default: 8). Codec id `7`. Lossy by construction; the bin table is stored as an attribute on the channel. |
-| **name-tokenized**     | Reserved (M79, v0.11). Read-name tokenisation: shared prefixes are factored out and indices replace the per-read names. Codec id `8`. Lossless. |
+| **rANS-order0**        | Reserved enum slot (M79, v0.11). CRAM-3.0-era range-asymmetric numeral systems entropy coder, order-0 (per-byte) frequency model. Codec id `4`. **Encoder/decoder NOT YET IMPLEMENTED.** Tracked under "Genomic codec milestone" — see WORKPLAN. |
+| **rANS-order1**        | Reserved enum slot (M79, v0.11). Order-1 (preceding-byte context) rANS variant. Codec id `5`. **Encoder/decoder NOT YET IMPLEMENTED.** |
+| **base-pack**          | Reserved enum slot (M79, v0.11). 2-bit ACGT packed-base codec for genomic read sequences. Codec id `6`. Lossless on the canonical alphabet `{A,C,G,T}`; reads containing `N` would be diverted to a sidecar mask dataset. **Encoder/decoder NOT YET IMPLEMENTED**; M82 stores one ASCII byte per base instead. |
+| **quality-binned**     | Reserved enum slot (M79, v0.11). Illumina-style quality-score binning that maps 40 raw Phred levels onto a small number of bins (default: 8). Codec id `7`. Lossy by construction. **Encoder/decoder NOT YET IMPLEMENTED**; M82 stores raw Phred bytes. |
+| **name-tokenized**     | Reserved enum slot (M79, v0.11). Read-name tokenisation: shared prefixes are factored out and indices replace the per-read names. Codec id `8`. Lossless. **Encoder/decoder NOT YET IMPLEMENTED**; M82 stores read names as VL_STRING in the `read_names` compound. |
 
-The five reserved codec ids (`4`–`8`) are committed to disk format
-in M79 so cross-language readers see a stable enum even before
-the encoders land. Reading a dataset whose codec id ≥ 4 on a
-v0.11 reader without M74 returns an `UnsupportedCodec` error.
+The five reserved codec ids (`4`–`8`) are committed to the disk
+format in M79 so cross-language readers see a stable enum table
+before encoders land. **As of v0.11.x (post-M82.5) none of the five
+have been implemented** — the enum slots exist; the codecs do not.
+Reading a dataset whose codec id ≥ 4 returns an `UnsupportedCodec`
+error in every implementation.
+
+> **Note on CRAM 3.1 specifically.** The reserved names above map
+> to CRAM-3.0-era codecs. CRAM 3.1 adds the rANS-Nx16 streams (four
+> variants — order 0/1 × stripe/RLE), the fqzcomp-derived quality
+> codec, and adaptive arithmetic. **None of those CRAM-3.1-specific
+> codecs are reserved or implemented.** Adding them would require
+> additional enum slots (codec ids `9`+) plus encoders, decoders,
+> and a cross-language conformance harness. Tracked under "Genomic
+> codec milestone" in WORKPLAN.
 
 ### Precision additions (M79, v0.11)
 

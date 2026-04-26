@@ -119,6 +119,34 @@ context describing the migration itself.
 - **Out of scope (codec milestone):** Base-packing; M82 stores one
   ASCII byte per base.
 
+### Documentation correction — genomic codec gap (post-M82.5)
+
+Stale claims across the docs implied that the M79-reserved genomic
+codec slots (rANS-order0/1, base-pack, quality-binned,
+name-tokenized) had encoders/decoders shipping with M74. They did
+not. M74 shipped as MS activation/isolation work; the genomic
+codecs are not implemented in any of the three languages.
+
+- **Updated:** `docs/format-spec.md` §10.4 — each of the five
+  reserved codec rows now explicitly says **"NOT YET IMPLEMENTED"**.
+  Added a "Note on CRAM 3.1 specifically" callout flagging that
+  the reserved names map to CRAM-3.0-era codecs; CRAM 3.1's
+  rANS-Nx16, fqzcomp, and adaptive arithmetic codecs are neither
+  reserved nor implemented.
+- **Updated:** `docs/M82.md` — "What's deliberately out of scope"
+  now leads with the codec gap (was: only base-packing was
+  mentioned). Quantifies the practical impact (61 KB uncompressed
+  vs 6–10 KB BAM/CRAM at 100 reads; 3 GB vs 300 MB at 10 M reads).
+- **Updated:** `WORKPLAN.md` — added a "Pending follow-on
+  milestones (post-M82)" section. The "Genomic codec milestone"
+  entry is the load-bearing one (Phase 1: implement the five M79
+  reservations; Phase 2: reserve + implement CRAM 3.1 codecs;
+  Phase 3: sidecar mask dataset for non-canonical bases).
+  Replaces the vague "Next candidates" line that closed the M82.5
+  entry.
+
+No code changes — documentation only.
+
 ### M82.5 — Documentation pass
 
 Wraps the M82 milestone series. Implementation, conformance, and
