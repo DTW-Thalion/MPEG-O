@@ -1292,3 +1292,60 @@ Python reference and M82.2 ObjC normative shapes.
 
 M82.4 (cross-language conformance matrix — must resolve VL string
 encoding decision), M82.5 (docs).
+
+---
+
+## M82.4 — Cross-language conformance matrix — shipped 2026-04-25
+
+Closes the M82.4 promise from M82.2 ("3×3 cross-language conformance
+matrix") and M82.3 ("must resolve VL string encoding decision"). The
+VL string decision was already made in the M82.4 hot-fix that landed
+between M82.3 and this work (see CHANGELOG entry "M82.4 — Java
+VL_STRING-in-compound read fix"). This entry covers the matrix proper:
+all 9 (writer, reader) cells exercised on every CI run.
+
+### Shipped (M82.4 matrix)
+
+- [x] **`python/tests/validation/test_m82_3x3_matrix.py`** — 9
+      parametrised cells `{python,objc,java}-write` ×
+      `{python,objc,java}-read` plus a field-level VL_STRING readback
+      test that opens ObjC- and Java-written fixtures from Python and
+      verifies cigar / read_name / chromosome / sequence prefix.
+- [x] **`TtioWriteGenomicFixture` (Java + ObjC)** — deterministic
+      100-read genomic-only fixture writers. Same content shape as
+      `python/tests/fixtures/genomic/generate.py`. ACGT cycled (not
+      RNG-derived) so all three languages produce identical bytes.
+      Java exposes `build()` for reuse from JUnit; ObjC mirrors the
+      existing `MakeFixtures` tool conventions.
+- [x] **`TtioVerify` JSON schema bumped** — both Java and ObjC tools
+      now emit a `"genomic_runs"` block; Python's `_python_summary`
+      helper does the same. Schema:
+      `{"name": {"read_count", "reference_uri", "platform", "sample_name"}}`.
+      Pre-M82 datasets emit `"genomic_runs": {}`.
+
+### Coverage delta
+
+Pre-M82.4: only diagonal cells (each language → itself) and the
+Python writer column were exercised. Post-M82.4: all 9 cells run on
+every CI invocation, including the four cells that were the gap —
+ObjC→Python, ObjC→Java, Java→Python, Java→ObjC.
+
+### Verified
+
+- Python: 911 passed, 2 baseline failures (pre-existing
+  `test_smoke.py` version pin, unrelated to M82).
+- Python validation suite: 29 passed, 3 expected skips, 1 expected
+  xfail (memory-provider in-process limit, documented).
+- Java: 402 passed.
+- ObjC: 1935 passed.
+
+### Out of scope (deferred to M82.5)
+
+- **Documentation pass.** This is M82.5's job — high-level `M82.md`
+  guide for downstream users, plus per-language API docstrings.
+- **MS runs via memory:// / sqlite:// / zarr://** — same gap as
+  M82.2/M82.3 (separate writer refactor; not blocked by M82.4).
+
+### Next
+
+M82.5 (docs).
