@@ -57,6 +57,22 @@
     // a uint8 byte stream. Cache lifetime is the TTIOGenomicRun
     // instance.
     NSMutableDictionary<NSString *, NSData *> *_decodedIntChannels;
+    // M86 Phase F: combined per-field cache for the mate_info subgroup
+    // (Binding Decision §129). Single NSMutableDictionary keyed by the
+    // on-disk child name (@"chrom", @"pos", @"tlen") since the three
+    // fields have three different value types — chrom is
+    // NSArray<NSString *>, pos is NSData carrying int64 LE bytes, tlen
+    // is NSData carrying int32 LE bytes. Separate from
+    // _decodedByteChannels / _decodedIntChannels / _decodedReadNames /
+    // _decodedCigars per Binding Decision §129. Cache lifetime is the
+    // TTIOGenomicRun instance (re-opening the file incurs the decode
+    // cost again).
+    NSMutableDictionary<NSString *, id> *_decodedMateInfo;
+    // M86 Phase F: cached link-type query result for
+    // signal_channels/mate_info. -1 = not yet probed; 0 = M82 compound
+    // dataset; 1 = Phase F subgroup. Probed once via H5Oget_info_by_name
+    // on first mate-field access (Binding Decision §128, Gotcha §141).
+    int8_t _mateInfoLinkType;
 }
 
 - (NSUInteger)readCount { return _index.count; }
@@ -84,6 +100,8 @@
         _compoundCache    = [NSMutableDictionary dictionary];
         _decodedByteChannels = [NSMutableDictionary dictionary];
         _decodedIntChannels  = [NSMutableDictionary dictionary];
+        _decodedMateInfo     = [NSMutableDictionary dictionary];
+        _mateInfoLinkType    = -1;  // not yet probed
     }
     return self;
 }
@@ -738,6 +756,432 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return decoded;
 }
 
+// M86 Phase F: HDF5 link-type query for signal_channels/mate_info.
+// Per Binding Decision §128 / Gotcha §141, dispatch is on HDF5 link
+// type (dataset = M82 compound; group = Phase F subgroup), NOT on
+// @compression attribute presence on the bare link (the attribute
+// lives on per-field child datasets within the subgroup, not on the
+// bare link). Probed once on first access and cached on the run.
+//
+// HDF5 backend: H5Oget_info_by_name returns a struct whose `type`
+// field is H5O_TYPE_GROUP or H5O_TYPE_DATASET — the cleanest signal
+// for the dispatch. For non-HDF5 backends we fall back to the
+// storage protocol's openGroupNamed/openDatasetNamed combination
+// (one returns nil where the other doesn't).
+- (BOOL)_mateInfoIsSubgroup
+{
+    if (_mateInfoLinkType >= 0) {
+        return _mateInfoLinkType == 1;
+    }
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if (!sig) {
+        // Defensive: if signal_channels is unavailable, assume M82.
+        _mateInfoLinkType = 0;
+        return NO;
+    }
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        if (hg) {
+            H5O_info_t info;
+            herr_t s = H5Oget_info_by_name([hg groupId], "mate_info",
+                                           &info, H5P_DEFAULT);
+            if (s >= 0) {
+                _mateInfoLinkType =
+                    (info.type == H5O_TYPE_GROUP) ? 1 : 0;
+                return _mateInfoLinkType == 1;
+            }
+        }
+        // H5Oget_info_by_name failed — assume compound (legacy default).
+        _mateInfoLinkType = 0;
+        return NO;
+    }
+    // Storage-protocol path: try openGroupNamed first; if it succeeds
+    // and the link is a dataset the protocol's adapter typically
+    // returns nil for openGroupNamed. Different providers behave
+    // slightly differently here; for robustness probe openGroupNamed
+    // first and treat success as Phase F. (The cross-language
+    // conformance fixture only covers HDF5; provider-path Phase F
+    // round-trips through the same mate_info dispatch but byte-exact
+    // parity isn't asserted.)
+    NSError *gErr = nil;
+    id<TTIOStorageGroup> sub = [sig openGroupNamed:@"mate_info" error:&gErr];
+    if (sub != nil) {
+        _mateInfoLinkType = 1;
+        return YES;
+    }
+    _mateInfoLinkType = 0;
+    return NO;
+}
+
+// M86 Phase F: lazily decode the mate_info chrom field from the Phase F
+// subgroup. Caches in _decodedMateInfo[@"chrom"] and returns
+// NSArray<NSString *>. Routes through Phase C cigars helpers for the
+// rANS path (length-prefix-concat) and TTIONameTokenizerDecode for
+// the NAME_TOKENIZED path. For un-overridden chrom fields the dataset
+// is a compound with VL_STRING value field — read whole and extract.
+- (NSArray<NSString *> *)_decodeMateChromOrError:(NSError **)error
+{
+    NSArray<NSString *> *cached = _decodedMateInfo[@"chrom"];
+    if (cached) return cached;
+
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:error];
+    if (!sig) return nil;
+
+    // Open the Phase F subgroup. HDF5 fast path uses the underlying
+    // H5 group; non-HDF5 falls back to the storage protocol.
+    TTIOHDF5Group *mateH5 = nil;
+    id<TTIOStorageGroup> mateProt = nil;
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        mateH5 = [hg openGroupNamed:@"mate_info" error:error];
+        if (!mateH5) return nil;
+    } else {
+        mateProt = [sig openGroupNamed:@"mate_info" error:error];
+        if (!mateProt) return nil;
+    }
+
+    // Determine layout: a flat uint8 child dataset is the codec path;
+    // a compound child dataset is the natural-dtype path.
+    TTIOHDF5Dataset *chromH5 = nil;
+    id<TTIOStorageDataset> chromProt = nil;
+    if (mateH5) {
+        chromH5 = [mateH5 openDatasetNamed:@"chrom" error:error];
+        if (!chromH5) return nil;
+    } else {
+        chromProt = [mateProt openDatasetNamed:@"chrom" error:error];
+        if (!chromProt) return nil;
+    }
+
+    TTIOPrecision prec = chromH5 ? [chromH5 precision] : [chromProt precision];
+    if (prec == TTIOPrecisionUInt8) {
+        uint8_t codec_id = 0;
+        if (chromH5) {
+            codec_id = _ttio_m86_read_compression_attr([chromH5 datasetId]);
+        } else {
+            codec_id = _ttio_m86_read_compression_attr_protocol(chromProt);
+        }
+        NSData *encoded = nil;
+        if (chromH5) {
+            id raw = [chromH5 readDataWithError:error];
+            if (![raw isKindOfClass:[NSData class]]) return nil;
+            encoded = (NSData *)raw;
+        } else {
+            id raw = [chromProt readAll:error];
+            if (![raw isKindOfClass:[NSData class]]) return nil;
+            encoded = (NSData *)raw;
+        }
+
+        if (codec_id == (uint8_t)4 /* RANS_ORDER0 */
+            || codec_id == (uint8_t)5 /* RANS_ORDER1 */) {
+            NSError *decErr = nil;
+            NSData *decoded = TTIORansDecode(encoded, &decErr);
+            if (decoded == nil) {
+                if (error) *error = decErr ?: [NSError
+                    errorWithDomain:@"TTIOGenomicRun" code:2070
+                           userInfo:@{NSLocalizedDescriptionKey:
+                               @"signal_channel 'mate_info/chrom' rANS "
+                               @"decode failed"}];
+                return nil;
+            }
+            const uint8_t *buf = (const uint8_t *)decoded.bytes;
+            const size_t   n   = decoded.length;
+            size_t off = 0;
+            NSMutableArray<NSString *> *out = [NSMutableArray array];
+            while (off < n) {
+                uint64_t len = 0;
+                if (!_ttio_m86_cigars_varint_read(buf, n, &off, &len)) {
+                    if (error) *error = [NSError
+                        errorWithDomain:@"TTIOGenomicRun" code:2071
+                               userInfo:@{NSLocalizedDescriptionKey:
+                                   @"signal_channel 'mate_info/chrom' "
+                                   @"rANS length-prefix-concat: "
+                                   @"truncated varint length prefix"}];
+                    return nil;
+                }
+                if (off + (size_t)len > n) {
+                    if (error) *error = [NSError
+                        errorWithDomain:@"TTIOGenomicRun" code:2072
+                               userInfo:@{NSLocalizedDescriptionKey:
+                                   [NSString stringWithFormat:
+                                        @"signal_channel 'mate_info/chrom' "
+                                        @"rANS length-prefix-concat: entry "
+                                        @"runs off end of decoded buffer "
+                                        @"(offset=%zu, length=%llu, "
+                                        @"buffer_size=%zu)",
+                                        off,
+                                        (unsigned long long)len, n]}];
+                    return nil;
+                }
+                NSString *cstr = [[NSString alloc]
+                    initWithBytes:buf + off
+                           length:(NSUInteger)len
+                         encoding:NSASCIIStringEncoding];
+                if (cstr == nil) {
+                    if (error) *error = [NSError
+                        errorWithDomain:@"TTIOGenomicRun" code:2073
+                               userInfo:@{NSLocalizedDescriptionKey:
+                                   @"signal_channel 'mate_info/chrom' "
+                                   @"rANS length-prefix-concat: entry "
+                                   @"contains non-ASCII bytes"}];
+                    return nil;
+                }
+                [out addObject:cstr];
+                off += (size_t)len;
+            }
+            _decodedMateInfo[@"chrom"] = [out copy];
+            return _decodedMateInfo[@"chrom"];
+        }
+        if (codec_id == (uint8_t)8 /* NAME_TOKENIZED */) {
+            NSError *decErr = nil;
+            NSArray<NSString *> *decoded =
+                TTIONameTokenizerDecode(encoded, &decErr);
+            if (decoded == nil) {
+                if (error) *error = decErr ?: [NSError
+                    errorWithDomain:@"TTIOGenomicRun" code:2074
+                           userInfo:@{NSLocalizedDescriptionKey:
+                               @"signal_channel 'mate_info/chrom' "
+                               @"NAME_TOKENIZED decode failed"}];
+                return nil;
+            }
+            _decodedMateInfo[@"chrom"] = [decoded copy];
+            return _decodedMateInfo[@"chrom"];
+        }
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2075
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"signal_channel 'mate_info/chrom': "
+                            @"@compression=%u is not a supported TTIO "
+                            @"codec id (only RANS_ORDER0 = 4, "
+                            @"RANS_ORDER1 = 5, and NAME_TOKENIZED = 8 "
+                            @"are recognised for this channel)",
+                            (unsigned)codec_id]}];
+        return nil;
+    }
+
+    // Natural-dtype (un-overridden) path: compound VL_STRING child
+    // dataset inside the subgroup. Read whole and extract values.
+    NSArray *rows = nil;
+    if (mateH5) {
+        TTIOCompoundField *vlValue =
+            [TTIOCompoundField fieldWithName:@"value"
+                                        kind:TTIOCompoundFieldKindVLString];
+        rows = [TTIOCompoundIO readGenericFromGroup:mateH5
+                                         datasetNamed:@"chrom"
+                                               fields:@[vlValue]
+                                                error:error];
+    } else {
+        rows = [chromProt readAll:error];
+    }
+    if (!rows) return nil;
+    NSMutableArray<NSString *> *out = [NSMutableArray arrayWithCapacity:rows.count];
+    for (NSDictionary *r in rows) {
+        id v = r[@"value"];
+        NSString *s = [v isKindOfClass:[NSData class]]
+            ? [[NSString alloc] initWithData:v encoding:NSUTF8StringEncoding]
+            : (NSString *)v;
+        [out addObject:s ?: @""];
+    }
+    _decodedMateInfo[@"chrom"] = [out copy];
+    return _decodedMateInfo[@"chrom"];
+}
+
+// M86 Phase F: lazily decode an integer mate field (pos = int64 LE,
+// tlen = int32 LE) from the Phase F subgroup. Caches in
+// _decodedMateInfo[name] and returns the cached NSData (LE byte
+// representation). For un-overridden fields reads the typed dataset
+// directly (HDF5 already returns LE bytes on x86/ARM hosts; on
+// big-endian hosts the caller must byte-swap, mirroring the write
+// contract per Binding Decision §118).
+- (NSData *)_decodeMateIntField:(NSString *)name
+                       elemSize:(NSUInteger)elemSize
+                          error:(NSError **)error
+{
+    NSData *cached = _decodedMateInfo[name];
+    if (cached) return cached;
+
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:error];
+    if (!sig) return nil;
+
+    TTIOHDF5Group *mateH5 = nil;
+    id<TTIOStorageGroup> mateProt = nil;
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        mateH5 = [hg openGroupNamed:@"mate_info" error:error];
+        if (!mateH5) return nil;
+    } else {
+        mateProt = [sig openGroupNamed:@"mate_info" error:error];
+        if (!mateProt) return nil;
+    }
+
+    TTIOHDF5Dataset *fieldH5 = nil;
+    id<TTIOStorageDataset> fieldProt = nil;
+    if (mateH5) {
+        fieldH5 = [mateH5 openDatasetNamed:name error:error];
+        if (!fieldH5) return nil;
+    } else {
+        fieldProt = [mateProt openDatasetNamed:name error:error];
+        if (!fieldProt) return nil;
+    }
+
+    TTIOPrecision prec = fieldH5 ? [fieldH5 precision] : [fieldProt precision];
+    if (prec == TTIOPrecisionUInt8) {
+        uint8_t codec_id = 0;
+        if (fieldH5) {
+            codec_id = _ttio_m86_read_compression_attr([fieldH5 datasetId]);
+        } else {
+            codec_id = _ttio_m86_read_compression_attr_protocol(fieldProt);
+        }
+        if (codec_id != 4 /* RansOrder0 */ && codec_id != 5 /* RansOrder1 */) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2076
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"signal_channel 'mate_info/%@': "
+                                @"@compression=%u is not a supported "
+                                @"TTIO codec id for an integer mate field "
+                                @"(only RANS_ORDER0 = 4 and RANS_ORDER1 = "
+                                @"5 are recognised)",
+                                name, (unsigned)codec_id]}];
+            return nil;
+        }
+        NSData *encoded = nil;
+        if (fieldH5) {
+            id raw = [fieldH5 readDataWithError:error];
+            if (![raw isKindOfClass:[NSData class]]) return nil;
+            encoded = (NSData *)raw;
+        } else {
+            id raw = [fieldProt readAll:error];
+            if (![raw isKindOfClass:[NSData class]]) return nil;
+            encoded = (NSData *)raw;
+        }
+        NSError *decErr = nil;
+        NSData *decoded = TTIORansDecode(encoded, &decErr);
+        if (!decoded) {
+            if (error) *error = decErr ?: [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2077
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"signal_channel 'mate_info/%@' rANS "
+                                @"decode failed", name]}];
+            return nil;
+        }
+        _decodedMateInfo[name] = decoded;
+        return decoded;
+    }
+
+    // Natural-dtype (un-overridden) path: read the typed dataset whole.
+    // The bytes are already LE on x86/ARM hosts (HDF5 native LE storage).
+    id allRaw = nil;
+    if (fieldH5) {
+        allRaw = [fieldH5 readDataWithError:error];
+    } else {
+        allRaw = [fieldProt readAll:error];
+    }
+    if (![allRaw isKindOfClass:[NSData class]]) return nil;
+    _decodedMateInfo[name] = (NSData *)allRaw;
+    (void)elemSize;  // currently informational; element-size kept for
+                    // future shape validation.
+    return _decodedMateInfo[name];
+}
+
+// M86 Phase F: per-read accessors for the three mate fields. Each
+// dispatches on the link-type query (group = Phase F subgroup vs
+// dataset = M82 compound) and routes through either the per-field
+// decode helper (Phase F) or the existing _compoundCache[@"mate_info"]
+// path (M82). Used by -readAtIndex: in place of the M82 mate-block.
+- (NSString *)_mateChromAtIndex:(NSUInteger)i error:(NSError **)error
+{
+    if ([self _mateInfoIsSubgroup]) {
+        NSArray<NSString *> *chroms = [self _decodeMateChromOrError:error];
+        if (!chroms) return nil;
+        if (i >= chroms.count) return nil;
+        return chroms[i];
+    }
+    // M82 compound path — read whole-and-cache via _compoundCache,
+    // mirroring the original -readAtIndex: block.
+    NSArray *mates = _compoundCache[@"mate_info"];
+    if (!mates) {
+        NSArray *mateFields = @[
+            [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
+            [TTIOCompoundField fieldWithName:@"pos"   kind:TTIOCompoundFieldKindInt64],
+            [TTIOCompoundField fieldWithName:@"tlen"  kind:TTIOCompoundFieldKindInt64],
+        ];
+        id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:error];
+        if (!sig) return nil;
+        if ([sig respondsToSelector:@selector(unwrap)]) {
+            TTIOHDF5Group *h5 = [(id)sig performSelector:@selector(unwrap)];
+            mates = [TTIOCompoundIO readGenericFromGroup:h5
+                                             datasetNamed:@"mate_info"
+                                                   fields:mateFields
+                                                    error:error];
+        } else {
+            id<TTIOStorageDataset> ds = [sig openDatasetNamed:@"mate_info" error:error];
+            if (ds) mates = [ds readAll:error];
+        }
+        if (!mates) return nil;
+        _compoundCache[@"mate_info"] = mates;
+    }
+    if (i >= mates.count) return nil;
+    id mcv = mates[i][@"chrom"];
+    return [mcv isKindOfClass:[NSData class]]
+        ? [[NSString alloc] initWithData:mcv encoding:NSUTF8StringEncoding]
+        : (NSString *)(mcv ?: @"");
+}
+
+- (int64_t)_matePosAtIndex:(NSUInteger)i error:(NSError **)error
+{
+    if ([self _mateInfoIsSubgroup]) {
+        NSData *bytes = [self _decodeMateIntField:@"pos"
+                                          elemSize:sizeof(int64_t)
+                                             error:error];
+        if (!bytes) return 0;
+        NSUInteger n = bytes.length / sizeof(int64_t);
+        if (i >= n) return 0;
+        const int64_t *src = (const int64_t *)bytes.bytes;
+        // Bytes are LE; on x86/ARM (LE host) memcpy gives the right value.
+        int64_t v;
+        memcpy(&v, &src[i], sizeof(int64_t));
+        return v;
+    }
+    // M82 compound path.
+    NSArray *mates = _compoundCache[@"mate_info"];
+    if (!mates) {
+        // Force population via -_mateChromAtIndex: side-effect; reuses
+        // the same compound-cache fill. (Discarded return; we just
+        // need the cache populated.)
+        NSError *gErr = nil;
+        (void)[self _mateChromAtIndex:0 error:&gErr];
+        mates = _compoundCache[@"mate_info"];
+    }
+    if (!mates || i >= mates.count) return 0;
+    return [mates[i][@"pos"] longLongValue];
+}
+
+- (int32_t)_mateTlenAtIndex:(NSUInteger)i error:(NSError **)error
+{
+    if ([self _mateInfoIsSubgroup]) {
+        NSData *bytes = [self _decodeMateIntField:@"tlen"
+                                          elemSize:sizeof(int32_t)
+                                             error:error];
+        if (!bytes) return 0;
+        NSUInteger n = bytes.length / sizeof(int32_t);
+        if (i >= n) return 0;
+        const int32_t *src = (const int32_t *)bytes.bytes;
+        int32_t v;
+        memcpy(&v, &src[i], sizeof(int32_t));
+        return v;
+    }
+    NSArray *mates = _compoundCache[@"mate_info"];
+    if (!mates) {
+        NSError *gErr = nil;
+        (void)[self _mateChromAtIndex:0 error:&gErr];
+        mates = _compoundCache[@"mate_info"];
+    }
+    if (!mates || i >= mates.count) return 0;
+    return (int32_t)[mates[i][@"tlen"] integerValue];
+}
+
 - (TTIOAlignedRead *)readAtIndex:(NSUInteger)i error:(NSError **)error
 {
     if (i >= _index.count) {
@@ -789,36 +1233,20 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     NSString *readName = [self readNameAtIndex:i error:error];
     if (!readName && error && *error) return nil;
 
-    // mate_info has 3 fields (chrom VL, pos int64, tlen int32)
-    NSArray *mateFields = @[
-        [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
-        [TTIOCompoundField fieldWithName:@"pos"   kind:TTIOCompoundFieldKindInt64],
-        [TTIOCompoundField fieldWithName:@"tlen"  kind:TTIOCompoundFieldKindInt64],  // int32 boxed as int64
-    ];
-    NSArray *mates = _compoundCache[@"mate_info"];
-    if (!mates) {
-        id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:error];
-        if (!sig) return nil;
-        if ([sig respondsToSelector:@selector(unwrap)]) {
-            TTIOHDF5Group *h5 = [(id)sig performSelector:@selector(unwrap)];
-            mates = [TTIOCompoundIO readGenericFromGroup:h5
-                                             datasetNamed:@"mate_info"
-                                                   fields:mateFields
-                                                    error:error];
-        } else {
-            id<TTIOStorageDataset> ds = [sig openDatasetNamed:@"mate_info" error:error];
-            if (ds) mates = [ds readAll:error];
-        }
-        if (!mates) return nil;
-        _compoundCache[@"mate_info"] = mates;
+    // M86 Phase F: route mate-field reads through the per-field
+    // dispatch helpers. The link-type query (group vs dataset) for
+    // signal_channels/mate_info is cached on the run, so the three
+    // accessors are essentially free after the first call. The
+    // existing M82 compound path is preserved inside the helpers
+    // (see -_mateChromAtIndex: et al.).
+    NSError *mErr = nil;
+    NSString *mateChromosome = [self _mateChromAtIndex:i error:&mErr];
+    if (!mateChromosome && mErr) {
+        if (error) *error = mErr;
+        return nil;
     }
-    NSDictionary *mate = mates[i];
-    id mcv = mate[@"chrom"];
-    NSString *mateChromosome = [mcv isKindOfClass:[NSData class]]
-        ? [[NSString alloc] initWithData:mcv encoding:NSUTF8StringEncoding]
-        : (NSString *)(mcv ?: @"");
-    int64_t matePosition = [mate[@"pos"] longLongValue];
-    int32_t templateLength = (int32_t)[mate[@"tlen"] integerValue];
+    int64_t matePosition = [self _matePosAtIndex:i error:&mErr];
+    int32_t templateLength = [self _mateTlenAtIndex:i error:&mErr];
 
     return [[TTIOAlignedRead alloc]
         initWithReadName:readName

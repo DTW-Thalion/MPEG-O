@@ -92,11 +92,17 @@ static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
         // codecs are RANS_ORDER0/1 (Binding Decision §117).
         // M86 Phase C: cigars joins the override-eligible set;
         // accepts {RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED} per
-        // Binding Decision §120. mate_info remains explicitly
-        // out-of-scope (Binding Decision §124).
+        // Binding Decision §120.
+        // M86 Phase F: mate_info_chrom / mate_info_pos /
+        // mate_info_tlen join the override-eligible set as the
+        // three per-field "virtual channel" names that trigger the
+        // mate_info schema lift (Binding Decisions §125, §126). The
+        // bare "mate_info" key remains rejected with a discoverable
+        // error pointing at the per-field names (Gotcha §143).
         s = [NSSet setWithArray:@[
             @"sequences", @"qualities", @"read_names", @"cigars",
             @"positions", @"flags", @"mapping_qualities",
+            @"mate_info_chrom", @"mate_info_pos", @"mate_info_tlen",
         ]];
     });
     return s;
@@ -155,6 +161,16 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @(TTIOCompressionRansOrder0),
             @(TTIOCompressionRansOrder1),
         ]];
+        // M86 Phase F (Binding Decision §130): mate_info_chrom shares
+        // cigars' allowed set (rANS pair via length-prefix-concat plus
+        // NAME_TOKENIZED for repetitive chromosome alphabets). The
+        // integer fields mate_info_pos / mate_info_tlen mirror the
+        // existing integer channels (rANS pair only).
+        NSSet *mateChromAllowed = [NSSet setWithArray:@[
+            @(TTIOCompressionRansOrder0),
+            @(TTIOCompressionRansOrder1),
+            @(TTIOCompressionNameTokenized),
+        ]];
         d = @{
             @"sequences":         seqAllowed,
             @"qualities":         qualAllowed,
@@ -163,13 +179,18 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @"positions":         intAllowed,
             @"flags":             intAllowed,
             @"mapping_qualities": intAllowed,
+            @"mate_info_chrom":   mateChromAllowed,
+            @"mate_info_pos":     intAllowed,
+            @"mate_info_tlen":    intAllowed,
         };
     });
     return d;
 }
 
 /** M86 Phase B: integer channel names. Used by validation to dispatch
- *  on wrong-content error messages (Binding Decision §117). */
+ *  on wrong-content error messages (Binding Decision §117). M86 Phase F:
+ *  mate_info_pos and mate_info_tlen join this set so the int-channel
+ *  wrong-codec messaging fires for them too (Binding Decision §130). */
 static NSSet<NSString *> *_TTIO_M86_IntegerChannelNames(void)
 {
     static NSSet *s = nil;
@@ -177,6 +198,7 @@ static NSSet<NSString *> *_TTIO_M86_IntegerChannelNames(void)
     dispatch_once(&once, ^{
         s = [NSSet setWithArray:@[
             @"positions", @"flags", @"mapping_qualities",
+            @"mate_info_pos", @"mate_info_tlen",
         ]];
     });
     return s;
@@ -193,12 +215,30 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
         _TTIO_M86_AllowedOverrideCodecsByChannel();
     NSSet<NSString *> *intChannels = _TTIO_M86_IntegerChannelNames();
     for (NSString *chName in overrides) {
+        // M86 Phase F (Binding Decision §126, Gotcha §143): the bare
+        // 'mate_info' key is reserved and rejected with a discoverable
+        // error pointing at the three per-field virtual channel names.
+        // Producing this dedicated message before the generic
+        // unknown-channel rejection makes the migration path obvious.
+        if ([chName isEqualToString:@"mate_info"]) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"signalCodecOverrides['mate_info']: the "
+                               @"bare 'mate_info' key is reserved and "
+                               @"rejected — mate_info is decomposed at "
+                               @"the per-field level in M86 Phase F. Use "
+                               @"one or more of the three per-field keys "
+                               @"instead: 'mate_info_chrom', "
+                               @"'mate_info_pos', 'mate_info_tlen'. See "
+                               @"docs/format-spec.md §10.9."];
+        }
         if (![allowedChans containsObject:chName]) {
             [NSException raise:NSInvalidArgumentException
                         format:@"signalCodecOverrides: channel '%@' not "
                                @"supported (only sequences, qualities, "
                                @"read_names, cigars, positions, flags, "
-                               @"and mapping_qualities can use TTIO codecs)",
+                               @"mapping_qualities, mate_info_chrom, "
+                               @"mate_info_pos, and mate_info_tlen can "
+                               @"use TTIO codecs)",
                                chName];
         }
         NSNumber *codecBox = overrides[chName];
@@ -294,6 +334,47 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
                                        @"on this channel. Use "
                                        @"RANS_ORDER0, RANS_ORDER1, or "
                                        @"NAME_TOKENIZED on 'cigars'.",
+                                       chName];
+                }
+                [NSException raise:NSInvalidArgumentException
+                            format:@"signalCodecOverrides['%@']: codec %@ "
+                                   @"not supported on the '%@' channel "
+                                   @"(allowed: RansOrder0, RansOrder1, "
+                                   @"NameTokenized)",
+                                   chName, codecBox, chName];
+            }
+            // M86 Phase F (Binding Decision §130): mate_info_chrom shares
+            // cigars' allowed set ({RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED}).
+            // Wrong-content rejection mirrors cigars' messaging — chromosome
+            // names are short ASCII strings (typically <30 distinct values),
+            // none of them ACGT or Phred values.
+            if ([chName isEqualToString:@"mate_info_chrom"]) {
+                if (codec == TTIOCompressionBasePack) {
+                    [NSException raise:NSInvalidArgumentException
+                                format:@"signalCodecOverrides['%@']: codec "
+                                       @"BASE_PACK is not valid on the "
+                                       @"'mate_info_chrom' channel — "
+                                       @"BASE_PACK 2-bit-packs ACGT "
+                                       @"sequence bytes and would "
+                                       @"silently corrupt the chromosome "
+                                       @"names stored on this channel. "
+                                       @"Use RANS_ORDER0, RANS_ORDER1, "
+                                       @"or NAME_TOKENIZED on "
+                                       @"'mate_info_chrom'.",
+                                       chName];
+                }
+                if (codec == TTIOCompressionQualityBinned) {
+                    [NSException raise:NSInvalidArgumentException
+                                format:@"signalCodecOverrides['%@']: codec "
+                                       @"QUALITY_BINNED is not valid on "
+                                       @"the 'mate_info_chrom' channel — "
+                                       @"QUALITY_BINNED quantises Phred "
+                                       @"quality scores and would "
+                                       @"silently destroy the chromosome "
+                                       @"names stored on this channel. "
+                                       @"Use RANS_ORDER0, RANS_ORDER1, "
+                                       @"or NAME_TOKENIZED on "
+                                       @"'mate_info_chrom'.",
                                        chName];
                 }
                 [NSException raise:NSInvalidArgumentException
@@ -797,6 +878,364 @@ static BOOL _TTIO_M86_WriteIntChannelStorage(id<TTIOStorageGroup> group,
                             error:error];
 }
 
+// ── M86 Phase F: mate_info per-field decomposition write paths ─────
+//
+// When ANY of mate_info_{chrom,pos,tlen} is in signalCodecOverrides,
+// the writer creates a subgroup signal_channels/mate_info/ containing
+// three child datasets (chrom, pos, tlen). Each field is independently
+// codec-compressible: with override → flat 1-D uint8 + @compression
+// (no HDF5 filter, Binding Decision §87); without override → natural
+// dtype with HDF5 ZLIB filter inside the subgroup (Binding Decision
+// §127, partial overrides allowed). Mirrors Phase C cigars (chrom rANS
+// uses length-prefix-concat; NAME_TOKENIZED takes the list directly)
+// and Phase B int channels (pos / tlen rANS uses LE byte serialisation
+// of the typed array). Two write functions: HDF5 fast path
+// (TTIOHDF5Group) and provider/storage path (id<TTIOStorageGroup>).
+
+/** Phase F: encode the mate_info chrom field through the selected codec.
+ *  Returns nil on encoder failure. Raises NSInvalidArgumentException on
+ *  non-ASCII chrom strings (chromosome names must be 7-bit ASCII to
+ *  match the SAM contract). Mirrors _TTIO_M86_EncodeCigarsWithCodec. */
+static NSData *_TTIO_M86F_EncodeMateChromWithCodec(NSArray<NSString *> *chroms,
+                                                    TTIOCompression codec)
+{
+    if (codec == TTIOCompressionRansOrder0
+        || codec == TTIOCompressionRansOrder1) {
+        NSMutableData *buf = [NSMutableData data];
+        for (NSUInteger idx = 0; idx < chroms.count; idx++) {
+            NSString *c = chroms[idx];
+            const char *ascii = [c cStringUsingEncoding:NSASCIIStringEncoding];
+            if (ascii == NULL) {
+                [NSException raise:NSInvalidArgumentException
+                            format:@"signalCodecOverrides['mate_info_chrom']: "
+                                   @"chrom at index %lu contains non-ASCII "
+                                   @"bytes — chromosome names must be 7-bit "
+                                   @"ASCII per the SAM spec",
+                                   (unsigned long)idx];
+            }
+            NSUInteger nBytes = strlen(ascii);
+            _TTIO_M86_VarintWrite(buf, (uint64_t)nBytes);
+            [buf appendBytes:ascii length:nBytes];
+        }
+        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+        return TTIORansEncode(buf, order);
+    }
+    if (codec == TTIOCompressionNameTokenized) {
+        return TTIONameTokenizerEncode(chroms);
+    }
+    [NSException raise:NSInvalidArgumentException
+                format:@"_TTIO_M86F_EncodeMateChromWithCodec: codec %lu not "
+                       @"a valid mate_info_chrom codec (only RANS_ORDER0, "
+                       @"RANS_ORDER1, NAME_TOKENIZED)",
+                       (unsigned long)codec];
+    return nil;
+}
+
+/** Phase F (HDF5 fast path): write the mate_info subgroup with per-field
+ *  codec dispatch. ``run.signalCodecOverrides`` carries any subset of
+ *  the three per-field keys; fields without an override are written
+ *  natural-dtype with HDF5 ZLIB inside the subgroup. */
+static BOOL _TTIO_M86F_WriteMateInfoSubgroup(TTIOHDF5Group *sc,
+                                              TTIOWrittenGenomicRun *run,
+                                              NSError **error)
+{
+    TTIOHDF5Group *mate = [sc createGroupNamed:@"mate_info" error:error];
+    if (!mate) return NO;
+
+    // ---- chrom field ----
+    NSNumber *chromOverride = run.signalCodecOverrides[@"mate_info_chrom"];
+    if (chromOverride == nil) {
+        // Natural dtype: VL_STRING in compound dataset with HDF5 ZLIB.
+        NSArray *vlValueField = @[
+            [TTIOCompoundField fieldWithName:@"value"
+                                        kind:TTIOCompoundFieldKindVLString]
+        ];
+        NSMutableArray *rows = [NSMutableArray arrayWithCapacity:run.mateChromosomes.count];
+        for (NSString *c in run.mateChromosomes) [rows addObject:@{@"value": c}];
+        if (![TTIOCompoundIO writeGeneric:rows
+                                  intoGroup:mate datasetNamed:@"chrom"
+                                      fields:vlValueField error:error]) return NO;
+    } else {
+        TTIOCompression codec =
+            (TTIOCompression)[chromOverride unsignedIntegerValue];
+        NSData *encoded = _TTIO_M86F_EncodeMateChromWithCodec(
+            run.mateChromosomes, codec);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2070
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"M86 Phase F: mate_info_chrom codec %lu "
+                                @"encode returned nil",
+                                (unsigned long)codec]}];
+            return NO;
+        }
+        TTIOHDF5Dataset *ds = [mate createDatasetNamed:@"chrom"
+                                              precision:TTIOPrecisionUInt8
+                                                 length:encoded.length
+                                              chunkSize:65536
+                                            compression:TTIOCompressionNone
+                                       compressionLevel:0
+                                                  error:error];
+        if (!ds) return NO;
+        if (![ds writeData:encoded error:error]) return NO;
+        if (!_TTIO_M86_WriteUInt8Attribute([ds datasetId], "compression",
+                                           (uint8_t)codec, error)) return NO;
+    }
+
+    // ---- pos field (int64 / RANS only) ----
+    NSNumber *posOverride = run.signalCodecOverrides[@"mate_info_pos"];
+    if (posOverride == nil) {
+        // Natural dtype: INT64 typed dataset with HDF5 ZLIB.
+        NSUInteger nPos = run.matePositionsData.length / sizeof(int64_t);
+        TTIOHDF5Dataset *ds = [mate createDatasetNamed:@"pos"
+                                              precision:TTIOPrecisionInt64
+                                                 length:nPos
+                                              chunkSize:65536
+                                            compression:TTIOCompressionZlib
+                                       compressionLevel:6
+                                                  error:error];
+        if (!ds) return NO;
+        if (![ds writeData:run.matePositionsData error:error]) return NO;
+    } else {
+        TTIOCompression codec =
+            (TTIOCompression)[posOverride unsignedIntegerValue];
+        // LE byte serialisation of the int64 typed array (Binding Decision §118).
+        const int64_t *src = (const int64_t *)run.matePositionsData.bytes;
+        NSUInteger n = run.matePositionsData.length / sizeof(int64_t);
+        NSMutableData *leBytes = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+        int64_t *dst = (int64_t *)leBytes.mutableBytes;
+        for (NSUInteger i = 0; i < n; i++) {
+            uint64_t le = TTIO_HOST_TO_LE64((uint64_t)src[i]);
+            memcpy(&dst[i], &le, sizeof(uint64_t));
+        }
+        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+        NSData *encoded = TTIORansEncode(leBytes, order);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2071
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"M86 Phase F: mate_info_pos rANS encode failed"}];
+            return NO;
+        }
+        TTIOHDF5Dataset *ds = [mate createDatasetNamed:@"pos"
+                                              precision:TTIOPrecisionUInt8
+                                                 length:encoded.length
+                                              chunkSize:65536
+                                            compression:TTIOCompressionNone
+                                       compressionLevel:0
+                                                  error:error];
+        if (!ds) return NO;
+        if (![ds writeData:encoded error:error]) return NO;
+        if (!_TTIO_M86_WriteUInt8Attribute([ds datasetId], "compression",
+                                           (uint8_t)codec, error)) return NO;
+    }
+
+    // ---- tlen field (int32 / RANS only) ----
+    NSNumber *tlenOverride = run.signalCodecOverrides[@"mate_info_tlen"];
+    if (tlenOverride == nil) {
+        // Natural dtype: INT32 typed dataset with HDF5 ZLIB.
+        NSUInteger nT = run.templateLengthsData.length / sizeof(int32_t);
+        TTIOHDF5Dataset *ds = [mate createDatasetNamed:@"tlen"
+                                              precision:TTIOPrecisionInt32
+                                                 length:nT
+                                              chunkSize:65536
+                                            compression:TTIOCompressionZlib
+                                       compressionLevel:6
+                                                  error:error];
+        if (!ds) return NO;
+        if (![ds writeData:run.templateLengthsData error:error]) return NO;
+    } else {
+        TTIOCompression codec =
+            (TTIOCompression)[tlenOverride unsignedIntegerValue];
+        const int32_t *src = (const int32_t *)run.templateLengthsData.bytes;
+        NSUInteger n = run.templateLengthsData.length / sizeof(int32_t);
+        NSMutableData *leBytes = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+        int32_t *dst = (int32_t *)leBytes.mutableBytes;
+        for (NSUInteger i = 0; i < n; i++) {
+            dst[i] = (int32_t)TTIO_HOST_TO_LE32((uint32_t)src[i]);
+        }
+        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+        NSData *encoded = TTIORansEncode(leBytes, order);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2072
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"M86 Phase F: mate_info_tlen rANS encode failed"}];
+            return NO;
+        }
+        TTIOHDF5Dataset *ds = [mate createDatasetNamed:@"tlen"
+                                              precision:TTIOPrecisionUInt8
+                                                 length:encoded.length
+                                              chunkSize:65536
+                                            compression:TTIOCompressionNone
+                                       compressionLevel:0
+                                                  error:error];
+        if (!ds) return NO;
+        if (![ds writeData:encoded error:error]) return NO;
+        if (!_TTIO_M86_WriteUInt8Attribute([ds datasetId], "compression",
+                                           (uint8_t)codec, error)) return NO;
+    }
+
+    return YES;
+}
+
+/** Phase F (provider path): twin of _TTIO_M86F_WriteMateInfoSubgroup
+ *  using the storage protocol. Used by memory:// / sqlite:// / zarr://. */
+static BOOL _TTIO_M86F_WriteMateInfoSubgroupStorage(id<TTIOStorageGroup> sc,
+                                                     TTIOWrittenGenomicRun *run,
+                                                     NSError **error)
+{
+    id<TTIOStorageGroup> mate = [sc createGroupNamed:@"mate_info" error:error];
+    if (!mate) return NO;
+
+    // ---- chrom field ----
+    NSNumber *chromOverride = run.signalCodecOverrides[@"mate_info_chrom"];
+    if (chromOverride == nil) {
+        NSArray *vlValueField = @[
+            [TTIOCompoundField fieldWithName:@"value"
+                                        kind:TTIOCompoundFieldKindVLString]
+        ];
+        NSMutableArray *rows = [NSMutableArray arrayWithCapacity:run.mateChromosomes.count];
+        for (NSString *c in run.mateChromosomes) [rows addObject:@{@"value": c}];
+        id<TTIOStorageDataset> ds = [mate createCompoundDatasetNamed:@"chrom"
+                                                                  fields:vlValueField
+                                                                   count:rows.count
+                                                                   error:error];
+        if (!ds || ![ds writeAll:rows error:error]) return NO;
+    } else {
+        TTIOCompression codec =
+            (TTIOCompression)[chromOverride unsignedIntegerValue];
+        NSData *encoded = _TTIO_M86F_EncodeMateChromWithCodec(
+            run.mateChromosomes, codec);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2080
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"M86 Phase F: mate_info_chrom codec %lu "
+                                @"encode returned nil",
+                                (unsigned long)codec]}];
+            return NO;
+        }
+        id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"chrom"
+                                                   precision:TTIOPrecisionUInt8
+                                                      length:encoded.length
+                                                   chunkSize:65536
+                                                 compression:TTIOCompressionNone
+                                            compressionLevel:0
+                                                       error:error];
+        if (!ds) return NO;
+        if (![ds writeAll:encoded error:error]) return NO;
+        if (![ds setAttributeValue:@((uint8_t)codec)
+                            forName:@"compression"
+                              error:error]) return NO;
+    }
+
+    // ---- pos field ----
+    NSNumber *posOverride = run.signalCodecOverrides[@"mate_info_pos"];
+    if (posOverride == nil) {
+        NSUInteger nPos = run.matePositionsData.length / sizeof(int64_t);
+        id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"pos"
+                                                   precision:TTIOPrecisionInt64
+                                                      length:nPos
+                                                   chunkSize:65536
+                                                 compression:TTIOCompressionZlib
+                                            compressionLevel:6
+                                                       error:error];
+        if (!ds) return NO;
+        if (![ds writeAll:run.matePositionsData error:error]) return NO;
+    } else {
+        TTIOCompression codec =
+            (TTIOCompression)[posOverride unsignedIntegerValue];
+        const int64_t *src = (const int64_t *)run.matePositionsData.bytes;
+        NSUInteger n = run.matePositionsData.length / sizeof(int64_t);
+        NSMutableData *leBytes = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+        int64_t *dst = (int64_t *)leBytes.mutableBytes;
+        for (NSUInteger i = 0; i < n; i++) {
+            uint64_t le = TTIO_HOST_TO_LE64((uint64_t)src[i]);
+            memcpy(&dst[i], &le, sizeof(uint64_t));
+        }
+        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+        NSData *encoded = TTIORansEncode(leBytes, order);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2081
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"M86 Phase F: mate_info_pos rANS encode failed"}];
+            return NO;
+        }
+        id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"pos"
+                                                   precision:TTIOPrecisionUInt8
+                                                      length:encoded.length
+                                                   chunkSize:65536
+                                                 compression:TTIOCompressionNone
+                                            compressionLevel:0
+                                                       error:error];
+        if (!ds) return NO;
+        if (![ds writeAll:encoded error:error]) return NO;
+        if (![ds setAttributeValue:@((uint8_t)codec)
+                            forName:@"compression"
+                              error:error]) return NO;
+    }
+
+    // ---- tlen field ----
+    NSNumber *tlenOverride = run.signalCodecOverrides[@"mate_info_tlen"];
+    if (tlenOverride == nil) {
+        NSUInteger nT = run.templateLengthsData.length / sizeof(int32_t);
+        id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"tlen"
+                                                   precision:TTIOPrecisionInt32
+                                                      length:nT
+                                                   chunkSize:65536
+                                                 compression:TTIOCompressionZlib
+                                            compressionLevel:6
+                                                       error:error];
+        if (!ds) return NO;
+        if (![ds writeAll:run.templateLengthsData error:error]) return NO;
+    } else {
+        TTIOCompression codec =
+            (TTIOCompression)[tlenOverride unsignedIntegerValue];
+        const int32_t *src = (const int32_t *)run.templateLengthsData.bytes;
+        NSUInteger n = run.templateLengthsData.length / sizeof(int32_t);
+        NSMutableData *leBytes = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+        int32_t *dst = (int32_t *)leBytes.mutableBytes;
+        for (NSUInteger i = 0; i < n; i++) {
+            dst[i] = (int32_t)TTIO_HOST_TO_LE32((uint32_t)src[i]);
+        }
+        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+        NSData *encoded = TTIORansEncode(leBytes, order);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2082
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"M86 Phase F: mate_info_tlen rANS encode failed"}];
+            return NO;
+        }
+        id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"tlen"
+                                                   precision:TTIOPrecisionUInt8
+                                                      length:encoded.length
+                                                   chunkSize:65536
+                                                 compression:TTIOCompressionNone
+                                            compressionLevel:0
+                                                       error:error];
+        if (!ds) return NO;
+        if (![ds writeAll:encoded error:error]) return NO;
+        if (![ds setAttributeValue:@((uint8_t)codec)
+                            forName:@"compression"
+                              error:error]) return NO;
+    }
+
+    return YES;
+}
+
+/** Phase F: returns YES when ANY mate_info_* override is in the dict. */
+static BOOL _TTIO_M86F_HasMateOverrides(NSDictionary<NSString *, NSNumber *> *overrides)
+{
+    return overrides[@"mate_info_chrom"] != nil
+        || overrides[@"mate_info_pos"]   != nil
+        || overrides[@"mate_info_tlen"]  != nil;
+}
+
 @implementation TTIOSpectralDataset
 {
     TTIOHDF5File     *_file;       // retained while alive for lazy reads
@@ -1211,26 +1650,34 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         if (!nameDs || ![nameDs writeAll:nameRows error:error]) return NO;
     }
 
-    NSArray *mateFields = @[
-        [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
-        [TTIOCompoundField fieldWithName:@"pos"   kind:TTIOCompoundFieldKindInt64],
-        [TTIOCompoundField fieldWithName:@"tlen"  kind:TTIOCompoundFieldKindInt64],
-    ];
-    NSMutableArray *mateRows = [NSMutableArray arrayWithCapacity:run.readCount];
-    const int64_t *matePos = (const int64_t *)run.matePositionsData.bytes;
-    const int32_t *tlens   = (const int32_t *)run.templateLengthsData.bytes;
-    for (NSUInteger i = 0; i < run.readCount; i++) {
-        [mateRows addObject:@{
-            @"chrom": run.mateChromosomes[i],
-            @"pos":   @(matePos[i]),
-            @"tlen":  @((int64_t)tlens[i]),
-        }];
+    // M86 Phase F: schema lift for mate_info on the provider path.
+    // Same dispatch as the HDF5 fast path above: when ANY of the
+    // three per-field overrides is set, route through the subgroup
+    // writer; otherwise preserve the M82 compound write.
+    if (_TTIO_M86F_HasMateOverrides(run.signalCodecOverrides)) {
+        if (!_TTIO_M86F_WriteMateInfoSubgroupStorage(sc, run, error)) return NO;
+    } else {
+        NSArray *mateFields = @[
+            [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
+            [TTIOCompoundField fieldWithName:@"pos"   kind:TTIOCompoundFieldKindInt64],
+            [TTIOCompoundField fieldWithName:@"tlen"  kind:TTIOCompoundFieldKindInt64],
+        ];
+        NSMutableArray *mateRows = [NSMutableArray arrayWithCapacity:run.readCount];
+        const int64_t *matePos = (const int64_t *)run.matePositionsData.bytes;
+        const int32_t *tlens   = (const int32_t *)run.templateLengthsData.bytes;
+        for (NSUInteger i = 0; i < run.readCount; i++) {
+            [mateRows addObject:@{
+                @"chrom": run.mateChromosomes[i],
+                @"pos":   @(matePos[i]),
+                @"tlen":  @((int64_t)tlens[i]),
+            }];
+        }
+        id<TTIOStorageDataset> mateDs = [sc createCompoundDatasetNamed:@"mate_info"
+                                                                   fields:mateFields
+                                                                    count:run.readCount
+                                                                    error:error];
+        if (!mateDs || ![mateDs writeAll:mateRows error:error]) return NO;
     }
-    id<TTIOStorageDataset> mateDs = [sc createCompoundDatasetNamed:@"mate_info"
-                                                               fields:mateFields
-                                                                count:run.readCount
-                                                                error:error];
-    if (!mateDs || ![mateDs writeAll:mateRows error:error]) return NO;
 
     return YES;
 }
@@ -1525,25 +1972,36 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                                       fields:vlValueField error:error]) return NO;
     }
 
-    // mate_info compound: chrom (VL str) + pos (int64) + tlen (int32 → boxed as int64 via VLString-or-int64 schema).
-    NSArray *mateFields = @[
-        [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
-        [TTIOCompoundField fieldWithName:@"pos"   kind:TTIOCompoundFieldKindInt64],
-        [TTIOCompoundField fieldWithName:@"tlen"  kind:TTIOCompoundFieldKindInt64],
-    ];
-    NSMutableArray *mateRows = [NSMutableArray arrayWithCapacity:run.readCount];
-    const int64_t *matePos = (const int64_t *)run.matePositionsData.bytes;
-    const int32_t *tlens   = (const int32_t *)run.templateLengthsData.bytes;
-    for (NSUInteger i = 0; i < run.readCount; i++) {
-        [mateRows addObject:@{
-            @"chrom": run.mateChromosomes[i],
-            @"pos":   @(matePos[i]),
-            @"tlen":  @((int64_t)tlens[i]),
-        }];
+    // M86 Phase F: schema lift for mate_info. When ANY of the three
+    // per-field overrides is set the writer creates a subgroup
+    // signal_channels/mate_info/ containing three child datasets
+    // (Binding Decisions §125-§128). Per-field dispatch routes through
+    // _TTIO_M86F_WriteMateInfoSubgroup. When NO mate_info_* override
+    // is set the M82 compound write path is preserved unchanged for
+    // byte parity with pre-Phase-F files.
+    if (_TTIO_M86F_HasMateOverrides(run.signalCodecOverrides)) {
+        if (!_TTIO_M86F_WriteMateInfoSubgroup(sc, run, error)) return NO;
+    } else {
+        // mate_info compound: chrom (VL str) + pos (int64) + tlen (int32 → boxed as int64 via VLString-or-int64 schema).
+        NSArray *mateFields = @[
+            [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
+            [TTIOCompoundField fieldWithName:@"pos"   kind:TTIOCompoundFieldKindInt64],
+            [TTIOCompoundField fieldWithName:@"tlen"  kind:TTIOCompoundFieldKindInt64],
+        ];
+        NSMutableArray *mateRows = [NSMutableArray arrayWithCapacity:run.readCount];
+        const int64_t *matePos = (const int64_t *)run.matePositionsData.bytes;
+        const int32_t *tlens   = (const int32_t *)run.templateLengthsData.bytes;
+        for (NSUInteger i = 0; i < run.readCount; i++) {
+            [mateRows addObject:@{
+                @"chrom": run.mateChromosomes[i],
+                @"pos":   @(matePos[i]),
+                @"tlen":  @((int64_t)tlens[i]),
+            }];
+        }
+        if (![TTIOCompoundIO writeGeneric:mateRows
+                                  intoGroup:sc datasetNamed:@"mate_info"
+                                      fields:mateFields error:error]) return NO;
     }
-    if (![TTIOCompoundIO writeGeneric:mateRows
-                              intoGroup:sc datasetNamed:@"mate_info"
-                                  fields:mateFields error:error]) return NO;
 
     return YES;
 }
