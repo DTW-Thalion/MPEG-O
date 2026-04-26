@@ -73,6 +73,7 @@ extern void testM82GenomicRun(void);
 extern void testM83Rans(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
+extern void testM85bNameTokenizer(void);
 extern void testM86GenomicCodecWiring(void);
 
 int main(int argc, const char *argv[])
@@ -365,6 +366,10 @@ int main(int argc, const char *argv[])
         START_SET("M85: QUALITY_BINNED codec")
             testM85Quality();
         END_SET("M85: QUALITY_BINNED codec")
+
+        START_SET("M85B: NAME_TOKENIZED codec")
+            testM85bNameTokenizer();
+        END_SET("M85B: NAME_TOKENIZED codec")
 
         START_SET("M86: codec wiring")
             testM86GenomicCodecWiring();
