@@ -1,608 +1,651 @@
-# HANDOFF — M86 Phase F: mate_info per-field decomposition
+# HANDOFF — M87: SAM/BAM Importer
 
-**Scope:** Schema-lift `signal_channels/mate_info` from a
-3-field compound dataset to a subgroup containing three flat
-datasets (`chrom`, `pos`, `tlen`), each independently
-codec-compressible. Caller-facing API gains three "virtual"
-channel names — `mate_info_chrom`, `mate_info_pos`,
-`mate_info_tlen` — that map to per-field datasets within the
-subgroup. Partial overrides allowed. Closes the last channel
-gap left by M86 Phase C (which shipped cigars but deferred
-mate_info). Three languages with one cross-language conformance
+**Scope:** Read SAM and BAM (Sequence Alignment/Map) files via
+the `samtools view` subprocess and convert them to
+`WrittenGenomicRun` instances suitable for handing to
+`SpectralDataset.write_minimal(genomic_runs=...)`. First
+importer milestone for the genomic data path; first M86-era
+milestone introducing an external runtime dependency
+(`samtools`). Three languages (Python reference, ObjC
+normative, Java parity), with one cross-language conformance
 fixture.
 
-**Branch from:** `main` after M86 Phase C docs (`67faa2c`).
+**Branch from:** `main` after the M80–M86 doc sweep
+(`3ac8bd7`).
 
-**IP provenance:** Pure integration work + a small schema
-adaptation. Reuses the M83 rANS codec, the M85 Phase B
-NAME_TOKENIZED codec, the M86 Phase A `@compression` attribute
-scheme, the M86 Phase B int↔byte serialisation contract, and
-the M86 Phase C/E schema-lift dispatch pattern. New: dispatch
-on HDF5 link type (dataset vs group) for the top-level
-`mate_info` channel. No new codec implementation; no
-third-party source consulted.
+**IP provenance:** The TTI-O code wraps samtools as a
+subprocess; no htslib source is linked or consulted. SAM/BAM
+format parsing is from the public SAMv1 specification (Li et
+al. 2009 / SAMv1 spec at https://samtools.github.io/hts-specs).
+The subprocess approach mirrors the existing M53 Bruker timsTOF
+importer pattern (which subprocesses `opentims-bruker-bridge`
+from non-Python languages).
 
 ---
 
 ## 1. Background
 
-The M82 storage writes `signal_channels/mate_info` as a
-compound dataset of shape `[n_reads]` with three fields:
+The M83–M86 codec stack established that genomic data has
+first-class support in TTI-O. M87 closes the loop on the input
+side: callers can now ingest existing SAM/BAM files (the
+de-facto exchange format for aligned sequencing reads) and
+write them as `.tio` files using whatever codec choices best
+fit their workload.
 
-```
-mate_info: COMPOUND[n_reads] {
-    chrom: VL_STRING,   // mate chromosome ("*" for unmapped mates)
-    pos:   INT64,       // mate position (-1 if unpaired)
-    tlen:  INT32,       // template length (insert size; 0 if unpaired)
-}
-```
+`samtools` is the canonical reference implementation for
+SAM/BAM I/O. Linking htslib directly would couple TTI-O to a
+specific htslib version (and add a build dependency that's
+non-trivial in some environments). Subprocess wrapping is
+simpler:
 
-Per Binding Decision §124 from M86 Phase C, mate_info was
-deferred because compressing it cleanly requires either
-per-field schema decomposition (this milestone) or
-per-compound-field codec dispatch (no infrastructure exists).
+- TTI-O's three languages all have well-tested subprocess APIs.
+- Format parsing happens in plain text (SAM is tab-delimited);
+  no binary wire-format work needed in any language.
+- `samtools view -h <file>` writes SAM text to stdout for both
+  SAM and BAM input — one parser handles both formats.
+- New samtools versions roll out independently without TTI-O
+  coupling.
 
-M86 Phase C shipped the cigars half of "VL_STRING / compound
-channels"; Phase F closes the gap by decomposing the
-mate_info compound into three per-field datasets when any
-override is set, with each field independently
-codec-compressible.
-
-### 1.1 Per-field codec applicability
-
-Each field has natural codec affinity:
-
-| Field   | Type       | Allowed codecs                        | Best choice                                  |
-|---------|------------|----------------------------------------|----------------------------------------------|
-| `chrom` | VL_STRING  | RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED | NAME_TOKENIZED (chromosome names are highly repetitive — typically <30 distinct values like "chr1"..."chr22","chrX","chrY","chrM","*"; one-entry-per-value dictionary wins) |
-| `pos`   | INT64      | RANS_ORDER0, RANS_ORDER1               | RANS_ORDER1 (mirrors Phase B for the `positions` channel; mate positions cluster near read positions for paired reads) |
-| `tlen`  | INT32      | RANS_ORDER0, RANS_ORDER1               | RANS_ORDER1 (template lengths cluster around the library insert size; high entropy concentration) |
-
-Other codecs (BASE_PACK, QUALITY_BINNED) are wrong-content for
-all three fields and rejected.
-
-The chrom field accepts NAME_TOKENIZED (because it's a string
-list — same shape as read_names and cigars) AND rANS (because
-strings can be byte-streamed via length-prefix-concat — same
-contract as cigars rANS path).
+The cost: samtools must be on PATH at runtime. The package is
+in every major OS distribution (`apt install samtools`,
+`brew install samtools`, etc.) and is also the install target
+for any user who's also using BAM tools elsewhere.
 
 ---
 
 ## 2. Design
 
-### 2.1 Subgroup schema lift
+### 2.1 The BamReader API
 
-When ANY `mate_info_*` override is set, the writer skips the
-M82 compound write and instead creates a subgroup
-`signal_channels/mate_info/` containing three child datasets:
-
-```
-signal_channels/mate_info/
-    chrom: VL_STRING[n_reads] OR UINT8[encoded_length] @compression=4|5|8
-    pos:   INT64[n_reads] OR UINT8[encoded_length] @compression=4|5
-    tlen:  INT32[n_reads] OR UINT8[encoded_length] @compression=4|5
-```
-
-Each field is written either:
-- **As its natural dtype with HDF5-filter ZLIB** (no override
-  for that specific field); the dataset has no `@compression`
-  attribute.
-- **As a flat 1-D uint8 with codec output** (override is set
-  for that field); the dataset has `@compression == codec_id`,
-  no HDF5 filter.
-
-The chrom field's serialisation matches Phase C's cigars
-contract:
-- For NAME_TOKENIZED override: `name_tokenizer.encode(chroms)`
-  → flat uint8 with `@compression == 8`.
-- For RANS_ORDER0/1 override: length-prefix-concat
-  serialisation (`varint(len) + ascii bytes` per chrom) →
-  `rans.encode(buf, order)` → flat uint8 with
-  `@compression == 4` or `5`.
-
-The pos and tlen fields' serialisation matches Phase B's
-integer-channel contract:
-- For RANS_ORDER0/1 override: little-endian byte serialisation
-  (`array.astype('<i8'/'<i4').tobytes()`) → `rans.encode(buf,
-  order)` → flat uint8 with `@compression == 4` or `5`.
-
-### 2.2 Trigger semantics — partial overrides allowed
-
-Per Decision (i): any one of `mate_info_chrom`,
-`mate_info_pos`, `mate_info_tlen` in `signal_codec_overrides`
-triggers the subgroup layout. Fields WITHOUT an override use
-their natural-dtype HDF5-filter-ZLIB write inside the subgroup
-(no `@compression` attribute). Fields WITH an override use
-codec dispatch.
-
-If NO `mate_info_*` override is set, the existing M82
-compound write path is used (no schema change, no subgroup).
-This preserves backward compatibility for all existing
-callers.
-
-### 2.3 Read-side dispatch
-
-In `GenomicRun.__getitem__` (and any other call site that
-reads mate fields), introduce three helpers:
-`_mate_chrom_at(i)`, `_mate_pos_at(i)`, `_mate_tlen_at(i)`.
-Each:
-
-1. Opens the `signal_channels/mate_info` link.
-2. **Dispatches on HDF5 link type**:
-   - If `mate_info` is a **dataset**: M82 compound layout. Use
-     existing `_compound("mate_info")[i][<field>]` path.
-   - If `mate_info` is a **group**: subgroup layout. Open the
-     child dataset for the requested field (`chrom`, `pos`, or
-     `tlen`); check `@compression`:
-     - `0` (no attribute): read directly as the natural dtype
-       (VL_STRING for chrom; INT64 for pos; INT32 for tlen).
-     - `4`/`5` (rANS): read all bytes; `rans.decode(buf)` →
-       byte buffer; for chrom, walk varint-length-prefix
-       entries → list[str]; for pos, interpret bytes as int64
-       LE → np.ndarray; for tlen, interpret as int32 LE.
-       Cache the decoded result.
-     - `8` (NAME_TOKENIZED, only valid for chrom): read all
-       bytes; `name_tokenizer.decode(buf)` → list[str]. Cache.
-
-3. Returns the per-read value.
-
-### 2.4 Cache strategy — combined dict
-
-Add a single combined cache field on `GenomicRun`:
-`_decoded_mate_info: dict[str, Any]` keyed by field name
-(`"chrom"` → list[str]; `"pos"` → np.ndarray int64; `"tlen"`
-→ np.ndarray int32). The `_mate_<field>_at(i)` helpers all
-write to this dict on first decode.
-
-This cache is separate from `_decoded_byte_channels`,
-`_decoded_int_channels`, `_decoded_read_names`,
-`_decoded_cigars` per Binding Decision §125.
-
-### 2.5 Validation extension
-
-The per-channel allowed-codec map gains three new entries:
+Each language exposes a `BamReader` class:
 
 ```python
-_ALLOWED_OVERRIDE_CODECS_BY_CHANNEL = {
-    "sequences":         {RANS_ORDER0, RANS_ORDER1, BASE_PACK},
-    "qualities":         {RANS_ORDER0, RANS_ORDER1, BASE_PACK, QUALITY_BINNED},
-    "read_names":        {NAME_TOKENIZED},
-    "cigars":            {RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED},
-    "positions":         {RANS_ORDER0, RANS_ORDER1},
-    "flags":             {RANS_ORDER0, RANS_ORDER1},
-    "mapping_qualities": {RANS_ORDER0, RANS_ORDER1},
-    "mate_info_chrom":   {RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED},  # Phase F
-    "mate_info_pos":     {RANS_ORDER0, RANS_ORDER1},                  # Phase F
-    "mate_info_tlen":    {RANS_ORDER0, RANS_ORDER1},                  # Phase F
-}
+class BamReader:
+    def __init__(self, path: str): ...
+
+    def to_genomic_run(
+        self,
+        name: str = "genomic_0001",
+        region: str | None = None,
+        sample_name: str | None = None,
+    ) -> WrittenGenomicRun: ...
 ```
 
-Validation continues to reject:
-- BASE_PACK, QUALITY_BINNED, NAME_TOKENIZED on the integer
-  fields (`mate_info_pos`, `mate_info_tlen`).
-- BASE_PACK, QUALITY_BINNED on `mate_info_chrom`.
-- Any override on the bare channel name `mate_info` (the
-  caller MUST use the per-field virtual names).
+- `path`: filesystem path to a SAM or BAM file. samtools auto-
+  detects format from magic bytes.
+- `name`: the genomic-run name (becomes the subgroup name
+  under `/study/genomic_runs/<name>/`).
+- `region`: optional region filter passed through to
+  `samtools view` as positional argument
+  (e.g. `"chr1:1000-2000"` or `"*"` for unmapped reads).
+- `sample_name`: optional override for the run's
+  `sample_name` attribute. If None, derived from `@RG SM:` in
+  the SAM header (or empty string if no @RG present).
 
-The error message for `(mate_info, <any>)` is special: it
-points the caller at the three per-field names with a
-brief explanation that mate_info is decomposed at the
-per-field level in Phase F.
+The returned `WrittenGenomicRun` is the existing M82 write-
+side container; the caller can hand it directly to
+`SpectralDataset.write_minimal(genomic_runs={name: run})`.
 
-### 2.6 No back-compat shim
+### 2.2 The SamReader thin wrapper
 
-Files written with any `mate_info_*` override have a
-`mate_info` group instead of the M82 compound dataset. Pre-
-M86-Phase-F readers that hard-code the compound shape will
-fail when they hit the group (HDF5 reports "not a dataset" on
-the open). Discipline matches the rest of M86 (Binding
-Decision §90).
+```python
+class SamReader(BamReader):
+    """Convenience wrapper for SAM input.
 
-Files written without any `mate_info_*` override remain
-identical to M82 / Phase A/B/C/D/E output. Round-trip
-identical through all reader versions for those files.
+    Functionally identical to BamReader (samtools auto-detects
+    format); kept as a separate class for API clarity in
+    callsites that explicitly handle SAM text input.
+    """
+    pass
+```
+
+No format conversion needed — `samtools view -h <file>` reads
+both SAM and BAM. SamReader exists purely as a discoverable
+API for users searching for "SAM importer".
+
+### 2.3 Subprocess invocation
+
+Each language invokes:
+
+```
+samtools view -h [region] <path>
+```
+
+stdout is consumed line-by-line. Lines starting with `@` are
+header lines; everything else is an alignment record.
+
+Subprocess lifecycle:
+- Start the subprocess in `to_genomic_run()`.
+- Stream stdout (line-buffered) into the parser.
+- Wait for exit; check returncode == 0.
+- On non-zero exit, raise an error including stderr content.
+
+The subprocess is invoked via:
+- Python: `subprocess.Popen(["samtools", "view", "-h", path,
+  *([region] if region else [])], stdout=subprocess.PIPE,
+  stderr=subprocess.PIPE, text=True)`.
+- ObjC: `NSTask` with `setLaunchPath:`/`setArguments:`/
+  `setStandardOutput:`/`setStandardError:`.
+- Java: `ProcessBuilder(["samtools", "view", "-h", path,
+  ...])`.
+
+### 2.4 SAM header parsing
+
+Header lines are tab-separated `@TAG\tKEY:VALUE\tKEY:VALUE...`
+records. M87 parses three tag types:
+
+**`@SQ` — reference sequence dictionary:**
+```
+@SQ\tSN:chr1\tLN:248956422
+```
+Map `SN:` (sequence name) → reference chromosome list. The
+TTI-O `reference_uri` field is set to the first @SQ's `SN:`
+value in v0 of M87 (or to a comma-joined list — pick simplest
+that round-trips a single-reference input). For BAMs with many
+@SQ entries (typical for whole-genome alignments), the
+chromosome list goes into the `GenomicIndex.chromosomes`
+parallel array per-read.
+
+**`@RG` — read group:**
+```
+@RG\tID:rg1\tSM:NA12878\tPL:ILLUMINA\tLB:lib1
+```
+Map `SM:` (sample) → `WrittenGenomicRun.sample_name`. Map
+`PL:` (platform) → `WrittenGenomicRun.platform`. Multiple @RG
+lines: take the first one for v0 of M87 (caller can override
+via the `sample_name` parameter if needed).
+
+**`@PG` — program/tool used:**
+```
+@PG\tID:samtools\tPN:samtools\tVN:1.19.2\tCL:samtools view ...
+```
+Each @PG entry becomes a `ProvenanceRecord` in the run's
+`provenance_records` list. The `software` field is `PN:`, the
+`parameters` field is `CL:` (the original command line),
+`timestamp_unix` is the file's mtime (since SAM doesn't carry
+per-record timestamps).
+
+`@HD` (header version) and `@CO` (comments) are read but not
+mapped to TTI-O fields in v0.
+
+### 2.5 SAM alignment record parsing
+
+Each alignment line is tab-separated with at least 11 fields
+(extra optional tag fields are ignored in v0):
+
+| Field | Name  | TTI-O destination                                      |
+|-------|-------|--------------------------------------------------------|
+| 1     | QNAME | `read_names[i]`                                        |
+| 2     | FLAG  | `flags[i]` (uint32; cast from int)                     |
+| 3     | RNAME | `chromosomes[i]` (or `"*"` for unmapped)               |
+| 4     | POS   | `positions[i]` (int64; SAM is 1-based, TTI-O follows SAM)|
+| 5     | MAPQ  | `mapping_qualities[i]` (uint8)                         |
+| 6     | CIGAR | `cigars[i]`                                            |
+| 7     | RNEXT | `mate_chromosomes[i]` (`"="` expanded to RNAME)        |
+| 8     | PNEXT | `mate_positions[i]` (int64; -1 if unmapped)            |
+| 9     | TLEN  | `template_lengths[i]` (int32; signed; 0 if unpaired)   |
+| 10    | SEQ   | concatenated into `sequences` byte array (`"*"` → empty contribution) |
+| 11    | QUAL  | concatenated into `qualities` byte array (`"*"` → empty) |
+
+**Per-read offsets/lengths into the per-base channels:**
+`offsets[i]` = sum of all prior `lengths`; `lengths[i]` = number
+of bases for read `i`. For reads where SEQ is `"*"` (sequence
+not stored in the BAM), `lengths[i] = 0` and the read
+contributes 0 bytes to `sequences` and `qualities`.
+
+### 2.6 RNEXT special handling
+
+In SAM, `RNEXT == "="` means "same chromosome as RNAME". Some
+parsers preserve the literal `"="`; TTI-O **expands** it to
+the actual chromosome name (so downstream consumers don't need
+to remember the RNEXT-vs-RNAME convention). Documented in
+Binding Decision §131.
+
+### 2.7 The 1-based position convention
+
+SAM is 1-based for positions; BED-derived tools are typically
+0-based. TTI-O preserves the SAM convention (positions are
+1-based in `positions[i]` and `mate_positions[i]`); a value of
+`0` means "no position" (matches SAM's convention for unmapped
+reads where POS is sometimes recorded as `0`). Documented in
+Binding Decision §132.
+
+### 2.8 Error handling
+
+samtools-not-on-PATH, file-not-found, malformed-SAM-line, and
+samtools-non-zero-exit all raise informative errors with
+language-native exception types. Each error message includes:
+- The path being read (for "file not found" / "samtools failed")
+- The relevant SAM line + line number (for parse errors)
+- The captured stderr (for non-zero samtools exit)
+
+samtools-not-on-PATH is detected at first call (via `which`
+or `subprocess.run(["samtools", "--version"])`). The error
+message includes installation guidance for the major OSes.
 
 ---
 
-## 3. Binding Decisions (continued from M86 Phase C §120–§124)
+## 3. Binding Decisions (continued from M86 Phase F §125–§130)
 
 | #   | Decision | Rationale |
 |-----|----------|-----------|
-| 125 | When ANY `mate_info_*` override is set, the writer creates a subgroup `signal_channels/mate_info/` (instead of the compound dataset), and writes each of the three fields as a child dataset within that subgroup. | Per-field codec selection requires per-field datasets. The subgroup keeps the namespace tidy — siblings under `signal_channels/` would proliferate (`mate_info_chrom`, etc.) and visually conflate with the existing top-level channels. The subgroup also gives readers a clean shape-based dispatch (link type = group vs dataset). |
-| 126 | The per-field overrides are exposed as three flat-dict keys (`mate_info_chrom`, `mate_info_pos`, `mate_info_tlen`) in `signal_codec_overrides`. The bare key `mate_info` is reserved and rejected. | Matches the existing flat-dict API shape. Avoids introducing a nested-dict surface that the rest of the M86 API doesn't have. The bare-key rejection produces a discoverable error pointing at the per-field names. |
-| 127 | Partial overrides allowed: any one of the three triggers the subgroup layout; fields without overrides use their natural dtype with HDF5-filter ZLIB inside the subgroup. | Maximum flexibility without code complexity. Callers can compress only chrom (the high-win field) and leave pos/tlen on default ZLIB if they want. |
-| 128 | Read-side dispatch is on **HDF5 link type** (dataset vs group) for `mate_info`, NOT on the `@compression` attribute presence on the bare link. | Compound (M82) and subgroup (Phase F) are different HDF5 link types — the cleanest signal. The `@compression` attribute lives on the per-field child datasets within the subgroup, not on the bare `mate_info` link. |
-| 129 | The decoded mate-info cache is a single combined `dict[str, Any]` field keyed by field name. Separate from `_decoded_byte_channels`, `_decoded_int_channels`, `_decoded_read_names`, `_decoded_cigars`. | Three fields with three different value types (list[str] / np.ndarray int64 / np.ndarray int32) — a single typed cache would force a union or Object key. The combined dict keyed by field name is the cleanest shape. |
-| 130 | The `mate_info_chrom` field accepts THREE codecs (RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED) — same as the `cigars` channel from Phase C. | Same reasoning as cigars: chromosome names are a list of structured ASCII strings. NAME_TOKENIZED's columnar mode wins big when the chrom values are highly uniform (the typical case — often a single chromosome per run, or chr1..chr22 + sex + mito). rANS is more robust on mixed inputs. Selection guidance documented in `docs/format-spec.md` §10.9. |
+| 131 | When SAM's `RNEXT` field is `"="`, the importer **expands** it to the actual `RNAME` value rather than preserving the literal `"="`. | Makes downstream consumers self-contained — they don't need to remember the RNEXT-vs-RNAME convention to interpret `mate_chromosome`. The expansion is lossless because the original information (RNAME) is also stored. |
+| 132 | TTI-O preserves SAM's **1-based** position convention. `positions[i]` is the SAM 1-based POS field directly. A value of `0` means "no/unknown position" (matches SAM's convention for unmapped reads). | Matches the upstream format; avoids a class of bugs that comes from converting between 1-based and 0-based and back. Existing M82 code paths assume positions are 1-based per SAM. |
+| 133 | When the BAM has multiple `@RG` lines, M87 takes the **first** one for `sample_name` and `platform`. Caller can override via the `sample_name` parameter. | Most BAMs have one @RG. Multi-RG BAMs (e.g. merged from multiple libraries) are an advanced case; v0 picks one and lets the caller override. Future scope could expose all @RG as a list. |
+| 134 | `samtools` is invoked as a **subprocess**, not via libhtslib bindings. | Avoids coupling TTI-O to a specific htslib version. Subprocess approach is well-tested via M53 Bruker timsTOF importer. Trade-off: ~50ms subprocess startup overhead per import (acceptable for typical batch-import workloads). |
+| 135 | `samtools` not on PATH raises a clear error with installation guidance at first use, NOT at import time. The `BamReader` class is importable without samtools installed; only `to_genomic_run()` requires it. | Lets users `import ttio.importers.bam` without samtools installed (e.g. for documentation generation, type checking). The library doesn't refuse to load just because the runtime tool is missing. |
 
 ---
 
-## 4. API surface (no field-shape changes; new keys accepted)
+## 4. API surface
 
-### 4.1 Python
-
-The `WrittenGenomicRun.signal_codec_overrides` field signature
-is unchanged. Callers add per-field keys for mate_info:
+### 4.1 Python — `python/src/ttio/importers/bam.py`
 
 ```python
-# Maximum compression: all three fields overridden.
-run = WrittenGenomicRun(
-    # ... existing fields ...
-    signal_codec_overrides={
-        "mate_info_chrom": Compression.NAME_TOKENIZED,  # new in Phase F
-        "mate_info_pos":   Compression.RANS_ORDER1,     # new in Phase F
-        "mate_info_tlen":  Compression.RANS_ORDER1,     # new in Phase F
-    },
-)
+from ttio.importers.bam import BamReader
 
-# Partial: only chrom (the high-win field).
-run = WrittenGenomicRun(
-    # ... existing fields ...
-    signal_codec_overrides={
-        "mate_info_chrom": Compression.NAME_TOKENIZED,
-    },
-)
+reader = BamReader("/path/to/alignments.bam")
+run = reader.to_genomic_run(name="sample1", sample_name="NA12878")
 
-# Bare key is REJECTED with a clear error pointing at the
-# three per-field names.
-run = WrittenGenomicRun(
-    # ... existing fields ...
-    signal_codec_overrides={
-        "mate_info": Compression.RANS_ORDER1,  # raises ValueError
-    },
+# Optional region filter:
+chr1_only = reader.to_genomic_run(name="chr1", region="chr1")
+chr1_window = reader.to_genomic_run(name="window", region="chr1:1000-2000")
+unmapped = reader.to_genomic_run(name="unmapped", region="*")
+
+# Hand to the writer:
+SpectralDataset.write_minimal(
+    "out.tio",
+    title="Test run",
+    isa_investigation_id="ISA-001",
+    genomic_runs={run.name: run},
 )
 ```
 
-Mixed overrides (every channel from Phase A through F all at
-once) work in one call:
+`SamReader` is exported from `python/src/ttio/importers/sam.py`
+as a thin subclass.
 
-```python
-signal_codec_overrides={
-    "sequences":         Compression.BASE_PACK,
-    "qualities":         Compression.QUALITY_BINNED,
-    "read_names":        Compression.NAME_TOKENIZED,
-    "cigars":            Compression.RANS_ORDER1,
-    "positions":         Compression.RANS_ORDER1,
-    "flags":             Compression.RANS_ORDER0,
-    "mapping_qualities": Compression.RANS_ORDER1,
-    "mate_info_chrom":   Compression.NAME_TOKENIZED,    # new in Phase F
-    "mate_info_pos":     Compression.RANS_ORDER1,       # new in Phase F
-    "mate_info_tlen":    Compression.RANS_ORDER1,       # new in Phase F
+### 4.2 Objective-C — `objc/Source/Import/TTIOBamReader.{h,m}`
+
+```objc
+@interface TTIOBamReader : NSObject
+- (instancetype)initWithPath:(NSString *)path;
+- (TTIOWrittenGenomicRun *)toGenomicRunWithName:(NSString *)name
+                                          region:(NSString *)region
+                                      sampleName:(NSString *)sampleName
+                                           error:(NSError **)error;
+@end
+```
+
+`TTIOSamReader` subclass in `Import/TTIOSamReader.{h,m}`.
+
+### 4.3 Java — `java/src/main/java/global/thalion/ttio/importers/BamReader.java`
+
+```java
+public class BamReader {
+    public BamReader(Path path) { ... }
+    public WrittenGenomicRun toGenomicRun(String name) { ... }
+    public WrittenGenomicRun toGenomicRun(String name, String region) { ... }
+    public WrittenGenomicRun toGenomicRun(String name, String region, String sampleName) { ... }
 }
 ```
 
-### 4.2 Objective-C
-
-```objc
-writtenRun.signalCodecOverrides = @{
-    @"mate_info_chrom": @(TTIOCompressionNAME_TOKENIZED),
-    @"mate_info_pos":   @(TTIOCompressionRANS_ORDER1),
-    @"mate_info_tlen":  @(TTIOCompressionRANS_ORDER1),
-};
-```
-
-### 4.3 Java
-
-```java
-writtenRun.setSignalCodecOverrides(Map.of(
-    "mate_info_chrom", Compression.NAME_TOKENIZED,
-    "mate_info_pos",   Compression.RANS_ORDER1,
-    "mate_info_tlen",  Compression.RANS_ORDER1
-));
-```
+`SamReader` subclass in `importers/SamReader.java`.
 
 ---
 
-## 5. On-disk schema
+## 5. Test fixture
 
-### 5.1 M82 baseline (no override) — unchanged
+A small SAM/BAM fixture committed to
+`python/tests/fixtures/genomic/m87_test.sam` (source) and
+`python/tests/fixtures/genomic/m87_test.bam` (binary) with a
+companion script `regenerate_m87_bam.sh` that converts the SAM
+to BAM via `samtools view -bS`.
 
-```
-/study/genomic_runs/<name>/signal_channels/
-    mate_info: COMPOUND[n_reads] {
-        chrom: VL_STRING,
-        pos:   INT64,
-        tlen:  INT32
-    }
-```
+Fixture content (10 reads, mix of mapped + unmapped):
 
-### 5.2 Phase F with any mate_info_* override
-
-```
-/study/genomic_runs/<name>/signal_channels/
-    mate_info/                                    # GROUP, not dataset
-        chrom: <one of three layouts>
-            VL_STRING[n_reads]  (HDF5 ZLIB)       # if no chrom override
-            UINT8[encoded_len]  @compression=4|5  # if rANS chrom override
-            UINT8[encoded_len]  @compression=8    # if NAME_TOK chrom override
-        pos:   <one of two layouts>
-            INT64[n_reads]      (HDF5 ZLIB)       # if no pos override
-            UINT8[encoded_len]  @compression=4|5  # if rANS pos override
-        tlen:  <one of two layouts>
-            INT32[n_reads]      (HDF5 ZLIB)       # if no tlen override
-            UINT8[encoded_len]  @compression=4|5  # if rANS tlen override
+```sam
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:248956422
+@SQ	SN:chr2	LN:242193529
+@RG	ID:rg1	SM:M87_TEST_SAMPLE	PL:ILLUMINA	LB:lib1
+@PG	ID:bwa	PN:bwa	VN:0.7.17	CL:bwa mem ref.fa reads.fq
+r000	99	chr1	1000	60	100M	=	1100	200	ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT	IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+r001	147	chr1	1100	60	100M	=	1000	-200	TGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCA	HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+r002	0	chr1	2000	30	50M50S	*	0	0	ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN	IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+r003	99	chr2	5000	60	100M	=	5100	200	GCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCAT	JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ
+r004	147	chr2	5100	60	100M	=	5000	-200	ATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGC	GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+r005	4	*	0	0	*	*	0	0	*	*
+r006	77	*	0	0	*	*	0	0	ACGTACGTAC	IIIIIIIIII
+r007	141	*	0	0	*	*	0	0	TGCATGCATG	HHHHHHHHHH
+r008	16	chr1	3000	30	100M	*	0	0	ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+r009	0	chr1	4000	30	100M	*	0	0	ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT	EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
 ```
 
-The `mate_info` link type (group vs dataset) is the primary
-read-side dispatch signal. Each per-field child dataset
-carries its own `@compression` attribute (or lacks one,
-indicating natural-dtype storage).
+Properties of this fixture:
+- 10 reads total: 4 paired-mapped (r000-r001 + r003-r004), 1 with soft-clip (r002), 1 wholly unmapped with no SEQ (r005), 2 unmapped with SEQ stored (r006, r007), 2 single-end mapped (r008, r009).
+- Two chromosomes (chr1, chr2) for `@SQ` parsing coverage.
+- Single @RG (sample = `M87_TEST_SAMPLE`, platform = ILLUMINA).
+- Single @PG (program = bwa).
+- Mixed CIGARs (`100M`, `50M50S`) for cigars-channel coverage.
+- Mixed sequences (pure ACGT, plus N runs in r002) for sequences-channel coverage.
+
+Total bytes contributed to `sequences`: 100 + 100 + 100 + 100 + 100 + 0 + 10 + 10 + 100 + 100 = 720 bytes.
+
+The `.bam` binary is generated from this `.sam` via:
+```sh
+samtools view -bS m87_test.sam > m87_test.bam
+```
+
+Both files committed; the `.sam` is the authoritative spec
+(human-readable) and the `.bam` is the binary form the tests
+actually parse.
 
 ---
 
 ## 6. Tests
 
-### 6.1 Python — extend `python/tests/test_m86_genomic_codec_wiring.py`
+### 6.1 Python — `python/tests/test_m87_bam_importer.py`
 
-Add 9 new test methods (numbering continues from M86 Phase C):
+11 pytest cases:
 
-48. **`test_round_trip_mate_chrom_name_tokenized`** — write a
-    100-read run with
-    `signal_codec_overrides={"mate_info_chrom":
-    Compression.NAME_TOKENIZED}` (typical case: most mates on
-    same chromosome, e.g. 90% "chr1", 10% other). Reopen,
-    iterate all reads, verify each
-    `aligned_read.mate_chromosome` matches input byte-exact.
-49. **`test_round_trip_mate_pos_rans`** — same with
-    `mate_info_pos: RANS_ORDER1`. Verify
-    `aligned_read.mate_position` round-trips.
-50. **`test_round_trip_mate_tlen_rans`** — same with
-    `mate_info_tlen: RANS_ORDER1`. Verify
-    `aligned_read.template_length` round-trips.
-51. **`test_round_trip_mate_all_three`** — all three
-    overrides at once. All three fields round-trip.
-52. **`test_round_trip_mate_partial`** — only chrom
-    overridden, pos and tlen left at default. Subgroup is
-    created (verify `mate_info` is a group), chrom dataset
-    has `@compression`, pos and tlen are stored as their
-    natural dtypes inside the subgroup with no
-    `@compression`. All three round-trip.
-53. **`test_back_compat_mate_info_unchanged`** — no
-    mate_info_* override. Verify `mate_info` is still the
-    M82 compound dataset; round-trips via existing path.
-54. **`test_reject_bare_mate_info_key`** —
-    `signal_codec_overrides={"mate_info": Compression.RANS_ORDER1}`
-    raises ValueError at write time with a message pointing
-    at the three per-field keys.
-55. **`test_reject_wrong_codec_on_mate_pos`** —
-    `signal_codec_overrides={"mate_info_pos": Compression.NAME_TOKENIZED}`
-    raises ValueError (NAME_TOKENIZED on integer field).
-56. **`test_round_trip_full_ten_overrides`** — extend Phase
-    C's full-stack test (#47, seven overrides) to TEN
-    overrides: the seven existing + three mate_info_* fields.
-    All round-trip correctly. The full codec stack on every
-    eligible channel and field.
+1. **`test_samtools_available`** — verify `samtools --version`
+   succeeds; if not, skip the rest of the file with a clear
+   xfail marker. (`pytest.skipif(...)` at module level on the
+   `samtools` PATH check.)
+2. **`test_read_full_bam`** — read `m87_test.bam`, verify
+   `len(run.read_names) == 10`, all 10 read names present in
+   order (`r000`..`r009`).
+3. **`test_read_positions`** — verify `run.positions` matches
+   the SAM POS column for each read (1000, 1100, 2000, 5000,
+   5100, 0, 0, 0, 3000, 4000).
+4. **`test_read_chromosomes`** — verify
+   `run.chromosomes == ["chr1", "chr1", "chr1", "chr2", "chr2",
+   "*", "*", "*", "chr1", "chr1"]`.
+5. **`test_read_flags`** — verify `run.flags` (99, 147, 0,
+   99, 147, 4, 77, 141, 16, 0).
+6. **`test_read_mapping_qualities`** — verify
+   `run.mapping_qualities` = (60, 60, 30, 60, 60, 0, 0, 0,
+   30, 30).
+7. **`test_read_cigars`** — verify
+   `run.cigars == ["100M", "100M", "50M50S", "100M", "100M",
+   "*", "*", "*", "100M", "100M"]`.
+8. **`test_read_sequences_concat`** — verify
+   `run.sequences` is the concatenation of the 10 SEQ values
+   (with `"*"` reads contributing 0 bytes); total length
+   should be 720 bytes per the fixture properties.
+9. **`test_read_mate_info`** — verify mate fields:
+   `mate_chromosomes` = `["chr1", "chr1", "*", "chr2",
+   "chr2", "*", "*", "*", "*", "*"]` (RNEXT `"="` expanded to
+   RNAME per Binding Decision §131); `mate_positions` = `[1100,
+   1000, 0, 5100, 5000, 0, 0, 0, 0, 0]`; `template_lengths` =
+   `[200, -200, 0, 200, -200, 0, 0, 0, 0, 0]`.
+10. **`test_read_metadata_from_header`** — verify
+    `run.sample_name == "M87_TEST_SAMPLE"` (from @RG),
+    `run.platform == "ILLUMINA"` (from @RG),
+    `run.reference_uri` is set (from @SQ; either "chr1" or
+    "chr1,chr2" — pin in the test based on impl choice).
+11. **`test_round_trip_through_writer`** — read the BAM,
+    write it back as a `.tio` via
+    `SpectralDataset.write_minimal`, reopen, iterate reads,
+    verify each `aligned_read.read_name`, `.position`,
+    `.cigar`, etc. matches the original. Closes the loop:
+    BAM → WrittenGenomicRun → `.tio` → GenomicRun →
+    AlignedRead.
+12. **`test_region_filter`** — read with
+    `region="chr2:5000-5200"`, verify only 2 reads come back
+    (r003, r004 — both on chr2 in that window).
+13. **`test_region_unmapped`** — read with `region="*"`,
+    verify only the 4 unmapped/single-end reads come back.
+14. **`test_provenance_from_pg`** — verify
+    `run.provenance_records` contains at least one entry
+    derived from the `@PG` line; the entry's `software` field
+    is `"bwa"` and `parameters` includes `"bwa mem ref.fa
+    reads.fq"`.
+15. **`test_sam_input`** — instantiate `SamReader` (or
+    `BamReader`) on `m87_test.sam`, get the same 10-read
+    result as the BAM. Verifies samtools's auto-format detection.
+16. **`test_samtools_missing_error`** — patch `subprocess` to
+    simulate `samtools` not on PATH; verify the resulting
+    error message includes installation guidance for at least
+    one of {apt, brew, conda}.
 
-Plus extend `test_cross_language_fixtures` for the new fixture.
+### 6.2 ObjC — `objc/Tests/TestM87BamImporter.m`
 
-### 6.2 ObjC — extend `objc/Tests/TestM86GenomicCodecWiring.m`
+Same 16 cases. Skip the whole test file if `samtools` is not
+on PATH (`getenv("PATH")` + `access(X_OK)` walk, or
+`NSTask` with `samtools --version` returning non-zero). Wire
+into `TTIOTestRunner.m` as `START_SET("M87: BAM importer")`.
 
-Same 9 new test cases. Cross-language fixture loaded from
-`objc/Tests/Fixtures/genomic/m86_codec_mate_info_full.tio`.
-Target ≥ 18 new assertions.
+Target ≥ 30 new assertions.
 
-### 6.3 Java — extend
-`java/src/test/java/global/thalion/ttio/genomics/M86CodecWiringTest.java`
+### 6.3 Java — `java/src/test/java/global/thalion/ttio/importers/BamReaderTest.java`
 
-Same 9 new test cases. Cross-language fixture loaded from
-`java/src/test/resources/ttio/fixtures/genomic/m86_codec_mate_info_full.tio`.
+Same 16 cases. JUnit 5; use `@Disabled` or
+`assumeThat(samtools is on PATH)` to skip if samtools is
+missing.
 
-### 6.4 Cross-language conformance fixture
+### 6.4 Cross-language conformance
 
-Generate one fixture from the Python writer:
-`python/tests/fixtures/genomic/m86_codec_mate_info_full.tio`.
-A 100-read run with realistic mate_info patterns:
-- chrom: `["chr1"] * 90 + ["chr2"] * 5 + ["chrX"] * 3 + ["*"] * 2`
-- pos: deterministic monotonic positions for paired mates,
-  -1 for unmapped
-- tlen: cluster around 350 (typical Illumina insert size) for
-  paired, 0 for unmapped
+The `.bam` fixture is committed once under
+`python/tests/fixtures/genomic/m87_test.bam`. ObjC tests
+read it from `objc/Tests/Fixtures/genomic/m87_test.bam`
+(verbatim copy). Java tests read it from
+`java/src/test/resources/ttio/fixtures/genomic/m87_test.bam`
+(verbatim copy).
 
-Override: all three fields under their recommended codec
-(NAME_TOKENIZED for chrom, RANS_ORDER1 for pos and tlen).
+Each implementation produces the same `WrittenGenomicRun`
+shape: same `read_count`, same per-read scalar arrays
+(positions, flags, mapping_qualities, etc.), same
+`sequences` byte buffer. The cross-language assertion is
+**equality of decoded fields**, not byte-exact wire format
+(since the input is BAM, not a TTI-O codec stream).
 
-Other channels use M82 baseline (no override) so the fixture
-isolates the mate_info wiring.
+A new `m87_cross_language` integration test in
+`python/tests/integration/test_m87_cross_language.py`
+subprocesses the ObjC `TtioBamDump` and Java `BamDump` CLIs
+(both new in M87) on the fixture and diffs their canonical-
+JSON output against the Python BamReader's JSON dump. The
+CLIs emit the parsed run as canonical JSON for byte-compare;
+test fails if any field diverges.
 
 ---
 
-## 7. Documentation
+## 7. CLI tools
 
-### 7.1 `docs/format-spec.md`
+Each language ships a small `bam_dump` CLI for the cross-
+language conformance harness:
 
-Update §10.4 trailing summary: mate_info is no longer
-compound-only — it can be decomposed via the per-field virtual
-channel names when overrides are set.
+- Python: `python -m ttio.importers.bam_dump <bam_path>` →
+  canonical JSON to stdout.
+- ObjC: `TtioBamDump <bam_path>` → canonical JSON to stdout.
+- Java: `java -cp ... BamDump <bam_path>` → canonical JSON to
+  stdout.
 
-Add new §10.9 documenting the mate_info schema lift:
+The JSON shape is fixed across all three:
 
+```json
+{
+  "name": "genomic_0001",
+  "read_count": 10,
+  "sample_name": "M87_TEST_SAMPLE",
+  "platform": "ILLUMINA",
+  "reference_uri": "chr1",
+  "read_names": ["r000", "r001", ...],
+  "positions": [1000, 1100, ...],
+  "chromosomes": ["chr1", "chr1", ...],
+  "flags": [99, 147, ...],
+  "mapping_qualities": [60, 60, ...],
+  "cigars": ["100M", "100M", ...],
+  "mate_chromosomes": ["chr1", "chr1", ...],
+  "mate_positions": [1100, 1000, ...],
+  "template_lengths": [200, -200, ...],
+  "sequences_md5": "<md5 hex of concatenated sequences>",
+  "qualities_md5": "<md5 hex of concatenated qualities>",
+  "provenance_count": 1
+}
 ```
-## 10.9 mate_info per-field decomposition (M86 Phase F)
 
-The mate_info channel under signal_channels/ has TWO on-disk
-layouts depending on whether any mate_info_* override is set:
-
-- No override (M82 default): COMPOUND dataset with three
-  fields (chrom: VL_STRING, pos: INT64, tlen: INT32).
-- Any mate_info_* override: subgroup containing three child
-  datasets (chrom, pos, tlen), each with its own @compression
-  or natural dtype.
-
-Readers MUST dispatch on HDF5 link type (dataset = M82
-compound; group = Phase F subgroup). Per-field overrides are
-exposed via three flat keys in signal_codec_overrides:
-mate_info_chrom, mate_info_pos, mate_info_tlen. Partial
-overrides allowed; un-overridden fields use natural-dtype
-HDF5-filter ZLIB storage inside the subgroup.
-
-Codec applicability per field is documented in the validation
-map in spectral_dataset (one-to-one with the existing per-
-channel allowed-codec rules: chrom takes the same codecs as
-cigars; pos/tlen take the same codecs as positions/flags).
-
-The chrom field's rANS path uses length-prefix-concat
-serialisation (varint(len) + ascii bytes per chrom) — same
-contract as cigars (§10.8.2).
-
-Pre-M86-Phase-F readers that hard-code the compound layout
-will fail when they hit the subgroup. Discipline matches
-M80 / M82 / M86 Phase A/E/C (write-forward).
-```
-
-### 7.2 `docs/codecs/rans.md`
-
-Update §7 to add mate_info_pos and mate_info_tlen as new
-applicable channels for rANS (alongside positions, flags,
-mapping_qualities from Phase B). Add mate_info_chrom as
-applicable for rANS via the cigars-style length-prefix-concat.
-
-### 7.3 `docs/codecs/name_tokenizer.md`
-
-Update §8 to add mate_info_chrom as the third channel where
-NAME_TOKENIZED applies (alongside read_names from Phase E and
-cigars from Phase C). Note that for chromosome names, the
-columnar dictionary win is essentially guaranteed in
-practice (chrom alphabets are tiny — usually <30 distinct
-values — so the dictionary fits in a few bytes regardless of
-read count).
-
-### 7.4 `CHANGELOG.md`
-
-Add M86 Phase F entry under `[Unreleased]`. Update header.
-
-### 7.5 `WORKPLAN.md`
-
-Update M86 section header from "Phases A, B, C (cigars), D,
-and E shipped; Phase C (mate_info) deferred" to "Phases A,
-B, C, D, E, and F shipped". Phase F subsection: mark
-mate_info wiring complete; note this completes the M82-era
-genomic codec story for ALL channels.
+The `sequences_md5` / `qualities_md5` are MD5 hashes of the
+full byte buffers — short fixed-width fingerprints rather than
+embedding hundreds of bytes of base data in the JSON.
 
 ---
 
-## 8. Out of scope
+## 8. Documentation
 
-- **MS-side wiring.** Genomic-only.
-- **Per-field codec dispatch on other compounds.** mate_info
-  is the only compound that gets decomposed in Phase F. If
-  another compound shows up in the future, it'd need its own
-  Phase-F-style milestone.
-- **Cross-field codec hints.** The mate fields are
-  independent at the codec level; no joint encoding (e.g.
-  "encode chrom and pos together as a 2D structure"). Each
-  field gets its own codec choice.
+### 8.1 `docs/vendor-formats.md`
+
+Add a new section "SAM/BAM (M87)" documenting:
+- Subprocess-based design (samtools required at runtime).
+- Install instructions for major OSes (`apt install samtools`,
+  `brew install samtools`, `conda install -c bioconda
+  samtools`).
+- Field mapping table (SAM column → TTI-O field).
+- Header-line handling (@SQ, @RG, @PG).
+- Region filter syntax (samtools-native: `chr1:start-end`,
+  `*` for unmapped).
+- Cross-language CLI usage (`bam_dump`).
+
+### 8.2 README.md
+
+Add SAM/BAM importer to the existing **Importers** list (one
+line bullet, parallel to the existing mzML / nmrML / JCAMP-DX
+/ Bruker timsTOF / Thermo entries).
+
+### 8.3 `CHANGELOG.md`
+
+Add M87 entry under `[Unreleased]`. Update the Unreleased
+header to mention M87.
+
+### 8.4 `WORKPLAN.md`
+
+Update Phase 5 status: M87 status flipped from "planned" to
+SHIPPED with commits and test counts.
+
+### 8.5 Python `pyproject.toml`
+
+Add a note in the "Optional dependencies" section: the
+`bam`/`sam` importer requires the system tool `samtools`
+(not a PyPI package) — install via OS package manager. No
+PyPI dependency added (the BamReader is pure Python on top of
+subprocess).
 
 ---
 
-## 9. Acceptance Criteria
+## 9. Out of scope
+
+- **CRAM reading.** Reading CRAM via samtools requires a
+  reference FASTA. M88 covers CRAM import (separate
+  milestone).
+- **BAM/SAM writing.** TTI-O is the read direction in M87.
+  M88 covers the BAM/CRAM writers.
+- **htslib direct linking.** Subprocess via samtools is the
+  Phase 5 design choice (Binding Decision §134). A future
+  optimisation milestone could add htslib-Java / pysam fast
+  paths, but M87 does NOT.
+- **Optional SAM tag fields.** Fields 12+ on each alignment
+  line (NM:, MD:, etc.) are ignored in v0. A future milestone
+  could expose them as a `tags` field on `AlignedRead`.
+- **Multi-RG aggregation.** Only the first @RG is parsed in
+  v0. Caller can override via `sample_name=`.
+- **Region filter syntax extensions.** The region string is
+  passed through to samtools verbatim — whatever samtools
+  accepts, TTI-O accepts. No TTI-O-side parsing.
+- **Streaming write.** The full `WrittenGenomicRun` is built
+  in memory before being passed to the writer. For very
+  large BAMs (10⁹+ reads), a streaming writer would be
+  needed; deferred future scope.
+
+---
+
+## 10. Acceptance Criteria
 
 ### Python
-- [ ] All existing tests pass (zero regressions vs `67faa2c`).
-- [ ] All 9 new tests in
-      `python/tests/test_m86_genomic_codec_wiring.py` pass.
-- [ ] `m86_codec_mate_info_full.tio` fixture committed.
-- [ ] Validation accepts the three new keys (mate_info_chrom,
-      mate_info_pos, mate_info_tlen) with their per-field
-      allowed codec sets.
-- [ ] Validation rejects the bare `mate_info` key with a
-      message pointing at the per-field keys.
-- [ ] Validation rejects wrong-content codecs on each field
-      (NAME_TOKENIZED on int fields; BASE_PACK and
-      QUALITY_BINNED on all three).
-- [ ] Partial overrides work: only chrom triggers the
-      subgroup but pos/tlen stay on natural-dtype ZLIB inside
-      the subgroup.
-- [ ] Back-compat: empty mate_info_* overrides leave
-      mate_info as the M82 compound dataset.
+- [ ] All existing tests pass (zero regressions vs `3ac8bd7`).
+- [ ] All 16 new tests in `python/tests/test_m87_bam_importer.py`
+      pass.
+- [ ] `m87_test.sam` and `m87_test.bam` fixtures committed.
+- [ ] `python -m ttio.importers.bam_dump <bam>` CLI works and
+      emits the JSON shape from §7.
+- [ ] Importing `ttio.importers.bam` works without samtools
+      installed (only `to_genomic_run()` requires it).
 
 ### Objective-C
-- [ ] All existing tests pass (zero regressions vs the 2427
+- [ ] All existing tests pass (zero regressions vs the 2477
       PASS baseline + 2 pre-existing M38 Thermo failures).
-- [ ] 9 new test methods pass byte-exact against the Python
-      fixture.
-- [ ] HDF5-link-type dispatch (dataset vs group) works for
-      both layouts.
-- [ ] ≥ 18 new assertions.
+- [ ] 16 new test methods in `TestM87BamImporter.m` pass when
+      samtools is available; skip cleanly when not.
+- [ ] `TtioBamDump` CLI compiled and present.
+- [ ] ≥ 30 new assertions.
 
 ### Java
-- [ ] All existing tests pass (zero regressions vs the 502/0/0/0
-      baseline → ≥ 511/0/0/0 after M86 Phase F).
-- [ ] 9 new test methods pass.
-- [ ] Cross-language fixture reads byte-exact for all three
-      mate fields.
+- [ ] All existing tests pass (zero regressions vs the 512/0/0/0
+      baseline → ≥ 528/0/0/0 after M87).
+- [ ] 16 new test methods in `BamReaderTest.java` pass when
+      samtools is available; skip cleanly when not.
+- [ ] `BamDump` Maven exec target present.
 
 ### Cross-Language
-- [ ] All three implementations read
-      `m86_codec_mate_info_full.tio` byte-exact-on-decoded
-      (every read's `mate_chromosome`, `mate_position`,
-      `template_length` fields match the original Python
-      input).
-- [ ] `docs/format-spec.md` summary updated; new §10.9
-      documents the mate_info subgroup pattern.
-- [ ] `docs/codecs/rans.md` §7 updated to mention the three
-      mate_info_* channels.
-- [ ] `docs/codecs/name_tokenizer.md` §8 updated to mention
-      mate_info_chrom.
-- [ ] `CHANGELOG.md` M86 Phase F entry committed.
-- [ ] `WORKPLAN.md` M86 Phase F status flipped to SHIPPED;
-      header updated to "Phases A, B, C, D, E, and F shipped".
+- [ ] All three implementations produce the same canonical JSON
+      from `m87_test.bam` (`test_m87_cross_language.py` green).
+- [ ] `docs/vendor-formats.md` SAM/BAM section committed.
+- [ ] `README.md` Importers list mentions SAM/BAM.
+- [ ] `CHANGELOG.md` M87 entry committed.
+- [ ] `WORKPLAN.md` M87 status flipped to SHIPPED.
 
 ---
 
-## 10. Gotchas
+## 11. Gotchas
 
-141. **Dispatch on HDF5 link type for mate_info, not on
-     attribute presence.** This is the first M86 phase where
-     a top-level signal_channels link can be either a
-     compound dataset OR a group. Use the HDF5 binding's link-
-     type query (`H5O_TYPE_DATASET` vs `H5O_TYPE_GROUP` in
-     ObjC; equivalents in Python h5py and Java HDF5-Java).
+149. **samtools is a runtime dependency, not a build
+     dependency.** Each language must check at first use
+     (NOT at import time — Binding Decision §135) and raise
+     a clear error with installation guidance if missing.
+     `import ttio.importers.bam` succeeds even on systems
+     without samtools.
 
-142. **Per-field validation is independent.** A run can have
-     `mate_info_chrom` override but no `mate_info_pos`
-     override; the chrom field gets codec dispatch while the
-     pos field uses natural-dtype storage inside the subgroup.
-     Don't accidentally reject partial-override states.
+150. **samtools subprocess startup is ~50ms.** For a single
+     `to_genomic_run()` call this is negligible; for batch
+     workloads importing thousands of small BAMs, consider
+     batching at the caller level. M87 doesn't optimise for
+     this case.
 
-143. **The bare `mate_info` key is rejected.** Don't silently
-     map it to one of the per-field overrides; produce a
-     clear error pointing the caller at the three per-field
-     names. Tests must cover this rejection (#54).
+151. **samtools writes BAM-format errors to stderr, not
+     stdout.** When `samtools view` exits non-zero, the
+     stderr buffer must be captured and included in the
+     raised error. Otherwise debugging "what went wrong with
+     this BAM" is opaque.
 
-144. **Cache discipline: one combined `_decoded_mate_info`
-     dict, NOT three separate fields.** Per Binding Decision
-     §129. Each `_mate_<field>_at(i)` helper writes to
-     `_decoded_mate_info[<field>]` on first decode. Other
-     M86 caches (byte channels, integer channels, read names,
-     cigars) remain separate per their respective binding
-     decisions.
+152. **SAM lines can contain literal tab characters in
+     optional tags.** v0 of M87 parses only fields 1-11
+     (whitespace-split with maxsplit=11 in Python; equivalent
+     in ObjC/Java) and discards trailing fields. Avoid the
+     "split on all tabs" trap that breaks on malformed
+     optional-tag fields.
 
-145. **Three fields = three sets of Phase B integer-channel
-     code paths to mirror.** The pos and tlen fields are
-     just like Phase B's positions and flags channels — same
-     LE byte serialisation, same channel-name → dtype
-     lookup. Reuse the existing Phase B helpers if possible
-     (or extract a shared int-channel encode/decode helper
-     that the per-field code path can call).
+153. **The CIGAR string `"*"` means "no CIGAR".** Same for
+     SEQ and QUAL. The importer must store `"*"` literally
+     in `cigars[i]` (don't normalise to empty string) so
+     downstream consumers can distinguish "no info" from
+     "empty alignment".
 
-146. **The chrom field is just like the cigars channel from
-     Phase C.** Same length-prefix-concat serialisation for
-     the rANS path, same direct-call for the NAME_TOKENIZED
-     path. Reuse Phase C helpers if possible.
+154. **POS = 0 is valid.** SAM uses POS 0 for unmapped reads
+     (not -1). Don't confuse with `mate_position == -1` for
+     "no mate" (which is a TTI-O convention, not a SAM
+     convention). The importer maps SAM POS directly into
+     `positions[i]` (1-based; 0 = unmapped/no-position).
 
-147. **HDF5 link-type query is language-specific.** Python
-     h5py: `isinstance(parent["mate_info"], h5py.Group)` vs
-     `h5py.Dataset`. ObjC: `H5Oget_info_by_name` returns a
-     struct with a `type` field (`H5O_TYPE_GROUP` or
-     `H5O_TYPE_DATASET`). Java: `H5.H5Oget_info_by_name`
-     returns similar. Document the per-language idiom in the
-     implementer prompts.
+155. **TLEN is signed.** SAM's TLEN can be negative
+     (template-end-side reads). `template_lengths[i]` is
+     int32 and preserves the sign.
 
-148. **Empty / unmapped mate fields are common.** Many
-     reads have no mate (`mate_chromosome == "*"`,
-     `mate_position == -1`, `template_length == 0`). The
-     codecs handle these fine — chrom's "*" goes through the
-     NAME_TOKENIZED dictionary (one entry); pos's -1
-     delta-encodes well in rANS; tlen's 0 has high
-     concentration in the rANS frequency table. Tests should
-     include realistic mixes of paired and unpaired reads.
+156. **Cross-language tests must skip gracefully when
+     samtools is missing.** The implementation works without
+     samtools; the *tests* require it. Don't fail the whole
+     test suite on a samtools-less CI runner.
+
+157. **The fixture `.bam` file is binary** — committed as a
+     binary blob to the repo. Regeneration script (`.sh`)
+     that runs `samtools view -bS m87_test.sam > m87_test.bam`
+     is committed alongside so anyone can rebuild. The `.sam`
+     is the authoritative spec (human-readable).
