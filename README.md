@@ -5,7 +5,7 @@
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![Java: 17+](https://img.shields.io/badge/java-17%2B-blue.svg)](https://www.java.com/)
 
-**TTI-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS), nuclear magnetic resonance (NMR), and vibrational spectroscopy (Raman + IR) data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of analytical spectroscopy and spectrometry.
+**TTI-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS), nuclear magnetic resonance (NMR), vibrational spectroscopy (Raman + IR), UV/Vis, and **genomic sequencing** data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of both analytical spectroscopy/spectrometry AND genomic data.
 
 The standard is built around **six shared data primitives** and an **HDF5-based container** that mirrors the MPEG-G file model.
 
@@ -39,9 +39,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — v1.1.1, 1817 PASS / 1 env-dep skip.** | `objc/` |
-| **Python (`ttio`)**       | **v1.1.1 — full parity with ObjC and Java, 884 tests passing.** | `python/` |
-| **Java (`global.thalion.ttio`)** | **v1.1.1 — full parity with ObjC and Python, 389/389, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **Normative reference — 2477 PASS / 2 pre-existing M38 Thermo failures (unrelated).** Last release tag: v1.1.1; current main is unreleased work for the genomic data model and codec stack (M80–M86). | `objc/` |
+| **Python (`ttio`)**       | **898 passed / 42 pre-existing failures (zarr / smoke / XSD, unrelated).** Full parity with ObjC and Java. | `python/` |
+| **Java (`global.thalion.ttio`)** | **512/0/0/0 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages
@@ -66,6 +66,17 @@ release-by-release narrative (*which version introduced what*), see
 * **2D correlation spectroscopy (2D-COS)** — `TwoDimensionalCorrelationSpectrum` holds synchronous + asynchronous rank-2 correlation matrices over a shared variable axis; gated behind `opt_native_2d_cos`.
 * **Chromatograms** — TIC / XIC / SRM traces persist as `Chromatogram` with a parallel-array chromatogram index, round-tripped via `<chromatogramList>` + `<index name="chromatogram">` in the mzML writer.
 * **MS imaging** — `MSImage` stores a 3-D `[height, width, spectralPoints]` HDF5 dataset with tile-aligned chunking (default 32×32 pixel tiles); inherits identifications / quantifications / provenance / access-policy from `SpectralDataset`.
+* **Genomic sequencing** (M82) — `GenomicRun` is a parallel run-and-element hierarchy alongside the spectrum-based classes. `AlignedRead` is the per-read value class (read_name, chromosome, position, mapping_quality, cigar, sequence, qualities, flags, mate-pair info — modelled on SAM/BAM). `GenomicIndex` carries parallel-array per-read scalars (offsets, lengths, chromosomes, positions, mapping qualities, flags) for region / unmapped / flag queries. `WrittenGenomicRun` is the write-side container. Storage under `/study/genomic_runs/<name>/` with `signal_channels/` for per-base byte arrays (sequences, qualities) and per-read parallel arrays (positions, flags, mapping_qualities) plus VL_STRING compounds (cigars, read_names, mate_info). See [`docs/M82.md`](docs/M82.md) for the data-model walkthrough.
+
+### Genomic compression codecs (M83–M86)
+
+A complete genomic codec stack ships across all three languages with cross-language byte-exact conformance:
+
+* **rANS order-0 / order-1** (M83) — clean-room implementation of the range Asymmetric Numeral Systems entropy coder from Duda 2014 (arXiv:1311.2540). Wire format, frequency-table normalisation, and state width all specified for byte-identical output across Python / ObjC / Java. See [`docs/codecs/rans.md`](docs/codecs/rans.md).
+* **BASE_PACK** (M84) — 2-bit ACGT packing with a sparse position+byte sidecar mask for non-ACGT bytes (`N`, IUPAC ambiguity codes, soft-masking lowercase, gaps). Lossless on the full 256-byte alphabet; case-sensitive (preserves soft-masking convention). See [`docs/codecs/base_pack.md`](docs/codecs/base_pack.md).
+* **QUALITY_BINNED** (M85 Phase A) — fixed Illumina-8 / CRUMBLE-derived 8-bin Phred quantisation with 4-bit-packed bin indices. Lossy by construction; round-trip via bin centres. See [`docs/codecs/quality.md`](docs/codecs/quality.md).
+* **NAME_TOKENIZED** (M85 Phase B) — lean two-token-type columnar codec for read names (numeric digit-runs + string non-digit-runs). Per-column type detection picks columnar mode (delta-encoded numerics + dictionary-encoded strings) or verbatim fallback. ~3-7× compression on structured Illumina names. See [`docs/codecs/name_tokenizer.md`](docs/codecs/name_tokenizer.md).
+* **Pipeline wiring** (M86 Phases A/B/C/D/E/F) — every M82 channel in `signal_channels/` accepts at least one codec via `WrittenGenomicRun.signal_codec_overrides`. Per-channel `@compression` attribute; lazy whole-channel decode + per-instance cache. The cigars channel and `mate_info_chrom` virtual field accept BOTH rANS (recommended for real WGS data) AND NAME_TOKENIZED (recommended for known-uniform inputs); selection guidance documented in [`docs/format-spec.md`](docs/format-spec.md) §10.5–§10.9. The `mate_info` compound is decomposed into a subgroup with three per-field datasets (chrom, pos, tlen) when any per-field override is set.
 
 ### The six data primitives
 
@@ -143,6 +154,8 @@ release-by-release narrative (*which version introduced what*), see
 ### Format compatibility
 
 Every version's files remain readable by later versions. Readers open v0.1–v0.11 files without ceremony. The current container version is 1.3; legacy v0.2 files at 1.1 and v0.10 per-AU-encrypted files still round-trip. Vibrational-spectroscopy and UV/Vis groups under `/study/` are silently ignored by pre-v0.11 readers (they don't match any known layout); `RamanSpectrum`, `IRSpectrum`, `UVVisSpectrum`, and `TwoDimensionalCorrelationSpectrum` persist through the generic Spectrum path with `@ttio_class` attributes, so pre-v0.11 readers fall back to the base class rather than failing. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
+
+Files written by the unreleased M80–M86 line (TTI-O rebrand + genomic data + codec stack) are NOT readable by v0.11.x readers — the rebrand drops the `mpgo`/`MPGO` identifiers in favour of `ttio`/`TTIO` (Binding Decision §74 in WORKPLAN), and the genomic codec wiring uses `@compression` attributes plus schema lifts (compound → flat / subgroup) that pre-M86 readers don't dispatch on. Files written WITHOUT genomic-codec overrides are still readable by any post-M82 reader.
 
 ### Continuous integration
 
