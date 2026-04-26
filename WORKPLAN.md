@@ -119,7 +119,7 @@ name tokenisation from Bonfield, Bioinformatics 2022.
 
 ### M85 — Quality Quantiser + Name Tokeniser Codecs
 
-**Status: Phase A shipped (2026-04-26). Phase B deferred.**
+**Status: Phase A and Phase B both shipped (2026-04-26).**
 
 The original M84 sketch in this WORKPLAN bundled "Base-Packing +
 Quality Quantiser Codecs"; the M84 milestone shipped only
@@ -149,27 +149,54 @@ Throughput on the M85 Phase A reference host (4 MiB random Phred
 mod 41): Python 61 / 471 MB/s, Java 2001 / 425 MB/s, ObjC 3203 /
 2196 MB/s.
 
-#### Phase B — name_tokenizer codec (DEFERRED)
+#### Phase B — name_tokenizer codec (SHIPPED 2026-04-26)
 
-- `ttio.codecs.name_tokenizer`: CRAM 3.1-style read name
-  compression. Split structured names into token columns,
-  delta-encode numeric tokens, rANS each column.
-- Clean-room from Bonfield 2022 paper.
-- Target: ≥ 20:1 on structured Illumina names.
-- All three languages. Cross-language conformance.
+- [x] `ttio.codecs.name_tokenizer` — lean two-token-type
+      columnar codec (numeric digit-runs without leading zeros +
+      string non-digit-runs absorbing leading-zero digit-runs),
+      per-column type detection (columnar mode vs verbatim
+      fallback), delta-encoded numeric columns,
+      inline-dictionary-encoded string columns.
+- [x] All three languages, cross-language byte-exact fixtures
+      (`name_tok_{a,b,c,d}.bin`).
+- [x] M79 codec id `8` slot now has a working encoder + decoder.
+- [x] `docs/codecs/name_tokenizer.md` codec spec.
+- [x] `docs/format-spec.md` §10.4 name-tokenized row flipped.
+- Compression target was originally ≥ 20:1 (CRAM 3.1 / Bonfield
+  2022 style); Phase B's lean implementation achieves ~3–7:1.
+  Reaching 20:1 requires the full Bonfield-style encoder (eight
+  token types — DIGIT0, MATCH, DUP, ALPHA-vs-CHAR distinction,
+  per-token-type encoding variants — multi-thousand lines per
+  language with substantial cross-language byte-exact
+  conformance work). Tracked as a future optimisation milestone.
 
-Phase B is substantially larger than Phase A (Bonfield 2022's
-algorithm is more involved than 8-bin quantisation) and warrants
-its own plan and milestone. M79 codec id `8` is reserved.
+Commits: `cf665e7` (Python), `6a7e22a` (Java), `a66e750` (ObjC),
+plus M85 Phase B docs landing alongside.
+
+Throughput on the M85 Phase B reference host (100k Illumina-style
+names, 2.18 MB raw): Python 5.4 / 16.5 MB/s, Java ~14 / ~63
+MB/s, ObjC 37.0 / 310.7 MB/s.
 
 #### Forward reference
 
 A future M86 phase will wire QUALITY_BINNED (id 7) into the
-`qualities` channel of `signal_channels/`. The wiring
+`qualities` channel and NAME_TOKENIZED (id 8) into the
+`read_names` channel of `signal_channels/`. The wiring
 infrastructure (per-channel `signal_codec_overrides` dict,
 `@compression` attribute, lazy-decode cache) is already in
-place from M86 Phase A; only the dispatch branch for codec id 7
-needs to be added.
+place from M86 Phase A for byte channels; the `read_names`
+channel will additionally need lifting from VL_STRING-in-
+compound storage to a flat dataset that can carry the
+`@compression` attribute.
+
+#### Codec stack status (post-M85 Phase B)
+
+All five M79 codec slots (4–8) now have working encoders +
+decoders across Python, ObjC, and Java with cross-language
+byte-exact conformance fixtures. The genomic codec library is
+conceptually complete; remaining work is pipeline-wiring
+(future M86 phases) and optional optimisation milestones for
+higher compression ratios.
 
 ### M86 — Codec Integration into Signal Channel Pipeline
 
