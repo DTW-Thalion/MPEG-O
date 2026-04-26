@@ -1,726 +1,709 @@
-# HANDOFF — M86: Wire rANS + BASE_PACK into Genomic Signal-Channel Pipeline
+# HANDOFF — M85 Phase A: Clean-Room QUALITY_BINNED Codec (Illumina-8)
 
-**Scope:** Wire the M83 (rANS order-0/1) and M84 (BASE_PACK)
-codecs into the genomic signal-channel write and read paths so a
-caller can opt a per-channel compression codec into use at write
-time and any reader transparently decodes it. Three languages
-(Python reference, ObjC normative, Java parity), with
-cross-language conformance fixtures: each language must read a
-codec-compressed genomic run produced by either of the other two
-byte-for-byte identically to the original input.
+**Scope:** Clean-room implementation of the QUALITY_BINNED genomic
+quality-score codec — fixed 8-bin Phred quantisation (CRUMBLE-derived
+Illumina mapping) with 4-bit-packed bin indices. Lossy by
+construction. Three languages (Python reference, ObjC normative,
+Java parity), wire-byte conformance fixtures shared across all
+three.
 
-**Branch from:** `main` after M84 docs (`881be0f`).
+**Branch from:** `main` after M86 Phase A docs (`0de6fde`).
 
-**IP provenance:** Same as M83 / M84 — clean-room codec
-implementations from prior milestones. M86 is integration work on
-top of those primitives; no third-party codec source consulted at
-any point.
+**IP provenance:** Clean-room implementation. Phred-score bin
+tables in this rough shape have been published in many places —
+Illumina's reduced-representation guidance, James Bonfield's
+CRUMBLE paper (Bioinformatics 2019), HTSlib's `qual_quants` field,
+NCBI SRA's `lossy.sra` quality binning. The exact 8-bin table this
+codec uses is documented inline (§3) and is the public-domain
+"Illumina-8 / CRUMBLE-style" mapping. **No htslib, no CRUMBLE, no
+SRA toolkit source consulted at any point.** The 4-bit packing
+geometry is the natural choice for an 8-bin index alphabet and is
+not derived from any reference.
 
 ---
 
 ## 1. Background
 
-M82 stores genomic data uncompressed: one ASCII byte per base in
-`signal_channels/sequences`, raw Phred bytes in
-`signal_channels/qualities`, integer arrays in
-`signal_channels/{positions,flags,mapping_qualities}`, and
-variable-length strings in `signal_channels/{cigars,read_names}`.
+M84 in the original WORKPLAN sketch was scoped as
+`Base-Packing + Quality Quantiser Codecs`, but the milestone we
+shipped on 2026-04-26 covered only BASE_PACK. Quality quantisation
+slipped to M85.
 
-M83 shipped rANS order-0 and order-1 entropy coders as standalone
-primitives. M84 shipped BASE_PACK (2-bit ACGT + sidecar mask) the
-same way. Both are byte-stream codecs: byte input → byte output,
-no slicing, no random access into the encoded stream. Both ship in
-`python/src/ttio/codecs/`, `objc/Source/Codecs/`, and
-`java/src/main/java/global/thalion/ttio/codecs/`.
+The current M85 in WORKPLAN (line 120) lists name-tokenizer as the
+sole scope. M85 is now restructured into two phases — same shape
+as M86:
 
-The M82 storage path uses `WrittenGenomicRun.signal_compression`
-as a single string codec name (`"gzip"` or `"none"`) for the WHOLE
-run. The string is funnelled through `_compression_for(...)` to
-the HDF5 deflate filter. There is no per-channel codec selection;
-there is no path for the M83/M84 internal codecs.
+- **M85 Phase A (THIS milestone)** — `quality_binned` codec.
+  Catches up on the missed M84 piece. Comparable in scope to
+  BASE_PACK. Lossy by construction; round-trip via fixed
+  bin-centre mapping.
+- **M85 Phase B (DEFERRED)** — `name_tokenizer` codec
+  (CRAM 3.1-style, Bonfield 2022). Substantially larger;
+  separate future milestone after Phase A ships.
 
-M86 closes that gap for the two byte-array channels — `sequences`
-and `qualities`. Integer channels (`positions`, `flags`,
-`mapping_qualities`) and variable-length-string channels (`cigars`,
-`read_names`) stay on HDF5-filter ZLIB; per-channel codec
-selection for those is out of scope (the integer channels would
-need an int↔byte serialisation layer; the VL_STRING channels need
-the M85 `name-tokenized` codec, which is a separate milestone).
+M79 reserved `Compression.QUALITY_BINNED = 7`. Phase A ships the
+encoder, decoder, and cross-language fixtures for that slot. A
+future M86 Phase D will wire it into the `qualities` channel of
+`signal_channels/`.
 
 ---
 
-## 2. Design
+## 2. Algorithm
 
-### 2.1 Per-channel `@compression` attribute
+QUALITY_BINNED reduces a stream of Phred scores (typically 0–40,
+occasionally 0–93) to 4-bit bin indices. The 8-bin scheme means
+each input byte maps to a 3-bit number, but the wire stores 4 bits
+per index for trivial unpacking — see §3 binding decision §94 for
+the rationale.
 
-Each compressible signal-channel dataset carries a uint8 attribute
-`@compression` holding the M79 codec id. Absence or value `0`
-(`Compression.NONE`) means the dataset is stored as-is, with the
-HDF5 filter pipeline (typically zlib) handling any transparent
-compression. Non-zero values 4–6 (`RANS_ORDER0`, `RANS_ORDER1`,
-`BASE_PACK`) mean the dataset bytes are the codec output and the
-read path must dispatch to the corresponding `decode()` function
-before returning data to the caller.
+### Pack mapping
 
-The attribute scheme matches the existing numpress pattern (which
-uses `@<channel>_numpress_fixed_point` on the
-`signal_channels` group). The difference: numpress encodes its
-codec presence implicitly (presence of the attribute), while M86
-makes the codec id explicit (the attribute value names the codec).
-Numpress is unaffected by M86; the two mechanisms coexist.
+Each input byte (Phred score in 0..255, though typical genomic
+data is 0..93) maps to one of 8 bin indices via a fixed table. The
+decoder maps each bin index to a fixed bin centre — round-trip is
+NOT byte-exact for arbitrary Phred input. Round-trip semantics:
+`decode(encode(x)) == bin_centre[bin_of[x]]`. So Phred 7 round-trips
+through bin 1 to Phred 5 (its bin centre). This is intended; quality
+binning is a lossy compression scheme.
 
-### 2.2 Write-path opt-in
+### Bin table (Illumina-8 / CRUMBLE-derived)
 
-`WrittenGenomicRun` gains a new field
-`signal_codec_overrides: dict[str, Compression]` (default empty).
-For each channel name in the override dict, the writer:
+```
+Bin  Phred range   Centre  Notes
+───  ───────────   ──────  ─────────────────────────────
+ 0       0..1         0    "no information"
+ 1       2..9         5    low-confidence
+ 2      10..19       15    standard low / older platforms
+ 3      20..24       22    standard medium-low
+ 4      25..29       27    standard medium
+ 5      30..34       32    standard medium-high
+ 6      35..39       37    high
+ 7     40..255       40    capped at Phred 40 — saturates here
+```
 
-1. Validates the channel is one of `{"sequences", "qualities"}`.
-   Reject overrides for any other channel name with a clear error.
-2. Validates the codec id is one of
-   `{Compression.RANS_ORDER0, Compression.RANS_ORDER1, Compression.BASE_PACK}`.
-   Reject any other value.
-3. Encodes the raw uint8 buffer through the codec.
-4. Writes the encoded bytes as a uint8 dataset of length
-   `len(encoded_bytes)`. **No HDF5 filter** is applied (the bytes
-   are already entropy-coded; double-compressing wastes CPU for
-   no size win).
-5. Sets `@compression` on the dataset to the codec id (uint8).
+Bin index for Phred p:
+```
+if p <= 1:       0
+elif p <= 9:     1
+elif p <= 19:    2
+elif p <= 24:    3
+elif p <= 29:    4
+elif p <= 34:    5
+elif p <= 39:    6
+else:            7
+```
 
-Channels not in the override dict use the existing
-`signal_compression` string path (HDF5 deflate via the filter
-pipeline).
+Bin centre for index b: `[0, 5, 15, 22, 27, 32, 37, 40][b]`.
 
-### 2.3 Read-path dispatch
+The encoder emits the bin index for each input byte, then 4-bit-
+packs the indices (two per byte, big-endian within byte — first
+input quality occupies the high nibble).
 
-When opening a `sequences` or `qualities` dataset:
+### Bit order within a byte
 
-1. Check for the `@compression` attribute.
-2. If absent or `0`: existing slice-based read path (no change).
-3. If `4`/`5`/`6`: read all dataset bytes, decode through the
-   appropriate codec, cache the decoded buffer on the
-   `GenomicRun` instance for subsequent slice access.
+**Big-endian within byte.** The first input quality score occupies
+the high nibble; the second occupies the low nibble. Worked
+examples:
 
-The cached decoded buffer trades one-time decode cost for
-per-read slice cost (which is just a memory view). For sequential
-read iteration (the typical genomic workload) this is faster than
-filter-on-each-chunk decoding. For random access into a 10M-read
-dataset, the decoded buffer is held in RAM — acceptable for
-sequence/quality channels (each ≈ N reads × read_length bytes;
-typical = a few hundred MB max). Codec output is byte-stream
-non-sliceable; this is the intentional tradeoff.
+| Input bytes (Phred)    | Bin indices    | Packed         | Hex  |
+|------------------------|----------------|----------------|------|
+| `0 5`                  | `0 1`          | `0b 0000 0001` | 0x01 |
+| `40 30`                | `7 5`          | `0b 0111 0101` | 0x75 |
+| `0 0 5 5`              | `0 0 1 1`      | `0x00 0x11`    | —    |
+| `40` (single)          | `7` + padding  | `0b 0111 0000` | 0x70 |
 
-### 2.4 Lazy decode cache
+The padding bits (low nibble of the final byte when the input has
+odd length) are zero.
 
-Add a `_decoded_channels: dict[str, bytes]` field to `GenomicRun`
-(Python), `TTIOGenomicRun` (ObjC), and `GenomicRun` (Java),
-populated on first access. The existing `_signal_dataset(name)`
-helper (or its equivalent) checks `@compression` once on first
-dataset open and caches the decoded buffer. Subsequent
-`__getitem__` calls slice the cached buffer instead of slicing the
-HDF5 dataset.
+### Decode
 
-### 2.5 No back-compat shim
+1. Read the header. Validate `version == 0`, `scheme_id == 0`,
+   total stream length == `6 + ceil(original_length / 2)`. Reject
+   mismatches.
+2. Allocate output of size `original_length`. Walk the packed
+   body left-to-right: for each byte, extract the high nibble as
+   bin index for output position `2*i`, and the low nibble as bin
+   index for output position `2*i + 1`. Stop after
+   `original_length` indices are emitted (the last byte may be
+   half-used).
+3. Map each bin index through the bin-centre table to produce the
+   output Phred bytes.
 
-This is a write-forward change in the spirit of M80/M82: a v0.12
-genomic file written with `signal_codec_overrides` is unreadable
-by pre-M86 readers (they will return raw codec bytes when asked
-for a base-slice, which decodes to garbage). This is acceptable
-because (a) v0.12 is unreleased, (b) the `@compression` attribute
-exists specifically so future readers can detect the codec, and
-(c) the format-spec already says any reader must respect
-`@compression`. Pre-M86 readers can still read M82 files written
-without overrides (no `@compression` attribute on the channels →
-fall through to the existing path).
+### Edge cases
+
+- **Empty input** → 6-byte header only.
+- **Odd-length input** → final body byte has its low nibble
+  padded to zero. Decoder ignores the padding because it knows
+  `original_length`.
+- **Phred values > 40** → clamped to bin 7 (output Phred = 40).
+  Lossy but well-defined.
+- **All identical** → wire size = 6 + ceil(orig / 2). For 1 MB of
+  identical Phred scores, that's roughly 0.5 MB. (Compression on
+  identical data isn't the use case; rANS afterwards in the M86
+  pipeline does that.)
 
 ---
 
-## 3. Binding Decisions (continued from M84 §80–§85)
+## 3. Wire Format (cross-language contract)
+
+Big-endian throughout. Self-contained — the decoder needs no
+external metadata.
+
+```
+Offset  Size  Field
+──────  ────  ───────────────────────────────────────────
+0       1     version            (0x00)
+1       1     scheme_id          (0x00 = "illumina-8")
+2       4     original_length    (uint32 BE — input byte count)
+6       var   packed_indices     (ceil(original_length / 2) bytes)
+```
+
+Total length = `6 + ceil(original_length / 2)` bytes.
+
+Empty input → exactly 6 bytes (header only).
+
+Invariant: total stream length must equal
+`6 + ((original_length + 1) >> 1)`. The decoder MUST validate this
+and reject mismatched streams.
+
+---
+
+## 4. Binding Decisions (continued from M86 §86–§90)
 
 | #  | Decision | Rationale |
 |----|----------|-----------|
-| 86 | Per-channel `@compression` attribute (uint8) on the dataset itself, not on the parent `signal_channels` group. | Each channel's codec is independent. Putting the attribute on the dataset keeps the metadata co-located with its data and matches HDF5 best practice. The numpress attribute lives on the parent group only because it's a pair (codec choice + scaling factor) that the numpress decoder needs together. |
-| 87 | Codec-compressed channels are stored **without** an HDF5 filter. The TTI-O codec output is the raw dataset bytes. | rANS and BASE_PACK output is high-entropy; running it through deflate is a CPU loss with negligible (often negative) size benefit. Skipping the filter keeps the dataset bytes match the codec output exactly, which makes cross-language byte-for-byte fixture comparison straightforward. |
-| 88 | Per-channel codec selection only for `sequences` and `qualities`. Override for any other channel raises an error. | Integer channels need an int↔byte serialisation layer not specified in M86. VL_STRING channels need M85 codecs. Restricting the surface keeps the milestone tight and the failure mode explicit. |
-| 89 | Lazy whole-channel decode on first access; cache on the `GenomicRun` instance. | Codec output is byte-stream non-sliceable. The decode-once-then-slice tradeoff is the right shape for sequential genomic workloads (the common case) and is acceptable for random-access workloads on typical-size sequencing data. |
-| 90 | No backward-compatibility shim for pre-M86 readers. v0.12 files with `signal_codec_overrides` are unreadable by pre-M86 implementations. | Write-forward discipline matches M80, M82. The `@compression` attribute scheme exists in the format-spec already; pre-M86 readers that ignore it are non-conformant readers, not valid old readers. |
+| 91 | Single fixed bin scheme in v0: scheme_id `0x00` = "Illumina-8" with the bin ranges and centres documented in §2. | Simpler than parameterised binning. Future schemes (NCBI 4-bin, Bonfield variable-width, etc.) get distinct scheme_ids. The wire format permits up to 256 schemes; only one is defined now. |
+| 92 | Bin table is **NOT** included in the wire stream — it's implicit from the scheme_id. | Saves 16 bytes per stream and prevents accidental encode/decode mismatches across implementations. Each language hardcodes the table for scheme 0x00 and verifies it on first use of the codec. |
+| 93 | Phred values > 40 clamp to bin 7 (centre = 40). | Most genomic data uses Phred 0–40. Q41+ is uncommon (PacBio/HiFi can produce Q60+ but those usually pre-quantise). Losing the saturation precision is the documented lossy semantics. |
+| 94 | **4-bit-packed indices, not 3-bit-packed**, even though only 8 bins are used. | 4-bit aligns to nibble boundaries, two indices per byte, no bit-juggling across byte boundaries. 3-bit would save 25% more space but require complex bit math. The 4-bit choice trades 25% of the standalone size win for trivial pack/unpack code; the M86 pipeline composes rANS afterwards which recovers most of the difference. |
+| 95 | First input quality occupies the **high nibble** of its body byte (big-endian within byte). | Matches BASE_PACK's bit-order convention (Binding Decision §82) — left-to-right reading order maps to high-to-low bits. Cross-codec consistency makes hex dumps less surprising. |
+| 96 | Padding bits in the final body byte (when input has odd length) are zero. | Deterministic encoder output without recording the padding state. Decoder uses `original_length` to know how many indices to consume. |
+| 97 | Lossy round-trip: `decode(encode(x)) == bin_centre[bin_of[x]]`, NOT `x`. | Quality binning is fundamentally lossy. Tests must use bin-centre inputs OR assert against the known lossy mapping, not byte-exact round-trip on arbitrary input. |
 
 ---
 
-## 4. API extensions
+## 5. Python Implementation
 
-### 4.1 Python — `WrittenGenomicRun`
+### 5.1 `python/src/ttio/codecs/quality.py` (new file)
 
-Add to `python/src/ttio/written_genomic_run.py`:
-
-```python
-from .enums import Compression
-
-@dataclass(slots=True)
-class WrittenGenomicRun:
-    # ... existing fields ...
-    signal_compression: str = "gzip"  # unchanged
-
-    # M86: per-channel codec opt-in. Maps channel name to a TTI-O
-    # internal codec id. Only "sequences" and "qualities" are
-    # accepted; only RANS_ORDER0, RANS_ORDER1, BASE_PACK are
-    # accepted as codec values. Channels not in this dict use the
-    # existing signal_compression string path.
-    signal_codec_overrides: dict[str, Compression] = field(default_factory=dict)
-```
-
-### 4.2 Python — `_write_genomic_run` dispatch
-
-In `python/src/ttio/spectral_dataset.py` `_write_genomic_run`,
-replace the two relevant lines (currently lines 904–905) with a
-helper call:
+Public API — mirrors the rANS / BASE_PACK module shape:
 
 ```python
-# Signal channels — these honour run.signal_compression by default.
-sc = rg.create_group("signal_channels")
-io._write_int64_channel(sc, "positions", run.positions, run.signal_compression)
-_write_byte_channel_with_codec(
-    sc, "sequences", run.sequences, run.signal_compression,
-    run.signal_codec_overrides.get("sequences"),
-)
-_write_byte_channel_with_codec(
-    sc, "qualities", run.qualities, run.signal_compression,
-    run.signal_codec_overrides.get("qualities"),
-)
-io._write_uint32_channel(sc, "flags", run.flags, run.signal_compression)
-io._write_uint8_channel(
-    sc, "mapping_qualities", run.mapping_qualities, run.signal_compression
-)
-# ... existing cigars / read_names compound writes follow unchanged ...
-```
+def encode(data: bytes) -> bytes:
+    """Encode `data` (Phred score bytes) using QUALITY_BINNED.
 
-The helper lives in `python/src/ttio/_hdf5_io.py`:
+    Maps each input byte through the Illumina-8 bin table, packs
+    bin indices 4-bits-per-index (big-endian within byte). Returns
+    a self-contained byte string per the wire format in
+    HANDOFF.md §3.
 
-```python
-def _write_byte_channel_with_codec(
-    group, name, data, default_compression, codec_override
-):
-    """Write a uint8 byte channel, optionally through a TTIO codec.
-
-    If codec_override is None, behaves identically to
-    _write_uint8_channel (HDF5 filter dispatch).
-
-    If codec_override is RANS_ORDER0/RANS_ORDER1/BASE_PACK,
-    encodes the raw bytes and writes them as an unfiltered uint8
-    dataset with @compression set to the codec id.
+    Lossy: round-trip via bin centres. ``decode(encode(x)) ==
+    bin_centre[bin_of[x]]`` for each byte x.
     """
-    from .enums import Compression, Precision
-    if codec_override is None:
-        _write_uint8_channel(group, name, data, default_compression)
-        return
 
-    if codec_override == Compression.RANS_ORDER0:
-        from .codecs.rans import encode as _enc
-        encoded = _enc(bytes(data), order=0)
-    elif codec_override == Compression.RANS_ORDER1:
-        from .codecs.rans import encode as _enc
-        encoded = _enc(bytes(data), order=1)
-    elif codec_override == Compression.BASE_PACK:
-        from .codecs.base_pack import encode as _enc
-        encoded = _enc(bytes(data))
-    else:
-        raise ValueError(
-            f"signal_codec_overrides['{name}'] = {codec_override!r}: "
-            "only RANS_ORDER0, RANS_ORDER1, BASE_PACK are supported"
-        )
+def decode(encoded: bytes) -> bytes:
+    """Decode a stream produced by encode().
 
-    arr = np.frombuffer(encoded, dtype=np.uint8)
-    ds = group.create_dataset(
-        name, Precision.UINT8, length=arr.shape[0],
-        chunk_size=DEFAULT_SIGNAL_CHUNK,
-        compression=None,           # no HDF5 filter — bytes already coded
-    )
-    ds.write(arr)
-    write_int_attr(ds, "compression", int(codec_override))
+    Reads the header, unpacks the 4-bit bin indices, maps each
+    through the bin-centre table. Raises ValueError on malformed
+    input (bad version, bad scheme_id, length mismatch, truncated
+    stream).
+    """
 ```
 
-The override-validation (channel name and codec value) lives at
-the top of `_write_genomic_run`:
+Implementation notes:
 
-```python
-_ALLOWED_OVERRIDE_CHANNELS = frozenset({"sequences", "qualities"})
-_ALLOWED_OVERRIDE_CODECS = frozenset({
-    Compression.RANS_ORDER0, Compression.RANS_ORDER1, Compression.BASE_PACK,
-})
+- Use `bytes.translate` with a 256-entry lookup table for the
+  byte→bin-index mapping. That's the same pattern the M84
+  base_pack.py uses for ACGT.
+- For the 4-bit pack: iterate two indices at a time; pack
+  `(idx0 << 4) | idx1`. For odd input, last byte is `(last_idx
+  << 4)`.
+- For the unpack: iterate body bytes; emit `[byte >> 4, byte &
+  0x0F]` per byte. Stop after `original_length` emissions.
+- Bin-centre map for decode: `bytes([0, 5, 15, 22, 27, 32, 37,
+  40])` then `output.translate(centre_map)`.
+- Header: `struct.pack(">BBI", 0, 0, orig_len)` — 6 bytes.
+- Decode validation: check first two bytes; check
+  `len(encoded) == 6 + (orig_len + 1) // 2`; raise `ValueError`
+  with a clear message on any failure.
 
-for ch_name, codec in run.signal_codec_overrides.items():
-    if ch_name not in _ALLOWED_OVERRIDE_CHANNELS:
-        raise ValueError(
-            f"signal_codec_overrides: channel '{ch_name}' not supported "
-            f"(only sequences and qualities can use TTIO codecs)"
-        )
-    if Compression(codec) not in _ALLOWED_OVERRIDE_CODECS:
-        raise ValueError(
-            f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
-            "not supported (only RANS_ORDER0, RANS_ORDER1, BASE_PACK)"
-        )
+### 5.2 Module re-exports
+
+In `python/src/ttio/codecs/__init__.py`:
+- Add: `from .quality import encode as quality_encode, decode as quality_decode`
+- Update docstring: change `quality       — Phred score quantisation (M84, future)` to `quality       — Phred score quantisation (M85 Phase A)`.
+
+### 5.3 `python/tests/test_m85_quality.py` (new file)
+
+13 pytest cases per §7.1 below.
+
+---
+
+## 6. Objective-C and Java Implementations
+
+### 6.1 ObjC — `objc/Source/Codecs/TTIOQuality.{h,m}` (new files)
+
+Same shape as `TTIOBasePack.{h,m}`:
+
+```objc
+NSData * _Nonnull TTIOQualityEncode(NSData * _Nonnull data);
+
+NSData * _Nullable TTIOQualityDecode(NSData * _Nonnull encoded,
+                                     NSError * _Nullable * _Nullable error);
 ```
 
-### 4.3 Python — `GenomicRun` read dispatch
+C-core encoder/decoder wrapped by ObjC entry points. Static
+256-entry pack lookup table; 8-entry centre lookup table. Wire into
+`objc/Source/GNUmakefile` (add `Codecs/TTIOQuality.h` to
+`libTTIO_HEADER_FILES`, `Codecs/TTIOQuality.m` to
+`libTTIO_OBJC_FILES`).
 
-In `python/src/ttio/genomic_run.py`, modify `_signal_dataset` (or
-introduce a new `_signal_bytes(name)` helper) to check
-`@compression` once and cache:
+Tests in `objc/Tests/TestM85Quality.m`. Style mirrors
+`TestM84BasePack.m`. Wire into `TTIOTestRunner.m` as `extern void
+testM85Quality(void);` + `START_SET("M85: QUALITY_BINNED codec")
+testM85Quality(); END_SET("M85: QUALITY_BINNED codec")` block in
+`main`. Add `TestM85Quality.m` to `objc/Tests/GNUmakefile`'s
+`TTIOTests_OBJC_FILES`. Target ≥ 30 new assertions across the 13
+tests.
 
-```python
-@dataclass(slots=True)
-class GenomicRun:
-    # ... existing fields ...
-    _decoded_byte_channels: dict[str, bytes] = field(
-        default_factory=dict, repr=False, compare=False,
-    )
-
-    def _byte_channel_slice(self, name: str, offset: int, count: int) -> bytes:
-        """Return bytes [offset, offset+count) for a uint8 channel.
-
-        For codec-compressed channels (@compression > 0), the whole
-        channel is decoded once on first access and cached, then
-        sliced from memory. For uncompressed channels, the existing
-        per-slice HDF5 read path is used.
-        """
-        cached = self._decoded_byte_channels.get(name)
-        if cached is not None:
-            return cached[offset:offset + count]
-
-        ds = self._signal_dataset(name)
-        codec_id = _read_int_attr_or_zero(ds, "compression")
-        if codec_id == 0:
-            return bytes(ds.read(offset=offset, count=count))
-
-        # Compressed: read all bytes, decode, cache.
-        from .enums import Compression
-        all_bytes = bytes(ds.read(offset=0, count=ds.length))
-        if codec_id == Compression.RANS_ORDER0:
-            from .codecs.rans import decode as _dec
-            decoded = _dec(all_bytes)
-        elif codec_id == Compression.RANS_ORDER1:
-            from .codecs.rans import decode as _dec
-            decoded = _dec(all_bytes)
-        elif codec_id == Compression.BASE_PACK:
-            from .codecs.base_pack import decode as _dec
-            decoded = _dec(all_bytes)
-        else:
-            raise ValueError(
-                f"signal_channel '{name}': @compression={codec_id} "
-                "is not a supported codec"
-            )
-        self._decoded_byte_channels[name] = decoded
-        return decoded[offset:offset + count]
-```
-
-Then in `__getitem__`, replace the two channel-read blocks with
-calls to `self._byte_channel_slice("sequences", offset, length)`
-and `self._byte_channel_slice("qualities", offset, length)`.
-
-### 4.4 ObjC — same pattern
-
-`TTIOWrittenGenomicRun.h/m` gains a
-`@property NSDictionary<NSString *, NSNumber *> *signalCodecOverrides;`
-property (NSNumber boxes the Compression int).
-
-`TTIOWrittenGenomicRun.m`'s write path adds the same dispatch. The
-helpers go in a new file `objc/Source/Genomics/TTIOGenomicCodec.{h,m}`
-or directly in the existing genomics translation unit.
-
-`TTIOGenomicRun.m` gains a `@property NSMutableDictionary<NSString
-*, NSData *> *decodedByteChannels;` (private), and the byte-slice
-method dispatches identically.
-
-The validation for channel name and codec id mirrors the Python
-side (raise via `[NSException raise:...]` or `NSError**` —
-whichever the existing API uses; check existing
-`TTIOWrittenGenomicRun` for style).
-
-### 4.5 Java — same pattern
-
-`WrittenGenomicRun.java` (Java) gains:
+### 6.2 Java — `java/src/main/java/global/thalion/ttio/codecs/Quality.java` (new file)
 
 ```java
-private Map<String, Compression> signalCodecOverrides = Map.of();
-public void setSignalCodecOverrides(Map<String, Compression> overrides) { ... }
-public Map<String, Compression> getSignalCodecOverrides() { ... }
+package global.thalion.ttio.codecs;
+
+public final class Quality {
+    public static byte[] encode(byte[] data) { ... }
+    public static byte[] decode(byte[] encoded) { ... }
+    private Quality() {}
+}
 ```
 
-`GenomicRun.java` gains a `private final Map<String, byte[]> decodedByteChannels = new HashMap<>();` and a `byteChannelSlice(name, offset, count)` helper that mirrors the Python design.
+Use `ByteBuffer` with `ByteOrder.BIG_ENDIAN` for header
+serialisation. Use `Byte.toUnsignedInt(b)` whenever reading a byte
+as a Phred score (since Java `byte` is signed and Phred 128+ would
+otherwise sign-extend negative).
 
-The validation throws `IllegalArgumentException` on disallowed
-channel/codec.
-
----
-
-## 5. Wire Format
-
-### 5.1 `@compression` attribute
-
-| Field           | Type   | Notes                                         |
-|-----------------|--------|-----------------------------------------------|
-| Attribute name  | `compression` | Lowercase, on the channel dataset.   |
-| Type            | uint8  | HDF5 native uint8 (`H5T_NATIVE_UINT8`).       |
-| Value 0         | NONE   | Equivalent to attribute absent.               |
-| Value 4         | RANS_ORDER0 | Dataset bytes are M83 rANS order-0 stream. |
-| Value 5         | RANS_ORDER1 | Dataset bytes are M83 rANS order-1 stream. |
-| Value 6         | BASE_PACK | Dataset bytes are M84 BASE_PACK stream.    |
-
-When `@compression > 0`:
-- The dataset has shape `[encoded_length]` (1D uint8).
-- The dataset has no HDF5 filter (`H5P_DEFAULT` or no filter pipeline).
-- The dataset bytes ARE the self-contained codec stream from M83 §2 / M84 §2.
-
-### 5.2 Backwards compatibility
-
-A channel with no `@compression` attribute behaves exactly as in
-M82: it's a uint8/int64/uint32 dataset with whatever HDF5 filter
-the writer chose (typically gzip level 6 or none). M82 readers
-silently work unchanged.
-
-A v0.12 file with `@compression > 0` on a channel will fail
-gracefully on a pre-M86 reader: the reader sees a uint8 dataset
-of unexpected length (the codec output isn't sliceable), and
-`AlignedRead.sequence` will surface as garbled bytes for any
-read whose offset/length walks past the encoded payload boundary.
-This is detected by the v0.12 acceptance tests on the pre-M86
-side; the read returns clearly-wrong data rather than silently
-corrupting downstream analysis. The `@compression` attribute is
-the canonical signal that the dataset needs codec dispatch.
+Tests in
+`java/src/test/java/global/thalion/ttio/codecs/QualityTest.java`.
+JUnit 5. Same 13 test cases as Python; ≥ 12 test methods, ≥ 40
+assertions.
 
 ---
 
-## 6. Tests
+## 7. Tests
 
-### 6.1 Python — new file `python/tests/test_m86_genomic_codec_wiring.py`
+### 7.1 Python — `python/tests/test_m85_quality.py`
 
-Eight test cases. Use a small fixture run (10 reads × 100 bp = 1000-byte sequences and qualities channels):
+All 13 use pytest:
+
+1. **`round_trip_pure_centre_bytes`** — input is `bytes([0, 5, 15,
+   22, 27, 32, 37, 40] * 32)` (256 bytes of pure bin centres).
+   `decode(encode(data)) == data` byte-exact (no information lost
+   on bin-centre input).
+2. **`round_trip_arbitrary_phred`** — input is `bytes(range(50))`
+   (50 bytes 0..49). Compute the expected lossy round-trip
+   manually: each byte x maps to its bin index then to its bin
+   centre. Assert `decode(encode(data)) == expected_centres`.
+3. **`round_trip_clamped`** — input includes Phred 50, 60, 93,
+   100, 200, 255. All map to bin 7, centre 40. Verify.
+4. **`round_trip_empty`** — `b""` → 6-byte header → `b""`.
+5. **`round_trip_single_byte`** — each Phred value at a bin centre
+   round-trips: 0→0, 5→5, 15→15, 22→22, 27→27, 32→32, 37→37,
+   40→40. All produce 7-byte streams (6 header + 1 body, low
+   nibble = 0 padding).
+6. **`padding_tail_patterns`** — 1, 2, 3, 4 byte inputs verify
+   the padding behaviour. Specifically: `b"\x00"` → body byte
+   `0x00`; `b"\x05"` → body byte `0x10` (bin 1 in high nibble,
+   padding zero in low nibble); `b"\x05\x05"` → body byte `0x11`
+   (no padding); `b"\x05\x05\x05"` → body bytes `0x11 0x10`
+   (padding zero in low nibble of second body byte).
+7. **`compression_ratio`** — generate 1 MiB of arbitrary Phred
+   bytes (via `os.urandom` mod 41 to keep them in range). Verify
+   `len(encode(data))` equals `6 + (len(data) + 1) // 2` exactly.
+   Should be slightly over 50% of the input.
+8. **`canonical_vector_a`** — encode `data_a`, compare bytes-equal
+   to fixture `quality_a.bin`.
+9. **`canonical_vector_b`** — same with `quality_b.bin`.
+10. **`canonical_vector_c`** — same with `quality_c.bin`.
+11. **`canonical_vector_d`** — same with `quality_d.bin` (= 6
+    bytes total).
+12. **`decode_malformed`** — five sub-cases, each
+    `pytest.raises(ValueError)`:
+    - Stream shorter than the 6-byte header.
+    - Bad version byte (0x01 instead of 0x00).
+    - Bad scheme_id (0xFF instead of 0x00).
+    - `original_length` says 4 but actual body is 5 bytes
+      (mismatch with `ceil(orig/2)`).
+    - Original_length 5 but body is only 2 bytes (truncation).
+13. **`throughput`** — encode 10 MiB of arbitrary Phred bytes,
+    log MB/s. Soft target encode ≥ 50 MB/s, decode ≥ 100 MB/s.
+    Print actual.
+
+### 7.2 ObjC — `objc/Tests/TestM85Quality.m`
+
+Same 13 cases. Throughput soft target encode ≥ 300 MB/s, decode ≥
+500 MB/s. Hard floor encode ≥ 150 MB/s, decode ≥ 250 MB/s.
+
+### 7.3 Java — `java/src/test/java/global/thalion/ttio/codecs/QualityTest.java`
+
+Same 13 cases. Throughput logged, no hard threshold.
+
+### 7.4 Cross-language byte-exact conformance
+
+The four canonical fixtures are the contract.
+
+---
+
+## 8. Canonical Test Vectors
+
+All four fixtures are generated by the Python encoder and committed
+under `python/tests/fixtures/codecs/`. ObjC and Java each get
+verbatim copies under their fixture directories.
+
+### Vector A — pure bin centres, 256 bytes
 
 ```python
-import numpy as np
-import pytest
-import tempfile
-from pathlib import Path
-from ttio.enums import Compression, AcquisitionMode
-from ttio.spectral_dataset import SpectralDataset
-from ttio.written_genomic_run import WrittenGenomicRun
-
-def _make_run(seq_bytes: bytes, qual_bytes: bytes,
-              codec_overrides=None) -> WrittenGenomicRun:
-    n = 10
-    read_len = 100
-    return WrittenGenomicRun(
-        acquisition_mode=AcquisitionMode.GENOMIC_WGS.value,
-        reference_uri="GRCh38.p14",
-        platform="ILLUMINA",
-        sample_name="M86_TEST",
-        positions=np.arange(n, dtype=np.int64) * 1000,
-        mapping_qualities=np.full(n, 60, dtype=np.uint8),
-        flags=np.zeros(n, dtype=np.uint32),
-        sequences=np.frombuffer(seq_bytes, dtype=np.uint8),
-        qualities=np.frombuffer(qual_bytes, dtype=np.uint8),
-        offsets=np.arange(n, dtype=np.uint64) * read_len,
-        lengths=np.full(n, read_len, dtype=np.uint32),
-        cigars=["100M"] * n,
-        read_names=[f"r{i}" for i in range(n)],
-        mate_chromosomes=["chr1"] * n,
-        mate_positions=np.full(n, -1, dtype=np.int64),
-        template_lengths=np.zeros(n, dtype=np.int32),
-        chromosomes=["chr1"] * n,
-        signal_codec_overrides=codec_overrides or {},
-    )
+data_a = bytes([0, 5, 15, 22, 27, 32, 37, 40]) * 32
 ```
 
-Tests:
+Expected wire size: `6 + 128 = 134 bytes`. Body bytes are all
+`0x01 0x23 0x45 0x67 ...` patterns from packed bin pairs.
 
-1. **`test_round_trip_sequences_rans_order0`** — write a run with
-   `signal_codec_overrides={"sequences": Compression.RANS_ORDER0}`.
-   Reopen, iterate all 10 reads, verify each `aligned_read.sequence`
-   matches the corresponding 100-byte slice of the input.
-2. **`test_round_trip_sequences_rans_order1`** — same with order-1.
-3. **`test_round_trip_sequences_base_pack`** — same with BASE_PACK.
-   Use pure-ACGT sequences so the codec compresses well.
-4. **`test_round_trip_qualities_rans_order1`** — same on qualities
-   channel (Phred bytes have local correlation, so order-1 is
-   the natural choice).
-5. **`test_round_trip_mixed`** — both overrides at once: BASE_PACK
-   on sequences, RANS_ORDER1 on qualities. Round-trip both.
-6. **`test_back_compat_no_overrides`** — write with empty
-   `signal_codec_overrides`, reopen with M86 read code, verify the
-   data round-trips through the existing HDF5-filter path
-   unchanged. Confirms the new code path doesn't break M82
-   behaviour.
-7. **`test_reject_invalid_channel`** — `signal_codec_overrides=
-   {"positions": Compression.RANS_ORDER0}` must raise `ValueError`
-   at write time (positions is an integer channel).
-8. **`test_reject_invalid_codec`** — `signal_codec_overrides=
-   {"sequences": Compression.LZ4}` must raise `ValueError` at
-   write time (LZ4 is an HDF5 filter, not a TTIO codec).
-9. **`test_attribute_set_correctly`** — write with each codec,
-   open the underlying h5py file directly, verify the dataset
-   has `@compression == codec.value`.
-10. **`test_size_win_base_pack`** — write a 100 000 base pure-ACGT
-    sequences channel both with and without BASE_PACK; check that
-    the BASE_PACK file's `signal_channels/sequences` dataset is
-    < 30% the size of the uncompressed dataset.
+### Vector B — Illumina-realistic Phred profile, 1024 bytes
 
-### 6.2 Cross-language fixture generation
-
-After tests pass, generate three conformance fixtures from the
-Python writer in
-`python/tests/fixtures/genomic/m86_codec_<codec>.tio`:
+A typical Phred-quality profile drops at the read end. Construct
+deterministically:
 
 ```python
-# Common input: 10 reads × 100 bp pure-ACGT
-seq = (b"ACGT" * 25) * 10           # 1000 bytes pure ACGT
-qual = bytes((30 + (i % 11)) for i in range(1000))   # Phred 30-40
-
-for codec_name, codec in [
-    ("rans_order0", Compression.RANS_ORDER0),
-    ("rans_order1", Compression.RANS_ORDER1),
-    ("base_pack",   Compression.BASE_PACK),
-]:
-    overrides = {"sequences": codec, "qualities": codec}
-    # Build run, write to tmpfile, copy to fixtures/
-    ...
+import hashlib
+seed = hashlib.sha256(b"ttio-quality-vector-b").digest()  # 32 bytes
+data_b_bytes = bytearray()
+for i in range(1024):
+    # First half: Phred 30..40 (mostly bin 5, 6, 7)
+    # Second half: Phred 15..30 (mostly bin 2, 3, 4, 5)
+    if i < 512:
+        base = 30 + (seed[i % 32] % 11)   # 30..40
+    else:
+        base = 15 + (seed[i % 32] % 16)   # 15..30
+    data_b_bytes.append(base)
+data_b = bytes(data_b_bytes)
 ```
 
-Commit the three `.tio` files as
-`python/tests/fixtures/genomic/m86_codec_{rans_order0,rans_order1,base_pack}.tio`.
-Total fixture size should be a few hundred KB.
+Expected wire size: `6 + 512 = 518 bytes`. mask_count style metric
+n/a (no mask in QUALITY_BINNED).
 
-Add an 11th test:
-- **`test_cross_language_fixtures`** — for each of the three
-  fixture files, open with the M86 Python read path and verify
-  every read's sequence and qualities match the known input
-  (`b"ACGT" * 25` for each sequence, Phred 30-40 cycle for each
-  qualities slice).
+### Vector C — edge-case Phred values, 64 bytes
 
-### 6.3 ObjC — new file `objc/Tests/TestM86GenomicCodecWiring.m`
+Hand-constructed to exercise every bin transition and saturation,
+exactly 64 bytes:
 
-Same coverage as Python tests 1–11. Style mirrors
-`TestM82GenomicRun.m` (existing genomic test pattern). Loads
-fixtures from `objc/Tests/Fixtures/genomic/m86_codec_*.tio`
-(verbatim copies of the Python-generated fixtures). Target ≥ 30
-new assertions across the 11 tests. Wire into `TTIOTestRunner.m`
-as `START_SET("M86: codec wiring") testM86GenomicCodecWiring();
-END_SET("M86: codec wiring")`.
+```python
+data_c = bytes([
+    # 24 bytes covering every bin boundary (low + high edge of each bin)
+    0,  1,         # bin 0 edges
+    2,  5,  9,     # bin 1 low/centre/high
+    10, 15, 19,    # bin 2 low/centre/high
+    20, 22, 24,    # bin 3 low/centre/high
+    25, 27, 29,    # bin 4 low/centre/high
+    30, 32, 34,    # bin 5 low/centre/high
+    35, 37, 39,    # bin 6 low/centre/high
+    40, 41, 50, 60, 93, 100, 200, 255,  # bin 7 + saturation (8 bytes)
+    # 32 bytes of bin centres (4 cycles of the 8 centres)
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+])
+assert len(data_c) == 64
+```
 
-Add `objc/Tests/Fixtures/genomic/` directory if it does not
-already exist.
+Count check: 2 + 3 + 3 + 3 + 3 + 3 + 3 + 8 = 28 bytes for the
+boundary-coverage section. (Bin 0 contributes only the two values
+0 and 1, since `1` is both the centre and the high edge — the
+table above lists each bin distinctly.) Then 32 bytes of bin
+centres = 28 + 32 = **60**. Need 4 more bytes — append four more
+centres `0, 5, 15, 22`. Final input:
 
-### 6.4 Java — new file `java/src/test/java/global/thalion/ttio/genomics/M86CodecWiringTest.java`
+```python
+data_c = bytes([
+    0,  1,
+    2,  5,  9,
+    10, 15, 19,
+    20, 22, 24,
+    25, 27, 29,
+    30, 32, 34,
+    35, 37, 39,
+    40, 41, 50, 60, 93, 100, 200, 255,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22,
+])
+assert len(data_c) == 64, f"expected 64, got {len(data_c)}"
+```
 
-Same coverage as Python tests 1–11. JUnit 5. Style mirrors any
-existing `genomics/...Test.java`. Loads fixtures via
-`getResourceAsStream("/ttio/fixtures/genomic/m86_codec_*.tio")`.
-Place the fixture binaries under
-`java/src/test/resources/ttio/fixtures/genomic/`.
+Expected wire size: `6 + 32 = 38 bytes` (64 input bytes → 32
+packed body bytes).
 
-Target ≥ 11 test methods, ≥ 30 assertions.
+### Vector D — empty
 
-### 6.5 Cross-language conformance matrix
+```python
+data_d = b""
+```
 
-The three `.tio` fixtures committed in §6.2 are the cross-language
-contract. Each implementation must read every fixture and produce
-byte-identical decoded sequence/qualities data. The acceptance
-section enumerates this explicitly.
+Expected wire size: 6 bytes (header only).
+
+### Reference output generation
+
+```python
+import hashlib
+from ttio.codecs.quality import encode, decode
+
+# Bin and centre tables for the lossy round-trip check.
+_BIN_OF = [0]*2 + [1]*8 + [2]*10 + [3]*5 + [4]*5 + [5]*5 + [6]*5 + [7]*(256-40)
+_CENTRE = [0, 5, 15, 22, 27, 32, 37, 40]
+
+def lossy_expected(data):
+    return bytes(_CENTRE[_BIN_OF[b]] for b in data)
+
+# Vector A — pure bin centres
+data_a = bytes([0, 5, 15, 22, 27, 32, 37, 40]) * 32
+assert len(data_a) == 256
+
+# Vector B — Illumina-realistic Phred profile
+seed = hashlib.sha256(b"ttio-quality-vector-b").digest()
+data_b_bytes = bytearray()
+for i in range(1024):
+    if i < 512:
+        base = 30 + (seed[i % 32] % 11)
+    else:
+        base = 15 + (seed[i % 32] % 16)
+    data_b_bytes.append(base)
+data_b = bytes(data_b_bytes)
+
+# Vector C — exact 64-byte sequence per HANDOFF.md §8
+data_c = bytes([
+    0,  1,
+    2,  5,  9,
+    10, 15, 19,
+    20, 22, 24,
+    25, 27, 29,
+    30, 32, 34,
+    35, 37, 39,
+    40, 41, 50, 60, 93, 100, 200, 255,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22, 27, 32, 37, 40,
+    0, 5, 15, 22,
+])
+assert len(data_c) == 64
+
+# Vector D — empty
+data_d = b""
+
+for name, data in [("a", data_a), ("b", data_b), ("c", data_c), ("d", data_d)]:
+    enc = encode(data)
+    assert decode(enc) == lossy_expected(data), f"{name}: lossy round-trip failed"
+    open(f"tests/fixtures/codecs/quality_{name}.bin", "wb").write(enc)
+    print(f"{name}: {len(data)} -> {len(enc)} bytes")
+```
+
+The four input vectors A/B/C/D are deterministic and pinned by
+this script. ObjC and Java tests must construct the same input
+bytes (using the same SHA-256 salt for B and the same literal
+sequences for A, C, D) and compare encoder output against the
+committed `.bin` fixtures.
 
 ---
 
-## 7. Format-spec update
+## 9. Integration Point (Forward Reference)
 
-`docs/format-spec.md` already mentions per-channel attributes for
-codec selection in §10.4 (numpress example). Add a new subsection
-§10.5 (or extend §10.4) that documents the `@compression`
-attribute scheme:
+M85 Phase A does NOT wire QUALITY_BINNED into the genomic
+signal-channel pipeline — that's a future M86 phase (call it
+M86 Phase D, separate from Phase A which wired rANS + BASE_PACK).
+M85 Phase A delivers QUALITY_BINNED as a standalone primitive.
 
-> ### 10.5 `@compression` attribute (M86)
->
-> Signal-channel datasets that use a TTI-O internal compression
-> codec (rANS order-0 / rANS order-1 / BASE_PACK) carry a
-> `@compression` attribute (uint8) holding the M79 codec id. The
-> dataset bytes ARE the self-contained codec stream specified in
-> `docs/codecs/rans.md` (ids 4, 5) or `docs/codecs/base_pack.md`
-> (id 6). No HDF5 filter is applied to such datasets — the codec
-> output is high-entropy and would not benefit from deflate.
->
-> Absence of the attribute, or value `0`, means the dataset is
-> stored as-is and any HDF5 filter applies. Pre-M86 readers that
-> ignore `@compression` will silently misinterpret a v0.12-encoded
-> channel (the read path slices into a non-sliceable codec stream
-> and returns garbage). The attribute is the canonical signal for
-> codec dispatch.
->
-> M86 wires this attribute scheme only for the `sequences` and
-> `qualities` channels of `signal_channels/`. Integer channels
-> (`positions`, `flags`, `mapping_qualities`) and VL_STRING
-> channels (`cigars`, `read_names`) do not yet support TTIO
-> codecs; they ignore `@compression` if set and stay on
-> HDF5-filter ZLIB.
-
-Also update §10.4's trailing summary paragraph: ids `4`, `5`, `6`
-are now not just standalone primitives but **wired into the
-genomic write/read pipeline** for the byte channels; the
-`@compression` attribute is the dispatch mechanism.
+When M86 Phase D lands, a `signal_channels/qualities` dataset's
+`@compression == 7` will route the raw bytes through
+`quality.decode()`. The current M82 storage (raw Phred bytes)
+remains the `@compression == 0` (NONE) case.
 
 ---
 
-## 8. Documentation
+## 10. Documentation
 
-### 8.1 `docs/codecs/rans.md` and `docs/codecs/base_pack.md`
+### 10.1 `docs/codecs/quality.md` (new)
 
-Each gains a brief "Wired into" sentence at the top of §7
-("Forward references"):
+Codec specification document, parallel structure to
+`docs/codecs/rans.md` and `docs/codecs/base_pack.md`:
 
-> **M86** — wired into the genomic signal-channel write/read path
-> for `sequences` and `qualities` channels. Use
-> `WrittenGenomicRun.signal_codec_overrides={"sequences": ...}`
-> at write time; reader dispatches on `@compression` automatically.
+- Algorithm summary (8-bin Illumina-style + 4-bit packing)
+- Bin table (Phred ranges → bin index → bin centre)
+- Lossy round-trip explanation with worked examples
+- Wire format diagram
+- 4-bit-vs-3-bit rationale (Binding Decision §94)
+- IP provenance statement
+- Cross-language conformance contract
+- Performance targets per language
+- Public API in each of the three languages
 
-### 8.2 `CHANGELOG.md`
+### 10.2 `CHANGELOG.md`
 
-Add M86 entry under `[Unreleased]`. Mirror the M83/M84 structure
-(Added — Verification — Notes). Update the Unreleased header to
-include M86.
+Add M85 Phase A entry under `[Unreleased]`. Update the Unreleased
+header to mention M85 Phase A. Format mirrors the M83/M84/M86
+entries.
 
-### 8.3 `WORKPLAN.md`
+### 10.3 `docs/format-spec.md` §10.4
 
-The "Genomic codec milestone" section currently flags rANS and
-BASE_PACK as "implemented as standalone primitives, M86 wiring
-pending." Update Phase 1 status: mark the wiring complete for
-the byte channels; flag the integer-channel and VL_STRING codec
-work as still pending.
+Flip the **quality-binned** row from "Reserved enum slot … NOT
+YET IMPLEMENTED" to "Implemented in M85 Phase A …" with a pointer
+to `docs/codecs/quality.md`. Update the trailing summary
+paragraph: ids `4`, `5`, `6`, `7` now ship as standalone
+primitives; id `8` (name-tokenized) remains reserved-only and is
+deferred to M85 Phase B.
+
+### 10.4 `python/src/ttio/codecs/__init__.py`
+
+Update the docstring listing: change
+`quality       — Phred score quantisation (M84, future)` to
+`quality       — Phred score quantisation (M85 Phase A)`.
+
+### 10.5 `WORKPLAN.md`
+
+The M85 section needs restructuring to reflect Phase A shipping
+and Phase B (name-tokenizer) deferring. Format mirrors the M86
+restructure landed in `0de6fde`:
+
+```
+### M85 — Quality Quantiser + Name Tokeniser Codecs
+
+**Status: Phase A shipped (2026-04-26). Phase B deferred.**
+
+#### Phase A — quality_binned codec (SHIPPED)
+- [x] ttio.codecs.quality — fixed Illumina-8 bin table (CRUMBLE-
+      derived), 4-bit-packed indices, lossy by construction.
+- [x] All three languages, cross-language byte-exact fixtures.
+- (commit refs)
+
+#### Phase B — name_tokenizer codec (DEFERRED)
+- ttio.codecs.name_tokenizer: CRAM 3.1-style read name compression.
+  ... (existing wishlist preserved)
+```
+
+Also: update the M84 acceptance-criteria text in WORKPLAN if the
+M84 entry's "Quality Quantiser" half was acknowledged anywhere.
+(Spot-check during the docs phase; if no concrete claim was made,
+no edit needed.)
 
 ---
 
-## 9. Gotchas (continued from M84 §89–§95)
+## 11. Gotchas (continued from M86 §96–§102)
 
-96. **Codec output isn't HDF5-sliceable.** The whole channel must
-    be read and decoded in one shot. Any future code that adds
-    streaming-decode support would require codec changes (out of
-    M86 scope). The `_decoded_byte_channels` cache is the right
-    shape for the current codecs.
+103. **Lossy round-trip is a feature.** Tests must NOT assert
+     `decode(encode(arbitrary)) == arbitrary`. Use bin-centre
+     inputs for byte-exact round-trips, or assert against the
+     expected lossy output. Mistaken assertions will produce
+     "test passes for trivial inputs but fails for real Phred
+     data" bugs.
 
-97. **Don't double-compress.** When `@compression > 0`, the
-    dataset must be created without an HDF5 filter
-    (`compression=None` in the Python h5py call,
-    `H5Pset_deflate` skipped in ObjC, no `setDeflate` in Java).
-    Running deflate over rANS or BASE_PACK output adds CPU and
-    typically *enlarges* the bytes (random-looking data
-    compresses poorly).
+104. **Phred 41+ saturates to bin 7 / centre 40.** PacBio HiFi
+     produces Phred 60+ scores; those will round-trip to 40 with
+     this codec. Document. Future scheme_ids may add wider
+     ranges; for v0 of scheme 0x00, saturation is the spec.
 
-98. **Per-channel attribute name is `compression`, not `codec`.**
-    Single source of truth. The format-spec uses
-    `@compression` everywhere; do not introduce variants like
-    `@codec_id`, `@compression_codec`, etc. The attribute is on
-    the dataset, not on the parent group.
+105. **Padding-bit determinism.** Final body byte's low nibble
+     MUST be zero when input has odd length. Encoder bugs that
+     leave stack garbage there will fail the cross-language
+     fixture comparison. Tests must include a 1-byte input
+     (which packs to a single high-nibble plus zero padding).
 
-99. **`WrittenGenomicRun.signal_compression` (string) and
-    `signal_codec_overrides` (dict) are independent.** The string
-    sets the default for channels NOT in the dict; the dict
-    overrides per-channel. A run with `signal_compression="gzip"`
-    and `signal_codec_overrides={"sequences": BASE_PACK}` writes
-    sequences with BASE_PACK and qualities/positions/flags with
-    gzip-via-HDF5. Cross-language tests must cover this hybrid
-    case.
+106. **Header is fixed size: 6 bytes.** No optional fields; no
+     embedded bin table. Future scheme_ids may extend the
+     header (in which case version bumps to 0x01); v0 is the
+     6-byte header documented in §3.
 
-100. **Integer channels are deliberately out of scope.** Any
-     attempt to override `positions`, `flags`, or
-     `mapping_qualities` must raise. Test it explicitly. If a
-     future milestone wants integer-channel codecs, it'll add an
-     int↔byte serialisation contract — that contract doesn't
-     exist yet, and silently accepting an integer-channel
-     override would commit to one prematurely.
+107. **Java unsigned-byte gotcha.** Phred values must be read as
+     unsigned bytes from `byte[]`. `Byte.toUnsignedInt(b)` is
+     the canonical idiom. Without it, Phred 200+ would
+     sign-extend to a negative int and crash the bin-table
+     lookup.
 
-101. **Lazy decode is per-`GenomicRun`-instance, not global.**
-     Two open `GenomicRun` objects on the same file each decode
-     independently. This is correct (no shared mutable state)
-     but means re-opening incurs the decode cost again. Document
-     this in the `GenomicRun` class docstring.
-
-102. **Compound channels (`cigars`, `read_names`, `mate_info`)
-     ignore `@compression`.** They're not byte arrays, and their
-     write/read goes through a different code path
-     (`write_compound_dataset` / `read_compound_dataset`). Tests
-     that check round-trip on those channels remain unchanged
-     by M86.
+108. **No MPGO remnants.** M83 audited the ObjC tree; nothing
+     to clean.
 
 ---
 
 ## Acceptance Criteria
 
 ### Python
-- [ ] All existing tests pass (zero regressions vs `881be0f`).
-- [ ] `WrittenGenomicRun` has `signal_codec_overrides` field.
-- [ ] Round-trip with each codec on `sequences` byte-exact (3 tests).
-- [ ] Round-trip with RANS_ORDER1 on `qualities` byte-exact.
-- [ ] Round-trip with mixed overrides byte-exact.
-- [ ] Backwards-compat: empty overrides path unchanged.
-- [ ] Override on integer channel raises ValueError at write time.
-- [ ] Override with non-codec value raises ValueError at write time.
-- [ ] `@compression` attribute is set correctly on the dataset.
-- [ ] BASE_PACK on pure-ACGT sequences yields a dataset < 30% the
-      size of the uncompressed equivalent.
-- [ ] Three cross-language fixtures committed to
-      `python/tests/fixtures/genomic/m86_codec_*.tio`.
+- [ ] All existing tests pass (zero regressions vs `0de6fde`).
+- [ ] `quality.encode` / `quality.decode` ship in
+      `python/src/ttio/codecs/quality.py` with the wire format
+      from §3.
+- [ ] All 13 tests in `python/tests/test_m85_quality.py` pass.
+- [ ] All four canonical fixtures
+      (`quality_{a,b,c,d}.bin`) committed and match the encoder
+      output byte-exact.
+- [ ] Decode malformed (5 sub-cases) raises ValueError.
+- [ ] Throughput logged (encode ≥ 50 MB/s, decode ≥ 100 MB/s).
+- [ ] Module re-export + docstring updated in
+      `python/src/ttio/codecs/__init__.py`.
 
 ### Objective-C
-- [ ] All existing tests pass (zero regressions vs the 2047 PASS
-      baseline + 2 pre-existing M38 Thermo failures).
-- [ ] `TTIOWrittenGenomicRun.signalCodecOverrides` property added.
-- [ ] All 11 round-trip tests pass byte-exact.
-- [ ] Three cross-language fixtures (verbatim copies of Python's)
-      placed under `objc/Tests/Fixtures/genomic/` and read
-      byte-exact.
+- [ ] All existing tests pass (zero regressions vs the 2119
+      PASS baseline + 2 pre-existing M38 Thermo failures).
+- [ ] `TTIOQualityEncode` / `TTIOQualityDecode` ship.
+- [ ] All 13 tests in `TestM85Quality.m` pass byte-exact against
+      the Python fixtures.
+- [ ] Malformed input → NSError, no crash, all 5 sub-cases.
+- [ ] Throughput: encode ≥ 150 MB/s hard floor (soft ≥ 300);
+      decode ≥ 250 MB/s hard floor (soft ≥ 500).
 - [ ] ≥ 30 new assertions.
-- [ ] Validation rejects invalid channel / invalid codec
-      overrides cleanly (no crash).
 
 ### Java
-- [ ] All existing tests pass (zero regressions vs 430/0/0/0 baseline → ≥ 441/0/0/0 after M86).
-- [ ] `WrittenGenomicRun.signalCodecOverrides` setter/getter.
-- [ ] All 11 round-trip tests pass byte-exact.
-- [ ] Three cross-language fixtures (verbatim copies) under
-      `java/src/test/resources/ttio/fixtures/genomic/` and read
-      byte-exact.
-- [ ] ≥ 11 test methods, ≥ 30 assertions.
+- [ ] All existing tests pass (zero regressions vs the 441/0/0/0
+      baseline → ≥ 454/0/0/0 after M85 Phase A).
+- [ ] `Quality.encode` / `Quality.decode` ship.
+- [ ] All four canonical vectors match Python fixtures byte-exact.
+- [ ] Malformed input → IllegalArgumentException, all 5 sub-cases.
+- [ ] ≥ 12 test methods, ≥ 40 assertions.
 
 ### Cross-Language
-- [ ] All three implementations read all three Python-generated
-      fixtures with byte-identical decoded output.
-- [ ] `docs/format-spec.md` §10.5 (or extended §10.4) committed
-      describing the `@compression` attribute scheme.
-- [ ] `docs/codecs/rans.md` and `docs/codecs/base_pack.md`
-      updated with the M86 wiring sentence in §7.
-- [ ] `CHANGELOG.md` M86 entry committed under `[Unreleased]`.
-- [ ] `WORKPLAN.md` Phase 1 status updated to reflect wiring
-      complete for byte channels.
+- [ ] Python, ObjC, and Java produce identical encoded bytes for
+      vectors A, B, C, D.
+- [ ] Fixture files committed under
+      `python/tests/fixtures/codecs/quality_*.bin` and copied
+      verbatim to `objc/Tests/Fixtures/` and
+      `java/src/test/resources/ttio/codecs/`.
+- [ ] `docs/codecs/quality.md` committed and complete.
+- [ ] `CHANGELOG.md` M85 Phase A entry committed under
+      `[Unreleased]`.
+- [ ] `docs/format-spec.md` §10.4 quality-binned row flipped to
+      "implemented".
+- [ ] `python/src/ttio/codecs/__init__.py` docstring updated.
+- [ ] `WORKPLAN.md` M85 section restructured into Phase A
+      (shipped) and Phase B (deferred).
 
 ---
 
 ## Out of Scope
 
-- **Integer-channel codecs.** `positions`, `flags`,
-  `mapping_qualities` continue to use HDF5 ZLIB. Adding TTIO
-  codec support for these requires an int↔byte serialisation
-  contract that's not defined here. Future milestone.
-- **VL_STRING channel codecs.** `cigars`, `read_names`,
-  `mate_info` continue to use the existing compound-write path.
-  M85 (`name-tokenized`) is the natural follow-up.
-- **MS-side wiring.** This milestone is genomic-only. The MS
-  signal-channel path (`/study/ms_runs/.../signal_channels/`) is
-  unchanged. If an MS use case for the new codecs arises later,
-  it would be a sibling milestone with the same dispatch pattern
-  but the MS storage shape (one channel per profile / centroid /
-  noise / etc., float64 not uint8).
-- **Streaming decode.** The lazy-decode-cache approach reads the
-  whole channel into memory on first access. Future codecs (or
-  future versions of rANS / BASE_PACK) that support block-level
-  decode could enable streaming, but that's not in M86.
-- **Changing the M83 / M84 codec wire formats.** Those are
-  frozen across all three languages by their cross-language
-  fixture conformance contracts; M86 just calls into them.
-- **Performance optimisation.** The lazy-decode cost on first
-  read is the natural overhead. SIMD, parallel decode of
-  independent channels, etc. are out of scope.
+- **Name-tokenizer codec.** That's M85 Phase B, a separate future
+  milestone. Bonfield 2022 is substantially larger than
+  quality_binned and warrants its own plan.
+- **Wiring quality_binned into the genomic pipeline.** That's a
+  future M86 phase, not M85 Phase A.
+- **Variable bin schemes.** Only scheme_id `0x00` (Illumina-8) is
+  defined in v0. Future scheme_ids can add NCBI 4-bin, Bonfield
+  variable-width, etc.
+- **Quality scores > Phred 40.** Saturate to bin 7. Future codecs
+  with wider Phred range support are out of scope.
+- **rANS / Huffman composition inside the codec.** Standalone
+  size win is the 4-bit packing alone (~50%). Further compression
+  comes from M86 piping the output through rANS_order0; that's
+  composition, not codec scope.
+- **Performance optimisation beyond the targets.** SIMD,
+  vectorised pack/unpack tables, GPU offload — all out of scope.
