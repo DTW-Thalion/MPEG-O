@@ -71,6 +71,7 @@ extern void testV111DecryptInPlace(void);
 extern void testM79GenomicEnums(void);
 extern void testM82GenomicRun(void);
 extern void testM83Rans(void);
+extern void testM84BasePack(void);
 
 int main(int argc, const char *argv[])
 {
@@ -354,6 +355,10 @@ int main(int argc, const char *argv[])
         START_SET("M83: rANS codec")
             testM83Rans();
         END_SET("M83: rANS codec")
+
+        START_SET("M84: BASE_PACK codec")
+            testM84BasePack();
+        END_SET("M84: BASE_PACK codec")
     }
     return 0;
 }

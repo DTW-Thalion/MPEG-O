@@ -67,7 +67,8 @@ TTIOTests_OBJC_FILES = \
 	TestV111DecryptInPlace.m \
 	TestM79GenomicEnums.m \
 	TestM82GenomicRun.m \
-	TestM83Rans.m
+	TestM83Rans.m \
+	TestM84BasePack.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
