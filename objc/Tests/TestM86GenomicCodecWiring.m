@@ -15,6 +15,7 @@
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOGenomicRun.h"
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Codecs/TTIORans.h"      // M86 Phase B (size-win encoder probe)
 #import "Codecs/TTIOQuality.h"   // M86 Phase D
 #import "Codecs/TTIONameTokenizer.h"   // M86 Phase E
 #import "ValueClasses/TTIOEnums.h"
@@ -294,7 +295,11 @@ static void testRejectInvalidChannel(void)
 {
     NSData *seqBytes  = m86PureACGTSequences();
     NSData *qualBytes = m86PhredCycleQualities();
-    NSDictionary *overrides = @{ @"positions": @(TTIOCompressionRansOrder0) };
+    // M86 Phase B (Binding Decision §117): positions/flags/
+    // mapping_qualities are now valid override channels for the rANS
+    // codecs. Use `cigars` (still not in the override-eligible set)
+    // to exercise the unknown-channel rejection path.
+    NSDictionary *overrides = @{ @"cigars": @(TTIOCompressionRansOrder0) };
     TTIOWrittenGenomicRun *run = m86MakeRun(seqBytes, qualBytes,
                                             overrides, TTIOCompressionZlib);
     NSString *path = m86TmpPath("badch");
@@ -309,10 +314,10 @@ static void testRejectInvalidChannel(void)
         raised = YES;
         captured = e;
     }
-    PASS(raised, "M86: override on 'positions' raises NSException");
+    PASS(raised, "M86: override on 'cigars' raises NSException");
     PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
          "M86: bad-channel exception is NSInvalidArgumentException");
-    PASS(captured && [captured.reason rangeOfString:@"positions"].location != NSNotFound,
+    PASS(captured && [captured.reason rangeOfString:@"cigars"].location != NSNotFound,
          "M86: bad-channel exception names the rejected channel");
 
     // Validation runs before the genomic_runs subtree is built, so no
@@ -1613,6 +1618,682 @@ static void testCrossLanguageFixtureNameTokenized(void)
          (unsigned)nameAttr);
 }
 
+// ════════════════════════════════════════════════════════════════════
+// M86 Phase B — rANS on integer channels (positions / flags /
+// mapping_qualities). Mirrors python/tests/test_m86_genomic_codec_
+// wiring.py tests #30–#37 (HANDOFF.md M86 Phase B §6.2). The Phase B
+// dispatch is wired through a new int-channel codec helper that
+// serialises the integer arrays to little-endian bytes before passing
+// them to the M83 rANS codec; the read-side helper
+// -intChannelArrayNamed: decodes whole-channel and caches
+// per Binding Decisions §115–§119.
+// ════════════════════════════════════════════════════════════════════
+
+/** Build a Phase B-style genomic run with caller-supplied integer
+ *  arrays for positions / flags / mapping_qualities. The positions in
+ *  this run also drive the genomic_index, so per-read position assert-
+ *  ions go through the index (per Binding Decision §119) — the helper
+ *  -intChannelArrayNamed: exercises the signal_channels/ codec path
+ *  directly. */
+static TTIOWrittenGenomicRun *m86PhBMakeRun(
+    NSData *positionsData,
+    NSData *flagsData,
+    NSData *mapqsData,
+    NSDictionary<NSString *, NSNumber *> *codecOverrides,
+    TTIOCompression baseCompression)
+{
+    NSUInteger n = positionsData.length / sizeof(int64_t);
+    NSData *seqBytes = m86PureACGTSequences();
+    NSData *qualBytes = m86PhredCycleQualities();
+    // Note: m86PureACGTSequences() / m86PhredCycleQualities() both
+    // produce kM86_NReads * kM86_ReadLen bytes; this Phase B helper
+    // is exercised at kM86_NReads (10), so the sizes match.
+    if (n != kM86_NReads) {
+        // Helper invariant: positions must contain exactly kM86_NReads
+        // int64 elements so the synthesized seq/qual/offset buffers
+        // line up. Bail loudly so callers don't get cryptic decode
+        // errors downstream.
+        [NSException raise:NSInternalInconsistencyException
+                    format:@"Phase B helper expects kM86_NReads-sized "
+                           @"positions input (got %lu)",
+                           (unsigned long)n];
+    }
+
+    NSMutableData *offsets = [NSMutableData dataWithLength:n * sizeof(uint64_t)];
+    NSMutableData *lengths = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+    NSMutableData *matePos = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    NSMutableData *tlens   = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+    uint64_t *op = (uint64_t *)offsets.mutableBytes;
+    uint32_t *lp = (uint32_t *)lengths.mutableBytes;
+    int64_t  *mp = (int64_t  *)matePos.mutableBytes;
+    for (NSUInteger i = 0; i < n; i++) {
+        op[i] = (uint64_t)(i * kM86_ReadLen);
+        lp[i] = (uint32_t)kM86_ReadLen;
+        mp[i] = -1;
+    }
+    (void)tlens;  // zero-initialised
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *names  = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *chroms = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        [cigars addObject:@"100M"];
+        [names  addObject:[NSString stringWithFormat:@"r%lu",
+                                                     (unsigned long)i]];
+        [mateChroms addObject:@"chr1"];
+        [chroms addObject:@"chr1"];
+    }
+    return [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                   referenceUri:@"GRCh38.p14"
+                       platform:@"ILLUMINA"
+                     sampleName:@"M86_PHASEB"
+                      positions:positionsData
+               mappingQualities:mapqsData
+                          flags:flagsData
+                      sequences:seqBytes
+                      qualities:qualBytes
+                        offsets:offsets
+                        lengths:lengths
+                         cigars:cigars
+                      readNames:names
+                mateChromosomes:mateChroms
+                  matePositions:matePos
+                templateLengths:tlens
+                    chromosomes:chroms
+              signalCompression:baseCompression
+            signalCodecOverrides:codecOverrides];
+}
+
+// Test 24 — round-trip positions (int64) with RANS_ORDER1 byte-exact
+// through the new -intChannelArrayNamed: helper.
+static void testRoundTripPositionsRansOrder1(void)
+{
+    NSMutableData *positions = [NSMutableData dataWithLength:
+                                kM86_NReads * sizeof(int64_t)];
+    int64_t *pp = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        pp[i] = (int64_t)(i * 1000 + 1000000);
+    }
+    NSMutableData *flags = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint32_t)];
+    NSMutableData *mapqs = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint8_t)];
+    uint8_t *mq = (uint8_t *)mapqs.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) mq[i] = 60;
+
+    TTIOWrittenGenomicRun *run = m86PhBMakeRun(
+        positions, flags, mapqs,
+        @{ @"positions": @(TTIOCompressionRansOrder1) },
+        TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phb_pos_rt");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhB: write positions+RANS_ORDER1 succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    PASS(ds != nil, "M86 PhB: positions-codec file reopens");
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M86 PhB: positions-codec genomicRuns dict populated");
+
+    NSData *decoded = [gr intChannelArrayNamed:@"positions" error:&err];
+    PASS(decoded != nil,
+         "M86 PhB: -intChannelArrayNamed:'positions' returns non-nil");
+    PASS(decoded.length == kM86_NReads * sizeof(int64_t),
+         "M86 PhB: positions decoded length == n_reads * 8 (got %lu)",
+         (unsigned long)decoded.length);
+    BOOL allMatch = YES;
+    if (decoded.length == kM86_NReads * sizeof(int64_t)) {
+        const int64_t *got = (const int64_t *)decoded.bytes;
+        for (NSUInteger i = 0; i < kM86_NReads; i++) {
+            if (got[i] != (int64_t)(i * 1000 + 1000000)) {
+                allMatch = NO;
+                break;
+            }
+        }
+    } else {
+        allMatch = NO;
+    }
+    PASS(allMatch, "M86 PhB: positions int64 values round-trip byte-exact");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 25 — round-trip flags (uint32) with RANS_ORDER0 byte-exact.
+static void testRoundTripFlagsRansOrder0(void)
+{
+    NSMutableData *positions = [NSMutableData dataWithLength:
+                                kM86_NReads * sizeof(int64_t)];
+    int64_t *pp = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) pp[i] = (int64_t)(i * 1000);
+    NSMutableData *flags = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint32_t)];
+    uint32_t *fp = (uint32_t *)flags.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        fp[i] = (i % 2 == 0) ? 0x0001u : 0x0083u;
+    }
+    NSMutableData *mapqs = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint8_t)];
+    uint8_t *mq = (uint8_t *)mapqs.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) mq[i] = 60;
+
+    TTIOWrittenGenomicRun *run = m86PhBMakeRun(
+        positions, flags, mapqs,
+        @{ @"flags": @(TTIOCompressionRansOrder0) },
+        TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phb_flg_rt");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhB: write flags+RANS_ORDER0 succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    NSData *decoded = [gr intChannelArrayNamed:@"flags" error:&err];
+    PASS(decoded != nil && decoded.length == kM86_NReads * sizeof(uint32_t),
+         "M86 PhB: flags decoded length == n_reads * 4 (got %lu)",
+         (unsigned long)(decoded ? decoded.length : 0));
+    BOOL allMatch = YES;
+    if (decoded.length == kM86_NReads * sizeof(uint32_t)) {
+        const uint32_t *got = (const uint32_t *)decoded.bytes;
+        for (NSUInteger i = 0; i < kM86_NReads; i++) {
+            uint32_t expected = (i % 2 == 0) ? 0x0001u : 0x0083u;
+            if (got[i] != expected) { allMatch = NO; break; }
+        }
+    } else {
+        allMatch = NO;
+    }
+    PASS(allMatch, "M86 PhB: flags uint32 values round-trip byte-exact");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 26 — round-trip mapping_qualities (uint8) with RANS_ORDER1.
+//
+// Per Gotcha §131 the LE serialisation is a no-op for uint8 (1 byte
+// per element), but the dispatch path is still exercised end-to-end.
+static void testRoundTripMappingQualitiesRansOrder1(void)
+{
+    NSMutableData *positions = [NSMutableData dataWithLength:
+                                kM86_NReads * sizeof(int64_t)];
+    int64_t *pp = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) pp[i] = (int64_t)(i * 1000);
+    NSMutableData *flags = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint32_t)];
+    NSMutableData *mapqs = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint8_t)];
+    uint8_t *mq = (uint8_t *)mapqs.mutableBytes;
+    // 80% MAPQ 60, 20% MAPQ 0 — typical Illumina distribution.
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        mq[i] = (i % 5 != 0) ? 60 : 0;
+    }
+
+    TTIOWrittenGenomicRun *run = m86PhBMakeRun(
+        positions, flags, mapqs,
+        @{ @"mapping_qualities": @(TTIOCompressionRansOrder1) },
+        TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phb_mq_rt");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhB: write mapping_qualities+RANS_ORDER1 succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    NSData *decoded = [gr intChannelArrayNamed:@"mapping_qualities"
+                                          error:&err];
+    PASS(decoded != nil && decoded.length == kM86_NReads,
+         "M86 PhB: mapping_qualities decoded length == n_reads (got %lu)",
+         (unsigned long)(decoded ? decoded.length : 0));
+    BOOL allMatch = YES;
+    if (decoded.length == kM86_NReads) {
+        const uint8_t *got = (const uint8_t *)decoded.bytes;
+        for (NSUInteger i = 0; i < kM86_NReads; i++) {
+            uint8_t expected = (i % 5 != 0) ? 60 : 0;
+            if (got[i] != expected) { allMatch = NO; break; }
+        }
+    } else {
+        allMatch = NO;
+    }
+    PASS(allMatch,
+         "M86 PhB: mapping_qualities uint8 values round-trip byte-exact");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 27 — size win for clustered positions (10000 reads / 100 loci).
+//
+// Per the implementer's deviation note (Python test #33 changed the
+// baseline from HDF5-ZLIB to raw LE bytes — ZLIB's LZ77 beats rANS on
+// monotonic sequences, so the realistic test pattern is "clustered
+// positions" mimicking high-coverage WGS, 100 reads per locus).
+// Compare the rANS encoder output against the raw int64 LE byte
+// length; target < 50% (Python achieved 18.4%).
+static void testSizeWinPositions(void)
+{
+    NSUInteger nReads = 10000;
+    NSMutableData *raw = [NSMutableData dataWithLength:
+                          nReads * sizeof(int64_t)];
+    int64_t *src = (int64_t *)raw.mutableBytes;
+    for (NSUInteger i = 0; i < nReads; i++) {
+        src[i] = (int64_t)(1000000 + (i / 100) * 1000);
+    }
+    NSUInteger rawLen = raw.length;
+
+    // Encode through the same code path the writer uses: identity
+    // memcpy on x86/ARM (host LE) then TTIORansEncode.
+    NSData *encoded = TTIORansEncode(raw, 1);
+    PASS(encoded != nil && encoded.length > 0,
+         "M86 PhB size-win: rANS order-1 encode of clustered positions "
+         "produces non-empty output (%lu bytes)",
+         (unsigned long)(encoded ? encoded.length : 0));
+    NSUInteger encodedLen = encoded.length;
+    double ratio = (double)encodedLen / (double)rawLen;
+    PASS(ratio < 0.50,
+         "M86 PhB size-win: rANS_ORDER1 clustered positions ratio %.3f "
+         "< 0.50 (encoded=%lu bytes, raw_int64_LE=%lu bytes)",
+         ratio, (unsigned long)encodedLen, (unsigned long)rawLen);
+}
+
+// Test 28 — verify @compression attribute correctness on integer
+// channels under rANS overrides (HANDOFF.md §5.2).
+static void testAttributeSetCorrectlyIntegerChannels(void)
+{
+    NSMutableData *positions = [NSMutableData dataWithLength:
+                                kM86_NReads * sizeof(int64_t)];
+    int64_t *pp = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) pp[i] = (int64_t)(i * 1000);
+    NSMutableData *flags = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint32_t)];
+    NSMutableData *mapqs = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint8_t)];
+    uint8_t *mq = (uint8_t *)mapqs.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) mq[i] = 60;
+
+    NSDictionary *overrides = @{
+        @"positions":         @(TTIOCompressionRansOrder1),
+        @"flags":             @(TTIOCompressionRansOrder0),
+        @"mapping_qualities": @(TTIOCompressionRansOrder1),
+    };
+    TTIOWrittenGenomicRun *run = m86PhBMakeRun(positions, flags, mapqs,
+                                               overrides,
+                                               TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phb_attr");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhB attr: write all-three integer overrides succeeds");
+
+    uint8_t posAttr = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                             "positions");
+    uint8_t flgAttr = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                             "flags");
+    uint8_t mqAttr  = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                             "mapping_qualities");
+    PASS(posAttr == (uint8_t)TTIOCompressionRansOrder1,
+         "M86 PhB attr: positions @compression == RANS_ORDER1 (5, got %u)",
+         (unsigned)posAttr);
+    PASS(flgAttr == (uint8_t)TTIOCompressionRansOrder0,
+         "M86 PhB attr: flags @compression == RANS_ORDER0 (4, got %u)",
+         (unsigned)flgAttr);
+    PASS(mqAttr == (uint8_t)TTIOCompressionRansOrder1,
+         "M86 PhB attr: mapping_qualities @compression == RANS_ORDER1 "
+         "(5, got %u)", (unsigned)mqAttr);
+
+    // Verify the dataset class is H5T_INTEGER (uint8) for each codec-
+    // compressed channel.
+    hid_t f = H5Fopen(path.fileSystemRepresentation,
+                      H5F_ACC_RDONLY, H5P_DEFAULT);
+    PASS(f >= 0, "M86 PhB attr: file opens via H5Fopen");
+    const char *channels[] = {"positions", "flags", "mapping_qualities"};
+    BOOL allUint8 = YES;
+    for (int k = 0; k < 3; k++) {
+        char dsname[256];
+        snprintf(dsname, sizeof(dsname),
+                 "study/genomic_runs/genomic_0001/signal_channels/%s",
+                 channels[k]);
+        hid_t did = H5Dopen2(f, dsname, H5P_DEFAULT);
+        if (did < 0) { allUint8 = NO; continue; }
+        hid_t ht = H5Dget_type(did);
+        if (H5Tequal(ht, H5T_NATIVE_UINT8) <= 0) allUint8 = NO;
+        H5Tclose(ht);
+        H5Dclose(did);
+    }
+    if (f >= 0) H5Fclose(f);
+    PASS(allUint8,
+         "M86 PhB attr: all 3 codec-compressed integer datasets are "
+         "H5T_NATIVE_UINT8 on disk");
+
+    // Untouched byte channels (sequences/qualities) still carry no
+    // @compression attribute (sentinel 254).
+    uint8_t seqAttr = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                             "sequences");
+    uint8_t qualAttr = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                              "qualities");
+    PASS(seqAttr == 254 && qualAttr == 254,
+         "M86 PhB attr: untouched sequences/qualities carry no "
+         "@compression attribute");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 29 — reject BASE_PACK on positions with the wrong-content
+// rationale (Binding Decision §117).
+static void testRejectBasePackOnPositions(void)
+{
+    NSMutableData *positions = [NSMutableData dataWithLength:
+                                kM86_NReads * sizeof(int64_t)];
+    NSMutableData *flags = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint32_t)];
+    NSMutableData *mapqs = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint8_t)];
+    NSDictionary *overrides = @{
+        @"positions": @(TTIOCompressionBasePack),
+    };
+    TTIOWrittenGenomicRun *run = m86PhBMakeRun(positions, flags, mapqs,
+                                               overrides,
+                                               TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phb_bp_pos");
+    unlink(path.fileSystemRepresentation);
+
+    BOOL raised = NO;
+    NSException *captured = nil;
+    @try {
+        NSError *err = nil;
+        m86Write(path, run, &err);
+    } @catch (NSException *e) {
+        raised = YES;
+        captured = e;
+    }
+    PASS(raised, "M86 PhB: BASE_PACK on 'positions' raises NSException");
+    PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
+         "M86 PhB: BASE_PACK-on-positions exception is "
+         "NSInvalidArgumentException");
+    NSString *reason = captured ? captured.reason : @"";
+    PASS([reason rangeOfString:@"BASE_PACK"].location != NSNotFound,
+         "M86 PhB: BASE_PACK error names the codec");
+    PASS([reason rangeOfString:@"positions"].location != NSNotFound,
+         "M86 PhB: BASE_PACK error names the channel ('positions')");
+    PASS([reason rangeOfString:@"RANS_ORDER"].location != NSNotFound,
+         "M86 PhB: BASE_PACK error points at the rANS replacement");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 30 — reject QUALITY_BINNED on flags.
+static void testRejectQualityBinnedOnFlags(void)
+{
+    NSMutableData *positions = [NSMutableData dataWithLength:
+                                kM86_NReads * sizeof(int64_t)];
+    NSMutableData *flags = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint32_t)];
+    NSMutableData *mapqs = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint8_t)];
+    NSDictionary *overrides = @{
+        @"flags": @(TTIOCompressionQualityBinned),
+    };
+    TTIOWrittenGenomicRun *run = m86PhBMakeRun(positions, flags, mapqs,
+                                               overrides,
+                                               TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phb_qb_flg");
+    unlink(path.fileSystemRepresentation);
+
+    BOOL raised = NO;
+    NSException *captured = nil;
+    @try {
+        NSError *err = nil;
+        m86Write(path, run, &err);
+    } @catch (NSException *e) {
+        raised = YES;
+        captured = e;
+    }
+    PASS(raised,
+         "M86 PhB: QUALITY_BINNED on 'flags' raises NSException");
+    PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
+         "M86 PhB: QB-on-flags exception is NSInvalidArgumentException");
+    NSString *reason = captured ? captured.reason : @"";
+    PASS([reason rangeOfString:@"QUALITY_BINNED"].location != NSNotFound,
+         "M86 PhB: QUALITY_BINNED error names the codec");
+    PASS([reason rangeOfString:@"flags"].location != NSNotFound,
+         "M86 PhB: QUALITY_BINNED error names the channel ('flags')");
+    PASS([reason rangeOfString:@"RANS_ORDER"].location != NSNotFound,
+         "M86 PhB: QUALITY_BINNED error points at the rANS replacement");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 31 — full-stack: all six channel overrides at once. Gotcha
+// §133 — most likely to surface ordering bugs across the codec
+// dispatch matrix.
+static void testRoundTripFullStack(void)
+{
+    NSMutableData *positions = [NSMutableData dataWithLength:
+                                kM86_NReads * sizeof(int64_t)];
+    int64_t *pp = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        pp[i] = (int64_t)(i * 1000 + 1000000);
+    }
+    NSMutableData *flags = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint32_t)];
+    uint32_t *fp = (uint32_t *)flags.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        fp[i] = (i % 2 == 0) ? 0x0001u : 0x0083u;
+    }
+    NSMutableData *mapqs = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint8_t)];
+    uint8_t *mq = (uint8_t *)mapqs.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        mq[i] = (i % 5 != 0) ? 60 : 0;
+    }
+
+    // Build the run inline so the read_names are structured for
+    // NAME_TOKENIZED and the qualities are bin-centre Phred for
+    // QUALITY_BINNED to round-trip byte-exact.
+    NSData *seqBytes = m86PureACGTSequences();
+    NSData *qualBytes = m86BinCentreQualities();
+    NSArray<NSString *> *names = m86PhEStructuredNames(kM86_NReads);
+
+    NSMutableData *offsets = [NSMutableData dataWithLength:
+                              kM86_NReads * sizeof(uint64_t)];
+    NSMutableData *lengths = [NSMutableData dataWithLength:
+                              kM86_NReads * sizeof(uint32_t)];
+    NSMutableData *matePos = [NSMutableData dataWithLength:
+                              kM86_NReads * sizeof(int64_t)];
+    NSMutableData *tlens   = [NSMutableData dataWithLength:
+                              kM86_NReads * sizeof(int32_t)];
+    uint64_t *op = (uint64_t *)offsets.mutableBytes;
+    uint32_t *lp = (uint32_t *)lengths.mutableBytes;
+    int64_t  *mp = (int64_t  *)matePos.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        op[i] = (uint64_t)(i * kM86_ReadLen);
+        lp[i] = (uint32_t)kM86_ReadLen;
+        mp[i] = -1;
+    }
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    NSMutableArray *chroms = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        [cigars addObject:@"100M"];
+        [mateChroms addObject:@"chr1"];
+        [chroms addObject:@"chr1"];
+    }
+
+    NSDictionary *overrides = @{
+        @"sequences":         @(TTIOCompressionBasePack),
+        @"qualities":         @(TTIOCompressionQualityBinned),
+        @"read_names":        @(TTIOCompressionNameTokenized),
+        @"positions":         @(TTIOCompressionRansOrder1),
+        @"flags":             @(TTIOCompressionRansOrder0),
+        @"mapping_qualities": @(TTIOCompressionRansOrder1),
+    };
+    TTIOWrittenGenomicRun *run = [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                   referenceUri:@"GRCh38.p14"
+                       platform:@"ILLUMINA"
+                     sampleName:@"M86_FULL_STACK"
+                      positions:positions
+               mappingQualities:mapqs
+                          flags:flags
+                      sequences:seqBytes
+                      qualities:qualBytes
+                        offsets:offsets
+                        lengths:lengths
+                         cigars:cigars
+                      readNames:names
+                mateChromosomes:mateChroms
+                  matePositions:matePos
+                templateLengths:tlens
+                    chromosomes:chroms
+              signalCompression:TTIOCompressionZlib
+            signalCodecOverrides:overrides];
+    NSString *path = m86TmpPath("phb_full_stack");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhB full-stack: write all-six overrides succeeds");
+
+    // Verify all six @compression attributes on disk.
+    uint8_t seqA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                          "sequences");
+    uint8_t qualA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                           "qualities");
+    uint8_t nameA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                           "read_names");
+    uint8_t posA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                          "positions");
+    uint8_t flgA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                          "flags");
+    uint8_t mqA  = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                          "mapping_qualities");
+    PASS(seqA == TTIOCompressionBasePack
+         && qualA == TTIOCompressionQualityBinned
+         && nameA == TTIOCompressionNameTokenized
+         && posA == TTIOCompressionRansOrder1
+         && flgA == TTIOCompressionRansOrder0
+         && mqA  == TTIOCompressionRansOrder1,
+         "M86 PhB full-stack: all 6 @compression attributes correct "
+         "(seq=%u, qual=%u, names=%u, pos=%u, flg=%u, mq=%u)",
+         (unsigned)seqA, (unsigned)qualA, (unsigned)nameA,
+         (unsigned)posA, (unsigned)flgA, (unsigned)mqA);
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M86 PhB full-stack: file reopens through reader");
+
+    // Byte/string channels via the AlignedRead reader (existing path).
+    BOOL byteStringMatch = YES;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
+        if (r == nil) { byteStringMatch = NO; break; }
+        if (![r.sequence isEqualToString:m86ExpectedSequenceSlice(seqBytes, i)]) byteStringMatch = NO;
+        if (![r.qualities isEqualToData:m86ExpectedQualitySlice(qualBytes, i)])  byteStringMatch = NO;
+        if (![r.readName isEqualToString:names[i]]) byteStringMatch = NO;
+    }
+    PASS(byteStringMatch,
+         "M86 PhB full-stack: byte/string channels (seq/qual/read_names) "
+         "round-trip byte-exact across all 10 reads");
+
+    // Integer channels via the new Phase B helper. Per Binding
+    // Decision §119 -readAtIndex: does NOT consume these — it reads
+    // from the genomic_index — so the helper is the correct probe.
+    NSData *posD = [gr intChannelArrayNamed:@"positions" error:&err];
+    NSData *flgD = [gr intChannelArrayNamed:@"flags" error:&err];
+    NSData *mqD  = [gr intChannelArrayNamed:@"mapping_qualities" error:&err];
+    BOOL intMatch = (posD.length == kM86_NReads * sizeof(int64_t)
+                     && flgD.length == kM86_NReads * sizeof(uint32_t)
+                     && mqD.length == kM86_NReads);
+    if (intMatch) {
+        const int64_t  *pg = (const int64_t  *)posD.bytes;
+        const uint32_t *fg = (const uint32_t *)flgD.bytes;
+        const uint8_t  *mg = (const uint8_t  *)mqD.bytes;
+        for (NSUInteger i = 0; i < kM86_NReads; i++) {
+            if (pg[i] != (int64_t)(i * 1000 + 1000000)) intMatch = NO;
+            uint32_t expF = (i % 2 == 0) ? 0x0001u : 0x0083u;
+            if (fg[i] != expF) intMatch = NO;
+            uint8_t expM = (i % 5 != 0) ? 60 : 0;
+            if (mg[i] != expM) intMatch = NO;
+        }
+    }
+    PASS(intMatch,
+         "M86 PhB full-stack: integer channels (positions/flags/"
+         "mapping_qualities) round-trip byte-exact via "
+         "-intChannelArrayNamed:");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 32 — cross-language fixture: read the Python-built
+// m86_codec_integer_channels.tio and verify all three integer
+// channels decode byte-exact (HANDOFF.md §6.4).
+static void testCrossLanguageFixtureIntegerChannels(void)
+{
+    NSString *path = @"/home/toddw/TTI-O/objc/Tests/Fixtures/genomic/"
+                     @"m86_codec_integer_channels.tio";
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+        printf("SKIP: M86 PhB cross-language fixture not found at %s\n",
+               path.UTF8String);
+        return;
+    }
+
+    NSError *err = nil;
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    PASS(ds != nil, "M86 PhB fixture: integer-channel .tio opens");
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M86 PhB fixture: genomic_0001 present");
+    NSUInteger expectedReads = 100;
+    PASS(gr.readCount == expectedReads,
+         "M86 PhB fixture: 100 reads from cross-language input "
+         "(got %lu)", (unsigned long)gr.readCount);
+
+    NSData *posD = [gr intChannelArrayNamed:@"positions" error:&err];
+    NSData *flgD = [gr intChannelArrayNamed:@"flags" error:&err];
+    NSData *mqD  = [gr intChannelArrayNamed:@"mapping_qualities" error:&err];
+
+    BOOL allMatch = (posD.length == expectedReads * sizeof(int64_t)
+                     && flgD.length == expectedReads * sizeof(uint32_t)
+                     && mqD.length == expectedReads);
+    if (allMatch) {
+        const int64_t  *pg = (const int64_t  *)posD.bytes;
+        const uint32_t *fg = (const uint32_t *)flgD.bytes;
+        const uint8_t  *mg = (const uint8_t  *)mqD.bytes;
+        for (NSUInteger i = 0; i < expectedReads; i++) {
+            int64_t expP = (int64_t)(i * 1000 + 1000000);
+            uint32_t expF = (i % 2 == 0) ? 0x0001u : 0x0083u;
+            uint8_t expM = (i % 5 != 0) ? 60 : 0;
+            if (pg[i] != expP) { allMatch = NO; break; }
+            if (fg[i] != expF) { allMatch = NO; break; }
+            if (mg[i] != expM) { allMatch = NO; break; }
+        }
+    }
+    PASS(allMatch,
+         "M86 PhB fixture: all 3 integer channels decode byte-exact "
+         "from the Python-built cross-language fixture");
+
+    uint8_t posA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                          "positions");
+    uint8_t flgA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                          "flags");
+    uint8_t mqA  = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                          "mapping_qualities");
+    PASS(posA == (uint8_t)TTIOCompressionRansOrder1
+         && flgA == (uint8_t)TTIOCompressionRansOrder0
+         && mqA  == (uint8_t)TTIOCompressionRansOrder1,
+         "M86 PhB fixture: @compression attrs match the Python writer "
+         "(pos=%u, flg=%u, mq=%u)",
+         (unsigned)posA, (unsigned)flgA, (unsigned)mqA);
+}
+
 // ── Entry point ─────────────────────────────────────────────────────
 
 void testM86GenomicCodecWiring(void)
@@ -1644,4 +2325,15 @@ void testM86GenomicCodecWiring(void)
     testRejectNameTokenizedOnSequences();
     testMixedAllThreeOverrides();
     testCrossLanguageFixtureNameTokenized();
+    // M86 Phase B — rANS on the integer channels (positions /
+    // flags / mapping_qualities). Mirrors Python tests #30–#37.
+    testRoundTripPositionsRansOrder1();
+    testRoundTripFlagsRansOrder0();
+    testRoundTripMappingQualitiesRansOrder1();
+    testSizeWinPositions();
+    testAttributeSetCorrectlyIntegerChannels();
+    testRejectBasePackOnPositions();
+    testRejectQualityBinnedOnFlags();
+    testRoundTripFullStack();
+    testCrossLanguageFixtureIntegerChannels();
 }
