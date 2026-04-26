@@ -304,7 +304,14 @@ public final class Hdf5CompoundIO {
                         case UINT32 -> bb.getInt(off);
                         case INT64 -> bb.getLong(off);
                         case FLOAT64 -> bb.getDouble(off);
-                        case VL_STRING -> "";
+                        case VL_STRING -> {
+                            // M82.4: HDF5 stores VL_STRING as a char*
+                            // pointer (8 bytes) at the field offset.
+                            // Walk bytes from the native address until
+                            // the null terminator; decode UTF-8.
+                            long addr = bb.getLong(off);
+                            yield addr == 0 ? "" : readCStringUtf8(addr);
+                        }
                         case VL_BYTES -> {
                             long len = bb.getLong(off);
                             long addr = bb.getLong(off + 8);
@@ -332,6 +339,46 @@ public final class Hdf5CompoundIO {
             if (strType >= 0) try { H5.H5Tclose(strType); } catch (Exception ignored) {}
             if (dset >= 0) try { H5.H5Dclose(dset); } catch (Exception ignored) {}
             owner.unlockForReading();
+        }
+    }
+
+    /** v0.11 M82.4: Read a C-style null-terminated UTF-8 string from
+     *  a native address. Uses {@link NativeBytesPool#readBytes} to
+     *  walk bytes one at a time via {@code Unsafe.getByte}; stops at
+     *  the first 0x00 byte. JHI5 1.10 doesn't expose VL_STRING
+     *  marshalling out of compounds, but the underlying char*
+     *  pointers are sitting in the H5Dread buffer — we just have to
+     *  dereference them ourselves.
+     *
+     *  Capped at 64 KiB per string to bound runaway reads on a
+     *  malformed buffer. Genomic identifiers (CIGAR, read names,
+     *  chromosome names) are well under that limit. */
+    private static String readCStringUtf8(long addr) {
+        final int MAX = 65536;
+        byte[] tmp = new byte[256];
+        int n = 0;
+        while (n < MAX) {
+            byte b = sun.misc.Unsafe.class
+                .cast(unsafeInstance()).getByte(addr + n);
+            if (b == 0) break;
+            if (n == tmp.length) {
+                byte[] grown = new byte[tmp.length * 2];
+                System.arraycopy(tmp, 0, grown, 0, tmp.length);
+                tmp = grown;
+            }
+            tmp[n++] = b;
+        }
+        return new String(tmp, 0, n, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static sun.misc.Unsafe unsafeInstance() {
+        try {
+            java.lang.reflect.Field f =
+                sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            return (sun.misc.Unsafe) f.get(null);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
         }
     }
 

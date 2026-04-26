@@ -446,9 +446,16 @@ public final class Hdf5Provider implements StorageProvider {
 
         @Override
         public Object readAll() {
-            boolean hasVlBytes = schema.fields.stream()
-                    .anyMatch(f -> f.kind() == Hdf5CompoundIO.FieldKind.VL_BYTES);
-            return hasVlBytes
+            // M82.4: route VL_BYTES *and* VL_STRING compounds to the
+            // full reader. The full reader now dereferences VL_STRING
+            // char* pointers via Unsafe (was hardcoded to "" prior to
+            // M82.4); VL_BYTES uses the same NativeBytesPool path.
+            // Pure-primitive compounds still take the lighter
+            // primitives path for consistency with prior behavior.
+            boolean hasVl = schema.fields.stream().anyMatch(f ->
+                f.kind() == Hdf5CompoundIO.FieldKind.VL_BYTES
+             || f.kind() == Hdf5CompoundIO.FieldKind.VL_STRING);
+            return hasVl
                     ? Hdf5CompoundIO.readCompoundFull(parent, name, schema)
                     : Hdf5CompoundIO.readCompoundPrimitives(parent, name, schema);
         }

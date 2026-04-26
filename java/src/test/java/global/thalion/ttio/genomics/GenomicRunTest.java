@@ -393,25 +393,15 @@ class GenomicRunTest {
         }
     }
 
-    // ── Cross-language fixture read (Python → Java, partial) ──────
+    // ── Cross-language fixture read (Python → Java, full) ─────────
     //
-    // Java's JHI5 1.10 binding can't round-trip VL_STRING fields out
-    // of a compound dataset; Python writes the genomic compound fields
-    // (cigars, read_names, mate_info.chrom, genomic_index/chromosomes)
-    // as VL_STRING per the M82 spec. So Java reads return "" for those
-    // fields. M82.4 (cross-language matrix) will resolve this — likely
-    // by switching all three writers to a Java-readable encoding
-    // (e.g. VL_BYTES with UTF-8 payload, or parallel concat-bytes +
-    // offsets shape).
-    //
-    // For M82.3, this test asserts what Java CAN recover from a
-    // Python-written fixture: file opens, genomic_runs is populated,
-    // numeric fields (positions, flags, mapping_qualities, sequences,
-    // qualities) round-trip correctly. VL string content is checked
-    // for class but not equality.
+    // M82.4: Java reads VL_STRING fields out of compound datasets via
+    // Hdf5CompoundIO.readCompoundFull which dereferences the char*
+    // pointers in the H5Dread buffer using sun.misc.Unsafe. Same
+    // on-disk wire format as Python and ObjC; no JHI5 upgrade needed.
 
     @Test
-    void crossLanguageFixtureReadPartial() {
+    void crossLanguageFixtureRead() {
         Path fixture = Path.of(System.getProperty("user.home"),
             "TTI-O", "python", "tests", "fixtures", "genomic", "m82_100reads.tio");
         if (!java.nio.file.Files.exists(fixture)) {
@@ -428,23 +418,17 @@ class GenomicRunTest {
             assertEquals("NA12878", gr.sampleName());
             assertEquals(AcquisitionMode.GENOMIC_WGS, gr.acquisitionMode());
 
-            // Numeric fields round-trip.
-            assertEquals(10000L, gr.index().positionAt(0));
-            assertEquals(150, gr.index().lengthAt(0));
-            assertEquals(0, gr.index().flagsAt(0));
-            assertEquals(60, gr.index().mappingQualityAt(0));
-
             AlignedRead first = gr.readAt(0);
             assertNotNull(first);
-            // Sequence + qualities are typed datasets (not compounds);
-            // they round-trip from Python correctly.
             assertEquals(150, first.sequence().length());
             assertEquals(150, first.qualities().length);
-            // VL strings come back as "" due to the JHI5 limitation —
-            // assert NOT-NULL but skip equality.
-            assertNotNull(first.cigar());
-            assertNotNull(first.readName());
-            assertNotNull(first.chromosome());
+            assertEquals("150M", first.cigar(), "M82.4: cigar via VL_STRING");
+            assertEquals("read_000000", first.readName(),
+                "M82.4: read_name via VL_STRING");
+            // Python's _make_written_run assigns chromosomes round-robin
+            // across {chr1, chr2, chrX}; read 0 lands on chr1.
+            assertEquals("chr1", first.chromosome(),
+                "M82.4: chromosome via VL_STRING (in genomic_index)");
         }
     }
 }

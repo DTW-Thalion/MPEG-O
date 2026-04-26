@@ -115,19 +115,15 @@ public final class GenomicIndex {
         writeBytes(idxGroup, "mapping_qualities", Precision.UINT8, mappingQualities);
         writeInts (idxGroup, "flags",            Precision.UINT32, flags);
 
-        // chromosomes: compound with single VL_BYTES field (Java JHI5
-        // can't round-trip VL_STRING compounds; VL_BYTES works). Bytes
-        // are UTF-8 encoded; readers decode back to String.
-        // CROSS-LANGUAGE NOTE: Python and ObjC write VL_STRING here.
-        // Java↔others compound interop for genomic VL strings is the
-        // M82.4 cross-language matrix concern; M82.3 ships with Java
-        // round-trip working via VL_BYTES.
+        // chromosomes: compound VL string with one field "value".
+        // M82.4: Java now reads VL_STRING in compounds correctly
+        // (Hdf5CompoundIO.readCompoundFull dereferences the char*
+        // pointers via Unsafe), so we use the same VL_STRING wire
+        // format as Python and ObjC for cross-language parity.
         List<CompoundField> fields = List.of(
-            new CompoundField("value", CompoundField.Kind.VL_BYTES));
+            new CompoundField("value", CompoundField.Kind.VL_STRING));
         List<Object[]> rows = new ArrayList<>(chromosomes.size());
-        for (String c : chromosomes) {
-            rows.add(new Object[]{ c.getBytes(java.nio.charset.StandardCharsets.UTF_8) });
-        }
+        for (String c : chromosomes) rows.add(new Object[]{ c });
         try (StorageDataset ds = idxGroup.createCompoundDataset(
                 "chromosomes", fields, rows.size())) {
             ds.writeAll(rows);
@@ -151,10 +147,6 @@ public final class GenomicIndex {
         List<String> chroms = new ArrayList<>(chromRows.size());
         for (Object[] row : chromRows) {
             Object v = row[0];
-            // VL_BYTES (Java write path) → byte[]; VL_STRING (Python/ObjC
-            // write path) → String, but readback returns "" due to the
-            // JHI5 limitation. Falling back to "" preserves the contract;
-            // cross-language fix is M82.4 territory.
             if (v instanceof byte[] b) {
                 chroms.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
             } else {

@@ -119,6 +119,32 @@ context describing the migration itself.
 - **Out of scope (codec milestone):** Base-packing; M82 stores one
   ASCII byte per base.
 
+### M82.4 — Java VL_STRING-in-compound read fix (cross-language wire parity)
+
+- **Fixed:** `Hdf5CompoundIO.readCompoundFull` now dereferences
+  VL_STRING char* pointers in the H5Dread buffer using
+  `sun.misc.Unsafe.getByte`, walking bytes until the null terminator
+  and decoding UTF-8. Previous behavior (`-> ""`) was not a JHI5
+  binding limitation — it was a hardcoded placeholder. The pointers
+  were always present in the H5Dread output buffer; we just had to
+  read them ourselves the same way `NativeBytesPool` already does
+  for VL_BYTES.
+- **Reverted:** M82.3's VL_BYTES write workaround for genomic
+  compound VL fields (chromosomes, cigars, read_names, mate_info.chrom).
+  Java now writes — and reads — VL_STRING, matching Python and ObjC.
+- **Cross-language wire parity restored.** Java reads Python-written
+  `m82_100reads.tio` fully (cigar, read_name, chromosome all
+  recovered as Python wrote them). Java-written genomic .tio files
+  are now fully readable by Python and ObjC (same VL_STRING layout).
+- **Bonus:** The Identifications / Quantifications / ProvenanceRecords
+  JSON-mirror workarounds in `SpectralDataset` could be retired in a
+  follow-up pass — they were added for the same JHI5 limitation that
+  this fix removes.
+- **Verified:** 402 Java tests pass (no regression). M82.3's
+  cross-language fixture read test renamed back from
+  `crossLanguageFixtureReadPartial` to `crossLanguageFixtureRead`
+  with strict equality checks against Python-written values.
+
 ### M82.3 — GenomicRun (Java)
 
 - **Added:** `AlignedRead` (record), `GenomicRun`, `GenomicIndex`,

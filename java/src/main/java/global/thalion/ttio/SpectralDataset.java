@@ -592,20 +592,20 @@ public class SpectralDataset implements
                     Enums.Precision.UINT8,  run.mappingQualities(),
                     run.signalCompression());
 
-                // Compound datasets: cigars + read_names (single VL_BYTES
-                // — Java JHI5 can't round-trip VL_STRING in compounds;
-                // see GenomicIndex.writeTo for the full M82.4 cross-lang
-                // note).
+                // Compound datasets: cigars + read_names (single
+                // VL_STRING). M82.4: Java now reads VL_STRING in
+                // compounds correctly via Unsafe-based char* deref;
+                // wire format matches Python and ObjC.
                 List<global.thalion.ttio.providers.CompoundField> vlField = List.of(
                     new global.thalion.ttio.providers.CompoundField("value",
-                        global.thalion.ttio.providers.CompoundField.Kind.VL_BYTES));
-                writeCompoundOneColBytes(sc, "cigars", vlField, run.cigars());
-                writeCompoundOneColBytes(sc, "read_names", vlField, run.readNames());
+                        global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
+                writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
+                writeCompoundOneCol(sc, "read_names", vlField, run.readNames());
 
-                // mate_info: chrom (VL_BYTES) + pos (int64) + tlen (int64).
+                // mate_info: chrom (VL_STRING) + pos (int64) + tlen (int64).
                 List<global.thalion.ttio.providers.CompoundField> mateFields = List.of(
                     new global.thalion.ttio.providers.CompoundField("chrom",
-                        global.thalion.ttio.providers.CompoundField.Kind.VL_BYTES),
+                        global.thalion.ttio.providers.CompoundField.Kind.VL_STRING),
                     new global.thalion.ttio.providers.CompoundField("pos",
                         global.thalion.ttio.providers.CompoundField.Kind.INT64),
                     new global.thalion.ttio.providers.CompoundField("tlen",
@@ -613,8 +613,7 @@ public class SpectralDataset implements
                 List<Object[]> mateRows = new ArrayList<>(run.readCount());
                 for (int i = 0; i < run.readCount(); i++) {
                     mateRows.add(new Object[]{
-                        run.mateChromosomes().get(i)
-                            .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        run.mateChromosomes().get(i),
                         run.matePositions()[i],
                         (long) run.templateLengths()[i],
                     });
