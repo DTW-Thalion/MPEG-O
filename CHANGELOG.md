@@ -119,6 +119,35 @@ context describing the migration itself.
 - **Out of scope (codec milestone):** Base-packing; M82 stores one
   ASCII byte per base.
 
+### M82.5 — Documentation pass
+
+Wraps the M82 milestone series. Implementation, conformance, and
+wire-format parity are all settled — this is the user-facing doc
+layer.
+
+- **Added:** `docs/M82.md` — user-facing guide for the four new
+  public types (`GenomicRun` / `AlignedRead` / `GenomicIndex` /
+  `WrittenGenomicRun`), on-disk layout under `/study/genomic_runs/`,
+  minimal write+read snippet in Python, Java, and ObjC, query
+  helpers, and an explicit out-of-scope list (base-packing,
+  secondary alignments, multi-omics joins, MS-on-non-HDF5).
+- **Updated:** `ARCHITECTURE.md` — added the four genomic types to
+  the Layer 2 / Layer 3 tables and a new "Genomic abstraction-layer
+  divergence" section. The section documents where the MS and
+  genomic APIs share class/protocol surface and where the divergence
+  is irreducible: storage substrate fully shared, `SpectralDataset`
+  container mostly shared (narrow bifurcation at parallel typed
+  collections), Run-level shared only via `Indexable<T>` /
+  `Streamable<T>` / `AutoCloseable`, Element-level a hard wall
+  (`Spectrum` hierarchy vs `AlignedRead` record share zero
+  interface). Forcing a common base would be a YAGNI abstraction;
+  the section makes that explicit so future maintainers don't try.
+- **Fixed:** `TTIOGenomicIndex.h` had a stale "API status:
+  Provisional (M82.2). Disk read/write methods land in a follow-up
+  commit; until then they raise NSInternalInconsistencyException."
+  comment that no longer matched M82.4 reality. Replaced with the
+  current state.
+
 ### M82.4 — Cross-language conformance matrix (Python × ObjC × Java)
 
 Closes the M82.4 deliverable promised by M82.2 ("3×3 cross-language
