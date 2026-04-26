@@ -66,6 +66,16 @@ public class GenomicRun
     // sliced by per-read offset/length). The whole list is materialised
     // on first access regardless of the access pattern.
     private List<String> decodedReadNames = null;
+    // M86 Phase B: lazy decode cache for integer channels. Per Binding
+    // Decision §116 this is a separate cache from decodedByteChannels
+    // (byte[]) and decodedReadNames (List<String>) because the value
+    // type differs — typed integer arrays (long[]/int[]/byte[]). The
+    // decode happens whole-channel on first access through
+    // intChannelArray(name); per Binding Decision §119 alignedReadAt
+    // does NOT consume this cache (it still uses self.index for per-
+    // read integer fields), so this cache is exercised by callers that
+    // want bulk access to the compressed signal_channels integer data.
+    private final Map<String, Object> decodedIntChannels = new HashMap<>();
 
     private int cursor = 0;  // Streamable
 
@@ -305,6 +315,105 @@ public class GenomicRun
         // Compound path (M82, no override).
         List<Object[]> rows = compoundRows("read_names");
         return stringFromCompound(rows.get(i)[0]);
+    }
+
+    /** M86 Phase B: return the full integer array for the named
+     *  signal channel, lazily decoded on first access.
+     *
+     *  <p>Channel-name → return type mapping (Binding Decision §115):
+     *  <ul>
+     *    <li>{@code positions} → {@code long[]} (int64 LE)</li>
+     *    <li>{@code flags} → {@code int[]} (uint32 LE)</li>
+     *    <li>{@code mapping_qualities} → {@code byte[]} (uint8)</li>
+     *  </ul>
+     *
+     *  <p>For codec-compressed channels ({@code @compression > 0}) the
+     *  whole dataset is read once on first access, decoded through
+     *  {@link global.thalion.ttio.codecs.Rans#decode}, re-interpreted
+     *  via {@link java.nio.ByteOrder#LITTLE_ENDIAN}, and cached on this
+     *  {@link GenomicRun} per Binding Decision §116. For uncompressed
+     *  channels the dataset is read directly with its natural dtype.
+     *
+     *  <p>Per Binding Decision §119 this helper is callable but is NOT
+     *  consumed by {@link #objectAtIndex(int)} — the legacy read path
+     *  for per-read integer fields uses {@link #index} (the duplicated
+     *  {@code genomic_index/} arrays). Phase B compression on
+     *  {@code signal_channels/} integer datasets is therefore a
+     *  write-side file-size optimisation; tests verify the round-trip
+     *  by calling this helper directly. */
+    public Object intChannelArray(String name) {
+        Object cached = decodedIntChannels.get(name);
+        if (cached != null) return cached;
+
+        global.thalion.ttio.Enums.Precision naturalDtype;
+        switch (name) {
+            case "positions" -> naturalDtype = global.thalion.ttio.Enums
+                .Precision.INT64;
+            case "flags" -> naturalDtype = global.thalion.ttio.Enums
+                .Precision.UINT32;
+            case "mapping_qualities" -> naturalDtype = global.thalion.ttio
+                .Enums.Precision.UINT8;
+            default -> throw new IllegalArgumentException(
+                "intChannelArray: unknown integer channel '" + name + "'");
+        }
+
+        ensureSignalChannels();
+        try (StorageDataset ds = signalChannels.openDataset(name)) {
+            Object codecAttr = ds.getAttribute("compression");
+            long codecId = (codecAttr instanceof Number n)
+                ? n.longValue() : 0L;
+            if (codecId == 0L) {
+                // Uncompressed: dataset stored at its natural integer
+                // precision; readAll returns the typed array directly.
+                Object arr = ds.readAll();
+                decodedIntChannels.put(name, arr);
+                return arr;
+            }
+            if (codecId == global.thalion.ttio.Enums.Compression
+                    .RANS_ORDER0.ordinal()
+                || codecId == global.thalion.ttio.Enums.Compression
+                    .RANS_ORDER1.ordinal()) {
+                long total = ds.shape()[0];
+                byte[] all = (byte[]) ds.readSlice(0L, total);
+                byte[] decoded = global.thalion.ttio.codecs.Rans.decode(all);
+                Object arr = deserialiseLeBytes(decoded, naturalDtype);
+                decodedIntChannels.put(name, arr);
+                return arr;
+            }
+            throw new IllegalStateException(
+                "signal_channel '" + name + "': @compression=" + codecId
+                + " is not a supported TTIO codec id for an integer "
+                + "channel (only RANS_ORDER0 = 4 and RANS_ORDER1 = 5 "
+                + "are recognised)");
+        }
+    }
+
+    /** M86 Phase B: re-interpret a little-endian byte buffer as the
+     *  channel's natural integer array. */
+    private static Object deserialiseLeBytes(
+            byte[] bytes,
+            global.thalion.ttio.Enums.Precision precision) {
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bytes)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        switch (precision) {
+            case INT64 -> {
+                int n = bytes.length / 8;
+                long[] out = new long[n];
+                for (int i = 0; i < n; i++) out[i] = bb.getLong();
+                return out;
+            }
+            case UINT32 -> {
+                int n = bytes.length / 4;
+                int[] out = new int[n];
+                for (int i = 0; i < n; i++) out[i] = bb.getInt();
+                return out;
+            }
+            case UINT8 -> {
+                return bytes.clone();
+            }
+            default -> throw new IllegalArgumentException(
+                "deserialiseLeBytes: unsupported precision " + precision);
+        }
     }
 
     @SuppressWarnings("unchecked")

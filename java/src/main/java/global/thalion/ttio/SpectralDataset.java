@@ -569,12 +569,15 @@ public class SpectralDataset implements
             global.thalion.ttio.providers.StorageGroup parent,
             String name,
             WrittenGenomicRun run) {
-        // M86 Phase D: per-channel allowed-codec map (Gotcha §119).
+        // M86 Phase D/E/B: per-channel allowed-codec map (Gotcha §119).
         // Sequences accepts RANS+BASE_PACK; qualities additionally
         // accepts QUALITY_BINNED. Phase E adds read_names which only
-        // accepts NAME_TOKENIZED (Binding Decision §113). Runs BEFORE
-        // any group/dataset is created so the file is untouched on a
-        // bad override (Gotcha §96 — no half-written run).
+        // accepts NAME_TOKENIZED (Binding Decision §113). Phase B adds
+        // positions/flags/mapping_qualities which accept ONLY the rANS
+        // codecs (Binding Decision §117 — BASE_PACK / QUALITY_BINNED /
+        // NAME_TOKENIZED would silently corrupt the integer values).
+        // Runs BEFORE any group/dataset is created so the file is
+        // untouched on a bad override (Gotcha §96 — no half-written run).
         java.util.Map<String, java.util.Set<Enums.Compression>>
             allowedCodecsByChannel = java.util.Map.of(
                 "sequences", java.util.Set.of(
@@ -587,7 +590,18 @@ public class SpectralDataset implements
                     Enums.Compression.BASE_PACK,
                     Enums.Compression.QUALITY_BINNED),
                 "read_names", java.util.Set.of(
-                    Enums.Compression.NAME_TOKENIZED));
+                    Enums.Compression.NAME_TOKENIZED),
+                "positions", java.util.Set.of(
+                    Enums.Compression.RANS_ORDER0,
+                    Enums.Compression.RANS_ORDER1),
+                "flags", java.util.Set.of(
+                    Enums.Compression.RANS_ORDER0,
+                    Enums.Compression.RANS_ORDER1),
+                "mapping_qualities", java.util.Set.of(
+                    Enums.Compression.RANS_ORDER0,
+                    Enums.Compression.RANS_ORDER1));
+        java.util.Set<String> integerChannelNames = java.util.Set.of(
+            "positions", "flags", "mapping_qualities");
         for (var entry : run.signalCodecOverrides().entrySet()) {
             String chName = entry.getKey();
             Enums.Compression codec = entry.getValue();
@@ -595,7 +609,8 @@ public class SpectralDataset implements
                 throw new IllegalArgumentException(
                     "signalCodecOverrides: channel '" + chName
                     + "' not supported (only sequences, qualities, "
-                    + "and read_names can use TTIO codecs)");
+                    + "read_names, positions, flags, and "
+                    + "mapping_qualities can use TTIO codecs)");
             }
             java.util.Set<Enums.Compression> allowed =
                 allowedCodecsByChannel.get(chName);
@@ -639,6 +654,43 @@ public class SpectralDataset implements
                         + "for NAME_TOKENIZED, or RANS_ORDER0/"
                         + "RANS_ORDER1/BASE_PACK on '" + chName + "'.");
                 }
+                // Phase B Binding Decision §117: explicit messages for
+                // wrong-content codecs on integer channels. Each names
+                // the codec, the channel, and explains why the codec
+                // does not preserve integer values.
+                if (integerChannelNames.contains(chName)) {
+                    if (codec == Enums.Compression.BASE_PACK) {
+                        throw new IllegalArgumentException(
+                            "signalCodecOverrides['" + chName + "']: codec "
+                            + "BASE_PACK is not valid on the '"
+                            + chName + "' channel — BASE_PACK 2-bit-packs "
+                            + "ACGT sequence bytes and would silently "
+                            + "corrupt the integer values stored on this "
+                            + "channel. Use RANS_ORDER0 or RANS_ORDER1 on '"
+                            + chName + "'.");
+                    }
+                    if (codec == Enums.Compression.QUALITY_BINNED) {
+                        throw new IllegalArgumentException(
+                            "signalCodecOverrides['" + chName + "']: codec "
+                            + "QUALITY_BINNED is not valid on the '"
+                            + chName + "' channel — QUALITY_BINNED "
+                            + "quantises Phred quality scores onto an "
+                            + "8-bin centre table and would silently "
+                            + "destroy the integer values stored on this "
+                            + "channel. Use RANS_ORDER0 or RANS_ORDER1 on '"
+                            + chName + "'.");
+                    }
+                    if (codec == Enums.Compression.NAME_TOKENIZED) {
+                        throw new IllegalArgumentException(
+                            "signalCodecOverrides['" + chName + "']: codec "
+                            + "NAME_TOKENIZED is not valid on the '"
+                            + chName + "' channel — NAME_TOKENIZED "
+                            + "tokenises UTF-8 read-name strings and "
+                            + "would mis-tokenise the integer values "
+                            + "stored on this channel. Use RANS_ORDER0 "
+                            + "or RANS_ORDER1 on '" + chName + "'.");
+                    }
+                }
                 throw new IllegalArgumentException(
                     "signalCodecOverrides['" + chName + "']: codec "
                     + codec + " not supported on the '" + chName
@@ -666,8 +718,16 @@ public class SpectralDataset implements
 
             // signal_channels: 5 typed channels + 3 compound datasets.
             try (var sc = rg.createGroup("signal_channels")) {
-                writeSignalChannel(sc, "positions",
-                    Enums.Precision.INT64,  run.positions(), run.signalCompression());
+                // M86 Phase B: integer channels dispatch through
+                // writeIntChannelWithCodec; when the per-channel
+                // override is rANS the channel is serialised to
+                // little-endian bytes and written as flat uint8 with
+                // @compression. When the override is absent the helper
+                // delegates to the existing typed writer so byte parity
+                // with M82/Phase A/D/E files is preserved.
+                writeIntChannelWithCodec(sc, "positions",
+                    run.positions(), run.signalCompression(),
+                    run.signalCodecOverrides().get("positions"));
                 // M86: sequences/qualities go through the codec
                 // dispatch helper; absent from the override map →
                 // existing HDF5-filter path with @compression unset.
@@ -677,11 +737,12 @@ public class SpectralDataset implements
                 writeByteChannelWithCodec(sc, "qualities",
                     run.qualities(), run.signalCompression(),
                     run.signalCodecOverrides().get("qualities"));
-                writeSignalChannel(sc, "flags",
-                    Enums.Precision.UINT32, run.flags(), run.signalCompression());
-                writeSignalChannel(sc, "mapping_qualities",
-                    Enums.Precision.UINT8,  run.mappingQualities(),
-                    run.signalCompression());
+                writeIntChannelWithCodec(sc, "flags",
+                    run.flags(), run.signalCompression(),
+                    run.signalCodecOverrides().get("flags"));
+                writeIntChannelWithCodec(sc, "mapping_qualities",
+                    run.mappingQualities(), run.signalCompression(),
+                    run.signalCodecOverrides().get("mapping_qualities"));
 
                 // Compound datasets: cigars + read_names (single
                 // VL_STRING). M82.4: Java now reads VL_STRING in
@@ -813,6 +874,103 @@ public class SpectralDataset implements
      *  intent is explicit at the call site. */
     private static int codecIdFor(Enums.Compression codec) {
         return codec.ordinal();
+    }
+
+    /** M86 Phase B: write an integer signal channel, optionally through
+     *  a TTI-O rANS codec. When {@code codecOverride} is {@code null}
+     *  the channel is written via the existing typed writer (identical
+     *  to M82 behaviour, no {@code @compression} attribute). When it is
+     *  {@link Enums.Compression#RANS_ORDER0} or
+     *  {@link Enums.Compression#RANS_ORDER1}, the integer array is
+     *  serialised to its little-endian byte representation (Binding
+     *  Decision §118), encoded through the M83 rANS codec, and written
+     *  as an unfiltered uint8 dataset (Binding Decision §87 — codec
+     *  output is high-entropy) with the codec id stored on the
+     *  dataset's {@code @compression} attribute (uint8).
+     *
+     *  <p>The channel-name → dtype mapping (Binding Decision §115)
+     *  is fixed: {@code positions → int64}, {@code flags → uint32},
+     *  {@code mapping_qualities → uint8}. The reader recovers the
+     *  original dtype the same way, so no extra on-disk attribute is
+     *  needed.</p>
+     *
+     *  <p>Caller-side validation in {@link #writeGenomicRunSubtree}
+     *  guarantees this branch only fires for the three integer channel
+     *  names with a valid rANS codec (Binding Decision §117).</p> */
+    private static void writeIntChannelWithCodec(
+            global.thalion.ttio.providers.StorageGroup sc,
+            String name, Object data,
+            Enums.Compression defaultCodec,
+            Enums.Compression codecOverride) {
+        if (codecOverride == null) {
+            // No override: delegate to the typed writer so byte parity
+            // with pre-Phase-B files is preserved.
+            Enums.Precision p;
+            switch (name) {
+                case "positions" -> p = Enums.Precision.INT64;
+                case "flags"     -> p = Enums.Precision.UINT32;
+                case "mapping_qualities" -> p = Enums.Precision.UINT8;
+                default -> throw new IllegalArgumentException(
+                    "writeIntChannelWithCodec: unknown integer channel '"
+                    + name + "'");
+            }
+            writeSignalChannel(sc, name, p, data, defaultCodec);
+            return;
+        }
+        if (codecOverride != Enums.Compression.RANS_ORDER0
+                && codecOverride != Enums.Compression.RANS_ORDER1) {
+            // Defensive — the caller-side validation in
+            // writeGenomicRunSubtree rejects this combination first
+            // with a clearer message.
+            throw new IllegalArgumentException(
+                "writeIntChannelWithCodec: unsupported codec "
+                + codecOverride + " on integer channel '" + name + "'");
+        }
+        // Serialise array → little-endian byte buffer (Binding
+        // Decision §118).
+        byte[] leBytes;
+        switch (name) {
+            case "positions" -> {
+                long[] arr = (long[]) data;
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer
+                    .allocate(arr.length * 8)
+                    .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                for (long v : arr) bb.putLong(v);
+                leBytes = bb.array();
+            }
+            case "flags" -> {
+                int[] arr = (int[]) data;
+                java.nio.ByteBuffer bb = java.nio.ByteBuffer
+                    .allocate(arr.length * 4)
+                    .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                for (int v : arr) bb.putInt(v);
+                leBytes = bb.array();
+            }
+            case "mapping_qualities" -> {
+                // uint8 → byte buffer is endian-neutral; copy through.
+                byte[] arr = (byte[]) data;
+                leBytes = arr.clone();
+            }
+            default -> throw new IllegalArgumentException(
+                "writeIntChannelWithCodec: unknown integer channel '"
+                + name + "'");
+        }
+        // Encode through M83 rANS.
+        int order = (codecOverride == Enums.Compression.RANS_ORDER0) ? 0 : 1;
+        byte[] encoded = global.thalion.ttio.codecs.Rans.encode(leBytes, order);
+        // Write as flat unfiltered uint8 dataset.
+        global.thalion.ttio.providers.StorageDataset ds;
+        try {
+            ds = sc.createDataset(name, Enums.Precision.UINT8,
+                encoded.length, 65536, Enums.Compression.NONE, 0);
+        } catch (UnsupportedOperationException e) {
+            ds = sc.createDataset(name, Enums.Precision.UINT8,
+                encoded.length, 0, Enums.Compression.NONE, 0);
+        }
+        try (var closeMe = ds) {
+            closeMe.writeAll(encoded);
+            closeMe.setAttribute("compression", codecIdFor(codecOverride));
+        }
     }
 
     private static void writeSignalChannel(
