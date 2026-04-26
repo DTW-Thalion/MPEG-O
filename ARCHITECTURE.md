@@ -2,30 +2,40 @@
 
 TTI-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data: mass spectrometry, NMR, and vibrational spectroscopy (Raman + IR).
 
-As of v0.11.1 there are three interoperable reference implementations:
+As of the current main (post-v1.1.1; M80–M86 unreleased work in
+the genomic data model + codec stack) there are three
+interoperable reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
-  implementation. Every format guarantee in `docs/format-spec.md` is
-  rooted here. 1536 assertions passing.
+  implementation. Every format guarantee in `docs/format-spec.md`
+  is rooted here. 2477 assertions passing (2 pre-existing M38
+  Thermo failures unrelated to current work).
 - **Python (`ttio` package)** (`python/`, LGPL-3.0 core +
-  Apache-2.0 importers/exporters) — a full reader/writer on top of
-  `h5py` + `numpy` that mirrors the Objective-C class hierarchy
-  1-to-1. 765 tests passing.
+  Apache-2.0 importers/exporters) — a full reader/writer on top
+  of `h5py` + `numpy` that mirrors the Objective-C class
+  hierarchy 1-to-1. 898 tests passing (42 pre-existing failures
+  in zarr-optional / smoke / mzML XSD areas, unrelated).
 - **Java (`global.thalion.ttio`)** (`java/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
-  mirroring the ObjC/Python class hierarchy. 331 tests passing.
+  mirroring the ObjC/Python class hierarchy. 512/0/0/0.
   Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
   crypto dependency). HDF5 via system `libhdf5-java` bindings.
 
 Three-way cross-implementation conformance is asserted at every
 milestone: Python drives ObjC and Java subprocesses through
 `tests/integration/` harnesses and compares byte-level artefacts.
-As of v0.11.1, 44 combinations pass — the v0.10 per-AU encryption
-matrix (`test_per_au_cross_language.py`, 38 cells) plus the
-JCAMP-DX Raman/IR conformance harness
-(`test_raman_ir_cross_language.py`, 6 cells). Any language pair
-can exchange encrypted files, transport streams, and vibrational
-spectra bit-for-bit.
+The shipped conformance matrix covers v0.10 per-AU encryption
+(`test_per_au_cross_language.py`, 38 cells), the JCAMP-DX
+Raman/IR harness (`test_raman_ir_cross_language.py`, 6 cells),
+the M82.4 genomic data-model 9-cell matrix
+(`test_m82_3x3_matrix.py`), and the M83–M86 genomic codec
+fixtures (one per codec path under
+`python/tests/fixtures/codecs/` and
+`python/tests/fixtures/genomic/`; ObjC and Java each verify
+byte-exact decode against the Python-generated artefacts). Any
+language pair can exchange encrypted files, transport streams,
+vibrational spectra, and genomic runs (with or without codec
+compression) bit-for-bit.
 
 All three implementations express the architecture in three layers:
 
@@ -668,6 +678,61 @@ bindings (`libhdf5-java`).
 | **Numpress-delta** | TTIO transform → int64 deltas + zlib         | Yes    | `TTIOCompressionNumpressDelta` via `TTIONumpress`     | `signal_compression="numpress_delta"`             |
 
 LZ4 availability is runtime-detected via `H5Zfilter_avail(32004)` in ObjC and `hdf5plugin.PLUGIN_PATH` + `h5py.h5z.filter_avail(32004)` in Python; both implementations skip their LZ4 tests cleanly when the filter is absent. Numpress-delta is always available because it is a pure-library transform that produces an ordinary int64 HDF5 dataset.
+
+## Genomic compression codec stack (M83–M86, post-v1.1.1)
+
+Five additional codecs ship for genomic signal channels —
+clean-room implementations from public-domain literature, with
+cross-language byte-exact conformance fixtures across Python,
+ObjC, and Java. Codec ids are reserved in the M79
+`Compression` enum:
+
+| Codec id | Codec          | Algorithm                                        | Lossy? | M79 enum         |
+|----------|----------------|--------------------------------------------------|--------|------------------|
+| `4`      | RANS_ORDER0    | Range Asymmetric Numeral Systems, marginal model | No     | `RANS_ORDER0`    |
+| `5`      | RANS_ORDER1    | rANS with 256 per-context frequency tables       | No     | `RANS_ORDER1`    |
+| `6`      | BASE_PACK      | 2-bit ACGT packing + sparse position+byte mask   | No     | `BASE_PACK`      |
+| `7`      | QUALITY_BINNED | Fixed Illumina-8 / CRUMBLE Phred → 4-bit indices | Yes    | `QUALITY_BINNED` |
+| `8`      | NAME_TOKENIZED | Lean two-token columnar (numeric / string runs)  | No     | `NAME_TOKENIZED` |
+
+The codecs ship as standalone primitives in
+`python/src/ttio/codecs/`, `objc/Source/Codecs/`, and
+`java/src/main/java/global/thalion/ttio/codecs/` — each with a
+self-contained byte-stream wire format documented in
+`docs/codecs/<codec>.md`.
+
+The pipeline-wiring layer (M86 Phases A–F, all shipped) hooks
+the codecs into `signal_channels/` write/read paths via a
+per-channel `signal_codec_overrides` dict on
+`WrittenGenomicRun`. Each compressed channel carries an
+`@compression` uint8 attribute holding the M79 codec id; the
+reader dispatches on that attribute (and, for the read_names /
+cigars / mate_info channels, on the HDF5 link type — schema
+lift from compound to flat or to subgroup). Lazy whole-channel
+decode + per-instance cache means per-read access slices the
+in-memory decoded buffer rather than calling the codec on every
+read.
+
+Codec-channel applicability is enforced at write-time
+validation. Every M82 channel under `signal_channels/` accepts
+at least one codec (sequences/qualities take the byte codecs;
+positions/flags/mapping_qualities take rANS via LE byte
+serialisation; read_names + cigars + mate_info_chrom take
+NAME_TOKENIZED and rANS; mate_info_pos/tlen take rANS). Wrong-
+content combinations (e.g. QUALITY_BINNED on sequences) are
+rejected with a clear error. The full applicability matrix is
+documented in `docs/format-spec.md` §10.5–§10.9.
+
+Selection guidance for the channels accepting multiple codecs
+(cigars, mate_info_chrom): rANS is the recommended default for
+real WGS data; NAME_TOKENIZED is the niche choice for
+known-uniform inputs (synthetic / perfect-match-only filtered
+subsets). NAME_TOKENIZED's columnar mode wins big when the
+input has uniform token-count shape, but degrades to verbatim
+mode (no compression) on mixed inputs. rANS exploits
+byte-level repetition across the whole stream regardless of
+shape and produces ~3-17× compression on realistic mixed
+data.
 
 ---
 

@@ -135,6 +135,64 @@ Pure promote from v0.12.0. No new code; v1.0.0 signals that the public API is Se
 * **Not in this tag** — M40 PyPI + Maven Central publishing continues to wait on external account / API-token setup (planned for v1.0.1); mzML `<softwareList>` / `<dataProcessingList>` provenance-chain emission and hyperspectral-image analysis primitives are both scope-expansion, explicitly deferred past v1.0 in `docs/v1.0-gaps.md`.
 * **Format version** — container format remains at `1.3` (v0.12.0 M74 bump). No on-disk schema change in v1.0.0.
 
+## Unreleased — TTI-O rebrand + Genomic data model + Genomic codec stack (M79–M86, 2026-04-25/26)
+
+The unreleased line on `main` represents a substantial expansion of the project's scope: an end-to-end genomic data pathway alongside the spectroscopy/spectrometry stack that was the focus of v0.1–v1.0. The work spans a brand rename, a new run-and-element hierarchy modelled on SAM/BAM, and a complete five-codec genomic compression library wired into every M82 channel. None of this has been tagged into a numbered release yet — the work sits under the `[Unreleased]` header in `CHANGELOG.md` at present.
+
+### M79 — Modality + genomic enumerations groundwork (2026-04-25)
+
+Reserved enum slots for genomic content: a new `Compression` enum gains `RANS_ORDER0=4`, `RANS_ORDER1=5`, `BASE_PACK=6`, `QUALITY_BINNED=7`, `NAME_TOKENIZED=8`. New `AcquisitionMode.GENOMIC_*` values for read alignment / WGS / WES. New `Modality` enum string ("genomic_sequencing"). Reserved-only — no encoders or decoders yet, but the enum slots commit the wire-level codec ids for cross-language readers to recognise even before the codec library lands.
+
+### M80 — TTI-O rebrand clean sweep (2026-04-25)
+
+Repository-wide renaming of every `mpgo`/`MPGO`/`Mpgo` identifier (and the `mpeg_o` Python package, the `.mpgo` file extension, and the `MO` transport magic bytes) to `ttio`/`TTIO`/`Ttio`/`ttio`/`.tio`/`TI`. Clean break per Binding Decision §74 — no backward compatibility, no dual-read shims. Files written by pre-M80 implementations cannot be read by post-M80 implementations and vice versa. The rationale: TTI-O ("Thalion Initiative") is a name the Thalion organisation owns; the prior `MPEG-O` name implied an MPEG-G derivation that was architectural inspiration only, not a formal MPEG-G profile or extension.
+
+### M81 — Java reverse-DNS correction (2026-04-25)
+
+M80's Java rename used `com.dtwthalion.ttio` as the Maven groupId; M81 corrected it to `global.thalion.ttio` to match Thalion's actual root domain. Pure rename across all Java source, test, and Maven artefact metadata. Filed before any external Maven Central publishing so no released artefact carried the wrong groupId.
+
+### M82 — GenomicRun + AlignedRead + signal-channel layout (2026-04-25, four sub-milestones)
+
+Parallel run-and-element hierarchy alongside the existing spectrum-based classes. New types in all three languages:
+
+* **`GenomicRun`** — lazy view over one aligned-read run; `Indexable<AlignedRead>` + `Streamable<AlignedRead>` + `AutoCloseable`. Per-read access via `run[i]` (Python) / `run.alignedReadAt(i)` (Java) / `[run readAtIndex:]` (ObjC).
+* **`AlignedRead`** — per-read value class (`read_name`, `chromosome`, `position`, `mapping_quality`, `cigar`, `sequence`, `qualities`, `flags`, mate-pair info — modelled directly on SAM/BAM).
+* **`GenomicIndex`** — parallel-array per-read scalars (offsets, lengths, chromosomes, positions, mapping qualities, flags); supports region / unmapped / flag queries.
+* **`WrittenGenomicRun`** — pure write-side container passed to `SpectralDataset.write_minimal(genomic_runs=...)`.
+
+Storage under `/study/genomic_runs/<name>/` mirrors the existing `/study/ms_runs/` layout. `signal_channels/` carries per-base byte arrays (`sequences`, `qualities`), per-read parallel arrays (`positions`, `flags`, `mapping_qualities`), and three VL_STRING compounds (`cigars`, `read_names`, `mate_info`). The sub-milestones were M82.1 (Python reference), M82.2 (ObjC normative), M82.3 (Java parity), M82.4 (cross-language conformance — 9-cell matrix `test_m82_3x3_matrix.py`), and M82.5 (`docs/M82.md` + `ARCHITECTURE.md` divergence-analysis section).
+
+### M83 — rANS entropy codec (2026-04-25)
+
+Clean-room implementation of the range Asymmetric Numeral Systems entropy coder from Duda 2014 (arXiv:1311.2540) — order-0 (marginal) and order-1 (per-context) variants. Wire format, frequency-table normalisation, state width (64-bit unsigned, L=2²³, b=2⁸), and big-endian byte order all explicitly specified for byte-identical output across Python / ObjC / Java. Six canonical conformance fixtures (vectors A/B/C × order 0/1) under `python/tests/fixtures/codecs/rans_*.bin` are the wire-level conformance test vectors. Codec spec at [`codecs/rans.md`](codecs/rans.md). Performance on the M83 reference host: ObjC 181 / 229 MB/s encode/decode; Java 86 / 168 MB/s; Python 7.3 / 6.8 MB/s.
+
+### M84 — BASE_PACK genomic codec + sidecar mask (2026-04-26)
+
+Clean-room 2-bit ACGT packing with a sparse `(position: uint32, original_byte: uint8)` sidecar mask for non-ACGT bytes (`N`, IUPAC ambiguity codes, soft-masking lowercase, gaps). Lossless on the full 256-byte alphabet via the mask. Case-sensitive packing preserves soft-masking convention used by RepeatMasker / BWA / etc. Big-endian bit packing within byte; padding bits in final body byte are zero. Four canonical fixtures (pure ACGT, realistic ~1% N, IUPAC stress, empty). ObjC encode 907 MB/s, decode 2093 MB/s. Codec spec at [`codecs/base_pack.md`](codecs/base_pack.md).
+
+### M85 Phase A — QUALITY_BINNED codec (2026-04-26)
+
+Fixed Illumina-8 / CRUMBLE-derived 8-bin Phred quantisation with 4-bit-packed bin indices, big-endian within byte. Lossy by construction: `decode(encode(x)) == bin_centre[bin_of[x]]` per the bin table (centres 0/5/15/22/27/32/37/40). Hardcoded `scheme_id == 0x00` in v0; future scheme ids reserved for NCBI 4-bin, Bonfield variable-width, etc. Phred values >40 saturate to bin 7 / centre 40. Four canonical fixtures. Codec spec at [`codecs/quality.md`](codecs/quality.md).
+
+### M85 Phase B — NAME_TOKENIZED codec (2026-04-26)
+
+Lean two-token-type columnar codec for read names: numeric digit-runs (without leading zeros) and string non-digit-runs (absorbing leading-zero digit-runs). Per-column type detection picks columnar mode (delta-encoded numeric columns + dictionary-encoded string columns) or verbatim fallback. Achieves ~3-7:1 compression on structured Illumina names. NOT a faithful CRAM 3.1 / Bonfield 2022 implementation — that's a future optimisation milestone if the 20:1 target ever becomes load-bearing. Four canonical fixtures. Codec spec at [`codecs/name_tokenizer.md`](codecs/name_tokenizer.md).
+
+### M86 — Genomic codec pipeline-wiring (six phases, 2026-04-26)
+
+End-to-end integration of the M83/M84/M85 codecs into the `signal_channels/` write/read paths via a per-channel `WrittenGenomicRun.signal_codec_overrides` dict. Each compressed channel carries an `@compression` uint8 attribute holding the M79 codec id; the reader dispatches on that attribute (and, for the schema-lifted channels, on the HDF5 link type). All six phases shipped on 2026-04-26:
+
+* **Phase A — byte channels** (RANS_ORDER0/1, BASE_PACK on `sequences` and `qualities`). Established the per-channel `@compression` attribute scheme, the lazy whole-channel decode + per-instance cache pattern, and the no-double-compression rule (codec output is high-entropy; no HDF5 filter on top).
+* **Phase B — integer channels** (RANS_ORDER0/1 on `positions` int64, `flags` uint32, `mapping_qualities` uint8). Defined the int↔byte serialisation contract: arrays serialise to little-endian bytes per element before encoding; reader looks up natural dtype by channel name.
+* **Phase C — cigars channel** (RANS_ORDER0/1 + NAME_TOKENIZED). First channel accepting multiple codecs; documented selection guidance (rANS for real WGS data, NAME_TOKENIZED for known-uniform inputs). Schema lift from compound (M82) to flat 1-D uint8.
+* **Phase D — qualities QUALITY_BINNED** (codec id 7 added to the qualities byte channel). Validation rejects QUALITY_BINNED on `sequences` (would silently destroy ACGT data via Phred-bin quantisation).
+* **Phase E — read_names schema lift + NAME_TOKENIZED** (codec id 8 on a flat-byte `read_names` dataset replacing the M82 compound). First M86 phase doing a compound→flat schema lift.
+* **Phase F — mate_info per-field decomposition** (the M82 3-field compound → subgroup with three child datasets `chrom`, `pos`, `tlen`, each independently codec-compressible). First phase introducing HDF5 link-type dispatch (group vs dataset) for a top-level `signal_channels` link. Three new "virtual" channel names (`mate_info_chrom`, `mate_info_pos`, `mate_info_tlen`) in `signal_codec_overrides`; partial overrides allowed.
+
+Cross-language conformance fixtures for every phase under `python/tests/fixtures/codecs/` and `python/tests/fixtures/genomic/`. Selection guidance for the multi-codec channels in [`format-spec.md`](format-spec.md) §10.5–§10.9.
+
+After M86 Phase F, every M82 channel under `signal_channels/` accepts at least one codec, and every M79 codec slot (4–8) is wired into its applicable channels with cross-language byte-exact conformance. The M82-era genomic codec story is functionally complete; remaining future scope is optional optimisation milestones (a custom CIGAR-specific RLE-then-rANS codec for higher peak compression than NAME_TOKENIZED, or a full Bonfield 2022 name tokeniser for the 20:1 target).
+
 ## Format compatibility
 
 Every version's files remain readable by later versions. v0.11 readers open
