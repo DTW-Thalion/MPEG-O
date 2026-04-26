@@ -765,22 +765,31 @@ HDF5 filter pipeline or a dedicated per-channel attribute:
 
 The five reserved codec ids (`4`–`8`) are committed to the disk
 format in M79 so cross-language readers see a stable enum table
-before encoders land. **As of v0.12.x (post-M85 Phase B) all
+before encoders land. **As of v0.12.x (post-M86 Phase D) all
 five (rANS order-0, rANS order-1, base-pack, quality-binned,
 name-tokenized) ship as standalone primitives in all three
 languages — the genomic codec library is conceptually complete.**
 
-Ids `4`, `5`, `6` are also wired into the genomic signal-channel
-write/read pipeline for the `sequences` and `qualities` byte
-channels (M86 Phase A) — see §10.5 for the `@compression`
-attribute scheme. Ids `7` (quality-binned) and `8`
-(name-tokenized) ship as primitives only; the pipeline-wiring
-branches that interpret `@compression == 7` on a `qualities`
-dataset and `@compression == 8` on a `read_names` dataset are
-future M86 phases. Integer channels (`positions`, `flags`,
-`mapping_qualities`) and remaining VL_STRING channels (`cigars`,
-`mate_info`) continue to use HDF5-filter ZLIB; the channel-codec
-applicability table will grow as future M86 phases land.
+Ids `4`, `5`, `6`, and `7` are wired into the genomic
+signal-channel write/read pipeline:
+
+- Ids `4`, `5`, `6` apply to both `sequences` and `qualities`
+  byte channels (M86 Phase A).
+- Id `7` (quality-binned) applies to the `qualities` byte channel
+  only — the validation rejects QUALITY_BINNED on `sequences`
+  because Phred-bin quantisation would silently destroy ACGT
+  data (M86 Phase D).
+
+See §10.5 for the `@compression` attribute scheme.
+
+Id `8` (name-tokenized) ships as a standalone primitive only;
+the pipeline-wiring branch that interprets `@compression == 8`
+on a `read_names` dataset is M86 Phase E (deferred — requires
+lifting `read_names` from VL_STRING-in-compound to a flat byte
+dataset that can carry the attribute). Integer channels
+(`positions`, `flags`, `mapping_qualities`) and remaining
+VL_STRING channels (`cigars`, `mate_info`) continue to use
+HDF5-filter ZLIB.
 
 > **Note on CRAM 3.1 specifically.** The reserved names above map
 > to CRAM-3.0-era codecs. CRAM 3.1 adds the rANS-Nx16 streams (four

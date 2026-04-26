@@ -324,16 +324,20 @@ malformed input. `Quality.encode(byte[])` throws
 
 ## 7. Wired into / forward references
 
-- **M86 Phase D (deferred)** — wire QUALITY_BINNED into the
-  genomic signal-channel write/read path for the `qualities`
-  byte channel. A `signal_channels/qualities` dataset's
-  `@compression == 7` will route the raw bytes through
-  `quality.decode()`. The M86 wiring infrastructure (per-channel
-  `signal_codec_overrides` dict, `@compression` attribute,
-  lazy-decode cache) shipped in M86 Phase A; only the dispatch
-  branch for codec id 7 needs to be added. Lifting it out of M86
-  Phase A's scope and into a separate phase keeps each milestone
-  bounded.
+- **M86 Phase D (shipped 2026-04-26)** — QUALITY_BINNED is now
+  wired into the genomic signal-channel write/read path for the
+  `qualities` byte channel. Use
+  `WrittenGenomicRun.signal_codec_overrides={"qualities":
+  Compression.QUALITY_BINNED}` at write time; the reader
+  dispatches on `@compression == 7` automatically and decodes
+  the whole channel through `quality.decode()` on first access.
+  The codec is **rejected on the `sequences` channel** (Binding
+  Decision §108): applying Phred-bin quantisation to ACGT bytes
+  would silently destroy the sequence data via lossy
+  quantisation. Compression ~50% on a 100k-byte qualities
+  channel (vs HDF5-chunked ZLIB baseline). See
+  `docs/format-spec.md` §10.5 for the on-disk attribute scheme
+  shared with M86 Phase A.
 - **M85 Phase B (deferred)** — `name_tokenizer` codec (CRAM 3.1
   / Bonfield 2022 style read-name compression). Substantially
   larger than Phase A; warrants its own plan and milestone. M79
