@@ -602,11 +602,12 @@ def _write_byte_channel_with_codec(
     :func:`_write_uint8_channel` (the HDF5-filter dispatch path used
     by M82). When ``codec_override`` is one of
     :data:`ttio.enums.Compression.RANS_ORDER0`,
-    :data:`ttio.enums.Compression.RANS_ORDER1`, or
-    :data:`ttio.enums.Compression.BASE_PACK`, the raw bytes are
-    encoded through the corresponding M83 / M84 codec and written as
-    an unfiltered uint8 dataset whose ``@compression`` attribute holds
-    the codec id (so the read path can dispatch on it).
+    :data:`ttio.enums.Compression.RANS_ORDER1`,
+    :data:`ttio.enums.Compression.BASE_PACK`, or
+    :data:`ttio.enums.Compression.QUALITY_BINNED` (Phase D), the raw
+    bytes are encoded through the corresponding M83 / M84 / M85 codec
+    and written as an unfiltered uint8 dataset whose ``@compression``
+    attribute holds the codec id (so the read path can dispatch on it).
 
     Per Binding Decision §87, codec-compressed datasets carry NO HDF5
     filter — the codec output is high-entropy and double-compression
@@ -631,10 +632,17 @@ def _write_byte_channel_with_codec(
     elif codec_override == Compression.BASE_PACK:
         from .codecs.base_pack import encode as _enc
         encoded = _enc(raw)
+    elif codec_override == Compression.QUALITY_BINNED:
+        # Phase D: Illumina-8 Phred bin quantisation. Lossy by
+        # construction — caller has already been validated to apply
+        # this only to the qualities channel (per Binding Decision §108).
+        from .codecs.quality import encode as _enc
+        encoded = _enc(raw)
     else:
         raise ValueError(
             f"signal_codec_overrides['{name}'] = {codec_override!r}: "
-            "only RANS_ORDER0, RANS_ORDER1, BASE_PACK are supported"
+            "only RANS_ORDER0, RANS_ORDER1, BASE_PACK, QUALITY_BINNED "
+            "are supported"
         )
 
     arr = np.frombuffer(encoded, dtype=np.uint8)

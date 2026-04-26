@@ -234,6 +234,11 @@ class GenomicRun:
         elif codec_id == int(Compression.BASE_PACK):
             from .codecs.base_pack import decode as _dec
             decoded = _dec(all_bytes)
+        elif codec_id == int(Compression.QUALITY_BINNED):
+            # Phase D: Illumina-8 Phred bin decode (lossy on encode;
+            # decode is deterministic from the wire stream).
+            from .codecs.quality import decode as _dec
+            decoded = _dec(all_bytes)
         else:
             raise ValueError(
                 f"signal_channel '{name}': @compression={codec_id} "

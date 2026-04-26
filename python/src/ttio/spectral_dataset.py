@@ -876,18 +876,27 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         parent = _H5Group(parent)
 
     # M86: validate any per-channel codec overrides before we touch
-    # the file. Only sequences/qualities can be overridden; only the
-    # three TTIO byte-stream codecs are accepted. Anything else is a
+    # the file. Only sequences/qualities can be overridden; the
+    # accepted codec set is per-channel (Phase D §119): sequences
+    # gets the three byte-stream codecs (RANS_ORDER0/1 + BASE_PACK);
+    # qualities gets those plus QUALITY_BINNED. Anything else is a
     # caller error and must surface immediately (Binding Decision §88).
     from .enums import Compression as _Compression
-    _ALLOWED_OVERRIDE_CHANNELS = frozenset({"sequences", "qualities"})
-    _ALLOWED_OVERRIDE_CODECS = frozenset({
-        _Compression.RANS_ORDER0,
-        _Compression.RANS_ORDER1,
-        _Compression.BASE_PACK,
-    })
+    _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL = {
+        "sequences": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+            _Compression.BASE_PACK,
+        }),
+        "qualities": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+            _Compression.BASE_PACK,
+            _Compression.QUALITY_BINNED,
+        }),
+    }
     for ch_name, codec in run.signal_codec_overrides.items():
-        if ch_name not in _ALLOWED_OVERRIDE_CHANNELS:
+        if ch_name not in _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL:
             raise ValueError(
                 f"signal_codec_overrides: channel '{ch_name}' not supported "
                 f"(only sequences and qualities can use TTIO codecs)"
@@ -899,10 +908,29 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
                 "is not a valid Compression value"
             ) from exc
-        if codec_enum not in _ALLOWED_OVERRIDE_CODECS:
+        allowed = _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL[ch_name]
+        if codec_enum not in allowed:
+            # Phase D Binding Decision §110: explicit message for the
+            # (sequences, QUALITY_BINNED) category error — naming the
+            # codec, the channel, and the lossy-quantisation rationale.
+            if (
+                codec_enum == _Compression.QUALITY_BINNED
+                and ch_name == "sequences"
+            ):
+                raise ValueError(
+                    f"signal_codec_overrides['{ch_name}']: codec "
+                    f"QUALITY_BINNED is not valid on the '{ch_name}' "
+                    "channel — quality binning is lossy and only "
+                    "applies to Phred quality scores. Applying it to "
+                    "ACGT sequence bytes would silently destroy the "
+                    "sequence via Phred-bin quantisation. Use the "
+                    "'qualities' channel for QUALITY_BINNED, or "
+                    "RANS_ORDER0/RANS_ORDER1/BASE_PACK on sequences."
+                )
             raise ValueError(
                 f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
-                "not supported (only RANS_ORDER0, RANS_ORDER1, BASE_PACK)"
+                f"not supported on the '{ch_name}' channel "
+                f"(allowed: {sorted(c.name for c in allowed)})"
             )
 
     rg = parent.create_group(name)
