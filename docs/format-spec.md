@@ -760,25 +760,28 @@ HDF5 filter pipeline or a dedicated per-channel attribute:
 | **rANS-order0**        | Range-asymmetric numeral systems entropy coder, order-0 (per-byte) frequency model. Codec id `4`. **Implemented in M83** (v0.12 unreleased) across all three languages — clean-room from Duda 2014, no htslib source consulted. Wire format, deterministic frequency-table normalisation, and cross-language conformance contract specified in `docs/codecs/rans.md`. Standalone primitive only; signal-channel pipeline wiring lands in M86. |
 | **rANS-order1**        | Order-1 (preceding-byte context) rANS variant. Codec id `5`. **Implemented in M83** alongside order-0 — same wire format, per-context frequency tables (256 of them) with run-length-encoded sparse rows. See `docs/codecs/rans.md`. |
 | **base-pack**          | 2-bit ACGT packed-base codec for genomic read sequences. Codec id `6`. Lossless on the full byte alphabet via a sparse position+byte sidecar mask: bases that are uppercase `{A,C,G,T}` pack into 2-bit slots (4 bases per output byte, big-endian within byte), everything else (`N`, IUPAC ambiguity codes, lowercase soft-masking, gaps) is recorded in the mask alongside its input position so the decoder restores it byte-for-byte. **Implemented in M84** (v0.12 unreleased) across all three languages — clean-room implementation, no htslib / CRAM tools-Java / jbzip source consulted. Wire format and case-sensitivity rationale in `docs/codecs/base_pack.md`. Standalone primitive only; signal-channel pipeline wiring lands in M86. |
-| **quality-binned**     | Reserved enum slot (M79, v0.11). Illumina-style quality-score binning that maps 40 raw Phred levels onto a small number of bins (default: 8). Codec id `7`. Lossy by construction. **Encoder/decoder NOT YET IMPLEMENTED**; M82 stores raw Phred bytes. |
+| **quality-binned**     | Illumina-style quality-score binning that maps 40+ raw Phred levels onto 8 bins (CRUMBLE-derived bin table, fixed in v0 of scheme `0x00`). 4-bit-packed bin indices, big-endian within byte. Codec id `7`. Lossy by construction (decode returns the bin centre, not the original Phred). **Implemented in M85 Phase A** (v0.12 unreleased) across all three languages — clean-room implementation, no htslib / CRUMBLE / NCBI SRA toolkit source consulted. Wire format and bin table specified in `docs/codecs/quality.md`. Standalone primitive only; signal-channel pipeline wiring is a future M86 phase. |
 | **name-tokenized**     | Reserved enum slot (M79, v0.11). Read-name tokenisation: shared prefixes are factored out and indices replace the per-read names. Codec id `8`. Lossless. **Encoder/decoder NOT YET IMPLEMENTED**; M82 stores read names as VL_STRING in the `read_names` compound. |
 
 The five reserved codec ids (`4`–`8`) are committed to the disk
 format in M79 so cross-language readers see a stable enum table
-before encoders land. **As of v0.12.x (post-M86) ids `4`, `5`,
-and `6` (rANS order-0, rANS order-1, base-pack) ship as standalone
-primitives in all three languages AND are wired into the genomic
-signal-channel write/read pipeline for the byte channels
-(`sequences`, `qualities`)** — see §10.5 for the `@compression`
-attribute scheme that selects them at write time and dispatches
-them at read time. Integer channels (`positions`, `flags`,
+before encoders land. **As of v0.12.x (post-M85 Phase A) ids
+`4`, `5`, `6`, and `7` (rANS order-0, rANS order-1, base-pack,
+quality-binned) ship as standalone primitives in all three
+languages.** Ids `4`, `5`, `6` are also wired into the genomic
+signal-channel write/read pipeline for the `sequences` and
+`qualities` byte channels (M86 Phase A) — see §10.5 for the
+`@compression` attribute scheme. Id `7` (quality-binned) ships
+as a primitive only in M85 Phase A; the pipeline-wiring branch
+that interprets `@compression == 7` on a `qualities` dataset
+is a future M86 phase. Integer channels (`positions`, `flags`,
 `mapping_qualities`) and VL_STRING channels (`cigars`,
 `read_names`, `mate_info`) continue to use HDF5-filter ZLIB.
-**Ids `7` and `8` (quality-binned, name-tokenized) are still
-reserved-only** — their encoder/decoder work is tracked under
-"Genomic codec milestone" in WORKPLAN. Reading a dataset whose
-codec id ∈ {7, 8} continues to return `UnsupportedCodec` in every
-implementation.
+**Id `8` (name-tokenized) is still reserved-only** — its
+encoder/decoder work is M85 Phase B (CRAM 3.1 / Bonfield 2022
+style), tracked under "Genomic codec milestone" in WORKPLAN.
+Reading a dataset whose codec id == 8 continues to return
+`UnsupportedCodec` in every implementation.
 
 > **Note on CRAM 3.1 specifically.** The reserved names above map
 > to CRAM-3.0-era codecs. CRAM 3.1 adds the rANS-Nx16 streams (four

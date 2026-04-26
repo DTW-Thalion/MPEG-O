@@ -11,7 +11,145 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (Phase A)
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring + M85 QUALITY_BINNED (Phase A)
+
+### M85 Phase A — QUALITY_BINNED genomic codec (clean-room, 3-language) (2026-04-26)
+
+Catch-up milestone: the original M84 sketch in WORKPLAN bundled
+"Base-Packing + Quality Quantiser Codecs", but the M84
+implementation that landed earlier today shipped only BASE_PACK.
+M85 Phase A closes the gap with the QUALITY_BINNED codec (M79
+slot `7`) — fixed Illumina-8 / CRUMBLE-derived 8-bin Phred
+quantisation, 4-bit-packed bin indices, big-endian within byte,
+lossy by construction. M85 Phase B (`name_tokenizer`, M79 slot
+`8`) is substantially larger and deferred to a separate future
+milestone.
+
+The codec ships as a standalone primitive in M85 Phase A. Wiring
+into the genomic signal-channel pipeline (interpreting
+`@compression == 7` on a `signal_channels/qualities` dataset to
+call `quality.decode()`) is a future M86 phase, separate from
+M86 Phase A which already wired rANS and BASE_PACK.
+
+#### Added
+
+- **Python** (`python/src/ttio/codecs/quality.py`) — `encode(data)`
+  and `decode(encoded)` with no order/scheme parameter (v0 hardcodes
+  scheme `0x00` = Illumina-8). Pack loop uses `bytes.translate` with
+  a 256-entry bin-index table. Decode uses two `bytes.translate`
+  passes (high-nibble + low-nibble) interleaved via
+  `bytearray[0::2]/[1::2]` slice-assign — Python-specific perf hack
+  documented for the ObjC/Java agents who can use simpler per-byte
+  loops in compiled code. Throughput on the M85 host: encode 61
+  MB/s, decode 471 MB/s. 13 pytest cases, all passing; full Python
+  suite went from 825 passed → 838 passed (+13 new) with zero new
+  regressions.
+- **Objective-C** (`objc/Source/Codecs/TTIOQuality.{h,m}`) — C
+  core with `NSData → NSData` wrappers, `NSError**` out-param on
+  decode. Static 256-entry pack table and 16-entry centre table
+  (entries 8..15 mapped to 0 — defensive against malformed input;
+  matches Python's silent treatment of out-of-range nibbles).
+  Throughput: encode 3203 MB/s, decode 2196 MB/s — well above
+  the 300/500 soft targets and 150/250 hard floors. 75 new
+  assertions in `TestM85Quality.m`, full ObjC suite went from
+  2119 PASS → 2194 PASS (+75) with the same 2 pre-existing M38
+  Thermo failures unchanged.
+- **Java** (`java/src/main/java/global/thalion/ttio/codecs/Quality.java`)
+  — uses `>>>` (unsigned right shift) throughout; `Byte.toUnsignedInt(b)`
+  for byte→int widening (critical for Phred 200+ which would
+  otherwise sign-extend to negative); `writeUInt32BE` /
+  `readUInt32BE` helpers (matching the BasePack.java sibling style
+  rather than introducing ByteBuffer for a 6-byte header).
+  Defensive null check on `encode(null)` / `decode(null)` throwing
+  `IllegalArgumentException`. 13 JUnit 5 tests, 63 assertions,
+  all four canonical vectors byte-exact. Throughput: encode
+  2001 MB/s, decode 425 MB/s. Full Java suite went 441/0/0/0 →
+  454/0/0/0 (+13 new tests, zero failures).
+- **Canonical conformance fixtures** — four `.bin` files generated
+  from the Python encoder, committed under
+  `python/tests/fixtures/codecs/`, with verbatim copies under
+  `objc/Tests/Fixtures/` and `java/src/test/resources/ttio/codecs/`:
+  `quality_a.bin` (134 B; 256 B pure bin centres),
+  `quality_b.bin` (518 B; 1024 B SHA-256-derived
+  Illumina-realistic profile, Phred 15..40),
+  `quality_c.bin` (38 B; 64 B literal covering every bin
+  boundary + saturation [Phred 41, 50, 93, 100, 200, 255]),
+  `quality_d.bin` (6 B; empty input).
+- **Specification** — `docs/codecs/quality.md` documents the
+  algorithm, bin table (Phred ranges → bin index → bin centre),
+  bit-order-within-byte rule (with worked examples), wire format
+  diagram, seven binding decisions §91–§97 with rationale (single
+  fixed scheme, no embedded bin table, Phred-41+ saturation,
+  4-bit-vs-3-bit, big-endian within byte, zero padding bits, lossy
+  round-trip via bin centres), the cross-language conformance
+  contract, the per-language performance numbers, and the public
+  API in each language.
+- **Format-spec update** — `docs/format-spec.md` §10.4
+  quality-binned row flipped from "Reserved enum slot … NOT YET
+  IMPLEMENTED" to "Implemented in M85 Phase A" with a pointer to
+  `docs/codecs/quality.md`. Trailing summary paragraph updated:
+  ids `4`, `5`, `6`, `7` now ship as standalone primitives; ids
+  `4`, `5`, `6` are also wired into the byte-channel pipeline
+  (M86 Phase A); id `7` ships standalone-only and waits on a
+  future M86 phase to be wired; id `8` (name-tokenized) remains
+  reserved-only and is the M85 Phase B target.
+- **Python sub-package docstring** — `python/src/ttio/codecs/__init__.py`
+  changed `quality       — Phred score quantisation (M84, future)`
+  to `quality       — Phred score quantisation (M85 Phase A)`;
+  `name_tok       — Read name tokenisation (M85, future)` updated
+  to `(M85 Phase B, future)`.
+- **WORKPLAN** — M85 section restructured into Phase A (shipped:
+  quality_binned) and Phase B (deferred: name_tokenizer). Phase
+  A acceptance items checked.
+
+#### Verification
+
+- Python: `pytest tests/test_m85_quality.py -v` → 13/13 pass.
+  Full suite: 838 passed / 42 failed / 63 skipped / 4 xfailed /
+  3 errors (was 825 / 42 / 64 / 4 / 3); +13 new passes, zero
+  new regressions. The 42 failures and 3 errors are all
+  pre-existing unrelated issues (zarr, version smoke, mzML XSD,
+  websockets timing).
+- Objective-C: full test runner shows 2119 → 2194 PASS (+75 M85
+  assertions across 13 test functions); 2 FAIL unchanged
+  (pre-existing M38 Thermo).
+- Java: `mvn -o test` → 454 / 0 fail / 0 error / 0 skipped (was
+  441 / 0 / 0 / 0). All 13 new `QualityTest` cases pass.
+- Cross-language: each implementation independently constructs
+  the four canonical input vectors (vector A literal, vector B
+  via SHA-256("ttio-quality-vector-b"), vector C 64-byte literal,
+  vector D empty) and compares the resulting bytes against the
+  Python-generated fixtures. All three produce byte-identical
+  output for all four (Python, ObjC, Java).
+
+#### Notes
+
+- **Lossy round-trip is a feature, not a bug.** Tests use
+  bin-centre inputs for byte-exact round-trips, or assert
+  against the expected lossy mapping
+  (`bin_centre[bin_of[x]]`). Mistaken byte-exact assertions on
+  arbitrary Phred input would produce "passes for trivial
+  inputs but fails for real data" bugs.
+- **Phred 41+ saturates to centre 40.** PacBio HiFi produces
+  Phred 60+; these round-trip to 40 with this codec. Documented
+  as Binding Decision §93. Future scheme_ids may add wider
+  ranges.
+- **The decoder treats nibbles 8..15 as bin index 0 / centre 0
+  silently** in all three implementations. The encoder never
+  produces such nibbles; this is defensive behaviour against
+  hand-crafted hostile streams. Documented as Binding Decision
+  §96 follow-up.
+- **`@compression == 7` is not yet wired into the read path.**
+  M85 Phase A delivers the codec only. A v0.12 file written
+  with the codec in standalone mode (no signal-channel write
+  path uses it yet) is a synthetic test artifact only. The
+  future M86 phase that wires codec id 7 into the `qualities`
+  channel pipeline will reuse the M86 Phase A `@compression`
+  attribute scheme without changing it.
+- **The original M84 WORKPLAN sketch's "Quality Quantiser"
+  scope was honoured by M85 Phase A** rather than retroactively
+  amending M84. The CHANGELOG and WORKPLAN both note this
+  scope drift explicitly.
 
 ### M86 — Wire rANS + BASE_PACK into genomic signal-channel pipeline (Phase A: byte channels) (2026-04-26)
 
