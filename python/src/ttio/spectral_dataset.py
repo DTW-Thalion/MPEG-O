@@ -875,6 +875,36 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     if isinstance(parent, h5py.Group):
         parent = _H5Group(parent)
 
+    # M86: validate any per-channel codec overrides before we touch
+    # the file. Only sequences/qualities can be overridden; only the
+    # three TTIO byte-stream codecs are accepted. Anything else is a
+    # caller error and must surface immediately (Binding Decision §88).
+    from .enums import Compression as _Compression
+    _ALLOWED_OVERRIDE_CHANNELS = frozenset({"sequences", "qualities"})
+    _ALLOWED_OVERRIDE_CODECS = frozenset({
+        _Compression.RANS_ORDER0,
+        _Compression.RANS_ORDER1,
+        _Compression.BASE_PACK,
+    })
+    for ch_name, codec in run.signal_codec_overrides.items():
+        if ch_name not in _ALLOWED_OVERRIDE_CHANNELS:
+            raise ValueError(
+                f"signal_codec_overrides: channel '{ch_name}' not supported "
+                f"(only sequences and qualities can use TTIO codecs)"
+            )
+        try:
+            codec_enum = _Compression(codec)
+        except ValueError as exc:
+            raise ValueError(
+                f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
+                "is not a valid Compression value"
+            ) from exc
+        if codec_enum not in _ALLOWED_OVERRIDE_CODECS:
+            raise ValueError(
+                f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
+                "not supported (only RANS_ORDER0, RANS_ORDER1, BASE_PACK)"
+            )
+
     rg = parent.create_group(name)
 
     # Run-level attributes (mirrors _write_run pattern).
@@ -898,11 +928,19 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     idx_group = rg.create_group("genomic_index")
     idx.write(idx_group)
 
-    # Signal channels — these honour run.signal_compression.
+    # Signal channels — these honour run.signal_compression by default;
+    # M86 lets per-channel overrides route sequences/qualities through
+    # the rANS / BASE_PACK codecs instead.
     sc = rg.create_group("signal_channels")
     io._write_int64_channel(sc, "positions", run.positions, run.signal_compression)
-    io._write_uint8_channel(sc, "sequences", run.sequences, run.signal_compression)
-    io._write_uint8_channel(sc, "qualities", run.qualities, run.signal_compression)
+    io._write_byte_channel_with_codec(
+        sc, "sequences", run.sequences, run.signal_compression,
+        run.signal_codec_overrides.get("sequences"),
+    )
+    io._write_byte_channel_with_codec(
+        sc, "qualities", run.qualities, run.signal_compression,
+        run.signal_codec_overrides.get("qualities"),
+    )
     io._write_uint32_channel(sc, "flags", run.flags, run.signal_compression)
     io._write_uint8_channel(
         sc, "mapping_qualities", run.mapping_qualities, run.signal_compression

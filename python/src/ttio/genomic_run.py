@@ -52,6 +52,16 @@ class GenomicRun:
 
     _signal_cache: dict = field(default_factory=dict, repr=False, compare=False)
     _compound_cache: dict[str, list[dict]] = field(default_factory=dict, repr=False, compare=False)
+    # M86: lazy whole-channel decode cache for byte channels whose
+    # @compression attribute names a TTIO codec (rANS / BASE_PACK).
+    # Codec output is byte-stream non-sliceable, so the whole channel
+    # is decoded once on first access and the decoded buffer is
+    # sliced from memory thereafter (Binding Decision §89). Cache
+    # lifetime is the GenomicRun instance — re-opening the file
+    # incurs the decode cost again (Gotcha §101).
+    _decoded_byte_channels: dict[str, bytes] = field(
+        default_factory=dict, repr=False, compare=False,
+    )
 
     # ------------------------------------------------------------------
     # Sequence protocol
@@ -82,14 +92,12 @@ class GenomicRun:
         chrom = self.index.chromosomes[i]
 
         # Sequence and qualities — read a slice of the per-base channels.
-        # dataset.read(offset=N, count=K) reads K elements starting at N.
-        seq_ds = self._signal_dataset("sequences")
-        seq_raw = seq_ds.read(offset=offset, count=length)
-        sequence = bytes(seq_raw).decode("ascii")
-
-        qual_ds = self._signal_dataset("qualities")
-        qual_raw = qual_ds.read(offset=offset, count=length)
-        qualities = bytes(qual_raw)
+        # M86: routed through _byte_channel_slice so that channels
+        # written with a TTIO codec override (@compression > 0) are
+        # decoded transparently before slicing.
+        seq_bytes = self._byte_channel_slice("sequences", offset, length)
+        sequence = seq_bytes.decode("ascii")
+        qualities = self._byte_channel_slice("qualities", offset, length)
 
         # Compound channels — load whole-dataset once and cache.
         # read_compound_dataset already decodes VL bytes to str.
@@ -192,6 +200,47 @@ class GenomicRun:
             sig = self.group.open_group("signal_channels")
             self._signal_cache[name] = sig.open_dataset(name)
         return self._signal_cache[name]
+
+    def _byte_channel_slice(self, name: str, offset: int, count: int) -> bytes:
+        """Return bytes ``[offset, offset+count)`` for a uint8 byte channel.
+
+        M86 dispatch: for codec-compressed channels (``@compression > 0``)
+        the whole channel is decoded once on first access, the decoded
+        buffer is cached on this :class:`GenomicRun` instance, and
+        subsequent slices are taken from the cached bytes. For
+        uncompressed channels (no attribute or value 0) the existing
+        per-slice :meth:`StorageDataset.read` path is used unchanged
+        — no whole-channel materialisation, no behaviour change vs M82.
+        """
+        cached = self._decoded_byte_channels.get(name)
+        if cached is not None:
+            return cached[offset:offset + count]
+
+        ds = self._signal_dataset(name)
+        from . import _hdf5_io as io
+        codec_id = io.read_int_attr(ds, "compression", default=0) or 0
+        if codec_id == 0:
+            return bytes(ds.read(offset=offset, count=count))
+
+        # Compressed: read all bytes, decode, cache for subsequent slices.
+        from .enums import Compression
+        all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+        if codec_id == int(Compression.RANS_ORDER0):
+            from .codecs.rans import decode as _dec
+            decoded = _dec(all_bytes)
+        elif codec_id == int(Compression.RANS_ORDER1):
+            from .codecs.rans import decode as _dec
+            decoded = _dec(all_bytes)
+        elif codec_id == int(Compression.BASE_PACK):
+            from .codecs.base_pack import decode as _dec
+            decoded = _dec(all_bytes)
+        else:
+            raise ValueError(
+                f"signal_channel '{name}': @compression={codec_id} "
+                "is not a supported TTIO codec id"
+            )
+        self._decoded_byte_channels[name] = decoded
+        return decoded[offset:offset + count]
 
     def _compound(self, name: str) -> list[dict]:
         """Read a compound dataset whole and cache it.
