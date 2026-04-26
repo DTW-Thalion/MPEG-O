@@ -5,12 +5,24 @@
 #import "Providers/TTIOCompoundField.h"
 #import "Dataset/TTIOCompoundIO.h"
 #import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Dataset.h"
+#import "Codecs/TTIORans.h"
+#import "Codecs/TTIOBasePack.h"
+#import <hdf5.h>
 
 @implementation TTIOGenomicRun {
     id<TTIOStorageGroup> _group;
     id<TTIOStorageGroup> _signalChannelsGroup;       // lazily opened, cached
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *_signalCache;
     NSMutableDictionary<NSString *, NSArray *> *_compoundCache;
+    // M86: lazy whole-channel decode cache for byte channels whose
+    // @compression attribute names a TTIO codec (rANS / BASE_PACK).
+    // Codec output is byte-stream non-sliceable, so the whole channel
+    // is decoded once on first access and the decoded buffer is
+    // sliced from memory thereafter (Binding Decision §89). Cache
+    // lifetime is the TTIOGenomicRun instance — re-opening the file
+    // incurs the decode cost again (Gotcha §101).
+    NSMutableDictionary<NSString *, NSData *> *_decodedByteChannels;
 }
 
 - (NSUInteger)readCount { return _index.count; }
@@ -36,6 +48,7 @@
         _group            = group;
         _signalCache      = [NSMutableDictionary dictionary];
         _compoundCache    = [NSMutableDictionary dictionary];
+        _decodedByteChannels = [NSMutableDictionary dictionary];
     }
     return self;
 }
@@ -127,6 +140,120 @@
     return rows;
 }
 
+// M86: read the @compression attribute (uint8) on an HDF5 dataset.
+// Returns 0 (NONE) when the attribute is absent — equivalent to
+// "uncompressed at the TTIO-codec layer". The dataset hid_t is taken
+// from the underlying TTIOHDF5Dataset; non-HDF5 backends fall back to
+// the storage protocol's attributeValueForName:error:.
+static uint8_t _ttio_m86_read_compression_attr(hid_t did)
+{
+    if (H5Aexists(did, "compression") <= 0) return 0;
+    hid_t aid = H5Aopen(did, "compression", H5P_DEFAULT);
+    if (aid < 0) return 0;
+    uint8_t value = 0;
+    H5Aread(aid, H5T_NATIVE_UINT8, &value);
+    H5Aclose(aid);
+    return value;
+}
+
+// M86: read the @compression attribute via the storage protocol (used
+// for non-HDF5 backends). Returns 0 when absent or non-numeric.
+static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> ds)
+{
+    if (![ds hasAttributeNamed:@"compression"]) return 0;
+    NSError *e = nil;
+    id v = [ds attributeValueForName:@"compression" error:&e];
+    if ([v isKindOfClass:[NSNumber class]]) {
+        return (uint8_t)[v unsignedIntegerValue];
+    }
+    return 0;
+}
+
+// M86: byte-channel slice helper.
+//
+// For byte channels (sequences, qualities) the read path may need to
+// decode through a TTIO codec when @compression > 0. We implement the
+// decode-once-then-slice tradeoff (Binding Decision §89) — the whole
+// channel is decoded on first access and cached on the GenomicRun
+// instance. For uncompressed channels the existing per-slice
+// HDF5 hyperslab read path is preserved unchanged.
+- (NSData *)byteChannelSliceNamed:(NSString *)name
+                            offset:(NSUInteger)offset
+                             count:(NSUInteger)count
+                             error:(NSError **)error
+{
+    NSData *cached = _decodedByteChannels[name];
+    if (cached) {
+        NSUInteger from = MIN(offset, cached.length);
+        NSUInteger to   = MIN(from + count, cached.length);
+        return [cached subdataWithRange:NSMakeRange(from, to - from)];
+    }
+
+    id<TTIOStorageDataset> ds = [self signalDatasetNamed:name error:error];
+    if (!ds) return nil;
+
+    // Detect codec via @compression on the dataset. Two paths: HDF5
+    // backend exposes the underlying TTIOHDF5Dataset whose hid_t the
+    // H5A* calls need; non-HDF5 backends route through the storage
+    // protocol's attributeValueForName:.
+    uint8_t codec_id = 0;
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        TTIOHDF5Dataset *hds = [hg openDatasetNamed:name error:NULL];
+        if (hds) {
+            codec_id = _ttio_m86_read_compression_attr([hds datasetId]);
+        }
+    } else {
+        codec_id = _ttio_m86_read_compression_attr_protocol(ds);
+    }
+
+    if (codec_id == 0) {
+        // No TTIO-codec dispatch — existing hyperslab path.
+        id raw = [ds readSliceAtOffset:offset count:count error:error];
+        if (![raw isKindOfClass:[NSData class]]) return nil;
+        return (NSData *)raw;
+    }
+
+    // Codec-compressed: read all bytes, decode, cache, slice.
+    id allRaw = [ds readAll:error];
+    if (![allRaw isKindOfClass:[NSData class]]) return nil;
+    NSData *encoded = (NSData *)allRaw;
+    NSData *decoded = nil;
+    NSError *decErr = nil;
+    switch (codec_id) {
+        case 4: // TTIOCompressionRansOrder0
+        case 5: // TTIOCompressionRansOrder1
+            decoded = TTIORansDecode(encoded, &decErr);
+            break;
+        case 6: // TTIOCompressionBasePack
+            decoded = TTIOBasePackDecode(encoded, &decErr);
+            break;
+        default:
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2020
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"signal_channel '%@': @compression=%u "
+                                @"is not a supported TTIO codec id",
+                                name, (unsigned)codec_id]}];
+            return nil;
+    }
+    if (!decoded) {
+        if (error) *error = decErr ?: [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2021
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"signal_channel '%@' codec %u decode failed",
+                            name, (unsigned)codec_id]}];
+        return nil;
+    }
+    _decodedByteChannels[name] = decoded;
+    NSUInteger from = MIN(offset, decoded.length);
+    NSUInteger to   = MIN(from + count, decoded.length);
+    return [decoded subdataWithRange:NSMakeRange(from, to - from)];
+}
+
 - (TTIOAlignedRead *)readAtIndex:(NSUInteger)i error:(NSError **)error
 {
     if (i >= _index.count) {
@@ -147,19 +274,21 @@
     uint32_t flag     = [_index flagsAt:i];
     NSString *chrom   = [_index chromosomeAt:i];
 
-    // Hyperslab reads on sequences + qualities
-    id<TTIOStorageDataset> seqDs = [self signalDatasetNamed:@"sequences" error:error];
-    if (!seqDs) return nil;
-    id seqRaw = [seqDs readSliceAtOffset:offset count:length error:error];
-    if (![seqRaw isKindOfClass:[NSData class]]) return nil;
-    NSString *sequence = [[NSString alloc] initWithData:(NSData *)seqRaw
+    // M86: routed through byteChannelSliceNamed: so codec-compressed
+    // channels (@compression > 0) are decoded transparently before
+    // slicing. Uncompressed channels go through the existing
+    // hyperslab path.
+    NSData *seqData = [self byteChannelSliceNamed:@"sequences"
+                                            offset:offset count:length
+                                             error:error];
+    if (!seqData) return nil;
+    NSString *sequence = [[NSString alloc] initWithData:seqData
                                                encoding:NSASCIIStringEncoding];
 
-    id<TTIOStorageDataset> qualDs = [self signalDatasetNamed:@"qualities" error:error];
-    if (!qualDs) return nil;
-    id qualRaw = [qualDs readSliceAtOffset:offset count:length error:error];
-    if (![qualRaw isKindOfClass:[NSData class]]) return nil;
-    NSData *qualities = (NSData *)qualRaw;
+    NSData *qualities = [self byteChannelSliceNamed:@"qualities"
+                                              offset:offset count:length
+                                               error:error];
+    if (!qualities) return nil;
 
     // Compound rows (cached after first access)
     TTIOCompoundField *vlValue =

@@ -23,6 +23,8 @@
 #import "Genomics/TTIOGenomicRun.h"            // M82
 #import "Genomics/TTIOGenomicIndex.h"          // M82
 #import "Genomics/TTIOWrittenGenomicRun.h"     // M82
+#import "Codecs/TTIORans.h"                    // M86
+#import "Codecs/TTIOBasePack.h"                // M86
 #import <hdf5.h>
 
 // Internal SPI surfaced by TTIOAcquisitionRun for the dataset-level
@@ -52,6 +54,248 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
         if (run.spectrumIndex.hasActivationDetail) return YES;
     }
     return NO;
+}
+
+// ── M86: signal-channel codec wiring ────────────────────────────────
+//
+// Validation, codec dispatch (rANS / BASE_PACK), and the uint8
+// @compression attribute write that the read path keys on. See
+// HANDOFF.md M86 §2 + Binding Decisions §86–§89.
+
+static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
+{
+    static NSSet *s = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        s = [NSSet setWithArray:@[@"sequences", @"qualities"]];
+    });
+    return s;
+}
+
+static NSSet *_TTIO_M86_AllowedOverrideCodecs(void)
+{
+    static NSSet *s = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        s = [NSSet setWithArray:@[
+            @(TTIOCompressionRansOrder0),
+            @(TTIOCompressionRansOrder1),
+            @(TTIOCompressionBasePack),
+        ]];
+    });
+    return s;
+}
+
+/** Validate the per-channel codec overrides BEFORE any HDF5 mutation.
+ *  Raises NSInvalidArgumentException on programmer error so the file
+ *  is left untouched (Binding Decision §88, HANDOFF.md M86 §3). */
+static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *overrides)
+{
+    if (overrides.count == 0) return;
+    NSSet *allowedChans  = _TTIO_M86_AllowedOverrideChannels();
+    NSSet *allowedCodecs = _TTIO_M86_AllowedOverrideCodecs();
+    for (NSString *chName in overrides) {
+        if (![allowedChans containsObject:chName]) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"signalCodecOverrides: channel '%@' not "
+                               @"supported (only sequences and qualities "
+                               @"can use TTIO codecs)", chName];
+        }
+        NSNumber *codecBox = overrides[chName];
+        if (![codecBox isKindOfClass:[NSNumber class]]) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"signalCodecOverrides['%@']: codec value "
+                               @"must be an NSNumber-boxed TTIOCompression",
+                               chName];
+        }
+        if (![allowedCodecs containsObject:codecBox]) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"signalCodecOverrides['%@']: codec %@ "
+                               @"not supported (only RansOrder0, "
+                               @"RansOrder1, BasePack)",
+                               chName, codecBox];
+        }
+    }
+}
+
+/** Encode raw bytes through the selected M86 codec. */
+static NSData *_TTIO_M86_EncodeWithCodec(NSData *raw, TTIOCompression codec)
+{
+    switch (codec) {
+        case TTIOCompressionRansOrder0:
+            return TTIORansEncode(raw, 0);
+        case TTIOCompressionRansOrder1:
+            return TTIORansEncode(raw, 1);
+        case TTIOCompressionBasePack:
+            return TTIOBasePackEncode(raw);
+        default:
+            [NSException raise:NSInvalidArgumentException
+                        format:@"_TTIO_M86_EncodeWithCodec: codec %lu not "
+                               @"a TTIO byte-stream codec",
+                               (unsigned long)codec];
+            return nil;
+    }
+}
+
+/** Set @compression as a uint8 attribute on an HDF5 dataset. Matches
+ *  Python's ``write_int_attr(ds, "compression", n, dtype="<u1")``
+ *  byte-for-byte (Binding Decision §86, HANDOFF.md M86 §5.1). */
+static BOOL _TTIO_M86_WriteUInt8Attribute(hid_t did, const char *name,
+                                          uint8_t value, NSError **error)
+{
+    hid_t space = H5Screate(H5S_SCALAR);
+    if (space < 0) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2001
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"H5Screate(SCALAR) failed for @compression"}];
+        return NO;
+    }
+    if (H5Aexists(did, name) > 0) {
+        H5Adelete(did, name);
+    }
+    hid_t aid = H5Acreate2(did, name, H5T_NATIVE_UINT8, space,
+                            H5P_DEFAULT, H5P_DEFAULT);
+    if (aid < 0) {
+        H5Sclose(space);
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2002
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"H5Acreate2(@%s) failed", name]}];
+        return NO;
+    }
+    herr_t s = H5Awrite(aid, H5T_NATIVE_UINT8, &value);
+    H5Aclose(aid); H5Sclose(space);
+    if (s < 0) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2003
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"H5Awrite(@%s) failed", name]}];
+        return NO;
+    }
+    return YES;
+}
+
+/** Read @compression as a uint8 from an HDF5 dataset. Returns 0 when
+ *  the attribute is absent (matches Python's read_int_attr default).
+ *  ``*outExists`` (if non-NULL) signals whether the attribute was
+ *  found, so callers can distinguish "absent" from "explicitly 0". */
+static uint8_t _TTIO_M86_ReadUInt8Attribute(hid_t did, const char *name,
+                                            BOOL *outExists)
+{
+    if (H5Aexists(did, name) <= 0) {
+        if (outExists) *outExists = NO;
+        return 0;
+    }
+    if (outExists) *outExists = YES;
+    hid_t aid = H5Aopen(did, name, H5P_DEFAULT);
+    if (aid < 0) return 0;
+    uint8_t value = 0;
+    H5Aread(aid, H5T_NATIVE_UINT8, &value);
+    H5Aclose(aid);
+    return value;
+}
+
+/** Write a uint8 byte channel either through the existing HDF5 filter
+ *  (when no override) or through a TTIO codec (when overridden). For
+ *  the codec path we skip the HDF5 filter entirely (Binding Decision
+ *  §87 — no double-compression). The @compression attribute is set on
+ *  the dataset for the read-side dispatcher. */
+static BOOL _TTIO_M86_WriteByteChannel(TTIOHDF5Group *group,
+                                       NSString *name,
+                                       NSData *data,
+                                       TTIOCompression defaultCompression,
+                                       NSNumber *codecOverride,
+                                       NSError **error)
+{
+    if (codecOverride == nil) {
+        // Plain path — same behaviour as the M82 byte-channel write.
+        TTIOHDF5Dataset *ds = [group createDatasetNamed:name
+                                              precision:TTIOPrecisionUInt8
+                                                 length:data.length
+                                              chunkSize:65536
+                                            compression:defaultCompression
+                                       compressionLevel:6
+                                                  error:error];
+        if (!ds) return NO;
+        return [ds writeData:data error:error];
+    }
+
+    TTIOCompression codec = (TTIOCompression)[codecOverride unsignedIntegerValue];
+    NSData *encoded = _TTIO_M86_EncodeWithCodec(data, codec);
+    if (!encoded) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2010
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"M86 codec %lu encode failed for channel '%@'",
+                            (unsigned long)codec, name]}];
+        return NO;
+    }
+    // Codec-compressed datasets carry NO HDF5 filter.
+    TTIOHDF5Dataset *ds = [group createDatasetNamed:name
+                                          precision:TTIOPrecisionUInt8
+                                             length:encoded.length
+                                          chunkSize:65536
+                                        compression:TTIOCompressionNone
+                                   compressionLevel:0
+                                              error:error];
+    if (!ds) return NO;
+    if (![ds writeData:encoded error:error]) return NO;
+    return _TTIO_M86_WriteUInt8Attribute([ds datasetId], "compression",
+                                         (uint8_t)codec, error);
+}
+
+/** Provider-path twin of _TTIO_M86_WriteByteChannel for non-HDF5
+ *  backends (memory://, sqlite://). The @compression attribute uses
+ *  the storage protocol's setAttributeValue:forName: which boxes as
+ *  NSNumber → int64 in the HDF5 backend; non-HDF5 backends simply
+ *  store the integer. The cross-language fixture matrix only covers
+ *  HDF5, so the protocol path doesn't need byte-exact parity. */
+static BOOL _TTIO_M86_WriteByteChannelStorage(id<TTIOStorageGroup> group,
+                                              NSString *name,
+                                              NSData *data,
+                                              TTIOCompression defaultCompression,
+                                              NSNumber *codecOverride,
+                                              NSError **error)
+{
+    if (codecOverride == nil) {
+        id<TTIOStorageDataset> ds = [group createDatasetNamed:name
+                                                    precision:TTIOPrecisionUInt8
+                                                       length:data.length
+                                                    chunkSize:65536
+                                                  compression:defaultCompression
+                                             compressionLevel:6
+                                                        error:error];
+        if (!ds) return NO;
+        return [ds writeAll:data error:error];
+    }
+
+    TTIOCompression codec = (TTIOCompression)[codecOverride unsignedIntegerValue];
+    NSData *encoded = _TTIO_M86_EncodeWithCodec(data, codec);
+    if (!encoded) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2011
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"M86 codec %lu encode failed for channel '%@'",
+                            (unsigned long)codec, name]}];
+        return NO;
+    }
+    id<TTIOStorageDataset> ds = [group createDatasetNamed:name
+                                                precision:TTIOPrecisionUInt8
+                                                   length:encoded.length
+                                                chunkSize:65536
+                                              compression:TTIOCompressionNone
+                                         compressionLevel:0
+                                                    error:error];
+    if (!ds) return NO;
+    if (![ds writeAll:encoded error:error]) return NO;
+    return [ds setAttributeValue:@((uint8_t)codec)
+                          forName:@"compression"
+                            error:error];
 }
 
 @implementation TTIOSpectralDataset
@@ -321,6 +565,10 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                             name:(NSString *)name
                            error:(NSError **)error
 {
+    // M86: validate signal-channel codec overrides before any
+    // mutation. Same fail-fast contract as the HDF5 fast path.
+    _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
+
     id<TTIOStorageGroup> rg = [parent createGroupNamed:name error:error];
     if (!rg) return NO;
 
@@ -357,16 +605,13 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     if (!sc) return NO;
     TTIOCompression codec = run.signalCompression;
 
-    NSDictionary *channels = @{
+    NSDictionary *intChannels = @{
         @"positions"         : @[ @(TTIOPrecisionInt64),  run.positionsData ],
-        @"sequences"         : @[ @(TTIOPrecisionUInt8),  run.sequencesData ],
-        @"qualities"         : @[ @(TTIOPrecisionUInt8),  run.qualitiesData ],
         @"flags"             : @[ @(TTIOPrecisionUInt32), run.flagsData ],
         @"mapping_qualities" : @[ @(TTIOPrecisionUInt8),  run.mappingQualitiesData ],
     };
-    for (NSString *chName in @[@"positions", @"sequences", @"qualities",
-                                @"flags", @"mapping_qualities"]) {
-        NSArray *spec = channels[chName];
+    for (NSString *chName in @[@"positions", @"flags", @"mapping_qualities"]) {
+        NSArray *spec = intChannels[chName];
         TTIOPrecision prec = (TTIOPrecision)[spec[0] integerValue];
         NSData *data = spec[1];
         NSUInteger n = data.length / TTIOPrecisionElementSize(prec);
@@ -380,6 +625,15 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         if (!ds) return NO;
         if (![ds writeAll:data error:error]) return NO;
     }
+    // M86: sequences/qualities through codec-aware byte-channel writer.
+    if (!_TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
+                                           run.sequencesData, codec,
+                                           run.signalCodecOverrides[@"sequences"],
+                                           error)) return NO;
+    if (!_TTIO_M86_WriteByteChannelStorage(sc, @"qualities",
+                                           run.qualitiesData, codec,
+                                           run.signalCodecOverrides[@"qualities"],
+                                           error)) return NO;
 
     // 3 compound datasets via the storage-protocol's compound API.
     NSArray *vlValueField = @[
@@ -537,6 +791,11 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                     name:(NSString *)name
                    error:(NSError **)error
 {
+    // M86: validate signal-channel codec overrides before any HDF5
+    // mutation. Raises NSInvalidArgumentException on programmer
+    // error; the file is left untouched.
+    _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
+
     TTIOHDF5Group *rg = [parent createGroupNamed:name error:error];
     if (!rg) return NO;
 
@@ -597,17 +856,17 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     // adapter). These match the precision choices in the spec:
     // positions=int64, sequences=uint8, qualities=uint8, flags=uint32,
     // mapping_qualities=uint8.
+    //
+    // M86: sequences and qualities go through the byte-channel codec
+    // dispatcher so an override (rANS / BASE_PACK) is honoured.
     TTIOCompression codec = run.signalCompression;
-    NSDictionary *channels = @{
+    NSDictionary *intChannels = @{
         @"positions"         : @[ @(TTIOPrecisionInt64),  run.positionsData ],
-        @"sequences"         : @[ @(TTIOPrecisionUInt8),  run.sequencesData ],
-        @"qualities"         : @[ @(TTIOPrecisionUInt8),  run.qualitiesData ],
         @"flags"             : @[ @(TTIOPrecisionUInt32), run.flagsData ],
         @"mapping_qualities" : @[ @(TTIOPrecisionUInt8),  run.mappingQualitiesData ],
     };
-    for (NSString *chName in @[@"positions", @"sequences", @"qualities",
-                                @"flags", @"mapping_qualities"]) {
-        NSArray *spec = channels[chName];
+    for (NSString *chName in @[@"positions", @"flags", @"mapping_qualities"]) {
+        NSArray *spec = intChannels[chName];
         TTIOPrecision prec = (TTIOPrecision)[spec[0] integerValue];
         NSData *data = spec[1];
         NSUInteger n = data.length / TTIOPrecisionElementSize(prec);
@@ -621,6 +880,16 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         if (!ds) return NO;
         if (![ds writeAll:data error:error]) return NO;
     }
+    // sequences (uint8) — codec-aware
+    if (!_TTIO_M86_WriteByteChannel(sc, @"sequences", run.sequencesData,
+                                    codec,
+                                    run.signalCodecOverrides[@"sequences"],
+                                    error)) return NO;
+    // qualities (uint8) — codec-aware
+    if (!_TTIO_M86_WriteByteChannel(sc, @"qualities", run.qualitiesData,
+                                    codec,
+                                    run.signalCodecOverrides[@"qualities"],
+                                    error)) return NO;
 
     // 3 compound datasets via TTIOCompoundIO (HDF5-direct).
     NSArray *vlValueField = @[

@@ -21,6 +21,47 @@
                               chromosomes:(NSArray<NSString *> *)chromosomes
                        signalCompression:(TTIOCompression)signalCompression
 {
+    return [self initWithAcquisitionMode:mode
+                            referenceUri:referenceUri
+                                platform:platform
+                              sampleName:sampleName
+                                positions:positions
+                         mappingQualities:mappingQualities
+                                    flags:flags
+                                sequences:sequences
+                                qualities:qualities
+                                  offsets:offsets
+                                  lengths:lengths
+                                   cigars:cigars
+                                readNames:readNames
+                          mateChromosomes:mateChromosomes
+                            matePositions:matePositions
+                          templateLengths:templateLengths
+                              chromosomes:chromosomes
+                       signalCompression:signalCompression
+                     signalCodecOverrides:@{}];
+}
+
+- (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode
+                            referenceUri:(NSString *)referenceUri
+                                platform:(NSString *)platform
+                              sampleName:(NSString *)sampleName
+                                positions:(NSData *)positions
+                         mappingQualities:(NSData *)mappingQualities
+                                    flags:(NSData *)flags
+                                sequences:(NSData *)sequences
+                                qualities:(NSData *)qualities
+                                  offsets:(NSData *)offsets
+                                  lengths:(NSData *)lengths
+                                   cigars:(NSArray<NSString *> *)cigars
+                                readNames:(NSArray<NSString *> *)readNames
+                          mateChromosomes:(NSArray<NSString *> *)mateChromosomes
+                            matePositions:(NSData *)matePositions
+                          templateLengths:(NSData *)templateLengths
+                              chromosomes:(NSArray<NSString *> *)chromosomes
+                       signalCompression:(TTIOCompression)signalCompression
+                     signalCodecOverrides:(NSDictionary<NSString *, NSNumber *> *)signalCodecOverrides
+{
     self = [super init];
     if (self) {
         _acquisitionMode      = mode;
@@ -41,6 +82,9 @@
         _templateLengthsData  = [templateLengths copy];
         _chromosomes          = [chromosomes copy];
         _signalCompression    = signalCompression;
+        _signalCodecOverrides = signalCodecOverrides
+            ? [signalCodecOverrides copy]
+            : @{};
     }
     return self;
 }
