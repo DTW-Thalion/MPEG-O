@@ -1,644 +1,726 @@
-# HANDOFF — M84: Clean-Room BASE_PACK Codec + Sidecar Mask
+# HANDOFF — M86: Wire rANS + BASE_PACK into Genomic Signal-Channel Pipeline
 
-**Scope:** Clean-room implementation of the BASE_PACK genomic
-sequence codec — 2-bit packing for canonical ACGT bases plus a
-sidecar mask dataset that losslessly preserves any non-ACGT byte at
-its original position. Three languages (Python reference, ObjC
-normative, Java parity), wire-byte conformance fixtures shared
-across all three.
+**Scope:** Wire the M83 (rANS order-0/1) and M84 (BASE_PACK)
+codecs into the genomic signal-channel write and read paths so a
+caller can opt a per-channel compression codec into use at write
+time and any reader transparently decodes it. Three languages
+(Python reference, ObjC normative, Java parity), with
+cross-language conformance fixtures: each language must read a
+codec-compressed genomic run produced by either of the other two
+byte-for-byte identically to the original input.
 
-**Branch from:** `main` after M83 + format-spec slot 4/5 flip
-(`7b20ac9`).
+**Branch from:** `main` after M84 docs (`881be0f`).
 
-**IP provenance:** Clean-room implementation. The 2-bit-per-base
-packing convention is decades-old prior art, fundamental and
-ungatewayed by IP. **No htslib, no jbzip, no CRAM tools-Java source
-consulted.** The sidecar mask layout is a TTI-O-specific design
-choice (sparse position+byte list, see §3 binding decision §80).
-Correctness is validated via round-trip property and independently
-computed test vectors.
+**IP provenance:** Same as M83 / M84 — clean-room codec
+implementations from prior milestones. M86 is integration work on
+top of those primitives; no third-party codec source consulted at
+any point.
 
 ---
 
-## 1. Algorithm Summary
+## 1. Background
 
-BASE_PACK reduces canonical genomic-sequence storage by 4× (one
-byte per base → two bits per base) while remaining lossless on the
-full 256-byte alphabet via a sidecar mask.
+M82 stores genomic data uncompressed: one ASCII byte per base in
+`signal_channels/sequences`, raw Phred bytes in
+`signal_channels/qualities`, integer arrays in
+`signal_channels/{positions,flags,mapping_qualities}`, and
+variable-length strings in `signal_channels/{cigars,read_names}`.
 
-The encoder partitions the input into two streams:
+M83 shipped rANS order-0 and order-1 entropy coders as standalone
+primitives. M84 shipped BASE_PACK (2-bit ACGT + sidecar mask) the
+same way. Both are byte-stream codecs: byte input → byte output,
+no slicing, no random access into the encoded stream. Both ship in
+`python/src/ttio/codecs/`, `objc/Source/Codecs/`, and
+`java/src/main/java/global/thalion/ttio/codecs/`.
 
-- **Packed body.** Bases that are `A`, `C`, `G`, `T` (uppercase
-  only) get encoded into 2-bit slots, four bases per output byte.
-  Their positions in the packed body **shift down**: position `i` in
-  the input maps to byte `i // 4`, slot `i % 4`. Bases that are
-  *not* canonical ACGT still occupy a slot in the packed body — the
-  encoder writes a placeholder (`0b00`, i.e., `A`) to keep the bit
-  geometry simple — and their original byte is recorded in the
-  mask so the decoder restores them.
-- **Sidecar mask.** A sorted list of `(position: uint32,
-  original_byte: uint8)` pairs, one entry per non-ACGT input byte.
-  Position is the *input* index (not the packed-body byte index).
-  Encoded inline in the same self-contained byte stream produced
-  by `encode()`.
+The M82 storage path uses `WrittenGenomicRun.signal_compression`
+as a single string codec name (`"gzip"` or `"none"`) for the WHOLE
+run. The string is funnelled through `_compression_for(...)` to
+the HDF5 deflate filter. There is no per-channel codec selection;
+there is no path for the M83/M84 internal codecs.
 
-### Pack mapping (case-sensitive)
-
-```
-'A' (0x41) → 0b00
-'C' (0x43) → 0b01
-'G' (0x47) → 0b10
-'T' (0x54) → 0b11
-anything else → mask entry (placeholder 0b00 written to body)
-```
-
-**Case is significant.** Lowercase `a`/`c`/`g`/`t` go to the mask.
-This is intentional: many genomic pipelines use lowercase as
-*soft-masking* (e.g., to mark repeat regions), and a codec that
-silently uppercased would destroy that signal. BASE_PACK
-round-trips soft-masking for free at the cost of one mask entry
-per soft-masked base.
-
-### Bit order within a byte
-
-**Big-endian within byte** — first base in the input occupies the
-two highest-order bits.
-
-```
-input "ACGT"  →  packed = 0b00_01_10_11 = 0x1B
-input "TGCA"  →  packed = 0b11_10_01_00 = 0xE4
-input "AC"    →  packed = 0b00_01_00_00 = 0x10  (low 4 bits = padding zeros)
-```
-
-The padding bits in the final byte (when `len(input) % 4 != 0`) are
-unused and **must** be written as zero. The decoder ignores them
-(it knows the original length from the header).
-
-### Decode
-
-1. Read header, allocate output of size `original_length`.
-2. Unpack body bytes left-to-right: for each byte, extract the
-   four 2-bit slots high-to-low and write `"ACGT"[slot]` to the
-   next four output positions. Stop after `original_length` slots
-   are emitted (the last byte may be partial).
-3. Walk mask in order: for each `(position, byte)` entry, overwrite
-   `output[position]` with `byte`.
-
-The mask MUST be sorted ascending by position; the decoder rejects
-unsorted or duplicate-position masks.
-
-### Edge cases
-
-- Empty input → header only (13 bytes), `packed_length = 0`,
-  `mask_count = 0`.
-- All non-ACGT (e.g., 1 MB of `N`) → packed body is full of
-  placeholder zeros, mask carries every position. Total wire size
-  ≈ ⌈orig/4⌉ + 5·orig + 13. (Worse than the input — but lossless;
-  the codec is meant for ACGT-dominant data.)
-- All-ACGT (no mask entries) → `mask_count = 0`, mask section is
-  zero bytes. Total wire size = 13 + ⌈orig/4⌉.
+M86 closes that gap for the two byte-array channels — `sequences`
+and `qualities`. Integer channels (`positions`, `flags`,
+`mapping_qualities`) and variable-length-string channels (`cigars`,
+`read_names`) stay on HDF5-filter ZLIB; per-channel codec
+selection for those is out of scope (the integer channels would
+need an int↔byte serialisation layer; the VL_STRING channels need
+the M85 `name-tokenized` codec, which is a separate milestone).
 
 ---
 
-## 2. Wire Format (cross-language contract)
+## 2. Design
 
-Big-endian throughout. Self-contained — the decoder needs no
-external metadata. The first byte is a version tag, currently
-always `0x00` — future BASE_PACK variants (e.g., a 4-bit IUPAC
-mode, a different mask layout) would bump this and let old decoders
-reject new streams cleanly.
+### 2.1 Per-channel `@compression` attribute
 
-```
-Offset      Size  Field
-──────      ────  ───────────────────────────────────────────
-0           1     version            (0x00)
-1           4     original_length    (uint32 BE — input byte count)
-5           4     packed_length      (uint32 BE — = ceil(original_length / 4))
-9           4     mask_count         (uint32 BE — number of mask entries)
-13          var   packed_body        (packed_length bytes)
-13+pl       var   mask               (mask_count × 5 bytes:
-                                       uint32 BE position, uint8 original_byte)
-```
+Each compressible signal-channel dataset carries a uint8 attribute
+`@compression` holding the M79 codec id. Absence or value `0`
+(`Compression.NONE`) means the dataset is stored as-is, with the
+HDF5 filter pipeline (typically zlib) handling any transparent
+compression. Non-zero values 4–6 (`RANS_ORDER0`, `RANS_ORDER1`,
+`BASE_PACK`) mean the dataset bytes are the codec output and the
+read path must dispatch to the corresponding `decode()` function
+before returning data to the caller.
 
-Total length = `13 + packed_length + 5 * mask_count` bytes.
+The attribute scheme matches the existing numpress pattern (which
+uses `@<channel>_numpress_fixed_point` on the
+`signal_channels` group). The difference: numpress encodes its
+codec presence implicitly (presence of the attribute), while M86
+makes the codec id explicit (the attribute value names the codec).
+Numpress is unaffected by M86; the two mechanisms coexist.
 
-Invariant: `packed_length == (original_length + 3) // 4`. The
-decoder MUST validate this and reject mismatched streams.
+### 2.2 Write-path opt-in
 
-Invariant: every position in the mask is in
-`[0, original_length)` and positions are strictly ascending. The
-decoder MUST reject a stream that violates either condition.
+`WrittenGenomicRun` gains a new field
+`signal_codec_overrides: dict[str, Compression]` (default empty).
+For each channel name in the override dict, the writer:
+
+1. Validates the channel is one of `{"sequences", "qualities"}`.
+   Reject overrides for any other channel name with a clear error.
+2. Validates the codec id is one of
+   `{Compression.RANS_ORDER0, Compression.RANS_ORDER1, Compression.BASE_PACK}`.
+   Reject any other value.
+3. Encodes the raw uint8 buffer through the codec.
+4. Writes the encoded bytes as a uint8 dataset of length
+   `len(encoded_bytes)`. **No HDF5 filter** is applied (the bytes
+   are already entropy-coded; double-compressing wastes CPU for
+   no size win).
+5. Sets `@compression` on the dataset to the codec id (uint8).
+
+Channels not in the override dict use the existing
+`signal_compression` string path (HDF5 deflate via the filter
+pipeline).
+
+### 2.3 Read-path dispatch
+
+When opening a `sequences` or `qualities` dataset:
+
+1. Check for the `@compression` attribute.
+2. If absent or `0`: existing slice-based read path (no change).
+3. If `4`/`5`/`6`: read all dataset bytes, decode through the
+   appropriate codec, cache the decoded buffer on the
+   `GenomicRun` instance for subsequent slice access.
+
+The cached decoded buffer trades one-time decode cost for
+per-read slice cost (which is just a memory view). For sequential
+read iteration (the typical genomic workload) this is faster than
+filter-on-each-chunk decoding. For random access into a 10M-read
+dataset, the decoded buffer is held in RAM — acceptable for
+sequence/quality channels (each ≈ N reads × read_length bytes;
+typical = a few hundred MB max). Codec output is byte-stream
+non-sliceable; this is the intentional tradeoff.
+
+### 2.4 Lazy decode cache
+
+Add a `_decoded_channels: dict[str, bytes]` field to `GenomicRun`
+(Python), `TTIOGenomicRun` (ObjC), and `GenomicRun` (Java),
+populated on first access. The existing `_signal_dataset(name)`
+helper (or its equivalent) checks `@compression` once on first
+dataset open and caches the decoded buffer. Subsequent
+`__getitem__` calls slice the cached buffer instead of slicing the
+HDF5 dataset.
+
+### 2.5 No back-compat shim
+
+This is a write-forward change in the spirit of M80/M82: a v0.12
+genomic file written with `signal_codec_overrides` is unreadable
+by pre-M86 readers (they will return raw codec bytes when asked
+for a base-slice, which decodes to garbage). This is acceptable
+because (a) v0.12 is unreleased, (b) the `@compression` attribute
+exists specifically so future readers can detect the codec, and
+(c) the format-spec already says any reader must respect
+`@compression`. Pre-M86 readers can still read M82 files written
+without overrides (no `@compression` attribute on the channels →
+fall through to the existing path).
 
 ---
 
-## 3. Binding Decisions (continued from M83 §75–§79)
+## 3. Binding Decisions (continued from M84 §80–§85)
 
-| #  | Decision                                                                                                                             | Rationale |
-|----|--------------------------------------------------------------------------------------------------------------------------------------|-----------|
-| 80 | Sidecar mask layout is **sparse position+byte pairs**, not a dense bitmap.                                                          | Real genomic data has <1% non-ACGT; sparse list dominates bitmap on size and is simpler to round-trip. Bitmap would only win at >40% non-ACGT density, which never occurs on real reads. |
-| 81 | **Case-sensitive packing**: only uppercase `A`/`C`/`G`/`T` get packed; lowercase `a`/`c`/`g`/`t` go to the mask.                    | Preserves soft-masking convention used by many genomic pipelines. Round-trip lossless on input that distinguishes case. The cost (one mask entry per soft-masked base) is acceptable. |
-| 82 | **Big-endian bit packing within byte**: first input base occupies the two highest-order bits.                                       | Matches reading convention (left-to-right hex dumps of genomic data show first base on the left). Matches CRAM's external-data block convention. |
-| 83 | **Padding bits in the final body byte are zero.** Decoder uses `original_length` to know how many slots to consume; padding ignored. | Deterministic encoder output (all three languages emit byte-identical streams) without needing to record the padding count. |
-| 84 | **Mask entries sorted ascending by position.** Encoder MUST emit sorted; decoder validates (rejects unsorted).                       | Cross-language byte-exact fixture conformance. Decoder validation also catches malformed/truncated streams cheaply. |
-| 85 | **First byte is `version = 0x00`**, not the M79 codec id (`0x06`).                                                                  | The codec id is external dispatch context (lives in the dataset's `@compression` attribute when M86 wires this in). Version is internal to the codec format, lets future BASE_PACK variants ship without a new codec id. |
+| #  | Decision | Rationale |
+|----|----------|-----------|
+| 86 | Per-channel `@compression` attribute (uint8) on the dataset itself, not on the parent `signal_channels` group. | Each channel's codec is independent. Putting the attribute on the dataset keeps the metadata co-located with its data and matches HDF5 best practice. The numpress attribute lives on the parent group only because it's a pair (codec choice + scaling factor) that the numpress decoder needs together. |
+| 87 | Codec-compressed channels are stored **without** an HDF5 filter. The TTI-O codec output is the raw dataset bytes. | rANS and BASE_PACK output is high-entropy; running it through deflate is a CPU loss with negligible (often negative) size benefit. Skipping the filter keeps the dataset bytes match the codec output exactly, which makes cross-language byte-for-byte fixture comparison straightforward. |
+| 88 | Per-channel codec selection only for `sequences` and `qualities`. Override for any other channel raises an error. | Integer channels need an int↔byte serialisation layer not specified in M86. VL_STRING channels need M85 codecs. Restricting the surface keeps the milestone tight and the failure mode explicit. |
+| 89 | Lazy whole-channel decode on first access; cache on the `GenomicRun` instance. | Codec output is byte-stream non-sliceable. The decode-once-then-slice tradeoff is the right shape for sequential genomic workloads (the common case) and is acceptable for random-access workloads on typical-size sequencing data. |
+| 90 | No backward-compatibility shim for pre-M86 readers. v0.12 files with `signal_codec_overrides` are unreadable by pre-M86 implementations. | Write-forward discipline matches M80, M82. The `@compression` attribute scheme exists in the format-spec already; pre-M86 readers that ignore it are non-conformant readers, not valid old readers. |
 
 ---
 
-## 4. Python Implementation
+## 4. API extensions
 
-### 4.1 `python/src/ttio/codecs/base_pack.py` (new file)
+### 4.1 Python — `WrittenGenomicRun`
 
-Public API — mirrors the rANS module shape:
+Add to `python/src/ttio/written_genomic_run.py`:
 
 ```python
-def encode(data: bytes) -> bytes:
-    """Encode `data` using BASE_PACK + sidecar mask.
+from .enums import Compression
 
-    Returns a self-contained byte string per the wire format
-    in HANDOFF.md §2. Pure ACGT input compresses to ~25% of
-    original size; non-ACGT bytes round-trip via the mask.
-    """
+@dataclass(slots=True)
+class WrittenGenomicRun:
+    # ... existing fields ...
+    signal_compression: str = "gzip"  # unchanged
 
-def decode(encoded: bytes) -> bytes:
-    """Decode a stream produced by encode().
-
-    Reads the header, unpacks the 2-bit body, applies the
-    sidecar mask. Raises ValueError on malformed input
-    (bad version, wrong packed_length, out-of-range or
-    unsorted mask positions, truncated stream).
-    """
+    # M86: per-channel codec opt-in. Maps channel name to a TTI-O
+    # internal codec id. Only "sequences" and "qualities" are
+    # accepted; only RANS_ORDER0, RANS_ORDER1, BASE_PACK are
+    # accepted as codec values. Channels not in this dict use the
+    # existing signal_compression string path.
+    signal_codec_overrides: dict[str, Compression] = field(default_factory=dict)
 ```
 
-Implementation notes:
+### 4.2 Python — `_write_genomic_run` dispatch
 
-- Pack loop: iterate input in chunks of 4 bytes; emit one body
-  byte per chunk via `(slot0 << 6) | (slot1 << 4) | (slot2 << 2)
-  | slot3`.
-- Mask collection: build a list of `(i, b)` pairs as you scan; the
-  natural left-to-right scan emits them already sorted.
-- Header serialisation: use `struct.pack(">BIII", 0, orig_len,
-  packed_len, mask_count)` — 13 bytes exactly.
-- Mask serialisation: `b"".join(struct.pack(">IB", p, b) for p, b
-  in mask)` — 5 bytes per entry.
-- Decode: validate `version == 0`, `packed_length == (orig + 3) //
-  4`, total length matches `13 + packed_length + 5 * mask_count`.
-  Walk the mask once and verify monotonicity and `0 <= position <
-  orig_len`.
-
-### 4.2 Module re-exports
-
-In `python/src/ttio/codecs/__init__.py`, add the public names to
-the existing module:
+In `python/src/ttio/spectral_dataset.py` `_write_genomic_run`,
+replace the two relevant lines (currently lines 904–905) with a
+helper call:
 
 ```python
-from .base_pack import encode as base_pack_encode, decode as base_pack_decode
+# Signal channels — these honour run.signal_compression by default.
+sc = rg.create_group("signal_channels")
+io._write_int64_channel(sc, "positions", run.positions, run.signal_compression)
+_write_byte_channel_with_codec(
+    sc, "sequences", run.sequences, run.signal_compression,
+    run.signal_codec_overrides.get("sequences"),
+)
+_write_byte_channel_with_codec(
+    sc, "qualities", run.qualities, run.signal_compression,
+    run.signal_codec_overrides.get("qualities"),
+)
+io._write_uint32_channel(sc, "flags", run.flags, run.signal_compression)
+io._write_uint8_channel(
+    sc, "mapping_qualities", run.mapping_qualities, run.signal_compression
+)
+# ... existing cigars / read_names compound writes follow unchanged ...
 ```
 
-Update the docstring to remove `(M84, future)` from the
-`base_pack` line.
+The helper lives in `python/src/ttio/_hdf5_io.py`:
 
-### 4.3 `python/tests/test_m84_base_pack.py` (new file)
+```python
+def _write_byte_channel_with_codec(
+    group, name, data, default_compression, codec_override
+):
+    """Write a uint8 byte channel, optionally through a TTIO codec.
 
-14 pytest cases. Use `os.urandom` only for the realistic mixed
-test; the canonical vectors are deterministic.
+    If codec_override is None, behaves identically to
+    _write_uint8_channel (HDF5 filter dispatch).
 
----
+    If codec_override is RANS_ORDER0/RANS_ORDER1/BASE_PACK,
+    encodes the raw bytes and writes them as an unfiltered uint8
+    dataset with @compression set to the codec id.
+    """
+    from .enums import Compression, Precision
+    if codec_override is None:
+        _write_uint8_channel(group, name, data, default_compression)
+        return
 
-## 5. Objective-C Implementation
+    if codec_override == Compression.RANS_ORDER0:
+        from .codecs.rans import encode as _enc
+        encoded = _enc(bytes(data), order=0)
+    elif codec_override == Compression.RANS_ORDER1:
+        from .codecs.rans import encode as _enc
+        encoded = _enc(bytes(data), order=1)
+    elif codec_override == Compression.BASE_PACK:
+        from .codecs.base_pack import encode as _enc
+        encoded = _enc(bytes(data))
+    else:
+        raise ValueError(
+            f"signal_codec_overrides['{name}'] = {codec_override!r}: "
+            "only RANS_ORDER0, RANS_ORDER1, BASE_PACK are supported"
+        )
 
-### 5.1 `objc/Source/Codecs/TTIOBasePack.h` (new file)
-
-```objc
-/**
- * BASE_PACK genomic-sequence codec — 2-bit ACGT + sidecar mask.
- *
- * Clean-room implementation. No htslib / CRAM tools-Java / jbzip
- * source consulted. Wire format matches the Python reference
- * implementation byte-for-byte; see docs/codecs/base_pack.md
- * (M84) for the format specification.
- *
- * Cross-language equivalents:
- *   Python: ttio.codecs.base_pack
- *   Java:   global.thalion.ttio.codecs.BasePack
- */
-
-NSData * _Nonnull TTIOBasePackEncode(NSData * _Nonnull data);
-
-NSData * _Nullable TTIOBasePackDecode(NSData * _Nonnull encoded,
-                                      NSError * _Nullable * _Nullable error);
+    arr = np.frombuffer(encoded, dtype=np.uint8)
+    ds = group.create_dataset(
+        name, Precision.UINT8, length=arr.shape[0],
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=None,           # no HDF5 filter — bytes already coded
+    )
+    ds.write(arr)
+    write_int_attr(ds, "compression", int(codec_override))
 ```
 
-### 5.2 `objc/Source/Codecs/TTIOBasePack.m` (new file)
+The override-validation (channel name and codec value) lives at
+the top of `_write_genomic_run`:
 
-C core wrapped by ObjC entry points. Use a single-pass encoder
-that appends to two `NSMutableData` buffers (one for body, one for
-mask) then concatenates them after the header. Or build directly
-into one buffer — body length is known up front (`(orig + 3) /
-4`), mask length depends on input.
+```python
+_ALLOWED_OVERRIDE_CHANNELS = frozenset({"sequences", "qualities"})
+_ALLOWED_OVERRIDE_CODECS = frozenset({
+    Compression.RANS_ORDER0, Compression.RANS_ORDER1, Compression.BASE_PACK,
+})
 
-Performance target: encode ≥ 200 MB/s, decode ≥ 500 MB/s on a
-single core. BASE_PACK is dominated by a tight shift-and-mask
-loop; this is much faster than rANS.
+for ch_name, codec in run.signal_codec_overrides.items():
+    if ch_name not in _ALLOWED_OVERRIDE_CHANNELS:
+        raise ValueError(
+            f"signal_codec_overrides: channel '{ch_name}' not supported "
+            f"(only sequences and qualities can use TTIO codecs)"
+        )
+    if Compression(codec) not in _ALLOWED_OVERRIDE_CODECS:
+        raise ValueError(
+            f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
+            "not supported (only RANS_ORDER0, RANS_ORDER1, BASE_PACK)"
+        )
+```
 
-### 5.3 `objc/Source/GNUmakefile`
+### 4.3 Python — `GenomicRun` read dispatch
 
-Add `Codecs/TTIOBasePack.h` to `libTTIO_HEADER_FILES`,
-`Codecs/TTIOBasePack.m` to `libTTIO_OBJC_FILES`. Same pattern as
-the M83 entry already in place for `Codecs/TTIORans.{h,m}`.
+In `python/src/ttio/genomic_run.py`, modify `_signal_dataset` (or
+introduce a new `_signal_bytes(name)` helper) to check
+`@compression` once and cache:
 
-### 5.4 `objc/Tests/TestM84BasePack.m` (new file)
+```python
+@dataclass(slots=True)
+class GenomicRun:
+    # ... existing fields ...
+    _decoded_byte_channels: dict[str, bytes] = field(
+        default_factory=dict, repr=False, compare=False,
+    )
 
-Style mirrors `TestM83Rans.m` — inline `PASS()` macros, static
-helpers, no wrapper class, no `@try`/`@catch`. Target ≥ 30 new
-assertions across 13–14 test cases.
+    def _byte_channel_slice(self, name: str, offset: int, count: int) -> bytes:
+        """Return bytes [offset, offset+count) for a uint8 channel.
 
-### 5.5 `objc/Tests/Fixtures/`
+        For codec-compressed channels (@compression > 0), the whole
+        channel is decoded once on first access and cached, then
+        sliced from memory. For uncompressed channels, the existing
+        per-slice HDF5 read path is used.
+        """
+        cached = self._decoded_byte_channels.get(name)
+        if cached is not None:
+            return cached[offset:offset + count]
 
-Copy the Python-generated canonical fixtures verbatim:
-`base_pack_a.bin`, `base_pack_b.bin`, `base_pack_c.bin`,
-`base_pack_d.bin`. These are the cross-language byte-exact
-contract.
+        ds = self._signal_dataset(name)
+        codec_id = _read_int_attr_or_zero(ds, "compression")
+        if codec_id == 0:
+            return bytes(ds.read(offset=offset, count=count))
 
-### 5.6 `objc/Tests/GNUmakefile` and `objc/Tests/TTIOTestRunner.m`
+        # Compressed: read all bytes, decode, cache.
+        from .enums import Compression
+        all_bytes = bytes(ds.read(offset=0, count=ds.length))
+        if codec_id == Compression.RANS_ORDER0:
+            from .codecs.rans import decode as _dec
+            decoded = _dec(all_bytes)
+        elif codec_id == Compression.RANS_ORDER1:
+            from .codecs.rans import decode as _dec
+            decoded = _dec(all_bytes)
+        elif codec_id == Compression.BASE_PACK:
+            from .codecs.base_pack import decode as _dec
+            decoded = _dec(all_bytes)
+        else:
+            raise ValueError(
+                f"signal_channel '{name}': @compression={codec_id} "
+                "is not a supported codec"
+            )
+        self._decoded_byte_channels[name] = decoded
+        return decoded[offset:offset + count]
+```
 
-Add `TestM84BasePack.m` to `TTIOTests_OBJC_FILES`. Add `extern
-void testM84BasePack(void);` declaration in the runner and a
-`START_SET("M84: BASE_PACK codec") testM84BasePack();
-END_SET("M84: BASE_PACK codec")` block in `main`.
+Then in `__getitem__`, replace the two channel-read blocks with
+calls to `self._byte_channel_slice("sequences", offset, length)`
+and `self._byte_channel_slice("qualities", offset, length)`.
 
----
+### 4.4 ObjC — same pattern
 
-## 6. Java Implementation
+`TTIOWrittenGenomicRun.h/m` gains a
+`@property NSDictionary<NSString *, NSNumber *> *signalCodecOverrides;`
+property (NSNumber boxes the Compression int).
 
-### 6.1 `java/src/main/java/global/thalion/ttio/codecs/BasePack.java` (new file)
+`TTIOWrittenGenomicRun.m`'s write path adds the same dispatch. The
+helpers go in a new file `objc/Source/Genomics/TTIOGenomicCodec.{h,m}`
+or directly in the existing genomics translation unit.
+
+`TTIOGenomicRun.m` gains a `@property NSMutableDictionary<NSString
+*, NSData *> *decodedByteChannels;` (private), and the byte-slice
+method dispatches identically.
+
+The validation for channel name and codec id mirrors the Python
+side (raise via `[NSException raise:...]` or `NSError**` —
+whichever the existing API uses; check existing
+`TTIOWrittenGenomicRun` for style).
+
+### 4.5 Java — same pattern
+
+`WrittenGenomicRun.java` (Java) gains:
 
 ```java
-package global.thalion.ttio.codecs;
-
-/**
- * BASE_PACK codec — 2-bit ACGT packing + sidecar mask.
- *
- * Clean-room implementation matching the Python reference
- * (python/src/ttio/codecs/base_pack.py) byte-for-byte.
- */
-public final class BasePack {
-
-    public static byte[] encode(byte[] data) { ... }
-
-    public static byte[] decode(byte[] encoded) { ... }
-
-    private BasePack() {} // utility class
-}
+private Map<String, Compression> signalCodecOverrides = Map.of();
+public void setSignalCodecOverrides(Map<String, Compression> overrides) { ... }
+public Map<String, Compression> getSignalCodecOverrides() { ... }
 ```
 
-Use `ByteBuffer` with `ByteOrder.BIG_ENDIAN` for header
-serialisation. Use `Byte.toUnsignedInt(b)` whenever reading a byte
-as a symbol value or position byte.
+`GenomicRun.java` gains a `private final Map<String, byte[]> decodedByteChannels = new HashMap<>();` and a `byteChannelSlice(name, offset, count)` helper that mirrors the Python design.
 
-### 6.2 `java/src/test/resources/ttio/codecs/`
-
-Copy the Python-generated fixtures: `base_pack_a.bin`,
-`base_pack_b.bin`, `base_pack_c.bin`, `base_pack_d.bin`.
-
-### 6.3 `java/src/test/java/global/thalion/ttio/codecs/BasePackTest.java`
-
-JUnit 5. Same coverage as the ObjC suite. Target ≥ 12 test
-methods, ≥ 40 assertions.
+The validation throws `IllegalArgumentException` on disallowed
+channel/codec.
 
 ---
 
-## 7. Canonical Test Vectors
+## 5. Wire Format
 
-Four vectors. All four serialised by Python, ObjC and Java must
-produce byte-identical output to the committed fixtures.
+### 5.1 `@compression` attribute
 
-### Vector A — pure ACGT, deterministic 256 bytes
+| Field           | Type   | Notes                                         |
+|-----------------|--------|-----------------------------------------------|
+| Attribute name  | `compression` | Lowercase, on the channel dataset.   |
+| Type            | uint8  | HDF5 native uint8 (`H5T_NATIVE_UINT8`).       |
+| Value 0         | NONE   | Equivalent to attribute absent.               |
+| Value 4         | RANS_ORDER0 | Dataset bytes are M83 rANS order-0 stream. |
+| Value 5         | RANS_ORDER1 | Dataset bytes are M83 rANS order-1 stream. |
+| Value 6         | BASE_PACK | Dataset bytes are M84 BASE_PACK stream.    |
+
+When `@compression > 0`:
+- The dataset has shape `[encoded_length]` (1D uint8).
+- The dataset has no HDF5 filter (`H5P_DEFAULT` or no filter pipeline).
+- The dataset bytes ARE the self-contained codec stream from M83 §2 / M84 §2.
+
+### 5.2 Backwards compatibility
+
+A channel with no `@compression` attribute behaves exactly as in
+M82: it's a uint8/int64/uint32 dataset with whatever HDF5 filter
+the writer chose (typically gzip level 6 or none). M82 readers
+silently work unchanged.
+
+A v0.12 file with `@compression > 0` on a channel will fail
+gracefully on a pre-M86 reader: the reader sees a uint8 dataset
+of unexpected length (the codec output isn't sliceable), and
+`AlignedRead.sequence` will surface as garbled bytes for any
+read whose offset/length walks past the encoded payload boundary.
+This is detected by the v0.12 acceptance tests on the pre-M86
+side; the read returns clearly-wrong data rather than silently
+corrupting downstream analysis. The `@compression` attribute is
+the canonical signal that the dataset needs codec dispatch.
+
+---
+
+## 6. Tests
+
+### 6.1 Python — new file `python/tests/test_m86_genomic_codec_wiring.py`
+
+Eight test cases. Use a small fixture run (10 reads × 100 bp = 1000-byte sequences and qualities channels):
 
 ```python
-import hashlib
-seed = hashlib.sha256(b"ttio-base-pack-vector-a").digest()  # 32 bytes
-acgt = b"ACGT"
-data_a = bytes(acgt[b & 0b11] for b in seed * 8)  # 256 bytes pure ACGT
+import numpy as np
+import pytest
+import tempfile
+from pathlib import Path
+from ttio.enums import Compression, AcquisitionMode
+from ttio.spectral_dataset import SpectralDataset
+from ttio.written_genomic_run import WrittenGenomicRun
+
+def _make_run(seq_bytes: bytes, qual_bytes: bytes,
+              codec_overrides=None) -> WrittenGenomicRun:
+    n = 10
+    read_len = 100
+    return WrittenGenomicRun(
+        acquisition_mode=AcquisitionMode.GENOMIC_WGS.value,
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="M86_TEST",
+        positions=np.arange(n, dtype=np.int64) * 1000,
+        mapping_qualities=np.full(n, 60, dtype=np.uint8),
+        flags=np.zeros(n, dtype=np.uint32),
+        sequences=np.frombuffer(seq_bytes, dtype=np.uint8),
+        qualities=np.frombuffer(qual_bytes, dtype=np.uint8),
+        offsets=np.arange(n, dtype=np.uint64) * read_len,
+        lengths=np.full(n, read_len, dtype=np.uint32),
+        cigars=["100M"] * n,
+        read_names=[f"r{i}" for i in range(n)],
+        mate_chromosomes=["chr1"] * n,
+        mate_positions=np.full(n, -1, dtype=np.int64),
+        template_lengths=np.zeros(n, dtype=np.int32),
+        chromosomes=["chr1"] * n,
+        signal_codec_overrides=codec_overrides or {},
+    )
 ```
 
-Expected: `mask_count = 0`, `packed_length = 64`, total wire
-length = 13 + 64 = 77 bytes.
+Tests:
 
-### Vector B — realistic read-ish, 1024 bytes, ~1% non-ACGT
+1. **`test_round_trip_sequences_rans_order0`** — write a run with
+   `signal_codec_overrides={"sequences": Compression.RANS_ORDER0}`.
+   Reopen, iterate all 10 reads, verify each `aligned_read.sequence`
+   matches the corresponding 100-byte slice of the input.
+2. **`test_round_trip_sequences_rans_order1`** — same with order-1.
+3. **`test_round_trip_sequences_base_pack`** — same with BASE_PACK.
+   Use pure-ACGT sequences so the codec compresses well.
+4. **`test_round_trip_qualities_rans_order1`** — same on qualities
+   channel (Phred bytes have local correlation, so order-1 is
+   the natural choice).
+5. **`test_round_trip_mixed`** — both overrides at once: BASE_PACK
+   on sequences, RANS_ORDER1 on qualities. Round-trip both.
+6. **`test_back_compat_no_overrides`** — write with empty
+   `signal_codec_overrides`, reopen with M86 read code, verify the
+   data round-trips through the existing HDF5-filter path
+   unchanged. Confirms the new code path doesn't break M82
+   behaviour.
+7. **`test_reject_invalid_channel`** — `signal_codec_overrides=
+   {"positions": Compression.RANS_ORDER0}` must raise `ValueError`
+   at write time (positions is an integer channel).
+8. **`test_reject_invalid_codec`** — `signal_codec_overrides=
+   {"sequences": Compression.LZ4}` must raise `ValueError` at
+   write time (LZ4 is an HDF5 filter, not a TTIO codec).
+9. **`test_attribute_set_correctly`** — write with each codec,
+   open the underlying h5py file directly, verify the dataset
+   has `@compression == codec.value`.
+10. **`test_size_win_base_pack`** — write a 100 000 base pure-ACGT
+    sequences channel both with and without BASE_PACK; check that
+    the BASE_PACK file's `signal_channels/sequences` dataset is
+    < 30% the size of the uncompressed dataset.
+
+### 6.2 Cross-language fixture generation
+
+After tests pass, generate three conformance fixtures from the
+Python writer in
+`python/tests/fixtures/genomic/m86_codec_<codec>.tio`:
 
 ```python
-import hashlib
-seed = hashlib.sha256(b"ttio-base-pack-vector-b").digest()
-acgt = b"ACGT"
-data_b_chars = bytearray()
-for i in range(1024):
-    if i % 100 == 0:                      # N's at positions 0, 100, ..., 1000
-        data_b_chars.append(ord('N'))
-    else:
-        # deterministic ACGT from seed
-        bit_pair = (seed[i % 32] >> ((i // 32) % 4 * 2)) & 0b11
-        data_b_chars.append(acgt[bit_pair])
-data_b = bytes(data_b_chars)
+# Common input: 10 reads × 100 bp pure-ACGT
+seq = (b"ACGT" * 25) * 10           # 1000 bytes pure ACGT
+qual = bytes((30 + (i % 11)) for i in range(1000))   # Phred 30-40
+
+for codec_name, codec in [
+    ("rans_order0", Compression.RANS_ORDER0),
+    ("rans_order1", Compression.RANS_ORDER1),
+    ("base_pack",   Compression.BASE_PACK),
+]:
+    overrides = {"sequences": codec, "qualities": codec}
+    # Build run, write to tmpfile, copy to fixtures/
+    ...
 ```
 
-Expected: `mask_count = 11` (positions 0, 100, …, 1000 — eleven
-multiples of 100 in `[0, 1024)`), `packed_length = 256`, total =
-13 + 256 + 55 = 324 bytes.
+Commit the three `.tio` files as
+`python/tests/fixtures/genomic/m86_codec_{rans_order0,rans_order1,base_pack}.tio`.
+Total fixture size should be a few hundred KB.
 
-### Vector C — IUPAC + soft-mask stress, 64 bytes
+Add an 11th test:
+- **`test_cross_language_fixtures`** — for each of the three
+  fixture files, open with the M86 Python read path and verify
+  every read's sequence and qualities match the known input
+  (`b"ACGT" * 25` for each sequence, Phred 30-40 cycle for each
+  qualities slice).
 
-Hand-constructed to exercise every meaningful non-ACGT case:
+### 6.3 ObjC — new file `objc/Tests/TestM86GenomicCodecWiring.m`
 
-```python
-data_c = (
-    b"ACGT"           # 0-3   plain ACGT (packed)
-    b"acgt"           # 4-7   soft-mask (lowercase) — 4 mask entries
-    b"NNNN"           # 8-11  all-N — 4 mask entries
-    b"RYSW"           # 12-15 IUPAC ambiguity — 4 mask entries
-    b"KMBD"           # 16-19 more IUPAC — 4 mask entries
-    b"HVN-"           # 20-23 IUPAC + N + gap — 4 mask entries
-    b"....AC..GT.."   # 24-35 gaps + ACGT (positions 28,29,32,33 packed;
-                      #       positions 24-27, 30-31, 34-35 are 8 mask entries)
-    b"ACGT" * 7       # 36-63 plain ACGT padding (28 bytes)
-)
-assert len(data_c) == 64
-```
+Same coverage as Python tests 1–11. Style mirrors
+`TestM82GenomicRun.m` (existing genomic test pattern). Loads
+fixtures from `objc/Tests/Fixtures/genomic/m86_codec_*.tio`
+(verbatim copies of the Python-generated fixtures). Target ≥ 30
+new assertions across the 11 tests. Wire into `TTIOTestRunner.m`
+as `START_SET("M86: codec wiring") testM86GenomicCodecWiring();
+END_SET("M86: codec wiring")`.
 
-Expected: `mask_count = 28` (4 lowercase + 4 N + 4 IUPAC + 4 IUPAC
-+ 4 mixed + 8 gap-region non-ACGT). `packed_length = 16`. Total
-wire = 13 + 16 + 5×28 = 169 bytes.
+Add `objc/Tests/Fixtures/genomic/` directory if it does not
+already exist.
 
-### Vector D — empty input
+### 6.4 Java — new file `java/src/test/java/global/thalion/ttio/genomics/M86CodecWiringTest.java`
 
-```python
-data_d = b""
-```
+Same coverage as Python tests 1–11. JUnit 5. Style mirrors any
+existing `genomics/...Test.java`. Loads fixtures via
+`getResourceAsStream("/ttio/fixtures/genomic/m86_codec_*.tio")`.
+Place the fixture binaries under
+`java/src/test/resources/ttio/fixtures/genomic/`.
 
-Expected: header only, `packed_length = 0`, `mask_count = 0`,
-`original_length = 0`. Total wire length = 13 bytes.
+Target ≥ 11 test methods, ≥ 30 assertions.
 
-### Reference output generation
+### 6.5 Cross-language conformance matrix
 
-```bash
-cd python && python3 -c "
-import hashlib
-from ttio.codecs.base_pack import encode, decode
-
-seed_a = hashlib.sha256(b'ttio-base-pack-vector-a').digest()
-acgt = b'ACGT'
-data_a = bytes(acgt[b & 0b11] for b in seed_a * 8)
-
-seed_b = hashlib.sha256(b'ttio-base-pack-vector-b').digest()
-data_b_chars = bytearray()
-for i in range(1024):
-    if i % 100 == 0:
-        data_b_chars.append(ord('N'))
-    else:
-        bit_pair = (seed_b[i % 32] >> ((i // 32) % 4 * 2)) & 0b11
-        data_b_chars.append(acgt[bit_pair])
-data_b = bytes(data_b_chars)
-
-data_c = (b'ACGT' b'acgt' b'NNNN' b'RYSW' b'KMBD' b'HVN-'
-          b'....AC..GT..' b'ACGT' b'ACGT')
-assert len(data_c) == 64
-
-data_d = b''
-
-for name, data in [('a', data_a), ('b', data_b), ('c', data_c), ('d', data_d)]:
-    enc = encode(data)
-    assert decode(enc) == data, f'{name}: round-trip failed'
-    open(f'tests/fixtures/codecs/base_pack_{name}.bin', 'wb').write(enc)
-    print(f'{name}: {len(data)} -> {len(enc)} bytes')
-"
-```
-
-Commit the four `.bin` fixtures.
+The three `.tio` fixtures committed in §6.2 are the cross-language
+contract. Each implementation must read every fixture and produce
+byte-identical decoded sequence/qualities data. The acceptance
+section enumerates this explicitly.
 
 ---
 
-## 8. Tests
+## 7. Format-spec update
 
-### 8.1 Python — `python/tests/test_m84_base_pack.py`
+`docs/format-spec.md` already mentions per-channel attributes for
+codec selection in §10.4 (numpress example). Add a new subsection
+§10.5 (or extend §10.4) that documents the `@compression`
+attribute scheme:
 
-All 14 use pytest:
+> ### 10.5 `@compression` attribute (M86)
+>
+> Signal-channel datasets that use a TTI-O internal compression
+> codec (rANS order-0 / rANS order-1 / BASE_PACK) carry a
+> `@compression` attribute (uint8) holding the M79 codec id. The
+> dataset bytes ARE the self-contained codec stream specified in
+> `docs/codecs/rans.md` (ids 4, 5) or `docs/codecs/base_pack.md`
+> (id 6). No HDF5 filter is applied to such datasets — the codec
+> output is high-entropy and would not benefit from deflate.
+>
+> Absence of the attribute, or value `0`, means the dataset is
+> stored as-is and any HDF5 filter applies. Pre-M86 readers that
+> ignore `@compression` will silently misinterpret a v0.12-encoded
+> channel (the read path slices into a non-sliceable codec stream
+> and returns garbage). The attribute is the canonical signal for
+> codec dispatch.
+>
+> M86 wires this attribute scheme only for the `sequences` and
+> `qualities` channels of `signal_channels/`. Integer channels
+> (`positions`, `flags`, `mapping_qualities`) and VL_STRING
+> channels (`cigars`, `read_names`) do not yet support TTIO
+> codecs; they ignore `@compression` if set and stay on
+> HDF5-filter ZLIB.
 
-1. **Round-trip pure ACGT.** Build 1 MB by tiling `b"ACGT" *
-   262144`. Encode, decode, byte-exact; total wire size =
-   13 + 262144 = 262157 bytes (no mask).
-2. **Round-trip realistic.** 1 MiB (= 2²⁰ = 1 048 576 bytes) with
-   N's at every 100th position. Byte-exact; mask_count =
-   `ceil(1048576 / 100) = 10 486`.
-3. **Round-trip all-N.** 1 MiB of `N`. Byte-exact; mask_count =
-   1 048 576; total wire size = 13 + 262144 + 5 × 1048576 =
-   5 505 037 bytes.
-4. **Round-trip empty.** `b""`. Byte-exact; total wire size = 13
-   bytes.
-5. **Round-trip single ACGT.** `b"A"`, `b"C"`, `b"G"`, `b"T"` —
-   four sub-cases, each byte-exact, each total wire size = 14
-   bytes (13 header + 1 body byte = 0x00, 0x40, 0x80, 0xC0
-   respectively in the high two bits).
-6. **Round-trip single N.** `b"N"`. Byte-exact; total wire size
-   = 13 + 1 + 5 = 19 bytes.
-7. **IUPAC stress.** Full alphabet `b"ACGTacgtNRYSWKMBDHV-."`
-   (21 bytes). Byte-exact; mask_count = 17 (positions 4 through
-   20 — everything except the leading `ACGT`).
-8. **Canonical vector A.** Encode `data_a`, compare to
-   `base_pack_a.bin`. Byte-exact.
-9. **Canonical vector B.** Encode `data_b`, compare to
-   `base_pack_b.bin`. Byte-exact.
-10. **Canonical vector C.** Encode `data_c`, compare to
-    `base_pack_c.bin`. Byte-exact.
-11. **Canonical vector D.** Encode `data_d`, compare to
-    `base_pack_d.bin`. Byte-exact (= 13 bytes).
-12. **Decode malformed.** Five sub-cases, each
-    `pytest.raises(ValueError)`:
-    - Truncated stream (header only when mask_count > 0).
-    - Bad version byte (`0x01`).
-    - `packed_length` mismatch (write `packed_length = 999` over
-      a real header).
-    - Mask position out of range (`position >= original_length`).
-    - Mask positions out of order (swap two entries' positions).
-13. **Soft-masking round-trip.** `b"ACGTacgtACGT"`. Byte-exact;
-    mask_count = 4 (positions 4, 5, 6, 7).
-14. **Throughput.** Encode 10 MB of pure ACGT, log MB/s. PASS if
-    encode ≥ 20 MB/s, decode ≥ 50 MB/s. Print actual.
-
-### 8.2 ObjC — `objc/Tests/TestM84BasePack.m`
-
-Same coverage. Register in `TTIOTestRunner.m` under `M84:
-BASE_PACK codec`. Throughput target: encode ≥ 200 MB/s, decode ≥
-500 MB/s (soft); hard floor encode ≥ 100 MB/s, decode ≥ 250 MB/s.
-Target ≥ 30 new assertions.
-
-### 8.3 Java — `java/src/test/java/global/thalion/ttio/codecs/BasePackTest.java`
-
-JUnit 5. Same coverage. Throughput logged, no hard threshold (JIT
-variance). Target ≥ 12 test methods, ≥ 40 assertions.
-
-### 8.4 Cross-language byte-exact conformance
-
-The four canonical fixtures are the contract. All three encoders
-must produce byte-identical output for vectors A–D.
+Also update §10.4's trailing summary paragraph: ids `4`, `5`, `6`
+are now not just standalone primitives but **wired into the
+genomic write/read pipeline** for the byte channels; the
+`@compression` attribute is the dispatch mechanism.
 
 ---
 
-## 9. Integration Point (Forward Reference)
+## 8. Documentation
 
-M84 does NOT wire BASE_PACK into the genomic signal-channel
-pipeline — that's M86's scope (which also wires rANS slots 4 and
-5). M84 delivers BASE_PACK as a standalone, tested,
-cross-language-conformant primitive.
+### 8.1 `docs/codecs/rans.md` and `docs/codecs/base_pack.md`
 
-When M86 lands, a genomic dataset's `@compression == 6` will route
-the raw bytes through `base_pack.decode()`. The current M82
-storage (one ASCII byte per base in `signal_channels/sequences`)
-becomes the `@compression == 0` (NONE) case; opting in to
-BASE_PACK shrinks it ~4×.
+Each gains a brief "Wired into" sentence at the top of §7
+("Forward references"):
 
----
+> **M86** — wired into the genomic signal-channel write/read path
+> for `sequences` and `qualities` channels. Use
+> `WrittenGenomicRun.signal_codec_overrides={"sequences": ...}`
+> at write time; reader dispatches on `@compression` automatically.
 
-## 10. Documentation
+### 8.2 `CHANGELOG.md`
 
-### 10.1 `docs/codecs/base_pack.md` (new)
+Add M86 entry under `[Unreleased]`. Mirror the M83/M84 structure
+(Added — Verification — Notes). Update the Unreleased header to
+include M86.
 
-Codec specification document, parallel structure to
-`docs/codecs/rans.md`:
+### 8.3 `WORKPLAN.md`
 
-- Algorithm summary (2-bit pack + sparse mask)
-- Pack mapping table (ACGT → 0/1/2/3)
-- Bit-order-within-byte explanation with worked example
-- Wire format diagram
-- Sparse-mask vs dense-bitmap rationale (Binding Decision §80)
-- Case-sensitivity and soft-masking note (Binding Decision §81)
-- IP provenance statement
-- Cross-language conformance contract
-- Performance targets per language
-- Public API in each of the three languages
-
-### 10.2 `CHANGELOG.md`
-
-Add M84 entry under `[Unreleased]`. Update the header to mention
-M84. Format mirrors the M83 entry (Added — Verification — Notes).
-
-### 10.3 `docs/format-spec.md` §10.4
-
-Flip the **base-pack** row from "Reserved enum slot … NOT YET
-IMPLEMENTED" to "Implemented in M84 …" with a pointer to
-`docs/codecs/base_pack.md`. Update the trailing paragraph to note
-that ids `4`, `5`, `6` now ship as standalone primitives; ids `7`
-and `8` remain reserved.
-
-### 10.4 `python/src/ttio/codecs/__init__.py`
-
-Update the docstring listing to remove `(M84, future)` from
-`base_pack`.
+The "Genomic codec milestone" section currently flags rANS and
+BASE_PACK as "implemented as standalone primitives, M86 wiring
+pending." Update Phase 1 status: mark the wiring complete for
+the byte channels; flag the integer-channel and VL_STRING codec
+work as still pending.
 
 ---
 
-## 11. Gotchas (continued from M83 §82–§88)
+## 9. Gotchas (continued from M84 §89–§95)
 
-89. **Position width = uint32.** A single mask position is uint32
-    BE. Maximum supported `original_length` is 2^32 - 1 ≈ 4.3 GB
-    per encoded sequence. Real genomic reads are kilobytes at
-    most; this is comfortable. Document the limit, but don't add
-    a length cap (let the natural overflow be caught by the `0 <=
-    position < original_length` validation in decode).
+96. **Codec output isn't HDF5-sliceable.** The whole channel must
+    be read and decoded in one shot. Any future code that adds
+    streaming-decode support would require codec changes (out of
+    M86 scope). The `_decoded_byte_channels` cache is the right
+    shape for the current codecs.
 
-90. **Soft-masking interaction with downstream callers.** Anyone
-    calling `encode(read.upper())` will lose soft-masking. The
-    codec doesn't case-fold; that's a binding decision (§81).
-    When M86 wires this into the pipeline, the M86 docs must call
-    out that BASE_PACK is case-sensitive — not the responsibility
-    of M84 docs.
+97. **Don't double-compress.** When `@compression > 0`, the
+    dataset must be created without an HDF5 filter
+    (`compression=None` in the Python h5py call,
+    `H5Pset_deflate` skipped in ObjC, no `setDeflate` in Java).
+    Running deflate over rANS or BASE_PACK output adds CPU and
+    typically *enlarges* the bytes (random-looking data
+    compresses poorly).
 
-91. **Empty input vs all-non-ACGT input.** Both produce
-    mask_count = 0 in the all-ACGT case but differ wildly in
-    mask_count for all-non-ACGT. The decoder distinguishes them
-    via the original_length field — don't confuse "no mask
-    entries" with "empty input."
+98. **Per-channel attribute name is `compression`, not `codec`.**
+    Single source of truth. The format-spec uses
+    `@compression` everywhere; do not introduce variants like
+    `@codec_id`, `@compression_codec`, etc. The attribute is on
+    the dataset, not on the parent group.
 
-92. **Mask sortedness validation.** Decoder MUST reject unsorted
-    or duplicate-position masks. This catches both corruption and
-    encoder bugs. Add explicit tests for both error cases.
+99. **`WrittenGenomicRun.signal_compression` (string) and
+    `signal_codec_overrides` (dict) are independent.** The string
+    sets the default for channels NOT in the dict; the dict
+    overrides per-channel. A run with `signal_compression="gzip"`
+    and `signal_codec_overrides={"sequences": BASE_PACK}` writes
+    sequences with BASE_PACK and qualities/positions/flags with
+    gzip-via-HDF5. Cross-language tests must cover this hybrid
+    case.
 
-93. **Body length invariant.** `packed_length == (original_length
-    + 3) // 4`. Decoder rejects mismatches. This catches
-    truncated streams and stream-collision bugs early.
+100. **Integer channels are deliberately out of scope.** Any
+     attempt to override `positions`, `flags`, or
+     `mapping_qualities` must raise. Test it explicitly. If a
+     future milestone wants integer-channel codecs, it'll add an
+     int↔byte serialisation contract — that contract doesn't
+     exist yet, and silently accepting an integer-channel
+     override would commit to one prematurely.
 
-94. **Padding-bit determinism.** The final body byte's unused
-    low-order bits MUST be zero. If they're non-zero (e.g., a
-    buggy encoder leaves stack garbage), cross-language fixture
-    comparison will fail. Tests must include a 1-base, 2-base,
-    and 3-base input to exercise all three padding-tail patterns.
-    (Test #5 above covers the 1-base case for each ACGT; a
-    deliberate 2-base and 3-base sub-test should be added.)
+101. **Lazy decode is per-`GenomicRun`-instance, not global.**
+     Two open `GenomicRun` objects on the same file each decode
+     independently. This is correct (no shared mutable state)
+     but means re-opening incurs the decode cost again. Document
+     this in the `GenomicRun` class docstring.
 
-95. **No MPGO remnants to clean.** M83 already audited the ObjC
-    tree; nothing to do this milestone.
+102. **Compound channels (`cigars`, `read_names`, `mate_info`)
+     ignore `@compression`.** They're not byte arrays, and their
+     write/read goes through a different code path
+     (`write_compound_dataset` / `read_compound_dataset`). Tests
+     that check round-trip on those channels remain unchanged
+     by M86.
 
 ---
 
 ## Acceptance Criteria
 
 ### Python
-- [ ] All existing tests pass (zero regressions vs `7b20ac9`).
-- [ ] BASE_PACK round-trip: 1 MB pure ACGT, byte-exact, wire size
-      = 13 + 262144 = 262157 bytes.
-- [ ] BASE_PACK round-trip: 1 MB realistic (~1% N), byte-exact.
-- [ ] BASE_PACK round-trip: empty, single byte, IUPAC stress, all
-      pass byte-exact.
-- [ ] Soft-masking round-trip preserves case.
-- [ ] All four canonical vectors A/B/C/D produce expected fixture
-      bytes.
-- [ ] Decode malformed (5 cases) raises ValueError.
-- [ ] Throughput logged (encode ≥ 20 MB/s, decode ≥ 50 MB/s).
+- [ ] All existing tests pass (zero regressions vs `881be0f`).
+- [ ] `WrittenGenomicRun` has `signal_codec_overrides` field.
+- [ ] Round-trip with each codec on `sequences` byte-exact (3 tests).
+- [ ] Round-trip with RANS_ORDER1 on `qualities` byte-exact.
+- [ ] Round-trip with mixed overrides byte-exact.
+- [ ] Backwards-compat: empty overrides path unchanged.
+- [ ] Override on integer channel raises ValueError at write time.
+- [ ] Override with non-codec value raises ValueError at write time.
+- [ ] `@compression` attribute is set correctly on the dataset.
+- [ ] BASE_PACK on pure-ACGT sequences yields a dataset < 30% the
+      size of the uncompressed equivalent.
+- [ ] Three cross-language fixtures committed to
+      `python/tests/fixtures/genomic/m86_codec_*.tio`.
 
 ### Objective-C
-- [ ] All existing tests pass (zero regressions; 1981 baseline +
-      ≥ 30 new = ≥ 2011, with 2 pre-existing M38 Thermo failures
-      preserved).
-- [ ] Round-trip 1 MB pure ACGT byte-exact.
-- [ ] Round-trip 1 MB realistic byte-exact.
-- [ ] All four canonical vectors A/B/C/D match Python fixtures
+- [ ] All existing tests pass (zero regressions vs the 2047 PASS
+      baseline + 2 pre-existing M38 Thermo failures).
+- [ ] `TTIOWrittenGenomicRun.signalCodecOverrides` property added.
+- [ ] All 11 round-trip tests pass byte-exact.
+- [ ] Three cross-language fixtures (verbatim copies of Python's)
+      placed under `objc/Tests/Fixtures/genomic/` and read
       byte-exact.
-- [ ] Malformed input → NSError, no crash, all 5 sub-cases.
-- [ ] Throughput: encode ≥ 100 MB/s hard floor (soft ≥ 200);
-      decode ≥ 250 MB/s hard floor (soft ≥ 500).
 - [ ] ≥ 30 new assertions.
+- [ ] Validation rejects invalid channel / invalid codec
+      overrides cleanly (no crash).
 
 ### Java
-- [ ] All existing tests pass (zero regressions vs 416/0/0/0
-      baseline → ≥ 428/0/0/0 after M84).
-- [ ] Round-trip 1 MB pure ACGT and 1 MB realistic byte-exact.
-- [ ] All four canonical vectors match Python fixtures byte-exact.
-- [ ] Malformed input → IllegalArgumentException, all 5
-      sub-cases.
-- [ ] ≥ 12 test methods, ≥ 40 assertions.
+- [ ] All existing tests pass (zero regressions vs 430/0/0/0 baseline → ≥ 441/0/0/0 after M86).
+- [ ] `WrittenGenomicRun.signalCodecOverrides` setter/getter.
+- [ ] All 11 round-trip tests pass byte-exact.
+- [ ] Three cross-language fixtures (verbatim copies) under
+      `java/src/test/resources/ttio/fixtures/genomic/` and read
+      byte-exact.
+- [ ] ≥ 11 test methods, ≥ 30 assertions.
 
 ### Cross-Language
-- [ ] Python, ObjC, and Java produce identical encoded bytes for
-      vectors A, B, C, D.
-- [ ] Fixture files committed under
-      `python/tests/fixtures/codecs/base_pack_*.bin` and copied
-      verbatim to `objc/Tests/Fixtures/` and
-      `java/src/test/resources/ttio/codecs/`.
-- [ ] `docs/codecs/base_pack.md` committed and complete.
-- [ ] `CHANGELOG.md` M84 entry committed under `[Unreleased]`.
-- [ ] `docs/format-spec.md` §10.4 base-pack row flipped to
-      "implemented".
-- [ ] `python/src/ttio/codecs/__init__.py` docstring updated.
+- [ ] All three implementations read all three Python-generated
+      fixtures with byte-identical decoded output.
+- [ ] `docs/format-spec.md` §10.5 (or extended §10.4) committed
+      describing the `@compression` attribute scheme.
+- [ ] `docs/codecs/rans.md` and `docs/codecs/base_pack.md`
+      updated with the M86 wiring sentence in §7.
+- [ ] `CHANGELOG.md` M86 entry committed under `[Unreleased]`.
+- [ ] `WORKPLAN.md` Phase 1 status updated to reflect wiring
+      complete for byte channels.
 
 ---
 
 ## Out of Scope
 
-- **CRAM 3.1 base codecs.** WORKPLAN's "Genomic codec milestone
-  Phase 2" is a separate future milestone.
-- **M85 codecs** (quality-binned, name-tokenized) are separate
-  milestones.
-- **M86 wiring** into the genomic signal-channel pipeline. M84
-  delivers BASE_PACK as a primitive only.
-- **Performance optimisation beyond the targets.** SIMD,
-  vectorised packing tables, GPU offload — none of these are M84
-  scope. The shift-and-mask reference implementation is fast
-  enough for the M86 wiring to be useful.
+- **Integer-channel codecs.** `positions`, `flags`,
+  `mapping_qualities` continue to use HDF5 ZLIB. Adding TTIO
+  codec support for these requires an int↔byte serialisation
+  contract that's not defined here. Future milestone.
+- **VL_STRING channel codecs.** `cigars`, `read_names`,
+  `mate_info` continue to use the existing compound-write path.
+  M85 (`name-tokenized`) is the natural follow-up.
+- **MS-side wiring.** This milestone is genomic-only. The MS
+  signal-channel path (`/study/ms_runs/.../signal_channels/`) is
+  unchanged. If an MS use case for the new codecs arises later,
+  it would be a sibling milestone with the same dispatch pattern
+  but the MS storage shape (one channel per profile / centroid /
+  noise / etc., float64 not uint8).
+- **Streaming decode.** The lazy-decode-cache approach reads the
+  whole channel into memory on first access. Future codecs (or
+  future versions of rANS / BASE_PACK) that support block-level
+  decode could enable streaming, but that's not in M86.
+- **Changing the M83 / M84 codec wire formats.** Those are
+  frozen across all three languages by their cross-language
+  fixture conformance contracts; M86 just calls into them.
+- **Performance optimisation.** The lazy-decode cost on first
+  read is the natural overhead. SIMD, parallel decode of
+  independent channels, etc. are out of scope.
