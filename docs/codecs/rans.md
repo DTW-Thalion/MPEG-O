@@ -330,6 +330,16 @@ input.
   synthetic data). See `docs/codecs/name_tokenizer.md` §8 for
   the full selection table, and `docs/format-spec.md` §10.8
   for the cigars schema-lift contract.
+- **M86 Phase F** (shipped 2026-04-26) — rANS order-0 and
+  order-1 are also wired into the per-field **mate_info**
+  channels (`mate_info_chrom`, `mate_info_pos`,
+  `mate_info_tlen`) under the new mate_info subgroup layout.
+  The `mate_info_chrom` rANS path uses length-prefix-concat
+  (same contract as cigars); `mate_info_pos` and
+  `mate_info_tlen` use Phase B-style LE byte serialisation
+  (`<i8` and `<i4` respectively). See
+  `docs/format-spec.md` §10.9 for the mate_info subgroup
+  pattern.
 - **M84** (shipped) — base-pack codec (2-bit nucleotide packing
   + sidecar mask), see `docs/codecs/base_pack.md`.
 - **M85** (shipped) — quality-quantiser

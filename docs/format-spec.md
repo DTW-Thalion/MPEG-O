@@ -796,16 +796,26 @@ channel is:
   the codec-selection guidance (rANS is the recommended
   default; NAME_TOKENIZED is the niche choice for uniform
   CIGARs).
+- The **mate_info channel** (M82 compound: chrom + pos + tlen)
+  is decomposed into three per-field virtual channels
+  (`mate_info_chrom`, `mate_info_pos`, `mate_info_tlen`) when
+  any per-field override is set — see §10.9 for the subgroup
+  schema and per-field codec applicability. The chrom field
+  takes the same codec set as cigars
+  ({RANS_ORDER0/1, NAME_TOKENIZED}); pos/tlen take the
+  integer-channel set ({RANS_ORDER0/1}).
 
 See §10.5 for the byte-channel `@compression` attribute
 scheme, §10.6 for the `read_names` schema-lift pattern, §10.7
-for the integer-channel serialisation contract, and §10.8 for
-the cigars channel and codec-selection guidance.
+for the integer-channel serialisation contract, §10.8 for the
+cigars channel and codec-selection guidance, and §10.9 for the
+mate_info subgroup and per-field decomposition.
 
-The remaining VL_STRING channel `mate_info` continues to use
-HDF5-filter ZLIB; no codec match exists yet (it's a 3-field
-integer-tuple compound, would require per-field schema
-decomposition or per-compound-field dispatch).
+**The genomic codec pipeline-wiring is now complete for ALL
+M82 channels.** Every channel under `signal_channels/`
+supports at least one codec choice; every M79 codec slot
+(4–8) is wired into its applicable channels with cross-
+language byte-exact conformance.
 
 > **Note on CRAM 3.1 specifically.** The reserved names above map
 > to CRAM-3.0-era codecs. CRAM 3.1 adds the rANS-Nx16 streams (four
@@ -1053,6 +1063,121 @@ Pre-M86-Phase-C readers that hard-code the compound layout
 will fail when they hit the flat-uint8 layout. Discipline
 matches M80 / M82 / M86 Phase A/E (write-forward, no
 back-compat shim).
+
+## 10.9 mate_info per-field decomposition (M86 Phase F)
+
+The mate_info channel under `signal_channels/` has TWO on-disk
+layouts depending on whether any `mate_info_*` per-field
+override is set in `signal_codec_overrides`.
+
+### 10.9.1 On-disk schema
+
+**No override (M82 default):** COMPOUND dataset of shape
+`[n_reads]` with three fields:
+
+```
+signal_channels/mate_info: COMPOUND[n_reads] {
+    chrom: VL_STRING,
+    pos:   INT64,
+    tlen:  INT32
+}
+```
+
+Backward compatible with M82 readers.
+
+**Any mate_info_* override active:** SUBGROUP containing three
+child datasets:
+
+```
+signal_channels/mate_info/             # GROUP, not dataset
+    chrom: <one of three layouts>
+        VL_STRING[n_reads]  (HDF5 ZLIB)        # if no chrom override
+        UINT8[encoded_len]  @compression=4|5   # if rANS chrom override
+        UINT8[encoded_len]  @compression=8     # if NAME_TOK chrom override
+    pos:   <one of two layouts>
+        INT64[n_reads]      (HDF5 ZLIB)        # if no pos override
+        UINT8[encoded_len]  @compression=4|5   # if rANS pos override
+    tlen:  <one of two layouts>
+        INT32[n_reads]      (HDF5 ZLIB)        # if no tlen override
+        UINT8[encoded_len]  @compression=4|5   # if rANS tlen override
+```
+
+The `mate_info` link type (group vs dataset) is the primary
+read-side dispatch signal. Each per-field child dataset
+carries its own `@compression` attribute (or lacks one,
+indicating natural-dtype storage). Partial overrides are
+allowed: any one of the three per-field overrides triggers
+the subgroup layout, and un-overridden fields use natural-
+dtype HDF5 ZLIB storage inside the subgroup.
+
+### 10.9.2 API: per-field virtual channel names
+
+The override is exposed as three flat-dict keys in
+`signal_codec_overrides`:
+
+| Key                | Allowed codecs                          |
+|--------------------|------------------------------------------|
+| `mate_info_chrom`  | RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED |
+| `mate_info_pos`    | RANS_ORDER0, RANS_ORDER1                 |
+| `mate_info_tlen`   | RANS_ORDER0, RANS_ORDER1                 |
+
+The bare key `"mate_info"` is **rejected** at write-time
+validation with a message pointing at the three per-field
+keys. (NAME_TOKENIZED is wrong-content for the integer fields
+pos and tlen; BASE_PACK and QUALITY_BINNED are wrong-content
+for all three.)
+
+### 10.9.3 Per-field serialisation contracts
+
+The `chrom` field's rANS path uses **length-prefix-concat
+serialisation** (the same contract as the cigars channel
+from §10.8.2): each chrom is emitted as `varint(len) +
+ascii bytes`, the concatenated buffer is fed to
+`Rans.encode(buf, order)`. The NAME_TOKENIZED path calls
+`NameTokenizer.encode(chroms)` directly.
+
+The `pos` (int64) and `tlen` (int32) fields' rANS paths use
+the **integer-channel LE byte serialisation** from §10.7:
+each array is converted to little-endian byte representation
+(`<i8` for pos, `<i4` for tlen), concatenated, then fed to
+`Rans.encode(buf, order)`. The reader interprets the decoded
+bytes via the channel-name → dtype lookup (`pos → int64`,
+`tlen → int32`).
+
+### 10.9.4 Read-side dispatch
+
+Readers MUST inspect the `signal_channels/mate_info` link
+type before assuming the M82 layout:
+
+- `H5O_TYPE_DATASET` (or equivalent): M82 compound path.
+  Existing read code unchanged.
+- `H5O_TYPE_GROUP`: Phase F subgroup path. For each requested
+  field, open the child dataset and dispatch on
+  `@compression`:
+  - `0` (no attribute): read directly as the natural dtype
+    (VL_STRING for chrom; INT64 for pos; INT32 for tlen).
+  - `4`/`5`: read all bytes; `Rans.decode`; for chrom, walk
+    varint-length-prefix to recover `list[str]`; for pos/tlen,
+    interpret bytes as the natural dtype (LE).
+  - `8` (chrom only): `NameTokenizer.decode` → `list[str]`.
+
+Pre-M86-Phase-F readers that hard-code the compound layout
+will fail when they hit the subgroup. Discipline matches
+M80 / M82 / M86 Phase A/E/C (write-forward, no back-compat
+shim).
+
+### 10.9.5 Why the chrom field commonly wins big with NAME_TOKENIZED
+
+Mate chromosome alphabets are tiny in practice — typically
+fewer than 30 distinct values across the whole run
+(`chr1`..`chr22`, `chrX`, `chrY`, `chrM`, plus `*` for
+unmapped mates). For paired sequencing data where most mates
+are on the same chromosome as the read, the columnar
+dictionary is a one-or-two-entry win that crushes the chrom
+stream to a few bytes regardless of read count. The
+NAME_TOKENIZED path is the default recommendation for
+`mate_info_chrom`; the rANS path is available for unusual
+inputs (e.g. heavily-fragmented chromosome assignments).
 
 ### Precision additions (M79, v0.11)
 

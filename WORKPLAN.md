@@ -200,7 +200,7 @@ higher compression ratios.
 
 ### M86 — Codec Integration into Signal Channel Pipeline
 
-**Status: Phases A, B, C (cigars), D, and E shipped (2026-04-26). Phase C (mate_info) deferred.**
+**Status: Phases A, B, C, D, E, and F all shipped (2026-04-26). The genomic codec pipeline-wiring is complete for ALL M82 channels.**
 
 #### Phase A — byte channels (SHIPPED 2026-04-26)
 
@@ -335,14 +335,66 @@ Commits: `798ec88` (Python), `46076b1` (Java), `6213711`
 Commits: `61fb946` (Python), `133762e` (Java), `f5ff91f`
 (ObjC), plus M86 Phase C docs landing alongside.
 
-**mate_info (DEFERRED):**
+**mate_info (SHIPPED 2026-04-26 — see Phase F below).**
 
-`mate_info` is a 3-field compound (chrom VL_STRING + pos
-int64 + tlen int32). Compressing it cleanly requires either
-per-field schema decomposition (lift the compound to three
-flat datasets, each with its own `@compression`) or
-per-compound-field codec dispatch (no infrastructure for this
-exists). Both are substantial new design work; deferred.
+The mate_info portion was originally deferred from Phase C
+because the 3-field compound (chrom VL_STRING + pos int64 +
+tlen int32) needed either per-field schema decomposition or
+per-compound-field codec dispatch. Phase F shipped the
+former approach: subgroup with three per-field flat datasets,
+each independently codec-compressible.
+
+#### Phase F — mate_info per-field decomposition (SHIPPED 2026-04-26)
+
+- [x] Schema-lift mate_info from M82 compound to subgroup
+      `signal_channels/mate_info/` containing three child
+      datasets (`chrom`, `pos`, `tlen`) when any per-field
+      override is set.
+- [x] Three per-field virtual channel names exposed via
+      `signal_codec_overrides`: `mate_info_chrom`,
+      `mate_info_pos`, `mate_info_tlen`. The bare key
+      `mate_info` is rejected with a clear error pointing at
+      the per-field names (Binding Decision §126 / Gotcha
+      §143).
+- [x] Per-field codec applicability: chrom takes the cigars-
+      style codec set ({RANS_ORDER0/1, NAME_TOKENIZED}); pos
+      and tlen take the integer-channel set ({RANS_ORDER0/1}).
+- [x] Partial overrides allowed: any one per-field override
+      triggers the subgroup; un-overridden fields use natural
+      dtype with HDF5 ZLIB inside the subgroup (Binding
+      Decision §127).
+- [x] Read-side dispatch on HDF5 link type for the bare
+      `mate_info` link (group = Phase F; dataset = M82) per
+      Binding Decision §128. First M86 phase introducing
+      this dispatch axis. Per-language link-type query API:
+      Python h5py exception-based; ObjC `H5Oget_info_by_name`;
+      Java provider-abstract via `openGroup` exception (or
+      H5.H5Oget_info_by_name).
+- [x] New `_decoded_mate_info` combined dict cache keyed by
+      field name (separate from existing five caches per
+      Binding Decision §129).
+- [x] All three languages, one cross-language fixture
+      (`m86_codec_mate_info_full.tio`, 60 757 bytes) — both
+      ObjC and Java decode all three mate fields byte-exact
+      against the Python input over 100 reads with realistic
+      mate distributions (90% chr1 / 10% other; monotonic
+      positions for paired mates; tlen clustered around
+      350bp).
+- [x] Reuses Phase C cigars helpers for the chrom rANS path
+      (length-prefix-concat) and Phase B integer-channel
+      helpers for pos/tlen (LE byte serialisation).
+
+Commits: `20ca474` (Python), `b0b3926` (Java), `4d28629`
+(ObjC), plus M86 Phase F docs landing alongside.
+
+#### Codec stack pipeline-wiring status (post-M86 Phase F)
+
+The genomic codec pipeline-wiring is now **complete for ALL
+M82 channels**. Every channel under `signal_channels/` has at
+least one accepted codec; every M79 codec slot (4–8) is wired
+into its applicable channels with cross-language byte-exact
+conformance. The M82-era genomic codec story is functionally
+done.
 
 #### Phase E — NAME_TOKENIZED wiring + read_names schema lift (SHIPPED 2026-04-26)
 
