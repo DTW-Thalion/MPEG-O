@@ -143,10 +143,21 @@ def python_ttio(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def _python_summary(path: Path) -> dict:
     with SpectralDataset.open(path) as ds:
         runs = {n: {"spectrum_count": len(r)} for n, r in sorted(ds.ms_runs.items())}
+        granuns = getattr(ds, "genomic_runs", {}) or {}
+        gruns = {
+            n: {
+                "read_count": len(g),
+                "reference_uri": g.reference_uri or "",
+                "platform": g.platform or "",
+                "sample_name": g.sample_name or "",
+            }
+            for n, g in sorted(granuns.items())
+        }
         return {
             "title": ds.title,
             "isa_investigation_id": ds.isa_investigation_id,
             "ms_runs": runs,
+            "genomic_runs": gruns,
             "identification_count": len(ds.identifications()),
             "quantification_count": len(ds.quantifications()),
             "provenance_count": len(ds.provenance()),
@@ -161,6 +172,7 @@ def test_python_baseline(python_ttio: Path) -> None:
         "title": "Cross-language smoke",
         "isa_investigation_id": "ISA-XLANG",
         "ms_runs": {"run_0001": {"spectrum_count": 5}},
+        "genomic_runs": {},
         "identification_count": 2,
         "quantification_count": 0,
         "provenance_count": 0,
@@ -283,6 +295,7 @@ def _python_writes_on_provider(
         "title": f"xlang-{provider}",
         "isa_investigation_id": "ISA-XLANG-MATRIX",
         "ms_runs": {"run_0001": {"spectrum_count": 5}},
+        "genomic_runs": {},
         "identification_count": 2,
         "quantification_count": 0,
         "provenance_count": 0,

@@ -119,6 +119,46 @@ context describing the migration itself.
 - **Out of scope (codec milestone):** Base-packing; M82 stores one
   ASCII byte per base.
 
+### M82.4 — Cross-language conformance matrix (Python × ObjC × Java)
+
+Closes the M82.4 deliverable promised by M82.2 ("3×3 cross-language
+conformance matrix") and M82.3 ("must resolve VL string encoding
+decision"). Adds a fully-exercised 9-cell matrix with both summary
+parity and field-level VL_STRING parity.
+
+- **Added:** `python/tests/validation/test_m82_3x3_matrix.py`. Each
+  writer language (Python / ObjC / Java) emits a deterministic
+  100-read genomic-only fixture with identical content (ACGT cycled,
+  qualities = 30, chromosomes round-robin over {chr1,chr2,chrX},
+  positions `10000 + (i//3)*100`). Each reader language emits the
+  same flat JSON summary; all 9 cells must match the reference shape.
+- **Added:** `java/.../tools/TtioWriteGenomicFixture` — Java writer
+  CLI mirroring `python/tests/fixtures/genomic/generate.py`. Builds
+  the deterministic `WrittenGenomicRun` and calls
+  `SpectralDataset.create`. Reusable from JUnit tests via the public
+  `build()` factory.
+- **Added:** `objc/Tools/TtioWriteGenomicFixture.m` — ObjC equivalent.
+  Wired into `objc/Tools/GNUmakefile` alongside the existing
+  `TtioVerify` tool. Built as part of `gmake -s check` via the
+  standard `TOOL_NAME` mechanism.
+- **Extended:** Both `TtioVerify` CLIs (Java + ObjC) and Python's
+  `_python_summary` helper now emit a `"genomic_runs"` block in the
+  flat JSON summary. Schema:
+  `{"name": {"read_count", "reference_uri", "platform", "sample_name"}}`.
+  Pre-M82 datasets emit `"genomic_runs": {}`. The existing v0.9
+  cross-language smoke (`test_cross_language_smoke.py`) continues to
+  pass with the new field.
+- **Coverage delta:** Pre-M82.4 the matrix had only the diagonal
+  (each language → itself) and the Python writer column. Post-M82.4
+  all 9 cells are exercised on every CI run, including the four cells
+  that were the actual gap: ObjC→Python, ObjC→Java, Java→Python,
+  Java→ObjC.
+- **Verified:** Python 9/9 matrix cells pass + 1 field-level
+  VL_STRING readback (cigar / read_name / chromosome / sequence
+  prefix). Java 402/402 tests still green. ObjC 1935/1935 tests
+  still green. Existing cross-language smoke 9 passed + 1 expected
+  xfail.
+
 ### M82.4 — Java VL_STRING-in-compound read fix (cross-language wire parity)
 
 - **Fixed:** `Hdf5CompoundIO.readCompoundFull` now dereferences

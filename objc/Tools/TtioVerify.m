@@ -18,6 +18,7 @@
 #import "Dataset/TTIOProvenanceRecord.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOSpectrumIndex.h"
+#import "Genomics/TTIOGenomicRun.h"
 
 static NSString *JSONEscape(NSString *s)
 {
@@ -74,6 +75,26 @@ int main(int argc, const char *argv[])
             firstRun = NO;
             [out appendFormat:@"%@:{\"spectrum_count\":%lu}",
                 JSONEscape(rname), (unsigned long)run.spectrumIndex.count];
+        }
+        [out appendString:@"},"];
+
+        // Genomic runs (M82.4 cross-language conformance matrix).
+        [out appendString:@"\"genomic_runs\":{"];
+        BOOL firstGRun = YES;
+        NSArray *gRunNames = [[ds.genomicRuns allKeys]
+            sortedArrayUsingSelector:@selector(compare:)];
+        for (NSString *gname in gRunNames) {
+            TTIOGenomicRun *gr = ds.genomicRuns[gname];
+            if (!firstGRun) [out appendString:@","];
+            firstGRun = NO;
+            [out appendFormat:@"%@:{\"read_count\":%lu,"
+                              @"\"reference_uri\":%@,"
+                              @"\"platform\":%@,"
+                              @"\"sample_name\":%@}",
+                JSONEscape(gname), (unsigned long)gr.readCount,
+                JSONEscape(gr.referenceUri),
+                JSONEscape(gr.platform),
+                JSONEscape(gr.sampleName)];
         }
         [out appendString:@"},"];
 

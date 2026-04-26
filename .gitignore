@@ -32,6 +32,9 @@ python/tests/stress/benchmark_results.json
 # Maven build output
 java/target/
 
+# Transient build/ scratch dir for cross-language fixtures + logs
+build/
+
 # ObjC test summary artifact
 objc/tests.sum
 objc/Tests/tests.sum

@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump
 
 MakeFixtures_OBJC_FILES = MakeFixtures.m
 MakeFixtures_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -9,6 +9,10 @@ MakeFixtures_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 TtioVerify_OBJC_FILES = TtioVerify.m
 TtioVerify_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
 TtioVerify_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioWriteGenomicFixture_OBJC_FILES = TtioWriteGenomicFixture.m
+TtioWriteGenomicFixture_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioWriteGenomicFixture_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 TtioSign_OBJC_FILES = TtioSign.m
 TtioSign_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto

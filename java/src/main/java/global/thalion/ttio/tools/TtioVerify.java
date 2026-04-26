@@ -7,6 +7,7 @@ package global.thalion.ttio.tools;
 
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.genomics.GenomicRun;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,11 +26,19 @@ import java.util.List;
  *   "title": "...",
  *   "isa_investigation_id": "...",
  *   "ms_runs": {"run_0001": {"spectrum_count": 5}, ...},
+ *   "genomic_runs": {"genomic_0001": {"read_count": 100,
+ *                                      "reference_uri": "...",
+ *                                      "platform": "...",
+ *                                      "sample_name": "..."}, ...},
  *   "identification_count": N,
  *   "quantification_count": N,
  *   "provenance_count": N
  * }
  * </pre>
+ *
+ * <p>The {@code genomic_runs} block was added in M82.4 to drive the
+ * cross-language conformance matrix; pre-M82 datasets emit it as an
+ * empty object.</p>
  *
  * <p>Usage: {@code mvn exec:java -Dexec.mainClass=global.thalion.ttio.tools.TtioVerify -Dexec.args="path/to.tio"}</p>
  *
@@ -60,6 +69,22 @@ public final class TtioVerify {
                 out.append(jsonEscape(n))
                    .append(":{\"spectrum_count\":")
                    .append(run.spectrumCount())
+                   .append("}");
+            }
+            out.append("},");
+
+            out.append("\"genomic_runs\":{");
+            List<String> gnames = new ArrayList<>(ds.genomicRuns().keySet());
+            Collections.sort(gnames);
+            for (int i = 0; i < gnames.size(); i++) {
+                String n = gnames.get(i);
+                GenomicRun gr = ds.genomicRuns().get(n);
+                if (i > 0) out.append(",");
+                out.append(jsonEscape(n))
+                   .append(":{\"read_count\":").append(gr.readCount())
+                   .append(",\"reference_uri\":").append(jsonEscape(gr.referenceUri()))
+                   .append(",\"platform\":").append(jsonEscape(gr.platform()))
+                   .append(",\"sample_name\":").append(jsonEscape(gr.sampleName()))
                    .append("}");
             }
             out.append("},");
