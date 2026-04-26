@@ -1279,13 +1279,12 @@ Python reference and M82.2 ObjC normative shapes.
 
 ### Out of scope (deferred to M82.4)
 
-- **Cross-language interop for genomic VL string fields.** Java's
-  JHI5 1.10 binding can't round-trip VL_STRING in compounds. M82.3
-  uses VL_BYTES on the Java side as a workaround, breaking on-disk
-  type compatibility with Python/ObjC for the chromosomes / cigars /
-  read_names / mate_info.chrom fields. M82.4 cross-language matrix
-  must resolve this either by switching all writers to VL_BYTES or
-  by upgrading Java's binding.
+- **~~Cross-language interop for genomic VL string fields.~~ RESOLVED in M82.4
+  follow-up commit:** Java now reads VL_STRING in compounds correctly via
+  a pure-Java `sun.misc.Unsafe` char* dereference in `Hdf5CompoundIO.readCompoundFull`.
+  No JHI5 upgrade, no cross-language format change. All three writers
+  share the same VL_STRING wire format. M82.3's VL_BYTES workaround
+  reverted.
 - **MS runs via memory:// / sqlite:// / zarr://** — same gap as
   M82.2 (separate writer refactor required).
 
