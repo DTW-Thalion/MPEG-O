@@ -59,6 +59,13 @@ public class GenomicRun
     // cost again (Gotcha §101). Mutable HashMap, not Map.of(), so the
     // dispatch helper can populate it.
     private final Map<String, byte[]> decodedByteChannels = new HashMap<>();
+    // M86 Phase E: lazy decode cache for the read_names channel when it
+    // carries a NAME_TOKENIZED codec override. Held as a List<String>
+    // (not byte[]) per Binding Decision §114 — different value type and
+    // semantics from decodedByteChannels (which holds raw byte buffers
+    // sliced by per-read offset/length). The whole list is materialised
+    // on first access regardless of the access pattern.
+    private List<String> decodedReadNames = null;
 
     private int cursor = 0;  // Streamable
 
@@ -123,13 +130,14 @@ public class GenomicRun
         String sequence = new String(seqBytes, StandardCharsets.US_ASCII);
         byte[] qualities = byteChannelSlice("qualities", offset, length);
 
-        // Compound rows (cached on first access)
+        // Compound rows (cached on first access). M86 Phase E:
+        // read_names is dispatched separately via readNameAt() since
+        // the dataset shape varies (compound vs flat uint8 codec).
         List<Object[]> cigars     = compoundRows("cigars");
-        List<Object[]> readNames  = compoundRows("read_names");
         List<Object[]> mateInfos  = compoundRows("mate_info");
 
         String cigar    = stringFromCompound(cigars.get(i)[0]);
-        String readName = stringFromCompound(readNames.get(i)[0]);
+        String readName = readNameAt(i);
         Object[] mate   = mateInfos.get(i);
         String mateChrom = stringFromCompound(mate[0]);
         long matePos     = ((Number) mate[1]).longValue();
@@ -245,6 +253,58 @@ public class GenomicRun
         byte[] out = new byte[count];
         System.arraycopy(decoded, (int) offset, out, 0, count);
         return out;
+    }
+
+    /** M86 Phase E: return the read name at index {@code i}, dispatching
+     *  on dataset shape (Binding Decisions §111, §112).
+     *
+     *  <p>Two on-disk layouts:
+     *  <ul>
+     *    <li><b>M82 compound</b> (no override): VL_STRING-in-compound
+     *        dataset, read whole-and-cache via {@link #compoundRows}.</li>
+     *    <li><b>NAME_TOKENIZED</b> (override active): flat 1-D uint8
+     *        dataset. The whole channel is read, decoded once via
+     *        {@link global.thalion.ttio.codecs.NameTokenizer#decode},
+     *        and cached as a {@code List<String>} on this instance per
+     *        Binding Decision §114 (separate from
+     *        {@link #decodedByteChannels}).</li>
+     *  </ul>
+     *
+     *  <p>Dispatch is on the dataset's
+     *  {@link StorageDataset#precision()} — {@code Precision.UINT8}
+     *  routes through the codec path; {@code null} (the marker for a
+     *  compound dataset on the Hdf5Provider adapter) falls through to
+     *  the M82 compound path. */
+    private String readNameAt(int i) {
+        List<String> cached = decodedReadNames;
+        if (cached != null) {
+            return cached.get(i);
+        }
+        ensureSignalChannels();
+        try (StorageDataset ds = signalChannels.openDataset("read_names")) {
+            global.thalion.ttio.Enums.Precision p = ds.precision();
+            if (p == global.thalion.ttio.Enums.Precision.UINT8) {
+                Object codecAttr = ds.getAttribute("compression");
+                long codecId = (codecAttr instanceof Number n)
+                    ? n.longValue() : 0L;
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .NAME_TOKENIZED.ordinal()) {
+                    long total = ds.shape()[0];
+                    byte[] all = (byte[]) ds.readSlice(0L, total);
+                    decodedReadNames = global.thalion.ttio.codecs
+                        .NameTokenizer.decode(all);
+                    return decodedReadNames.get(i);
+                }
+                throw new IllegalStateException(
+                    "signal_channel 'read_names': @compression="
+                    + codecId + " is not a supported TTIO codec id "
+                    + "for the read_names channel (only NAME_TOKENIZED "
+                    + "= 8 is recognised)");
+            }
+        }
+        // Compound path (M82, no override).
+        List<Object[]> rows = compoundRows("read_names");
+        return stringFromCompound(rows.get(i)[0]);
     }
 
     @SuppressWarnings("unchecked")

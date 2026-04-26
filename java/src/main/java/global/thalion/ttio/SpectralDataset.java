@@ -571,9 +571,10 @@ public class SpectralDataset implements
             WrittenGenomicRun run) {
         // M86 Phase D: per-channel allowed-codec map (Gotcha §119).
         // Sequences accepts RANS+BASE_PACK; qualities additionally
-        // accepts QUALITY_BINNED. Runs BEFORE any group/dataset is
-        // created so the file is untouched on a bad override
-        // (Gotcha §96 — no half-written run).
+        // accepts QUALITY_BINNED. Phase E adds read_names which only
+        // accepts NAME_TOKENIZED (Binding Decision §113). Runs BEFORE
+        // any group/dataset is created so the file is untouched on a
+        // bad override (Gotcha §96 — no half-written run).
         java.util.Map<String, java.util.Set<Enums.Compression>>
             allowedCodecsByChannel = java.util.Map.of(
                 "sequences", java.util.Set.of(
@@ -584,15 +585,17 @@ public class SpectralDataset implements
                     Enums.Compression.RANS_ORDER0,
                     Enums.Compression.RANS_ORDER1,
                     Enums.Compression.BASE_PACK,
-                    Enums.Compression.QUALITY_BINNED));
+                    Enums.Compression.QUALITY_BINNED),
+                "read_names", java.util.Set.of(
+                    Enums.Compression.NAME_TOKENIZED));
         for (var entry : run.signalCodecOverrides().entrySet()) {
             String chName = entry.getKey();
             Enums.Compression codec = entry.getValue();
             if (!allowedCodecsByChannel.containsKey(chName)) {
                 throw new IllegalArgumentException(
                     "signalCodecOverrides: channel '" + chName
-                    + "' not supported (only sequences and qualities "
-                    + "can use TTIO codecs)");
+                    + "' not supported (only sequences, qualities, "
+                    + "and read_names can use TTIO codecs)");
             }
             java.util.Set<Enums.Compression> allowed =
                 allowedCodecsByChannel.get(chName);
@@ -613,6 +616,28 @@ public class SpectralDataset implements
                         + "Phred-bin quantisation. Use the 'qualities' "
                         + "channel for QUALITY_BINNED, or RANS_ORDER0/"
                         + "RANS_ORDER1/BASE_PACK on sequences.");
+                }
+                // Phase E Binding Decision §113: explicit message for
+                // (sequences|qualities, NAME_TOKENIZED) — names the
+                // codec, the channel, and the wrong-input-type
+                // rationale (codec tokenises UTF-8 strings, not
+                // binary byte streams).
+                if (codec == Enums.Compression.NAME_TOKENIZED
+                        && ("sequences".equals(chName)
+                            || "qualities".equals(chName))) {
+                    throw new IllegalArgumentException(
+                        "signalCodecOverrides['" + chName + "']: codec "
+                        + "NAME_TOKENIZED is not valid on the '"
+                        + chName + "' channel — NAME_TOKENIZED "
+                        + "tokenises UTF-8 read name strings (digit "
+                        + "runs vs string runs), not binary byte "
+                        + "streams like ACGT sequence bytes or Phred "
+                        + "quality scores. Applying it to '" + chName
+                        + "' would mis-tokenise the data and fall "
+                        + "back to verbatim, producing nonsensical "
+                        + "compression. Use the 'read_names' channel "
+                        + "for NAME_TOKENIZED, or RANS_ORDER0/"
+                        + "RANS_ORDER1/BASE_PACK on '" + chName + "'.");
                 }
                 throw new IllegalArgumentException(
                     "signalCodecOverrides['" + chName + "']: codec "
@@ -666,7 +691,38 @@ public class SpectralDataset implements
                     new global.thalion.ttio.providers.CompoundField("value",
                         global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
                 writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
-                writeCompoundOneCol(sc, "read_names", vlField, run.readNames());
+                // M86 Phase E: schema lift for read_names. When the
+                // NAME_TOKENIZED override is set, replace the M82
+                // compound dataset with a flat 1-D uint8 dataset of
+                // the same name carrying the codec output, plus an
+                // @compression == 8 attribute (Binding Decisions
+                // §111, §113). The two layouts are mutually exclusive
+                // within a single run; readers dispatch on dataset
+                // shape (compound vs uint8). No HDF5 filter is applied
+                // — codec output is high-entropy (Binding Decision §87).
+                if (run.signalCodecOverrides().containsKey("read_names")) {
+                    byte[] encoded =
+                        global.thalion.ttio.codecs.NameTokenizer
+                            .encode(run.readNames());
+                    global.thalion.ttio.providers.StorageDataset rnDs;
+                    try {
+                        rnDs = sc.createDataset("read_names",
+                            Enums.Precision.UINT8, encoded.length,
+                            65536, Enums.Compression.NONE, 0);
+                    } catch (UnsupportedOperationException e) {
+                        rnDs = sc.createDataset("read_names",
+                            Enums.Precision.UINT8, encoded.length,
+                            0, Enums.Compression.NONE, 0);
+                    }
+                    try (var closeMe = rnDs) {
+                        closeMe.writeAll(encoded);
+                        closeMe.setAttribute("compression",
+                            codecIdFor(Enums.Compression.NAME_TOKENIZED));
+                    }
+                } else {
+                    writeCompoundOneCol(sc, "read_names", vlField,
+                        run.readNames());
+                }
 
                 // mate_info: chrom (VL_STRING) + pos (int64) + tlen (int64).
                 List<global.thalion.ttio.providers.CompoundField> mateFields = List.of(
