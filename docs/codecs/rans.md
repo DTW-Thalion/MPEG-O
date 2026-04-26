@@ -297,15 +297,18 @@ input.
 
 ---
 
-## 7. Forward references
+## 7. Wired into / forward references
 
-- **M86** (deferred) — wire rANS into the genomic signal-channel
-  read/write path. A signal channel's `@compression` attribute will
-  hold `4` (rANS order-0) or `5` (rANS order-1) per the M79 enum
-  values; the read path will call `decode()` on the raw dataset
-  bytes.
-- **M84** (deferred) — base-pack codec (2-bit nucleotide packing)
-  building on the codecs sub-package layout established by M83.
+- **M86** (shipped) — rANS order-0 and order-1 are now wired into
+  the genomic signal-channel write/read path for the `sequences`
+  and `qualities` byte channels. Use
+  `WrittenGenomicRun.signal_codec_overrides={"sequences":
+  Compression.RANS_ORDER0}` (or `RANS_ORDER1`) at write time; the
+  reader dispatches on the per-dataset `@compression` attribute
+  automatically. See `docs/format-spec.md` §10.5 for the on-disk
+  attribute scheme.
+- **M84** (shipped) — base-pack codec (2-bit nucleotide packing
+  + sidecar mask), see `docs/codecs/base_pack.md`.
 - **M85** (deferred) — quality-quantiser and read-name-tokeniser
   codecs in the same sub-package.
 

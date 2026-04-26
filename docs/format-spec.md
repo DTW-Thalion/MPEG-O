@@ -765,16 +765,20 @@ HDF5 filter pipeline or a dedicated per-channel attribute:
 
 The five reserved codec ids (`4`–`8`) are committed to the disk
 format in M79 so cross-language readers see a stable enum table
-before encoders land. **As of v0.12.x (post-M84) ids `4`, `5`, and
-`6` (rANS order-0, rANS order-1, base-pack) ship as standalone
-primitives in all three languages** — the codec library is in
-place and the cross-language byte-exact fixtures are committed;
-only the signal-channel pipeline wiring (M86) remains before
-genomic datasets can opt into them at write time. **Ids `7` and
-`8` (quality-binned, name-tokenized) are still reserved-only** —
-their encoder/decoder work is tracked under "Genomic codec
-milestone" in WORKPLAN. Reading a dataset whose codec id ∈ {7, 8}
-continues to return `UnsupportedCodec` in every implementation.
+before encoders land. **As of v0.12.x (post-M86) ids `4`, `5`,
+and `6` (rANS order-0, rANS order-1, base-pack) ship as standalone
+primitives in all three languages AND are wired into the genomic
+signal-channel write/read pipeline for the byte channels
+(`sequences`, `qualities`)** — see §10.5 for the `@compression`
+attribute scheme that selects them at write time and dispatches
+them at read time. Integer channels (`positions`, `flags`,
+`mapping_qualities`) and VL_STRING channels (`cigars`,
+`read_names`, `mate_info`) continue to use HDF5-filter ZLIB.
+**Ids `7` and `8` (quality-binned, name-tokenized) are still
+reserved-only** — their encoder/decoder work is tracked under
+"Genomic codec milestone" in WORKPLAN. Reading a dataset whose
+codec id ∈ {7, 8} continues to return `UnsupportedCodec` in every
+implementation.
 
 > **Note on CRAM 3.1 specifically.** The reserved names above map
 > to CRAM-3.0-era codecs. CRAM 3.1 adds the rANS-Nx16 streams (four
@@ -784,6 +788,56 @@ continues to return `UnsupportedCodec` in every implementation.
 > additional enum slots (codec ids `9`+) plus encoders, decoders,
 > and a cross-language conformance harness. Tracked under "Genomic
 > codec milestone" in WORKPLAN.
+
+## 10.5 `@compression` attribute on signal-channel datasets (M86)
+
+Genomic signal-channel datasets (`signal_channels/sequences` and
+`signal_channels/qualities` under `/study/genomic_runs/<name>/`)
+that use a TTI-O internal compression codec (rANS order-0, rANS
+order-1, BASE_PACK) carry a `@compression` attribute holding the
+M79 codec id. The attribute type is `H5T_NATIVE_UINT8` (one byte).
+The dataset bytes ARE the self-contained codec stream specified in
+`docs/codecs/rans.md` (ids `4`, `5`) or `docs/codecs/base_pack.md`
+(id `6`). **No HDF5 filter is applied to such datasets** — the
+codec output is high-entropy and would not benefit from deflate.
+
+Absence of the attribute, or value `0` (`Compression.NONE`), means
+the dataset is stored as-is and any HDF5 filter applies (typically
+zlib level 6, the default for genomic byte channels). The attribute
+is written ONLY when an override is in effect; uncompressed channels
+have no `@compression` attribute at all.
+
+Pre-M86 readers that ignore `@compression` will silently
+misinterpret a v0.12-encoded channel: the read path slices into a
+non-sliceable codec stream and returns garbage for any read whose
+offset/length walks past the encoded payload boundary. The
+attribute is the canonical signal for codec dispatch — any
+TTI-O-conformant reader from M86 onwards must check it before
+slicing.
+
+M86 wires this attribute scheme for the **byte channels only**:
+`sequences` and `qualities`. Integer channels (`positions`,
+`flags`, `mapping_qualities`) and VL_STRING channels (`cigars`,
+`read_names`, `mate_info`) do not yet support TTI-O codecs; they
+ignore `@compression` if set and stay on HDF5-filter ZLIB. Lifting
+that restriction (integer-channel codecs, plus M85's
+name-tokenizer for read_names) is a future milestone.
+
+### Read-side dispatch (informative)
+
+When opening a `sequences` or `qualities` dataset, an M86 reader:
+
+1. Checks for the `@compression` attribute. If absent or `0`, uses
+   the existing slice-based read path (no change from M82).
+2. If `4`, `5`, or `6`, reads ALL dataset bytes, decodes the whole
+   stream through the corresponding `decode()` function, and
+   caches the decoded buffer on the open `GenomicRun` instance.
+   Subsequent per-read access slices the cached buffer in memory.
+
+This decode-once-cache strategy is the natural shape for the
+M83/M84 codecs, which produce non-sliceable byte streams. The
+memory cost is one decoded channel per open run instance —
+acceptable for typical sequencing workloads.
 
 ### Precision additions (M79, v0.11)
 
