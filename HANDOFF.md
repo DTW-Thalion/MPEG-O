@@ -425,12 +425,12 @@ All 14 use pytest:
 1. **Round-trip pure ACGT.** Build 1 MB by tiling `b"ACGT" *
    262144`. Encode, decode, byte-exact; total wire size =
    13 + 262144 = 262157 bytes (no mask).
-2. **Round-trip realistic.** 1 MB with N's at deterministic
-   positions (every 100th byte). Byte-exact; mask_count =
-   10 000.
-3. **Round-trip all-N.** 1 MB of `N`. Byte-exact; mask_count =
-   1 048 576; total wire size = 13 + 262144 + 5 * 1048576 =
-   5 504 941 bytes.
+2. **Round-trip realistic.** 1 MiB (= 2²⁰ = 1 048 576 bytes) with
+   N's at every 100th position. Byte-exact; mask_count =
+   `ceil(1048576 / 100) = 10 486`.
+3. **Round-trip all-N.** 1 MiB of `N`. Byte-exact; mask_count =
+   1 048 576; total wire size = 13 + 262144 + 5 × 1048576 =
+   5 505 037 bytes.
 4. **Round-trip empty.** `b""`. Byte-exact; total wire size = 13
    bytes.
 5. **Round-trip single ACGT.** `b"A"`, `b"C"`, `b"G"`, `b"T"` —
