@@ -119,6 +119,45 @@ context describing the migration itself.
 - **Out of scope (codec milestone):** Base-packing; M82 stores one
   ASCII byte per base.
 
+### M82.3 — GenomicRun (Java)
+
+- **Added:** `AlignedRead` (record), `GenomicRun`, `GenomicIndex`,
+  `WrittenGenomicRun` under `java/src/main/java/global/thalion/ttio/genomics/`.
+  `GenomicRun` implements `Indexable<AlignedRead>` + `Streamable`
+  + `AutoCloseable`.
+- **Added:** `SpectralDataset.create(..., List<WrittenGenomicRun> genomicRuns, ...)`
+  overload (existing 7-arg variant delegates with empty list).
+  `SpectralDataset.genomicRuns()` getter. Both HDF5 fast path and
+  `createViaProvider` (memory:// / sqlite:// / zarr://) write
+  `/study/genomic_runs/`. Both `open` paths read it back.
+- **Added:** `Precision.UINT64` enum value at ordinal 9 (with
+  `_RESERVED_UINT16` and `_RESERVED_INT8` placeholder slots at 7/8
+  to match Python/ObjC ordinal positions). All exhaustive
+  `Precision` switches updated across `StorageDataset`,
+  `Hdf5Dataset`, `Hdf5Group`, `SqliteProvider`, `ZarrProvider`.
+- **Added:** `FeatureFlags.OPT_GENOMIC` constant. Format version
+  bumped to 1.4 when genomic content present (idempotent if caller-
+  supplied features already include the flag).
+- **Added:** 13 new test methods in `GenomicRunTest.java`, ~78
+  assertions. Total Java tests now 402 (was 389).
+- **Fixed:** `Hdf5Group.precisionFromType` returns
+  `Precision.UINT64` (was `Precision.INT64` as a pre-M82 workaround).
+  MS spectrum_index/offsets files written as INT64 by the legacy
+  writer continue to read back as INT64.
+- **Workaround:** Java's JHI5 1.10 HDF5 binding cannot round-trip
+  VL_STRING fields inside compound datasets — readback returns
+  empty strings. M82.3 sidesteps this by writing the genomic
+  compound VL fields (chromosomes, cigars, read_names,
+  mate_info.chrom) as VL_BYTES (UTF-8 encoded). Java round-trip
+  works correctly. **Cross-language consequence:** Java-written
+  genomic .tio files are NOT readable by current Python/ObjC
+  writers (they emit/expect VL_STRING). Java reading
+  Python-written `m82_100reads.tio` recovers numeric fields and
+  sequences/qualities but returns "" for VL string fields. The
+  M82.4 cross-language matrix work must resolve this — either by
+  switching all three writers to a Java-readable encoding or by
+  upgrading Java's HDF5 binding.
+
 ### M82.2 — GenomicRun (Objective-C normative)
 
 - **Added:** `TTIOAlignedRead`, `TTIOGenomicRun`, `TTIOGenomicIndex`,
@@ -170,7 +209,7 @@ context describing the migration itself.
   `+readViaProviderURL:` (M64.5); now that path also reads
   `genomic_runs/` and populates `ds.genomicRuns`. Verified:
   100-read memory:// round-trip with all field assertions.
-- **Out of scope (M82.3/.4):** Java implementation; cross-language
+- **Out of scope (M82.4):** cross-language
   conformance matrix beyond the ObjC-reads-Python fixture covered
   here.
 
