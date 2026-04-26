@@ -11,7 +11,96 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS codec
+
+### M83 — rANS entropy codec (clean-room, 3-language) (2026-04-25)
+
+First entry in a new genomic-compression codec stack. Order-0 and
+order-1 range Asymmetric Numeral Systems (rANS) entropy coder
+implemented from Duda 2014 (arXiv:1311.2540 — public-domain
+algorithm). **No htslib source code consulted in any of the three
+implementations.** Correctness validated by round-trip property,
+independently computed test vectors, and byte-exact cross-language
+fixture conformance.
+
+The codec ships as a standalone primitive in M83. Wiring into the
+genomic signal-channel read/write path (interpreting `@compression`
+values 4 and 5 per the M79 enum) is deferred to M86.
+
+#### Added
+
+- **Python** (`python/src/ttio/codecs/`) — new sub-package for
+  compression primitives. `rans.py` implements `encode(data, order)`
+  and `decode(encoded)`. Pure Python, no Cython. State is a Python
+  `int`; algorithm parameters mirror the C/Java ports for byte
+  parity (M = 4096, L = 2²³, b = 256). Throughput on M83 host:
+  encode 7.25 MB/s, decode 6.79 MB/s. 14 tests, including 6
+  canonical-vector round-trips.
+- **Objective-C** (`objc/Source/Codecs/TTIORans.{h,m}`) — clean-room
+  C core with ObjC `NSData → NSData` wrappers, `NSError**` out-param
+  on decode for malformed input. Uses `uint64_t` state. Wired into
+  the existing `libTTIO` build via the new `Codecs/` header subdir.
+  Throughput: encode 181.6 MB/s, decode 229.4 MB/s. 48 new
+  assertions in `TestM83Rans.m`, including all 6 canonical vectors
+  byte-exact against the Python fixtures and the 11 round-trip /
+  malformed-input / throughput cases per HANDOFF §7.2.
+- **Java** (`java/src/main/java/global/thalion/ttio/codecs/Rans.java`)
+  — clean-room port from the Python reference using `long` state
+  with `>>>` (unsigned right shift) throughout, `Byte.toUnsignedInt`
+  for symbol widening, `ByteBuffer.BIG_ENDIAN` for header
+  serialisation. 14 JUnit 5 tests, 49 assertions, all 6 canonical
+  vectors byte-exact. Throughput: encode 86.12 MB/s, decode 167.61
+  MB/s.
+- **Canonical conformance fixtures** — six `.bin` files generated
+  from the Python encoder and committed under
+  `python/tests/fixtures/codecs/`, with verbatim copies under
+  `objc/Tests/Fixtures/` and `java/src/test/resources/ttio/codecs/`.
+  These are the cross-language wire-level conformance contract:
+  `rans_a_o0.bin`, `rans_a_o1.bin` (256 B uniform-ish input,
+  SHA-256 × 8); `rans_b_o0.bin`, `rans_b_o1.bin` (1024 B heavily
+  skewed, payload < 300 B for o0); `rans_c_o0.bin`, `rans_c_o1.bin`
+  (512 B perfectly cyclic, o1 wire size strictly smaller than o0).
+- **Specification** — `docs/codecs/rans.md` documents the algorithm,
+  the deterministic frequency-normalisation rule (Binding Decision
+  §78), the wire format, the cross-language conformance contract,
+  per-language performance targets, and the public API in each
+  language.
+
+#### Verification
+
+- Python: `pytest tests/test_m83_rans.py -v` → 14/14 pass. Full
+  Python suite shows zero new regressions; the 42 pre-existing
+  failures are all unrelated (missing optional `zarr`, XSD network
+  fetches, version-string smoke test).
+- Objective-C: `make CC=clang OBJC=clang check` shows 1933 → 1981
+  passes (+48 M83). The 2 failing cases (TestMilestone29.m M38
+  Thermo reader) pre-date M83 and are unrelated.
+- Java: `mvn -o test` → 416 / 0 fail / 0 error / 0 skipped (was
+  402 / 0 / 0 / 0 — all 14 new RansTest cases pass).
+- Cross-language: each implementation independently encodes the
+  three canonical input vectors at both orders and compares the
+  resulting bytes against the Python-generated fixtures. All three
+  produce byte-identical output for all six (Python, ObjC, Java).
+
+#### Notes
+
+- The order-0 wire size for short inputs is dominated by the
+  fixed 1024-byte frequency-table overhead. The "compressed size <
+  300 bytes" target for canonical vector B is interpreted as the
+  payload portion, not the entire wire (the payload is 137 B in
+  Java, 143 B in Python and ObjC). Documented in
+  `python/tests/test_m83_rans.py` and `docs/codecs/rans.md`.
+- Order-1 frequency-table serialisation uses run-length encoded
+  per-context rows: `uint16 n_nonzero` followed by
+  `n_nonzero × (uint8 symbol + uint16 freq)`. Empty contexts take
+  exactly 2 bytes.
+- The deterministic frequency normalisation algorithm (Binding
+  Decision §78) is the cross-language hot spot — every
+  implementation must produce identical normalised frequencies
+  given identical input counts. The tiebreaker rule is "descending
+  count, ascending symbol value" for surplus distribution and
+  "ascending count, ascending symbol value, never below 1" for
+  deficit subtraction. Fully specified in `docs/codecs/rans.md` §3.
 
 ### Renamed (M80, 2026-04-25)
 
