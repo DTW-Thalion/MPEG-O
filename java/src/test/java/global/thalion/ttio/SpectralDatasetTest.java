@@ -534,9 +534,15 @@ class SpectralDatasetTest {
     }
 
     @Test
-    void compoundOnlyRecoversPrimitives() {
-        // Simulate a Python/ObjC file with compound dataset but no JSON mirror:
-        // Java reads primitives via projection; VL strings decode as empty.
+    void compoundOnlyRecoversFullRecord() {
+        // M82.4: simulate a compound-only file (Python/ObjC files have
+        // no JSON mirror; M82.4-and-later Java files don't either).
+        // VL_STRING fields are now recovered from the compound via
+        // Hdf5CompoundIO.readCompoundFull's Unsafe-based char* deref —
+        // this test was previously named compoundOnlyRecoversPrimitives
+        // and asserted "" for VL fields, documenting the JHI5 1.10
+        // limitation. M82.4 retired that limitation; the test now
+        // asserts full-record recovery.
         String path = tempDir.resolve("compound_only.tio").toString();
 
         List<Identification> idents = List.of(
@@ -547,12 +553,16 @@ class SpectralDatasetTest {
             assertNotNull(ds);
         }
 
-        // Strip the JSON mirror to emulate a writer that only emits compound.
+        // Strip any legacy JSON mirror to force the compound read path.
+        // (M82.4 writers don't emit one anyway; this guards against any
+        // future regression that re-introduces it.)
         try (Hdf5File f = Hdf5File.open(path);
              Hdf5Group root = f.rootGroup();
              Hdf5Group study = root.openGroup("study")) {
             try {
-                hdf.hdf5lib.H5.H5Adelete(study.getGroupId(), "identifications_json");
+                if (study.hasAttribute("identifications_json")) {
+                    hdf.hdf5lib.H5.H5Adelete(study.getGroupId(), "identifications_json");
+                }
             } catch (hdf.hdf5lib.exceptions.HDF5LibraryException e) {
                 fail("could not strip mirror: " + e.getMessage());
             }
@@ -561,12 +571,11 @@ class SpectralDatasetTest {
         try (SpectralDataset ds = SpectralDataset.open(path)) {
             List<Identification> read = ds.identifications();
             assertEquals(1, read.size());
-            // Primitives recovered via compound projection:
             assertEquals(42, read.get(0).spectrumIndex());
             assertEquals(0.61, read.get(0).confidenceScore(), 1e-12);
-            // VL fields decode as empty (documented JHI5 1.10 limitation):
-            assertEquals("", read.get(0).runName());
-            assertEquals("", read.get(0).chemicalEntity());
+            // M82.4: VL fields now recover from the compound directly.
+            assertEquals("run_X", read.get(0).runName());
+            assertEquals("CHEBI:99999", read.get(0).chemicalEntity());
         }
     }
 
