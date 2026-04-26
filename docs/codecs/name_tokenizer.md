@@ -353,14 +353,24 @@ on malformed input. `NameTokenizer.encode(List<String>)` throws
 
 ## 8. Wired into / forward references
 
-- **M86 Phase E (deferred)** — wire NAME_TOKENIZED into the
-  genomic signal-channel write/read path for the `read_names`
-  channel of `signal_channels/`. The current M82 storage uses
-  VL_STRING in a compound; lifting it to the codec dispatch
-  surface will require some restructuring of the compound-write
-  path. The `@compression` attribute scheme from M86 Phase A
-  applies; a `read_names` dataset with `@compression == 8` will
-  route the raw bytes through `name_tokenizer.decode()`.
+- **M86 Phase E (shipped 2026-04-26)** — NAME_TOKENIZED is now
+  wired into the genomic signal-channel write/read path for the
+  `read_names` channel via a **schema lift**: when the override
+  is set, the writer replaces the M82 compound `read_names`
+  dataset with a flat 1-D uint8 dataset of the same name
+  containing the codec output, and sets `@compression == 8` on
+  it. The reader dispatches on dataset shape (compound → M82
+  path; 1-D uint8 → codec dispatch). Use
+  `WrittenGenomicRun.signal_codec_overrides={"read_names":
+  Compression.NAME_TOKENIZED}` at write time. The codec is
+  **rejected on the `sequences` and `qualities` channels**
+  (Binding Decision §113): NAME_TOKENIZED tokenises UTF-8
+  strings, not binary byte streams. Compression on 1000
+  structured Illumina names: NAME_TOKENIZED dataset is roughly
+  20–50% of the M82 compound footprint depending on baseline
+  methodology (H5 storage-size vs file-size delta — see
+  `docs/format-spec.md` §10.6 for the schema-lift on-disk
+  contract).
 - **Future optimisation milestone (deferred)** — full Bonfield
   2022 / CRAM 3.1 token type set for ≥ 20:1 compression on
   structured Illumina names. Multi-thousand lines per language

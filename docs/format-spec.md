@@ -770,7 +770,7 @@ five (rANS order-0, rANS order-1, base-pack, quality-binned,
 name-tokenized) ship as standalone primitives in all three
 languages — the genomic codec library is conceptually complete.**
 
-Ids `4`, `5`, `6`, and `7` are wired into the genomic
+Ids `4`, `5`, `6`, `7`, and `8` are all wired into the genomic
 signal-channel write/read pipeline:
 
 - Ids `4`, `5`, `6` apply to both `sequences` and `qualities`
@@ -779,17 +779,20 @@ signal-channel write/read pipeline:
   only — the validation rejects QUALITY_BINNED on `sequences`
   because Phred-bin quantisation would silently destroy ACGT
   data (M86 Phase D).
+- Id `8` (name-tokenized) applies to the `read_names` channel
+  only — the validation rejects NAME_TOKENIZED on `sequences`
+  and `qualities` because the codec tokenises UTF-8 strings,
+  not binary byte streams (M86 Phase E). The `read_names`
+  channel uses a schema-lift pattern (compound →
+  flat uint8) when the override is set; see §10.6.
 
-See §10.5 for the `@compression` attribute scheme.
+See §10.5 for the `@compression` attribute scheme on byte
+channels and §10.6 for the schema-lift pattern on
+`read_names`.
 
-Id `8` (name-tokenized) ships as a standalone primitive only;
-the pipeline-wiring branch that interprets `@compression == 8`
-on a `read_names` dataset is M86 Phase E (deferred — requires
-lifting `read_names` from VL_STRING-in-compound to a flat byte
-dataset that can carry the attribute). Integer channels
-(`positions`, `flags`, `mapping_qualities`) and remaining
-VL_STRING channels (`cigars`, `mate_info`) continue to use
-HDF5-filter ZLIB.
+Integer channels (`positions`, `flags`, `mapping_qualities`)
+and remaining VL_STRING channels (`cigars`, `mate_info`)
+continue to use HDF5-filter ZLIB.
 
 > **Note on CRAM 3.1 specifically.** The reserved names above map
 > to CRAM-3.0-era codecs. CRAM 3.1 adds the rANS-Nx16 streams (four
@@ -849,6 +852,45 @@ This decode-once-cache strategy is the natural shape for the
 M83/M84 codecs, which produce non-sliceable byte streams. The
 memory cost is one decoded channel per open run instance —
 acceptable for typical sequencing workloads.
+
+## 10.6 `read_names` schema lift under NAME_TOKENIZED (M86 Phase E)
+
+`signal_channels/read_names` has two on-disk layouts depending
+on whether the M85-Phase-B NAME_TOKENIZED codec was selected at
+write time via `signal_codec_overrides`:
+
+- **No override (M82 default):** compound dataset of shape
+  `[n_reads]` with field `{value: VL_STRING}`. Backward
+  compatible with M82 readers.
+- **NAME_TOKENIZED override active:** flat 1-D `UINT8` dataset
+  of length = `name_tokenizer.encode()` output size, with the
+  `@compression` attribute set to `8`. The dataset bytes are
+  the self-contained NAME_TOKENIZED stream specified in
+  `docs/codecs/name_tokenizer.md` §2. **No HDF5 filter** is
+  applied (the codec output is high-entropy).
+
+The two layouts are mutually exclusive within a single run and
+share the same dataset name. Readers MUST dispatch on dataset
+shape — a compound dataset uses the M82 read path; a 1-D
+`UINT8` dataset requires the codec dispatch path. The
+`@compression` attribute is the canonical secondary signal: if
+present and equal to `8`, decode through `name_tokenizer`. If
+present with any other value, the dataset is malformed (no
+other codec applies to `read_names` in M86 Phase E).
+
+**Pre-M86-Phase-E reader behaviour:** A v0.12 file with the
+override is **unreadable** by pre-M86 readers — they expect
+the M82 compound layout and will silently misinterpret the
+flat-uint8 dataset as a corrupt compound. Discipline matches
+M80 / M82 / M86 Phase A (write-forward, no back-compat shim).
+Files written without the override remain identical to M82
+output and are read identically by all reader versions.
+
+The other VL_STRING channels (`cigars`, `mate_info`) do NOT
+currently support a codec override; they remain in compound
+storage. `cigars` would want an RLE-then-rANS pipeline (no
+codec match in M79); `mate_info` is an integer-tuple compound
+with no codec match.
 
 ### Precision additions (M79, v0.11)
 

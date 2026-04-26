@@ -11,7 +11,147 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + D) + M85 QUALITY_BINNED + NAME_TOKENIZED
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + D + E) + M85 QUALITY_BINNED + NAME_TOKENIZED
+
+### M86 Phase E — Wire NAME_TOKENIZED into the read_names channel via schema lift (2026-04-26)
+
+Pipeline-wiring extension that lights up M79 codec id `8`
+(NAME_TOKENIZED, shipped standalone in M85 Phase B) on the
+genomic `read_names` channel. Bigger than Phase D because
+`read_names` is currently stored as VL_STRING-in-compound and
+cannot carry the `@compression` attribute as-is — Phase E
+performs a **schema lift**: when the override is set, the
+writer replaces the M82 compound `read_names` dataset with a
+flat 1-D uint8 dataset of the same name containing the codec
+output, and sets `@compression == 8` on it. Readers dispatch
+on dataset shape (compound → M82 path; 1-D uint8 → codec
+dispatch via lazy-decode list cache).
+
+The codec is **rejected on the `sequences` and `qualities`
+channels** at write-time validation per Binding Decision §113:
+NAME_TOKENIZED tokenises UTF-8 strings, not binary byte
+streams; applying it to ACGT or Phred bytes would mis-tokenise.
+The other byte-channel codecs (4/5/6/7) are NOT valid on
+`read_names` because the source data is `list[str]`, not
+`bytes`.
+
+The genomic codec stack is now conceptually complete for the
+byte and string channels: all five M79 codec slots (4–8) are
+both standalone primitives AND wired into the signal-channel
+pipeline. Integer channels (positions/flags/mapping_qualities
+— M86 Phase B) and remaining VL_STRING channels (cigars,
+mate_info — M86 Phase C) remain deferred.
+
+#### Added
+
+- **Python** — `python/src/ttio/spectral_dataset.py` per-channel
+  allowed-codec map gains `read_names: {NAME_TOKENIZED}`;
+  validation rejects `(sequences|qualities, NAME_TOKENIZED)`
+  with messages naming the codec, the channel, and pointing at
+  the correct channel for NAME_TOKENIZED. Schema-lift write
+  branch in `_write_genomic_run`: if `"read_names" in
+  signal_codec_overrides`, encode via `name_tokenizer.encode`
+  and write a flat uint8 dataset with `@compression == 8`
+  instead of the M82 compound. `python/src/ttio/genomic_run.py`
+  gains `_decoded_read_names: list[str] | None` cache (separate
+  from `_decoded_byte_channels` per Binding Decision §114) and
+  `_read_name_at(i)` helper that dispatches on dataset
+  precision (`Precision.UINT8` → codec; compound → M82). Only
+  `__getitem__` directly touches read_names; `reads_in_region`
+  inherits via `self[i]`. 7 new pytest cases (6 spec'd plus
+  cross-language fixture extension).
+- **Objective-C** —
+  `objc/Source/Dataset/TTIOSpectralDataset.m` adds the
+  `read_names` entry to `_TTIO_M86_AllowedOverrideCodecsByChannel`,
+  the rejection branch with the wrong-input-type rationale,
+  and the schema-lift write branch in BOTH `writeGenomicRun:`
+  (HDF5 fast path) AND `writeGenomicRunStorage:`
+  (provider path). `objc/Source/Genomics/TTIOGenomicRun.m`
+  gains `_decodedReadNames` private NSArray cache and
+  `readNameAtIndex:error:` helper that dispatches on
+  `[ds precision] == TTIOPrecisionUInt8` (cleaner than raw
+  `H5Tget_class` — works through the existing
+  storage-protocol abstraction so memory:// and sqlite://
+  providers are supported uniformly). 39 new assertions in
+  `TestM86GenomicCodecWiring.m` across 7 new test methods.
+  Compression on 1000 structured Illumina names measured at
+  ~19% via file-size delta methodology (vs ~50% via h5
+  storage-size; the latter undercounts the VL_STRING global
+  heap).
+- **Java** —
+  `java/src/main/java/global/thalion/ttio/SpectralDataset.java`
+  gets the `read_names → {NAME_TOKENIZED}` per-channel map
+  entry, the rejection branch, and the schema-lift write
+  branch in `writeGenomicRunSubtree`.
+  `java/src/main/java/global/thalion/ttio/genomics/GenomicRun.java`
+  gains `private List<String> decodedReadNames = null;` and
+  `readNameAt(int i)` helper dispatching on
+  `StorageDataset.precision() == Precision.UINT8` (cleaner
+  layered abstraction than raw H5 calls — the
+  `Hdf5CompoundDatasetAdapter` returns `precision == null`,
+  the flat-uint8 adapter returns `Precision.UINT8`). 7 new
+  JUnit 5 tests (M86CodecWiringTest 18 → 25).
+- **Cross-language conformance fixture** — new
+  `python/tests/fixtures/genomic/m86_codec_name_tokenized.tio`
+  (48 432 bytes), with verbatim copies under
+  `objc/Tests/Fixtures/genomic/` and
+  `java/src/test/resources/ttio/fixtures/genomic/`. The
+  fixture has only `read_names` overridden (NAME_TOKENIZED);
+  sequences and qualities use M82 baseline. All 10 reads use
+  structured Illumina-style names
+  `INSTR:RUN:1:{i//4}:{i%4}:{i*100}` for i in 0..9. ObjC and
+  Java both read the fixture and verify all 10 names round-trip
+  byte-exact, with `@compression == 8` confirmed on the
+  `read_names` dataset.
+
+#### Verification
+
+- Python: `pytest tests/test_m86_genomic_codec_wiring.py -v` →
+  29/29 pass (was 22 in M86 Phase D; +7 new). Full suite: 866
+  passed / 42 failed / 64 skipped / 4 xfailed / 3 errors (was
+  859 / 42 / 64 / 4 / 3); +7 new passes from M86 Phase E,
+  zero new regressions.
+- Objective-C: full test runner shows 2290 → 2329 PASS (+39
+  M86 Phase E assertions across 7 new test methods); 2 FAIL
+  unchanged (pre-existing M38 Thermo).
+- Java: `mvn -o test` → 482 / 0 fail / 0 error / 0 skipped
+  (was 475 / 0 / 0 / 0). M86CodecWiringTest 18 → 25.
+- Cross-language: each implementation reads
+  `m86_codec_name_tokenized.tio` and decodes all 10 read names
+  byte-exact against the original Python input list.
+
+#### Notes
+
+- **Schema lift means the `read_names` dataset shape changes
+  based on the override.** A v0.12 file with the override has
+  a flat uint8 dataset; without the override it has the M82
+  compound. Pre-M86-Phase-E readers that hard-code the
+  compound shape will fail on the new flat-uint8 layout.
+  Discipline matches M80 / M82 / M86 Phase A (write-forward,
+  no back-compat shim per Binding Decision §90).
+- **The `@compression` attribute is the canonical secondary
+  signal**, but shape detection is the primary dispatch key:
+  a 1-D uint8 dataset *without* `@compression` would be a
+  malformed write (since M82 used compound exclusively).
+- **Lazy-decode cache holds the entire decoded list** per
+  `GenomicRun` instance. For 10M reads this is potentially a
+  few hundred MB of decoded strings in RAM — acceptable for
+  typical genomic workloads. Documented in the
+  `GenomicRun` docstrings.
+- **Compression measurement methodology matters.** Python and
+  Java measure baseline via `h5_storage_size` which undercounts
+  the VL_STRING global heap; ObjC measures via file-size
+  delta which captures the full compound footprint. Neither
+  is wrong; they're measuring slightly different things. Both
+  show meaningful compression (NAME_TOKENIZED dataset is
+  smaller than the M82 compound footprint) so the Phase E
+  acceptance criterion is met across all three.
+- **Other VL_STRING channels (cigars, mate_info) do NOT
+  support codec overrides yet.** Phase E specifically does the
+  schema lift only for `read_names`. Future Phase C work could
+  apply similar treatment to cigars (with an RLE-then-rANS
+  pipeline) but no codec match exists for mate_info's
+  integer-tuple compound.
 
 ### M86 Phase D — Wire QUALITY_BINNED into the qualities channel (2026-04-26)
 
