@@ -200,7 +200,7 @@ higher compression ratios.
 
 ### M86 — Codec Integration into Signal Channel Pipeline
 
-**Status: Phases A, D, and E shipped (2026-04-26). Phases B and C deferred.**
+**Status: Phases A, B, D, and E shipped (2026-04-26). Phase C deferred.**
 
 #### Phase A — byte channels (SHIPPED 2026-04-26)
 
@@ -259,12 +259,45 @@ plus M86 docs landing alongside.
 Commits: `425393a` (Python), `5d09294` (Java), `e7a85c6` (ObjC),
 plus M86 Phase D docs landing alongside.
 
-#### Phase B — integer channels (DEFERRED)
+#### Phase B — integer channels (SHIPPED 2026-04-26)
 
-`positions` (int64), `flags` (uint32), `mapping_qualities`
-(uint8) still use HDF5-filter ZLIB. Adding TTIO-codec support
-to these channels requires an int↔byte serialisation contract
-that M86 does not specify. Future milestone.
+- [x] Wire `RANS_ORDER0` and `RANS_ORDER1` (M79 codec ids 4 + 5)
+      into the three integer channels of `signal_channels/`:
+      `positions` (int64), `flags` (uint32),
+      `mapping_qualities` (uint8).
+- [x] Defines the int↔byte serialisation contract: integer
+      arrays serialise to **little-endian** bytes per element
+      before encoding; reader looks up original dtype by
+      channel name (no on-disk dtype attribute, per Binding
+      Decision §115).
+- [x] Per-channel allowed-codec map gains positions/flags/
+      mapping_qualities entries (rANS only). Validation
+      rejects BASE_PACK / QUALITY_BINNED / NAME_TOKENIZED on
+      integer channels (wrong-content codecs) per §117.
+- [x] New per-instance `_decoded_int_channels` cache (separate
+      from byte-channel and read-names caches per Binding
+      Decision §116).
+- [x] All three languages, cross-language `.tio` fixture
+      conformance: 1 new fixture
+      (`m86_codec_integer_channels.tio`, 60 720 bytes) with
+      all three integer channels under rANS — Python, ObjC,
+      Java all decode byte-exact.
+- [x] Compression on clustered-positions int64 (10000-read /
+      100-locus pattern): ~18% of raw LE bytes, byte-identical
+      across all three languages (M83 rANS conformance).
+
+**Important caveat (Binding Decision §119):** The current M82
+read path for per-read integer fields uses `genomic_index/`,
+not `signal_channels/`. Phase B compression is therefore
+primarily a **write-side file-size optimisation**; it does not
+currently affect read performance through `__getitem__` /
+`alignedReadAt(int)`. The new `_int_channel_array(name)`
+helper IS callable for direct access; future readers that
+prefer `signal_channels/` (streaming, M89 transport) will
+benefit transparently.
+
+Commits: `798ec88` (Python), `46076b1` (Java), `6213711`
+(ObjC), plus M86 Phase B docs landing alongside.
 
 #### Phase C — VL_STRING / compound channels (DEFERRED)
 

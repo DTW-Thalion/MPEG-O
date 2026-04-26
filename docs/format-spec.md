@@ -771,28 +771,36 @@ name-tokenized) ship as standalone primitives in all three
 languages — the genomic codec library is conceptually complete.**
 
 Ids `4`, `5`, `6`, `7`, and `8` are all wired into the genomic
-signal-channel write/read pipeline:
+signal-channel write/read pipeline. The codec applicability per
+channel is:
 
 - Ids `4`, `5`, `6` apply to both `sequences` and `qualities`
   byte channels (M86 Phase A).
-- Id `7` (quality-binned) applies to the `qualities` byte channel
-  only — the validation rejects QUALITY_BINNED on `sequences`
-  because Phred-bin quantisation would silently destroy ACGT
-  data (M86 Phase D).
+- Id `7` (quality-binned) applies to the `qualities` byte
+  channel only — validation rejects QUALITY_BINNED on
+  `sequences` because Phred-bin quantisation would silently
+  destroy ACGT data (M86 Phase D).
 - Id `8` (name-tokenized) applies to the `read_names` channel
-  only — the validation rejects NAME_TOKENIZED on `sequences`
-  and `qualities` because the codec tokenises UTF-8 strings,
-  not binary byte streams (M86 Phase E). The `read_names`
-  channel uses a schema-lift pattern (compound →
-  flat uint8) when the override is set; see §10.6.
+  only — validation rejects NAME_TOKENIZED on `sequences` and
+  `qualities` because the codec tokenises UTF-8 strings, not
+  binary byte streams (M86 Phase E). The `read_names` channel
+  uses a schema-lift pattern (compound → flat uint8); see
+  §10.6.
+- Ids `4` and `5` (rANS order-0/1) also apply to the **integer
+  channels** `positions` (int64), `flags` (uint32), and
+  `mapping_qualities` (uint8) via the int↔byte serialisation
+  contract in §10.7 (M86 Phase B). Validation rejects ids `6`,
+  `7`, `8` on integer channels (wrong-content codecs for
+  integer fields).
 
-See §10.5 for the `@compression` attribute scheme on byte
-channels and §10.6 for the schema-lift pattern on
-`read_names`.
+See §10.5 for the byte-channel `@compression` attribute scheme,
+§10.6 for the `read_names` schema-lift pattern, and §10.7 for
+the integer-channel serialisation contract.
 
-Integer channels (`positions`, `flags`, `mapping_qualities`)
-and remaining VL_STRING channels (`cigars`, `mate_info`)
-continue to use HDF5-filter ZLIB.
+The remaining VL_STRING channels (`cigars`, `mate_info`)
+continue to use HDF5-filter ZLIB; no codec match exists yet
+(`cigars` would want an RLE-then-rANS pipeline; `mate_info` is
+an integer-tuple compound).
 
 > **Note on CRAM 3.1 specifically.** The reserved names above map
 > to CRAM-3.0-era codecs. CRAM 3.1 adds the rANS-Nx16 streams (four
@@ -891,6 +899,53 @@ currently support a codec override; they remain in compound
 storage. `cigars` would want an RLE-then-rANS pipeline (no
 codec match in M79); `mate_info` is an integer-tuple compound
 with no codec match.
+
+## 10.7 Integer-channel codec wiring (M86 Phase B)
+
+Integer channels under `signal_channels/` (`positions` int64,
+`flags` uint32, `mapping_qualities` uint8) accept
+`@compression` values of `4` (RANS_ORDER0) or `5`
+(RANS_ORDER1). When set:
+
+- The dataset is stored as a flat 1-D `UINT8` of length =
+  `Rans.encode()` output size, with no HDF5 filter.
+- The bytes are the rANS-coded **little-endian** byte
+  representation of the original integer array. For an int64
+  array of N elements, the input to the codec is `N × 8` bytes
+  in LE order; for uint32, `N × 4` bytes; for uint8, `N` bytes
+  (LE serialisation is a no-op for single-byte elements).
+- The reader determines the original dtype by **channel-name
+  lookup**: `positions → int64`, `flags → uint32`,
+  `mapping_qualities → uint8`. There is no on-disk dtype
+  attribute; the dispatch is name-based.
+
+Other codec ids (`6` = BASE_PACK, `7` = QUALITY_BINNED, `8` =
+NAME_TOKENIZED) are rejected on integer channels at write-time
+validation — they are content-specific codecs (ACGT packing,
+Phred-bin quantisation, string tokenisation) and would not
+preserve integer values.
+
+**Read-side caveat:** The current M82-derived read path for
+per-read integer fields (`AlignedRead.position`, `.flags`,
+`.mapping_quality`) uses `genomic_index/`, not
+`signal_channels/`. M86 Phase B compression on the integer
+channels under `signal_channels/` is therefore primarily a
+**write-side file-size optimisation**; it does not currently
+affect read performance through the per-read access path.
+Direct callers of the codec-aware integer-channel helper
+(`_int_channel_array(name)` in Python and equivalents) DO
+benefit from the compressed read path. Future readers that
+prefer `signal_channels/` over `genomic_index/` (e.g.,
+streaming readers, M89 transport-layer materialisation) will
+benefit transparently.
+
+The endianness convention (little-endian) is fixed and
+non-negotiable across all three implementations (Python: numpy
+dtype strings `<i8`, `<u4`, `<u1`; ObjC:
+`OSSwapHostToLittleInt64`/`htole64` etc.; Java:
+`ByteBuffer.LITTLE_ENDIAN` with `putLong`/`putInt`/`put`).
+Cross-language byte-exact fixture conformance is verified by
+the M86 Phase B test suite.
 
 ### Precision additions (M79, v0.11)
 
