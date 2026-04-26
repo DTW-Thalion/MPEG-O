@@ -35,6 +35,16 @@
     // again; for very large runs the decoded list is materialised in
     // RAM in one shot since the codec is per-batch, Gotcha §124).
     NSArray<NSString *> *_decodedReadNames;
+    // M86 Phase B: lazy whole-channel decode cache for integer
+    // channels (positions / flags / mapping_qualities) whose
+    // @compression attribute names a TTIO rANS id. Held as NSData
+    // (LE byte representation of the original integer array) keyed
+    // by channel name. Separate from _decodedByteChannels per
+    // Binding Decision §116 — the codec output is interpreted as
+    // typed integers via channel-name dtype lookup (§115), not as
+    // a uint8 byte stream. Cache lifetime is the TTIOGenomicRun
+    // instance.
+    NSMutableDictionary<NSString *, NSData *> *_decodedIntChannels;
 }
 
 - (NSUInteger)readCount { return _index.count; }
@@ -61,6 +71,7 @@
         _signalCache      = [NSMutableDictionary dictionary];
         _compoundCache    = [NSMutableDictionary dictionary];
         _decodedByteChannels = [NSMutableDictionary dictionary];
+        _decodedIntChannels  = [NSMutableDictionary dictionary];
     }
     return self;
 }
@@ -392,6 +403,104 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
                                       encoding:NSUTF8StringEncoding];
     }
     return (NSString *)nameV;
+}
+
+// M86 Phase B: integer-channel array reader.
+//
+// Returns the full integer signal-channel array (positions, flags,
+// or mapping_qualities) as an NSData carrying the LE byte
+// representation of the dtype implied by channel-name lookup
+// (Binding Decision §115). Two paths:
+//
+//   - **Uncompressed (no @compression or @compression == 0):** read
+//     the typed dataset directly via the storage protocol; bytes are
+//     already in LE order (HDF5 stores native little-endian on
+//     x86/ARM). Cache and return.
+//
+//   - **rANS (@compression == 4 or 5):** read the dataset whole as
+//     uint8 bytes, decode through TTIORansDecode, cache and return.
+//
+// Per Binding Decision §119 the per-read access path
+// (-readAtIndex:) does NOT consume this helper; it continues to use
+// self.index.{positions,mappingQualities,flags}. This helper is
+// wired for round-trip conformance and for any future reader that
+// prefers signal_channels/ over genomic_index/ (Phase B is primarily
+// a write-side file-size optimisation).
+- (NSData *)intChannelArrayNamed:(NSString *)name error:(NSError **)error
+{
+    if (![name isEqualToString:@"positions"]
+        && ![name isEqualToString:@"flags"]
+        && ![name isEqualToString:@"mapping_qualities"]) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2050
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"intChannelArrayNamed: '%@' is not a "
+                            @"recognised integer signal channel "
+                            @"(only positions, flags, "
+                            @"mapping_qualities)", name]}];
+        return nil;
+    }
+    NSData *cached = _decodedIntChannels[name];
+    if (cached) return cached;
+
+    id<TTIOStorageDataset> ds = [self signalDatasetNamed:name error:error];
+    if (!ds) return nil;
+
+    // Detect codec via @compression on the dataset. HDF5 backend
+    // exposes the underlying TTIOHDF5Dataset; non-HDF5 backends
+    // route through the storage protocol's attributeValueForName:.
+    uint8_t codec_id = 0;
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        TTIOHDF5Dataset *hds = [hg openDatasetNamed:name error:NULL];
+        if (hds) {
+            codec_id = _ttio_m86_read_compression_attr([hds datasetId]);
+        }
+    } else {
+        codec_id = _ttio_m86_read_compression_attr_protocol(ds);
+    }
+
+    if (codec_id == 0) {
+        // Uncompressed: read the typed dataset whole. The storage
+        // protocol returns NSData carrying the native (host LE on
+        // x86/ARM) byte representation; that matches the documented
+        // LE serialisation contract for the cached output.
+        id allRaw = [ds readAll:error];
+        if (![allRaw isKindOfClass:[NSData class]]) return nil;
+        _decodedIntChannels[name] = (NSData *)allRaw;
+        return _decodedIntChannels[name];
+    }
+
+    if (codec_id != 4 /* RansOrder0 */ && codec_id != 5 /* RansOrder1 */) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2051
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"signal_channel '%@': @compression=%u "
+                            @"is not a supported TTIO codec id for an "
+                            @"integer channel (only RANS_ORDER0 = 4 "
+                            @"and RANS_ORDER1 = 5 are recognised)",
+                            name, (unsigned)codec_id]}];
+        return nil;
+    }
+
+    id allRaw = [ds readAll:error];
+    if (![allRaw isKindOfClass:[NSData class]]) return nil;
+    NSError *decErr = nil;
+    NSData *decoded = TTIORansDecode((NSData *)allRaw, &decErr);
+    if (!decoded) {
+        if (error) *error = decErr ?: [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2052
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"signal_channel '%@' rANS decode failed",
+                            name]}];
+        return nil;
+    }
+    _decodedIntChannels[name] = decoded;
+    return decoded;
 }
 
 - (TTIOAlignedRead *)readAtIndex:(NSUInteger)i error:(NSError **)error

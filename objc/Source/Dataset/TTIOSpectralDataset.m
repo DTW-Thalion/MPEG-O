@@ -29,6 +29,21 @@
 #import "Codecs/TTIONameTokenizer.h"            // M86 Phase E
 #import <hdf5.h>
 
+// M86 Phase B: little-endian serialisation helpers. Use macOS's
+// libkern/OSByteOrder.h when available; fall back to endian.h on
+// Linux (GNUstep on x86/ARM). The serialisation is non-negotiable
+// LE per Binding Decision §118; on big-endian platforms a per-element
+// byte swap is required so the wire bytes are identical across hosts.
+#if defined(__APPLE__)
+#  include <libkern/OSByteOrder.h>
+#  define TTIO_HOST_TO_LE32(x) OSSwapHostToLittleInt32(x)
+#  define TTIO_HOST_TO_LE64(x) OSSwapHostToLittleInt64(x)
+#else
+#  include <endian.h>
+#  define TTIO_HOST_TO_LE32(x) htole32(x)
+#  define TTIO_HOST_TO_LE64(x) htole64(x)
+#endif
+
 // Internal SPI surfaced by TTIOAcquisitionRun for the dataset-level
 // decrypt lifecycle. Not part of the public header.
 @interface TTIOAcquisitionRun (TTIOSpectralDatasetInternal)
@@ -72,7 +87,13 @@ static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
         // M86 Phase E: read_names joins sequences/qualities as an
         // override-eligible channel, but its only valid codec is
         // NAME_TOKENIZED (Binding Decision §113).
-        s = [NSSet setWithArray:@[@"sequences", @"qualities", @"read_names"]];
+        // M86 Phase B: positions/flags/mapping_qualities (integer
+        // channels) join the override-eligible set; their only valid
+        // codecs are RANS_ORDER0/1 (Binding Decision §117).
+        s = [NSSet setWithArray:@[
+            @"sequences", @"qualities", @"read_names",
+            @"positions", @"flags", @"mapping_qualities",
+        ]];
     });
     return s;
 }
@@ -105,13 +126,42 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
         NSSet *nameAllowed = [NSSet setWithArray:@[
             @(TTIOCompressionNameTokenized),
         ]];
+        // M86 Phase B (Binding Decision §117): integer channels accept
+        // ONLY the rANS codecs. BASE_PACK 2-bit-packs ACGT bytes,
+        // QUALITY_BINNED quantises Phred scores onto 8 bins, and
+        // NAME_TOKENIZED tokenises UTF-8 strings — none of those
+        // preserve int64/uint32/uint8 values. The rANS coders are
+        // content-agnostic byte-stream codecs and operate correctly
+        // on the little-endian byte representation of integer arrays
+        // (Binding Decision §118).
+        NSSet *intAllowed = [NSSet setWithArray:@[
+            @(TTIOCompressionRansOrder0),
+            @(TTIOCompressionRansOrder1),
+        ]];
         d = @{
-            @"sequences":  seqAllowed,
-            @"qualities":  qualAllowed,
-            @"read_names": nameAllowed,
+            @"sequences":         seqAllowed,
+            @"qualities":         qualAllowed,
+            @"read_names":        nameAllowed,
+            @"positions":         intAllowed,
+            @"flags":             intAllowed,
+            @"mapping_qualities": intAllowed,
         };
     });
     return d;
+}
+
+/** M86 Phase B: integer channel names. Used by validation to dispatch
+ *  on wrong-content error messages (Binding Decision §117). */
+static NSSet<NSString *> *_TTIO_M86_IntegerChannelNames(void)
+{
+    static NSSet *s = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        s = [NSSet setWithArray:@[
+            @"positions", @"flags", @"mapping_qualities",
+        ]];
+    });
+    return s;
 }
 
 /** Validate the per-channel codec overrides BEFORE any HDF5 mutation.
@@ -123,12 +173,15 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
     NSSet *allowedChans = _TTIO_M86_AllowedOverrideChannels();
     NSDictionary<NSString *, NSSet<NSNumber *> *> *allowedByChan =
         _TTIO_M86_AllowedOverrideCodecsByChannel();
+    NSSet<NSString *> *intChannels = _TTIO_M86_IntegerChannelNames();
     for (NSString *chName in overrides) {
         if (![allowedChans containsObject:chName]) {
             [NSException raise:NSInvalidArgumentException
                         format:@"signalCodecOverrides: channel '%@' not "
-                               @"supported (only sequences, qualities, and "
-                               @"read_names can use TTIO codecs)", chName];
+                               @"supported (only sequences, qualities, "
+                               @"read_names, positions, flags, and "
+                               @"mapping_qualities can use TTIO codecs)",
+                               chName];
         }
         NSNumber *codecBox = overrides[chName];
         if (![codecBox isKindOfClass:[NSNumber class]]) {
@@ -188,6 +241,57 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
                             format:@"signalCodecOverrides['%@']: codec %@ "
                                    @"not supported on the '%@' channel "
                                    @"(allowed: NameTokenized)",
+                                   chName, codecBox, chName];
+            }
+            // M86 Phase B Binding Decision §117: explicit messages for
+            // wrong-content codecs on integer channels (positions,
+            // flags, mapping_qualities). Each message names the codec,
+            // the channel, and explains why the codec does not preserve
+            // integer values.
+            if ([intChannels containsObject:chName]) {
+                if (codec == TTIOCompressionBasePack) {
+                    [NSException raise:NSInvalidArgumentException
+                                format:@"signalCodecOverrides['%@']: codec "
+                                       @"BASE_PACK is not valid on the "
+                                       @"'%@' channel — BASE_PACK 2-bit-"
+                                       @"packs ACGT sequence bytes and "
+                                       @"would silently corrupt the "
+                                       @"integer values stored on this "
+                                       @"channel. Use RANS_ORDER0 or "
+                                       @"RANS_ORDER1 on '%@'.",
+                                       chName, chName, chName];
+                }
+                if (codec == TTIOCompressionQualityBinned) {
+                    [NSException raise:NSInvalidArgumentException
+                                format:@"signalCodecOverrides['%@']: codec "
+                                       @"QUALITY_BINNED is not valid on "
+                                       @"the '%@' channel — "
+                                       @"QUALITY_BINNED quantises Phred "
+                                       @"quality scores onto an 8-bin "
+                                       @"centre table and would silently "
+                                       @"destroy the integer values "
+                                       @"stored on this channel. Use "
+                                       @"RANS_ORDER0 or RANS_ORDER1 on "
+                                       @"'%@'.",
+                                       chName, chName, chName];
+                }
+                if (codec == TTIOCompressionNameTokenized) {
+                    [NSException raise:NSInvalidArgumentException
+                                format:@"signalCodecOverrides['%@']: codec "
+                                       @"NAME_TOKENIZED is not valid on "
+                                       @"the '%@' channel — "
+                                       @"NAME_TOKENIZED tokenises UTF-8 "
+                                       @"read-name strings and would "
+                                       @"mis-tokenise the integer values "
+                                       @"stored on this channel. Use "
+                                       @"RANS_ORDER0 or RANS_ORDER1 on "
+                                       @"'%@'.",
+                                       chName, chName, chName];
+                }
+                [NSException raise:NSInvalidArgumentException
+                            format:@"signalCodecOverrides['%@']: codec %@ "
+                                   @"not supported on the '%@' channel "
+                                   @"(allowed: RansOrder0, RansOrder1)",
                                    chName, codecBox, chName];
             }
             NSString *allowedTail =
@@ -368,6 +472,182 @@ static BOOL _TTIO_M86_WriteByteChannelStorage(id<TTIOStorageGroup> group,
                        [NSString stringWithFormat:
                             @"M86 codec %lu encode failed for channel '%@'",
                             (unsigned long)codec, name]}];
+        return NO;
+    }
+    id<TTIOStorageDataset> ds = [group createDatasetNamed:name
+                                                precision:TTIOPrecisionUInt8
+                                                   length:encoded.length
+                                                chunkSize:65536
+                                              compression:TTIOCompressionNone
+                                         compressionLevel:0
+                                                    error:error];
+    if (!ds) return NO;
+    if (![ds writeAll:encoded error:error]) return NO;
+    return [ds setAttributeValue:@((uint8_t)codec)
+                          forName:@"compression"
+                            error:error];
+}
+
+// ── M86 Phase B: integer-channel codec wiring ───────────────────────
+//
+// Per-channel integer dtypes for the int↔byte serialisation contract
+// (Binding Decision §115). Determined by **channel name lookup**; the
+// reader uses the same map to interpret the decoded byte buffer back
+// to the channel's natural integer dtype, so no extra on-disk
+// attribute is required beyond ``@compression``.
+static TTIOPrecision _TTIO_M86_IntegerChannelPrecision(NSString *name)
+{
+    if ([name isEqualToString:@"positions"])         return TTIOPrecisionInt64;
+    if ([name isEqualToString:@"flags"])             return TTIOPrecisionUInt32;
+    if ([name isEqualToString:@"mapping_qualities"]) return TTIOPrecisionUInt8;
+    return (TTIOPrecision)0;  // unreachable; validation rejects others
+}
+
+/** Serialise an integer signal-channel buffer to little-endian bytes
+ *  for the rANS codec. The input is the in-memory NSData buffer the
+ *  WrittenGenomicRun carries (host endianness). The output is the LE
+ *  byte representation per Binding Decision §118 — non-negotiable so
+ *  big-endian platforms produce identical wire bytes. We byte-swap
+ *  per element on big-endian hosts; on x86/ARM this is a memcpy
+ *  no-op (Gotcha §131 — uint8 is always trivially a no-op). */
+static NSData *_TTIO_M86_IntChannelToLEBytes(NSString *name, NSData *data)
+{
+    if ([name isEqualToString:@"positions"]) {
+        const int64_t *src = (const int64_t *)data.bytes;
+        NSUInteger n = data.length / sizeof(int64_t);
+        NSMutableData *out = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+        int64_t *dst = (int64_t *)out.mutableBytes;
+        for (NSUInteger i = 0; i < n; i++) {
+            uint64_t le = TTIO_HOST_TO_LE64((uint64_t)src[i]);
+            memcpy(&dst[i], &le, sizeof(uint64_t));
+        }
+        return out;
+    }
+    if ([name isEqualToString:@"flags"]) {
+        const uint32_t *src = (const uint32_t *)data.bytes;
+        NSUInteger n = data.length / sizeof(uint32_t);
+        NSMutableData *out = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+        uint32_t *dst = (uint32_t *)out.mutableBytes;
+        for (NSUInteger i = 0; i < n; i++) {
+            dst[i] = TTIO_HOST_TO_LE32(src[i]);
+        }
+        return out;
+    }
+    // mapping_qualities (uint8) — LE no-op (Gotcha §131).
+    return [data copy];
+}
+
+/** Write an integer signal channel either directly with the M82 typed
+ *  dataset (when no override) or through the rANS codec with the LE-
+ *  serialisation contract (when overridden). The HDF5 fast path. */
+static BOOL _TTIO_M86_WriteIntChannel(TTIOHDF5Group *group,
+                                      NSString *name,
+                                      NSData *data,
+                                      TTIOCompression defaultCompression,
+                                      NSNumber *codecOverride,
+                                      NSError **error)
+{
+    TTIOPrecision prec = _TTIO_M86_IntegerChannelPrecision(name);
+    if (codecOverride == nil) {
+        // M82 typed path — preserves byte parity with pre-Phase-B files.
+        NSUInteger n = data.length / TTIOPrecisionElementSize(prec);
+        TTIOHDF5Dataset *ds = [group createDatasetNamed:name
+                                              precision:prec
+                                                 length:n
+                                              chunkSize:65536
+                                            compression:defaultCompression
+                                       compressionLevel:6
+                                                  error:error];
+        if (!ds) return NO;
+        return [ds writeData:data error:error];
+    }
+
+    TTIOCompression codec = (TTIOCompression)[codecOverride unsignedIntegerValue];
+    if (codec != TTIOCompressionRansOrder0
+        && codec != TTIOCompressionRansOrder1) {
+        // Defensive — _TTIO_M86_ValidateOverrides rejects this first.
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2050
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"M86 Phase B: codec %lu is not valid on "
+                            @"integer channel '%@' (only RANS_ORDER0/"
+                            @"RANS_ORDER1 supported)",
+                            (unsigned long)codec, name]}];
+        return NO;
+    }
+    NSData *leBytes = _TTIO_M86_IntChannelToLEBytes(name, data);
+    int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+    NSData *encoded = TTIORansEncode(leBytes, order);
+    if (!encoded) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2051
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"M86 Phase B: rANS encode failed for "
+                            @"integer channel '%@'", name]}];
+        return NO;
+    }
+    // Codec-compressed datasets carry NO HDF5 filter (Binding Decision §87).
+    TTIOHDF5Dataset *ds = [group createDatasetNamed:name
+                                          precision:TTIOPrecisionUInt8
+                                             length:encoded.length
+                                          chunkSize:65536
+                                        compression:TTIOCompressionNone
+                                   compressionLevel:0
+                                              error:error];
+    if (!ds) return NO;
+    if (![ds writeData:encoded error:error]) return NO;
+    return _TTIO_M86_WriteUInt8Attribute([ds datasetId], "compression",
+                                         (uint8_t)codec, error);
+}
+
+/** Provider-path twin of _TTIO_M86_WriteIntChannel for non-HDF5
+ *  backends (memory://, sqlite://). */
+static BOOL _TTIO_M86_WriteIntChannelStorage(id<TTIOStorageGroup> group,
+                                             NSString *name,
+                                             NSData *data,
+                                             TTIOCompression defaultCompression,
+                                             NSNumber *codecOverride,
+                                             NSError **error)
+{
+    TTIOPrecision prec = _TTIO_M86_IntegerChannelPrecision(name);
+    if (codecOverride == nil) {
+        NSUInteger n = data.length / TTIOPrecisionElementSize(prec);
+        id<TTIOStorageDataset> ds = [group createDatasetNamed:name
+                                                    precision:prec
+                                                       length:n
+                                                    chunkSize:65536
+                                                  compression:defaultCompression
+                                             compressionLevel:6
+                                                        error:error];
+        if (!ds) return NO;
+        return [ds writeAll:data error:error];
+    }
+
+    TTIOCompression codec = (TTIOCompression)[codecOverride unsignedIntegerValue];
+    if (codec != TTIOCompressionRansOrder0
+        && codec != TTIOCompressionRansOrder1) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2052
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"M86 Phase B: codec %lu is not valid on "
+                            @"integer channel '%@' (only RANS_ORDER0/"
+                            @"RANS_ORDER1 supported)",
+                            (unsigned long)codec, name]}];
+        return NO;
+    }
+    NSData *leBytes = _TTIO_M86_IntChannelToLEBytes(name, data);
+    int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+    NSData *encoded = TTIORansEncode(leBytes, order);
+    if (!encoded) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2053
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"M86 Phase B: rANS encode failed for "
+                            @"integer channel '%@'", name]}];
         return NO;
     }
     id<TTIOStorageDataset> ds = [group createDatasetNamed:name
@@ -691,25 +971,19 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     if (!sc) return NO;
     TTIOCompression codec = run.signalCompression;
 
+    // M86 Phase B: integer channels dispatch through
+    // _TTIO_M86_WriteIntChannelStorage; when an rANS override is set
+    // the buffer is serialised LE and encoded; otherwise the M82
+    // typed write is preserved for byte parity.
     NSDictionary *intChannels = @{
-        @"positions"         : @[ @(TTIOPrecisionInt64),  run.positionsData ],
-        @"flags"             : @[ @(TTIOPrecisionUInt32), run.flagsData ],
-        @"mapping_qualities" : @[ @(TTIOPrecisionUInt8),  run.mappingQualitiesData ],
+        @"positions"         : run.positionsData,
+        @"flags"             : run.flagsData,
+        @"mapping_qualities" : run.mappingQualitiesData,
     };
     for (NSString *chName in @[@"positions", @"flags", @"mapping_qualities"]) {
-        NSArray *spec = intChannels[chName];
-        TTIOPrecision prec = (TTIOPrecision)[spec[0] integerValue];
-        NSData *data = spec[1];
-        NSUInteger n = data.length / TTIOPrecisionElementSize(prec);
-        id<TTIOStorageDataset> ds = [sc createDatasetNamed:chName
-                                                   precision:prec
-                                                      length:n
-                                                   chunkSize:65536
-                                                 compression:codec
-                                            compressionLevel:6
-                                                       error:error];
-        if (!ds) return NO;
-        if (![ds writeAll:data error:error]) return NO;
+        if (!_TTIO_M86_WriteIntChannelStorage(
+                sc, chName, intChannels[chName], codec,
+                run.signalCodecOverrides[chName], error)) return NO;
     }
     // M86: sequences/qualities through codec-aware byte-channel writer.
     if (!_TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
@@ -962,10 +1236,6 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     // signal_channels subgroup.
     TTIOHDF5Group *sc = [rg createGroupNamed:@"signal_channels" error:error];
     if (!sc) return NO;
-    id<TTIOStorageGroup> scAdapter =
-        (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
-            performSelector:@selector(initWithGroup:) withObject:sc];
-    if (!scAdapter) return NO;
 
     // 5 typed channels (use TTIOGenomicIndex's static writeTypedChannel
     // helper isn't accessible — inline the same pattern via the
@@ -975,26 +1245,21 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     //
     // M86: sequences and qualities go through the byte-channel codec
     // dispatcher so an override (rANS / BASE_PACK) is honoured.
+    // M86 Phase B: positions/flags/mapping_qualities (integer
+    // channels) go through the int-channel codec dispatcher; when an
+    // rANS override is set the array is serialised LE and encoded,
+    // otherwise the M82 typed write is preserved for byte parity.
     TTIOCompression codec = run.signalCompression;
     NSDictionary *intChannels = @{
-        @"positions"         : @[ @(TTIOPrecisionInt64),  run.positionsData ],
-        @"flags"             : @[ @(TTIOPrecisionUInt32), run.flagsData ],
-        @"mapping_qualities" : @[ @(TTIOPrecisionUInt8),  run.mappingQualitiesData ],
+        @"positions"         : run.positionsData,
+        @"flags"             : run.flagsData,
+        @"mapping_qualities" : run.mappingQualitiesData,
     };
     for (NSString *chName in @[@"positions", @"flags", @"mapping_qualities"]) {
-        NSArray *spec = intChannels[chName];
-        TTIOPrecision prec = (TTIOPrecision)[spec[0] integerValue];
-        NSData *data = spec[1];
-        NSUInteger n = data.length / TTIOPrecisionElementSize(prec);
-        id<TTIOStorageDataset> ds = [scAdapter createDatasetNamed:chName
-                                                          precision:prec
-                                                             length:n
-                                                          chunkSize:65536
-                                                        compression:codec
-                                                   compressionLevel:6
-                                                              error:error];
-        if (!ds) return NO;
-        if (![ds writeAll:data error:error]) return NO;
+        if (!_TTIO_M86_WriteIntChannel(sc, chName, intChannels[chName],
+                                       codec,
+                                       run.signalCodecOverrides[chName],
+                                       error)) return NO;
     }
     // sequences (uint8) — codec-aware
     if (!_TTIO_M86_WriteByteChannel(sc, @"sequences", run.sequencesData,
