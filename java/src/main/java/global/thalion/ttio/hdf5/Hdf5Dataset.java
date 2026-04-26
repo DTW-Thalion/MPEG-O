@@ -166,6 +166,124 @@ public class Hdf5Dataset implements AutoCloseable {
         closed = true;
     }
 
+    // ── Dataset-level attributes (M86) ─────────────────────────────
+    //
+    // Codec dispatch on signal_channels datasets needs an
+    // @compression attribute living on the dataset itself (Binding
+    // Decision §86). Hdf5Dataset previously had no attribute API; the
+    // helpers below add the minimum surface — uint8 integer write,
+    // any-int read with default — used by M86's read/write paths.
+
+    /** Test whether a named attribute exists on this dataset. */
+    public boolean hasAttribute(String name) {
+        file.lockForReading();
+        try {
+            return H5.H5Aexists(datasetId, name);
+        } catch (HDF5LibraryException e) {
+            return false;
+        } finally {
+            file.unlockForReading();
+        }
+    }
+
+    /** Write a uint8 (one-byte) integer attribute on this dataset.
+     *  M86's {@code @compression} attribute uses this datatype
+     *  (Binding Decision §86: H5T_NATIVE_UINT8). */
+    public void setUint8Attribute(String name, int value) {
+        file.lockForWriting();
+        long space = -1, aid = -1;
+        try {
+            space = H5.H5Screate(HDF5Constants.H5S_SCALAR);
+            if (H5.H5Aexists(datasetId, name)) {
+                H5.H5Adelete(datasetId, name);
+            }
+            aid = H5.H5Acreate(datasetId, name, HDF5Constants.H5T_NATIVE_UINT8,
+                    space, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+            if (aid < 0) throw new Hdf5Errors.AttributeException(
+                    "H5Acreate2 (uint8) failed for '" + name + "'");
+            byte[] data = { (byte) (value & 0xFF) };
+            H5.H5Awrite(aid, HDF5Constants.H5T_NATIVE_UINT8, data);
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.AttributeException(
+                    "setUint8Attribute failed for '" + name + "': " + e.getMessage());
+        } finally {
+            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ignored) {}
+            file.unlockForWriting();
+        }
+    }
+
+    /** Remove a named attribute. No-op when the attribute is absent. */
+    public void deleteAttribute(String name) {
+        file.lockForWriting();
+        try {
+            if (H5.H5Aexists(datasetId, name)) {
+                H5.H5Adelete(datasetId, name);
+            }
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.AttributeException(
+                    "H5Adelete failed for '" + name + "': " + e.getMessage());
+        } finally {
+            file.unlockForWriting();
+        }
+    }
+
+    /** List attribute names on this dataset. */
+    public java.util.List<String> attributeNames() {
+        file.lockForReading();
+        try {
+            int n = (int) H5.H5Oget_info(datasetId).num_attrs;
+            java.util.List<String> out = new java.util.ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                long aid = H5.H5Aopen_by_idx(datasetId, ".",
+                        HDF5Constants.H5_INDEX_NAME, HDF5Constants.H5_ITER_INC,
+                        (long) i, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+                try {
+                    String nm = H5.H5Aget_name(aid);
+                    if (nm != null) out.add(nm);
+                } finally {
+                    try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+                }
+            }
+            return out;
+        } catch (HDF5LibraryException e) {
+            return java.util.List.of();
+        } finally {
+            file.unlockForReading();
+        }
+    }
+
+    /** Read an integer attribute of any width (uint8 / int64 / …) and
+     *  return its value as a long. Returns {@code defaultValue} when
+     *  the attribute is absent. */
+    public long readIntegerAttribute(String name, long defaultValue) {
+        file.lockForReading();
+        long aid = -1, htype = -1;
+        try {
+            if (!H5.H5Aexists(datasetId, name)) return defaultValue;
+            aid = H5.H5Aopen(datasetId, name, HDF5Constants.H5P_DEFAULT);
+            if (aid < 0) return defaultValue;
+            htype = H5.H5Aget_type(aid);
+            long size = H5.H5Tget_size(htype);
+            if (size == 1) {
+                byte[] buf = new byte[1];
+                H5.H5Aread(aid, HDF5Constants.H5T_NATIVE_UINT8, buf);
+                return buf[0] & 0xFFL;
+            }
+            // Fall through: treat as int64 (covers the legacy integer
+            // attributes other modules write via H5T_NATIVE_INT64).
+            long[] data = new long[1];
+            H5.H5Aread(aid, HDF5Constants.H5T_NATIVE_INT64, data);
+            return data[0];
+        } catch (HDF5LibraryException e) {
+            return defaultValue;
+        } finally {
+            if (htype >= 0) try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            file.unlockForReading();
+        }
+    }
+
     // ── Internal helpers ────────────────────────────────────────────
 
     private Object allocateBuffer(long count) {

@@ -50,6 +50,15 @@ public class GenomicRun
     private StorageDataset sequencesDs;                        // lazy
     private StorageDataset qualitiesDs;                        // lazy
     private final Map<String, List<Object[]>> compoundCache = new HashMap<>();
+    // M86: lazy whole-channel decode cache for byte channels whose
+    // @compression attribute names a TTI-O codec (rANS / BASE_PACK).
+    // Codec output is byte-stream non-sliceable, so the whole channel
+    // is decoded once on first access and the decoded buffer is sliced
+    // from memory thereafter (Binding Decision §89). Cache lifetime is
+    // this GenomicRun instance — re-opening the file incurs the decode
+    // cost again (Gotcha §101). Mutable HashMap, not Map.of(), so the
+    // dispatch helper can populate it.
+    private final Map<String, byte[]> decodedByteChannels = new HashMap<>();
 
     private int cursor = 0;  // Streamable
 
@@ -107,10 +116,12 @@ public class GenomicRun
         int  length = index.lengthAt(i);
 
         ensureSignalChannels();
-        // Sequences: hyperslab read of `length` bytes at `offset`
-        byte[] seqBytes = (byte[]) sequencesDs.readSlice(offset, length);
+        // M86: routed through byteChannelSlice so that channels written
+        // with a TTIO codec override (@compression > 0) are decoded
+        // transparently before slicing.
+        byte[] seqBytes = byteChannelSlice("sequences", offset, length);
         String sequence = new String(seqBytes, StandardCharsets.US_ASCII);
-        byte[] qualities = (byte[]) qualitiesDs.readSlice(offset, length);
+        byte[] qualities = byteChannelSlice("qualities", offset, length);
 
         // Compound rows (cached on first access)
         List<Object[]> cigars     = compoundRows("cigars");
@@ -185,6 +196,50 @@ public class GenomicRun
             sequencesDs = signalChannels.openDataset("sequences");
             qualitiesDs = signalChannels.openDataset("qualities");
         }
+    }
+
+    /** M86: slice {@code count} bytes starting at {@code offset} from a
+     *  uint8 byte channel. For codec-compressed channels
+     *  ({@code @compression > 0}) the whole channel is decoded once on
+     *  first access, the decoded buffer is cached on this
+     *  {@link GenomicRun} instance, and subsequent slices come from the
+     *  cached array. For uncompressed channels (no attribute or value
+     *  0) the existing per-slice {@link StorageDataset#readSlice} path
+     *  is used unchanged. */
+    private byte[] byteChannelSlice(String name, long offset, int count) {
+        byte[] cached = decodedByteChannels.get(name);
+        if (cached != null) {
+            byte[] out = new byte[count];
+            System.arraycopy(cached, (int) offset, out, 0, count);
+            return out;
+        }
+        StorageDataset ds = "sequences".equals(name) ? sequencesDs
+                          : "qualities".equals(name) ? qualitiesDs
+                          : signalChannels.openDataset(name);
+        Object codecAttr = ds.getAttribute("compression");
+        long codecId = (codecAttr instanceof Number n) ? n.longValue() : 0L;
+        if (codecId == 0L) {
+            return (byte[]) ds.readSlice(offset, count);
+        }
+        // Compressed: read the whole channel, decode once, cache.
+        long total = ds.shape()[0];
+        byte[] all = (byte[]) ds.readSlice(0L, total);
+        byte[] decoded;
+        if (codecId == global.thalion.ttio.Enums.Compression.RANS_ORDER0.ordinal()) {
+            decoded = global.thalion.ttio.codecs.Rans.decode(all);
+        } else if (codecId == global.thalion.ttio.Enums.Compression.RANS_ORDER1.ordinal()) {
+            decoded = global.thalion.ttio.codecs.Rans.decode(all);
+        } else if (codecId == global.thalion.ttio.Enums.Compression.BASE_PACK.ordinal()) {
+            decoded = global.thalion.ttio.codecs.BasePack.decode(all);
+        } else {
+            throw new IllegalStateException(
+                "signal_channel '" + name + "': @compression="
+                + codecId + " is not a supported TTIO codec id");
+        }
+        decodedByteChannels.put(name, decoded);
+        byte[] out = new byte[count];
+        System.arraycopy(decoded, (int) offset, out, 0, count);
+        return out;
     }
 
     @SuppressWarnings("unchecked")

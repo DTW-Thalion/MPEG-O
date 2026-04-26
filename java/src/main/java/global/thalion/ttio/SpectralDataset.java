@@ -554,11 +554,43 @@ public class SpectralDataset implements
     /** v0.11 M82.3: write one {@code /study/genomic_runs/<name>/}
      *  subtree via the StorageGroup protocol. Provider-agnostic — used
      *  by both the HDF5 fast path and the {@code memory://} /
-     *  {@code sqlite://} / {@code zarr://} paths. */
+     *  {@code sqlite://} / {@code zarr://} paths.
+     *
+     *  <p>M86: validates {@link WrittenGenomicRun#signalCodecOverrides}
+     *  before any file mutation (Binding Decision §88: only sequences
+     *  / qualities accept overrides; only RANS_ORDER0 / RANS_ORDER1 /
+     *  BASE_PACK accepted as values). Validation throws
+     *  {@link IllegalArgumentException} so the caller sees the failure
+     *  immediately and the file is left untouched.</p> */
     private static void writeGenomicRunSubtree(
             global.thalion.ttio.providers.StorageGroup parent,
             String name,
             WrittenGenomicRun run) {
+        // M86: per-channel codec override validation. Runs BEFORE any
+        // group/dataset is created so the file is untouched on a bad
+        // override (Gotcha §96 — no half-written run).
+        java.util.Set<String> allowedChannels =
+            java.util.Set.of("sequences", "qualities");
+        java.util.Set<Enums.Compression> allowedCodecs =
+            java.util.Set.of(Enums.Compression.RANS_ORDER0,
+                              Enums.Compression.RANS_ORDER1,
+                              Enums.Compression.BASE_PACK);
+        for (var entry : run.signalCodecOverrides().entrySet()) {
+            String chName = entry.getKey();
+            Enums.Compression codec = entry.getValue();
+            if (!allowedChannels.contains(chName)) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides: channel '" + chName
+                    + "' not supported (only sequences and qualities "
+                    + "can use TTIO codecs)");
+            }
+            if (codec == null || !allowedCodecs.contains(codec)) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides['" + chName + "']: codec "
+                    + codec + " not supported (only RANS_ORDER0, "
+                    + "RANS_ORDER1, BASE_PACK)");
+            }
+        }
         try (var rg = parent.createGroup(name)) {
             // Run-level attributes.
             rg.setAttribute("acquisition_mode",
@@ -582,10 +614,15 @@ public class SpectralDataset implements
             try (var sc = rg.createGroup("signal_channels")) {
                 writeSignalChannel(sc, "positions",
                     Enums.Precision.INT64,  run.positions(), run.signalCompression());
-                writeSignalChannel(sc, "sequences",
-                    Enums.Precision.UINT8,  run.sequences(), run.signalCompression());
-                writeSignalChannel(sc, "qualities",
-                    Enums.Precision.UINT8,  run.qualities(), run.signalCompression());
+                // M86: sequences/qualities go through the codec
+                // dispatch helper; absent from the override map →
+                // existing HDF5-filter path with @compression unset.
+                writeByteChannelWithCodec(sc, "sequences",
+                    run.sequences(), run.signalCompression(),
+                    run.signalCodecOverrides().get("sequences"));
+                writeByteChannelWithCodec(sc, "qualities",
+                    run.qualities(), run.signalCompression(),
+                    run.signalCodecOverrides().get("qualities"));
                 writeSignalChannel(sc, "flags",
                     Enums.Precision.UINT32, run.flags(), run.signalCompression());
                 writeSignalChannel(sc, "mapping_qualities",
@@ -624,6 +661,66 @@ public class SpectralDataset implements
                 }
             }
         }
+    }
+
+    /** M86: write a uint8 byte channel, optionally through a TTI-O
+     *  codec (rANS order-0/1, BASE_PACK). When {@code codecOverride}
+     *  is {@code null} the channel is written via the default
+     *  HDF5-filter path (identical to M82 behaviour, no
+     *  {@code @compression} attribute set). When it names a TTI-O
+     *  codec, the raw bytes are encoded, written as an unfiltered
+     *  uint8 dataset (Binding Decision §87 — no double-compression),
+     *  and the codec id is stored on the dataset's
+     *  {@code @compression} attribute (uint8). */
+    private static void writeByteChannelWithCodec(
+            global.thalion.ttio.providers.StorageGroup sc,
+            String name, byte[] data,
+            Enums.Compression defaultCodec,
+            Enums.Compression codecOverride) {
+        if (codecOverride == null) {
+            writeSignalChannel(sc, name, Enums.Precision.UINT8, data, defaultCodec);
+            return;
+        }
+        byte[] encoded;
+        switch (codecOverride) {
+            case RANS_ORDER0 -> encoded =
+                global.thalion.ttio.codecs.Rans.encode(data, 0);
+            case RANS_ORDER1 -> encoded =
+                global.thalion.ttio.codecs.Rans.encode(data, 1);
+            case BASE_PACK   -> encoded =
+                global.thalion.ttio.codecs.BasePack.encode(data);
+            default -> throw new IllegalArgumentException(
+                "writeByteChannelWithCodec: unsupported codec "
+                + codecOverride);
+        }
+        // Unfiltered uint8 dataset; codec output already entropy-coded.
+        // Force a chunked layout (chunkSize > 0) so HDF5 honours our
+        // explicit Compression.NONE choice rather than the legacy
+        // contiguous fallback.
+        global.thalion.ttio.providers.StorageDataset ds;
+        try {
+            ds = sc.createDataset(name, Enums.Precision.UINT8,
+                encoded.length, 65536, Enums.Compression.NONE, 0);
+        } catch (UnsupportedOperationException e) {
+            ds = sc.createDataset(name, Enums.Precision.UINT8,
+                encoded.length, 0, Enums.Compression.NONE, 0);
+        }
+        try (var closeMe = ds) {
+            closeMe.writeAll(encoded);
+            // M79 codec id (4 / 5 / 6) as a uint8 attribute on the
+            // dataset itself — read path dispatches on this.
+            int codecId = codecIdFor(codecOverride);
+            closeMe.setAttribute("compression", codecId);
+        }
+    }
+
+    /** Map a {@link Enums.Compression} enum value to its M79 codec id
+     *  (the wire-format integer that travels in the
+     *  {@code @compression} attribute). The enum's {@code ordinal()}
+     *  already matches the M79 numbering — this helper exists so the
+     *  intent is explicit at the call site. */
+    private static int codecIdFor(Enums.Compression codec) {
+        return codec.ordinal();
     }
 
     private static void writeSignalChannel(

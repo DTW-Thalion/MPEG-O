@@ -9,6 +9,7 @@ import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.Enums.Compression;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -50,6 +51,16 @@ import java.util.Objects;
  * @param signalCompression  codec applied to typed signal channels.
  *                           Defaults to {@link Compression#ZLIB}; pass
  *                           {@link Compression#NONE} to skip.
+ * @param signalCodecOverrides M86: per-channel TTI-O codec opt-in.
+ *                           Maps channel name (only {@code "sequences"}
+ *                           and {@code "qualities"} accepted) to a
+ *                           codec id (only {@link Compression#RANS_ORDER0},
+ *                           {@link Compression#RANS_ORDER1}, or
+ *                           {@link Compression#BASE_PACK} accepted).
+ *                           Channels not in this map use the
+ *                           {@link #signalCompression} HDF5-filter
+ *                           dispatch path. Defaults to
+ *                           {@link Map#of() empty}; never {@code null}.
  */
 public record WrittenGenomicRun(
     AcquisitionMode acquisitionMode,
@@ -69,7 +80,8 @@ public record WrittenGenomicRun(
     long[] matePositions,
     int[]  templateLengths,
     List<String> chromosomes,
-    Compression signalCompression
+    Compression signalCompression,
+    Map<String, Compression> signalCodecOverrides
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -77,10 +89,46 @@ public record WrittenGenomicRun(
         Objects.requireNonNull(platform);
         Objects.requireNonNull(sampleName);
         Objects.requireNonNull(signalCompression);
-        cigars          = List.copyOf(cigars);
-        readNames       = List.copyOf(readNames);
-        mateChromosomes = List.copyOf(mateChromosomes);
-        chromosomes     = List.copyOf(chromosomes);
+        Objects.requireNonNull(signalCodecOverrides,
+            "signalCodecOverrides must not be null; pass Map.of() for none");
+        cigars                = List.copyOf(cigars);
+        readNames             = List.copyOf(readNames);
+        mateChromosomes       = List.copyOf(mateChromosomes);
+        chromosomes           = List.copyOf(chromosomes);
+        signalCodecOverrides  = Map.copyOf(signalCodecOverrides);
+    }
+
+    /**
+     * Backwards-compatible constructor (pre-M86) that defaults
+     * {@link #signalCodecOverrides} to {@link Map#of() empty}. Existing
+     * callers that build a run without per-channel codec overrides
+     * continue to work unchanged.
+     */
+    public WrittenGenomicRun(
+        AcquisitionMode acquisitionMode,
+        String referenceUri,
+        String platform,
+        String sampleName,
+        long[] positions,
+        byte[] mappingQualities,
+        int[]  flags,
+        byte[] sequences,
+        byte[] qualities,
+        long[] offsets,
+        int[]  lengths,
+        List<String> cigars,
+        List<String> readNames,
+        List<String> mateChromosomes,
+        long[] matePositions,
+        int[]  templateLengths,
+        List<String> chromosomes,
+        Compression signalCompression
+    ) {
+        this(acquisitionMode, referenceUri, platform, sampleName,
+             positions, mappingQualities, flags, sequences, qualities,
+             offsets, lengths, cigars, readNames, mateChromosomes,
+             matePositions, templateLengths, chromosomes,
+             signalCompression, Map.of());
     }
 
     /** Number of reads (derived from {@link #offsets} length). */
