@@ -1349,3 +1349,54 @@ ObjC→Python, ObjC→Java, Java→Python, Java→ObjC.
 ### Next
 
 M82.5 (docs).
+
+---
+
+## M82.5 — Documentation pass — shipped 2026-04-25
+
+Wraps the M82 milestone series with user-facing documentation now
+that the implementation, conformance matrix, and wire-format parity
+are settled.
+
+### Shipped (M82.5)
+
+- [x] **`docs/M82.md`** — high-level guide for downstream users:
+      the four new types (`GenomicRun` / `AlignedRead` /
+      `GenomicIndex` / `WrittenGenomicRun`), on-disk layout under
+      `/study/genomic_runs/`, minimal write+read snippet in Python,
+      Java, and ObjC, query helpers (`indices_for_region` /
+      `_unmapped` / `_flag`), explicit out-of-scope list (base-
+      packing, secondary alignments, multi-omics joins, MS-on-
+      non-HDF5).
+- [x] **`ARCHITECTURE.md` — genomic abstraction-layers section.**
+      Documented the MS-vs-genomic divergence layer-by-layer:
+      storage substrate (fully shared, zero divergence),
+      `SpectralDataset` container (mostly shared — narrow
+      bifurcation at parallel typed `msRuns` / `genomicRuns`
+      collections), Run-level (shared only via `Indexable<T>` /
+      `Streamable<T>` / `AutoCloseable`; concrete field set diverges
+      irreducibly), Element-level (hard wall — `Spectrum` class
+      hierarchy vs `AlignedRead` record share zero interface, common
+      base would be a YAGNI abstraction). Includes the new types in
+      the Layer 2 / Layer 3 tables.
+- [x] **Per-language API docstring audit.** Python module + class
+      docstrings, Java javadoc, ObjC header comments all confirmed
+      adequate. One stale "API status: Provisional" comment in
+      `TTIOGenomicIndex.h` corrected to reflect M82.2/M82.4 reality.
+
+### Out of scope
+
+- **`docs/format-spec.md` `/study/genomic_runs/` section.** The
+  format spec doesn't yet describe the genomic on-disk layout in
+  the format-spec proper. M82.md covers it for users; promoting the
+  layout into format-spec is a separate housekeeping pass.
+- **MS runs via memory:// / sqlite:// / zarr://** — same gap as
+  M82.2/M82.3/M82.4 (separate writer refactor; not blocked by M82.5).
+- **Base-packing codec** — deferred to a separate codec milestone.
+- **Multi-omics join helpers** — separate analysis milestone.
+
+### Next
+
+M82 series complete. Next candidates: format-spec promotion of the
+genomic layout, MS-on-non-HDF5 writer refactor, base-packing codec,
+or moving on to a separate milestone.

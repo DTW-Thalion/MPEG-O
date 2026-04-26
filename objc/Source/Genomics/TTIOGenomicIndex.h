@@ -13,8 +13,9 @@
  *
  * Genomic analogue of TTIOSpectrumIndex.
  *
- * API status: Provisional (M82.2). Disk read/write methods land in a
- * follow-up commit; until then they raise NSInternalInconsistencyException.
+ * API status: Stable (M82.2/M82.4). Reads and writes
+ * /study/genomic_runs/<name>/genomic_index/ via the StorageGroup
+ * protocol on every supported provider.
  *
  * Cross-language equivalents:
  *   Python: ttio.genomic_index.GenomicIndex

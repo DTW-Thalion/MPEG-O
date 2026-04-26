@@ -93,7 +93,10 @@ delegate to the relevant managers in v0.1; see "Implementation notes
 | `TTIOCVParam` | `NSObject` | `NSCoding`, `NSCopying` | `ontologyRef`, `accession`, `name`, `value`, `unit` |
 | `TTIOSpectrum` | `NSObject` | — | `signalArrays` (NSDictionary), `axes`, `indexPosition`, `scanTimeSeconds`, `precursorMz`, `precursorCharge` |
 | `TTIOAcquisitionRun` | `NSObject` | `TTIOIndexable`, `TTIOStreamable` | `spectrumIndex`, `instrumentConfig`, `acquisitionMode`; lazy hyperslab reads when read from disk |
-| `TTIOSpectralDataset` | `NSObject` | — | `title`, `isaInvestigationId`, `msRuns`, `nmrRuns`, `identifications`, `quantifications`, `provenanceRecords`, `transitions` |
+| `TTIOGenomicRun` (v0.11, M82) | `NSObject` | `TTIOIndexable`, `TTIOStreamable` | `genomicIndex`, `referenceUri`, `platform`, `sampleName`, `acquisitionMode`; element type is `TTIOAlignedRead`, not `TTIOSpectrum`. Lazy hyperslab reads on `signal_channels/sequences` and `qualities`; compound rows (cigars, read_names, mate_info) cached on first access |
+| `TTIOGenomicIndex` (v0.11, M82) | `NSObject` | — | `offsets`, `lengths`, `chromosomes`, `positions`, `mappingQualities`, `flags` (parallel arrays); `indicesForRegion:`, `indicesForUnmapped`, `indicesForFlag:` query helpers |
+| `TTIOWrittenGenomicRun` (v0.11, M82) | `NSObject` | — | Pure write-side container passed to `+writeMinimalToPath:...:genomicRuns:`. Mirrors the field set of `TTIOWrittenRun` for the genomic side |
+| `TTIOSpectralDataset` | `NSObject` | — | `title`, `isaInvestigationId`, `msRuns`, `nmrRuns`, `genomicRuns` (v0.11, M82), `identifications`, `quantifications`, `provenanceRecords`, `transitions` |
 | `TTIOIdentification` | `NSObject` | `NSCopying` | `runName`, `spectrumIndex`, `chemicalEntity`, `confidenceScore`, `evidenceChain` |
 | `TTIOQuantification` | `NSObject` | `NSCopying` | `chemicalEntity`, `sampleRef`, `abundance`, `normalizationMethod` |
 | `TTIOProvenanceRecord` | `NSObject` | `NSCopying` | `inputRefs`, `software`, `parameters`, `outputRefs`, `timestampUnix` |
@@ -124,6 +127,131 @@ delegate to the relevant managers in v0.1; see "Implementation notes
 | `TTIOFreeInductionDecay` | `TTIOSignalArray` | Complex128 buffer (interleaved real/imag), `dwellTimeSeconds`, `scanCount`, `receiverGain` |
 | `TTIOChromatogram` | `TTIOSpectrum` | `timeArray`, `intensityArray`, `type` (TIC / XIC / SRM), `targetMz`, `precursorProductMz`, `productMz` |
 | `TTIOTransition` / `TTIOTransitionList` | `NSObject` | precursor → product m/z, collision energy, RT window |
+| `TTIOAlignedRead` (v0.11, M82) | `NSObject` | `readName`, `chromosome`, `position`, `mappingQuality`, `cigar`, `sequence`, `qualities`, `flags`, `mateChromosome`, `matePosition`, `templateLength`. Pure value class — does **not** extend `TTIOSpectrum`. See "Genomic abstraction-layer divergence" below for why |
+
+---
+
+## Genomic abstraction-layer divergence (v0.11, M82)
+
+M82 added a parallel run-and-element hierarchy alongside the
+spectrum-based classes. The two hierarchies share API surface up to a
+point — and then diverge irreducibly. This section documents *where*
+that divergence is, layer by layer, so future maintainers know which
+abstractions can be extended generically and which can't.
+
+The layered analysis below applies identically to all three reference
+implementations (Objective-C, Python, Java).
+
+### Layer A — Storage substrate: fully shared, zero divergence
+
+`StorageProvider` / `StorageGroup` / `StorageDataset` and the four
+backends (HDF5, Memory, SQLite, Zarr) make no distinction between MS
+and genomic data. Compound datasets, VL_STRING handling, the
+AU/encryption layer, signature paths, feature flags — all of it is
+modality-agnostic. M82's only intrusions into this layer were:
+
+- One new `Precision.UINT64` enum value for genomic offset arrays.
+- One new `OPT_GENOMIC` feature flag and a format-version bump to
+  `1.4` when genomic content is present.
+
+Both are additive; neither bifurcates a code path.
+
+### Layer B — `SpectralDataset` container: mostly shared, narrow bifurcation
+
+The top-level container holds both run modalities as sibling typed
+collections:
+
+```java
+private final Map<String, AcquisitionRun>  msRuns;
+private final Map<String, GenomicRun>      genomicRuns;  // M82.3
+```
+
+Everything else on `SpectralDataset` is modality-agnostic: `title`,
+`isaInvestigationId`, `featureFlags`, `identifications()`,
+`quantifications()`, `provenanceRecords()`, `close()`, plus the entire
+signature/encryption path. The bifurcation here is *narrow* — two
+parallel typed getters and two parallel branches inside `create(...)`
+and `open(...)`. A generic "open a `.tio` and walk the runs" tool can
+stay polymorphic up to this point, treating each map separately.
+
+### Layer C — Run-level: shared only via generic protocols
+
+`AcquisitionRun` and `GenomicRun` both implement the same trio of
+generic access protocols:
+
+- `Indexable<T>` — random access, returns one `T` per index.
+- `Streamable<T>` — sequential iteration with seek.
+- `AutoCloseable` (Java) / NSObject lifecycle (ObjC) / context manager
+  (Python) — resource cleanup.
+
+`AcquisitionRun` also implements `Provenanceable` and `Encryptable`;
+`GenomicRun` does not (yet — those would be additive when needed).
+Beyond those interfaces the field sets diverge entirely:
+
+| Concern | `AcquisitionRun` | `GenomicRun` |
+|---|---|---|
+| Element type | `Spectrum` | `AlignedRead` |
+| Index type | `SpectrumIndex` | `GenomicIndex` |
+| Acquisition metadata | `instrumentConfig`, `nucleusType`, `spectrometerFrequencyMHz` | `referenceUri`, `platform`, `sampleName` |
+| Per-element typed channels | m/z + intensity (float64) | sequences + qualities (uint8) |
+| Auxiliary data | `chromatograms` (TIC/XIC/SRM) | mate-info, cigars, read-names compounds |
+| Storage subgroup | `/study/ms_runs/<name>/` | `/study/genomic_runs/<name>/` |
+
+**There is no shared `Run` base class, and adding one would only buy
+generic iteration** — instrument-config-vs-reference-uri is a real
+domain difference, not an artifact of the implementation.
+
+### Layer D — Element-level: hard wall
+
+`Spectrum` (the class hierarchy: `MassSpectrum`, `NMRSpectrum`,
+`IRSpectrum`, `RamanSpectrum`, `NMR2DSpectrum`, `UVVisSpectrum`,
+`TwoDimensionalCorrelationSpectrum`, `Chromatogram`) and
+`AlignedRead` (Java record / ObjC value class / Python frozen
+dataclass) share *zero* interface. They're both leaves of their
+respective trees, but the element-type abstraction is exactly where
+the divergence is irreducible:
+
+- A spectrum has a coordinate axis (m/z, chemical shift, wavenumber,
+  wavelength) and an intensity axis. The Spectrum hierarchy
+  parameterises by axis semantics.
+- A read has a string sequence, a Phred quality byte array, a CIGAR
+  string, a chromosome, a 0-based position, and SAM flag bits. None
+  of these have a coordinate-axis interpretation.
+
+Forcing both under a common parent (`Datum`, `Observation`, `Element`,
+…) would be a YAGNI abstraction — there is no operation that
+meaningfully spans both element types.
+
+### Summary: where the API can stay polymorphic
+
+| Layer | Sharing | Where divergence enters |
+|---|---|---|
+| **A. Storage** | 100% shared | n/a |
+| **B. Container** | Shared except parallel typed `msRuns` / `genomicRuns` collections | Two parallel getters + parallel write branches |
+| **C. Run** | Shared via `Indexable<T>` / `Streamable<T>` / `AutoCloseable` | Element type `T` and concrete field set |
+| **D. Element** | None | Entirely separate types — `Spectrum` ≠ `AlignedRead` |
+
+A generic "iterate any run and yield elements" function works across
+both modalities. Anything that needs to look at run-specific
+metadata, or any per-element field, must bifurcate. This is by design
+— pushing the abstraction further would obscure real domain
+differences without enabling any concrete client code.
+
+### Cross-cutting parallels (no shared interface, mirrored shape)
+
+These pairs follow the same *pattern* in their respective domains but
+deliberately do not share a base class — they are documented together
+to make the parallel structure obvious:
+
+- `WrittenRun` ↔ `WrittenGenomicRun` (write-side containers, both
+  Java records / ObjC value classes)
+- `SpectrumIndex` ↔ `GenomicIndex` (parallel-array index containers)
+- `MassSpectrum.mzArray, .intensityArray` ↔ `AlignedRead.sequence,
+  .qualities` (per-element typed channels)
+
+Pre-M82 readers (lacking the `OPT_GENOMIC` feature flag) simply see
+`genomicRuns == {}` and an empty `/study/genomic_runs/` group; no
+existing MS-only client code path is affected.
 
 ---
 
