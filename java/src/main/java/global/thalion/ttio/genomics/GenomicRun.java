@@ -66,6 +66,12 @@ public class GenomicRun
     // sliced by per-read offset/length). The whole list is materialised
     // on first access regardless of the access pattern.
     private List<String> decodedReadNames = null;
+    // M86 Phase C: lazy decode cache for the cigars channel when it
+    // carries an RANS_ORDER0 / RANS_ORDER1 / NAME_TOKENIZED codec
+    // override. Held as a List<String> mirroring decodedReadNames per
+    // Binding Decision §123 — separate cache from decodedReadNames
+    // (Option A from §2.3, lower-risk than a generalised dict).
+    private List<String> decodedCigars = null;
     // M86 Phase B: lazy decode cache for integer channels. Per Binding
     // Decision §116 this is a separate cache from decodedByteChannels
     // (byte[]) and decodedReadNames (List<String>) because the value
@@ -143,10 +149,11 @@ public class GenomicRun
         // Compound rows (cached on first access). M86 Phase E:
         // read_names is dispatched separately via readNameAt() since
         // the dataset shape varies (compound vs flat uint8 codec).
-        List<Object[]> cigars     = compoundRows("cigars");
+        // M86 Phase C: cigars likewise dispatched via cigarAt() since
+        // the dataset shape varies (compound vs flat uint8 codec).
         List<Object[]> mateInfos  = compoundRows("mate_info");
 
-        String cigar    = stringFromCompound(cigars.get(i)[0]);
+        String cigar    = cigarAt(i);
         String readName = readNameAt(i);
         Object[] mate   = mateInfos.get(i);
         String mateChrom = stringFromCompound(mate[0]);
@@ -315,6 +322,144 @@ public class GenomicRun
         // Compound path (M82, no override).
         List<Object[]> rows = compoundRows("read_names");
         return stringFromCompound(rows.get(i)[0]);
+    }
+
+    /** M86 Phase C: return the cigar string at index {@code i},
+     *  dispatching on dataset shape (Binding Decisions §120-§123).
+     *
+     *  <p>Two on-disk layouts:
+     *  <ul>
+     *    <li><b>M82 compound</b> (no override): VL_STRING-in-compound
+     *        dataset, read whole-and-cache via {@link #compoundRows}.</li>
+     *    <li><b>TTIO codec</b> (override active): flat 1-D uint8
+     *        dataset. The whole channel is read, decoded once, and
+     *        cached as a {@code List<String>} on this instance per
+     *        Binding Decision §123 (separate from
+     *        {@link #decodedReadNames} per Option A from the Phase C
+     *        plan §2.3).
+     *      <ul>
+     *        <li>RANS_ORDER0 / RANS_ORDER1: decoded byte buffer is a
+     *            length-prefix-concat sequence ({@code varint(len) +
+     *            bytes} per CIGAR). Walk the buffer to reconstruct
+     *            the {@code List<String>}.</li>
+     *        <li>NAME_TOKENIZED: pass the bytes through
+     *            {@link global.thalion.ttio.codecs.NameTokenizer#decode}
+     *            directly.</li>
+     *      </ul>
+     *    </li>
+     *  </ul>
+     *
+     *  <p>Per Gotcha §139 the rANS path uses raw length-prefix-concat
+     *  (NOT NAME_TOKENIZED's verbatim format then rANS-encoded). */
+    private String cigarAt(int i) {
+        List<String> cached = decodedCigars;
+        if (cached != null) {
+            return cached.get(i);
+        }
+        ensureSignalChannels();
+        try (StorageDataset ds = signalChannels.openDataset("cigars")) {
+            global.thalion.ttio.Enums.Precision p = ds.precision();
+            if (p == global.thalion.ttio.Enums.Precision.UINT8) {
+                Object codecAttr = ds.getAttribute("compression");
+                long codecId = (codecAttr instanceof Number n)
+                    ? n.longValue() : 0L;
+                long total = ds.shape()[0];
+                byte[] all = (byte[]) ds.readSlice(0L, total);
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .RANS_ORDER0.ordinal()
+                    || codecId == global.thalion.ttio.Enums.Compression
+                        .RANS_ORDER1.ordinal()) {
+                    byte[] decoded = global.thalion.ttio.codecs
+                        .Rans.decode(all);
+                    decodedCigars = decodeLengthPrefixConcat(decoded);
+                    return decodedCigars.get(i);
+                }
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .NAME_TOKENIZED.ordinal()) {
+                    decodedCigars = global.thalion.ttio.codecs
+                        .NameTokenizer.decode(all);
+                    return decodedCigars.get(i);
+                }
+                throw new IllegalStateException(
+                    "signal_channel 'cigars': @compression="
+                    + codecId + " is not a supported TTIO codec id "
+                    + "for the cigars channel (only RANS_ORDER0 = 4, "
+                    + "RANS_ORDER1 = 5, and NAME_TOKENIZED = 8 are "
+                    + "recognised)");
+            }
+        }
+        // Compound path (M82, no override).
+        List<Object[]> rows = compoundRows("cigars");
+        return stringFromCompound(rows.get(i)[0]);
+    }
+
+    /** Walk a length-prefix-concat byte buffer back into a list of
+     *  ASCII strings. Each entry is {@code varint(len) + len bytes} of
+     *  ASCII payload; iteration stops when the buffer is exhausted. */
+    private static List<String> decodeLengthPrefixConcat(byte[] buf) {
+        List<String> out = new ArrayList<>();
+        int offset = 0;
+        int n = buf.length;
+        long[] tmp = new long[1];
+        while (offset < n) {
+            offset = readUnsignedVarint(buf, offset, tmp);
+            long lengthL = tmp[0];
+            if (lengthL < 0 || lengthL > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException(
+                    "cigars rANS stream: length-prefix-concat entry "
+                    + "length " + lengthL + " out of int range");
+            }
+            int length = (int) lengthL;
+            if (offset + length > n) {
+                throw new IllegalArgumentException(
+                    "cigars rANS stream: length-prefix-concat entry "
+                    + "runs off end of decoded buffer (offset="
+                    + offset + ", length=" + length
+                    + ", buffer_size=" + n + ")");
+            }
+            for (int k = 0; k < length; k++) {
+                int b = Byte.toUnsignedInt(buf[offset + k]);
+                if (b > 0x7F) {
+                    throw new IllegalArgumentException(
+                        "cigars rANS stream: entry contains "
+                        + "non-ASCII bytes");
+                }
+            }
+            out.add(new String(buf, offset, length,
+                StandardCharsets.US_ASCII));
+            offset += length;
+        }
+        return out;
+    }
+
+    /** Unsigned LEB128 varint reader matching the writer in
+     *  {@link global.thalion.ttio.SpectralDataset}. Returns the new
+     *  offset; the decoded value is stored in {@code out[0]}. */
+    private static int readUnsignedVarint(byte[] buf, int offset, long[] out) {
+        long value = 0;
+        int shift = 0;
+        int pos = offset;
+        int n = buf.length;
+        while (true) {
+            if (pos >= n) {
+                throw new IllegalArgumentException(
+                    "cigars rANS stream: varint runs off end of buffer "
+                    + "at offset " + offset);
+            }
+            int b = Byte.toUnsignedInt(buf[pos]);
+            pos++;
+            value |= ((long) (b & 0x7F)) << shift;
+            if ((b & 0x80) == 0) {
+                out[0] = value;
+                return pos;
+            }
+            shift += 7;
+            if (shift > 63) {
+                throw new IllegalArgumentException(
+                    "cigars rANS stream: varint overflow at offset "
+                    + offset);
+            }
+        }
     }
 
     /** M86 Phase B: return the full integer array for the named

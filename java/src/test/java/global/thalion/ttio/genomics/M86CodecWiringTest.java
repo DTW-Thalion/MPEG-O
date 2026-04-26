@@ -330,17 +330,19 @@ class M86CodecWiringTest {
     void rejectInvalidChannel(@TempDir Path tmp) {
         // M86 Phase B (Binding Decision §117) extended the override map
         // to the three integer channels (positions, flags,
-        // mapping_qualities). This test now targets a structurally-VL
-        // channel (cigars) that has no codec match and remains outside
-        // the per-channel allowed-codec map (HANDOFF.md §8 — out of scope).
+        // mapping_qualities). M86 Phase C (Binding Decision §120) added
+        // cigars. This test targets the third compound channel
+        // mate_info, which remains outside the per-channel allowed-
+        // codec map (HANDOFF.md §1.3 / Binding Decision §124 — out of
+        // Phase C scope).
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
             () -> {
                 WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
-                    Map.of("cigars", Compression.RANS_ORDER0));
+                    Map.of("mate_info", Compression.RANS_ORDER0));
                 writeRun(tmp, bad, "bad-channel.tio");
             });
-        assertTrue(ex.getMessage().contains("cigars"),
+        assertTrue(ex.getMessage().contains("mate_info"),
             "error message should name the offending channel: " + ex.getMessage());
         assertTrue(ex.getMessage().contains("sequences"),
             "error message should hint at allowed channels: " + ex.getMessage());
@@ -1599,6 +1601,619 @@ class M86CodecWiringTest {
             assertEquals(Compression.NAME_TOKENIZED.ordinal(),
                 rnDs.readIntegerAttribute("compression", -1L),
                 "fixture read_names @compression == NAME_TOKENIZED (8)");
+        } finally {
+            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
+        }
+    }
+
+    // ── M86 Phase C helpers ────────────────────────────────────────
+
+    /** Build a 1000-read mixed-CIGAR run mirroring the Python Phase C
+     *  test #42 generator: 80% "100M" + 10% "99M1D" + 10% "50M50S".
+     *  Every other channel uses M82 baseline so the cigars channel is
+     *  isolated for the size measurement. */
+    private static WrittenGenomicRun mixedCigarRun(
+            int n, int len, Map<String, Compression> overrides) {
+        byte[] seq = new byte[n * len];
+        byte[] cycle = "ACGT".getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i < seq.length; i++) seq[i] = cycle[i % 4];
+        byte[] qual = new byte[n * len];
+        for (int i = 0; i < qual.length; i++) qual[i] = (byte) (30 + (i % 11));
+        long[] positions = new long[n];
+        for (int i = 0; i < n; i++) positions[i] = i * 1000L;
+        byte[] mapqs = new byte[n];
+        java.util.Arrays.fill(mapqs, (byte) 60);
+        int[] flags = new int[n];
+        long[] offsets = new long[n];
+        int[]  lengths = new int[n];
+        for (int i = 0; i < n; i++) {
+            offsets[i] = (long) i * len;
+            lengths[i] = len;
+        }
+        List<String> cigars     = new ArrayList<>(n);
+        List<String> readNames  = new ArrayList<>(n);
+        List<String> mateChroms = new ArrayList<>(n);
+        List<String> chroms     = new ArrayList<>(n);
+        long[] matePos = new long[n];
+        int[]  tlens   = new int[n];
+        for (int i = 0; i < n; i++) {
+            int mod = i % 10;
+            if (mod < 8)       cigars.add("100M");
+            else if (mod == 8) cigars.add("99M1D");
+            else               cigars.add("50M50S");
+            readNames.add("r" + i);
+            mateChroms.add("chr1");
+            chroms.add("chr1");
+            matePos[i] = -1L;
+        }
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA", "M86_C_MIXED",
+            positions, mapqs, flags, seq, qual, offsets, lengths,
+            cigars, readNames, mateChroms, matePos, tlens, chroms,
+            Compression.NONE,
+            overrides == null ? Map.of() : overrides);
+    }
+
+    /** Build a uniform-CIGAR run (all "100M") — the columnar-mode
+     *  sweet spot for NAME_TOKENIZED. */
+    private static WrittenGenomicRun uniformCigarRun(
+            int n, int len, Map<String, Compression> overrides) {
+        byte[] seq = new byte[n * len];
+        byte[] cycle = "ACGT".getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i < seq.length; i++) seq[i] = cycle[i % 4];
+        byte[] qual = new byte[n * len];
+        for (int i = 0; i < qual.length; i++) qual[i] = (byte) (30 + (i % 11));
+        long[] positions = new long[n];
+        for (int i = 0; i < n; i++) positions[i] = i * 1000L;
+        byte[] mapqs = new byte[n];
+        java.util.Arrays.fill(mapqs, (byte) 60);
+        int[] flags = new int[n];
+        long[] offsets = new long[n];
+        int[]  lengths = new int[n];
+        for (int i = 0; i < n; i++) {
+            offsets[i] = (long) i * len;
+            lengths[i] = len;
+        }
+        List<String> cigars     = new ArrayList<>(n);
+        List<String> readNames  = new ArrayList<>(n);
+        List<String> mateChroms = new ArrayList<>(n);
+        List<String> chroms     = new ArrayList<>(n);
+        long[] matePos = new long[n];
+        int[]  tlens   = new int[n];
+        for (int i = 0; i < n; i++) {
+            cigars.add("100M");
+            readNames.add("r" + i);
+            mateChroms.add("chr1");
+            chroms.add("chr1");
+            matePos[i] = -1L;
+        }
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA", "M86_C_UNIFORM",
+            positions, mapqs, flags, seq, qual, offsets, lengths,
+            cigars, readNames, mateChroms, matePos, tlens, chroms,
+            Compression.NONE,
+            overrides == null ? Map.of() : overrides);
+    }
+
+    // ── 35. Phase C: round-trip cigars via rANS order-1 ────────────
+
+    @Test
+    void roundTripCigarsRansOrder1(@TempDir Path tmp) {
+        // Mixed-CIGAR input (the realistic real-WGS pattern §1.2). The
+        // length-prefix-concat byte stream is rANS-encoded; the reader
+        // reverses both layers to recover the original CIGARs.
+        int n = 1000, len = 100;
+        WrittenGenomicRun run = mixedCigarRun(n, len,
+            Map.of("cigars", Compression.RANS_ORDER1));
+        Path file = writeRun(tmp, run, "cg-rans1.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(n, gr.readCount());
+            for (int i = 0; i < n; i++) {
+                AlignedRead r = gr.readAt(i);
+                int mod = i % 10;
+                String expected = (mod < 8) ? "100M"
+                                : (mod == 8) ? "99M1D" : "50M50S";
+                assertEquals(expected, r.cigar(),
+                    "RANS_ORDER1 cigars round-trip @ read " + i);
+            }
+        }
+    }
+
+    // ── 36. Phase C: round-trip cigars via NAME_TOKENIZED (uniform) ─
+
+    @Test
+    void roundTripCigarsNameTokenizedUniform(@TempDir Path tmp) {
+        // Uniform CIGARs trigger NAME_TOKENIZED's columnar mode — the
+        // wire stream is tiny (1-entry dict + delta=0). For N_READS=10
+        // reads of "100M" the encoded stream is < 50 bytes (mirrors
+        // the Python test on the same N_READS).
+        WrittenGenomicRun run = makeRun(pureAcgt(), phredCycle(),
+            Map.of("cigars", Compression.NAME_TOKENIZED));
+        Path file = writeRun(tmp, run, "cg-nt-uniform.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(N_READS, gr.readCount());
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals("100M", r.cigar(),
+                    "NAME_TOKENIZED uniform cigars round-trip @ read " + i);
+            }
+        }
+        // Confirm the NAME_TOKENIZED dataset is small (columnar win).
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+            long bytes = cgDs.getLength();
+            assertTrue(bytes < 50,
+                "NAME_TOKENIZED on " + N_READS + " uniform CIGARs "
+                + "should be < 50 bytes; got " + bytes);
+        }
+    }
+
+    // ── 37. Phase C: round-trip cigars via NAME_TOKENIZED (mixed) ───
+
+    @Test
+    void roundTripCigarsNameTokenizedMixed(@TempDir Path tmp) {
+        // NAME_TOKENIZED on mixed CIGARs falls back to verbatim mode —
+        // round-trip is still correct (lossless), but compression is
+        // poor (~size of raw bytes). This test verifies correctness of
+        // the verbatim fallback; sizeComparisonCigarsCodecs covers
+        // the size implications.
+        int n = 1000, len = 100;
+        WrittenGenomicRun run = mixedCigarRun(n, len,
+            Map.of("cigars", Compression.NAME_TOKENIZED));
+        Path file = writeRun(tmp, run, "cg-nt-mixed.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(n, gr.readCount());
+            for (int i = 0; i < n; i++) {
+                AlignedRead r = gr.readAt(i);
+                int mod = i % 10;
+                String expected = (mod < 8) ? "100M"
+                                : (mod == 8) ? "99M1D" : "50M50S";
+                assertEquals(expected, r.cigar(),
+                    "NAME_TOKENIZED mixed cigars round-trip @ read " + i);
+            }
+        }
+    }
+
+    // ── 38. Phase C: size comparison — three codec paths ───────────
+
+    @Test
+    void sizeComparisonCigarsCodecs(@TempDir Path tmp) {
+        // Demonstrates §1.2's selection guidance: on the realistic
+        // mixed-CIGAR input, RANS_ORDER1 wins (3-5×), NAME_TOKENIZED
+        // falls back to verbatim (essentially raw bytes), and the
+        // M82 compound has the largest HDF5 footprint. Print the three
+        // sizes so the comparison is visible in test output.
+        int n = 1000, len = 100;
+        WrittenGenomicRun base = mixedCigarRun(n, len, Map.of());
+        WrittenGenomicRun rans = mixedCigarRun(n, len,
+            Map.of("cigars", Compression.RANS_ORDER1));
+        WrittenGenomicRun nt   = mixedCigarRun(n, len,
+            Map.of("cigars", Compression.NAME_TOKENIZED));
+
+        Path baseFile = writeRun(tmp, base, "cg-size-base.tio");
+        Path ransFile = writeRun(tmp, rans, "cg-size-rans.tio");
+        Path ntFile   = writeRun(tmp, nt,   "cg-size-nt.tio");
+
+        long ransBytes;
+        long ntBytes;
+        try (Hdf5File f = Hdf5File.openReadOnly(ransFile.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+            ransBytes = cgDs.getLength();
+        }
+        try (Hdf5File f = Hdf5File.openReadOnly(ntFile.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+            ntBytes = cgDs.getLength();
+        }
+        // The M82 compound stores VL_STRING payloads on the global
+        // heap — Dataset.getLength() doesn't see them. Compare against
+        // total file size as a workable proxy for the §1.2 ordering.
+        long baseFileSize;
+        try {
+            baseFileSize = Files.size(baseFile);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        System.out.printf(
+            "[M86 Phase C] cigars size on 1000-read mixed input: "
+            + "RANS_ORDER1=%d, NAME_TOKENIZED=%d, M82-baseline-file=%d%n",
+            ransBytes, ntBytes, baseFileSize);
+
+        // §1.2 ordering: RANS_ORDER1 < NAME_TOKENIZED on mixed input.
+        assertTrue(ransBytes < ntBytes,
+            "RANS_ORDER1 (" + ransBytes + ") should be smaller than "
+            + "NAME_TOKENIZED (" + ntBytes + ") on mixed input");
+        // RANS_ORDER1 is a meaningful win over the M82 baseline file.
+        // NAME_TOKENIZED on mixed input falls back to verbatim and is
+        // essentially raw — Python measured ~5307 bytes vs ~18334 for
+        // the no-override path. Java should match the rANS number
+        // (byte-identical via M83 conformance).
+        assertTrue(ransBytes < 2000,
+            "RANS_ORDER1 cigars on 1000-read mixed input expected to "
+            + "compress to ~1100 bytes; got " + ransBytes);
+    }
+
+    // ── 39. Phase C: NAME_TOKENIZED columnar size win on uniform ───
+
+    @Test
+    void sizeWinCigarsUniform(@TempDir Path tmp) {
+        // 1000 × "100M" — the columnar-mode sweet spot for
+        // NAME_TOKENIZED (1-entry dict + delta=0; ~2 bytes/read).
+        // RANS_ORDER1 collapses the repeating-byte stream to
+        // near-entropy-zero. Both codecs decisively beat the raw
+        // length-prefix-concat baseline (5 bytes/read = 5000 bytes
+        // for 1000 reads). Mirrors Python's measurement —
+        // ordering between rANS and NAME_TOKENIZED is not asserted
+        // (depends on rANS frequency-table overhead vs NT's
+        // per-read overhead).
+        int n = 1000, len = 100;
+        WrittenGenomicRun rans = uniformCigarRun(n, len,
+            Map.of("cigars", Compression.RANS_ORDER1));
+        WrittenGenomicRun nt   = uniformCigarRun(n, len,
+            Map.of("cigars", Compression.NAME_TOKENIZED));
+
+        Path ransFile = writeRun(tmp, rans, "cg-uniform-rans.tio");
+        Path ntFile   = writeRun(tmp, nt,   "cg-uniform-nt.tio");
+
+        long ransBytes, ntBytes;
+        try (Hdf5File f = Hdf5File.openReadOnly(ransFile.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+            ransBytes = cgDs.getLength();
+        }
+        try (Hdf5File f = Hdf5File.openReadOnly(ntFile.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+            ntBytes = cgDs.getLength();
+        }
+
+        long rawConcat = 1000L * 5L;  // varint(3) + "100M" per CIGAR
+        assertTrue(ntBytes < rawConcat * 0.5,
+            "NAME_TOKENIZED uniform-cigars wire = " + ntBytes
+            + " bytes (target < " + (long)(rawConcat * 0.5)
+            + " = 50% of raw length-prefix-concat = " + rawConcat
+            + " bytes)");
+        assertTrue(ransBytes < rawConcat,
+            "RANS_ORDER1 uniform-cigars wire = " + ransBytes
+            + " bytes must beat raw concat (" + rawConcat + ")");
+    }
+
+    // ── 40. Phase C: @compression set correctly on cigars dataset ──
+
+    @Test
+    void attributeSetCorrectlyCigars(@TempDir Path tmp) {
+        // All three accepted codecs produce a 1-D uint8 dataset with
+        // @compression == codec_id. Other compound channels (read_names,
+        // mate_info) are untouched.
+        for (Compression codec : new Compression[]{
+                Compression.RANS_ORDER0,
+                Compression.RANS_ORDER1,
+                Compression.NAME_TOKENIZED}) {
+            WrittenGenomicRun run = makeRun(pureAcgt(), phredCycle(),
+                Map.of("cigars", codec));
+            Path file = writeRun(tmp, run, "cg-attr-" + codec.name() + ".tio");
+            try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+                 Hdf5Group root = f.rootGroup();
+                 Hdf5Group study = root.openGroup("study");
+                 Hdf5Group gRuns = study.openGroup("genomic_runs");
+                 Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+                 Hdf5Group sc    = rg.openGroup("signal_channels");
+                 Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+                assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                    cgDs.getPrecision(),
+                    "cigars must be 1-D uint8 under " + codec
+                    + ", not compound");
+                assertTrue(cgDs.hasAttribute("compression"),
+                    "cigars must carry @compression for codec " + codec);
+                long val = cgDs.readIntegerAttribute("compression", -1L);
+                assertEquals(codec.ordinal(), val,
+                    "@compression value for " + codec);
+            }
+        }
+    }
+
+    // ── 41. Phase C: back-compat — cigars compound unchanged ───────
+
+    @Test
+    void backCompatCigarsUnchanged(@TempDir Path tmp) {
+        // No cigars override → cigars stays as M82 compound. Two cases:
+        // empty overrides, and overrides on other channels only.
+        Map<String, Compression>[] cases = new Map[]{
+            Map.of(),
+            Map.of("read_names", Compression.NAME_TOKENIZED,
+                   "sequences", Compression.BASE_PACK),
+        };
+        String[] descs = {"empty", "rn+seq"};
+        for (int c = 0; c < cases.length; c++) {
+            Map<String, Compression> overrides = cases[c];
+            WrittenGenomicRun run;
+            if (overrides.containsKey("read_names")) {
+                run = makeRunWithNames(pureAcgt(), phredCycle(),
+                    illuminaNames(N_READS), overrides);
+            } else {
+                run = makeRun(pureAcgt(), phredCycle(), overrides);
+            }
+            Path file = writeRun(tmp, run, "cg-backcompat-" + descs[c] + ".tio");
+            try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+                 Hdf5Group root = f.rootGroup();
+                 Hdf5Group study = root.openGroup("study");
+                 Hdf5Group gRuns = study.openGroup("genomic_runs");
+                 Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+                 Hdf5Group sc    = rg.openGroup("signal_channels");
+                 Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+                assertNotEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                    cgDs.getPrecision(),
+                    descs[c] + ": cigars must remain compound, "
+                    + "not lifted to uint8");
+                assertFalse(cgDs.hasAttribute("compression"),
+                    descs[c] + ": M82 compound must not carry @compression");
+            }
+            try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+                GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+                for (int i = 0; i < N_READS; i++) {
+                    AlignedRead r = gr.readAt(i);
+                    assertEquals("100M", r.cigar(),
+                        descs[c] + ": cigar @ read " + i);
+                }
+            }
+        }
+    }
+
+    // ── 42. Phase C: reject BASE_PACK on cigars ────────────────────
+
+    @Test
+    void rejectBasePackOnCigars(@TempDir Path tmp) {
+        // Per Binding Decision §120: BASE_PACK 2-bit-packs ACGT bytes
+        // and would silently corrupt CIGAR strings. Validation throws
+        // IllegalArgumentException at write time; the message names
+        // the codec, the channel, and points at the recommended codecs.
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
+                    Map.of("cigars", Compression.BASE_PACK));
+                writeRun(tmp, bad, "bad-bp-cg.tio");
+            });
+        String msg = ex.getMessage();
+        assertNotNull(msg, "exception must have a message");
+        assertTrue(msg.contains("BASE_PACK"),
+            "error must name the codec; got: " + msg);
+        assertTrue(msg.contains("cigars"),
+            "error must name the channel; got: " + msg);
+        assertTrue(msg.contains("RANS_ORDER0")
+                || msg.contains("RANS_ORDER1")
+                || msg.contains("NAME_TOKENIZED"),
+            "error must point at the recommended codecs; got: " + msg);
+
+        // Same check for QUALITY_BINNED on cigars.
+        IllegalArgumentException exQ = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
+                    Map.of("cigars", Compression.QUALITY_BINNED));
+                writeRun(tmp, bad, "bad-qb-cg.tio");
+            });
+        String msgQ = exQ.getMessage();
+        assertNotNull(msgQ, "exception must have a message");
+        assertTrue(msgQ.contains("QUALITY_BINNED"),
+            "QB error must name the codec; got: " + msgQ);
+        assertTrue(msgQ.contains("cigars"),
+            "QB error must name the channel; got: " + msgQ);
+    }
+
+    // ── 43. Phase C: full seven-overrides round-trip ───────────────
+
+    @Test
+    void roundTripFullSevenOverrides(@TempDir Path tmp) {
+        // Phase B's roundTripFullStack covered six channels. Phase C
+        // extends to seven by adding cigars=RANS_ORDER1 (the
+        // recommended default). All seven channels round-trip; on-disk
+        // @compression matches per-channel codec id.
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L + 1_000_000L;
+        int[] flags = new int[N_READS];
+        for (int i = 0; i < N_READS; i++)
+            flags[i] = (i % 2 == 0) ? 0x0001 : 0x0083;
+        byte[] mapq = new byte[N_READS];
+        for (int i = 0; i < N_READS; i++)
+            mapq[i] = (i % 5 != 0) ? (byte) 60 : (byte) 0;
+        byte[] seq  = pureAcgt();
+        byte[] qual = qualBinCentre();
+        List<String> names = illuminaNames(N_READS);
+
+        long[] offsets = new long[N_READS];
+        int[]  lengths = new int[N_READS];
+        for (int i = 0; i < N_READS; i++) {
+            offsets[i] = (long) i * READ_LEN;
+            lengths[i] = READ_LEN;
+        }
+        List<String> cigars     = new ArrayList<>(N_READS);
+        List<String> mateChroms = new ArrayList<>(N_READS);
+        List<String> chroms     = new ArrayList<>(N_READS);
+        long[] matePos = new long[N_READS];
+        int[]  tlens   = new int[N_READS];
+        for (int i = 0; i < N_READS; i++) {
+            // Mixed CIGARs so the rANS path isn't trivial.
+            cigars.add((i % 3 == 0) ? "100M"
+                     : (i % 3 == 1) ? "99M1D" : "50M50S");
+            mateChroms.add("chr1");
+            chroms.add("chr1");
+            matePos[i] = -1L;
+        }
+        // Build the seven-channel override map. Use a HashMap because
+        // Map.of() tops out at 10 entries but we want the explicit
+        // shape mirroring §4.3 of HANDOFF.md.
+        Map<String, Compression> overrides = new java.util.HashMap<>();
+        overrides.put("sequences",         Compression.BASE_PACK);
+        overrides.put("qualities",         Compression.QUALITY_BINNED);
+        overrides.put("read_names",        Compression.NAME_TOKENIZED);
+        overrides.put("cigars",            Compression.RANS_ORDER1);
+        overrides.put("positions",         Compression.RANS_ORDER1);
+        overrides.put("flags",             Compression.RANS_ORDER0);
+        overrides.put("mapping_qualities", Compression.RANS_ORDER1);
+
+        WrittenGenomicRun run = new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA",
+            "M86_C_FULL_SEVEN",
+            positions, mapq, flags, seq, qual, offsets, lengths,
+            cigars, names, mateChroms, matePos, tlens, chroms,
+            Compression.NONE, overrides);
+        Path file = writeRun(tmp, run, "full-seven.tio");
+
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset cgDs   = sc.openDataset("cigars")) {
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                cgDs.getPrecision(),
+                "cigars must be 1-D uint8 under RANS_ORDER1");
+            assertEquals(Compression.RANS_ORDER1.ordinal(),
+                cgDs.readIntegerAttribute("compression", -1L),
+                "cigars @compression == RANS_ORDER1 (5)");
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(N_READS, gr.readCount());
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                String expectedCigar = (i % 3 == 0) ? "100M"
+                    : (i % 3 == 1) ? "99M1D" : "50M50S";
+                assertEquals(expectedCigar, r.cigar(),
+                    "full-seven RANS_ORDER1 cigar @ read " + i);
+                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
+                    "full-seven BASE_PACK seq @ read " + i);
+                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
+                    "full-seven QUALITY_BINNED qual @ read " + i);
+                assertEquals(names.get(i), r.readName(),
+                    "full-seven NAME_TOKENIZED name @ read " + i);
+            }
+            // Integer channels via the helper (per §119).
+            long[] decodedPos = (long[]) gr.intChannelArray("positions");
+            int[]  decodedFlg = (int[])  gr.intChannelArray("flags");
+            byte[] decodedMq  = (byte[]) gr.intChannelArray("mapping_qualities");
+            assertArrayEquals(positions, decodedPos,
+                "full-seven RANS_ORDER1 positions round-trip");
+            assertArrayEquals(flags, decodedFlg,
+                "full-seven RANS_ORDER0 flags round-trip");
+            assertArrayEquals(mapq, decodedMq,
+                "full-seven RANS_ORDER1 mapq round-trip");
+        }
+    }
+
+    // ── 44. Phase C: cross-language fixture (rANS) ─────────────────
+
+    @Test
+    void crossLanguageFixtureCigarsRans() throws IOException {
+        // Python writer fixture: 100-read run with mixed CIGARs (§6.4
+        // pattern: 80% "100M" + 10% "99M1D" + 10% "50M50S") under
+        // {"cigars": RANS_ORDER1}. Java reader recovers each CIGAR
+        // byte-exact through the M83 rANS decode + length-prefix-concat
+        // walk.
+        int n = 100;
+        Path tmp = copyFixtureToTemp("m86_codec_cigars_rans.tio");
+        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertNotNull(gr, "fixture has genomic_0001");
+            assertEquals(n, gr.readCount(), "fixture read count");
+            for (int i = 0; i < n; i++) {
+                AlignedRead r = gr.readAt(i);
+                int mod = i % 10;
+                String expected = (mod < 8) ? "100M"
+                                : (mod == 8) ? "99M1D" : "50M50S";
+                assertEquals(expected, r.cigar(),
+                    "rANS fixture cigar @ " + i);
+            }
+        } finally {
+            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+        }
+        // Verify the on-disk schema-lift layout (uint8 + @compression == 5).
+        Path tmp2 = copyFixtureToTemp("m86_codec_cigars_rans.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                cgDs.getPrecision(),
+                "fixture cigars must be 1-D uint8 (schema-lifted)");
+            assertEquals(Compression.RANS_ORDER1.ordinal(),
+                cgDs.readIntegerAttribute("compression", -1L),
+                "fixture cigars @compression == RANS_ORDER1 (5)");
+        } finally {
+            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
+        }
+    }
+
+    // ── 45. Phase C: cross-language fixture (NAME_TOKENIZED) ───────
+
+    @Test
+    void crossLanguageFixtureCigarsNameTokenized() throws IOException {
+        // Python writer fixture: 100-read run with all-uniform CIGARs
+        // (["100M"] * 100) under {"cigars": NAME_TOKENIZED}. The
+        // NAME_TOKENIZED columnar mode produces a tiny (~30 byte)
+        // stream that the Java decoder reverses to recover the
+        // original CIGAR list.
+        int n = 100;
+        Path tmp = copyFixtureToTemp("m86_codec_cigars_name_tokenized.tio");
+        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertNotNull(gr, "fixture has genomic_0001");
+            assertEquals(n, gr.readCount(), "fixture read count");
+            for (int i = 0; i < n; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals("100M", r.cigar(),
+                    "NAME_TOKENIZED fixture cigar @ " + i);
+            }
+        } finally {
+            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+        }
+        // Verify the on-disk schema-lift layout (uint8 + @compression == 8).
+        Path tmp2 = copyFixtureToTemp("m86_codec_cigars_name_tokenized.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                cgDs.getPrecision(),
+                "fixture cigars must be 1-D uint8 (schema-lifted)");
+            assertEquals(Compression.NAME_TOKENIZED.ordinal(),
+                cgDs.readIntegerAttribute("compression", -1L),
+                "fixture cigars @compression == NAME_TOKENIZED (8)");
         } finally {
             try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
         }

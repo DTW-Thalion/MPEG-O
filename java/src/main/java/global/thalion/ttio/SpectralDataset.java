@@ -591,6 +591,10 @@ public class SpectralDataset implements
                     Enums.Compression.QUALITY_BINNED),
                 "read_names", java.util.Set.of(
                     Enums.Compression.NAME_TOKENIZED),
+                "cigars", java.util.Set.of(
+                    Enums.Compression.RANS_ORDER0,
+                    Enums.Compression.RANS_ORDER1,
+                    Enums.Compression.NAME_TOKENIZED),
                 "positions", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
                     Enums.Compression.RANS_ORDER1),
@@ -609,7 +613,7 @@ public class SpectralDataset implements
                 throw new IllegalArgumentException(
                     "signalCodecOverrides: channel '" + chName
                     + "' not supported (only sequences, qualities, "
-                    + "read_names, positions, flags, and "
+                    + "read_names, cigars, positions, flags, and "
                     + "mapping_qualities can use TTIO codecs)");
             }
             java.util.Set<Enums.Compression> allowed =
@@ -691,6 +695,34 @@ public class SpectralDataset implements
                             + "or RANS_ORDER1 on '" + chName + "'.");
                     }
                 }
+                // Phase C Binding Decision §120: explicit messages for
+                // wrong-content codecs on the cigars channel. CIGAR
+                // strings are 7-bit ASCII per the SAM spec; BASE_PACK
+                // assumes ACGT bytes and QUALITY_BINNED assumes Phred
+                // values, so either would silently corrupt the CIGARs.
+                if ("cigars".equals(chName)) {
+                    if (codec == Enums.Compression.BASE_PACK) {
+                        throw new IllegalArgumentException(
+                            "signalCodecOverrides['" + chName + "']: codec "
+                            + "BASE_PACK is not valid on the '"
+                            + chName + "' channel — BASE_PACK 2-bit-packs "
+                            + "ACGT sequence bytes and would silently "
+                            + "corrupt the CIGAR strings stored on this "
+                            + "channel. Use RANS_ORDER0, RANS_ORDER1, or "
+                            + "NAME_TOKENIZED on '" + chName + "'.");
+                    }
+                    if (codec == Enums.Compression.QUALITY_BINNED) {
+                        throw new IllegalArgumentException(
+                            "signalCodecOverrides['" + chName + "']: codec "
+                            + "QUALITY_BINNED is not valid on the '"
+                            + chName + "' channel — QUALITY_BINNED "
+                            + "quantises Phred quality scores onto an "
+                            + "8-bin centre table and would silently "
+                            + "destroy the CIGAR strings stored on this "
+                            + "channel. Use RANS_ORDER0, RANS_ORDER1, or "
+                            + "NAME_TOKENIZED on '" + chName + "'.");
+                    }
+                }
                 throw new IllegalArgumentException(
                     "signalCodecOverrides['" + chName + "']: codec "
                     + codec + " not supported on the '" + chName
@@ -751,7 +783,46 @@ public class SpectralDataset implements
                 List<global.thalion.ttio.providers.CompoundField> vlField = List.of(
                     new global.thalion.ttio.providers.CompoundField("value",
                         global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
-                writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
+                // M86 Phase C: schema lift for cigars. When an override
+                // is present, replace the M82 compound dataset with a
+                // flat 1-D uint8 dataset of the same name carrying the
+                // codec output, plus an @compression attribute (Binding
+                // Decisions §120-§122). Three codec ids are supported:
+                //   * RANS_ORDER0 / RANS_ORDER1: serialise the CIGAR
+                //     list[String] via length-prefix-concat
+                //     (varint(asciiLen) + asciiBytes per CIGAR — §2.5
+                //     of the Phase C plan), then encode through M83
+                //     rANS. Per Gotcha §139 this is NOT NAME_TOKENIZED's
+                //     verbatim format then rANS-encoded.
+                //   * NAME_TOKENIZED: pass the list[String] directly
+                //     to NameTokenizer.encode (the codec already
+                //     handles list[str] input).
+                // The two layouts are mutually exclusive within a
+                // single run; readers dispatch on dataset shape and the
+                // @compression attribute. No HDF5 filter is applied —
+                // codec output is high-entropy (Binding Decision §87).
+                if (run.signalCodecOverrides().containsKey("cigars")) {
+                    Enums.Compression cigarsCodec =
+                        run.signalCodecOverrides().get("cigars");
+                    byte[] encoded = encodeCigars(run.cigars(), cigarsCodec);
+                    global.thalion.ttio.providers.StorageDataset cgDs;
+                    try {
+                        cgDs = sc.createDataset("cigars",
+                            Enums.Precision.UINT8, encoded.length,
+                            65536, Enums.Compression.NONE, 0);
+                    } catch (UnsupportedOperationException e) {
+                        cgDs = sc.createDataset("cigars",
+                            Enums.Precision.UINT8, encoded.length,
+                            0, Enums.Compression.NONE, 0);
+                    }
+                    try (var closeMe = cgDs) {
+                        closeMe.writeAll(encoded);
+                        closeMe.setAttribute("compression",
+                            codecIdFor(cigarsCodec));
+                    }
+                } else {
+                    writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
+                }
                 // M86 Phase E: schema lift for read_names. When the
                 // NAME_TOKENIZED override is set, replace the M82
                 // compound dataset with a flat 1-D uint8 dataset of
@@ -874,6 +945,79 @@ public class SpectralDataset implements
      *  intent is explicit at the call site. */
     private static int codecIdFor(Enums.Compression codec) {
         return codec.ordinal();
+    }
+
+    /** M86 Phase C: encode a {@code List<String>} of CIGARs through one
+     *  of the three accepted codec paths.
+     *
+     *  <p>For {@link Enums.Compression#RANS_ORDER0} and
+     *  {@link Enums.Compression#RANS_ORDER1} the list is first
+     *  serialised via length-prefix-concat ({@code varint(asciiLen) +
+     *  asciiBytes} per CIGAR — §2.5 of the Phase C plan), then encoded
+     *  through M83 rANS at the matching order. ASCII-only per the SAM
+     *  spec; non-ASCII input throws {@link IllegalArgumentException}.
+     *
+     *  <p>For {@link Enums.Compression#NAME_TOKENIZED} the list is
+     *  passed directly to
+     *  {@link global.thalion.ttio.codecs.NameTokenizer#encode} which
+     *  already handles {@code List<String>} input.
+     *
+     *  <p>Per Gotcha §139 the rANS path uses raw length-prefix-concat
+     *  directly — NOT NAME_TOKENIZED's verbatim format then rANS-
+     *  encoded. The two encodings would produce different byte streams
+     *  for the same input. */
+    private static byte[] encodeCigars(
+            List<String> cigars,
+            Enums.Compression codec) {
+        if (codec == Enums.Compression.NAME_TOKENIZED) {
+            return global.thalion.ttio.codecs.NameTokenizer.encode(cigars);
+        }
+        if (codec != Enums.Compression.RANS_ORDER0
+                && codec != Enums.Compression.RANS_ORDER1) {
+            // Defensive — caller-side validation rejects this first.
+            throw new IllegalArgumentException(
+                "encodeCigars: unsupported codec " + codec);
+        }
+        java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+        for (int idx = 0; idx < cigars.size(); idx++) {
+            String cig = cigars.get(idx);
+            if (cig == null) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides['cigars']: cigar at index "
+                    + idx + " is null");
+            }
+            for (int j = 0; j < cig.length(); j++) {
+                if (cig.charAt(j) > 0x7F) {
+                    throw new IllegalArgumentException(
+                        "signalCodecOverrides['cigars']: cigar at index "
+                        + idx + " contains non-ASCII bytes — CIGARs "
+                        + "must be 7-bit ASCII per the SAM spec");
+                }
+            }
+            byte[] payload = cig.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+            writeUnsignedVarint(buf, payload.length);
+            buf.write(payload, 0, payload.length);
+        }
+        int order = (codec == Enums.Compression.RANS_ORDER0) ? 0 : 1;
+        return global.thalion.ttio.codecs.Rans.encode(buf.toByteArray(), order);
+    }
+
+    /** Unsigned LEB128 varint writer matching the encoding used by the
+     *  {@link global.thalion.ttio.codecs.NameTokenizer} verbatim path —
+     *  low 7 bits per byte, top bit set on continuation, terminated by
+     *  the first byte with the top bit clear. The cigars rANS path
+     *  serialises each entry as {@code varint(asciiLen) + asciiBytes}. */
+    private static void writeUnsignedVarint(
+            java.io.ByteArrayOutputStream out, long n) {
+        if (n < 0) {
+            throw new IllegalArgumentException(
+                "writeUnsignedVarint: negative value " + n);
+        }
+        while (Long.compareUnsigned(n, 0x80L) >= 0) {
+            out.write((int) ((n & 0x7FL) | 0x80L));
+            n >>>= 7;
+        }
+        out.write((int) (n & 0x7FL));
     }
 
     /** M86 Phase B: write an integer signal channel, optionally through
