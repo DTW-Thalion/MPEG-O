@@ -295,11 +295,12 @@ static void testRejectInvalidChannel(void)
 {
     NSData *seqBytes  = m86PureACGTSequences();
     NSData *qualBytes = m86PhredCycleQualities();
-    // M86 Phase B (Binding Decision §117): positions/flags/
-    // mapping_qualities are now valid override channels for the rANS
-    // codecs. Use `cigars` (still not in the override-eligible set)
-    // to exercise the unknown-channel rejection path.
-    NSDictionary *overrides = @{ @"cigars": @(TTIOCompressionRansOrder0) };
+    // M86 Phase C (Binding Decisions §120, §124): cigars joined the
+    // override-eligible set; mate_info remains the only structurally-
+    // VL string channel the validator continues to reject (Gotcha
+    // §137). Use `mate_info` to exercise the unknown-channel rejection
+    // path now that cigars is valid.
+    NSDictionary *overrides = @{ @"mate_info": @(TTIOCompressionRansOrder0) };
     TTIOWrittenGenomicRun *run = m86MakeRun(seqBytes, qualBytes,
                                             overrides, TTIOCompressionZlib);
     NSString *path = m86TmpPath("badch");
@@ -314,10 +315,10 @@ static void testRejectInvalidChannel(void)
         raised = YES;
         captured = e;
     }
-    PASS(raised, "M86: override on 'cigars' raises NSException");
+    PASS(raised, "M86: override on 'mate_info' raises NSException");
     PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
          "M86: bad-channel exception is NSInvalidArgumentException");
-    PASS(captured && [captured.reason rangeOfString:@"cigars"].location != NSNotFound,
+    PASS(captured && [captured.reason rangeOfString:@"mate_info"].location != NSNotFound,
          "M86: bad-channel exception names the rejected channel");
 
     // Validation runs before the genomic_runs subtree is built, so no
@@ -2294,6 +2295,784 @@ static void testCrossLanguageFixtureIntegerChannels(void)
          (unsigned)posA, (unsigned)flgA, (unsigned)mqA);
 }
 
+// ════════════════════════════════════════════════════════════════════
+// M86 Phase C — rANS + NAME_TOKENIZED on the cigars channel.
+// HANDOFF.md M86 Phase C §6.2. Mirrors Python tests #39–#47 + the
+// two cross-language fixture readers.
+//
+// Schema lift: when signalCodecOverrides contains "cigars", the
+// writer replaces the M82 compound cigars dataset (VL_STRING-in-
+// compound) with a flat 1-D uint8 dataset of the same name carrying
+// the codec output, plus an @compression attribute naming the codec
+// id. Three codec paths accepted (Binding Decision §120):
+//   - RANS_ORDER0 / RANS_ORDER1: serialise NSArray<NSString*> via
+//     length-prefix-concat (varint(asciiLen) + asciiBytes per
+//     CIGAR), then TTIORansEncode (Gotcha §139).
+//   - NAME_TOKENIZED: TTIONameTokenizerEncode directly on the
+//     list[str] (the codec's self-describing wire format).
+// ════════════════════════════════════════════════════════════════════
+
+/** Build a Phase C cigars run with caller-supplied cigars list. The
+ *  other channels mirror m86PhEMakeRun's defaults so the new tests
+ *  stay isolated to the cigars dispatch path. */
+static TTIOWrittenGenomicRun *m86PhCMakeRun(
+    NSData *seqBytes, NSData *qualBytes,
+    NSArray<NSString *> *cigars,
+    NSArray<NSString *> *names,
+    NSDictionary<NSString *, NSNumber *> *codecOverrides,
+    TTIOCompression baseCompression)
+{
+    NSUInteger n = cigars.count;
+    NSMutableData *positions = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    NSMutableData *mapqs     = [NSMutableData dataWithLength:n * sizeof(uint8_t)];
+    NSMutableData *flags     = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+    NSMutableData *offsets   = [NSMutableData dataWithLength:n * sizeof(uint64_t)];
+    NSMutableData *lengths   = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+    NSMutableData *matePos   = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    NSMutableData *tlens     = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+    int64_t  *posp = (int64_t  *)positions.mutableBytes;
+    uint8_t  *mqp  = (uint8_t  *)mapqs.mutableBytes;
+    uint64_t *op   = (uint64_t *)offsets.mutableBytes;
+    uint32_t *lp   = (uint32_t *)lengths.mutableBytes;
+    int64_t  *mpp  = (int64_t  *)matePos.mutableBytes;
+    NSUInteger readLen = (seqBytes.length > 0 && n > 0)
+                         ? (seqBytes.length / n) : 0;
+    NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *chroms = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray<NSString *> *namesActual = names
+        ? [names mutableCopy]
+        : [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        posp[i] = (int64_t)(i * 1000);
+        mqp[i]  = 60;
+        op[i]   = (uint64_t)(i * readLen);
+        lp[i]   = (uint32_t)readLen;
+        mpp[i]  = -1;
+        [mateChroms addObject:@"chr1"];
+        [chroms addObject:@"chr1"];
+        if (names == nil) {
+            [namesActual addObject:[NSString stringWithFormat:@"r%lu",
+                                                              (unsigned long)i]];
+        }
+    }
+    (void)flags; (void)tlens;
+    return [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                   referenceUri:@"GRCh38.p14"
+                       platform:@"ILLUMINA"
+                     sampleName:@"M86C_TEST"
+                      positions:positions
+               mappingQualities:mapqs
+                          flags:flags
+                      sequences:seqBytes
+                      qualities:qualBytes
+                        offsets:offsets
+                        lengths:lengths
+                         cigars:cigars
+                      readNames:namesActual
+                mateChromosomes:mateChroms
+                  matePositions:matePos
+                templateLengths:tlens
+                    chromosomes:chroms
+              signalCompression:baseCompression
+            signalCodecOverrides:codecOverrides];
+}
+
+/** Build the canonical Phase C 1000-read mixed-CIGAR list — the
+ *  realistic-WGS workload pattern matching the Python implementer's
+ *  generator (HANDOFF M86 Phase C §6.4 fixture A): 80% "100M" +
+ *  10% "99M1D" + 10% "50M50S". */
+static NSArray<NSString *> *m86PhCMixedCigars(NSUInteger n)
+{
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        NSUInteger r = i % 10;
+        if (r < 8)         [out addObject:@"100M"];
+        else if (r == 8)   [out addObject:@"99M1D"];
+        else               [out addObject:@"50M50S"];
+    }
+    return out;
+}
+
+/** Build a 1000-read mixed-CIGAR Phase C run for the size tests. */
+static TTIOWrittenGenomicRun *m86PhCMakeMixed1000Run(
+    NSDictionary<NSString *, NSNumber *> *codecOverrides)
+{
+    NSUInteger nReads = 1000;
+    NSUInteger readLen = 100;
+    NSUInteger total = nReads * readLen;
+    NSMutableData *seq = [NSMutableData dataWithLength:total];
+    uint8_t *sp = (uint8_t *)seq.mutableBytes;
+    static const uint8_t cycle[4] = {'A', 'C', 'G', 'T'};
+    for (NSUInteger i = 0; i < total; i++) sp[i] = cycle[i % 4];
+    NSMutableData *qual = [NSMutableData dataWithLength:total];
+    uint8_t *qp = (uint8_t *)qual.mutableBytes;
+    for (NSUInteger i = 0; i < total; i++) qp[i] = (uint8_t)(30 + (i % 11));
+    NSArray<NSString *> *cigars = m86PhCMixedCigars(nReads);
+    NSMutableArray *names = [NSMutableArray arrayWithCapacity:nReads];
+    for (NSUInteger i = 0; i < nReads; i++) {
+        [names addObject:[NSString stringWithFormat:@"r%lu",
+                                                    (unsigned long)i]];
+    }
+    return m86PhCMakeRun(seq, qual, cigars, names,
+                         codecOverrides, TTIOCompressionNone);
+}
+
+/** Build a 1000-read uniform-CIGAR (all "100M") Phase C run. */
+static TTIOWrittenGenomicRun *m86PhCMakeUniform1000Run(
+    NSDictionary<NSString *, NSNumber *> *codecOverrides)
+{
+    NSUInteger nReads = 1000;
+    NSUInteger readLen = 100;
+    NSUInteger total = nReads * readLen;
+    NSMutableData *seq = [NSMutableData dataWithLength:total];
+    uint8_t *sp = (uint8_t *)seq.mutableBytes;
+    static const uint8_t cycle[4] = {'A', 'C', 'G', 'T'};
+    for (NSUInteger i = 0; i < total; i++) sp[i] = cycle[i % 4];
+    NSMutableData *qual = [NSMutableData dataWithLength:total];
+    uint8_t *qp = (uint8_t *)qual.mutableBytes;
+    for (NSUInteger i = 0; i < total; i++) qp[i] = (uint8_t)(30 + (i % 11));
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:nReads];
+    NSMutableArray *names  = [NSMutableArray arrayWithCapacity:nReads];
+    for (NSUInteger i = 0; i < nReads; i++) {
+        [cigars addObject:@"100M"];
+        [names  addObject:[NSString stringWithFormat:@"r%lu",
+                                                     (unsigned long)i]];
+    }
+    return m86PhCMakeRun(seq, qual, cigars, names,
+                         codecOverrides, TTIOCompressionNone);
+}
+
+// Test 33 — round-trip cigars with RANS_ORDER1 byte-exact across a
+// 100-read mixed-CIGAR input (the realistic WGS workload).
+static void testRoundTripCigarsRansOrder1(void)
+{
+    NSData *seqBytes  = m86PureACGTSequences();
+    NSData *qualBytes = m86PhredCycleQualities();
+    NSArray<NSString *> *cigars = m86PhCMixedCigars(kM86_NReads);
+    NSDictionary *overrides = @{
+        @"cigars": @(TTIOCompressionRansOrder1)
+    };
+    TTIOWrittenGenomicRun *run = m86PhCMakeRun(seqBytes, qualBytes,
+                                                cigars, nil, overrides,
+                                                TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phc_cig_rans1");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhC: write cigars+RANS_ORDER1 succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    PASS(ds != nil, "M86 PhC: cigars-RANS file reopens");
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M86 PhC: cigars-RANS genomicRuns dict populated");
+    PASS(gr.readCount == kM86_NReads,
+         "M86 PhC: cigars-RANS readCount round-trips");
+
+    BOOL allMatch = YES;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
+        if (r == nil) { allMatch = NO; break; }
+        if (![r.cigar isEqualToString:cigars[i]]) {
+            allMatch = NO;
+            break;
+        }
+    }
+    PASS(allMatch,
+         "M86 PhC: cigars+RANS_ORDER1 round-trips byte-exact across "
+         "all 10 reads");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 34 — round-trip cigars with NAME_TOKENIZED on uniform input
+// (NAME_TOKENIZED's columnar-mode sweet spot per HANDOFF §1.2).
+static void testRoundTripCigarsNameTokenizedUniform(void)
+{
+    NSData *seqBytes  = m86PureACGTSequences();
+    NSData *qualBytes = m86PhredCycleQualities();
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    for (NSUInteger i = 0; i < kM86_NReads; i++) [cigars addObject:@"100M"];
+    NSDictionary *overrides = @{
+        @"cigars": @(TTIOCompressionNameTokenized)
+    };
+    TTIOWrittenGenomicRun *run = m86PhCMakeRun(seqBytes, qualBytes,
+                                                cigars, nil, overrides,
+                                                TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phc_cig_nt_uni");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhC: write cigars+NAME_TOKENIZED uniform succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    BOOL allMatch = YES;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
+        if (r == nil) { allMatch = NO; break; }
+        if (![r.cigar isEqualToString:@"100M"]) {
+            allMatch = NO;
+            break;
+        }
+    }
+    PASS(allMatch,
+         "M86 PhC: cigars+NAME_TOKENIZED uniform round-trips byte-exact "
+         "across all 10 reads");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 35 — round-trip cigars with NAME_TOKENIZED on mixed input.
+//
+// Per HANDOFF §1.2 the codec falls back to verbatim mode here (token
+// shapes vary across reads); round-trip still succeeds but the wire
+// is much larger than RANS_ORDER1's. The size test #36 documents
+// the cost.
+static void testRoundTripCigarsNameTokenizedMixed(void)
+{
+    NSData *seqBytes  = m86PureACGTSequences();
+    NSData *qualBytes = m86PhredCycleQualities();
+    NSArray<NSString *> *cigars = m86PhCMixedCigars(kM86_NReads);
+    NSDictionary *overrides = @{
+        @"cigars": @(TTIOCompressionNameTokenized)
+    };
+    TTIOWrittenGenomicRun *run = m86PhCMakeRun(seqBytes, qualBytes,
+                                                cigars, nil, overrides,
+                                                TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phc_cig_nt_mix");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhC: write cigars+NAME_TOKENIZED mixed succeeds");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    BOOL allMatch = YES;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
+        if (r == nil) { allMatch = NO; break; }
+        if (![r.cigar isEqualToString:cigars[i]]) {
+            allMatch = NO;
+            break;
+        }
+    }
+    PASS(allMatch,
+         "M86 PhC: cigars+NAME_TOKENIZED mixed round-trips byte-exact "
+         "(verbatim-mode fallback path)");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 36 — side-by-side cigars wire size for the 1000-read mixed
+// CIGAR input. Demonstrates HANDOFF §1.2 selection guidance: on
+// realistic-WGS-like input RANS_ORDER1 << NAME_TOKENIZED < no-override.
+static void testSizeComparisonCigarsCodecs(void)
+{
+    TTIOWrittenGenomicRun *noRun   = m86PhCMakeMixed1000Run(@{});
+    TTIOWrittenGenomicRun *ransRun = m86PhCMakeMixed1000Run(
+        @{ @"cigars": @(TTIOCompressionRansOrder1) });
+    TTIOWrittenGenomicRun *ntRun   = m86PhCMakeMixed1000Run(
+        @{ @"cigars": @(TTIOCompressionNameTokenized) });
+
+    NSString *pNo   = m86TmpPath("phc_cig_size_no");
+    NSString *pRans = m86TmpPath("phc_cig_size_rans");
+    NSString *pNt   = m86TmpPath("phc_cig_size_nt");
+    unlink(pNo.fileSystemRepresentation);
+    unlink(pRans.fileSystemRepresentation);
+    unlink(pNt.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(pNo,   noRun,   &err),
+         "M86 PhC size: no-override cigars write succeeds");
+    PASS(m86Write(pRans, ransRun, &err),
+         "M86 PhC size: cigars+RANS_ORDER1 write succeeds");
+    PASS(m86Write(pNt,   ntRun,   &err),
+         "M86 PhC size: cigars+NAME_TOKENIZED write succeeds");
+
+    NSDictionary *aNo   = [[NSFileManager defaultManager]
+        attributesOfItemAtPath:pNo error:nil];
+    NSDictionary *aRans = [[NSFileManager defaultManager]
+        attributesOfItemAtPath:pRans error:nil];
+    NSDictionary *aNt   = [[NSFileManager defaultManager]
+        attributesOfItemAtPath:pNt error:nil];
+    unsigned long long noFile   = [aNo[NSFileSize]   unsignedLongLongValue];
+    unsigned long long ransFile = [aRans[NSFileSize] unsignedLongLongValue];
+    unsigned long long ntFile   = [aNt[NSFileSize]   unsignedLongLongValue];
+
+    hsize_t ransSize = m86PhEChannelStorageSize(
+        pRans.fileSystemRepresentation, "cigars");
+    hsize_t ntSize   = m86PhEChannelStorageSize(
+        pNt.fileSystemRepresentation, "cigars");
+
+    // HDF5 storage_size on the M82 compound misses the global VL heap.
+    // Approximate the M82 footprint via file-size delta vs the rANS
+    // file (which differs only in the cigars dataset). Same approach
+    // as Python's test_size_comparison_cigars_codecs.
+    long long signedDelta = (long long)noFile - (long long)ransFile;
+    unsigned long long noFootprint = (unsigned long long)
+        ((long long)ransSize + (signedDelta > 0 ? signedDelta : 0));
+
+    printf("\n[M86 Phase C size comparison — 1000-read mixed CIGARs]\n"
+           "  no-override (M82 compound): %llu bytes (approx; file=%llu)\n"
+           "  RANS_ORDER1:                %llu bytes (file=%llu)\n"
+           "  NAME_TOKENIZED (verbatim):  %llu bytes (file=%llu)\n",
+           noFootprint, noFile,
+           (unsigned long long)ransSize, ransFile,
+           (unsigned long long)ntSize, ntFile);
+
+    PASS((unsigned long long)ransSize < (unsigned long long)ntSize,
+         "M86 PhC size: RANS_ORDER1 (%llu) beats NAME_TOKENIZED-verbatim "
+         "(%llu) on mixed-CIGAR input (§1.2 — realistic WGS workload)",
+         (unsigned long long)ransSize, (unsigned long long)ntSize);
+    PASS((unsigned long long)ntSize < noFootprint,
+         "M86 PhC size: NAME_TOKENIZED-verbatim (%llu) still beats M82 "
+         "compound footprint (%llu) — the codec at least avoids the "
+         "VL_STRING heap overhead",
+         (unsigned long long)ntSize, noFootprint);
+
+    unlink(pNo.fileSystemRepresentation);
+    unlink(pRans.fileSystemRepresentation);
+    unlink(pNt.fileSystemRepresentation);
+}
+
+// Test 37 — uniform-cigar size win: NAME_TOKENIZED columnar-mode and
+// RANS_ORDER1 both decisively beat the raw 5000-byte length-prefix-
+// concat for 1000 × "100M". Per Python's test_size_win_cigars_uniform
+// we assert NAME_TOKENIZED < 50% of the raw concat baseline; rANS
+// also beats raw concat. (Ordering between NT and rANS on uniform
+// input depends on per-codec overhead and is not asserted.)
+static void testSizeWinCigarsUniform(void)
+{
+    TTIOWrittenGenomicRun *ransRun = m86PhCMakeUniform1000Run(
+        @{ @"cigars": @(TTIOCompressionRansOrder1) });
+    TTIOWrittenGenomicRun *ntRun   = m86PhCMakeUniform1000Run(
+        @{ @"cigars": @(TTIOCompressionNameTokenized) });
+
+    NSString *pRans = m86TmpPath("phc_cig_uni_rans");
+    NSString *pNt   = m86TmpPath("phc_cig_uni_nt");
+    unlink(pRans.fileSystemRepresentation);
+    unlink(pNt.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(pRans, ransRun, &err),
+         "M86 PhC size-uni: cigars+RANS_ORDER1 write succeeds");
+    PASS(m86Write(pNt,   ntRun,   &err),
+         "M86 PhC size-uni: cigars+NAME_TOKENIZED write succeeds");
+
+    hsize_t ransSize = m86PhEChannelStorageSize(
+        pRans.fileSystemRepresentation, "cigars");
+    hsize_t ntSize   = m86PhEChannelStorageSize(
+        pNt.fileSystemRepresentation, "cigars");
+    NSUInteger rawConcat = 1000 * 5;  // varint(3) + b"100M"
+
+    PASS((unsigned long long)ntSize < (unsigned long long)(rawConcat / 2),
+         "M86 PhC size-uni: NAME_TOKENIZED (%llu) < 50%% of raw concat "
+         "(%lu/2 = %lu) — columnar-mode wins on uniform input",
+         (unsigned long long)ntSize,
+         (unsigned long)rawConcat,
+         (unsigned long)(rawConcat / 2));
+    PASS((unsigned long long)ransSize < (unsigned long long)rawConcat,
+         "M86 PhC size-uni: RANS_ORDER1 (%llu) beats raw concat (%lu) "
+         "on uniform input via order-1 entropy collapse",
+         (unsigned long long)ransSize, (unsigned long)rawConcat);
+
+    unlink(pRans.fileSystemRepresentation);
+    unlink(pNt.fileSystemRepresentation);
+}
+
+// Test 38 — verify @compression attribute correctness on the cigars
+// dataset under each accepted codec override.
+static void testAttributeSetCorrectlyCigars(void)
+{
+    NSData *seqBytes  = m86PureACGTSequences();
+    NSData *qualBytes = m86PhredCycleQualities();
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    for (NSUInteger i = 0; i < kM86_NReads; i++) [cigars addObject:@"100M"];
+
+    const TTIOCompression codecs[3] = {
+        TTIOCompressionRansOrder0,
+        TTIOCompressionRansOrder1,
+        TTIOCompressionNameTokenized,
+    };
+    const char *labels[3] = {"RANS_ORDER0", "RANS_ORDER1", "NAME_TOKENIZED"};
+
+    for (int k = 0; k < 3; k++) {
+        TTIOCompression codec = codecs[k];
+        NSDictionary *overrides = @{ @"cigars": @(codec) };
+        TTIOWrittenGenomicRun *run = m86PhCMakeRun(seqBytes, qualBytes,
+                                                    cigars, nil, overrides,
+                                                    TTIOCompressionZlib);
+        NSString *path = m86TmpPath("phc_cig_attr");
+        unlink(path.fileSystemRepresentation);
+
+        NSError *err = nil;
+        PASS(m86Write(path, run, &err),
+             "M86 PhC attr/%s: write succeeds", labels[k]);
+
+        // Verify cigars dataset is 1-D uint8 with the right
+        // @compression value.
+        hid_t f = H5Fopen(path.fileSystemRepresentation,
+                          H5F_ACC_RDONLY, H5P_DEFAULT);
+        hid_t did = H5Dopen2(f,
+            "study/genomic_runs/genomic_0001/signal_channels/cigars",
+            H5P_DEFAULT);
+        hid_t htype = H5Dget_type(did);
+        PASS(H5Tequal(htype, H5T_NATIVE_UINT8) > 0,
+             "M86 PhC attr/%s: cigars dtype == H5T_NATIVE_UINT8",
+             labels[k]);
+        H5Tclose(htype);
+        hid_t space = H5Dget_space(did);
+        int rank = H5Sget_simple_extent_ndims(space);
+        PASS(rank == 1,
+             "M86 PhC attr/%s: cigars is 1-D (rank=%d)", labels[k], rank);
+        H5Sclose(space);
+        H5Dclose(did);
+        H5Fclose(f);
+
+        uint8_t cigarsAttr = m86ReadCompressionAttr(
+            path.fileSystemRepresentation, "cigars");
+        PASS(cigarsAttr == (uint8_t)codec,
+             "M86 PhC attr/%s: cigars @compression == %u (got %u)",
+             labels[k], (unsigned)codec, (unsigned)cigarsAttr);
+
+        // Untouched read_names remains compound (no override), and
+        // sequences/qualities carry no @compression either.
+        uint8_t namesAttr = m86ReadCompressionAttr(
+            path.fileSystemRepresentation, "read_names");
+        uint8_t seqAttr = m86ReadCompressionAttr(
+            path.fileSystemRepresentation, "sequences");
+        uint8_t qualAttr = m86ReadCompressionAttr(
+            path.fileSystemRepresentation, "qualities");
+        // read_names stays compound under no override, so the helper
+        // returns 254 (sentinel for "absent attribute"). Same for
+        // sequences and qualities.
+        PASS(namesAttr == 254 && seqAttr == 254 && qualAttr == 254,
+             "M86 PhC attr/%s: only cigars carries @compression; "
+             "read_names/sequences/qualities have no attribute",
+             labels[k]);
+
+        unlink(path.fileSystemRepresentation);
+    }
+}
+
+// Test 39 — without override, cigars stays compound (M82) and
+// round-trips via the existing read path (which now goes through
+// cigarAtIndex:'s compound fall-through).
+static void testBackCompatCigarsUnchanged(void)
+{
+    NSData *seqBytes  = m86PureACGTSequences();
+    NSData *qualBytes = m86PhredCycleQualities();
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    for (NSUInteger i = 0; i < kM86_NReads; i++) [cigars addObject:@"100M"];
+
+    // Empty overrides — cigars stays as the M82 compound.
+    TTIOWrittenGenomicRun *run = m86PhCMakeRun(seqBytes, qualBytes,
+                                                cigars, nil, @{},
+                                                TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phc_cig_bc");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhC back-compat: empty-overrides write succeeds");
+
+    // Verify cigars is COMPOUND (not H5T_INTEGER) and carries no
+    // @compression attribute.
+    hid_t f = H5Fopen(path.fileSystemRepresentation,
+                      H5F_ACC_RDONLY, H5P_DEFAULT);
+    hid_t did = H5Dopen2(f,
+        "study/genomic_runs/genomic_0001/signal_channels/cigars",
+        H5P_DEFAULT);
+    PASS(did >= 0, "M86 PhC back-compat: cigars dataset exists");
+    hid_t htype = H5Dget_type(did);
+    H5T_class_t cls = H5Tget_class(htype);
+    PASS(cls == H5T_COMPOUND,
+         "M86 PhC back-compat: cigars dataset class is H5T_COMPOUND "
+         "(got %d) — no schema lift without override", (int)cls);
+    PASS(H5Aexists(did, "compression") <= 0,
+         "M86 PhC back-compat: compound cigars carries NO "
+         "@compression attribute");
+    H5Tclose(htype);
+    if (did >= 0) H5Dclose(did);
+    if (f   >= 0) H5Fclose(f);
+
+    // Round-trip via the existing M82 compound read path through
+    // cigarAtIndex:'s compound fall-through.
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    BOOL allMatch = YES;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
+        if (r == nil) { allMatch = NO; break; }
+        if (![r.cigar isEqualToString:@"100M"]) {
+            allMatch = NO;
+            break;
+        }
+    }
+    PASS(allMatch,
+         "M86 PhC back-compat: M82 compound cigars round-trips "
+         "byte-exact via the cigarAtIndex: compound fall-through");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 40 — BASE_PACK on cigars raises NSException with rationale.
+static void testRejectBasePackOnCigars(void)
+{
+    NSData *seqBytes  = m86PureACGTSequences();
+    NSData *qualBytes = m86PhredCycleQualities();
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    for (NSUInteger i = 0; i < kM86_NReads; i++) [cigars addObject:@"100M"];
+    NSDictionary *overrides = @{
+        @"cigars": @(TTIOCompressionBasePack)
+    };
+    TTIOWrittenGenomicRun *run = m86PhCMakeRun(seqBytes, qualBytes,
+                                                cigars, nil, overrides,
+                                                TTIOCompressionZlib);
+    NSString *path = m86TmpPath("phc_cig_bp_bad");
+    unlink(path.fileSystemRepresentation);
+
+    BOOL raised = NO;
+    NSException *captured = nil;
+    @try {
+        NSError *err = nil;
+        m86Write(path, run, &err);
+    } @catch (NSException *e) {
+        raised = YES;
+        captured = e;
+    }
+    PASS(raised, "M86 PhC: BASE_PACK on 'cigars' raises NSException");
+    PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
+         "M86 PhC: BASE_PACK-on-cigars exception is "
+         "NSInvalidArgumentException");
+    NSString *reason = captured ? captured.reason : @"";
+    PASS([reason rangeOfString:@"BASE_PACK"].location != NSNotFound,
+         "M86 PhC: BASE_PACK error message names the codec");
+    PASS([reason rangeOfString:@"cigars"].location != NSNotFound,
+         "M86 PhC: BASE_PACK error message names the channel ('cigars')");
+    PASS([reason rangeOfString:@"RANS_ORDER"].location != NSNotFound
+         || [reason rangeOfString:@"NAME_TOKENIZED"].location != NSNotFound,
+         "M86 PhC: BASE_PACK error message points at the accepted "
+         "alternatives");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 41 — full-stack with seven overrides: extends Phase B's
+// six-channel test to include cigars=RANS_ORDER1 (the recommended
+// default for real WGS data per HANDOFF §1.2 / Binding Decision §121).
+static void testRoundTripFullSevenOverrides(void)
+{
+    NSMutableData *positions = [NSMutableData dataWithLength:
+                                kM86_NReads * sizeof(int64_t)];
+    int64_t *pp = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        pp[i] = (int64_t)(i * 1000 + 1000000);
+    }
+    NSMutableData *flags = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint32_t)];
+    uint32_t *fp = (uint32_t *)flags.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        fp[i] = (i % 2 == 0) ? 0x0001u : 0x0083u;
+    }
+    NSMutableData *mapqs = [NSMutableData dataWithLength:
+                            kM86_NReads * sizeof(uint8_t)];
+    uint8_t *mq = (uint8_t *)mapqs.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        mq[i] = (i % 5 != 0) ? 60 : 0;
+    }
+    NSData *seqBytes = m86PureACGTSequences();
+    NSData *qualBytes = m86BinCentreQualities();
+    NSArray<NSString *> *names = m86PhEStructuredNames(kM86_NReads);
+    NSArray<NSString *> *cigars = m86PhCMixedCigars(kM86_NReads);
+
+    NSMutableData *offsets = [NSMutableData dataWithLength:
+                              kM86_NReads * sizeof(uint64_t)];
+    NSMutableData *lengths = [NSMutableData dataWithLength:
+                              kM86_NReads * sizeof(uint32_t)];
+    NSMutableData *matePos = [NSMutableData dataWithLength:
+                              kM86_NReads * sizeof(int64_t)];
+    NSMutableData *tlens   = [NSMutableData dataWithLength:
+                              kM86_NReads * sizeof(int32_t)];
+    uint64_t *op = (uint64_t *)offsets.mutableBytes;
+    uint32_t *lp = (uint32_t *)lengths.mutableBytes;
+    int64_t  *mp = (int64_t  *)matePos.mutableBytes;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        op[i] = (uint64_t)(i * kM86_ReadLen);
+        lp[i] = (uint32_t)kM86_ReadLen;
+        mp[i] = -1;
+    }
+    NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    NSMutableArray *chroms = [NSMutableArray arrayWithCapacity:kM86_NReads];
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        [mateChroms addObject:@"chr1"];
+        [chroms addObject:@"chr1"];
+    }
+
+    NSDictionary *overrides = @{
+        @"sequences":         @(TTIOCompressionBasePack),
+        @"qualities":         @(TTIOCompressionQualityBinned),
+        @"read_names":        @(TTIOCompressionNameTokenized),
+        @"cigars":            @(TTIOCompressionRansOrder1),  // Phase C
+        @"positions":         @(TTIOCompressionRansOrder1),
+        @"flags":             @(TTIOCompressionRansOrder0),
+        @"mapping_qualities": @(TTIOCompressionRansOrder1),
+    };
+    TTIOWrittenGenomicRun *run = [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                   referenceUri:@"GRCh38.p14"
+                       platform:@"ILLUMINA"
+                     sampleName:@"M86C_FULL7"
+                      positions:positions
+               mappingQualities:mapqs
+                          flags:flags
+                      sequences:seqBytes
+                      qualities:qualBytes
+                        offsets:offsets
+                        lengths:lengths
+                         cigars:cigars
+                      readNames:names
+                mateChromosomes:mateChroms
+                  matePositions:matePos
+                templateLengths:tlens
+                    chromosomes:chroms
+              signalCompression:TTIOCompressionZlib
+            signalCodecOverrides:overrides];
+    NSString *path = m86TmpPath("phc_full7");
+    unlink(path.fileSystemRepresentation);
+
+    NSError *err = nil;
+    PASS(m86Write(path, run, &err),
+         "M86 PhC full-7: write all-seven overrides succeeds");
+
+    uint8_t cigarsA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                              "cigars");
+    PASS(cigarsA == (uint8_t)TTIOCompressionRansOrder1,
+         "M86 PhC full-7: cigars @compression == RANS_ORDER1 (5, got %u)",
+         (unsigned)cigarsA);
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M86 PhC full-7: file reopens through reader");
+
+    BOOL allMatch = YES;
+    for (NSUInteger i = 0; i < kM86_NReads; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
+        if (r == nil) { allMatch = NO; break; }
+        if (![r.cigar isEqualToString:cigars[i]])      allMatch = NO;
+        if (![r.readName isEqualToString:names[i]])    allMatch = NO;
+        if (![r.sequence isEqualToString:m86ExpectedSequenceSlice(seqBytes, i)]) allMatch = NO;
+        if (![r.qualities isEqualToData:m86ExpectedQualitySlice(qualBytes, i)])  allMatch = NO;
+    }
+    PASS(allMatch,
+         "M86 PhC full-7: cigars + read_names + sequences + qualities "
+         "all round-trip byte-exact across all 10 reads with seven "
+         "concurrent codec overrides");
+
+    unlink(path.fileSystemRepresentation);
+}
+
+// Test 42 — cross-language fixture: Python-built cigars+RANS_ORDER1
+// fixture decodes byte-exact (HANDOFF §6.4 fixture A). The fixture
+// is a 100-read mixed-CIGAR run.
+static void testCrossLanguageFixtureCigarsRans(void)
+{
+    NSString *path = @"/home/toddw/TTI-O/objc/Tests/Fixtures/genomic/"
+                     @"m86_codec_cigars_rans.tio";
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+        printf("SKIP: M86 PhC cigars-RANS cross-language fixture not "
+               "found at %s\n", path.UTF8String);
+        return;
+    }
+
+    NSError *err = nil;
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    PASS(ds != nil,
+         "M86 PhC fixture-rans: cigars-RANS .tio opens via reader");
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M86 PhC fixture-rans: genomic_0001 present");
+    NSUInteger expected = 100;
+    PASS(gr.readCount == expected,
+         "M86 PhC fixture-rans: 100 reads from cross-language input "
+         "(got %lu)", (unsigned long)gr.readCount);
+
+    NSArray<NSString *> *expectedCigars = m86PhCMixedCigars(expected);
+    BOOL allMatch = YES;
+    for (NSUInteger i = 0; i < expected; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
+        if (r == nil) { allMatch = NO; break; }
+        if (![r.cigar isEqualToString:expectedCigars[i]]) {
+            allMatch = NO;
+            break;
+        }
+    }
+    PASS(allMatch,
+         "M86 PhC fixture-rans: 100 cigars decode byte-exact from the "
+         "Python-built cross-language fixture");
+
+    uint8_t cigarsA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                              "cigars");
+    PASS(cigarsA == (uint8_t)TTIOCompressionRansOrder1,
+         "M86 PhC fixture-rans: cigars @compression == RANS_ORDER1 "
+         "(5, got %u)", (unsigned)cigarsA);
+}
+
+// Test 43 — cross-language fixture: Python-built cigars+NAME_TOKENIZED
+// fixture decodes byte-exact (HANDOFF §6.4 fixture B). The fixture
+// is a 100-read uniform-CIGAR run.
+static void testCrossLanguageFixtureCigarsNameTokenized(void)
+{
+    NSString *path = @"/home/toddw/TTI-O/objc/Tests/Fixtures/genomic/"
+                     @"m86_codec_cigars_name_tokenized.tio";
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+        printf("SKIP: M86 PhC cigars-NAME_TOKENIZED cross-language "
+               "fixture not found at %s\n", path.UTF8String);
+        return;
+    }
+
+    NSError *err = nil;
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
+                                                                error:&err];
+    PASS(ds != nil,
+         "M86 PhC fixture-nt: cigars-NAME_TOKENIZED .tio opens via "
+         "reader");
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    PASS(gr != nil, "M86 PhC fixture-nt: genomic_0001 present");
+    NSUInteger expected = 100;
+    PASS(gr.readCount == expected,
+         "M86 PhC fixture-nt: 100 reads from cross-language input "
+         "(got %lu)", (unsigned long)gr.readCount);
+
+    BOOL allMatch = YES;
+    for (NSUInteger i = 0; i < expected; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
+        if (r == nil) { allMatch = NO; break; }
+        if (![r.cigar isEqualToString:@"100M"]) {
+            allMatch = NO;
+            break;
+        }
+    }
+    PASS(allMatch,
+         "M86 PhC fixture-nt: 100 cigars decode byte-exact (\"100M\" "
+         "× 100) from the Python-built cross-language fixture");
+
+    uint8_t cigarsA = m86ReadCompressionAttr(path.fileSystemRepresentation,
+                                              "cigars");
+    PASS(cigarsA == (uint8_t)TTIOCompressionNameTokenized,
+         "M86 PhC fixture-nt: cigars @compression == NAME_TOKENIZED "
+         "(8, got %u)", (unsigned)cigarsA);
+}
+
 // ── Entry point ─────────────────────────────────────────────────────
 
 void testM86GenomicCodecWiring(void)
@@ -2336,4 +3115,17 @@ void testM86GenomicCodecWiring(void)
     testRejectQualityBinnedOnFlags();
     testRoundTripFullStack();
     testCrossLanguageFixtureIntegerChannels();
+    // M86 Phase C — rANS + NAME_TOKENIZED on the cigars channel.
+    // Mirrors Python tests #39–#47 + the two cross-language fixtures.
+    testRoundTripCigarsRansOrder1();
+    testRoundTripCigarsNameTokenizedUniform();
+    testRoundTripCigarsNameTokenizedMixed();
+    testSizeComparisonCigarsCodecs();
+    testSizeWinCigarsUniform();
+    testAttributeSetCorrectlyCigars();
+    testBackCompatCigarsUnchanged();
+    testRejectBasePackOnCigars();
+    testRoundTripFullSevenOverrides();
+    testCrossLanguageFixtureCigarsRans();
+    testCrossLanguageFixtureCigarsNameTokenized();
 }

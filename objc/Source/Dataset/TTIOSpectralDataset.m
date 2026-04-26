@@ -90,8 +90,12 @@ static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
         // M86 Phase B: positions/flags/mapping_qualities (integer
         // channels) join the override-eligible set; their only valid
         // codecs are RANS_ORDER0/1 (Binding Decision §117).
+        // M86 Phase C: cigars joins the override-eligible set;
+        // accepts {RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED} per
+        // Binding Decision §120. mate_info remains explicitly
+        // out-of-scope (Binding Decision §124).
         s = [NSSet setWithArray:@[
-            @"sequences", @"qualities", @"read_names",
+            @"sequences", @"qualities", @"read_names", @"cigars",
             @"positions", @"flags", @"mapping_qualities",
         ]];
     });
@@ -126,6 +130,19 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
         NSSet *nameAllowed = [NSSet setWithArray:@[
             @(TTIOCompressionNameTokenized),
         ]];
+        // M86 Phase C (Binding Decision §120): cigars accepts THREE
+        // codecs — the rANS pair operate on a length-prefix-concat
+        // byte stream of the CIGAR strings (varint(len)+bytes per
+        // CIGAR — §2.5 / Gotcha §139); NAME_TOKENIZED operates on
+        // the list[str] directly via its self-describing wire format.
+        // BASE_PACK and QUALITY_BINNED are wrong-content (CIGARs
+        // contain digits + operator letters MIDNSHP=X, none of which
+        // are ACGT or Phred values).
+        NSSet *cigarAllowed = [NSSet setWithArray:@[
+            @(TTIOCompressionRansOrder0),
+            @(TTIOCompressionRansOrder1),
+            @(TTIOCompressionNameTokenized),
+        ]];
         // M86 Phase B (Binding Decision §117): integer channels accept
         // ONLY the rANS codecs. BASE_PACK 2-bit-packs ACGT bytes,
         // QUALITY_BINNED quantises Phred scores onto 8 bins, and
@@ -142,6 +159,7 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @"sequences":         seqAllowed,
             @"qualities":         qualAllowed,
             @"read_names":        nameAllowed,
+            @"cigars":            cigarAllowed,
             @"positions":         intAllowed,
             @"flags":             intAllowed,
             @"mapping_qualities": intAllowed,
@@ -179,8 +197,8 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
             [NSException raise:NSInvalidArgumentException
                         format:@"signalCodecOverrides: channel '%@' not "
                                @"supported (only sequences, qualities, "
-                               @"read_names, positions, flags, and "
-                               @"mapping_qualities can use TTIO codecs)",
+                               @"read_names, cigars, positions, flags, "
+                               @"and mapping_qualities can use TTIO codecs)",
                                chName];
         }
         NSNumber *codecBox = overrides[chName];
@@ -241,6 +259,48 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
                             format:@"signalCodecOverrides['%@']: codec %@ "
                                    @"not supported on the '%@' channel "
                                    @"(allowed: NameTokenized)",
+                                   chName, codecBox, chName];
+            }
+            // M86 Phase C Binding Decision §120: explicit messages for
+            // wrong-content codecs on the cigars channel. CIGAR strings
+            // contain ASCII digits + operator letters (MIDNSHP=X), none
+            // of which are ACGT bases or Phred quality values.
+            if ([chName isEqualToString:@"cigars"]) {
+                if (codec == TTIOCompressionBasePack) {
+                    [NSException raise:NSInvalidArgumentException
+                                format:@"signalCodecOverrides['%@']: codec "
+                                       @"BASE_PACK is not valid on the "
+                                       @"'cigars' channel — BASE_PACK "
+                                       @"2-bit-packs ACGT sequence bytes "
+                                       @"and would silently corrupt the "
+                                       @"CIGAR strings stored on this "
+                                       @"channel (CIGAR ASCII contains "
+                                       @"digits and operator letters "
+                                       @"MIDNSHP=X, none of which are "
+                                       @"ACGT). Use RANS_ORDER0, "
+                                       @"RANS_ORDER1, or NAME_TOKENIZED "
+                                       @"on 'cigars'.",
+                                       chName];
+                }
+                if (codec == TTIOCompressionQualityBinned) {
+                    [NSException raise:NSInvalidArgumentException
+                                format:@"signalCodecOverrides['%@']: codec "
+                                       @"QUALITY_BINNED is not valid on "
+                                       @"the 'cigars' channel — "
+                                       @"QUALITY_BINNED quantises Phred "
+                                       @"quality scores onto an 8-bin "
+                                       @"centre table and would silently "
+                                       @"destroy the CIGAR strings stored "
+                                       @"on this channel. Use "
+                                       @"RANS_ORDER0, RANS_ORDER1, or "
+                                       @"NAME_TOKENIZED on 'cigars'.",
+                                       chName];
+                }
+                [NSException raise:NSInvalidArgumentException
+                            format:@"signalCodecOverrides['%@']: codec %@ "
+                                   @"not supported on the '%@' channel "
+                                   @"(allowed: RansOrder0, RansOrder1, "
+                                   @"NameTokenized)",
                                    chName, codecBox, chName];
             }
             // M86 Phase B Binding Decision §117: explicit messages for
@@ -325,6 +385,79 @@ static NSData *_TTIO_M86_EncodeWithCodec(NSData *raw, TTIOCompression codec)
                                (unsigned long)codec];
             return nil;
     }
+}
+
+// M86 Phase C: unsigned LEB128 varint writer for the cigars rANS path.
+// The serialisation contract is `varint(asciiLen) + asciiBytes` per
+// CIGAR (§2.5 of the Phase C plan; mirrors NAME_TOKENIZED's verbatim
+// format minus the 7-byte header). Same wire format as the codec's
+// own internal varint helpers (see TTIONameTokenizer.m); reproduced
+// here to avoid coupling the dataset writer to the codec module's
+// private symbols.
+static void _TTIO_M86_VarintWrite(NSMutableData *out, uint64_t value)
+{
+    uint8_t buf[10];
+    size_t n = 0;
+    while (value >= 0x80u) {
+        buf[n++] = (uint8_t)((value & 0x7Fu) | 0x80u);
+        value >>= 7;
+    }
+    buf[n++] = (uint8_t)(value & 0x7Fu);
+    [out appendBytes:buf length:n];
+}
+
+/** M86 Phase C: encode a list of CIGAR strings via the selected codec.
+ *
+ *  Three accepted codecs (Binding Decision §120):
+ *    - RANS_ORDER0 / RANS_ORDER1: serialise the list as length-prefix-
+ *      concat (varint(asciiLen) + asciiBytes per CIGAR — §2.5,
+ *      Gotcha §139), then pass the concatenated buffer through
+ *      TTIORansEncode. The rANS path uses raw length-prefix-concat
+ *      directly — NOT NAME_TOKENIZED's encoder output then rANS-
+ *      encoded, which would be a different wire format.
+ *    - NAME_TOKENIZED: pass the NSArray<NSString *> through
+ *      TTIONameTokenizerEncode directly (the codec already accepts
+ *      list[str] input via its self-describing wire format).
+ *
+ *  Returns nil on encoder failure (rare; the rANS coder always returns
+ *  a valid stream for any byte buffer; NAME_TOKENIZED returns a valid
+ *  stream for any ASCII-only NSString list). Raises
+ *  NSInvalidArgumentException if any CIGAR contains non-ASCII bytes
+ *  (SAM spec is 7-bit ASCII; mirrors NAME_TOKENIZED's existing
+ *  constraint and the Python writer's contract). */
+static NSData *_TTIO_M86_EncodeCigarsWithCodec(NSArray<NSString *> *cigars,
+                                                TTIOCompression codec)
+{
+    if (codec == TTIOCompressionRansOrder0
+        || codec == TTIOCompressionRansOrder1) {
+        NSMutableData *buf = [NSMutableData data];
+        for (NSUInteger idx = 0; idx < cigars.count; idx++) {
+            NSString *cig = cigars[idx];
+            const char *ascii = [cig cStringUsingEncoding:NSASCIIStringEncoding];
+            if (ascii == NULL) {
+                [NSException raise:NSInvalidArgumentException
+                            format:@"signalCodecOverrides['cigars']: cigar "
+                                   @"at index %lu contains non-ASCII bytes "
+                                   @"— CIGARs must be 7-bit ASCII per the "
+                                   @"SAM spec",
+                                   (unsigned long)idx];
+            }
+            NSUInteger nBytes = strlen(ascii);
+            _TTIO_M86_VarintWrite(buf, (uint64_t)nBytes);
+            [buf appendBytes:ascii length:nBytes];
+        }
+        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+        return TTIORansEncode(buf, order);
+    }
+    if (codec == TTIOCompressionNameTokenized) {
+        return TTIONameTokenizerEncode(cigars);
+    }
+    [NSException raise:NSInvalidArgumentException
+                format:@"_TTIO_M86_EncodeCigarsWithCodec: codec %lu not a "
+                       @"valid cigars codec (only RANS_ORDER0, "
+                       @"RANS_ORDER1, NAME_TOKENIZED)",
+                       (unsigned long)codec];
+    return nil;
 }
 
 /** Set @compression as a uint8 attribute on an HDF5 dataset. Matches
@@ -1000,13 +1133,45 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         [TTIOCompoundField fieldWithName:@"value" kind:TTIOCompoundFieldKindVLString]
     ];
 
-    NSMutableArray *cigarRows = [NSMutableArray arrayWithCapacity:run.cigars.count];
-    for (NSString *c in run.cigars) [cigarRows addObject:@{@"value": c}];
-    id<TTIOStorageDataset> cigarDs = [sc createCompoundDatasetNamed:@"cigars"
-                                                                fields:vlValueField
-                                                                 count:run.cigars.count
-                                                                 error:error];
-    if (!cigarDs || ![cigarDs writeAll:cigarRows error:error]) return NO;
+    // M86 Phase C: schema lift for cigars on the provider/storage
+    // path. Same dispatch as the HDF5 fast path.
+    NSNumber *cigarsOverrideS = run.signalCodecOverrides[@"cigars"];
+    if (cigarsOverrideS != nil) {
+        TTIOCompression cigarsCodec =
+            (TTIOCompression)[cigarsOverrideS unsignedIntegerValue];
+        NSData *encoded = _TTIO_M86_EncodeCigarsWithCodec(run.cigars,
+                                                          cigarsCodec);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2061
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"M86 Phase C: cigars codec %lu encode "
+                                @"returned nil",
+                                (unsigned long)cigarsCodec]}];
+            return NO;
+        }
+        id<TTIOStorageDataset> cigarDs = [sc createDatasetNamed:@"cigars"
+                                                      precision:TTIOPrecisionUInt8
+                                                         length:encoded.length
+                                                      chunkSize:65536
+                                                    compression:TTIOCompressionNone
+                                               compressionLevel:0
+                                                          error:error];
+        if (!cigarDs) return NO;
+        if (![cigarDs writeAll:encoded error:error]) return NO;
+        if (![cigarDs setAttributeValue:@((uint8_t)cigarsCodec)
+                                forName:@"compression"
+                                  error:error]) return NO;
+    } else {
+        NSMutableArray *cigarRows = [NSMutableArray arrayWithCapacity:run.cigars.count];
+        for (NSString *c in run.cigars) [cigarRows addObject:@{@"value": c}];
+        id<TTIOStorageDataset> cigarDs = [sc createCompoundDatasetNamed:@"cigars"
+                                                                    fields:vlValueField
+                                                                     count:run.cigars.count
+                                                                     error:error];
+        if (!cigarDs || ![cigarDs writeAll:cigarRows error:error]) return NO;
+    }
 
     // M86 Phase E: schema lift for read_names on the provider/storage
     // path (memory:// / sqlite:// / zarr://). Same dispatch as the
@@ -1277,11 +1442,48 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         [TTIOCompoundField fieldWithName:@"value" kind:TTIOCompoundFieldKindVLString]
     ];
 
-    NSMutableArray *cigarRows = [NSMutableArray arrayWithCapacity:run.cigars.count];
-    for (NSString *c in run.cigars) [cigarRows addObject:@{@"value": c}];
-    if (![TTIOCompoundIO writeGeneric:cigarRows
-                              intoGroup:sc datasetNamed:@"cigars"
-                                  fields:vlValueField error:error]) return NO;
+    // M86 Phase C: schema lift for cigars. When an override is set,
+    // replace the M82 compound dataset with a flat 1-D uint8 dataset
+    // of the same name carrying the codec output, plus an
+    // @compression attribute naming the codec id (Binding Decisions
+    // §120-§122). Three codec choices are supported (rANS uses a
+    // length-prefix-concat byte stream over the CIGAR list — Gotcha
+    // §139 — while NAME_TOKENIZED consumes the list[str] directly).
+    // No HDF5 filter applied (Binding Decision §87).
+    NSNumber *cigarsOverride = run.signalCodecOverrides[@"cigars"];
+    if (cigarsOverride != nil) {
+        TTIOCompression cigarsCodec =
+            (TTIOCompression)[cigarsOverride unsignedIntegerValue];
+        NSData *encoded = _TTIO_M86_EncodeCigarsWithCodec(run.cigars,
+                                                          cigarsCodec);
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2060
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"M86 Phase C: cigars codec %lu encode "
+                                @"returned nil",
+                                (unsigned long)cigarsCodec]}];
+            return NO;
+        }
+        TTIOHDF5Dataset *cigarDs = [sc createDatasetNamed:@"cigars"
+                                                precision:TTIOPrecisionUInt8
+                                                   length:encoded.length
+                                                chunkSize:65536
+                                              compression:TTIOCompressionNone
+                                         compressionLevel:0
+                                                    error:error];
+        if (!cigarDs) return NO;
+        if (![cigarDs writeData:encoded error:error]) return NO;
+        if (!_TTIO_M86_WriteUInt8Attribute([cigarDs datasetId], "compression",
+                                           (uint8_t)cigarsCodec, error)) return NO;
+    } else {
+        NSMutableArray *cigarRows = [NSMutableArray arrayWithCapacity:run.cigars.count];
+        for (NSString *c in run.cigars) [cigarRows addObject:@{@"value": c}];
+        if (![TTIOCompoundIO writeGeneric:cigarRows
+                                  intoGroup:sc datasetNamed:@"cigars"
+                                      fields:vlValueField error:error]) return NO;
+    }
 
     // M86 Phase E: schema lift for read_names. When the
     // NAME_TOKENIZED override is set, replace the M82 compound
