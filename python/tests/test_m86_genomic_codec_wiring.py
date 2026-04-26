@@ -1,7 +1,7 @@
 """M86 — genomic signal-channel codec wiring tests.
 
-Covers the original eleven test cases (Phase A) plus the six new
-Phase D cases (HANDOFF.md M86 Phase D §5.1):
+Covers the original eleven test cases (Phase A), six Phase D cases,
+and six Phase E cases (HANDOFF.md M86 Phase E §6.1):
   1.  Round-trip sequences via rANS order-0.
   2.  Round-trip sequences via rANS order-1.
   3.  Round-trip sequences via BASE_PACK (pure ACGT).
@@ -19,6 +19,13 @@ Phase D cases (HANDOFF.md M86 Phase D §5.1):
  15.  ``@compression == 7`` for QUALITY_BINNED qualities.
  16.  Validation: QUALITY_BINNED on sequences raises with rationale.
  17.  Mixed: sequences=BASE_PACK + qualities=QUALITY_BINNED.
+ 18.  Round-trip read_names via NAME_TOKENIZED (Illumina-style).
+ 19.  Size-win: NAME_TOKENIZED < 50% of M82 compound storage.
+ 20.  Schema lift: read_names dataset is 1-D uint8 with @compression == 8.
+ 21.  Back-compat: read_names is still compound when no override.
+ 22.  Validation: NAME_TOKENIZED on sequences raises with rationale.
+ 23.  Mixed: sequences=BASE_PACK + qualities=QUALITY_BINNED + read_names=NAME_TOKENIZED.
+ 24.  Cross-language fixture for NAME_TOKENIZED.
 """
 from __future__ import annotations
 
@@ -639,6 +646,356 @@ def test_mixed_quality_binned_with_rans(tmp_path: Path):
 # the QUALITY_BINNED fixture uses the bin-centre quality buffer rather than
 # the PHRED_CYCLE_QUAL used by the Phase A fixtures, and only the qualities
 # channel carries QUALITY_BINNED — sequences uses BASE_PACK.
+
+
+# ----------------------------------------------------------------------
+# 18–23: Phase E — NAME_TOKENIZED on the read_names channel (schema lift)
+# ----------------------------------------------------------------------
+# Phase E lifts read_names from VL_STRING-in-compound to a flat 1-D
+# uint8 dataset when the override is set, so that the @compression
+# attribute can travel with the codec output. Readers dispatch on
+# dataset shape (compound vs uint8). Per Binding Decision §111 the
+# two layouts are mutually exclusive within a single run; per §113
+# NAME_TOKENIZED is only valid on the read_names channel.
+
+# Deterministic Illumina-style names — same generator the ObjC and
+# Java agents use to construct the cross-language fixture input.
+# Tokenises to ["INSTR:RUN:", N, ":", N, ":", N, ":", N] — 7
+# alternating string/numeric columns that pack tightly through the
+# NAME_TOKENIZED columnar mode.
+ILLUMINA_NAMES = [
+    f"INSTR:RUN:1:{i // 4}:{i % 4}:{i * 100}"
+    for i in range(N_READS)
+]
+
+
+def _make_run_with_names(
+    seq_bytes: bytes,
+    qual_bytes: bytes,
+    names: list[str],
+    codec_overrides: dict[str, Compression] | None = None,
+) -> WrittenGenomicRun:
+    """Variant of :func:`_make_run` that accepts custom read names.
+
+    Used for the Phase E NAME_TOKENIZED tests — the codec is sensitive
+    to name structure, so synthesising structured names (instead of
+    the default ``r{i}``) lets us exercise the columnar encode path.
+    """
+    assert len(names) == N_READS, f"expected {N_READS} names, got {len(names)}"
+    run = _make_run(seq_bytes, qual_bytes, codec_overrides)
+    run.read_names = names
+    return run
+
+
+def test_round_trip_read_names_name_tokenized(tmp_path: Path):
+    """Structured Illumina-style names round-trip byte-exact via NAME_TOKENIZED.
+
+    NAME_TOKENIZED is a lossless codec (M85 Phase B §1) so every
+    name in the input list must appear unchanged on the read side.
+    """
+    run = _make_run_with_names(
+        PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, ILLUMINA_NAMES,
+        {"read_names": Compression.NAME_TOKENIZED},
+    )
+    p = _write_and_open(tmp_path, run, fname="rn_nt.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == N_READS
+        for i in range(N_READS):
+            r = gr[i]
+            assert r.read_name == ILLUMINA_NAMES[i], (
+                f"read {i}: name mismatch — expected "
+                f"{ILLUMINA_NAMES[i]!r}, got {r.read_name!r}"
+            )
+            # Sequences/qualities unchanged path (no override on those).
+            assert r.sequence == _expected_seq_slice(PURE_ACGT_SEQ, i)
+            assert r.qualities == _expected_qual_slice(PHRED_CYCLE_QUAL, i)
+    finally:
+        ds.close()
+
+
+def test_size_win_name_tokenized(tmp_path: Path):
+    """NAME_TOKENIZED is significantly smaller than the M82 compound layout.
+
+    The HDF5 VL_STRING compound stores the dataset's primary chunk
+    plus a separate global heap holding the variable-length
+    payloads. ``Dataset.id.get_storage_size()`` reports only the
+    primary chunk and misses the heap; the realistic comparison
+    is the total file-size delta between the two writes (per
+    HANDOFF.md §6.1 — "the exact ratio depends on HDF5 VL_STRING
+    overhead; just verify it's a meaningful win"). For 1000
+    structured Illumina-style names the codec output is well
+    under 50% of the compound's combined primary+heap footprint.
+    """
+    n_reads = 1000
+    read_len = 100
+    total = n_reads * read_len
+    seq = (b"ACGT" * 25) * n_reads
+    qual = bytes((30 + (i % 11)) for i in range(total))
+    names = [
+        f"INSTR:RUN:1:{i // 4}:{i % 4}:{i * 100}"
+        for i in range(n_reads)
+    ]
+    base_kw = dict(
+        acquisition_mode=7, reference_uri="GRCh38.p14",
+        platform="ILLUMINA", sample_name="SIZE_WIN_NT",
+        positions=np.arange(n_reads, dtype=np.int64) * 1000,
+        mapping_qualities=np.full(n_reads, 60, dtype=np.uint8),
+        flags=np.zeros(n_reads, dtype=np.uint32),
+        sequences=np.frombuffer(seq, dtype=np.uint8),
+        qualities=np.frombuffer(qual, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * read_len,
+        lengths=np.full(n_reads, read_len, dtype=np.uint32),
+        cigars=["100M"] * n_reads,
+        read_names=names,
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_compression="none",
+    )
+    raw_run = WrittenGenomicRun(**base_kw)
+    nt_run = WrittenGenomicRun(
+        **base_kw,
+        signal_codec_overrides={"read_names": Compression.NAME_TOKENIZED},
+    )
+
+    p_raw = tmp_path / "rn_raw.tio"
+    SpectralDataset.write_minimal(
+        p_raw, title="r", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": raw_run},
+    )
+    p_nt = tmp_path / "rn_nt.tio"
+    SpectralDataset.write_minimal(
+        p_nt, title="b", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": nt_run},
+    )
+
+    raw_file_size = p_raw.stat().st_size
+    nt_file_size = p_nt.stat().st_size
+    # Footprint attributable to read_names = file-size delta. The
+    # two files differ only in the read_names channel (both written
+    # with signal_compression="none" so other channels are identical).
+    saved = raw_file_size - nt_file_size
+    # The on-disk codec stream is the realistic "after" size; the
+    # M82 footprint for read_names is approximately the codec
+    # stream plus the bytes saved.
+    with h5py.File(p_nt, "r") as f:
+        nt_codec_bytes = f[
+            "study/genomic_runs/genomic_0001/signal_channels/read_names"
+        ].id.get_storage_size()
+    m82_footprint = nt_codec_bytes + saved
+    ratio = nt_codec_bytes / m82_footprint
+    assert ratio < 0.50, (
+        f"NAME_TOKENIZED read_names dataset = {nt_codec_bytes} bytes; "
+        f"M82 footprint (codec+saved) = {m82_footprint} bytes; "
+        f"ratio = {ratio:.3f} (target < 0.50)"
+    )
+
+
+def test_attribute_set_correctly_name_tokenized(tmp_path: Path):
+    """NAME_TOKENIZED override produces 1-D uint8 read_names with @compression == 8.
+
+    Verifies the schema lift: instead of the M82 compound, the
+    dataset is a flat uint8 array carrying the codec output, with
+    @compression set to the NAME_TOKENIZED codec id.
+    """
+    run = _make_run_with_names(
+        PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, ILLUMINA_NAMES,
+        {"read_names": Compression.NAME_TOKENIZED},
+    )
+    p = _write_and_open(tmp_path, run, fname="attr_nt.tio")
+    with h5py.File(p, "r") as f:
+        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+        rn = sc["read_names"]
+        # Schema lift: 1-D uint8, NOT compound.
+        assert rn.dtype == np.uint8, (
+            f"read_names dtype must be uint8 under NAME_TOKENIZED, "
+            f"got {rn.dtype}"
+        )
+        assert len(rn.shape) == 1, (
+            f"read_names must be 1-D under NAME_TOKENIZED, "
+            f"got shape {rn.shape}"
+        )
+        # @compression attribute carries the codec id.
+        attr = rn.attrs.get("compression")
+        assert attr is not None, "read_names must carry @compression"
+        assert int(attr) == int(Compression.NAME_TOKENIZED.value) == 8
+        # Other byte channels untouched by this override.
+        assert "compression" not in sc["sequences"].attrs
+        assert "compression" not in sc["qualities"].attrs
+
+
+def test_back_compat_read_names_unchanged(tmp_path: Path):
+    """No read_names override leaves the M82 compound path unchanged.
+
+    Covers two cases: empty overrides, and overrides that touch
+    only sequences/qualities. In both, read_names must remain a
+    VL_STRING-in-compound dataset (the M82 layout).
+    """
+    for desc, overrides in (
+        ("empty", {}),
+        ("seq+qual only", {
+            "sequences": Compression.BASE_PACK,
+            "qualities": Compression.RANS_ORDER1,
+        }),
+    ):
+        run = _make_run(
+            PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, codec_overrides=overrides,
+        )
+        p = tmp_path / f"backcompat_{desc.replace(' ', '_').replace('+', '')}.tio"
+        SpectralDataset.write_minimal(
+            p, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run},
+        )
+
+        with h5py.File(p, "r") as f:
+            rn = f["study/genomic_runs/genomic_0001/signal_channels/read_names"]
+            # Compound dataset → dtype.kind == 'V', has named fields.
+            assert rn.dtype.kind == "V", (
+                f"{desc}: read_names must remain compound (kind='V'), "
+                f"got kind={rn.dtype.kind!r}"
+            )
+            assert rn.dtype.names is not None and "value" in rn.dtype.names, (
+                f"{desc}: M82 compound must have a 'value' field, "
+                f"got fields={rn.dtype.names}"
+            )
+            # No @compression attribute on the compound.
+            assert "compression" not in rn.attrs
+
+        # Round-trip through the existing read path.
+        ds = SpectralDataset.open(p)
+        try:
+            gr = ds.genomic_runs["genomic_0001"]
+            for i in range(N_READS):
+                r = gr[i]
+                assert r.read_name == f"r{i}", (
+                    f"{desc}: read {i} name mismatch — got {r.read_name!r}"
+                )
+        finally:
+            ds.close()
+
+
+def test_reject_name_tokenized_on_sequences(tmp_path: Path):
+    """NAME_TOKENIZED on the sequences channel raises ValueError at write.
+
+    Per Binding Decision §113: the codec tokenises UTF-8 strings,
+    not binary byte streams. The error must name the codec, the
+    channel, and explain the wrong-input-type rationale.
+    """
+    run = _make_run(
+        PURE_ACGT_SEQ, PHRED_CYCLE_QUAL,
+        {"sequences": Compression.NAME_TOKENIZED},
+    )
+    p = tmp_path / "bad_nt_seq.tio"
+    with pytest.raises(ValueError) as excinfo:
+        SpectralDataset.write_minimal(
+            p, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run},
+        )
+    msg = str(excinfo.value)
+    assert "NAME_TOKENIZED" in msg, f"error must name the codec; got: {msg!r}"
+    assert "sequences" in msg, f"error must name the channel; got: {msg!r}"
+    # Mentions read_names so the user knows where it *does* belong.
+    assert "read_names" in msg, (
+        f"error must point at the read_names channel; got: {msg!r}"
+    )
+
+    # Same check for the qualities channel (also forbidden).
+    run_q = _make_run(
+        PURE_ACGT_SEQ, PHRED_CYCLE_QUAL,
+        {"qualities": Compression.NAME_TOKENIZED},
+    )
+    p_q = tmp_path / "bad_nt_qual.tio"
+    with pytest.raises(ValueError) as excinfo_q:
+        SpectralDataset.write_minimal(
+            p_q, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run_q},
+        )
+    msg_q = str(excinfo_q.value)
+    assert "NAME_TOKENIZED" in msg_q
+    assert "qualities" in msg_q
+
+
+def test_mixed_all_three_overrides(tmp_path: Path):
+    """All three overrides at once — full codec stack on a single file.
+
+    Exercises sequences=BASE_PACK + qualities=QUALITY_BINNED +
+    read_names=NAME_TOKENIZED simultaneously. Verifies the on-disk
+    @compression attributes for all three channels and that all
+    three round-trip correctly (with QUALITY_BINNED's bin-centre
+    inputs preserving byte-exact qualities).
+    """
+    run = _make_run_with_names(
+        PURE_ACGT_SEQ, QUAL_BIN_CENTRE, ILLUMINA_NAMES,
+        {
+            "sequences": Compression.BASE_PACK,
+            "qualities": Compression.QUALITY_BINNED,
+            "read_names": Compression.NAME_TOKENIZED,
+        },
+    )
+    p = _write_and_open(tmp_path, run, fname="mixed_all_three.tio")
+
+    with h5py.File(p, "r") as f:
+        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+        assert int(sc["sequences"].attrs["compression"]) == int(
+            Compression.BASE_PACK.value
+        )
+        assert int(sc["qualities"].attrs["compression"]) == int(
+            Compression.QUALITY_BINNED.value
+        )
+        assert int(sc["read_names"].attrs["compression"]) == int(
+            Compression.NAME_TOKENIZED.value
+        )
+        # read_names must be the lifted 1-D uint8 layout, not compound.
+        assert sc["read_names"].dtype == np.uint8
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == N_READS
+        for i in range(N_READS):
+            r = gr[i]
+            assert r.sequence == _expected_seq_slice(PURE_ACGT_SEQ, i)
+            assert r.qualities == _expected_qual_slice(QUAL_BIN_CENTRE, i)
+            assert r.read_name == ILLUMINA_NAMES[i]
+    finally:
+        ds.close()
+
+
+def test_cross_language_fixture_name_tokenized():
+    """Phase E fixture decodes byte-exact: structured Illumina-style names.
+
+    Companion to the QUALITY_BINNED cross-language test — checks
+    that the committed fixture round-trips through the Python
+    reader, providing the cross-language baseline for ObjC and
+    Java conformance.
+    """
+    fixture_path = FIXTURE_DIR / "m86_codec_name_tokenized.tio"
+    assert fixture_path.exists(), (
+        f"fixture missing: {fixture_path} — regenerate with "
+        f"python/tests/fixtures/genomic/regenerate_m86_name_tokenized.py"
+    )
+    ds = SpectralDataset.open(fixture_path)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == N_READS
+        for i in range(N_READS):
+            r = gr[i]
+            assert r.read_name == ILLUMINA_NAMES[i], (
+                f"name_tokenized fixture: read {i} name mismatch — "
+                f"got {r.read_name!r}, expected {ILLUMINA_NAMES[i]!r}"
+            )
+        # Verify the fixture really uses the lifted layout with @compression == 8.
+        with h5py.File(fixture_path, "r") as f:
+            rn = f["study/genomic_runs/genomic_0001/signal_channels/read_names"]
+            assert rn.dtype == np.uint8
+            assert int(rn.attrs["compression"]) == int(
+                Compression.NAME_TOKENIZED.value
+            )
+    finally:
+        ds.close()
 
 
 def test_cross_language_fixture_quality_binned():
