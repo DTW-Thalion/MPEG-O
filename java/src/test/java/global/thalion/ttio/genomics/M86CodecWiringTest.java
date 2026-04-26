@@ -331,18 +331,19 @@ class M86CodecWiringTest {
         // M86 Phase B (Binding Decision §117) extended the override map
         // to the three integer channels (positions, flags,
         // mapping_qualities). M86 Phase C (Binding Decision §120) added
-        // cigars. This test targets the third compound channel
-        // mate_info, which remains outside the per-channel allowed-
-        // codec map (HANDOFF.md §1.3 / Binding Decision §124 — out of
-        // Phase C scope).
+        // cigars. M86 Phase F (Binding Decisions §125-§130) added the
+        // three per-field mate_info_chrom/pos/tlen virtual channels
+        // (and rejects the bare "mate_info" key — covered separately
+        // by rejectBareMateInfoKey). Use a synthetic name guaranteed
+        // never to be a valid channel.
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
             () -> {
                 WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
-                    Map.of("mate_info", Compression.RANS_ORDER0));
+                    Map.of("not_a_real_channel", Compression.RANS_ORDER0));
                 writeRun(tmp, bad, "bad-channel.tio");
             });
-        assertTrue(ex.getMessage().contains("mate_info"),
+        assertTrue(ex.getMessage().contains("not_a_real_channel"),
             "error message should name the offending channel: " + ex.getMessage());
         assertTrue(ex.getMessage().contains("sequences"),
             "error message should hint at allowed channels: " + ex.getMessage());
@@ -2214,6 +2215,530 @@ class M86CodecWiringTest {
             assertEquals(Compression.NAME_TOKENIZED.ordinal(),
                 cgDs.readIntegerAttribute("compression", -1L),
                 "fixture cigars @compression == NAME_TOKENIZED (8)");
+        } finally {
+            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // M86 Phase F — mate_info per-field decomposition
+    // ════════════════════════════════════════════════════════════════
+
+    /** Phase F: 100-read mate distribution per HANDOFF.md §6.4.
+     *  90% chr1, 5% chr2, 3% chrX, 2% "*" (unmapped). */
+    private static List<String> phaseFMateChroms() {
+        List<String> out = new ArrayList<>(100);
+        for (int i = 0; i < 90; i++) out.add("chr1");
+        for (int i = 0; i < 5;  i++) out.add("chr2");
+        for (int i = 0; i < 3;  i++) out.add("chrX");
+        for (int i = 0; i < 2;  i++) out.add("*");
+        return out;
+    }
+
+    /** Phase F: monotonic positions for paired mates, -1 for "*". */
+    private static long[] phaseFMatePositions() {
+        List<String> chroms = phaseFMateChroms();
+        long[] out = new long[100];
+        for (int i = 0; i < 100; i++) {
+            out[i] = "*".equals(chroms.get(i)) ? -1L : (long) (i * 100 + 500);
+        }
+        return out;
+    }
+
+    /** Phase F: insert sizes around 350 for paired, 0 for "*". */
+    private static int[] phaseFMateTlens() {
+        List<String> chroms = phaseFMateChroms();
+        int[] out = new int[100];
+        for (int i = 0; i < 100; i++) {
+            out[i] = "*".equals(chroms.get(i)) ? 0 : (350 + (i % 11) - 5);
+        }
+        return out;
+    }
+
+    /** Build a 100-read run with the realistic Phase F mate distribution.
+     *  Mirrors Python {@code _make_phase_f_run}. */
+    private static WrittenGenomicRun makePhaseFRun(
+            Map<String, Compression> overrides) {
+        int n = 100;
+        int len = 100;
+        int total = n * len;
+        byte[] seq = new byte[total];
+        byte[] cycle = "ACGT".getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i < total; i++) seq[i] = cycle[i % 4];
+        byte[] qual = new byte[total];
+        for (int i = 0; i < total; i++) qual[i] = (byte) (30 + (i % 11));
+        long[] positions = new long[n];
+        for (int i = 0; i < n; i++) positions[i] = (long) i * 1000L;
+        byte[] mapqs = new byte[n];
+        java.util.Arrays.fill(mapqs, (byte) 60);
+        int[] flags = new int[n];
+        long[] offsets = new long[n];
+        int[] lengths  = new int[n];
+        for (int i = 0; i < n; i++) {
+            offsets[i] = (long) i * len;
+            lengths[i] = len;
+        }
+        List<String> cigars     = new ArrayList<>(n);
+        List<String> readNames  = new ArrayList<>(n);
+        List<String> chroms     = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            cigars.add("100M");
+            readNames.add("r" + i);
+            chroms.add("chr1");
+        }
+        List<String> mateChroms = phaseFMateChroms();
+        long[] matePos          = phaseFMatePositions();
+        int[]  tlens            = phaseFMateTlens();
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA",
+            "M86F_TEST",
+            positions, mapqs, flags, seq, qual, offsets, lengths,
+            cigars, readNames, mateChroms, matePos, tlens, chroms,
+            Compression.NONE,
+            overrides == null ? Map.of() : overrides);
+    }
+
+    // ── 46. Phase F: round-trip mate_info_chrom via NAME_TOKENIZED ──
+
+    @Test
+    void roundTripMateChromNameTokenized(@TempDir Path tmp) {
+        WrittenGenomicRun run = makePhaseFRun(
+            Map.of("mate_info_chrom", Compression.NAME_TOKENIZED));
+        Path file = writeRun(tmp, run, "mi-chrom-nt.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(100, gr.readCount());
+            List<String> expectedChroms = phaseFMateChroms();
+            long[] expectedPos          = phaseFMatePositions();
+            int[]  expectedTlen         = phaseFMateTlens();
+            for (int i = 0; i < 100; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedChroms.get(i), r.mateChromosome(),
+                    "NAME_TOKENIZED mate chrom @ read " + i);
+                assertEquals(expectedPos[i], r.matePosition(),
+                    "natural-dtype mate pos @ read " + i);
+                assertEquals(expectedTlen[i], r.templateLength(),
+                    "natural-dtype mate tlen @ read " + i);
+            }
+        }
+    }
+
+    // ── 47. Phase F: round-trip mate_info_pos via rANS ──────────────
+
+    @Test
+    void roundTripMatePosRans(@TempDir Path tmp) {
+        WrittenGenomicRun run = makePhaseFRun(
+            Map.of("mate_info_pos", Compression.RANS_ORDER1));
+        Path file = writeRun(tmp, run, "mi-pos-rans.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(100, gr.readCount());
+            List<String> expectedChroms = phaseFMateChroms();
+            long[] expectedPos          = phaseFMatePositions();
+            int[]  expectedTlen         = phaseFMateTlens();
+            for (int i = 0; i < 100; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedChroms.get(i), r.mateChromosome(),
+                    "natural-dtype mate chrom @ read " + i);
+                assertEquals(expectedPos[i], r.matePosition(),
+                    "RANS_ORDER1 mate pos @ read " + i);
+                assertEquals(expectedTlen[i], r.templateLength(),
+                    "natural-dtype mate tlen @ read " + i);
+            }
+        }
+    }
+
+    // ── 48. Phase F: round-trip mate_info_tlen via rANS ─────────────
+
+    @Test
+    void roundTripMateTlenRans(@TempDir Path tmp) {
+        WrittenGenomicRun run = makePhaseFRun(
+            Map.of("mate_info_tlen", Compression.RANS_ORDER1));
+        Path file = writeRun(tmp, run, "mi-tlen-rans.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(100, gr.readCount());
+            List<String> expectedChroms = phaseFMateChroms();
+            long[] expectedPos          = phaseFMatePositions();
+            int[]  expectedTlen         = phaseFMateTlens();
+            for (int i = 0; i < 100; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedChroms.get(i), r.mateChromosome(),
+                    "natural-dtype mate chrom @ read " + i);
+                assertEquals(expectedPos[i], r.matePosition(),
+                    "natural-dtype mate pos @ read " + i);
+                assertEquals(expectedTlen[i], r.templateLength(),
+                    "RANS_ORDER1 mate tlen @ read " + i);
+            }
+        }
+    }
+
+    // ── 49. Phase F: round-trip all three mate fields ───────────────
+
+    @Test
+    void roundTripMateAllThree(@TempDir Path tmp) {
+        Map<String, Compression> overrides = new java.util.HashMap<>();
+        overrides.put("mate_info_chrom", Compression.NAME_TOKENIZED);
+        overrides.put("mate_info_pos",   Compression.RANS_ORDER1);
+        overrides.put("mate_info_tlen",  Compression.RANS_ORDER1);
+        WrittenGenomicRun run = makePhaseFRun(overrides);
+        Path file = writeRun(tmp, run, "mi-all-three.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(100, gr.readCount());
+            List<String> expectedChroms = phaseFMateChroms();
+            long[] expectedPos          = phaseFMatePositions();
+            int[]  expectedTlen         = phaseFMateTlens();
+            for (int i = 0; i < 100; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedChroms.get(i), r.mateChromosome(),
+                    "all-three mate chrom @ read " + i);
+                assertEquals(expectedPos[i], r.matePosition(),
+                    "all-three mate pos @ read " + i);
+                assertEquals(expectedTlen[i], r.templateLength(),
+                    "all-three mate tlen @ read " + i);
+            }
+        }
+        // Confirm each child has @compression set with the right id.
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Group mi    = sc.openGroup("mate_info")) {
+            try (Hdf5Dataset chDs = mi.openDataset("chrom")) {
+                assertEquals(Compression.NAME_TOKENIZED.ordinal(),
+                    chDs.readIntegerAttribute("compression", -1L),
+                    "chrom @compression == NAME_TOKENIZED (8)");
+            }
+            try (Hdf5Dataset poDs = mi.openDataset("pos")) {
+                assertEquals(Compression.RANS_ORDER1.ordinal(),
+                    poDs.readIntegerAttribute("compression", -1L),
+                    "pos @compression == RANS_ORDER1 (5)");
+            }
+            try (Hdf5Dataset tlDs = mi.openDataset("tlen")) {
+                assertEquals(Compression.RANS_ORDER1.ordinal(),
+                    tlDs.readIntegerAttribute("compression", -1L),
+                    "tlen @compression == RANS_ORDER1 (5)");
+            }
+        }
+    }
+
+    // ── 50. Phase F: partial overrides (only chrom) ─────────────────
+
+    @Test
+    void roundTripMatePartial(@TempDir Path tmp) {
+        // Only chrom override → subgroup created; pos/tlen as natural
+        // dtype (no @compression) inside the subgroup. Per Binding
+        // Decision §127 / Gotcha §142.
+        WrittenGenomicRun run = makePhaseFRun(
+            Map.of("mate_info_chrom", Compression.NAME_TOKENIZED));
+        Path file = writeRun(tmp, run, "mi-partial.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Group mi    = sc.openGroup("mate_info")) {
+            try (Hdf5Dataset chDs = mi.openDataset("chrom")) {
+                assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                    chDs.getPrecision(),
+                    "chrom must be UINT8 under NAME_TOKENIZED");
+                assertEquals(Compression.NAME_TOKENIZED.ordinal(),
+                    chDs.readIntegerAttribute("compression", -1L),
+                    "chrom @compression == NAME_TOKENIZED (8)");
+            }
+            try (Hdf5Dataset poDs = mi.openDataset("pos")) {
+                assertEquals(global.thalion.ttio.Enums.Precision.INT64,
+                    poDs.getPrecision(),
+                    "pos must be natural-dtype INT64 (no override)");
+                assertFalse(poDs.hasAttribute("compression"),
+                    "pos has no @compression when not overridden");
+            }
+            try (Hdf5Dataset tlDs = mi.openDataset("tlen")) {
+                assertEquals(global.thalion.ttio.Enums.Precision.INT32,
+                    tlDs.getPrecision(),
+                    "tlen must be natural-dtype INT32 (no override)");
+                assertFalse(tlDs.hasAttribute("compression"),
+                    "tlen has no @compression when not overridden");
+            }
+        }
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            List<String> expectedChroms = phaseFMateChroms();
+            long[] expectedPos          = phaseFMatePositions();
+            int[]  expectedTlen         = phaseFMateTlens();
+            for (int i = 0; i < 100; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedChroms.get(i), r.mateChromosome(),
+                    "partial: chrom @ read " + i);
+                assertEquals(expectedPos[i], r.matePosition(),
+                    "partial: natural pos @ read " + i);
+                assertEquals(expectedTlen[i], r.templateLength(),
+                    "partial: natural tlen @ read " + i);
+            }
+        }
+    }
+
+    // ── 51. Phase F: back-compat — mate_info compound unchanged ─────
+
+    @Test
+    void backCompatMateInfoUnchanged(@TempDir Path tmp) {
+        // No mate_info_* override → mate_info stays as M82 compound
+        // dataset (not a subgroup). Round-trip via the existing path.
+        WrittenGenomicRun run = makePhaseFRun(Map.of());
+        Path file = writeRun(tmp, run, "mi-backcompat.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset miDs = sc.openDataset("mate_info")) {
+            assertNotEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                miDs.getPrecision(),
+                "mate_info must remain compound, not lifted to uint8");
+            assertFalse(miDs.hasAttribute("compression"),
+                "M82 compound mate_info must not carry @compression");
+        }
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            List<String> expectedChroms = phaseFMateChroms();
+            long[] expectedPos          = phaseFMatePositions();
+            int[]  expectedTlen         = phaseFMateTlens();
+            for (int i = 0; i < 100; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedChroms.get(i), r.mateChromosome(),
+                    "back-compat mate chrom @ read " + i);
+                assertEquals(expectedPos[i], r.matePosition(),
+                    "back-compat mate pos @ read " + i);
+                assertEquals(expectedTlen[i], r.templateLength(),
+                    "back-compat mate tlen @ read " + i);
+            }
+        }
+    }
+
+    // ── 52. Phase F: reject the bare "mate_info" key ────────────────
+
+    @Test
+    void rejectBareMateInfoKey(@TempDir Path tmp) {
+        // Per Binding Decision §126 / Gotcha §143: the bare
+        // "mate_info" key is reserved and rejected with an error
+        // message naming all three per-field virtual channel names.
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makePhaseFRun(
+                    Map.of("mate_info", Compression.RANS_ORDER1));
+                writeRun(tmp, bad, "bad-bare-mi.tio");
+            });
+        String msg = ex.getMessage();
+        assertNotNull(msg, "exception must have a message");
+        assertTrue(msg.contains("mate_info_chrom"),
+            "error must name mate_info_chrom; got: " + msg);
+        assertTrue(msg.contains("mate_info_pos"),
+            "error must name mate_info_pos; got: " + msg);
+        assertTrue(msg.contains("mate_info_tlen"),
+            "error must name mate_info_tlen; got: " + msg);
+    }
+
+    // ── 53. Phase F: reject NAME_TOKENIZED on mate_info_pos ─────────
+
+    @Test
+    void rejectWrongCodecOnMatePos(@TempDir Path tmp) {
+        // NAME_TOKENIZED on the integer pos field must be rejected
+        // (mirrors Phase B integer-channel validation; §117 generalised).
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makePhaseFRun(
+                    Map.of("mate_info_pos", Compression.NAME_TOKENIZED));
+                writeRun(tmp, bad, "bad-mi-pos-nt.tio");
+            });
+        String msg = ex.getMessage();
+        assertNotNull(msg, "exception must have a message");
+        assertTrue(msg.contains("NAME_TOKENIZED"),
+            "error must name the codec; got: " + msg);
+        assertTrue(msg.contains("mate_info_pos"),
+            "error must name the channel; got: " + msg);
+        assertTrue(msg.contains("RANS_ORDER0")
+                || msg.contains("RANS_ORDER1"),
+            "error must point at the recommended codecs; got: " + msg);
+    }
+
+    // ── 54. Phase F: full ten-overrides round-trip ──────────────────
+
+    @Test
+    void roundTripFullTenOverrides(@TempDir Path tmp) {
+        // Phase C's roundTripFullSevenOverrides covered seven channels.
+        // Phase F extends to TEN by adding the three mate_info_* fields
+        // (HANDOFF.md §6.1 test #56 / §4.3 §10 of CTX). All ten
+        // channels round-trip via their respective codecs.
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L + 1_000_000L;
+        int[] flags = new int[N_READS];
+        for (int i = 0; i < N_READS; i++)
+            flags[i] = (i % 2 == 0) ? 0x0001 : 0x0083;
+        byte[] mapq = new byte[N_READS];
+        for (int i = 0; i < N_READS; i++)
+            mapq[i] = (i % 5 != 0) ? (byte) 60 : (byte) 0;
+        byte[] seq  = pureAcgt();
+        byte[] qual = qualBinCentre();
+        List<String> names = illuminaNames(N_READS);
+
+        long[] offsets = new long[N_READS];
+        int[]  lengths = new int[N_READS];
+        for (int i = 0; i < N_READS; i++) {
+            offsets[i] = (long) i * READ_LEN;
+            lengths[i] = READ_LEN;
+        }
+        List<String> cigars     = new ArrayList<>(N_READS);
+        List<String> mateChroms = new ArrayList<>(N_READS);
+        List<String> chroms     = new ArrayList<>(N_READS);
+        long[] matePos = new long[N_READS];
+        int[]  tlens   = new int[N_READS];
+        for (int i = 0; i < N_READS; i++) {
+            cigars.add((i % 3 == 0) ? "100M"
+                     : (i % 3 == 1) ? "99M1D" : "50M50S");
+            // Mixed mate distribution: most chr1, a few chr2/X, two "*".
+            mateChroms.add(i < 6 ? "chr1"
+                         : i == 6 ? "chr2"
+                         : i == 7 ? "chrX"
+                         : "*");
+            chroms.add("chr1");
+            matePos[i] = "*".equals(mateChroms.get(i)) ? -1L
+                       : (long) (i * 100 + 500);
+            tlens[i]   = "*".equals(mateChroms.get(i)) ? 0
+                       : (350 + (i % 11) - 5);
+        }
+        Map<String, Compression> overrides = new java.util.HashMap<>();
+        overrides.put("sequences",         Compression.BASE_PACK);
+        overrides.put("qualities",         Compression.QUALITY_BINNED);
+        overrides.put("read_names",        Compression.NAME_TOKENIZED);
+        overrides.put("cigars",            Compression.RANS_ORDER1);
+        overrides.put("positions",         Compression.RANS_ORDER1);
+        overrides.put("flags",             Compression.RANS_ORDER0);
+        overrides.put("mapping_qualities", Compression.RANS_ORDER1);
+        overrides.put("mate_info_chrom",   Compression.NAME_TOKENIZED);
+        overrides.put("mate_info_pos",     Compression.RANS_ORDER1);
+        overrides.put("mate_info_tlen",    Compression.RANS_ORDER1);
+
+        WrittenGenomicRun run = new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA",
+            "M86_F_FULL_TEN",
+            positions, mapq, flags, seq, qual, offsets, lengths,
+            cigars, names, mateChroms, matePos, tlens, chroms,
+            Compression.NONE, overrides);
+        Path file = writeRun(tmp, run, "full-ten.tio");
+
+        // Verify mate_info is now a subgroup with three codec children.
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Group mi    = sc.openGroup("mate_info")) {
+            try (Hdf5Dataset chDs = mi.openDataset("chrom")) {
+                assertEquals(Compression.NAME_TOKENIZED.ordinal(),
+                    chDs.readIntegerAttribute("compression", -1L));
+            }
+            try (Hdf5Dataset poDs = mi.openDataset("pos")) {
+                assertEquals(Compression.RANS_ORDER1.ordinal(),
+                    poDs.readIntegerAttribute("compression", -1L));
+            }
+            try (Hdf5Dataset tlDs = mi.openDataset("tlen")) {
+                assertEquals(Compression.RANS_ORDER1.ordinal(),
+                    tlDs.readIntegerAttribute("compression", -1L));
+            }
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(N_READS, gr.readCount());
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                String expectedCigar = (i % 3 == 0) ? "100M"
+                    : (i % 3 == 1) ? "99M1D" : "50M50S";
+                assertEquals(expectedCigar, r.cigar(),
+                    "full-ten cigar @ read " + i);
+                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
+                    "full-ten seq @ read " + i);
+                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
+                    "full-ten qual @ read " + i);
+                assertEquals(names.get(i), r.readName(),
+                    "full-ten name @ read " + i);
+                assertEquals(mateChroms.get(i), r.mateChromosome(),
+                    "full-ten mate chrom @ read " + i);
+                assertEquals(matePos[i], r.matePosition(),
+                    "full-ten mate pos @ read " + i);
+                assertEquals(tlens[i], r.templateLength(),
+                    "full-ten mate tlen @ read " + i);
+            }
+            long[] decodedPos = (long[]) gr.intChannelArray("positions");
+            int[]  decodedFlg = (int[])  gr.intChannelArray("flags");
+            byte[] decodedMq  = (byte[]) gr.intChannelArray("mapping_qualities");
+            assertArrayEquals(positions, decodedPos);
+            assertArrayEquals(flags, decodedFlg);
+            assertArrayEquals(mapq, decodedMq);
+        }
+    }
+
+    // ── 55. Phase F: cross-language fixture ─────────────────────────
+
+    @Test
+    void crossLanguageFixtureMateInfoFull() throws IOException {
+        // Python writer fixture: 100-read run with the realistic Phase F
+        // mate distribution (90% chr1, 5% chr2, 3% chrX, 2% "*"),
+        // overridden with NAME_TOKENIZED on chrom and RANS_ORDER1 on
+        // pos and tlen. Java reader recovers each value byte-exact via
+        // the Phase F subgroup + per-field codec dispatch.
+        Path tmp = copyFixtureToTemp("m86_codec_mate_info_full.tio");
+        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertNotNull(gr, "fixture has genomic_0001");
+            assertEquals(100, gr.readCount(), "fixture read count");
+            List<String> expectedChroms = phaseFMateChroms();
+            long[] expectedPos          = phaseFMatePositions();
+            int[]  expectedTlen         = phaseFMateTlens();
+            for (int i = 0; i < 100; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedChroms.get(i), r.mateChromosome(),
+                    "fixture mate chrom @ read " + i);
+                assertEquals(expectedPos[i], r.matePosition(),
+                    "fixture mate pos @ read " + i);
+                assertEquals(expectedTlen[i], r.templateLength(),
+                    "fixture mate tlen @ read " + i);
+            }
+        } finally {
+            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+        }
+        // Verify on-disk subgroup layout.
+        Path tmp2 = copyFixtureToTemp("m86_codec_mate_info_full.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Group mi    = sc.openGroup("mate_info")) {
+            try (Hdf5Dataset chDs = mi.openDataset("chrom")) {
+                assertEquals(Compression.NAME_TOKENIZED.ordinal(),
+                    chDs.readIntegerAttribute("compression", -1L),
+                    "fixture chrom @compression == NAME_TOKENIZED (8)");
+            }
+            try (Hdf5Dataset poDs = mi.openDataset("pos")) {
+                assertEquals(Compression.RANS_ORDER1.ordinal(),
+                    poDs.readIntegerAttribute("compression", -1L),
+                    "fixture pos @compression == RANS_ORDER1 (5)");
+            }
+            try (Hdf5Dataset tlDs = mi.openDataset("tlen")) {
+                assertEquals(Compression.RANS_ORDER1.ordinal(),
+                    tlDs.readIntegerAttribute("compression", -1L),
+                    "fixture tlen @compression == RANS_ORDER1 (5)");
+            }
         } finally {
             try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
         }

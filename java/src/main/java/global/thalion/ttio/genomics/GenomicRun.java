@@ -82,6 +82,14 @@ public class GenomicRun
     // read integer fields), so this cache is exercised by callers that
     // want bulk access to the compressed signal_channels integer data.
     private final Map<String, Object> decodedIntChannels = new HashMap<>();
+    // M86 Phase F: combined per-field cache for the mate_info subgroup
+    // layout (Binding Decision §129). Keyed by on-disk child name
+    // ("chrom" → List<String>; "pos" → long[]; "tlen" → int[]).
+    // Separate from compoundCache (M82 path), decodedByteChannels,
+    // decodedReadNames, decodedCigars, decodedIntChannels — three
+    // value types in one cache, one entry per per-read decode.
+    // Mutable HashMap so the per-field accessors can populate it.
+    private final Map<String, Object> decodedMateInfo = new HashMap<>();
 
     private int cursor = 0;  // Streamable
 
@@ -146,19 +154,19 @@ public class GenomicRun
         String sequence = new String(seqBytes, StandardCharsets.US_ASCII);
         byte[] qualities = byteChannelSlice("qualities", offset, length);
 
-        // Compound rows (cached on first access). M86 Phase E:
-        // read_names is dispatched separately via readNameAt() since
-        // the dataset shape varies (compound vs flat uint8 codec).
-        // M86 Phase C: cigars likewise dispatched via cigarAt() since
-        // the dataset shape varies (compound vs flat uint8 codec).
-        List<Object[]> mateInfos  = compoundRows("mate_info");
-
-        String cigar    = cigarAt(i);
-        String readName = readNameAt(i);
-        Object[] mate   = mateInfos.get(i);
-        String mateChrom = stringFromCompound(mate[0]);
-        long matePos     = ((Number) mate[1]).longValue();
-        int  tlen        = ((Number) mate[2]).intValue();
+        // M86 Phase E: read_names dispatched separately via
+        // readNameAt() (the dataset shape varies — compound vs flat
+        // uint8 codec). M86 Phase C: cigars likewise via cigarAt().
+        // M86 Phase F: mate fields dispatched via three per-field
+        // accessors (mateChromAt / matePosAt / mateTlenAt) since the
+        // mate_info link can be either an M82 compound dataset OR a
+        // Phase F subgroup containing three child datasets (Binding
+        // Decision §128, link-type dispatch).
+        String cigar     = cigarAt(i);
+        String readName  = readNameAt(i);
+        String mateChrom = mateChromAt(i);
+        long   matePos   = matePosAt(i);
+        int    tlen      = mateTlenAt(i);
 
         return new AlignedRead(
             readName,
@@ -553,12 +561,256 @@ public class GenomicRun
                 for (int i = 0; i < n; i++) out[i] = bb.getInt();
                 return out;
             }
+            case INT32 -> {
+                // M86 Phase F: mate_info_tlen is signed int32. Same
+                // 4-byte LE re-interpret as UINT32; Java's int[] is
+                // signed so the bit pattern carries through unchanged.
+                int n = bytes.length / 4;
+                int[] out = new int[n];
+                for (int i = 0; i < n; i++) out[i] = bb.getInt();
+                return out;
+            }
             case UINT8 -> {
                 return bytes.clone();
             }
             default -> throw new IllegalArgumentException(
                 "deserialiseLeBytes: unsupported precision " + precision);
         }
+    }
+
+    // ── M86 Phase F: mate_info per-field dispatch ──────────────────
+
+    /** M86 Phase F: true iff {@code signal_channels/mate_info} is a
+     *  group (Phase F layout) rather than a dataset (M82 compound
+     *  layout). Per Binding Decision §128 / Gotcha §141, dispatch is
+     *  on HDF5 link type, NOT on the {@code @compression} attribute
+     *  presence on the bare link.
+     *
+     *  <p>The HDF5 link-type query in Java is
+     *  {@code H5.H5Oget_info_by_name(parentId, "mate_info", flags)}
+     *  whose returned {@code H5O_info_t.type} field can be compared
+     *  to {@link hdf.hdf5lib.HDF5Constants#H5O_TYPE_GROUP} vs
+     *  {@link hdf.hdf5lib.HDF5Constants#H5O_TYPE_DATASET}. Because
+     *  {@code GenomicRun} is provider-abstract (HDF5 / SQLite /
+     *  Zarr / memory), this helper instead uses the StorageGroup
+     *  protocol's {@code openGroup} as the link-type query — it
+     *  raises an exception when the named child is a dataset (the
+     *  HDF5 binding's {@code H5Gopen} call fails with a negative
+     *  return on a dataset, surfaced as
+     *  {@link global.thalion.ttio.hdf5.Hdf5Errors.GroupOpenException}
+     *  by the adapter). This mirrors the Python implementation's
+     *  {@code try/except KeyError on h5py.Group} pattern. */
+    private boolean isMateInfoSubgroup() {
+        ensureSignalChannels();
+        if (!signalChannels.hasChild("mate_info")) {
+            return false;
+        }
+        try (StorageGroup g = signalChannels.openGroup("mate_info")) {
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** M86 Phase F: return the mate chromosome at index {@code i},
+     *  dispatching on {@code signal_channels/mate_info} link type
+     *  (Binding Decision §128).
+     *
+     *  <ul>
+     *    <li><b>M82 compound</b> (no override): COMPOUND[n_reads]
+     *        dataset with three fields. Read whole-and-cache via the
+     *        existing {@link #compoundRows} helper, then return the
+     *        per-read entry.</li>
+     *    <li><b>Phase F subgroup</b> (any mate_info_* override): GROUP
+     *        containing three child datasets. Decode the chrom child
+     *        on first access (cached in
+     *        {@code decodedMateInfo["chrom"]} per Binding Decision
+     *        §129) and return entry [i].</li>
+     *  </ul> */
+    private String mateChromAt(int i) {
+        if (isMateInfoSubgroup()) {
+            return decodeMateChrom().get(i);
+        }
+        // M82 compound path.
+        List<Object[]> rows = compoundRows("mate_info");
+        return stringFromCompound(rows.get(i)[0]);
+    }
+
+    /** M86 Phase F: return the mate position at index {@code i},
+     *  dispatching on the mate_info link type (Binding Decision §128). */
+    private long matePosAt(int i) {
+        if (isMateInfoSubgroup()) {
+            long[] arr = (long[]) decodeMateIntField(
+                "pos", global.thalion.ttio.Enums.Precision.INT64);
+            return arr[i];
+        }
+        List<Object[]> rows = compoundRows("mate_info");
+        return ((Number) rows.get(i)[1]).longValue();
+    }
+
+    /** M86 Phase F: return the template length at index {@code i},
+     *  dispatching on the mate_info link type (Binding Decision §128). */
+    private int mateTlenAt(int i) {
+        if (isMateInfoSubgroup()) {
+            int[] arr = (int[]) decodeMateIntField(
+                "tlen", global.thalion.ttio.Enums.Precision.INT32);
+            return arr[i];
+        }
+        List<Object[]> rows = compoundRows("mate_info");
+        return ((Number) rows.get(i)[2]).intValue();
+    }
+
+    /** M86 Phase F: lazily decode the chrom field from the Phase F
+     *  subgroup, caching the result in
+     *  {@code decodedMateInfo["chrom"]} (Binding Decision §129).
+     *  Dispatches on the chrom child dataset's precision and
+     *  {@code @compression} attribute:
+     *  <ul>
+     *    <li>UINT8 + {@code @compression == NAME_TOKENIZED (8)}:
+     *        decoded via {@link global.thalion.ttio.codecs.NameTokenizer#decode}.</li>
+     *    <li>UINT8 + {@code @compression == RANS_ORDER0|1 (4|5)}:
+     *        decoded via M83 rANS, then walked as length-prefix-concat
+     *        ({@code varint(len) + ASCII bytes} per chrom).</li>
+     *    <li>Compound (no codec): un-overridden field stored at its
+     *        natural VL_STRING dtype with HDF5 ZLIB; read whole and
+     *        extract the values.</li>
+     *  </ul> */
+    @SuppressWarnings("unchecked")
+    private List<String> decodeMateChrom() {
+        Object cached = decodedMateInfo.get("chrom");
+        if (cached != null) return (List<String>) cached;
+
+        ensureSignalChannels();
+        try (StorageGroup mateGroup = signalChannels.openGroup("mate_info");
+             StorageDataset ds = mateGroup.openDataset("chrom")) {
+            global.thalion.ttio.Enums.Precision p = ds.precision();
+            if (p == global.thalion.ttio.Enums.Precision.UINT8) {
+                Object codecAttr = ds.getAttribute("compression");
+                long codecId = (codecAttr instanceof Number n)
+                    ? n.longValue() : 0L;
+                long total = ds.shape()[0];
+                byte[] all = (byte[]) ds.readSlice(0L, total);
+                List<String> out;
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .RANS_ORDER0.ordinal()
+                    || codecId == global.thalion.ttio.Enums.Compression
+                        .RANS_ORDER1.ordinal()) {
+                    byte[] decoded = global.thalion.ttio.codecs
+                        .Rans.decode(all);
+                    out = decodeLengthPrefixConcatMate(decoded);
+                } else if (codecId == global.thalion.ttio.Enums.Compression
+                        .NAME_TOKENIZED.ordinal()) {
+                    out = global.thalion.ttio.codecs
+                        .NameTokenizer.decode(all);
+                } else {
+                    throw new IllegalStateException(
+                        "signal_channel 'mate_info/chrom': @compression="
+                        + codecId + " is not a supported TTIO codec id "
+                        + "(only RANS_ORDER0 = 4, RANS_ORDER1 = 5, and "
+                        + "NAME_TOKENIZED = 8 are recognised for this "
+                        + "channel)");
+                }
+                decodedMateInfo.put("chrom", out);
+                return out;
+            }
+            // Natural-dtype (compound VL_STRING) path — un-overridden
+            // field inside the subgroup. Read whole as compound rows.
+            @SuppressWarnings("unchecked")
+            List<Object[]> rows = (List<Object[]>) ds.readAll();
+            List<String> out = new ArrayList<>(rows.size());
+            for (Object[] r : rows) out.add(stringFromCompound(r[0]));
+            decodedMateInfo.put("chrom", out);
+            return out;
+        }
+    }
+
+    /** M86 Phase F: lazily decode an integer mate field (pos or tlen)
+     *  from the Phase F subgroup, caching the result in
+     *  {@code decodedMateInfo[name]} (Binding Decision §129).
+     *  Dispatches on dataset precision and {@code @compression}:
+     *  <ul>
+     *    <li>UINT8 + {@code @compression == RANS_ORDER0|1}: decoded
+     *        via M83 rANS, then re-interpreted as the natural integer
+     *        precision via {@link java.nio.ByteOrder#LITTLE_ENDIAN}.</li>
+     *    <li>Natural-dtype (INT64 / INT32, no override): read directly
+     *        with the typed reader inside the subgroup.</li>
+     *  </ul> */
+    private Object decodeMateIntField(String name,
+            global.thalion.ttio.Enums.Precision naturalPrecision) {
+        Object cached = decodedMateInfo.get(name);
+        if (cached != null) return cached;
+
+        ensureSignalChannels();
+        try (StorageGroup mateGroup = signalChannels.openGroup("mate_info");
+             StorageDataset ds = mateGroup.openDataset(name)) {
+            global.thalion.ttio.Enums.Precision p = ds.precision();
+            if (p == global.thalion.ttio.Enums.Precision.UINT8) {
+                Object codecAttr = ds.getAttribute("compression");
+                long codecId = (codecAttr instanceof Number n)
+                    ? n.longValue() : 0L;
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .RANS_ORDER0.ordinal()
+                    || codecId == global.thalion.ttio.Enums.Compression
+                        .RANS_ORDER1.ordinal()) {
+                    long total = ds.shape()[0];
+                    byte[] all = (byte[]) ds.readSlice(0L, total);
+                    byte[] decoded = global.thalion.ttio.codecs
+                        .Rans.decode(all);
+                    Object arr = deserialiseLeBytes(decoded, naturalPrecision);
+                    decodedMateInfo.put(name, arr);
+                    return arr;
+                }
+                throw new IllegalStateException(
+                    "signal_channel 'mate_info/" + name + "': @compression="
+                    + codecId + " is not a supported TTIO codec id for "
+                    + "an integer mate field (only RANS_ORDER0 = 4 and "
+                    + "RANS_ORDER1 = 5 are recognised)");
+            }
+            // Natural-dtype path — read the typed dataset directly.
+            Object arr = ds.readAll();
+            decodedMateInfo.put(name, arr);
+            return arr;
+        }
+    }
+
+    /** M86 Phase F: walk a length-prefix-concat byte buffer back into
+     *  a list of ASCII chrom strings. Mirrors {@link #decodeLengthPrefixConcat}
+     *  used by the cigars rANS path; kept as a separate copy so the
+     *  error messages name the chrom channel. */
+    private static List<String> decodeLengthPrefixConcatMate(byte[] buf) {
+        List<String> out = new ArrayList<>();
+        int offset = 0;
+        int n = buf.length;
+        long[] tmp = new long[1];
+        while (offset < n) {
+            offset = readUnsignedVarint(buf, offset, tmp);
+            long lengthL = tmp[0];
+            if (lengthL < 0 || lengthL > Integer.MAX_VALUE) {
+                throw new IllegalArgumentException(
+                    "mate_info_chrom rANS stream: length-prefix-concat "
+                    + "entry length " + lengthL + " out of int range");
+            }
+            int length = (int) lengthL;
+            if (offset + length > n) {
+                throw new IllegalArgumentException(
+                    "mate_info_chrom rANS stream: length-prefix-concat "
+                    + "entry runs off end of decoded buffer (offset="
+                    + offset + ", length=" + length
+                    + ", buffer_size=" + n + ")");
+            }
+            for (int k = 0; k < length; k++) {
+                int b = Byte.toUnsignedInt(buf[offset + k]);
+                if (b > 0x7F) {
+                    throw new IllegalArgumentException(
+                        "mate_info_chrom rANS stream: entry contains "
+                        + "non-ASCII bytes");
+                }
+            }
+            out.add(new String(buf, offset, length,
+                StandardCharsets.US_ASCII));
+            offset += length;
+        }
+        return out;
     }
 
     @SuppressWarnings("unchecked")
