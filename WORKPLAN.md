@@ -1244,3 +1244,52 @@ ObjC normative implementation matching the Python reference shipped in M82.1.
 ### Next
 
 M82.3 (Java), M82.4 (cross-language conformance matrix), M82.5 (docs).
+
+---
+
+## M82.3 — GenomicRun + AlignedRead (Java) — shipped 2026-04-25
+
+Java implementation of the genomic data model. Mirrors the M82.1
+Python reference and M82.2 ObjC normative shapes.
+
+### Shipped (M82.3)
+
+- [x] **4 new classes** under `java/src/main/java/global/thalion/ttio/genomics/`:
+      `AlignedRead` (record), `GenomicIndex`, `GenomicRun`,
+      `WrittenGenomicRun`. `GenomicRun` implements
+      `Indexable<AlignedRead>` + `Streamable` + `AutoCloseable`.
+- [x] **`SpectralDataset` extensions** — new
+      `create(... List<WrittenGenomicRun> ...)` overload, both HDF5
+      and provider-driven create paths write `/study/genomic_runs/`,
+      both open paths read it. `genomicRuns()` getter.
+- [x] **`Precision.UINT64`** at enum ordinal 9 with reserved
+      placeholders at 7 and 8 for cross-language ordinal parity with
+      Python and ObjC.
+- [x] **`FeatureFlags.OPT_GENOMIC`** constant + format version 1.4
+      auto-bump.
+- [x] **13 new test methods**, ~78 assertions in `GenomicRunTest.java`.
+      Total Java tests now 402 (was 389 baseline).
+- [x] **Memory provider round-trip** — exercises the
+      `createViaProvider` + `openViaProvider` paths via `memory://` URL.
+
+### Bug fixes surfaced during execution
+
+- `Hdf5Group.precisionFromType` returned `INT64` for `H5T_NATIVE_UINT64`
+  as a pre-M82 workaround (the enum value didn't exist). Fixed.
+
+### Out of scope (deferred to M82.4)
+
+- **Cross-language interop for genomic VL string fields.** Java's
+  JHI5 1.10 binding can't round-trip VL_STRING in compounds. M82.3
+  uses VL_BYTES on the Java side as a workaround, breaking on-disk
+  type compatibility with Python/ObjC for the chromosomes / cigars /
+  read_names / mate_info.chrom fields. M82.4 cross-language matrix
+  must resolve this either by switching all writers to VL_BYTES or
+  by upgrading Java's binding.
+- **MS runs via memory:// / sqlite:// / zarr://** — same gap as
+  M82.2 (separate writer refactor required).
+
+### Next
+
+M82.4 (cross-language conformance matrix — must resolve VL string
+encoding decision), M82.5 (docs).
