@@ -692,35 +692,18 @@ public class SpectralDataset implements
                         idents.get(row).confidenceScore(),
                         pool.addString(idents.get(row).evidenceChainJson())
                 });
-
-        // JSON mirror on @identifications_json so JHI5-1.10 readers
-        // (currently only our own) can recover VL-string fields.
-        StringBuilder json = new StringBuilder("[");
-        for (int i = 0; i < idents.size(); i++) {
-            if (i > 0) json.append(',');
-            Identification id = idents.get(i);
-            json.append('{')
-                .append("\"run_name\":").append(MiniJson.quote(id.runName()))
-                .append(",\"spectrum_index\":").append(id.spectrumIndex())
-                .append(",\"chemical_entity\":").append(MiniJson.quote(id.chemicalEntity()))
-                .append(",\"confidence_score\":").append(id.confidenceScore())
-                .append(",\"evidence_chain\":").append(
-                        id.evidenceChainJson() == null || id.evidenceChainJson().isEmpty()
-                                ? "[]" : id.evidenceChainJson())
-                .append('}');
-        }
-        json.append(']');
-        study.setStringAttribute("identifications_json", json.toString());
+        // M82.4: identifications_json mirror retired. Java reads
+        // VL_STRING from the compound directly via Unsafe deref now,
+        // so the JSON shadow is dead weight on the HDF5 fast path.
     }
 
     private static List<Identification> readIdentifications(Hdf5Group study) {
-        if (study.hasAttribute("identifications_json")) {
-            return parseIdentificationsJson(study.readStringAttribute("identifications_json"));
-        }
+        // M82.4: prefer the compound (canonical) — VL_STRING reads
+        // work via Unsafe deref now. Fall back to legacy JSON mirror
+        // only when the compound is absent (older Java-written files
+        // that were JSON-only or unusual layouts).
         if (study.hasChild("identifications")) {
-            // Python/ObjC file without JSON mirror — recover primitive fields.
-            // VL strings decode as empty (see class-level javadoc).
-            List<Object[]> rows = Hdf5CompoundIO.readCompoundPrimitives(
+            List<Object[]> rows = Hdf5CompoundIO.readCompoundFull(
                     study, "identifications", Hdf5CompoundIO.identificationSchema());
             List<Identification> out = new ArrayList<>(rows.size());
             for (Object[] r : rows) {
@@ -729,6 +712,9 @@ public class SpectralDataset implements
                         (Double) r[3], MiniJson.parseArrayOfStrings((String) r[4])));
             }
             return out;
+        }
+        if (study.hasAttribute("identifications_json")) {
+            return parseIdentificationsJson(study.readStringAttribute("identifications_json"));
         }
         return List.of();
     }
@@ -747,30 +733,13 @@ public class SpectralDataset implements
                         pool.addString(quants.get(row).normalizationMethod() != null
                                 ? quants.get(row).normalizationMethod() : "")
                 });
-
-        StringBuilder json = new StringBuilder("[");
-        for (int i = 0; i < quants.size(); i++) {
-            if (i > 0) json.append(',');
-            Quantification q = quants.get(i);
-            json.append('{')
-                .append("\"chemical_entity\":").append(MiniJson.quote(q.chemicalEntity()))
-                .append(",\"sample_ref\":").append(MiniJson.quote(q.sampleRef()))
-                .append(",\"abundance\":").append(q.abundance());
-            if (q.normalizationMethod() != null) {
-                json.append(",\"normalization_method\":").append(MiniJson.quote(q.normalizationMethod()));
-            }
-            json.append('}');
-        }
-        json.append(']');
-        study.setStringAttribute("quantifications_json", json.toString());
+        // M82.4: quantifications_json mirror retired (see writeIdentifications).
     }
 
     private static List<Quantification> readQuantifications(Hdf5Group study) {
-        if (study.hasAttribute("quantifications_json")) {
-            return parseQuantificationsJson(study.readStringAttribute("quantifications_json"));
-        }
+        // M82.4: compound first (canonical); JSON fallback for legacy.
         if (study.hasChild("quantifications")) {
-            List<Object[]> rows = Hdf5CompoundIO.readCompoundPrimitives(
+            List<Object[]> rows = Hdf5CompoundIO.readCompoundFull(
                     study, "quantifications", Hdf5CompoundIO.quantificationSchema());
             List<Quantification> out = new ArrayList<>(rows.size());
             for (Object[] r : rows) {
@@ -780,6 +749,9 @@ public class SpectralDataset implements
                         (String) r[0], (String) r[1], (Double) r[2], norm));
             }
             return out;
+        }
+        if (study.hasAttribute("quantifications_json")) {
+            return parseQuantificationsJson(study.readStringAttribute("quantifications_json"));
         }
         return List.of();
     }
@@ -798,29 +770,16 @@ public class SpectralDataset implements
                         pool.addString(records.get(row).inputRefsJson()),
                         pool.addString(records.get(row).outputRefsJson())
                 });
-
-        StringBuilder json = new StringBuilder("[");
-        for (int i = 0; i < records.size(); i++) {
-            if (i > 0) json.append(',');
-            ProvenanceRecord r = records.get(i);
-            json.append('{')
-                .append("\"timestamp_unix\":").append(r.timestampUnix())
-                .append(",\"software\":").append(MiniJson.quote(r.software()))
-                .append(",\"parameters\":").append(nonEmptyJson(r.parametersJson(), "{}"))
-                .append(",\"input_refs\":").append(nonEmptyJson(r.inputRefsJson(), "[]"))
-                .append(",\"output_refs\":").append(nonEmptyJson(r.outputRefsJson(), "[]"))
-                .append('}');
-        }
-        json.append(']');
-        study.setStringAttribute("provenance_json", json.toString());
+        // M82.4: study-level provenance_json mirror retired
+        // (see writeIdentifications). The per-run provenance_json
+        // attribute on /study/ms_runs/<name>/ is a different layer
+        // and is signed by signatures.py — that one stays.
     }
 
     private static List<ProvenanceRecord> readProvenance(Hdf5Group study) {
-        if (study.hasAttribute("provenance_json")) {
-            return parseProvenanceJson(study.readStringAttribute("provenance_json"));
-        }
+        // M82.4: compound first (canonical); JSON fallback for legacy.
         if (study.hasChild("provenance")) {
-            List<Object[]> rows = Hdf5CompoundIO.readCompoundPrimitives(
+            List<Object[]> rows = Hdf5CompoundIO.readCompoundFull(
                     study, "provenance", Hdf5CompoundIO.provenanceSchema());
             List<ProvenanceRecord> out = new ArrayList<>(rows.size());
             for (Object[] r : rows) {
@@ -831,6 +790,9 @@ public class SpectralDataset implements
                         MiniJson.parseArrayOfStrings((String) r[4])));
             }
             return out;
+        }
+        if (study.hasAttribute("provenance_json")) {
+            return parseProvenanceJson(study.readStringAttribute("provenance_json"));
         }
         return List.of();
     }
