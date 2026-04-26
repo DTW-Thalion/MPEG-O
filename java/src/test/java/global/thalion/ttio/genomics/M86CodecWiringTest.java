@@ -74,11 +74,42 @@ class M86CodecWiringTest {
         return out;
     }
 
+    /** Deterministic Illumina-style names — same generator as the
+     *  Python reference and the cross-language fixture input.
+     *  Tokenises to ["INSTR:RUN:", N, ":", N, ":", N, ":", N] — 7
+     *  alternating string/numeric columns that pack tightly through
+     *  the NAME_TOKENIZED columnar mode. */
+    private static List<String> illuminaNames(int n) {
+        List<String> out = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            out.add(String.format("INSTR:RUN:1:%d:%d:%d", i / 4, i % 4, i * 100));
+        }
+        return out;
+    }
+
     /** 10-read × 100-bp synthetic genomic run, mirrors Python {@code _make_run}. */
     private static WrittenGenomicRun makeRun(byte[] seq, byte[] qual,
                                               Map<String, Compression> overrides) {
+        return makeRunWithNames(seq, qual, defaultReadNames(), overrides);
+    }
+
+    /** Default read-name list used by the legacy test cases ("r0".."r9"). */
+    private static List<String> defaultReadNames() {
+        List<String> out = new ArrayList<>(N_READS);
+        for (int i = 0; i < N_READS; i++) out.add("r" + i);
+        return out;
+    }
+
+    /** 10-read × 100-bp synthetic genomic run with caller-supplied
+     *  read names. Mirrors Python {@code _make_run_with_names} — used
+     *  by the M86 Phase E tests to exercise the structured-Illumina
+     *  columnar encode path. */
+    private static WrittenGenomicRun makeRunWithNames(byte[] seq, byte[] qual,
+                                              List<String> readNames,
+                                              Map<String, Compression> overrides) {
         assertEquals(TOTAL, seq.length, "seq length");
         assertEquals(TOTAL, qual.length, "qual length");
+        assertEquals(N_READS, readNames.size(), "readNames length");
         long[] positions = new long[N_READS];
         for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L;
         byte[] mapqs = new byte[N_READS];
@@ -91,14 +122,12 @@ class M86CodecWiringTest {
             lengths[i] = READ_LEN;
         }
         List<String> cigars = new ArrayList<>(N_READS);
-        List<String> readNames = new ArrayList<>(N_READS);
         List<String> mateChroms = new ArrayList<>(N_READS);
         List<String> chroms     = new ArrayList<>(N_READS);
         long[] matePos = new long[N_READS];
         int[] tlens    = new int[N_READS];
         for (int i = 0; i < N_READS; i++) {
             cigars.add("100M");
-            readNames.add("r" + i);
             mateChroms.add("chr1");
             chroms.add("chr1");
             matePos[i] = -1L;
@@ -740,6 +769,356 @@ class M86CodecWiringTest {
             assertEquals(Compression.QUALITY_BINNED.ordinal(),
                 qualDs.readIntegerAttribute("compression", -1L),
                 "fixture qualities @compression == QUALITY_BINNED (7)");
+        } finally {
+            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
+        }
+    }
+
+    // ── 19. Phase E: round-trip read_names via NAME_TOKENIZED ──────
+
+    @Test
+    void roundTripReadNamesNameTokenized(@TempDir Path tmp) {
+        // Structured Illumina-style names round-trip byte-exact via
+        // NAME_TOKENIZED (lossless codec — M85 Phase B §1).
+        List<String> names = illuminaNames(N_READS);
+        WrittenGenomicRun run = makeRunWithNames(pureAcgt(), phredCycle(), names,
+            Map.of("read_names", Compression.NAME_TOKENIZED));
+        Path file = writeRun(tmp, run, "rn-nt.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(N_READS, gr.readCount());
+            byte[] seq  = pureAcgt();
+            byte[] qual = phredCycle();
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(names.get(i), r.readName(),
+                    "NAME_TOKENIZED round-trip @ read " + i);
+                // Sequences/qualities (no override) unchanged path.
+                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
+                    "sequences (no override) @ read " + i);
+                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
+                    "qualities (no override) @ read " + i);
+            }
+        }
+    }
+
+    // ── 20. Phase E: NAME_TOKENIZED size-win vs M82 compound ───────
+
+    @Test
+    void sizeWinNameTokenized(@TempDir Path tmp) {
+        // 1000 structured Illumina-style read names. Compares the
+        // TOTAL FILE-SIZE delta between the two writes (the HDF5
+        // VL_STRING compound stores per-name payloads on the global
+        // heap, which Dataset.id.get_storage_size() misses). The
+        // Python reference targets ratio < 0.50.
+        int n = 1000;
+        int len = 100;
+        byte[] seq = new byte[n * len];
+        byte[] cycle = "ACGT".getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i < seq.length; i++) seq[i] = cycle[i % 4];
+        byte[] qual = new byte[n * len];
+        for (int i = 0; i < qual.length; i++) qual[i] = (byte) (30 + (i % 11));
+        List<String> names = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            names.add(String.format("INSTR:RUN:1:%d:%d:%d",
+                i / 4, i % 4, i * 100));
+        }
+        WrittenGenomicRun raw = bigRunWithNames(n, len, seq, qual, names, Map.of());
+        WrittenGenomicRun nt  = bigRunWithNames(n, len, seq, qual, names,
+            Map.of("read_names", Compression.NAME_TOKENIZED));
+
+        Path rawFile = writeRun(tmp, raw, "nt-size-raw.tio");
+        Path ntFile  = writeRun(tmp, nt,  "nt-size-nt.tio");
+
+        long rawFileSize, ntFileSize;
+        try {
+            rawFileSize = Files.size(rawFile);
+            ntFileSize  = Files.size(ntFile);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        long saved = rawFileSize - ntFileSize;
+
+        long ntCodecBytes;
+        try (Hdf5File f = Hdf5File.openReadOnly(ntFile.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset rnDs = sc.openDataset("read_names")) {
+            ntCodecBytes = rnDs.getLength();
+        }
+        long m82Footprint = ntCodecBytes + saved;
+        double ratio = (double) ntCodecBytes / (double) m82Footprint;
+        assertTrue(ratio < 0.50,
+            "NAME_TOKENIZED read_names dataset = " + ntCodecBytes
+            + " bytes; M82 footprint (codec+saved) = " + m82Footprint
+            + " bytes; ratio = " + String.format("%.4f", ratio)
+            + " (target < 0.50)");
+        assertTrue(ntCodecBytes > 0, "NAME_TOKENIZED output non-empty");
+    }
+
+    /** bigRun variant accepting custom read names. */
+    private static WrittenGenomicRun bigRunWithNames(int n, int len, byte[] seq,
+                                                      byte[] qual,
+                                                      List<String> names,
+                                                      Map<String, Compression> overrides) {
+        long[] positions = new long[n];
+        for (int i = 0; i < n; i++) positions[i] = i * 1000L;
+        byte[] mapqs = new byte[n];
+        java.util.Arrays.fill(mapqs, (byte) 60);
+        int[] flags = new int[n];
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        for (int i = 0; i < n; i++) {
+            offsets[i] = (long) i * len;
+            lengths[i] = len;
+        }
+        List<String> cigars = new ArrayList<>(n);
+        List<String> mateChroms = new ArrayList<>(n);
+        List<String> chroms = new ArrayList<>(n);
+        long[] matePos = new long[n];
+        int[] tlens = new int[n];
+        for (int i = 0; i < n; i++) {
+            cigars.add(len + "M");
+            mateChroms.add("chr1");
+            chroms.add("chr1");
+            matePos[i] = -1L;
+        }
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA", "M86_NT_BIG",
+            positions, mapqs, flags, seq, qual, offsets, lengths,
+            cigars, names, mateChroms, matePos, tlens, chroms,
+            Compression.NONE, overrides);
+    }
+
+    // ── 21. Phase E: @compression == 8 set on read_names dataset ───
+
+    @Test
+    void attributeSetCorrectlyNameTokenized(@TempDir Path tmp) {
+        // Schema lift: read_names becomes 1-D uint8 (not compound) and
+        // carries @compression == 8. Other byte channels are untouched
+        // by this override.
+        WrittenGenomicRun run = makeRunWithNames(pureAcgt(), phredCycle(),
+            illuminaNames(N_READS),
+            Map.of("read_names", Compression.NAME_TOKENIZED));
+        Path file = writeRun(tmp, run, "rn-nt-attr.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset rnDs   = sc.openDataset("read_names");
+             Hdf5Dataset seqDs  = sc.openDataset("sequences");
+             Hdf5Dataset qualDs = sc.openDataset("qualities")) {
+            // Schema-lift dispatch: precision UINT8, not compound.
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                rnDs.getPrecision(),
+                "read_names must be 1-D uint8 under NAME_TOKENIZED, "
+                + "not compound");
+            // @compression carries the codec id.
+            assertTrue(rnDs.hasAttribute("compression"),
+                "read_names must carry @compression");
+            long val = rnDs.readIntegerAttribute("compression", -1L);
+            assertEquals(Compression.NAME_TOKENIZED.ordinal(), val,
+                "@compression value must be NAME_TOKENIZED ordinal");
+            assertEquals(8L, val, "NAME_TOKENIZED is M79 codec id 8");
+            // Other channels untouched by this override.
+            assertFalse(seqDs.hasAttribute("compression"),
+                "sequences must have no @compression attribute");
+            assertFalse(qualDs.hasAttribute("compression"),
+                "qualities must have no @compression attribute");
+        }
+    }
+
+    // ── 22. Phase E: back-compat — read_names compound unchanged ───
+
+    @Test
+    void backCompatReadNamesUnchanged(@TempDir Path tmp) {
+        // No read_names override → read_names stays as M82 compound.
+        // Two cases: empty overrides, and overrides on other channels
+        // only.
+        Map<String, Compression>[] cases = new Map[]{
+            Map.of(),
+            Map.of("sequences", Compression.BASE_PACK,
+                   "qualities", Compression.RANS_ORDER1),
+        };
+        String[] descs = {"empty", "seq+qual"};
+        for (int c = 0; c < cases.length; c++) {
+            WrittenGenomicRun run = makeRun(pureAcgt(), phredCycle(), cases[c]);
+            Path file = writeRun(tmp, run, "backcompat-" + descs[c] + ".tio");
+            // Inspect the on-disk shape: read_names must NOT be uint8
+            // (it's the M82 compound), and must not carry @compression.
+            try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+                 Hdf5Group root = f.rootGroup();
+                 Hdf5Group study = root.openGroup("study");
+                 Hdf5Group gRuns = study.openGroup("genomic_runs");
+                 Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+                 Hdf5Group sc    = rg.openGroup("signal_channels");
+                 Hdf5Dataset rnDs = sc.openDataset("read_names")) {
+                assertNotEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                    rnDs.getPrecision(),
+                    descs[c] + ": read_names must remain compound, "
+                    + "not lifted to uint8");
+                assertFalse(rnDs.hasAttribute("compression"),
+                    descs[c] + ": M82 compound must not carry @compression");
+            }
+            // Round-trip via the existing read path.
+            try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+                GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+                for (int i = 0; i < N_READS; i++) {
+                    AlignedRead r = gr.readAt(i);
+                    assertEquals("r" + i, r.readName(),
+                        descs[c] + ": read " + i + " name");
+                }
+            }
+        }
+    }
+
+    // ── 23. Phase E: reject NAME_TOKENIZED on sequences/qualities ──
+
+    @Test
+    void rejectNameTokenizedOnSequences(@TempDir Path tmp) {
+        // Per Binding Decision §113: NAME_TOKENIZED tokenises UTF-8
+        // strings, not binary byte streams. Validation throws
+        // IllegalArgumentException at write time; the message must
+        // name the codec, the channel, and explain the wrong-input-
+        // type rationale. Mentions read_names so the user knows
+        // where the codec *does* belong.
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
+                    Map.of("sequences", Compression.NAME_TOKENIZED));
+                writeRun(tmp, bad, "bad-nt-seq.tio");
+            });
+        String msg = ex.getMessage();
+        assertNotNull(msg, "exception must have a message");
+        assertTrue(msg.contains("NAME_TOKENIZED"),
+            "error must name the codec; got: " + msg);
+        assertTrue(msg.contains("sequences"),
+            "error must name the channel; got: " + msg);
+        assertTrue(msg.contains("tokenises UTF-8"),
+            "error must explain that NAME_TOKENIZED tokenises UTF-8; got: " + msg);
+        assertTrue(msg.contains("read_names")
+                && msg.contains("NAME_TOKENIZED"),
+            "error must point at the read_names channel for "
+            + "NAME_TOKENIZED; got: " + msg);
+
+        // Same check for the qualities channel (also forbidden).
+        IllegalArgumentException exQ = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
+                    Map.of("qualities", Compression.NAME_TOKENIZED));
+                writeRun(tmp, bad, "bad-nt-qual.tio");
+            });
+        String msgQ = exQ.getMessage();
+        assertNotNull(msgQ, "exception must have a message");
+        assertTrue(msgQ.contains("NAME_TOKENIZED"),
+            "qualities error must name the codec; got: " + msgQ);
+        assertTrue(msgQ.contains("qualities"),
+            "qualities error must name the channel; got: " + msgQ);
+    }
+
+    // ── 24. Phase E: mixed all three overrides ─────────────────────
+
+    @Test
+    void mixedAllThreeOverrides(@TempDir Path tmp) {
+        // sequences=BASE_PACK + qualities=QUALITY_BINNED + read_names=
+        // NAME_TOKENIZED simultaneously. Verifies the on-disk
+        // @compression attributes for all three channels and that all
+        // three round-trip correctly (with QUALITY_BINNED's bin-centre
+        // inputs preserving byte-exact qualities).
+        byte[] seq  = pureAcgt();
+        byte[] qual = qualBinCentre();
+        List<String> names = illuminaNames(N_READS);
+        WrittenGenomicRun run = makeRunWithNames(seq, qual, names,
+            Map.of("sequences", Compression.BASE_PACK,
+                   "qualities", Compression.QUALITY_BINNED,
+                   "read_names", Compression.NAME_TOKENIZED));
+        Path file = writeRun(tmp, run, "mixed-all-three.tio");
+
+        // Verify all three channels carry their respective codec ids.
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset seqDs  = sc.openDataset("sequences");
+             Hdf5Dataset qualDs = sc.openDataset("qualities");
+             Hdf5Dataset rnDs   = sc.openDataset("read_names")) {
+            assertEquals(Compression.BASE_PACK.ordinal(),
+                seqDs.readIntegerAttribute("compression", -1L),
+                "sequences @compression == BASE_PACK (6)");
+            assertEquals(Compression.QUALITY_BINNED.ordinal(),
+                qualDs.readIntegerAttribute("compression", -1L),
+                "qualities @compression == QUALITY_BINNED (7)");
+            assertEquals(Compression.NAME_TOKENIZED.ordinal(),
+                rnDs.readIntegerAttribute("compression", -1L),
+                "read_names @compression == NAME_TOKENIZED (8)");
+            // read_names must be the lifted 1-D uint8 layout.
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                rnDs.getPrecision(),
+                "read_names must be 1-D uint8 under NAME_TOKENIZED");
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(N_READS, gr.readCount());
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
+                    "mixed BASE_PACK seq @ read " + i);
+                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
+                    "mixed QUALITY_BINNED qual @ read " + i);
+                assertEquals(names.get(i), r.readName(),
+                    "mixed NAME_TOKENIZED read_name @ read " + i);
+            }
+        }
+    }
+
+    // ── 25. Phase E: cross-language fixture (Python → Java) ────────
+
+    @Test
+    void crossLanguageFixtureNameTokenized() throws IOException {
+        // Phase E fixture: NAME_TOKENIZED on read_names with structured
+        // Illumina-style names. Sequences/qualities use the default
+        // (non-codec) HDF5 path on the Python side too, so we only
+        // assert the read_name round-trip matches the deterministic
+        // generator.
+        List<String> expectedNames = illuminaNames(N_READS);
+        Path tmp = copyFixtureToTemp("m86_codec_name_tokenized.tio");
+        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertNotNull(gr, "fixture has genomic_0001");
+            assertEquals(N_READS, gr.readCount(), "fixture read count");
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedNames.get(i), r.readName(),
+                    "NAME_TOKENIZED fixture read_name @ " + i);
+            }
+        } finally {
+            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+        }
+        // Verify the on-disk schema-lift layout (uint8 + @compression == 8).
+        Path tmp2 = copyFixtureToTemp("m86_codec_name_tokenized.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset rnDs = sc.openDataset("read_names")) {
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                rnDs.getPrecision(),
+                "fixture read_names must be 1-D uint8 (schema-lifted)");
+            assertEquals(Compression.NAME_TOKENIZED.ordinal(),
+                rnDs.readIntegerAttribute("compression", -1L),
+                "fixture read_names @compression == NAME_TOKENIZED (8)");
         } finally {
             try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
         }
