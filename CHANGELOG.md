@@ -11,7 +11,116 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS codec
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK
+
+### M84 — BASE_PACK genomic codec + sidecar mask (clean-room, 3-language) (2026-04-26)
+
+Second entry in the genomic codec stack started by M83. 2-bit
+packing for canonical ACGT bases plus a sparse position+byte
+sidecar mask that losslessly preserves any non-ACGT byte (`N`,
+IUPAC ambiguity codes, soft-masking lowercase, gaps, anything
+else) at its original position. Implemented from first principles
+across all three languages — the 2-bit-per-base packing convention
+is decades-old prior art. **No htslib / CRAM tools-Java / jbzip
+source code consulted in any of the three implementations.**
+
+The codec ships as a standalone primitive in M84; wiring into the
+genomic signal-channel pipeline (interpreting `@compression == 6`
+on a `signal_channels/sequences` dataset to dispatch to
+`base_pack.decode()`) is deferred to M86, which will land
+alongside the rANS wiring.
+
+#### Added
+
+- **Python** (`python/src/ttio/codecs/base_pack.py`) — `encode(data)`
+  and `decode(encoded)` with no order parameter. Pack loop uses
+  `bytes.translate` for the 256-entry symbol→slot mapping;
+  decode uses a precomputed unpack table. Throughput on the M84
+  host: encode 63 MB/s, decode 70 MB/s. 14 pytest cases, all
+  passing; full Python suite went from 796 passed → 810 passed
+  (+14 new) with zero new regressions.
+- **Objective-C** (`objc/Source/Codecs/TTIOBasePack.{h,m}`) — C
+  core with `NSData → NSData` wrappers, `NSError**` out-param on
+  decode. Two-pass encoder (count mask entries to size the output,
+  then single-scan write into one pre-zeroed buffer; padding bits
+  are zero by construction). Static 256-entry pack and unpack
+  lookup tables (no openssl/libgcrypt dependency added).
+  Throughput: encode 907 MB/s, decode 2093 MB/s — 4–5× faster
+  than rANS owing to the simpler inner loop. 66 new assertions
+  in `TestM84BasePack.m`, full ObjC suite went from 1981 passed →
+  2047 passed (+66) with the same 2 pre-existing M38 Thermo
+  failures unchanged.
+- **Java** (`java/src/main/java/global/thalion/ttio/codecs/BasePack.java`)
+  — uses `>>>` (unsigned right shift) throughout; `Byte.toUnsignedInt(b)`
+  for byte→int widening; manual big-endian `uint32` pack/unpack
+  helpers. 14 JUnit 5 test methods, ~50 assertions, all four
+  canonical vectors byte-exact. Throughput: encode 110 MB/s,
+  decode 232 MB/s. Full Java suite went 416/0/0/0 → 430/0/0/0
+  (+14 new tests, zero failures).
+- **Canonical conformance fixtures** — four `.bin` files generated
+  from the Python encoder, committed under
+  `python/tests/fixtures/codecs/`, with verbatim copies under
+  `objc/Tests/Fixtures/` and `java/src/test/resources/ttio/codecs/`:
+  `base_pack_a.bin` (77 B; 256 B pure ACGT, mask_count = 0),
+  `base_pack_b.bin` (324 B; 1024 B realistic, mask_count = 11),
+  `base_pack_c.bin` (169 B; 64 B IUPAC + soft-mask + gap stress,
+  mask_count = 28), `base_pack_d.bin` (13 B; empty input).
+- **Specification** — `docs/codecs/base_pack.md` documents the
+  algorithm, pack mapping, bit-order-within-byte rule (with worked
+  examples), wire format diagram, six binding decisions §80–§85
+  with rationale (sparse mask vs dense bitmap, case-sensitivity
+  for soft-masking, big-endian within byte, zero padding bits,
+  mask sortedness validation, internal version byte distinct from
+  M79 codec id), the cross-language conformance contract, the
+  per-language performance numbers, and the public API in each
+  language.
+- **Format-spec update** — `docs/format-spec.md` §10.4 base-pack
+  row flipped from "Reserved enum slot … NOT YET IMPLEMENTED" to
+  "Implemented in M84" with a pointer to `docs/codecs/base_pack.md`.
+  Trailing summary paragraph updated: ids `4`, `5`, `6` now ship
+  as standalone primitives in all three languages; ids `7` and
+  `8` (quality-binned, name-tokenized) remain reserved-only.
+- **Python sub-package docstring** — `python/src/ttio/codecs/__init__.py`
+  no longer says `(M84, future)` for `base_pack`.
+
+#### Verification
+
+- Python: `pytest tests/test_m84_base_pack.py -v` → 14/14 pass.
+  Full suite: 810 passed / 42 failed / 64 skipped / 4 xfailed
+  (was 796 / 42 / 63 / 4); +14 new passes from M84, zero new
+  regressions; the 42 pre-existing failures are all unrelated
+  (missing optional `zarr`, version-string smoke test, etc.).
+- Objective-C: `make CC=clang OBJC=clang check` shows 1981 → 2047
+  passes (+66 M84). The 2 failing cases (TestMilestone29.m M38
+  Thermo reader) pre-date M83 and remain unrelated.
+- Java: `mvn -o test` → 430 / 0 fail / 0 error / 0 skipped (was
+  416 / 0 / 0 / 0); all 14 new BasePackTest cases pass.
+- Cross-language: each implementation independently encodes the
+  four canonical input vectors and compares the resulting bytes
+  against the Python-generated fixtures. All three produce
+  byte-identical output for all four (Python, ObjC, Java).
+
+#### Notes
+
+- **Case sensitivity is a feature, not a quirk.** Anyone calling
+  `encode(read.upper())` will lose soft-masking. M86's wiring
+  docs will call this out — it's not BASE_PACK's responsibility
+  to silently uppercase.
+- **All-non-ACGT input is BASE_PACK's worst case.** A sequence
+  that's entirely `N` produces a wire stream ≈ 25% larger than
+  the original (header + 1 byte of placeholder body per 4 input
+  bytes + 5 bytes of mask per input byte). This is by design;
+  BASE_PACK is for ACGT-dominant data, and pure-N input is
+  rare-to-nonexistent on real genomic reads. The codec is still
+  lossless in this case, just not space-efficient.
+- **The M84 ObjC and Java implementations landed in a single
+  commit (`38f15c1`)** — the parallel subagent dispatch had a
+  race condition in the commit step that bundled both
+  implementations into one commit. The Java commit message
+  describes only the Java work; the ObjC files are present and
+  correct in the same commit. No content was lost or corrupted;
+  the subsequent ObjC verification (full test suite at HEAD)
+  confirmed the bundled state passes cleanly.
 
 ### M83 — rANS entropy codec (clean-room, 3-language) (2026-04-25)
 
