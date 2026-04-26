@@ -558,37 +558,66 @@ public class SpectralDataset implements
      *
      *  <p>M86: validates {@link WrittenGenomicRun#signalCodecOverrides}
      *  before any file mutation (Binding Decision §88: only sequences
-     *  / qualities accept overrides; only RANS_ORDER0 / RANS_ORDER1 /
-     *  BASE_PACK accepted as values). Validation throws
-     *  {@link IllegalArgumentException} so the caller sees the failure
-     *  immediately and the file is left untouched.</p> */
+     *  / qualities accept overrides). Phase A allowed RANS_ORDER0 /
+     *  RANS_ORDER1 / BASE_PACK on either byte channel. Phase D
+     *  (Binding Decision §108) adds QUALITY_BINNED but restricts it to
+     *  the {@code qualities} channel only — applying it to ACGT bytes
+     *  would silently destroy the sequence via Phred-bin quantisation.
+     *  Validation throws {@link IllegalArgumentException} so the caller
+     *  sees the failure immediately and the file is left untouched.</p> */
     private static void writeGenomicRunSubtree(
             global.thalion.ttio.providers.StorageGroup parent,
             String name,
             WrittenGenomicRun run) {
-        // M86: per-channel codec override validation. Runs BEFORE any
-        // group/dataset is created so the file is untouched on a bad
-        // override (Gotcha §96 — no half-written run).
-        java.util.Set<String> allowedChannels =
-            java.util.Set.of("sequences", "qualities");
-        java.util.Set<Enums.Compression> allowedCodecs =
-            java.util.Set.of(Enums.Compression.RANS_ORDER0,
-                              Enums.Compression.RANS_ORDER1,
-                              Enums.Compression.BASE_PACK);
+        // M86 Phase D: per-channel allowed-codec map (Gotcha §119).
+        // Sequences accepts RANS+BASE_PACK; qualities additionally
+        // accepts QUALITY_BINNED. Runs BEFORE any group/dataset is
+        // created so the file is untouched on a bad override
+        // (Gotcha §96 — no half-written run).
+        java.util.Map<String, java.util.Set<Enums.Compression>>
+            allowedCodecsByChannel = java.util.Map.of(
+                "sequences", java.util.Set.of(
+                    Enums.Compression.RANS_ORDER0,
+                    Enums.Compression.RANS_ORDER1,
+                    Enums.Compression.BASE_PACK),
+                "qualities", java.util.Set.of(
+                    Enums.Compression.RANS_ORDER0,
+                    Enums.Compression.RANS_ORDER1,
+                    Enums.Compression.BASE_PACK,
+                    Enums.Compression.QUALITY_BINNED));
         for (var entry : run.signalCodecOverrides().entrySet()) {
             String chName = entry.getKey();
             Enums.Compression codec = entry.getValue();
-            if (!allowedChannels.contains(chName)) {
+            if (!allowedCodecsByChannel.containsKey(chName)) {
                 throw new IllegalArgumentException(
                     "signalCodecOverrides: channel '" + chName
                     + "' not supported (only sequences and qualities "
                     + "can use TTIO codecs)");
             }
-            if (codec == null || !allowedCodecs.contains(codec)) {
+            java.util.Set<Enums.Compression> allowed =
+                allowedCodecsByChannel.get(chName);
+            if (codec == null || !allowed.contains(codec)) {
+                // Phase D Binding Decision §110: explicit message for
+                // the (sequences, QUALITY_BINNED) category error —
+                // names the codec, the channel, and the
+                // lossy-quantisation rationale.
+                if (codec == Enums.Compression.QUALITY_BINNED
+                        && "sequences".equals(chName)) {
+                    throw new IllegalArgumentException(
+                        "signalCodecOverrides['" + chName + "']: codec "
+                        + "QUALITY_BINNED is not valid on the '"
+                        + chName + "' channel — quality binning is "
+                        + "lossy and only applies to Phred quality "
+                        + "scores. Applying it to ACGT sequence bytes "
+                        + "would silently destroy the sequence via "
+                        + "Phred-bin quantisation. Use the 'qualities' "
+                        + "channel for QUALITY_BINNED, or RANS_ORDER0/"
+                        + "RANS_ORDER1/BASE_PACK on sequences.");
+                }
                 throw new IllegalArgumentException(
                     "signalCodecOverrides['" + chName + "']: codec "
-                    + codec + " not supported (only RANS_ORDER0, "
-                    + "RANS_ORDER1, BASE_PACK)");
+                    + codec + " not supported on the '" + chName
+                    + "' channel (allowed: " + allowed + ")");
             }
         }
         try (var rg = parent.createGroup(name)) {
@@ -664,14 +693,19 @@ public class SpectralDataset implements
     }
 
     /** M86: write a uint8 byte channel, optionally through a TTI-O
-     *  codec (rANS order-0/1, BASE_PACK). When {@code codecOverride}
-     *  is {@code null} the channel is written via the default
-     *  HDF5-filter path (identical to M82 behaviour, no
-     *  {@code @compression} attribute set). When it names a TTI-O
+     *  codec (rANS order-0/1, BASE_PACK, QUALITY_BINNED). When
+     *  {@code codecOverride} is {@code null} the channel is written
+     *  via the default HDF5-filter path (identical to M82 behaviour,
+     *  no {@code @compression} attribute set). When it names a TTI-O
      *  codec, the raw bytes are encoded, written as an unfiltered
      *  uint8 dataset (Binding Decision §87 — no double-compression),
      *  and the codec id is stored on the dataset's
-     *  {@code @compression} attribute (uint8). */
+     *  {@code @compression} attribute (uint8).
+     *
+     *  <p>Phase D: QUALITY_BINNED (M85 Phase A codec id 7) added.
+     *  Caller-side validation in {@link #writeGenomicRunSubtree}
+     *  guarantees this branch only fires for the {@code qualities}
+     *  channel (Binding Decision §108).</p> */
     private static void writeByteChannelWithCodec(
             global.thalion.ttio.providers.StorageGroup sc,
             String name, byte[] data,
@@ -689,6 +723,8 @@ public class SpectralDataset implements
                 global.thalion.ttio.codecs.Rans.encode(data, 1);
             case BASE_PACK   -> encoded =
                 global.thalion.ttio.codecs.BasePack.encode(data);
+            case QUALITY_BINNED -> encoded =
+                global.thalion.ttio.codecs.Quality.encode(data);
             default -> throw new IllegalArgumentException(
                 "writeByteChannelWithCodec: unsupported codec "
                 + codecOverride);

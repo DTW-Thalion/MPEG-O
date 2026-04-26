@@ -61,6 +61,19 @@ class M86CodecWiringTest {
         return out;
     }
 
+    /** Illumina-8 bin centres (Phase D): {0,5,15,22,27,32,37,40}. */
+    private static final byte[] BIN_CENTRES = {0, 5, 15, 22, 27, 32, 37, 40};
+
+    /** Bin-centre Phred buffer: {@code BIN_CENTRES} cycled to {@code TOTAL}
+     *  bytes. Mirrors Python {@code QUAL_BIN_CENTRE} (1000 bytes for 10
+     *  reads × 100 bp). Bin centres round-trip byte-exact through
+     *  QUALITY_BINNED. */
+    private static byte[] qualBinCentre() {
+        byte[] out = new byte[TOTAL];
+        for (int i = 0; i < TOTAL; i++) out[i] = BIN_CENTRES[i % BIN_CENTRES.length];
+        return out;
+    }
+
     /** 10-read × 100-bp synthetic genomic run, mirrors Python {@code _make_run}. */
     private static WrittenGenomicRun makeRun(byte[] seq, byte[] qual,
                                               Map<String, Compression> overrides) {
@@ -472,6 +485,263 @@ class M86CodecWiringTest {
             } finally {
                 try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
             }
+        }
+    }
+
+    // ── 12. Phase D: round-trip qualities via QUALITY_BINNED (centres) ──
+
+    @Test
+    void roundTripQualitiesQualityBinned(@TempDir Path tmp) {
+        // Bin-centre Phred values round-trip byte-exact through
+        // QUALITY_BINNED (the codec is lossy in general, but inputs at
+        // bin centres 0/5/15/22/27/32/37/40 decode back to themselves).
+        byte[] qual = qualBinCentre();
+        WrittenGenomicRun run = makeRun(pureAcgt(), qual,
+            Map.of("qualities", Compression.QUALITY_BINNED));
+        Path file = writeRun(tmp, run, "qb-centres.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(N_READS, gr.readCount());
+            byte[] seq = pureAcgt();
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
+                    "QUALITY_BINNED bin-centre seq @ read " + i);
+                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
+                    "QUALITY_BINNED bin-centre qual @ read " + i);
+            }
+        }
+    }
+
+    // ── 13. Phase D: lossy round-trip of arbitrary Phred values ────
+
+    @Test
+    void roundTripQualitiesQualityBinnedLossy(@TempDir Path tmp) {
+        // Arbitrary Phred values cycled 0..49 — covers every bin and
+        // the saturation case (>=40 → centre 40). Use the codec's own
+        // encode/decode round-trip to compute the expected lossy
+        // mapping rather than reimplementing the bin table.
+        byte[] arbitraryQual = new byte[TOTAL];
+        for (int i = 0; i < TOTAL; i++) arbitraryQual[i] = (byte) (i % 50);
+        byte[] expectedQual = global.thalion.ttio.codecs.Quality.decode(
+            global.thalion.ttio.codecs.Quality.encode(arbitraryQual));
+        assertEquals(TOTAL, expectedQual.length, "expected lossy length");
+        // Sanity check: lossy mapping must actually differ from input.
+        assertFalse(java.util.Arrays.equals(expectedQual, arbitraryQual),
+            "lossy mapping must differ from input, else test is degenerate");
+
+        WrittenGenomicRun run = makeRun(pureAcgt(), arbitraryQual,
+            Map.of("qualities", Compression.QUALITY_BINNED));
+        Path file = writeRun(tmp, run, "qb-lossy.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            byte[] seq = pureAcgt();
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
+                    "QUALITY_BINNED lossy seq @ read " + i);
+                assertArrayEquals(expectedQualSlice(expectedQual, i),
+                    r.qualities(),
+                    "read " + i + ": qualities did not match lossy mapping");
+            }
+        }
+    }
+
+    // ── 14. Phase D: size-win — QUALITY_BINNED qualities < 55% raw ─
+
+    @Test
+    void sizeWinQualityBinned(@TempDir Path tmp) {
+        // 100 000 bytes of bin-centre qualities → wire stream is
+        // 6 + 50 000 = 50 006 bytes (≈ 50.006% ratio). Use the
+        // 0.55 target from the Python equivalent.
+        int n = 1000, len = 100;
+        byte[] seq = new byte[n * len];
+        byte[] cycle = "ACGT".getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i < seq.length; i++) seq[i] = cycle[i % 4];
+        byte[] qual = new byte[n * len];
+        for (int i = 0; i < qual.length; i++)
+            qual[i] = BIN_CENTRES[i % BIN_CENTRES.length];
+
+        WrittenGenomicRun base = bigRun(n, len, seq, qual, Map.of());
+        WrittenGenomicRun qbRun = bigRun(n, len, seq, qual,
+            Map.of("qualities", Compression.QUALITY_BINNED));
+
+        Path baseFile = writeRun(tmp, base,  "qb-size-base.tio");
+        Path qbFile   = writeRun(tmp, qbRun, "qb-size-compressed.tio");
+
+        long baseQualBytes;
+        long qbQualBytes;
+        try (Hdf5File f = Hdf5File.openReadOnly(baseFile.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset qDs = sc.openDataset("qualities")) {
+            baseQualBytes = qDs.getLength();
+        }
+        try (Hdf5File f = Hdf5File.openReadOnly(qbFile.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset qDs = sc.openDataset("qualities")) {
+            qbQualBytes = qDs.getLength();
+        }
+
+        double ratio = (double) qbQualBytes / (double) baseQualBytes;
+        assertTrue(ratio < 0.55,
+            "QUALITY_BINNED qualities dataset should be < 55% of "
+            + "uncompressed; got " + qbQualBytes + " / " + baseQualBytes
+            + " = " + String.format("%.4f", ratio));
+        assertTrue(qbQualBytes > 0, "QUALITY_BINNED output non-empty");
+    }
+
+    // ── 15. Phase D: @compression == 7 set on the qualities dataset ─
+
+    @Test
+    void attributeSetCorrectlyQualityBinned(@TempDir Path tmp) {
+        WrittenGenomicRun run = makeRun(pureAcgt(), qualBinCentre(),
+            Map.of("qualities", Compression.QUALITY_BINNED));
+        Path file = writeRun(tmp, run, "qb-attr.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset seqDs  = sc.openDataset("sequences");
+             Hdf5Dataset qualDs = sc.openDataset("qualities")) {
+            // qualities must carry @compression == 7.
+            assertTrue(qualDs.hasAttribute("compression"),
+                "qualities must carry @compression for QUALITY_BINNED");
+            long val = qualDs.readIntegerAttribute("compression", -1L);
+            assertEquals(Compression.QUALITY_BINNED.ordinal(), val,
+                "@compression value must be 7 (QUALITY_BINNED)");
+            assertEquals(7L, val,
+                "QUALITY_BINNED is M79 codec id 7");
+            // sequences is not in the override map → no attribute.
+            assertFalse(seqDs.hasAttribute("compression"),
+                "sequences must have no @compression attribute");
+        }
+    }
+
+    // ── 16. Phase D: reject QUALITY_BINNED on sequences ────────────
+
+    @Test
+    void rejectQualityBinnedOnSequences(@TempDir Path tmp) {
+        // Per Binding Decision §108, applying QUALITY_BINNED to ACGT
+        // bytes would map all four to bin 7 (centre 40). Validation
+        // throws IllegalArgumentException at write time; the message
+        // must name the codec, the channel, and the lossy rationale.
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makeRun(pureAcgt(), qualBinCentre(),
+                    Map.of("sequences", Compression.QUALITY_BINNED));
+                writeRun(tmp, bad, "bad-qb-seq.tio");
+            });
+        String msg = ex.getMessage();
+        assertNotNull(msg, "exception must have a message");
+        assertTrue(msg.contains("QUALITY_BINNED"),
+            "error must name the codec; got: " + msg);
+        assertTrue(msg.contains("sequences"),
+            "error must name the channel; got: " + msg);
+        assertTrue(msg.toLowerCase(java.util.Locale.ROOT).contains("lossy"),
+            "error must explain that quality binning is lossy; got: " + msg);
+        assertTrue(msg.contains("Phred")
+                || msg.toLowerCase(java.util.Locale.ROOT).contains("quality"),
+            "error must mention Phred/quality scores; got: " + msg);
+    }
+
+    // ── 17. Phase D: mixed BASE_PACK seq + QUALITY_BINNED qual ─────
+
+    @Test
+    void mixedQualityBinnedWithRans(@TempDir Path tmp) {
+        // Per-channel codec dispatch on both byte channels, two
+        // different codec ids in one run (BASE_PACK = 6, QUALITY_BINNED
+        // = 7). Bin-centre qualities round-trip byte-exact.
+        byte[] seq = pureAcgt();
+        byte[] qual = qualBinCentre();
+        WrittenGenomicRun run = makeRun(seq, qual,
+            Map.of("sequences", Compression.BASE_PACK,
+                   "qualities", Compression.QUALITY_BINNED));
+        Path file = writeRun(tmp, run, "qb-mixed.tio");
+
+        // Verify both channels carry their respective codec ids.
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset seqDs  = sc.openDataset("sequences");
+             Hdf5Dataset qualDs = sc.openDataset("qualities")) {
+            assertEquals(Compression.BASE_PACK.ordinal(),
+                seqDs.readIntegerAttribute("compression", -1L),
+                "sequences @compression == BASE_PACK (6)");
+            assertEquals(Compression.QUALITY_BINNED.ordinal(),
+                qualDs.readIntegerAttribute("compression", -1L),
+                "qualities @compression == QUALITY_BINNED (7)");
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
+                    "mixed BASE_PACK seq @ read " + i);
+                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
+                    "mixed QUALITY_BINNED qual @ read " + i);
+            }
+        }
+    }
+
+    // ── 18. Phase D: cross-language fixture (Python → Java) ────────
+
+    @Test
+    void crossLanguageFixtureQualityBinned() throws IOException {
+        // Phase D fixture: BASE_PACK on sequences + QUALITY_BINNED on
+        // qualities. Qualities buffer is bin centres so the lossy
+        // codec round-trip is byte-exact and the cross-language
+        // comparison is meaningful.
+        byte[] expectedSeq  = pureAcgt();
+        byte[] expectedQual = qualBinCentre();
+        Path tmp = copyFixtureToTemp("m86_codec_quality_binned.tio");
+        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertNotNull(gr, "fixture has genomic_0001");
+            assertEquals(N_READS, gr.readCount(),
+                "fixture read count");
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedSeqSlice(expectedSeq, i), r.sequence(),
+                    "QB fixture seq @ " + i);
+                assertArrayEquals(expectedQualSlice(expectedQual, i),
+                    r.qualities(), "QB fixture qual @ " + i);
+            }
+        } finally {
+            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+        }
+        // Verify channel @compression attributes match the fixture spec.
+        Path tmp2 = copyFixtureToTemp("m86_codec_quality_binned.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset seqDs  = sc.openDataset("sequences");
+             Hdf5Dataset qualDs = sc.openDataset("qualities")) {
+            assertEquals(Compression.BASE_PACK.ordinal(),
+                seqDs.readIntegerAttribute("compression", -1L),
+                "fixture sequences @compression == BASE_PACK (6)");
+            assertEquals(Compression.QUALITY_BINNED.ordinal(),
+                qualDs.readIntegerAttribute("compression", -1L),
+                "fixture qualities @compression == QUALITY_BINNED (7)");
+        } finally {
+            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
         }
     }
 }

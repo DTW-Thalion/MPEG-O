@@ -231,6 +231,11 @@ public class GenomicRun
             decoded = global.thalion.ttio.codecs.Rans.decode(all);
         } else if (codecId == global.thalion.ttio.Enums.Compression.BASE_PACK.ordinal()) {
             decoded = global.thalion.ttio.codecs.BasePack.decode(all);
+        } else if (codecId == global.thalion.ttio.Enums.Compression.QUALITY_BINNED.ordinal()) {
+            // M86 Phase D: lossy Phred bin quantisation (M85 §97).
+            // Caller of byteChannelSlice gets the bin-centre values,
+            // not the original Phred bytes.
+            decoded = global.thalion.ttio.codecs.Quality.decode(all);
         } else {
             throw new IllegalStateException(
                 "signal_channel '" + name + "': @compression="
