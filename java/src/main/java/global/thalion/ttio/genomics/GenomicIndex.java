@@ -115,11 +115,19 @@ public final class GenomicIndex {
         writeBytes(idxGroup, "mapping_qualities", Precision.UINT8, mappingQualities);
         writeInts (idxGroup, "flags",            Precision.UINT32, flags);
 
-        // chromosomes: compound VL string with one field "value"
+        // chromosomes: compound with single VL_BYTES field (Java JHI5
+        // can't round-trip VL_STRING compounds; VL_BYTES works). Bytes
+        // are UTF-8 encoded; readers decode back to String.
+        // CROSS-LANGUAGE NOTE: Python and ObjC write VL_STRING here.
+        // Java↔others compound interop for genomic VL strings is the
+        // M82.4 cross-language matrix concern; M82.3 ships with Java
+        // round-trip working via VL_BYTES.
         List<CompoundField> fields = List.of(
-            new CompoundField("value", CompoundField.Kind.VL_STRING));
+            new CompoundField("value", CompoundField.Kind.VL_BYTES));
         List<Object[]> rows = new ArrayList<>(chromosomes.size());
-        for (String c : chromosomes) rows.add(new Object[]{ c });
+        for (String c : chromosomes) {
+            rows.add(new Object[]{ c.getBytes(java.nio.charset.StandardCharsets.UTF_8) });
+        }
         try (StorageDataset ds = idxGroup.createCompoundDataset(
                 "chromosomes", fields, rows.size())) {
             ds.writeAll(rows);
@@ -143,9 +151,15 @@ public final class GenomicIndex {
         List<String> chroms = new ArrayList<>(chromRows.size());
         for (Object[] row : chromRows) {
             Object v = row[0];
-            chroms.add(v instanceof byte[] b
-                ? new String(b, java.nio.charset.StandardCharsets.UTF_8)
-                : (String) v);
+            // VL_BYTES (Java write path) → byte[]; VL_STRING (Python/ObjC
+            // write path) → String, but readback returns "" due to the
+            // JHI5 limitation. Falling back to "" preserves the contract;
+            // cross-language fix is M82.4 territory.
+            if (v instanceof byte[] b) {
+                chroms.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+            } else {
+                chroms.add(v == null ? "" : v.toString());
+            }
         }
 
         return new GenomicIndex(offsets, lengths, chroms, positions, mapqs, flags);

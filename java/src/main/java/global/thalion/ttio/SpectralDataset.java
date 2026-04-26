@@ -592,17 +592,20 @@ public class SpectralDataset implements
                     Enums.Precision.UINT8,  run.mappingQualities(),
                     run.signalCompression());
 
-                // Compound datasets: cigars + read_names (single VL string)
+                // Compound datasets: cigars + read_names (single VL_BYTES
+                // — Java JHI5 can't round-trip VL_STRING in compounds;
+                // see GenomicIndex.writeTo for the full M82.4 cross-lang
+                // note).
                 List<global.thalion.ttio.providers.CompoundField> vlField = List.of(
                     new global.thalion.ttio.providers.CompoundField("value",
-                        global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
-                writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
-                writeCompoundOneCol(sc, "read_names", vlField, run.readNames());
+                        global.thalion.ttio.providers.CompoundField.Kind.VL_BYTES));
+                writeCompoundOneColBytes(sc, "cigars", vlField, run.cigars());
+                writeCompoundOneColBytes(sc, "read_names", vlField, run.readNames());
 
-                // mate_info: chrom (VL str) + pos (int64) + tlen (int64).
+                // mate_info: chrom (VL_BYTES) + pos (int64) + tlen (int64).
                 List<global.thalion.ttio.providers.CompoundField> mateFields = List.of(
                     new global.thalion.ttio.providers.CompoundField("chrom",
-                        global.thalion.ttio.providers.CompoundField.Kind.VL_STRING),
+                        global.thalion.ttio.providers.CompoundField.Kind.VL_BYTES),
                     new global.thalion.ttio.providers.CompoundField("pos",
                         global.thalion.ttio.providers.CompoundField.Kind.INT64),
                     new global.thalion.ttio.providers.CompoundField("tlen",
@@ -610,7 +613,8 @@ public class SpectralDataset implements
                 List<Object[]> mateRows = new ArrayList<>(run.readCount());
                 for (int i = 0; i < run.readCount(); i++) {
                     mateRows.add(new Object[]{
-                        run.mateChromosomes().get(i),
+                        run.mateChromosomes().get(i)
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8),
                         run.matePositions()[i],
                         (long) run.templateLengths()[i],
                     });
@@ -651,6 +655,24 @@ public class SpectralDataset implements
             List<String> values) {
         List<Object[]> rows = new ArrayList<>(values.size());
         for (String v : values) rows.add(new Object[]{ v });
+        try (var ds = sc.createCompoundDataset(name, fields, rows.size())) {
+            ds.writeAll(rows);
+        }
+    }
+
+    /** v0.11 M82.3: same as {@link #writeCompoundOneCol} but encodes
+     *  values as UTF-8 byte[] for compound VL_BYTES fields (the
+     *  Java-side workaround for the JHI5 VL_STRING-in-compound limit). */
+    private static void writeCompoundOneColBytes(
+            global.thalion.ttio.providers.StorageGroup sc,
+            String name,
+            List<global.thalion.ttio.providers.CompoundField> fields,
+            List<String> values) {
+        List<Object[]> rows = new ArrayList<>(values.size());
+        for (String v : values) {
+            rows.add(new Object[]{
+                v.getBytes(java.nio.charset.StandardCharsets.UTF_8) });
+        }
         try (var ds = sc.createCompoundDataset(name, fields, rows.size())) {
             ds.writeAll(rows);
         }
