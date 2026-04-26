@@ -200,7 +200,7 @@ higher compression ratios.
 
 ### M86 — Codec Integration into Signal Channel Pipeline
 
-**Status: Phase A shipped (2026-04-26). Phase B and Phase C deferred.**
+**Status: Phases A and D shipped (2026-04-26). Phases B, C, E deferred.**
 
 #### Phase A — byte channels (SHIPPED 2026-04-26)
 
@@ -231,6 +231,34 @@ higher compression ratios.
 Commits: `31b0fa48` (Python), `0450913` (Java), `d2befc20` (ObjC),
 plus M86 docs landing alongside.
 
+#### Phase D — QUALITY_BINNED wiring (SHIPPED 2026-04-26)
+
+- [x] Extend the M86 Phase A dispatch to accept
+      `Compression.QUALITY_BINNED` (M79 codec id `7`) on the
+      qualities byte channel of genomic runs.
+- [x] Per-channel allowed-codec map: sequences accepts
+      RANS_ORDER0/1 + BASE_PACK; qualities accepts those plus
+      QUALITY_BINNED. Validation rejects `(sequences,
+      QUALITY_BINNED)` with a clear lossy-quantisation error
+      message (Binding Decision §108) — applying Phred-bin
+      quantisation to ACGT bytes would silently destroy the
+      sequence data.
+- [x] Reuses M85 Phase A `Quality.encode/decode` codec and the
+      M86 Phase A wiring infrastructure (per-channel
+      `signal_codec_overrides` dict, `@compression` attribute,
+      lazy-decode cache); zero new infrastructure.
+- [x] All three languages, cross-language `.tio` fixture
+      conformance: 1 new fixture
+      (`m86_codec_quality_binned.tio`, 48 432 bytes) generated
+      by Python; ObjC and Java both read it byte-exact (BASE_PACK
+      on sequences + QUALITY_BINNED on qualities, bin-centre
+      values for byte-exact lossy round-trip).
+- [x] QUALITY_BINNED on a 100k-byte qualities channel hits ~50%
+      of the HDF5-chunked-ZLIB baseline.
+
+Commits: `425393a` (Python), `5d09294` (Java), `e7a85c6` (ObjC),
+plus M86 Phase D docs landing alongside.
+
 #### Phase B — integer channels (DEFERRED)
 
 `positions` (int64), `flags` (uint32), `mapping_qualities`
@@ -240,10 +268,18 @@ that M86 does not specify. Future milestone.
 
 #### Phase C — VL_STRING / compound channels (DEFERRED)
 
-`cigars`, `read_names`, `mate_info` continue to use the existing
-compound-write path. The natural codec is M85's
-`name-tokenizer` (M79 slot 8) for `read_names`; `cigars` would
-want an RLE-then-rANS pipeline. Both wait on M85 landing first.
+`cigars` and `mate_info` continue to use the existing
+compound-write path. `cigars` would want an RLE-then-rANS
+pipeline; `mate_info` lacks an obvious codec match.
+
+#### Phase E — NAME_TOKENIZED wiring + read_names schema lift (DEFERRED)
+
+`read_names` is currently stored as VL_STRING-in-compound and
+cannot carry the `@compression` attribute as-is. Phase E lifts
+the channel to a flat byte dataset and wires
+`Compression.NAME_TOKENIZED` (M79 codec id `8`, M85 Phase B) into
+the dispatch. This is a more substantial change than Phase D
+because of the schema lift; separated for milestone bounding.
 
 #### Original wishlist preserved for future scope
 

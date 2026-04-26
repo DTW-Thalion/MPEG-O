@@ -11,7 +11,106 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring + M85 QUALITY_BINNED (Phase A) + M85 NAME_TOKENIZED (Phase B)
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + D) + M85 QUALITY_BINNED + NAME_TOKENIZED
+
+### M86 Phase D — Wire QUALITY_BINNED into the qualities channel (2026-04-26)
+
+Pipeline-wiring extension that lights up M79 codec id `7`
+(QUALITY_BINNED, shipped standalone in M85 Phase A) on the
+genomic `qualities` byte channel. Pure integration: reuses the
+M85 Phase A codec and the M86 Phase A wiring infrastructure
+(per-channel `signal_codec_overrides` dict, per-dataset
+`@compression` uint8 attribute, lazy-decode cache on the open
+`GenomicRun` instance).
+
+The codec is **rejected on the `sequences` channel** at write-
+time validation per Binding Decision §108: applying Phred-bin
+quantisation to ACGT bytes would silently destroy the sequence
+data via lossy mapping. The other three byte-channel codecs
+(RANS_ORDER0, RANS_ORDER1, BASE_PACK) continue to apply to
+either channel as in M86 Phase A.
+
+#### Added
+
+- **Python** — `python/src/ttio/spectral_dataset.py` validation
+  block restructured from a flat allowed-codec set to a
+  per-channel map (`_ALLOWED_OVERRIDE_CODECS_BY_CHANNEL`); the
+  `(sequences, QUALITY_BINNED)` rejection branch produces an
+  error message naming the codec, the channel, and the
+  lossy-quantisation rationale. `_write_byte_channel_with_codec`
+  in `_hdf5_io.py` gains the QUALITY_BINNED encode dispatch
+  branch. `_byte_channel_slice` in `genomic_run.py` gains the
+  decode dispatch. 6 new pytest cases in
+  `test_m86_genomic_codec_wiring.py` plus an extension to
+  `test_cross_language_fixtures` for the new fixture.
+- **Objective-C** — `objc/Source/Dataset/TTIOSpectralDataset.m`
+  validation now uses `_TTIO_M86_AllowedOverrideCodecsByChannel`
+  per-channel map; the validator factor (`_TTIO_M86_ValidateOverrides`
+  from M86 Phase A) is shared between `writeGenomicRun` (HDF5
+  fast path) and `writeGenomicRunStorage` (provider path), so
+  the change picks up automatically in both. QUALITY_BINNED
+  encode dispatch added to `_TTIO_M86_EncodeWithCodec`. Decode
+  dispatch added to `byteChannelSliceNamed:offset:count:error:`
+  in `TTIOGenomicRun.m`. 32 new assertions in
+  `TestM86GenomicCodecWiring.m` across 7 new test methods (the
+  6 spec'd plus a separate cross-language fixture test).
+- **Java** — `SpectralDataset.java` validation restructured to
+  per-channel `Map<String, Set<Compression>>`; explicit
+  `(sequences, QUALITY_BINNED)` rejection branch; `case
+  QUALITY_BINNED -> Quality.encode(data)` added to
+  `writeByteChannelWithCodec`. `GenomicRun.byteChannelSlice`
+  gains the decode branch. 7 new JUnit 5 tests in
+  `M86CodecWiringTest.java` (M86CodecWiringTest 11 → 18).
+- **Cross-language conformance fixture** — new
+  `python/tests/fixtures/genomic/m86_codec_quality_binned.tio`
+  (48 432 bytes), with verbatim copies under
+  `objc/Tests/Fixtures/genomic/` and
+  `java/src/test/resources/ttio/fixtures/genomic/`. The fixture
+  uses **two distinct codecs in one run**: `sequences` =
+  BASE_PACK (codec id 6), `qualities` = QUALITY_BINNED (codec id
+  7) with bin-centre Phred values. Both channels carry their
+  `@compression` uint8 attribute. ObjC and Java each read the
+  fixture and verify the decoded data byte-exact against the
+  known input.
+
+#### Verification
+
+- Python: `pytest tests/test_m86_genomic_codec_wiring.py -v` →
+  22/22 pass (was 15 in M86 Phase A; +7 new = 6 spec'd cases
+  plus the cross-language-fixture extension). Full suite: 859
+  passed / 42 failed / 64 skipped / 4 xfailed / 3 errors (was
+  852 / 42 / 64 / 4 / 4); +7 new passes from M86 Phase D, zero
+  new regressions, error count actually dropped by 1.
+- Objective-C: full test runner shows 2258 → 2290 PASS (+32 M86
+  Phase D assertions across 7 new test methods); 2 FAIL
+  unchanged (pre-existing M38 Thermo).
+- Java: `mvn -o test` → 475 / 0 fail / 0 error / 0 skipped (was
+  468 / 0 / 0 / 0). M86CodecWiringTest 11 → 18.
+- Cross-language: each implementation reads
+  `m86_codec_quality_binned.tio` and decodes both `sequences`
+  (BASE_PACK) and `qualities` (QUALITY_BINNED) byte-exact
+  against the known input. `@compression` attributes verified
+  on disk: sequences=6, qualities=7.
+
+#### Notes
+
+- **Compression on a 100k-byte qualities channel ≈ 50%** of the
+  HDF5-chunked-ZLIB baseline (the actual ratio depends on the
+  channel size and HDF5 chunking overhead). Python and Java
+  measured ~0.50; ObjC measured 0.382 because its baseline
+  includes more chunk overhead. All three are well under the
+  ~50% target.
+- **Lossy round-trip semantics propagate.** When QUALITY_BINNED
+  is wired into the qualities channel, the qualities round-trip
+  becomes lossy (each byte → bin centre per the Illumina-8
+  table). Tests use bin-centre input or assert against the
+  expected lossy mapping. M86 Phase A behaviour is unchanged
+  for files that don't opt in.
+- **NAME_TOKENIZED wiring is M86 Phase E** (still deferred).
+  The `read_names` channel is currently VL_STRING-in-compound;
+  lifting it to a flat byte dataset that can carry the
+  `@compression` attribute is a more substantial schema change
+  than Phase D. Separated for milestone bounding.
 
 ### M85 Phase B — NAME_TOKENIZED genomic codec (clean-room, 3-language, lean) (2026-04-26)
 
