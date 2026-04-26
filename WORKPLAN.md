@@ -117,14 +117,59 @@ name tokenisation from Bonfield, Bioinformatics 2022.
   `"lossless"` (passthrough). Per-run configurable.
 - All three languages. Cross-language byte-exact conformance.
 
-### M85 — Name Tokeniser Codec
+### M85 — Quality Quantiser + Name Tokeniser Codecs
 
-- `ttio.codecs.name_tokenizer`: CRAM 3.1-style read name compression.
-  Split structured names into token columns, delta-encode numeric
-  tokens, rANS each column.
+**Status: Phase A shipped (2026-04-26). Phase B deferred.**
+
+The original M84 sketch in this WORKPLAN bundled "Base-Packing +
+Quality Quantiser Codecs"; the M84 milestone shipped only
+BASE_PACK on 2026-04-26, and quality_binned slipped to M85. M85
+is now restructured into two phases: Phase A is the catch-up
+quality codec, Phase B is the original name_tokenizer scope.
+
+#### Phase A — quality_binned codec (SHIPPED 2026-04-26)
+
+- [x] `ttio.codecs.quality` — fixed Illumina-8 / CRUMBLE-derived
+      8-bin Phred quantisation table, 4-bit-packed bin indices,
+      big-endian within byte. Lossy by construction;
+      `decode(encode(x)) == bin_centre[bin_of[x]]`.
+- [x] All three languages, cross-language byte-exact fixtures
+      (`quality_{a,b,c,d}.bin`).
+- [x] Phred 41+ saturates to bin 7 / centre 40 (documented).
+- [x] Wire format: `[1 B version=0x00][1 B scheme_id=0x00][4 B
+      BE orig_len][packed body of ceil(orig/2) bytes]`.
+- [x] M79 codec id `7` slot now has a working encoder + decoder.
+- [x] `docs/codecs/quality.md` codec spec.
+- [x] `docs/format-spec.md` §10.4 quality-binned row flipped.
+
+Commits: `9cfb08b` (Python), `5ad8952` (Java), `1449502` (ObjC),
+plus M85 Phase A docs landing alongside.
+
+Throughput on the M85 Phase A reference host (4 MiB random Phred
+mod 41): Python 61 / 471 MB/s, Java 2001 / 425 MB/s, ObjC 3203 /
+2196 MB/s.
+
+#### Phase B — name_tokenizer codec (DEFERRED)
+
+- `ttio.codecs.name_tokenizer`: CRAM 3.1-style read name
+  compression. Split structured names into token columns,
+  delta-encode numeric tokens, rANS each column.
 - Clean-room from Bonfield 2022 paper.
 - Target: ≥ 20:1 on structured Illumina names.
 - All three languages. Cross-language conformance.
+
+Phase B is substantially larger than Phase A (Bonfield 2022's
+algorithm is more involved than 8-bin quantisation) and warrants
+its own plan and milestone. M79 codec id `8` is reserved.
+
+#### Forward reference
+
+A future M86 phase will wire QUALITY_BINNED (id 7) into the
+`qualities` channel of `signal_channels/`. The wiring
+infrastructure (per-channel `signal_codec_overrides` dict,
+`@compression` attribute, lazy-decode cache) is already in
+place from M86 Phase A; only the dispatch branch for codec id 7
+needs to be added.
 
 ### M86 — Codec Integration into Signal Channel Pipeline
 
