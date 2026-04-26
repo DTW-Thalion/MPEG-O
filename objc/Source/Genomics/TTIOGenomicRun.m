@@ -9,6 +9,7 @@
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"   // M86 Phase D
+#import "Codecs/TTIONameTokenizer.h"   // M86 Phase E
 #import <hdf5.h>
 
 @implementation TTIOGenomicRun {
@@ -24,6 +25,16 @@
     // lifetime is the TTIOGenomicRun instance — re-opening the file
     // incurs the decode cost again (Gotcha §101).
     NSMutableDictionary<NSString *, NSData *> *_decodedByteChannels;
+    // M86 Phase E: lazy whole-list decode cache for read_names when
+    // it's stored as a flat 1-D uint8 dataset with @compression == 8
+    // (NAME_TOKENIZED). Held as NSArray<NSString *> rather than NSData
+    // because the codec returns a list of names indexed by read
+    // number — separate from _decodedByteChannels per Binding
+    // Decision §114. Cache lifetime is the TTIOGenomicRun instance
+    // (Gotcha §125 — re-opening the file incurs the decode cost
+    // again; for very large runs the decoded list is materialised in
+    // RAM in one shot since the codec is per-batch, Gotcha §124).
+    NSArray<NSString *> *_decodedReadNames;
 }
 
 - (NSUInteger)readCount { return _index.count; }
@@ -258,6 +269,131 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return [decoded subdataWithRange:NSMakeRange(from, to - from)];
 }
 
+// M86 Phase E: read_names dispatch helper.
+//
+// The read_names channel has two on-disk layouts (Binding Decisions
+// §111, §112):
+//
+//   - **M82 compound** (no override): VL_STRING-in-compound dataset,
+//     read whole-and-cache via -compoundRowsNamed:.
+//   - **NAME_TOKENIZED** (override active): flat 1-D uint8 dataset
+//     of the same name carrying the codec output, with
+//     @compression == 8. Decoded once on first access via
+//     TTIONameTokenizerDecode and cached as NSArray<NSString *>
+//     on this TTIOGenomicRun instance per Binding Decision §114.
+//
+// Dispatch is on dataset shape — a flat uint8 dataset routes through
+// the codec path; otherwise fall through to the compound path.
+// All call sites that touch read_names should route through this
+// helper (Gotcha §126).
+- (NSString *)readNameAtIndex:(NSUInteger)i error:(NSError **)error
+{
+    if (_decodedReadNames != nil) {
+        if (i >= _decodedReadNames.count) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2040
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"read_names index %lu out of range "
+                                @"[0, %lu)",
+                                (unsigned long)i,
+                                (unsigned long)_decodedReadNames.count]}];
+            return nil;
+        }
+        return _decodedReadNames[i];
+    }
+
+    id<TTIOStorageDataset> ds = [self signalDatasetNamed:@"read_names"
+                                                   error:error];
+    if (!ds) return nil;
+
+    // Shape dispatch: precision == UInt8 is a flat uint8 dataset and
+    // therefore the codec path; anything else is the M82 compound.
+    // The HDF5 backend's -openDatasetNamed: returns precision UInt8
+    // for the schema-lifted layout (TTIOHDF5Group introspects via
+    // H5Tequal(H5T_NATIVE_UINT8)); for compound datasets none of the
+    // primitive H5Tequal checks match, so precision falls through
+    // (here we treat anything other than UInt8 as compound).
+    if ([ds precision] == TTIOPrecisionUInt8) {
+        uint8_t codec_id = 0;
+        id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+        if ([sig respondsToSelector:@selector(unwrap)]) {
+            TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+            TTIOHDF5Dataset *hds = [hg openDatasetNamed:@"read_names"
+                                                  error:NULL];
+            if (hds) {
+                codec_id = _ttio_m86_read_compression_attr([hds datasetId]);
+            }
+        } else {
+            codec_id = _ttio_m86_read_compression_attr_protocol(ds);
+        }
+        if (codec_id != (uint8_t)8 /* NAME_TOKENIZED */) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2041
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"signal_channel 'read_names': "
+                                @"@compression=%u is not a supported "
+                                @"TTIO codec id for the read_names "
+                                @"channel (only NAME_TOKENIZED = 8 is "
+                                @"recognised)",
+                                (unsigned)codec_id]}];
+            return nil;
+        }
+        id allRaw = [ds readAll:error];
+        if (![allRaw isKindOfClass:[NSData class]]) return nil;
+        NSData *encoded = (NSData *)allRaw;
+        NSError *decErr = nil;
+        NSArray<NSString *> *decoded = TTIONameTokenizerDecode(encoded, &decErr);
+        if (decoded == nil) {
+            if (error) *error = decErr ?: [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2042
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"signal_channel 'read_names' "
+                           @"NAME_TOKENIZED decode failed"}];
+            return nil;
+        }
+        _decodedReadNames = [decoded copy];
+        if (i >= _decodedReadNames.count) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2043
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"read_names index %lu out of range "
+                                @"[0, %lu) after NAME_TOKENIZED decode",
+                                (unsigned long)i,
+                                (unsigned long)_decodedReadNames.count]}];
+            return nil;
+        }
+        return _decodedReadNames[i];
+    }
+
+    // Compound path (M82, no override).
+    TTIOCompoundField *vlValue =
+        [TTIOCompoundField fieldWithName:@"value"
+                                    kind:TTIOCompoundFieldKindVLString];
+    NSArray *names = [self compoundRowsNamed:@"read_names"
+                                       field:vlValue
+                                       error:error];
+    if (!names) return nil;
+    if (i >= names.count) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2044
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"read_names index %lu out of range [0, %lu)",
+                            (unsigned long)i,
+                            (unsigned long)names.count]}];
+        return nil;
+    }
+    id nameV = names[i][@"value"];
+    if ([nameV isKindOfClass:[NSData class]]) {
+        return [[NSString alloc] initWithData:nameV
+                                      encoding:NSUTF8StringEncoding];
+    }
+    return (NSString *)nameV;
+}
+
 - (TTIOAlignedRead *)readAtIndex:(NSUInteger)i error:(NSError **)error
 {
     if (i >= _index.count) {
@@ -305,12 +441,12 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         ? [[NSString alloc] initWithData:cigarV encoding:NSUTF8StringEncoding]
         : (NSString *)cigarV;
 
-    NSArray *names = [self compoundRowsNamed:@"read_names" field:vlValue error:error];
-    if (!names) return nil;
-    id nameV = names[i][@"value"];
-    NSString *readName = [nameV isKindOfClass:[NSData class]]
-        ? [[NSString alloc] initWithData:nameV encoding:NSUTF8StringEncoding]
-        : (NSString *)nameV;
+    // M86 Phase E: route read_names through the shape-dispatching
+    // helper so the schema-lifted (flat uint8 + NAME_TOKENIZED)
+    // layout is decoded transparently. The compound (M82) layout
+    // continues to use the existing -compoundRowsNamed: cache.
+    NSString *readName = [self readNameAtIndex:i error:error];
+    if (!readName && error && *error) return nil;
 
     // mate_info has 3 fields (chrom VL, pos int64, tlen int32)
     NSArray *mateFields = @[
