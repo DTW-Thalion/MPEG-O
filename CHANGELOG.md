@@ -11,7 +11,161 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + D + E) + M85 QUALITY_BINNED + NAME_TOKENIZED
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E) + M85 QUALITY_BINNED + NAME_TOKENIZED
+
+### M86 Phase C — Wire rANS + NAME_TOKENIZED into the cigars channel via schema lift (2026-04-26)
+
+Pipeline-wiring extension that lights up M79 codec ids `4`
+(RANS_ORDER0), `5` (RANS_ORDER1), and `8` (NAME_TOKENIZED) on
+the genomic `cigars` channel. Same schema-lift pattern as M86
+Phase E (compound → flat 1-D uint8) but with **three accepted
+codec paths** so callers can match the codec to their
+workload. The cigars channel uses the same dataset name in
+both M82 (compound) and Phase C (flat uint8) forms; readers
+dispatch on dataset shape.
+
+The codec choice matters: real WGS data has indels and
+soft-clips that break NAME_TOKENIZED's columnar mode back to
+verbatim/no-compression, while rANS exploits byte-level
+repetition over the limited CIGAR alphabet (digits 0-9 + ~9
+operator letters MIDNSHP=X) regardless of token-count
+uniformity. **rANS is the recommended default for real
+data**; NAME_TOKENIZED is the niche choice for known-uniform
+CIGARs. Selection guidance documented in
+`docs/codecs/name_tokenizer.md` §8 and
+`docs/format-spec.md` §10.8.
+
+`mate_info` (the third VL_STRING-in-compound channel) is
+explicitly out of scope for Phase C — it's a 3-field compound
+(chrom VL_STRING + pos int64 + tlen int32) and would require
+per-field schema decomposition or per-compound-field codec
+dispatch (substantial new design work; deferred).
+
+#### Added
+
+- **Python** — `python/src/ttio/spectral_dataset.py`
+  per-channel allowed-codec map gains
+  `"cigars": {RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED}`;
+  validation rejects `(cigars, BASE_PACK|QUALITY_BINNED)`
+  with messages naming the codec, the channel, and accepted
+  alternatives. Schema-lift write branch in `_write_genomic_run`
+  with codec-id dispatch: rANS path uses length-prefix-concat
+  (`varint(asciiLen) + asciiBytes` per cigar) then
+  `rans.encode`; NAME_TOKENIZED path calls
+  `name_tokenizer.encode(cigars)` directly. The two paths
+  produce wire-level distinct output even though both are
+  "list[str] → bytes". `python/src/ttio/genomic_run.py` gains
+  `_decoded_cigars: list[str] | None` cache (separate from
+  `_decoded_read_names` per Binding Decision §123) and
+  `_cigar_at(i)` helper with three-way codec dispatch.
+  `__getitem__` routes through it. 9 new pytest cases plus
+  cross-language fixture extensions (test_m86_genomic_codec_wiring
+  29 → 51 items via parametrization). Reused varint helpers
+  from `name_tokenizer.py` directly.
+- **Objective-C** — `objc/Source/Dataset/TTIOSpectralDataset.m`
+  adds the cigars entry to `_TTIO_M86_AllowedOverrideCodecsByChannel`,
+  the rejection branches, and `_TTIO_M86_EncodeCigarsWithCodec`
+  dispatch helper (with inline `_TTIO_M86_VarintWrite` for the
+  rANS path). Schema-lift write branch wired into BOTH
+  `writeGenomicRun:` (HDF5 fast path) AND
+  `writeGenomicRunStorage:` (provider path).
+  `objc/Source/Genomics/TTIOGenomicRun.m` gains
+  `_decodedCigars` private NSArray cache and
+  `cigarAtIndex:error:` helper with shape + `@compression`
+  dispatch (4/5 → rANS+length-prefix-concat;
+  8 → NAME_TOKENIZED; compound fall-through). 57 new
+  assertions in `TestM86GenomicCodecWiring.m` across 11 new
+  test methods.
+- **Java** —
+  `java/src/main/java/global/thalion/ttio/SpectralDataset.java`
+  gets the cigars entry, rejection branches, and
+  `encodeCigars`/`writeUnsignedVarint` helpers for the rANS
+  path. `GenomicRun.java` gains
+  `private List<String> decodedCigars = null;` and
+  `cigarAt(int i)` helper with `decodeLengthPrefixConcat`/
+  `readUnsignedVarint`. 11 new JUnit 5 tests
+  (M86CodecWiringTest 34 → 45). Reused `rejectInvalidChannel`
+  test was retargeted from `positions` (now valid post-Phase-B)
+  to `mate_info`.
+- **Cross-language conformance fixtures** — TWO new fixtures
+  generated from the Python writer and committed under
+  `python/tests/fixtures/genomic/`, with verbatim copies under
+  `objc/Tests/Fixtures/genomic/` and
+  `java/src/test/resources/ttio/fixtures/genomic/`:
+  `m86_codec_cigars_rans.tio` (53 160 bytes; 100-read mixed
+  CIGARs under RANS_ORDER1) and
+  `m86_codec_cigars_name_tokenized.tio` (52 528 bytes; 100
+  uniform "100M" reads under NAME_TOKENIZED). All three
+  implementations decode both fixtures byte-exact against the
+  original Python input.
+
+#### Verification
+
+- Python: 51 M86 test items pass (was 38 in M86 Phase B; +13
+  new). Full suite: 888 passed / 42 failed / 64 skipped /
+  4 xfailed / 3 errors (was 875 / 42 / 64 / 4 / 3); +13 new
+  passes from M86 Phase C, zero new regressions.
+- Objective-C: full test runner shows 2370 → 2427 PASS (+57
+  M86 Phase C assertions across 11 new test methods); 2 FAIL
+  unchanged (pre-existing M38 Thermo).
+- Java: `mvn -o test` → 502 / 0 fail / 0 error / 0 skipped
+  (was 491 / 0 / 0 / 0). M86CodecWiringTest 34 → 45.
+- Cross-language: each implementation reads both fixtures and
+  decodes all 100 cigars byte-exact against the original
+  Python input list. The codec-output bytes are byte-identical
+  across the three languages via M83 + M85B conformance
+  (validated by reading the same fixture in all three).
+
+#### Empirical codec selection
+
+The size-comparison tests print all three sizes side-by-side
+on a 1000-read mixed-CIGAR input (80% "100M" + 10% "99M1D" +
+10% "50M50S"). Measured byte-identical for the codec paths
+across all three implementations:
+
+| Codec choice            | Wire size | Notes |
+|-------------------------|-----------|-------|
+| no-override (M82 compound) | ~18-29 KB | varies by HDF5 backend storage methodology |
+| NAME_TOKENIZED (verbatim mode) | **5307 bytes** | falls back to verbatim because token counts vary |
+| **RANS_ORDER1**         | **1111 bytes** | ~17× smaller than baseline; ~5× smaller than NAME_TOKENIZED |
+
+This is the empirical confirmation that rANS is the right
+default for real data — exactly the case where
+NAME_TOKENIZED's columnar mode no longer applies.
+
+#### Notes
+
+- **The rANS-on-cigars path uses length-prefix-concat
+  directly, NOT NAME_TOKENIZED's encoder output then
+  rANS-encoded.** The two encodings would produce different
+  byte streams for the same input (NAME_TOKENIZED's verbatim
+  mode includes a 7-byte header which the rANS path doesn't
+  need; rANS's own self-contained header already records the
+  byte count). Documented as Gotcha §139.
+- **Selection guidance is surfaced in three doc locations**
+  (`docs/codecs/rans.md` §7, `docs/codecs/name_tokenizer.md`
+  §8, `docs/format-spec.md` §10.8) so users find it from any
+  entry point. The §10.8 selection table is the authoritative
+  reference.
+- **Both varint helpers (encode and decode) are duplicated in
+  Python (reused from name_tokenizer), Java (inline in
+  SpectralDataset/GenomicRun), and ObjC (inline in the same
+  files).** Future refactor could extract a shared helper if
+  a third caller emerges; for Phase C the duplication is
+  acceptable and matches the existing private-static pattern.
+- **mate_info remains in compound storage.** Per-field codec
+  dispatch on the 3-field compound (chrom VL_STRING + pos
+  int64 + tlen int32) requires substantial new infrastructure
+  (per-field schema decomposition or per-compound-field
+  dispatch). Deferred future scope. The `mate_info` channel
+  validation continues to reject all overrides (the
+  `rejectInvalidChannel` test was retargeted from `positions`
+  to `mate_info` since `positions` is now valid post-Phase-B).
+- **The genomic codec pipeline-wiring is now complete for ALL
+  M82 channels except mate_info.** All five M79 codec slots
+  (4–8) are wired into their applicable channels. Phase C
+  mate_info is the only remaining channel without codec
+  support.
 
 ### M86 Phase B — Wire rANS into integer channels via LE byte serialisation (2026-04-26)
 
