@@ -70,6 +70,7 @@ extern void testV11EncryptionParity(void);
 extern void testV111DecryptInPlace(void);
 extern void testM79GenomicEnums(void);
 extern void testM82GenomicRun(void);
+extern void testM83Rans(void);
 
 int main(int argc, const char *argv[])
 {
@@ -349,6 +350,10 @@ int main(int argc, const char *argv[])
         START_SET("M82: GenomicRun + AlignedRead + signal channels (v0.11)")
             testM82GenomicRun();
         END_SET("M82: GenomicRun + AlignedRead + signal channels (v0.11)")
+
+        START_SET("M83: rANS codec")
+            testM83Rans();
+        END_SET("M83: rANS codec")
     }
     return 0;
 }
