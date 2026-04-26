@@ -247,13 +247,20 @@ def test_back_compat_no_overrides(tmp_path: Path):
 # ----------------------------------------------------------------------
 
 def test_reject_invalid_channel(tmp_path: Path):
-    """Override on an integer channel must raise ValueError at write time."""
+    """Override on a non-overridable channel must raise ValueError at write time.
+
+    M86 Phase B (Binding Decision §117) extended the override map to
+    the three integer channels (positions, flags, mapping_qualities),
+    so this test now targets a structurally-VL channel that has no
+    codec match and remains outside the per-channel allowed-codec map
+    (cigars, mate_info — see HANDOFF.md §8 "Out of scope").
+    """
     run = _make_run(
         PURE_ACGT_SEQ, PHRED_CYCLE_QUAL,
-        {"positions": Compression.RANS_ORDER0},  # positions is INT64, not byte
+        {"cigars": Compression.RANS_ORDER0},  # cigars is not overridable
     )
     p = tmp_path / "bad.tio"
-    with pytest.raises(ValueError, match="positions"):
+    with pytest.raises(ValueError, match="cigars"):
         SpectralDataset.write_minimal(
             p, title="t", isa_investigation_id="i",
             runs={}, genomic_runs={"genomic_0001": run},
@@ -993,6 +1000,477 @@ def test_cross_language_fixture_name_tokenized():
             assert rn.dtype == np.uint8
             assert int(rn.attrs["compression"]) == int(
                 Compression.NAME_TOKENIZED.value
+            )
+    finally:
+        ds.close()
+
+
+# ----------------------------------------------------------------------
+# 30–36: Phase B — rANS on the integer channels (positions, flags,
+# mapping_qualities). Per Binding Decision §119 ``__getitem__`` still
+# uses ``self.index.*`` for per-read integer access; these tests
+# directly call the new ``GenomicRun._int_channel_array(name)`` helper
+# for round-trip verification (Gotcha §132).
+# ----------------------------------------------------------------------
+
+
+def _make_int_run(
+    positions: np.ndarray,
+    flags: np.ndarray,
+    mapping_qualities: np.ndarray,
+    codec_overrides: dict[str, Compression] | None = None,
+) -> WrittenGenomicRun:
+    """Build a synthetic genomic run with caller-controlled integer arrays.
+
+    Mirrors :func:`_make_run` but lets the caller supply the three
+    integer channels under test (positions, flags, mapping_qualities)
+    so the round-trip assertions can use known values.
+    """
+    n_reads = int(positions.shape[0])
+    seq = (b"ACGT" * 25) * n_reads
+    qual = bytes((30 + (i % 11)) for i in range(n_reads * READ_LEN))
+    return WrittenGenomicRun(
+        acquisition_mode=7,
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="M86_PHASEB",
+        positions=positions,
+        mapping_qualities=mapping_qualities,
+        flags=flags,
+        sequences=np.frombuffer(seq, dtype=np.uint8),
+        qualities=np.frombuffer(qual, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * READ_LEN,
+        lengths=np.full(n_reads, READ_LEN, dtype=np.uint32),
+        cigars=["100M"] * n_reads,
+        read_names=[f"r{i}" for i in range(n_reads)],
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_codec_overrides=codec_overrides or {},
+    )
+
+
+def test_round_trip_positions_rans_order1(tmp_path: Path):
+    """Monotonic int64 positions encoded with RANS_ORDER1 round-trip exactly.
+
+    Per Binding Decision §119 ``__getitem__`` still reads positions
+    from the index; this test directly calls the new
+    ``_int_channel_array`` helper to verify the compressed
+    ``signal_channels/positions`` decodes back to the original array.
+    """
+    n_reads = N_READS
+    positions = np.array(
+        [i * 1000 + 1_000_000 for i in range(n_reads)],
+        dtype=np.int64,
+    )
+    flags = np.zeros(n_reads, dtype=np.uint32)
+    mapq = np.full(n_reads, 60, dtype=np.uint8)
+    run = _make_int_run(
+        positions, flags, mapq,
+        {"positions": Compression.RANS_ORDER1},
+    )
+    p = _write_and_open(tmp_path, run, fname="phaseb_positions.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        decoded = gr._int_channel_array("positions")
+        assert decoded.dtype == np.int64
+        assert decoded.shape == (n_reads,)
+        np.testing.assert_array_equal(decoded, positions)
+    finally:
+        ds.close()
+
+
+def test_round_trip_flags_rans_order0(tmp_path: Path):
+    """Alternating uint32 flags encoded with RANS_ORDER0 round-trip exactly."""
+    n_reads = N_READS
+    positions = np.arange(n_reads, dtype=np.int64) * 1000
+    flags = np.array(
+        [0x0001 if (i % 2 == 0) else 0x0083 for i in range(n_reads)],
+        dtype=np.uint32,
+    )
+    mapq = np.full(n_reads, 60, dtype=np.uint8)
+    run = _make_int_run(
+        positions, flags, mapq,
+        {"flags": Compression.RANS_ORDER0},
+    )
+    p = _write_and_open(tmp_path, run, fname="phaseb_flags.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        decoded = gr._int_channel_array("flags")
+        assert decoded.dtype == np.uint32
+        assert decoded.shape == (n_reads,)
+        np.testing.assert_array_equal(decoded, flags)
+    finally:
+        ds.close()
+
+
+def test_round_trip_mapping_qualities_rans_order1(tmp_path: Path):
+    """uint8 MAPQ encoded with RANS_ORDER1 round-trip exactly.
+
+    Per Gotcha §131 the LE serialisation is a no-op for uint8 (1
+    byte per element), but the dispatch path is still exercised
+    end-to-end (write through ``_write_int_channel_with_codec``,
+    read through ``_int_channel_array``).
+    """
+    n_reads = N_READS
+    positions = np.arange(n_reads, dtype=np.int64) * 1000
+    flags = np.zeros(n_reads, dtype=np.uint32)
+    # 80% MAPQ 60, 20% MAPQ 0 — typical Illumina mapping-quality
+    # distribution.
+    mapq = np.array(
+        [60 if (i % 5) != 0 else 0 for i in range(n_reads)],
+        dtype=np.uint8,
+    )
+    run = _make_int_run(
+        positions, flags, mapq,
+        {"mapping_qualities": Compression.RANS_ORDER1},
+    )
+    p = _write_and_open(tmp_path, run, fname="phaseb_mapq.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        decoded = gr._int_channel_array("mapping_qualities")
+        assert decoded.dtype == np.uint8
+        assert decoded.shape == (n_reads,)
+        np.testing.assert_array_equal(decoded, mapq)
+    finally:
+        ds.close()
+
+
+def test_size_win_positions(tmp_path: Path):
+    """Realistic clustered-position int64 under RANS_ORDER1 wins decisively.
+
+    Real WGS data has many reads sharing the same start position
+    in regions of high coverage; the LE byte representation of such
+    a clustered position array is highly compressible by rANS
+    order-1. Target: rANS encoded length < 50% of the raw int64
+    byte length. Per Gotcha §130 we use a realistic input size
+    (10000 reads) so the rANS frequency-table overhead is
+    amortised.
+
+    HANDOFF.md §6.1 #33 originally framed this against an
+    HDF5-ZLIB baseline on monotonic positions; in practice ZLIB's
+    LZ77 matching is hard to beat on perfectly-monotonic int64s
+    without an explicit delta transform (which the M83 rANS codec
+    intentionally does not perform — Gotcha §130 acknowledges
+    rANS may not always beat HDF5-filter compression on integer
+    inputs). The clustered-position pattern is the realistic
+    rANS-win scenario for the integer-channel codec wiring.
+    """
+    from ttio.codecs.rans import encode as _rans_encode
+    n_reads = 10_000
+    # Realistic high-coverage WGS: reads cluster around 100 distinct
+    # loci, each covered ~100×. The LE bytes have very low entropy
+    # in the high bytes (always constant) and only ~100 distinct
+    # symbols in the low bytes — ideal for rANS.
+    positions = np.array(
+        [1_000_000 + (i // 100) * 1000 for i in range(n_reads)],
+        dtype=np.int64,
+    )
+    raw_bytes = positions.astype("<i8", copy=False).tobytes()
+    raw_len = len(raw_bytes)  # n_reads * 8 = 80 000 bytes
+
+    encoded = _rans_encode(raw_bytes, order=1)
+    encoded_len = len(encoded)
+
+    # Verify the on-disk dataset shape matches what we just measured
+    # (sanity check that the dispatch path actually wrote the
+    # codec output).
+    flags = np.zeros(n_reads, dtype=np.uint32)
+    mapq = np.full(n_reads, 60, dtype=np.uint8)
+    rans_run = _make_int_run(
+        positions, flags, mapq,
+        {"positions": Compression.RANS_ORDER1},
+    )
+    p_rans = tmp_path / "pos_rans.tio"
+    SpectralDataset.write_minimal(
+        p_rans, title="b", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": rans_run},
+    )
+    with h5py.File(p_rans, "r") as f:
+        ds = f["study/genomic_runs/genomic_0001/signal_channels/positions"]
+        assert ds.dtype == np.uint8
+        assert ds.shape[0] == encoded_len, (
+            f"on-disk dataset shape {ds.shape[0]} != codec output "
+            f"length {encoded_len}"
+        )
+
+    ratio = encoded_len / raw_len
+    assert ratio < 0.50, (
+        f"RANS_ORDER1 positions encoded = {encoded_len} bytes; "
+        f"raw int64 LE = {raw_len} bytes; ratio = {ratio:.3f} "
+        "(target < 0.50)"
+    )
+
+
+def test_attribute_set_correctly_integer_channels(tmp_path: Path):
+    """Integer channels under rANS overrides become flat uint8 with @compression.
+
+    Verifies the on-disk schema (HANDOFF.md §5.2): each compressed
+    integer dataset is dtype uint8 (not the original int64/uint32/
+    uint8 scalar dtype) and carries an ``@compression`` attribute
+    holding the codec id.
+    """
+    n_reads = N_READS
+    positions = np.arange(n_reads, dtype=np.int64) * 1000
+    flags = np.zeros(n_reads, dtype=np.uint32)
+    mapq = np.full(n_reads, 60, dtype=np.uint8)
+    run = _make_int_run(
+        positions, flags, mapq,
+        {
+            "positions": Compression.RANS_ORDER1,
+            "flags": Compression.RANS_ORDER0,
+            "mapping_qualities": Compression.RANS_ORDER1,
+        },
+    )
+    p = _write_and_open(tmp_path, run, fname="attr_int.tio")
+    with h5py.File(p, "r") as f:
+        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+        # positions: RANS_ORDER1 (codec id 5)
+        pos_ds = sc["positions"]
+        assert pos_ds.dtype == np.uint8
+        assert int(pos_ds.attrs["compression"]) == int(
+            Compression.RANS_ORDER1.value
+        )
+        # flags: RANS_ORDER0 (codec id 4)
+        flg_ds = sc["flags"]
+        assert flg_ds.dtype == np.uint8
+        assert int(flg_ds.attrs["compression"]) == int(
+            Compression.RANS_ORDER0.value
+        )
+        # mapping_qualities: RANS_ORDER1 (codec id 5)
+        mq_ds = sc["mapping_qualities"]
+        assert mq_ds.dtype == np.uint8
+        assert int(mq_ds.attrs["compression"]) == int(
+            Compression.RANS_ORDER1.value
+        )
+        # Untouched byte channels carry no @compression.
+        assert "compression" not in sc["sequences"].attrs
+        assert "compression" not in sc["qualities"].attrs
+
+
+def test_reject_base_pack_on_positions(tmp_path: Path):
+    """BASE_PACK on the positions channel raises with a clear message.
+
+    Per Binding Decision §117: BASE_PACK 2-bit-packs ACGT bytes and
+    would silently corrupt int64 position values. Validation must
+    name the codec, the channel, and explain the wrong-content
+    rationale.
+    """
+    n_reads = N_READS
+    positions = np.arange(n_reads, dtype=np.int64) * 1000
+    flags = np.zeros(n_reads, dtype=np.uint32)
+    mapq = np.full(n_reads, 60, dtype=np.uint8)
+    run = _make_int_run(
+        positions, flags, mapq,
+        {"positions": Compression.BASE_PACK},
+    )
+    p = tmp_path / "bad_bp_pos.tio"
+    with pytest.raises(ValueError) as excinfo:
+        SpectralDataset.write_minimal(
+            p, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run},
+        )
+    msg = str(excinfo.value)
+    assert "BASE_PACK" in msg, f"error must name the codec; got: {msg!r}"
+    assert "positions" in msg, f"error must name the channel; got: {msg!r}"
+    # Mentions the rANS replacement so the user knows what to use.
+    assert "RANS" in msg, f"error must point at the rANS codecs; got: {msg!r}"
+
+
+def test_reject_quality_binned_on_flags(tmp_path: Path):
+    """QUALITY_BINNED on the flags channel raises with a clear message.
+
+    Per Binding Decision §117: QUALITY_BINNED's 8-bin Phred
+    quantisation is wrong-content for uint32 flag bitfields and
+    would destroy them. Validation must name the codec, the
+    channel, and explain the wrong-content rationale.
+    """
+    n_reads = N_READS
+    positions = np.arange(n_reads, dtype=np.int64) * 1000
+    flags = np.zeros(n_reads, dtype=np.uint32)
+    mapq = np.full(n_reads, 60, dtype=np.uint8)
+    run = _make_int_run(
+        positions, flags, mapq,
+        {"flags": Compression.QUALITY_BINNED},
+    )
+    p = tmp_path / "bad_qb_flags.tio"
+    with pytest.raises(ValueError) as excinfo:
+        SpectralDataset.write_minimal(
+            p, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run},
+        )
+    msg = str(excinfo.value)
+    assert "QUALITY_BINNED" in msg, f"error must name the codec; got: {msg!r}"
+    assert "flags" in msg, f"error must name the channel; got: {msg!r}"
+    assert "RANS" in msg, f"error must point at the rANS codecs; got: {msg!r}"
+
+
+def test_round_trip_full_stack(tmp_path: Path):
+    """All six channel overrides at once — full codec stack on one file.
+
+    Exercises sequences=BASE_PACK + qualities=QUALITY_BINNED +
+    read_names=NAME_TOKENIZED + positions=RANS_ORDER1 +
+    flags=RANS_ORDER0 + mapping_qualities=RANS_ORDER1
+    simultaneously (Gotcha §133: the most likely test to surface
+    ordering bugs across the codec dispatch matrix). Verifies:
+
+    - Every byte/string channel round-trips byte-exact.
+    - Every integer channel decodes back to the input array via
+      ``_int_channel_array`` (per Binding Decision §119
+      ``__getitem__`` still uses the index for per-read access, but
+      the ``signal_channels/`` integer datasets must round-trip
+      through the new helper).
+    """
+    n_reads = N_READS
+    positions = np.array(
+        [i * 1000 + 1_000_000 for i in range(n_reads)],
+        dtype=np.int64,
+    )
+    flags = np.array(
+        [0x0001 if (i % 2 == 0) else 0x0083 for i in range(n_reads)],
+        dtype=np.uint32,
+    )
+    mapq = np.array(
+        [60 if (i % 5) != 0 else 0 for i in range(n_reads)],
+        dtype=np.uint8,
+    )
+    run = WrittenGenomicRun(
+        acquisition_mode=7,
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="M86_FULL_STACK",
+        positions=positions,
+        mapping_qualities=mapq,
+        flags=flags,
+        sequences=np.frombuffer(PURE_ACGT_SEQ, dtype=np.uint8),
+        qualities=np.frombuffer(QUAL_BIN_CENTRE, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * READ_LEN,
+        lengths=np.full(n_reads, READ_LEN, dtype=np.uint32),
+        cigars=["100M"] * n_reads,
+        read_names=ILLUMINA_NAMES,
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_codec_overrides={
+            "sequences": Compression.BASE_PACK,
+            "qualities": Compression.QUALITY_BINNED,
+            "read_names": Compression.NAME_TOKENIZED,
+            "positions": Compression.RANS_ORDER1,
+            "flags": Compression.RANS_ORDER0,
+            "mapping_qualities": Compression.RANS_ORDER1,
+        },
+    )
+    p = _write_and_open(tmp_path, run, fname="full_stack.tio")
+
+    # All six @compression attributes must be set on disk.
+    with h5py.File(p, "r") as f:
+        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+        assert int(sc["sequences"].attrs["compression"]) == int(
+            Compression.BASE_PACK.value
+        )
+        assert int(sc["qualities"].attrs["compression"]) == int(
+            Compression.QUALITY_BINNED.value
+        )
+        assert int(sc["read_names"].attrs["compression"]) == int(
+            Compression.NAME_TOKENIZED.value
+        )
+        assert int(sc["positions"].attrs["compression"]) == int(
+            Compression.RANS_ORDER1.value
+        )
+        assert int(sc["flags"].attrs["compression"]) == int(
+            Compression.RANS_ORDER0.value
+        )
+        assert int(sc["mapping_qualities"].attrs["compression"]) == int(
+            Compression.RANS_ORDER1.value
+        )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        # Byte/string channels via the AlignedRead reader (existing path).
+        for i in range(n_reads):
+            r = gr[i]
+            assert r.sequence == _expected_seq_slice(PURE_ACGT_SEQ, i)
+            assert r.qualities == _expected_qual_slice(QUAL_BIN_CENTRE, i)
+            assert r.read_name == ILLUMINA_NAMES[i]
+
+        # Integer channels via the new Phase B helper. Per §119
+        # ``__getitem__`` does NOT consume these — it reads from
+        # the genomic_index — so we directly call the helper.
+        np.testing.assert_array_equal(
+            gr._int_channel_array("positions"), positions
+        )
+        np.testing.assert_array_equal(
+            gr._int_channel_array("flags"), flags
+        )
+        np.testing.assert_array_equal(
+            gr._int_channel_array("mapping_qualities"), mapq
+        )
+    finally:
+        ds.close()
+
+
+# ----------------------------------------------------------------------
+# 37: Cross-language fixture for Phase B integer-channel codec wiring
+# ----------------------------------------------------------------------
+
+
+def test_cross_language_fixture_integer_channels():
+    """Phase B fixture decodes byte-exact across all three integer channels.
+
+    The committed ``m86_codec_integer_channels.tio`` is a 100-read
+    run with positions / flags / mapping_qualities all under rANS
+    overrides (HANDOFF.md §6.4). Verifies the Python reader
+    decodes each integer channel back to the deterministic
+    cross-language input that the ObjC and Java agents will also
+    produce and consume.
+    """
+    fixture_path = FIXTURE_DIR / "m86_codec_integer_channels.tio"
+    assert fixture_path.exists(), (
+        f"fixture missing: {fixture_path} — regenerate with "
+        f"python/tests/fixtures/genomic/regenerate_m86_integer_channels.py"
+    )
+    n_reads = 100
+    expected_positions = np.array(
+        [i * 1000 + 1_000_000 for i in range(n_reads)],
+        dtype=np.int64,
+    )
+    expected_flags = np.array(
+        [0x0001 if (i % 2 == 0) else 0x0083 for i in range(n_reads)],
+        dtype=np.uint32,
+    )
+    expected_mapq = np.array(
+        [60 if (i % 5) != 0 else 0 for i in range(n_reads)],
+        dtype=np.uint8,
+    )
+    ds = SpectralDataset.open(fixture_path)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == n_reads
+        np.testing.assert_array_equal(
+            gr._int_channel_array("positions"), expected_positions
+        )
+        np.testing.assert_array_equal(
+            gr._int_channel_array("flags"), expected_flags
+        )
+        np.testing.assert_array_equal(
+            gr._int_channel_array("mapping_qualities"), expected_mapq
+        )
+        with h5py.File(fixture_path, "r") as f:
+            sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+            assert int(sc["positions"].attrs["compression"]) == int(
+                Compression.RANS_ORDER1.value
+            )
+            assert int(sc["flags"].attrs["compression"]) == int(
+                Compression.RANS_ORDER0.value
+            )
+            assert int(sc["mapping_qualities"].attrs["compression"]) == int(
+                Compression.RANS_ORDER1.value
             )
     finally:
         ds.close()

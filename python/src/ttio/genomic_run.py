@@ -12,9 +12,24 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterator, TYPE_CHECKING
 
+import numpy as np
+
 from .aligned_read import AlignedRead
 from .enums import AcquisitionMode
 from .genomic_index import GenomicIndex
+
+
+# M86 Phase B: per-integer-channel dtype lookup, mirroring the
+# write side (see ``_hdf5_io._INTEGER_CHANNEL_DTYPES``). Determined
+# by channel name (Binding Decision §115), not by an on-disk
+# attribute, so the reader recovers the original integer dtype
+# from the codec-decoded byte buffer without touching extra
+# metadata.
+_INTEGER_CHANNEL_DTYPES = {
+    "positions": "<i8",
+    "flags": "<u4",
+    "mapping_qualities": "<u1",
+}
 
 if TYPE_CHECKING:
     from .providers.base import StorageGroup
@@ -74,6 +89,19 @@ class GenomicRun:
     # Gotcha §125).
     _decoded_read_names: list[str] | None = field(
         default=None, repr=False, compare=False,
+    )
+    # M86 Phase B: lazy whole-channel decode cache for integer
+    # channels (positions, flags, mapping_qualities) whose
+    # ``@compression`` attribute names a TTIO codec (currently
+    # rANS only — Binding Decision §117). Held as a
+    # ``dict[str, np.ndarray]`` because each entry is a typed
+    # numpy array, not raw bytes. Per Binding Decision §116 this
+    # cache is **separate** from ``_decoded_byte_channels`` (raw
+    # bytes) and ``_decoded_read_names`` (decoded list) — the
+    # value types differ and conflating would force a union
+    # type and unnecessary type checks in every read path.
+    _decoded_int_channels: dict[str, "np.ndarray"] = field(
+        default_factory=dict, repr=False, compare=False,
     )
 
     # ------------------------------------------------------------------
@@ -258,6 +286,73 @@ class GenomicRun:
             )
         self._decoded_byte_channels[name] = decoded
         return decoded[offset:offset + count]
+
+    def _int_channel_array(self, name: str) -> "np.ndarray":
+        """Return the full integer array for ``name``, lazily decoded.
+
+        M86 Phase B dispatch: for codec-compressed integer channels
+        (``@compression`` names a TTIO rANS id) the entire dataset is
+        read once on first access, decoded through the codec, and
+        re-interpreted as the channel's natural integer dtype
+        (Binding Decision §115). The resulting numpy array is cached
+        on this :class:`GenomicRun` instance per Binding Decision
+        §116 (separate from the byte and read-names caches because
+        the value type is different). For uncompressed channels
+        (no ``@compression`` attribute or value 0) the dataset is
+        read directly and re-interpreted via the same channel-name
+        dtype lookup.
+
+        Per Binding Decision §119, this helper is **callable but not
+        currently called** by :meth:`__getitem__`, which still uses
+        ``self.index.{positions,mapping_qualities,flags}`` for per-
+        read integer access. Phase B is primarily a write-side
+        file-size optimisation; the read-path dispatch is wired here
+        for round-trip correctness and for any future reader that
+        prefers ``signal_channels/`` over ``genomic_index/``.
+        """
+        cached = self._decoded_int_channels.get(name)
+        if cached is not None:
+            return cached
+
+        dtype_str = _INTEGER_CHANNEL_DTYPES.get(name)
+        if dtype_str is None:
+            raise ValueError(
+                f"_int_channel_array: unknown integer channel "
+                f"name {name!r}"
+            )
+
+        ds = self._signal_dataset(name)
+        from . import _hdf5_io as io
+        codec_id = io.read_int_attr(ds, "compression", default=0) or 0
+
+        if codec_id == 0:
+            # Uncompressed: read the dataset directly. The dataset
+            # is stored at its native integer precision, so the
+            # provider's ``read`` returns a typed buffer; we
+            # re-interpret as the canonical LE dtype to keep the
+            # value type uniform with the codec path.
+            raw = bytes(np.asarray(ds.read(offset=0, count=int(ds.length))).tobytes())
+            arr = np.frombuffer(raw, dtype=dtype_str)
+            self._decoded_int_channels[name] = arr
+            return arr
+
+        from .enums import Compression
+        if codec_id in (
+            int(Compression.RANS_ORDER0),
+            int(Compression.RANS_ORDER1),
+        ):
+            from .codecs.rans import decode as _dec
+            all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+            decoded_bytes = _dec(all_bytes)
+            arr = np.frombuffer(decoded_bytes, dtype=dtype_str)
+            self._decoded_int_channels[name] = arr
+            return arr
+
+        raise ValueError(
+            f"signal_channel '{name}': @compression={codec_id} "
+            "is not a supported TTIO codec id for an integer channel "
+            "(only RANS_ORDER0 = 4 and RANS_ORDER1 = 5 are recognised)"
+        )
 
     def _compound(self, name: str) -> list[dict]:
         """Read a compound dataset whole and cache it.
