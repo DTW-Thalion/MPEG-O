@@ -1,6 +1,7 @@
 """M86 — genomic signal-channel codec wiring tests.
 
-Covers the eleven test cases in HANDOFF.md §6.1:
+Covers the original eleven test cases (Phase A) plus the six new
+Phase D cases (HANDOFF.md M86 Phase D §5.1):
   1.  Round-trip sequences via rANS order-0.
   2.  Round-trip sequences via rANS order-1.
   3.  Round-trip sequences via BASE_PACK (pure ACGT).
@@ -11,7 +12,13 @@ Covers the eleven test cases in HANDOFF.md §6.1:
   8.  Validation: non-TTIO codec value raises.
   9.  ``@compression`` attribute is set correctly.
  10.  Size-win: BASE_PACK on pure-ACGT sequences < 30% raw.
- 11.  Cross-language fixture verification (3 fixtures × byte-exact).
+ 11.  Cross-language fixture verification (4 fixtures × byte-exact).
+ 12.  Round-trip qualities via QUALITY_BINNED (bin-centre input).
+ 13.  Round-trip qualities via QUALITY_BINNED (lossy mapping).
+ 14.  Size-win: QUALITY_BINNED qualities ~50% raw.
+ 15.  ``@compression == 7`` for QUALITY_BINNED qualities.
+ 16.  Validation: QUALITY_BINNED on sequences raises with rationale.
+ 17.  Mixed: sequences=BASE_PACK + qualities=QUALITY_BINNED.
 """
 from __future__ import annotations
 
@@ -37,6 +44,13 @@ TOTAL_BYTES = N_READS * READ_LEN  # 1000
 # Common cross-language fixture inputs (HANDOFF.md §6.2).
 PURE_ACGT_SEQ = (b"ACGT" * 25) * N_READS                    # 1000 bytes
 PHRED_CYCLE_QUAL = bytes((30 + (i % 11)) for i in range(TOTAL_BYTES))
+
+# Phase D cross-language fixture: 1000 bytes of bin-centre Phred values
+# (Illumina-8 centres 0/5/15/22/27/32/37/40 cycled). Bin centres
+# round-trip byte-exact through QUALITY_BINNED (HANDOFF.md §120).
+BIN_CENTRES = (0, 5, 15, 22, 27, 32, 37, 40)
+QUAL_BIN_CENTRE = bytes(BIN_CENTRES * (TOTAL_BYTES // len(BIN_CENTRES)))
+assert len(QUAL_BIN_CENTRE) == TOTAL_BYTES
 
 
 def _make_run(
@@ -355,6 +369,7 @@ def test_size_win_base_pack(tmp_path: Path):
 # ----------------------------------------------------------------------
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "genomic"
+# Phase A fixtures encode both channels with the same codec.
 FIXTURE_NAMES = (
     ("rans_order0", Compression.RANS_ORDER0),
     ("rans_order1", Compression.RANS_ORDER1),
@@ -387,5 +402,277 @@ def test_cross_language_fixtures(codec_name: str, codec: Compression):
             sc = f["study/genomic_runs/genomic_0001/signal_channels"]
             assert int(sc["sequences"].attrs["compression"]) == int(codec.value)
             assert int(sc["qualities"].attrs["compression"]) == int(codec.value)
+    finally:
+        ds.close()
+
+
+# ----------------------------------------------------------------------
+# 12–17: Phase D — QUALITY_BINNED on the qualities channel
+# ----------------------------------------------------------------------
+
+
+def test_round_trip_qualities_quality_binned(tmp_path: Path):
+    """Bin-centre Phred values round-trip byte-exact via QUALITY_BINNED.
+
+    QUALITY_BINNED is lossy by construction (M85 §97), but inputs that
+    are already at bin centres (0/5/15/22/27/32/37/40) decode back to
+    themselves byte-exact.
+    """
+    run = _make_run(
+        PURE_ACGT_SEQ, QUAL_BIN_CENTRE,
+        {"qualities": Compression.QUALITY_BINNED},
+    )
+    p = _write_and_open(tmp_path, run, fname="qb_centres.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == N_READS
+        for i in range(N_READS):
+            r = gr[i]
+            assert r.sequence == _expected_seq_slice(PURE_ACGT_SEQ, i)
+            assert r.qualities == _expected_qual_slice(QUAL_BIN_CENTRE, i)
+    finally:
+        ds.close()
+
+
+def test_round_trip_qualities_quality_binned_lossy(tmp_path: Path):
+    """Arbitrary Phred values round-trip via the documented lossy mapping."""
+    # 1000 bytes cycling through Phred 0..49 — covers every bin and
+    # the saturation case (≥40 → centre 40).
+    arbitrary_qual = bytes((i % 50) for i in range(TOTAL_BYTES))
+    # Compute the expected lossy output up-front using the codec's
+    # public encode/decode round-trip — keeps this test as a pure
+    # integration check (we don't reimplement the bin table here).
+    from ttio.codecs.quality import encode as _enc, decode as _dec
+    expected_qual = _dec(_enc(arbitrary_qual))
+    assert len(expected_qual) == TOTAL_BYTES
+    # Sanity: lossy mapping must actually differ from the input
+    # (otherwise the test is degenerate).
+    assert expected_qual != arbitrary_qual
+
+    run = _make_run(
+        PURE_ACGT_SEQ, arbitrary_qual,
+        {"qualities": Compression.QUALITY_BINNED},
+    )
+    p = _write_and_open(tmp_path, run, fname="qb_lossy.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        for i in range(N_READS):
+            r = gr[i]
+            assert r.sequence == _expected_seq_slice(PURE_ACGT_SEQ, i)
+            assert r.qualities == _expected_qual_slice(expected_qual, i), (
+                f"read {i}: qualities did not match expected lossy mapping"
+            )
+    finally:
+        ds.close()
+
+
+def test_size_win_quality_binned(tmp_path: Path):
+    """QUALITY_BINNED qualities dataset is ~50% the size of uncompressed.
+
+    The codec is 4-bits-per-index with a 6-byte header. For 100 000
+    qualities bytes the wire stream is 6 + 50 000 = 50 006 bytes — a
+    50.006% ratio of the raw 100 000 (well under our 0.55 target).
+    """
+    n_reads = 1000
+    read_len = 100
+    total = n_reads * read_len  # 100 000
+    seq = (b"ACGT" * 25) * n_reads
+    # Use bin-centre values cycled through all 8 centres so the
+    # round-trip semantics are byte-exact (not strictly required for
+    # the size assertion, but keeps this test stylistically consistent
+    # with the byte-exact round-trip suite above).
+    qual = bytes(BIN_CENTRES * (total // len(BIN_CENTRES)))
+    base_kw = dict(
+        acquisition_mode=7, reference_uri="GRCh38.p14",
+        platform="ILLUMINA", sample_name="SIZE_WIN_QB",
+        positions=np.arange(n_reads, dtype=np.int64) * 1000,
+        mapping_qualities=np.full(n_reads, 60, dtype=np.uint8),
+        flags=np.zeros(n_reads, dtype=np.uint32),
+        sequences=np.frombuffer(seq, dtype=np.uint8),
+        qualities=np.frombuffer(qual, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * read_len,
+        lengths=np.full(n_reads, read_len, dtype=np.uint32),
+        cigars=["100M"] * n_reads,
+        read_names=[f"r{i}" for i in range(n_reads)],
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_compression="none",  # no HDF5 filter on the baseline
+    )
+    raw_run = WrittenGenomicRun(**base_kw)
+    qb_run = WrittenGenomicRun(
+        **base_kw,
+        signal_codec_overrides={"qualities": Compression.QUALITY_BINNED},
+    )
+
+    p_raw = tmp_path / "qb_raw.tio"
+    SpectralDataset.write_minimal(
+        p_raw, title="r", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": raw_run},
+    )
+    p_qb = tmp_path / "qb_compressed.tio"
+    SpectralDataset.write_minimal(
+        p_qb, title="b", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": qb_run},
+    )
+
+    with h5py.File(p_raw, "r") as f:
+        raw_size = f[
+            "study/genomic_runs/genomic_0001/signal_channels/qualities"
+        ].id.get_storage_size()
+    with h5py.File(p_qb, "r") as f:
+        qb_size = f[
+            "study/genomic_runs/genomic_0001/signal_channels/qualities"
+        ].id.get_storage_size()
+
+    ratio = qb_size / raw_size
+    # Target: ~50% (the codec is 4-bit-packed; header is a constant
+    # 6 bytes for the whole channel, negligible at 100k bytes).
+    assert ratio < 0.55, (
+        f"QUALITY_BINNED qualities dataset = {qb_size} bytes; "
+        f"raw = {raw_size} bytes; ratio = {ratio:.3f} (target < 0.55)"
+    )
+
+
+def test_attribute_set_correctly_quality_binned(tmp_path: Path):
+    """QUALITY_BINNED qualities channel carries @compression == 7 (uint8)."""
+    run = _make_run(
+        PURE_ACGT_SEQ, QUAL_BIN_CENTRE,
+        {"qualities": Compression.QUALITY_BINNED},
+    )
+    p = _write_and_open(tmp_path, run, fname="attr_qb.tio")
+    with h5py.File(p, "r") as f:
+        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+        qual_attr = sc["qualities"].attrs.get("compression")
+        assert qual_attr is not None, "qualities must carry @compression"
+        assert int(qual_attr) == int(Compression.QUALITY_BINNED.value) == 7
+        # sequences has no override → no @compression attribute.
+        assert "compression" not in sc["sequences"].attrs
+        # Integer / mapping_qualities channels are untouched.
+        assert "compression" not in sc["positions"].attrs
+        assert "compression" not in sc["flags"].attrs
+        assert "compression" not in sc["mapping_qualities"].attrs
+
+
+def test_reject_quality_binned_on_sequences(tmp_path: Path):
+    """QUALITY_BINNED on the sequences channel raises ValueError at write time.
+
+    Per Binding Decision §108: QUALITY_BINNED would map all four
+    ACGT bytes (0x41/0x43/0x47/0x54 = 65/67/71/84, all ≥ 40) to
+    bin 7 / centre 40, silently destroying the sequence. The
+    validation rejects this combination before touching the file.
+    The error message must name the codec, the channel, and explain
+    the lossy-quantisation rationale (Binding Decision §110).
+    """
+    run = _make_run(
+        PURE_ACGT_SEQ, QUAL_BIN_CENTRE,
+        {"sequences": Compression.QUALITY_BINNED},
+    )
+    p = tmp_path / "bad_qb_seq.tio"
+    with pytest.raises(ValueError) as excinfo:
+        SpectralDataset.write_minimal(
+            p, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run},
+        )
+    msg = str(excinfo.value)
+    # Names the codec.
+    assert "QUALITY_BINNED" in msg, f"error must name the codec; got: {msg!r}"
+    # Names the channel.
+    assert "sequences" in msg, f"error must name the channel; got: {msg!r}"
+    # Explains the lossy-quantisation rationale.
+    assert "lossy" in msg.lower(), (
+        f"error must explain that quality binning is lossy; got: {msg!r}"
+    )
+    # Mentions Phred quality scores so the user knows where it
+    # *does* belong.
+    assert "Phred" in msg or "quality" in msg.lower(), (
+        f"error must mention Phred/quality scores; got: {msg!r}"
+    )
+
+
+def test_mixed_quality_binned_with_rans(tmp_path: Path):
+    """Mixed override: BASE_PACK on sequences + QUALITY_BINNED on qualities.
+
+    Exercises the per-channel codec dispatch on both byte channels
+    in the same run with two different codec ids (6 and 7). Both
+    round-trip correctly: sequences byte-exact (BASE_PACK is
+    lossless on pure ACGT), qualities byte-exact (input is bin
+    centres, which round-trip exactly).
+    """
+    run = _make_run(
+        PURE_ACGT_SEQ, QUAL_BIN_CENTRE,
+        {
+            "sequences": Compression.BASE_PACK,
+            "qualities": Compression.QUALITY_BINNED,
+        },
+    )
+    p = _write_and_open(tmp_path, run, fname="mixed_bp_qb.tio")
+
+    # Verify both channels really do carry their respective codec ids.
+    with h5py.File(p, "r") as f:
+        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+        assert int(sc["sequences"].attrs["compression"]) == int(
+            Compression.BASE_PACK.value
+        )
+        assert int(sc["qualities"].attrs["compression"]) == int(
+            Compression.QUALITY_BINNED.value
+        )
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        for i in range(N_READS):
+            r = gr[i]
+            assert r.sequence == _expected_seq_slice(PURE_ACGT_SEQ, i)
+            assert r.qualities == _expected_qual_slice(QUAL_BIN_CENTRE, i)
+    finally:
+        ds.close()
+
+
+# ----------------------------------------------------------------------
+# 11+: Cross-language fixture for QUALITY_BINNED
+# ----------------------------------------------------------------------
+# Separate test (not a parameterization extension of FIXTURE_NAMES) because
+# the QUALITY_BINNED fixture uses the bin-centre quality buffer rather than
+# the PHRED_CYCLE_QUAL used by the Phase A fixtures, and only the qualities
+# channel carries QUALITY_BINNED — sequences uses BASE_PACK.
+
+
+def test_cross_language_fixture_quality_binned():
+    """Phase D fixture decodes byte-exact: BASE_PACK seq + QUALITY_BINNED qual.
+
+    The qualities buffer is bin centres, so the lossy QUALITY_BINNED
+    round-trip is byte-exact and meaningful for cross-language
+    conformance comparison against the ObjC and Java readers.
+    """
+    fixture_path = FIXTURE_DIR / "m86_codec_quality_binned.tio"
+    assert fixture_path.exists(), (
+        f"fixture missing: {fixture_path} — regenerate with "
+        f"python/tests/fixtures/genomic/regenerate_m86_quality_binned.py"
+    )
+    ds = SpectralDataset.open(fixture_path)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == N_READS
+        for i in range(N_READS):
+            r = gr[i]
+            assert r.sequence == _expected_seq_slice(PURE_ACGT_SEQ, i), (
+                f"quality_binned fixture: read {i} sequence mismatch"
+            )
+            assert r.qualities == _expected_qual_slice(QUAL_BIN_CENTRE, i), (
+                f"quality_binned fixture: read {i} qualities mismatch"
+            )
+        # Verify channel @compression attributes match the fixture spec.
+        with h5py.File(fixture_path, "r") as f:
+            sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+            assert int(sc["sequences"].attrs["compression"]) == int(
+                Compression.BASE_PACK.value
+            )
+            assert int(sc["qualities"].attrs["compression"]) == int(
+                Compression.QUALITY_BINNED.value
+            )
     finally:
         ds.close()
