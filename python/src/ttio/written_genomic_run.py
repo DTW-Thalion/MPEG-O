@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .enums import Compression
 from .provenance import ProvenanceRecord
 
 
@@ -50,3 +51,10 @@ class WrittenGenomicRun:
     # Optional
     provenance_records: list[ProvenanceRecord] = field(default_factory=list)
     signal_compression: str = "gzip"  # "gzip" → ZLIB; "none" → NONE
+
+    # M86: per-channel codec opt-in. Maps channel name to a TTI-O
+    # internal codec id. Only "sequences" and "qualities" are
+    # accepted; only RANS_ORDER0, RANS_ORDER1, BASE_PACK are
+    # accepted as codec values. Channels not in this dict use the
+    # existing signal_compression string path.
+    signal_codec_overrides: dict[str, Compression] = field(default_factory=dict)

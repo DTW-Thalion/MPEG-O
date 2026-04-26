@@ -589,6 +589,64 @@ def _write_uint8_channel(
     ds.write(data)
 
 
+def _write_byte_channel_with_codec(
+    group: _IOTarget,
+    name: str,
+    data: np.ndarray,
+    default_compression: str,
+    codec_override: Any,
+) -> None:
+    """Write a uint8 byte channel, optionally through a TTIO codec.
+
+    M86: if ``codec_override`` is ``None``, behaves identically to
+    :func:`_write_uint8_channel` (the HDF5-filter dispatch path used
+    by M82). When ``codec_override`` is one of
+    :data:`ttio.enums.Compression.RANS_ORDER0`,
+    :data:`ttio.enums.Compression.RANS_ORDER1`, or
+    :data:`ttio.enums.Compression.BASE_PACK`, the raw bytes are
+    encoded through the corresponding M83 / M84 codec and written as
+    an unfiltered uint8 dataset whose ``@compression`` attribute holds
+    the codec id (so the read path can dispatch on it).
+
+    Per Binding Decision §87, codec-compressed datasets carry NO HDF5
+    filter — the codec output is high-entropy and double-compression
+    would waste CPU for negative size benefit.
+    """
+    from .enums import Compression, Precision
+    if codec_override is None:
+        _write_uint8_channel(group, name, data, default_compression)
+        return
+
+    # Normalise to bytes for the codec.
+    if data.dtype != np.uint8:
+        data = data.astype(np.uint8, copy=False)
+    raw = bytes(data.tobytes())
+
+    if codec_override == Compression.RANS_ORDER0:
+        from .codecs.rans import encode as _enc
+        encoded = _enc(raw, order=0)
+    elif codec_override == Compression.RANS_ORDER1:
+        from .codecs.rans import encode as _enc
+        encoded = _enc(raw, order=1)
+    elif codec_override == Compression.BASE_PACK:
+        from .codecs.base_pack import encode as _enc
+        encoded = _enc(raw)
+    else:
+        raise ValueError(
+            f"signal_codec_overrides['{name}'] = {codec_override!r}: "
+            "only RANS_ORDER0, RANS_ORDER1, BASE_PACK are supported"
+        )
+
+    arr = np.frombuffer(encoded, dtype=np.uint8)
+    ds = group.create_dataset(
+        name, Precision.UINT8, length=int(arr.shape[0]),
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=Compression.NONE,  # no HDF5 filter — bytes already coded
+    )
+    ds.write(arr)
+    write_int_attr(ds, "compression", int(codec_override), dtype="<u1")
+
+
 def _write_uint32_channel(
     group: _IOTarget, name: str, data: np.ndarray, compression: str
 ) -> None:
