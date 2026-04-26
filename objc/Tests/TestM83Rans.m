@@ -290,6 +290,36 @@ static void testCanonicalVectorCOrder0(void)
          "M83: vector C order-0 byte-exact match against Python fixture");
 }
 
+static void testCanonicalVectorAOrder1(void)
+{
+    NSData *fixture = loadFixture(@"rans_a_o1.bin");
+    PASS(fixture != nil, "M83: rans_a_o1.bin fixture loads");
+    NSData *data = vectorA();
+    NSData *enc = TTIORansEncode(data, 1);
+    compareDataDumpHexOnFail(enc, fixture, "vector A o1");
+    PASS([enc isEqualToData:fixture],
+         "M83: vector A order-1 byte-exact match against Python fixture");
+    NSError *err = nil;
+    NSData *dec = TTIORansDecode(fixture, &err);
+    PASS([dec isEqualToData:data],
+         "M83: vector A order-1 fixture decodes back to vector A");
+}
+
+static void testCanonicalVectorBOrder1(void)
+{
+    NSData *fixture = loadFixture(@"rans_b_o1.bin");
+    PASS(fixture != nil, "M83: rans_b_o1.bin fixture loads");
+    NSData *data = vectorB();
+    NSData *enc = TTIORansEncode(data, 1);
+    compareDataDumpHexOnFail(enc, fixture, "vector B o1");
+    PASS([enc isEqualToData:fixture],
+         "M83: vector B order-1 byte-exact match against Python fixture");
+    NSError *err = nil;
+    NSData *dec = TTIORansDecode(fixture, &err);
+    PASS([dec isEqualToData:data],
+         "M83: vector B order-1 fixture decodes back to vector B");
+}
+
 static void testCanonicalVectorCOrder1(void)
 {
     NSData *fixture0 = loadFixture(@"rans_c_o0.bin");
@@ -399,7 +429,9 @@ void testM83Rans(void)
     testRoundTripEmpty();
     testRoundTripSingleByte();
     testCanonicalVectorAOrder0();
+    testCanonicalVectorAOrder1();
     testCanonicalVectorBOrder0();
+    testCanonicalVectorBOrder1();
     testCanonicalVectorCOrder0();
     testCanonicalVectorCOrder1();
     testDecodeMalformed();
