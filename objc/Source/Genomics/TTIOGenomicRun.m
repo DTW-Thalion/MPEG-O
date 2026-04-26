@@ -35,6 +35,18 @@
     // again; for very large runs the decoded list is materialised in
     // RAM in one shot since the codec is per-batch, Gotcha §124).
     NSArray<NSString *> *_decodedReadNames;
+    // M86 Phase C: lazy whole-list decode cache for cigars when it's
+    // stored as a flat 1-D uint8 dataset with @compression in
+    // {RANS_ORDER0 (4), RANS_ORDER1 (5), NAME_TOKENIZED (8)}. Held as
+    // NSArray<NSString *> because all three codec paths return a
+    // list of CIGAR strings indexed by read number — separate from
+    // _decodedReadNames per Binding Decision §123 since the two
+    // channels have independent dispatch shapes (rANS uses length-
+    // prefix-concat, NAME_TOKENIZED uses its own self-describing
+    // wire format). Cache lifetime is the TTIOGenomicRun instance
+    // (Gotcha §138 — re-opening the file incurs the decode cost
+    // again).
+    NSArray<NSString *> *_decodedCigars;
     // M86 Phase B: lazy whole-channel decode cache for integer
     // channels (positions / flags / mapping_qualities) whose
     // @compression attribute names a TTIO rANS id. Held as NSData
@@ -405,6 +417,229 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return (NSString *)nameV;
 }
 
+// M86 Phase C: unsigned LEB128 varint reader for the cigars rANS
+// length-prefix-concat path. Mirrors NAME_TOKENIZED's varint_read
+// (in TTIONameTokenizer.m) — reproduced here to avoid coupling the
+// run reader to the codec module's private symbols. Returns 1 on
+// success and advances *io_offset past the consumed bytes; returns
+// 0 on truncated/oversize varints (>10 bytes / >64 bits).
+static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
+                                         size_t *io_offset,
+                                         uint64_t *out_value)
+{
+    uint64_t value = 0;
+    int shift = 0;
+    size_t pos = *io_offset;
+    for (;;) {
+        if (pos >= buf_len) return 0;
+        const uint8_t b = buf[pos++];
+        if (shift >= 64) return 0;
+        value |= ((uint64_t)(b & 0x7Fu)) << shift;
+        if ((b & 0x80u) == 0) {
+            *io_offset = pos;
+            *out_value = value;
+            return 1;
+        }
+        shift += 7;
+    }
+}
+
+// M86 Phase C: cigars dispatch helper.
+//
+// The cigars channel has two on-disk layouts (Binding Decisions
+// §120-§123, HANDOFF M86 Phase C §2.7):
+//
+//   - **M82 compound** (no override): VL_STRING-in-compound dataset,
+//     read whole-and-cache via -compoundRowsNamed:.
+//   - **TTIO codec** (override active): flat 1-D uint8 dataset
+//     of the same name carrying the codec output, with @compression
+//     in {4, 5, 8}. Decoded once on first access and cached as
+//     NSArray<NSString *> on this TTIOGenomicRun instance per
+//     Binding Decision §123 — a separate field from
+//     _decodedReadNames since the two channels have independent
+//     dispatch shapes.
+//
+//     * @compression == 4 (RANS_ORDER0) or 5 (RANS_ORDER1): the
+//       decoded byte buffer is a length-prefix-concat sequence
+//       (varint(len) + bytes per CIGAR; §2.5 of the Phase C plan;
+//       Gotcha §139). Walk the buffer until exhausted.
+//     * @compression == 8 (NAME_TOKENIZED): pass the bytes through
+//       TTIONameTokenizerDecode directly (the codec's self-describing
+//       wire format records the read count internally).
+//
+// Dispatch is on dataset shape — a flat uint8 dataset routes through
+// the codec path; otherwise fall through to the compound path (same
+// pattern Phase E uses for read_names).
+- (NSString *)cigarAtIndex:(NSUInteger)i error:(NSError **)error
+{
+    if (_decodedCigars != nil) {
+        if (i >= _decodedCigars.count) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2060
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"cigars index %lu out of range "
+                                @"[0, %lu)",
+                                (unsigned long)i,
+                                (unsigned long)_decodedCigars.count]}];
+            return nil;
+        }
+        return _decodedCigars[i];
+    }
+
+    id<TTIOStorageDataset> ds = [self signalDatasetNamed:@"cigars"
+                                                   error:error];
+    if (!ds) return nil;
+
+    // Shape dispatch: precision == UInt8 is a flat uint8 dataset and
+    // therefore the codec path; anything else (compound) falls through
+    // to the M82 path. Mirrors -readNameAtIndex:'s shape check.
+    if ([ds precision] == TTIOPrecisionUInt8) {
+        uint8_t codec_id = 0;
+        id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+        if ([sig respondsToSelector:@selector(unwrap)]) {
+            TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+            TTIOHDF5Dataset *hds = [hg openDatasetNamed:@"cigars"
+                                                  error:NULL];
+            if (hds) {
+                codec_id = _ttio_m86_read_compression_attr([hds datasetId]);
+            }
+        } else {
+            codec_id = _ttio_m86_read_compression_attr_protocol(ds);
+        }
+
+        id allRaw = [ds readAll:error];
+        if (![allRaw isKindOfClass:[NSData class]]) return nil;
+        NSData *encoded = (NSData *)allRaw;
+
+        if (codec_id == (uint8_t)4 /* RANS_ORDER0 */
+            || codec_id == (uint8_t)5 /* RANS_ORDER1 */) {
+            NSError *decErr = nil;
+            NSData *decoded = TTIORansDecode(encoded, &decErr);
+            if (decoded == nil) {
+                if (error) *error = decErr ?: [NSError
+                    errorWithDomain:@"TTIOGenomicRun" code:2061
+                           userInfo:@{NSLocalizedDescriptionKey:
+                               @"signal_channel 'cigars' rANS decode "
+                               @"failed"}];
+                return nil;
+            }
+            // Walk length-prefix-concat: varint(len) + len bytes per
+            // CIGAR, repeated until the decoded buffer is exhausted.
+            const uint8_t *buf = (const uint8_t *)decoded.bytes;
+            const size_t   n   = decoded.length;
+            size_t off = 0;
+            NSMutableArray<NSString *> *out = [NSMutableArray array];
+            while (off < n) {
+                uint64_t len = 0;
+                if (!_ttio_m86_cigars_varint_read(buf, n, &off, &len)) {
+                    if (error) *error = [NSError
+                        errorWithDomain:@"TTIOGenomicRun" code:2062
+                               userInfo:@{NSLocalizedDescriptionKey:
+                                   @"signal_channel 'cigars' rANS "
+                                   @"length-prefix-concat: truncated "
+                                   @"varint length prefix"}];
+                    return nil;
+                }
+                if (off + (size_t)len > n) {
+                    if (error) *error = [NSError
+                        errorWithDomain:@"TTIOGenomicRun" code:2063
+                               userInfo:@{NSLocalizedDescriptionKey:
+                                   [NSString stringWithFormat:
+                                        @"signal_channel 'cigars' rANS "
+                                        @"length-prefix-concat: entry "
+                                        @"runs off end of decoded buffer "
+                                        @"(offset=%zu, length=%llu, "
+                                        @"buffer_size=%zu)",
+                                        off,
+                                        (unsigned long long)len, n]}];
+                    return nil;
+                }
+                NSString *cig = [[NSString alloc]
+                    initWithBytes:buf + off
+                           length:(NSUInteger)len
+                         encoding:NSASCIIStringEncoding];
+                if (cig == nil) {
+                    if (error) *error = [NSError
+                        errorWithDomain:@"TTIOGenomicRun" code:2064
+                               userInfo:@{NSLocalizedDescriptionKey:
+                                   @"signal_channel 'cigars' rANS "
+                                   @"length-prefix-concat: entry "
+                                   @"contains non-ASCII bytes"}];
+                    return nil;
+                }
+                [out addObject:cig];
+                off += (size_t)len;
+            }
+            _decodedCigars = [out copy];
+        } else if (codec_id == (uint8_t)8 /* NAME_TOKENIZED */) {
+            NSError *decErr = nil;
+            NSArray<NSString *> *decoded =
+                TTIONameTokenizerDecode(encoded, &decErr);
+            if (decoded == nil) {
+                if (error) *error = decErr ?: [NSError
+                    errorWithDomain:@"TTIOGenomicRun" code:2065
+                           userInfo:@{NSLocalizedDescriptionKey:
+                               @"signal_channel 'cigars' "
+                               @"NAME_TOKENIZED decode failed"}];
+                return nil;
+            }
+            _decodedCigars = [decoded copy];
+        } else {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2066
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"signal_channel 'cigars': "
+                                @"@compression=%u is not a supported "
+                                @"TTIO codec id for the cigars channel "
+                                @"(only RANS_ORDER0 = 4, RANS_ORDER1 = "
+                                @"5, and NAME_TOKENIZED = 8 are "
+                                @"recognised)",
+                                (unsigned)codec_id]}];
+            return nil;
+        }
+
+        if (i >= _decodedCigars.count) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2067
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"cigars index %lu out of range "
+                                @"[0, %lu) after codec decode",
+                                (unsigned long)i,
+                                (unsigned long)_decodedCigars.count]}];
+            return nil;
+        }
+        return _decodedCigars[i];
+    }
+
+    // Compound path (M82, no override).
+    TTIOCompoundField *vlValue =
+        [TTIOCompoundField fieldWithName:@"value"
+                                    kind:TTIOCompoundFieldKindVLString];
+    NSArray *cigars = [self compoundRowsNamed:@"cigars"
+                                         field:vlValue
+                                         error:error];
+    if (!cigars) return nil;
+    if (i >= cigars.count) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2068
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"cigars index %lu out of range [0, %lu)",
+                            (unsigned long)i,
+                            (unsigned long)cigars.count]}];
+        return nil;
+    }
+    id cigarV = cigars[i][@"value"];
+    if ([cigarV isKindOfClass:[NSData class]]) {
+        return [[NSString alloc] initWithData:cigarV
+                                      encoding:NSUTF8StringEncoding];
+    }
+    return (NSString *)cigarV;
+}
+
 // M86 Phase B: integer-channel array reader.
 //
 // Returns the full integer signal-channel array (positions, flags,
@@ -539,16 +774,13 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
                                                error:error];
     if (!qualities) return nil;
 
-    // Compound rows (cached after first access)
-    TTIOCompoundField *vlValue =
-        [TTIOCompoundField fieldWithName:@"value" kind:TTIOCompoundFieldKindVLString];
-
-    NSArray *cigars = [self compoundRowsNamed:@"cigars" field:vlValue error:error];
-    if (!cigars) return nil;
-    id cigarV = cigars[i][@"value"];
-    NSString *cigar = [cigarV isKindOfClass:[NSData class]]
-        ? [[NSString alloc] initWithData:cigarV encoding:NSUTF8StringEncoding]
-        : (NSString *)cigarV;
+    // M86 Phase C: route cigars through the shape-dispatching helper
+    // so the schema-lifted (flat uint8 + RANS or NAME_TOKENIZED)
+    // layout is decoded transparently. The compound (M82) layout
+    // continues to use the existing -compoundRowsNamed: cache via
+    // the helper's compound fall-through.
+    NSString *cigar = [self cigarAtIndex:i error:error];
+    if (!cigar && error && *error) return nil;
 
     // M86 Phase E: route read_names through the shape-dispatching
     // helper so the schema-lifted (flat uint8 + NAME_TOKENIZED)

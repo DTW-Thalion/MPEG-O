@@ -49,6 +49,20 @@
 - (NSString *)readNameAtIndex:(NSUInteger)index
                          error:(NSError **)error;
 
+/** Return the CIGAR string at `index`. Dispatches on the on-disk
+ *  cigars dataset shape (M86 Phase C):
+ *    - Compound `{value: VL_STRING}`: existing M82 read path.
+ *    - Flat 1-D uint8 with `@compression`:
+ *        * `4` (RANS_ORDER0) or `5` (RANS_ORDER1): TTIORansDecode
+ *          then walk varint(len)+bytes per CIGAR.
+ *        * `8` (NAME_TOKENIZED): TTIONameTokenizerDecode directly.
+ *      Decoded list is materialised on first call and held for the
+ *      lifetime of this run instance per Binding Decision §123 — a
+ *      separate cache from `_decodedReadNames` since the two
+ *      channels have independent dispatch shapes. */
+- (NSString *)cigarAtIndex:(NSUInteger)index
+                     error:(NSError **)error;
+
 /** Reads on `chromosome` whose mapping position is in [start, end). */
 - (NSArray<TTIOAlignedRead *> *)readsInRegion:(NSString *)chromosome
                                           start:(int64_t)start
