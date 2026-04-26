@@ -328,14 +328,19 @@ class M86CodecWiringTest {
 
     @Test
     void rejectInvalidChannel(@TempDir Path tmp) {
+        // M86 Phase B (Binding Decision §117) extended the override map
+        // to the three integer channels (positions, flags,
+        // mapping_qualities). This test now targets a structurally-VL
+        // channel (cigars) that has no codec match and remains outside
+        // the per-channel allowed-codec map (HANDOFF.md §8 — out of scope).
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
             () -> {
                 WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
-                    Map.of("positions", Compression.RANS_ORDER0));
+                    Map.of("cigars", Compression.RANS_ORDER0));
                 writeRun(tmp, bad, "bad-channel.tio");
             });
-        assertTrue(ex.getMessage().contains("positions"),
+        assertTrue(ex.getMessage().contains("cigars"),
             "error message should name the offending channel: " + ex.getMessage());
         assertTrue(ex.getMessage().contains("sequences"),
             "error message should hint at allowed channels: " + ex.getMessage());
@@ -1078,6 +1083,481 @@ class M86CodecWiringTest {
                 assertEquals(names.get(i), r.readName(),
                     "mixed NAME_TOKENIZED read_name @ read " + i);
             }
+        }
+    }
+
+    // ── M86 Phase B helpers ────────────────────────────────────────
+
+    /** Build a synthetic genomic run with caller-controlled integer
+     *  arrays. Mirrors Python {@code _make_int_run} — qualities are
+     *  the M82 phred-cycle, sequences pure-ACGT, names "r0".."rN".
+     *  Supports any read count (overrides the {@link #N_READS}
+     *  default). */
+    private static WrittenGenomicRun makeIntRun(long[] positions,
+                                                 int[] flags,
+                                                 byte[] mappingQualities,
+                                                 Map<String, Compression> overrides) {
+        int n = positions.length;
+        byte[] seq = new byte[n * READ_LEN];
+        byte[] cycle = "ACGT".getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i < seq.length; i++) seq[i] = cycle[i % 4];
+        byte[] qual = new byte[n * READ_LEN];
+        for (int i = 0; i < qual.length; i++) qual[i] = (byte) (30 + (i % 11));
+        long[] offsets = new long[n];
+        int[]  lengths = new int[n];
+        for (int i = 0; i < n; i++) {
+            offsets[i] = (long) i * READ_LEN;
+            lengths[i] = READ_LEN;
+        }
+        List<String> cigars     = new ArrayList<>(n);
+        List<String> readNames  = new ArrayList<>(n);
+        List<String> mateChroms = new ArrayList<>(n);
+        List<String> chroms     = new ArrayList<>(n);
+        long[] matePos = new long[n];
+        int[]  tlens   = new int[n];
+        for (int i = 0; i < n; i++) {
+            cigars.add("100M");
+            readNames.add("r" + i);
+            mateChroms.add("chr1");
+            chroms.add("chr1");
+            matePos[i] = -1L;
+        }
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA", "M86_PHASEB",
+            positions, mappingQualities, flags, seq, qual, offsets, lengths,
+            cigars, readNames, mateChroms, matePos, tlens, chroms,
+            Compression.NONE,
+            overrides == null ? Map.of() : overrides);
+    }
+
+    // ── 26. Phase B: round-trip positions via rANS order-1 ─────────
+
+    @Test
+    void roundTripPositionsRansOrder1(@TempDir Path tmp) {
+        // Monotonic int64 positions encoded with RANS_ORDER1 round-trip
+        // exactly. Per Binding Decision §119 alignedReadAt still reads
+        // positions from the index; this test directly calls the new
+        // intChannelArray helper to verify the compressed dataset
+        // decodes back to the original array.
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L + 1_000_000L;
+        int[]  flags = new int[N_READS];
+        byte[] mapq  = new byte[N_READS];
+        java.util.Arrays.fill(mapq, (byte) 60);
+        WrittenGenomicRun run = makeIntRun(positions, flags, mapq,
+            Map.of("positions", Compression.RANS_ORDER1));
+        Path file = writeRun(tmp, run, "phaseb-positions.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            long[] decoded = (long[]) gr.intChannelArray("positions");
+            assertEquals(N_READS, decoded.length, "decoded length");
+            assertArrayEquals(positions, decoded, "RANS_ORDER1 positions round-trip");
+        }
+    }
+
+    // ── 27. Phase B: round-trip flags via rANS order-0 ─────────────
+
+    @Test
+    void roundTripFlagsRansOrder0(@TempDir Path tmp) {
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L;
+        int[]  flags = new int[N_READS];
+        for (int i = 0; i < N_READS; i++)
+            flags[i] = (i % 2 == 0) ? 0x0001 : 0x0083;
+        byte[] mapq = new byte[N_READS];
+        java.util.Arrays.fill(mapq, (byte) 60);
+        WrittenGenomicRun run = makeIntRun(positions, flags, mapq,
+            Map.of("flags", Compression.RANS_ORDER0));
+        Path file = writeRun(tmp, run, "phaseb-flags.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            int[] decoded = (int[]) gr.intChannelArray("flags");
+            assertEquals(N_READS, decoded.length, "decoded length");
+            assertArrayEquals(flags, decoded, "RANS_ORDER0 flags round-trip");
+        }
+    }
+
+    // ── 28. Phase B: round-trip mapping_qualities via rANS order-1 ─
+
+    @Test
+    void roundTripMappingQualitiesRansOrder1(@TempDir Path tmp) {
+        // Per Gotcha §131 the LE serialisation is a no-op for uint8
+        // (1 byte per element), but the dispatch path is still
+        // exercised end-to-end.
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L;
+        int[]  flags = new int[N_READS];
+        byte[] mapq = new byte[N_READS];
+        for (int i = 0; i < N_READS; i++)
+            mapq[i] = (i % 5 != 0) ? (byte) 60 : (byte) 0;
+        WrittenGenomicRun run = makeIntRun(positions, flags, mapq,
+            Map.of("mapping_qualities", Compression.RANS_ORDER1));
+        Path file = writeRun(tmp, run, "phaseb-mapq.tio");
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            byte[] decoded = (byte[]) gr.intChannelArray("mapping_qualities");
+            assertEquals(N_READS, decoded.length, "decoded length");
+            assertArrayEquals(mapq, decoded, "RANS_ORDER1 mapq round-trip");
+        }
+    }
+
+    // ── 29. Phase B: size-win on clustered positions ───────────────
+
+    @Test
+    void sizeWinPositions(@TempDir Path tmp) {
+        // Realistic high-coverage WGS: reads cluster around 100
+        // distinct loci, each covered ~100×. The LE bytes have very
+        // low entropy in the high bytes and only ~100 distinct symbols
+        // in the low bytes — ideal for rANS. Per Gotcha §130 we use a
+        // realistic input size (10000 reads) so the rANS frequency-
+        // table overhead is amortised.
+        //
+        // HANDOFF.md baseline was originally HDF5-ZLIB; in practice
+        // ZLIB's LZ77 matching beats rANS on perfectly-monotonic
+        // int64s without an explicit delta transform. The realistic
+        // baseline is raw int64 LE bytes, and the realistic test
+        // pattern is clustered positions.
+        int n = 10_000;
+        long[] positions = new long[n];
+        for (int i = 0; i < n; i++)
+            positions[i] = 1_000_000L + (i / 100) * 1000L;
+
+        // Independent measurement: encode the LE bytes and compare
+        // length. Mirrors the Python reference's measurement.
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer
+            .allocate(n * 8)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        for (long v : positions) bb.putLong(v);
+        byte[] rawBytes = bb.array();
+        int rawLen = rawBytes.length;  // n * 8 = 80 000
+        byte[] encoded = global.thalion.ttio.codecs.Rans.encode(rawBytes, 1);
+        int encodedLen = encoded.length;
+
+        // Sanity check: the on-disk dataset matches our measurement.
+        int[]  flags = new int[n];
+        byte[] mapq  = new byte[n];
+        java.util.Arrays.fill(mapq, (byte) 60);
+        WrittenGenomicRun run = makeIntRun(positions, flags, mapq,
+            Map.of("positions", Compression.RANS_ORDER1));
+        Path file = writeRun(tmp, run, "phaseb-sizewin.tio");
+
+        long onDiskLen;
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset posDs = sc.openDataset("positions")) {
+            onDiskLen = posDs.getLength();
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                posDs.getPrecision(),
+                "positions must be 1-D uint8 under RANS_ORDER1");
+        }
+        assertEquals(encodedLen, onDiskLen,
+            "on-disk dataset shape must equal codec output length");
+
+        double ratio = (double) encodedLen / (double) rawLen;
+        assertTrue(ratio < 0.50,
+            "RANS_ORDER1 positions encoded = " + encodedLen
+            + " bytes; raw int64 LE = " + rawLen
+            + " bytes; ratio = " + String.format("%.4f", ratio)
+            + " (target < 0.50)");
+    }
+
+    // ── 30. Phase B: @compression set on integer channels ──────────
+
+    @Test
+    void attributeSetCorrectlyIntegerChannels(@TempDir Path tmp) {
+        // All three integer channels under rANS overrides become flat
+        // uint8 with @compression. Untouched byte channels carry no
+        // such attribute.
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L;
+        int[]  flags = new int[N_READS];
+        byte[] mapq = new byte[N_READS];
+        java.util.Arrays.fill(mapq, (byte) 60);
+        WrittenGenomicRun run = makeIntRun(positions, flags, mapq,
+            Map.of(
+                "positions", Compression.RANS_ORDER1,
+                "flags",     Compression.RANS_ORDER0,
+                "mapping_qualities", Compression.RANS_ORDER1));
+        Path file = writeRun(tmp, run, "phaseb-attr.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset posDs  = sc.openDataset("positions");
+             Hdf5Dataset flgDs  = sc.openDataset("flags");
+             Hdf5Dataset mqDs   = sc.openDataset("mapping_qualities");
+             Hdf5Dataset seqDs  = sc.openDataset("sequences");
+             Hdf5Dataset qualDs = sc.openDataset("qualities")) {
+            // positions: RANS_ORDER1 (codec id 5)
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                posDs.getPrecision(), "positions must be uint8");
+            assertEquals(Compression.RANS_ORDER1.ordinal(),
+                posDs.readIntegerAttribute("compression", -1L),
+                "positions @compression == RANS_ORDER1 (5)");
+            // flags: RANS_ORDER0 (codec id 4)
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                flgDs.getPrecision(), "flags must be uint8");
+            assertEquals(Compression.RANS_ORDER0.ordinal(),
+                flgDs.readIntegerAttribute("compression", -1L),
+                "flags @compression == RANS_ORDER0 (4)");
+            // mapping_qualities: RANS_ORDER1 (codec id 5)
+            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
+                mqDs.getPrecision(), "mapping_qualities must be uint8");
+            assertEquals(Compression.RANS_ORDER1.ordinal(),
+                mqDs.readIntegerAttribute("compression", -1L),
+                "mapping_qualities @compression == RANS_ORDER1 (5)");
+            // Untouched byte channels: no @compression.
+            assertFalse(seqDs.hasAttribute("compression"),
+                "sequences must have no @compression attribute");
+            assertFalse(qualDs.hasAttribute("compression"),
+                "qualities must have no @compression attribute");
+        }
+    }
+
+    // ── 31. Phase B: reject BASE_PACK on positions ─────────────────
+
+    @Test
+    void rejectBasePackOnPositions(@TempDir Path tmp) {
+        // Per Binding Decision §117: BASE_PACK 2-bit-packs ACGT bytes
+        // and would silently corrupt int64 position values. Validation
+        // throws IllegalArgumentException at write time; the message
+        // names the codec, the channel, and explains the wrong-content
+        // rationale. Mentions the rANS replacement.
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L;
+        int[]  flags = new int[N_READS];
+        byte[] mapq = new byte[N_READS];
+        java.util.Arrays.fill(mapq, (byte) 60);
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makeIntRun(positions, flags, mapq,
+                    Map.of("positions", Compression.BASE_PACK));
+                writeRun(tmp, bad, "bad-bp-pos.tio");
+            });
+        String msg = ex.getMessage();
+        assertNotNull(msg, "exception must have a message");
+        assertTrue(msg.contains("BASE_PACK"),
+            "error must name the codec; got: " + msg);
+        assertTrue(msg.contains("positions"),
+            "error must name the channel; got: " + msg);
+        assertTrue(msg.contains("RANS_ORDER0") || msg.contains("RANS_ORDER1"),
+            "error must point at the rANS codecs; got: " + msg);
+    }
+
+    // ── 32. Phase B: reject QUALITY_BINNED on flags ────────────────
+
+    @Test
+    void rejectQualityBinnedOnFlags(@TempDir Path tmp) {
+        // Per Binding Decision §117: QUALITY_BINNED's 8-bin Phred
+        // quantisation is wrong-content for uint32 flag bitfields and
+        // would destroy them.
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L;
+        int[]  flags = new int[N_READS];
+        byte[] mapq = new byte[N_READS];
+        java.util.Arrays.fill(mapq, (byte) 60);
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makeIntRun(positions, flags, mapq,
+                    Map.of("flags", Compression.QUALITY_BINNED));
+                writeRun(tmp, bad, "bad-qb-flags.tio");
+            });
+        String msg = ex.getMessage();
+        assertNotNull(msg, "exception must have a message");
+        assertTrue(msg.contains("QUALITY_BINNED"),
+            "error must name the codec; got: " + msg);
+        assertTrue(msg.contains("flags"),
+            "error must name the channel; got: " + msg);
+        assertTrue(msg.contains("RANS_ORDER0") || msg.contains("RANS_ORDER1"),
+            "error must point at the rANS codecs; got: " + msg);
+    }
+
+    // ── 33. Phase B: full-stack — all six channel overrides at once ─
+
+    @Test
+    void roundTripFullStack(@TempDir Path tmp) {
+        // sequences=BASE_PACK + qualities=QUALITY_BINNED + read_names=
+        // NAME_TOKENIZED + positions=RANS_ORDER1 + flags=RANS_ORDER0 +
+        // mapping_qualities=RANS_ORDER1 simultaneously (Gotcha §133:
+        // the most likely test to surface ordering bugs across the
+        // codec dispatch matrix). Verifies that every byte/string
+        // channel round-trips byte-exact AND every integer channel
+        // decodes back to the input array via intChannelArray (per
+        // Binding Decision §119, alignedReadAt does not consume the
+        // integer cache — it still uses the index — so we directly
+        // call the helper).
+        long[] positions = new long[N_READS];
+        for (int i = 0; i < N_READS; i++) positions[i] = i * 1000L + 1_000_000L;
+        int[] flags = new int[N_READS];
+        for (int i = 0; i < N_READS; i++)
+            flags[i] = (i % 2 == 0) ? 0x0001 : 0x0083;
+        byte[] mapq = new byte[N_READS];
+        for (int i = 0; i < N_READS; i++)
+            mapq[i] = (i % 5 != 0) ? (byte) 60 : (byte) 0;
+        byte[] seq  = pureAcgt();
+        byte[] qual = qualBinCentre();
+        List<String> names = illuminaNames(N_READS);
+
+        long[] offsets = new long[N_READS];
+        int[]  lengths = new int[N_READS];
+        for (int i = 0; i < N_READS; i++) {
+            offsets[i] = (long) i * READ_LEN;
+            lengths[i] = READ_LEN;
+        }
+        List<String> cigars     = new ArrayList<>(N_READS);
+        List<String> mateChroms = new ArrayList<>(N_READS);
+        List<String> chroms     = new ArrayList<>(N_READS);
+        long[] matePos = new long[N_READS];
+        int[]  tlens   = new int[N_READS];
+        for (int i = 0; i < N_READS; i++) {
+            cigars.add("100M");
+            mateChroms.add("chr1");
+            chroms.add("chr1");
+            matePos[i] = -1L;
+        }
+        WrittenGenomicRun run = new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA",
+            "M86_FULL_STACK",
+            positions, mapq, flags, seq, qual, offsets, lengths,
+            cigars, names, mateChroms, matePos, tlens, chroms,
+            Compression.NONE,
+            Map.of(
+                "sequences", Compression.BASE_PACK,
+                "qualities", Compression.QUALITY_BINNED,
+                "read_names", Compression.NAME_TOKENIZED,
+                "positions", Compression.RANS_ORDER1,
+                "flags", Compression.RANS_ORDER0,
+                "mapping_qualities", Compression.RANS_ORDER1));
+        Path file = writeRun(tmp, run, "full-stack.tio");
+
+        // All six @compression attributes must be set on disk.
+        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset seqDs  = sc.openDataset("sequences");
+             Hdf5Dataset qualDs = sc.openDataset("qualities");
+             Hdf5Dataset rnDs   = sc.openDataset("read_names");
+             Hdf5Dataset posDs  = sc.openDataset("positions");
+             Hdf5Dataset flgDs  = sc.openDataset("flags");
+             Hdf5Dataset mqDs   = sc.openDataset("mapping_qualities")) {
+            assertEquals(Compression.BASE_PACK.ordinal(),
+                seqDs.readIntegerAttribute("compression", -1L),
+                "sequences @compression == BASE_PACK (6)");
+            assertEquals(Compression.QUALITY_BINNED.ordinal(),
+                qualDs.readIntegerAttribute("compression", -1L),
+                "qualities @compression == QUALITY_BINNED (7)");
+            assertEquals(Compression.NAME_TOKENIZED.ordinal(),
+                rnDs.readIntegerAttribute("compression", -1L),
+                "read_names @compression == NAME_TOKENIZED (8)");
+            assertEquals(Compression.RANS_ORDER1.ordinal(),
+                posDs.readIntegerAttribute("compression", -1L),
+                "positions @compression == RANS_ORDER1 (5)");
+            assertEquals(Compression.RANS_ORDER0.ordinal(),
+                flgDs.readIntegerAttribute("compression", -1L),
+                "flags @compression == RANS_ORDER0 (4)");
+            assertEquals(Compression.RANS_ORDER1.ordinal(),
+                mqDs.readIntegerAttribute("compression", -1L),
+                "mapping_qualities @compression == RANS_ORDER1 (5)");
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertEquals(N_READS, gr.readCount());
+            // Byte/string channels via the AlignedRead reader.
+            for (int i = 0; i < N_READS; i++) {
+                AlignedRead r = gr.readAt(i);
+                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
+                    "full-stack BASE_PACK seq @ " + i);
+                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
+                    "full-stack QUALITY_BINNED qual @ " + i);
+                assertEquals(names.get(i), r.readName(),
+                    "full-stack NAME_TOKENIZED name @ " + i);
+            }
+            // Integer channels via the new Phase B helper. Per §119
+            // alignedReadAt does NOT consume these — it reads from
+            // the genomic_index — so we directly call the helper.
+            long[] decodedPos = (long[]) gr.intChannelArray("positions");
+            int[]  decodedFlg = (int[])  gr.intChannelArray("flags");
+            byte[] decodedMq  = (byte[]) gr.intChannelArray("mapping_qualities");
+            assertArrayEquals(positions, decodedPos,
+                "full-stack RANS_ORDER1 positions round-trip");
+            assertArrayEquals(flags, decodedFlg,
+                "full-stack RANS_ORDER0 flags round-trip");
+            assertArrayEquals(mapq, decodedMq,
+                "full-stack RANS_ORDER1 mapq round-trip");
+        }
+    }
+
+    // ── 34. Phase B: cross-language fixture (Python → Java) ────────
+
+    @Test
+    void crossLanguageFixtureIntegerChannels() throws IOException {
+        // The committed m86_codec_integer_channels.tio is a 100-read
+        // run with positions / flags / mapping_qualities all under rANS
+        // overrides (HANDOFF.md §6.4). Verifies the Java reader decodes
+        // each integer channel back to the deterministic
+        // cross-language input.
+        int n = 100;
+        long[] expectedPositions = new long[n];
+        for (int i = 0; i < n; i++)
+            expectedPositions[i] = i * 1000L + 1_000_000L;
+        int[] expectedFlags = new int[n];
+        for (int i = 0; i < n; i++)
+            expectedFlags[i] = (i % 2 == 0) ? 0x0001 : 0x0083;
+        byte[] expectedMapq = new byte[n];
+        for (int i = 0; i < n; i++)
+            expectedMapq[i] = (i % 5 != 0) ? (byte) 60 : (byte) 0;
+
+        Path tmp = copyFixtureToTemp("m86_codec_integer_channels.tio");
+        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            assertNotNull(gr, "fixture has genomic_0001");
+            assertEquals(n, gr.readCount(), "fixture read count");
+            long[] decodedPos = (long[]) gr.intChannelArray("positions");
+            int[]  decodedFlg = (int[])  gr.intChannelArray("flags");
+            byte[] decodedMq  = (byte[]) gr.intChannelArray("mapping_qualities");
+            assertArrayEquals(expectedPositions, decodedPos,
+                "fixture RANS_ORDER1 positions round-trip");
+            assertArrayEquals(expectedFlags, decodedFlg,
+                "fixture RANS_ORDER0 flags round-trip");
+            assertArrayEquals(expectedMapq, decodedMq,
+                "fixture RANS_ORDER1 mapq round-trip");
+        } finally {
+            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+        }
+        // Verify on-disk @compression layout matches the spec.
+        Path tmp2 = copyFixtureToTemp("m86_codec_integer_channels.tio");
+        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study");
+             Hdf5Group gRuns = study.openGroup("genomic_runs");
+             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
+             Hdf5Group sc    = rg.openGroup("signal_channels");
+             Hdf5Dataset posDs = sc.openDataset("positions");
+             Hdf5Dataset flgDs = sc.openDataset("flags");
+             Hdf5Dataset mqDs  = sc.openDataset("mapping_qualities")) {
+            assertEquals(Compression.RANS_ORDER1.ordinal(),
+                posDs.readIntegerAttribute("compression", -1L),
+                "fixture positions @compression == RANS_ORDER1 (5)");
+            assertEquals(Compression.RANS_ORDER0.ordinal(),
+                flgDs.readIntegerAttribute("compression", -1L),
+                "fixture flags @compression == RANS_ORDER0 (4)");
+            assertEquals(Compression.RANS_ORDER1.ordinal(),
+                mqDs.readIntegerAttribute("compression", -1L),
+                "fixture mapping_qualities @compression == RANS_ORDER1 (5)");
+        } finally {
+            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
         }
     }
 
