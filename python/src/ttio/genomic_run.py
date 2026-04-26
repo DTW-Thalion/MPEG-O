@@ -14,6 +14,8 @@ from typing import Iterator, TYPE_CHECKING
 
 import numpy as np
 
+from typing import Any
+
 from .aligned_read import AlignedRead
 from .enums import AcquisitionMode
 from .genomic_index import GenomicIndex
@@ -119,6 +121,19 @@ class GenomicRun:
     _decoded_int_channels: dict[str, "np.ndarray"] = field(
         default_factory=dict, repr=False, compare=False,
     )
+    # M86 Phase F: combined per-field cache for the mate_info subgroup
+    # layout (Binding Decision §129, Gotcha §144). Held as a single
+    # ``dict[str, Any]`` keyed by field name (``"chrom"`` →
+    # list[str]; ``"pos"`` → np.ndarray int64; ``"tlen"`` →
+    # np.ndarray int32) because the three fields have three different
+    # value types — a typed-per-field cache would force a union or
+    # three separate fields. Used only for the Phase F subgroup
+    # layout; the M82 compound layout still uses the existing
+    # ``_compound_cache`` via :meth:`_compound`. ``_mate_<field>_at``
+    # populates the corresponding key on first access.
+    _decoded_mate_info: dict[str, Any] = field(
+        default_factory=dict, repr=False, compare=False,
+    )
 
     # ------------------------------------------------------------------
     # Sequence protocol
@@ -164,11 +179,15 @@ class GenomicRun:
 
         read_name = self._read_name_at(i)
 
-        mates = self._compound("mate_info")
-        mate = mates[i]
-        mate_chromosome = mate["chrom"]
-        mate_position = int(mate["pos"])
-        template_length = int(mate["tlen"])
+        # M86 Phase F: dispatch on HDF5 link type (compound dataset =
+        # M82 path; subgroup = Phase F per-field path). The three
+        # helpers each open the bare ``mate_info`` link, detect the
+        # layout, and route to either the existing ``_compound``
+        # cache (M82) or the per-field codec/natural-dtype dispatch
+        # (Phase F).
+        mate_chromosome = self._mate_chrom_at(i)
+        mate_position = self._mate_pos_at(i)
+        template_length = self._mate_tlen_at(i)
 
         return AlignedRead(
             read_name=read_name,
@@ -516,3 +535,175 @@ class GenomicRun:
         # Compound path (M82, no override).
         cigars = self._compound("cigars")
         return cigars[i]["value"]
+
+    # ------------------------------------------------------------------
+    # M86 Phase F — mate_info per-field dispatch
+    # ------------------------------------------------------------------
+
+    def _mate_info_is_subgroup(self) -> bool:
+        """True iff ``signal_channels/mate_info`` is a group (Phase F).
+
+        Per Binding Decision §128 / Gotcha §141, dispatch is on HDF5
+        link type, NOT on ``@compression`` attribute presence on the
+        bare link. The StorageGroup protocol's ``open_group`` raises
+        ``KeyError`` when the named child is a dataset (verified in
+        :class:`ttio.providers.hdf5._Group.open_group`); we use that
+        as the link-type query.
+        """
+        sig = self.group.open_group("signal_channels")
+        try:
+            sig.open_group("mate_info")
+            return True
+        except KeyError:
+            return False
+
+    def _decode_mate_chrom(self):
+        """Lazily decode the chrom field from the Phase F subgroup.
+
+        Populates ``_decoded_mate_info["chrom"]`` with a
+        ``list[str]`` and returns it.
+        """
+        cached = self._decoded_mate_info.get("chrom")
+        if cached is not None:
+            return cached
+
+        sig = self.group.open_group("signal_channels")
+        mate_group = sig.open_group("mate_info")
+
+        # Dispatch on dataset shape inside the subgroup. Per the
+        # writer (§5.2), an overridden chrom field is a flat 1-D
+        # uint8 dataset with @compression; an un-overridden chrom
+        # is a compound (VL_STRING) dataset with no attribute.
+        from .enums import Compression, Precision
+        ds = mate_group.open_dataset("chrom")
+        if ds.precision == Precision.UINT8:
+            from . import _hdf5_io as io
+            codec_id = io.read_int_attr(ds, "compression", default=0) or 0
+            all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+            if codec_id in (
+                int(Compression.RANS_ORDER0),
+                int(Compression.RANS_ORDER1),
+            ):
+                from .codecs.rans import decode as _rans_dec
+                from .codecs.name_tokenizer import _varint_decode as _vd
+                decoded = _rans_dec(all_bytes)
+                out: list[str] = []
+                offset = 0
+                n = len(decoded)
+                while offset < n:
+                    length, offset = _vd(decoded, offset)
+                    if offset + length > n:
+                        raise ValueError(
+                            "mate_info_chrom rANS stream: length-prefix-"
+                            "concat entry runs off end of decoded buffer "
+                            f"(offset={offset}, length={length}, "
+                            f"buffer_size={n})"
+                        )
+                    payload = decoded[offset:offset + length]
+                    offset += length
+                    try:
+                        out.append(payload.decode("ascii"))
+                    except UnicodeDecodeError as exc:
+                        raise ValueError(
+                            "mate_info_chrom rANS stream: entry contains "
+                            "non-ASCII bytes"
+                        ) from exc
+                self._decoded_mate_info["chrom"] = out
+                return out
+            if codec_id == int(Compression.NAME_TOKENIZED):
+                from .codecs import name_tokenizer as _nt
+                out = _nt.decode(all_bytes)
+                self._decoded_mate_info["chrom"] = out
+                return out
+            raise ValueError(
+                f"signal_channel 'mate_info/chrom': "
+                f"@compression={codec_id} is not a supported TTIO codec id "
+                "(only RANS_ORDER0 = 4, RANS_ORDER1 = 5, and "
+                "NAME_TOKENIZED = 8 are recognised for this channel)"
+            )
+
+        # Natural dtype (compound VL_STRING) — un-overridden field
+        # inside the subgroup. Read whole and extract the values.
+        from . import _hdf5_io as io
+        out = [r["value"] for r in io.read_compound_dataset(mate_group, "chrom")]
+        self._decoded_mate_info["chrom"] = out
+        return out
+
+    def _decode_mate_int_field(
+        self, name: str, dtype_str: str
+    ) -> "np.ndarray":
+        """Lazily decode a Phase F integer mate field (pos or tlen).
+
+        Populates ``_decoded_mate_info[name]`` with a typed numpy
+        array and returns it. ``name`` is the on-disk child name
+        (``"pos"`` or ``"tlen"``); ``dtype_str`` is the natural
+        integer dtype (``"<i8"`` or ``"<i4"``).
+        """
+        cached = self._decoded_mate_info.get(name)
+        if cached is not None:
+            return cached
+
+        sig = self.group.open_group("signal_channels")
+        mate_group = sig.open_group("mate_info")
+        ds = mate_group.open_dataset(name)
+
+        from .enums import Compression, Precision
+        from . import _hdf5_io as io
+
+        if ds.precision == Precision.UINT8:
+            codec_id = io.read_int_attr(ds, "compression", default=0) or 0
+            if codec_id in (
+                int(Compression.RANS_ORDER0),
+                int(Compression.RANS_ORDER1),
+            ):
+                from .codecs.rans import decode as _dec
+                all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+                decoded_bytes = _dec(all_bytes)
+                arr = np.frombuffer(decoded_bytes, dtype=dtype_str)
+                self._decoded_mate_info[name] = arr
+                return arr
+            raise ValueError(
+                f"signal_channel 'mate_info/{name}': "
+                f"@compression={codec_id} is not a supported TTIO codec id "
+                "for an integer mate field (only RANS_ORDER0 = 4 and "
+                "RANS_ORDER1 = 5 are recognised)"
+            )
+
+        # Natural-dtype path — read the typed dataset directly and
+        # re-interpret to the canonical LE dtype to keep the value
+        # type uniform with the codec path.
+        raw = bytes(np.asarray(ds.read(offset=0, count=int(ds.length))).tobytes())
+        arr = np.frombuffer(raw, dtype=dtype_str)
+        self._decoded_mate_info[name] = arr
+        return arr
+
+    def _mate_chrom_at(self, i: int) -> str:
+        """Return the mate chromosome at index ``i``, dispatching on layout.
+
+        M86 Phase F: ``signal_channels/mate_info`` has two on-disk
+        layouts (Binding Decisions §125, §128, Gotcha §141):
+
+        - **M82 compound** (no override): COMPOUND[n_reads] dataset
+          with three fields. Read whole-and-cache via the existing
+          :meth:`_compound` helper, then return the per-read entry.
+        - **Phase F subgroup** (any mate_info_* override): GROUP
+          containing three child datasets. Decode the chrom child
+          on first access (cached in ``_decoded_mate_info["chrom"]``)
+          and return entry [i].
+        """
+        if self._mate_info_is_subgroup():
+            return self._decode_mate_chrom()[i]
+        # M82 compound path.
+        return self._compound("mate_info")[i]["chrom"]
+
+    def _mate_pos_at(self, i: int) -> int:
+        """Return the mate position at index ``i``, dispatching on layout."""
+        if self._mate_info_is_subgroup():
+            return int(self._decode_mate_int_field("pos", "<i8")[i])
+        return int(self._compound("mate_info")[i]["pos"])
+
+    def _mate_tlen_at(self, i: int) -> int:
+        """Return the template length at index ``i``, dispatching on layout."""
+        if self._mate_info_is_subgroup():
+            return int(self._decode_mate_int_field("tlen", "<i4")[i])
+        return int(self._compound("mate_info")[i]["tlen"])
