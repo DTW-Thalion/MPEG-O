@@ -299,18 +299,29 @@ input.
 
 ## 7. Wired into / forward references
 
-- **M86** (shipped) — rANS order-0 and order-1 are now wired into
-  the genomic signal-channel write/read path for the `sequences`
-  and `qualities` byte channels. Use
+- **M86 Phase A** (shipped) — rANS order-0 and order-1 are wired
+  into the genomic signal-channel write/read path for the
+  `sequences` and `qualities` byte channels. Use
   `WrittenGenomicRun.signal_codec_overrides={"sequences":
   Compression.RANS_ORDER0}` (or `RANS_ORDER1`) at write time; the
   reader dispatches on the per-dataset `@compression` attribute
   automatically. See `docs/format-spec.md` §10.5 for the on-disk
   attribute scheme.
+- **M86 Phase B** (shipped 2026-04-26) — rANS order-0 and
+  order-1 are also wired into the **integer channels**
+  (`positions` int64, `flags` uint32, `mapping_qualities`
+  uint8). Integer arrays are serialised to little-endian bytes
+  per element before encoding; the reader looks up the
+  channel's natural dtype by name. Integer channels accept
+  ONLY rANS codecs (other codecs are wrong-content for
+  integer fields). See `docs/format-spec.md` §10.7 for the
+  int↔byte serialisation contract.
 - **M84** (shipped) — base-pack codec (2-bit nucleotide packing
   + sidecar mask), see `docs/codecs/base_pack.md`.
-- **M85** (deferred) — quality-quantiser and read-name-tokeniser
-  codecs in the same sub-package.
+- **M85** (shipped) — quality-quantiser
+  (`docs/codecs/quality.md`) and read-name-tokeniser
+  (`docs/codecs/name_tokenizer.md`) codecs in the same
+  sub-package.
 
 The `codecs/` sub-package layout (`python/src/ttio/codecs/`,
 `objc/Source/Codecs/`, `java/src/main/java/global/thalion/ttio/codecs/`)
