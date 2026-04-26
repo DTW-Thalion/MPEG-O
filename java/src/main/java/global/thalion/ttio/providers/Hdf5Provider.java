@@ -374,17 +374,40 @@ public final class Hdf5Provider implements StorageProvider {
         }
         @Override public void writeAll(Object data) { delegate.writeData(data); }
 
-        @Override public boolean hasAttribute(String n) { return false; }
-        @Override public Object getAttribute(String n) { return null; }
+        @Override public boolean hasAttribute(String n) {
+            // M86: route through Hdf5Dataset's attribute API so the
+            // codec-dispatch read path can probe @compression on the
+            // dataset itself (Binding Decision §86).
+            return delegate.hasAttribute(n);
+        }
+        @Override public Object getAttribute(String n) {
+            // M86: only the integer reader is wired here today; the
+            // @compression attribute is a uint8 scalar. Returns null
+            // when absent so callers can dispatch on the tri-state
+            // (absent / 0 / non-zero codec id).
+            if (!delegate.hasAttribute(n)) return null;
+            return delegate.readIntegerAttribute(n, 0L);
+        }
         @Override public void setAttribute(String n, Object v) {
+            // M86: dataset-level @compression attribute is a uint8 by
+            // spec (Binding Decision §86). Numbers go through the
+            // uint8 writer; nulls delete; everything else is rejected
+            // until a use case appears.
+            if (v == null) { delegate.deleteAttribute(n); return; }
+            if (v instanceof Number num) {
+                delegate.setUint8Attribute(n, num.intValue());
+                return;
+            }
             throw new UnsupportedOperationException(
-                    "dataset-level attributes not yet exposed via Hdf5Dataset");
+                    "dataset-level attribute value type not supported: "
+                    + v.getClass());
         }
         @Override public void deleteAttribute(String n) {
-            throw new UnsupportedOperationException(
-                    "dataset-level attributes not yet exposed via Hdf5Dataset");
+            delegate.deleteAttribute(n);
         }
-        @Override public List<String> attributeNames() { return List.of(); }
+        @Override public List<String> attributeNames() {
+            return delegate.attributeNames();
+        }
 
         @Override public void close() {
             if (ownsNative) delegate.close();
