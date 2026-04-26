@@ -11,7 +11,135 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E) + M85 QUALITY_BINNED + NAME_TOKENIZED
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED
+
+### M86 Phase F — mate_info per-field decomposition (2026-04-26)
+
+Most schema-invasive M86 phase: when any of three per-field
+virtual overrides (`mate_info_chrom`, `mate_info_pos`,
+`mate_info_tlen`) is set in `signal_codec_overrides`, the
+writer replaces the M82 compound `mate_info` dataset with a
+**subgroup** `signal_channels/mate_info/` containing three
+independent flat datasets, each independently codec-
+compressible. **First M86 phase introducing HDF5 link-type
+dispatch** (group = Phase F; dataset = M82 compound) for a
+top-level signal_channels link.
+
+Closes the last channel gap left by M86 Phase C. The M82-era
+genomic codec story is now **complete for ALL channels**:
+every channel under `signal_channels/` has at least one
+accepted codec; every M79 codec slot (4–8) is wired into its
+applicable channels with cross-language byte-exact
+conformance.
+
+#### Per-field codec applicability
+
+| Virtual channel    | Type      | Allowed codecs                          | Recommended default |
+|--------------------|-----------|------------------------------------------|---------------------|
+| `mate_info_chrom`  | VL_STRING | RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED | NAME_TOKENIZED (chromosome alphabets are tiny — typically <30 distinct values; the columnar dictionary win is essentially guaranteed) |
+| `mate_info_pos`    | INT64     | RANS_ORDER0, RANS_ORDER1                 | RANS_ORDER1         |
+| `mate_info_tlen`   | INT32     | RANS_ORDER0, RANS_ORDER1                 | RANS_ORDER1         |
+
+#### Added
+
+- **Python** (`spectral_dataset.py` + `genomic_run.py`):
+  three new entries in `_ALLOWED_OVERRIDE_CODECS_BY_CHANNEL`;
+  bare `"mate_info"` key rejected with message naming the
+  three per-field keys; schema-lift write branch with
+  per-field codec dispatch in `_write_genomic_run` (chrom
+  reuses the Phase C cigars helpers for the rANS path;
+  pos/tlen reuse Phase B integer-channel helpers).
+  `GenomicRun` gains a `_decoded_mate_info: dict[str, Any]`
+  combined cache (separate from the five existing caches per
+  Binding Decision §129) and three `_mate_<field>_at(i)`
+  helpers with HDF5 link-type dispatch (h5py
+  `Group`/`Dataset` exception-based detection). 9 new pytest
+  cases plus cross-language fixture extension. M86 test
+  count 51 → 61.
+- **Objective-C** (`TTIOSpectralDataset.m` + `TTIOGenomicRun.m`):
+  same shape. Adds `_TTIO_M86F_HasMateOverrides` predicate,
+  `_TTIO_M86F_WriteMateInfoSubgroup` (HDF5 fast path) and
+  `_TTIO_M86F_WriteMateInfoSubgroupStorage` (provider path)
+  helpers. Reader uses `H5Oget_info_by_name` for the link-
+  type query (or a provider-protocol probe fallback for
+  non-HDF5 backends). Three private `_mate<Field>AtIndex:`
+  accessors + `_decodedMateInfo` combined NSMutableDictionary
+  cache. 50 new assertions across 10 new test methods
+  (TestM86GenomicCodecWiring 2427 → 2477).
+- **Java** (`SpectralDataset.java` + `GenomicRun.java`):
+  same shape. Schema-lift write branch with per-field codec
+  dispatch. Reader uses provider-abstract `try {
+  signalChannels.openGroup("mate_info") } catch (...)`
+  pattern (HDF5 binding's `H5Gopen` on a dataset surfaces as
+  `Hdf5Errors.GroupOpenException`). Three private
+  `mate<Field>At(int)` accessors + `decodedMateInfo`
+  combined `Map<String, Object>` cache. Phase B's
+  `deserialiseLeBytes` extended with INT32 branch for tlen.
+  10 new JUnit 5 tests (M86CodecWiringTest 45 → 55).
+- **Cross-language conformance fixture** — new
+  `python/tests/fixtures/genomic/m86_codec_mate_info_full.tio`
+  (60 757 bytes), with verbatim copies under
+  `objc/Tests/Fixtures/genomic/` and
+  `java/src/test/resources/ttio/fixtures/genomic/`. 100-read
+  run with realistic mate distributions: chrom = `["chr1"] *
+  90 + ["chr2"] * 5 + ["chrX"] * 3 + ["*"] * 2`; pos = `i *
+  100 + 500` for paired (98 entries) / `-1` for unmapped;
+  tlen = `350 + (i % 11) - 5` for paired / `0` for unmapped.
+  Override: chrom=NAME_TOKENIZED, pos=RANS_ORDER1,
+  tlen=RANS_ORDER1. All three implementations decode the
+  fixture byte-exact for all three mate fields across all
+  100 reads.
+
+#### Verification
+
+- Python: 61 M86 test items pass (was 51 in Phase C; +10
+  new). Full suite: 898 passed / 42 failed / 64 skipped /
+  4 xfailed / 3 errors (was 888 / 42 / 64 / 4 / 3); +10 new
+  passes from M86 Phase F, zero new regressions.
+- Objective-C: full test runner shows 2427 → 2477 PASS (+50
+  M86 Phase F assertions across 10 new test methods); 2 FAIL
+  unchanged (pre-existing M38 Thermo).
+- Java: `mvn -o test` → 512 / 0 fail / 0 error / 0 skipped
+  (was 502 / 0 / 0 / 0). M86CodecWiringTest 45 → 55.
+- Cross-language: each implementation reads
+  `m86_codec_mate_info_full.tio` and decodes all three mate
+  fields byte-exact against the original Python input across
+  all 100 reads. Per-field `@compression` attributes verified
+  on disk: chrom = 8 (NAME_TOKENIZED), pos = 5 (RANS_ORDER1),
+  tlen = 5 (RANS_ORDER1). The `mate_info` link is verified
+  to be a GROUP (not a dataset) in the Phase F layout.
+
+#### Notes
+
+- **HDF5 link-type dispatch** is the first M86 phase where a
+  top-level signal_channels link can be either a compound
+  dataset OR a group. The three implementations use
+  language-idiomatic link-type queries: Python
+  exception-based (`open_group` raising `KeyError`); ObjC
+  `H5Oget_info_by_name` returning `H5O_TYPE_GROUP`/
+  `H5O_TYPE_DATASET`; Java provider-abstract `openGroup`
+  exception or `H5.H5Oget_info_by_name`.
+- **Partial overrides work as documented.** Any one per-field
+  override creates the subgroup; un-overridden fields use
+  natural dtype with HDF5 ZLIB inside the subgroup (no
+  `@compression` attribute on those datasets). Tests #52
+  (`test_round_trip_mate_partial`) cover this case in all
+  three languages.
+- **Bare `"mate_info"` key rejection** produces a clear error
+  pointing the caller at the three per-field names. The
+  Python error message includes the literal substrings
+  `mate_info_chrom`, `mate_info_pos`, `mate_info_tlen`, and
+  a cross-reference to `docs/format-spec.md §10.9`. ObjC and
+  Java messages match the substring contract loosely.
+- **Existing `rejectInvalidChannel` test** in Java was
+  retargeted from `"mate_info"` (now legitimately triggers
+  the Phase F bare-key rejection) to a synthetic invalid
+  name (`"not_a_real_channel"`).
+- **Codec stack now complete for ALL M82 channels.** The
+  M82-era genomic codec story is functionally done. Future
+  optimisation milestones could ship custom codecs (e.g.
+  CIGAR-specific RLE-then-rANS) for higher peak compression,
+  but the structural pipeline-wiring work is over.
 
 ### M86 Phase C — Wire rANS + NAME_TOKENIZED into the cigars channel via schema lift (2026-04-26)
 

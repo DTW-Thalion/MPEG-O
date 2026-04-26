@@ -370,6 +370,17 @@ on malformed input. `NameTokenizer.encode(List<String>)` throws
   cigars on real WGS data** (see selection table below);
   NAME_TOKENIZED is the niche choice when CIGARs are known to
   be uniform.
+- **M86 Phase F (shipped 2026-04-26)** — NAME_TOKENIZED is
+  the **recommended default for the `mate_info_chrom` field**
+  (one of three per-field virtual channels under the new
+  mate_info subgroup layout). Mate chromosome alphabets are
+  tiny — typically <30 distinct values across the whole run
+  (`chr1`..`chr22`, `chrX`, `chrY`, `chrM`, plus `*` for
+  unmapped mates) — so the columnar dictionary win is
+  essentially guaranteed. The `mate_info_pos` and
+  `mate_info_tlen` fields take rANS only (integer-channel
+  shape per Phase B). See `docs/format-spec.md` §10.9 for
+  the mate_info subgroup pattern.
 
 ### Codec selection guidance for `cigars` (M86 Phase C)
 
