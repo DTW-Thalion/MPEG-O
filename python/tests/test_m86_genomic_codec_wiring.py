@@ -249,18 +249,18 @@ def test_back_compat_no_overrides(tmp_path: Path):
 def test_reject_invalid_channel(tmp_path: Path):
     """Override on a non-overridable channel must raise ValueError at write time.
 
-    M86 Phase B (Binding Decision §117) extended the override map to
-    the three integer channels (positions, flags, mapping_qualities),
-    so this test now targets a structurally-VL channel that has no
-    codec match and remains outside the per-channel allowed-codec map
-    (cigars, mate_info — see HANDOFF.md §8 "Out of scope").
+    M86 Phase C (Binding Decision §124) extended the override map to
+    the cigars channel; mate_info remains the only structurally-VL
+    channel without a codec match (HANDOFF.md §8 "Out of scope" plus
+    Gotcha §137: mate_info validation must continue to reject all
+    codec overrides).
     """
     run = _make_run(
         PURE_ACGT_SEQ, PHRED_CYCLE_QUAL,
-        {"cigars": Compression.RANS_ORDER0},  # cigars is not overridable
+        {"mate_info": Compression.RANS_ORDER0},  # mate_info is not overridable
     )
     p = tmp_path / "bad.tio"
-    with pytest.raises(ValueError, match="cigars"):
+    with pytest.raises(ValueError, match="mate_info"):
         SpectralDataset.write_minimal(
             p, title="t", isa_investigation_id="i",
             runs={}, genomic_runs={"genomic_0001": run},
@@ -1508,6 +1508,674 @@ def test_cross_language_fixture_quality_binned():
             )
             assert int(sc["qualities"].attrs["compression"]) == int(
                 Compression.QUALITY_BINNED.value
+            )
+    finally:
+        ds.close()
+
+
+# ----------------------------------------------------------------------
+# 39–47: Phase C — rANS + NAME_TOKENIZED on the cigars channel
+# ----------------------------------------------------------------------
+# Phase C lifts cigars from VL_STRING-in-compound to a flat 1-D
+# uint8 dataset when the override is set, so that the @compression
+# attribute can travel with the codec output. Three codec choices
+# are accepted (Binding Decision §120):
+#   * RANS_ORDER0 (4)  — entropy code length-prefix-concat byte stream
+#   * RANS_ORDER1 (5)  — same, with order-1 context model (recommended
+#                        default for real WGS data, §1.2)
+#   * NAME_TOKENIZED (8) — the M85 codec's columnar mode wins on
+#                        all-uniform CIGARs but degrades to verbatim
+#                        on mixed token-count input
+# Readers dispatch on dataset shape (compound vs uint8) and codec
+# id (@compression).
+
+
+def _make_run_with_cigars(
+    seq_bytes: bytes,
+    qual_bytes: bytes,
+    cigars: list[str],
+    codec_overrides: dict[str, Compression] | None = None,
+) -> WrittenGenomicRun:
+    """Variant of :func:`_make_run` that accepts custom cigars.
+
+    Used for the Phase C rANS/NAME_TOKENIZED tests on the cigars
+    channel — the codec choice is sensitive to CIGAR distribution
+    (uniform vs mixed token-count), so synthesising controlled
+    cigars lets us exercise both code paths.
+    """
+    assert len(cigars) == N_READS, f"expected {N_READS} cigars, got {len(cigars)}"
+    run = _make_run(seq_bytes, qual_bytes, codec_overrides)
+    run.cigars = cigars
+    return run
+
+
+def _mixed_cigars(n_reads: int) -> list[str]:
+    """Realistic mixed-CIGAR distribution — 80% perfect-match, 10% del, 10% soft-clip.
+
+    Per HANDOFF.md §6.4 fixture A spec.
+    """
+    out: list[str] = []
+    for i in range(n_reads):
+        m = i % 10
+        if m < 8:
+            out.append("100M")
+        elif m == 8:
+            out.append("99M1D")
+        else:
+            out.append("50M50S")
+    return out
+
+
+def test_round_trip_cigars_rans_order1(tmp_path: Path):
+    """Mixed CIGARs encoded with RANS_ORDER1 round-trip byte-exact.
+
+    Uses 80% '100M' + 10% '99M1D' + 10% '50M50S' across 1000 reads
+    — the realistic-WGS distribution from HANDOFF.md §1.2 where rANS
+    wins decisively over NAME_TOKENIZED's verbatim fallback.
+    """
+    n_reads = 1000
+    read_len = 100
+    total = n_reads * read_len
+    seq = (b"ACGT" * 25) * n_reads
+    qual = bytes((30 + (i % 11)) for i in range(total))
+    cigars = _mixed_cigars(n_reads)
+    run = WrittenGenomicRun(
+        acquisition_mode=7, reference_uri="GRCh38.p14",
+        platform="ILLUMINA", sample_name="M86C_RANS",
+        positions=np.arange(n_reads, dtype=np.int64) * 1000,
+        mapping_qualities=np.full(n_reads, 60, dtype=np.uint8),
+        flags=np.zeros(n_reads, dtype=np.uint32),
+        sequences=np.frombuffer(seq, dtype=np.uint8),
+        qualities=np.frombuffer(qual, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * read_len,
+        lengths=np.full(n_reads, read_len, dtype=np.uint32),
+        cigars=cigars,
+        read_names=[f"r{i}" for i in range(n_reads)],
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_codec_overrides={"cigars": Compression.RANS_ORDER1},
+    )
+    p = _write_and_open(tmp_path, run, fname="cigars_rans1.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == n_reads
+        for i in range(n_reads):
+            r = gr[i]
+            assert r.cigar == cigars[i], (
+                f"read {i} cigar mismatch — expected {cigars[i]!r}, "
+                f"got {r.cigar!r}"
+            )
+    finally:
+        ds.close()
+
+
+def test_round_trip_cigars_name_tokenized_uniform(tmp_path: Path):
+    """All-uniform CIGARs encoded with NAME_TOKENIZED round-trip byte-exact.
+
+    The all-'100M' input is the columnar-mode sweet spot: the codec
+    emits a 1-entry dictionary plus delta=0 for the numeric column,
+    so the wire stream is < 50 bytes for 100 identical CIGARs.
+    """
+    cigars = ["100M"] * N_READS
+    run = _make_run_with_cigars(
+        PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, cigars,
+        {"cigars": Compression.NAME_TOKENIZED},
+    )
+    p = _write_and_open(tmp_path, run, fname="cigars_nt_uniform.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        for i in range(N_READS):
+            r = gr[i]
+            assert r.cigar == cigars[i]
+    finally:
+        ds.close()
+
+    # NAME_TOKENIZED wire size on uniform input < 50 bytes (§1.2).
+    with h5py.File(p, "r") as f:
+        ds_size = f[
+            "study/genomic_runs/genomic_0001/signal_channels/cigars"
+        ].id.get_storage_size()
+    assert ds_size < 50, (
+        f"NAME_TOKENIZED on uniform '100M' wire stream = {ds_size} bytes "
+        "(target < 50 — columnar-mode 1-entry dict + delta=0 win)"
+    )
+
+
+def test_round_trip_cigars_name_tokenized_mixed(tmp_path: Path):
+    """Mixed CIGARs encoded with NAME_TOKENIZED round-trip byte-exact.
+
+    Same 1000-read mixed-CIGAR input as the rANS round-trip test.
+    The NAME_TOKENIZED codec falls back to verbatim mode here
+    (varying token-count between '100M' (2 tokens), '99M1D' (4
+    tokens), and '50M50S' (4 tokens)) producing a much larger wire
+    than rANS — but the round-trip itself is still byte-exact
+    (verbatim is lossless). This test guards correctness; the
+    size comparison is in test_size_comparison_cigars_codecs.
+    """
+    n_reads = 1000
+    read_len = 100
+    total = n_reads * read_len
+    seq = (b"ACGT" * 25) * n_reads
+    qual = bytes((30 + (i % 11)) for i in range(total))
+    cigars = _mixed_cigars(n_reads)
+    run = WrittenGenomicRun(
+        acquisition_mode=7, reference_uri="GRCh38.p14",
+        platform="ILLUMINA", sample_name="M86C_NTMIX",
+        positions=np.arange(n_reads, dtype=np.int64) * 1000,
+        mapping_qualities=np.full(n_reads, 60, dtype=np.uint8),
+        flags=np.zeros(n_reads, dtype=np.uint32),
+        sequences=np.frombuffer(seq, dtype=np.uint8),
+        qualities=np.frombuffer(qual, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * read_len,
+        lengths=np.full(n_reads, read_len, dtype=np.uint32),
+        cigars=cigars,
+        read_names=[f"r{i}" for i in range(n_reads)],
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_codec_overrides={"cigars": Compression.NAME_TOKENIZED},
+    )
+    p = _write_and_open(tmp_path, run, fname="cigars_nt_mixed.tio")
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        for i in range(n_reads):
+            r = gr[i]
+            assert r.cigar == cigars[i]
+    finally:
+        ds.close()
+
+
+def test_size_comparison_cigars_codecs(tmp_path: Path, capsys):
+    """Side-by-side cigars wire size: no-override vs RANS_ORDER1 vs NAME_TOKENIZED.
+
+    HANDOFF.md §6.1 #42 / Acceptance Criteria: prints the three
+    sizes so the §1.2 selection guidance is empirically visible at
+    test time, and asserts RANS_ORDER1 < NAME_TOKENIZED < no-override
+    on the realistic mixed-CIGAR input (the workload pattern where
+    rANS dominates because NAME_TOKENIZED falls back to verbatim).
+    """
+    n_reads = 1000
+    read_len = 100
+    total = n_reads * read_len
+    seq = (b"ACGT" * 25) * n_reads
+    qual = bytes((30 + (i % 11)) for i in range(total))
+    cigars = _mixed_cigars(n_reads)
+    base_kw = dict(
+        acquisition_mode=7, reference_uri="GRCh38.p14",
+        platform="ILLUMINA", sample_name="M86C_SIZE",
+        positions=np.arange(n_reads, dtype=np.int64) * 1000,
+        mapping_qualities=np.full(n_reads, 60, dtype=np.uint8),
+        flags=np.zeros(n_reads, dtype=np.uint32),
+        sequences=np.frombuffer(seq, dtype=np.uint8),
+        qualities=np.frombuffer(qual, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * read_len,
+        lengths=np.full(n_reads, read_len, dtype=np.uint32),
+        cigars=cigars,
+        read_names=[f"r{i}" for i in range(n_reads)],
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_compression="none",  # no HDF5 filter on baseline
+    )
+    no_run = WrittenGenomicRun(**base_kw)
+    rans_run = WrittenGenomicRun(
+        **base_kw,
+        signal_codec_overrides={"cigars": Compression.RANS_ORDER1},
+    )
+    nt_run = WrittenGenomicRun(
+        **base_kw,
+        signal_codec_overrides={"cigars": Compression.NAME_TOKENIZED},
+    )
+
+    p_no = tmp_path / "cig_no.tio"
+    SpectralDataset.write_minimal(
+        p_no, title="x", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": no_run},
+    )
+    p_rans = tmp_path / "cig_rans.tio"
+    SpectralDataset.write_minimal(
+        p_rans, title="x", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": rans_run},
+    )
+    p_nt = tmp_path / "cig_nt.tio"
+    SpectralDataset.write_minimal(
+        p_nt, title="x", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": nt_run},
+    )
+
+    # No-override path is M82 compound; ``id.get_storage_size`` only
+    # captures the primary chunk and misses the global VL heap. Use
+    # the file-size delta as the realistic baseline footprint
+    # (mirrors test_size_win_name_tokenized).
+    no_file = p_no.stat().st_size
+    rans_file = p_rans.stat().st_size
+    nt_file = p_nt.stat().st_size
+    with h5py.File(p_rans, "r") as f:
+        rans_size = f[
+            "study/genomic_runs/genomic_0001/signal_channels/cigars"
+        ].id.get_storage_size()
+    with h5py.File(p_nt, "r") as f:
+        nt_size = f[
+            "study/genomic_runs/genomic_0001/signal_channels/cigars"
+        ].id.get_storage_size()
+    # Approximate the M82 compound's full footprint (primary chunk
+    # + VL heap) from the file-size delta against the rANS file.
+    no_footprint = no_file - rans_file + rans_size
+
+    print(
+        f"\n[M86 Phase C size comparison — 1000-read mixed CIGARs]\n"
+        f"  no-override (M82 compound): {no_footprint} bytes "
+        f"(approx; file_size={no_file})\n"
+        f"  RANS_ORDER1:                {rans_size} bytes "
+        f"(file_size={rans_file})\n"
+        f"  NAME_TOKENIZED (verbatim):  {nt_size} bytes "
+        f"(file_size={nt_file})\n"
+    )
+
+    # §1.2 selection guidance assertions (mixed-CIGAR workload):
+    # RANS_ORDER1 wins decisively; NAME_TOKENIZED's verbatim mode
+    # is roughly the raw bytes (much larger than rANS).
+    assert rans_size < nt_size, (
+        f"RANS_ORDER1 ({rans_size}) must beat NAME_TOKENIZED-verbatim "
+        f"({nt_size}) on mixed-CIGAR input (§1.2 — the realistic-WGS "
+        "workload where rANS dominates)"
+    )
+    assert nt_size < no_footprint, (
+        f"NAME_TOKENIZED-verbatim ({nt_size}) must still beat the "
+        f"M82 compound footprint ({no_footprint}); the codec at "
+        "least avoids the VL_STRING heap overhead"
+    )
+
+
+def test_size_win_cigars_uniform(tmp_path: Path):
+    """Same comparison on uniform input — both codecs win, RANS_ORDER1 strongest.
+
+    All-'100M' x 1000 reads. The columnar mode emits ~2 bytes/read
+    (per HANDOFF §1.2 estimate) for delta=0 + 1-entry dict — about
+    2 KB for 1000 reads. RANS_ORDER1 actually wins even here
+    because the byte-level entropy of an all-'100M' length-prefix-
+    concat stream is extremely low (a single repeating pattern), so
+    the order-1 frequency model collapses it to under 1 KB. Both
+    codecs decisively beat the raw 5000-byte concatenation;
+    NAME_TOKENIZED's columnar mode beats verbatim by ~2.5x.
+    """
+    n_reads = 1000
+    read_len = 100
+    total = n_reads * read_len
+    seq = (b"ACGT" * 25) * n_reads
+    qual = bytes((30 + (i % 11)) for i in range(total))
+    cigars = ["100M"] * n_reads
+    base_kw = dict(
+        acquisition_mode=7, reference_uri="GRCh38.p14",
+        platform="ILLUMINA", sample_name="M86C_UNI",
+        positions=np.arange(n_reads, dtype=np.int64) * 1000,
+        mapping_qualities=np.full(n_reads, 60, dtype=np.uint8),
+        flags=np.zeros(n_reads, dtype=np.uint32),
+        sequences=np.frombuffer(seq, dtype=np.uint8),
+        qualities=np.frombuffer(qual, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * read_len,
+        lengths=np.full(n_reads, read_len, dtype=np.uint32),
+        cigars=cigars,
+        read_names=[f"r{i}" for i in range(n_reads)],
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_compression="none",
+    )
+    rans_run = WrittenGenomicRun(
+        **base_kw,
+        signal_codec_overrides={"cigars": Compression.RANS_ORDER1},
+    )
+    nt_run = WrittenGenomicRun(
+        **base_kw,
+        signal_codec_overrides={"cigars": Compression.NAME_TOKENIZED},
+    )
+    p_rans = tmp_path / "uni_rans.tio"
+    SpectralDataset.write_minimal(
+        p_rans, title="x", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": rans_run},
+    )
+    p_nt = tmp_path / "uni_nt.tio"
+    SpectralDataset.write_minimal(
+        p_nt, title="x", isa_investigation_id="i",
+        runs={}, genomic_runs={"genomic_0001": nt_run},
+    )
+    with h5py.File(p_rans, "r") as f:
+        rans_size = f[
+            "study/genomic_runs/genomic_0001/signal_channels/cigars"
+        ].id.get_storage_size()
+    with h5py.File(p_nt, "r") as f:
+        nt_size = f[
+            "study/genomic_runs/genomic_0001/signal_channels/cigars"
+        ].id.get_storage_size()
+
+    # NAME_TOKENIZED's columnar mode is significantly smaller than
+    # the raw concatenation (5000 bytes for 1000 × "100M" — the
+    # length-prefix-concat input). The exact ratio depends on the
+    # codec's per-read 2-byte overhead (1 svarint(0) + 1
+    # varint(code=0)); ~2 bytes/read = ~2 KB for 1000 reads.
+    raw_concat = 1000 * 5  # varint(3) (1 byte) + b"100M" (4 bytes)
+    assert nt_size < raw_concat * 0.5, (
+        f"NAME_TOKENIZED uniform-cigars wire = {nt_size} bytes "
+        f"(target < {raw_concat * 0.5:.0f} = 50% of raw "
+        f"length-prefix-concat = {raw_concat} bytes)"
+    )
+    # Both codecs beat the raw stream; the precise rANS-vs-NT
+    # ordering on uniform input depends on rANS frequency-table
+    # overhead vs NAME_TOKENIZED columnar 2-bytes/read overhead.
+    # In this implementation RANS_ORDER1 wins by collapsing the
+    # repeating bytes to entropy ~0; we don't assert ordering here
+    # because the §1.2 selection guidance is "either codec is
+    # acceptable on uniform input — both crush the raw stream".
+    assert rans_size < raw_concat, (
+        f"RANS_ORDER1 uniform-cigars wire = {rans_size} bytes "
+        f"must beat raw concat ({raw_concat})"
+    )
+
+
+@pytest.mark.parametrize("codec", [
+    Compression.RANS_ORDER0,
+    Compression.RANS_ORDER1,
+    Compression.NAME_TOKENIZED,
+])
+def test_attribute_set_correctly_cigars(tmp_path: Path, codec: Compression):
+    """Each accepted cigars codec produces 1-D uint8 with @compression == id.
+
+    Verifies the schema lift and the @compression dispatch tag for
+    all three accepted codecs (HANDOFF.md §5.2 / §5.3).
+    """
+    cigars = ["100M"] * N_READS
+    run = _make_run_with_cigars(
+        PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, cigars,
+        {"cigars": codec},
+    )
+    p = _write_and_open(tmp_path, run, fname=f"attr_cig_{codec.name}.tio")
+    with h5py.File(p, "r") as f:
+        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+        cig_ds = sc["cigars"]
+        assert cig_ds.dtype == np.uint8, (
+            f"cigars dtype must be uint8 under {codec.name}, "
+            f"got {cig_ds.dtype}"
+        )
+        assert len(cig_ds.shape) == 1, (
+            f"cigars must be 1-D under {codec.name}, "
+            f"got shape {cig_ds.shape}"
+        )
+        attr = cig_ds.attrs.get("compression")
+        assert attr is not None, "cigars must carry @compression"
+        assert int(attr) == int(codec.value)
+        # Other channels untouched.
+        assert "compression" not in sc["sequences"].attrs
+        assert "compression" not in sc["qualities"].attrs
+        # read_names remains compound (no override).
+        assert sc["read_names"].dtype.kind == "V"
+
+
+def test_back_compat_cigars_unchanged(tmp_path: Path):
+    """No cigars override leaves the M82 compound path unchanged.
+
+    Covers two cases: empty overrides, and overrides that touch
+    only sequences/qualities. In both, cigars must remain a
+    VL_STRING-in-compound dataset (the M82 layout). Round-trip
+    through the existing __getitem__ path (which dispatches
+    through _cigar_at).
+    """
+    for desc, overrides in (
+        ("empty", {}),
+        ("seq+qual only", {
+            "sequences": Compression.BASE_PACK,
+            "qualities": Compression.RANS_ORDER1,
+        }),
+    ):
+        run = _make_run(
+            PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, codec_overrides=overrides,
+        )
+        p = tmp_path / f"cig_bc_{desc.replace(' ', '_').replace('+', '')}.tio"
+        SpectralDataset.write_minimal(
+            p, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run},
+        )
+
+        with h5py.File(p, "r") as f:
+            cig = f["study/genomic_runs/genomic_0001/signal_channels/cigars"]
+            assert cig.dtype.kind == "V", (
+                f"{desc}: cigars must remain compound (kind='V'), "
+                f"got kind={cig.dtype.kind!r}"
+            )
+            assert cig.dtype.names is not None and "value" in cig.dtype.names, (
+                f"{desc}: M82 compound must have 'value' field, "
+                f"got fields={cig.dtype.names}"
+            )
+            assert "compression" not in cig.attrs
+
+        ds = SpectralDataset.open(p)
+        try:
+            gr = ds.genomic_runs["genomic_0001"]
+            for i in range(N_READS):
+                r = gr[i]
+                # _make_run uses cigars=["100M"] * N_READS.
+                assert r.cigar == "100M", (
+                    f"{desc}: read {i} cigar mismatch — got {r.cigar!r}"
+                )
+        finally:
+            ds.close()
+
+
+def test_reject_base_pack_on_cigars(tmp_path: Path):
+    """BASE_PACK on the cigars channel raises with a clear message.
+
+    Per Binding Decision §120 / §121: BASE_PACK 2-bit-packs ACGT
+    bytes and would silently corrupt CIGAR strings (digits +
+    operator letters MIDNSHP=X are not ACGT). Validation must
+    name the codec, the channel, and explain the wrong-content
+    rationale.
+    """
+    run = _make_run(
+        PURE_ACGT_SEQ, PHRED_CYCLE_QUAL,
+        {"cigars": Compression.BASE_PACK},
+    )
+    p = tmp_path / "bad_bp_cig.tio"
+    with pytest.raises(ValueError) as excinfo:
+        SpectralDataset.write_minimal(
+            p, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run},
+        )
+    msg = str(excinfo.value)
+    assert "BASE_PACK" in msg, f"error must name the codec; got: {msg!r}"
+    assert "cigars" in msg, f"error must name the channel; got: {msg!r}"
+    # Mentions the rANS/NAME_TOKENIZED replacements.
+    assert "RANS" in msg or "NAME_TOKENIZED" in msg, (
+        f"error must point at the accepted codecs; got: {msg!r}"
+    )
+
+    # Also verify QUALITY_BINNED is rejected on cigars (parallel
+    # wrong-content rejection per §120 / §137 — both are wrong-
+    # content for CIGAR strings).
+    run_qb = _make_run(
+        PURE_ACGT_SEQ, PHRED_CYCLE_QUAL,
+        {"cigars": Compression.QUALITY_BINNED},
+    )
+    p_qb = tmp_path / "bad_qb_cig.tio"
+    with pytest.raises(ValueError) as excinfo_qb:
+        SpectralDataset.write_minimal(
+            p_qb, title="t", isa_investigation_id="i",
+            runs={}, genomic_runs={"genomic_0001": run_qb},
+        )
+    msg_qb = str(excinfo_qb.value)
+    assert "QUALITY_BINNED" in msg_qb
+    assert "cigars" in msg_qb
+
+
+def test_round_trip_full_seven_overrides(tmp_path: Path):
+    """All seven channel overrides at once — Phase B's #37 + cigars=RANS_ORDER1.
+
+    Extends the Phase B six-channel full-stack test with the
+    Phase C cigars override at the recommended default
+    (RANS_ORDER1 — §1.2). Verifies all seven @compression
+    attributes are set on disk and all seven channels round-trip
+    correctly.
+    """
+    n_reads = N_READS
+    positions = np.array(
+        [i * 1000 + 1_000_000 for i in range(n_reads)],
+        dtype=np.int64,
+    )
+    flags = np.array(
+        [0x0001 if (i % 2 == 0) else 0x0083 for i in range(n_reads)],
+        dtype=np.uint32,
+    )
+    mapq = np.array(
+        [60 if (i % 5) != 0 else 0 for i in range(n_reads)],
+        dtype=np.uint8,
+    )
+    cigars = _mixed_cigars(n_reads)
+    run = WrittenGenomicRun(
+        acquisition_mode=7,
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="M86_FULL_SEVEN",
+        positions=positions,
+        mapping_qualities=mapq,
+        flags=flags,
+        sequences=np.frombuffer(PURE_ACGT_SEQ, dtype=np.uint8),
+        qualities=np.frombuffer(QUAL_BIN_CENTRE, dtype=np.uint8),
+        offsets=np.arange(n_reads, dtype=np.uint64) * READ_LEN,
+        lengths=np.full(n_reads, READ_LEN, dtype=np.uint32),
+        cigars=cigars,
+        read_names=ILLUMINA_NAMES,
+        mate_chromosomes=["chr1"] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=["chr1"] * n_reads,
+        signal_codec_overrides={
+            "sequences": Compression.BASE_PACK,
+            "qualities": Compression.QUALITY_BINNED,
+            "read_names": Compression.NAME_TOKENIZED,
+            "cigars": Compression.RANS_ORDER1,        # Phase C — recommended default
+            "positions": Compression.RANS_ORDER1,
+            "flags": Compression.RANS_ORDER0,
+            "mapping_qualities": Compression.RANS_ORDER1,
+        },
+    )
+    p = _write_and_open(tmp_path, run, fname="full_seven.tio")
+
+    with h5py.File(p, "r") as f:
+        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
+        assert int(sc["sequences"].attrs["compression"]) == int(
+            Compression.BASE_PACK.value
+        )
+        assert int(sc["qualities"].attrs["compression"]) == int(
+            Compression.QUALITY_BINNED.value
+        )
+        assert int(sc["read_names"].attrs["compression"]) == int(
+            Compression.NAME_TOKENIZED.value
+        )
+        assert int(sc["cigars"].attrs["compression"]) == int(
+            Compression.RANS_ORDER1.value
+        )
+        assert int(sc["positions"].attrs["compression"]) == int(
+            Compression.RANS_ORDER1.value
+        )
+        assert int(sc["flags"].attrs["compression"]) == int(
+            Compression.RANS_ORDER0.value
+        )
+        assert int(sc["mapping_qualities"].attrs["compression"]) == int(
+            Compression.RANS_ORDER1.value
+        )
+        # cigars must also be the lifted 1-D uint8 layout.
+        assert sc["cigars"].dtype == np.uint8
+
+    ds = SpectralDataset.open(p)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        for i in range(n_reads):
+            r = gr[i]
+            assert r.sequence == _expected_seq_slice(PURE_ACGT_SEQ, i)
+            assert r.qualities == _expected_qual_slice(QUAL_BIN_CENTRE, i)
+            assert r.read_name == ILLUMINA_NAMES[i]
+            assert r.cigar == cigars[i]
+        np.testing.assert_array_equal(
+            gr._int_channel_array("positions"), positions
+        )
+        np.testing.assert_array_equal(
+            gr._int_channel_array("flags"), flags
+        )
+        np.testing.assert_array_equal(
+            gr._int_channel_array("mapping_qualities"), mapq
+        )
+    finally:
+        ds.close()
+
+
+# ----------------------------------------------------------------------
+# 47+: Cross-language fixtures for Phase C (one per cigars codec path)
+# ----------------------------------------------------------------------
+
+
+def test_cross_language_fixture_cigars_rans():
+    """Phase C fixture (rANS path) decodes byte-exact: 100-read mixed CIGARs.
+
+    Companion to the per-language conformance suites in objc/ and java/.
+    """
+    fixture_path = FIXTURE_DIR / "m86_codec_cigars_rans.tio"
+    assert fixture_path.exists(), (
+        f"fixture missing: {fixture_path} — regenerate with "
+        f"python/tests/fixtures/genomic/regenerate_m86_cigars_rans.py"
+    )
+    n_reads = 100
+    expected_cigars = _mixed_cigars(n_reads)
+    ds = SpectralDataset.open(fixture_path)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == n_reads
+        for i in range(n_reads):
+            r = gr[i]
+            assert r.cigar == expected_cigars[i], (
+                f"cigars_rans fixture: read {i} cigar mismatch — "
+                f"got {r.cigar!r}, expected {expected_cigars[i]!r}"
+            )
+        with h5py.File(fixture_path, "r") as f:
+            cig = f["study/genomic_runs/genomic_0001/signal_channels/cigars"]
+            assert cig.dtype == np.uint8
+            assert int(cig.attrs["compression"]) == int(
+                Compression.RANS_ORDER1.value
+            )
+    finally:
+        ds.close()
+
+
+def test_cross_language_fixture_cigars_name_tokenized():
+    """Phase C fixture (NAME_TOKENIZED path) decodes byte-exact: 100 uniform CIGARs.
+
+    Companion to the per-language conformance suites.
+    """
+    fixture_path = FIXTURE_DIR / "m86_codec_cigars_name_tokenized.tio"
+    assert fixture_path.exists(), (
+        f"fixture missing: {fixture_path} — regenerate with "
+        f"python/tests/fixtures/genomic/regenerate_m86_cigars_name_tokenized.py"
+    )
+    n_reads = 100
+    expected_cigars = ["100M"] * n_reads
+    ds = SpectralDataset.open(fixture_path)
+    try:
+        gr = ds.genomic_runs["genomic_0001"]
+        assert len(gr) == n_reads
+        for i in range(n_reads):
+            r = gr[i]
+            assert r.cigar == expected_cigars[i]
+        with h5py.File(fixture_path, "r") as f:
+            cig = f["study/genomic_runs/genomic_0001/signal_channels/cigars"]
+            assert cig.dtype == np.uint8
+            assert int(cig.attrs["compression"]) == int(
+                Compression.NAME_TOKENIZED.value
             )
     finally:
         ds.close()
