@@ -940,16 +940,59 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
         }),
+        # M86 Phase F: per-field decomposition of the M82 mate_info
+        # compound dataset. The bare key "mate_info" is reserved and
+        # rejected (Binding Decision §126); callers must use the
+        # three per-field virtual channel names. The chrom field
+        # accepts the same codec set as the cigars channel (Phase C
+        # / Binding Decision §130) — it's a list of structured
+        # ASCII strings. The pos and tlen fields are integer
+        # channels and accept the same codec set as positions/flags
+        # (Binding Decision §117 generalised).
+        "mate_info_chrom": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+            _Compression.NAME_TOKENIZED,
+        }),
+        "mate_info_pos": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+        }),
+        "mate_info_tlen": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+        }),
     }
     _INTEGER_CHANNEL_NAMES = frozenset(
-        {"positions", "flags", "mapping_qualities"}
+        {"positions", "flags", "mapping_qualities",
+         "mate_info_pos", "mate_info_tlen"}
+    )
+    _MATE_INFO_FIELD_NAMES = frozenset(
+        {"mate_info_chrom", "mate_info_pos", "mate_info_tlen"}
     )
     for ch_name, codec in run.signal_codec_overrides.items():
+        # M86 Phase F Binding Decision §126 / Gotcha §143: the bare
+        # "mate_info" key is reserved and rejected with a message
+        # pointing at the three per-field names. Without the
+        # explicit reject, the bare key would fall through to the
+        # generic "channel not supported" branch and the caller
+        # would not learn about the per-field surface.
+        if ch_name == "mate_info":
+            raise ValueError(
+                "signal_codec_overrides['mate_info']: the bare "
+                "'mate_info' key is reserved and rejected — "
+                "mate_info is decomposed at the per-field level in "
+                "M86 Phase F. Use one or more of the three per-"
+                "field virtual channel names instead: "
+                "'mate_info_chrom', 'mate_info_pos', "
+                "'mate_info_tlen'. See docs/format-spec.md §10.9."
+            )
         if ch_name not in _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL:
             raise ValueError(
                 f"signal_codec_overrides: channel '{ch_name}' not supported "
                 f"(only sequences, qualities, read_names, cigars, "
-                f"positions, flags, and mapping_qualities can use TTIO codecs)"
+                f"positions, flags, mapping_qualities, mate_info_chrom, "
+                f"mate_info_pos, and mate_info_tlen can use TTIO codecs)"
             )
         try:
             codec_enum = _Compression(codec)
@@ -1037,27 +1080,32 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             # — neither ACGT bytes (BASE_PACK) nor Phred quality
             # values (QUALITY_BINNED) match. The error names the
             # codec, the channel, and the wrong-content rationale.
-            if ch_name == "cigars":
+            #
+            # Phase F: mate_info_chrom shares the same codec rules as
+            # cigars (Binding Decision §130) — both are list[str] of
+            # structured ASCII content. Reuse the same wrong-content
+            # rejection messages for the same reason.
+            if ch_name in ("cigars", "mate_info_chrom"):
                 if codec_enum == _Compression.BASE_PACK:
                     raise ValueError(
                         f"signal_codec_overrides['{ch_name}']: codec "
-                        "BASE_PACK is not valid on the 'cigars' "
+                        f"BASE_PACK is not valid on the '{ch_name}' "
                         "channel — BASE_PACK 2-bit-packs ACGT sequence "
-                        "bytes and would silently corrupt the CIGAR "
-                        "strings stored on this channel (CIGAR ASCII "
-                        "includes digits and operator letters MIDNSHP=X, "
-                        "none of which are ACGT). Use RANS_ORDER0, "
-                        "RANS_ORDER1, or NAME_TOKENIZED on 'cigars'."
+                        "bytes and would silently corrupt the structured "
+                        "ASCII strings stored on this channel. Use "
+                        f"RANS_ORDER0, RANS_ORDER1, or NAME_TOKENIZED on "
+                        f"'{ch_name}'."
                     )
                 if codec_enum == _Compression.QUALITY_BINNED:
                     raise ValueError(
                         f"signal_codec_overrides['{ch_name}']: codec "
-                        "QUALITY_BINNED is not valid on the 'cigars' "
+                        f"QUALITY_BINNED is not valid on the '{ch_name}' "
                         "channel — QUALITY_BINNED quantises Phred "
                         "quality scores onto an 8-bin centre table and "
-                        "would silently destroy the CIGAR strings "
-                        "stored on this channel. Use RANS_ORDER0, "
-                        "RANS_ORDER1, or NAME_TOKENIZED on 'cigars'."
+                        "would silently destroy the structured ASCII "
+                        "strings stored on this channel. Use "
+                        f"RANS_ORDER0, RANS_ORDER1, or NAME_TOKENIZED on "
+                        f"'{ch_name}'."
                     )
             raise ValueError(
                 f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
@@ -1221,24 +1269,206 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             [{"value": n} for n in run.read_names],
             [("value", io.vl_str())],
         )
-    io.write_compound_dataset(
-        sc,
-        "mate_info",
-        [
-            {"chrom": mc, "pos": int(mp), "tlen": int(tl)}
-            for mc, mp, tl in zip(
-                run.mate_chromosomes,
-                run.mate_positions,
-                run.template_lengths,
-            )
-        ],
-        [("chrom", io.vl_str()), ("pos", "<i8"), ("tlen", "<i4")],
-    )
+    # M86 Phase F: schema lift for mate_info. When ANY of the three
+    # per-field overrides (mate_info_chrom / mate_info_pos /
+    # mate_info_tlen) is in signal_codec_overrides, the writer
+    # creates a subgroup ``signal_channels/mate_info/`` containing
+    # three child datasets (chrom, pos, tlen) and dispatches each
+    # child independently — codec-compressed if the per-field
+    # override is set, natural-dtype HDF5-filter ZLIB if not
+    # (Binding Decision §125, §127). Partial overrides allowed
+    # (Gotcha §142). When NO mate_info_* override is set, the
+    # existing M82 compound write path is used unchanged for byte
+    # parity with pre-Phase-F files.
+    _mate_override_keys = {
+        "mate_info_chrom", "mate_info_pos", "mate_info_tlen",
+    }
+    _mate_overrides = {
+        k: run.signal_codec_overrides[k]
+        for k in _mate_override_keys
+        if k in run.signal_codec_overrides
+    }
+    if _mate_overrides:
+        _write_mate_info_subgroup(sc, run, _mate_overrides)
+    else:
+        io.write_compound_dataset(
+            sc,
+            "mate_info",
+            [
+                {"chrom": mc, "pos": int(mp), "tlen": int(tl)}
+                for mc, mp, tl in zip(
+                    run.mate_chromosomes,
+                    run.mate_positions,
+                    run.template_lengths,
+                )
+            ],
+            [("chrom", io.vl_str()), ("pos", "<i8"), ("tlen", "<i4")],
+        )
 
     # Per-run provenance — same pattern as _write_run.
     if run.provenance_records:
         prov = rg.create_group("provenance")
         _write_provenance(prov, run.provenance_records, dataset_name="steps")
+
+
+def _write_mate_info_subgroup(
+    sc,
+    run: WrittenGenomicRun,
+    overrides: dict[str, Any],
+) -> None:
+    """M86 Phase F: write the mate_info subgroup with per-field codec dispatch.
+
+    Triggered when any of the three per-field override keys is in
+    ``run.signal_codec_overrides``. Creates a subgroup
+    ``signal_channels/mate_info/`` containing three child datasets
+    (``chrom``, ``pos``, ``tlen``). Each field is independently
+    codec-compressible: fields with an override are written as flat
+    1-D uint8 with the codec output and ``@compression`` attribute
+    (no HDF5 filter — Binding Decision §87); fields without an
+    override use their natural dtype with HDF5 ZLIB filter inside
+    the subgroup (Binding Decision §127, partial overrides allowed).
+
+    The chrom field's serialisation matches Phase C cigars:
+    NAME_TOKENIZED takes the list directly; rANS uses
+    length-prefix-concat (varint(len) + ASCII bytes per chrom).
+
+    The pos and tlen fields' serialisation matches Phase B integer
+    channels: rANS over the LE byte representation of the typed
+    array (``<i8`` for pos, ``<i4`` for tlen).
+    """
+    from .enums import Compression as _Compression, Precision as _Precision
+
+    mate_group = sc.create_group("mate_info")
+
+    # ---- chrom field ---------------------------------------------------
+    chroms = list(run.mate_chromosomes)
+    chrom_codec = overrides.get("mate_info_chrom")
+    if chrom_codec is None:
+        # Natural dtype (VL_STRING) with HDF5 ZLIB filter.
+        io.write_compound_dataset(
+            mate_group,
+            "chrom",
+            [{"value": c} for c in chroms],
+            [("value", io.vl_str())],
+        )
+    else:
+        chrom_codec = _Compression(chrom_codec)
+        if chrom_codec in (
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+        ):
+            from .codecs.rans import encode as _rans_enc
+            from .codecs.name_tokenizer import _varint_encode as _ve
+            buf = bytearray()
+            for idx, c in enumerate(chroms):
+                try:
+                    payload = c.encode("ascii")
+                except UnicodeEncodeError as exc:
+                    raise ValueError(
+                        "signal_codec_overrides['mate_info_chrom']: "
+                        f"chrom at index {idx} contains non-ASCII bytes"
+                    ) from exc
+                buf.extend(_ve(len(payload)))
+                buf.extend(payload)
+            order = (
+                0
+                if chrom_codec == _Compression.RANS_ORDER0
+                else 1
+            )
+            encoded = _rans_enc(bytes(buf), order=order)
+        elif chrom_codec == _Compression.NAME_TOKENIZED:
+            from .codecs import name_tokenizer as _nt
+            encoded = _nt.encode(chroms)
+        else:  # pragma: no cover — validation rejects this
+            raise ValueError(
+                "signal_codec_overrides['mate_info_chrom']: codec "
+                f"{chrom_codec!r} is not supported"
+            )
+        arr = np.frombuffer(encoded, dtype=np.uint8)
+        ds = mate_group.create_dataset(
+            "chrom",
+            _Precision.UINT8,
+            length=int(arr.shape[0]),
+            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=_Compression.NONE,
+        )
+        ds.write(arr)
+        io.write_int_attr(
+            ds, "compression", int(chrom_codec), dtype="<u1"
+        )
+
+    # ---- pos field -----------------------------------------------------
+    pos_arr = np.asarray(run.mate_positions).astype("<i8", copy=False)
+    pos_codec = overrides.get("mate_info_pos")
+    _write_mate_int_field(
+        mate_group, "pos", pos_arr, "<i8", _Precision.INT64, pos_codec,
+    )
+
+    # ---- tlen field ----------------------------------------------------
+    tlen_arr = np.asarray(run.template_lengths).astype("<i4", copy=False)
+    tlen_codec = overrides.get("mate_info_tlen")
+    _write_mate_int_field(
+        mate_group, "tlen", tlen_arr, "<i4", _Precision.INT32, tlen_codec,
+    )
+
+
+def _write_mate_int_field(
+    mate_group,
+    name: str,
+    arr: np.ndarray,
+    dtype_str: str,
+    natural_precision: Any,
+    codec: Any,
+) -> None:
+    """Write one of the integer mate fields (pos or tlen) with optional codec.
+
+    Mirrors the Phase B integer-channel write contract: when ``codec``
+    is ``None``, the array is written at its natural integer
+    precision with HDF5 ZLIB. When ``codec`` is RANS_ORDER0 or
+    RANS_ORDER1, the LE byte representation of the array is encoded
+    through the M83 rANS codec and written as a flat unfiltered uint8
+    dataset with ``@compression`` carrying the codec id.
+    """
+    from .enums import Compression as _Compression, Precision as _Precision
+
+    if codec is None:
+        # Natural-dtype write with HDF5 ZLIB filter inside the subgroup.
+        ds = mate_group.create_dataset(
+            name,
+            natural_precision,
+            length=int(arr.shape[0]),
+            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=_Compression.ZLIB,
+            compression_level=6,
+        )
+        ds.write(arr)
+        return
+
+    codec_enum = _Compression(codec)
+    if codec_enum not in (
+        _Compression.RANS_ORDER0,
+        _Compression.RANS_ORDER1,
+    ):  # pragma: no cover — validation rejects this
+        raise ValueError(
+            f"signal_codec_overrides['mate_info_{name}']: codec "
+            f"{codec!r} is not supported (only RANS_ORDER0 and "
+            "RANS_ORDER1 are valid for the integer mate fields)"
+        )
+
+    le_bytes = bytes(np.ascontiguousarray(arr).tobytes())
+    from .codecs.rans import encode as _enc
+    order = 0 if codec_enum == _Compression.RANS_ORDER0 else 1
+    encoded = _enc(le_bytes, order=order)
+    arr_u8 = np.frombuffer(encoded, dtype=np.uint8)
+    ds = mate_group.create_dataset(
+        name,
+        _Precision.UINT8,
+        length=int(arr_u8.shape[0]),
+        chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+        compression=_Compression.NONE,
+    )
+    ds.write(arr_u8)
+    io.write_int_attr(ds, "compression", int(codec_enum), dtype="<u1")
 
 
 def _write_identifications(study: h5py.Group, records: list[Identification]) -> None:
