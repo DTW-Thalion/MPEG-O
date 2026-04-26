@@ -90,6 +90,22 @@ class GenomicRun:
     _decoded_read_names: list[str] | None = field(
         default=None, repr=False, compare=False,
     )
+    # M86 Phase C: lazy decode cache for the cigars channel when it
+    # carries a TTIO codec override (RANS_ORDER0 / RANS_ORDER1 /
+    # NAME_TOKENIZED). Held as a ``list[str]`` because all three
+    # codec paths produce per-read string entries — the rANS path
+    # walks varint-length-prefix entries inside the decoded byte
+    # buffer, and NAME_TOKENIZED returns ``list[str]`` directly.
+    # Per Binding Decision §123 (Option A from §2.3) this cache is
+    # **separate** from ``_decoded_read_names`` — the lower-risk
+    # choice that does not touch shipped Phase E code. A future
+    # generalisation (Option B) could fold both into a
+    # ``dict[str, list[str]]`` if a third list-of-strings channel
+    # appears. Cache lifetime is the GenomicRun instance (Gotcha
+    # §138).
+    _decoded_cigars: list[str] | None = field(
+        default=None, repr=False, compare=False,
+    )
     # M86 Phase B: lazy whole-channel decode cache for integer
     # channels (positions, flags, mapping_qualities) whose
     # ``@compression`` attribute names a TTIO codec (currently
@@ -140,10 +156,11 @@ class GenomicRun:
         sequence = seq_bytes.decode("ascii")
         qualities = self._byte_channel_slice("qualities", offset, length)
 
-        # Compound channels — load whole-dataset once and cache.
-        # read_compound_dataset already decodes VL bytes to str.
-        cigars = self._compound("cigars")
-        cigar = cigars[i]["value"]
+        # Compound / codec-lifted channels — dispatch on dataset
+        # shape (M86 Phases C and E). The compound path delegates
+        # to ``_compound`` (whole-dataset cached), the codec path
+        # decodes once and caches ``list[str]``.
+        cigar = self._cigar_at(i)
 
         read_name = self._read_name_at(i)
 
@@ -412,3 +429,90 @@ class GenomicRun:
         # Compound path (M82, no override).
         names = self._compound("read_names")
         return names[i]["value"]
+
+    def _cigar_at(self, i: int) -> str:
+        """Return the cigar string at index ``i``, dispatching on shape.
+
+        M86 Phase C: cigars has two on-disk layouts (Binding
+        Decisions §120-§123):
+
+        - **M82 compound** (no override): VL_STRING-in-compound
+          dataset, read whole-and-cache via :meth:`_compound`.
+        - **TTIO codec** (override active): flat 1-D uint8
+          dataset, decoded once on first access and cached as a
+          ``list[str]`` on this :class:`GenomicRun` instance per
+          Binding Decision §123. Three codec ids are recognised:
+
+          * ``RANS_ORDER0`` (4) and ``RANS_ORDER1`` (5): the
+            decoded byte buffer is a length-prefix-concat sequence
+            (``varint(len) + bytes`` per CIGAR — §2.5 of the
+            Phase C plan / format-spec §10.6 extended). Walk the
+            buffer to reconstruct the ``list[str]``.
+          * ``NAME_TOKENIZED`` (8): pass the bytes through the
+            codec's ``decode(bytes) -> list[str]`` API directly.
+
+        Dispatch is on dataset shape — a 1-D uint8 dataset routes
+        through the codec path; anything else (compound) falls
+        through to the M82 path. The :attr:`_decoded_cigars` cache
+        holds the entire decoded list across calls.
+        """
+        cached = self._decoded_cigars
+        if cached is not None:
+            return cached[i]
+
+        sig = self.group.open_group("signal_channels")
+        ds = sig.open_dataset("cigars")
+
+        from .enums import Compression, Precision
+        if ds.precision == Precision.UINT8:
+            from . import _hdf5_io as io
+            codec_id = io.read_int_attr(ds, "compression", default=0) or 0
+            all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+            if codec_id in (
+                int(Compression.RANS_ORDER0),
+                int(Compression.RANS_ORDER1),
+            ):
+                from .codecs.rans import decode as _rans_dec
+                from .codecs.name_tokenizer import _varint_decode as _vd
+                decoded = _rans_dec(all_bytes)
+                # Walk the length-prefix-concat byte stream — the
+                # mirror of the writer's serialisation contract
+                # (§2.5). Each entry is varint(len) + len bytes
+                # of ASCII payload.
+                out: list[str] = []
+                offset = 0
+                n = len(decoded)
+                while offset < n:
+                    length, offset = _vd(decoded, offset)
+                    if offset + length > n:
+                        raise ValueError(
+                            "cigars rANS stream: length-prefix-concat "
+                            f"entry runs off end of decoded buffer "
+                            f"(offset={offset}, length={length}, "
+                            f"buffer_size={n})"
+                        )
+                    payload = decoded[offset:offset + length]
+                    offset += length
+                    try:
+                        out.append(payload.decode("ascii"))
+                    except UnicodeDecodeError as exc:
+                        raise ValueError(
+                            "cigars rANS stream: entry contains "
+                            "non-ASCII bytes"
+                        ) from exc
+                self._decoded_cigars = out
+                return out[i]
+            if codec_id == int(Compression.NAME_TOKENIZED):
+                from .codecs import name_tokenizer as _nt
+                self._decoded_cigars = _nt.decode(all_bytes)
+                return self._decoded_cigars[i]
+            raise ValueError(
+                f"signal_channel 'cigars': @compression={codec_id} "
+                "is not a supported TTIO codec id for the cigars "
+                "channel (only RANS_ORDER0 = 4, RANS_ORDER1 = 5, "
+                "and NAME_TOKENIZED = 8 are recognised)"
+            )
+
+        # Compound path (M82, no override).
+        cigars = self._compound("cigars")
+        return cigars[i]["value"]

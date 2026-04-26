@@ -906,6 +906,19 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         "read_names": frozenset({
             _Compression.NAME_TOKENIZED,
         }),
+        # M86 Phase C: cigars accepts THREE codecs (Binding Decisions
+        # §120, §121, §122). The rANS pair operate on a length-prefix-
+        # concat byte stream of the CIGAR strings (varint(len) + bytes
+        # per CIGAR); NAME_TOKENIZED operates on the list[str] directly
+        # via its own columnar/verbatim wire format. BASE_PACK and
+        # QUALITY_BINNED are wrong-content (CIGARs are not ACGT bytes
+        # nor Phred values) and are explicitly rejected with named
+        # error messages below.
+        "cigars": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+            _Compression.NAME_TOKENIZED,
+        }),
         # M86 Phase B: integer channels accept ONLY the rANS codecs
         # (Binding Decision §117). The rANS coders are content-
         # agnostic byte-stream codecs and operate correctly on the
@@ -935,8 +948,8 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         if ch_name not in _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL:
             raise ValueError(
                 f"signal_codec_overrides: channel '{ch_name}' not supported "
-                f"(only sequences, qualities, read_names, positions, "
-                f"flags, and mapping_qualities can use TTIO codecs)"
+                f"(only sequences, qualities, read_names, cigars, "
+                f"positions, flags, and mapping_qualities can use TTIO codecs)"
             )
         try:
             codec_enum = _Compression(codec)
@@ -1018,6 +1031,34 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                         f"this channel. Use RANS_ORDER0 or "
                         f"RANS_ORDER1 on '{ch_name}'."
                     )
+            # Phase C Binding Decisions §120, §121: explicit messages
+            # for the wrong-content codecs on the cigars channel. The
+            # cigars channel holds variable-length ASCII CIGAR strings
+            # — neither ACGT bytes (BASE_PACK) nor Phred quality
+            # values (QUALITY_BINNED) match. The error names the
+            # codec, the channel, and the wrong-content rationale.
+            if ch_name == "cigars":
+                if codec_enum == _Compression.BASE_PACK:
+                    raise ValueError(
+                        f"signal_codec_overrides['{ch_name}']: codec "
+                        "BASE_PACK is not valid on the 'cigars' "
+                        "channel — BASE_PACK 2-bit-packs ACGT sequence "
+                        "bytes and would silently corrupt the CIGAR "
+                        "strings stored on this channel (CIGAR ASCII "
+                        "includes digits and operator letters MIDNSHP=X, "
+                        "none of which are ACGT). Use RANS_ORDER0, "
+                        "RANS_ORDER1, or NAME_TOKENIZED on 'cigars'."
+                    )
+                if codec_enum == _Compression.QUALITY_BINNED:
+                    raise ValueError(
+                        f"signal_codec_overrides['{ch_name}']: codec "
+                        "QUALITY_BINNED is not valid on the 'cigars' "
+                        "channel — QUALITY_BINNED quantises Phred "
+                        "quality scores onto an 8-bin centre table and "
+                        "would silently destroy the CIGAR strings "
+                        "stored on this channel. Use RANS_ORDER0, "
+                        "RANS_ORDER1, or NAME_TOKENIZED on 'cigars'."
+                    )
             raise ValueError(
                 f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
                 f"not supported on the '{ch_name}' channel "
@@ -1080,12 +1121,73 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     )
     # Variable-length per-read string fields — cigars and read_names are
     # 7-bit ASCII; vl_str() (ASCII encoding) matches the ObjC reader.
-    io.write_compound_dataset(
-        sc,
-        "cigars",
-        [{"value": c} for c in run.cigars],
-        [("value", io.vl_str())],
-    )
+    # M86 Phase C: schema lift for cigars. When an override is
+    # present the writer replaces the M82 compound dataset with a
+    # flat 1-D uint8 dataset of the same name carrying the codec
+    # output, plus an @compression attribute (Binding Decisions
+    # §120-§122). Three codec choices are supported (rANS uses a
+    # length-prefix-concat byte stream over the CIGAR list; the
+    # NAME_TOKENIZED codec consumes the list[str] directly).
+    if "cigars" in run.signal_codec_overrides:
+        from .enums import Precision as _Precision
+        cigars_codec = _Compression(
+            run.signal_codec_overrides["cigars"]
+        )
+        if cigars_codec in (
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+        ):
+            from .codecs.rans import encode as _rans_enc
+            from .codecs.name_tokenizer import _varint_encode as _ve
+            # Validate ASCII early so non-ASCII surfaces a clear
+            # error before we touch the file (§2.5 contract).
+            buf = bytearray()
+            for idx, cig in enumerate(run.cigars):
+                try:
+                    payload = cig.encode("ascii")
+                except UnicodeEncodeError as exc:
+                    raise ValueError(
+                        f"signal_codec_overrides['cigars']: cigar "
+                        f"at index {idx} contains non-ASCII bytes "
+                        "— CIGARs must be 7-bit ASCII per the SAM "
+                        "spec"
+                    ) from exc
+                buf.extend(_ve(len(payload)))
+                buf.extend(payload)
+            order = (
+                0
+                if cigars_codec == _Compression.RANS_ORDER0
+                else 1
+            )
+            encoded = _rans_enc(bytes(buf), order=order)
+        elif cigars_codec == _Compression.NAME_TOKENIZED:
+            from .codecs import name_tokenizer as _nt
+            encoded = _nt.encode(list(run.cigars))
+        else:  # pragma: no cover — validation above rejects this
+            raise ValueError(
+                f"signal_codec_overrides['cigars']: codec "
+                f"{cigars_codec!r} is not supported"
+            )
+        arr = np.frombuffer(encoded, dtype=np.uint8)
+        ds = sc.create_dataset(
+            "cigars",
+            _Precision.UINT8,
+            length=int(arr.shape[0]),
+            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=_Compression.NONE,
+        )
+        ds.write(arr)
+        io.write_int_attr(
+            ds, "compression",
+            int(cigars_codec), dtype="<u1",
+        )
+    else:
+        io.write_compound_dataset(
+            sc,
+            "cigars",
+            [{"value": c} for c in run.cigars],
+            [("value", io.vl_str())],
+        )
     # M86 Phase E: schema lift for read_names. When the
     # NAME_TOKENIZED override is set, replace the M82 compound
     # dataset with a flat 1-D uint8 dataset of the same name
