@@ -876,12 +876,14 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         parent = _H5Group(parent)
 
     # M86: validate any per-channel codec overrides before we touch
-    # the file. Only sequences/qualities/read_names can be overridden;
-    # the accepted codec set is per-channel (Phase D §119, Phase E
-    # §113): sequences gets the three byte-stream codecs
-    # (RANS_ORDER0/1 + BASE_PACK); qualities gets those plus
-    # QUALITY_BINNED; read_names gets NAME_TOKENIZED only. Anything
-    # else is a caller error and must surface immediately
+    # the file. Phase A/D/E covered the three byte/string channels
+    # (sequences, qualities, read_names). Phase B (Binding Decision
+    # §117) extends the override map to the three integer channels
+    # (positions, flags, mapping_qualities), each of which accepts
+    # only the rANS codecs — BASE_PACK / QUALITY_BINNED /
+    # NAME_TOKENIZED are wrong-content for integer fields and would
+    # silently corrupt the data. Anything outside the per-channel
+    # whitelist is a caller error and must surface immediately
     # (Binding Decision §88).
     from .enums import Compression as _Compression
     _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL = {
@@ -904,13 +906,37 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         "read_names": frozenset({
             _Compression.NAME_TOKENIZED,
         }),
+        # M86 Phase B: integer channels accept ONLY the rANS codecs
+        # (Binding Decision §117). The rANS coders are content-
+        # agnostic byte-stream codecs and operate correctly on the
+        # little-endian byte representation of int64/uint32/uint8
+        # arrays (§118). The other byte-channel codecs do not
+        # preserve integer values: BASE_PACK 2-bit-packs ACGT bytes
+        # (mangling everything else), QUALITY_BINNED quantises Phred
+        # scores onto an 8-bin centre table, and NAME_TOKENIZED
+        # tokenises UTF-8 strings.
+        "positions": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+        }),
+        "flags": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+        }),
+        "mapping_qualities": frozenset({
+            _Compression.RANS_ORDER0,
+            _Compression.RANS_ORDER1,
+        }),
     }
+    _INTEGER_CHANNEL_NAMES = frozenset(
+        {"positions", "flags", "mapping_qualities"}
+    )
     for ch_name, codec in run.signal_codec_overrides.items():
         if ch_name not in _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL:
             raise ValueError(
                 f"signal_codec_overrides: channel '{ch_name}' not supported "
-                f"(only sequences, qualities, and read_names can use "
-                f"TTIO codecs)"
+                f"(only sequences, qualities, read_names, positions, "
+                f"flags, and mapping_qualities can use TTIO codecs)"
             )
         try:
             codec_enum = _Compression(codec)
@@ -958,6 +984,40 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                     "NAME_TOKENIZED, or RANS_ORDER0/RANS_ORDER1/"
                     f"BASE_PACK on '{ch_name}'."
                 )
+            # Phase B Binding Decision §117: explicit messages for
+            # the wrong-content codecs on integer channels. Each
+            # message names the codec, the channel, and explains
+            # why the codec does not preserve integer values.
+            if ch_name in _INTEGER_CHANNEL_NAMES:
+                if codec_enum == _Compression.BASE_PACK:
+                    raise ValueError(
+                        f"signal_codec_overrides['{ch_name}']: codec "
+                        f"BASE_PACK is not valid on the '{ch_name}' "
+                        "channel — BASE_PACK 2-bit-packs ACGT sequence "
+                        f"bytes and would silently corrupt the integer "
+                        "values stored on this channel. Use "
+                        f"RANS_ORDER0 or RANS_ORDER1 on '{ch_name}'."
+                    )
+                if codec_enum == _Compression.QUALITY_BINNED:
+                    raise ValueError(
+                        f"signal_codec_overrides['{ch_name}']: codec "
+                        f"QUALITY_BINNED is not valid on the "
+                        f"'{ch_name}' channel — QUALITY_BINNED "
+                        "quantises Phred quality scores onto an 8-bin "
+                        f"centre table and would silently destroy the "
+                        "integer values stored on this channel. Use "
+                        f"RANS_ORDER0 or RANS_ORDER1 on '{ch_name}'."
+                    )
+                if codec_enum == _Compression.NAME_TOKENIZED:
+                    raise ValueError(
+                        f"signal_codec_overrides['{ch_name}']: codec "
+                        f"NAME_TOKENIZED is not valid on the "
+                        f"'{ch_name}' channel — NAME_TOKENIZED "
+                        "tokenises UTF-8 read-name strings and would "
+                        "mis-tokenise the integer values stored on "
+                        f"this channel. Use RANS_ORDER0 or "
+                        f"RANS_ORDER1 on '{ch_name}'."
+                    )
             raise ValueError(
                 f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
                 f"not supported on the '{ch_name}' channel "
@@ -991,7 +1051,16 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # M86 lets per-channel overrides route sequences/qualities through
     # the rANS / BASE_PACK codecs instead.
     sc = rg.create_group("signal_channels")
-    io._write_int64_channel(sc, "positions", run.positions, run.signal_compression)
+    # M86 Phase B: integer channels dispatch through
+    # ``_write_int_channel_with_codec``; when the per-channel
+    # override is rANS the channel is serialised to little-endian
+    # bytes and written as flat uint8 with @compression. When the
+    # override is absent (the M82 default), the helper delegates to
+    # the existing typed writer so byte parity is preserved.
+    io._write_int_channel_with_codec(
+        sc, "positions", run.positions, run.signal_compression,
+        run.signal_codec_overrides.get("positions"),
+    )
     io._write_byte_channel_with_codec(
         sc, "sequences", run.sequences, run.signal_compression,
         run.signal_codec_overrides.get("sequences"),
@@ -1000,9 +1069,14 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         sc, "qualities", run.qualities, run.signal_compression,
         run.signal_codec_overrides.get("qualities"),
     )
-    io._write_uint32_channel(sc, "flags", run.flags, run.signal_compression)
-    io._write_uint8_channel(
-        sc, "mapping_qualities", run.mapping_qualities, run.signal_compression
+    io._write_int_channel_with_codec(
+        sc, "flags", run.flags, run.signal_compression,
+        run.signal_codec_overrides.get("flags"),
+    )
+    io._write_int_channel_with_codec(
+        sc, "mapping_qualities", run.mapping_qualities,
+        run.signal_compression,
+        run.signal_codec_overrides.get("mapping_qualities"),
     )
     # Variable-length per-read string fields — cigars and read_names are
     # 7-bit ASCII; vl_str() (ASCII encoding) matches the ObjC reader.

@@ -687,6 +687,108 @@ def _write_int64_channel(
     ds.write(data)
 
 
+# M86 Phase B: per-channel integer dtypes for the int↔byte
+# serialisation contract. Determined by **channel name lookup**
+# (Binding Decision §115), not by an on-disk attribute. The reader
+# uses the same map to interpret the decoded byte buffer back to
+# the channel's natural integer dtype.
+_INTEGER_CHANNEL_DTYPES = {
+    "positions": "<i8",
+    "flags": "<u4",
+    "mapping_qualities": "<u1",
+}
+
+
+def _write_int_channel_with_codec(
+    group: _IOTarget,
+    name: str,
+    data: np.ndarray,
+    default_compression: str,
+    codec_override: Any,
+) -> None:
+    """Write an integer signal channel, optionally through a TTIO codec.
+
+    M86 Phase B: when ``codec_override`` is ``None`` the helper
+    delegates to the existing :func:`_write_int64_channel`,
+    :func:`_write_uint32_channel`, or :func:`_write_uint8_channel`
+    so the on-disk dtype is preserved and byte parity with M82 is
+    maintained. When ``codec_override`` is one of
+    :data:`ttio.enums.Compression.RANS_ORDER0` or
+    :data:`ttio.enums.Compression.RANS_ORDER1`, the integer array is
+    serialised to its little-endian byte representation (Binding
+    Decision §118), the bytes are encoded through the M83 rANS
+    codec, and the result is written as an unfiltered uint8 dataset
+    whose ``@compression`` attribute holds the codec id.
+
+    The dtype of the original array is determined by **channel name
+    lookup** (Binding Decision §115); the reader recovers the
+    original dtype the same way, so no extra on-disk attribute is
+    needed beyond ``@compression``.
+
+    Per Binding Decision §87, codec-compressed datasets carry NO
+    HDF5 filter — the codec output is high-entropy and the HDF5
+    filter would waste CPU for negative size benefit.
+    """
+    from .enums import Compression, Precision
+
+    if codec_override is None:
+        # No override: delegate to the M82 typed writer so byte
+        # parity with pre-Phase-B files is preserved.
+        if name == "positions":
+            _write_int64_channel(group, name, data, default_compression)
+        elif name == "flags":
+            _write_uint32_channel(group, name, data, default_compression)
+        elif name == "mapping_qualities":
+            _write_uint8_channel(group, name, data, default_compression)
+        else:
+            raise ValueError(
+                f"_write_int_channel_with_codec: unknown integer "
+                f"channel name {name!r}"
+            )
+        return
+
+    if codec_override not in (
+        Compression.RANS_ORDER0,
+        Compression.RANS_ORDER1,
+    ):
+        # Defensive — the caller-side validation in
+        # ``_write_genomic_run`` rejects this combination first
+        # with a clearer message.
+        raise ValueError(
+            f"signal_codec_overrides['{name}'] = {codec_override!r}: "
+            "only RANS_ORDER0 and RANS_ORDER1 are supported on "
+            "integer channels"
+        )
+
+    dtype_str = _INTEGER_CHANNEL_DTYPES.get(name)
+    if dtype_str is None:
+        raise ValueError(
+            f"_write_int_channel_with_codec: unknown integer channel "
+            f"name {name!r} (no dtype registered)"
+        )
+
+    # Serialise array → little-endian byte buffer (Binding Decision
+    # §118). ``astype`` with the explicit ``<`` byte-order tag
+    # forces LE on big-endian hosts.
+    arr = np.ascontiguousarray(np.asarray(data).astype(dtype_str, copy=False))
+    le_bytes = bytes(arr.tobytes())
+
+    # Encode through the M83 rANS codec.
+    from .codecs.rans import encode as _enc
+    order = 0 if codec_override == Compression.RANS_ORDER0 else 1
+    encoded = _enc(le_bytes, order=order)
+
+    # Write the codec output as a flat unfiltered uint8 dataset.
+    arr_u8 = np.frombuffer(encoded, dtype=np.uint8)
+    ds = group.create_dataset(
+        name, Precision.UINT8, length=int(arr_u8.shape[0]),
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=Compression.NONE,  # codec output is high-entropy
+    )
+    ds.write(arr_u8)
+    write_int_attr(ds, "compression", int(codec_override), dtype="<u1")
+
+
 def _write_uint64_channel(
     group: _IOTarget, name: str, data: np.ndarray, compression: str
 ) -> None:
