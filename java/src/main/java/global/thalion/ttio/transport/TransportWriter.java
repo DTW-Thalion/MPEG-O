@@ -11,6 +11,8 @@ import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.MassSpectrum;
 import global.thalion.ttio.SpectrumIndex;
+import global.thalion.ttio.genomics.AlignedRead;
+import global.thalion.ttio.genomics.GenomicRun;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -168,12 +170,14 @@ public final class TransportWriter implements AutoCloseable {
 
     public void writeDataset(SpectralDataset dataset) throws IOException {
         Map<String, AcquisitionRun> runs = dataset.msRuns();
+        Map<String, GenomicRun> genomicRuns = dataset.genomicRuns();
         List<String> features = new ArrayList<>();
         for (String f : dataset.featureFlags().features()) features.add(f);
 
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
-                features, runs.size());
+                features, runs.size() + genomicRuns.size());
 
+        // Spectral dataset headers: ids 1..N.
         int id = 1;
         for (Map.Entry<String, AcquisitionRun> e : runs.entrySet()) {
             AcquisitionRun run = e.getValue();
@@ -188,6 +192,19 @@ public final class TransportWriter implements AutoCloseable {
             id++;
         }
 
+        // M89.2/M89.4: Genomic dataset headers: ids N+1..N+M (contiguous).
+        for (Map.Entry<String, GenomicRun> e : genomicRuns.entrySet()) {
+            GenomicRun grun = e.getValue();
+            writeDatasetHeader(id, e.getKey(),
+                    grun.acquisitionMode().ordinal(),
+                    "TTIOGenomicRead",
+                    List.of("sequences", "qualities"),
+                    genomicRunMetadataJson(grun),
+                    grun.readCount());
+            id++;
+        }
+
+        // Spectral AUs first.
         id = 1;
         for (Map.Entry<String, AcquisitionRun> e : runs.entrySet()) {
             AcquisitionRun run = e.getValue();
@@ -200,7 +217,107 @@ public final class TransportWriter implements AutoCloseable {
             writeEndOfDataset(id, n);
             id++;
         }
+
+        // M89.2: Then genomic AUs.
+        for (Map.Entry<String, GenomicRun> e : genomicRuns.entrySet()) {
+            emitGenomicRunAccessUnits(id, e.getValue());
+            writeEndOfDataset(id, e.getValue().readCount());
+            id++;
+        }
         writeEndOfStream();
+    }
+
+    /** M89.2: Write a single {@link GenomicRun} as a stream segment.
+     *
+     *  <p>Used by callers that drive emission manually (multiplexed
+     *  streams, M89.4). The dataset header + AUs + end-of-dataset are
+     *  emitted; the caller is responsible for stream framing
+     *  (writeStreamHeader / writeEndOfStream).</p>
+     *
+     *  @since 0.11 (M89.2)
+     */
+    public void writeGenomicRun(int datasetId, String name, GenomicRun run)
+            throws IOException {
+        writeDatasetHeader(datasetId, name,
+                run.acquisitionMode().ordinal(),
+                "TTIOGenomicRead",
+                List.of("sequences", "qualities"),
+                genomicRunMetadataJson(run),
+                run.readCount());
+        emitGenomicRunAccessUnits(datasetId, run);
+        writeEndOfDataset(datasetId, run.readCount());
+    }
+
+    /** M89.2: emit one ACCESS_UNIT packet per AlignedRead in {@code run}.
+     *
+     *  <p>Per-read fixed fields go into the AU's genomic suffix
+     *  (chromosome / position / mapping_quality / flags). The
+     *  variable-length sequences and qualities ride as two UINT8
+     *  channels with the per-read slice as data. Compound channels
+     *  (cigars, read_names, mate_*) are NOT carried in M89.2 — they
+     *  default to "" / -1 / 0 on the reader side.</p>
+     */
+    private void emitGenomicRunAccessUnits(int datasetId, GenomicRun run)
+            throws IOException {
+        int n = run.readCount();
+        int precisionUint8 = Enums.Precision.UINT8.ordinal();
+        int compressionNone = Enums.Compression.NONE.ordinal();
+        int acqMode = run.acquisitionMode().ordinal() & 0xFF;
+        for (int i = 0; i < n; i++) {
+            AlignedRead read = run.objectAtIndex(i);
+            byte[] seqBytes = read.sequence().getBytes(StandardCharsets.UTF_8);
+            byte[] qualBytes = read.qualities();
+            int length = seqBytes.length;
+            List<ChannelData> channels = new ArrayList<>(2);
+            channels.add(new ChannelData("sequences", precisionUint8,
+                    compressionNone, length, seqBytes));
+            channels.add(new ChannelData("qualities", precisionUint8,
+                    compressionNone, qualBytes.length, qualBytes));
+            AccessUnit au = new AccessUnit(
+                    5,                  // spectrum_class GenomicRead
+                    acqMode,
+                    0,                  // ms_level
+                    2,                  // polarity = unknown (wire)
+                    0.0, 0.0, 0,        // rt, precursor_mz, precursor_charge
+                    0.0, 0.0,           // ion_mobility, base_peak_intensity
+                    channels,
+                    0L, 0L, 0L,         // pixel_x/y/z (unused for class==5)
+                    read.chromosome(),
+                    read.position(),
+                    read.mappingQuality(),
+                    read.flags() & 0xFFFF);
+            writeAccessUnit(datasetId, i, au);
+        }
+    }
+
+    /** M89.2: Per-genomic-run metadata serialised into the
+     *  {@code instrument_json} slot of the dataset header. Mirrors
+     *  Python {@code _genomic_run_metadata_json}: JSON object with
+     *  reference_uri, platform, sample_name, modality, sort_keys=true.
+     */
+    static String genomicRunMetadataJson(GenomicRun run) {
+        StringBuilder sb = new StringBuilder(96);
+        sb.append('{');
+        appendJsonField(sb, "modality",      nz(run.modality()),     false);
+        appendJsonField(sb, "platform",      nz(run.platform()),     true);
+        appendJsonField(sb, "reference_uri", nz(run.referenceUri()), true);
+        appendJsonField(sb, "sample_name",   nz(run.sampleName()),   true);
+        sb.append('}');
+        return sb.toString();
+    }
+
+    private static String nz(String s) { return s == null ? "" : s; }
+
+    private static void appendJsonField(StringBuilder sb, String key,
+                                          String value, boolean needsComma) {
+        if (needsComma) sb.append(", ");
+        sb.append('"').append(key).append("\": \"");
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '"' || c == '\\') sb.append('\\').append(c);
+            else sb.append(c);
+        }
+        sb.append('"');
     }
 
     static String instrumentConfigJson(InstrumentConfig cfg) {
