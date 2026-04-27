@@ -490,15 +490,34 @@ Test deltas: Python 898 → 915 (+17 incl. JSON shape check), ObjC
 2477 → 2532 (+55 assertions across 16 test methods), Java 512 →
 529 (+17 incl. JSON shape check).
 
-### M88 — CRAM Importer + BAM/CRAM Exporter
+### M88 — CRAM Importer + BAM/CRAM Exporter (SHIPPED 2026-04-26)
 
-- `ttio.importers.cram`: reads CRAM via `samtools view -h` + reference
-  FASTA.
-- `ttio.exporters.bam`: GenomicRun → SAM text → `samtools view -b`.
-- `ttio.exporters.cram`: GenomicRun → SAM text → `samtools view -C`.
-- Lossless round-trip: BAM → .tio → BAM, field-by-field comparison.
-- Lossy round-trip: quality binning tolerance documented.
-- All three languages.
+- `ttio.importers.cram` (and `TTIOCramReader` / Java `CramReader`):
+  reads CRAM via `samtools view -h --reference <fasta>`. Subclasses
+  the M87 BAM reader; reuses the SAM-text parsing path. Reference
+  FASTA enforced at construction (Python `TypeError` / ObjC
+  `NS_UNAVAILABLE` / Java null-rejection). Binding Decision §139.
+- `ttio.exporters.bam` (and `TTIOBamWriter` / Java `BamWriter`):
+  composes SAM text from `WrittenGenomicRun`, pipes through
+  `samtools view -b -o <out.bam>`. All 11 SAM columns always emitted
+  with sentinel fills; RNEXT collapses to `=` when chrom matches a
+  mapped read (§136); negative `mate_position` maps to 0 on emit
+  (§138); QUAL ASCII Phred+33 verbatim.
+- `ttio.exporters.cram` (and `TTIOCramWriter` / Java `CramWriter`):
+  two-stage pipeline `samtools view -C --reference <fa> | samtools
+  sort -O cram --reference <fa> -o <out.cram>` because CRAM slices
+  require sorted input. Subprocess chaining: ObjC `NSTask`+`NSPipe`,
+  Java `ProcessBuilder` + transferTo pump thread, Python `Popen`
+  with `stdin=prev.stdout`.
+- Lossless round-trips verified per language: BAM↔BAM (per-field),
+  CRAM↔CRAM (sequence buffer + names), BAM↔CRAM, CRAM↔BAM.
+- Cross-language harness `test_m88_cross_language.py` re-uses M87
+  `bam_dump` CLIs against the new M88 BAM fixture; byte-identical
+  canonical JSON across Python / ObjC / Java. CRAM cross-language
+  parity verified implicitly via shared canonical CRAM fixture in
+  per-language unit suites.
+- Test counts: Python 915 → 932 (+17), ObjC 2532 → 2595 (+63 across
+  14 test methods), Java 529 → 543 (+14).
 
 ---
 
