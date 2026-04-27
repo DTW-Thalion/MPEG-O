@@ -77,6 +77,7 @@ extern void testM85bNameTokenizer(void);
 extern void testM86GenomicCodecWiring(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
+extern void testV4EdgeCases(void);
 
 int main(int argc, const char *argv[])
 {
@@ -384,6 +385,10 @@ int main(int argc, const char *argv[])
         START_SET("M88: CRAM/BAM round-trip")
             testM88CramBamRoundTrip();
         END_SET("M88: CRAM/BAM round-trip")
+
+        START_SET("V4: edge case hardening")
+            testV4EdgeCases();
+        END_SET("V4: edge case hardening")
     }
     return 0;
 }
