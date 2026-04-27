@@ -114,7 +114,10 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <argLine>-Djava.library.path=${hdf5.native.path}</argLine>
+                    <!-- ${argLine} expands to JaCoCo's prepare-agent
+                         flags (V1, verification workplan) when JaCoCo
+                         is active; expands to empty string otherwise. -->
+                    <argLine>@{argLine} -Djava.library.path=${hdf5.native.path}</argLine>
                 </configuration>
             </plugin>
             <plugin>
@@ -139,6 +142,33 @@
                         </systemProperty>
                     </systemProperties>
                 </configuration>
+            </plugin>
+            <!--
+              V1 (verification workplan): JaCoCo line + branch coverage.
+              `mvn verify` (or `mvn test`) produces target/site/jacoco/
+              with jacoco.xml + index.html. CI uploads as artifacts.
+              No threshold enforcement in V1; just visibility.
+              See docs/verification-workplan.md §V1.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
