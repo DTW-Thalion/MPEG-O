@@ -209,6 +209,90 @@ def verify_provenance(run_group: h5py.Group, key: bytes) -> bool:
     return hmac.compare_digest(stored, expected)
 
 
+# M90.2: run-level convenience helpers for genomic_runs. These walk
+# every signal channel (sequences, qualities) and every genomic_index
+# column (offsets, lengths, positions, mapping_qualities, flags) and
+# sign each dataset individually with sign_dataset(). The chromosomes
+# compound is intentionally skipped — sign_dataset signs atomic
+# datasets, and the compound row format requires a separate code path
+# that the existing canonical-bytes API doesn't yet cover for VL string
+# rows.
+
+_GENOMIC_SIGNAL_CHANNELS = ("sequences", "qualities")
+_GENOMIC_INDEX_COLUMNS = (
+    "offsets", "lengths", "positions", "mapping_qualities", "flags",
+)
+
+
+def sign_genomic_run(
+    run_group: h5py.Group,
+    key: bytes,
+    *,
+    algorithm: str = "hmac-sha256",
+) -> dict[str, str]:
+    """Sign every signal channel + index column under one genomic
+    run with one call.
+
+    Returns a dict mapping ``"<sub>/<dataset>"`` (e.g. ``"signal_channels/sequences"``,
+    ``"genomic_index/positions"``) to the prefixed signature stored on
+    that dataset's ``@ttio_signature`` attribute. Datasets that don't
+    exist are silently skipped (e.g. encrypted files have segments
+    instead of plaintext signal channels).
+
+    Algorithm dispatches identically to :func:`sign_dataset` —
+    ``"hmac-sha256"`` (HMAC + shared key) or ``"ml-dsa-87"`` (PQC
+    private key).
+    """
+    out: dict[str, str] = {}
+    if "signal_channels" in run_group:
+        sig_group = run_group["signal_channels"]
+        for cname in _GENOMIC_SIGNAL_CHANNELS:
+            if cname in sig_group:
+                out[f"signal_channels/{cname}"] = sign_dataset(
+                    sig_group[cname], key, algorithm=algorithm,
+                )
+    if "genomic_index" in run_group:
+        idx_group = run_group["genomic_index"]
+        for cname in _GENOMIC_INDEX_COLUMNS:
+            if cname in idx_group:
+                out[f"genomic_index/{cname}"] = sign_dataset(
+                    idx_group[cname], key, algorithm=algorithm,
+                )
+    return out
+
+
+def verify_genomic_run(
+    run_group: h5py.Group,
+    key: bytes,
+    *,
+    algorithm: str = "hmac-sha256",
+) -> bool:
+    """Verify every dataset that :func:`sign_genomic_run` would sign.
+
+    Returns ``True`` iff every present, signed dataset verifies under
+    the key. A dataset that has no ``@ttio_signature`` (i.e. wasn't
+    signed) returns ``False`` from :func:`verify_dataset` and so is
+    treated as a verification failure — that's intentional, since a
+    partial-signature run is not a fully-signed run. Datasets that
+    don't exist on disk are skipped.
+    """
+    if "signal_channels" in run_group:
+        sig_group = run_group["signal_channels"]
+        for cname in _GENOMIC_SIGNAL_CHANNELS:
+            if cname in sig_group and not verify_dataset(
+                sig_group[cname], key, algorithm=algorithm,
+            ):
+                return False
+    if "genomic_index" in run_group:
+        idx_group = run_group["genomic_index"]
+        for cname in _GENOMIC_INDEX_COLUMNS:
+            if cname in idx_group and not verify_dataset(
+                idx_group[cname], key, algorithm=algorithm,
+            ):
+                return False
+    return True
+
+
 # ── Provider-agnostic sign / verify (v0.8 M54.1) ─────────────────────────
 
 
