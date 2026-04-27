@@ -1,585 +1,383 @@
-# HANDOFF — M88: CRAM Importer + BAM/CRAM Exporters
+# HANDOFF — M88.1: extend `bam_dump` CLI with `--reference` for CRAM (cross-language conformance)
 
-**Scope:** Three new classes per language: `CramReader` (CRAM
-input via `samtools view -h --reference`), `BamWriter`
-(GenomicRun → SAM text → `samtools view -b`), `CramWriter`
-(GenomicRun → SAM text → `samtools view -C --reference`). Reuses
-the M87 subprocess-delegation pattern; adds reference-FASTA
-handling for CRAM and writer-side SAM line formatting from
-`AlignedRead`. Three languages with one cross-language
-conformance fixture (synthetic 2-chromosome reference + matching
-BAM/CRAM fixtures).
+**Scope:** Extend the existing M87 `bam_dump` / `TtioBamDump` /
+`BamDump` CLI in each of the three languages with a `--reference
+<fasta>` flag. When the input path ends in `.cram`, dispatch to
+the M88 `CramReader` instead of `BamReader`. This closes the
+"CRAM cross-language parity verified implicitly" gap from M88 by
+giving the harness the same byte-exact cross-language treatment
+that M87 BAM has.
 
-**Branch from:** `main` after the M87 docs (`238b90d`).
+**Branch from:** `main` after the M88 docs (`3e56d0a`).
 
-**IP provenance:** Pure subprocess wrapping. Reuses M87's
-`samtools` delegation pattern. SAM text format per the public
-SAMv1 spec; CRAM details handled entirely by samtools. No
-htslib source consulted or linked.
+**IP provenance:** Pure CLI extension over the existing
+`CramReader` / `TTIOCramReader` / Java `CramReader` classes
+shipped in M88. No new format parsing; no new external
+dependencies; no `htslib` linking.
 
 ---
 
-## 1. Background and dependencies
+## 1. Why extending `bam_dump` (not a separate `cram_dump`)
 
-M87 shipped the read direction for SAM/BAM. M88 closes the
-interop loop:
+User chose **Option A** — extend the existing CLI rather than
+ship a parallel `cram_dump` per language. Rationale:
 
-1. **CRAM import** — needed because CRAM is the modern reference-
-   compressed sequencing format used by the 1000 Genomes Project,
-   GA4GH RefGet workflows, and increasingly by clinical
-   pipelines that need ~50% smaller files than BAM.
-2. **BAM export** — round-trip support for the most common
-   exchange format. Lets a TTI-O `.tio` file be re-emitted as
-   BAM for tools that don't speak `.tio`.
-3. **CRAM export** — same as BAM export but with reference-
-   compressed output. Needs a reference FASTA at write time.
+- Mirrors the reader inheritance pattern: `CramReader extends
+  BamReader`, so `bam_dump` becoming the universal aligned-read
+  dump tool reflects how the classes actually relate.
+- Single CLI surface; users learn one tool that handles SAM, BAM,
+  and CRAM.
+- Single cross-language harness file
+  (`test_m88_cross_language.py`) gets new CRAM tests appended;
+  no parallel harness file proliferation.
+- The CLI already takes a path; adding one optional flag is the
+  smallest possible surface change.
 
-`samtools 1.19.2` was installed in M87 — the same binary
-handles all three new code paths. CRAM additionally requires a
-reference FASTA file (or a RefGet HTTP endpoint, which TTI-O
-does NOT support in v0; FASTA path only).
+## 2. CLI contract (all three languages)
 
----
+### Invocation
 
-## 2. Design
+```
+# BAM/SAM (M87 behaviour, unchanged):
+python -m ttio.importers.bam_dump <bam_path> [--name <str>]
+TtioBamDump <bam_path> [--name <str>]
+mvn -o -q exec:java -Dexec.mainClass=global.thalion.ttio.importers.BamDump -Dexec.args="<bam_path>"
 
-### 2.1 CramReader (extends BamReader pattern)
+# CRAM (new in M88.1):
+python -m ttio.importers.bam_dump <cram_path> --reference <fa_path> [--name <str>]
+TtioBamDump <cram_path> --reference <fa_path> [--name <str>]
+mvn -o -q exec:java -Dexec.mainClass=global.thalion.ttio.importers.BamDump -Dexec.args="<cram_path> --reference <fa_path>"
+```
+
+### Dispatch logic
 
 ```python
-class CramReader(BamReader):
-    def __init__(self, path: str, reference_fasta: str): ...
+if path.lower().endswith(".cram"):
+    if reference is None:
+        error("--reference is required for .cram input")
+    reader = CramReader(path, reference)
+else:
+    if reference is not None:
+        # Accepted but unused; samtools auto-detects BAM/SAM.
+        # Do NOT error — keeps the CLI tolerant of scripts that
+        # always pass --reference.
+        pass
+    reader = BamReader(path)
 ```
 
-The constructor takes both the CRAM path and a reference FASTA
-path. `to_genomic_run(...)` invokes:
+Extension-based dispatch (`.cram` lowercased). Magic-byte sniffing
+is unnecessary — samtools-produced CRAMs use `.cram` and BAMs use
+`.bam`/`.sam`. If a user passes a CRAM file without the `.cram`
+extension, they can rename it; we don't sniff.
 
-```
-samtools view -h --reference <reference_fasta> <cram_path> [region]
-```
+### Output (canonical JSON to stdout)
 
-Subprocess output is parsed identically to `BamReader.to_genomic_run`
-— same SAM text format. The only difference is the `--reference`
-flag.
+**Unchanged from M87.** Same schema, same serialisation
+(sorted keys, 2-space indent, MD5 fingerprints, trailing
+newline). The `provenance_count` field will naturally differ
+between BAM and CRAM fixtures because samtools injects different
+`@PG` records on each format's read path — that is correct and
+expected.
 
-### 2.2 BamWriter
+### Exit codes
+
+* `0` — success
+* `2` — argparse error (missing path, `--reference` missing for `.cram`, etc.)
+* `1` — runtime error (samtools not on PATH, FASTA missing, malformed input)
+
+Errors go to stderr; stdout is reserved for canonical JSON only.
+
+## 3. File-by-file plan
+
+### Python (Task 53 — reference implementation, run first)
+
+**Modify** `python/src/ttio/importers/bam_dump.py`:
 
 ```python
-class BamWriter:
-    def __init__(self, path: str): ...
+"""bam_dump — canonical-JSON dump of a SAM/BAM/CRAM file for the
+M87 / M88.1 cross-language conformance harness.
 
-    def write(
-        self,
-        run: WrittenGenomicRun,
-        provenance_records: list[ProvenanceRecord] | None = None,
-        sort: bool = True,
-    ) -> None: ...
+Usage::
+
+    # BAM/SAM (M87):
+    python -m ttio.importers.bam_dump <path>
+
+    # CRAM (M88.1):
+    python -m ttio.importers.bam_dump <path.cram> --reference <fa>
+
+Reads the file via :class:`~ttio.importers.bam.BamReader` for SAM/BAM
+or :class:`~ttio.importers.cram.CramReader` for CRAM (auto-dispatched
+on the `.cram` extension) and emits a canonical JSON document on
+stdout matching the schema documented in HANDOFF.md M87 §7. The
+same shape is produced by the ObjC ``TtioBamDump`` and Java
+``BamDump`` CLIs.
+
+SPDX-License-Identifier: Apache-2.0
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sys
+from typing import Any
+
+from .bam import BamReader
+from .cram import CramReader
+
+
+__all__ = ["dump", "main"]
+
+
+def dump(
+    path: str,
+    name: str = "genomic_0001",
+    reference: str | None = None,
+) -> dict[str, Any]:
+    """Read ``path`` and return the canonical-JSON-shaped dict.
+
+    If ``path`` ends in ``.cram`` (case-insensitive), a
+    :class:`CramReader` is used; ``reference`` must then be provided.
+    Otherwise a :class:`BamReader` handles the file (samtools
+    auto-detects SAM vs BAM); ``reference`` is accepted but unused.
+
+    Returned keys are unchanged from M87 — see this module's
+    docstring for the full schema.
+    """
+    if path.lower().endswith(".cram"):
+        if reference is None:
+            raise ValueError(
+                "--reference <fasta> is required for .cram input"
+            )
+        reader = CramReader(path, reference)
+    else:
+        reader = BamReader(path)
+
+    run = reader.to_genomic_run(name=name)
+
+    seq_md5 = hashlib.md5(bytes(run.sequences)).hexdigest()
+    qual_md5 = hashlib.md5(bytes(run.qualities)).hexdigest()
+
+    return {
+        "name": name,
+        "read_count": len(run.read_names),
+        "sample_name": run.sample_name,
+        "platform": run.platform,
+        "reference_uri": run.reference_uri,
+        "read_names": list(run.read_names),
+        "positions": [int(x) for x in run.positions],
+        "chromosomes": list(run.chromosomes),
+        "flags": [int(x) for x in run.flags],
+        "mapping_qualities": [int(x) for x in run.mapping_qualities],
+        "cigars": list(run.cigars),
+        "mate_chromosomes": list(run.mate_chromosomes),
+        "mate_positions": [int(x) for x in run.mate_positions],
+        "template_lengths": [int(x) for x in run.template_lengths],
+        "sequences_md5": seq_md5,
+        "qualities_md5": qual_md5,
+        "provenance_count": len(run.provenance_records),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m ttio.importers.bam_dump",
+        description=(
+            "Emit canonical M87/M88.1 JSON for a SAM, BAM, or CRAM file."
+        ),
+    )
+    parser.add_argument(
+        "path",
+        help="Path to a SAM, BAM, or CRAM file (.cram dispatches to CramReader).",
+    )
+    parser.add_argument(
+        "--reference", default=None,
+        help="Path to reference FASTA — required for .cram input, ignored otherwise.",
+    )
+    parser.add_argument(
+        "--name", default="genomic_0001",
+        help="Genomic-run name to embed in the JSON (default: genomic_0001).",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        payload = dump(args.path, name=args.name, reference=args.reference)
+    except ValueError as exc:
+        parser.error(str(exc))  # exits 2 with message on stderr
+
+    sys.stdout.write(json.dumps(payload, sort_keys=True, indent=2))
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 ```
 
-Emits a BAM file from a `WrittenGenomicRun`. Internally:
+**Tests:** add 2 pytest cases to a new
+`python/tests/integration/test_m88_1_bam_dump_cram.py` (or extend
+the existing `test_m87_bam_dump.py` if it exists — implementer's
+call):
 
-1. Build the SAM header from the run's metadata:
-   - `@HD\tVN:1.6\tSO:coordinate` (when `sort=True`) or `\tSO:unsorted`.
-   - `@SQ\tSN:<chrom>\tLN:<length>` for each unique chromosome
-     observed in the run. Length is taken from the chromosome
-     dictionary if available; otherwise defaults to `2147483647`
-     (max int32) since SAM requires `LN:` but TTI-O doesn't
-     always know the true reference length.
-   - `@RG\tID:rg1\tSM:<sample_name>\tPL:<platform>` (one line)
-     when sample_name and/or platform is set.
-   - `@PG\tID:<entry.software>\tPN:<entry.software>\tCL:<entry.parameters>`
-     for each provenance record.
-2. For each read `i` in the run, emit a SAM alignment line
-   with all 11 columns: QNAME, FLAG, RNAME, POS, MAPQ, CIGAR,
-   RNEXT, PNEXT, TLEN, SEQ, QUAL. Tab-separated, no optional
-   tag columns in v0.
-3. Stream the SAM text via stdin to `samtools view -bS -`
-   (the trailing `-` reads from stdin). If `sort=True`, also
-   pipe through `samtools sort -O bam -o <path>`. If
-   `sort=False`, write directly to `<path>` via samtools.
+1. `test_bam_dump_dispatches_to_cram_reader` — runs the CLI as a
+   subprocess against the M88 CRAM fixture with `--reference`,
+   asserts JSON parses, has `read_count == 5`, `sample_name ==
+   "M88_TEST_SAMPLE"`.
+2. `test_bam_dump_cram_without_reference_errors` — runs the CLI
+   on the M88 CRAM fixture without `--reference`, asserts
+   non-zero exit + error message on stderr mentioning `--reference`.
 
-The `provenance_records` parameter lets the caller supply
-provenance separately (since Python's `WrittenGenomicRun`
-carries it as a record component but Java/ObjC don't — see M87
-convergent decision).
-
-### 2.3 CramWriter (extends BamWriter pattern)
-
-```python
-class CramWriter(BamWriter):
-    def __init__(self, path: str, reference_fasta: str): ...
+**Commit (Python only):**
+```
+git add python/src/ttio/importers/bam_dump.py \
+        python/tests/integration/test_m88_1_bam_dump_cram.py
+git commit -m "feat(M88.1): bam_dump --reference flag + .cram extension dispatch"
 ```
 
-Same as BamWriter but invokes `samtools view -CS --reference
-<reference_fasta> -` (or `samtools sort -O cram --reference`).
+After Python commits, capture the canonical JSON output for the
+M88 CRAM fixture (write to a scratch file, do not commit). ObjC
+and Java implementers will diff their outputs against this
+reference.
 
-### 2.4 SAM line formatting
+### ObjC (Task 54 — implements after Python)
 
-Each line is exactly 11 tab-separated fields:
+**Modify** `objc/Tools/TtioBamDump.m`:
 
+- Parse `--reference <fa>` flag in main() (alongside existing
+  positional path + `--name`).
+- After parsing args, check `[path hasSuffix:@".cram"]` (case-
+  insensitive) and dispatch to `[[TTIOCramReader alloc]
+  initWithPath:path referenceFasta:reference]` if true; else use
+  the existing `TTIOBamReader` path.
+- If the path is `.cram` and `--reference` is absent, fprintf an
+  error to stderr and exit 2.
+
+The canonical-JSON serialisation logic stays identical (this is
+the byte-exact contract — do not touch it).
+
+**Verification:** rebuild the binary, run it against the M88 CRAM
+fixture with `--reference`, diff output against the Python
+reference output. Must be byte-identical.
+
+**Commit (ObjC only):**
 ```
-QNAME\tFLAG\tRNAME\tPOS\tMAPQ\tCIGAR\tRNEXT\tPNEXT\tTLEN\tSEQ\tQUAL\n
-```
-
-Field formatting:
-- **QNAME**: `read_names[i]`. Empty string is invalid in SAM
-  (use `*` if unset).
-- **FLAG**: `flags[i]` as decimal integer (range 0..65535).
-- **RNAME**: `chromosomes[i]`. Use `*` for unmapped (already
-  the case in TTI-O).
-- **POS**: `positions[i]` as decimal integer (1-based; 0 =
-  unmapped).
-- **MAPQ**: `mapping_qualities[i]` as decimal integer (0..255).
-- **CIGAR**: `cigars[i]`. Use `*` if unset.
-- **RNEXT**: `mate_chromosomes[i]`. M87 expanded `=` to RNAME
-  on read; the writer **collapses** `RNEXT == RNAME` to `=`
-  per Binding Decision §136 (smaller SAM, lossless on
-  round-trip via M87's expansion rule).
-- **PNEXT**: `mate_positions[i]` as decimal integer. M87
-  reads `-1` as "no mate" but SAM uses `0` for the same
-  meaning — the writer maps `-1` → `0`.
-- **TLEN**: `template_lengths[i]` as decimal integer (signed).
-- **SEQ**: bytes from `sequences[offsets[i]:offsets[i]+lengths[i]]`,
-  decoded as ASCII. If `lengths[i] == 0`, emit `*`.
-- **QUAL**: bytes from `qualities[offsets[i]:offsets[i]+lengths[i]]`,
-  encoded as ASCII (Phred+33 — but TTI-O already stores raw
-  Phred bytes that match SAM's encoding directly). If
-  `lengths[i] == 0`, emit `*`.
-
-### 2.5 Sort behaviour
-
-By default the writer sorts by coordinate (chromosome then
-position) via `samtools sort -O bam`. When `sort=False`, the
-writer emits unsorted BAM (header `SO:unsorted`). CRAM with
-unsorted output is unusual but supported by samtools; the
-writer matches BAM behaviour.
-
-For round-trip round trips, sorting causes the read order in
-the output BAM to potentially differ from the input
-GenomicRun's order — tests must compare by read name (QNAME)
-rather than by position-in-array.
-
-### 2.6 Round-trip semantics
-
-**Lossless fields** on round-trip (BAM → GenomicRun → BAM):
-- All 11 SAM columns (QNAME through QUAL) for each read.
-- @SQ entries for chromosomes the run touches.
-- @RG (the first one TTI-O parsed; multi-RG aggregation is
-  out of scope per M87 §133).
-
-**Lossy / not preserved**:
-- Optional SAM tag fields (12+) — discarded by M87, NOT
-  re-emitted by M88.
-- @PG accumulation — each round trip adds samtools and TTI-O
-  @PG entries; the user-supplied `bwa` entry stays but the
-  list grows.
-- Original sort order if `sort=True` (default).
-
-**CRAM-specific lossless concerns**:
-- Sequence: lossless via reference-compressed encoding.
-- Quality: lossless under default samtools settings (no
-  `--output-fmt-option lossy_names`).
-- Read names: lossless (unless `--output-fmt-option
-  lossy_names=1`, which TTI-O does NOT enable).
-
-### 2.7 Reference FASTA handling
-
-For M88 v0:
-- The reference FASTA path is a positional argument to
-  `CramReader` and `CramWriter` constructors.
-- Path resolution is the caller's responsibility (no env-var
-  fallback, no auto-discovery).
-- Must be a real filesystem path (no http:// / s3:// /
-  RefGet endpoints in v0).
-- samtools handles `.fai` index requirement — if missing,
-  samtools writes one to the same directory as the FASTA on
-  first read. No TTI-O-side index management.
-
-A small synthetic reference FASTA (~2 KB total, 1 kb each for
-chr1 and chr2) is committed as a fixture for testing.
-
----
-
-## 3. Binding Decisions (continued from M87 §131–§135)
-
-| #   | Decision | Rationale |
-|-----|----------|-----------|
-| 136 | The BAM writer **collapses** `mate_chromosome == chromosome` to the SAM `=` shorthand for `RNEXT`. M87's reader expanded `=` to RNAME; the writer reverses this for round-trip canonicality. | Smaller SAM/BAM (one byte vs N bytes per same-chrom mate). Lossless under M87 + M88 round-trips because the expansion/collapse pair preserves semantics. |
-| 137 | The default sort behaviour is **coordinate-sorted output** (`sort=True`). | BAM consumers (samtools index, IGV, GATK) expect coordinate-sorted; emitting unsorted by default would make every TTI-O-written BAM unusable downstream without a separate `samtools sort` step. The `sort=False` parameter is available for callers who explicitly need the input order preserved. |
-| 138 | `mate_positions[i] == -1` (TTI-O's "no mate" sentinel) is **mapped to `0` on write** (SAM's convention). M87's reader does not symmetrically map SAM 0 → -1 because SAM 0 is overloaded ("position 0" is also the sentinel for unmapped POS); the writer's mapping is a one-way normalisation to SAM convention. | TTI-O's `-1` was an internal convention (the M82 schema chose -1 because it doesn't collide with any valid 1-based position). SAM uses 0 for the same meaning. The writer normalises on output to ensure samtools accepts the stream. |
-| 139 | Reference FASTA path is a **positional constructor argument** for CRAM read/write. No env-var fallback, no `RefGet` HTTP support in v0. | Keep API simple; reference resolution is a known headache for genomic tools and TTI-O doesn't need to solve it again. Callers who need fancier resolution wrap the constructor. |
-| 140 | Optional SAM tag fields (cols 12+) are **NOT preserved** through the M88 round trip. | M87's reader discards them (Binding Decision §134's spirit); M88's writer doesn't have them to re-emit. A future milestone could store + re-emit tags via a new `WrittenGenomicRun.optional_tags: list[list[str]]` field; not in M88 scope. |
-
----
-
-## 4. API surface
-
-### 4.1 Python — `python/src/ttio/importers/cram.py` + `python/src/ttio/exporters/bam.py` + `python/src/ttio/exporters/cram.py`
-
-```python
-from ttio.importers.cram import CramReader
-from ttio.exporters.bam import BamWriter
-from ttio.exporters.cram import CramWriter
-
-# CRAM read:
-reader = CramReader("alignments.cram", "reference.fa")
-run = reader.to_genomic_run(name="sample1")
-
-# BAM write:
-writer = BamWriter("output.bam")
-writer.write(run, provenance_records=run.provenance_records)
-
-# CRAM write:
-cram_writer = CramWriter("output.cram", "reference.fa")
-cram_writer.write(run, provenance_records=run.provenance_records)
+git add objc/Tools/TtioBamDump.m
+git commit -m "feat(M88.1): TtioBamDump --reference flag + .cram extension dispatch"
 ```
 
-### 4.2 Objective-C — `objc/Source/Import/TTIOCramReader.{h,m}` + `objc/Source/Export/TTIOBamWriter.{h,m}` + `objc/Source/Export/TTIOCramWriter.{h,m}`
+### Java (Task 55 — implements after Python, parallel with ObjC)
 
-```objc
-@interface TTIOCramReader : TTIOBamReader
-- (instancetype)initWithPath:(NSString *)path
-              referenceFasta:(NSString *)referenceFasta;
-@end
+**Modify** `java/src/main/java/global/thalion/ttio/importers/BamDump.java`:
 
-@interface TTIOBamWriter : NSObject
-- (instancetype)initWithPath:(NSString *)path;
-- (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
-   provenanceRecords:(NSArray<TTIOProvenanceRecord *> *)provenance
-                sort:(BOOL)sort
-               error:(NSError **)error;
-@end
+- Parse `--reference <fa>` flag in main() (alongside existing
+  positional path + `--name`).
+- After parsing, check `path.toLowerCase().endsWith(".cram")` and
+  dispatch to `new CramReader(Paths.get(path), Paths.get(reference))`
+  if true; else use existing `BamReader` path.
+- If the path is `.cram` and `--reference` is absent, print error
+  to stderr and `System.exit(2)`.
 
-@interface TTIOCramWriter : TTIOBamWriter
-- (instancetype)initWithPath:(NSString *)path
-              referenceFasta:(NSString *)referenceFasta;
-@end
+The canonical-JSON serialisation logic stays identical (byte-exact
+contract).
+
+**Verification:** `mvn -o compile`, then run via `mvn -o -q
+exec:java -Dexec.mainClass=...BamDump -Dexec.args="<cram>
+--reference <fa>"`. Diff against Python reference.
+
+**Commit (Java only):**
+```
+git add java/src/main/java/global/thalion/ttio/importers/BamDump.java
+git commit -m "feat(M88.1): BamDump --reference flag + .cram extension dispatch"
 ```
 
-### 4.3 Java
+### Cross-language harness + docs (Task 56)
 
-```java
-public class CramReader extends BamReader {
-    public CramReader(Path path, Path referenceFasta) { ... }
-}
+**Modify** `python/tests/integration/test_m88_cross_language.py`:
 
-public class BamWriter {
-    public BamWriter(Path path) { ... }
-    public void write(WrittenGenomicRun run,
-                      List<ProvenanceRecord> provenance,
-                      boolean sort) throws IOException { ... }
-}
+Append three new tests (no new harness file):
 
-public class CramWriter extends BamWriter {
-    public CramWriter(Path path, Path referenceFasta) { ... }
-}
+1. `test_python_cram_dump_works` — sanity check: Python CLI on M88
+   CRAM with `--reference` produces non-empty JSON with
+   `read_count == 5`, `sample_name == "M88_TEST_SAMPLE"`.
+2. `test_objc_cram_matches_python_byte_exact` — ObjC CLI output
+   on M88 CRAM == Python output (byte-exact).
+3. `test_java_cram_matches_python_byte_exact` — same for Java.
+
+Add a CRAM fixture path constant + `_python_cram_dump()` /
+`_objc_cram_dump()` / `_java_cram_dump()` helpers next to the
+existing BAM helpers. Each new helper just invokes the same CLI
+with the CRAM fixture path + `--reference` arg.
+
+**Update `docs/vendor-formats.md`** — in the M88 §SAM/BAM/CRAM
+Export section's "Cross-language conformance" subsection, replace
+the "Adding CRAM-aware dump CLIs across all three languages is
+deferred to a future M88.1" text with a present-tense statement
+that M88.1 extends the existing `bam_dump` CLI with a
+`--reference` flag and the harness verifies byte-identical
+canonical JSON across all three languages for both BAM and CRAM.
+
+Also update the §CRAM section to note that the `bam_dump` CLI
+auto-dispatches to `CramReader` when the input path ends in
+`.cram`.
+
+**Update `CHANGELOG.md`** — append M88.1 section under Unreleased
+(after the M88 section).
+
+**Update `WORKPLAN.md`** — append M88.1 entry after the M88
+SHIPPED block.
+
+**Update `README.md`** — append a short note to the CRAM importer
+bullet mentioning the `bam_dump` CLI's `--reference` flag for CRAM.
+
+**Commit (docs):**
+```
+git add python/tests/integration/test_m88_cross_language.py \
+        docs/vendor-formats.md CHANGELOG.md WORKPLAN.md README.md
+git commit -m "docs(M88.1): extend cross-language harness with CRAM + docs sweep"
 ```
 
----
+## 4. Acceptance criteria
 
-## 5. Reference + cross-language fixture
+- All three CLIs accept `--reference` and dispatch to CramReader
+  on `.cram` paths.
+- All three CLIs reject `.cram` input without `--reference` (exit
+  2, error mentions `--reference`).
+- Existing M87 BAM behaviour is unchanged: `bam_dump foo.bam`
+  still works without `--reference`.
+- Extended `test_m88_cross_language.py` — all six tests pass:
+  Python sanity (BAM), ObjC byte-exact (BAM), Java byte-exact
+  (BAM), Python sanity (CRAM), ObjC byte-exact (CRAM), Java
+  byte-exact (CRAM).
+- No regressions in any language's existing test suite.
 
-### 5.1 Synthetic reference FASTA
+## 5. Critical notes
 
-Commit `python/tests/fixtures/genomic/m88_test_reference.fa`:
+- **Canonical-JSON contract is unchanged.** The serialisation
+  logic in each language MUST produce byte-identical output for
+  the same WrittenGenomicRun. Do not touch the JSON emission —
+  only the dispatch logic before it.
+- **CRAM `provenance_count` will differ from BAM** for the same
+  fixture pair, because samtools injects different `@PG` records
+  per format. The canonical JSON for the CRAM fixture is its own
+  ground truth; do not compare CRAM output against BAM output.
+- **Extension dispatch is case-insensitive.** `Path.cram`,
+  `Path.CRAM`, `Path.Cram` all dispatch to CramReader.
+- **`--reference` for BAM/SAM is accepted but unused.** Do not
+  error — keeps the CLI tolerant of scripts that always pass
+  `--reference` (defensive).
+- **Do NOT commit the autogenerated `<fasta>.fai`** index — it's
+  reproducible at runtime and was deliberately excluded from M88.
+- **No `git add -A`.** Each implementer commits only their own
+  language paths to prevent the M84-style commit-bundling race.
+- **One commit per language; one commit for docs.** Four commits
+  total expected on top of `3e56d0a`.
 
-```
->chr1
-ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
-ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
-... [repeat ACGT for 1000 bases total per chromosome] ...
->chr2
-TGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCA
-TGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCATGCA
-... [repeat TGCA for 1000 bases total per chromosome] ...
-```
+## 6. Sequencing
 
-Total: ~2 KB committed binary (deterministic; the
-`regenerate_m88_reference.sh` script regenerates from a small
-inline Python one-liner).
-
-The `.fai` index (`m88_test_reference.fa.fai`) is regenerated
-on first use by samtools. We commit the reference but NOT the
-index (lets samtools build it deterministically on each
-machine).
-
-### 5.2 BAM and CRAM fixtures
-
-`python/tests/fixtures/genomic/m88_test.bam` — 5 reads aligned
-to the synthetic reference (4 perfect-match on chr1 around
-position 100, 1 perfect-match on chr2 around position 200).
-Built from a small SAM source `m88_test.sam` via:
-
-```sh
-samtools view -bS m88_test.sam > m88_test.bam
-samtools index m88_test.bam
-```
-
-`python/tests/fixtures/genomic/m88_test.cram` — same data
-encoded as CRAM:
-
-```sh
-samtools view -CS --reference m88_test_reference.fa m88_test.sam > m88_test.cram
-samtools index m88_test.cram
-```
-
-All four files (`.fa`, `.bam`, `.bam.bai`, `.cram`,
-`.cram.crai`) committed; regeneration via
-`regenerate_m88_fixtures.sh`.
-
-The `.cram.crai` index file is needed for region-filter tests
-on CRAM input.
-
----
-
-## 6. Tests
-
-### 6.1 Python — `python/tests/test_m88_cram_bam_round_trip.py`
-
-14 pytest cases (skip-the-file pattern from M87 if samtools is
-missing):
-
-1. **`test_cram_read_full`** — read `m88_test.cram` with
-   `CramReader`, verify `len(run.read_names) == 5` and all
-   per-read scalars match the expected values from the SAM
-   source.
-2. **`test_cram_read_region`** — region-filter CRAM read on
-   `chr1:100-200` returns the 4 chr1 reads.
-3. **`test_bam_write_basic`** — write a `WrittenGenomicRun`
-   to a temp `.bam`, then read it back with `BamReader` and
-   verify all read names + positions round-trip. Don't
-   assert byte-equality of the BAM file (samtools may add
-   @PG entries).
-4. **`test_bam_write_unsorted`** — same with `sort=False`,
-   verify the read order in the output matches the input
-   order.
-5. **`test_bam_write_with_provenance`** — write with explicit
-   `provenance_records=[ProvenanceRecord(...)]`, read back,
-   verify the entry appears in the parsed @PG chain.
-6. **`test_cram_write_basic`** — write a `WrittenGenomicRun`
-   to a temp `.cram` (with reference), read back with
-   `CramReader`, verify round-trip.
-7. **`test_cram_write_with_reference`** — write CRAM, then
-   try reading WITHOUT the reference path; verify samtools
-   raises (CRAM needs the reference; this is samtools
-   behaviour, not TTI-O).
-8. **`test_round_trip_bam_to_bam`** — full BAM → GenomicRun →
-   BAM round trip. Read both BAMs back through `BamReader`
-   and verify equality of all per-read scalar arrays + the
-   sequences/qualities byte buffers (excluding @PG count
-   which grows by 2 per write).
-9. **`test_round_trip_cram_to_cram`** — full CRAM → GenomicRun
-   → CRAM round trip. Same comparison method.
-10. **`test_round_trip_cross_format`** — BAM → GenomicRun →
-    CRAM, then CRAM → GenomicRun → BAM. End state should
-    match the start (modulo @PG growth).
-11. **`test_mate_collapse_to_equals`** — verify the BAM
-    writer collapses `mate_chromosome == chromosome` to `=`
-    in the SAM stream by writing then reading the raw SAM
-    via `samtools view -h` and parsing.
-12. **`test_mate_position_negative_one_to_zero`** — verify
-    the writer maps `-1` mate positions to `0` per Binding
-    Decision §138.
-13. **`test_cram_reader_missing_reference`** — `CramReader`
-    constructed without a reference path raises a clear
-    error (or one is required-arg in the constructor; pick
-    one and test).
-14. **`test_writer_produces_valid_sam`** — write a BAM, then
-    `samtools view <bam>` returns valid SAM text (parseable
-    by `samtools view -h` round trip).
-
-### 6.2 ObjC — `objc/Tests/TestM88CramBamRoundTrip.m`
-
-Same 14 cases. Skip the whole file if `samtools` is not on
-PATH (reuse the M87 detection helper from
-`TTIOBamReader.m`).
-
-### 6.3 Java — `java/src/test/java/global/thalion/ttio/exporters/CramBamRoundTripTest.java`
-
-Same 14 cases. JUnit 5 with `Assumptions.assumeTrue(samtoolsAvailable())`
-(reuse M87's `BamReader.isSamtoolsAvailable()` static probe).
-
-### 6.4 Cross-language conformance
-
-Extend `python/tests/integration/test_m87_cross_language.py`
-into a new
-`python/tests/integration/test_m88_cross_language.py` that:
-
-1. Reads `m88_test.bam` in each of the three languages
-   (sanity check; same as M87's existing harness on the
-   different fixture).
-2. **Writes** `m88_test.bam` from a known
-   `WrittenGenomicRun` in each of the three languages,
-   reads each output back via `BamReader`, and dumps via
-   `bam_dump`. Asserts all three written-and-re-read BAMs
-   produce byte-identical canonical JSON.
-3. Same for CRAM via `CramReader` / `CramWriter`.
-
-The cross-language assertion is on the **decoded JSON**
-(field-equality), not on the raw BAM/CRAM bytes (which
-differ by samtools-injected @PG entries and timestamps).
-
----
-
-## 7. Documentation
-
-### 7.1 `docs/vendor-formats.md`
-
-Extend the SAM/BAM section (added in M87) with new
-subsections "CRAM input (M88)" and "BAM/CRAM export (M88)"
-covering:
-- Reference FASTA requirement for CRAM read/write.
-- Lossless round-trip guarantees and known lossy pitfalls
-  (samtools' `--output-fmt-option lossy_names`, etc.).
-- Sort behaviour (default coordinate-sorted; `sort=False`
-  preserves input order).
-- The mate-position normalisation (-1 → 0 on write per §138).
-- The mate-chromosome collapse (`==` chromosome → `=` per
-  §136).
-
-### 7.2 README.md
-
-Add CRAM importer + BAM/CRAM exporter rows to the existing
-Importers and Exporters lists.
-
-### 7.3 CHANGELOG.md
-
-M88 entry under `[Unreleased]`.
-
-### 7.4 WORKPLAN.md
-
-M88 status flipped from planned to SHIPPED.
-
----
-
-## 8. Out of scope
-
-- **CRAM with embedded reference** — TTI-O requires an
-  external reference FASTA. samtools' embedded-reference CRAM
-  mode is not exposed in v0.
-- **RefGet HTTP endpoints** — the FASTA path is a filesystem
-  path only. RefGet integration is a future milestone.
-- **htslib direct linking** — subprocess-only continues from
-  M87.
-- **Optional SAM tag fields** — see Binding Decision §140.
-  Future milestone could add a `WrittenGenomicRun.optional_tags`
-  field.
-- **Multi-RG splitting on write** — only one @RG emitted per
-  output BAM/CRAM. Future scope.
-- **Lossy CRAM modes** — `--output-fmt-option
-  lossy_names=1` and quality-binning CRAM modes are NOT
-  exposed. Always lossless.
-- **Streaming write for huge runs** — same as M87, the full
-  GenomicRun is materialised in memory before SAM text is
-  generated.
-- **Index file management** — samtools auto-builds `.fai`,
-  `.bai`, `.crai` as needed. TTI-O doesn't try to be smart
-  about it.
-
----
-
-## 9. Acceptance Criteria
-
-### Python
-- [ ] All existing tests pass (zero regressions vs `238b90d`).
-- [ ] All 14 new tests in
-      `python/tests/test_m88_cram_bam_round_trip.py` pass.
-- [ ] `m88_test_reference.fa`, `m88_test.sam`, `m88_test.bam`,
-      `m88_test.bam.bai`, `m88_test.cram`, `m88_test.cram.crai`
-      fixtures committed.
-- [ ] `regenerate_m88_fixtures.sh` script committed and
-      executable.
-- [ ] `CramReader` + `BamWriter` + `CramWriter` import
-      successfully without samtools installed (only methods
-      that invoke samtools require it).
-
-### Objective-C
-- [ ] All existing tests pass (zero regressions vs the 2532
-      PASS baseline + 2 pre-existing M38 Thermo failures).
-- [ ] 14 new test methods in `TestM88CramBamRoundTrip.m`
-      pass when samtools is available; skip cleanly when not.
-- [ ] ≥ 30 new assertions.
-
-### Java
-- [ ] All existing tests pass (zero regressions vs the 529/0/0/0
-      baseline → ≥ 543/0/0/0 after M88).
-- [ ] 14 new test methods in `CramBamRoundTripTest.java` pass
-      when samtools is available; skip cleanly when not.
-
-### Cross-Language
-- [ ] All three implementations produce field-equal canonical
-      JSON when reading the M88 BAM/CRAM fixtures.
-- [ ] BAMs written by each language round-trip to identical
-      decoded JSON when read back.
-- [ ] `docs/vendor-formats.md` SAM/BAM section extended with
-      CRAM read/write coverage.
-- [ ] `README.md` exporters list updated.
-- [ ] `CHANGELOG.md` M88 entry committed.
-- [ ] `WORKPLAN.md` M88 status flipped to SHIPPED.
-
----
-
-## 10. Gotchas
-
-158. **CRAM reads need the reference; CRAM writes need the
-     reference; CRAM seeks need the index.** All three are
-     samtools-side concerns — TTI-O just passes paths
-     through. Tests must commit the reference + index files
-     OR rely on samtools auto-building them on first use.
-
-159. **samtools sort writes a temp file to the BAM's
-     directory by default.** For tmp_path tests, this means
-     the sort happens in a directory that pytest controls;
-     no special handling needed.
-
-160. **The mate-chromosome collapse (§136) interacts with
-     samtools sort.** When samtools sorts by coordinate,
-     mate-chromosome RNEXT may shift order; the collapse
-     happens in the SAM text TTI-O generates BEFORE samtools
-     sees it, so samtools' sort doesn't affect the collapse
-     decision.
-
-161. **CRAM round-trips through TTI-O are NOT byte-identical
-     CRAM bytes** (samtools may use different compression
-     parameters, container layouts, etc. across runs). The
-     cross-language assertion is on **decoded fields**, not
-     raw CRAM bytes. Same rationale as the M87 cross-language
-     harness.
-
-162. **Quality bytes in SAM/BAM/CRAM are Phred+33 ASCII**;
-     TTI-O stores raw Phred bytes. The encoding mismatch:
-     SAM stores ASCII `'I'` (= 73 decimal = Phred 40 +33), TTI-O
-     stores raw byte 40. The reader (M87) already handles
-     this (subtracts 33 from each char's ASCII value to get
-     raw Phred). The writer (M88) must add 33 to each raw
-     Phred byte to get the ASCII character.
-
-     Wait — re-check M87 behaviour. The M87 reader stores
-     SAM's QUAL field bytes directly into the qualities
-     buffer (subtracts 33? or stores as-is?). Verify with
-     the M87 fixture's `qualities_md5`: the expected MD5 is
-     over raw Phred bytes (after −33 conversion) OR over
-     ASCII bytes (no conversion). The implementer must
-     check the M87 implementation and match its convention
-     so M88's write reverses it correctly.
-
-163. **TLEN can be very negative** (signed int32 — values
-     down to -2^31). Don't accidentally truncate to int16 or
-     uint32 anywhere in the SAM line formatter.
-
-164. **The SAM spec requires fixed column ordering**;
-     samtools rejects malformed SAM. The writer's per-read
-     line builder must always emit all 11 columns even when
-     fields are empty (use `*` or `0` per spec rather than
-     skipping).
-
-165. **CRAM file extensions matter to samtools.** `.cram`
-     extension triggers CRAM mode auto-detection; `.bam`
-     triggers BAM. Always honour the user-supplied path
-     extension; don't auto-rename.
-
-166. **The reference FASTA must match the BAM's @SQ
-     entries.** If a BAM was aligned against `chr1`
-     (length 248956422 in GRCh38) but the user passes a
-     reference where chr1 has a different length, samtools
-     errors out. TTI-O doesn't validate this — error
-     surfaces from the samtools subprocess.
+1. Python implementer (Task 53) — produces reference canonical JSON
+   for M88 CRAM fixture.
+2. ObjC implementer (Task 54) + Java implementer (Task 55) in
+   parallel — both diff against Python reference.
+3. Docs + harness (Task 56) — extends harness, runs end-to-end,
+   sweeps docs.
+4. Push.
