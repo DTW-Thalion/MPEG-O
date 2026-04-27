@@ -72,6 +72,8 @@ libTTIO_HEADER_FILES = \
 	Import/TTIONmrMLReader.h \
 	Import/TTIOThermoRawReader.h \
 	Import/TTIOBrukerTDFReader.h \
+	Import/TTIOBamReader.h \
+	Import/TTIOSamReader.h \
 	Import/TTIOImzMLReader.h \
 	Import/TTIOMzTabReader.h \
 	Import/TTIOWatersMassLynxReader.h \
@@ -171,6 +173,8 @@ libTTIO_OBJC_FILES = \
 	Import/TTIONmrMLReader.m \
 	Import/TTIOThermoRawReader.m \
 	Import/TTIOBrukerTDFReader.m \
+	Import/TTIOBamReader.m \
+	Import/TTIOSamReader.m \
 	Import/TTIOImzMLReader.m \
 	Import/TTIOMzTabReader.m \
 	Import/TTIOWatersMassLynxReader.m \
