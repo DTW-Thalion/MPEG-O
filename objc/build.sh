@@ -101,17 +101,23 @@ if [ "$COVERAGE" = "1" ]; then
     "$LLVM_PROFDATA" merge -sparse "${profraws[@]}" \
         -o "$here/coverage/coverage.profdata"
 
-    # Find every test binary GNUstep produced and aggregate them. The
-    # GNUstep test target convention is `<TestProject>/obj/<TestName>`,
-    # which lands the unit-test runner at Tests/obj/TTIOTests. CLI
-    # tools built with --coverage (TtioBamDump, TtioPerAU, etc.) also
-    # contribute profiles when they're exercised.
+    # Find every binary that participates in a coverage-instrumented
+    # test run. The test runner is at Tests/obj/TTIOTests, but it
+    # links against libTTIO.so (Source/obj/libTTIO.so) which carries
+    # ~all the production code's coverage maps. llvm-cov needs every
+    # binary object that contributed profile data passed as -object
+    # so it can resolve the corresponding source files.
     binaries=()
     while IFS= read -r -d '' bin; do
         # First binary is the positional arg to llvm-cov export; the
         # rest get -object prefixes (added later).
         binaries+=("$bin")
     done < <(find "$here" -path "*/obj/TTIOTests" -type f -print0 2>/dev/null)
+    # Also pick up the shared libTTIO.so* the test binary links to —
+    # without this the report contains only Tests/ source coverage.
+    while IFS= read -r -d '' lib; do
+        binaries+=("$lib")
+    done < <(find "$here/Source" -name "libTTIO.so*" -type f -print0 2>/dev/null)
 
     if [ ${#binaries[@]} -eq 0 ]; then
         echo "build.sh --coverage: no TTIOTests binary found under $here" >&2
