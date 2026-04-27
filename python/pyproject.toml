@@ -92,9 +92,10 @@ testpaths = ["tests"]
 addopts = "-ra"
 asyncio_mode = "strict"
 
-# V1 (verification workplan): code coverage. No threshold enforced;
-# CI publishes coverage.xml + htmlcov/ as artifacts. See
-# docs/verification-workplan.md §V1.
+# V1 (verification workplan): code coverage. C7 added the
+# fail_under threshold below; CI publishes coverage.xml + htmlcov/
+# as artefacts and gates on the threshold. See
+# docs/verification-workplan.md §V1 + docs/coverage-workplan.md §C7.
 [tool.coverage.run]
 source = ["src/ttio"]
 branch = true
@@ -107,6 +108,16 @@ omit = [
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
+# C7 — minimum overall line coverage. Set 1 pt below the
+# post-C-series achieved baseline (85% as measured by
+# coverage report on the full suite) to allow for natural
+# drift while catching regressions. Bump after intentional
+# coverage improvements; never lower without a recorded reason.
+# Note: per-file coverage in tools/ is 71-100% (much higher) but
+# the aggregate is dragged down by the three vendor-importer
+# files (Bruker / Thermo / Waters) that need proprietary fixtures
+# to exercise. See docs/coverage-workplan.md for the gap analysis.
+fail_under = 84
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",

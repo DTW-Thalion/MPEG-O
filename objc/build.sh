@@ -146,6 +146,29 @@ if [ "$COVERAGE" = "1" ]; then
 
     lines_hit=$(grep -c '^DA:.*,[1-9]' "$here/coverage/coverage.lcov" || echo 0)
     echo "build.sh --coverage: wrote $here/coverage/coverage.lcov ($lines_hit hit lines)"
+
+    # C7 — minimum aggregate line coverage (LH/LF across all files).
+    # Set 1 pt below the post-C-series ObjC baseline (~84% as
+    # measured by summing LH:/LF: across coverage.lcov) to allow
+    # for natural drift while catching regressions. Bump after
+    # intentional improvements; never lower without a recorded
+    # reason. Override by setting TTIO_COV_MIN=<pct> in the env.
+    # See docs/verification-workplan.md §V1 + docs/coverage-workplan.md §C7.
+    cov_min="${TTIO_COV_MIN:-82}"
+    cov_pct=$(awk -F: '
+        /^LH:/ { hit += $2 }
+        /^LF:/ { found += $2 }
+        END    { if (found > 0) printf "%.2f", 100 * hit / found }
+    ' "$here/coverage/coverage.lcov")
+    if [ -z "$cov_pct" ]; then
+        echo "build.sh --coverage: could not compute coverage % (empty LH/LF totals)" >&2
+        exit 1
+    fi
+    if awk -v p="$cov_pct" -v m="$cov_min" 'BEGIN{exit !(p+0 < m+0)}'; then
+        echo "build.sh --coverage: line coverage $cov_pct% is below threshold $cov_min%" >&2
+        exit 1
+    fi
+    echo "build.sh --coverage: line coverage $cov_pct% meets threshold $cov_min%"
     exit 0
 fi
 

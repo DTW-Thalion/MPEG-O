@@ -157,8 +157,12 @@
               V1 (verification workplan): JaCoCo line + branch coverage.
               `mvn verify` (or `mvn test`) produces target/site/jacoco/
               with jacoco.xml + index.html. CI uploads as artifacts.
-              No threshold enforcement in V1; just visibility.
-              See docs/verification-workplan.md §V1.
+              C7 added the BUNDLE LINE COVEREDRATIO check below — set
+              1 pt below the post-C-series Java baseline (~86%) to
+              allow drift while catching regressions. Bump after
+              intentional improvements; never lower without a
+              recorded reason. See docs/verification-workplan.md §V1
+              and docs/coverage-workplan.md §C7.
             -->
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -177,6 +181,27 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.84</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

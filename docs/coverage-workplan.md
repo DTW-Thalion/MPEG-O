@@ -218,26 +218,40 @@ pt, ObjC +0.5 pts (most branch tests don't add new line coverage).
 
 ---
 
-### C7 — Coverage thresholds in CI
+### C7 — Coverage thresholds in CI ✅ DONE 2026-04-27
 
-**Effort:** S (1-2 days). **Foundation; should land last so
-thresholds match where we end up.**
+**Effort actual:** ~1 day. Landed after C1-C5 (C4/C6 deferred to a
+later coverage push — see Section 4 sequencing notes).
 
-**Scope:** After C1-C6, set per-language coverage thresholds in
-CI that fail builds below the new floor.
+**What landed:**
+* `python/pyproject.toml` — `[tool.coverage.report] fail_under = 84`
+  (post-C-series achieved baseline 85% per `coverage report`, set
+  1 pt below to allow drift).
+* `.github/workflows/ci.yml` — pytest invocation gained
+  `--cov-fail-under=84` (pytest-cov ignores the pyproject.toml
+  setting; the CLI flag is what gates the build).
+* `java/pom.xml` — added `jacoco-check` execution under the
+  existing `jacoco-maven-plugin` with rule
+  `BUNDLE LINE COVEREDRATIO minimum=0.84`. Verified locally:
+  `mvn verify` reports "All coverage checks have been met" and
+  exits 0 at the post-C-series Java baseline (~86%).
+* `objc/build.sh` — after `llvm-cov export`, sums `LH:`/`LF:`
+  totals across `coverage.lcov` and exits 1 if below
+  `${TTIO_COV_MIN:-82}`% (post-C-series ObjC baseline 83.93%
+  per `awk` over the existing lcov, set 1 pt below).
 
-**Files:**
-* `python/pyproject.toml` — `[tool.coverage.report] fail_under = 90`
-  (or whatever C-series achieves).
-* `java/pom.xml` — JaCoCo `<rule>` block with `LINE COVEREDRATIO
-  minimum=0.85` etc.
-* `objc/build.sh` — `--coverage` flag exits non-zero if below a
-  numeric threshold derived from `coverage.lcov` totals.
-* `.github/workflows/ci.yml` — coverage jobs already publish
-  artefacts; threshold enforcement makes them gate on `actions/exit`.
+**Why the floors look low vs targets in §2:**
+The §2 targets (Python ≥92, Java ≥88, ObjC ≥85) were aspirational
+end-of-series stretch goals. Actuals after C1-C5 landed are
+85/86/84 — held back by vendor-importer paths (Bruker timsTOF,
+Thermo RAW, Waters MassLynx) that need proprietary fixtures, and
+genomics + cloud paths deferred from C4/C6. The CI floors are set
+1 pt below current actuals to lock in the C-series gains while
+allowing drift; bump them in tandem after intentional coverage
+improvements.
 
-**Target:** Threshold matches actual achieved baseline minus 1 pt
-(allow 1 pt of natural drift).
+**Override:** ObjC accepts `TTIO_COV_MIN=<pct>` in env for local
+overrides (e.g. when bisecting on a branch).
 
 ---
 
