@@ -75,6 +75,7 @@ extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM85bNameTokenizer(void);
 extern void testM86GenomicCodecWiring(void);
+extern void testM87BamImporter(void);
 
 int main(int argc, const char *argv[])
 {
@@ -374,6 +375,10 @@ int main(int argc, const char *argv[])
         START_SET("M86: codec wiring")
             testM86GenomicCodecWiring();
         END_SET("M86: codec wiring")
+
+        START_SET("M87: BAM importer")
+            testM87BamImporter();
+        END_SET("M87: BAM importer")
     }
     return 0;
 }
