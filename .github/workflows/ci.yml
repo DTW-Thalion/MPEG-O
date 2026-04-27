@@ -334,6 +334,128 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  perf-regression:
+    name: Performance regression check (Python + ObjC, push-to-main only)
+    runs-on: ubuntu-latest
+    # V2 (verification workplan): only fires on push to main, not every
+    # PR. Perf runs are slow (~3-5 min total) and noisy on shared GHA
+    # runners; we accept that regressions are detected after merge
+    # rather than during PR review. Maintainers update
+    # tools/perf/baseline.json with --update-baseline when accepting
+    # an intentional perf change.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [python-test, objc-build-test]
+
+    env:
+      LIBOBJC2_REF: v2.3
+      TOOLS_MAKE_REF: make-2_9_3
+      LIBS_BASE_REF:  base-1_31_1
+      INSTALL_PREFIX: /usr/local
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies (apt)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build make git ca-certificates \
+            libhdf5-dev zlib1g-dev libssl-dev libxml2-dev \
+            libgnutls28-dev libffi-dev libicu-dev \
+            libblocksruntime-dev libcurl4-openssl-dev tzdata \
+            python3 python3-pip
+
+      - name: Cache GNUstep stack
+        id: gnustep-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/include/objc
+            /usr/local/include/GNUstep
+            /usr/local/lib/libobjc.so*
+            /usr/local/lib/libgnustep-base*
+            /usr/local/lib/GNUstep
+            /usr/local/share/GNUstep
+            /usr/local/bin/gnustep-config
+            /usr/local/bin/gdomap
+          key: gnustep-${{ runner.os }}-${{ env.LIBOBJC2_REF }}-${{ env.TOOLS_MAKE_REF }}-${{ env.LIBS_BASE_REF }}-v2
+
+      - name: Build libobjc2 from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -exo pipefail
+          git clone --depth 1 --branch "${LIBOBJC2_REF}" \
+            https://github.com/gnustep/libobjc2.git /tmp/libobjc2
+          cd /tmp/libobjc2
+          git submodule update --init --recursive
+          mkdir build && cd build
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
+          ninja
+          sudo ninja install
+
+      - name: Build gnustep-make from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -exo pipefail
+          git clone --depth 1 --branch "${TOOLS_MAKE_REF}" \
+            https://github.com/gnustep/tools-make.git /tmp/tools-make
+          cd /tmp/tools-make
+          ./configure --prefix="${INSTALL_PREFIX}" \
+            --with-library-combo=ng-gnu-gnu CC=clang
+          make
+          sudo make install
+
+      - name: Build gnustep-base from source
+        if: steps.gnustep-cache.outputs.cache-hit != 'true'
+        run: |
+          set -exo pipefail
+          # shellcheck disable=SC1091
+          . "${INSTALL_PREFIX}/share/GNUstep/Makefiles/GNUstep.sh"
+          git clone --depth 1 --branch "${LIBS_BASE_REF}" \
+            https://github.com/gnustep/libs-base.git /tmp/libs-base
+          cd /tmp/libs-base
+          ./configure CC=clang
+          make
+          sudo -E make install
+
+      - name: Refresh dynamic linker cache
+        run: sudo ldconfig
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ttio + perf deps
+        working-directory: python
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -e ".[test,import,crypto,codecs]"
+
+      - name: Build libTTIO + tools (for ObjC perf)
+        working-directory: objc
+        run: ./build.sh
+
+      - name: Run perf harness + compare against baseline
+        run: |
+          chmod +x tools/perf/run_perf_ci.sh
+          tools/perf/run_perf_ci.sh | tee perf-report.md
+
+      - name: Upload perf report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report
+          path: |
+            perf-report.md
+            tools/perf/_out_python_full/full.json
+            tools/perf/_out_objc_full/full.json
+          if-no-files-found: warn
+          retention-days: 90
+
   cross-compat:
     name: Cross-language parity (ObjC ⇄ Python ⇄ Java)
     needs: [objc-build-test, python-test, java-test]
