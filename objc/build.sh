@@ -118,6 +118,14 @@ if [ "$COVERAGE" = "1" ]; then
     while IFS= read -r -d '' lib; do
         binaries+=("$lib")
     done < <(find "$here/Source" -name "libTTIO.so*" -type f -print0 2>/dev/null)
+    # And the CLI tool binaries under Tools/obj/ — when tests fork-
+    # exec them via NSTask under coverage, each child writes its own
+    # .profraw, but we need to pass each binary as -object so llvm-cov
+    # can resolve the source files mapped into each tool's coverage
+    # maps.
+    while IFS= read -r -d '' tool; do
+        binaries+=("$tool")
+    done < <(find "$here/Tools/obj" -maxdepth 1 -type f -executable -print0 2>/dev/null)
 
     if [ ${#binaries[@]} -eq 0 ]; then
         echo "build.sh --coverage: no TTIOTests binary found under $here" >&2

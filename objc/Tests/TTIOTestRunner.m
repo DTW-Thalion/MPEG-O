@@ -79,6 +79,7 @@ extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
 extern void testV4EdgeCases(void);
 extern void testV8Hdf5Corruption(void);
+extern void testC1ToolsCli(void);
 
 int main(int argc, const char *argv[])
 {
@@ -394,6 +395,10 @@ int main(int argc, const char *argv[])
         START_SET("V8: HDF5 corruption recovery")
             testV8Hdf5Corruption();
         END_SET("V8: HDF5 corruption recovery")
+
+        START_SET("C1: CLI tools coverage")
+            testC1ToolsCli();
+        END_SET("C1: CLI tools coverage")
     }
     return 0;
 }
