@@ -318,3 +318,115 @@ in full in CI.
 * `UVVisSpectrum` JCAMP-DX writer emitting `##DATA TYPE=UV/VIS
   SPECTRUM` with `##XUNITS=NANOMETERS`, `##YUNITS=ABSORBANCE`, and
   `##$PATH LENGTH CM` / `##$SOLVENT` custom LDRs.
+
+## SAM/BAM (M87, post-v1.1.1 — delegation to samtools)
+
+**Status:** Implemented via subprocess delegation. No `htslib`
+links into TTI-O; the converter is resolved at runtime.
+
+The Sequence Alignment/Map (SAM) text format and its binary
+counterpart (BAM) are the de facto exchange format for aligned
+sequencing reads. M87 ingests both via the canonical
+[`samtools`][samtools] CLI and converts them to
+`WrittenGenomicRun` instances ready for the M82-era write path.
+
+[samtools]: http://www.htslib.org/
+
+### Installation
+
+| Method | Command | Notes |
+|---|---|---|
+| **apt (Debian/Ubuntu)** | `sudo apt install samtools` | Universe repo; tracks current htslib. |
+| **brew (macOS)** | `brew install samtools` | Bottled; depends on `htslib`. |
+| **conda/mamba** | `conda install -c bioconda samtools` | Self-contained. |
+| **From source** | Build htslib + samtools from [GitHub][samtools-src] | For non-x86 architectures. |
+
+[samtools-src]: https://github.com/samtools/samtools
+
+The reference development environment for M87 used `samtools 1.19.2` (Ubuntu 24.04 universe build). Other 1.x versions are expected to work — TTI-O parses the SAM text emitted by `samtools view -h` and does not consume any version-specific output.
+
+### Binary resolution (all three languages)
+
+The reader checks `samtools` on `PATH` at first use of `to_genomic_run()` (NOT at import time per Binding Decision §135 in the M87 plan). If missing, raises a clear error including install guidance for apt / brew / conda. The error fires only on the first import operation; the `BamReader` class itself is loadable on systems without `samtools` (e.g. for documentation generation, type checking).
+
+### Command invoked
+
+```
+samtools view -h <path> [region]
+```
+
+stdout is consumed line-by-line by the language-native subprocess wrapper:
+
+* Python: `subprocess.Popen(..., stdout=PIPE, stderr=PIPE, text=True)`.
+* ObjC: `NSTask` with `setLaunchPath:` / `setStandardOutput:`.
+* Java: `ProcessBuilder([...]).start()`.
+
+### Field mapping (SAM column → TTI-O field)
+
+| Col | SAM Name | TTI-O destination                                          |
+|-----|----------|------------------------------------------------------------|
+| 1   | QNAME    | `read_names[i]`                                            |
+| 2   | FLAG     | `flags[i]` (uint32)                                        |
+| 3   | RNAME    | `chromosomes[i]` (or `"*"` for unmapped)                   |
+| 4   | POS      | `positions[i]` (int64; SAM 1-based; 0 = unmapped)          |
+| 5   | MAPQ     | `mapping_qualities[i]` (uint8)                             |
+| 6   | CIGAR    | `cigars[i]` (literal `"*"` preserved if absent)            |
+| 7   | RNEXT    | `mate_chromosomes[i]` (`"="` expanded to RNAME)            |
+| 8   | PNEXT    | `mate_positions[i]` (int64)                                |
+| 9   | TLEN     | `template_lengths[i]` (int32; signed)                      |
+| 10  | SEQ      | concatenated into `sequences` byte array (`"*"` → 0 bytes) |
+| 11  | QUAL     | concatenated into `qualities` byte array                   |
+
+Only columns 1–11 are parsed in v0; optional tag fields (12+) are discarded. The `sequences` and `qualities` byte arrays are concatenated across all reads with `offsets[i]` / `lengths[i]` parallel arrays giving each read's slice.
+
+### Header line handling
+
+* `@SQ` (sequence dictionary) — `SN:` populates a chromosome list; `reference_uri` is set to the first `SN:` value.
+* `@RG` (read group) — `SM:` → `sample_name`, `PL:` → `platform`. First `@RG` line wins for multi-`@RG` BAMs.
+* `@PG` (program/tool) — each entry becomes a `ProvenanceRecord` accessible via `reader.lastProvenance()` (Java) / `reader.provenanceRecords` (ObjC) / set on the returned `WrittenGenomicRun.provenance_records` (Python). Note that `samtools view -bS` and `samtools view -h` themselves inject `@PG` records on the BAM/SAM stream — the `provenance_count` for the M87 fixture is 3 (1 user-supplied `bwa` plus 2 samtools-injected entries).
+* `@HD` (header version) and `@CO` (comments) are read but not mapped to TTI-O fields.
+
+### Region filter
+
+The `region` parameter is passed verbatim to `samtools view` as a positional argument:
+
+```python
+reader = BamReader("sample.bam")
+chr1_only = reader.to_genomic_run(name="chr1", region="chr1")
+window   = reader.to_genomic_run(name="window", region="chr1:1000-2000")
+unmapped = reader.to_genomic_run(name="unmapped", region="*")
+```
+
+The BAM must be indexed (a `.bai` companion file alongside the `.bam`) for region queries to work. Build with `samtools index <file.bam>` if the index is missing.
+
+### Round trip via the M82 write path
+
+```python
+from ttio.spectral_dataset import SpectralDataset
+from ttio.importers.bam import BamReader
+
+reader = BamReader("alignments.bam")
+run = reader.to_genomic_run(name="sample1", sample_name="NA12878")
+
+SpectralDataset.write_minimal(
+    "out.tio",
+    title="Sample 1",
+    isa_investigation_id="ISA-001",
+    genomic_runs={run.name: run},
+)
+```
+
+The resulting `.tio` accepts any of the M83–M86 codec choices on the genomic signal channels via `WrittenGenomicRun.signal_codec_overrides`.
+
+### Cross-language conformance
+
+A small canonical fixture (`m87_test.sam` + `m87_test.bam` + `m87_test.bam.bai`, 10 reads on two chromosomes with mixed mapped/unmapped/clipped) is committed under `python/tests/fixtures/genomic/`. Each language ships a `bam_dump` CLI emitting a fixed canonical-JSON shape (sorted keys, 2-space indent, MD5 fingerprints for the byte buffers). The M87 cross-language harness (`python/tests/integration/test_m87_cross_language.py`) runs all three CLIs on the same BAM and asserts byte-identical output. Java and ObjC currently match Python byte-exact at 1341 bytes per the canonical-JSON serialisation.
+
+### What is NOT covered
+
+* **CRAM input** — requires a reference FASTA. M88 (separate milestone) handles CRAM import.
+* **BAM/SAM writing** — TTI-O is the read direction in M87. M88 covers BAM/CRAM writers.
+* **Optional SAM tag fields** (`NM:i:`, `MD:Z:`, etc.) — ignored in v0. A future milestone could expose them as a `tags` field on `AlignedRead`.
+* **Multi-`@RG` aggregation** — only the first `@RG` is parsed. Caller can override `sample_name=` if needed.
+* **htslib direct linking** — subprocess via `samtools` is the Phase 5 design choice. A future optimisation milestone could add htslib-Java / pysam fast paths if the subprocess startup overhead (~50 ms per import) becomes a bottleneck.
+* **Streaming write** — the full `WrittenGenomicRun` is built in memory before being passed to the writer. For very large BAMs (10⁹+ reads) a streaming writer would be needed; future scope.

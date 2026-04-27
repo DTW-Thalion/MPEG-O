@@ -11,7 +11,148 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer
+
+### M87 — SAM/BAM Importer (2026-04-26)
+
+First Phase 5 (interop) milestone. A `BamReader` / `SamReader`
+class in each of the three languages wraps `samtools view -h`
+as a subprocess (no htslib linking, no pysam/htsjdk
+dependency) and converts SAM/BAM input to `WrittenGenomicRun`
+instances ready for the M82-era write path. samtools auto-
+detects SAM vs BAM format from magic bytes; one parser handles
+both. Optional region filter is passed verbatim to samtools.
+
+**First M86-era milestone with an external runtime
+dependency.** samtools must be on PATH at runtime; the class
+itself is loadable without it, and the error fires only at
+first import call (Binding Decision §135) with install hints
+for apt / brew / conda.
+
+#### Added
+
+- **Python** (`python/src/ttio/importers/bam.py` +
+  `sam.py`) — `BamReader.to_genomic_run(name, region,
+  sample_name)` returns a `WrittenGenomicRun`. Subprocess
+  wrapper via `subprocess.Popen(["samtools", "view", "-h",
+  ...], text=True)` consumed line-by-line. SAM header
+  parsing: `@SQ` → `reference_uri`, `@RG` → `sample_name` +
+  `platform` (first-wins per §133), `@PG` →
+  `ProvenanceRecord` list. SAM alignment columns 1–11 mapped
+  to `WrittenGenomicRun` fields (RNEXT `=` expanded to RNAME
+  per §131; 1-based positions preserved per §132). `bam_dump`
+  CLI (`python -m ttio.importers.bam_dump <bam>`) emits
+  canonical JSON with sorted keys + 2-space indent + MD5
+  fingerprints for the sequences/qualities byte buffers — the
+  cross-language conformance contract. 17 pytest cases
+  including BAM → `.tio` → GenomicRun → AlignedRead round-
+  trip. Full Python suite: 898 → 915 passed, zero
+  regressions.
+- **Objective-C** (`objc/Source/Import/TTIOBamReader.{h,m}` +
+  `TTIOSamReader.{h,m}`) — NSTask-based subprocess wrapper.
+  `TtioBamDump` CLI hand-rolls canonical-JSON emission
+  (NSJSONSerialization on GNUstep doesn't reliably support
+  `NSJSONWritingSortedKeys`, and Python's `indent=2` puts
+  each array element on its own line which NSJSONSerialization
+  compacts). Provenance exposed via a `provenanceRecords`
+  property on the reader (since `TTIOWrittenGenomicRun` doesn't
+  carry provenance fields). 55 new assertions across 16 test
+  methods in `TestM87BamImporter.m`. ObjC suite: 2477 → 2532
+  PASS, 2 pre-existing M38 Thermo failures unchanged.
+- **Java** (`java/src/main/java/global/thalion/ttio/importers/BamReader.java`
+  + `SamReader.java`) — ProcessBuilder-based subprocess.
+  `BamDump` main-class emits canonical JSON via TreeMap-
+  ordered serialisation. `lastProvenance()` accessor on the
+  reader (Java's `WrittenGenomicRun` record doesn't carry
+  provenance — convergent design with ObjC). Static
+  `isSamtoolsAvailable()` probe with memoised positive cache;
+  every test method uses `Assumptions.assumeTrue(...)` to
+  skip cleanly when missing. 17 JUnit 5 tests
+  (BamReaderTest 0 → 17). Java suite: 512 → 529.
+- **Cross-language harness**
+  (`python/tests/integration/test_m87_cross_language.py`) —
+  runs all three `bam_dump` CLIs on the canonical fixture
+  and asserts byte-identical output (1341 bytes per CLI;
+  identical md5 `23d408e0c94a22d37c5e149df6f7d921` across
+  Python, ObjC, Java). Skips ObjC/Java legs when their
+  builds aren't available; runs the Python leg in isolation.
+- **Cross-language fixture** —
+  `python/tests/fixtures/genomic/m87_test.{sam,bam,bam.bai}`
+  is a 10-read SAM/BAM in true coordinate-sorted order on
+  two chromosomes (chr1, chr2) with mixed
+  mapped/unmapped/soft-clipped reads, single @RG
+  (`SM:M87_TEST_SAMPLE`, `PL:ILLUMINA`), single user @PG
+  (`bwa`). Verbatim copies under
+  `objc/Tests/Fixtures/genomic/` and
+  `java/src/test/resources/ttio/fixtures/genomic/`. The
+  authoritative SAM source is committed alongside the
+  binary BAM and a regeneration shell script
+  (`regenerate_m87_bam.sh`) that runs `samtools view -bS`.
+- **Documentation** — new SAM/BAM section in
+  `docs/vendor-formats.md` (§SAM/BAM) covering installation
+  via apt/brew/conda, binary resolution semantics,
+  field-mapping table, header-line handling, region filter
+  syntax, the canonical-JSON shape, and the cross-language
+  conformance harness. README importers list updated.
+  `python/pyproject.toml` no new dependencies (samtools is
+  a system tool, not a Python package).
+
+#### Verification
+
+- Python: 17/17 tests in `test_m87_bam_importer.py` pass.
+  Full suite: 915 passed / 42 failed / 64 skipped /
+  4 xfailed / 3 errors (was 898 / 42 / 64 / 4 / 3); +17 new,
+  zero new regressions.
+- Objective-C: full test runner shows 2477 → 2532 PASS (+55
+  M87 assertions across 16 test methods); 2 FAIL unchanged
+  (pre-existing M38 Thermo).
+- Java: `mvn -o test` → 529 / 0 fail / 0 error / 0 skipped
+  (was 512 / 0 / 0 / 0). BamReaderTest 0 → 17.
+- Cross-language: `test_m87_cross_language.py` runs all
+  three `bam_dump` CLIs and verifies byte-identical output.
+  All three legs (Python / ObjC / Java) match the reference
+  byte-for-byte at 1341 bytes.
+
+#### Notes
+
+- **Provenance-on-the-reader pattern (convergent across
+  languages).** Python's `WrittenGenomicRun` carries
+  `provenance_records`; ObjC and Java's don't. Both ObjC and
+  Java independently chose to expose provenance as a side-
+  channel on the `BamReader` object
+  (`reader.provenanceRecords` / `reader.lastProvenance()`)
+  rather than modifying the M82 record shape — same design,
+  same rationale (don't widen the M82 surface for an
+  importer-side concern).
+- **provenance_count is 3, not 1.** Each `samtools view`
+  invocation injects its own `@PG` record; the M87 fixture's
+  user-supplied `bwa` entry shares the chain with two
+  samtools-injected entries (one for `view -bS` at fixture
+  build, one for `view -h` at read). All three implementations
+  see 3 entries; tests assert the `bwa` entry exists by name
+  (the stable cross-language assertion) rather than asserting
+  `provenance_count == 1`.
+- **The SAM fixture was reordered from HANDOFF §5 source
+  order to true coordinate-sorted order.** The HANDOFF §5
+  spec listed reads `r000`..`r009` in source order, but
+  `@HD SO:coordinate` requires actual sort and `samtools
+  index` rejects unsorted BAMs (region-filter tests need an
+  index). The committed canonical order is `r000, r001, r002,
+  r008, r009, r003, r004, r005, r006, r007`. The fixture
+  itself is the source of truth; ObjC/Java agents copied the
+  Python files verbatim per HANDOFF §6.4.
+- **Canonical JSON byte-equality** is achieved via:
+  Python `json.dumps(obj, sort_keys=True, indent=2)` +
+  trailing newline; ObjC manual emitter (NSJSONSerialization
+  on GNUstep doesn't sort + compacts arrays); Java TreeMap-
+  based ordered serialisation. The shape is fixed at 17
+  top-level keys including MD5 fingerprints over the
+  concatenated sequence/quality byte buffers.
+- **subprocess startup is ~50ms per call** (Gotcha §150).
+  Acceptable for typical batch workloads (importing one or
+  many BAMs once); if very-large-batch import becomes a
+  bottleneck, a future optimisation milestone could add an
+  htslib-Java / pysam fast path.
 
 ### M86 Phase F — mate_info per-field decomposition (2026-04-26)
 

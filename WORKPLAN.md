@@ -451,14 +451,44 @@ deferred future scope.
 
 ## Phase 5 — Import/Export + Interoperability
 
-### M87 — SAM/BAM Importer
+### M87 — SAM/BAM Importer (SHIPPED 2026-04-26)
 
-- `ttio.importers.bam`: reads BAM via `samtools view` subprocess.
-  `BamReader.to_genomic_run()` with optional region filter.
-- SAM header parsing: @SQ → reference_uri, @RG → read group metadata,
-  @PG → provenance chain.
-- `ttio.importers.sam`: thin wrapper (SAM → BAM → BamReader).
-- All three languages.
+- [x] `ttio.importers.bam`: reads BAM via `samtools view -h`
+      subprocess (no htslib link). `BamReader.to_genomic_run()`
+      with optional region filter passed verbatim to samtools.
+- [x] SAM header parsing: @SQ → `reference_uri`, @RG (first wins
+      per Binding Decision §133) → `sample_name` + `platform`,
+      @PG → `ProvenanceRecord` list (samtools also injects @PG
+      records on view-bS / view-h, so the M87 fixture's
+      provenance_count is 3 not 1).
+- [x] `ttio.importers.sam`: thin subclass; samtools auto-detects
+      SAM vs BAM format from magic bytes.
+- [x] Per-language `bam_dump` CLI emitting canonical JSON
+      (sorted keys, 2-space indent, MD5 fingerprints for the
+      sequences/qualities buffers) — 1341 bytes byte-identical
+      across Python, ObjC, and Java.
+- [x] Cross-language harness
+      (`python/tests/integration/test_m87_cross_language.py`)
+      runs all three CLIs on the canonical fixture and asserts
+      byte-equality.
+- [x] All three languages, 16 test cases per language
+      (samtools-availability, full-BAM read, per-field
+      verification, mate-info, header parsing, region filter,
+      SAM input wrapper, samtools-missing error message,
+      round-trip-through-writer BAM → `.tio` → GenomicRun →
+      AlignedRead).
+- [x] samtools-not-on-PATH detected at first call, NOT at import
+      time per Binding Decision §135. Error message includes
+      apt/brew/conda install hints.
+- [x] RNEXT `=` expanded to RNAME per Binding Decision §131.
+      1-based positions preserved per §132.
+
+Commits: `9504d1a3` (Python), `126410f` (Java), `b0ec762` (ObjC),
+plus M87 docs landing alongside.
+
+Test deltas: Python 898 → 915 (+17 incl. JSON shape check), ObjC
+2477 → 2532 (+55 assertions across 16 test methods), Java 512 →
+529 (+17 incl. JSON shape check).
 
 ### M88 — CRAM Importer + BAM/CRAM Exporter
 
