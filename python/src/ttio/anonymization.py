@@ -64,6 +64,11 @@ class AnonymizationPolicy:
     coarsen_chemical_shift_decimals: int | None = None
     coarsen_mz_decimals: int | None = None
     strip_metadata_fields: bool = False
+    # M90.3: genomic policies. None / False / empty = no-op.
+    strip_read_names: bool = False
+    randomise_qualities: bool = False
+    randomise_qualities_constant: int = 30
+    mask_regions: list[tuple[str, int, int]] | None = None
 
 
 @dataclass(slots=True)
@@ -77,6 +82,10 @@ class AnonymizationResult:
     chemical_shift_values_coarsened: int = 0
     metabolites_masked: int = 0
     metadata_fields_stripped: int = 0
+    # M90.3: genomic counters.
+    read_names_stripped: int = 0
+    qualities_randomised: int = 0
+    reads_in_masked_region: int = 0
     policies_applied: list[str] = field(default_factory=list)
 
 
@@ -229,6 +238,9 @@ def anonymize(
         result.policies_applied.append("strip_metadata_fields")
         new_title = ""
 
+    # --- M90.3 genomic policies ---
+    new_genomic_runs = _apply_genomic_policies(source, policy, result)
+
     # Provenance record documenting the anonymization
     prov = ProvenanceRecord(
         timestamp_unix=int(time.time()),
@@ -261,6 +273,7 @@ def anonymize(
         title=new_title,
         isa_investigation_id=source.isa_investigation_id,
         runs=new_runs,
+        genomic_runs=new_genomic_runs or None,
         identifications=new_ids if not policy.redact_saav_spectra else _filter_ids(new_ids, new_runs),
         provenance=[prov],
         features=features,
@@ -268,6 +281,120 @@ def anonymize(
     )
 
     return result
+
+
+# --------------------------------------------------------- M90.3 genomic ---
+
+
+def _apply_genomic_policies(
+    source: SpectralDataset,
+    policy: AnonymizationPolicy,
+    result: AnonymizationResult,
+) -> dict[str, "WrittenGenomicRun"]:
+    """Walk source.genomic_runs and apply genomic policies, returning
+    a dict of WrittenGenomicRun copies suitable for write_minimal.
+
+    No-op (returns ``{}``) when source has no genomic runs and no
+    genomic policy is set; otherwise copies every genomic run and
+    applies the requested transformations. The original
+    SpectralDataset is never mutated.
+    """
+    from .written_genomic_run import WrittenGenomicRun
+
+    grs = getattr(source, "genomic_runs", {}) or {}
+    if not grs:
+        return {}
+
+    out: dict[str, WrittenGenomicRun] = {}
+    for run_name, gr in sorted(grs.items()):
+        n = len(gr)
+        # Materialise the per-read fields by iterating the lazy
+        # GenomicRun. This is O(N reads) but the anonymizer is a
+        # one-shot offline tool so the overhead is acceptable.
+        read_names: list[str] = []
+        cigars: list[str] = []
+        sequences_list: list[bytes] = []
+        qualities_list: list[bytes] = []
+        mate_chromosomes: list[str] = []
+        mate_positions = np.zeros(n, dtype=np.int64)
+        template_lengths = np.zeros(n, dtype=np.int32)
+        for i in range(n):
+            r = gr[i]
+            read_names.append(r.read_name)
+            cigars.append(r.cigar)
+            sequences_list.append(r.sequence.encode("ascii"))
+            qualities_list.append(bytes(r.qualities))
+            mate_chromosomes.append(r.mate_chromosome)
+            mate_positions[i] = r.mate_position
+            template_lengths[i] = r.template_length
+
+        # ── strip_read_names ────────────────────────────────────────
+        if policy.strip_read_names:
+            read_names = ["" for _ in range(n)]
+            result.read_names_stripped += n
+            if "strip_read_names" not in result.policies_applied:
+                result.policies_applied.append("strip_read_names")
+
+        # ── randomise_qualities ─────────────────────────────────────
+        if policy.randomise_qualities:
+            const = int(policy.randomise_qualities_constant) & 0xFF
+            qualities_list = [bytes([const] * len(q)) for q in qualities_list]
+            result.qualities_randomised += n
+            if "randomise_qualities" not in result.policies_applied:
+                result.policies_applied.append("randomise_qualities")
+
+        # ── mask_regions ────────────────────────────────────────────
+        if policy.mask_regions:
+            chroms = list(gr.index.chromosomes)
+            positions_arr = np.asarray(gr.index.positions)
+            for chr_name, region_start, region_end in policy.mask_regions:
+                for i in range(n):
+                    if chroms[i] != chr_name:
+                        continue
+                    pos = int(positions_arr[i])
+                    if region_start <= pos <= region_end:
+                        sequences_list[i] = b"\x00" * len(sequences_list[i])
+                        qualities_list[i] = b"\x00" * len(qualities_list[i])
+                        result.reads_in_masked_region += 1
+            if "mask_regions" not in result.policies_applied:
+                result.policies_applied.append("mask_regions")
+
+        # Re-pack into the flat WrittenGenomicRun layout.
+        lengths = np.array([len(s) for s in sequences_list], dtype=np.uint32)
+        offsets = np.zeros(n, dtype=np.uint64)
+        running = 0
+        for i in range(n):
+            offsets[i] = running
+            running += int(lengths[i])
+        sequences_flat = np.frombuffer(
+            b"".join(sequences_list), dtype=np.uint8,
+        )
+        qualities_flat = np.frombuffer(
+            b"".join(qualities_list), dtype=np.uint8,
+        )
+
+        out[run_name] = WrittenGenomicRun(
+            acquisition_mode=int(gr.acquisition_mode),
+            reference_uri=gr.reference_uri or "",
+            platform=gr.platform or "",
+            sample_name=gr.sample_name or "",
+            positions=np.asarray(gr.index.positions, dtype=np.int64),
+            mapping_qualities=np.asarray(
+                gr.index.mapping_qualities, dtype=np.uint8,
+            ),
+            flags=np.asarray(gr.index.flags, dtype=np.uint32),
+            sequences=sequences_flat,
+            qualities=qualities_flat,
+            offsets=offsets,
+            lengths=lengths,
+            cigars=cigars,
+            read_names=read_names,
+            mate_chromosomes=mate_chromosomes,
+            mate_positions=mate_positions,
+            template_lengths=template_lengths,
+            chromosomes=list(gr.index.chromosomes),
+        )
+    return out
 
 
 # --------------------------------------------------------- policy helpers
