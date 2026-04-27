@@ -477,14 +477,25 @@ Servers supporting query-filtered streaming (see M68/M71) evaluate
 client filters against AU-header fields BEFORE emitting the AU.
 Supported filters:
 
-| Filter              | AU field                       | Comparison                    |
-|---------------------|--------------------------------|-------------------------------|
-| `rt_min` / `rt_max` | `retention_time`               | closed interval               |
-| `ms_level`          | `ms_level`                     | equality                      |
-| `precursor_mz_*`    | `precursor_mz`                 | closed interval               |
-| `polarity`          | `polarity`                     | equality                      |
-| `dataset_id`        | packet-header `dataset_id`     | equality                      |
-| `max_au`            | count                          | cap across all datasets       |
+| Filter                          | AU field                       | Comparison                    |
+|---------------------------------|--------------------------------|-------------------------------|
+| `rt_min` / `rt_max`             | `retention_time`               | closed interval               |
+| `ms_level`                      | `ms_level`                     | equality                      |
+| `precursor_mz_*`                | `precursor_mz`                 | closed interval               |
+| `polarity`                      | `polarity`                     | equality                      |
+| `dataset_id`                    | packet-header `dataset_id`     | equality                      |
+| `max_au`                        | count                          | cap across all datasets       |
+| `chromosome` (M89.3)            | genomic-suffix `chromosome`    | exact string equality         |
+| `position_min` / `position_max` (M89.3) | genomic-suffix `position` | closed interval (inclusive)   |
+
+In multiplexed streams (MS + genomic in one `.tis`, M89.4),
+genomic predicates filter the AU types cleanly: `chromosome` and
+`position_*` predicates exclude every non-genomic AU
+(`spectrum_class != 5`), so a region query such as
+`{"chromosome": "chr1", "position_min": 0, "position_max": 1e6}`
+yields the genomic AUs in that window and skips MS entirely. To
+combine modalities in one query, send two separate filtered
+queries and union the resulting streams.
 
 `StreamHeader`, `DatasetHeader`, `ProtectionMetadata`,
 `EndOfDataset`, and `EndOfStream` packets are ALWAYS emitted
