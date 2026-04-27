@@ -200,6 +200,23 @@ public class C2Hdf5ErrorPathsTest {
     // ── Exception class instantiation smoke ───────────────────────────
 
     @Test
+    @DisplayName("C2 #15a: Hdf5Exception(message, cause) 2-arg ctor preserves cause")
+    void hdf5ExceptionTwoArgCtor() {
+        // The 2-arg constructor is hit by the wrapper when a libhdf5
+        // call throws HDF5LibraryException; the wrapper catches and
+        // rewraps as `new Hdf5Exception("...", originalException)`.
+        // V1 baseline showed the 1-arg ctor covered (used by every
+        // subclass) but the 2-arg ctor was never instantiated in
+        // tests — pulling Hdf5Exception class coverage to 50%.
+        IllegalStateException cause = new IllegalStateException("native h5 error");
+        Hdf5Errors.Hdf5Exception e =
+            new Hdf5Errors.Hdf5Exception("wrapper layer message", cause);
+        assertEquals("wrapper layer message", e.getMessage());
+        assertSame(cause, e.getCause(),
+            "2-arg ctor should preserve the cause chain");
+    }
+
+    @Test
     @DisplayName("C2 #16: DatasetReadException, DatasetWriteException, AttributeException carry messages")
     void exceptionClassesCarryMessages() {
         // These exception subclasses are thrown only on rare libhdf5
