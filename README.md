@@ -107,6 +107,7 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **JCAMP-DX 5.01** — AFFN `##XYDATA=(X++(Y..Y))` plus the full §5.9 **compressed dialect (PAC / SQZ / DIF / DUP)**. Reader auto-detects compression via a sentinel-char scan that excludes `e`/`E` so AFFN scientific notation doesn't false-trigger. Dispatches on `##DATA TYPE=` to Raman, IR (transmittance + absorbance), and UV/Vis. 2-D NTUPLES is intentionally out of scope.
 * **Bruker timsTOF `.d`** — SQLite metadata reads natively in every language (`java.sql`, `libsqlite3`, stdlib `sqlite3`); binary frame decompression via `opentimspy` + `opentims-bruker-bridge` (Python native; Java / ObjC subprocess the Python helper). `inv_ion_mobility` channel preserves the 2-D timsTOF geometry per-peak. Install with `pip install 'ttio[bruker]'`.
 * **Thermo `.raw`** — shells out to `ThermoRawFileParser` and ingests the resulting mzML.
+* **SAM/BAM** (M87, post-v1.1.1) — `BamReader` / `SamReader` wrap `samtools view -h` as a subprocess (no htslib link); convert SAM/BAM input to `WrittenGenomicRun` instances. SAM header parsed for `@SQ` (reference dictionary), `@RG` (sample + platform), `@PG` (provenance chain). Optional region filter passes through to samtools verbatim. Cross-language `bam_dump` CLI emits canonical JSON byte-identical across Python / ObjC / Java. Requires `samtools` on PATH at runtime; `BamReader` class is loadable without it (error fires only at first import call). See [`docs/vendor-formats.md`](docs/vendor-formats.md) §SAM/BAM.
 
 ### Exporters
 
