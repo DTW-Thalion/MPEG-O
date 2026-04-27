@@ -42,6 +42,7 @@ CLI_MODULES = [
     "ttio.tools.ttio_pqc_cli",
     "ttio.tools.ttio_sign_cli",
     "ttio.tools.ttio_verify_cli",
+    "ttio.importers.bruker_tdf_cli",
 ]
 
 # CLIs that don't special-case --help (treat it as a positional
