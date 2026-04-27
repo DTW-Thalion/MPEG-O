@@ -158,6 +158,30 @@ jobs:
         working-directory: objc
         run: ./build.sh check
 
+      # V1: opt-in coverage build. Runs after the main test pass so a
+      # coverage-build failure (e.g. linker can't find profile runtime)
+      # doesn't gate the green check on the existing tests.
+      # `continue-on-error: true` keeps the job green even if llvm-cov
+      # tooling is not in the GHA image.
+      - name: Coverage build (opt-in)
+        working-directory: objc
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y --no-install-recommends llvm
+          ./build.sh clean
+          ./build.sh --coverage check
+
+      - name: Upload coverage (LLVM lcov)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: objc-coverage
+          path: |
+            objc/coverage/coverage.lcov
+            objc/coverage/coverage.profdata
+          if-no-files-found: warn
+          retention-days: 14
+
   python-test:
     name: Python — build & test (ttio package)
     runs-on: ubuntu-latest
@@ -190,7 +214,22 @@ jobs:
 
       - name: Run pytest (default filter — no stress, no requires_network)
         working-directory: python
-        run: pytest -v --tb=short
+        # V1 (verification workplan): pytest-cov runs on every matrix
+        # entry; XML/HTML reports are uploaded only on the 3.12 leg
+        # below so we don't double-upload artifacts.
+        run: pytest -v --tb=short --cov=src/ttio --cov-report=term --cov-report=xml --cov-report=html
+
+      # V1: publish coverage on the 3.12 leg only.
+      - name: Upload coverage (Python 3.12 only)
+        if: matrix.python-version == '3.12' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: |
+            python/coverage.xml
+            python/htmlcov/
+          if-no-files-found: warn
+          retention-days: 14
 
   python-validation:
     name: Python — M64 cross-tool validation (optional deps)
@@ -277,7 +316,23 @@ jobs:
 
       - name: Build and test
         working-directory: java
+        # V1: `mvn verify` triggers JaCoCo's report execution (bound
+        # to the verify phase) which produces target/site/jacoco/.
         run: mvn verify -B
+
+      # V1: publish JaCoCo coverage as artifacts.
+      - name: Upload coverage (JaCoCo)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-coverage
+          path: |
+            java/target/site/jacoco/jacoco.xml
+            java/target/site/jacoco/jacoco.csv
+            java/target/site/jacoco/index.html
+            java/target/site/jacoco/jacoco-resources/
+          if-no-files-found: warn
+          retention-days: 14
 
   cross-compat:
     name: Cross-language parity (ObjC ⇄ Python ⇄ Java)
