@@ -6,6 +6,17 @@ as a record of what was built; current milestones use TTI-O names.
 
 ---
 
+> **⏸ M-series paused (2026-04-27).** Phase 6 (M89 transport extension,
+> M90 encryption/anonymisation, M91 multi-omics integration) and
+> Phase 7 (M92 benchmarking + v0.11.0 tag) are paused while we repay
+> verification debt accumulated through M88.1. The active workplan is
+> [`docs/verification-workplan.md`](docs/verification-workplan.md)
+> (V-series). M-series resumes at M89 once V-series milestones land
+> (estimated 4-8 weeks). V-series and M-series have separate
+> CHANGELOG sections under `[Unreleased]` and do not interleave.
+
+---
+
 ## Phase 1 — Core Data Model (v0.1.0-alpha, complete)
 
 ### Milestone 1 — Foundation (Protocols + Value Classes) ✓
