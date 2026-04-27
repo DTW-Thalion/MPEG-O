@@ -182,10 +182,16 @@ class ChannelData:
 # n_channels(u8). Total 38 bytes.
 _AU_PREFIX_STRUCT = struct.Struct("<BBBBddBddB")
 _AU_PIXEL_STRUCT = struct.Struct("<III")
+# M89.1 GenomicRead suffix (§4.3.4): position(i64) + mapq(u8) + flags(u16),
+# preceded by a uint16-length-prefixed UTF-8 chromosome string. The
+# chromosome is variable-length so it can't fit in the fixed prefix —
+# this is a deliberate tradeoff for filter-key flexibility (decoy
+# contigs, T2T-style names) over byte parsimony.
+_AU_GENOMIC_FIXED_STRUCT = struct.Struct("<qBH")
 
 # Named spectrum_class values. v0.11 M79 reserved the GenomicRead value;
 # the genomic-specific AU payload extension (chromosome, position, mapq,
-# flags) lands in M82.
+# flags) ships in M89.1.
 SPECTRUM_CLASS_MASS_SPECTRUM = 0
 SPECTRUM_CLASS_NMR_SPECTRUM = 1
 SPECTRUM_CLASS_NMR_2D = 2
@@ -219,6 +225,16 @@ class AccessUnit:
     pixel_y: int = 0
     pixel_z: int = 0
 
+    # GenomicRead extension (written only when ``spectrum_class == 5``).
+    # See M89.1 / transport-spec §4.3.4. position is signed i64 to match
+    # the BAM convention of -1 for unmapped reads (and to allow
+    # T2T-style concatenated assemblies > 4 Gbp). flags is u16 (BAM/SAM
+    # convention); mapping_quality is u8 (BAM range 0-255).
+    chromosome: str = ""
+    position: int = 0
+    mapping_quality: int = 0
+    flags: int = 0
+
     def to_bytes(self) -> bytes:
         prefix = _AU_PREFIX_STRUCT.pack(
             int(self.spectrum_class) & 0xFF,
@@ -239,6 +255,13 @@ class AccessUnit:
                 int(self.pixel_y) & 0xFFFFFFFF,
                 int(self.pixel_z) & 0xFFFFFFFF,
             )
+        elif self.spectrum_class == 5:
+            body += pack_string(self.chromosome, width=2)
+            body += _AU_GENOMIC_FIXED_STRUCT.pack(
+                int(self.position),
+                int(self.mapping_quality) & 0xFF,
+                int(self.flags) & 0xFFFF,
+            )
         return body
 
     @classmethod
@@ -258,11 +281,28 @@ class AccessUnit:
             ch, offset = ChannelData.from_buffer(data, offset)
             channels.append(ch)
         pixel_x = pixel_y = pixel_z = 0
+        chromosome = ""
+        position = mapping_quality = flags = 0
         if spectrum_class == 4:
             if len(data) - offset < 12:
                 raise ValueError("MSImagePixel AU missing pixel coordinates")
             pixel_x, pixel_y, pixel_z = _AU_PIXEL_STRUCT.unpack_from(data, offset)
             offset += 12
+        elif spectrum_class == 5:
+            try:
+                chromosome, offset = unpack_string(data, offset, width=2)
+            except struct.error as exc:
+                raise ValueError(
+                    "GenomicRead AU missing chromosome length prefix"
+                ) from exc
+            if len(data) - offset < _AU_GENOMIC_FIXED_STRUCT.size:
+                raise ValueError(
+                    "GenomicRead AU missing position/mapq/flags suffix"
+                )
+            position, mapping_quality, flags = _AU_GENOMIC_FIXED_STRUCT.unpack_from(
+                data, offset
+            )
+            offset += _AU_GENOMIC_FIXED_STRUCT.size
         return cls(
             spectrum_class=spectrum_class,
             acquisition_mode=acquisition_mode,
@@ -277,6 +317,10 @@ class AccessUnit:
             pixel_x=pixel_x,
             pixel_y=pixel_y,
             pixel_z=pixel_z,
+            chromosome=chromosome,
+            position=position,
+            mapping_quality=mapping_quality,
+            flags=flags,
         )
 
 
