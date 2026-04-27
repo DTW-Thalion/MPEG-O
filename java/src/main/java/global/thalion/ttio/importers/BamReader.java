@@ -115,14 +115,7 @@ public class BamReader {
             throw new IOException("BAM/SAM file not found: " + path);
         }
 
-        List<String> cmd = new ArrayList<>();
-        cmd.add("samtools");
-        cmd.add("view");
-        cmd.add("-h");
-        cmd.add(path.toAbsolutePath().toString());
-        if (region != null) {
-            cmd.add(region);
-        }
+        List<String> cmd = buildSamtoolsViewCommand(region);
 
         long fileMtime;
         try {
@@ -372,6 +365,32 @@ public class BamReader {
     // ------------------------------------------------------------------
     // Internals
     // ------------------------------------------------------------------
+
+    /**
+     * Build the {@code samtools view -h ...} command for this reader.
+     *
+     * <p>Subclasses ({@code CramReader} in M88) override to inject
+     * {@code --reference <fasta>} so reference-compressed CRAM bytes
+     * can be reconstituted. Default implementation emits the bare
+     * BAM/SAM read invocation with an optional region filter.</p>
+     *
+     * @param region optional region filter passed verbatim to
+     *               {@code samtools view} ({@code "chr1:1000-2000"},
+     *               {@code "*"}, etc.); {@code null} means no filter.
+     * @return mutable list of command tokens (caller may further
+     *         mutate before {@link ProcessBuilder} invocation).
+     */
+    protected List<String> buildSamtoolsViewCommand(String region) {
+        List<String> cmd = new ArrayList<>();
+        cmd.add("samtools");
+        cmd.add("view");
+        cmd.add("-h");
+        cmd.add(path.toAbsolutePath().toString());
+        if (region != null) {
+            cmd.add(region);
+        }
+        return cmd;
+    }
 
     private static Map<String, String> parseHeaderFields(String line) {
         Map<String, String> fields = new LinkedHashMap<>();
