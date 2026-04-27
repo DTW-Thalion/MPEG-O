@@ -208,6 +208,54 @@ public class C2cValueClassesGapsTest {
     }
 
     @Test
+    @DisplayName("C2c #9b: JcampDxEncoding.fromString covers all modes + error paths")
+    void jcampDxEncodingFromString() {
+        assertEquals(global.thalion.ttio.exporters.JcampDxEncoding.AFFN,
+            global.thalion.ttio.exporters.JcampDxEncoding.fromString("affn"));
+        assertEquals(global.thalion.ttio.exporters.JcampDxEncoding.PAC,
+            global.thalion.ttio.exporters.JcampDxEncoding.fromString("PAC"));
+        assertEquals(global.thalion.ttio.exporters.JcampDxEncoding.SQZ,
+            global.thalion.ttio.exporters.JcampDxEncoding.fromString("Sqz"));
+        assertEquals(global.thalion.ttio.exporters.JcampDxEncoding.DIF,
+            global.thalion.ttio.exporters.JcampDxEncoding.fromString("dif"));
+        // Null input branch.
+        assertThrows(IllegalArgumentException.class,
+            () -> global.thalion.ttio.exporters.JcampDxEncoding.fromString(null));
+        // Unknown-name branch.
+        assertThrows(IllegalArgumentException.class,
+            () -> global.thalion.ttio.exporters.JcampDxEncoding.fromString("xyz"));
+        // Enum self-test.
+        assertEquals(4,
+            global.thalion.ttio.exporters.JcampDxEncoding.values().length);
+    }
+
+    @Test
+    @DisplayName("C2c #9c: Verifier.verify covers all four Status outcomes")
+    void verifierStatusOutcomes() {
+        byte[] data = "hello".getBytes();
+        byte[] key = new byte[32];
+
+        // NOT_SIGNED branch — null + empty signature.
+        assertEquals(global.thalion.ttio.protection.Verifier.Status.NOT_SIGNED,
+            global.thalion.ttio.protection.Verifier.verify(data, null, key));
+        assertEquals(global.thalion.ttio.protection.Verifier.Status.NOT_SIGNED,
+            global.thalion.ttio.protection.Verifier.verify(data, "", key));
+
+        // INVALID — sign with one key, verify with another.
+        String sig = global.thalion.ttio.protection.SignatureManager
+            .sign(data, key);
+        byte[] differentKey = new byte[32];
+        java.util.Arrays.fill(differentKey, (byte) 0xFF);
+        assertEquals(global.thalion.ttio.protection.Verifier.Status.INVALID,
+            global.thalion.ttio.protection.Verifier.verify(data, sig,
+                differentKey));
+
+        // VALID — sign and verify with same key.
+        assertEquals(global.thalion.ttio.protection.Verifier.Status.VALID,
+            global.thalion.ttio.protection.Verifier.verify(data, sig, key));
+    }
+
+    @Test
     @DisplayName("C2c #9: SignalArray full constructor produces valid object")
     void signalArrayFullConstructor() {
         double[] data = { 1.0, 2.0, 3.0 };
