@@ -1,0 +1,66 @@
+{
+  "_meta": {
+    "version": 1,
+    "generated_at": "2026-04-27",
+    "captured_from": "tools/perf/_out_python_full/full.json + tools/perf/_out_objc_full/full.json",
+    "n": 10000,
+    "peaks": 16,
+    "regression_threshold_pct": 10.0,
+    "notes": [
+      "Baseline numbers for tools/perf/compare_baseline.py — V2 of the verification workplan.",
+      "Updated by maintainers when an intentional optimisation or regression is accepted.",
+      "Java is intentionally absent in v1: the ProfileHarnessFull harness emits tabular text + JFR, not JSON. Adding JSON output is a V2.1 follow-up.",
+      "All timing values are seconds (matches harness output). compare_baseline.py converts to milliseconds for display."
+    ]
+  },
+  "python": {
+    "ms.hdf5": {"write": 0.0613858, "read": 0.0102240},
+    "ms.memory": {"write": 0.1732410, "read": 0.0006768},
+    "ms.sqlite": {"write": 0.0534874, "read": 0.0341883},
+    "ms.zarr": {"write": 0.1301182, "read": 0.2354086},
+    "transport.plain": {"encode": 0.4461681, "decode": 0.3657578, "src_mb": 0.338797, "mots_mb": 3.570441},
+    "transport.compressed": {"encode": 0.4466577, "decode": 0.2941383, "src_mb": 0.338797, "mots_mb": 2.304445},
+    "encryption": {"encrypt": 0.2610203, "decrypt": 0.1323387, "bytes_mb": 0.338789},
+    "signatures": {"sign": 0.0106382, "verify": 0.0052533},
+    "jcamp": {
+      "ir_write": 0.0061603,
+      "ir_read": 0.0098482,
+      "raman_write": 0.0060359,
+      "raman_read": 0.0095065,
+      "uvvis_write": 0.0065327,
+      "uvvis_read": 0.0103931,
+      "compressed_read": 0.0042920
+    },
+    "spectra.build": {
+      "ir_build": 0.0001516,
+      "raman_build": 0.0001613,
+      "uvvis_build": 0.0001225,
+      "2dcos_build": 0.0001252
+    }
+  },
+  "objc": {
+    "ms.hdf5": {"write": 0.0641185, "read": 0.0058150},
+    "ms.memory": {"write": null, "read": null},
+    "ms.sqlite": {"write": null, "read": null},
+    "ms.zarr": {"write": null, "read": null},
+    "transport.plain": {"encode": 0.0978922, "decode": 0.0847183, "src_mb": 0.332448, "mots_mb": 3.570300},
+    "transport.compressed": {"encode": 0.1719530, "decode": 0.0943971, "src_mb": 0.332448, "mots_mb": 2.304300},
+    "encryption": {"encrypt": 0.0900057, "decrypt": 0.0630190, "bytes_mb": 0.332440},
+    "signatures": {"sign": 0.0019397, "verify": 0.0016404},
+    "jcamp": {
+      "ir_write": 0.0056524,
+      "ir_read": 0.0199712,
+      "raman_write": 0.0060375,
+      "raman_read": 0.0179203,
+      "uvvis_write": 0.0058948,
+      "uvvis_read": 0.0185415,
+      "compressed_read": 0.0070540
+    },
+    "spectra.build": {
+      "ir_build": 0.0001442,
+      "raman_build": 0.0000996,
+      "uvvis_build": 0.0000851,
+      "2dcos_build": 0.0001062
+    }
+  }
+}
