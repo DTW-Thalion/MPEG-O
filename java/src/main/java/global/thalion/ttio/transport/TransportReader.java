@@ -9,6 +9,8 @@ import global.thalion.ttio.Enums;
 import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
+import global.thalion.ttio.MiniJson;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -109,6 +111,8 @@ public final class TransportReader implements AutoCloseable {
         String isa = "";
         Map<Integer, DatasetMeta> datasetMetas = new LinkedHashMap<>();
         Map<Integer, RunAccumulator> runAccs = new LinkedHashMap<>();
+        // M89.2: parallel accumulator for genomic datasets.
+        Map<Integer, GenomicAccumulator> genomicAccs = new LinkedHashMap<>();
         Map<Integer, Long> lastSeq = new LinkedHashMap<>();
         boolean sawStreamHeader = false;
 
@@ -124,7 +128,7 @@ public final class TransportReader implements AutoCloseable {
                 isa = readLEString(buf, 2);
                 int nFeatures = buf.getShort() & 0xFFFF;
                 for (int i = 0; i < nFeatures; i++) readLEString(buf, 2);
-                // n_datasets — we don't need it; the headers carry their own ids.
+                // n_datasets - we don't need it; the headers carry their own ids.
                 continue;
             }
             if (!sawStreamHeader) {
@@ -139,11 +143,17 @@ public final class TransportReader implements AutoCloseable {
                 int nch = buf.get() & 0xFF;
                 List<String> channelNames = new ArrayList<>(nch);
                 for (int i = 0; i < nch; i++) channelNames.add(readLEString(buf, 2));
-                readLEString(buf, 4); // instrument_json
+                String instrumentJson = readLEString(buf, 4);
                 long expected = buf.getInt() & 0xFFFFFFFFL;
                 datasetMetas.put(datasetId, new DatasetMeta(
-                        datasetId, name, acqMode, spectrumClass, channelNames, expected));
-                runAccs.put(datasetId, new RunAccumulator(channelNames));
+                        datasetId, name, acqMode, spectrumClass, channelNames,
+                        instrumentJson, expected));
+                // M89.2: genomic datasets get a parallel accumulator.
+                if ("TTIOGenomicRead".equals(spectrumClass)) {
+                    genomicAccs.put(datasetId, new GenomicAccumulator());
+                } else {
+                    runAccs.put(datasetId, new RunAccumulator(channelNames));
+                }
                 continue;
             }
             if (h.packetType == PacketType.ACCESS_UNIT) {
@@ -158,7 +168,11 @@ public final class TransportReader implements AutoCloseable {
                 }
                 lastSeq.put(h.datasetId, h.auSequence);
                 AccessUnit au = AccessUnit.decode(rec.payload);
-                runAccs.get(h.datasetId).ingest(au);
+                if (genomicAccs.containsKey(h.datasetId)) {
+                    genomicAccs.get(h.datasetId).ingest(au);
+                } else {
+                    runAccs.get(h.datasetId).ingest(au);
+                }
                 continue;
             }
             if (h.packetType == PacketType.END_OF_DATASET) continue;
@@ -169,6 +183,7 @@ public final class TransportReader implements AutoCloseable {
         List<AcquisitionRun> runs = new ArrayList<>();
         for (Map.Entry<Integer, DatasetMeta> e : datasetMetas.entrySet()) {
             DatasetMeta meta = e.getValue();
+            if (genomicAccs.containsKey(e.getKey())) continue;
             RunAccumulator acc = runAccs.get(e.getKey());
             SpectrumIndex idx = acc.toSpectrumIndex();
             Map<String, double[]> channelMap = acc.toChannelMap();
@@ -181,8 +196,24 @@ public final class TransportReader implements AutoCloseable {
                     channelMap, List.of(), List.of(), "", 0.0));
         }
 
-        return SpectralDataset.create(outputPath, title, isa, runs,
-                List.of(), List.of(), List.of());
+        // M89.2: build WrittenGenomicRun for each genomic dataset.
+        List<WrittenGenomicRun> genomicRuns = new ArrayList<>();
+        for (Map.Entry<Integer, GenomicAccumulator> e : genomicAccs.entrySet()) {
+            DatasetMeta meta = datasetMetas.get(e.getKey());
+            genomicRuns.add(e.getValue().toWrittenGenomicRun(meta));
+        }
+
+        // Create the file then re-open so the returned dataset's
+        // genomic StorageGroup handles are live (the create() call
+        // closes its read-side handles after writing - GenomicRun
+        // would then fail to open signal_channels lazily).
+        SpectralDataset created = SpectralDataset.create(
+            outputPath, title, isa, runs, genomicRuns,
+            List.of(), List.of(), List.of(),
+            global.thalion.ttio.FeatureFlags.defaultCurrent());
+        if (genomicRuns.isEmpty()) return created;
+        created.close();
+        return SpectralDataset.open(outputPath);
     }
 
     // ---------------------------------------------------------- helpers
@@ -204,10 +235,129 @@ public final class TransportReader implements AutoCloseable {
         final int acquisitionMode;
         final String spectrumClass;
         final List<String> channelNames;
+        final String instrumentJson;
         final long expectedAUCount;
-        DatasetMeta(int id, String n, int mode, String cls, List<String> ch, long exp) {
+        DatasetMeta(int id, String n, int mode, String cls, List<String> ch,
+                    String instrumentJson, long exp) {
             datasetId = id; name = n; acquisitionMode = mode; spectrumClass = cls;
-            channelNames = ch; expectedAUCount = exp;
+            channelNames = ch; this.instrumentJson = instrumentJson;
+            expectedAUCount = exp;
+        }
+    }
+
+    /** M89.2: per-dataset accumulator for genomic AUs. Mirrors the
+     *  Python {@code _new_genomic_accumulator} dict. Sequences and
+     *  qualities ride as UINT8 channels; the suffix carries chromosome
+     *  / position / mapq / flags. */
+    private static final class GenomicAccumulator {
+        final List<String> chromosomes = new ArrayList<>();
+        final List<Long> positions = new ArrayList<>();
+        final List<Integer> mappingQualities = new ArrayList<>();
+        final List<Integer> flags = new ArrayList<>();
+        final java.io.ByteArrayOutputStream sequences = new java.io.ByteArrayOutputStream();
+        final java.io.ByteArrayOutputStream qualities = new java.io.ByteArrayOutputStream();
+        final List<Long> offsets = new ArrayList<>();
+        final List<Integer> lengths = new ArrayList<>();
+        long runningOffset = 0L;
+        int acquisitionMode = 0;
+
+        void ingest(AccessUnit au) {
+            if (au.spectrumClass != 5) {
+                throw new IllegalStateException(
+                    "genomic accumulator received spectrum_class " + au.spectrumClass);
+            }
+            chromosomes.add(au.chromosome);
+            positions.add(au.position);
+            mappingQualities.add(au.mappingQuality);
+            flags.add(au.flags);
+            int length = 0;
+            for (ChannelData ch : au.channels) {
+                if (ch.precision != Enums.Precision.UINT8.ordinal()) {
+                    throw new IllegalStateException(
+                        "genomic channel precision " + ch.precision
+                        + " not yet supported (UINT8 only in M89.2)");
+                }
+                if (ch.compression != Enums.Compression.NONE.ordinal()) {
+                    throw new IllegalStateException(
+                        "genomic channel compression " + ch.compression
+                        + " not yet supported (NONE only in M89.2)");
+                }
+                if ("sequences".equals(ch.name)) {
+                    try { sequences.write(ch.data); }
+                    catch (java.io.IOException e) { throw new IllegalStateException(e); }
+                    length = ch.data.length;
+                } else if ("qualities".equals(ch.name)) {
+                    try { qualities.write(ch.data); }
+                    catch (java.io.IOException e) { throw new IllegalStateException(e); }
+                    if (length == 0) length = ch.data.length;
+                }
+            }
+            offsets.add(runningOffset);
+            lengths.add(length);
+            runningOffset += length;
+        }
+
+        WrittenGenomicRun toWrittenGenomicRun(DatasetMeta meta) {
+            int n = chromosomes.size();
+            long[] offsetsArr = new long[n];
+            int[] lengthsArr = new int[n];
+            long[] positionsArr = new long[n];
+            byte[] mqArr = new byte[n];
+            int[] flagsArr = new int[n];
+            for (int i = 0; i < n; i++) {
+                offsetsArr[i] = offsets.get(i);
+                lengthsArr[i] = lengths.get(i);
+                positionsArr[i] = positions.get(i);
+                mqArr[i] = (byte) (mappingQualities.get(i) & 0xFF);
+                flagsArr[i] = flags.get(i);
+            }
+            // Compound fields not carried in M89.2 - defaults preserve shape.
+            List<String> emptyStrs = new ArrayList<>(n);
+            long[] mateP = new long[n];
+            int[] tlens = new int[n];
+            for (int i = 0; i < n; i++) {
+                emptyStrs.add("");
+                mateP[i] = -1L;
+                tlens[i] = 0;
+            }
+            List<String> cigars = new ArrayList<>(emptyStrs);
+            List<String> readNames = new ArrayList<>(emptyStrs);
+            List<String> mateChroms = new ArrayList<>(emptyStrs);
+
+            // Decode instrument_json metadata.
+            String referenceUri = "", platform = "", sampleName = "", modality = "";
+            try {
+                Object parsed = MiniJson.parse(meta.instrumentJson);
+                if (parsed instanceof Map<?, ?> mraw) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> m = (Map<String, Object>) mraw;
+                    Object ru = m.get("reference_uri"); if (ru != null) referenceUri = ru.toString();
+                    Object pl = m.get("platform"); if (pl != null) platform = pl.toString();
+                    Object sn = m.get("sample_name"); if (sn != null) sampleName = sn.toString();
+                    Object md = m.get("modality"); if (md != null) modality = md.toString();
+                }
+            } catch (Exception ignore) {
+                // Unparseable instrument_json - leave defaults.
+            }
+            // modality not currently surfaced on WrittenGenomicRun's
+            // constructor; the GenomicRun reader pulls it from the
+            // file-level modality attribute (defaulted at write time).
+            Enums.AcquisitionMode acqMode;
+            try {
+                acqMode = Enums.AcquisitionMode.values()[
+                    Math.min(meta.acquisitionMode,
+                             Enums.AcquisitionMode.values().length - 1)];
+            } catch (Exception e) {
+                acqMode = Enums.AcquisitionMode.GENOMIC_WGS;
+            }
+            return new WrittenGenomicRun(
+                acqMode, referenceUri, platform, sampleName,
+                positionsArr, mqArr, flagsArr,
+                sequences.toByteArray(), qualities.toByteArray(),
+                offsetsArr, lengthsArr,
+                cigars, readNames, mateChroms, mateP, tlens,
+                new ArrayList<>(chromosomes),
+                Enums.Compression.ZLIB);
         }
     }
 
