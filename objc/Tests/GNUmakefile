@@ -78,7 +78,8 @@ TTIOTests_OBJC_FILES = \
 	TestV8Hdf5Corruption.m \
 	TestC1ToolsCli.m \
 	TestC2HDF5ErrorPaths.m \
-	TestC3ProvidersErrorPaths.m
+	TestC3ProvidersErrorPaths.m \
+	TestC5ProtectionGap.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

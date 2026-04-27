@@ -82,6 +82,7 @@ extern void testV8Hdf5Corruption(void);
 extern void testC1ToolsCli(void);
 extern void testC2HDF5ErrorPaths(void);
 extern void testC3ProvidersErrorPaths(void);
+extern void testC5ProtectionGap(void);
 
 int main(int argc, const char *argv[])
 {
@@ -409,6 +410,10 @@ int main(int argc, const char *argv[])
         START_SET("C3: providers error-path coverage")
             testC3ProvidersErrorPaths();
         END_SET("C3: providers error-path coverage")
+
+        START_SET("C5: protection package gap")
+            testC5ProtectionGap();
+        END_SET("C5: protection package gap")
     }
     return 0;
 }
