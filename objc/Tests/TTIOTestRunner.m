@@ -78,6 +78,7 @@ extern void testM86GenomicCodecWiring(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
 extern void testV4EdgeCases(void);
+extern void testV8Hdf5Corruption(void);
 
 int main(int argc, const char *argv[])
 {
@@ -389,6 +390,10 @@ int main(int argc, const char *argv[])
         START_SET("V4: edge case hardening")
             testV4EdgeCases();
         END_SET("V4: edge case hardening")
+
+        START_SET("V8: HDF5 corruption recovery")
+            testV8Hdf5Corruption();
+        END_SET("V8: HDF5 corruption recovery")
     }
     return 0;
 }
