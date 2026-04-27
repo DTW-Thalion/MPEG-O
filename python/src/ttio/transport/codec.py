@@ -73,6 +73,7 @@ _SPECTRUM_CLASS_TO_WIRE = {
     "TTIONMR2DSpectrum": 2,
     "TTIOFreeInductionDecay": 3,
     "TTIOMSImagePixel": 4,
+    "TTIOGenomicRead": 5,  # M89.2
 }
 _WIRE_TO_SPECTRUM_CLASS = {v: k for k, v in _SPECTRUM_CLASS_TO_WIRE.items()}
 
@@ -208,15 +209,21 @@ class TransportWriter:
         self._emit(PacketType.END_OF_STREAM, b"")
 
     def write_dataset(self, dataset: SpectralDataset) -> None:
-        """Walk ``dataset`` and emit the full packet sequence."""
+        """Walk ``dataset`` and emit the full packet sequence.
+
+        Spectral runs are emitted first (dataset_ids 1..N), then
+        genomic runs (dataset_ids N+1..N+M). M89.2 added the genomic
+        flow.
+        """
         runs = list(dataset.all_runs.items())
+        genomic_runs = list(getattr(dataset, "genomic_runs", {}).items())
         features = list(dataset.feature_flags.features)
         self.write_stream_header(
             format_version="1.2",
             title=dataset.title or "",
             isa_investigation=dataset.isa_investigation_id or "",
             features=features,
-            n_datasets=len(runs),
+            n_datasets=len(runs) + len(genomic_runs),
         )
         for i, (name, run) in enumerate(runs, start=1):
             self.write_dataset_header(
@@ -228,10 +235,109 @@ class TransportWriter:
                 instrument_json=_instrument_config_json(run),
                 expected_au_count=len(run),
             )
+        for j, (name, grun) in enumerate(genomic_runs, start=len(runs) + 1):
+            self.write_dataset_header(
+                dataset_id=j,
+                name=name,
+                acquisition_mode=int(grun.acquisition_mode),
+                spectrum_class="TTIOGenomicRead",
+                channel_names=["sequences", "qualities"],
+                instrument_json=_genomic_run_metadata_json(grun),
+                expected_au_count=len(grun),
+            )
         for i, (name, run) in enumerate(runs, start=1):
             self._emit_run_access_units(dataset_id=i, run=run)
             self.write_end_of_dataset(dataset_id=i, final_au_sequence=len(run))
+        for j, (name, grun) in enumerate(genomic_runs, start=len(runs) + 1):
+            self._emit_genomic_run_access_units(dataset_id=j, run=grun)
+            self.write_end_of_dataset(dataset_id=j, final_au_sequence=len(grun))
         self.write_end_of_stream()
+
+    def write_genomic_run(
+        self, *, dataset_id: int, name: str, run
+    ) -> None:
+        """Write a single GenomicRun as a stream segment.
+
+        Used by callers that drive emission manually (multiplexed
+        streams, M89.4). The dataset header + AUs + end-of-dataset
+        are emitted; the caller is responsible for stream framing.
+        """
+        self.write_dataset_header(
+            dataset_id=dataset_id,
+            name=name,
+            acquisition_mode=int(run.acquisition_mode),
+            spectrum_class="TTIOGenomicRead",
+            channel_names=["sequences", "qualities"],
+            instrument_json=_genomic_run_metadata_json(run),
+            expected_au_count=len(run),
+        )
+        self._emit_genomic_run_access_units(dataset_id=dataset_id, run=run)
+        self.write_end_of_dataset(
+            dataset_id=dataset_id, final_au_sequence=len(run)
+        )
+
+    def _emit_genomic_run_access_units(self, *, dataset_id: int, run) -> None:
+        """Emit one ACCESS_UNIT packet per AlignedRead in ``run``.
+
+        M89.2: minimal genomic flow. Per-read fixed fields go into the
+        AU's genomic suffix (chromosome / position / mapping_quality /
+        flags). The variable-length sequences and qualities arrays
+        ride as two UINT8 channels with the per-read slice as data.
+
+        Compound channels (cigars, read_names, mate_*) are NOT carried
+        in M89.2; they default to "" / -1 / 0 on materialise. A future
+        sub-milestone will extend this to full SAM-equivalence.
+        """
+        index = run.index
+        n_reads = index.count
+        # Bulk-read sequences and qualities once; slice per AU.
+        if n_reads > 0:
+            total_bases = int(index.offsets[-1]) + int(index.lengths[-1])
+            seq_full = run._byte_channel_slice("sequences", 0, total_bases)
+            qual_full = run._byte_channel_slice("qualities", 0, total_bases)
+        else:
+            seq_full = b""
+            qual_full = b""
+        chromosomes = index.chromosomes
+        positions = index.positions
+        mqs = index.mapping_qualities
+        flags_arr = index.flags
+        offsets = index.offsets
+        lengths = index.lengths
+        precision_uint8 = int(Precision.UINT8) & 0xFF
+        compression_none = int(Compression.NONE) & 0xFF
+        acq_mode = int(run.acquisition_mode) & 0xFF
+
+        for i in range(n_reads):
+            start = int(offsets[i])
+            length = int(lengths[i])
+            stop = start + length
+            seq_bytes = seq_full[start:stop]
+            qual_bytes = qual_full[start:stop]
+            au = AccessUnit(
+                spectrum_class=5,
+                acquisition_mode=acq_mode,
+                ms_level=0,
+                polarity=2,
+                retention_time=0.0,
+                precursor_mz=0.0,
+                precursor_charge=0,
+                ion_mobility=0.0,
+                base_peak_intensity=0.0,
+                channels=[
+                    ChannelData("sequences", precision_uint8,
+                                compression_none, length, seq_bytes),
+                    ChannelData("qualities", precision_uint8,
+                                compression_none, length, qual_bytes),
+                ],
+                chromosome=chromosomes[i],
+                position=int(positions[i]),
+                mapping_quality=int(mqs[i]),
+                flags=int(flags_arr[i]) & 0xFFFF,
+            )
+            self.write_access_unit(
+                dataset_id=dataset_id, au_sequence=i, au=au
+            )
 
     def _emit_run_access_units(
         self, *, dataset_id: int, run: AcquisitionRun
@@ -385,6 +491,21 @@ def _instrument_config_json(run: AcquisitionRun) -> str:
     }, sort_keys=True)
 
 
+def _genomic_run_metadata_json(run) -> str:
+    """Serialise per-genomic-run metadata for the dataset header.
+
+    Reuses the instrument_json slot in the DATASET_HEADER packet —
+    GenomicRun has its own metadata fields (reference_uri, platform,
+    sample_name) instead of an InstrumentConfig. M89.2.
+    """
+    return json.dumps({
+        "reference_uri": getattr(run, "reference_uri", "") or "",
+        "platform": getattr(run, "platform", "") or "",
+        "sample_name": getattr(run, "sample_name", "") or "",
+        "modality": getattr(run, "modality", "") or "",
+    }, sort_keys=True)
+
+
 def _spectrum_to_access_unit(
     spectrum: Spectrum,
     run: AcquisitionRun,
@@ -503,6 +624,7 @@ class TransportReader:
         stream_meta: dict = {}
         dataset_metas: dict[int, dict] = {}
         run_data: dict[int, dict] = {}
+        genomic_data: dict[int, dict] = {}
         last_seq: dict[int, int] = {}
         saw_stream_header = False
 
@@ -520,19 +642,24 @@ class TransportReader:
                 )
             if ptype == int(PacketType.DATASET_HEADER):
                 meta = _decode_dataset_header(payload)
-                dataset_metas[meta["dataset_id"]] = meta
-                run_data[meta["dataset_id"]] = {
-                    "channels": {c: [] for c in meta["channel_names"]},
-                    "offsets": [],
-                    "lengths": [],
-                    "retention_times": [],
-                    "ms_levels": [],
-                    "polarities": [],
-                    "precursor_mzs": [],
-                    "precursor_charges": [],
-                    "base_peak_intensities": [],
-                    "running_offset": 0,
-                }
+                did = meta["dataset_id"]
+                dataset_metas[did] = meta
+                # M89.2: genomic datasets get a parallel accumulator.
+                if meta["spectrum_class"] == "TTIOGenomicRead":
+                    genomic_data[did] = _new_genomic_accumulator()
+                else:
+                    run_data[did] = {
+                        "channels": {c: [] for c in meta["channel_names"]},
+                        "offsets": [],
+                        "lengths": [],
+                        "retention_times": [],
+                        "ms_levels": [],
+                        "polarities": [],
+                        "precursor_mzs": [],
+                        "precursor_charges": [],
+                        "base_peak_intensities": [],
+                        "running_offset": 0,
+                    }
             elif ptype == int(PacketType.ACCESS_UNIT):
                 did = header.dataset_id
                 if did not in dataset_metas:
@@ -546,7 +673,12 @@ class TransportReader:
                         f"prev={prev}, got={header.au_sequence}"
                     )
                 last_seq[did] = header.au_sequence
-                _ingest_access_unit_bytes(run_data[did], payload)
+                if did in genomic_data:
+                    _ingest_genomic_access_unit_bytes(
+                        genomic_data[did], payload
+                    )
+                else:
+                    _ingest_access_unit_bytes(run_data[did], payload)
             elif ptype == int(PacketType.END_OF_DATASET):
                 continue
             elif ptype == int(PacketType.END_OF_STREAM):
@@ -559,6 +691,8 @@ class TransportReader:
 
         runs: dict[str, WrittenRun] = {}
         for did, meta in dataset_metas.items():
+            if did in genomic_data:
+                continue
             rd = run_data[did]
             channel_data = {
                 c: (np.concatenate(rd["channels"][c])
@@ -583,15 +717,104 @@ class TransportReader:
                 signal_compression="gzip",
             )
 
+        # M89.2: build WrittenGenomicRun for each genomic dataset.
+        from ..written_genomic_run import WrittenGenomicRun
+        genomic_runs: dict[str, WrittenGenomicRun] = {}
+        for did, gd in genomic_data.items():
+            meta = dataset_metas[did]
+            n = len(gd["chromosomes"])
+            instrument_meta = json.loads(meta.get("instrument_json") or "{}")
+            genomic_runs[meta["name"]] = WrittenGenomicRun(
+                acquisition_mode=meta["acquisition_mode"],
+                reference_uri=instrument_meta.get("reference_uri", ""),
+                platform=instrument_meta.get("platform", ""),
+                sample_name=instrument_meta.get("sample_name", ""),
+                positions=np.array(gd["positions"], dtype=np.int64),
+                mapping_qualities=np.array(gd["mapping_qualities"], dtype=np.uint8),
+                flags=np.array(gd["flags"], dtype=np.uint32),
+                sequences=(np.concatenate(gd["sequences_chunks"])
+                           if gd["sequences_chunks"]
+                           else np.array([], dtype=np.uint8)),
+                qualities=(np.concatenate(gd["qualities_chunks"])
+                           if gd["qualities_chunks"]
+                           else np.array([], dtype=np.uint8)),
+                offsets=np.array(gd["offsets"], dtype=np.uint64),
+                lengths=np.array(gd["lengths"], dtype=np.uint32),
+                # Compound fields not carried in M89.2 — defaults preserve shape.
+                cigars=["" for _ in range(n)],
+                read_names=["" for _ in range(n)],
+                mate_chromosomes=["" for _ in range(n)],
+                mate_positions=np.full(n, -1, dtype=np.int64),
+                template_lengths=np.zeros(n, dtype=np.int32),
+                chromosomes=list(gd["chromosomes"]),
+            )
+
         path = SpectralDataset.write_minimal(
             output_path,
             title=stream_meta.get("title", ""),
             isa_investigation_id=stream_meta.get("isa_investigation", ""),
             runs=runs,
+            genomic_runs=genomic_runs or None,
             features=list(stream_meta.get("features", [])) or None,
             provider=provider,
         )
         return SpectralDataset.open(path)
+
+
+def _new_genomic_accumulator() -> dict:
+    """Per-dataset accumulator for genomic AUs. See M89.2."""
+    return {
+        "chromosomes": [],
+        "positions": [],
+        "mapping_qualities": [],
+        "flags": [],
+        "sequences_chunks": [],
+        "qualities_chunks": [],
+        "offsets": [],
+        "lengths": [],
+        "running_offset": 0,
+    }
+
+
+def _ingest_genomic_access_unit_bytes(gd: dict, payload: bytes) -> None:
+    """Parse a genomic AU payload (spectrum_class==5) into ``gd``.
+
+    Mirrors :func:`_ingest_access_unit_bytes` but extracts the genomic
+    suffix (chromosome / position / mapq / flags) and accumulates
+    sequences + qualities as concatenated uint8 buffers. M89.2.
+    """
+    au = AccessUnit.from_bytes(payload)
+    if au.spectrum_class != 5:
+        raise ValueError(
+            f"genomic accumulator received spectrum_class {au.spectrum_class}"
+        )
+    gd["chromosomes"].append(au.chromosome)
+    gd["positions"].append(int(au.position))
+    gd["mapping_qualities"].append(int(au.mapping_quality))
+    gd["flags"].append(int(au.flags) & 0xFFFFFFFF)
+    length = 0
+    for ch in au.channels:
+        if ch.precision != int(Precision.UINT8):
+            raise NotImplementedError(
+                f"genomic channel precision {ch.precision} not yet supported "
+                "(UINT8 only in M89.2)"
+            )
+        if ch.compression != int(Compression.NONE):
+            raise NotImplementedError(
+                f"genomic channel compression {ch.compression} not yet supported "
+                "(NONE only in M89.2)"
+            )
+        arr = np.frombuffer(ch.data, dtype=np.uint8).copy()
+        if ch.name == "sequences":
+            gd["sequences_chunks"].append(arr)
+            length = len(arr)
+        elif ch.name == "qualities":
+            gd["qualities_chunks"].append(arr)
+            if length == 0:
+                length = len(arr)
+    gd["offsets"].append(gd["running_offset"])
+    gd["lengths"].append(length)
+    gd["running_offset"] += length
 
 
 def _decode_stream_header(payload: bytes) -> dict:
