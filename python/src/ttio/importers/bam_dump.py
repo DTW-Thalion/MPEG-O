@@ -1,20 +1,20 @@
-"""bam_dump — canonical-JSON dump of a SAM/BAM file for the M87
-cross-language conformance harness.
+"""bam_dump — canonical-JSON dump of a SAM/BAM/CRAM file for the
+M87 / M88.1 cross-language conformance harness.
 
 Usage::
 
-    python -m ttio.importers.bam_dump <bam_or_sam_path>
+    # BAM/SAM (M87):
+    python -m ttio.importers.bam_dump <path>
 
-Reads the file via :class:`~ttio.importers.bam.BamReader` and emits a
-canonical JSON document on stdout matching the schema documented in
-``HANDOFF.md`` §7. The same shape is produced by the ObjC
-``TtioBamDump`` and Java ``BamDump`` CLIs; cross-language tests
-diff the three outputs to verify field-equality decoding.
+    # CRAM (M88.1):
+    python -m ttio.importers.bam_dump <path.cram> --reference <fa>
 
-The JSON keys are sorted and the document is indented two spaces;
-sequence/quality byte buffers are summarised by their MD5 hex digest
-(rather than being embedded as base64) to keep the output a short
-fixed-width fingerprint.
+Reads the file via :class:`~ttio.importers.bam.BamReader` for SAM/BAM
+or :class:`~ttio.importers.cram.CramReader` for CRAM (auto-dispatched
+on the `.cram` extension) and emits a canonical JSON document on
+stdout matching the schema documented in HANDOFF.md M87 §7. The
+same shape is produced by the ObjC ``TtioBamDump`` and Java
+``BamDump`` CLIs.
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -27,37 +27,36 @@ import sys
 from typing import Any
 
 from .bam import BamReader
+from .cram import CramReader
 
 
 __all__ = ["dump", "main"]
 
 
-def dump(path: str, name: str = "genomic_0001") -> dict[str, Any]:
+def dump(
+    path: str,
+    name: str = "genomic_0001",
+    reference: str | None = None,
+) -> dict[str, Any]:
     """Read ``path`` and return the canonical-JSON-shaped dict.
 
-    Returned keys (sorted by :func:`json.dumps(sort_keys=True)` for
-    canonical output):
+    If ``path`` ends in ``.cram`` (case-insensitive), a
+    :class:`CramReader` is used; ``reference`` must then be provided.
+    Otherwise a :class:`BamReader` handles the file (samtools
+    auto-detects SAM vs BAM); ``reference`` is accepted but unused.
 
-    * ``name`` — the run name passed in (default ``"genomic_0001"``)
-    * ``read_count`` — number of alignment records
-    * ``sample_name`` — first @RG SM: tag (or "")
-    * ``platform`` — first @RG PL: tag (or "")
-    * ``reference_uri`` — first @SQ SN: tag (or "")
-    * ``read_names`` — list[str], length == read_count
-    * ``positions`` — list[int], 1-based per Binding Decision §132
-    * ``chromosomes`` — list[str]
-    * ``flags`` — list[int]
-    * ``mapping_qualities`` — list[int]
-    * ``cigars`` — list[str], "*" preserved literally per Gotcha §153
-    * ``mate_chromosomes`` — list[str], "=" expanded to RNAME per
-      Binding Decision §131
-    * ``mate_positions`` — list[int]
-    * ``template_lengths`` — list[int], signed
-    * ``sequences_md5`` — hex MD5 of concatenated SEQ buffer
-    * ``qualities_md5`` — hex MD5 of concatenated QUAL buffer
-    * ``provenance_count`` — number of @PG-derived provenance rows
+    Returned keys are unchanged from M87 — see this module's
+    docstring for the full schema.
     """
-    reader = BamReader(path)
+    if path.lower().endswith(".cram"):
+        if reference is None:
+            raise ValueError(
+                "--reference <fasta> is required for .cram input"
+            )
+        reader = CramReader(path, reference)
+    else:
+        reader = BamReader(path)
+
     run = reader.to_genomic_run(name=name)
 
     seq_md5 = hashlib.md5(bytes(run.sequences)).hexdigest()
@@ -87,10 +86,17 @@ def dump(path: str, name: str = "genomic_0001") -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m ttio.importers.bam_dump",
-        description="Emit the canonical M87 JSON dump for a SAM/BAM file.",
+        description=(
+            "Emit canonical M87/M88.1 JSON for a SAM, BAM, or CRAM file."
+        ),
     )
     parser.add_argument(
-        "path", help="Path to a SAM or BAM file (samtools auto-detects)."
+        "path",
+        help="Path to a SAM, BAM, or CRAM file (.cram dispatches to CramReader).",
+    )
+    parser.add_argument(
+        "--reference", default=None,
+        help="Path to reference FASTA — required for .cram input, ignored otherwise.",
     )
     parser.add_argument(
         "--name", default="genomic_0001",
@@ -98,7 +104,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    payload = dump(args.path, name=args.name)
+    try:
+        payload = dump(args.path, name=args.name, reference=args.reference)
+    except ValueError as exc:
+        parser.error(str(exc))  # exits 2 with message on stderr
+
     sys.stdout.write(json.dumps(payload, sort_keys=True, indent=2))
     sys.stdout.write("\n")
     return 0
