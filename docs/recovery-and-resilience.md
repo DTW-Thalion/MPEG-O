@@ -22,7 +22,7 @@ specification.
 | Truncated tail (last 1 KB chopped) | Either raises on read OR returns truncated array | Yes | Behaviour depends on whether the missing bytes contain the chunk index. **If h5py returns data, the array is always the declared length** — no silently-short arrays. |
 | Corrupted superblock magic (first 8 bytes zeroed) | Open raises | Yes | All three languages catch this cleanly. |
 | Random 16 KB of garbage | Open raises | Yes | No format auto-detection past the superblock. |
-| Trailing junk past declared EOF | Tolerated | n/a | h5py reads up to the declared file extent and ignores trailing bytes. **If you need tamper-detection on appended bytes, sign the file via TTI-O M54 signatures (HMAC-SHA256 / ML-DSA-87) — HDF5 itself can't tell.** |
+| Trailing junk past declared EOF | Tolerated (Python) / Rejected (ObjC) | n/a | **Cross-language divergence** — h5py tolerates trailing bytes; the ObjC `TTIOHDF5File` wrapper rejects them via its EOF probe. Java behaviour matches Python (libhdf5 default). **If you need tamper-detection across all three langs, sign the file via TTI-O M54 signatures (HMAC-SHA256 / ML-DSA-87) — HDF5 itself can't tell.** |
 
 ## What we DO NOT guarantee (today)
 
