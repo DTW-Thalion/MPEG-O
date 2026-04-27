@@ -81,6 +81,19 @@ ADDITIONAL_OBJCFLAGS  += -Wall -Wextra -Wno-unused-parameter -fobjc-arc \
 ADDITIONAL_OBJCCFLAGS += -Wall -Wextra -Wno-unused-parameter -fobjc-arc \
                          -fobjc-runtime=$(TTIO_OBJC_RUNTIME) $(TTIO_BLOCKS_FLAG)
 
+# V1 (verification workplan): clang coverage instrumentation. Driven
+# by the TTIO_COVERAGE env var set by `objc/build.sh --coverage`. We
+# can't pass these via `make ADDITIONAL_OBJCFLAGS=...` on the command
+# line because that would override (not append to) the +=above which
+# is what carries `-fobjc-arc`. Env-var-gated append in the makefile
+# is the only path that doesn't break ARC.
+ifdef TTIO_COVERAGE
+ADDITIONAL_OBJCFLAGS  += -fprofile-instr-generate -fcoverage-mapping
+ADDITIONAL_OBJCCFLAGS += -fprofile-instr-generate -fcoverage-mapping
+ADDITIONAL_CFLAGS     += -fprofile-instr-generate -fcoverage-mapping
+ADDITIONAL_LDFLAGS    += -fprofile-instr-generate
+endif
+
 # Testing.h ships with gnustep-make's TestFramework.
 ADDITIONAL_OBJCFLAGS  += -I$(GNUSTEP_MAKEFILES)/TestFramework
 ADDITIONAL_OBJCCFLAGS += -I$(GNUSTEP_MAKEFILES)/TestFramework
