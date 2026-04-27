@@ -1,9 +1,13 @@
 /*
- * TtioBamDump — canonical-JSON dump of a SAM/BAM file for the M87
- * cross-language conformance harness.
+ * TtioBamDump — canonical-JSON dump of a SAM/BAM/CRAM file for the
+ * M87/M88.1 cross-language conformance harness.
  *
  * Usage:
- *     TtioBamDump <bam_or_sam_path> [--name NAME]
+ *     TtioBamDump <bam_or_sam_or_cram_path> [--name NAME] [--reference FASTA]
+ *
+ * When the input path ends in `.cram` (case-insensitive) the tool
+ * dispatches to TTIOCramReader, which requires `--reference <fasta>`.
+ * For BAM/SAM input `--reference` is accepted but unused.
  *
  * Reads the file via TTIOBamReader and emits a canonical JSON document
  * on stdout matching the schema documented in HANDOFF.md §7. The same
@@ -22,6 +26,7 @@
  */
 #import <Foundation/Foundation.h>
 #import "Import/TTIOBamReader.h"
+#import "Import/TTIOCramReader.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #include <openssl/md5.h>
 
@@ -195,19 +200,34 @@ int main(int argc, const char *argv[])
 {
     @autoreleasepool {
         if (argc < 2) {
-            fprintf(stderr, "usage: %s <bam_or_sam_path> [--name NAME]\n", argv[0]);
+            fprintf(stderr, "usage: %s <bam_or_sam_or_cram_path> [--name NAME] [--reference FASTA]\n", argv[0]);
             return 2;
         }
         NSString *path = [NSString stringWithUTF8String:argv[1]];
         NSString *runName = @"genomic_0001";
+        NSString *reference = nil;
         for (int i = 2; i < argc; i++) {
             NSString *arg = [NSString stringWithUTF8String:argv[i]];
             if ([arg isEqualToString:@"--name"] && i + 1 < argc) {
                 runName = [NSString stringWithUTF8String:argv[++i]];
+            } else if ([arg isEqualToString:@"--reference"] && i + 1 < argc) {
+                reference = [NSString stringWithUTF8String:argv[++i]];
             }
         }
 
-        TTIOBamReader *reader = [[TTIOBamReader alloc] initWithPath:path];
+        // Dispatch on extension: .cram → TTIOCramReader (requires --reference);
+        // anything else → TTIOBamReader (BAM/SAM). For BAM/SAM, --reference
+        // is accepted but ignored (defensive — keeps the CLI tolerant).
+        BOOL isCram = [path.lowercaseString hasSuffix:@".cram"];
+        if (isCram && reference == nil) {
+            fprintf(stderr,
+                    "TtioBamDump: --reference <fasta> is required for .cram input\n");
+            return 2;
+        }
+
+        TTIOBamReader *reader = isCram
+            ? [[TTIOCramReader alloc] initWithPath:path referenceFasta:reference]
+            : [[TTIOBamReader alloc] initWithPath:path];
         NSError *err = nil;
         TTIOWrittenGenomicRun *run = [reader toGenomicRunWithName:runName
                                                             region:nil
