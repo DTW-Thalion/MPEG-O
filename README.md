@@ -176,13 +176,19 @@ pip install 'ttio[all]'
 
 Individual extras:
 
-| Extra     | Pulls in                                    | Needed for                                            |
-|-----------|---------------------------------------------|-------------------------------------------------------|
-| `crypto`  | `cryptography>=41.0`                        | AES-256-GCM encryption / decryption of signal channels |
-| `import`  | `lxml`                                      | mzML / nmrML importers (`ttio.importers`)           |
-| `cloud`   | `fsspec`, `s3fs`, `aiohttp`                 | `s3://` / `http(s)://` / `gs://` / `az://` open paths |
-| `codecs`  | `hdf5plugin>=4.0`                           | LZ4 signal-channel compression                        |
-| `zarr`    | `zarr>=3.0`                                 | `ZarrProvider` — `zarr://`, `zarr+s3://`, `zarr+memory://` URLs (Zarr v3 on-disk format) |
+| Extra         | Pulls in                                                                      | Needed for                                                                                |
+|---------------|-------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| `crypto`      | `cryptography>=41.0`                                                          | AES-256-GCM encryption / decryption of signal channels                                    |
+| `import`      | `lxml`                                                                        | mzML / nmrML importers (`ttio.importers`)                                                 |
+| `cloud`       | `fsspec`, `s3fs`, `aiohttp`                                                   | `s3://` / `http(s)://` / `gs://` / `az://` open paths                                     |
+| `codecs`      | `hdf5plugin>=4.0`                                                             | LZ4 signal-channel compression                                                            |
+| `zarr`        | `zarr>=3.0`                                                                   | `ZarrProvider` — `zarr://`, `zarr+s3://`, `zarr+memory://` URLs (Zarr v3 on-disk format) |
+| `pqc`         | `liboqs-python>=0.14`                                                         | Post-quantum signatures (ML-DSA-87) and KEM (ML-KEM-1024) — `v3:` envelope wrap          |
+| `bruker`      | `opentimspy`, `opentims-bruker-bridge`                                        | Bruker timsTOF `.d` importer (M53)                                                       |
+| `network`     | `websockets>=12.0`                                                            | `.tis` streaming transport over WebSocket (M68)                                          |
+| `integration` | `pyimzml`, `pyteomics`, `pymzml`, `isatools`                                  | Cross-tool validation harnesses (mzML XSD checks, mzTab importer fixtures, ISA-Tab tests) |
+| `test`        | pytest, pytest-asyncio, pytest-cov, hypothesis, **+ all of the above except `integration`** | Full local dev environment for `pytest`                                                   |
+| `all`         | `[crypto,import,cloud,codecs,zarr,pqc,bruker]`                                | Everything except `test` + `integration`                                                  |
 
 ### Python quick start
 
@@ -200,12 +206,32 @@ with SpectralDataset.open("s3://my-bucket/run.tio", anon=False) as ds:
     ...
 ```
 
-Run the Python test suite (requires libhdf5-dev + the `test` extra):
+Run the Python test suite. The `[test]` extra already pulls in
+pytest, pytest-asyncio, pytest-cov, hypothesis, cryptography, lxml,
+fsspec, aiohttp, hdf5plugin, zarr, liboqs-python, opentimspy +
+bridge, and websockets — enough for the full unit + property-based
++ stress + V-series suite. Add `[integration]` for the cross-tool
+validation harnesses (mzML XSD, pyteomics, pymzml, isatools-driven
+ISA-Tab tests):
 
 ```bash
-cd python
-pip install -e '.[test,codecs]'
-pytest
+sudo apt install libhdf5-dev libhdf5-serial-dev samtools
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip setuptools wheel
+pip install -e 'python[test,integration]'
+cd python && pytest
+```
+
+Expected on a healthy install: **1121 passed, 0 failed, 12 skipped,
+4 xfailed** (the skips are platform-conditional fixtures and the
+xfails are documented future-work markers).
+
+Coverage report (V1 of the verification workplan):
+
+```bash
+cd python && pytest --cov=src/ttio --cov-report=term --cov-report=html
+# HTML report at python/htmlcov/index.html
 ```
 
 ### Building the Java implementation

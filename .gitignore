@@ -56,3 +56,11 @@ python/coverage.xml
 python/htmlcov/
 python/.coverage
 objc/coverage/
+
+# V5 (verification workplan) test-runtime artefacts.
+# - jqwik writes .jqwik-database next to the test run for shrinking.
+# - clang-coverage runs without LLVM_PROFILE_FILE drop default.profraw
+#   in the working directory; can appear if a tool is run by hand
+#   without the build.sh --coverage harness.
+java/.jqwik-database
+**/default.profraw
