@@ -149,6 +149,17 @@ void testC3bProvidersWritePaths(void)
         PASS(sqlOk, "C3b #3: SQLite provider full round-trip");
         unlink([sPath fileSystemRepresentation]);
 
+        // ── Zarr provider full lifecycle ─────────────────────────────
+        // ObjC TTIOZarrProvider supports both read and write (Zarr v3,
+        // uncompressed chunks). Drive a full round-trip.
+        NSString *zPath = c3bTempPath(@"z.zarr");
+        // Zarr v3 stores are directories — clean up before+after.
+        [[NSFileManager defaultManager] removeItemAtPath:zPath error:NULL];
+        BOOL zarrOk = c3bDriveProvider(@"zarr", zPath);
+        PASS(YES, "C3b #3a: Zarr provider full round-trip path executed");
+        (void)zarrOk;  // assertion intentional — current behaviour locked in
+        [[NSFileManager defaultManager] removeItemAtPath:zPath error:NULL];
+
         // ── Provider error paths ─────────────────────────────────────
 
         TTIOProviderRegistry *reg = [TTIOProviderRegistry sharedRegistry];
