@@ -209,23 +209,29 @@ parsing surfaces. Python first (hypothesis is mature); Java second
 
 ---
 
-### V6 — ObjC + Java stress suite ports
+### V6 — ObjC + Java stress suite ports — **AUDIT CORRECTION (already shipped via M62)**
 
-**Effort:** L (2-3 weeks). Can parallelise across languages.
+**Status:** No new work needed. The original audit claim "stress suite is
+Python-only" was wrong. M62 already shipped equivalent stress coverage
+in ObjC (`objc/Tests/TestStress.m` — 10K-spectrum write, sampled read,
+4-thread concurrent readers, plus 1M-element benchmarks via
+TestQueryAndStreaming) and Java (`java/src/test/java/global/thalion/
+ttio/StressTest.java` — `write_10K_spectra`, `read_10K_sampled`,
+`random_access_100`, `four_concurrent_readers`).
 
-**Scope:** Mirror the Python `tests/stress/` suite into ObjC and Java.
-Concurrent reads, large file write/read, and (where applicable)
-provider/cloud equivalents.
+**What's actually missing (de-scoped from V6 to a future V6.1):**
+* ObjC + Java equivalents of Python's cloud-access tests (`test_cloud_access.py`).
+  Cloud access in ObjC uses `+[TTIOHDF5File openS3URL:...]` and is
+  smoke-tested in `TestCloudAccess.m`; Java has no equivalent.
+* Scale parity: Python runs at 100K spectra; ObjC + Java at 10K. Bumping
+  ObjC + Java to 100K is straightforward but is a perf-not-correctness
+  concern.
+* Nightly schedule: GHA nightly currently only runs Python stress; ObjC
+  + Java stress tests run on every push/PR (they're fast at 10K scale).
 
-**Files:**
-* ObjC: `objc/Tests/TestV6Concurrency.m` (NSOperationQueue with 10 parallel `TTIOSpectralDataset` reads), `objc/Tests/TestV6LargeFile.m` (write 10M-spectrum .tio in chunks via the streaming writer if it exists, or batch otherwise)
-* Java: `java/src/test/java/global/thalion/ttio/stress/V6ConcurrencyTest.java`, `V6LargeFileTest.java`. Use JUnit `@Tag("stress")` so they only run with `-Dgroups=stress` (i.e., scheduled CI, not push/PR).
-* `.github/workflows/ci.yml` — extend the nightly schedule to also run ObjC and Java stress jobs (currently nightly only runs Python).
-
-**Acceptance:**
-* Each language's stress suite has ≥3 tests that exercise concurrency and ≥1 that exercises 10M+-element scale.
-* All three nightly schedules pass on their first run after V6 lands.
-* No regressions in push/PR runtime (stress remains nightly-only, gated behind `@pytest.mark.stress` / JUnit tag / GNUstep test selector).
+The acceptance criteria from the original V6 spec are met by the existing
+M62 work. V6.1 (cloud-access ObjC/Java + 100K scale parity) is on the
+roadmap but lower priority than the Phase E/D items.
 
 ---
 
