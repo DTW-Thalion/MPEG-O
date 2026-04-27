@@ -481,6 +481,17 @@ features (reference-relative encoding, slice-level metadata) are
 opaque; samtools materialises them as plain SAM text before our
 parser sees them.
 
+### CLI dispatch via `bam_dump --reference` (M88.1)
+
+The M87 `bam_dump` / `TtioBamDump` / `BamDump` CLI in each language
+auto-dispatches to the CRAM reader when the input path ends in
+`.cram` (case-insensitive). The reference FASTA is supplied via a
+`--reference <fasta>` flag; omitting it on a `.cram` path is a
+hard error (exit 2) with a stderr message identifying the missing
+flag. For BAM/SAM paths the flag is accepted but unused (defensive
+— scripts can always pass it). The canonical-JSON output schema is
+unchanged from M87.
+
 ## SAM/BAM/CRAM Export (M88, post-M87)
 
 **Status:** Implemented in all three languages. Subprocess
@@ -549,15 +560,24 @@ canonical M88 fixture (5 reads, 2 chromosomes, multi-RG, `M88_TEST_SAMPLE`).
 ### Cross-language conformance
 
 The M88 cross-language harness
-(`python/tests/integration/test_m88_cross_language.py`) re-uses the
-M87 `bam_dump` CLIs against the new M88 BAM fixture and asserts
-byte-identical canonical JSON across Python / ObjC / Java. CRAM
-cross-language read parity is verified implicitly: each language
-ingests the same canonical M88 CRAM fixture in its own unit suite
-and produces buffer-byte-identical decoded `WrittenGenomicRun`
-instances. Adding CRAM-aware dump CLIs across all three languages
-is deferred to a future M88.1 if the implicit verification ever
-proves insufficient.
+(`python/tests/integration/test_m88_cross_language.py`) drives both
+read paths against the M88 fixtures and asserts byte-identical
+canonical JSON across Python / ObjC / Java:
+
+* **BAM** (3 tests) — the existing M87 `bam_dump` CLIs run against
+  `m88_test.bam`; output is 1341-ish bytes of canonical JSON
+  (sorted keys, 2-space indent, MD5 fingerprints for the byte
+  buffers).
+* **CRAM** (3 tests, added in M88.1) — the same `bam_dump` /
+  `TtioBamDump` / `BamDump` CLIs are re-used with a new
+  `--reference <fasta>` flag; the path's `.cram` extension
+  auto-dispatches to `CramReader` / `TTIOCramReader` / Java
+  `CramReader`. Output for the M88 CRAM fixture is exactly 914
+  bytes (md5 `2be5c5bccc95635240aa60337406cb35`) and is
+  byte-identical across all three languages. The CRAM fixture's
+  `provenance_count` differs from the BAM fixture's by design —
+  samtools injects different `@PG` records on each format's read
+  path, and that's correct.
 
 ### What is NOT covered
 

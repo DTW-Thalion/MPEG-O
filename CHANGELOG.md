@@ -11,7 +11,88 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer + M88 CRAM importer + BAM/CRAM exporters
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer + M88 CRAM importer + BAM/CRAM exporters + M88.1 bam_dump CRAM dispatch
+
+### M88.1 — `bam_dump --reference` flag for CRAM cross-language conformance (2026-04-26)
+
+Closes the implicit-parity gap from M88. Extends the existing
+M87 `bam_dump` / `TtioBamDump` / `BamDump` CLI in each language
+with an optional `--reference <fasta>` flag and case-insensitive
+`.cram` extension dispatch to the M88 `CramReader` /
+`TTIOCramReader` / Java `CramReader`. No new format parsing, no
+new external dependencies; pure CLI extension over the readers
+shipped in M88. User chose **Option A** (extend existing CLI)
+over **Option B** (parallel `cram_dump` per language) — single
+CLI surface, single harness file, mirrors the
+`CramReader extends BamReader` inheritance pattern.
+
+#### Added
+
+- **Python** (`python/src/ttio/importers/bam_dump.py`) — added
+  `--reference` argparse arg + `reference` parameter to
+  `dump()`. Dispatches to `CramReader(path, reference)` when
+  path ends in `.cram` (case-insensitive); errors via
+  `parser.error()` (exit 2) when `.cram` is given without
+  `--reference`. Existing BAM/SAM behaviour unchanged. Two new
+  pytest cases in
+  `python/tests/integration/test_m88_1_bam_dump_cram.py`:
+  `test_bam_dump_dispatches_to_cram_reader` and
+  `test_bam_dump_cram_without_reference_errors`. Python suite:
+  1045 → 1047 passed, zero regressions.
+- **Objective-C** (`objc/Tools/TtioBamDump.m`) — hand-rolled arg
+  loop also recognises `--reference <fa>`. Dispatches via
+  `[path.lowercaseString hasSuffix:@".cram"]` to
+  `[[TTIOCramReader alloc] initWithPath:referenceFasta:]`. For
+  `.cram` without `--reference`, prints stderr error and returns
+  2 from `main()`. ObjC suite: 2595 → 2597 passed (the 2 baseline
+  M38 Thermo failures didn't reproduce in this run).
+- **Java** (`java/src/main/java/global/thalion/ttio/importers/BamDump.java`)
+  — added `--reference <fa>` and `--reference=<fa>` argparse
+  handling (mirrors existing `--name`). Dispatches via
+  `pathStr.toLowerCase().endsWith(".cram")` to
+  `new CramReader(Paths.get(pathStr), Paths.get(reference))`. For
+  `.cram` without `--reference`, stderr error and `return 2`.
+  Java suite: 543 → 543 (no delta; coverage is in the cross-
+  language harness).
+
+#### Cross-language conformance
+
+- **`python/tests/integration/test_m88_cross_language.py`** —
+  extended with a `CRAM_FIXTURE` / `CRAM_REFERENCE` constant
+  pair, three new `_*_cram_dump()` helpers, and three new tests:
+  `test_python_cram_dump_works`,
+  `test_objc_cram_matches_python_byte_exact`, and
+  `test_java_cram_matches_python_byte_exact`. All 6 tests
+  (3 BAM + 3 CRAM) pass against the M88 fixtures. The CRAM
+  canonical JSON for the M88 fixture is exactly **914 bytes**
+  with md5 `2be5c5bccc95635240aa60337406cb35`, byte-identical
+  across all three languages.
+
+#### Documentation
+
+- **`docs/vendor-formats.md`** — added a "CLI dispatch via
+  `bam_dump --reference`" subsection to §CRAM. Replaced the
+  "Adding CRAM-aware dump CLIs ... is deferred to a future
+  M88.1" caveat in §SAM/BAM/CRAM Export with a present-tense
+  description of the 6-test BAM+CRAM cross-language harness.
+- **`README.md`** — appended a `--reference` flag note to the
+  CRAM importer bullet.
+- **`WORKPLAN.md`** — appended M88.1 SHIPPED entry.
+
+#### Notes
+
+- The CRAM fixture's `provenance_count` differs from the BAM
+  fixture's by design — samtools injects different `@PG` records
+  on each format's read path. The canonical JSON for each
+  fixture is its own ground truth; do not compare CRAM output
+  against BAM output.
+- `--reference` is accepted but unused for BAM/SAM paths
+  (defensive — keeps the CLI tolerant of scripts that always
+  pass it).
+- Cross-language dispatch is extension-based (`.cram` lower-
+  cased), not magic-byte sniffing. samtools-produced CRAMs use
+  `.cram` and BAMs use `.bam`/`.sam`; if the user has a CRAM
+  with a different extension, they can rename it.
 
 ### M88 — CRAM Importer + BAM/CRAM Exporters (2026-04-26)
 
