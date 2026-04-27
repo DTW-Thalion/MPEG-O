@@ -74,6 +74,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) uint32_t pixelY;
 @property (nonatomic, readonly) uint32_t pixelZ;
 
+// GenomicRead extension (written only when spectrumClass == 5). M89.1.
+// Wire layout (transport-spec §4.3.4): chromosome (uint16-len-prefixed
+// UTF-8) + position (i64 LE) + mappingQuality (u8) + flags (u16 LE).
+// position is signed to match BAM's -1 unmapped sentinel.
+@property (nonatomic, readonly, copy) NSString *chromosome;
+@property (nonatomic, readonly) int64_t position;
+@property (nonatomic, readonly) uint8_t mappingQuality;
+@property (nonatomic, readonly) uint16_t flags;
+
 - (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
                       acquisitionMode:(uint8_t)acquisitionMode
                               msLevel:(uint8_t)msLevel
@@ -87,6 +96,27 @@ NS_ASSUME_NONNULL_BEGIN
                                pixelX:(uint32_t)pixelX
                                pixelY:(uint32_t)pixelY
                                pixelZ:(uint32_t)pixelZ;
+
+/** M89.1 designated initialiser including the GenomicRead suffix
+ *  fields. The shorter pixel-only initialiser delegates here with
+ *  chromosome=@"", position=0, mappingQuality=0, flags=0. */
+- (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
+                      acquisitionMode:(uint8_t)acquisitionMode
+                              msLevel:(uint8_t)msLevel
+                             polarity:(uint8_t)polarity
+                        retentionTime:(double)retentionTime
+                          precursorMz:(double)precursorMz
+                      precursorCharge:(uint8_t)precursorCharge
+                          ionMobility:(double)ionMobility
+                    basePeakIntensity:(double)basePeakIntensity
+                             channels:(NSArray<TTIOTransportChannelData *> *)channels
+                               pixelX:(uint32_t)pixelX
+                               pixelY:(uint32_t)pixelY
+                               pixelZ:(uint32_t)pixelZ
+                            chromosome:(NSString *)chromosome
+                              position:(int64_t)position
+                       mappingQuality:(uint8_t)mappingQuality
+                                  flags:(uint16_t)flags;
 
 - (NSData *)encode;
 

@@ -4,6 +4,7 @@
 #import "TTIOTransportReader.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOWrittenRun.h"
+#import "Genomics/TTIOWrittenGenomicRun.h"
 #import "ValueClasses/TTIOEnums.h"
 #import <string.h>
 #import <zlib.h>
@@ -188,6 +189,11 @@ typedef struct {
         [NSMutableDictionary dictionary];
     NSMutableDictionary<NSNumber *, NSMutableDictionary *> *runData =
         [NSMutableDictionary dictionary];
+    // M89.2 / M89.4: genomic accumulators, keyed by dataset_id. Each
+    // value holds the parallel arrays that ultimately feed
+    // TTIOWrittenGenomicRun.
+    NSMutableDictionary<NSNumber *, NSMutableDictionary *> *genomicData =
+        [NSMutableDictionary dictionary];
     NSMutableDictionary<NSNumber *, NSNumber *> *lastSeq =
         [NSMutableDictionary dictionary];
     BOOL sawStreamHeader = NO;
@@ -239,13 +245,52 @@ typedef struct {
             uint32_t expected = 0;
             if (off + 4 <= len) { expected = readU32(&bytes[off]); off += 4; }
 
+            // Re-read instrument_json (M89.2: genomic dataset header
+            // carries reference_uri / platform / sample_name / modality
+            // in this slot; we already advanced past it above with a
+            // discarded value, so re-extract by walking the payload
+            // again before the n_channels byte). Cheaper to keep a
+            // local copy from the first pass.
+            //
+            // (We deliberately skip rewinding — readLEString returned
+            // the JSON string we discarded with `(void)`. To minimise
+            // churn we recompute by re-reading from a fresh offset.)
+            NSUInteger jsonOff = 0;
+            jsonOff += 2;  // dataset_id
+            // skip name
+            (void)readLEString(bytes, len, &jsonOff, 2);
+            jsonOff += 1;  // acq_mode
+            (void)readLEString(bytes, len, &jsonOff, 2);  // spectrum_class
+            jsonOff += 1;  // n_channels
+            for (uint8_t i = 0; i < nch; i++) {
+                (void)readLEString(bytes, len, &jsonOff, 2);
+            }
+            NSString *instrumentJSON = readLEString(bytes, len, &jsonOff, 4) ?: @"";
+
             datasetMetas[@(did)] = @{
                 @"name": name ?: @"",
                 @"acquisitionMode": @(acqMode),
                 @"spectrumClass": spectrumClass ?: @"TTIOMassSpectrum",
                 @"channelNames": [chNames copy],
                 @"expectedAUCount": @(expected),
+                @"instrumentJSON": instrumentJSON,
             };
+
+            // M89.2: route genomic datasets to a parallel accumulator.
+            if ([spectrumClass isEqualToString:@"TTIOGenomicRead"]) {
+                NSMutableDictionary *gd = [NSMutableDictionary dictionary];
+                gd[@"runningOffset"] = @(0);
+                gd[@"chromosomes"] = [NSMutableArray array];
+                gd[@"positions"] = [NSMutableArray array];
+                gd[@"mappingQualities"] = [NSMutableArray array];
+                gd[@"flags"] = [NSMutableArray array];
+                gd[@"sequences"] = [NSMutableData data];
+                gd[@"qualities"] = [NSMutableData data];
+                gd[@"offsets"] = [NSMutableArray array];
+                gd[@"lengths"] = [NSMutableArray array];
+                genomicData[@(did)] = gd;
+                continue;
+            }
 
             NSMutableDictionary *rd = [NSMutableDictionary dictionary];
             rd[@"runningOffset"] = @(0);
@@ -292,6 +337,57 @@ typedef struct {
             if (!au) {
                 if (error) *error = auErr;
                 return NO;
+            }
+
+            // M89.2: route to genomic accumulator if this dataset is
+            // a TTIOGenomicRead stream.
+            NSMutableDictionary *gd = genomicData[didKey];
+            if (gd) {
+                if (au.spectrumClass != 5) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:@"genomic accumulator received spectrum_class %u",
+                                             (unsigned)au.spectrumClass]}];
+                    return NO;
+                }
+                [(NSMutableArray *)gd[@"chromosomes"] addObject:(au.chromosome ?: @"")];
+                [(NSMutableArray *)gd[@"positions"] addObject:@(au.position)];
+                [(NSMutableArray *)gd[@"mappingQualities"] addObject:@(au.mappingQuality)];
+                [(NSMutableArray *)gd[@"flags"] addObject:@((uint32_t)au.flags)];
+                NSMutableData *seqSink = gd[@"sequences"];
+                NSMutableData *qualSink = gd[@"qualities"];
+                NSUInteger length = 0;
+                for (TTIOTransportChannelData *ch in au.channels) {
+                    if (ch.precision != TTIOPrecisionUInt8) {
+                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                 code:TTIOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:@"genomic channel precision %u not supported (UINT8 only in M89.2)",
+                                                 (unsigned)ch.precision]}];
+                        return NO;
+                    }
+                    if (ch.compression != TTIOCompressionNone) {
+                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                 code:TTIOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:@"genomic channel compression %u not supported (NONE only in M89.2)",
+                                                 (unsigned)ch.compression]}];
+                        return NO;
+                    }
+                    if ([ch.name isEqualToString:@"sequences"]) {
+                        [seqSink appendData:ch.data];
+                        length = ch.data.length;
+                    } else if ([ch.name isEqualToString:@"qualities"]) {
+                        [qualSink appendData:ch.data];
+                        if (length == 0) length = ch.data.length;
+                    }
+                }
+                uint64_t curOffset = ((NSNumber *)gd[@"runningOffset"]).unsignedLongLongValue;
+                [(NSMutableArray *)gd[@"offsets"] addObject:@(curOffset)];
+                [(NSMutableArray *)gd[@"lengths"] addObject:@((uint32_t)length)];
+                gd[@"runningOffset"] = @(curOffset + length);
+                continue;
             }
 
             NSMutableDictionary *rd = runData[didKey];
@@ -375,6 +471,8 @@ typedef struct {
         [NSMutableDictionary dictionary];
     for (NSNumber *didKey in datasetMetas) {
         NSDictionary *meta = datasetMetas[didKey];
+        // Skip genomic datasets — built separately below.
+        if (genomicData[didKey]) continue;
         NSDictionary *rd = runData[didKey];
         NSMutableDictionary *channelDataOut = [NSMutableDictionary dictionary];
         for (NSString *c in (NSArray *)meta[@"channelNames"]) {
@@ -447,10 +545,108 @@ typedef struct {
         runs[(NSString *)meta[@"name"]] = wr;
     }
 
+    // M89.2: build TTIOWrittenGenomicRun objects for each genomic
+    // dataset_id. These travel through the extended writeMinimalToPath
+    // overload alongside any MS runs.
+    NSMutableDictionary<NSString *, TTIOWrittenGenomicRun *> *genomicRuns =
+        [NSMutableDictionary dictionary];
+    for (NSNumber *didKey in genomicData) {
+        NSDictionary *meta = datasetMetas[didKey];
+        NSMutableDictionary *gd = genomicData[didKey];
+        NSString *instrumentJSON = meta[@"instrumentJSON"] ?: @"";
+        NSString *referenceUri = @"";
+        NSString *platform = @"";
+        NSString *sampleName = @"";
+        if (instrumentJSON.length > 0) {
+            NSData *jdata = [instrumentJSON dataUsingEncoding:NSUTF8StringEncoding];
+            id parsed = [NSJSONSerialization JSONObjectWithData:jdata options:0 error:NULL];
+            if ([parsed isKindOfClass:[NSDictionary class]]) {
+                NSDictionary *jd = parsed;
+                referenceUri = [jd[@"reference_uri"] isKindOfClass:[NSString class]]
+                    ? jd[@"reference_uri"] : @"";
+                platform     = [jd[@"platform"] isKindOfClass:[NSString class]]
+                    ? jd[@"platform"]     : @"";
+                sampleName   = [jd[@"sample_name"] isKindOfClass:[NSString class]]
+                    ? jd[@"sample_name"]   : @"";
+            }
+        }
+
+        NSArray *posArr = gd[@"positions"];
+        NSMutableData *positionsData = [NSMutableData dataWithCapacity:posArr.count * 8];
+        for (NSNumber *n in posArr) {
+            int64_t v = n.longLongValue;
+            [positionsData appendBytes:&v length:8];
+        }
+        NSArray *mqArr = gd[@"mappingQualities"];
+        NSMutableData *mqData = [NSMutableData dataWithCapacity:mqArr.count];
+        for (NSNumber *n in mqArr) {
+            uint8_t v = (uint8_t)n.unsignedCharValue;
+            [mqData appendBytes:&v length:1];
+        }
+        NSArray *flagsArr = gd[@"flags"];
+        NSMutableData *flagsData = [NSMutableData dataWithCapacity:flagsArr.count * 4];
+        for (NSNumber *n in flagsArr) {
+            uint32_t v = (uint32_t)n.unsignedIntValue;
+            [flagsData appendBytes:&v length:4];
+        }
+        NSArray *offArr = gd[@"offsets"];
+        NSMutableData *offsetsData = [NSMutableData dataWithCapacity:offArr.count * 8];
+        for (NSNumber *n in offArr) {
+            uint64_t v = n.unsignedLongLongValue;
+            [offsetsData appendBytes:&v length:8];
+        }
+        NSArray *lenArr = gd[@"lengths"];
+        NSMutableData *lengthsData = [NSMutableData dataWithCapacity:lenArr.count * 4];
+        for (NSNumber *n in lenArr) {
+            uint32_t v = n.unsignedIntValue;
+            [lengthsData appendBytes:&v length:4];
+        }
+
+        // M89.2: compound fields not carried on the wire — defaults
+        // preserve shape on the materialised side. cigar="", read_name="",
+        // mate_chromosome="", mate_position=-1, template_length=0.
+        NSUInteger n = posArr.count;
+        NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:n];
+        NSMutableArray *readNames = [NSMutableArray arrayWithCapacity:n];
+        NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:n];
+        for (NSUInteger i = 0; i < n; i++) {
+            [cigars addObject:@""];
+            [readNames addObject:@""];
+            [mateChroms addObject:@""];
+        }
+        NSMutableData *matePosData = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+        int64_t *matePosBuf = (int64_t *)matePosData.mutableBytes;
+        for (NSUInteger i = 0; i < n; i++) matePosBuf[i] = -1;
+        NSMutableData *tlenData = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+        // tlen is zero-initialised by dataWithLength: — leave as-is.
+
+        TTIOWrittenGenomicRun *wgr = [[TTIOWrittenGenomicRun alloc]
+            initWithAcquisitionMode:(TTIOAcquisitionMode)((NSNumber *)meta[@"acquisitionMode"]).unsignedIntegerValue
+                       referenceUri:referenceUri
+                           platform:platform
+                         sampleName:sampleName
+                          positions:positionsData
+                   mappingQualities:mqData
+                              flags:flagsData
+                          sequences:[gd[@"sequences"] copy]
+                          qualities:[gd[@"qualities"] copy]
+                            offsets:offsetsData
+                            lengths:lengthsData
+                             cigars:cigars
+                          readNames:readNames
+                    mateChromosomes:mateChroms
+                      matePositions:matePosData
+                    templateLengths:tlenData
+                        chromosomes:[gd[@"chromosomes"] copy]
+                  signalCompression:TTIOCompressionNone];
+        genomicRuns[(NSString *)meta[@"name"]] = wgr;
+    }
+
     return [TTIOSpectralDataset writeMinimalToPath:outputPath
                                               title:title
                                  isaInvestigationId:isa
                                              msRuns:runs
+                                        genomicRuns:(genomicRuns.count ? genomicRuns : nil)
                                     identifications:nil
                                     quantifications:nil
                                   provenanceRecords:nil

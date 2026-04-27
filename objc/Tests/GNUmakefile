@@ -74,6 +74,7 @@ TTIOTests_OBJC_FILES = \
 	TestM86GenomicCodecWiring.m \
 	TestM87BamImporter.m \
 	TestM88CramBamRoundTrip.m \
+	TestM89GenomicTransport.m \
 	TestV4EdgeCases.m \
 	TestV8Hdf5Corruption.m \
 	TestC1ToolsCli.m \
