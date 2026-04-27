@@ -60,6 +60,16 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- V5 (verification workplan): jqwik for property-based codec tests.
+             Default 1000 tries per property; deterministic seed in CI.
+             See docs/verification-workplan.md §V5. -->
+        <dependency>
+            <groupId>net.jqwik</groupId>
+            <artifactId>jqwik</artifactId>
+            <version>1.9.1</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- SQLite JDBC for SqliteProvider -->
         <dependency>
             <groupId>org.xerial</groupId>
