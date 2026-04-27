@@ -155,8 +155,8 @@ version-appropriate parsing of nested JSON payloads.
 
 ### 4.2 DatasetHeader (`0x02`)
 
-One DatasetHeader per AcquisitionRun. MUST precede any AccessUnit
-carrying the matching `dataset_id`.
+One DatasetHeader per AcquisitionRun *or* GenomicRun. MUST precede
+any AccessUnit carrying the matching `dataset_id`.
 
 ```
 dataset_id:          uint16                       # matches header.dataset_id
@@ -164,17 +164,26 @@ name_len:            uint16
 name:                bytes[name_len]              # run name, e.g. "run_0001"
 acquisition_mode:    uint8                        # TTIOAcquisitionMode enum
 spectrum_class_len:  uint16
-spectrum_class:      bytes[spectrum_class_len]    # e.g. "TTIOMassSpectrum"
+spectrum_class:      bytes[spectrum_class_len]    # e.g. "TTIOMassSpectrum",
+                                                  # "TTIOGenomicRead" (M89.2)
 n_channels:          uint8
 channel_names:       repeated { uint16 len, bytes[len] }
 instrument_json_len: uint32
-instrument_json:     bytes[instrument_json_len]   # InstrumentConfig serialized as JSON
+instrument_json:     bytes[instrument_json_len]   # InstrumentConfig OR
+                                                  # genomic-run metadata JSON
 expected_au_count:   uint32                       # 0 if unknown / real-time
 ```
 
 `spectrum_class` uses the ObjC class name as the canonical wire
 token; Python and Java map it to their native class via
 `class_hierarchy.md`.
+
+For genomic runs (`spectrum_class == "TTIOGenomicRead"`), the
+`instrument_json` slot carries
+``{"reference_uri", "platform", "sample_name", "modality"}``
+instead of an `InstrumentConfig` (M89.2). Channel names for genomic
+runs are `["sequences", "qualities"]` in M89.2; compound channels
+(cigars, read_names, mate_*) are not yet carried on the wire.
 
 `expected_au_count = 0` is the real-time acquisition signal — the
 receiver MUST allocate growable structures and MUST NOT pre-size

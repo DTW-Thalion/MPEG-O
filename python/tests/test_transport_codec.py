@@ -296,3 +296,124 @@ class TestOrderingEnforcement:
         buffer.seek(0)
         with pytest.raises(ValueError, match="StreamHeader"):
             transport_to_file(buffer, tmp_path / "rt.tio")
+
+
+def _make_minimal_genomic_dataset(path: Path) -> Path:
+    """Write a small 4-read genomic dataset to ``path`` (M89.2 fixture)."""
+    from ttio.written_genomic_run import WrittenGenomicRun
+
+    n_reads = 4
+    read_length = 12
+    chromosomes = ["chr1", "chr1", "chr2", "*"]  # last is unmapped
+    positions = np.array([100, 200, 50, -1], dtype=np.int64)
+    flags = np.array([0x0003, 0x0003, 0x0003, 0x0004], dtype=np.uint32)
+    mapqs = np.array([60, 55, 40, 0], dtype=np.uint8)
+
+    seq_bytes = b"ACGTACGTACGT" * n_reads
+    qual_bytes = bytes([30] * (n_reads * read_length))
+    sequences = np.frombuffer(seq_bytes, dtype=np.uint8)
+    qualities = np.frombuffer(qual_bytes, dtype=np.uint8)
+    offsets = np.arange(n_reads, dtype=np.uint64) * read_length
+    lengths = np.full(n_reads, read_length, dtype=np.uint32)
+
+    run = WrittenGenomicRun(
+        acquisition_mode=7,  # GENOMIC_WGS
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="NA12878",
+        positions=positions,
+        mapping_qualities=mapqs,
+        flags=flags,
+        sequences=sequences,
+        qualities=qualities,
+        offsets=offsets,
+        lengths=lengths,
+        cigars=[f"{read_length}M"] * n_reads,
+        read_names=[f"read_{i:03d}" for i in range(n_reads)],
+        mate_chromosomes=[""] * n_reads,
+        mate_positions=np.full(n_reads, -1, dtype=np.int64),
+        template_lengths=np.zeros(n_reads, dtype=np.int32),
+        chromosomes=chromosomes,
+    )
+    SpectralDataset.write_minimal(
+        path,
+        title="M89.2 genomic round-trip fixture",
+        isa_investigation_id="ISA-M89-TEST",
+        runs={},
+        genomic_runs={"genomic_0001": run},
+    )
+    return path
+
+
+class TestGenomicRoundTrip:
+    """M89.2: GenomicRun ↔ transport ↔ GenomicRun round-trip."""
+
+    def test_emits_one_au_per_read(self, tmp_path):
+        src = _make_minimal_genomic_dataset(tmp_path / "src.tio")
+        buffer = io.BytesIO()
+        file_to_transport(src, buffer)
+        buffer.seek(0)
+        with TransportReader(buffer) as tr:
+            types = [int(h.packet_type) for h, _ in tr.iter_packets()]
+        # StreamHeader, DatasetHeader, 4 AUs, EndOfDataset, EndOfStream = 8
+        assert types == [
+            int(PacketType.STREAM_HEADER),
+            int(PacketType.DATASET_HEADER),
+            int(PacketType.ACCESS_UNIT),
+            int(PacketType.ACCESS_UNIT),
+            int(PacketType.ACCESS_UNIT),
+            int(PacketType.ACCESS_UNIT),
+            int(PacketType.END_OF_DATASET),
+            int(PacketType.END_OF_STREAM),
+        ]
+
+    def test_au_carries_genomic_suffix(self, tmp_path):
+        src = _make_minimal_genomic_dataset(tmp_path / "src.tio")
+        buffer = io.BytesIO()
+        file_to_transport(src, buffer)
+        buffer.seek(0)
+        aus: list[AccessUnit] = []
+        with TransportReader(buffer) as tr:
+            for header, payload in tr.iter_packets():
+                if int(header.packet_type) == int(PacketType.ACCESS_UNIT):
+                    aus.append(AccessUnit.from_bytes(payload))
+        assert len(aus) == 4
+        assert all(au.spectrum_class == 5 for au in aus)
+        assert [au.chromosome for au in aus] == ["chr1", "chr1", "chr2", "*"]
+        assert [au.position for au in aus] == [100, 200, 50, -1]
+        assert [au.mapping_quality for au in aus] == [60, 55, 40, 0]
+        assert [au.flags for au in aus] == [0x0003, 0x0003, 0x0003, 0x0004]
+        # Sequences came back as one UINT8 channel per AU.
+        assert all(any(c.name == "sequences" for c in au.channels) for au in aus)
+        seq_channel = next(c for c in aus[0].channels if c.name == "sequences")
+        assert bytes(seq_channel.data[:12]) == b"ACGTACGTACGT"
+
+    def test_round_trip_genomic_to_file(self, tmp_path):
+        src = _make_minimal_genomic_dataset(tmp_path / "src.tio")
+        buffer = io.BytesIO()
+        file_to_transport(src, buffer)
+        buffer.seek(0)
+        rt_path = transport_to_file(buffer, tmp_path / "rt.tio")
+        try:
+            assert "genomic_0001" in rt_path.genomic_runs
+            rt_run = rt_path.genomic_runs["genomic_0001"]
+            assert len(rt_run) == 4
+            assert rt_run.index.chromosomes == ["chr1", "chr1", "chr2", "*"]
+            np.testing.assert_array_equal(
+                rt_run.index.positions,
+                np.array([100, 200, 50, -1], dtype=np.int64),
+            )
+            np.testing.assert_array_equal(
+                rt_run.index.mapping_qualities,
+                np.array([60, 55, 40, 0], dtype=np.uint8),
+            )
+            np.testing.assert_array_equal(
+                rt_run.index.flags,
+                np.array([0x0003, 0x0003, 0x0003, 0x0004], dtype=np.uint32),
+            )
+            # Sequence + qualities round-trip byte-exact.
+            r0 = rt_run[0]
+            assert r0.sequence == "ACGTACGTACGT"
+            assert r0.qualities == bytes([30] * 12)
+        finally:
+            rt_path.close()
