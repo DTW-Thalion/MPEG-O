@@ -73,7 +73,8 @@ TTIOTests_OBJC_FILES = \
 	TestM85bNameTokenizer.m \
 	TestM86GenomicCodecWiring.m \
 	TestM87BamImporter.m \
-	TestM88CramBamRoundTrip.m
+	TestM88CramBamRoundTrip.m \
+	TestV4EdgeCases.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
