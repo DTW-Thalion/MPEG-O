@@ -81,6 +81,7 @@ extern void testV4EdgeCases(void);
 extern void testV8Hdf5Corruption(void);
 extern void testC1ToolsCli(void);
 extern void testC2HDF5ErrorPaths(void);
+extern void testC3ProvidersErrorPaths(void);
 
 int main(int argc, const char *argv[])
 {
@@ -404,6 +405,10 @@ int main(int argc, const char *argv[])
         START_SET("C2: HDF5 error-path coverage")
             testC2HDF5ErrorPaths();
         END_SET("C2: HDF5 error-path coverage")
+
+        START_SET("C3: providers error-path coverage")
+            testC3ProvidersErrorPaths();
+        END_SET("C3: providers error-path coverage")
     }
     return 0;
 }
