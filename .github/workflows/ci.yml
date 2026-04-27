@@ -217,7 +217,11 @@ jobs:
         # V1 (verification workplan): pytest-cov runs on every matrix
         # entry; XML/HTML reports are uploaded only on the 3.12 leg
         # below so we don't double-upload artifacts.
-        run: pytest -v --tb=short --cov=src/ttio --cov-report=term --cov-report=xml --cov-report=html
+        # C7 (coverage workplan): --cov-fail-under gates the build at
+        # the post-C-series baseline. Bump in tandem with
+        # pyproject.toml's [tool.coverage.report] fail_under after
+        # intentional coverage improvements.
+        run: pytest -v --tb=short --cov=src/ttio --cov-report=term --cov-report=xml --cov-report=html --cov-fail-under=84
 
       # V1: publish coverage on the 3.12 leg only.
       - name: Upload coverage (Python 3.12 only)
