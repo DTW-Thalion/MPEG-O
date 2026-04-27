@@ -80,6 +80,7 @@ extern void testM88CramBamRoundTrip(void);
 extern void testV4EdgeCases(void);
 extern void testV8Hdf5Corruption(void);
 extern void testC1ToolsCli(void);
+extern void testC2HDF5ErrorPaths(void);
 
 int main(int argc, const char *argv[])
 {
@@ -399,6 +400,10 @@ int main(int argc, const char *argv[])
         START_SET("C1: CLI tools coverage")
             testC1ToolsCli();
         END_SET("C1: CLI tools coverage")
+
+        START_SET("C2: HDF5 error-path coverage")
+            testC2HDF5ErrorPaths();
+        END_SET("C2: HDF5 error-path coverage")
     }
     return 0;
 }
