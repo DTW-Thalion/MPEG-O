@@ -85,6 +85,7 @@ extern void testC3ProvidersErrorPaths(void);
 extern void testC5ProtectionGap(void);
 extern void testC3bProvidersWritePaths(void);
 extern void testC2bHDF5CompoundType(void);
+extern void testC3cCanonicalBytes(void);
 
 int main(int argc, const char *argv[])
 {
@@ -424,6 +425,10 @@ int main(int argc, const char *argv[])
         START_SET("C2b: HDF5CompoundType coverage")
             testC2bHDF5CompoundType();
         END_SET("C2b: HDF5CompoundType coverage")
+
+        START_SET("C3c: CanonicalBytes + SqliteProvider")
+            testC3cCanonicalBytes();
+        END_SET("C3c: CanonicalBytes + SqliteProvider")
     }
     return 0;
 }
