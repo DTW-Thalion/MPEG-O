@@ -145,17 +145,24 @@ def encrypt_channel_to_segments(
     dataset_id: int,
     channel_name: str,
     key: bytes,
+    dtype: np.dtype | str = "<f8",
 ) -> list[ChannelSegment]:
-    """Slice ``plaintext_flat`` into per-spectrum rows and encrypt
-    each independently.
+    """Slice ``plaintext_flat`` into per-AU rows and encrypt each
+    independently.
 
     ``plaintext_flat`` is typically a float64 array of decoded signal
-    values for an entire channel; ``offsets[i]`` / ``lengths[i]`` are
-    the i-th spectrum's position. Each row is a separate AES-GCM
-    operation with a fresh IV.
+    values (MS path) or a uint8 array of bytes (genomic path, M90.1).
+    ``offsets[i]`` / ``lengths[i]`` are the i-th AU's position. Each
+    row is a separate AES-GCM operation with a fresh IV.
+
+    ``dtype`` controls the per-element byte width and the cast applied
+    to ``plaintext_flat`` if it doesn't already match. Default
+    ``"<f8"`` (float64, 8 bytes) preserves pre-M90.1 behaviour.
+    Genomic callers pass ``"<u1"`` (uint8, 1 byte).
     """
-    if plaintext_flat.dtype != np.dtype("<f8"):
-        plaintext_flat = plaintext_flat.astype("<f8", copy=False)
+    target = np.dtype(dtype)
+    if plaintext_flat.dtype != target:
+        plaintext_flat = plaintext_flat.astype(target, copy=False)
     segments: list[ChannelSegment] = []
     for au_seq, (off, length) in enumerate(zip(offsets, lengths)):
         off_i = int(off)
@@ -181,20 +188,29 @@ def decrypt_channel_from_segments(
     dataset_id: int,
     channel_name: str,
     key: bytes,
+    dtype: np.dtype | str = "<f8",
 ) -> np.ndarray:
-    """Decrypt every row and concatenate plaintext float64 values."""
+    """Decrypt every row and concatenate plaintext values.
+
+    ``dtype`` controls the per-element byte width used to validate
+    the decrypted length and the dtype of the returned array.
+    Default ``"<f8"`` (MS path); genomic callers pass ``"<u1"``.
+    """
+    target = np.dtype(dtype)
+    bpe = target.itemsize
     chunks: list[bytes] = []
     for au_seq, seg in enumerate(segments):
         aad = aad_for_channel(dataset_id, au_seq, channel_name)
         plaintext = decrypt_with_aad(seg.iv, seg.tag, seg.ciphertext, key, aad)
-        if len(plaintext) != seg.length * 8:
+        if len(plaintext) != seg.length * bpe:
             raise ValueError(
                 f"channel {channel_name!r} segment {au_seq}: "
-                f"decrypted {len(plaintext)} bytes, expected {seg.length * 8}"
+                f"decrypted {len(plaintext)} bytes, "
+                f"expected {seg.length * bpe} (dtype={target})"
             )
         chunks.append(plaintext)
     total_bytes = b"".join(chunks)
-    return np.frombuffer(total_bytes, dtype="<f8").copy()
+    return np.frombuffer(total_bytes, dtype=target).copy()
 
 
 # ---------------------------------------------------------- header segments
@@ -436,6 +452,54 @@ def encrypt_per_au(
 
             dataset_id_counter += 1
 
+        # M90.1: extend encryption to genomic runs. Genomic signal
+        # channels (sequences, qualities) are stored as plain uint8
+        # datasets named without a "_values" suffix (different from
+        # the MS layout). dataset_id_counter continues from where the
+        # MS loop left off so genomic runs occupy IDs N+1..N+M
+        # (matches the M89.2 transport convention).
+        if study.has_child("genomic_runs"):
+            g_runs = study.open_group("genomic_runs")
+            g_run_names = [n for n in g_runs.child_names()
+                            if not n.startswith("_") and g_runs.has_child(n)]
+            for g_run_name in g_run_names:
+                try:
+                    g_group = g_runs.open_group(g_run_name)
+                except KeyError:
+                    continue
+                g_sig = g_group.open_group("signal_channels")
+                g_idx = g_group.open_group("genomic_index")
+                g_offsets = np.asarray(
+                    g_idx.open_dataset("offsets").read(), dtype="<u8",
+                )
+                g_lengths = np.asarray(
+                    g_idx.open_dataset("lengths").read(), dtype="<u4",
+                )
+                # Genomic signal channels: sequences + qualities, both
+                # uint8, both stored under their bare names (no
+                # _values suffix per _write_genomic_run).
+                for cname in ("sequences", "qualities"):
+                    if not g_sig.has_child(cname):
+                        continue
+                    plaintext = np.asarray(
+                        g_sig.open_dataset(cname).read(),
+                    ).astype("<u1", copy=False)
+                    segments = encrypt_channel_to_segments(
+                        plaintext, g_offsets, g_lengths,
+                        dataset_id=dataset_id_counter,
+                        channel_name=cname,
+                        key=key,
+                        dtype="<u1",
+                    )
+                    io.write_channel_segments(
+                        g_sig, f"{cname}_segments", segments,
+                    )
+                    g_sig.delete_child(cname)
+                    g_sig.set_attribute(
+                        f"{cname}_algorithm", "aes-256-gcm",
+                    )
+                dataset_id_counter += 1
+
         features_set.add("opt_per_au_encryption")
         if encrypt_headers:
             features_set.add("opt_encrypted_au_headers")
@@ -523,6 +587,35 @@ def decrypt_per_au(
 
             out[run_name] = run_out
             dataset_id_counter += 1
+
+        # M90.1: also materialise genomic_runs. dataset_id continues
+        # from where the MS loop left off so AAD reconstruction
+        # matches the encrypt path exactly.
+        if study.has_child("genomic_runs"):
+            g_runs = study.open_group("genomic_runs")
+            g_run_names = [n for n in g_runs.child_names()
+                            if not n.startswith("_") and g_runs.has_child(n)]
+            for g_run_name in g_run_names:
+                try:
+                    g_group = g_runs.open_group(g_run_name)
+                except KeyError:
+                    continue
+                g_sig = g_group.open_group("signal_channels")
+                g_run_out: dict[str, Any] = {}
+                for cname in ("sequences", "qualities"):
+                    seg_name = f"{cname}_segments"
+                    if not g_sig.has_child(seg_name):
+                        continue
+                    segments = io.read_channel_segments(g_sig, seg_name)
+                    g_run_out[cname] = decrypt_channel_from_segments(
+                        segments,
+                        dataset_id=dataset_id_counter,
+                        channel_name=cname,
+                        key=key,
+                        dtype="<u1",
+                    )
+                out[g_run_name] = g_run_out
+                dataset_id_counter += 1
 
         return out
     finally:
