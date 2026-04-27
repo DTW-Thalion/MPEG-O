@@ -519,6 +519,30 @@ Test deltas: Python 898 → 915 (+17 incl. JSON shape check), ObjC
 - Test counts: Python 915 → 932 (+17), ObjC 2532 → 2595 (+63 across
   14 test methods), Java 529 → 543 (+14).
 
+### M88.1 — `bam_dump --reference` flag for CRAM cross-language conformance (SHIPPED 2026-04-26)
+
+- Closes the implicit-parity gap from M88. Extends the existing
+  M87 `bam_dump` CLI in each language (Python `bam_dump`, ObjC
+  `TtioBamDump`, Java `BamDump`) with an optional
+  `--reference <fasta>` flag and case-insensitive `.cram`
+  extension dispatch to the M88 `CramReader` / `TTIOCramReader`
+  / Java `CramReader`.
+- User chose Option A (extend existing CLI) over Option B
+  (parallel `cram_dump` per language) — single CLI surface,
+  single harness file, mirrors the
+  `CramReader extends BamReader` inheritance.
+- For BAM/SAM paths, `--reference` is accepted but unused
+  (defensive). For `.cram` paths without `--reference`, exits 2
+  with a stderr error message.
+- Cross-language harness `test_m88_cross_language.py` now has
+  six tests (3 BAM + 3 CRAM); CRAM canonical JSON for the M88
+  fixture is **914 bytes** with md5
+  `2be5c5bccc95635240aa60337406cb35` byte-identical across
+  Python / ObjC / Java.
+- Test counts: Python 1045 → 1047 (+2), ObjC 2595 → 2597, Java
+  543 → 543 (no delta; coverage is in the cross-language
+  harness).
+
 ---
 
 ## Phase 6 — Framework Integration

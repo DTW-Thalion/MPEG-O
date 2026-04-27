@@ -1,22 +1,24 @@
-"""M88 cross-language conformance harness for the SAM/BAM/CRAM importer.
+"""M88 + M88.1 cross-language conformance harness for the SAM/BAM/CRAM importer.
 
 Drives the three language implementations via subprocess against the
-M88 BAM fixture (``m88_test.bam`` — 5 reads, 2 chromosomes, multi-RG,
-exercises the mate-collapse and PNEXT mapping paths added in M88) and
-confirms each emits byte-identical canonical JSON. Any divergence in
-SAM parsing, RNEXT expansion, 1-based position handling, or
-canonical-JSON serialisation trips the test.
+M88 BAM and CRAM fixtures (``m88_test.bam`` and ``m88_test.cram`` — 5
+reads, 2 chromosomes, multi-RG, exercises the mate-collapse and PNEXT
+mapping paths added in M88) and confirms each emits byte-identical
+canonical JSON. Any divergence in SAM parsing, RNEXT expansion,
+1-based position handling, or canonical-JSON serialisation trips the
+test.
 
-Scope: this harness covers the BAM read path. CRAM read parity across
-languages is verified implicitly — all three implementations consume
-the same canonical M88 CRAM fixture in their own unit suites and
-produce buffer-byte-identical decoded ``WrittenGenomicRun`` instances
-(BAM-CRAM round-trip tests, M88 #6/#9/#10). A CRAM-aware dump CLI
-across all three languages is deferred to M88.1.
+Scope:
+
+- M88 BAM tests verify the BAM read path (Python / ObjC / Java).
+- M88.1 CRAM tests verify the CRAM read path via the same CLI
+  extended with a ``--reference <fasta>`` flag and ``.cram``
+  extension dispatch to ``CramReader`` / ``TTIOCramReader`` /
+  Java ``CramReader``.
 
 The Python ``bam_dump`` CLI is the reference. ObjC's
 ``TtioBamDump`` and Java's ``BamDump`` must produce
-byte-identical output when fed the M88 BAM fixture.
+byte-identical output when fed the same fixture (BAM or CRAM).
 
 Tests are skipped when:
 - ``samtools`` is missing from PATH (M88 dispatch requires it).
@@ -36,6 +38,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = REPO_ROOT / "python" / "tests" / "fixtures" / "genomic" / "m88_test.bam"
+CRAM_FIXTURE = REPO_ROOT / "python" / "tests" / "fixtures" / "genomic" / "m88_test.cram"
+CRAM_REFERENCE = REPO_ROOT / "python" / "tests" / "fixtures" / "genomic" / "m88_test_reference.fa"
 
 OBJC_BIN = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioBamDump"
 JAVA_POM = REPO_ROOT / "java" / "pom.xml"
@@ -129,3 +133,87 @@ def test_java_matches_python_byte_exact():
     py = _python_dump()
     ja = _java_dump()
     assert ja == py, f"Java diverges from Python:\n--- python:\n{py}\n--- java:\n{ja}"
+
+
+# ---------------------------------------------------------------------------
+# M88.1 — CRAM cross-language conformance via bam_dump --reference dispatch
+# ---------------------------------------------------------------------------
+
+
+def _python_cram_dump() -> str:
+    """Run the Python bam_dump CLI against the M88 CRAM and return canonical JSON."""
+    result = subprocess.run(
+        [
+            "python3", "-m", "ttio.importers.bam_dump",
+            str(CRAM_FIXTURE),
+            "--reference", str(CRAM_REFERENCE),
+        ],
+        cwd=str(REPO_ROOT / "python"),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    return result.stdout
+
+
+def _objc_cram_dump() -> str:
+    """Run the ObjC TtioBamDump CLI against the M88 CRAM and return canonical JSON."""
+    if not OBJC_BIN.exists():
+        pytest.skip(f"ObjC TtioBamDump not built at {OBJC_BIN}")
+    objc_source_obj = REPO_ROOT / "objc" / "Source" / "obj"
+    env = {"LD_LIBRARY_PATH": str(objc_source_obj)}
+    result = subprocess.run(
+        [
+            str(OBJC_BIN),
+            str(CRAM_FIXTURE),
+            "--reference", str(CRAM_REFERENCE),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+        env={**env, "PATH": "/usr/bin:/usr/local/bin"},
+    )
+    return result.stdout
+
+
+def _java_cram_dump() -> str:
+    """Run the Java BamDump CLI against the M88 CRAM via Maven exec."""
+    if not JAVA_POM.exists():
+        pytest.skip(f"Java pom.xml not at {JAVA_POM}")
+    result = subprocess.run(
+        [
+            "mvn", "-o", "-q", "exec:java",
+            "-Dexec.mainClass=global.thalion.ttio.importers.BamDump",
+            f"-Dexec.args={CRAM_FIXTURE} --reference {CRAM_REFERENCE}",
+        ],
+        cwd=str(REPO_ROOT / "java"),
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+    return result.stdout
+
+
+def test_python_cram_dump_works():
+    """Sanity: Python CLI produces non-empty canonical JSON for M88 CRAM fixture."""
+    out = _python_cram_dump()
+    assert out.startswith("{")
+    assert '"read_count": 5' in out
+    assert '"sample_name": "M88_TEST_SAMPLE"' in out
+
+
+def test_objc_cram_matches_python_byte_exact():
+    """ObjC TtioBamDump output is byte-identical to Python on M88 CRAM fixture."""
+    py = _python_cram_dump()
+    oc = _objc_cram_dump()
+    assert oc == py, f"ObjC diverges from Python (CRAM):\n--- python:\n{py}\n--- objc:\n{oc}"
+
+
+def test_java_cram_matches_python_byte_exact():
+    """Java BamDump output is byte-identical to Python on M88 CRAM fixture."""
+    py = _python_cram_dump()
+    ja = _java_cram_dump()
+    assert ja == py, f"Java diverges from Python (CRAM):\n--- python:\n{py}\n--- java:\n{ja}"
