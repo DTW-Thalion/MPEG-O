@@ -108,6 +108,7 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **Bruker timsTOF `.d`** — SQLite metadata reads natively in every language (`java.sql`, `libsqlite3`, stdlib `sqlite3`); binary frame decompression via `opentimspy` + `opentims-bruker-bridge` (Python native; Java / ObjC subprocess the Python helper). `inv_ion_mobility` channel preserves the 2-D timsTOF geometry per-peak. Install with `pip install 'ttio[bruker]'`.
 * **Thermo `.raw`** — shells out to `ThermoRawFileParser` and ingests the resulting mzML.
 * **SAM/BAM** (M87, post-v1.1.1) — `BamReader` / `SamReader` wrap `samtools view -h` as a subprocess (no htslib link); convert SAM/BAM input to `WrittenGenomicRun` instances. SAM header parsed for `@SQ` (reference dictionary), `@RG` (sample + platform), `@PG` (provenance chain). Optional region filter passes through to samtools verbatim. Cross-language `bam_dump` CLI emits canonical JSON byte-identical across Python / ObjC / Java. Requires `samtools` on PATH at runtime; `BamReader` class is loadable without it (error fires only at first import call). See [`docs/vendor-formats.md`](docs/vendor-formats.md) §SAM/BAM.
+* **CRAM** (M88, post-M87) — `CramReader` / `TTIOCramReader` extends the M87 BAM reader with a mandatory reference FASTA argument injected as `samtools view --reference <fasta>`. Reuses the SAM-text parsing path; produces `WrittenGenomicRun` instances with the same shape as `BamReader`. Reference rejection is enforced at construction (Python `TypeError` / ObjC `NS_UNAVAILABLE` / Java null-rejection). See [`docs/vendor-formats.md`](docs/vendor-formats.md) §CRAM.
 
 ### Exporters
 
@@ -117,6 +118,7 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **imzML** — continuous + processed modes, UUID normalisation.
 * **mzTab** — proteomics 1.0 and metabolomics 2.0.0-M dialects.
 * **ISA-Tab / ISA-JSON** — investigation/study/assay TSV files + ISA-JSON from a `SpectralDataset`. Licensed Apache-2.0.
+* **SAM/BAM/CRAM** (M88, post-M87) — `BamWriter` / `CramWriter` (and ObjC / Java equivalents) compose SAM text in memory from a `WrittenGenomicRun` and pipe it through `samtools view -b` (BAM) or `samtools view -C | samtools sort -O cram` (CRAM, two-stage). All 11 SAM columns always emitted with sentinel fills; RNEXT collapses to `=` when mate matches a mapped read; QUAL is ASCII Phred+33 verbatim. Lossless BAM↔BAM, CRAM↔CRAM, and BAM↔CRAM round-trips through `.tio` per the M88 conformance suite. See [`docs/vendor-formats.md`](docs/vendor-formats.md) §SAM/BAM/CRAM Export.
 
 ### Streaming transport (`.tis`)
 

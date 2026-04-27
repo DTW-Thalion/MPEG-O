@@ -11,7 +11,101 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer + M88 CRAM importer + BAM/CRAM exporters
+
+### M88 — CRAM Importer + BAM/CRAM Exporters (2026-04-26)
+
+Closes the read/write loop for SAM/BAM/CRAM. Adds a `CramReader`
+that subclasses the M87 `BamReader` and a `BamWriter` /
+`CramWriter` pair that compose SAM text from a
+`WrittenGenomicRun` and pipe it through `samtools view -b` (BAM)
+or `samtools view -C | samtools sort -O cram` (two-stage CRAM,
+because CRAM slices require sorted input). All in all three
+languages; no `htslib` linked.
+
+**Same external dependency as M87** (samtools on PATH at
+runtime); no new build-time deps. CRAM read/write requires a
+reference FASTA — enforced at construction (Python `TypeError`,
+ObjC `NS_UNAVAILABLE` selector, Java null-rejection of the FASTA
+path argument). Binding Decision §139.
+
+#### Added
+
+- **Python** (`python/src/ttio/importers/cram.py` +
+  `python/src/ttio/exporters/{bam,cram}.py`) — `CramReader(path,
+  reference_fasta)` extends `BamReader` with `--reference <fa>`
+  injected into the samtools view command line. `BamWriter(path)`
+  / `CramWriter(path, reference_fasta)` compose SAM text from a
+  `WrittenGenomicRun` and pipe via `subprocess.Popen` chains.
+  RNEXT collapses to `=` only when read is mapped AND mate
+  chromosome equals read chromosome (§136); negative
+  `mate_position` maps to 0 on emit (§138); QUAL ASCII Phred+33
+  pass-through verbatim. 14 pytest cases including BAM↔BAM,
+  CRAM↔CRAM, BAM↔CRAM round-trips with per-field equality
+  checks. Python suite: 915 → 932 passed, zero regressions.
+- **Objective-C** (`objc/Source/Import/TTIOCramReader.{h,m}` +
+  `objc/Source/Export/TTIO{Bam,Cram}Writer.{h,m}`) — NSTask
+  subprocess pipelines (single task for BAM emit, two NSTasks
+  with NSPipe for CRAM emit). `-[TTIOCramReader initWithPath:]`
+  and `-[TTIOCramWriter initWithPath:]` declared `NS_UNAVAILABLE`
+  to steer ARC clients to the two-arg initialisers. 14 test
+  methods in `TestM88CramBamRoundTrip.m` (+63 PASS assertions).
+  ObjC suite: 2532 → 2595 passed (zero regressions; the 2 M38
+  Thermo failures are pre-existing).
+- **Java** (`java/src/main/java/global/thalion/ttio/importers/CramReader.java`
+  + `java/src/main/java/global/thalion/ttio/exporters/{Bam,Cram}Writer.java`)
+  — `ProcessBuilder` subprocess pipelines. CRAM two-stage uses
+  `Process.getInputStream().transferTo(secondProcess.getOutputStream())`
+  in a pump thread. `BamReader.java` got a small backwards-
+  compatible refactor: extracted the samtools view command list
+  into `protected List<String> buildSamtoolsViewCommand(String
+  region)` so `CramReader` can override without duplicating the
+  SAM parser. Caller-visible behaviour unchanged. 14 tests in
+  `CramBamRoundTripTest.java`. Java suite: 529 → 543 passed,
+  zero regressions.
+
+#### Cross-language conformance
+
+- **`python/tests/integration/test_m88_cross_language.py`** — new.
+  Re-uses the M87 `bam_dump` CLIs (`python -m
+  ttio.importers.bam_dump`, `TtioBamDump`,
+  `global.thalion.ttio.importers.BamDump`) against the new M88 BAM
+  fixture. Asserts byte-identical canonical JSON across all three
+  languages; passes today. CRAM cross-language read parity is
+  verified implicitly: each language's unit suite consumes the
+  same canonical M88 CRAM fixture and produces buffer-byte-
+  identical decoded `WrittenGenomicRun` instances. Adding
+  CRAM-aware dump CLIs across all three languages is deferred to
+  M88.1 if the implicit verification ever proves insufficient.
+- **Fixtures** (`python/tests/fixtures/genomic/m88_test*`) — 5
+  reads on 2 chromosomes (4 chr1 perfect-match + 1 chr2
+  perfect-match), multi-`@RG`, `M88_TEST_SAMPLE`. Reference FASTA
+  is a 2-chromosome synthetic (chr1 = `ACGT`*250, chr2 =
+  `TGCA`*250). Fixtures copied verbatim across all three
+  languages; `regenerate_m88_fixtures.sh` is the reproducer.
+
+#### Documentation
+
+- **`docs/vendor-formats.md`** — appended §CRAM section and
+  §SAM/BAM/CRAM Export section. Documents the constructor
+  signature matrix, samtools command lines invoked, the SAM text
+  emission rules (§136 RNEXT collapse, §138 PNEXT mapping, ASCII
+  Phred+33 QUAL pass-through), the round-trip semantics matrix
+  (BAM↔BAM, CRAM↔CRAM, BAM↔CRAM, CRAM↔BAM all lossless), and the
+  out-of-scope list (CRAM 4.0, multi-`@RG` aggregation, optional
+  SAM tag fields).
+- **`README.md`** — Importers list gets a CRAM line; Exporters
+  list gets a SAM/BAM/CRAM line. Both link to the relevant
+  vendor-formats sections.
+- **`WORKPLAN.md`** — M88 marked SHIPPED 2026-04-26.
+
+#### Reference (`.fai`) handling
+
+samtools autogenerates a `<fasta>.fai` index alongside the FASTA
+on first read. The M88 fixture commits the reference but **NOT**
+the index — let samtools regenerate it locally. This avoids
+spurious diffs across machines (the index encodes byte offsets
+that change with line-ending normalisation).
 
 ### M87 — SAM/BAM Importer (2026-04-26)
 
