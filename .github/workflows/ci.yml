@@ -439,9 +439,29 @@ jobs:
         working-directory: objc
         run: ./build.sh
 
+      # P2 (perf workplan): Java is now in the regression-detection
+      # loop via ProfileHarnessFull --json. Provision JDK + HDF5
+      # JNI bindings the same way the cross-compat job does.
+      - name: Install JDK 17 + HDF5 Java bindings
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install libhdf5-java
+        run: sudo apt-get install -y --no-install-recommends libhdf5-java libhdf5-jni
+      - name: Compile Java + materialise runtime classpath
+        working-directory: java
+        run: |
+          mvn -B test-compile
+          mvn -B dependency:build-classpath \
+              -Dmdep.outputFile=target/runtime-classpath.txt
+
       - name: Run perf harness + compare against baseline
         run: |
-          chmod +x tools/perf/run_perf_ci.sh
+          chmod +x tools/perf/run_perf_ci.sh \
+                   tools/perf/build_and_run_python_full.sh \
+                   tools/perf/build_and_run_objc_full.sh \
+                   tools/perf/build_and_run_java_full.sh
           tools/perf/run_perf_ci.sh | tee perf-report.md
 
       - name: Upload perf report
@@ -453,6 +473,7 @@ jobs:
             perf-report.md
             tools/perf/_out_python_full/full.json
             tools/perf/_out_objc_full/full.json
+            tools/perf/_out_java_full/full.json
           if-no-files-found: warn
           retention-days: 90
 

@@ -59,6 +59,12 @@ from ttio.importers.jcamp_dx import read_spectrum as jcamp_read_spectrum
 from ttio.signatures import sign_dataset, verify_dataset
 from ttio.transport import file_to_transport, transport_to_file
 
+# P4 (perf workplan): isolated codec microbenchmarks.
+from ttio.codecs import base_pack as _bp
+from ttio.codecs import name_tokenizer as _nt
+from ttio.codecs import quality as _qb
+from ttio.codecs import rans as _rans
+
 # ---------------------------------------------------------------------------
 # Workload helpers
 # ---------------------------------------------------------------------------
@@ -348,6 +354,75 @@ def bench_spectra_inmemory(n: int) -> dict[str, float]:
             "uvvis_build": t_uv, "2dcos_build": t_2d}
 
 
+def bench_codecs(_tmp: Path, _n: int) -> dict[str, float]:
+    """Isolated encode/decode timings for each genomic codec.
+
+    Fixed-size payloads (1 MiB byte codecs, 10K names for the
+    name tokenizer) so cross-language comparisons are meaningful.
+    Uses deterministic seeds so re-runs are reproducible (no
+    random-jitter headroom in the regression-detection budget).
+
+    Per docs/verification-workplan.md §V2 / P4 follow-up.
+    """
+    rng = np.random.default_rng(42)
+    one_mib = 1024 * 1024  # 1 MiB
+
+    # rANS: random byte payload.
+    rans_in = rng.integers(0, 256, size=one_mib, dtype=np.uint8).tobytes()
+
+    t_o0_enc, rans_o0 = _timed(_rans.encode, rans_in, 0)
+    t_o0_dec, _       = _timed(_rans.decode, rans_o0)
+    t_o1_enc, rans_o1 = _timed(_rans.encode, rans_in, 1)
+    t_o1_dec, _       = _timed(_rans.decode, rans_o1)
+
+    # BASE_PACK: pure-ACGT 1 MiB stream — best case for the codec.
+    bp_in = bytes(rng.choice(list(b"ACGT"), size=one_mib).tolist())
+    t_bp_enc, bp_enc = _timed(_bp.encode, bp_in)
+    t_bp_dec, _      = _timed(_bp.decode, bp_enc)
+
+    # QUALITY_BINNED: random Phred bytes (0-93 like real Illumina).
+    qb_in = bytes(rng.integers(0, 94, size=one_mib, dtype=np.uint8).tolist())
+    t_qb_enc, qb_enc = _timed(_qb.encode, qb_in)
+    t_qb_dec, _      = _timed(_qb.decode, qb_enc)
+
+    # NAME_TOKENIZED: 10K Illumina-style names (~ stable size).
+    names = [
+        f"M88_{i:08d}:{rng.integers(0, 1000):03d}:{rng.integers(0, 100):02d}"
+        for i in range(10_000)
+    ]
+    t_nt_enc, nt_enc = _timed(_nt.encode, names)
+    t_nt_dec, _      = _timed(_nt.decode, nt_enc)
+
+    # Throughput (MiB/s) for byte codecs is informational only;
+    # downstream regression check still keys off the raw timings.
+    def mibps(secs: float, n_bytes: int) -> float:
+        return (n_bytes / one_mib) / secs if secs > 0 else 0.0
+
+    # Informational throughput summary printed to stdout but kept
+    # OUT of the returned dict — the regression comparator treats
+    # every dict value as a timing in seconds, so adding constants
+    # like "1.0 MiB input" pollutes the diff. Keys returned here
+    # are timings only.
+    print(f"  [codec throughput] rans_o0  enc={mibps(t_o0_enc, one_mib):6.1f} MiB/s  dec={mibps(t_o0_dec, one_mib):6.1f} MiB/s")
+    print(f"  [codec throughput] rans_o1  enc={mibps(t_o1_enc, one_mib):6.1f} MiB/s  dec={mibps(t_o1_dec, one_mib):6.1f} MiB/s")
+    print(f"  [codec throughput] base_pk  enc={mibps(t_bp_enc, one_mib):6.1f} MiB/s  dec={mibps(t_bp_dec, one_mib):6.1f} MiB/s")
+    print(f"  [codec throughput] qual_bn  enc={mibps(t_qb_enc, one_mib):6.1f} MiB/s  dec={mibps(t_qb_dec, one_mib):6.1f} MiB/s")
+    print(f"  [codec throughput] name_tk  10K names enc={t_nt_enc*1000:.1f} ms  dec={t_nt_dec*1000:.1f} ms")
+
+    return {
+        "rans_o0_encode": t_o0_enc,
+        "rans_o0_decode": t_o0_dec,
+        "rans_o1_encode": t_o1_enc,
+        "rans_o1_decode": t_o1_dec,
+        "base_pack_encode": t_bp_enc,
+        "base_pack_decode": t_bp_dec,
+        "quality_binned_encode": t_qb_enc,
+        "quality_binned_decode": t_qb_dec,
+        "name_tokenized_encode": t_nt_enc,
+        "name_tokenized_decode": t_nt_dec,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -366,6 +441,7 @@ BENCHMARKS: dict[str, Any] = {
     "signatures":     lambda tmp, a: bench_signatures(tmp, a.n, a.peaks),
     "jcamp":          lambda tmp, a: bench_jcamp(tmp, a.n),
     "spectra.build":  lambda tmp, a: bench_spectra_inmemory(a.n),
+    "codecs":         lambda tmp, a: bench_codecs(tmp, a.n),
 }
 
 

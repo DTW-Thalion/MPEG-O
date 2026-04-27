@@ -611,6 +611,78 @@ static void bench_spectra_build(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
+/* ── codecs benchmark (P4 — perf workplan) ─────────────────────── */
+
+#import "Codecs/TTIORans.h"
+#import "Codecs/TTIOBasePack.h"
+#import "Codecs/TTIOQuality.h"
+#import "Codecs/TTIONameTokenizer.h"
+
+static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                          NSMutableDictionary *out)
+{
+    (void)tmp; (void)n; (void)peaks;
+    @autoreleasepool {
+        const NSUInteger oneMiB = 1024 * 1024;
+        srand(42);
+
+        // rANS: random bytes.
+        NSMutableData *ransIn = [NSMutableData dataWithLength:oneMiB];
+        unsigned char *p = ransIn.mutableBytes;
+        for (NSUInteger i = 0; i < oneMiB; i++) p[i] = (unsigned char)rand();
+
+        double t0 = nowSeconds();
+        NSData *o0 = TTIORansEncode(ransIn, 0);
+        putSeconds(out, @"rans_o0_encode", nowSeconds() - t0);
+        t0 = nowSeconds();
+        (void)TTIORansDecode(o0, NULL);
+        putSeconds(out, @"rans_o0_decode", nowSeconds() - t0);
+
+        t0 = nowSeconds();
+        NSData *o1 = TTIORansEncode(ransIn, 1);
+        putSeconds(out, @"rans_o1_encode", nowSeconds() - t0);
+        t0 = nowSeconds();
+        (void)TTIORansDecode(o1, NULL);
+        putSeconds(out, @"rans_o1_decode", nowSeconds() - t0);
+
+        // BASE_PACK on pure ACGT.
+        const char alpha[] = "ACGT";
+        NSMutableData *bpIn = [NSMutableData dataWithLength:oneMiB];
+        unsigned char *bp = bpIn.mutableBytes;
+        for (NSUInteger i = 0; i < oneMiB; i++) bp[i] = (unsigned char)alpha[rand() & 3];
+        t0 = nowSeconds();
+        NSData *bpEnc = TTIOBasePackEncode(bpIn);
+        putSeconds(out, @"base_pack_encode", nowSeconds() - t0);
+        t0 = nowSeconds();
+        (void)TTIOBasePackDecode(bpEnc, NULL);
+        putSeconds(out, @"base_pack_decode", nowSeconds() - t0);
+
+        // QUALITY_BINNED on random Phred bytes.
+        NSMutableData *qbIn = [NSMutableData dataWithLength:oneMiB];
+        unsigned char *qb = qbIn.mutableBytes;
+        for (NSUInteger i = 0; i < oneMiB; i++) qb[i] = (unsigned char)(rand() % 94);
+        t0 = nowSeconds();
+        NSData *qbEnc = TTIOQualityEncode(qbIn);
+        putSeconds(out, @"quality_binned_encode", nowSeconds() - t0);
+        t0 = nowSeconds();
+        (void)TTIOQualityDecode(qbEnc, NULL);
+        putSeconds(out, @"quality_binned_decode", nowSeconds() - t0);
+
+        // NAME_TOKENIZED: 10K Illumina-style names.
+        NSMutableArray *names = [NSMutableArray arrayWithCapacity:10000];
+        for (NSUInteger i = 0; i < 10000; i++) {
+            [names addObject:[NSString stringWithFormat:@"M88_%08lu:%03d:%02d",
+                              (unsigned long)i, rand() % 1000, rand() % 100]];
+        }
+        t0 = nowSeconds();
+        NSData *ntEnc = TTIONameTokenizerEncode(names);
+        putSeconds(out, @"name_tokenized_encode", nowSeconds() - t0);
+        t0 = nowSeconds();
+        (void)TTIONameTokenizerDecode(ntEnc, NULL);
+        putSeconds(out, @"name_tokenized_decode", nowSeconds() - t0);
+    }
+}
+
 /* ── Registry + driver ─────────────────────────────────────────── */
 
 typedef struct {
@@ -629,6 +701,7 @@ static BenchEntry kBenches[] = {
     { "signatures",           bench_signatures },
     { "jcamp",                bench_jcamp },
     { "spectra.build",        bench_spectra_build },
+    { "codecs",               bench_codecs },
     { NULL, NULL }
 };
 

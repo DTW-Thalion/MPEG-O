@@ -23,6 +23,17 @@ javac -d "$BUILD_DIR" -cp "$CP" "$TOOLS_DIR/ProfileHarnessFull.java"
 JFR_FILE="$OUT_DIR/profile.jfr"
 rm -f "$JFR_FILE"
 
+# Default --json $OUT_DIR/full.json so the perf-CI orchestrator
+# always picks up fresh numbers from the Java leg without an
+# explicit flag from the caller.
+HAS_JSON=0
+for a in "$@"; do
+    [ "$a" = "--json" ] && HAS_JSON=1 && break
+done
+if [ "$HAS_JSON" = "0" ]; then
+    set -- "$@" --json "$OUT_DIR/full.json"
+fi
+
 echo "[run] profiling with JFR -> $JFR_FILE"
 java \
     -Djava.library.path="$HDF5_NATIVE" \
