@@ -47,7 +47,7 @@ pqc = ["liboqs-python>=0.14,<1"]
 # prebuilt libtimsdata.so / libtimsdata.dll / libtimsdata.dylib so pip
 # install is the whole story.
 bruker = ["opentimspy>=1.0", "opentims-bruker-bridge>=1.0"]
-test = ["pytest>=7", "pytest-asyncio>=0.23", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0", "zarr>=3.0", "liboqs-python>=0.14,<1", "opentimspy>=1.0", "opentims-bruker-bridge>=1.0", "websockets>=12.0"]
+test = ["pytest>=7", "pytest-asyncio>=0.23", "pytest-cov>=4", "cryptography>=41.0", "lxml", "fsspec", "aiohttp", "hdf5plugin>=4.0", "zarr>=3.0", "liboqs-python>=0.14,<1", "opentimspy>=1.0", "opentims-bruker-bridge>=1.0", "websockets>=12.0"]
 # v0.9 M57: integration test extras. pyimzML for M59 imzML imports;
 # pyteomics + pymzml for M64 cross-reader validation;
 # isatools is pinned because the API churns between minor releases.
@@ -91,3 +91,25 @@ ttio = ["py.typed"]
 testpaths = ["tests"]
 addopts = "-ra"
 asyncio_mode = "strict"
+
+# V1 (verification workplan): code coverage. No threshold enforced;
+# CI publishes coverage.xml + htmlcov/ as artifacts. See
+# docs/verification-workplan.md §V1.
+[tool.coverage.run]
+source = ["src/ttio"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/_jcamp_decode.py",  # vendored helper; see comment in module
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
