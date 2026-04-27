@@ -18,6 +18,7 @@ class AUFilter:
     filtered streams consume no bandwidth for non-matching spectra.
     """
 
+    # Spectral predicates (M68).
     rt_min: float | None = None
     rt_max: float | None = None
     ms_level: int | None = None
@@ -26,11 +27,19 @@ class AUFilter:
     polarity: int | None = None  # wire polarity: 0=pos, 1=neg, 2=unknown
     dataset_id: int | None = None
     max_au: int | None = None
+    # Genomic predicates (M89.3). chromosome is an exact string match
+    # (no wildcard / regex — the canonical wire form is what the
+    # importer wrote, e.g. "chr1", "*"). position_min / position_max
+    # are inclusive on both ends.
+    chromosome: str | None = None
+    position_min: int | None = None
+    position_max: int | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "AUFilter":
         if not data:
             return cls()
+        chrom = data.get("chromosome")
         return cls(
             rt_min=_f(data.get("rt_min")),
             rt_max=_f(data.get("rt_max")),
@@ -40,6 +49,9 @@ class AUFilter:
             polarity=_i(data.get("polarity")),
             dataset_id=_i(data.get("dataset_id")),
             max_au=_i(data.get("max_au")),
+            chromosome=str(chrom) if chrom is not None else None,
+            position_min=_i(data.get("position_min")),
+            position_max=_i(data.get("position_max")),
         )
 
     def matches(self, au: AccessUnit, dataset_id: int) -> bool:
@@ -57,6 +69,21 @@ class AUFilter:
             return False
         if self.polarity is not None and au.polarity != self.polarity:
             return False
+        # Genomic predicates (M89.3). A genomic predicate set on a
+        # non-genomic AU MUST exclude that AU — the two AU types are
+        # cleanly separated in multiplexed streams. A non-genomic AU
+        # has spectrum_class != 5 and chromosome == "" / position == 0
+        # (the dataclass defaults).
+        if self.chromosome is not None and au.chromosome != self.chromosome:
+            return False
+        if self.position_min is not None or self.position_max is not None:
+            if au.spectrum_class != 5:
+                # Position filter on an MS AU — exclude.
+                return False
+            if self.position_min is not None and au.position < self.position_min:
+                return False
+            if self.position_max is not None and au.position > self.position_max:
+                return False
         return True
 
 
