@@ -74,12 +74,15 @@ libTTIO_HEADER_FILES = \
 	Import/TTIOBrukerTDFReader.h \
 	Import/TTIOBamReader.h \
 	Import/TTIOSamReader.h \
+	Import/TTIOCramReader.h \
 	Import/TTIOImzMLReader.h \
 	Import/TTIOMzTabReader.h \
 	Import/TTIOWatersMassLynxReader.h \
 	Import/TTIOJcampDxReader.h \
 	Import/TTIOJcampDxDecode.h \
 	Export/TTIOMzMLWriter.h \
+	Export/TTIOBamWriter.h \
+	Export/TTIOCramWriter.h \
 	Export/TTIONmrMLWriter.h \
 	Export/TTIOImzMLWriter.h \
 	Export/TTIOMzTabWriter.h \
@@ -175,12 +178,15 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOBrukerTDFReader.m \
 	Import/TTIOBamReader.m \
 	Import/TTIOSamReader.m \
+	Import/TTIOCramReader.m \
 	Import/TTIOImzMLReader.m \
 	Import/TTIOMzTabReader.m \
 	Import/TTIOWatersMassLynxReader.m \
 	Import/TTIOJcampDxReader.m \
 	Import/TTIOJcampDxDecode.m \
 	Export/TTIOMzMLWriter.m \
+	Export/TTIOBamWriter.m \
+	Export/TTIOCramWriter.m \
 	Export/TTIONmrMLWriter.m \
 	Export/TTIOImzMLWriter.m \
 	Export/TTIOMzTabWriter.m \

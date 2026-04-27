@@ -76,6 +76,7 @@ extern void testM85Quality(void);
 extern void testM85bNameTokenizer(void);
 extern void testM86GenomicCodecWiring(void);
 extern void testM87BamImporter(void);
+extern void testM88CramBamRoundTrip(void);
 
 int main(int argc, const char *argv[])
 {
@@ -379,6 +380,10 @@ int main(int argc, const char *argv[])
         START_SET("M87: BAM importer")
             testM87BamImporter();
         END_SET("M87: BAM importer")
+
+        START_SET("M88: CRAM/BAM round-trip")
+            testM88CramBamRoundTrip();
+        END_SET("M88: CRAM/BAM round-trip")
     }
     return 0;
 }
