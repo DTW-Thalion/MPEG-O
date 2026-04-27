@@ -42,3 +42,11 @@ objc/Tests/tests.sum
 # Sphinx build cache (Python doc generator intermediate output;
 # committed HTML lives under docs/api/python/).
 python/docs/_build/
+
+# samtools-generated FASTA index files (M88 reference-aware CRAM
+# path). The reference FASTAs themselves are committed; the .fai
+# indexes are reproducible at runtime via samtools and were
+# deliberately excluded per the M88 spec — pinning them across
+# machines would create spurious diffs (the index encodes byte
+# offsets that change with line-ending normalisation).
+*.fa.fai
