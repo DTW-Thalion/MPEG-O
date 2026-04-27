@@ -417,3 +417,159 @@ class TestGenomicRoundTrip:
             assert r0.qualities == bytes([30] * 12)
         finally:
             rt_path.close()
+
+
+def _make_multiplexed_dataset(path: Path) -> Path:
+    """Write one .tio carrying BOTH an MS run and a genomic run (M89.4)."""
+    from ttio.written_genomic_run import WrittenGenomicRun
+
+    # ── MS run (3 spectra, 4 points each) ──────────────────────────
+    ms_n = 3
+    ms_points = 4
+    ms_total = ms_n * ms_points
+    mz_all = np.arange(ms_total, dtype="<f8") + 100.0
+    intensity_all = (np.arange(ms_total, dtype="<f8") + 1.0) * 1000.0
+    ms_run = WrittenRun(
+        spectrum_class="TTIOMassSpectrum",
+        acquisition_mode=int(AcquisitionMode.MS1_DDA),
+        channel_data={"mz": mz_all, "intensity": intensity_all},
+        offsets=np.array([i * ms_points for i in range(ms_n)], dtype="<u8"),
+        lengths=np.full(ms_n, ms_points, dtype="<u4"),
+        retention_times=np.array([1.0, 2.0, 3.0], dtype="<f8"),
+        ms_levels=np.array([1, 2, 1], dtype="<i4"),
+        polarities=np.array(
+            [int(Polarity.POSITIVE)] * ms_n, dtype="<i4"
+        ),
+        precursor_mzs=np.array([0.0, 500.25, 0.0], dtype="<f8"),
+        precursor_charges=np.array([0, 2, 0], dtype="<i4"),
+        base_peak_intensities=np.array(
+            [
+                float(intensity_all[i * ms_points:(i + 1) * ms_points].max())
+                for i in range(ms_n)
+            ],
+            dtype="<f8",
+        ),
+    )
+
+    # ── Genomic run (3 reads, 8 bases each) ────────────────────────
+    g_n = 3
+    g_len = 8
+    sequences = np.frombuffer(b"ACGTACGT" * g_n, dtype=np.uint8)
+    qualities = np.frombuffer(bytes([30] * (g_n * g_len)), dtype=np.uint8)
+    g_run = WrittenGenomicRun(
+        acquisition_mode=7,
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="NA12878",
+        positions=np.array([100, 200, 300], dtype=np.int64),
+        mapping_qualities=np.full(g_n, 60, dtype=np.uint8),
+        flags=np.array([0x0003, 0x0003, 0x0003], dtype=np.uint32),
+        sequences=sequences,
+        qualities=qualities,
+        offsets=np.arange(g_n, dtype=np.uint64) * g_len,
+        lengths=np.full(g_n, g_len, dtype=np.uint32),
+        cigars=[f"{g_len}M"] * g_n,
+        read_names=[f"read_{i:03d}" for i in range(g_n)],
+        mate_chromosomes=[""] * g_n,
+        mate_positions=np.full(g_n, -1, dtype=np.int64),
+        template_lengths=np.zeros(g_n, dtype=np.int32),
+        chromosomes=["chr1", "chr1", "chr2"],
+    )
+
+    SpectralDataset.write_minimal(
+        path,
+        title="M89.4 multiplexed fixture",
+        isa_investigation_id="ISA-M89-MUX",
+        runs={"run_0001": ms_run},
+        genomic_runs={"genomic_0001": g_run},
+    )
+    return path
+
+
+class TestMultiplexedRoundTrip:
+    """M89.4: MS + genomic in one .tis, both materialise on the other side."""
+
+    def test_packet_sequence_carries_both_modalities(self, tmp_path):
+        src = _make_multiplexed_dataset(tmp_path / "mux.tio")
+        buffer = io.BytesIO()
+        file_to_transport(src, buffer)
+        buffer.seek(0)
+        # Expect: StreamHeader, 2 DatasetHeaders, 3 MS AUs +
+        # EndOfDataset, 3 genomic AUs + EndOfDataset, EndOfStream.
+        with TransportReader(buffer) as tr:
+            types = [int(h.packet_type) for h, _ in tr.iter_packets()]
+        assert types == [
+            int(PacketType.STREAM_HEADER),
+            int(PacketType.DATASET_HEADER),  # MS
+            int(PacketType.DATASET_HEADER),  # genomic
+            int(PacketType.ACCESS_UNIT),     # MS x 3
+            int(PacketType.ACCESS_UNIT),
+            int(PacketType.ACCESS_UNIT),
+            int(PacketType.END_OF_DATASET),  # MS done
+            int(PacketType.ACCESS_UNIT),     # genomic x 3
+            int(PacketType.ACCESS_UNIT),
+            int(PacketType.ACCESS_UNIT),
+            int(PacketType.END_OF_DATASET),  # genomic done
+            int(PacketType.END_OF_STREAM),
+        ]
+
+    def test_round_trip_preserves_both_modalities(self, tmp_path):
+        src = _make_multiplexed_dataset(tmp_path / "mux.tio")
+        buffer = io.BytesIO()
+        file_to_transport(src, buffer)
+        buffer.seek(0)
+        rt = transport_to_file(buffer, tmp_path / "rt.tio")
+        try:
+            # MS preserved.
+            assert "run_0001" in rt.all_runs
+            ms_rt = rt.all_runs["run_0001"]
+            assert len(ms_rt) == 3
+            assert ms_rt[1].ms_level == 2
+            assert ms_rt[1].precursor_mz == pytest.approx(500.25)
+            # Genomic preserved.
+            assert "genomic_0001" in rt.genomic_runs
+            g_rt = rt.genomic_runs["genomic_0001"]
+            assert len(g_rt) == 3
+            assert g_rt.index.chromosomes == ["chr1", "chr1", "chr2"]
+            np.testing.assert_array_equal(
+                g_rt.index.positions, np.array([100, 200, 300], dtype=np.int64)
+            )
+            assert g_rt[2].sequence == "ACGTACGT"
+        finally:
+            rt.close()
+
+    def test_dataset_ids_disjoint_per_modality(self, tmp_path):
+        """MS occupies dataset_id 1; genomic gets dataset_id 2.
+
+        The ID space is contiguous across modalities — a server-side
+        filter on dataset_id can isolate either modality.
+        """
+        src = _make_multiplexed_dataset(tmp_path / "mux.tio")
+        buffer = io.BytesIO()
+        file_to_transport(src, buffer)
+        buffer.seek(0)
+        ids: list[int] = []
+        with TransportReader(buffer) as tr:
+            for header, payload in tr.iter_packets():
+                if int(header.packet_type) == int(PacketType.ACCESS_UNIT):
+                    ids.append(int(header.dataset_id))
+        assert ids == [1, 1, 1, 2, 2, 2]
+
+    def test_genomic_filter_skips_ms_aus(self, tmp_path):
+        """A chromosome filter MUST skip MS AUs in a multiplexed stream."""
+        from ttio.transport.filters import AUFilter
+        src = _make_multiplexed_dataset(tmp_path / "mux.tio")
+        buffer = io.BytesIO()
+        file_to_transport(src, buffer)
+        buffer.seek(0)
+        f = AUFilter(chromosome="chr1")
+        kept: list[int] = []  # spectrum_class for AUs the filter accepts
+        with TransportReader(buffer) as tr:
+            for header, payload in tr.iter_packets():
+                if int(header.packet_type) != int(PacketType.ACCESS_UNIT):
+                    continue
+                au = AccessUnit.from_bytes(payload)
+                if f.matches(au, dataset_id=int(header.dataset_id)):
+                    kept.append(au.spectrum_class)
+        # Two genomic reads on chr1; zero MS AUs.
+        assert kept == [5, 5]
