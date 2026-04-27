@@ -12,6 +12,7 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.List;
@@ -44,14 +45,19 @@ public final class BamDump {
     public static int run(String[] args, Writer out) throws IOException {
         String pathStr = null;
         String name = "genomic_0001";
+        String reference = null;
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
             if ("--name".equals(a) && i + 1 < args.length) {
                 name = args[++i];
             } else if (a.startsWith("--name=")) {
                 name = a.substring("--name=".length());
+            } else if ("--reference".equals(a) && i + 1 < args.length) {
+                reference = args[++i];
+            } else if (a.startsWith("--reference=")) {
+                reference = a.substring("--reference=".length());
             } else if ("-h".equals(a) || "--help".equals(a)) {
-                out.write("Usage: BamDump <path> [--name NAME]\n");
+                out.write("Usage: BamDump <path> [--reference FASTA] [--name NAME]\n");
                 return 0;
             } else if (pathStr == null) {
                 pathStr = a;
@@ -62,10 +68,22 @@ public final class BamDump {
         }
         if (pathStr == null) {
             throw new IllegalArgumentException(
-                "Usage: BamDump <path> [--name NAME]");
+                "Usage: BamDump <path> [--reference FASTA] [--name NAME]");
         }
 
-        BamReader reader = new BamReader(Path.of(pathStr));
+        // M88.1: dispatch on .cram extension to CramReader. For
+        // BAM/SAM paths --reference is accepted but unused.
+        BamReader reader;
+        if (pathStr.toLowerCase().endsWith(".cram")) {
+            if (reference == null) {
+                System.err.println(
+                    "error: --reference <fasta> is required for .cram input");
+                return 2;
+            }
+            reader = new CramReader(Paths.get(pathStr), Paths.get(reference));
+        } else {
+            reader = new BamReader(Paths.get(pathStr));
+        }
         WrittenGenomicRun run = reader.toGenomicRun(name);
 
         TreeMap<String, Object> payload = new TreeMap<>();
