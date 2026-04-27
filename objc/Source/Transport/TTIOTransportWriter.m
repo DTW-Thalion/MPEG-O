@@ -10,6 +10,9 @@
 #import "Spectra/TTIOMassSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "ValueClasses/TTIOEnums.h"
+#import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOGenomicIndex.h"
+#import "Genomics/TTIOAlignedRead.h"
 #import <time.h>
 #import <string.h>
 #import <zlib.h>
@@ -58,6 +61,7 @@ static NSString *spectrumClassToWireName(uint8_t wire)
         case 2: return @"TTIONMR2DSpectrum";
         case 3: return @"TTIOFreeInductionDecay";
         case 4: return @"TTIOMSImagePixel";
+        case 5: return @"TTIOGenomicRead";  // M89.2
         default: return @"TTIOMassSpectrum";
     }
 }
@@ -69,6 +73,7 @@ static uint8_t wireFromSpectrumClassName(NSString *name)
     if ([name isEqualToString:@"TTIONMR2DSpectrum"]) return 2;
     if ([name isEqualToString:@"TTIOFreeInductionDecay"]) return 3;
     if ([name isEqualToString:@"TTIOMSImagePixel"]) return 4;
+    if ([name isEqualToString:@"TTIOGenomicRead"]) return 5;  // M89.2
     return 0;
 }
 
@@ -334,6 +339,114 @@ static TTIOAccessUnit *accessUnitFromSpectrum(TTIOSpectrum *spectrum,
                                                     pixelX:0 pixelY:0 pixelZ:0];
 }
 
+// ---------------------------------------------------------------- M89.2
+
+static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
+{
+    if (!run) return @"{}";
+    NSDictionary *d = @{
+        @"modality":      run.modality      ?: @"",
+        @"platform":      run.platform      ?: @"",
+        @"reference_uri": run.referenceUri  ?: @"",
+        @"sample_name":   run.sampleName    ?: @"",
+    };
+    NSData *json = [NSJSONSerialization dataWithJSONObject:d
+                                                    options:NSJSONWritingSortedKeys
+                                                      error:nil];
+    return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+}
+
+- (BOOL)writeGenomicRun:(TTIOGenomicRun *)run
+              datasetId:(uint16_t)datasetId
+                   name:(NSString *)name
+                  error:(NSError **)error
+{
+    if (!run) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeGenomicRun: nil run"}];
+        return NO;
+    }
+    NSUInteger nReads = run.readCount;
+    NSString *instrJSON = genomicRunMetadataJSON(run);
+    if (![self writeDatasetHeaderWithDatasetId:datasetId
+                                           name:(name ?: @"")
+                                acquisitionMode:(uint8_t)run.acquisitionMode
+                                  spectrumClass:@"TTIOGenomicRead"
+                                   channelNames:@[@"sequences", @"qualities"]
+                                 instrumentJSON:instrJSON
+                                expectedAUCount:(uint32_t)nReads
+                                          error:error]) return NO;
+
+    TTIOGenomicIndex *idx = run.index;
+    uint8_t acqMode = (uint8_t)run.acquisitionMode;
+    for (NSUInteger i = 0; i < nReads; i++) {
+        NSError *readErr = nil;
+        TTIOAlignedRead *r = [run readAtIndex:i error:&readErr];
+        if (!r) {
+            if (error) *error = readErr ?: [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                code:TTIOTransportErrorUnexpectedPayload
+                                                            userInfo:@{NSLocalizedDescriptionKey:
+                                  [NSString stringWithFormat:@"writeGenomicRun: failed to materialise read %lu",
+                                      (unsigned long)i]}];
+            return NO;
+        }
+        NSData *seqData = [r.sequence dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *qualData = r.qualities ?: [NSData data];
+        uint32_t seqLen = (uint32_t)seqData.length;
+        uint32_t qualLen = (uint32_t)qualData.length;
+        TTIOTransportChannelData *seqCh =
+            [[TTIOTransportChannelData alloc] initWithName:@"sequences"
+                                                  precision:TTIOPrecisionUInt8
+                                                compression:TTIOCompressionNone
+                                                  nElements:seqLen
+                                                       data:seqData];
+        TTIOTransportChannelData *qualCh =
+            [[TTIOTransportChannelData alloc] initWithName:@"qualities"
+                                                  precision:TTIOPrecisionUInt8
+                                                compression:TTIOCompressionNone
+                                                  nElements:qualLen
+                                                       data:qualData];
+        // Prefer the index-side fields for chromosome/position/mapq/
+        // flags — they're already in the wire-correct types and avoid
+        // any sentinel conversion in AlignedRead. Falls back to the
+        // AlignedRead fields if the index isn't populated for this i.
+        NSString *chrom = r.chromosome;
+        int64_t pos = r.position;
+        uint8_t mapq = r.mappingQuality;
+        uint16_t flags = (uint16_t)(r.flags & 0xFFFFu);
+        if (idx && i < idx.count) {
+            chrom = [idx chromosomeAt:i] ?: chrom;
+            pos = [idx positionAt:i];
+            mapq = [idx mappingQualityAt:i];
+            flags = (uint16_t)([idx flagsAt:i] & 0xFFFFu);
+        }
+        TTIOAccessUnit *au =
+            [[TTIOAccessUnit alloc] initWithSpectrumClass:5
+                                          acquisitionMode:acqMode
+                                                  msLevel:0
+                                                 polarity:2
+                                            retentionTime:0.0
+                                              precursorMz:0.0
+                                          precursorCharge:0
+                                              ionMobility:0.0
+                                        basePeakIntensity:0.0
+                                                 channels:@[seqCh, qualCh]
+                                                   pixelX:0 pixelY:0 pixelZ:0
+                                               chromosome:(chrom ?: @"")
+                                                 position:pos
+                                           mappingQuality:mapq
+                                                    flags:flags];
+        if (![self writeAccessUnit:au datasetId:datasetId auSequence:(uint32_t)i error:error]) {
+            return NO;
+        }
+    }
+    return [self writeEndOfDatasetWithDatasetId:datasetId
+                                finalAUSequence:(uint32_t)nReads
+                                           error:error];
+}
+
 - (BOOL)writeDataset:(TTIOSpectralDataset *)dataset error:(NSError **)error
 {
     NSArray<NSString *> *runNames = dataset.msRuns.allKeys;
@@ -341,12 +454,16 @@ static TTIOAccessUnit *accessUnitFromSpectrum(TTIOSpectrum *spectrum,
     // round-trip guarantee for dict iteration across platforms.
     runNames = [runNames sortedArrayUsingSelector:@selector(compare:)];
 
+    // M89.4: genomic runs after MS runs in the dataset_id space.
+    NSArray<NSString *> *genomicNames =
+        [dataset.genomicRuns.allKeys sortedArrayUsingSelector:@selector(compare:)];
+
     // Features currently unknown via the ObjC API; emit empty list.
     if (![self writeStreamHeaderWithFormatVersion:@"1.2"
                                              title:(dataset.title ?: @"")
                                   isaInvestigation:(dataset.isaInvestigationId ?: @"")
                                           features:@[]
-                                         nDatasets:(uint16_t)runNames.count
+                                         nDatasets:(uint16_t)(runNames.count + genomicNames.count)
                                              error:error]) return NO;
 
     uint16_t did = 1;
@@ -365,6 +482,21 @@ static TTIOAccessUnit *accessUnitFromSpectrum(TTIOSpectrum *spectrum,
                                               error:error]) return NO;
         did++;
     }
+    // M89.4: contiguous IDs after MS — genomic dataset_ids start at
+    // runNames.count + 1.
+    for (NSString *name in genomicNames) {
+        TTIOGenomicRun *grun = dataset.genomicRuns[name];
+        NSString *instrJSON = genomicRunMetadataJSON(grun);
+        if (![self writeDatasetHeaderWithDatasetId:did
+                                               name:name
+                                    acquisitionMode:(uint8_t)grun.acquisitionMode
+                                      spectrumClass:@"TTIOGenomicRead"
+                                       channelNames:@[@"sequences", @"qualities"]
+                                     instrumentJSON:instrJSON
+                                   expectedAUCount:(uint32_t)grun.readCount
+                                              error:error]) return NO;
+        did++;
+    }
 
     did = 1;
     for (NSString *name in runNames) {
@@ -379,6 +511,70 @@ static TTIOAccessUnit *accessUnitFromSpectrum(TTIOSpectrum *spectrum,
         }
         if (![self writeEndOfDatasetWithDatasetId:did
                                   finalAUSequence:(uint32_t)count
+                                             error:error]) return NO;
+        did++;
+    }
+    // M89.4: genomic AU bursts. Reuses the per-run helper so the
+    // multiplexed flow shares a single emission path with manual
+    // writeGenomicRun: callers.
+    for (NSString *name in genomicNames) {
+        TTIOGenomicRun *grun = dataset.genomicRuns[name];
+        NSUInteger nReads = grun.readCount;
+        uint8_t acqMode = (uint8_t)grun.acquisitionMode;
+        TTIOGenomicIndex *idx = grun.index;
+        for (NSUInteger i = 0; i < nReads; i++) {
+            NSError *readErr = nil;
+            TTIOAlignedRead *r = [grun readAtIndex:i error:&readErr];
+            if (!r) {
+                if (error) *error = readErr;
+                return NO;
+            }
+            NSData *seqData = [r.sequence dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+            NSData *qualData = r.qualities ?: [NSData data];
+            TTIOTransportChannelData *seqCh =
+                [[TTIOTransportChannelData alloc] initWithName:@"sequences"
+                                                      precision:TTIOPrecisionUInt8
+                                                    compression:TTIOCompressionNone
+                                                      nElements:(uint32_t)seqData.length
+                                                           data:seqData];
+            TTIOTransportChannelData *qualCh =
+                [[TTIOTransportChannelData alloc] initWithName:@"qualities"
+                                                      precision:TTIOPrecisionUInt8
+                                                    compression:TTIOCompressionNone
+                                                      nElements:(uint32_t)qualData.length
+                                                           data:qualData];
+            NSString *chrom = r.chromosome;
+            int64_t pos = r.position;
+            uint8_t mapq = r.mappingQuality;
+            uint16_t flags = (uint16_t)(r.flags & 0xFFFFu);
+            if (idx && i < idx.count) {
+                chrom = [idx chromosomeAt:i] ?: chrom;
+                pos = [idx positionAt:i];
+                mapq = [idx mappingQualityAt:i];
+                flags = (uint16_t)([idx flagsAt:i] & 0xFFFFu);
+            }
+            TTIOAccessUnit *au =
+                [[TTIOAccessUnit alloc] initWithSpectrumClass:5
+                                              acquisitionMode:acqMode
+                                                      msLevel:0
+                                                     polarity:2
+                                                retentionTime:0.0
+                                                  precursorMz:0.0
+                                              precursorCharge:0
+                                                  ionMobility:0.0
+                                            basePeakIntensity:0.0
+                                                     channels:@[seqCh, qualCh]
+                                                       pixelX:0 pixelY:0 pixelZ:0
+                                                   chromosome:(chrom ?: @"")
+                                                     position:pos
+                                               mappingQuality:mapq
+                                                        flags:flags];
+            if (![self writeAccessUnit:au datasetId:did auSequence:(uint32_t)i error:error]) {
+                return NO;
+            }
+        }
+        if (![self writeEndOfDatasetWithDatasetId:did
+                                  finalAUSequence:(uint32_t)nReads
                                              error:error]) return NO;
         did++;
     }

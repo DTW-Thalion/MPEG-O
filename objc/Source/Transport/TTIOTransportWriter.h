@@ -20,6 +20,7 @@
 
 @class TTIOSpectralDataset;
 @class TTIOAcquisitionRun;
+@class TTIOGenomicRun;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -69,6 +70,22 @@ NS_ASSUME_NONNULL_BEGIN
                                   error:(NSError * _Nullable *)error;
 
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
+
+/** M89.2: emit a single GenomicRun as a stream segment.
+ *
+ *  Writes the dataset header (spectrum_class="TTIOGenomicRead",
+ *  channel_names=["sequences", "qualities"], reference/platform
+ *  metadata in the instrument_json slot), then one ACCESS_UNIT per
+ *  read with the genomic suffix populated, then end-of-dataset.
+ *
+ *  The caller is responsible for stream framing
+ *  (writeStreamHeader…/writeEndOfStream…). For full-dataset emission
+ *  use ``writeDataset:`` which calls this internally for each
+ *  genomic run after the MS runs. */
+- (BOOL)writeGenomicRun:(TTIOGenomicRun *)run
+              datasetId:(uint16_t)datasetId
+                   name:(NSString *)name
+                  error:(NSError * _Nullable *)error;
 
 - (void)close;
 

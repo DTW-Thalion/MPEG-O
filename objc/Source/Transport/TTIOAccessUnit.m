@@ -50,6 +50,19 @@ static inline double readF64(const uint8_t *b)
     return v;
 }
 
+static inline void writeI64(uint8_t *b, int64_t v)
+{
+    uint64_t u = (uint64_t)v;
+    for (int i = 0; i < 8; i++) b[i] = (uint8_t)((u >> (8 * i)) & 0xFFu);
+}
+
+static inline int64_t readI64(const uint8_t *b)
+{
+    uint64_t u = 0;
+    for (int i = 0; i < 8; i++) u |= ((uint64_t)b[i]) << (8 * i);
+    return (int64_t)u;
+}
+
 // ---------------------------------------------------------------- Channel
 
 @implementation TTIOTransportChannelData
@@ -136,6 +149,43 @@ static inline double readF64(const uint8_t *b)
                                pixelY:(uint32_t)pixelY
                                pixelZ:(uint32_t)pixelZ
 {
+    return [self initWithSpectrumClass:spectrumClass
+                       acquisitionMode:acquisitionMode
+                               msLevel:msLevel
+                              polarity:polarity
+                         retentionTime:retentionTime
+                           precursorMz:precursorMz
+                       precursorCharge:precursorCharge
+                           ionMobility:ionMobility
+                     basePeakIntensity:basePeakIntensity
+                              channels:channels
+                                pixelX:pixelX
+                                pixelY:pixelY
+                                pixelZ:pixelZ
+                            chromosome:@""
+                              position:0
+                        mappingQuality:0
+                                 flags:0];
+}
+
+- (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
+                      acquisitionMode:(uint8_t)acquisitionMode
+                              msLevel:(uint8_t)msLevel
+                             polarity:(uint8_t)polarity
+                        retentionTime:(double)retentionTime
+                          precursorMz:(double)precursorMz
+                      precursorCharge:(uint8_t)precursorCharge
+                          ionMobility:(double)ionMobility
+                    basePeakIntensity:(double)basePeakIntensity
+                             channels:(NSArray<TTIOTransportChannelData *> *)channels
+                               pixelX:(uint32_t)pixelX
+                               pixelY:(uint32_t)pixelY
+                               pixelZ:(uint32_t)pixelZ
+                            chromosome:(NSString *)chromosome
+                              position:(int64_t)position
+                       mappingQuality:(uint8_t)mappingQuality
+                                  flags:(uint16_t)flags
+{
     if ((self = [super init])) {
         _spectrumClass = spectrumClass;
         _acquisitionMode = acquisitionMode;
@@ -150,6 +200,10 @@ static inline double readF64(const uint8_t *b)
         _pixelX = pixelX;
         _pixelY = pixelY;
         _pixelZ = pixelZ;
+        _chromosome = [(chromosome ?: @"") copy];
+        _position = position;
+        _mappingQuality = mappingQuality;
+        _flags = flags;
     }
     return self;
 }
@@ -178,6 +232,19 @@ static inline double readF64(const uint8_t *b)
         writeU32(&pix[4], _pixelY);
         writeU32(&pix[8], _pixelZ);
         [buf appendBytes:pix length:12];
+    } else if (_spectrumClass == 5) {
+        // M89.1: GenomicRead suffix — chromosome (uint16-len-prefixed
+        // UTF-8) then position (i64 LE) + mapq (u8) + flags (u16 LE).
+        NSData *chrom = [(_chromosome ?: @"") dataUsingEncoding:NSUTF8StringEncoding];
+        uint8_t lenBytes[2];
+        writeU16(lenBytes, (uint16_t)chrom.length);
+        [buf appendBytes:lenBytes length:2];
+        [buf appendData:chrom];
+        uint8_t suffix[11];
+        writeI64(&suffix[0], _position);
+        suffix[8] = _mappingQuality;
+        writeU16(&suffix[9], _flags);
+        [buf appendBytes:suffix length:11];
     }
     return buf;
 }
@@ -223,6 +290,10 @@ static inline double readF64(const uint8_t *b)
     }
 
     uint32_t pixelX = 0, pixelY = 0, pixelZ = 0;
+    NSString *chromosome = @"";
+    int64_t position = 0;
+    uint8_t mappingQuality = 0;
+    uint16_t flagsField = 0;
     if (spectrumClass == 4) {
         if (length - offset < 12) {
             if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
@@ -234,6 +305,40 @@ static inline double readF64(const uint8_t *b)
         pixelX = readU32(&bytes[offset]);
         pixelY = readU32(&bytes[offset + 4]);
         pixelZ = readU32(&bytes[offset + 8]);
+    } else if (spectrumClass == 5) {
+        // M89.1: GenomicRead suffix.
+        if (length - offset < 2) {
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorTruncated
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"GenomicRead AU missing chromosome length prefix"}];
+            return nil;
+        }
+        uint16_t chromLen = readU16(&bytes[offset]);
+        offset += 2;
+        if (length - offset < chromLen) {
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorTruncated
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"GenomicRead AU truncated chromosome bytes"}];
+            return nil;
+        }
+        if (chromLen > 0) {
+            chromosome = [[NSString alloc] initWithBytes:&bytes[offset]
+                                                   length:chromLen
+                                                 encoding:NSUTF8StringEncoding] ?: @"";
+        }
+        offset += chromLen;
+        if (length - offset < 11) {
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorTruncated
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"GenomicRead AU missing position/mapq/flags suffix"}];
+            return nil;
+        }
+        position = readI64(&bytes[offset]);
+        mappingQuality = bytes[offset + 8];
+        flagsField = readU16(&bytes[offset + 9]);
     }
 
     return [[self alloc] initWithSpectrumClass:spectrumClass
@@ -248,7 +353,11 @@ static inline double readF64(const uint8_t *b)
                                       channels:channels
                                         pixelX:pixelX
                                         pixelY:pixelY
-                                        pixelZ:pixelZ];
+                                        pixelZ:pixelZ
+                                    chromosome:chromosome
+                                      position:position
+                                mappingQuality:mappingQuality
+                                         flags:flagsField];
 }
 
 @end
