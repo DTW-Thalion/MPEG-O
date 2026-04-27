@@ -84,6 +84,7 @@ extern void testC2HDF5ErrorPaths(void);
 extern void testC3ProvidersErrorPaths(void);
 extern void testC5ProtectionGap(void);
 extern void testC3bProvidersWritePaths(void);
+extern void testC2bHDF5CompoundType(void);
 
 int main(int argc, const char *argv[])
 {
@@ -419,6 +420,10 @@ int main(int argc, const char *argv[])
         START_SET("C3b: providers write-path coverage")
             testC3bProvidersWritePaths();
         END_SET("C3b: providers write-path coverage")
+
+        START_SET("C2b: HDF5CompoundType coverage")
+            testC2bHDF5CompoundType();
+        END_SET("C2b: HDF5CompoundType coverage")
     }
     return 0;
 }
