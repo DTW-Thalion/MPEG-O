@@ -47,6 +47,17 @@ clang -fobjc-arc \
     $GNU_LIB -lm \
     -o "$OUT_BIN"
 
+# Default `--json $OUT_DIR/full.json` so the perf-CI orchestrator
+# always gets a fresh result file. Caller can override by passing
+# their own `--json <path>` on the command line.
+HAS_JSON=0
+for a in "$@"; do
+    [ "$a" = "--json" ] && HAS_JSON=1 && break
+done
+if [ "$HAS_JSON" = "0" ]; then
+    set -- "$@" --json "$OUT_DIR/full.json"
+fi
+
 echo "[run] $OUT_BIN $*"
 (
     cd "$OUT_DIR"

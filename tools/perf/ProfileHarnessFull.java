@@ -362,12 +362,82 @@ public final class ProfileHarnessFull {
         return r;
     }
 
+    // P4 (perf workplan): isolated codec microbenchmarks on
+    // fixed-size payloads (1 MiB byte codecs, 10K names for the
+    // tokenizer). Mirrors profile_python_full.py bench_codecs so
+    // cross-language deltas are meaningful.
+    private static Result benchCodecs(int n) {
+        java.util.Random rng = new java.util.Random(42);
+        int oneMiB = 1024 * 1024;
+
+        // rANS: random bytes.
+        byte[] ransIn = new byte[oneMiB];
+        rng.nextBytes(ransIn);
+
+        Result r = new Result();
+        long t;
+        byte[] tmp;
+
+        t = System.nanoTime();
+        byte[] o0 = global.thalion.ttio.codecs.Rans.encode(ransIn, 0);
+        r.timings.put("rans_o0_encode", (System.nanoTime() - t) / 1e6);
+
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.Rans.decode(o0);
+        r.timings.put("rans_o0_decode", (System.nanoTime() - t) / 1e6);
+
+        t = System.nanoTime();
+        byte[] o1 = global.thalion.ttio.codecs.Rans.encode(ransIn, 1);
+        r.timings.put("rans_o1_encode", (System.nanoTime() - t) / 1e6);
+
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.Rans.decode(o1);
+        r.timings.put("rans_o1_decode", (System.nanoTime() - t) / 1e6);
+
+        // BASE_PACK on pure ACGT.
+        byte[] alphabet = {(byte) 'A', (byte) 'C', (byte) 'G', (byte) 'T'};
+        byte[] bpIn = new byte[oneMiB];
+        for (int i = 0; i < oneMiB; i++) bpIn[i] = alphabet[rng.nextInt(4)];
+        t = System.nanoTime();
+        byte[] bpEnc = global.thalion.ttio.codecs.BasePack.encode(bpIn);
+        r.timings.put("base_pack_encode", (System.nanoTime() - t) / 1e6);
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.BasePack.decode(bpEnc);
+        r.timings.put("base_pack_decode", (System.nanoTime() - t) / 1e6);
+
+        // QUALITY_BINNED on random Phred bytes.
+        byte[] qbIn = new byte[oneMiB];
+        for (int i = 0; i < oneMiB; i++) qbIn[i] = (byte) rng.nextInt(94);
+        t = System.nanoTime();
+        byte[] qbEnc = global.thalion.ttio.codecs.Quality.encode(qbIn);
+        r.timings.put("quality_binned_encode", (System.nanoTime() - t) / 1e6);
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.Quality.decode(qbEnc);
+        r.timings.put("quality_binned_decode", (System.nanoTime() - t) / 1e6);
+
+        // NAME_TOKENIZED: 10K Illumina-style names.
+        java.util.List<String> names = new java.util.ArrayList<>(10_000);
+        for (int i = 0; i < 10_000; i++) {
+            names.add(String.format("M88_%08d:%03d:%02d",
+                    i, rng.nextInt(1000), rng.nextInt(100)));
+        }
+        t = System.nanoTime();
+        byte[] ntEnc = global.thalion.ttio.codecs.NameTokenizer.encode(names);
+        r.timings.put("name_tokenized_encode", (System.nanoTime() - t) / 1e6);
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.NameTokenizer.decode(ntEnc);
+        r.timings.put("name_tokenized_decode", (System.nanoTime() - t) / 1e6);
+
+        return r;
+    }
+
     // ── Driver ──────────────────────────────────────────────────────
 
     private static final String[] BENCH_ORDER = {
         "ms.hdf5", "ms.memory", "ms.sqlite", "ms.zarr",
         "transport.plain", "transport.compressed",
         "encryption", "signatures", "jcamp", "spectra.build",
+        "codecs",
     };
 
     private static Result runOne(String name, Path tmpRoot,
@@ -385,6 +455,7 @@ public final class ProfileHarnessFull {
             case "signatures":   return benchSignature(tmp, n, peaks);
             case "jcamp":        return benchJcamp(tmp, n);
             case "spectra.build": return benchSpectra(n);
+            case "codecs":       return benchCodecs(n);
             default: throw new IllegalArgumentException(name);
         }
     }
@@ -394,12 +465,14 @@ public final class ProfileHarnessFull {
         int peaks = 16;
         Set<String> only = new HashSet<>();
         Set<String> skip = new HashSet<>();
+        Path jsonPath = null;
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--n":     n = Integer.parseInt(args[++i]); break;
                 case "--peaks": peaks = Integer.parseInt(args[++i]); break;
                 case "--only":  only.addAll(Arrays.asList(args[++i].split(","))); break;
                 case "--skip":  skip.addAll(Arrays.asList(args[++i].split(","))); break;
+                case "--json":  jsonPath = Paths.get(args[++i]); break;
                 default: throw new IllegalArgumentException("unknown " + args[i]);
             }
         }
@@ -461,6 +534,55 @@ public final class ProfileHarnessFull {
             }
             System.out.printf("  %-28s total=%7.1f   %s%n",
                     e.getKey(), total, phases.toString());
+        }
+
+        // V2.1 (verification workplan): emit JSON matching the
+        // Python + ObjC harness schema so tools/perf/compare_baseline.py
+        // can diff Java against tools/perf/baseline.json["java"].
+        // Timings are converted ms → seconds so the units match the
+        // other harnesses; sizes (MB) are passed through as-is.
+        if (jsonPath != null) {
+            Files.createDirectories(jsonPath.getParent() == null
+                ? Paths.get(".") : jsonPath.getParent());
+            StringBuilder json = new StringBuilder();
+            json.append("{\n");
+            json.append("  \"n\": ").append(n).append(",\n");
+            json.append("  \"peaks\": ").append(peaks).append(",\n");
+            json.append("  \"results\": {");
+            boolean firstBench = true;
+            for (var e : results.entrySet()) {
+                if (!firstBench) json.append(",");
+                firstBench = false;
+                json.append("\n    \"").append(e.getKey()).append("\": {");
+                Result r = e.getValue();
+                if (r.error != null) {
+                    json.append("\"error\": \"")
+                        .append(r.error.replace("\\", "\\\\").replace("\"", "\\\""))
+                        .append("\"");
+                } else {
+                    boolean firstField = true;
+                    for (var t : r.timings.entrySet()) {
+                        if (!firstField) json.append(", ");
+                        firstField = false;
+                        // ms → seconds (divide by 1000) to match Python/ObjC.
+                        json.append("\"").append(t.getKey()).append("\": ")
+                            .append(String.format(java.util.Locale.ROOT,
+                                "%.7f", t.getValue() / 1000.0));
+                    }
+                    for (var s : r.sizes.entrySet()) {
+                        if (!firstField) json.append(", ");
+                        firstField = false;
+                        json.append("\"").append(s.getKey()).append("\": ")
+                            .append(String.format(java.util.Locale.ROOT,
+                                "%.6f", s.getValue()));
+                    }
+                }
+                json.append("}");
+            }
+            json.append("\n  }\n");
+            json.append("}\n");
+            Files.writeString(jsonPath, json.toString());
+            System.out.println("\nJSON dump: " + jsonPath);
         }
     }
 }

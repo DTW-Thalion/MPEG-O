@@ -7,60 +7,208 @@
     "peaks": 16,
     "regression_threshold_pct": 10.0,
     "notes": [
-      "Baseline numbers for tools/perf/compare_baseline.py — V2 of the verification workplan.",
+      "Baseline numbers for tools/perf/compare_baseline.py \u2014 V2 of the verification workplan.",
       "Updated by maintainers when an intentional optimisation or regression is accepted.",
-      "Java is intentionally absent in v1: the ProfileHarnessFull harness emits tabular text + JFR, not JSON. Adding JSON output is a V2.1 follow-up.",
+      "Java JSON output landed via P2 follow-up (2026-04-27); Java numbers below capture the post-V1-deps state.",
       "All timing values are seconds (matches harness output). compare_baseline.py converts to milliseconds for display."
     ]
   },
   "python": {
-    "ms.hdf5": {"write": 0.0613858, "read": 0.0102240},
-    "ms.memory": {"write": 0.1732410, "read": 0.0006768},
-    "ms.sqlite": {"write": 0.0534874, "read": 0.0341883},
-    "ms.zarr": {"write": 0.1301182, "read": 0.2354086},
-    "transport.plain": {"encode": 0.4461681, "decode": 0.3657578, "src_mb": 0.338797, "mots_mb": 3.570441},
-    "transport.compressed": {"encode": 0.4466577, "decode": 0.2941383, "src_mb": 0.338797, "mots_mb": 2.304445},
-    "encryption": {"encrypt": 0.2610203, "decrypt": 0.1323387, "bytes_mb": 0.338789},
-    "signatures": {"sign": 0.0106382, "verify": 0.0052533},
+    "ms.hdf5": {
+      "write": 0.05741430600005515,
+      "read": 0.009571026999992682
+    },
+    "ms.memory": {
+      "write": 0.19132767999985845,
+      "read": 0.0007046919999993406
+    },
+    "ms.sqlite": {
+      "write": 0.05570767499989415,
+      "read": 0.03500215700000808
+    },
+    "ms.zarr": {
+      "write": 0.13089138399982403,
+      "read": 0.04290523800000301
+    },
+    "transport.plain": {
+      "encode": 0.24895793300015612,
+      "decode": 0.3350430289999622,
+      "src_mb": 0.338797,
+      "mots_mb": 3.570441
+    },
+    "transport.compressed": {
+      "encode": 0.24475023000013607,
+      "decode": 0.26548402099979285,
+      "src_mb": 0.338797,
+      "mots_mb": 2.304445
+    },
+    "encryption": {
+      "encrypt": 0.2613891109999713,
+      "decrypt": 0.13207449100013946,
+      "bytes_mb": 0.338789
+    },
+    "signatures": {
+      "sign": 0.007630589999962467,
+      "verify": 0.004665285999863045
+    },
     "jcamp": {
-      "ir_write": 0.0061603,
-      "ir_read": 0.0098482,
-      "raman_write": 0.0060359,
-      "raman_read": 0.0095065,
-      "uvvis_write": 0.0065327,
-      "uvvis_read": 0.0103931,
-      "compressed_read": 0.0042920
+      "ir_write": 0.005877182999938668,
+      "ir_read": 0.01312321599993993,
+      "raman_write": 0.005873037999890585,
+      "raman_read": 0.01191401500000211,
+      "uvvis_write": 0.006288259000029939,
+      "uvvis_read": 0.01355689000001803,
+      "compressed_read": 0.0042842979999022646
     },
     "spectra.build": {
-      "ir_build": 0.0001516,
-      "raman_build": 0.0001613,
-      "uvvis_build": 0.0001225,
-      "2dcos_build": 0.0001252
+      "ir_build": 0.00016821700000946294,
+      "raman_build": 0.00015244500013977813,
+      "uvvis_build": 0.0001224919999458507,
+      "2dcos_build": 0.00014501200007543957
+    },
+    "codecs": {
+      "rans_o0_encode": 0.12236242499989203,
+      "rans_o0_decode": 0.14746084900002643,
+      "rans_o1_encode": 0.25921957200012,
+      "rans_o1_decode": 0.27642922700010786,
+      "base_pack_encode": 0.017405932999963625,
+      "base_pack_decode": 0.011446593000073335,
+      "quality_binned_encode": 0.015512281999917832,
+      "quality_binned_decode": 0.0008822610000152054,
+      "name_tokenized_encode": 0.026575819999834494,
+      "name_tokenized_decode": 0.002286876999960441
+    }
+  },
+  "java": {
+    "ms.hdf5": {
+      "write": 0.0535084,
+      "read": 0.0052766
+    },
+    "ms.memory": {
+      "write": 0.0074798,
+      "read": 0.0012989
+    },
+    "ms.sqlite": {
+      "write": 0.1673797,
+      "read": 0.0154155
+    },
+    "ms.zarr": {
+      "write": 0.0301851,
+      "read": 0.0175416
+    },
+    "transport.plain": {
+      "encode": 0.061601,
+      "decode": 0.1015771,
+      "src_mb": 0.330576,
+      "mots_mb": 3.53029
+    },
+    "transport.compressed": {
+      "encode": 0.1254487,
+      "decode": 0.0984306,
+      "src_mb": 0.330576,
+      "mots_mb": 2.264294
+    },
+    "encryption": {
+      "encrypt": 0.1727007,
+      "decrypt": 0.0745877,
+      "bytes_mb": 0.330568
+    },
+    "signatures": {
+      "sign": 0.0092917,
+      "verify": 0.0014757
+    },
+    "jcamp": {
+      "ir_write": 0.0112936,
+      "ir_read": 0.0751154,
+      "raman_write": 0.0218617,
+      "raman_read": 0.0569442,
+      "uvvis_write": 0.0211426,
+      "uvvis_read": 0.0380158,
+      "compressed_read": 0.0119199
+    },
+    "spectra.build": {
+      "ir_build": 5e-06,
+      "raman_build": 1.7e-06,
+      "uvvis_build": 1.7e-06,
+      "2dcos_build": 0.0004608
+    },
+    "codecs": {
+      "rans_o0_encode": 0.0253067,
+      "rans_o0_decode": 0.0120424,
+      "rans_o1_encode": 0.0593614,
+      "rans_o1_decode": 0.0557362,
+      "base_pack_encode": 0.0261438,
+      "base_pack_decode": 0.0204076,
+      "quality_binned_encode": 0.0083879,
+      "quality_binned_decode": 0.0108554,
+      "name_tokenized_encode": 0.0289,
+      "name_tokenized_decode": 0.0055436
     }
   },
   "objc": {
-    "ms.hdf5": {"write": 0.0641185, "read": 0.0058150},
-    "ms.memory": {"write": null, "read": null},
-    "ms.sqlite": {"write": null, "read": null},
-    "ms.zarr": {"write": null, "read": null},
-    "transport.plain": {"encode": 0.0978922, "decode": 0.0847183, "src_mb": 0.332448, "mots_mb": 3.570300},
-    "transport.compressed": {"encode": 0.1719530, "decode": 0.0943971, "src_mb": 0.332448, "mots_mb": 2.304300},
-    "encryption": {"encrypt": 0.0900057, "decrypt": 0.0630190, "bytes_mb": 0.332440},
-    "signatures": {"sign": 0.0019397, "verify": 0.0016404},
+    "codecs": {
+      "name_tokenized_decode": 0.0010581,
+      "rans_o0_decode": 0.00438204,
+      "quality_binned_encode": 0.000927307,
+      "rans_o1_decode": 0.01312,
+      "base_pack_decode": 0.000501462,
+      "quality_binned_decode": 0.000924949,
+      "name_tokenized_encode": 0.00308345,
+      "rans_o1_encode": 0.00898688,
+      "base_pack_encode": 0.00211982,
+      "rans_o0_encode": 0.00519931
+    },
+    "encryption": {
+      "encrypt": 0.0896006,
+      "bytes_mb": 0.33244,
+      "decrypt": 0.065518
+    },
     "jcamp": {
-      "ir_write": 0.0056524,
-      "ir_read": 0.0199712,
-      "raman_write": 0.0060375,
-      "raman_read": 0.0179203,
-      "uvvis_write": 0.0058948,
-      "uvvis_read": 0.0185415,
-      "compressed_read": 0.0070540
+      "uvvis_write": 0.00600844,
+      "raman_write": 0.00615739,
+      "uvvis_read": 0.0192779,
+      "compressed_read": 0.00707021,
+      "ir_write": 0.00578594,
+      "ir_read": 0.0210468,
+      "raman_read": 0.0186778
+    },
+    "ms.hdf5": {
+      "read": 0.00587264,
+      "write": 0.0612847
+    },
+    "ms.memory": {
+      "read": null,
+      "write": null
+    },
+    "ms.sqlite": {
+      "read": null,
+      "write": null
+    },
+    "ms.zarr": {
+      "read": null,
+      "write": null
+    },
+    "signatures": {
+      "verify": 0.00165995,
+      "sign": 0.00202459
     },
     "spectra.build": {
-      "ir_build": 0.0001442,
-      "raman_build": 0.0000996,
-      "uvvis_build": 0.0000851,
-      "2dcos_build": 0.0001062
+      "2dcos_build": 0.000111316,
+      "ir_build": 0.000143066,
+      "uvvis_build": 8.5054e-05,
+      "raman_build": 9.0116e-05
+    },
+    "transport.compressed": {
+      "encode": 0.170608,
+      "decode": 0.094385,
+      "mots_mb": 2.3043,
+      "src_mb": 0.332448
+    },
+    "transport.plain": {
+      "encode": 0.0955015,
+      "decode": 0.0859208,
+      "mots_mb": 3.5703,
+      "src_mb": 0.332448
     }
   }
 }

@@ -138,6 +138,30 @@ detect ≥10% regressions automatically; surface deltas as PR comments.
 
 **Deferred:** Per-PR perf runs (too slow for shared CI without dedicated runners); GitHub Actions matrix to fan out per-language perf in parallel (possible but not essential at this scale).
 
+#### V2 follow-ups landed (2026-04-27, P1-P4)
+
+* **P1: orchestrator gaps closed.** `build_and_run_python_full.sh`
+  added (was missing); `build_and_run_objc_full.sh` and
+  `build_and_run_java_full.sh` now default `--json` so caller can't
+  silently produce a stale full.json. `run_perf_ci.sh` consistently
+  uses the wrappers.
+* **P2: Java JSON output landed.** `ProfileHarnessFull.java` now
+  takes `--json <path>` and emits the same schema as Python + ObjC.
+  Java is in the regression-detection loop with all 32 metrics
+  baselined.
+* **P3: JCAMP read "regression" investigated.** The 15-28% slowdown
+  vs the original baseline turned out to be baseline drift, not a
+  code regression: numpy 1.26 vs 2.2 produces identical timings;
+  no JCAMP-related commits exist between the baseline date and
+  today (only M80/M81 rename commits touched the file). Most
+  likely cause: the original baseline was captured under
+  different system load. Re-baselined.
+* **P4: codec microbenchmarks added.** New `codecs` benchmark
+  group in all three languages with isolated 1 MiB rANS / BASE_PACK
+  / QUALITY / 10K-name NAME_TOKENIZED encode + decode. Headline
+  cross-language deltas (rANS o0 encode, 1 MiB random bytes):
+  Python 126 ms → Java 20 ms → ObjC 6 ms (21× faster than Python).
+
 ---
 
 ### V3 — Document the cross-language coverage matrix
