@@ -196,7 +196,8 @@ flags:
 
 ```
 spectrum_class:      uint8        # 0=MassSpectrum, 1=NMRSpectrum,
-                                  # 2=NMR2D, 3=FID, 4=MSImagePixel
+                                  # 2=NMR2D, 3=FID, 4=MSImagePixel,
+                                  # 5=GenomicRead (M89.1)
 acquisition_mode:    uint8        # TTIOAcquisitionMode
 ms_level:            uint8        # 1, 2, ... (0 for NMR)
 polarity:            uint8        # 0=positive, 1=negative, 2=unknown
@@ -222,11 +223,21 @@ data:                bytes[data_length]
 pixel_x:             uint32
 pixel_y:             uint32
 pixel_z:             uint32
+
+# GenomicRead extension (spectrum_class == 5, M89.1):
+chromosome_len:      uint16
+chromosome:          bytes[chromosome_len]    # UTF-8, e.g. "chr1", "*", "chr22_KI270739v1_random"
+position:            int64           # 0-based; -1 for unmapped (BAM convention)
+mapping_quality:     uint8           # 0-255 (BAM convention)
+flags:               uint16          # SAM/BAM bit flags
 ```
 
 The header fields (`retention_time` through `base_peak_intensity`)
 constitute the **filter keys**: a server can evaluate any AU filter
-(§7) against these bytes without touching `data`.
+(§7) against these bytes without touching `data`. For
+GenomicRead AUs (`spectrum_class == 5`) the genomic suffix
+(`chromosome`, `position`) is *also* a filter key — see §7 for
+the genomic predicate set added in M89.3.
 
 Channel payloads are conveyed in their native container encoding.
 When `compression = 0` (`none`) the receiver decodes raw IEEE-754
@@ -248,7 +259,11 @@ Each channel's AES-GCM operation uses **authenticated data**
 `dataset_id (u16 LE) || au_sequence (u32 LE) || channel_name_utf8`.
 
 MSImagePixel fields (`pixel_x / pixel_y / pixel_z`) stay
-plaintext.
+plaintext. GenomicRead fields (`chromosome / position /
+mapping_quality / flags`) likewise stay plaintext under
+`ENCRYPTED` only — server-side filtering on chromosome and
+position remains keyless. (Encryption of the genomic suffix
+under `ENCRYPTED_HEADER` lands in M89.5.)
 
 #### 4.3.3 Fully-encrypted AU (`ENCRYPTED | ENCRYPTED_HEADER` set, v0.10+)
 

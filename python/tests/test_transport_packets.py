@@ -150,6 +150,108 @@ class TestAccessUnit:
         assert decoded.pixel_y == 20
         assert decoded.pixel_z == 0
 
+    def test_genomic_read_round_trip(self):
+        # M89.1: GenomicRead AU (spectrum_class==5) carries a
+        # chromosome+position+mapq+flags suffix after channels.
+        au = AccessUnit(
+            spectrum_class=5,
+            acquisition_mode=0,
+            ms_level=0,
+            polarity=2,
+            retention_time=0.0,
+            precursor_mz=0.0,
+            precursor_charge=0,
+            ion_mobility=0.0,
+            base_peak_intensity=0.0,
+            channels=[
+                ChannelData("seq", 1, 0, 1, b"\x00" * 8),
+            ],
+            chromosome="chr1",
+            position=123_456_789,
+            mapping_quality=60,
+            flags=0x0003,  # paired + proper pair
+        )
+        decoded = AccessUnit.from_bytes(au.to_bytes())
+        assert decoded.spectrum_class == 5
+        assert decoded.chromosome == "chr1"
+        assert decoded.position == 123_456_789
+        assert decoded.mapping_quality == 60
+        assert decoded.flags == 0x0003
+        assert len(decoded.channels) == 1
+
+    def test_genomic_read_unmapped(self):
+        # Unmapped reads use the BAM convention: chromosome="*",
+        # position=-1. Flag bit 0x4 (segment unmapped) set.
+        au = AccessUnit(
+            spectrum_class=5,
+            acquisition_mode=0, ms_level=0, polarity=2,
+            retention_time=0.0, precursor_mz=0.0, precursor_charge=0,
+            ion_mobility=0.0, base_peak_intensity=0.0,
+            channels=[],
+            chromosome="*",
+            position=-1,
+            mapping_quality=0,
+            flags=0x0004,
+        )
+        decoded = AccessUnit.from_bytes(au.to_bytes())
+        assert decoded.position == -1
+        assert decoded.chromosome == "*"
+        assert decoded.flags == 0x0004
+
+    def test_genomic_read_long_chromosome(self):
+        # Decoy contig names can be quite long.
+        long_chr = "chr22_KI270739v1_random"
+        au = AccessUnit(
+            spectrum_class=5,
+            acquisition_mode=0, ms_level=0, polarity=2,
+            retention_time=0.0, precursor_mz=0.0, precursor_charge=0,
+            ion_mobility=0.0, base_peak_intensity=0.0,
+            channels=[],
+            chromosome=long_chr, position=42, mapping_quality=255,
+            flags=0xFFFF,
+        )
+        decoded = AccessUnit.from_bytes(au.to_bytes())
+        assert decoded.chromosome == long_chr
+        assert decoded.mapping_quality == 255
+        assert decoded.flags == 0xFFFF
+
+    def test_genomic_read_truncated_suffix_raises(self):
+        # Missing the genomic suffix on a spectrum_class==5 AU should
+        # raise a clear ValueError, not silently decode to zeros.
+        au = AccessUnit(
+            spectrum_class=5,
+            acquisition_mode=0, ms_level=0, polarity=2,
+            retention_time=0.0, precursor_mz=0.0, precursor_charge=0,
+            ion_mobility=0.0, base_peak_intensity=0.0,
+            channels=[],
+            chromosome="chr1", position=100, mapping_quality=60, flags=0,
+        )
+        full = au.to_bytes()
+        # Drop the trailing flags (last 2 bytes) so the suffix is short.
+        truncated = full[:-2]
+        with pytest.raises(ValueError, match="GenomicRead"):
+            AccessUnit.from_bytes(truncated)
+
+    def test_genomic_suffix_only_when_class_is_5(self):
+        # An MS AU with chromosome accidentally set should not write a
+        # genomic suffix — chromosome is silently ignored. Decoder
+        # returns the default "" / 0 / 0 / 0 values.
+        au = AccessUnit(
+            spectrum_class=0,
+            acquisition_mode=0, ms_level=1, polarity=0,
+            retention_time=1.0, precursor_mz=0.0, precursor_charge=0,
+            ion_mobility=0.0, base_peak_intensity=0.0,
+            channels=[],
+            chromosome="should-be-ignored",
+            position=999, mapping_quality=42, flags=0xBEEF,
+        )
+        decoded = AccessUnit.from_bytes(au.to_bytes())
+        assert decoded.spectrum_class == 0
+        assert decoded.chromosome == ""
+        assert decoded.position == 0
+        assert decoded.mapping_quality == 0
+        assert decoded.flags == 0
+
     def test_no_channels(self):
         au = AccessUnit(
             spectrum_class=0,
