@@ -193,7 +193,7 @@ void testC3cCanonicalBytes(void)
 
             // Read slice.
             err = nil;
-            NSData *slice = [ds readSliceAtOffset:1 length:2 error:&err];
+            NSData *slice = [ds readSliceAtOffset:1 count:2 error:&err];
             PASS(slice != nil && slice.length == 16,
                  "C3c #13: SqliteProvider readSliceAtOffset works (2 elems)");
 

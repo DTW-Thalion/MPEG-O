@@ -100,19 +100,19 @@ void testC2HDF5ErrorPaths(void)
         if (fixture) {
             TTIOHDF5Group *root = [fixture rootGroup];
             err = nil;
-            TTIOHDF5Group *missing = [root openGroupAtPath:@"/nope/nada/nope"
-                                                     error:&err];
+            TTIOHDF5Group *missing = [root openGroupNamed:@"nope"
+                                                    error:&err];
             PASS(missing == nil, "C2 #5: openGroup missing returns nil");
             PASS(err != nil, "C2 #5: openGroup missing populates NSError");
 
             // #6: createGroup duplicate → nil + error on second call.
             err = nil;
-            TTIOHDF5Group *first = [root createGroupAtPath:@"samples"
-                                                     error:&err];
+            TTIOHDF5Group *first = [root createGroupNamed:@"samples"
+                                                    error:&err];
             PASS(first != nil, "C2 #6: first createGroup succeeds");
             err = nil;
-            TTIOHDF5Group *dup = [root createGroupAtPath:@"samples"
-                                                   error:&err];
+            TTIOHDF5Group *dup = [root createGroupNamed:@"samples"
+                                                  error:&err];
             PASS(dup == nil, "C2 #6: duplicate createGroup returns nil");
             PASS(err != nil, "C2 #6: duplicate createGroup populates NSError");
 
@@ -120,8 +120,8 @@ void testC2HDF5ErrorPaths(void)
 
             // #7: openDataset on missing dataset → nil + error.
             err = nil;
-            TTIOHDF5Dataset *missingDs = [root openDatasetAtPath:@"not_there"
-                                                            error:&err];
+            TTIOHDF5Dataset *missingDs = [root openDatasetNamed:@"not_there"
+                                                           error:&err];
             PASS(missingDs == nil, "C2 #7: openDataset missing returns nil");
             PASS(err != nil, "C2 #7: openDataset missing populates NSError");
 

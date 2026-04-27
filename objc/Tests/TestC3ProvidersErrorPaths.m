@@ -41,6 +41,8 @@ void testC3ProvidersErrorPaths(void)
 
         err = nil;
         id<TTIOStorageProvider> bad = [reg openURL:@"unknown-scheme://nope"
+                                              mode:TTIOStorageOpenModeRead
+                                          provider:nil
                                               error:&err];
         PASS(bad == nil, "C3 #3: unknown scheme returns nil");
         PASS(err != nil, "C3 #3: unknown scheme populates NSError");
@@ -49,7 +51,9 @@ void testC3ProvidersErrorPaths(void)
 
         err = nil;
         id<TTIOStorageProvider> bogus = [reg openURL:@"hdf5:///tmp/c3_does_not_exist.tio"
-                                                 error:&err];
+                                                mode:TTIOStorageOpenModeRead
+                                            provider:nil
+                                               error:&err];
         // Either nil (rejected) or non-nil but won't have any groups.
         // Pass condition: no segfault.
         PASS(YES, "C3 #4: hdf5:// missing file handled cleanly");
@@ -59,11 +63,14 @@ void testC3ProvidersErrorPaths(void)
 
         err = nil;
         id<TTIOStorageProvider> mem = [reg openURL:@"memory://c3-test"
+                                              mode:TTIOStorageOpenModeReadWrite
+                                          provider:nil
                                               error:&err];
         if (mem != nil) {
             PASS(YES, "C3 #5: memory:// URL opens");
             // Smoke: memory provider has a root group.
-            id<TTIOStorageGroup> rootMem = [mem rootGroup];
+            err = nil;
+            id<TTIOStorageGroup> rootMem = [mem rootGroupWithError:&err];
             PASS(rootMem != nil || rootMem == nil,
                  "C3 #5: memory rootGroup query didn't crash");
             [mem close];
@@ -75,6 +82,8 @@ void testC3ProvidersErrorPaths(void)
 
         err = nil;
         id<TTIOStorageProvider> sqp = [reg openURL:@"sqlite:///tmp/c3_does_not_exist.db"
+                                              mode:TTIOStorageOpenModeRead
+                                          provider:nil
                                               error:&err];
         // Either nil (rejected) or auto-creates. Pass condition: no
         // segfault.
