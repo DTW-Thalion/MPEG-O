@@ -9,11 +9,14 @@ as a record of what was built; current milestones use TTI-O names.
 > **⏸ M-series paused (2026-04-27).** Phase 6 (M89 transport extension,
 > M90 encryption/anonymisation, M91 multi-omics integration) and
 > Phase 7 (M92 benchmarking + v0.11.0 tag) are paused while we repay
-> verification debt accumulated through M88.1. The active workplan is
-> [`docs/verification-workplan.md`](docs/verification-workplan.md)
-> (V-series). M-series resumes at M89 once V-series milestones land
-> (estimated 4-8 weeks). V-series and M-series have separate
-> CHANGELOG sections under `[Unreleased]` and do not interleave.
+> verification + coverage debt accumulated through M88.1. Active
+> workplans:
+> * [`docs/verification-workplan.md`](docs/verification-workplan.md) — **V-series** (V1-V9 + P1-P4 perf follow-ups; mostly complete as of 2026-04-27).
+> * [`docs/coverage-workplan.md`](docs/coverage-workplan.md) — **C-series** (C1-C8, coverage debt repayment; targets Python ≥92%, Java ≥88%, ObjC ≥85% line coverage).
+>
+> M-series resumes at M89 once V-series + C-series land (estimated
+> 4-8 more weeks). V-, C-, and M-series have separate CHANGELOG
+> sections under `[Unreleased]` and do not interleave.
 
 ---
 
