@@ -50,3 +50,9 @@ python/docs/_build/
 # machines would create spurious diffs (the index encodes byte
 # offsets that change with line-ending normalisation).
 *.fa.fai
+
+# V1 (verification workplan): coverage artefacts.
+python/coverage.xml
+python/htmlcov/
+python/.coverage
+objc/coverage/
