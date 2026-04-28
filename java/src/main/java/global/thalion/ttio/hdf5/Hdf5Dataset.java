@@ -187,20 +187,17 @@ public class Hdf5Dataset implements AutoCloseable {
     }
 
     /** M90.2: write a UTF-8 string attribute on this dataset.
-     *  Mirrors {@link Hdf5Group#setStringAttribute} so the
-     *  {@code @ttio_signature} attribute placed by
-     *  {@link global.thalion.ttio.protection.SignatureManager#signGenomicRun}
-     *  can land directly on the dataset. */
+     *  Mirrors {@link Hdf5Group#setStringAttribute}. M90.7 made this
+     *  emit VL_STRING with UTF-8 cset so Python and ObjC readers can
+     *  consume Java-written {@code @ttio_signature} attributes. */
     public void setStringAttribute(String name, String value) {
         file.lockForWriting();
         long htype = -1, space = -1, aid = -1;
         try {
-            byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            int len = Math.max(bytes.length, 1);
-
             htype = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-            H5.H5Tset_size(htype, len);
+            H5.H5Tset_size(htype, HDF5Constants.H5T_VARIABLE);
             H5.H5Tset_strpad(htype, HDF5Constants.H5T_STR_NULLTERM);
+            H5.H5Tset_cset(htype, HDF5Constants.H5T_CSET_UTF8);
 
             space = H5.H5Screate(HDF5Constants.H5S_SCALAR);
 
@@ -213,9 +210,8 @@ public class Hdf5Dataset implements AutoCloseable {
             if (aid < 0) throw new Hdf5Errors.AttributeException(
                     "H5Acreate2 (string) failed for '" + name + "'");
 
-            byte[] padded = new byte[len];
-            System.arraycopy(bytes, 0, padded, 0, Math.min(bytes.length, len));
-            H5.H5Awrite(aid, htype, padded);
+            String[] data = { value };
+            H5.H5Awrite_VLStrings(aid, htype, data);
         } catch (HDF5LibraryException e) {
             throw new Hdf5Errors.AttributeException(
                     "setStringAttribute failed for '" + name + "': "
@@ -232,7 +228,9 @@ public class Hdf5Dataset implements AutoCloseable {
      *  Returns {@code null} when the attribute is absent OR the
      *  attribute's HDF5 type class is not {@code H5T_STRING}. The
      *  caller is expected to dispatch on the return type ({@code null}
-     *  meaning "not a string-typed attribute, try a numeric reader"). */
+     *  meaning "not a string-typed attribute, try a numeric reader").
+     *  M90.7 added the VL_STRING branch — both VL and fixed-length
+     *  attrs decode correctly. */
     public String readStringAttribute(String name) {
         file.lockForReading();
         long aid = -1, htype = -1;
@@ -244,6 +242,11 @@ public class Hdf5Dataset implements AutoCloseable {
             if (klass != HDF5Constants.H5T_STRING) {
                 // Not a string-typed attribute (e.g. uint8 @compression).
                 return null;
+            }
+            if (H5.H5Tis_variable_str(htype)) {
+                String[] buf = new String[1];
+                H5.H5Aread_VLStrings(aid, htype, buf);
+                return buf[0] == null ? "" : buf[0];
             }
             long size = H5.H5Tget_size(htype);
             if (size <= 0) return "";

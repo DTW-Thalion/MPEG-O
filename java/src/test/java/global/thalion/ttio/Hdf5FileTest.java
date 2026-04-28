@@ -145,4 +145,70 @@ class Hdf5FileTest {
             f.unlockForWriting();
         }
     }
+
+    /** M90.7: setStringAttribute MUST emit a variable-length HDF5
+     *  string with UTF-8 cset (matches Python's h5py default), so
+     *  cross-language readers handle Java-written attrs uniformly. */
+    @Test
+    void setStringAttribute_writesVariableLengthUtf8() throws Exception {
+        String path = tempDir.resolve("vl_string.h5").toString();
+        try (Hdf5File f = Hdf5File.create(path);
+             Hdf5Group root = f.rootGroup()) {
+            root.setStringAttribute("test_attr", "hello world");
+            // Read back via the same path — round-trip MUST work.
+            assertEquals("hello world", root.readStringAttribute("test_attr"));
+        }
+        // Reopen and inspect the type metadata directly via JHDF5.
+        try (Hdf5File f = Hdf5File.openReadOnly(path);
+             Hdf5Group root = f.rootGroup()) {
+            assertEquals("hello world", root.readStringAttribute("test_attr"));
+            // Probe the HDF5 type to confirm VL.
+            long aid = hdf.hdf5lib.H5.H5Aopen(root.getGroupId(), "test_attr",
+                hdf.hdf5lib.HDF5Constants.H5P_DEFAULT);
+            long htype = hdf.hdf5lib.H5.H5Aget_type(aid);
+            try {
+                assertTrue(hdf.hdf5lib.H5.H5Tis_variable_str(htype),
+                    "M90.7: string attribute must be VL_STRING");
+                assertEquals(hdf.hdf5lib.HDF5Constants.H5T_CSET_UTF8,
+                    hdf.hdf5lib.H5.H5Tget_cset(htype),
+                    "M90.7: string attribute must declare UTF-8 cset");
+            } finally {
+                hdf.hdf5lib.H5.H5Tclose(htype);
+                hdf.hdf5lib.H5.H5Aclose(aid);
+            }
+        }
+    }
+
+    /** M90.7: a fixed-length string attribute (e.g. legacy file written
+     *  by pre-M90.7 Java) MUST still read back correctly through the
+     *  back-compat branch. */
+    @Test
+    void readStringAttribute_handlesFixedLengthBackCompat() throws Exception {
+        String path = tempDir.resolve("fixed_string.h5").toString();
+        // Build a file with a fixed-length attr the legacy way.
+        try (Hdf5File f = Hdf5File.create(path);
+             Hdf5Group root = f.rootGroup()) {
+            long gid = root.getGroupId();
+            byte[] bytes = "legacy".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            int len = bytes.length;
+            long htype = hdf.hdf5lib.H5.H5Tcopy(hdf.hdf5lib.HDF5Constants.H5T_C_S1);
+            hdf.hdf5lib.H5.H5Tset_size(htype, len);
+            hdf.hdf5lib.H5.H5Tset_strpad(htype,
+                hdf.hdf5lib.HDF5Constants.H5T_STR_NULLTERM);
+            long space = hdf.hdf5lib.H5.H5Screate(
+                hdf.hdf5lib.HDF5Constants.H5S_SCALAR);
+            long aid = hdf.hdf5lib.H5.H5Acreate(gid, "legacy_attr", htype, space,
+                hdf.hdf5lib.HDF5Constants.H5P_DEFAULT,
+                hdf.hdf5lib.HDF5Constants.H5P_DEFAULT);
+            hdf.hdf5lib.H5.H5Awrite(aid, htype, bytes);
+            hdf.hdf5lib.H5.H5Aclose(aid);
+            hdf.hdf5lib.H5.H5Sclose(space);
+            hdf.hdf5lib.H5.H5Tclose(htype);
+        }
+        // Read with the M90.7 reader — back-compat branch.
+        try (Hdf5File f = Hdf5File.openReadOnly(path);
+             Hdf5Group root = f.rootGroup()) {
+            assertEquals("legacy", root.readStringAttribute("legacy_attr"));
+        }
+    }
 }
