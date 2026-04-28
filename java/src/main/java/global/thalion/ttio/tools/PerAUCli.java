@@ -40,18 +40,26 @@ import java.util.TreeMap;
  * <p>Decryption emits a minimal, language-agnostic binary dump
  * compatible with the Python side's NPZ convention so cross-language
  * byte-equality checks work without depending on the Python
- * interpreter to read Java output. Layout:
+ * interpreter to read Java output. Layout (M90.12 — MPAD v1):
  * <pre>
- *   MAGIC "MPAD" (4 bytes) | u32 n_entries
- *   per entry: u16 key_len | utf8 key bytes | u32 byte_len | bytes
+ *   MAGIC "MPA1" (4 bytes) | u32 n_entries
+ *   per entry: u16 key_len | utf8 key bytes |
+ *              u8 dtype_code | u32 byte_len | bytes
  * </pre>
- * Keys are sorted lexicographically.
+ * Keys are sorted lexicographically. The dtype byte mirrors the
+ * Precision enum: {@code 0=f4, 1=f8, 2=i4, 3=i8, 4=u4, 6=u1, 9=u8,
+ * 0xFF=opaque bytes (e.g. JSON-encoded au_headers)}.
  *
  * @since 1.0
  */
 public final class PerAUCli {
 
-    private static final byte[] MAGIC = {'M', 'P', 'A', 'D'};
+    private static final byte[] MAGIC = {'M', 'P', 'A', '1'};
+
+    // M90.12: per-entry dtype codes (mirror the Precision enum).
+    private static final int MPAD_DTYPE_FLOAT64 = 1;
+    private static final int MPAD_DTYPE_UINT8 = 6;
+    private static final int MPAD_DTYPE_BYTES = 0xFF;
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) usageAndExit();
@@ -73,21 +81,29 @@ public final class PerAUCli {
         PerAUFile.encryptFile(args[2], readKey(args[3]), headers, "hdf5");
     }
 
+    /** Per-entry payload: a (dtype_code, raw_bytes) pair. */
+    private record MpadEntry(int dtypeCode, byte[] value) {}
+
     private static void decrypt(String[] args) throws Exception {
         if (args.length < 4) usageAndExit();
         Map<String, PerAUFile.DecryptedRun> plain =
             PerAUFile.decryptFile(args[1], readKey(args[3]), "hdf5");
 
-        TreeMap<String, byte[]> entries = new TreeMap<>();
+        TreeMap<String, MpadEntry> entries = new TreeMap<>();
         for (Map.Entry<String, PerAUFile.DecryptedRun> e : plain.entrySet()) {
             String runName = e.getKey();
-            for (Map.Entry<String, byte[]> c : e.getValue().channels().entrySet()) {
-                entries.put(runName + "__" + c.getKey(), c.getValue());
+            PerAUFile.DecryptedRun run = e.getValue();
+            int channelDtype = run.isGenomic()
+                ? MPAD_DTYPE_UINT8 : MPAD_DTYPE_FLOAT64;
+            for (Map.Entry<String, byte[]> c : run.channels().entrySet()) {
+                entries.put(runName + "__" + c.getKey(),
+                             new MpadEntry(channelDtype, c.getValue()));
             }
-            if (e.getValue().auHeaders() != null) {
+            if (run.auHeaders() != null) {
                 entries.put(runName + "__au_headers_json",
-                             auHeadersJson(e.getValue().auHeaders())
-                                .getBytes(StandardCharsets.UTF_8));
+                             new MpadEntry(MPAD_DTYPE_BYTES,
+                                            auHeadersJson(run.auHeaders())
+                                                .getBytes(StandardCharsets.UTF_8)));
             }
         }
 
@@ -95,12 +111,14 @@ public final class PerAUCli {
              DataOutputStream out = new DataOutputStream(fos)) {
             fos.write(MAGIC);
             writeU32LE(out, entries.size());
-            for (Map.Entry<String, byte[]> e : entries.entrySet()) {
+            for (Map.Entry<String, MpadEntry> e : entries.entrySet()) {
                 byte[] k = e.getKey().getBytes(StandardCharsets.UTF_8);
                 writeU16LE(out, k.length);
                 out.write(k);
-                writeU32LE(out, e.getValue().length);
-                out.write(e.getValue());
+                MpadEntry me = e.getValue();
+                out.writeByte(me.dtypeCode() & 0xFF);
+                writeU32LE(out, me.value().length);
+                out.write(me.value());
             }
         }
     }

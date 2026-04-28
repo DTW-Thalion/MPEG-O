@@ -501,15 +501,112 @@ public final class Hdf5Provider implements StorageProvider {
             return new ArrayList<>(all.subList(from, to));
         }
 
-        @Override public boolean hasAttribute(String n) { return false; }
-        @Override public Object getAttribute(String n) { return null; }
-        @Override public void setAttribute(String n, Object v) {
-            throw new UnsupportedOperationException(
-                    "compound-dataset attributes not yet routed");
+        // M90.15: route attribute API through a freshly-opened
+        // dataset handle so signGenomicRun() can write
+        // @ttio_signature on the chromosomes compound. We can't use
+        // the Hdf5Group#openDataset path because precisionFromType
+        // isn't defined on compounds; instead we call H5.H5Dopen
+        // directly, perform the attribute op, and close the handle.
+        @Override public boolean hasAttribute(String n) {
+            long did = -1;
+            try {
+                did = H5.H5Dopen(parent.getGroupId(), name,
+                        HDF5Constants.H5P_DEFAULT);
+                if (did < 0) return false;
+                return H5.H5Aexists(did, n);
+            } catch (HDF5LibraryException e) {
+                return false;
+            } finally {
+                if (did >= 0) try { H5.H5Dclose(did); } catch (Exception ignored) {}
+            }
         }
+
+        @Override public Object getAttribute(String n) {
+            long did = -1, aid = -1, htype = -1;
+            try {
+                did = H5.H5Dopen(parent.getGroupId(), name,
+                        HDF5Constants.H5P_DEFAULT);
+                if (did < 0) return null;
+                if (!H5.H5Aexists(did, n)) return null;
+                aid = H5.H5Aopen(did, n, HDF5Constants.H5P_DEFAULT);
+                htype = H5.H5Aget_type(aid);
+                int klass = H5.H5Tget_class(htype);
+                if (klass != HDF5Constants.H5T_STRING) return null;
+                if (H5.H5Tis_variable_str(htype)) {
+                    String[] buf = new String[1];
+                    H5.H5Aread_VLStrings(aid, htype, buf);
+                    return buf[0] == null ? "" : buf[0];
+                }
+                long size = H5.H5Tget_size(htype);
+                if (size <= 0) return "";
+                byte[] buf = new byte[(int) size];
+                H5.H5Aread(aid, htype, buf);
+                int realLen = buf.length;
+                while (realLen > 0 && buf[realLen - 1] == 0) realLen--;
+                return new String(buf, 0, realLen,
+                    java.nio.charset.StandardCharsets.UTF_8);
+            } catch (HDF5LibraryException e) {
+                return null;
+            } finally {
+                if (htype >= 0) try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+                if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+                if (did >= 0) try { H5.H5Dclose(did); } catch (Exception ignored) {}
+            }
+        }
+
+        @Override public void setAttribute(String n, Object v) {
+            if (!(v instanceof String s)) {
+                throw new UnsupportedOperationException(
+                    "compound-dataset attribute value must be String, got "
+                    + (v == null ? "null" : v.getClass()));
+            }
+            long did = -1, htype = -1, space = -1, aid = -1;
+            try {
+                did = H5.H5Dopen(parent.getGroupId(), name,
+                        HDF5Constants.H5P_DEFAULT);
+                if (did < 0) {
+                    throw new RuntimeException(
+                        "H5Dopen failed for compound dataset '" + name + "'");
+                }
+                htype = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+                H5.H5Tset_size(htype, HDF5Constants.H5T_VARIABLE);
+                H5.H5Tset_strpad(htype, HDF5Constants.H5T_STR_NULLTERM);
+                H5.H5Tset_cset(htype, HDF5Constants.H5T_CSET_UTF8);
+                space = H5.H5Screate(HDF5Constants.H5S_SCALAR);
+                if (H5.H5Aexists(did, n)) {
+                    H5.H5Adelete(did, n);
+                }
+                aid = H5.H5Acreate(did, n, htype, space,
+                        HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+                if (aid < 0) {
+                    throw new RuntimeException(
+                        "H5Acreate (string) failed on compound '"
+                        + name + "', attr '" + n + "'");
+                }
+                H5.H5Awrite_VLStrings(aid, htype, new String[]{s});
+            } catch (HDF5LibraryException e) {
+                throw new RuntimeException(
+                    "compound setAttribute failed for '" + name + "/" + n
+                    + "': " + e.getMessage(), e);
+            } finally {
+                if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+                if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ignored) {}
+                if (htype >= 0) try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+                if (did >= 0) try { H5.H5Dclose(did); } catch (Exception ignored) {}
+            }
+        }
+
         @Override public void deleteAttribute(String n) {
-            throw new UnsupportedOperationException(
-                    "compound-dataset attributes not yet routed");
+            long did = -1;
+            try {
+                did = H5.H5Dopen(parent.getGroupId(), name,
+                        HDF5Constants.H5P_DEFAULT);
+                if (did < 0) return;
+                if (H5.H5Aexists(did, n)) H5.H5Adelete(did, n);
+            } catch (HDF5LibraryException ignored) {
+            } finally {
+                if (did >= 0) try { H5.H5Dclose(did); } catch (Exception ignored) {}
+            }
         }
         @Override public List<String> attributeNames() { return List.of(); }
 

@@ -1,9 +1,11 @@
 /* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
 package global.thalion.ttio.protection;
 
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.FeatureFlags;
 import global.thalion.ttio.protection.PerAUEncryption.AUHeaderPlaintext;
 import global.thalion.ttio.protection.PerAUEncryption.ChannelSegment;
+import global.thalion.ttio.protection.PerAUEncryption.GcmResult;
 import global.thalion.ttio.protection.PerAUEncryption.HeaderSegment;
 import global.thalion.ttio.providers.CompoundField;
 import global.thalion.ttio.providers.ProviderRegistry;
@@ -13,6 +15,7 @@ import global.thalion.ttio.providers.StorageProvider;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -51,10 +54,39 @@ public final class PerAUFile {
     private PerAUFile() {}
 
     /** Result of {@link #decryptFile}: per-run, per-channel plaintext
-     *  float64 LE bytes; optional {@code auHeaders} list when
-     *  {@code opt_encrypted_au_headers} is set. */
+     *  bytes; optional {@code auHeaders} list when
+     *  {@code opt_encrypted_au_headers} is set. M90.11: optional
+     *  {@code indexPlain} carries the four genomic_index columns
+     *  recovered when the file was encrypted with the reserved
+     *  {@code "_headers"} key. M90.12: {@code isGenomic} tags the
+     *  run as genomic-uint8 (vs MS-float64) so the CLI can emit the
+     *  right MPAD v1 dtype code without having to re-open the file. */
     public record DecryptedRun(Map<String, byte[]> channels,
-                                 List<AUHeaderPlaintext> auHeaders) {}
+                                 List<AUHeaderPlaintext> auHeaders,
+                                 GenomicIndexPlain indexPlain,
+                                 boolean isGenomic) {
+        public DecryptedRun(Map<String, byte[]> channels,
+                              List<AUHeaderPlaintext> auHeaders) {
+            this(channels, auHeaders, null, false);
+        }
+
+        public DecryptedRun(Map<String, byte[]> channels,
+                              List<AUHeaderPlaintext> auHeaders,
+                              GenomicIndexPlain indexPlain) {
+            this(channels, auHeaders, indexPlain, false);
+        }
+    }
+
+    /** M90.11: plaintext genomic_index columns recovered from a file
+     *  encrypted with the reserved {@code "_headers"} key. */
+    public record GenomicIndexPlain(List<String> chromosomes,
+                                      long[] positions,
+                                      byte[] mappingQualities,
+                                      int[] flags) {}
+
+    /** M90.11: reserved key name in the {@code keyMap} that signals
+     *  the caller wants the genomic_index columns encrypted. */
+    public static final String HEADERS_KEY_NAME = "_headers";
 
     /** Encrypt {@code path} in place. */
     public static void encryptFile(String path, byte[] key,
@@ -180,6 +212,17 @@ public final class PerAUFile {
                     + "' must be 32 bytes, got " + e.getValue().length);
             }
         }
+        // M90.11: split off the reserved "_headers" entry. The
+        // remaining map drives per-AU signal-channel dispatch.
+        Map<String, byte[]> chromosomeKeys = new LinkedHashMap<>();
+        byte[] headersKey = null;
+        for (Map.Entry<String, byte[]> e : keyMap.entrySet()) {
+            if (HEADERS_KEY_NAME.equals(e.getKey())) {
+                headersKey = e.getValue();
+            } else {
+                chromosomeKeys.put(e.getKey(), e.getValue());
+            }
+        }
         StorageProvider sp = ProviderRegistry.open(path,
             StorageProvider.Mode.READ_WRITE, providerName);
         try {
@@ -201,21 +244,51 @@ public final class PerAUFile {
                     }
                 }
                 int datasetId = nMs + 1;
+                // Signal-channel encryption runs in two cases (M90.11
+                // semantics, mirroring Python's run_signal_encrypt):
+                //   (a) caller supplied chromosome keys (M90.4 path)
+                //   (b) caller supplied an empty key_map (M90.4 no-op)
+                // The only path that SKIPS signal-channel encryption
+                // is the headers-only case (key_map == {"_headers": K}).
+                boolean runSignalEncrypt =
+                    !chromosomeKeys.isEmpty() || headersKey == null;
                 try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
                     for (String runName : runNames(gRuns)) {
                         encryptOneGenomicRunByRegion(gRuns, runName,
-                                                       datasetId, keyMap);
+                                                       datasetId,
+                                                       chromosomeKeys,
+                                                       headersKey,
+                                                       runSignalEncrypt);
                         datasetId++;
                     }
                 }
             }
 
             List<String> updatedFeatures = new ArrayList<>(flags.features());
+            // Feature-flag set rules (mirror Python):
+            //  * OPT_PER_AU_ENCRYPTION — set whenever signal-channel
+            //    encryption ran (chromosome keys present OR empty
+            //    key_map no-op path) OR when headers_key is provided.
+            //  * OPT_REGION_KEYED_ENCRYPTION — only when at least one
+            //    chromosome key was provided.
+            //  * OPT_ENCRYPTED_AU_HEADERS — set when "_headers" key
+            //    was used (M90.11).
+            // The two Python predicates collapse: "chromosomeKeys
+            // present OR headersKey is null" covers the M90.4 path
+            // (incl. empty key_map no-op) and "headersKey != null"
+            // covers the M90.11 headers-only path. Their union is
+            // always true once we reach this point, so we
+            // unconditionally add the flag.
             if (!updatedFeatures.contains(FeatureFlags.OPT_PER_AU_ENCRYPTION)) {
                 updatedFeatures.add(FeatureFlags.OPT_PER_AU_ENCRYPTION);
             }
-            if (!updatedFeatures.contains(FeatureFlags.OPT_REGION_KEYED_ENCRYPTION)) {
+            if (!chromosomeKeys.isEmpty()
+                    && !updatedFeatures.contains(FeatureFlags.OPT_REGION_KEYED_ENCRYPTION)) {
                 updatedFeatures.add(FeatureFlags.OPT_REGION_KEYED_ENCRYPTION);
+            }
+            if (headersKey != null
+                    && !updatedFeatures.contains(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS)) {
+                updatedFeatures.add(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
             }
             java.util.Collections.sort(updatedFeatures);
             new FeatureFlags(flags.formatVersion(), updatedFeatures).writeTo(root);
@@ -248,6 +321,25 @@ public final class PerAUFile {
                 throw new IllegalStateException(
                     "file at " + path + " does not carry opt_per_au_encryption");
             }
+            // M90.11: when the file carries opt_encrypted_au_headers,
+            // decrypt requires the reserved "_headers" key. Without
+            // it we can't even reconstruct the chromosomes column
+            // needed for per-AU dispatch on signal channels.
+            boolean headersEncrypted =
+                flags.has(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
+            byte[] headersKey = keyMap.get(HEADERS_KEY_NAME);
+            if (headersEncrypted && headersKey == null) {
+                throw new IllegalStateException(
+                    "file at " + path + " carries opt_encrypted_au_headers; "
+                    + "caller must provide a '_headers' entry in keyMap "
+                    + "to decrypt the genomic_index columns");
+            }
+            Map<String, byte[]> chromosomeKeys = new LinkedHashMap<>();
+            for (Map.Entry<String, byte[]> e : keyMap.entrySet()) {
+                if (!HEADERS_KEY_NAME.equals(e.getKey())) {
+                    chromosomeKeys.put(e.getKey(), e.getValue());
+                }
+            }
 
             try (StorageGroup study = root.openGroup("study")) {
                 int nMs = 0;
@@ -263,7 +355,8 @@ public final class PerAUFile {
                 try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
                     for (String runName : runNames(gRuns)) {
                         out.put(runName, decryptOneGenomicRunByRegion(
-                            gRuns, runName, datasetId, keyMap));
+                            gRuns, runName, datasetId, chromosomeKeys,
+                            headersEncrypted, headersKey));
                         datasetId++;
                     }
                 }
@@ -411,13 +504,23 @@ public final class PerAUFile {
                     PerAUEncryption.decryptChannelFromSegments(
                         segs, datasetId, cname, key, 1));
             }
-            return new DecryptedRun(channels, null);
+            return new DecryptedRun(channels, null, null, /* isGenomic */ true);
         }
     }
 
-    /** M90.4: encrypt one genomic run with per-chromosome dispatch. */
+    /** M90.4 + M90.11: encrypt one genomic run with per-chromosome
+     *  dispatch on signal channels and optional reserved-{@code "_headers"}
+     *  encryption of the genomic_index columns.
+     *
+     *  <p>{@code runSignalEncrypt} is {@code false} only in the
+     *  M90.11 headers-only case (key_map == {"_headers": K}) where
+     *  the caller wants the index columns encrypted but the signal
+     *  channels left untouched. */
     private static void encryptOneGenomicRunByRegion(StorageGroup gRuns,
-            String runName, int datasetId, Map<String, byte[]> keyMap) {
+            String runName, int datasetId,
+            Map<String, byte[]> chromosomeKeys,
+            byte[] headersKey,
+            boolean runSignalEncrypt) {
         try (StorageGroup run = gRuns.openGroup(runName);
              StorageGroup sig = run.openGroup("signal_channels");
              StorageGroup idx = run.openGroup("genomic_index")) {
@@ -426,32 +529,51 @@ public final class PerAUFile {
             int[] lengths = readInts(idx, "lengths");
             List<String> chromosomes = readChromosomes(idx);
 
-            for (String cname : new String[]{"sequences", "qualities"}) {
-                if (!sig.hasChild(cname)) continue;
-                byte[] plaintext;
-                try (StorageDataset ds = sig.openDataset(cname)) {
-                    plaintext = (byte[]) ds.readAll();
+            if (runSignalEncrypt) {
+                for (String cname : new String[]{"sequences", "qualities"}) {
+                    if (!sig.hasChild(cname)) continue;
+                    byte[] plaintext;
+                    try (StorageDataset ds = sig.openDataset(cname)) {
+                        plaintext = (byte[]) ds.readAll();
+                    }
+                    List<ChannelSegment> segs =
+                        PerAUEncryption.encryptChannelByRegion(
+                            plaintext, offsets, lengths, chromosomes,
+                            datasetId, cname, chromosomeKeys);
+                    writeChannelSegments(sig, cname + "_segments", segs);
+                    sig.deleteChild(cname);
+                    sig.setAttribute(cname + "_algorithm",
+                                      "aes-256-gcm-by-region");
                 }
-                List<ChannelSegment> segs =
-                    PerAUEncryption.encryptChannelByRegion(
-                        plaintext, offsets, lengths, chromosomes,
-                        datasetId, cname, keyMap);
-                writeChannelSegments(sig, cname + "_segments", segs);
-                sig.deleteChild(cname);
-                sig.setAttribute(cname + "_algorithm",
-                                  "aes-256-gcm-by-region");
+            }
+
+            // M90.11: encrypt genomic_index columns under the
+            // reserved _headers key.
+            if (headersKey != null) {
+                encryptGenomicIndex(idx, datasetId, headersKey, chromosomes);
             }
         }
     }
 
-    /** M90.4: decrypt one region-encrypted genomic run. */
+    /** M90.4 + M90.11: decrypt one region-encrypted genomic run. */
     private static DecryptedRun decryptOneGenomicRunByRegion(
             StorageGroup gRuns, String runName, int datasetId,
-            Map<String, byte[]> keyMap) {
+            Map<String, byte[]> chromosomeKeys,
+            boolean headersEncrypted, byte[] headersKey) {
         try (StorageGroup run = gRuns.openGroup(runName);
              StorageGroup sig = run.openGroup("signal_channels");
              StorageGroup idx = run.openGroup("genomic_index")) {
-            List<String> chromosomes = readChromosomes(idx);
+            // M90.11: decrypt the genomic_index columns first so the
+            // per-AU signal-channel dispatch (which needs chromosomes)
+            // can proceed even when the source columns were encrypted.
+            List<String> chromosomes;
+            GenomicIndexPlain indexPlain = null;
+            if (headersEncrypted) {
+                indexPlain = decryptGenomicIndex(idx, datasetId, headersKey);
+                chromosomes = indexPlain.chromosomes();
+            } else {
+                chromosomes = readChromosomes(idx);
+            }
             Map<String, byte[]> channels = new LinkedHashMap<>();
             for (String cname : new String[]{"sequences", "qualities"}) {
                 String segName = cname + "_segments";
@@ -459,10 +581,185 @@ public final class PerAUFile {
                 List<ChannelSegment> segs = readChannelSegments(sig, segName);
                 channels.put(cname,
                     PerAUEncryption.decryptChannelByRegion(
-                        segs, chromosomes, datasetId, cname, keyMap));
+                        segs, chromosomes, datasetId, cname, chromosomeKeys));
             }
-            return new DecryptedRun(channels, null);
+            return new DecryptedRun(channels, null, indexPlain,
+                                      /* isGenomic */ true);
         }
+    }
+
+    /** M90.11: encrypt the four genomic_index columns
+     *  (chromosomes, positions, mapping_qualities, flags) and replace
+     *  the plaintext datasets with {@code <column>_encrypted} blobs
+     *  containing {@code iv || tag || ciphertext}. {@code offsets} /
+     *  {@code lengths} stay plaintext (structural framing).
+     *
+     *  <p>Per-column AES-GCM with AAD =
+     *  {@code "genomic_headers:" + datasetId + ":" + column_name}.
+     *  Chromosomes (a VL compound) is JSON-serialised before
+     *  encryption to match Python's
+     *  {@code json.dumps(chromosomes).encode("utf-8")} byte form. */
+    private static void encryptGenomicIndex(StorageGroup idx, int datasetId,
+                                              byte[] key,
+                                              List<String> chromosomes) {
+        long[] positions = readLongs(idx, "positions");
+        byte[] mapqs;
+        try (StorageDataset ds = idx.openDataset("mapping_qualities")) {
+            mapqs = (byte[]) ds.readAll();
+        }
+        int[] flags = readInts(idx, "flags");
+
+        Map<String, byte[]> columns = new LinkedHashMap<>();
+        columns.put("chromosomes",
+            chromosomesJson(chromosomes).getBytes(StandardCharsets.UTF_8));
+        columns.put("positions", longsToLeBytes(positions));
+        columns.put("mapping_qualities", mapqs.clone());
+        columns.put("flags", intsToLeBytes(flags));
+
+        for (Map.Entry<String, byte[]> e : columns.entrySet()) {
+            String colName = e.getKey();
+            byte[] plaintext = e.getValue();
+            byte[] aad = ("genomic_headers:" + datasetId + ":" + colName)
+                .getBytes(StandardCharsets.US_ASCII);
+            GcmResult r = PerAUEncryption.encryptWithAad(plaintext, key, aad, null);
+            byte[] blob = new byte[r.iv().length + r.tag().length
+                                     + r.ciphertext().length];
+            System.arraycopy(r.iv(), 0, blob, 0, r.iv().length);
+            System.arraycopy(r.tag(), 0, blob, r.iv().length, r.tag().length);
+            System.arraycopy(r.ciphertext(), 0, blob,
+                              r.iv().length + r.tag().length,
+                              r.ciphertext().length);
+            if (idx.hasChild(colName)) {
+                idx.deleteChild(colName);
+            }
+            String encName = colName + "_encrypted";
+            if (idx.hasChild(encName)) {
+                idx.deleteChild(encName);
+            }
+            try (StorageDataset out = idx.createDataset(encName,
+                    Enums.Precision.UINT8, blob.length, 0,
+                    Enums.Compression.NONE, 0)) {
+                out.writeAll(blob);
+            }
+        }
+    }
+
+    /** M90.11: inverse of {@link #encryptGenomicIndex}. Returns the
+     *  four plaintext columns. */
+    private static GenomicIndexPlain decryptGenomicIndex(
+            StorageGroup idx, int datasetId, byte[] key) {
+        List<String> chromosomes = null;
+        long[] positions = null;
+        byte[] mapqs = null;
+        int[] flags = null;
+        for (String colName : new String[]{
+                "chromosomes", "positions", "mapping_qualities", "flags"}) {
+            String encName = colName + "_encrypted";
+            if (!idx.hasChild(encName)) {
+                throw new IllegalStateException(
+                    "genomic_index/" + encName + " missing — file does not "
+                    + "appear to carry M90.11 encrypted headers");
+            }
+            byte[] blob;
+            try (StorageDataset ds = idx.openDataset(encName)) {
+                blob = (byte[]) ds.readAll();
+            }
+            if (blob.length < 12 + 16) {
+                throw new IllegalStateException(
+                    "genomic_index/" + encName + " too short for IV+TAG");
+            }
+            byte[] iv = Arrays.copyOfRange(blob, 0, 12);
+            byte[] tag = Arrays.copyOfRange(blob, 12, 28);
+            byte[] ciphertext = Arrays.copyOfRange(blob, 28, blob.length);
+            byte[] aad = ("genomic_headers:" + datasetId + ":" + colName)
+                .getBytes(StandardCharsets.US_ASCII);
+            byte[] plain = PerAUEncryption.decryptWithAad(iv, tag, ciphertext,
+                                                            key, aad);
+            switch (colName) {
+                case "chromosomes":
+                    chromosomes = chromosomesFromJson(
+                        new String(plain, StandardCharsets.UTF_8));
+                    break;
+                case "positions":
+                    positions = leBytesToLongs(plain);
+                    break;
+                case "mapping_qualities":
+                    mapqs = plain;
+                    break;
+                case "flags":
+                    flags = leBytesToInts(plain);
+                    break;
+            }
+        }
+        return new GenomicIndexPlain(chromosomes, positions, mapqs, flags);
+    }
+
+    /** Match Python {@code json.dumps(list_of_str)} with default
+     *  separators ({@code ", "} between items). */
+    static String chromosomesJson(List<String> chromosomes) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        for (int i = 0; i < chromosomes.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append('"');
+            // Chromosome names are simple ASCII identifiers (chr1,
+            // chr6, chrX, ...) — no escaping needed in practice. We
+            // still escape backslash + double-quote for safety.
+            String s = chromosomes.get(i);
+            for (int j = 0; j < s.length(); j++) {
+                char c = s.charAt(j);
+                if (c == '"' || c == '\\') sb.append('\\');
+                sb.append(c);
+            }
+            sb.append('"');
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    /** Tiny JSON parser for the chromosomes column — accepts the
+     *  flat string-array shape produced by {@link #chromosomesJson}
+     *  or by Python's {@code json.dumps}. */
+    static List<String> chromosomesFromJson(String json) {
+        List<String> out = new ArrayList<>();
+        int n = json.length();
+        int i = 0;
+        // Skip leading whitespace and the opening '['.
+        while (i < n && Character.isWhitespace(json.charAt(i))) i++;
+        if (i >= n || json.charAt(i) != '[') {
+            throw new IllegalStateException(
+                "chromosomes JSON must start with '[': " + json);
+        }
+        i++;
+        while (i < n) {
+            while (i < n && (Character.isWhitespace(json.charAt(i))
+                              || json.charAt(i) == ',')) i++;
+            if (i >= n) break;
+            char c = json.charAt(i);
+            if (c == ']') break;
+            if (c != '"') {
+                throw new IllegalStateException(
+                    "chromosomes JSON expected '\"' at " + i + ": " + json);
+            }
+            i++;  // past opening quote
+            StringBuilder sb = new StringBuilder();
+            while (i < n) {
+                char ch = json.charAt(i);
+                if (ch == '\\' && i + 1 < n) {
+                    sb.append(json.charAt(i + 1));
+                    i += 2;
+                    continue;
+                }
+                if (ch == '"') {
+                    i++;
+                    break;
+                }
+                sb.append(ch);
+                i++;
+            }
+            out.add(sb.toString());
+        }
+        return out;
     }
 
     /** Read the genomic_index/chromosomes compound dataset into a
@@ -608,5 +905,39 @@ public final class PerAUFile {
         ByteBuffer bb = ByteBuffer.allocate(v.length * 8).order(ByteOrder.LITTLE_ENDIAN);
         for (double d : v) bb.putDouble(d);
         return bb.array();
+    }
+
+    private static byte[] longsToLeBytes(long[] v) {
+        ByteBuffer bb = ByteBuffer.allocate(v.length * 8).order(ByteOrder.LITTLE_ENDIAN);
+        for (long l : v) bb.putLong(l);
+        return bb.array();
+    }
+
+    private static byte[] intsToLeBytes(int[] v) {
+        ByteBuffer bb = ByteBuffer.allocate(v.length * 4).order(ByteOrder.LITTLE_ENDIAN);
+        for (int i : v) bb.putInt(i);
+        return bb.array();
+    }
+
+    private static long[] leBytesToLongs(byte[] b) {
+        if ((b.length & 7) != 0) {
+            throw new IllegalStateException(
+                "leBytesToLongs: length " + b.length + " not multiple of 8");
+        }
+        ByteBuffer bb = ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN);
+        long[] out = new long[b.length / 8];
+        for (int i = 0; i < out.length; i++) out[i] = bb.getLong();
+        return out;
+    }
+
+    private static int[] leBytesToInts(byte[] b) {
+        if ((b.length & 3) != 0) {
+            throw new IllegalStateException(
+                "leBytesToInts: length " + b.length + " not multiple of 4");
+        }
+        ByteBuffer bb = ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN);
+        int[] out = new int[b.length / 4];
+        for (int i = 0; i < out.length; i++) out[i] = bb.getInt();
+        return out;
     }
 }
