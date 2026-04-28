@@ -381,8 +381,9 @@ def test_per_au_cli_encrypt_decrypt_round_trip(tmp_path):
     rc_dec = per_au_cli.main(["decrypt", str(enc), str(dec), str(key)])
     assert rc_dec == 0, f"decrypt rc {rc_dec}"
     assert dec.exists()
-    # mpad magic header at the start of the decoded output.
-    assert dec.read_bytes()[:4] == b"MPAD"
+    # mpad magic header at the start of the decoded output. M90.12
+    # bumped the magic from "MPAD" to "MPA1" (uint8-aware format).
+    assert dec.read_bytes()[:4] == b"MPA1"
 
 
 def test_per_au_cli_encrypt_with_headers_round_trip(tmp_path):
