@@ -36,7 +36,45 @@ from ttio.transport.encrypted import (
     write_encrypted_dataset,
 )
 
-_MPAD_MAGIC = b"MPAD"
+_MPAD_MAGIC = b"MPA1"  # M90.12: bumped from MPAD to MPA1 (uint8-aware)
+
+
+# M90.12: per-entry dtype codes mirror the existing Precision enum.
+# Reader infers element-byte width from the dtype code instead of
+# the pre-M90.12 behaviour of casting everything to float64.
+_MPAD_DTYPE_FLOAT32 = 0
+_MPAD_DTYPE_FLOAT64 = 1
+_MPAD_DTYPE_INT32 = 2
+_MPAD_DTYPE_INT64 = 3
+_MPAD_DTYPE_UINT32 = 4
+_MPAD_DTYPE_UINT8 = 6
+_MPAD_DTYPE_UINT64 = 9
+_MPAD_DTYPE_BYTES = 0xFF  # opaque (e.g. JSON-encoded au_headers)
+
+
+def _ndarray_to_mpad_entry(arr) -> tuple[int, bytes]:
+    """Map a numpy array dtype to (mpad_dtype_code, raw_bytes).
+    Falls back to float64 for unrecognised dtypes (preserves the
+    pre-M90.12 behaviour for any unanticipated array shape)."""
+    np_arr = np.asarray(arr)
+    dtype_str = np_arr.dtype.str
+    if dtype_str in ("<f8", ">f8", "=f8", "float64"):
+        return _MPAD_DTYPE_FLOAT64, np_arr.astype("<f8", copy=False).tobytes()
+    if dtype_str in ("|u1", "<u1", "uint8"):
+        return _MPAD_DTYPE_UINT8, np_arr.astype("<u1", copy=False).tobytes()
+    if dtype_str in ("<i8", ">i8", "=i8", "int64"):
+        return _MPAD_DTYPE_INT64, np_arr.astype("<i8", copy=False).tobytes()
+    if dtype_str in ("<u4", ">u4", "=u4", "uint32"):
+        return _MPAD_DTYPE_UINT32, np_arr.astype("<u4", copy=False).tobytes()
+    if dtype_str in ("<i4", ">i4", "=i4", "int32"):
+        return _MPAD_DTYPE_INT32, np_arr.astype("<i4", copy=False).tobytes()
+    if dtype_str in ("<f4", ">f4", "=f4", "float32"):
+        return _MPAD_DTYPE_FLOAT32, np_arr.astype("<f4", copy=False).tobytes()
+    if dtype_str in ("<u8", ">u8", "=u8", "uint64"):
+        return _MPAD_DTYPE_UINT64, np_arr.astype("<u8", copy=False).tobytes()
+    # Fallback: float64 (backward-compat with pre-M90.12 behaviour
+    # on unanticipated dtypes).
+    return _MPAD_DTYPE_FLOAT64, np_arr.astype("<f8", copy=False).tobytes()
 
 
 def _read_key(path: str) -> bytes:
@@ -85,15 +123,20 @@ def _headers_json(rows) -> str:
 
 def _do_decrypt(args: argparse.Namespace) -> int:
     plain = decrypt_per_au(args.input, _read_key(args.key))
-    entries: dict[str, bytes] = {}
+    # M90.12: each entry now carries its own dtype code so genomic
+    # uint8 channels stay 1 byte/element (pre-M90.12 cast everything
+    # to float64, mangling sequences/qualities).
+    entries: dict[str, tuple[int, bytes]] = {}
     for run_name, run in plain.items():
         for ch, arr in run.items():
             if ch == "__au_headers__":
-                entries[f"{run_name}__au_headers_json"] = \
-                    _headers_json(arr).encode("utf-8")
+                entries[f"{run_name}__au_headers_json"] = (
+                    _MPAD_DTYPE_BYTES,
+                    _headers_json(arr).encode("utf-8"),
+                )
             else:
-                entries[f"{run_name}__{ch}"] = \
-                    np.asarray(arr, dtype="<f8").tobytes()
+                dtype_code, raw_bytes = _ndarray_to_mpad_entry(arr)
+                entries[f"{run_name}__{ch}"] = (dtype_code, raw_bytes)
 
     with open(args.output, "wb") as fp:
         fp.write(_MPAD_MAGIC)
@@ -102,7 +145,8 @@ def _do_decrypt(args: argparse.Namespace) -> int:
             key_bytes = key.encode("utf-8")
             fp.write(struct.pack("<H", len(key_bytes)))
             fp.write(key_bytes)
-            value = entries[key]
+            dtype_code, value = entries[key]
+            fp.write(struct.pack("<B", dtype_code))
             fp.write(struct.pack("<I", len(value)))
             fp.write(value)
     return 0
