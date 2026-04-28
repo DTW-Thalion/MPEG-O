@@ -6,17 +6,17 @@ as a record of what was built; current milestones use TTI-O names.
 
 ---
 
-> **⏸ M-series paused (2026-04-27).** Phase 6 (M89 transport extension,
-> M90 encryption/anonymisation, M91 multi-omics integration) and
-> Phase 7 (M92 benchmarking + v0.11.0 tag) are paused while we repay
-> verification + coverage debt accumulated through M88.1. Active
-> workplans:
+> **Status (2026-04-28).** Phase 6 (M89 transport extension, M90
+> encryption/anonymisation, M91 multi-omics integration) **shipped**
+> alongside V- and C-series debt repayment. Phase 8 (post-M91
+> abstraction polish — `Run` protocol, modality-agnostic
+> `runs` / `runsForSample` / `runsOfModality`, mixed-dict write API,
+> per-run provenance compound dual-write/dual-read) **shipped**.
+> **Phase 7 — M92 release prep is the next milestone.** Active
+> sibling workplans (separate CHANGELOG sections under
+> `[Unreleased]`, do not interleave with M-series):
 > * [`docs/verification-workplan.md`](docs/verification-workplan.md) — **V-series** (V1-V9 + P1-P4 perf follow-ups; mostly complete as of 2026-04-27).
 > * [`docs/coverage-workplan.md`](docs/coverage-workplan.md) — **C-series** (C1-C8, coverage debt repayment; targets Python ≥92%, Java ≥88%, ObjC ≥85% line coverage).
->
-> M-series resumes at M89 once V-series + C-series land (estimated
-> 4-8 more weeks). V-, C-, and M-series have separate CHANGELOG
-> sections under `[Unreleased]` and do not interleave.
 
 ---
 
@@ -561,36 +561,93 @@ Test deltas: Python 898 → 915 (+17 incl. JSON shape check), ObjC
 
 ## Phase 6 — Framework Integration
 
-### M89 — Transport Layer Extension
+### M89 — Transport Layer Extension ✓ (shipped 2026-04-27)
 
 - `.tis` GenomicRead AU payload: chromosome + position + mapq + flags
-  prefix (replaces zeroed spectral fields from M79).
+  prefix (replaces zeroed spectral fields from M79). `spectrum_class
+  == 5` discriminator.
 - `TransportWriter.write_genomic_run()` / `TransportReader`
-  materialisation.
+  materialisation in all three languages.
 - `AUFilter` extended with chromosome + position_range predicates.
 - Multiplexed streams: MS + genomic runs interleaved in one `.tis`.
 - Per-AU encryption on genomic AUs verified end-to-end.
-- All three languages + 3×3 cross-language transport matrix.
+- 3×3 cross-language transport matrix green.
 
-### M90 — Encryption, Signatures, and Anonymisation for Genomic Data
+### M90 — Encryption, Signatures, and Anonymisation for Genomic Data ✓ (shipped 2026-04-28)
 
-- Per-AU encrypt/decrypt verified on genomic signal channels.
-- PQC signatures (ML-DSA-87) on genomic datasets.
-- Genomic anonymisation: strip read names, randomise quality scores,
-  optionally mask specific regions (e.g., HLA loci).
-- Region-based encryption: encrypt chr6 (HLA), leave chr1 in clear.
-- Cross-language encrypt/verify matrix.
+Shipped as 15 sub-mileposts (M90.1–M90.15):
 
-### M91 — Multi-Omics Integration Test
+- M90.1–M90.6 — Per-AU AES-256-GCM on genomic signal channels with
+  AAD = `dataset_id || au_sequence || channel_name`. ML-DSA-87
+  signatures on genomic datasets.
+- M90.7 — Java VL_STRING attribute writer/reader (
+  `H5Awrite_VLStrings` / `H5Aread_VLStrings`). ObjC attribute reader
+  follow-up landed in `a3495d4`.
+- M90.8/9/10 — AU compound-field round-trip; UINT8 wire compression
+  via M86 codecs; M90.10 cross-language parity in Java + ObjC.
+- M90.11 — Encrypted genomic AU headers with per-region key map
+  (reserved `_headers` key).
+- M90.12 — UINT8-aware MPAD format ("MPA1" magic + per-entry dtype
+  byte). Fixes the float64 cast bug.
+- M90.13 — Region masking by SAM overlap.
+- M90.14 — Seeded-RNG random quality scores (anonymiser).
+- M90.15 — Sign chromosomes VL compound (Python +
+  cross-language follow-up).
+- Genomic anonymiser strips read names, randomises quality, masks
+  HLA-style regions. Java + ObjC final parity in
+  `f1728dc` / `cb728f7`.
 
-- Single `.tio` containing: WGS genomic run (10K reads) + proteomics
-  MS run (1K spectra) + NMR metabolomics run (100 spectra).
-- Shared provenance linking all three to a common sample.
-- Unified encryption envelope.
-- Cross-modality query ("all data from sample NA12878").
-- `.tis` transport: stream the multi-omics file, all three runs
-  materialise correctly.
-- All three languages.
+### M91 — Multi-Omics Integration Test ✓ (shipped 2026-04-28)
+
+- Single `.tio` carrying WGS + proteomics MS + NMR metabolomics with
+  shared provenance and a unified encryption envelope.
+- Cross-modality query (`runs_for_sample("sample://NA12878")` returns
+  all three modalities).
+- `.tis` transport multiplexing verified end-to-end.
+- All three languages. Python ref impl in `9038f76`.
+
+---
+
+## Phase 8 — Post-M91 Abstraction Polish ✓ (shipped 2026-04-28)
+
+OO design pass on the modality abstraction surface, driven by the
+M91 cross-modality findings. Closes the gap where MS and genomic
+runs each had their own accessor surface despite both being
+indexable, streamable, and provenanceable.
+
+### Phase 1 — Run protocol + modality-agnostic helpers ✓
+
+- `Run` protocol (Python `runtime_checkable Protocol`, ObjC
+  `@protocol TTIORun`, Java `interface Run`) — unified surface for
+  `name`, `acquisition_mode`, `__len__` / `count` / `numberOfRuns`,
+  `__getitem__` / `get` / `objectAtIndex:`, `provenance_chain` /
+  `provenanceChain`. Both `AcquisitionRun` and `GenomicRun` conform.
+- `dataset.runs_for_sample(uri)` / `runsForSample:` and
+  `runs_of_modality(cls)` / `runsOfModality:` modality-agnostic
+  accessors in all three languages.
+- `GenomicRun.provenance_chain()` / `provenanceChain` exposed (closes
+  the M91 read-side gap where genomic runs had no provenance API).
+
+### Phase 2 — Mixed-dict write + per-run provenance dual-write ✓
+
+- `SpectralDataset.write_minimal(runs={...})` accepts a mixed dict of
+  MS + genomic runs and dispatches by isinstance / class. Same
+  surface in Java (mixed `Map<String, Object>` overload) and ObjC
+  (`mixedRuns:` parameter).
+- Per-run provenance now writes the canonical compound dataset
+  `<run>/provenance/steps` on the HDF5 fast path in all three
+  languages, plus the legacy `@provenance_json` mirror for non-HDF5
+  providers and pre-Phase-2 readers. Reader prefers compound, falls
+  back to JSON.
+- Anonymiser (ObjC) refactored onto the unified
+  `writeMinimalToPath:` path; −270 / +150 lines.
+- M51 cross-language byte-parity harness extended with an
+  `ms_per_run_provenance` section so the Python / Java / ObjC
+  dumpers' per-run output is byte-identical (`6200b4f`).
+
+Commits: `145485c`, `772eb00`, `6992ae9`, `7a2ffef`, `54ef6f1`,
+`6ceba4a`, `6200b4f`. All three test suites green
+(Python 1324 / Java 755 / ObjC 3070).
 
 ---
 

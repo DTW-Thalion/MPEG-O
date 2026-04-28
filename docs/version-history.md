@@ -135,9 +135,9 @@ Pure promote from v0.12.0. No new code; v1.0.0 signals that the public API is Se
 * **Not in this tag** — M40 PyPI + Maven Central publishing continues to wait on external account / API-token setup (planned for v1.0.1); mzML `<softwareList>` / `<dataProcessingList>` provenance-chain emission and hyperspectral-image analysis primitives are both scope-expansion, explicitly deferred past v1.0 in `docs/v1.0-gaps.md`.
 * **Format version** — container format remains at `1.3` (v0.12.0 M74 bump). No on-disk schema change in v1.0.0.
 
-## Unreleased — TTI-O rebrand + Genomic data model + Genomic codec stack (M79–M86, 2026-04-25/26)
+## Unreleased — TTI-O rebrand + genomic stack + transport extension + multi-omics integration (M79–M91 + Phase 1+2, 2026-04-25 → 2026-04-28)
 
-The unreleased line on `main` represents a substantial expansion of the project's scope: an end-to-end genomic data pathway alongside the spectroscopy/spectrometry stack that was the focus of v0.1–v1.0. The work spans a brand rename, a new run-and-element hierarchy modelled on SAM/BAM, and a complete five-codec genomic compression library wired into every M82 channel. None of this has been tagged into a numbered release yet — the work sits under the `[Unreleased]` header in `CHANGELOG.md` at present.
+The unreleased line on `main` represents a substantial expansion of the project's scope: an end-to-end genomic data pathway alongside the spectroscopy/spectrometry stack that was the focus of v0.1–v1.0. The work spans a brand rename (M80), a new run-and-element hierarchy modelled on SAM/BAM (M82), a complete five-codec genomic compression library wired into every M82 channel (M83–M86), SAM/BAM and CRAM importers/exporters (M87–M88), genomic transport extension (M89), genomic encryption + anonymisation (M90, 15 sub-mileposts), a multi-omics integration test (M91), and a post-M91 OO abstraction polish that unifies the MS and genomic surfaces under a single `Run` protocol with canonical `runs` / `runsForSample` / `runsOfModality` accessors and a per-run-provenance compound dataset dual-write across all three languages (Phase 1+2). None of this has been tagged into a numbered release yet — the work sits under the `[Unreleased]` header in `CHANGELOG.md` at present.
 
 ### M79 — Modality + genomic enumerations groundwork (2026-04-25)
 
@@ -193,6 +193,30 @@ Cross-language conformance fixtures for every phase under `python/tests/fixtures
 
 After M86 Phase F, every M82 channel under `signal_channels/` accepts at least one codec, and every M79 codec slot (4–8) is wired into its applicable channels with cross-language byte-exact conformance. The M82-era genomic codec story is functionally complete; remaining future scope is optional optimisation milestones (a custom CIGAR-specific RLE-then-rANS codec for higher peak compression than NAME_TOKENIZED, or a full Bonfield 2022 name tokeniser for the 20:1 target).
 
+### M87 — SAM/BAM importer (2026-04-26)
+
+`BamReader` / `SamReader` (Python), `TTIOBamReader` (ObjC), and `BamReader` (Java) wrap `samtools view -h` as a subprocess (no htslib link); convert SAM/BAM input to `WrittenGenomicRun` instances. The SAM header drives the reference dictionary (`@SQ`), sample + platform (`@RG`), and provenance chain (`@PG`); optional region filter passes through to samtools verbatim. Cross-language `bam_dump` CLI emits canonical JSON byte-identical across Python / ObjC / Java. Requires `samtools` on `PATH` at runtime; the reader class loads without it (the error fires only at first import call).
+
+### M88 + M88.1 — CRAM importer + `bam_dump --reference` flag (2026-04-26)
+
+`CramReader` / `TTIOCramReader` extends the M87 BAM reader with a mandatory reference FASTA argument injected as `samtools view --reference <fasta>`. Reuses the SAM-text parsing path; produces `WrittenGenomicRun` instances with the same shape as the BAM reader. The shared `bam_dump` CLI auto-dispatches to the CRAM reader on `.cram` paths via a new `--reference <fasta>` flag (M88.1), keeping a single CLI surface and a single parity harness file.
+
+### M89 — Transport layer extension for genomic (2026-04-27)
+
+`.tis` GenomicRead AU payload carries a `chromosome + position + mapq + flags` prefix when `spectrum_class == 5` (replaces the zeroed spectral fields M79 reserved). `TransportWriter.write_genomic_run()` / `TransportReader.materialise_genomic_run()` ship in all three languages; `AUFilter` extends with chromosome + position-range predicates so subscribers can scope a stream to a region without decrypting AUs they won't read; MS and genomic runs interleave in a single `.tis` and dispatch per-AU on the `spectrum_class` byte. 3×3 cross-language transport matrix green for both encode and decode directions.
+
+### M90 — Encryption, signatures, and anonymisation for genomic data (2026-04-27 / 2026-04-28, 15 sub-mileposts)
+
+Per-AU AES-256-GCM on genomic signal channels (AAD = `dataset_id || au_sequence || channel_name`); ML-DSA-87 signatures over the chromosomes VL compound dataset (M90.15); region-based encryption keyed on the reserved `_headers` key in the per-region key map (M90.11) — encrypt chr6 / HLA, leave chr1 in clear. Genomic anonymiser (strip read names, randomise quality on a seeded RNG, mask SAM-overlapping regions). MPAD transport debug magic bumped to `"MPA1"` with a per-entry dtype byte (M90.12) so genomic UINT8 channels survive transport without the previous unconditional float64 cast that silently mangled them. Java VL_STRING attribute reader/writer rewired through the canonical JHDF5 `H5Awrite_VLStrings` / `H5Aread_VLStrings` entry points (M90.7); ObjC reader follow-up handles the same wire shape via `H5Tis_variable_str` probe + `H5Dvlen_reclaim`.
+
+### M91 — Multi-omics integration test (2026-04-28)
+
+Single `.tio` carrying a 10K-read WGS genomic run + a 1K-spectrum proteomics MS run + a 100-spectrum NMR metabolomics run, with shared provenance keyed on a common sample URI and a unified encryption envelope. Verifies cross-modality query (`runs_for_sample("sample://NA12878")` returns all three modalities) and `.tis` transport multiplexing across all three languages.
+
+### Phase 1+2 abstraction polish — `Run` protocol + per-run compound provenance dual-write (2026-04-28)
+
+OO design pass on the modality surface driven by M91 findings. Both `AcquisitionRun` and `GenomicRun` now conform to a uniform `Run` protocol (Python `runtime_checkable Protocol`, ObjC `@protocol TTIORun`, Java `interface Run`) exposing `name`, `acquisition_mode`, `__len__` / `count` / `numberOfRuns`, `__getitem__` / `get` / `objectAtIndex:`, and `provenance_chain` / `provenanceChain`. New modality-agnostic accessors on `SpectralDataset`: `runs` (canonical unified mapping), `runs_for_sample(uri)`, `runs_of_modality(cls)`. `SpectralDataset.write_minimal(runs={...})` accepts a mixed mapping of MS + genomic runs and dispatches by class; Java + ObjC have equivalent mixed-dict overloads. Per-run provenance now writes the canonical `<run>/provenance/steps` compound dataset on the HDF5 fast path in all three languages while keeping the legacy `@provenance_json` mirror as a fallback for non-HDF5 providers and pre-Phase-2 readers; reader prefers compound. M51 cross-language byte-parity harness extended with an `ms_per_run_provenance` section so the Python / Java / ObjC dumpers' per-run output is byte-identical. Phase 1 introduced `all_runs_unified` / `allRunsUnified` as the unified accessor; Phase 2 promoted the canonical name to `runs` / `runs()` and retained `all_runs_unified` / `allRunsUnified` as deprecated aliases.
+
 ## Format compatibility
 
 Every version's files remain readable by later versions. v0.11 readers open
@@ -206,3 +230,17 @@ v0.10 transport and per-AU encryption behaviour is unchanged. v0.12 M74
 activation detail is additive — legacy files without M74 columns remain
 format `1.1`. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify
 indefinitely.
+
+The unreleased M79–M91 + Phase 1+2 line is a clean break from v1.x readers
+per Binding Decision §74 (M80 rebrand drops `mpgo`/`MPGO` for `ttio`/`TTIO`).
+Within that line, downstream additions remain backward-compatible with their
+upstream peers: M86 codec attributes are absent on M82-shape files (readers
+still see uncompressed natural-dtype channels); M89 genomic AUs (`spectrum_class
+== 5`) are tagged with the `opt_genomic` feature flag and pre-M89 transport
+readers reject the stream cleanly via the flag check; M90.12 MPAD output
+still parses on a v0.10 / pre-M90.12 reader as a length-mismatch error
+(magic check fails first), avoiding silent float-cast corruption; Phase 2
+per-run provenance writes BOTH the canonical `<run>/provenance/steps`
+compound dataset and the legacy `@provenance_json` attribute, so Phase 1
+readers (which only know the JSON attribute) round-trip Phase 2 files
+without loss.

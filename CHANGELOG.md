@@ -11,7 +11,159 @@ leading `0.` means the public API is still stabilising; see
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer + M88 CRAM importer + BAM/CRAM exporters + M88.1 bam_dump CRAM dispatch
+## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer + M88 CRAM importer + BAM/CRAM exporters + M88.1 bam_dump CRAM dispatch + M89 transport extension + M90 genomic encryption/anonymisation + M91 multi-omics integration + Phase 1+2 abstraction polish
+
+### Phase 1+2 abstraction polish — `Run` protocol + per-run compound provenance dual-write (2026-04-28)
+
+OO design pass on the modality surface driven by M91 findings.
+Both `AcquisitionRun` and `GenomicRun` now conform to a uniform
+`Run` interface; per-run provenance writes the canonical
+`<run>/provenance/steps` compound dataset on the HDF5 fast path in
+all three languages while keeping the `@provenance_json` mirror as
+a fallback. Cross-language byte-parity harness extended.
+
+#### Added
+
+- **`Run` protocol** — Python `runtime_checkable Protocol`
+  (`ttio.protocols.run.Run`), ObjC `@protocol TTIORun`, Java
+  `interface global.thalion.ttio.protocols.Run`. Members: `name`,
+  `acquisition_mode` / `acquisitionMode`, `__len__` / `count` /
+  `numberOfRuns`, `__getitem__` / `get` / `objectAtIndex:`,
+  `provenance_chain` / `provenanceChain`. Both `AcquisitionRun`
+  and `GenomicRun` conform.
+- **Modality-agnostic helpers on `SpectralDataset`** —
+  `runs` (canonical unified mapping; ObjC `runs`; Java
+  `runs()`), `runs_for_sample(uri)` / `runsForSample:` /
+  `runsForSample(uri)`, `runs_of_modality(cls)` /
+  `runsOfModality:` / `runsOfModality(class)`. Phase 1 alias
+  `all_runs_unified` / `allRunsUnified` retained as a deprecated
+  shim for Phase 1 callers.
+- **`GenomicRun.provenance_chain()` / `provenanceChain`** — closes
+  the M91 read-side gap; cross-modality callers no longer need to
+  fall back to `@sample_name`.
+- **Mixed-dict write API** — `SpectralDataset.write_minimal(runs={...})`
+  accepts a mixed mapping of MS + genomic runs and dispatches by
+  isinstance / class. Java mixed `Map<String, Object>` overload.
+  ObjC `mixedRuns:` parameter on `+writeMinimalToPath:`.
+- **`TTIOWrittenRun.provenanceRecords`** (ObjC) — previously
+  missing; MS runs written via `+writeMinimalToPath:` now carry
+  per-run provenance through to the compound + JSON mirror.
+- **Per-run compound provenance dual-write** — Java
+  (`AcquisitionRun.writeProvenance`,
+  `SpectralDataset.writeGenomicRunSubtree`) and ObjC
+  (`+writeMinimalToPath:` MS loop) now write
+  `<run>/provenance/steps` compound on HDF5 backends while still
+  emitting the `@provenance_json` mirror. Python had this already.
+- **Per-run compound provenance dual-read** — Java and ObjC
+  readers prefer the compound dataset and fall back to the JSON
+  attribute (Python already had this).
+- **`Hdf5Provider.tryUnwrapHdf5Group(StorageGroup)`** (Java) —
+  lets modality-agnostic write/read paths reach the native
+  compound API without leaking the provider type.
+- **In-process MPAD test for the M90.12 wire bump** (ObjC) —
+  spawns `TtioPerAU encrypt` / `decrypt` via NSTask and verifies
+  the `MPA1` magic, dtype byte, and per-record value width on
+  both MS (FLOAT64) and genomic (UINT8) fixtures.
+- **M51 cross-language byte-parity harness extended** —
+  `ms_per_run_provenance` section now part of the Python / Java /
+  ObjC dumper byte-equality check, exercising the new dual-write.
+
+#### Changed
+
+- **`TTIOAnonymizer` mixed-path refactor** (ObjC) — MS + genomic
+  collapsed onto the unified `+writeMinimalToPath:` call.
+  −270 / +150 lines. Removes `_appendGenomicTransformedToFile:`,
+  `_applyGenomicPolicies:`, and the unused `arrayFromDoubles`
+  helper.
+
+Commits: `145485c`, `772eb00`, `6992ae9`, `7a2ffef`, `54ef6f1`,
+`6ceba4a`, `6200b4f`. Test suites green: Python 1324 passed,
+Java 755/0/0/0, ObjC 3070/0.
+
+---
+
+### M91 — Multi-omics integration test (2026-04-28)
+
+Single `.tio` carrying a 10K-read WGS genomic run + a 1K-spectrum
+proteomics MS run + a 100-spectrum NMR metabolomics run, with
+shared provenance keyed on a common sample URI and a unified
+encryption envelope. Verifies cross-modality query
+(`runs_for_sample("sample://NA12878")` returns all three
+modalities) and `.tis` transport multiplexing across all three
+languages. Python ref impl shipped in `9038f76`; Java and ObjC
+parity follows from M82–M90 infrastructure already in place.
+
+---
+
+### M90 — Encryption, signatures, and anonymisation for genomic data (2026-04-27 / 2026-04-28)
+
+Shipped as 15 sub-mileposts (M90.1–M90.15) across all three
+languages. Per-AU AES-256-GCM on genomic signal channels with
+AAD = `dataset_id || au_sequence || channel_name`; ML-DSA-87
+signatures; region-based encryption (encrypt chr6 / HLA, leave
+chr1 in clear) with per-region key map keyed on the reserved
+`_headers` key; genomic anonymiser (strip read names, randomise
+quality, optionally mask regions).
+
+#### Added
+
+- **M90.7** — Java VL_STRING attribute reader/writer using the
+  canonical JHDF5 `H5Awrite_VLStrings` / `H5Aread_VLStrings`
+  entry points (replaces the JVM-crashing `H5AwriteVL` path).
+  ObjC reader follow-up for the same wire shape in `a3495d4`.
+- **M90.8 / M90.9 / M90.10** — AU compound-field round-trip on
+  the wire; UINT8 wire compression dispatched through the M86
+  codec stack. Java parity in `969875a`, ObjC in `bbb9de9`.
+- **M90.11** — Encrypted genomic AU headers with per-region key
+  map. The reserved key `_headers` in the `keyMap` carries the
+  header-encryption key; per-chromosome keys are separate.
+- **M90.12** — UINT8-aware MPAD format. Magic bumped from
+  `"MPAD"` → `"MPA1"`; new per-entry dtype byte (1 = FLOAT64,
+  6 = UINT8) lets the decoder keep genomic UINT8 channels
+  unmangled by the previous unconditional float64 cast.
+- **M90.13** — Region masking by SAM overlap (anonymiser).
+- **M90.14** — Seeded-RNG random quality scores (anonymiser).
+- **M90.15** — Sign chromosomes VL compound dataset (Python +
+  cross-language follow-up).
+
+#### Fixed
+
+- ObjC VL_STRING attribute reader regression discovered during
+  M91 (Java now writes VL_STRING per M90.7, but ObjC's reader
+  expected fixed-length, throwing "unable to convert between
+  src and dst datatypes"). Fix probes `H5Tis_variable_str` and
+  reclaims via `H5Dvlen_reclaim`. Commit `a3495d4`.
+- MPAD float64 cast bug (Python). Genomic UINT8 channels were
+  silently mangled by `_do_decrypt`'s unconditional float64
+  cast; M90.12 adds the per-entry dtype byte to fix. Commit
+  `20829e1`.
+
+Commits across both write and read sides + cross-language parity
+land between `020ec94` (M90.6) and `f1728dc` / `cb728f7` (final
+Java + ObjC parity, 2026-04-28).
+
+---
+
+### M89 — Transport layer extension for genomic (2026-04-27)
+
+`.tis` GenomicRead AU payload carries the chromosome + position +
+mapq + flags prefix that replaced the zeroed spectral fields from
+M79. `spectrum_class == 5` discriminates genomic AUs on the wire.
+
+#### Added
+
+- `TransportWriter.write_genomic_run()` /
+  `TransportReader.materialise_genomic_run()` in all three
+  languages.
+- `AUFilter` extended with chromosome + position-range
+  predicates so subscribers can filter at the broker.
+- Multiplexed streams: MS + genomic runs interleaved in a
+  single `.tis` (one stream, per-AU `spectrum_class` dispatch).
+- Per-AU encryption verified end-to-end on genomic AUs.
+- 3×3 cross-language transport matrix green (Python / Java /
+  ObjC, both encode and decode directions).
+
+---
 
 ### M88.1 — `bam_dump --reference` flag for CRAM cross-language conformance (2026-04-26)
 
