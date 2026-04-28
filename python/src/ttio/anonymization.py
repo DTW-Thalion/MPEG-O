@@ -347,15 +347,33 @@ def _apply_genomic_policies(
         if policy.mask_regions:
             chroms = list(gr.index.chromosomes)
             positions_arr = np.asarray(gr.index.positions)
+            # M90.13: walk the CIGAR to compute each read's reference
+            # end coordinate. SAM-overlap semantics: a read overlaps a
+            # region iff [read_start, read_end] intersects
+            # [region_start, region_end]. Falls back to position-only
+            # check when the CIGAR is missing/empty/non-parseable
+            # (preserves M90.3 behaviour for back-compat).
+            already_masked: set[int] = set()
             for chr_name, region_start, region_end in policy.mask_regions:
                 for i in range(n):
-                    if chroms[i] != chr_name:
+                    if i in already_masked or chroms[i] != chr_name:
                         continue
                     pos = int(positions_arr[i])
-                    if region_start <= pos <= region_end:
-                        sequences_list[i] = b"\x00" * len(sequences_list[i])
-                        qualities_list[i] = b"\x00" * len(qualities_list[i])
-                        result.reads_in_masked_region += 1
+                    span = _cigar_ref_span(cigars[i])
+                    if span > 0:
+                        read_end = pos + span - 1  # inclusive
+                        # Overlap test on inclusive intervals.
+                        if (read_end < region_start
+                                or pos > region_end):
+                            continue
+                    else:
+                        # No / unparseable CIGAR — M90.3 fallback.
+                        if not (region_start <= pos <= region_end):
+                            continue
+                    sequences_list[i] = b"\x00" * len(sequences_list[i])
+                    qualities_list[i] = b"\x00" * len(qualities_list[i])
+                    result.reads_in_masked_region += 1
+                    already_masked.add(i)
             if "mask_regions" not in result.policies_applied:
                 result.policies_applied.append("mask_regions")
 
@@ -447,3 +465,35 @@ def _filter_ids(
         if ident.spectrum_index < int(run.offsets.shape[0]):
             out.append(ident)
     return out
+
+
+# M90.13 — CIGAR reference span (number of bases consumed on the
+# reference). Ops that consume reference: M, D, N, =, X. Ops that
+# don't: I, S, H, P. Returns 0 for empty / non-parseable CIGAR (the
+# caller falls back to position-only masking — M90.3 behaviour).
+_CIGAR_REF_CONSUMERS = frozenset("MDN=X")
+
+
+def _cigar_ref_span(cigar: str) -> int:
+    if not cigar or cigar == "*":
+        return 0
+    total = 0
+    digits: list[str] = []
+    for ch in cigar:
+        if ch.isdigit():
+            digits.append(ch)
+        else:
+            if not digits:
+                return 0  # malformed
+            n = int("".join(digits))
+            digits = []
+            if ch in _CIGAR_REF_CONSUMERS:
+                total += n
+            elif ch in "ISHP":
+                pass
+            else:
+                # Unknown op — bail out and fall back to pos-only.
+                return 0
+    if digits:
+        return 0  # trailing digits with no op = malformed
+    return total
