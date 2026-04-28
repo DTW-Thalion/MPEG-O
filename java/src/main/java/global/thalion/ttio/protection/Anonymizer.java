@@ -51,7 +51,11 @@ public class Anonymizer {
         boolean stripReadNames,
         boolean randomiseQualities,
         int randomiseQualitiesConstant,    // default 30
-        java.util.List<MaskRegion> maskRegions  // null = no masking
+        java.util.List<MaskRegion> maskRegions,  // null = no masking
+        /** M90.14: when non-null, qualities are replaced with
+         *  deterministic random Phred bytes in [0, 93] from a seeded
+         *  RNG. When null, the M90.3 constant path is used. */
+        Long randomiseQualitiesSeed
     ) {
         /** Backward-compatible 7-arg constructor for the pre-M90.3
          *  surface. Defaults the four genomic fields to no-op
@@ -69,7 +73,30 @@ public class Anonymizer {
                  maskRareMetabolites, rareMetaboliteThreshold,
                  coarsenMzDecimals, coarsenChemicalShiftDecimals,
                  stripMetadata,
-                 false, false, 30, null);
+                 false, false, 30, null, null);
+        }
+
+        /** Backward-compatible 11-arg constructor for the M90.3
+         *  surface. Defaults {@code randomiseQualitiesSeed} to
+         *  {@code null} (constant-replacement path). M90.14 callers
+         *  use the canonical 12-arg constructor instead. */
+        public AnonymizationPolicy(boolean redactSaavSpectra,
+                                     double maskIntensityBelowQuantile,
+                                     boolean maskRareMetabolites,
+                                     double rareMetaboliteThreshold,
+                                     int coarsenMzDecimals,
+                                     int coarsenChemicalShiftDecimals,
+                                     boolean stripMetadata,
+                                     boolean stripReadNames,
+                                     boolean randomiseQualities,
+                                     int randomiseQualitiesConstant,
+                                     java.util.List<MaskRegion> maskRegions) {
+            this(redactSaavSpectra, maskIntensityBelowQuantile,
+                 maskRareMetabolites, rareMetaboliteThreshold,
+                 coarsenMzDecimals, coarsenChemicalShiftDecimals,
+                 stripMetadata,
+                 stripReadNames, randomiseQualities,
+                 randomiseQualitiesConstant, maskRegions, null);
         }
 
         public static AnonymizationPolicy defaults() {
@@ -347,11 +374,30 @@ public class Anonymizer {
 
             // ── randomise_qualities ─────────────────────────────────
             if (policy.randomiseQualities()) {
-                byte constByte = (byte) (policy.randomiseQualitiesConstant() & 0xFF);
-                for (int i = 0; i < n; i++) {
-                    byte[] q = new byte[qualities[i].length];
-                    Arrays.fill(q, constByte);
-                    qualities[i] = q;
+                if (policy.randomiseQualitiesSeed() != null) {
+                    // M90.14: seeded random Phred per byte. Range
+                    // [0, 93] matches the SAM spec valid Phred range
+                    // (0 = lowest, 93 = highest representable in
+                    // Illumina-style ASCII offset 33 + 60). Cross-
+                    // language byte-equality with numpy's PCG64 is
+                    // explicitly NOT a goal — Python's docstring
+                    // calls out that as a follow-up.
+                    java.util.Random rng = new java.util.Random(
+                        policy.randomiseQualitiesSeed());
+                    for (int i = 0; i < n; i++) {
+                        byte[] q = new byte[qualities[i].length];
+                        for (int j = 0; j < q.length; j++) {
+                            q[j] = (byte) (rng.nextInt(94) & 0xFF);
+                        }
+                        qualities[i] = q;
+                    }
+                } else {
+                    byte constByte = (byte) (policy.randomiseQualitiesConstant() & 0xFF);
+                    for (int i = 0; i < n; i++) {
+                        byte[] q = new byte[qualities[i].length];
+                        Arrays.fill(q, constByte);
+                        qualities[i] = q;
+                    }
                 }
                 countersOut[1] += n;
             }
@@ -364,20 +410,37 @@ public class Anonymizer {
                     chroms.add(gr.index().chromosomeAt(i));
                     positions[i] = gr.index().positionAt(i);
                 }
+                // M90.13: SAM-overlap semantics. Walk the CIGAR to
+                // compute each read's reference end coordinate; a
+                // read overlaps a region iff [pos, pos+span-1]
+                // intersects [region_start, region_end] on inclusive
+                // endpoints. Falls back to position-only check when
+                // CIGAR is empty / "*" / non-parseable (M90.3
+                // backward-compat).
+                java.util.BitSet alreadyMasked = new java.util.BitSet(n);
                 for (MaskRegion region : policy.maskRegions()) {
                     String chrName = region.chromosome();
                     long start = region.start();
                     long end = region.end();
                     for (int i = 0; i < n; i++) {
+                        if (alreadyMasked.get(i)) continue;
                         if (!chroms.get(i).equals(chrName)) continue;
                         long pos = positions[i];
-                        // Inclusive endpoints to match Python
-                        // _apply_genomic_policies: region_start <= pos
-                        // <= region_end.
-                        if (pos >= start && pos <= end) {
+                        long span = cigarRefSpan(cigars.get(i));
+                        boolean overlaps;
+                        if (span > 0) {
+                            long readEnd = pos + span - 1;  // inclusive
+                            overlaps = !(readEnd < start || pos > end);
+                        } else {
+                            // Empty / unparseable CIGAR — fall back to
+                            // position-only check (M90.3 behaviour).
+                            overlaps = (pos >= start && pos <= end);
+                        }
+                        if (overlaps) {
                             Arrays.fill(sequences[i], (byte) 0);
                             Arrays.fill(qualities[i], (byte) 0);
                             countersOut[2] += 1;
+                            alreadyMasked.set(i);
                         }
                     }
                 }
@@ -442,6 +505,44 @@ public class Anonymizer {
             ));
         }
         return out;
+    }
+
+    // M90.13: CIGAR reference span (number of bases consumed on the
+    // reference). Ops that consume reference: M, D, N, =, X. Ops that
+    // do NOT: I, S, H, P. Returns 0 for empty / "*" / non-parseable
+    // CIGAR — caller falls back to position-only masking (M90.3
+    // backward compatibility).
+    static long cigarRefSpan(String cigar) {
+        if (cigar == null || cigar.isEmpty() || cigar.equals("*")) {
+            return 0L;
+        }
+        long total = 0L;
+        long acc = 0L;
+        boolean haveDigit = false;
+        for (int i = 0; i < cigar.length(); i++) {
+            char ch = cigar.charAt(i);
+            if (ch >= '0' && ch <= '9') {
+                acc = acc * 10 + (ch - '0');
+                haveDigit = true;
+            } else {
+                if (!haveDigit) return 0L;  // malformed
+                switch (ch) {
+                    case 'M': case 'D': case 'N': case '=': case 'X':
+                        total += acc;
+                        break;
+                    case 'I': case 'S': case 'H': case 'P':
+                        // Don't consume reference bases.
+                        break;
+                    default:
+                        // Unknown op — bail out and fall back to pos-only.
+                        return 0L;
+                }
+                acc = 0L;
+                haveDigit = false;
+            }
+        }
+        if (haveDigit) return 0L;  // trailing digits with no op
+        return total;
     }
 
     static boolean isSaav(String chemicalEntity) {

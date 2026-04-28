@@ -246,12 +246,14 @@ public final class SignatureManager {
     private static final String[] GENOMIC_SIGNAL_CHANNELS = {
         "sequences", "qualities"
     };
-    /** Index columns signed by {@link #signGenomicRun}. The
-     *  {@code chromosomes} compound is intentionally excluded —
-     *  compound signing is covered by the dataset-level path on the
-     *  signal channels. */
+    /** Index columns signed by {@link #signGenomicRun}. M90.15: the
+     *  {@code chromosomes} VL_BYTES row compound is now signed
+     *  alongside the atomic columns — {@link StorageDataset#readCanonicalBytes}
+     *  handles VL compounds via {@code canonicaliseCompoundRows}, so
+     *  the M90.2 deferral was speculative. */
     private static final String[] GENOMIC_INDEX_COLUMNS = {
-        "offsets", "lengths", "positions", "mapping_qualities", "flags"
+        "offsets", "lengths", "positions", "mapping_qualities", "flags",
+        "chromosomes"
     };
 
     /** M90.2: sign every signal channel and every genomic_index
