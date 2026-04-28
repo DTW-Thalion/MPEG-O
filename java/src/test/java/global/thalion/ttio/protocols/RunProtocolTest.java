@@ -376,4 +376,89 @@ class RunProtocolTest {
         assertTrue(ex2.getMessage().contains("does not match"),
             "expected name-mismatch message, got: " + ex2.getMessage());
     }
+
+    // ── Phase 2 deviation closure: per-run compound provenance ─────
+    //
+    // Phase 1 wrote per-run provenance only as a JSON attribute, so
+    // Python files (whose writer emits the canonical
+    // ``<run>/provenance/steps`` compound dataset) could not round-
+    // trip cleanly into Java. Phase 2 closes the gap by:
+    //   1. Java now writes BOTH the compound (HDF5 fast path) and
+    //      the JSON attribute (non-HDF5 providers + legacy readers).
+    //   2. Java's reader prefers the compound and falls back to the
+    //      JSON attribute, so Python-only files load correctly.
+    //
+    // The two tests below exercise the writer (via H5 inspection of
+    // the on-disk dataset) and the reader (compound-only by stripping
+    // the JSON attribute before re-opening).
+
+    @Test
+    void phase2_perRunCompoundDatasetIsWritten(@TempDir Path tmp) throws Exception {
+        Path file = writeMixedDataset(tmp.resolve("phase2.tio"));
+        // Probe the file directly via the low-level Hdf5 API to confirm
+        // that BOTH the MS run and the genomic run carry a
+        // /provenance/steps compound dataset (canonical Python layout).
+        try (global.thalion.ttio.hdf5.Hdf5File f =
+                global.thalion.ttio.hdf5.Hdf5File.openReadOnly(file.toString());
+             global.thalion.ttio.hdf5.Hdf5Group root = f.rootGroup();
+             global.thalion.ttio.hdf5.Hdf5Group study = root.openGroup("study")) {
+            try (global.thalion.ttio.hdf5.Hdf5Group msRuns =
+                    study.openGroup("ms_runs");
+                 global.thalion.ttio.hdf5.Hdf5Group msRun =
+                    msRuns.openGroup("ms_0001");
+                 global.thalion.ttio.hdf5.Hdf5Group prov =
+                    msRun.openGroup("provenance")) {
+                assertTrue(prov.hasChild("steps"),
+                    "MS run provenance/steps compound dataset missing");
+            }
+            try (global.thalion.ttio.hdf5.Hdf5Group gRuns =
+                    study.openGroup("genomic_runs");
+                 global.thalion.ttio.hdf5.Hdf5Group gRun =
+                    gRuns.openGroup("genomic_0001");
+                 global.thalion.ttio.hdf5.Hdf5Group prov =
+                    gRun.openGroup("provenance")) {
+                assertTrue(prov.hasChild("steps"),
+                    "genomic run provenance/steps compound dataset missing");
+            }
+        }
+    }
+
+    @Test
+    void phase2_readsCompoundWhenJsonAttributeAbsent(@TempDir Path tmp)
+            throws Exception {
+        Path file = writeMixedDataset(tmp.resolve("phase2-strip.tio"));
+        // Strip the provenance_json attribute from BOTH runs so the
+        // reader has only the compound dataset to work with — proves
+        // the cross-language Python-style read path.
+        try (global.thalion.ttio.hdf5.Hdf5File f =
+                global.thalion.ttio.hdf5.Hdf5File.open(file.toString());
+             global.thalion.ttio.hdf5.Hdf5Group root = f.rootGroup();
+             global.thalion.ttio.hdf5.Hdf5Group study = root.openGroup("study")) {
+            try (global.thalion.ttio.hdf5.Hdf5Group msRuns =
+                    study.openGroup("ms_runs");
+                 global.thalion.ttio.hdf5.Hdf5Group msRun =
+                    msRuns.openGroup("ms_0001")) {
+                msRun.deleteAttribute("provenance_json");
+            }
+            try (global.thalion.ttio.hdf5.Hdf5Group gRuns =
+                    study.openGroup("genomic_runs");
+                 global.thalion.ttio.hdf5.Hdf5Group gRun =
+                    gRuns.openGroup("genomic_0001")) {
+                gRun.deleteAttribute("provenance_json");
+            }
+        }
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            AcquisitionRun ms = ds.msRuns().get("ms_0001");
+            List<ProvenanceRecord> msChain = ms.provenanceChain();
+            assertEquals(1, msChain.size(), "MS chain (compound only)");
+            assertEquals("ms-pipeline", msChain.get(0).software());
+            assertTrue(msChain.get(0).inputRefs().contains(SAMPLE_URI));
+
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            List<ProvenanceRecord> gChain = gr.provenanceChain();
+            assertEquals(1, gChain.size(), "genomic chain (compound only)");
+            assertEquals("genomics-pipeline", gChain.get(0).software());
+            assertTrue(gChain.get(0).inputRefs().contains(SAMPLE_URI));
+        }
+    }
 }

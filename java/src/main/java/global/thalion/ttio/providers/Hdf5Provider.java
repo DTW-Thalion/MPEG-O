@@ -94,6 +94,16 @@ public final class Hdf5Provider implements StorageProvider {
         return new Hdf5DatasetAdapter(dataset, name, null, /*ownsNative=*/false);
     }
 
+    /** Phase 2 (post-M91): if {@code group} is an HDF5-backed
+     *  {@link StorageGroup}, return the underlying {@link Hdf5Group};
+     *  otherwise return {@code null}. Lets cross-modality code paths
+     *  (per-run provenance, etc.) write a native HDF5 compound dataset
+     *  on the fast path while still falling back to the protocol API
+     *  for memory/sqlite/zarr providers. */
+    public static Hdf5Group tryUnwrapHdf5Group(StorageGroup group) {
+        return group instanceof Hdf5GroupAdapter a ? a.unwrap() : null;
+    }
+
     @Override
     public boolean isOpen() { return open; }
 
