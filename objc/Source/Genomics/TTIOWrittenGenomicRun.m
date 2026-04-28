@@ -85,6 +85,7 @@
         _signalCodecOverrides = signalCodecOverrides
             ? [signalCodecOverrides copy]
             : @{};
+        _provenanceRecords    = @[];
     }
     return self;
 }

@@ -4,6 +4,8 @@
 #import <Foundation/Foundation.h>
 #import "ValueClasses/TTIOEnums.h"
 
+@class TTIOProvenanceRecord;
+
 /**
  * Write-side container for a single genomic run, passed to
  * +[TTIOSpectralDataset writeMinimalToPath:...genomicRuns:...].
@@ -60,6 +62,14 @@
  * ``WrittenGenomicRun.signal_codec_overrides``.
  */
 @property (readonly, copy) NSDictionary<NSString *, NSNumber *> *signalCodecOverrides;
+
+/** Phase 1 (post-M91): per-run provenance records. Persisted under
+ *  ``<run>/provenance/steps`` by the writer; read back via
+ *  -[TTIOGenomicRun provenanceChain]. Defaults to an empty array.
+ *  Settable so callers building a TTIOWrittenGenomicRun via the
+ *  existing initialisers can attach provenance after construction
+ *  without binding the (already large) initialiser surface. */
+@property (nonatomic, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
 
 @property (readonly) NSUInteger readCount;
 

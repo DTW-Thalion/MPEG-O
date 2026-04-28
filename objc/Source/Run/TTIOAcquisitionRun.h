@@ -6,6 +6,7 @@
 #import "Protocols/TTIOStreamable.h"
 #import "Protocols/TTIOProvenanceable.h"
 #import "Protocols/TTIOEncryptable.h"
+#import "Protocols/TTIORun.h"
 #import "ValueClasses/TTIOEnums.h"
 
 @class TTIOSpectrum;
@@ -45,7 +46,16 @@
 @interface TTIOAcquisitionRun : NSObject <TTIOIndexable,
                                           TTIOStreamable,
                                           TTIOProvenanceable,
-                                          TTIOEncryptable>
+                                          TTIOEncryptable,
+                                          TTIORun>
+
+/** Phase 1: run identifier as stored in the .tio file (e.g.
+ *  ``@"run_0001"``). Set after load by -setPersistenceFilePath:runName:
+ *  or by the in-memory write path; defaults to the empty string for
+ *  freshly constructed in-memory runs that have not yet been persisted.
+ *  Required by the TTIORun protocol so callers can iterate uniformly
+ *  across modalities. */
+@property (readonly, copy) NSString *name;
 
 @property (readonly) TTIOAcquisitionMode acquisitionMode;
 @property (readonly, strong) TTIOInstrumentConfig *instrumentConfig;
