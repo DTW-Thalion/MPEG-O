@@ -41,6 +41,7 @@ public class AcquisitionRun implements
         global.thalion.ttio.protocols.Streamable<Spectrum>,
         global.thalion.ttio.protocols.Provenanceable,
         global.thalion.ttio.protocols.Encryptable,
+        global.thalion.ttio.protocols.Run,
         AutoCloseable {
 
     private static final int CHUNK_SIZE = 65536;
@@ -192,6 +193,16 @@ public class AcquisitionRun implements
 
     @Override
     public int count() { return spectrumIndex.count(); }
+
+    // ---- Run conformance ----
+
+    /** Phase 1: modality-agnostic accessor required by
+     *  {@link global.thalion.ttio.protocols.Run}. Delegates to
+     *  {@link #objectAtIndex(int)}; the typed return is widened to
+     *  {@code Object} so callers iterating uniformly over
+     *  AcquisitionRun + GenomicRun see a single signature. */
+    @Override
+    public Object get(int index) { return objectAtIndex(index); }
 
     // ---- Streamable conformance ----
 
@@ -573,10 +584,19 @@ public class AcquisitionRun implements
     }
 
     private static List<ProvenanceRecord> readProvenance(StorageGroup runGroup) {
-        // Read from provenance_json attribute (v0.2+ compat)
+        // Read from provenance_json attribute (v0.2+ compat). Phase 1
+        // (post-M91): wire up the previously-deferred parser so MS runs
+        // round-trip per-run provenance the same way genomic runs do —
+        // closes the cross-modality gap that {@link Run#provenanceChain}
+        // was added to address.
         if (!runGroup.hasAttribute("provenance_json")) return List.of();
-        // Simple parse — full JSON parsing deferred to M32 compound dataset support
-        return List.of(); // placeholder - compound dataset reading in SpectralDataset
+        Object v = runGroup.getAttribute("provenance_json");
+        if (v == null) return List.of();
+        String json = v instanceof String s ? s
+                    : v instanceof byte[] b ? new String(b,
+                          java.nio.charset.StandardCharsets.UTF_8)
+                    : v.toString();
+        return ProvenanceJsonParse.parseArray(json);
     }
 
     // ── Dataset helpers ─────────────────────────────────────────────
