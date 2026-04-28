@@ -624,3 +624,287 @@ def decrypt_per_au(
 
 # Back-compat alias.
 decrypt_per_au_file = decrypt_per_au
+
+
+# ────────────────────────────────────────────────────────────────────
+# M90.4 — region-based per-AU encryption.
+#
+# Per-AU dispatch keyed on the genomic_index `chromosomes` column:
+# reads on chromosomes whose name appears in `key_map` are AES-256-GCM
+# encrypted with that key; reads on chromosomes NOT in `key_map`
+# are stored as "clear segments" — the same `<channel>_segments`
+# compound is reused, but with a length-0 IV / length-0 tag and the
+# raw plaintext bytes stored in the `ciphertext` field. The decode
+# path branches on `len(iv)`, so old M90.1 files (every IV is exactly
+# 12 bytes) still decode unchanged.
+#
+# This is intentionally non-invasive: no schema changes, no extra
+# field, no migration. The empty-IV sentinel is unambiguous because
+# AES-GCM IVs are always exactly 12 bytes.
+# ────────────────────────────────────────────────────────────────────
+
+
+def encrypt_per_au_by_region(
+    path: str,
+    key_map: dict[str, bytes],
+    *,
+    provider: str | None = None,
+) -> None:
+    """Encrypt genomic signal channels with a per-chromosome key map.
+
+    Reads whose chromosome appears in ``key_map`` are AES-256-GCM
+    encrypted with the corresponding 32-byte key. Reads on
+    chromosomes NOT in ``key_map`` are stored as "clear segments"
+    (length-0 IV + plaintext bytes in the ciphertext slot).
+
+    MS runs are NOT touched — chromosome is a genomic concept.
+    Use the existing :func:`encrypt_per_au` for MS encryption.
+
+    The on-disk schema is identical to M90.1 (same
+    ``<channel>_segments`` compound). The reader distinguishes
+    encrypted vs clear segments by ``len(seg.iv)``.
+    """
+    from . import _hdf5_io as io
+    from .providers.registry import open_provider
+
+    for chrom, key in key_map.items():
+        if len(key) != 32:
+            raise ValueError(
+                f"AES-256-GCM key for chromosome {chrom!r} must be "
+                f"32 bytes, got {len(key)}"
+            )
+
+    sp = open_provider(path, provider=provider, mode="a")
+    try:
+        root = sp.root_group()
+        version, features = io.read_feature_flags(root)
+        features_set = set(features)
+
+        study = root.open_group("study")
+        if not study.has_child("genomic_runs"):
+            return  # no genomic data — nothing to encrypt
+
+        # Match the dataset_id_counter convention from the MS path:
+        # MS runs occupy 1..N, genomic N+1..N+M. For region-only
+        # encryption we still walk MS first to get the count even
+        # though we don't touch it.
+        if study.has_child("ms_runs"):
+            ms_runs = study.open_group("ms_runs")
+            n_ms = sum(
+                1 for n in ms_runs.child_names()
+                if not n.startswith("_") and ms_runs.has_child(n)
+            )
+        else:
+            n_ms = 0
+        dataset_id_counter = n_ms + 1
+
+        g_runs = study.open_group("genomic_runs")
+        g_run_names = [n for n in g_runs.child_names()
+                        if not n.startswith("_") and g_runs.has_child(n)]
+        for g_run_name in g_run_names:
+            try:
+                g_group = g_runs.open_group(g_run_name)
+            except KeyError:
+                continue
+            g_sig = g_group.open_group("signal_channels")
+            g_idx = g_group.open_group("genomic_index")
+            g_offsets = np.asarray(
+                g_idx.open_dataset("offsets").read(), dtype="<u8",
+            )
+            g_lengths = np.asarray(
+                g_idx.open_dataset("lengths").read(), dtype="<u4",
+            )
+            chromosomes = _read_chromosomes(g_idx)
+
+            for cname in ("sequences", "qualities"):
+                if not g_sig.has_child(cname):
+                    continue
+                plaintext = np.asarray(
+                    g_sig.open_dataset(cname).read(),
+                ).astype("<u1", copy=False)
+                segments = _encrypt_channel_with_dispatch(
+                    plaintext, g_offsets, g_lengths, chromosomes,
+                    dataset_id=dataset_id_counter,
+                    channel_name=cname,
+                    key_map=key_map,
+                )
+                io.write_channel_segments(
+                    g_sig, f"{cname}_segments", segments,
+                )
+                g_sig.delete_child(cname)
+                g_sig.set_attribute(
+                    f"{cname}_algorithm", "aes-256-gcm-by-region",
+                )
+            dataset_id_counter += 1
+
+        features_set.add("opt_per_au_encryption")
+        features_set.add("opt_region_keyed_encryption")
+        io.write_feature_flags(root, version, sorted(features_set))
+    finally:
+        sp.close()
+
+
+def decrypt_per_au_by_region(
+    path: str,
+    key_map: dict[str, bytes],
+    *,
+    provider: str | None = None,
+) -> dict[str, dict[str, np.ndarray]]:
+    """Decrypt a region-encrypted file using a per-chromosome key map.
+
+    Caller may supply only a subset of the keys used at encryption
+    time. Clear segments (length-0 IV) decode without any key.
+    Encrypted segments whose chromosome key isn't in ``key_map``
+    raise the underlying AES-GCM authentication error.
+
+    Returns ``{run_name: {channel_name: uint8 ndarray}}`` like
+    :func:`decrypt_per_au`. MS runs are decrypted via the standard
+    path inside this function as a convenience — but only if all
+    MS runs were encrypted (mixed MS-encrypted / region-genomic-
+    encrypted is unusual and supported here only because the
+    counter convention guarantees correct AAD reconstruction).
+    """
+    from . import _hdf5_io as io
+    from .providers.registry import open_provider
+
+    sp = open_provider(path, provider=provider, mode="r")
+    try:
+        root = sp.root_group()
+        _, features = io.read_feature_flags(root)
+        if "opt_per_au_encryption" not in features:
+            raise ValueError(
+                f"file at {path!r} does not carry opt_per_au_encryption"
+            )
+
+        study = root.open_group("study")
+        out: dict[str, dict] = {}
+
+        # Walk MS runs first to keep the dataset_id counter aligned.
+        # MS reads use the legacy single-key path — region encryption
+        # only touches genomic. If MS is encrypted under a different
+        # key, callers should use the standard decrypt_per_au.
+        if study.has_child("ms_runs"):
+            ms_runs = study.open_group("ms_runs")
+            ms_run_names = [n for n in ms_runs.child_names()
+                             if not n.startswith("_") and ms_runs.has_child(n)]
+        else:
+            ms_run_names = []
+        dataset_id_counter = len(ms_run_names) + 1
+
+        if not study.has_child("genomic_runs"):
+            return out
+        g_runs = study.open_group("genomic_runs")
+        g_run_names = [n for n in g_runs.child_names()
+                        if not n.startswith("_") and g_runs.has_child(n)]
+        for g_run_name in g_run_names:
+            try:
+                g_group = g_runs.open_group(g_run_name)
+            except KeyError:
+                continue
+            g_sig = g_group.open_group("signal_channels")
+            g_idx = g_group.open_group("genomic_index")
+            chromosomes = _read_chromosomes(g_idx)
+            g_run_out: dict[str, Any] = {}
+            for cname in ("sequences", "qualities"):
+                seg_name = f"{cname}_segments"
+                if not g_sig.has_child(seg_name):
+                    continue
+                segments = io.read_channel_segments(g_sig, seg_name)
+                g_run_out[cname] = _decrypt_channel_with_dispatch(
+                    segments, chromosomes,
+                    dataset_id=dataset_id_counter,
+                    channel_name=cname,
+                    key_map=key_map,
+                )
+            out[g_run_name] = g_run_out
+            dataset_id_counter += 1
+
+        return out
+    finally:
+        sp.close()
+
+
+def _read_chromosomes(idx_group) -> list[str]:
+    """Read the genomic_index chromosomes compound dataset. Returns a
+    list[str], one entry per read."""
+    from . import _hdf5_io as io
+    rows = io.read_compound_dataset(idx_group, "chromosomes")
+    out: list[str] = []
+    for row in rows:
+        v = row["value"]
+        out.append(v.decode("utf-8") if isinstance(v, bytes) else v)
+    return out
+
+
+def _encrypt_channel_with_dispatch(
+    plaintext_flat: np.ndarray,
+    offsets: np.ndarray,
+    lengths: np.ndarray,
+    chromosomes: list[str],
+    *,
+    dataset_id: int,
+    channel_name: str,
+    key_map: dict[str, bytes],
+) -> list[ChannelSegment]:
+    """Per-AU dispatch: encrypt with key_map[chrom] if present, else
+    emit a clear segment. ``plaintext_flat`` is uint8 bytes
+    (genomic-only path)."""
+    if plaintext_flat.dtype != np.dtype("<u1"):
+        plaintext_flat = plaintext_flat.astype("<u1", copy=False)
+    segments: list[ChannelSegment] = []
+    for au_seq, (off, length, chrom) in enumerate(
+        zip(offsets, lengths, chromosomes)
+    ):
+        off_i = int(off)
+        length_i = int(length)
+        chunk = plaintext_flat[off_i:off_i + length_i].tobytes()
+        key = key_map.get(chrom)
+        if key is None:
+            # Clear segment: empty IV + tag, plaintext bytes ride in
+            # the ciphertext slot.
+            segments.append(ChannelSegment(
+                offset=off_i, length=length_i,
+                iv=b"", tag=b"", ciphertext=chunk,
+            ))
+        else:
+            aad = aad_for_channel(dataset_id, au_seq, channel_name)
+            iv, tag, ciphertext = encrypt_with_aad(chunk, key, aad)
+            segments.append(ChannelSegment(
+                offset=off_i, length=length_i,
+                iv=iv, tag=tag, ciphertext=ciphertext,
+            ))
+    return segments
+
+
+def _decrypt_channel_with_dispatch(
+    segments,
+    chromosomes: list[str],
+    *,
+    dataset_id: int,
+    channel_name: str,
+    key_map: dict[str, bytes],
+) -> np.ndarray:
+    """Inverse of :func:`_encrypt_channel_with_dispatch`. Branches on
+    ``len(seg.iv)``: 0 = clear segment, 12 = AES-GCM."""
+    chunks: list[bytes] = []
+    for au_seq, seg in enumerate(segments):
+        if len(seg.iv) == 0:
+            # Clear segment: ciphertext is the plaintext.
+            chunks.append(bytes(seg.ciphertext))
+            continue
+        chrom = chromosomes[au_seq] if au_seq < len(chromosomes) else ""
+        key = key_map.get(chrom)
+        if key is None:
+            raise ValueError(
+                f"chromosome {chrom!r} segment {au_seq} is encrypted "
+                f"but key_map has no entry for {chrom!r}"
+            )
+        aad = aad_for_channel(dataset_id, au_seq, channel_name)
+        plaintext = decrypt_with_aad(seg.iv, seg.tag, seg.ciphertext, key, aad)
+        if len(plaintext) != seg.length:
+            raise ValueError(
+                f"channel {channel_name!r} segment {au_seq}: "
+                f"decrypted {len(plaintext)} bytes, expected {seg.length}"
+            )
+        chunks.append(plaintext)
+    return np.frombuffer(b"".join(chunks), dtype="<u1").copy()
