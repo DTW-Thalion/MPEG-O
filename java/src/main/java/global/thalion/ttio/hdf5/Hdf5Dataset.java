@@ -186,6 +186,83 @@ public class Hdf5Dataset implements AutoCloseable {
         }
     }
 
+    /** M90.2: write a UTF-8 string attribute on this dataset.
+     *  Mirrors {@link Hdf5Group#setStringAttribute} so the
+     *  {@code @ttio_signature} attribute placed by
+     *  {@link global.thalion.ttio.protection.SignatureManager#signGenomicRun}
+     *  can land directly on the dataset. */
+    public void setStringAttribute(String name, String value) {
+        file.lockForWriting();
+        long htype = -1, space = -1, aid = -1;
+        try {
+            byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            int len = Math.max(bytes.length, 1);
+
+            htype = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
+            H5.H5Tset_size(htype, len);
+            H5.H5Tset_strpad(htype, HDF5Constants.H5T_STR_NULLTERM);
+
+            space = H5.H5Screate(HDF5Constants.H5S_SCALAR);
+
+            if (H5.H5Aexists(datasetId, name)) {
+                H5.H5Adelete(datasetId, name);
+            }
+
+            aid = H5.H5Acreate(datasetId, name, htype, space,
+                    HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
+            if (aid < 0) throw new Hdf5Errors.AttributeException(
+                    "H5Acreate2 (string) failed for '" + name + "'");
+
+            byte[] padded = new byte[len];
+            System.arraycopy(bytes, 0, padded, 0, Math.min(bytes.length, len));
+            H5.H5Awrite(aid, htype, padded);
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.AttributeException(
+                    "setStringAttribute failed for '" + name + "': "
+                    + e.getMessage());
+        } finally {
+            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ignored) {}
+            if (htype >= 0) try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+            file.unlockForWriting();
+        }
+    }
+
+    /** M90.2: read a UTF-8 string attribute from this dataset.
+     *  Returns {@code null} when the attribute is absent OR the
+     *  attribute's HDF5 type class is not {@code H5T_STRING}. The
+     *  caller is expected to dispatch on the return type ({@code null}
+     *  meaning "not a string-typed attribute, try a numeric reader"). */
+    public String readStringAttribute(String name) {
+        file.lockForReading();
+        long aid = -1, htype = -1;
+        try {
+            if (!H5.H5Aexists(datasetId, name)) return null;
+            aid = H5.H5Aopen(datasetId, name, HDF5Constants.H5P_DEFAULT);
+            htype = H5.H5Aget_type(aid);
+            int klass = H5.H5Tget_class(htype);
+            if (klass != HDF5Constants.H5T_STRING) {
+                // Not a string-typed attribute (e.g. uint8 @compression).
+                return null;
+            }
+            long size = H5.H5Tget_size(htype);
+            if (size <= 0) return "";
+            byte[] buf = new byte[(int) size];
+            H5.H5Aread(aid, htype, buf);
+            // Strip trailing NULs from null-terminated padding.
+            int realLen = buf.length;
+            while (realLen > 0 && buf[realLen - 1] == 0) realLen--;
+            return new String(buf, 0, realLen,
+                java.nio.charset.StandardCharsets.UTF_8);
+        } catch (HDF5LibraryException e) {
+            return null;
+        } finally {
+            if (htype >= 0) try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
+            file.unlockForReading();
+        }
+    }
+
     /** Write a uint8 (one-byte) integer attribute on this dataset.
      *  M86's {@code @compression} attribute uses this datatype
      *  (Binding Decision §86: H5T_NATIVE_UINT8). */

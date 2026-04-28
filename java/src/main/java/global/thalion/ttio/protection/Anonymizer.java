@@ -3,6 +3,9 @@ package global.thalion.ttio.protection;
 
 import global.thalion.ttio.*;
 import global.thalion.ttio.Enums.*;
+import global.thalion.ttio.genomics.AlignedRead;
+import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -29,6 +32,13 @@ import java.util.*;
  */
 public class Anonymizer {
 
+    /** M90.3: a single masked region (chromosome + half-open
+     *  interval). Reads whose mapping position falls inside any
+     *  registered region have their sequence + qualities zeroed, but
+     *  their index entries are preserved so downstream readers see
+     *  the same read count and per-read offsets. */
+    public record MaskRegion(String chromosome, long start, long end) {}
+
     public record AnonymizationPolicy(
         boolean redactSaavSpectra,
         double maskIntensityBelowQuantile,  // 0.0 = disabled
@@ -36,8 +46,32 @@ public class Anonymizer {
         double rareMetaboliteThreshold,     // default 0.05
         int coarsenMzDecimals,              // -1 = disabled
         int coarsenChemicalShiftDecimals,   // -1 = disabled
-        boolean stripMetadata
+        boolean stripMetadata,
+        // M90.3 genomic policies. None / false / null = no-op.
+        boolean stripReadNames,
+        boolean randomiseQualities,
+        int randomiseQualitiesConstant,    // default 30
+        java.util.List<MaskRegion> maskRegions  // null = no masking
     ) {
+        /** Backward-compatible 7-arg constructor for the pre-M90.3
+         *  surface. Defaults the four genomic fields to no-op
+         *  (genomic policies disabled, randomise constant 30, no
+         *  mask regions). Exists so the M90 work is purely additive
+         *  for callers that don't touch genomic content. */
+        public AnonymizationPolicy(boolean redactSaavSpectra,
+                                     double maskIntensityBelowQuantile,
+                                     boolean maskRareMetabolites,
+                                     double rareMetaboliteThreshold,
+                                     int coarsenMzDecimals,
+                                     int coarsenChemicalShiftDecimals,
+                                     boolean stripMetadata) {
+            this(redactSaavSpectra, maskIntensityBelowQuantile,
+                 maskRareMetabolites, rareMetaboliteThreshold,
+                 coarsenMzDecimals, coarsenChemicalShiftDecimals,
+                 stripMetadata,
+                 false, false, 30, null);
+        }
+
         public static AnonymizationPolicy defaults() {
             return new AnonymizationPolicy(
                 true, 0.0, false, 0.05, -1, -1, true);
@@ -51,8 +85,28 @@ public class Anonymizer {
         int mzValuesCoarsened,
         int chemicalShiftValuesCoarsened,
         int metabolitesMasked,
-        int metadataFieldsStripped
-    ) {}
+        int metadataFieldsStripped,
+        // M90.3 genomic counters. Zero = either no genomic content
+        // or the corresponding policy was disabled.
+        int readNamesStripped,
+        int qualitiesRandomised,
+        int readsInMaskedRegion
+    ) {
+        /** Backward-compatible 7-arg constructor for the pre-M90.3
+         *  surface. Defaults the three genomic counters to 0. */
+        public AnonymizationResult(SpectralDataset dataset,
+                                     int spectraRedacted,
+                                     int intensitiesZeroed,
+                                     int mzValuesCoarsened,
+                                     int chemicalShiftValuesCoarsened,
+                                     int metabolitesMasked,
+                                     int metadataFieldsStripped) {
+            this(dataset, spectraRedacted, intensitiesZeroed,
+                 mzValuesCoarsened, chemicalShiftValuesCoarsened,
+                 metabolitesMasked, metadataFieldsStripped,
+                 0, 0, 0);
+        }
+    }
 
     /** Apply anonymization policies to a dataset, writing a new anonymized file. */
     public static AnonymizationResult anonymize(
@@ -181,6 +235,14 @@ public class Anonymizer {
             metadataFieldsStripped = 1;
         }
 
+        // M90.3: walk genomic_runs and apply genomic policies. Returns
+        // an empty list when the source carries no genomic runs (and
+        // create()'s genomic-runs branch is then a no-op). The three
+        // genomic counters in the result mirror the three policies.
+        int[] genomicCounters = new int[3];  // [stripped, randomised, masked]
+        List<WrittenGenomicRun> anonymizedGenomicRuns =
+            applyGenomicPolicies(source, policy, genomicCounters);
+
         // Build provenance record
         Map<String, String> params = new LinkedHashMap<>();
         params.put("spectra_redacted", String.valueOf(spectraRedacted));
@@ -189,6 +251,9 @@ public class Anonymizer {
         params.put("chemical_shift_values_coarsened", String.valueOf(csValuesCoarsened));
         params.put("metabolites_masked", String.valueOf(metabolitesMasked));
         params.put("metadata_fields_stripped", String.valueOf(metadataFieldsStripped));
+        params.put("read_names_stripped", String.valueOf(genomicCounters[0]));
+        params.put("qualities_randomised", String.valueOf(genomicCounters[1]));
+        params.put("reads_in_masked_region", String.valueOf(genomicCounters[2]));
 
         ProvenanceRecord anonProv = ProvenanceRecord.of(
                 "ttio anonymizer v0.4", params, List.of(), List.of());
@@ -207,12 +272,176 @@ public class Anonymizer {
         }
 
         SpectralDataset result = SpectralDataset.create(outputPath, title,
-                source.isaInvestigationId(), anonymizedRuns, idents,
-                source.quantifications(), prov, flags);
+                source.isaInvestigationId(), anonymizedRuns,
+                anonymizedGenomicRuns,
+                idents, source.quantifications(), prov, flags);
 
         return new AnonymizationResult(result, spectraRedacted, intensitiesZeroed,
                 mzValuesCoarsened, csValuesCoarsened, metabolitesMasked,
-                metadataFieldsStripped);
+                metadataFieldsStripped,
+                genomicCounters[0], genomicCounters[1], genomicCounters[2]);
+    }
+
+    // ─────────────────────────────────────── M90.3 genomic policy walker
+
+    /** Walk {@code source.genomicRuns()} and produce a list of
+     *  {@link WrittenGenomicRun} copies with {@code policy}-driven
+     *  transformations applied (no source mutation).
+     *
+     *  <p>Returns an empty list if the source carries no genomic
+     *  runs OR if no genomic policy is set — the create() path
+     *  treats both cases as "no genomic content". The three counters
+     *  in {@code countersOut} are populated:
+     *  <ul>
+     *    <li>{@code [0]} read_names stripped (one per read).</li>
+     *    <li>{@code [1]} reads whose qualities were randomised.</li>
+     *    <li>{@code [2]} reads whose mapping position fell inside any
+     *        registered mask region.</li>
+     *  </ul>
+     *
+     *  <p>When the source has genomic runs but no genomic policy is
+     *  set the runs are still copied verbatim — that's required for
+     *  parity with the Python reference (a no-op anonymize on a
+     *  genomic-bearing file must preserve the genomic content). */
+    private static List<WrittenGenomicRun> applyGenomicPolicies(
+            SpectralDataset source, AnonymizationPolicy policy,
+            int[] countersOut) {
+        Map<String, GenomicRun> grs = source.genomicRuns();
+        if (grs == null || grs.isEmpty()) {
+            return List.of();
+        }
+        List<WrittenGenomicRun> out = new ArrayList<>(grs.size());
+        // Sort by run name so the output is deterministic.
+        List<String> names = new ArrayList<>(grs.keySet());
+        java.util.Collections.sort(names);
+        for (String runName : names) {
+            GenomicRun gr = grs.get(runName);
+            int n = gr.readCount();
+
+            // Materialise the per-read fields by iterating the lazy
+            // GenomicRun. This is O(N reads) but the anonymizer is a
+            // one-shot offline tool so the overhead is acceptable.
+            List<String> readNames = new ArrayList<>(n);
+            List<String> cigars = new ArrayList<>(n);
+            byte[][] sequences = new byte[n][];
+            byte[][] qualities = new byte[n][];
+            List<String> mateChromosomes = new ArrayList<>(n);
+            long[] matePositions = new long[n];
+            int[] templateLengths = new int[n];
+            for (int i = 0; i < n; i++) {
+                AlignedRead r = gr.readAt(i);
+                readNames.add(r.readName());
+                cigars.add(r.cigar());
+                sequences[i] = r.sequence().getBytes(StandardCharsets.US_ASCII);
+                qualities[i] = r.qualities().clone();
+                mateChromosomes.add(r.mateChromosome());
+                matePositions[i] = r.matePosition();
+                templateLengths[i] = r.templateLength();
+            }
+
+            // ── strip_read_names ────────────────────────────────────
+            if (policy.stripReadNames()) {
+                for (int i = 0; i < n; i++) readNames.set(i, "");
+                countersOut[0] += n;
+            }
+
+            // ── randomise_qualities ─────────────────────────────────
+            if (policy.randomiseQualities()) {
+                byte constByte = (byte) (policy.randomiseQualitiesConstant() & 0xFF);
+                for (int i = 0; i < n; i++) {
+                    byte[] q = new byte[qualities[i].length];
+                    Arrays.fill(q, constByte);
+                    qualities[i] = q;
+                }
+                countersOut[1] += n;
+            }
+
+            // ── mask_regions ────────────────────────────────────────
+            if (policy.maskRegions() != null && !policy.maskRegions().isEmpty()) {
+                List<String> chroms = new ArrayList<>(n);
+                long[] positions = new long[n];
+                for (int i = 0; i < n; i++) {
+                    chroms.add(gr.index().chromosomeAt(i));
+                    positions[i] = gr.index().positionAt(i);
+                }
+                for (MaskRegion region : policy.maskRegions()) {
+                    String chrName = region.chromosome();
+                    long start = region.start();
+                    long end = region.end();
+                    for (int i = 0; i < n; i++) {
+                        if (!chroms.get(i).equals(chrName)) continue;
+                        long pos = positions[i];
+                        // Inclusive endpoints to match Python
+                        // _apply_genomic_policies: region_start <= pos
+                        // <= region_end.
+                        if (pos >= start && pos <= end) {
+                            Arrays.fill(sequences[i], (byte) 0);
+                            Arrays.fill(qualities[i], (byte) 0);
+                            countersOut[2] += 1;
+                        }
+                    }
+                }
+            }
+
+            // Re-pack into the flat WrittenGenomicRun layout.
+            int[] lengths = new int[n];
+            long[] offsets = new long[n];
+            long running = 0;
+            int totalSeq = 0, totalQual = 0;
+            for (int i = 0; i < n; i++) {
+                lengths[i] = sequences[i].length;
+                offsets[i] = running;
+                running += sequences[i].length;
+                totalSeq += sequences[i].length;
+                totalQual += qualities[i].length;
+            }
+            byte[] sequencesFlat = new byte[totalSeq];
+            byte[] qualitiesFlat = new byte[totalQual];
+            int sCursor = 0, qCursor = 0;
+            for (int i = 0; i < n; i++) {
+                System.arraycopy(sequences[i], 0, sequencesFlat, sCursor, sequences[i].length);
+                sCursor += sequences[i].length;
+                System.arraycopy(qualities[i], 0, qualitiesFlat, qCursor, qualities[i].length);
+                qCursor += qualities[i].length;
+            }
+
+            // Pull the per-read integer fields directly from the index;
+            // these are unchanged by anonymization (the index entries
+            // are preserved for masked reads — only the sequence /
+            // qualities bytes are zeroed).
+            long[] positionsOut = new long[n];
+            byte[] mappingQualities = new byte[n];
+            int[] flagsArr = new int[n];
+            List<String> chromosomesList = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                positionsOut[i] = gr.index().positionAt(i);
+                mappingQualities[i] = (byte) gr.index().mappingQualityAt(i);
+                flagsArr[i] = gr.index().flagsAt(i);
+                chromosomesList.add(gr.index().chromosomeAt(i));
+            }
+
+            out.add(new WrittenGenomicRun(
+                gr.acquisitionMode(),
+                gr.referenceUri(),
+                gr.platform(),
+                gr.sampleName(),
+                positionsOut,
+                mappingQualities,
+                flagsArr,
+                sequencesFlat,
+                qualitiesFlat,
+                offsets,
+                lengths,
+                cigars,
+                readNames,
+                mateChromosomes,
+                matePositions,
+                templateLengths,
+                chromosomesList,
+                Compression.ZLIB
+            ));
+        }
+        return out;
     }
 
     static boolean isSaav(String chemicalEntity) {

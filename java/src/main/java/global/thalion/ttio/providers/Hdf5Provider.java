@@ -381,21 +381,30 @@ public final class Hdf5Provider implements StorageProvider {
             return delegate.hasAttribute(n);
         }
         @Override public Object getAttribute(String n) {
-            // M86: only the integer reader is wired here today; the
-            // @compression attribute is a uint8 scalar. Returns null
-            // when absent so callers can dispatch on the tri-state
-            // (absent / 0 / non-zero codec id).
+            // M86: integer reader for @compression (uint8 scalar).
+            // M90.2: String reader for @ttio_signature (UTF-8). The
+            // string reader is type-safe — it returns null when the
+            // on-disk type class is not H5T_STRING, so callers can
+            // dispatch on (string-typed -> String) vs
+            // (numeric-typed -> Long).
             if (!delegate.hasAttribute(n)) return null;
+            String s = delegate.readStringAttribute(n);
+            if (s != null) return s;
             return delegate.readIntegerAttribute(n, 0L);
         }
         @Override public void setAttribute(String n, Object v) {
             // M86: dataset-level @compression attribute is a uint8 by
             // spec (Binding Decision §86). Numbers go through the
-            // uint8 writer; nulls delete; everything else is rejected
-            // until a use case appears.
+            // uint8 writer; nulls delete.
+            // M90.2: Strings (e.g. @ttio_signature) go through the
+            // UTF-8 string writer added in Hdf5Dataset.
             if (v == null) { delegate.deleteAttribute(n); return; }
             if (v instanceof Number num) {
                 delegate.setUint8Attribute(n, num.intValue());
+                return;
+            }
+            if (v instanceof String s) {
+                delegate.setStringAttribute(n, s);
                 return;
             }
             throw new UnsupportedOperationException(
