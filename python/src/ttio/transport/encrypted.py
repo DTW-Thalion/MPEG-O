@@ -11,11 +11,15 @@ Cross-language equivalents: ObjC
 """
 from __future__ import annotations
 
+import json
 import struct
 from pathlib import Path
 from typing import BinaryIO
 
+import numpy as np
+
 from .. import _hdf5_io as io
+from ..enums import Precision
 from ..feature_flags import (
     OPT_ENCRYPTED_AU_HEADERS,
     OPT_PER_AU_ENCRYPTION,
@@ -87,13 +91,24 @@ def write_encrypted_dataset(
         run_items = [(n, ms_runs.open_group(n))
                       for n in ms_runs.child_names()
                       if not n.startswith("_") and ms_runs.has_child(n)]
+        # M90.8: also walk genomic_runs after MS. dataset_id_counter
+        # continues from MS so AAD reconstruction matches the
+        # per-AU encrypt path (M90.1).
+        if study.has_child("genomic_runs"):
+            g_runs_group = study.open_group("genomic_runs")
+            genomic_run_items = [(n, g_runs_group.open_group(n))
+                                  for n in g_runs_group.child_names()
+                                  if not n.startswith("_")
+                                  and g_runs_group.has_child(n)]
+        else:
+            genomic_run_items = []
 
         writer.write_stream_header(
             format_version="1.2",
             title=title,
             isa_investigation=isa,
             features=list(features),
-            n_datasets=len(run_items),
+            n_datasets=len(run_items) + len(genomic_run_items),
         )
 
         # One ProtectionMetadata per dataset (per run). The wrapped
@@ -236,9 +251,136 @@ def write_encrypted_dataset(
                 dataset_id=dataset_id,
                 final_au_sequence=n,
             )
+
+        # M90.8: emit genomic_runs after MS. Same dataset_id space
+        # (continues from MS) so AAD reconstruction stays symmetric.
+        for genomic_offset, (g_run_name, g_run_group) in enumerate(
+            genomic_run_items, start=1,
+        ):
+            g_dataset_id = len(run_items) + genomic_offset
+            g_sig = g_run_group.open_group("signal_channels")
+            g_idx = g_run_group.open_group("genomic_index")
+            # Genomic only encrypts sequences + qualities (M90.1).
+            g_channel_names = [c for c in ("sequences", "qualities")
+                                if g_sig.has_child(f"{c}_segments")]
+            g_first = g_channel_names[0] if g_channel_names else "sequences"
+            cipher_suite = (io.read_string_attr(g_sig, f"{g_first}_algorithm")
+                              or "aes-256-gcm")
+            kek_algorithm = (io.read_string_attr(g_sig,
+                                                   f"{g_first}_kek_algorithm")
+                               or "")
+            wrapped_dek_attr = f"{g_first}_wrapped_dek"
+            if g_sig.has_attribute(wrapped_dek_attr):
+                wrapped_dek = bytes(g_sig.get_attribute(wrapped_dek_attr))
+            else:
+                wrapped_dek = b""
+            _emit_protection_metadata(
+                writer,
+                dataset_id=g_dataset_id,
+                cipher_suite=cipher_suite,
+                kek_algorithm=kek_algorithm,
+                wrapped_dek=wrapped_dek,
+                signature_algorithm="",
+                public_key=b"",
+            )
+            g_acquisition_mode = io.read_int_attr(g_run_group,
+                                                    "acquisition_mode",
+                                                    default=0) or 0
+            # Genomic-run metadata JSON (M89.2 convention).
+            g_metadata_json = json.dumps({
+                "modality": io.read_string_attr(g_run_group,
+                                                  "modality") or "",
+                "platform": io.read_string_attr(g_run_group,
+                                                  "platform") or "",
+                "reference_uri": io.read_string_attr(g_run_group,
+                                                       "reference_uri") or "",
+                "sample_name": io.read_string_attr(g_run_group,
+                                                     "sample_name") or "",
+            }, sort_keys=True)
+            # Read the plaintext genomic_index columns (these are NOT
+            # encrypted by M90.1 — only signal channels are).
+            g_chromosomes = _read_chromosomes_compound(g_idx)
+            g_positions = np.asarray(
+                g_idx.open_dataset("positions").read(), dtype=np.int64,
+            )
+            g_mapqs = np.asarray(
+                g_idx.open_dataset("mapping_qualities").read(),
+                dtype=np.uint8,
+            )
+            g_flags = np.asarray(
+                g_idx.open_dataset("flags").read(), dtype=np.uint32,
+            )
+            g_segments_by_name = {
+                c: io.read_channel_segments(g_sig, f"{c}_segments")
+                for c in g_channel_names
+            }
+            n_reads = (len(next(iter(g_segments_by_name.values())))
+                        if g_segments_by_name else 0)
+
+            writer.write_dataset_header(
+                dataset_id=g_dataset_id,
+                name=g_run_name,
+                acquisition_mode=int(g_acquisition_mode),
+                spectrum_class="TTIOGenomicRead",
+                channel_names=list(g_channel_names),
+                instrument_json=g_metadata_json,
+                expected_au_count=n_reads,
+            )
+
+            for i in range(n_reads):
+                # Build encrypted ChannelData list (UINT8 for genomic).
+                g_channels = []
+                for cname in g_channel_names:
+                    seg = g_segments_by_name[cname][i]
+                    data = bytes(seg.iv) + bytes(seg.tag) + bytes(seg.ciphertext)
+                    g_channels.append(ChannelData(
+                        name=cname,
+                        precision=int(Precision.UINT8) & 0xFF,
+                        compression=0,  # NONE (inner plaintext is raw uint8)
+                        n_elements=int(seg.length),
+                        data=data,
+                    ))
+                au = AccessUnit(
+                    spectrum_class=5,
+                    acquisition_mode=int(g_acquisition_mode),
+                    ms_level=0,
+                    polarity=2,
+                    retention_time=0.0,
+                    precursor_mz=0.0,
+                    precursor_charge=0,
+                    ion_mobility=0.0,
+                    base_peak_intensity=0.0,
+                    channels=g_channels,
+                    chromosome=g_chromosomes[i],
+                    position=int(g_positions[i]),
+                    mapping_quality=int(g_mapqs[i]),
+                    flags=int(g_flags[i]) & 0xFFFF,
+                )
+                _emit_raw_au(
+                    writer,
+                    dataset_id=g_dataset_id,
+                    au_sequence=i,
+                    payload=au.to_bytes(),
+                    flags=int(PacketFlag.ENCRYPTED),
+                )
+            writer.write_end_of_dataset(
+                dataset_id=g_dataset_id,
+                final_au_sequence=n_reads,
+            )
+
         writer.write_end_of_stream()
     finally:
         sp.close()
+
+
+def _read_chromosomes_compound(idx_group) -> list[str]:
+    """Read the genomic_index/chromosomes compound dataset → list[str]."""
+    rows = io.read_compound_dataset(idx_group, "chromosomes")
+    out: list[str] = []
+    for row in rows:
+        v = row["value"]
+        out.append(v.decode("utf-8") if isinstance(v, bytes) else v)
+    return out
 
 
 def _wire_polarity(raw: int) -> int:
@@ -345,6 +487,13 @@ def read_encrypted_to_file(
                 "channel_segments": {c: [] for c in meta["channel_names"]},
                 "header_segments": [],
                 "used_encrypted_headers": False,
+                # M90.8: genomic-only accumulator, populated by
+                # _ingest_encrypted_au when spectrum_class == 5.
+                "is_genomic": meta["spectrum_class"] == "TTIOGenomicRead",
+                "genomic_chromosomes": [],
+                "genomic_positions": [],
+                "genomic_mapqs": [],
+                "genomic_flags": [],
             }
         elif ptype == int(PacketType.PROTECTION_METADATA):
             pm = _decode_protection_metadata(payload)
@@ -379,13 +528,18 @@ def read_encrypted_to_file(
         io.write_fixed_string_attr(study, "title", stream_meta.get("title", ""))
         io.write_fixed_string_attr(study, "isa_investigation_id",
                                      stream_meta.get("isa_investigation", ""))
-        ms_runs = study.create_group("ms_runs")
-        names = ",".join(d["meta"]["name"] for _, d in sorted(datasets.items()))
-        io.write_fixed_string_attr(ms_runs, "_run_names", names)
+        # M90.8: split datasets into MS vs genomic for output.
+        ms_datasets = {did: d for did, d in datasets.items()
+                        if not d.get("is_genomic")}
+        genomic_datasets = {did: d for did, d in datasets.items()
+                             if d.get("is_genomic")}
 
-        import numpy as np
-        from ..enums import Precision
-        for did, d in sorted(datasets.items()):
+        ms_runs = study.create_group("ms_runs")
+        ms_names = ",".join(d["meta"]["name"]
+                              for _, d in sorted(ms_datasets.items()))
+        io.write_fixed_string_attr(ms_runs, "_run_names", ms_names)
+
+        for did, d in sorted(ms_datasets.items()):
             meta = d["meta"]
             run_group = ms_runs.create_group(meta["name"])
             io.write_int_attr(run_group, "acquisition_mode",
@@ -429,6 +583,83 @@ def read_encrypted_to_file(
             if d["used_encrypted_headers"]:
                 io.write_au_header_segments(idx, "au_header_segments",
                                               d["header_segments"])
+
+        # M90.8: write genomic_runs/ if any genomic datasets came
+        # through the stream.
+        if genomic_datasets:
+            g_runs_group = study.create_group("genomic_runs")
+            g_names = ",".join(d["meta"]["name"]
+                                 for _, d in sorted(genomic_datasets.items()))
+            io.write_fixed_string_attr(g_runs_group, "_run_names", g_names)
+            for did, d in sorted(genomic_datasets.items()):
+                meta = d["meta"]
+                g_metadata = json.loads(meta.get("instrument_json") or "{}")
+                g_run_group = g_runs_group.create_group(meta["name"])
+                io.write_int_attr(g_run_group, "acquisition_mode",
+                                    meta["acquisition_mode"])
+                io.write_fixed_string_attr(g_run_group, "spectrum_class",
+                                             meta["spectrum_class"])
+                io.write_fixed_string_attr(g_run_group, "modality",
+                                             g_metadata.get("modality", ""))
+                io.write_fixed_string_attr(g_run_group, "platform",
+                                             g_metadata.get("platform", ""))
+                io.write_fixed_string_attr(g_run_group, "reference_uri",
+                                             g_metadata.get("reference_uri", ""))
+                io.write_fixed_string_attr(g_run_group, "sample_name",
+                                             g_metadata.get("sample_name", ""))
+
+                g_sig = g_run_group.create_group("signal_channels")
+                io.write_fixed_string_attr(g_sig, "channel_names",
+                                             ",".join(meta["channel_names"]))
+                for cname in meta["channel_names"]:
+                    segs = d["channel_segments"][cname]
+                    io.write_channel_segments(g_sig, f"{cname}_segments", segs)
+                    g_sig.set_attribute(f"{cname}_algorithm", "aes-256-gcm")
+                    pm = protection.get(did)
+                    if pm:
+                        g_sig.set_attribute(f"{cname}_wrapped_dek",
+                                             pm["wrapped_dek"])
+                        g_sig.set_attribute(f"{cname}_kek_algorithm",
+                                             pm["kek_algorithm"])
+
+                g_idx = g_run_group.create_group("genomic_index")
+                first_segs = next(iter(d["channel_segments"].values()))
+                n_reads = len(first_segs)
+                io.write_int_attr(g_idx, "count", n_reads)
+                offsets_arr = np.array(
+                    [s.offset for s in first_segs], dtype="<u8",
+                )
+                lengths_arr = np.array(
+                    [s.length for s in first_segs], dtype="<u4",
+                )
+                ds_off = g_idx.create_dataset(
+                    "offsets", Precision.UINT64, n_reads,
+                )
+                ds_off.write(offsets_arr)
+                ds_len = g_idx.create_dataset(
+                    "lengths", Precision.UINT32, n_reads,
+                )
+                ds_len.write(lengths_arr)
+                # Per-read genomic suffix columns from the AU stream.
+                ds_pos = g_idx.create_dataset(
+                    "positions", Precision.INT64, n_reads,
+                )
+                ds_pos.write(np.array(d["genomic_positions"], dtype=np.int64))
+                ds_mq = g_idx.create_dataset(
+                    "mapping_qualities", Precision.UINT8, n_reads,
+                )
+                ds_mq.write(np.array(d["genomic_mapqs"], dtype=np.uint8))
+                ds_fl = g_idx.create_dataset(
+                    "flags", Precision.UINT32, n_reads,
+                )
+                ds_fl.write(np.array(d["genomic_flags"], dtype=np.uint32))
+                # Chromosomes compound (VL string column).
+                io.write_compound_dataset(
+                    g_idx,
+                    "chromosomes",
+                    [{"value": c} for c in d["genomic_chromosomes"]],
+                    [("value", io.vl_str())],
+                )
     finally:
         sp_out.close()
 
@@ -493,6 +724,12 @@ def _ingest_encrypted_au(d: dict, *, header, payload: bytes,
         # variant. We don't decode the filter header; we do need to
         # skip it to reach the channels. Delegate to AccessUnit.
         au = AccessUnit.from_bytes(payload)
+        # M90.8: capture genomic suffix when this is a genomic AU.
+        if d.get("is_genomic"):
+            d["genomic_chromosomes"].append(au.chromosome)
+            d["genomic_positions"].append(int(au.position))
+            d["genomic_mapqs"].append(int(au.mapping_quality))
+            d["genomic_flags"].append(int(au.flags) & 0xFFFFFFFF)
         # AccessUnit.from_bytes already parsed channels; retrieve
         # them directly.
         for cname in list(d["channel_segments"].keys()):
