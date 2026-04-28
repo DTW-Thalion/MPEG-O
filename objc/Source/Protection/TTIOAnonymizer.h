@@ -39,6 +39,32 @@
 @property (nonatomic) NSInteger coarsenChemicalShiftDecimals; // -1 = disabled
 @property (nonatomic) BOOL stripMetadataFields;
 
+// M90.3 — genomic anonymisation policies. When source has no
+// genomic_runs, these are silent no-ops.
+
+/** Replace every read_name on every genomic run with the empty
+ *  string. Other genomic fields are preserved. */
+@property (nonatomic) BOOL stripReadNames;
+
+/** Replace every per-base Phred quality score with a single
+ *  caller-specified constant (default 30). The "randomise" name
+ *  matches the M90 spec language; the actual replacement is
+ *  deterministic per-read so anonymised .tio files stay
+ *  reproducible. */
+@property (nonatomic) BOOL randomiseQualities;
+
+/** The per-base byte (Phred score) substituted in by
+ *  randomiseQualities. Defaults to 30. */
+@property (nonatomic) uint8_t randomiseQualitiesConstant;
+
+/** A list of (chromosome, start, end) tuples; any read whose
+ *  mapping position falls in any region has its sequence and
+ *  qualities bytes zeroed (kept in the index so downstream tooling
+ *  iterating by index still sees N reads). Each entry is an
+ *  NSArray of three elements: NSString chr, NSNumber start (int64),
+ *  NSNumber end (int64). nil means "no regions to mask". */
+@property (nonatomic, copy) NSArray<NSArray *> *maskRegions;
+
 @end
 
 @interface TTIOAnonymizationResult : NSObject
@@ -49,6 +75,11 @@
 @property (nonatomic) NSUInteger chemicalShiftValuesCoarsened;
 @property (nonatomic) NSUInteger metabolitesMasked;
 @property (nonatomic) NSUInteger metadataFieldsStripped;
+// M90.3 — genomic counters. Populated when the corresponding
+// policy is enabled and the source has genomic runs.
+@property (nonatomic) NSUInteger readNamesStripped;
+@property (nonatomic) NSUInteger qualitiesRandomised;
+@property (nonatomic) NSUInteger readsInMaskedRegion;
 @property (nonatomic, copy) NSArray<NSString *> *policiesApplied;
 
 @end

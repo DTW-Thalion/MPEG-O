@@ -75,6 +75,7 @@ TTIOTests_OBJC_FILES = \
 	TestM87BamImporter.m \
 	TestM88CramBamRoundTrip.m \
 	TestM89GenomicTransport.m \
+	TestM90GenomicProtection.m \
 	TestV4EdgeCases.m \
 	TestV8Hdf5Corruption.m \
 	TestC1ToolsCli.m \

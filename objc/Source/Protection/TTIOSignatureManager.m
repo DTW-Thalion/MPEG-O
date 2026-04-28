@@ -557,6 +557,148 @@ static BOOL markPQCPreviewFeature(TTIOHDF5Group *root, NSError **error)
                          error:error];
 }
 
+#pragma mark - M90.2 Genomic run-level convenience
+
+// Channels signed by signGenomicRun: / verifyGenomicRun:. The
+// chromosomes compound is intentionally NOT signed — see the header
+// docstring for rationale.
+static NSString *const kSignalChannelNames[] = {
+    @"sequences", @"qualities",
+};
+static NSString *const kIndexColumnNames[] = {
+    @"offsets", @"lengths", @"positions", @"mapping_qualities", @"flags",
+};
+
+// Test whether ``parentPath/childName`` exists in the file. Used to
+// silently skip datasets that aren't present (e.g. encrypted files
+// where signal channels become *_segments compounds).
+static BOOL fileHasObjectAtPath(NSString *filePath, NSString *objectPath)
+{
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:filePath error:NULL];
+    if (!f) return NO;
+    htri_t exists = H5Lexists([f rootGroup].groupId,
+                                [objectPath UTF8String], H5P_DEFAULT);
+    [f close];
+    return exists > 0;
+}
+
++ (NSDictionary<NSString *, NSString *> *)
+    signGenomicRun:(NSString *)runName
+            inFile:(NSString *)filePath
+           withKey:(NSData *)hmacKey
+             error:(NSError **)error
+{
+    NSMutableDictionary<NSString *, NSString *> *out =
+        [NSMutableDictionary dictionary];
+    NSString *runPath =
+        [NSString stringWithFormat:@"/study/genomic_runs/%@", runName];
+
+    // ── signal_channels/{sequences, qualities}
+    for (size_t i = 0; i < sizeof(kSignalChannelNames) / sizeof(kSignalChannelNames[0]); i++) {
+        NSString *cname = kSignalChannelNames[i];
+        NSString *subPath =
+            [NSString stringWithFormat:@"signal_channels/%@", cname];
+        NSString *fullPath =
+            [NSString stringWithFormat:@"%@/%@", runPath, subPath];
+        if (!fileHasObjectAtPath(filePath, fullPath)) continue;
+        NSError *signErr = nil;
+        if (![self signDataset:fullPath
+                        inFile:filePath
+                       withKey:hmacKey
+                         error:&signErr]) {
+            if (error) *error = signErr;
+            return nil;
+        }
+        // Read back the stored attribute so the caller has the
+        // same return shape as Python's sign_genomic_run.
+        TTIOHDF5File *file =
+            [TTIOHDF5File openReadOnlyAtPath:filePath error:NULL];
+        if (file) {
+            hid_t did = openDatasetByPath([file rootGroup].groupId, fullPath);
+            if (did >= 0) {
+                NSString *stored =
+                    readStringAttribute(did, "ttio_signature");
+                H5Dclose(did);
+                if (stored) out[subPath] = stored;
+            }
+            [file close];
+        }
+    }
+
+    // ── genomic_index/{offsets, lengths, positions,
+    //                    mapping_qualities, flags}
+    for (size_t i = 0; i < sizeof(kIndexColumnNames) / sizeof(kIndexColumnNames[0]); i++) {
+        NSString *cname = kIndexColumnNames[i];
+        NSString *subPath =
+            [NSString stringWithFormat:@"genomic_index/%@", cname];
+        NSString *fullPath =
+            [NSString stringWithFormat:@"%@/%@", runPath, subPath];
+        if (!fileHasObjectAtPath(filePath, fullPath)) continue;
+        NSError *signErr = nil;
+        if (![self signDataset:fullPath
+                        inFile:filePath
+                       withKey:hmacKey
+                         error:&signErr]) {
+            if (error) *error = signErr;
+            return nil;
+        }
+        TTIOHDF5File *file =
+            [TTIOHDF5File openReadOnlyAtPath:filePath error:NULL];
+        if (file) {
+            hid_t did = openDatasetByPath([file rootGroup].groupId, fullPath);
+            if (did >= 0) {
+                NSString *stored =
+                    readStringAttribute(did, "ttio_signature");
+                H5Dclose(did);
+                if (stored) out[subPath] = stored;
+            }
+            [file close];
+        }
+    }
+    return out;
+}
+
++ (BOOL)verifyGenomicRun:(NSString *)runName
+                  inFile:(NSString *)filePath
+                 withKey:(NSData *)hmacKey
+                   error:(NSError **)error
+{
+    NSString *runPath =
+        [NSString stringWithFormat:@"/study/genomic_runs/%@", runName];
+    for (size_t i = 0; i < sizeof(kSignalChannelNames) / sizeof(kSignalChannelNames[0]); i++) {
+        NSString *cname = kSignalChannelNames[i];
+        NSString *fullPath =
+            [NSString stringWithFormat:@"%@/signal_channels/%@",
+                runPath, cname];
+        if (!fileHasObjectAtPath(filePath, fullPath)) continue;
+        NSError *vErr = nil;
+        if (![self verifyDataset:fullPath
+                          inFile:filePath
+                         withKey:hmacKey
+                           error:&vErr]) {
+            if (error) *error = vErr;
+            return NO;
+        }
+    }
+    for (size_t i = 0; i < sizeof(kIndexColumnNames) / sizeof(kIndexColumnNames[0]); i++) {
+        NSString *cname = kIndexColumnNames[i];
+        NSString *fullPath =
+            [NSString stringWithFormat:@"%@/genomic_index/%@",
+                runPath, cname];
+        if (!fileHasObjectAtPath(filePath, fullPath)) continue;
+        NSError *vErr = nil;
+        if (![self verifyDataset:fullPath
+                          inFile:filePath
+                         withKey:hmacKey
+                           error:&vErr]) {
+            if (error) *error = vErr;
+            return NO;
+        }
+    }
+    return YES;
+}
+
+
 #pragma mark - Provenance signing
 
 + (BOOL)signProvenanceInRun:(NSString *)runPath

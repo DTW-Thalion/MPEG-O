@@ -267,11 +267,38 @@ static void appendU32LE(NSMutableData *d, uint32_t v)
                           key:(NSData *)key
                         error:(NSError **)error
 {
+    return [self encryptChannelToSegments:plaintextFloat64
+                                  offsets:offsets
+                                  lengths:lengths
+                                 nSpectra:nSpectra
+                          bytesPerElement:8
+                                datasetId:datasetId
+                              channelName:channelName
+                                      key:key
+                                    error:error];
+}
+
++ (NSArray<TTIOChannelSegment *> *)
+    encryptChannelToSegments:(NSData *)plaintext
+                      offsets:(const uint64_t *)offsets
+                      lengths:(const uint32_t *)lengths
+                     nSpectra:(NSUInteger)nSpectra
+              bytesPerElement:(NSUInteger)bpe
+                    datasetId:(uint16_t)datasetId
+                  channelName:(NSString *)channelName
+                          key:(NSData *)key
+                        error:(NSError **)error
+{
+    if (bpe == 0) {
+        if (error) *error = makeErr(kErrCrypto,
+            @"bytesPerElement must be > 0");
+        return nil;
+    }
     NSMutableArray *out = [NSMutableArray arrayWithCapacity:nSpectra];
-    const uint8_t *all = (const uint8_t *)plaintextFloat64.bytes;
+    const uint8_t *all = (const uint8_t *)plaintext.bytes;
     for (NSUInteger i = 0; i < nSpectra; i++) {
-        NSUInteger byteOffset = (NSUInteger)offsets[i] * 8;
-        NSUInteger byteLength = (NSUInteger)lengths[i] * 8;
+        NSUInteger byteOffset = (NSUInteger)offsets[i] * bpe;
+        NSUInteger byteLength = (NSUInteger)lengths[i] * bpe;
         NSData *chunk = [NSData dataWithBytes:all + byteOffset length:byteLength];
         NSData *aad = [self aadForChannel:channelName
                                   datasetId:datasetId
@@ -303,6 +330,26 @@ static void appendU32LE(NSMutableData *d, uint32_t v)
                                     key:(NSData *)key
                                   error:(NSError **)error
 {
+    return [self decryptChannelFromSegments:segments
+                            bytesPerElement:8
+                                  datasetId:datasetId
+                                channelName:channelName
+                                        key:key
+                                      error:error];
+}
+
++ (NSData *)decryptChannelFromSegments:(NSArray<TTIOChannelSegment *> *)segments
+                        bytesPerElement:(NSUInteger)bpe
+                              datasetId:(uint16_t)datasetId
+                            channelName:(NSString *)channelName
+                                    key:(NSData *)key
+                                  error:(NSError **)error
+{
+    if (bpe == 0) {
+        if (error) *error = makeErr(kErrCrypto,
+            @"bytesPerElement must be > 0");
+        return nil;
+    }
     NSMutableData *out = [NSMutableData data];
     for (NSUInteger i = 0; i < segments.count; i++) {
         TTIOChannelSegment *seg = segments[i];
@@ -316,11 +363,12 @@ static void appendU32LE(NSMutableData *d, uint32_t v)
                                                   aad:aad
                                                 error:error];
         if (!plain) return nil;
-        if (plain.length != (NSUInteger)seg.length * 8) {
+        if (plain.length != (NSUInteger)seg.length * bpe) {
             if (error) *error = makeErr(kErrCrypto,
-                @"channel %@ segment %lu: decrypted %lu bytes, expected %u",
+                @"channel %@ segment %lu: decrypted %lu bytes, expected %lu",
                 channelName, (unsigned long)i,
-                (unsigned long)plain.length, (unsigned)seg.length * 8);
+                (unsigned long)plain.length,
+                (unsigned long)((NSUInteger)seg.length * bpe));
             return nil;
         }
         [out appendData:plain];

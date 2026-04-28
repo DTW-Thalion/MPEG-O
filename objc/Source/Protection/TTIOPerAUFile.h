@@ -63,6 +63,50 @@ NS_ASSUME_NONNULL_BEGIN
        providerName:(nullable NSString *)providerName
               error:(NSError * _Nullable *)error;
 
+#pragma mark - M90.4 — region-based per-AU encryption
+
+/** Encrypt genomic signal channels with a per-chromosome key map.
+ *
+ *  Reads whose chromosome appears in ``keyMap`` are AES-256-GCM
+ *  encrypted with the corresponding 32-byte key. Reads on chromosomes
+ *  NOT in ``keyMap`` are stored as "clear segments" — the same
+ *  ``<channel>_segments`` compound is reused, but with a length-0 IV
+ *  / length-0 tag and the raw plaintext bytes stored in the
+ *  ``ciphertext`` slot. The decoder branches on ``len(seg.iv)``, so
+ *  old M90.1 files (every IV is exactly 12 bytes) decode unchanged
+ *  under the new code path.
+ *
+ *  MS runs are NOT touched — chromosome is a genomic concept. Use
+ *  ``encryptFilePath:`` for MS encryption.
+ *
+ *  Sets the ``opt_per_au_encryption`` and
+ *  ``opt_region_keyed_encryption`` feature flags on the root group.
+ *  The per-channel ``<channel>_algorithm`` attribute is set to
+ *  ``"aes-256-gcm-by-region"``.
+ */
++ (BOOL)encryptFilePathByRegion:(NSString *)path
+                          keyMap:(NSDictionary<NSString *, NSData *> *)keyMap
+                    providerName:(nullable NSString *)providerName
+                           error:(NSError * _Nullable *)error;
+
+/** Decrypt a region-encrypted file using a per-chromosome key map.
+ *
+ *  Caller may supply only a subset of the keys used at encryption
+ *  time. Clear segments (length-0 IV) decode without any key.
+ *  Encrypted segments whose chromosome key isn't in ``keyMap``
+ *  cause the call to fail (no key available).
+ *
+ *  Returns ``{run_name: {channel_name: NSData uint8}}`` like
+ *  ``decryptFilePath:`` (genomic dtype is uint8, one ASCII byte per
+ *  base). MS runs are not part of region-keyed encryption; this
+ *  helper does not touch them.
+ */
++ (nullable NSDictionary<NSString *, NSDictionary *> *)
+    decryptFilePathByRegion:(NSString *)path
+                      keyMap:(NSDictionary<NSString *, NSData *> *)keyMap
+                providerName:(nullable NSString *)providerName
+                       error:(NSError * _Nullable *)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

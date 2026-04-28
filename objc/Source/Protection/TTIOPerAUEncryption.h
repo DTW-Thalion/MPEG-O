@@ -116,7 +116,11 @@ NS_ASSUME_NONNULL_BEGIN
 /** Slice ``plaintextFloat64`` into per-spectrum rows and encrypt each
  *  independently with a fresh IV. ``plaintextFloat64`` is a flat float64
  *  LE buffer; ``offsets[i]`` and ``lengths[i]`` index the i-th
- *  spectrum's slice. */
+ *  spectrum's slice.
+ *
+ *  Convenience overload that calls the generalised method below with
+ *  ``bytesPerElement = 8`` (float64). MS callers stay on this entry
+ *  point; M90.1 genomic callers reach for the bytesPerElement form. */
 + (nullable NSArray<TTIOChannelSegment *> *)
     encryptChannelToSegments:(NSData *)plaintextFloat64
                       offsets:(const uint64_t *)offsets
@@ -127,9 +131,35 @@ NS_ASSUME_NONNULL_BEGIN
                           key:(NSData *)key
                         error:(NSError * _Nullable *)error;
 
+/** Generalised: ``bytesPerElement`` is the per-element byte width
+ *  (8 for float64 MS path, 1 for uint8 genomic path).
+ *  ``offsets[i]`` and ``lengths[i]`` index in *elements*, not bytes —
+ *  the helper multiplies by ``bytesPerElement`` internally. */
++ (nullable NSArray<TTIOChannelSegment *> *)
+    encryptChannelToSegments:(NSData *)plaintext
+                      offsets:(const uint64_t *)offsets
+                      lengths:(const uint32_t *)lengths
+                     nSpectra:(NSUInteger)nSpectra
+              bytesPerElement:(NSUInteger)bytesPerElement
+                    datasetId:(uint16_t)datasetId
+                  channelName:(NSString *)channelName
+                          key:(NSData *)key
+                        error:(NSError * _Nullable *)error;
+
 /** Decrypt every row in order and concatenate plaintext float64 bytes. */
 + (nullable NSData *)
     decryptChannelFromSegments:(NSArray<TTIOChannelSegment *> *)segments
+                      datasetId:(uint16_t)datasetId
+                    channelName:(NSString *)channelName
+                            key:(NSData *)key
+                          error:(NSError * _Nullable *)error;
+
+/** Generalised decrypt — caller specifies the per-element byte
+ *  width used to validate each segment's plaintext length. Default
+ *  (8) preserves the MS path; pass 1 for the genomic uint8 path. */
++ (nullable NSData *)
+    decryptChannelFromSegments:(NSArray<TTIOChannelSegment *> *)segments
+              bytesPerElement:(NSUInteger)bytesPerElement
                       datasetId:(uint16_t)datasetId
                     channelName:(NSString *)channelName
                             key:(NSData *)key

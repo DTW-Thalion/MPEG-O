@@ -12,6 +12,23 @@
 #import "ValueClasses/TTIOEncodingSpec.h"
 #import "ValueClasses/TTIOEnums.h"
 #import "HDF5/TTIOFeatureFlags.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOGenomicIndex.h"
+#import "Genomics/TTIOAlignedRead.h"
+#import "Genomics/TTIOWrittenGenomicRun.h"
+
+// Forward-declare the private class method on TTIOSpectralDataset
+// that writes one genomic_runs subtree via the HDF5 fast path.
+// Defined in TTIOSpectralDataset.m; not exposed in the public
+// header but callable from within the framework.
+@interface TTIOSpectralDataset (TTIOPrivateGenomicWrite)
++ (BOOL)writeGenomicRun:(TTIOWrittenGenomicRun *)run
+                  toGroup:(TTIOHDF5Group *)group
+                     name:(NSString *)name
+                    error:(NSError **)error;
+@end
 
 #pragma mark - Policy
 
@@ -24,6 +41,8 @@
         _rareMetaboliteThreshold = 0.05;
         _coarsenMzDecimals = -1;
         _coarsenChemicalShiftDecimals = -1;
+        // M90.3 defaults
+        _randomiseQualitiesConstant = 30;
     }
     return self;
 }
@@ -241,7 +260,260 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
               transitions:nil];
 
     if (![out writeToFilePath:outputPath error:error]) return nil;
+
+    // M90.3 — apply genomic policies and append /study/genomic_runs/
+    // to the just-written file. Source.genomicRuns is iterated lazily
+    // (M82 reader); we materialise reads into TTIOWrittenGenomicRun
+    // objects with the requested transforms applied, then write each
+    // subtree under the existing /study group via the HDF5 fast path.
+    if (source.genomicRuns.count > 0) {
+        if (![self _applyGenomicPolicies:source
+                                  output:outputPath
+                                  policy:policy
+                                  result:result
+                                   error:error]) {
+            return nil;
+        }
+    }
     return result;
+}
+
+
+#pragma mark - M90.3 Genomic policies
+
++ (BOOL)_applyGenomicPolicies:(TTIOSpectralDataset *)source
+                       output:(NSString *)outputPath
+                       policy:(TTIOAnonymizationPolicy *)policy
+                       result:(TTIOAnonymizationResult *)result
+                        error:(NSError **)error
+{
+    // We need a mutable copy of the appliedPolicies list to track
+    // M90.3 policy firings — the result property is `copy` so we
+    // can't mutate it in place. Take ownership of the existing list
+    // (likely an immutable NSArray) into a mutable shadow.
+    NSMutableArray<NSString *> *applied =
+        [NSMutableArray arrayWithArray:result.policiesApplied ?: @[]];
+
+    NSArray<NSString *> *runNames =
+        [[source.genomicRuns allKeys] sortedArrayUsingSelector:@selector(compare:)];
+
+    NSMutableDictionary<NSString *, TTIOWrittenGenomicRun *> *transformed =
+        [NSMutableDictionary dictionary];
+
+    for (NSString *runName in runNames) {
+        TTIOGenomicRun *gr = source.genomicRuns[runName];
+        NSUInteger n = gr.readCount;
+
+        // Materialise per-read fields by iterating the lazy run.
+        // O(N) reads — anonymizer is one-shot offline so the cost
+        // is acceptable.
+        NSMutableArray<NSString *> *readNames =
+            [NSMutableArray arrayWithCapacity:n];
+        NSMutableArray<NSString *> *cigars =
+            [NSMutableArray arrayWithCapacity:n];
+        NSMutableArray<NSData *> *sequencesList =
+            [NSMutableArray arrayWithCapacity:n];
+        NSMutableArray<NSMutableData *> *qualitiesList =
+            [NSMutableArray arrayWithCapacity:n];
+        NSMutableArray<NSString *> *mateChromosomes =
+            [NSMutableArray arrayWithCapacity:n];
+        NSMutableData *matePositionsData =
+            [NSMutableData dataWithLength:n * sizeof(int64_t)];
+        int64_t *matePositions = (int64_t *)matePositionsData.mutableBytes;
+        NSMutableData *templateLengthsData =
+            [NSMutableData dataWithLength:n * sizeof(int32_t)];
+        int32_t *templateLengths =
+            (int32_t *)templateLengthsData.mutableBytes;
+
+        for (NSUInteger i = 0; i < n; i++) {
+            NSError *readErr = nil;
+            TTIOAlignedRead *r = [gr readAtIndex:i error:&readErr];
+            if (!r) {
+                if (error) *error = readErr;
+                return NO;
+            }
+            [readNames addObject:r.readName ?: @""];
+            [cigars    addObject:r.cigar ?: @""];
+            NSData *seqBytes =
+                [r.sequence dataUsingEncoding:NSASCIIStringEncoding] ?: [NSData data];
+            [sequencesList addObject:seqBytes];
+            NSMutableData *q = [r.qualities mutableCopy] ?: [NSMutableData data];
+            [qualitiesList addObject:q];
+            [mateChromosomes addObject:r.mateChromosome ?: @""];
+            matePositions[i] = r.matePosition;
+            templateLengths[i] = r.templateLength;
+        }
+
+        // ── strip_read_names ─────────────────────────────────────
+        if (policy.stripReadNames) {
+            for (NSUInteger i = 0; i < n; i++) {
+                [readNames replaceObjectAtIndex:i withObject:@""];
+            }
+            result.readNamesStripped += n;
+            if (![applied containsObject:@"strip_read_names"]) {
+                [applied addObject:@"strip_read_names"];
+            }
+        }
+
+        // ── randomise_qualities ──────────────────────────────────
+        if (policy.randomiseQualities) {
+            uint8_t k = policy.randomiseQualitiesConstant;
+            for (NSUInteger i = 0; i < n; i++) {
+                NSMutableData *q = qualitiesList[i];
+                uint8_t *bytes = (uint8_t *)q.mutableBytes;
+                memset(bytes, k, q.length);
+            }
+            result.qualitiesRandomised += n;
+            if (![applied containsObject:@"randomise_qualities"]) {
+                [applied addObject:@"randomise_qualities"];
+            }
+        }
+
+        // ── mask_regions ─────────────────────────────────────────
+        if (policy.maskRegions.count > 0) {
+            for (NSUInteger i = 0; i < n; i++) {
+                NSString *chromI = [gr.index chromosomeAt:i];
+                int64_t posI = [gr.index positionAt:i];
+                BOOL hit = NO;
+                for (NSArray *region in policy.maskRegions) {
+                    if (region.count != 3) continue;
+                    NSString *rChr = region[0];
+                    int64_t rStart = [region[1] longLongValue];
+                    int64_t rEnd   = [region[2] longLongValue];
+                    if ([chromI isEqualToString:rChr]
+                        && posI >= rStart && posI <= rEnd) {
+                        hit = YES;
+                        break;
+                    }
+                }
+                if (hit) {
+                    NSMutableData *zeroSeq =
+                        [NSMutableData dataWithLength:[sequencesList[i] length]];
+                    [sequencesList replaceObjectAtIndex:i withObject:zeroSeq];
+                    NSMutableData *q = qualitiesList[i];
+                    memset(q.mutableBytes, 0, q.length);
+                    result.readsInMaskedRegion += 1;
+                }
+            }
+            if (![applied containsObject:@"mask_regions"]) {
+                [applied addObject:@"mask_regions"];
+            }
+        }
+
+        // ── Re-pack into the flat WrittenGenomicRun layout. ──────
+        NSMutableData *lengthsData =
+            [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+        uint32_t *lengths = (uint32_t *)lengthsData.mutableBytes;
+        NSMutableData *offsetsData =
+            [NSMutableData dataWithLength:n * sizeof(uint64_t)];
+        uint64_t *offsets = (uint64_t *)offsetsData.mutableBytes;
+        uint64_t running = 0;
+        NSMutableData *sequencesFlat = [NSMutableData data];
+        NSMutableData *qualitiesFlat = [NSMutableData data];
+        for (NSUInteger i = 0; i < n; i++) {
+            NSData *s = sequencesList[i];
+            offsets[i] = running;
+            lengths[i] = (uint32_t)s.length;
+            running += s.length;
+            [sequencesFlat appendData:s];
+            [qualitiesFlat appendData:qualitiesList[i]];
+        }
+
+        // Repack positions / mapping_qualities / flags / chromosomes
+        // from the source index (no per-read transform on these — only
+        // sequences/qualities/read_names/cigars are touched).
+        NSMutableData *positionsData =
+            [NSMutableData dataWithLength:n * sizeof(int64_t)];
+        int64_t *positions = (int64_t *)positionsData.mutableBytes;
+        NSMutableData *mapqsData =
+            [NSMutableData dataWithLength:n * sizeof(uint8_t)];
+        uint8_t *mapqs = (uint8_t *)mapqsData.mutableBytes;
+        NSMutableData *flagsData =
+            [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+        uint32_t *flags = (uint32_t *)flagsData.mutableBytes;
+        NSMutableArray<NSString *> *chromosomes =
+            [NSMutableArray arrayWithCapacity:n];
+        for (NSUInteger i = 0; i < n; i++) {
+            positions[i] = [gr.index positionAt:i];
+            mapqs[i]     = [gr.index mappingQualityAt:i];
+            flags[i]     = [gr.index flagsAt:i];
+            [chromosomes addObject:[gr.index chromosomeAt:i] ?: @""];
+        }
+
+        TTIOWrittenGenomicRun *written =
+            [[TTIOWrittenGenomicRun alloc]
+                initWithAcquisitionMode:gr.acquisitionMode
+                           referenceUri:gr.referenceUri ?: @""
+                               platform:gr.platform ?: @""
+                             sampleName:gr.sampleName ?: @""
+                              positions:positionsData
+                       mappingQualities:mapqsData
+                                  flags:flagsData
+                              sequences:sequencesFlat
+                              qualities:qualitiesFlat
+                                offsets:offsetsData
+                                lengths:lengthsData
+                                 cigars:cigars
+                              readNames:readNames
+                        mateChromosomes:mateChromosomes
+                          matePositions:matePositionsData
+                        templateLengths:templateLengthsData
+                            chromosomes:chromosomes
+                     signalCompression:TTIOCompressionZlib];
+        transformed[runName] = written;
+    }
+
+    // Open the just-written file and append /study/genomic_runs/.
+    TTIOHDF5File *file =
+        [TTIOHDF5File openAtPath:outputPath error:error];
+    if (!file) return NO;
+    TTIOHDF5Group *root = file.rootGroup;
+    TTIOHDF5Group *study = [root openGroupNamed:@"study" error:error];
+    if (!study) { [file close]; return NO; }
+    TTIOHDF5Group *gRunsGroup = nil;
+    if ([study hasChildNamed:@"genomic_runs"]) {
+        gRunsGroup = [study openGroupNamed:@"genomic_runs" error:error];
+    } else {
+        gRunsGroup = [study createGroupNamed:@"genomic_runs" error:error];
+    }
+    if (!gRunsGroup) { [file close]; return NO; }
+    NSArray<NSString *> *gNames =
+        [transformed.allKeys sortedArrayUsingSelector:@selector(compare:)];
+    if (![gRunsGroup setStringAttribute:@"_run_names"
+                                  value:[gNames componentsJoinedByString:@","]
+                                  error:error]) {
+        [file close]; return NO;
+    }
+    for (NSString *gName in gNames) {
+        TTIOWrittenGenomicRun *wgr = transformed[gName];
+        if (![TTIOSpectralDataset writeGenomicRun:wgr
+                                            toGroup:gRunsGroup
+                                               name:gName
+                                              error:error]) {
+            [file close];
+            return NO;
+        }
+    }
+
+    // Set the opt_genomic feature flag so the reader picks up the
+    // genomic_runs subtree on round-trip.
+    NSArray *currentFeatures = [TTIOFeatureFlags featuresForRoot:root] ?: @[];
+    if (![currentFeatures containsObject:[TTIOFeatureFlags featureOptGenomic]]) {
+        NSMutableArray *updated = [currentFeatures mutableCopy];
+        [updated addObject:[TTIOFeatureFlags featureOptGenomic]];
+        NSString *version = [TTIOFeatureFlags formatVersionForRoot:root] ?: @"1.4";
+        if (![TTIOFeatureFlags writeFormatVersion:version
+                                          features:updated
+                                            toRoot:root
+                                             error:error]) {
+            [file close]; return NO;
+        }
+    }
+
+    [file close];
+
+    result.policiesApplied = applied;
+    return YES;
 }
 
 @end
