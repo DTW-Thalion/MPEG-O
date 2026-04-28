@@ -1163,20 +1163,33 @@ public class SpectralDataset implements
                 }
             }
 
-            // Phase 1 (post-M91): per-run provenance, mirroring
-            // AcquisitionRun.writeProvenance — write a JSON array
-            // attribute on the run group itself. The empty
-            // ``provenance`` subgroup matches the MS layout exactly so
-            // both modalities present the same on-disk shape to
-            // downstream tools.
+            // Phase 2 (post-M91): per-run provenance, mirroring
+            // AcquisitionRun.writeProvenance. On the HDF5 fast path
+            // we write the canonical compound ``provenance/steps``
+            // (the same layout Python writes). The JSON attribute is
+            // also emitted so non-HDF5 providers
+            // (memory/sqlite/zarr) and legacy Java readers still see
+            // the chain.
             if (!run.provenanceRecords().isEmpty()) {
                 try (var prov = rg.createGroup("provenance")) {
-                    // The subgroup exists as a marker; the canonical
-                    // payload is the attribute below. Closing here is
-                    // intentional — no children to write on the Java
-                    // side (Python additionally emits a compound at
-                    // ``provenance/steps``; Java's reader does not
-                    // parse that path so we don't write it either).
+                    Hdf5Group h5 = global.thalion.ttio.providers.Hdf5Provider
+                        .tryUnwrapHdf5Group(prov);
+                    if (h5 != null) {
+                        List<ProvenanceRecord> recs = run.provenanceRecords();
+                        Hdf5CompoundIO.writeCompoundDataset(h5, "steps",
+                            Hdf5CompoundIO.provenanceSchema(),
+                            recs.size(),
+                            (row, pool) -> {
+                                ProvenanceRecord r = recs.get(row);
+                                return new Object[]{
+                                    r.timestampUnix(),
+                                    pool.addString(r.software()),
+                                    pool.addString(r.parametersJson()),
+                                    pool.addString(r.inputRefsJson()),
+                                    pool.addString(r.outputRefsJson())
+                                };
+                            });
+                    }
                 }
                 rg.setAttribute("provenance_json",
                     buildProvenanceJsonArray(run.provenanceRecords()));

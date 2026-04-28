@@ -565,8 +565,32 @@ public class AcquisitionRun implements
     }
 
     private void writeProvenance(StorageGroup runGroup) {
-        // v0.3+: per-run provenance as JSON attribute (compound dataset deferred)
+        // Per-run provenance. On the HDF5 fast path we write the
+        // canonical compound dataset {@code provenance/steps} matching
+        // Python's writer (cross-language round-trip). The JSON
+        // attribute is also written so non-HDF5 providers
+        // (memory/sqlite/zarr) and legacy Java readers can still
+        // recover the chain.
         try (StorageGroup prov = runGroup.createGroup("provenance")) {
+            global.thalion.ttio.hdf5.Hdf5Group h5 =
+                global.thalion.ttio.providers.Hdf5Provider
+                    .tryUnwrapHdf5Group(prov);
+            if (h5 != null) {
+                global.thalion.ttio.hdf5.Hdf5CompoundIO.writeCompoundDataset(
+                    h5, "steps",
+                    global.thalion.ttio.hdf5.Hdf5CompoundIO.provenanceSchema(),
+                    provenanceRecords.size(),
+                    (row, pool) -> {
+                        ProvenanceRecord r = provenanceRecords.get(row);
+                        return new Object[]{
+                            r.timestampUnix(),
+                            pool.addString(r.software()),
+                            pool.addString(r.parametersJson()),
+                            pool.addString(r.inputRefsJson()),
+                            pool.addString(r.outputRefsJson())
+                        };
+                    });
+            }
             StringBuilder json = new StringBuilder("[");
             for (int i = 0; i < provenanceRecords.size(); i++) {
                 if (i > 0) json.append(",");
@@ -584,11 +608,34 @@ public class AcquisitionRun implements
     }
 
     private static List<ProvenanceRecord> readProvenance(StorageGroup runGroup) {
-        // Read from provenance_json attribute (v0.2+ compat). Phase 1
-        // (post-M91): wire up the previously-deferred parser so MS runs
-        // round-trip per-run provenance the same way genomic runs do —
-        // closes the cross-modality gap that {@link Run#provenanceChain}
-        // was added to address.
+        // Phase 2 (post-M91): prefer the canonical compound dataset
+        // {@code provenance/steps} (matches Python's writer). Fall
+        // back to the {@code provenance_json} attribute so files
+        // written by older Java versions and non-HDF5 providers
+        // (memory/sqlite/zarr) still round-trip cleanly.
+        if (runGroup.hasChild("provenance")) {
+            try (StorageGroup prov = runGroup.openGroup("provenance")) {
+                global.thalion.ttio.hdf5.Hdf5Group h5 =
+                    global.thalion.ttio.providers.Hdf5Provider
+                        .tryUnwrapHdf5Group(prov);
+                if (h5 != null && h5.hasChild("steps")) {
+                    List<Object[]> rows = global.thalion.ttio.hdf5.Hdf5CompoundIO
+                        .readCompoundFull(h5, "steps",
+                            global.thalion.ttio.hdf5.Hdf5CompoundIO
+                                .provenanceSchema());
+                    List<ProvenanceRecord> out = new ArrayList<>(rows.size());
+                    for (Object[] r : rows) {
+                        out.add(new ProvenanceRecord(
+                            ((Number) r[0]).longValue(),
+                            (String) r[1],
+                            MiniJson.parseStringMap((String) r[2]),
+                            MiniJson.parseArrayOfStrings((String) r[3]),
+                            MiniJson.parseArrayOfStrings((String) r[4])));
+                    }
+                    return out;
+                }
+            }
+        }
         if (!runGroup.hasAttribute("provenance_json")) return List.of();
         Object v = runGroup.getAttribute("provenance_json");
         if (v == null) return List.of();

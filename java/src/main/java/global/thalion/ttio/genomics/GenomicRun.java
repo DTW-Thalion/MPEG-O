@@ -145,15 +145,39 @@ public class GenomicRun
                               sampleName, idx, runGroup, prov);
     }
 
-    /** Phase 1 (post-M91): read per-run provenance from the
-     *  {@code provenance_json} attribute on the genomic run group.
-     *  Mirrors {@link global.thalion.ttio.AcquisitionRun}'s on-disk
-     *  pattern (the JSON attribute is the canonical Java write format;
-     *  the Python ref impl additionally writes a
-     *  {@code provenance/steps} compound dataset, which Java does not
-     *  parse here — Java-written files round-trip cleanly because
-     *  Java's writer emits the JSON attribute too). */
+    /** Phase 2 (post-M91): read per-run provenance. Prefers the
+     *  canonical compound dataset {@code provenance/steps} (matches
+     *  Python's writer and Java's HDF5 fast path), falling back to
+     *  the {@code provenance_json} attribute for non-HDF5 providers
+     *  (memory/sqlite/zarr) and legacy Java-written files. */
     private static List<ProvenanceRecord> readPerRunProvenance(StorageGroup runGroup) {
+        if (runGroup.hasChild("provenance")) {
+            try (StorageGroup prov = runGroup.openGroup("provenance")) {
+                global.thalion.ttio.hdf5.Hdf5Group h5 =
+                    global.thalion.ttio.providers.Hdf5Provider
+                        .tryUnwrapHdf5Group(prov);
+                if (h5 != null && h5.hasChild("steps")) {
+                    List<Object[]> rows =
+                        global.thalion.ttio.hdf5.Hdf5CompoundIO
+                            .readCompoundFull(h5, "steps",
+                                global.thalion.ttio.hdf5.Hdf5CompoundIO
+                                    .provenanceSchema());
+                    List<ProvenanceRecord> out = new ArrayList<>(rows.size());
+                    for (Object[] r : rows) {
+                        out.add(new ProvenanceRecord(
+                            ((Number) r[0]).longValue(),
+                            (String) r[1],
+                            global.thalion.ttio.MiniJson.parseStringMap(
+                                (String) r[2]),
+                            global.thalion.ttio.MiniJson.parseArrayOfStrings(
+                                (String) r[3]),
+                            global.thalion.ttio.MiniJson.parseArrayOfStrings(
+                                (String) r[4])));
+                    }
+                    return out;
+                }
+            }
+        }
         if (!runGroup.hasAttribute("provenance_json")) {
             return List.of();
         }
