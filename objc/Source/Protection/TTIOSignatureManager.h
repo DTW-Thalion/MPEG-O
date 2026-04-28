@@ -99,6 +99,48 @@
             algorithm:(NSString *)algorithm
                 error:(NSError **)error;
 
+#pragma mark - M90.2 Genomic run-level convenience
+
+/** M90.2: sign every signal channel + every genomic_index column
+ *  under one genomic run with one call.
+ *
+ *  Walks ``/study/genomic_runs/<runName>/signal_channels/{sequences,
+ *  qualities}`` and ``/study/genomic_runs/<runName>/genomic_index/
+ *  {offsets, lengths, positions, mapping_qualities, flags}`` and signs
+ *  each existing dataset individually with HMAC-SHA256. The
+ *  ``chromosomes`` compound is intentionally NOT signed (the
+ *  canonical-bytes path for VL-string compounds is covered by the
+ *  dataset-level routines but the run-level helper deliberately
+ *  scopes to atomic numeric / uint8 channels for cross-language
+ *  parity with the Python reference impl).
+ *
+ *  Returns a dictionary mapping each signed sub-path
+ *  (e.g. ``"signal_channels/sequences"``,
+ *  ``"genomic_index/positions"``) to the prefixed signature stored
+ *  on that dataset's ``@ttio_signature`` attribute. Datasets that
+ *  don't exist on disk (e.g. encrypted files where signal channels
+ *  have been replaced by ``*_segments`` compounds) are silently
+ *  skipped.
+ */
++ (NSDictionary<NSString *, NSString *> *)
+    signGenomicRun:(NSString *)runName
+            inFile:(NSString *)filePath
+           withKey:(NSData *)hmacKey
+             error:(NSError **)error;
+
+/** M90.2: verify every dataset that ``signGenomicRun:`` would sign.
+ *
+ *  Returns YES iff every present, signed dataset verifies under the
+ *  key. Datasets that don't exist on disk are skipped. A present
+ *  dataset that has no ``@ttio_signature`` (i.e. wasn't signed) is
+ *  treated as a verification failure — a partial-signature run is
+ *  not a fully-signed run.
+ */
++ (BOOL)verifyGenomicRun:(NSString *)runName
+                  inFile:(NSString *)filePath
+                 withKey:(NSData *)hmacKey
+                   error:(NSError **)error;
+
 #pragma mark - Provenance signing
 
 /** Sign the `@provenance_json` attribute on the given run group.

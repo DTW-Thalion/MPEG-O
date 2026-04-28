@@ -78,6 +78,7 @@ extern void testM86GenomicCodecWiring(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
 extern void testM89GenomicTransport(void);
+extern void testM90GenomicProtection(void);
 extern void testV4EdgeCases(void);
 extern void testV8Hdf5Corruption(void);
 extern void testC1ToolsCli(void);
@@ -398,6 +399,10 @@ int main(int argc, const char *argv[])
         START_SET("M89: GenomicRead AU + filter + transport (v0.11)")
             testM89GenomicTransport();
         END_SET("M89: GenomicRead AU + filter + transport (v0.11)")
+
+        START_SET("M90: genomic protection (per-AU + signatures + anon + region)")
+            testM90GenomicProtection();
+        END_SET("M90: genomic protection (per-AU + signatures + anon + region)")
 
         START_SET("V4: edge case hardening")
             testV4EdgeCases();
