@@ -223,15 +223,19 @@ public class Hdf5Group implements AutoCloseable {
     // ── Attributes ──────────────────────────────────────────────────
 
     public void setStringAttribute(String name, String value) {
+        // M90.7: write as VL_STRING with UTF-8 encoding (matches what
+        // h5py writes by default), so Python readers can verify
+        // signatures and other string attributes written by Java.
+        // The pre-M90.7 fixed-length path was ASCII-only and reported
+        // a non-VARIABLE type to other-language readers, breaking
+        // cross-language compat on @ttio_signature etc.
         file.lockForWriting();
         long htype = -1, space = -1, aid = -1;
         try {
-            byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            int len = Math.max(bytes.length, 1);
-
             htype = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-            H5.H5Tset_size(htype, len);
+            H5.H5Tset_size(htype, HDF5Constants.H5T_VARIABLE);
             H5.H5Tset_strpad(htype, HDF5Constants.H5T_STR_NULLTERM);
+            H5.H5Tset_cset(htype, HDF5Constants.H5T_CSET_UTF8);
 
             space = H5.H5Screate(HDF5Constants.H5S_SCALAR);
 
@@ -244,10 +248,8 @@ public class Hdf5Group implements AutoCloseable {
             if (aid < 0) throw new Hdf5Errors.AttributeException(
                     "H5Acreate2 failed for '" + name + "'");
 
-            // Write as byte array padded to type size
-            byte[] padded = new byte[len];
-            System.arraycopy(bytes, 0, padded, 0, Math.min(bytes.length, len));
-            H5.H5Awrite(aid, htype, padded);
+            String[] data = { value };
+            H5.H5Awrite_VLStrings(aid, htype, data);
         } catch (HDF5LibraryException e) {
             throw new Hdf5Errors.AttributeException(
                     "setStringAttribute failed for '" + name + "': " + e.getMessage());
@@ -260,6 +262,8 @@ public class Hdf5Group implements AutoCloseable {
     }
 
     public String readStringAttribute(String name) {
+        // M90.7: read both VL_STRING (forward) and fixed-length
+        // (pre-M90.7 + cross-platform back-compat) string attributes.
         file.lockForReading();
         long aid = -1, htype = -1;
         try {
@@ -272,12 +276,15 @@ public class Hdf5Group implements AutoCloseable {
                     "H5Aopen failed for '" + name + "'");
 
             htype = H5.H5Aget_type(aid);
+            if (H5.H5Tis_variable_str(htype)) {
+                String[] buf = new String[1];
+                H5.H5Aread_VLStrings(aid, htype, buf);
+                return buf[0] == null ? "" : buf[0];
+            }
+            // Back-compat: fixed-length string.
             long size = H5.H5Tget_size(htype);
-
             byte[] buf = new byte[(int) size];
             H5.H5Aread(aid, htype, buf);
-
-            // Trim trailing nulls
             int end = buf.length;
             while (end > 0 && buf[end - 1] == 0) end--;
             return new String(buf, 0, end, java.nio.charset.StandardCharsets.UTF_8);
