@@ -219,8 +219,13 @@ def verify_provenance(run_group: h5py.Group, key: bytes) -> bool:
 # rows.
 
 _GENOMIC_SIGNAL_CHANNELS = ("sequences", "qualities")
+# M90.15: chromosomes (VL_BYTES row compound) is now signed alongside
+# the atomic columns. read_canonical_bytes handles VL compounds via
+# canonicalise_compound_rows / canonicalise_compound_structured —
+# the M90.2 deferral was speculative.
 _GENOMIC_INDEX_COLUMNS = (
     "offsets", "lengths", "positions", "mapping_qualities", "flags",
+    "chromosomes",
 )
 
 
