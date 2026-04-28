@@ -216,8 +216,13 @@ class TestAccessUnit:
         assert decoded.flags == 0xFFFF
 
     def test_genomic_read_truncated_suffix_raises(self):
-        # Missing the genomic suffix on a spectrum_class==5 AU should
-        # raise a clear ValueError, not silently decode to zeros.
+        # Missing the M89.1 fixed-suffix bytes on a spectrum_class==5 AU
+        # should raise a clear ValueError, not silently decode to zeros.
+        # Cut into the M89.1 fixed-suffix block (post-chromosome) by
+        # 14 bytes so we drop into the middle of position+mapq+flags
+        # — the M89.1 minimum "GenomicRead AU missing position/mapq/flags
+        # suffix" error path. (Cutting only the M90.9 mate-extension
+        # tail is a NO-OP per the back-compat rule of M90.9.)
         au = AccessUnit(
             spectrum_class=5,
             acquisition_mode=0, ms_level=0, polarity=2,
@@ -227,8 +232,10 @@ class TestAccessUnit:
             chromosome="chr1", position=100, mapping_quality=60, flags=0,
         )
         full = au.to_bytes()
-        # Drop the trailing flags (last 2 bytes) so the suffix is short.
-        truncated = full[:-2]
+        # M89.1 fixed suffix is 11 bytes (i64 + u8 + u16); M90.9 mate
+        # extension adds 12. Dropping 14 bytes lands inside the M89.1
+        # block — guaranteed to trigger the M89.1 truncation error.
+        truncated = full[:-14]
         with pytest.raises(ValueError, match="GenomicRead"):
             AccessUnit.from_bytes(truncated)
 

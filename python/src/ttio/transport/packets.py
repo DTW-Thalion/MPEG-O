@@ -188,6 +188,11 @@ _AU_PIXEL_STRUCT = struct.Struct("<III")
 # this is a deliberate tradeoff for filter-key flexibility (decoy
 # contigs, T2T-style names) over byte parsimony.
 _AU_GENOMIC_FIXED_STRUCT = struct.Struct("<qBH")
+# M90.9 mate extension: appended after the M89.1 fixed suffix when
+# present. mate_position(i64) + template_length(i32). Decoder treats
+# the extension as optional — payloads ending right after flags
+# default these to -1 / 0 (preserves M89.1 wire compatibility).
+_AU_GENOMIC_MATE_STRUCT = struct.Struct("<qi")
 
 # Named spectrum_class values. v0.11 M79 reserved the GenomicRead value;
 # the genomic-specific AU payload extension (chromosome, position, mapq,
@@ -234,6 +239,11 @@ class AccessUnit:
     position: int = 0
     mapping_quality: int = 0
     flags: int = 0
+    # M90.9: mate extension fields. Optional on the wire — when
+    # absent (M89.1 file or empty AU) they default to BAM unmapped
+    # sentinels (-1 mate_position, 0 template_length).
+    mate_position: int = -1
+    template_length: int = 0
 
     def to_bytes(self) -> bytes:
         prefix = _AU_PREFIX_STRUCT.pack(
@@ -262,6 +272,13 @@ class AccessUnit:
                 int(self.mapping_quality) & 0xFF,
                 int(self.flags) & 0xFFFF,
             )
+            # M90.9 mate extension — always emitted by Python writers
+            # post-M90.9. Decoders fall back to defaults when missing
+            # so M89.1 fixtures still decode.
+            body += _AU_GENOMIC_MATE_STRUCT.pack(
+                int(self.mate_position),
+                int(self.template_length),
+            )
         return body
 
     @classmethod
@@ -283,6 +300,10 @@ class AccessUnit:
         pixel_x = pixel_y = pixel_z = 0
         chromosome = ""
         position = mapping_quality = flags = 0
+        # M90.9 mate extension defaults — match the dataclass
+        # defaults so M89.1 AUs decode unchanged.
+        mate_position = -1
+        template_length = 0
         if spectrum_class == 4:
             if len(data) - offset < 12:
                 raise ValueError("MSImagePixel AU missing pixel coordinates")
@@ -303,6 +324,13 @@ class AccessUnit:
                 data, offset
             )
             offset += _AU_GENOMIC_FIXED_STRUCT.size
+            # M90.9 mate extension — optional. M89.1 payloads end
+            # right after flags; M90.9+ payloads carry 12 more bytes.
+            if len(data) - offset >= _AU_GENOMIC_MATE_STRUCT.size:
+                mate_position, template_length = (
+                    _AU_GENOMIC_MATE_STRUCT.unpack_from(data, offset)
+                )
+                offset += _AU_GENOMIC_MATE_STRUCT.size
         return cls(
             spectrum_class=spectrum_class,
             acquisition_mode=acquisition_mode,
@@ -321,6 +349,8 @@ class AccessUnit:
             position=position,
             mapping_quality=mapping_quality,
             flags=flags,
+            mate_position=mate_position,
+            template_length=template_length,
         )
 
 

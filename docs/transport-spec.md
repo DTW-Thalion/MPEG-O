@@ -239,7 +239,18 @@ chromosome:          bytes[chromosome_len]    # UTF-8, e.g. "chr1", "*", "chr22_
 position:            int64           # 0-based; -1 for unmapped (BAM convention)
 mapping_quality:     uint8           # 0-255 (BAM convention)
 flags:               uint16          # SAM/BAM bit flags
+# M90.9 mate extension (optional — M89.1 payloads end after flags):
+mate_position:       int64           # 0-based mate position; -1 if unpaired/unmapped
+template_length:     int32           # observed template length (TLEN); 0 if unpaired
 ```
+
+In addition to the M89.1 sequences/qualities UINT8 channels, M90.9
+genomic AUs may carry per-AU UINT8 string channels named ``cigar``,
+``read_name``, and ``mate_chromosome`` carrying the SAM-equivalent
+per-read fields. Decoders dispatch on channel name; missing channels
+default to the empty string. The mate extension on the suffix is
+optional — M89.1 fixtures decode unchanged with mate_position=-1 and
+template_length=0.
 
 The header fields (`retention_time` through `base_peak_intensity`)
 constitute the **filter keys**: a server can evaluate any AU filter

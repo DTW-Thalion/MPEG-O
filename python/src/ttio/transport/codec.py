@@ -241,7 +241,8 @@ class TransportWriter:
                 name=name,
                 acquisition_mode=int(grun.acquisition_mode),
                 spectrum_class="TTIOGenomicRead",
-                channel_names=["sequences", "qualities"],
+                channel_names=["sequences", "qualities",
+                               "cigar", "read_name", "mate_chromosome"],
                 instrument_json=_genomic_run_metadata_json(grun),
                 expected_au_count=len(grun),
             )
@@ -279,14 +280,16 @@ class TransportWriter:
     def _emit_genomic_run_access_units(self, *, dataset_id: int, run) -> None:
         """Emit one ACCESS_UNIT packet per AlignedRead in ``run``.
 
-        M89.2: minimal genomic flow. Per-read fixed fields go into the
-        AU's genomic suffix (chromosome / position / mapping_quality /
-        flags). The variable-length sequences and qualities arrays
-        ride as two UINT8 channels with the per-read slice as data.
+        M89.2: per-read fixed fields go into the AU's genomic suffix
+        (chromosome / position / mapping_quality / flags). The
+        variable-length sequences and qualities arrays ride as two
+        UINT8 channels with the per-read slice as data.
 
-        Compound channels (cigars, read_names, mate_*) are NOT carried
-        in M89.2; they default to "" / -1 / 0 on materialise. A future
-        sub-milestone will extend this to full SAM-equivalence.
+        M90.9: compound fields now also round-trip on the wire.
+        cigar, read_name, mate_chromosome ride as additional UINT8
+        string channels (one per AU). mate_position + template_length
+        live in the M90.9 mate extension at the end of the AU genomic
+        suffix.
         """
         index = run.index
         n_reads = index.count
@@ -314,6 +317,26 @@ class TransportWriter:
             stop = start + length
             seq_bytes = seq_full[start:stop]
             qual_bytes = qual_full[start:stop]
+            # M90.9: pull the per-read compound fields off the lazy
+            # AlignedRead. read_name / cigar / mate_* go on the wire
+            # so a transport round-trip preserves SAM-level fidelity.
+            r = run[i]
+            cigar_bytes = (r.cigar or "").encode("utf-8")
+            name_bytes = (r.read_name or "").encode("utf-8")
+            mate_chr_bytes = (r.mate_chromosome or "").encode("utf-8")
+            channels = [
+                ChannelData("sequences", precision_uint8,
+                            compression_none, length, seq_bytes),
+                ChannelData("qualities", precision_uint8,
+                            compression_none, length, qual_bytes),
+                ChannelData("cigar", precision_uint8,
+                            compression_none, len(cigar_bytes), cigar_bytes),
+                ChannelData("read_name", precision_uint8,
+                            compression_none, len(name_bytes), name_bytes),
+                ChannelData("mate_chromosome", precision_uint8,
+                            compression_none, len(mate_chr_bytes),
+                            mate_chr_bytes),
+            ]
             au = AccessUnit(
                 spectrum_class=5,
                 acquisition_mode=acq_mode,
@@ -324,16 +347,13 @@ class TransportWriter:
                 precursor_charge=0,
                 ion_mobility=0.0,
                 base_peak_intensity=0.0,
-                channels=[
-                    ChannelData("sequences", precision_uint8,
-                                compression_none, length, seq_bytes),
-                    ChannelData("qualities", precision_uint8,
-                                compression_none, length, qual_bytes),
-                ],
+                channels=channels,
                 chromosome=chromosomes[i],
                 position=int(positions[i]),
                 mapping_quality=int(mqs[i]),
                 flags=int(flags_arr[i]) & 0xFFFF,
+                mate_position=int(r.mate_position),
+                template_length=int(r.template_length),
             )
             self.write_access_unit(
                 dataset_id=dataset_id, au_sequence=i, au=au
@@ -740,12 +760,24 @@ class TransportReader:
                            else np.array([], dtype=np.uint8)),
                 offsets=np.array(gd["offsets"], dtype=np.uint64),
                 lengths=np.array(gd["lengths"], dtype=np.uint32),
-                # Compound fields not carried in M89.2 — defaults preserve shape.
-                cigars=["" for _ in range(n)],
-                read_names=["" for _ in range(n)],
-                mate_chromosomes=["" for _ in range(n)],
-                mate_positions=np.full(n, -1, dtype=np.int64),
-                template_lengths=np.zeros(n, dtype=np.int32),
+                # M90.9: compound fields now round-trip on the wire.
+                # When the source is an M89.2-era stream the per-AU
+                # decoders default the missing strings to "" and the
+                # mate scalars to -1 / 0 (preserved by the AU
+                # decoder + accumulator paths).
+                cigars=list(gd["cigars"]) if gd["cigars"]
+                        else ["" for _ in range(n)],
+                read_names=list(gd["read_names"]) if gd["read_names"]
+                            else ["" for _ in range(n)],
+                mate_chromosomes=list(gd["mate_chromosomes"])
+                                  if gd["mate_chromosomes"]
+                                  else ["" for _ in range(n)],
+                mate_positions=(np.array(gd["mate_positions"], dtype=np.int64)
+                                if gd["mate_positions"]
+                                else np.full(n, -1, dtype=np.int64)),
+                template_lengths=(np.array(gd["template_lengths"], dtype=np.int32)
+                                   if gd["template_lengths"]
+                                   else np.zeros(n, dtype=np.int32)),
                 chromosomes=list(gd["chromosomes"]),
             )
 
@@ -762,7 +794,7 @@ class TransportReader:
 
 
 def _new_genomic_accumulator() -> dict:
-    """Per-dataset accumulator for genomic AUs. See M89.2."""
+    """Per-dataset accumulator for genomic AUs. See M89.2 + M90.9."""
     return {
         "chromosomes": [],
         "positions": [],
@@ -773,6 +805,12 @@ def _new_genomic_accumulator() -> dict:
         "offsets": [],
         "lengths": [],
         "running_offset": 0,
+        # M90.9: compound-field accumulators.
+        "cigars": [],
+        "read_names": [],
+        "mate_chromosomes": [],
+        "mate_positions": [],
+        "template_lengths": [],
     }
 
 
@@ -792,7 +830,15 @@ def _ingest_genomic_access_unit_bytes(gd: dict, payload: bytes) -> None:
     gd["positions"].append(int(au.position))
     gd["mapping_qualities"].append(int(au.mapping_quality))
     gd["flags"].append(int(au.flags) & 0xFFFFFFFF)
+    # M90.9: mate extension fields ride on the AU genomic suffix.
+    gd["mate_positions"].append(int(au.mate_position))
+    gd["template_lengths"].append(int(au.template_length))
     length = 0
+    # M90.9: compound-string channels default to "" if absent (an
+    # M89.2-era AU). Channel-name dispatch covers both layouts.
+    cigar_str = ""
+    name_str = ""
+    mate_chr_str = ""
     for ch in au.channels:
         if ch.precision != int(Precision.UINT8):
             raise NotImplementedError(
@@ -804,14 +850,24 @@ def _ingest_genomic_access_unit_bytes(gd: dict, payload: bytes) -> None:
                 f"genomic channel compression {ch.compression} not yet supported "
                 "(NONE only in M89.2)"
             )
-        arr = np.frombuffer(ch.data, dtype=np.uint8).copy()
         if ch.name == "sequences":
+            arr = np.frombuffer(ch.data, dtype=np.uint8).copy()
             gd["sequences_chunks"].append(arr)
             length = len(arr)
         elif ch.name == "qualities":
+            arr = np.frombuffer(ch.data, dtype=np.uint8).copy()
             gd["qualities_chunks"].append(arr)
             if length == 0:
                 length = len(arr)
+        elif ch.name == "cigar":
+            cigar_str = bytes(ch.data).decode("utf-8")
+        elif ch.name == "read_name":
+            name_str = bytes(ch.data).decode("utf-8")
+        elif ch.name == "mate_chromosome":
+            mate_chr_str = bytes(ch.data).decode("utf-8")
+    gd["cigars"].append(cigar_str)
+    gd["read_names"].append(name_str)
+    gd["mate_chromosomes"].append(mate_chr_str)
     gd["offsets"].append(gd["running_offset"])
     gd["lengths"].append(length)
     gd["running_offset"] += length
