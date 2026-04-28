@@ -63,7 +63,12 @@ public final class EncryptedTransport {
 
     // ────────────────────────────────────────────────────────── writer
 
-    /** Emit the full transport stream from a per-AU-encrypted file. */
+    /** Emit the full transport stream from a per-AU-encrypted file.
+     *
+     *  <p>M90.8: also walks {@code /study/genomic_runs/} after MS runs.
+     *  Genomic dataset_id continues from MS (1..N MS, N+1..N+M genomic)
+     *  so AAD reconstruction matches the per-AU encrypt path
+     *  (M90.1).</p> */
     public static void writeEncryptedDataset(String ttioPath,
                                                TransportWriter writer,
                                                String providerName)
@@ -79,62 +84,245 @@ public final class EncryptedTransport {
             }
             boolean headersEncrypted = flags.has(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
 
-            try (StorageGroup study = root.openGroup("study");
-                 StorageGroup msRuns = study.openGroup("ms_runs")) {
+            try (StorageGroup study = root.openGroup("study")) {
                 String title = attrStr(study, "title", "");
                 String isa = attrStr(study, "isa_investigation_id", "");
 
-                List<String> runNames = new ArrayList<>();
-                for (String n : msRuns.childNames()) {
-                    if (!n.startsWith("_") && msRuns.hasChild(n)) runNames.add(n);
+                List<String> msRunNames = new ArrayList<>();
+                if (study.hasChild("ms_runs")) {
+                    try (StorageGroup msRuns = study.openGroup("ms_runs")) {
+                        for (String n : msRuns.childNames()) {
+                            if (!n.startsWith("_") && msRuns.hasChild(n)) {
+                                msRunNames.add(n);
+                            }
+                        }
+                    }
+                }
+                List<String> genomicRunNames = new ArrayList<>();
+                if (study.hasChild("genomic_runs")) {
+                    try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
+                        for (String n : gRuns.childNames()) {
+                            if (!n.startsWith("_") && gRuns.hasChild(n)) {
+                                genomicRunNames.add(n);
+                            }
+                        }
+                    }
                 }
 
                 List<String> features = new ArrayList<>(flags.features());
                 writer.writeStreamHeader("1.2", title, isa, features,
-                                          runNames.size());
-
-                // ── ProtectionMetadata + DatasetHeader per run ──
+                                          msRunNames.size() + genomicRunNames.size());
                 int did = 1;
-                for (String runName : runNames) {
-                    try (StorageGroup run = msRuns.openGroup(runName);
-                         StorageGroup sig = run.openGroup("signal_channels")) {
-                        List<String> channelNames = splitNames(
-                            attrStr(sig, "channel_names", ""));
-                        String firstCh = channelNames.isEmpty()
-                            ? "intensity" : channelNames.get(0);
-                        String cipherSuite = attrStr(sig,
-                            firstCh + "_algorithm", "aes-256-gcm");
-                        String kek = attrStr(sig,
-                            firstCh + "_kek_algorithm", "");
-                        byte[] wrapped = attrBytes(sig,
-                            firstCh + "_wrapped_dek");
+                if (!msRunNames.isEmpty()) {
+                    try (StorageGroup msRuns = study.openGroup("ms_runs")) {
+                        for (String runName : msRunNames) {
+                            try (StorageGroup run = msRuns.openGroup(runName);
+                                 StorageGroup sig = run.openGroup("signal_channels")) {
+                                List<String> channelNames = splitNames(
+                                    attrStr(sig, "channel_names", ""));
+                                String firstCh = channelNames.isEmpty()
+                                    ? "intensity" : channelNames.get(0);
+                                String cipherSuite = attrStr(sig,
+                                    firstCh + "_algorithm", "aes-256-gcm");
+                                String kek = attrStr(sig,
+                                    firstCh + "_kek_algorithm", "");
+                                byte[] wrapped = attrBytes(sig,
+                                    firstCh + "_wrapped_dek");
 
-                        writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
-                            did, 0, encodeProtection(cipherSuite, kek, wrapped));
+                                writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
+                                    did, 0, encodeProtection(cipherSuite, kek, wrapped));
 
-                        long expectedAUs = firstChannelSegmentCount(sig, firstCh);
-                        int acqMode = intAttr(run, "acquisition_mode", 0);
-                        String spectrumClass = attrStr(run, "spectrum_class",
-                                                         "TTIOMassSpectrum");
-                        writer.writeDatasetHeader(did, runName, acqMode,
-                            spectrumClass, channelNames, "{}", expectedAUs);
+                                long expectedAUs = firstChannelSegmentCount(sig, firstCh);
+                                int acqMode = intAttr(run, "acquisition_mode", 0);
+                                String spectrumClass = attrStr(run, "spectrum_class",
+                                                                 "TTIOMassSpectrum");
+                                writer.writeDatasetHeader(did, runName, acqMode,
+                                    spectrumClass, channelNames, "{}", expectedAUs);
+                            }
+                            did++;
+                        }
+
+                        did = 1;
+                        for (String runName : msRunNames) {
+                            long n = emitRunAUs(writer, msRuns, runName, did,
+                                                  headersEncrypted);
+                            writer.writeEndOfDataset(did, n);
+                            did++;
+                        }
                     }
-                    did++;
                 }
 
-                // ── AUs ───────────────────────────────────────
-                did = 1;
-                for (String runName : runNames) {
-                    long n = emitRunAUs(writer, msRuns, runName, did,
-                                          headersEncrypted);
-                    writer.writeEndOfDataset(did, n);
-                    did++;
+                if (!genomicRunNames.isEmpty()) {
+                    try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
+                        int firstGenomicDid = did;
+                        for (String runName : genomicRunNames) {
+                            emitGenomicDatasetHeader(writer, gRuns, runName, did);
+                            did++;
+                        }
+                        did = firstGenomicDid;
+                        for (String runName : genomicRunNames) {
+                            long n = emitGenomicRunAUs(writer, gRuns, runName, did);
+                            writer.writeEndOfDataset(did, n);
+                            did++;
+                        }
+                    }
                 }
             }
             writer.writeEndOfStream();
         } finally {
             sp.close();
         }
+    }
+
+    /** M90.8: emit ProtectionMetadata + DatasetHeader for one genomic
+     *  run. Genomic only encrypts {@code sequences} + {@code qualities}
+     *  (per M90.1); other channels (cigars, read_names, mate_info)
+     *  stay plaintext on the source file and are not part of the
+     *  encrypted-transport contract. */
+    private static void emitGenomicDatasetHeader(TransportWriter writer,
+                                                   StorageGroup gRuns,
+                                                   String runName,
+                                                   int datasetId)
+            throws IOException {
+        try (StorageGroup run = gRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels")) {
+            List<String> channelNames = new ArrayList<>(2);
+            for (String c : new String[]{"sequences", "qualities"}) {
+                if (sig.hasChild(c + "_segments")) channelNames.add(c);
+            }
+            String firstCh = channelNames.isEmpty()
+                ? "sequences" : channelNames.get(0);
+            String cipherSuite = attrStr(sig,
+                firstCh + "_algorithm", "aes-256-gcm");
+            String kek = attrStr(sig, firstCh + "_kek_algorithm", "");
+            byte[] wrapped = attrBytes(sig, firstCh + "_wrapped_dek");
+            writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
+                datasetId, 0, encodeProtection(cipherSuite, kek, wrapped));
+
+            int acqMode = intAttr(run, "acquisition_mode", 0);
+            String metadataJson = genomicRunMetadataJson(
+                attrStr(run, "modality", ""),
+                attrStr(run, "platform", ""),
+                attrStr(run, "reference_uri", ""),
+                attrStr(run, "sample_name", ""));
+            long expectedAUs = channelNames.isEmpty()
+                ? 0L
+                : PerAUFile.readChannelSegments(sig,
+                      channelNames.get(0) + "_segments").size();
+            writer.writeDatasetHeader(datasetId, runName, acqMode,
+                "TTIOGenomicRead", channelNames, metadataJson, expectedAUs);
+        }
+    }
+
+    /** M90.8: emit one ENCRYPTED ACCESS_UNIT packet per read.
+     *  Each AU carries {@code spectrum_class=5}, the M89.1 chromosome
+     *  + position + mapq + flags suffix (sourced from the plaintext
+     *  {@code genomic_index/}), and UINT8 ChannelData with
+     *  {@code IV || TAG || ciphertext} for each encrypted channel. */
+    private static long emitGenomicRunAUs(TransportWriter writer,
+                                            StorageGroup gRuns,
+                                            String runName,
+                                            int datasetId)
+            throws IOException {
+        try (StorageGroup run = gRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels");
+             StorageGroup idx = run.openGroup("genomic_index")) {
+            List<String> channelNames = new ArrayList<>(2);
+            for (String c : new String[]{"sequences", "qualities"}) {
+                if (sig.hasChild(c + "_segments")) channelNames.add(c);
+            }
+            int acqMode = intAttr(run, "acquisition_mode", 0);
+            Map<String, List<ChannelSegment>> segsByCh = new LinkedHashMap<>();
+            for (String c : channelNames) {
+                segsByCh.put(c, PerAUFile.readChannelSegments(sig, c + "_segments"));
+            }
+            long[] positions;
+            byte[] mapqs;
+            int[] flagsArr;
+            try (StorageDataset d = idx.openDataset("positions")) {
+                positions = (long[]) d.readAll();
+            }
+            try (StorageDataset d = idx.openDataset("mapping_qualities")) {
+                mapqs = (byte[]) d.readAll();
+            }
+            try (StorageDataset d = idx.openDataset("flags")) {
+                flagsArr = (int[]) d.readAll();
+            }
+            List<String> chromosomes = readGenomicChromosomes(idx);
+            int n = channelNames.isEmpty() ? 0 : segsByCh.get(channelNames.get(0)).size();
+            int uint8Precision = global.thalion.ttio.Enums.Precision.UINT8.ordinal();
+
+            for (int i = 0; i < n; i++) {
+                List<global.thalion.ttio.transport.ChannelData> channels =
+                    new ArrayList<>(channelNames.size());
+                for (String c : channelNames) {
+                    ChannelSegment seg = segsByCh.get(c).get(i);
+                    byte[] data = concat(seg.iv(), seg.tag(), seg.ciphertext());
+                    channels.add(new global.thalion.ttio.transport.ChannelData(
+                        c, uint8Precision, 0, seg.length(), data));
+                }
+                global.thalion.ttio.transport.AccessUnit au =
+                    new global.thalion.ttio.transport.AccessUnit(
+                        5, acqMode, 0, 2,
+                        0.0, 0.0, 0,
+                        0.0, 0.0,
+                        channels,
+                        0L, 0L, 0L,
+                        chromosomes.get(i),
+                        positions[i],
+                        mapqs[i] & 0xFF,
+                        flagsArr[i] & 0xFFFF);
+                writer.emitRawPacket(PacketType.ACCESS_UNIT,
+                    PacketHeader.FLAG_ENCRYPTED, datasetId, i, au.encode());
+            }
+            return n;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> readGenomicChromosomes(StorageGroup idx) {
+        try (StorageDataset ds = idx.openDataset("chromosomes")) {
+            List<Object[]> rows = (List<Object[]>) ds.readAll();
+            List<String> out = new ArrayList<>(rows.size());
+            for (Object[] r : rows) {
+                Object v = r[0];
+                if (v == null) out.add("");
+                else if (v instanceof byte[] b) out.add(new String(b, StandardCharsets.UTF_8));
+                else out.add(v.toString());
+            }
+            return out;
+        }
+    }
+
+    private static String genomicRunMetadataJson(String modality, String platform,
+                                                   String referenceUri, String sampleName) {
+        char QT = (char) 34;
+        char OB = (char) 123;
+        char CB = (char) 125;
+        StringBuilder sb = new StringBuilder(96);
+        sb.append(OB);
+        sb.append(QT).append("modality").append(QT).append(": ").append(QT).append(esc(modality)).append(QT);
+        sb.append(", ");
+        sb.append(QT).append("platform").append(QT).append(": ").append(QT).append(esc(platform)).append(QT);
+        sb.append(", ");
+        sb.append(QT).append("reference_uri").append(QT).append(": ").append(QT).append(esc(referenceUri)).append(QT);
+        sb.append(", ");
+        sb.append(QT).append("sample_name").append(QT).append(": ").append(QT).append(esc(sampleName)).append(QT);
+        sb.append(CB);
+        return sb.toString();
+    }
+
+    private static String esc(String value) {
+        if (value == null) return "";
+        char QT = (char) 34;
+        char BS = (char) 92;
+        StringBuilder out = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == QT || c == BS) out.append(BS);
+            out.append(c);
+        }
+        return out.toString();
     }
 
     /** @return number of AU packets emitted for this run. */
@@ -237,10 +425,11 @@ public final class EncryptedTransport {
                 }
                 case DATASET_HEADER -> {
                     ParsedDatasetHeader h = parseDatasetHeader(rec.payload);
-                    datasets.put(h.datasetId,
-                                  new DatasetAccumulator(h.name, h.acqMode,
-                                                            h.spectrumClass,
-                                                            h.channelNames));
+                    boolean isGenomic = "TTIOGenomicRead".equals(h.spectrumClass);
+                    DatasetAccumulator acc = new DatasetAccumulator(
+                        h.name, h.acqMode, h.spectrumClass, h.channelNames,
+                        h.instrumentJson, isGenomic);
+                    datasets.put(h.datasetId, acc);
                 }
                 case ACCESS_UNIT -> {
                     DatasetAccumulator acc = datasets.get(rec.header.datasetId);
@@ -357,6 +546,7 @@ public final class EncryptedTransport {
         int acqMode;
         String spectrumClass;
         List<String> channelNames;
+        String instrumentJson = "";
     }
 
     private static ParsedDatasetHeader parseDatasetHeader(byte[] payload) {
@@ -369,8 +559,13 @@ public final class EncryptedTransport {
         int nch = bb.get() & 0xFF;
         out.channelNames = new ArrayList<>(nch);
         for (int i = 0; i < nch; i++) out.channelNames.add(readLEString(bb, 2));
-        // instrument_json + expected_au_count follow; not needed for
-        // file materialisation (reader recomputes from AUs).
+        // M90.8: instrument_json carries the genomic-run metadata for the
+        // reader to rebuild modality/platform/reference_uri/sample_name.
+        if (bb.remaining() >= 4) {
+            out.instrumentJson = readLEString(bb, 4);
+        } else {
+            out.instrumentJson = "";
+        }
         return out;
     }
 
@@ -395,34 +590,47 @@ public final class EncryptedTransport {
         ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
 
         if (encHeader) {
-            bb.get(); // spectrum_class (already set by DatasetHeader)
+            bb.get();
             int nChannels = bb.get() & 0xFF;
             byte[] iv = new byte[12]; bb.get(iv);
             byte[] tag = new byte[16]; bb.get(tag);
             byte[] ct = new byte[36]; bb.get(ct);
             acc.headerSegments.add(new HeaderSegment(iv, tag, ct));
             readEncryptedChannels(bb, nChannels, acc);
+            return;
+        }
+        bb.get();
+        int acq = bb.get() & 0xFF;
+        int msLevel = bb.get() & 0xFF;
+        int polWire = bb.get() & 0xFF;
+        double rt = bb.getDouble();
+        double pmz = bb.getDouble();
+        int pc = bb.get() & 0xFF;
+        double ionMob = bb.getDouble();
+        double bpi = bb.getDouble();
+        int nChannels = bb.get() & 0xFF;
+        if (acc.acquisitionMode == 0) acc.acquisitionMode = acq;
+        if (acc.isGenomic) {
+            readEncryptedChannels(bb, nChannels, acc);
+            global.thalion.ttio.transport.AccessUnit au =
+                global.thalion.ttio.transport.AccessUnit.decode(payload);
+            acc.genomicChromosomes.add(au.chromosome);
+            acc.genomicPositions.add(au.position);
+            acc.genomicMapqs.add(au.mappingQuality);
+            acc.genomicFlags.add(au.flags & 0xFFFFFFFFL);
         } else {
-            bb.get();                 // spectrum_class
-            int acq = bb.get() & 0xFF;
-            int msLevel = bb.get() & 0xFF;
-            int polWire = bb.get() & 0xFF;
-            double rt = bb.getDouble();
-            double pmz = bb.getDouble();
-            int pc = bb.get() & 0xFF;
-            double ionMob = bb.getDouble();
-            double bpi = bb.getDouble();
-            int nChannels = bb.get() & 0xFF;
             acc.plaintextRts.add(rt);
             acc.plaintextMsLevels.add(msLevel);
-            acc.plaintextPolarities.add(polWire == 0 ? 1 : polWire == 1 ? -1 : 0);
+            int polInt = 0;
+            if (polWire == 0) polInt = 1;
+            else if (polWire == 1) polInt = -1;
+            acc.plaintextPolarities.add(polInt);
             acc.plaintextPmzs.add(pmz);
             acc.plaintextPcs.add(pc);
             acc.plaintextBpis.add(bpi);
-            if (acc.acquisitionMode == 0) acc.acquisitionMode = acq;
             readEncryptedChannels(bb, nChannels, acc);
-            @SuppressWarnings("unused") double _im = ionMob;
         }
+        @SuppressWarnings("unused") double _im = ionMob;
     }
 
     private static void readEncryptedChannels(ByteBuffer bb, int nChannels,
@@ -464,26 +672,63 @@ public final class EncryptedTransport {
             StorageProvider.Mode.CREATE, providerName);
         try {
             StorageGroup root = sp.rootGroup();
-            new FeatureFlags("1.1", features).writeTo(root);
+            // M90.8: bump format_version to 1.4 + add opt_genomic when any
+            // genomic dataset came through the stream (matches the
+            // SpectralDataset.create heuristic).
+            boolean anyGenomic = false;
+            for (DatasetAccumulator d : datasets.values()) {
+                if (d.isGenomic) { anyGenomic = true; break; }
+            }
+            String formatVersion = anyGenomic ? "1.4" : "1.1";
+            List<String> writtenFeatures = new ArrayList<>(features);
+            if (anyGenomic && !writtenFeatures.contains(FeatureFlags.OPT_GENOMIC)) {
+                writtenFeatures.add(FeatureFlags.OPT_GENOMIC);
+                java.util.Collections.sort(writtenFeatures);
+            }
+            new FeatureFlags(formatVersion, writtenFeatures).writeTo(root);
 
             try (StorageGroup study = root.createGroup("study")) {
                 study.setAttribute("title", title == null ? "" : title);
                 study.setAttribute("isa_investigation_id",
                                      isa == null ? "" : isa);
 
-                try (StorageGroup msRuns = study.createGroup("ms_runs")) {
-                    StringBuilder runNamesJoined = new StringBuilder();
-                    boolean first = true;
-                    for (DatasetAccumulator acc : datasets.values()) {
-                        if (!first) runNamesJoined.append(',');
-                        runNamesJoined.append(acc.name);
-                        first = false;
-                    }
-                    msRuns.setAttribute("_run_names", runNamesJoined.toString());
+                // M90.8: split datasets into MS vs genomic.
+                Map<Integer, DatasetAccumulator> msDs = new TreeMap<>();
+                Map<Integer, DatasetAccumulator> gDs = new TreeMap<>();
+                for (Map.Entry<Integer, DatasetAccumulator> e : datasets.entrySet()) {
+                    if (e.getValue().isGenomic) gDs.put(e.getKey(), e.getValue());
+                    else msDs.put(e.getKey(), e.getValue());
+                }
 
-                    for (Map.Entry<Integer, DatasetAccumulator> e : datasets.entrySet()) {
-                        materialiseRun(msRuns, e.getValue(),
-                                         protection.get(e.getKey()));
+                if (!msDs.isEmpty()) {
+                    try (StorageGroup msRuns = study.createGroup("ms_runs")) {
+                        StringBuilder names = new StringBuilder();
+                        boolean first = true;
+                        for (DatasetAccumulator acc : msDs.values()) {
+                            if (!first) names.append(',');
+                            names.append(acc.name);
+                            first = false;
+                        }
+                        msRuns.setAttribute("_run_names", names.toString());
+                        for (Map.Entry<Integer, DatasetAccumulator> e : msDs.entrySet()) {
+                            materialiseRun(msRuns, e.getValue(), protection.get(e.getKey()));
+                        }
+                    }
+                }
+
+                if (!gDs.isEmpty()) {
+                    try (StorageGroup gRuns = study.createGroup("genomic_runs")) {
+                        StringBuilder gnames = new StringBuilder();
+                        boolean first = true;
+                        for (DatasetAccumulator acc : gDs.values()) {
+                            if (!first) gnames.append(',');
+                            gnames.append(acc.name);
+                            first = false;
+                        }
+                        gRuns.setAttribute("_run_names", gnames.toString());
+                        for (Map.Entry<Integer, DatasetAccumulator> e : gDs.entrySet()) {
+                            materialiseGenomicRun(gRuns, e.getValue(), protection.get(e.getKey()));
+                        }
                     }
                 }
             }
@@ -556,6 +801,120 @@ public final class EncryptedTransport {
         }
         }  // run try-with-resources
         }  // sig try-with-resources
+    }
+
+    /** M90.8: materialise one genomic dataset into the destination .tio.
+     *  Mirrors materialiseRun for genomic_runs/ subtree: writes the run
+     *  group with modality/platform/reference_uri/sample_name attrs
+     *  (parsed from instrument_json), the encrypted signal_channels
+     *  segments, and the genomic_index columns + chromosomes compound. */
+    private static void materialiseGenomicRun(StorageGroup gRuns,
+                                                DatasetAccumulator acc,
+                                                ProtectionMeta pm) {
+        try (StorageGroup run = gRuns.createGroup(acc.name)) {
+            run.setAttribute("acquisition_mode", (long) acc.acquisitionMode);
+            run.setAttribute("spectrum_class", acc.spectrumClass);
+            run.setAttribute("modality", extractJsonField(acc.instrumentJson, "modality"));
+            run.setAttribute("platform", extractJsonField(acc.instrumentJson, "platform"));
+            run.setAttribute("reference_uri", extractJsonField(acc.instrumentJson, "reference_uri"));
+            run.setAttribute("sample_name", extractJsonField(acc.instrumentJson, "sample_name"));
+            run.setAttribute("read_count", (long) acc.genomicChromosomes.size());
+
+            try (StorageGroup sig = run.createGroup("signal_channels")) {
+                StringBuilder cn = new StringBuilder();
+                boolean first = true;
+                for (String c : acc.channelNames) {
+                    if (!first) cn.append(',');
+                    cn.append(c);
+                    first = false;
+                }
+                sig.setAttribute("channel_names", cn.toString());
+                for (String cname : acc.channelNames) {
+                    List<ChannelSegment> segs = acc.channelSegments.get(cname);
+                    if (segs == null) continue;
+                    PerAUFile.writeChannelSegments(sig, cname + "_segments", segs);
+                    sig.setAttribute(cname + "_algorithm",
+                        pm != null && pm.cipherSuite != null
+                            ? pm.cipherSuite : "aes-256-gcm");
+                    if (pm != null && pm.wrappedDek != null && pm.wrappedDek.length > 0) {
+                        sig.setAttribute(cname + "_wrapped_dek", pm.wrappedDek);
+                        sig.setAttribute(cname + "_kek_algorithm",
+                                          pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
+                    }
+                }
+            }
+
+            try (StorageGroup idx = run.createGroup("genomic_index")) {
+                int n = acc.genomicChromosomes.size();
+                idx.setAttribute("count", (long) n);
+                long[] offsetsArr = new long[n];
+                int[] lengthsArr = new int[n];
+                long[] positionsArr = new long[n];
+                byte[] mqArr = new byte[n];
+                int[] flagsArr = new int[n];
+                List<ChannelSegment> firstSegs = acc.channelNames.isEmpty()
+                    ? java.util.Collections.<ChannelSegment>emptyList()
+                    : acc.channelSegments.get(acc.channelNames.get(0));
+                for (int i = 0; i < n; i++) {
+                    offsetsArr[i] = firstSegs != null && i < firstSegs.size() ? firstSegs.get(i).offset() : 0L;
+                    lengthsArr[i] = firstSegs != null && i < firstSegs.size() ? firstSegs.get(i).length() : 0;
+                    positionsArr[i] = acc.genomicPositions.get(i);
+                    mqArr[i] = (byte) (acc.genomicMapqs.get(i) & 0xFF);
+                    flagsArr[i] = (int) (acc.genomicFlags.get(i) & 0xFFFFFFFFL);
+                }
+                writePrimitiveArray(idx, "offsets", Enums.Precision.UINT64, offsetsArr);
+                writePrimitiveArray(idx, "lengths", Enums.Precision.UINT32, lengthsArr);
+                writePrimitiveArray(idx, "positions", Enums.Precision.INT64, positionsArr);
+                writePrimitiveArray(idx, "mapping_qualities", Enums.Precision.UINT8, mqArr);
+                writePrimitiveArray(idx, "flags", Enums.Precision.UINT32, flagsArr);
+                writeChromosomesCompound(idx, acc.genomicChromosomes);
+            }
+        }
+    }
+
+    /** M90.8: minimal JSON value extractor for the metadata JSON we
+     *  emit on the wire. Looks for the literal pattern "key": "value"
+     *  and returns the captured value; returns the empty string when
+     *  the key is not present or the JSON cannot be parsed. */
+    private static String extractJsonField(String json, String key) {
+        if (json == null || json.isEmpty()) return "";
+        char QT = (char) 34;
+        char BS = (char) 92;
+        String needle = QT + key + QT + ": " + QT;
+        int start = json.indexOf(needle);
+        if (start < 0) return "";
+        start += needle.length();
+        // Walk forward looking for an unescaped closing quote.
+        StringBuilder out = new StringBuilder();
+        int i = start;
+        while (i < json.length()) {
+            char c = json.charAt(i);
+            if (c == BS && i + 1 < json.length()) {
+                out.append(json.charAt(i + 1));
+                i += 2;
+                continue;
+            }
+            if (c == QT) break;
+            out.append(c);
+            i++;
+        }
+        return out.toString();
+    }
+
+    /** M90.8: write a chromosomes compound dataset (single VL_STRING
+     *  field {@code value}) mirroring the GenomicIndex layout. */
+    private static void writeChromosomesCompound(StorageGroup idx,
+                                                    List<String> chromosomes) {
+        java.util.List<global.thalion.ttio.providers.CompoundField> fields =
+            java.util.List.of(new global.thalion.ttio.providers.CompoundField(
+                "value",
+                global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
+        java.util.List<Object[]> rows = new java.util.ArrayList<>(chromosomes.size());
+        for (String c : chromosomes) rows.add(new Object[]{ c == null ? "" : c });
+        try (StorageDataset ds = idx.createCompoundDataset(
+                "chromosomes", fields, rows.size())) {
+            ds.writeAll(rows);
+        }
     }
 
     private static void writePrimitiveArray(StorageGroup parent, String name,
@@ -670,13 +1029,28 @@ public final class EncryptedTransport {
         List<Double> plaintextPmzs = new ArrayList<>();
         List<Integer> plaintextPcs = new ArrayList<>();
         List<Double> plaintextBpis = new ArrayList<>();
+        // M90.8: genomic accumulator fields
+        boolean isGenomic;
+        String instrumentJson = "";
+        List<String> genomicChromosomes = new ArrayList<>();
+        List<Long> genomicPositions = new ArrayList<>();
+        List<Integer> genomicMapqs = new ArrayList<>();
+        List<Long> genomicFlags = new ArrayList<>();
 
         DatasetAccumulator(String name, int acqMode, String spectrumClass,
                              List<String> channelNames) {
+            this(name, acqMode, spectrumClass, channelNames, "", false);
+        }
+
+        DatasetAccumulator(String name, int acqMode, String spectrumClass,
+                             List<String> channelNames, String instrumentJson,
+                             boolean isGenomic) {
             this.name = name;
             this.acquisitionMode = acqMode;
             this.spectrumClass = spectrumClass;
             this.channelNames = new ArrayList<>(channelNames);
+            this.instrumentJson = instrumentJson == null ? "" : instrumentJson;
+            this.isGenomic = isGenomic;
             for (String c : channelNames) {
                 channelSegments.put(c, new ArrayList<>());
             }

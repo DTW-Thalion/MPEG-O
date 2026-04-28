@@ -11,8 +11,12 @@ import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.MassSpectrum;
 import global.thalion.ttio.SpectrumIndex;
+import global.thalion.ttio.codecs.BasePack;
+import global.thalion.ttio.codecs.Rans;
 import global.thalion.ttio.genomics.AlignedRead;
 import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.providers.StorageDataset;
+import global.thalion.ttio.providers.StorageGroup;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -193,12 +197,15 @@ public final class TransportWriter implements AutoCloseable {
         }
 
         // M89.2/M89.4: Genomic dataset headers: ids N+1..N+M (contiguous).
+        // M90.9: now lists 5 channels (sequences, qualities + the 3
+        // per-AU compound strings cigar/read_name/mate_chromosome).
         for (Map.Entry<String, GenomicRun> e : genomicRuns.entrySet()) {
             GenomicRun grun = e.getValue();
             writeDatasetHeader(id, e.getKey(),
                     grun.acquisitionMode().ordinal(),
                     "TTIOGenomicRead",
-                    List.of("sequences", "qualities"),
+                    List.of("sequences", "qualities",
+                            "cigar", "read_name", "mate_chromosome"),
                     genomicRunMetadataJson(grun),
                     grun.readCount());
             id++;
@@ -241,21 +248,35 @@ public final class TransportWriter implements AutoCloseable {
         writeDatasetHeader(datasetId, name,
                 run.acquisitionMode().ordinal(),
                 "TTIOGenomicRead",
-                List.of("sequences", "qualities"),
+                List.of("sequences", "qualities",
+                        "cigar", "read_name", "mate_chromosome"),
                 genomicRunMetadataJson(run),
                 run.readCount());
         emitGenomicRunAccessUnits(datasetId, run);
         writeEndOfDataset(datasetId, run.readCount());
     }
 
-    /** M89.2: emit one ACCESS_UNIT packet per AlignedRead in {@code run}.
+    /** M89.2/M90.9: emit one ACCESS_UNIT packet per AlignedRead in
+     *  {@code run}.
      *
-     *  <p>Per-read fixed fields go into the AU's genomic suffix
+     *  <p>M89.2: per-read fixed fields go into the AU's genomic suffix
      *  (chromosome / position / mapping_quality / flags). The
      *  variable-length sequences and qualities ride as two UINT8
-     *  channels with the per-read slice as data. Compound channels
-     *  (cigars, read_names, mate_*) are NOT carried in M89.2 — they
-     *  default to "" / -1 / 0 on the reader side.</p>
+     *  channels with the per-read slice as data.</p>
+     *
+     *  <p>M90.9: compound fields now also round-trip on the wire.
+     *  cigar, read_name, mate_chromosome ride as additional UINT8
+     *  string channels (one per AU). mate_position + template_length
+     *  live in the M90.9 mate extension at the end of the AU genomic
+     *  suffix.</p>
+     *
+     *  <p>M90.10: when the source channel carries an {@code @compression}
+     *  attribute naming an M86 codec (RANS_ORDER0/1, BASE_PACK), the
+     *  writer re-encodes each per-AU slice with the same codec on
+     *  the wire. The wire ChannelData.compression byte tells the
+     *  reader which decoder to dispatch. The 3 string channels
+     *  (cigar / read_name / mate_chromosome) ALWAYS ride uncompressed —
+     *  per-AU codec framing dominates short strings.</p>
      */
     private void emitGenomicRunAccessUnits(int datasetId, GenomicRun run)
             throws IOException {
@@ -263,16 +284,38 @@ public final class TransportWriter implements AutoCloseable {
         int precisionUint8 = Enums.Precision.UINT8.ordinal();
         int compressionNone = Enums.Compression.NONE.ordinal();
         int acqMode = run.acquisitionMode().ordinal() & 0xFF;
+        // M90.10: probe source @compression on sequences + qualities
+        // so the wire codec mirrors the file's codec choice. The
+        // string channels (cigar/read_name/mate_chromosome) always
+        // ride uncompressed.
+        int seqCodec = run.signalChannelCompressionCode("sequences");
+        int qualCodec = run.signalChannelCompressionCode("qualities");
         for (int i = 0; i < n; i++) {
             AlignedRead read = run.objectAtIndex(i);
             byte[] seqBytes = read.sequence().getBytes(StandardCharsets.UTF_8);
             byte[] qualBytes = read.qualities();
             int length = seqBytes.length;
-            List<ChannelData> channels = new ArrayList<>(2);
+            // M90.10: re-encode per-AU slice with the M86 codec when
+            // the source channel had an @compression attribute set.
+            byte[] seqPayload = applyWireCodec(seqBytes, seqCodec);
+            byte[] qualPayload = applyWireCodec(qualBytes, qualCodec);
+            byte[] cigarBytes = (read.cigar() == null ? "" : read.cigar())
+                .getBytes(StandardCharsets.UTF_8);
+            byte[] nameBytes = (read.readName() == null ? "" : read.readName())
+                .getBytes(StandardCharsets.UTF_8);
+            byte[] mateChrBytes = (read.mateChromosome() == null ? ""
+                    : read.mateChromosome()).getBytes(StandardCharsets.UTF_8);
+            List<ChannelData> channels = new ArrayList<>(5);
             channels.add(new ChannelData("sequences", precisionUint8,
-                    compressionNone, length, seqBytes));
+                    seqCodec, length, seqPayload));
             channels.add(new ChannelData("qualities", precisionUint8,
-                    compressionNone, qualBytes.length, qualBytes));
+                    qualCodec, qualBytes.length, qualPayload));
+            channels.add(new ChannelData("cigar", precisionUint8,
+                    compressionNone, cigarBytes.length, cigarBytes));
+            channels.add(new ChannelData("read_name", precisionUint8,
+                    compressionNone, nameBytes.length, nameBytes));
+            channels.add(new ChannelData("mate_chromosome", precisionUint8,
+                    compressionNone, mateChrBytes.length, mateChrBytes));
             AccessUnit au = new AccessUnit(
                     5,                  // spectrum_class GenomicRead
                     acqMode,
@@ -285,9 +328,30 @@ public final class TransportWriter implements AutoCloseable {
                     read.chromosome(),
                     read.position(),
                     read.mappingQuality(),
-                    read.flags() & 0xFFFF);
+                    read.flags() & 0xFFFF,
+                    read.matePosition(),
+                    read.templateLength());
             writeAccessUnit(datasetId, i, au);
         }
+    }
+
+    /** M90.10: encode {@code plaintext} with the given wire codec id.
+     *  NONE → identity. Other ids dispatch to the matching M86 codec.
+     *  Mirrors Python {@code _apply_wire_codec}. */
+    private static byte[] applyWireCodec(byte[] plaintext, int codecId) {
+        if (codecId == 0) return plaintext;  // NONE
+        if (codecId == Enums.Compression.RANS_ORDER0.ordinal()) {
+            return Rans.encode(plaintext, 0);
+        }
+        if (codecId == Enums.Compression.RANS_ORDER1.ordinal()) {
+            return Rans.encode(plaintext, 1);
+        }
+        if (codecId == Enums.Compression.BASE_PACK.ordinal()) {
+            return BasePack.encode(plaintext);
+        }
+        throw new UnsupportedOperationException(
+            "applyWireCodec: codec id " + codecId
+            + " not supported for genomic UINT8");
     }
 
     /** M89.2: Per-genomic-run metadata serialised into the

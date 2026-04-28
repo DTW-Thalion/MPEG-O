@@ -50,8 +50,17 @@ public final class AccessUnit {
     public final int mappingQuality;
     public final int flags;
 
+    // M90.9 mate extension (written only when {@code spectrumClass == 5}).
+    // Optional on the wire — when absent (M89.1 fixture or empty AU)
+    // these default to BAM unmapped sentinels: -1 mate_position,
+    // 0 template_length. Decoder is OPTIONAL: payloads ending right
+    // after flags decode unchanged.
+    public final long matePosition;
+    public final int templateLength;
+
     /** Backwards-compatible constructor (pre-M89.1) for non-genomic AUs.
-     *  Genomic suffix fields default to "" / 0 / 0 / 0. */
+     *  Genomic suffix fields default to "" / 0 / 0 / 0; mate extension
+     *  fields default to -1 / 0. */
     public AccessUnit(int spectrumClass, int acquisitionMode, int msLevel, int polarity,
                        double retentionTime, double precursorMz, int precursorCharge,
                        double ionMobility, double basePeakIntensity,
@@ -61,10 +70,12 @@ public final class AccessUnit {
              retentionTime, precursorMz, precursorCharge,
              ionMobility, basePeakIntensity, channels,
              pixelX, pixelY, pixelZ,
-             "", 0L, 0, 0);
+             "", 0L, 0, 0, -1L, 0);
     }
 
-    /** M89.1 full constructor including GenomicRead suffix fields. */
+    /** M89.1 constructor including GenomicRead suffix fields. Mate
+     *  extension fields default to -1 / 0 (preserves M89.1 wire
+     *  fixtures). */
     public AccessUnit(int spectrumClass, int acquisitionMode, int msLevel, int polarity,
                        double retentionTime, double precursorMz, int precursorCharge,
                        double ionMobility, double basePeakIntensity,
@@ -72,6 +83,23 @@ public final class AccessUnit {
                        long pixelX, long pixelY, long pixelZ,
                        String chromosome, long position,
                        int mappingQuality, int flags) {
+        this(spectrumClass, acquisitionMode, msLevel, polarity,
+             retentionTime, precursorMz, precursorCharge,
+             ionMobility, basePeakIntensity, channels,
+             pixelX, pixelY, pixelZ,
+             chromosome, position, mappingQuality, flags,
+             -1L, 0);
+    }
+
+    /** M90.9 full constructor including the mate-extension fields. */
+    public AccessUnit(int spectrumClass, int acquisitionMode, int msLevel, int polarity,
+                       double retentionTime, double precursorMz, int precursorCharge,
+                       double ionMobility, double basePeakIntensity,
+                       List<ChannelData> channels,
+                       long pixelX, long pixelY, long pixelZ,
+                       String chromosome, long position,
+                       int mappingQuality, int flags,
+                       long matePosition, int templateLength) {
         this.spectrumClass = spectrumClass;
         this.acquisitionMode = acquisitionMode;
         this.msLevel = msLevel;
@@ -89,6 +117,8 @@ public final class AccessUnit {
         this.position = position;
         this.mappingQuality = mappingQuality;
         this.flags = flags;
+        this.matePosition = matePosition;
+        this.templateLength = templateLength;
     }
 
     public byte[] encode() {
@@ -98,8 +128,10 @@ public final class AccessUnit {
             size += 12;
         } else if (spectrumClass == 5) {
             // M89.1: uint16 chromosome length + chromosome bytes +
-            // int64 position + uint8 mapq + uint16 flags = 13 + |chrom|
+            // int64 position + uint8 mapq + uint16 flags = 13 + |chrom|.
+            // M90.9: + int64 mate_position + int32 template_length = +12.
             size += 2 + chromosome.getBytes(StandardCharsets.UTF_8).length + 8 + 1 + 2;
+            size += 8 + 4;
         }
         ByteBuffer buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
         buf.put((byte) (spectrumClass & 0xFF));
@@ -124,6 +156,11 @@ public final class AccessUnit {
             buf.putLong(position);
             buf.put((byte) (mappingQuality & 0xFF));
             buf.putShort((short) (flags & 0xFFFF));
+            // M90.9 mate extension — always emitted by Java writers
+            // post-M90.9. Decoders fall back to defaults when missing
+            // so M89.1 fixtures still decode.
+            buf.putLong(matePosition);
+            buf.putInt(templateLength);
         }
         return buf.array();
     }
@@ -150,6 +187,10 @@ public final class AccessUnit {
         long position = 0L;
         int mappingQuality = 0;
         int flags = 0;
+        // M90.9 mate extension defaults — match the constructor
+        // defaults so M89.1 AUs decode unchanged.
+        long matePosition = -1L;
+        int templateLength = 0;
         if (spectrumClass == 4) {
             if (bytes.length - buf.position() < 12) {
                 throw new IllegalArgumentException("MSImagePixel AU missing pixel coordinates");
@@ -181,10 +222,18 @@ public final class AccessUnit {
             position = buf.getLong();
             mappingQuality = buf.get() & 0xFF;
             flags = buf.getShort() & 0xFFFF;
+            // M90.9 mate extension — optional. M89.1 payloads end
+            // right after flags; M90.9+ payloads carry 12 more bytes
+            // (int64 mate_position + int32 template_length).
+            if (bytes.length - buf.position() >= 12) {
+                matePosition = buf.getLong();
+                templateLength = buf.getInt();
+            }
         }
         return new AccessUnit(spectrumClass, acquisitionMode, msLevel, polarity,
                 retentionTime, precursorMz, precursorCharge, ionMobility,
                 basePeakIntensity, channels, pixelX, pixelY, pixelZ,
-                chromosome, position, mappingQuality, flags);
+                chromosome, position, mappingQuality, flags,
+                matePosition, templateLength);
     }
 }

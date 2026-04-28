@@ -10,6 +10,8 @@ import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.MiniJson;
+import global.thalion.ttio.codecs.BasePack;
+import global.thalion.ttio.codecs.Rans;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 
 import java.io.ByteArrayInputStream;
@@ -245,10 +247,22 @@ public final class TransportReader implements AutoCloseable {
         }
     }
 
-    /** M89.2: per-dataset accumulator for genomic AUs. Mirrors the
-     *  Python {@code _new_genomic_accumulator} dict. Sequences and
-     *  qualities ride as UINT8 channels; the suffix carries chromosome
-     *  / position / mapq / flags. */
+    /** M89.2/M90.9: per-dataset accumulator for genomic AUs. Mirrors
+     *  the Python {@code _new_genomic_accumulator} dict.
+     *
+     *  <p>M89.2: sequences and qualities ride as UINT8 channels; the
+     *  suffix carries chromosome / position / mapq / flags.</p>
+     *
+     *  <p>M90.9: cigar / read_name / mate_chromosome ride as 3
+     *  additional UINT8 string channels (per-AU). mate_position +
+     *  template_length ride on the M90.9 mate extension at the end of
+     *  the AU genomic suffix; the {@link AccessUnit#decode} path
+     *  defaults them to -1 / 0 when absent (M89.1 fixtures).</p>
+     *
+     *  <p>M90.10: dispatches on the wire {@code compression} byte to
+     *  pick the M86 codec decoder (rANS / BASE_PACK) for the
+     *  sequences + qualities channels. The 3 string channels are
+     *  always uncompressed.</p> */
     private static final class GenomicAccumulator {
         final List<String> chromosomes = new ArrayList<>();
         final List<Long> positions = new ArrayList<>();
@@ -258,6 +272,12 @@ public final class TransportReader implements AutoCloseable {
         final java.io.ByteArrayOutputStream qualities = new java.io.ByteArrayOutputStream();
         final List<Long> offsets = new ArrayList<>();
         final List<Integer> lengths = new ArrayList<>();
+        // M90.9 compound-field accumulators.
+        final List<String> cigars = new ArrayList<>();
+        final List<String> readNames = new ArrayList<>();
+        final List<String> mateChroms = new ArrayList<>();
+        final List<Long> matePositions = new ArrayList<>();
+        final List<Integer> templateLengths = new ArrayList<>();
         long runningOffset = 0L;
         int acquisitionMode = 0;
 
@@ -270,31 +290,63 @@ public final class TransportReader implements AutoCloseable {
             positions.add(au.position);
             mappingQualities.add(au.mappingQuality);
             flags.add(au.flags);
+            // M90.9: mate extension fields ride on the AU genomic suffix.
+            matePositions.add(au.matePosition);
+            templateLengths.add(au.templateLength);
             int length = 0;
+            // M90.9: compound-string channels default to "" if absent
+            // (an M89.2-era AU). Channel-name dispatch covers both
+            // layouts.
+            String cigarStr = "";
+            String nameStr = "";
+            String mateChrStr = "";
             for (ChannelData ch : au.channels) {
                 if (ch.precision != Enums.Precision.UINT8.ordinal()) {
                     throw new IllegalStateException(
                         "genomic channel precision " + ch.precision
-                        + " not yet supported (UINT8 only in M89.2)");
+                        + " not yet supported (UINT8 only)");
                 }
-                if (ch.compression != Enums.Compression.NONE.ordinal()) {
-                    throw new IllegalStateException(
-                        "genomic channel compression " + ch.compression
-                        + " not yet supported (NONE only in M89.2)");
-                }
+                // M90.10: dispatch on wire compression byte (NONE /
+                // RANS_* / BASE_PACK). See decodeWireCodec.
+                byte[] decoded = decodeWireCodec(ch.data, ch.compression);
                 if ("sequences".equals(ch.name)) {
-                    try { sequences.write(ch.data); }
+                    try { sequences.write(decoded); }
                     catch (java.io.IOException e) { throw new IllegalStateException(e); }
-                    length = ch.data.length;
+                    length = decoded.length;
                 } else if ("qualities".equals(ch.name)) {
-                    try { qualities.write(ch.data); }
+                    try { qualities.write(decoded); }
                     catch (java.io.IOException e) { throw new IllegalStateException(e); }
-                    if (length == 0) length = ch.data.length;
+                    if (length == 0) length = decoded.length;
+                } else if ("cigar".equals(ch.name)) {
+                    cigarStr = new String(decoded, StandardCharsets.UTF_8);
+                } else if ("read_name".equals(ch.name)) {
+                    nameStr = new String(decoded, StandardCharsets.UTF_8);
+                } else if ("mate_chromosome".equals(ch.name)) {
+                    mateChrStr = new String(decoded, StandardCharsets.UTF_8);
                 }
             }
+            cigars.add(cigarStr);
+            readNames.add(nameStr);
+            mateChroms.add(mateChrStr);
             offsets.add(runningOffset);
             lengths.add(length);
             runningOffset += length;
+        }
+
+        /** M90.10: decode a wire payload encoded by
+         *  {@code TransportWriter.applyWireCodec}. NONE → identity. */
+        private static byte[] decodeWireCodec(byte[] payload, int codecId) {
+            if (codecId == 0) return payload;  // NONE
+            if (codecId == Enums.Compression.RANS_ORDER0.ordinal()
+                    || codecId == Enums.Compression.RANS_ORDER1.ordinal()) {
+                return Rans.decode(payload);
+            }
+            if (codecId == Enums.Compression.BASE_PACK.ordinal()) {
+                return BasePack.decode(payload);
+            }
+            throw new UnsupportedOperationException(
+                "decodeWireCodec: codec id " + codecId
+                + " not supported for genomic UINT8");
         }
 
         WrittenGenomicRun toWrittenGenomicRun(DatasetMeta meta) {
@@ -311,18 +363,20 @@ public final class TransportReader implements AutoCloseable {
                 mqArr[i] = (byte) (mappingQualities.get(i) & 0xFF);
                 flagsArr[i] = flags.get(i);
             }
-            // Compound fields not carried in M89.2 - defaults preserve shape.
-            List<String> emptyStrs = new ArrayList<>(n);
+            // M90.9: compound fields now round-trip on the wire. When
+            // the source is an M89.2-era stream the per-AU decoders
+            // default the missing strings to "" and the mate scalars
+            // to -1 / 0 (preserved by AccessUnit.decode + the
+            // accumulator defaults).
             long[] mateP = new long[n];
             int[] tlens = new int[n];
             for (int i = 0; i < n; i++) {
-                emptyStrs.add("");
-                mateP[i] = -1L;
-                tlens[i] = 0;
+                mateP[i] = matePositions.get(i);
+                tlens[i] = templateLengths.get(i);
             }
-            List<String> cigars = new ArrayList<>(emptyStrs);
-            List<String> readNames = new ArrayList<>(emptyStrs);
-            List<String> mateChroms = new ArrayList<>(emptyStrs);
+            List<String> cigarsOut = new ArrayList<>(cigars);
+            List<String> readNamesOut = new ArrayList<>(readNames);
+            List<String> mateChromsOut = new ArrayList<>(mateChroms);
 
             // Decode instrument_json metadata.
             String referenceUri = "", platform = "", sampleName = "", modality = "";
@@ -355,7 +409,7 @@ public final class TransportReader implements AutoCloseable {
                 positionsArr, mqArr, flagsArr,
                 sequences.toByteArray(), qualities.toByteArray(),
                 offsetsArr, lengthsArr,
-                cigars, readNames, mateChroms, mateP, tlens,
+                cigarsOut, readNamesOut, mateChromsOut, mateP, tlens,
                 new ArrayList<>(chromosomes),
                 Enums.Compression.ZLIB);
         }
