@@ -41,25 +41,31 @@ The Java implementation mirrors the three-layer ObjC/Python pattern:
 
 | Layer | Java Package | Description |
 |-------|-------------|-------------|
-| HDF5 wrappers | `global.thalion.ttio.hdf5` | `Hdf5File`, `Hdf5Group`, `Hdf5Dataset`, `Hdf5CompoundType` |
-| Core + enums | `global.thalion.ttio` | `SignalArray`, `Spectrum`, `AcquisitionRun`, `SpectralDataset`, `FeatureFlags`, `NumpressCodec` |
-| Importers | `global.thalion.ttio.importers` | `MzMLReader`, `NmrMLReader`, `CVTermMapper`, `ThermoRawReader` (stub) |
-| Exporters | `global.thalion.ttio.exporters` | `MzMLWriter`, `NmrMLWriter`, `ISAExporter` |
-| Protection | `global.thalion.ttio.protection` | `EncryptionManager`, `SignatureManager`, `KeyRotationManager`, `Anonymizer` |
+| HDF5 wrappers | `global.thalion.ttio.hdf5` | `Hdf5File`, `Hdf5Group`, `Hdf5Dataset`, `Hdf5CompoundIO`, `NativeStringPool`, `NativeBytesPool` |
+| Storage providers | `global.thalion.ttio.providers` | `Hdf5Provider`, `MemoryProvider`, `SqliteProvider`, `ZarrProvider` (`StorageProvider` / `StorageGroup` / `StorageDataset` protocols) |
+| Protocols | `global.thalion.ttio.protocols` | `Run`, `Indexable`, `Streamable`, `Provenanceable`, `Encryptable`, `CVAnnotatable` |
+| Core + enums | `global.thalion.ttio` | `SignalArray`, `Spectrum`, `AcquisitionRun`, `SpectralDataset`, `FeatureFlags`, `NumpressCodec`, `ProvenanceRecord` |
+| Genomics | `global.thalion.ttio.genomics` | `AlignedRead`, `GenomicIndex`, `GenomicRun`, `WrittenGenomicRun` |
+| Codecs | `global.thalion.ttio.codecs` | `Rans`, `BasePack`, `QualityBinned`, `NameTokenizer` |
+| Transport | `global.thalion.ttio.transport` | `TransportWriter`, `TransportReader`, `AUFilter`, `WebSocketServer`, `WebSocketClient` |
+| Importers | `global.thalion.ttio.importers` | `MzMLReader`, `NmrMLReader`, `CVTermMapper`, `BamReader`, `CramReader` |
+| Exporters | `global.thalion.ttio.exporters` | `MzMLWriter`, `NmrMLWriter`, `ISAExporter`, `BamWriter`, `CramWriter` |
+| Protection | `global.thalion.ttio.protection` | `EncryptionManager`, `SignatureManager`, `KeyRotationManager`, `Anonymizer`, `PostQuantumCrypto` |
 
-See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the full 28-class mapping
+See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the full class mapping
 table and design notes.
 
-## Test Suite (62 tests)
+## Test Suite (755 tests, 0 failures, 0 errors, 0 skipped)
 
-| Test Class | Count | Coverage |
-|-----------|-------|---------|
-| `Hdf5FileTest` | 8 | File/group/attribute operations |
-| `Hdf5DatasetTest` | 9 | All precisions, compression, hyperslab |
-| `SpectralDatasetTest` | 9 | Round-trips, fixtures, MSImage |
-| `ImportExportTest` | 10 | mzML, nmrML, ISA, Thermo stub |
-| `ProtectionTest` | 14 | Encrypt, sign, key rotation, anonymize |
-| `AdvancedFeaturesTest` | 12 | Thread safety, LZ4, Numpress-delta |
+The suite spans HDF5 wrappers, the four storage providers, all six data
+primitives, the genomic stack (M82 + M83–M86 codec wiring + M87/M88
+SAM/BAM/CRAM importers + M88 exporters), the .tis transport (M89
+including genomic AU multiplexing), full M90 genomic encryption +
+signatures + anonymisation, the Phase 1+2 abstraction polish (`Run`
+protocol conformance + modality-agnostic helpers + per-run compound
+provenance dual-write/dual-read), and the cross-language byte-parity
+harness (M51 dumper + M82.4 genomic conformance fixtures + M86 codec
+fixtures).
 
 ## Test Fixtures
 

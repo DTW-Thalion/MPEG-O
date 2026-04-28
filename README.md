@@ -39,9 +39,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 2477 PASS / 2 pre-existing M38 Thermo failures (unrelated).** Last release tag: v1.1.1; current main is unreleased work for the genomic data model and codec stack (M80–M86). | `objc/` |
-| **Python (`ttio`)**       | **898 passed / 42 pre-existing failures (zarr / smoke / XSD, unrelated).** Full parity with ObjC and Java. | `python/` |
-| **Java (`global.thalion.ttio`)** | **512/0/0/0 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
+| **Objective-C (GNUstep)** | **Normative reference — 3070 PASS / 0 failures.** Last release tag: v1.1.1; current main is unreleased work covering M80–M91 (TTI-O rebrand + genomic data model + codec stack + transport extension + encryption/anonymisation + multi-omics integration) plus the post-M91 Phase 1+2 abstraction polish (`Run` protocol, modality-agnostic helpers, per-run compound provenance). | `objc/` |
+| **Python (`ttio`)**       | **1324 passed / 12 skipped / 4 xfailed.** Full parity with ObjC and Java. | `python/` |
+| **Java (`global.thalion.ttio`)** | **755/0/0/0 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages
@@ -82,10 +82,10 @@ A complete genomic codec stack ships across all three languages with cross-langu
 
 * **SignalArray** — atomic typed-buffer unit conforming to `CVAnnotatable`; round-trips with axis descriptors and CV annotations. Supports `float32` / `float64` / `int32` / `int64` / `uint32` / `complex128`.
 * **Spectrum** — named dictionary of SignalArrays with coordinate axes and CV metadata; specialized by MS / NMR / Raman / IR / UV-Vis / 2D-COS subclasses and persisted through the generic path with `@ttio_class` attributes.
-* **AcquisitionRun** — ordered, indexable, streamable collection of Spectrum objects sharing an instrument configuration and provenance chain. Accepts any Spectrum subclass; signal-channel serialization is name-driven. Conforms to `Indexable` + `Streamable` + `Provenanceable` + `Encryptable` with per-run provenance chains.
+* **AcquisitionRun** — ordered, indexable, streamable collection of Spectrum objects sharing an instrument configuration and provenance chain. Accepts any Spectrum subclass; signal-channel serialization is name-driven. Conforms to `Indexable` + `Streamable` + `Provenanceable` + `Encryptable` with per-run provenance chains. Also conforms to the modality-agnostic `Run` protocol (Phase 1+2; same surface as `GenomicRun`) so cross-modality code can iterate `dataset.runs.values()` uniformly and call `runs_for_sample(uri)` / `runs_of_modality(cls)` regardless of modality.
 * **CVAnnotation** — controlled-vocabulary parameter (ontology reference + accession + value + unit) attachable to any annotatable object. PSI-MS / nmrCV / Unimod accessions mapped via `CVTermMapper`.
 * **Identification** — link from a spectrum (or region) to a chemical entity, with confidence score and evidence chain. Persisted as a native HDF5 compound dataset.
-* **ProvenanceRecord** — W3C PROV-compatible record (input entities → activity → output entities). Persists both as a compound dataset at `/study/provenance` and per-run at `<run>/provenance/steps`.
+* **ProvenanceRecord** — W3C PROV-compatible record (input entities → activity → output entities). Persists both as a compound dataset at `/study/provenance` and per-run at `<run>/provenance/steps` (Phase 2: dual-write across all three languages on the HDF5 fast path; legacy `@provenance_json` mirror retained for non-HDF5 providers and pre-Phase-2 readers).
 
 ### Container, storage providers, and I/O
 
@@ -125,7 +125,8 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **Packet codec** — 24-byte headers, nine packet types: StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, EndOfStream. Three-language parity; bidirectional conformance matrix (any writer × any reader). Optional CRC-32C per packet. See [`docs/transport-spec.md`](docs/transport-spec.md).
 * **WebSocket client + server** — libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). Stream `.tio` as `.tis` over `ws://` / `wss://`.
 * **Acquisition simulator** — replays a fixture at wall-clock pace to exercise client/server scheduling.
-* **Selective access** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`.
+* **Selective access** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`. M89 extends `AUFilter` with chromosome + position-range predicates so subscribers can scope a stream to a genomic region without decrypting AUs they won't read.
+* **Genomic AUs + multiplexing** (M89) — `.tis` carries genomic AUs with a `chromosome + position + mapq + flags` prefix when `spectrum_class == 5`; MS and genomic runs interleave in a single stream and dispatch per-AU on the `spectrum_class` byte. 3×3 cross-language transport matrix green for both encode and decode directions.
 
 ### Protection: encryption, integrity, and key management
 
@@ -139,11 +140,12 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **Post-quantum signatures + KEM (`v3:`)** — ML-KEM-1024 (FIPS 203) envelope key-wrap and ML-DSA-87 (FIPS 204) dataset signatures. Python + ObjC via [`liboqs`](https://github.com/open-quantum-safe/liboqs); Java via Bouncy Castle 1.80+. Opt-in via `pip install 'ttio[pqc]'`; classical AES-256-GCM + HMAC-SHA256 remain the defaults. Feature flag: `opt_pqc_preview`. See [`docs/pqc.md`](docs/pqc.md).
 * **Access policy** — `AccessPolicy` persists JSON-encoded subject/stream/key-id metadata under `/protection/access_policies` independently of any key store.
 * **Spectral anonymization** — policy-based pipeline (SAAV redaction, intensity masking, m/z coarsening, rare-metabolite suppression, metadata stripping). Audit trail via provenance record. Feature flag: `opt_anonymized`.
+* **Genomic encryption + anonymisation** (M90) — per-AU AES-256-GCM on genomic signal channels with AAD = `dataset_id || au_sequence || channel_name`; ML-DSA-87 signatures over the chromosomes VL compound (M90.15); region-based encryption (encrypt chr6 / HLA, leave chr1 in clear) with a per-region key map keyed on the reserved `_headers` key (M90.11); genomic anonymiser (strip read names, randomise quality on a seeded RNG, mask SAM-overlapping regions). MPAD transport debug magic bumped to `"MPA1"` with a per-entry dtype byte (M90.12) so genomic UINT8 channels survive without a float64 cast.
 
 ### Cross-language conformance
 
 * **Three-language parity** — Objective-C (GNUstep) normative reference, Python (`ttio`, Python 3.11+), Java (`global.thalion.ttio`, JDK 17 + Maven). Every cross-language round-trip test passes byte-for-byte, driven by shared format fixtures.
-* **Compound byte-parity harness** — three dumper CLIs (Python `python -m ttio.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `TtioDumpIdentifications`) emit identifications / quantifications / provenance as byte-identical canonical JSON; pairwise-diffed in CI.
+* **Compound byte-parity harness** — three dumper CLIs (Python `python -m ttio.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `TtioDumpIdentifications`) emit identifications / quantifications / study-level provenance / `ms_per_run_provenance` (per-run provenance flattened by sorted run-name + per-run sequence index, Phase 2) as byte-identical canonical JSON; pairwise-diffed in CI.
 * **Per-AU encryption CLIs** — `per_au_cli` (Python), `PerAUCli` (Java), `TtioPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" dump for byte-compare; `transcode --rekey` rotates DEKs.
 * **PQC conformance matrix** — 32-cell verification across languages × providers (primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence).
 * **JCAMP-DX conformance** — 6 integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `TtioJcampDxDump`.
@@ -158,7 +160,7 @@ A complete genomic codec stack ships across all three languages with cross-langu
 
 Every version's files remain readable by later versions. Readers open v0.1–v0.11 files without ceremony. The current container version is 1.3; legacy v0.2 files at 1.1 and v0.10 per-AU-encrypted files still round-trip. Vibrational-spectroscopy and UV/Vis groups under `/study/` are silently ignored by pre-v0.11 readers (they don't match any known layout); `RamanSpectrum`, `IRSpectrum`, `UVVisSpectrum`, and `TwoDimensionalCorrelationSpectrum` persist through the generic Spectrum path with `@ttio_class` attributes, so pre-v0.11 readers fall back to the base class rather than failing. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
 
-Files written by the unreleased M80–M86 line (TTI-O rebrand + genomic data + codec stack) are NOT readable by v0.11.x readers — the rebrand drops the `mpgo`/`MPGO` identifiers in favour of `ttio`/`TTIO` (Binding Decision §74 in WORKPLAN), and the genomic codec wiring uses `@compression` attributes plus schema lifts (compound → flat / subgroup) that pre-M86 readers don't dispatch on. Files written WITHOUT genomic-codec overrides are still readable by any post-M82 reader.
+Files written by the unreleased M80–M91 line (TTI-O rebrand + genomic data + codec stack + transport extension + genomic encryption + multi-omics integration + Phase 1+2 abstraction polish) are NOT readable by v0.11.x readers — the rebrand drops the `mpgo`/`MPGO` identifiers in favour of `ttio`/`TTIO` (Binding Decision §74 in WORKPLAN), the genomic codec wiring uses `@compression` attributes plus schema lifts (compound → flat / subgroup) that pre-M86 readers don't dispatch on, the M90.12 MPAD transport magic is `"MPA1"` rather than `"MPAD"`, and the Phase 2 per-run provenance writer emits a canonical `<run>/provenance/steps` compound dataset alongside the legacy `@provenance_json` attribute (the Phase 2 reader prefers compound; pre-Phase-2 readers fall through to the JSON attribute and round-trip unchanged). Files written WITHOUT genomic-codec overrides are still readable by any post-M82 reader.
 
 ### Continuous integration
 
