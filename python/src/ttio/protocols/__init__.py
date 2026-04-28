@@ -11,6 +11,7 @@ from .cv_annotatable import CVAnnotatable
 from .encryptable import Encryptable
 from .indexable import Indexable
 from .provenanceable import Provenanceable
+from .run import Run
 from .streamable import Streamable
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "Encryptable",
     "Indexable",
     "Provenanceable",
+    "Run",
     "Streamable",
 ]
