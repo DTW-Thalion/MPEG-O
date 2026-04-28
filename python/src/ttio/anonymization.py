@@ -68,6 +68,10 @@ class AnonymizationPolicy:
     strip_read_names: bool = False
     randomise_qualities: bool = False
     randomise_qualities_constant: int = 30
+    # M90.14: when set, qualities are replaced with deterministic
+    # random Phred scores in [0, 93] (SAM spec range) from a numpy
+    # RNG seeded with this value. None → constant path (M90.3).
+    randomise_qualities_seed: int | None = None
     mask_regions: list[tuple[str, int, int]] | None = None
 
 
@@ -337,8 +341,23 @@ def _apply_genomic_policies(
 
         # ── randomise_qualities ─────────────────────────────────────
         if policy.randomise_qualities:
-            const = int(policy.randomise_qualities_constant) & 0xFF
-            qualities_list = [bytes([const] * len(q)) for q in qualities_list]
+            if policy.randomise_qualities_seed is not None:
+                # M90.14: seeded random Phred per byte. Range [0, 93]
+                # matches the SAM spec valid Phred range (0 = lowest
+                # quality, 93 = highest representable in standard
+                # Illumina-style ASCII offset 33 + 60).
+                rng = np.random.default_rng(
+                    int(policy.randomise_qualities_seed),
+                )
+                qualities_list = [
+                    bytes(rng.integers(0, 94, size=len(q), dtype=np.uint8))
+                    for q in qualities_list
+                ]
+            else:
+                const = int(policy.randomise_qualities_constant) & 0xFF
+                qualities_list = [
+                    bytes([const] * len(q)) for q in qualities_list
+                ]
             result.qualities_randomised += n
             if "randomise_qualities" not in result.policies_applied:
                 result.policies_applied.append("randomise_qualities")
