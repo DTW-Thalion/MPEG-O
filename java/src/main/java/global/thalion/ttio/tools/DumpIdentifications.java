@@ -85,6 +85,7 @@ public final class DumpIdentifications {
         List<Map<String, Object>> idents = new ArrayList<>();
         List<Map<String, Object>> quants = new ArrayList<>();
         List<Map<String, Object>> provs  = new ArrayList<>();
+        List<Map<String, Object>> msPerRun = new ArrayList<>();
         try (SpectralDataset ds = SpectralDataset.open(path)) {
             for (Identification i : ds.identifications()) {
                 idents.add(identificationRecord(i));
@@ -95,9 +96,27 @@ public final class DumpIdentifications {
             for (ProvenanceRecord p : ds.provenanceRecords()) {
                 provs.add(provenanceRecord(p));
             }
+            // Per-run provenance, flattened across MS runs in sorted-
+            // name order. Each record carries the run name and a per-
+            // run sequence index for stable byte-parity across Python,
+            // Java, and Objective-C dumpers.
+            List<String> sortedNames =
+                new ArrayList<>(ds.msRuns().keySet());
+            java.util.Collections.sort(sortedNames);
+            for (String runName : sortedNames) {
+                var run = ds.msRuns().get(runName);
+                List<ProvenanceRecord> chain = run.provenanceChain();
+                for (int seq = 0; seq < chain.size(); seq++) {
+                    Map<String, Object> rec = provenanceRecord(chain.get(seq));
+                    rec.put("run", runName);
+                    rec.put("seq", (long) seq);
+                    msPerRun.add(rec);
+                }
+            }
         }
         Map<String, List<Map<String, Object>>> sections = new LinkedHashMap<>();
         sections.put("identifications", idents);
+        sections.put("ms_per_run_provenance", msPerRun);
         sections.put("quantifications", quants);
         sections.put("provenance", provs);
         return CanonicalJson.formatTopLevel(sections);

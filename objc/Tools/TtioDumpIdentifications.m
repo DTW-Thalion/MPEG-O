@@ -21,6 +21,7 @@
 #import <Foundation/Foundation.h>
 
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Run/TTIOAcquisitionRun.h"
 #import "Dataset/TTIOIdentification.h"
 #import "Dataset/TTIOQuantification.h"
 #import "Dataset/TTIOProvenanceRecord.h"
@@ -230,12 +231,34 @@ int main(int argc, const char *argv[])
         for (TTIOProvenanceRecord *p in ds.provenanceRecords) {
             [provs addObject:provenanceRecord(p)];
         }
+        // Per-run provenance, flattened across MS runs in sorted-name
+        // order. Each record carries the run name and a per-run
+        // sequence index for stable byte-parity across Python, Java,
+        // and Objective-C dumpers.
+        NSMutableArray *msPerRun = [NSMutableArray array];
+        NSArray<NSString *> *runNames =
+            [ds.msRuns.allKeys sortedArrayUsingSelector:@selector(compare:)];
+        for (NSString *runName in runNames) {
+            TTIOAcquisitionRun *run = ds.msRuns[runName];
+            NSArray<TTIOProvenanceRecord *> *chain =
+                [run provenanceChain] ?: @[];
+            NSUInteger seq = 0;
+            for (TTIOProvenanceRecord *p in chain) {
+                NSMutableDictionary *rec =
+                    [provenanceRecord(p) mutableCopy];
+                rec[@"run"] = runName;
+                rec[@"seq"] = @((long long)seq);
+                [msPerRun addObject:rec];
+                seq++;
+            }
+        }
         [ds closeFile];
 
         NSString *blob = formatTopLevel(@{
-            @"identifications": idents,
-            @"quantifications": quants,
-            @"provenance":      provs,
+            @"identifications":         idents,
+            @"ms_per_run_provenance":   msPerRun,
+            @"quantifications":         quants,
+            @"provenance":              provs,
         });
         NSData *utf8 = [blob dataUsingEncoding:NSUTF8StringEncoding];
         fwrite(utf8.bytes, 1, utf8.length, stdout);
