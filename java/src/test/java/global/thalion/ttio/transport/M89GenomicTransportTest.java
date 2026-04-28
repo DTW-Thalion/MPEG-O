@@ -124,8 +124,13 @@ class M89GenomicTransportTest {
             0L, 0L, 0L,
             "chr1", 100L, 60, 0);
         byte[] full = au.encode();
-        // Drop the trailing flags (last 2 bytes) so the suffix is short.
-        byte[] truncated = Arrays.copyOf(full, full.length - 2);
+        // M90.9: the AU body now ends with int64 mate_position +
+        // int32 template_length (12 bytes). The mate extension
+        // decoder is OPTIONAL — if it is short the decoder simply
+        // defaults to -1 / 0. To reach the M89.1 short-fixed-suffix
+        // path drop the entire mate extension plus the trailing 2
+        // flags bytes (14 bytes total).
+        byte[] truncated = Arrays.copyOf(full, full.length - 14);
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
             () -> AccessUnit.decode(truncated));

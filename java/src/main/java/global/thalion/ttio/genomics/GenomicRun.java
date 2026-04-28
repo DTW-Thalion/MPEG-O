@@ -134,6 +134,25 @@ public class GenomicRun
                               sampleName, idx, runGroup);
     }
 
+    /** M90.10: probe the {@code @compression} attribute on a
+     *  signal_channels child dataset. Returns the codec id (an
+     *  {@link global.thalion.ttio.Enums.Compression} ordinal), or 0
+     *  ({@code NONE}) when the attribute is absent or the channel
+     *  doesn't exist. Used by
+     *  {@link global.thalion.ttio.transport.TransportWriter} to mirror
+     *  the file's per-channel codec choice on the wire. */
+    public int signalChannelCompressionCode(String channelName) {
+        ensureSignalChannels();
+        if (!signalChannels.hasChild(channelName)) return 0;
+        try (StorageDataset ds = signalChannels.openDataset(channelName)) {
+            Object v = ds.getAttribute("compression");
+            if (v instanceof Number n) return n.intValue();
+            return 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     /** Materialise read at index {@code i}. {@link Indexable} requires
      *  this signature. The shorthand {@code readAt} is provided as a
      *  domain-natural alias. */
