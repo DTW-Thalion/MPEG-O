@@ -21,6 +21,8 @@
 #import <Foundation/Foundation.h>
 #import "ValueClasses/TTIOEnums.h"
 
+@class TTIOProvenanceRecord;
+
 NS_ASSUME_NONNULL_BEGIN
 
 @interface TTIOWrittenRun : NSObject
@@ -51,6 +53,16 @@ NS_ASSUME_NONNULL_BEGIN
 
 /** v0.3 M21. "gzip", "none", "lz4", or "numpress_delta". Defaults to "gzip". */
 @property (nonatomic, copy) NSString *signalCompression;
+
+/** Per-run provenance records. Persisted under the run's group as
+ *  ``provenance/steps`` (compound dataset) plus a legacy
+ *  ``@provenance_json`` attribute mirror — matches the layout that
+ *  ``-[TTIOAcquisitionRun writeToGroup:name:error:]`` emits, and
+ *  the cross-language wire format Python's ``WrittenRun.provenance_records``
+ *  / Java's ``WrittenRun.provenanceRecords`` write to. Defaults to
+ *  ``@[]`` so callers that don't ship per-run provenance get
+ *  byte-parity with pre-v0.6 files. */
+@property (nonatomic, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
 
 - (instancetype)initWithSpectrumClassName:(NSString *)spectrumClassName
                           acquisitionMode:(int64_t)acquisitionMode
