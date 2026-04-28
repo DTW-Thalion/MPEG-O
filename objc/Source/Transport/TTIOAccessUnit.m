@@ -63,6 +63,24 @@ static inline int64_t readI64(const uint8_t *b)
     return (int64_t)u;
 }
 
+static inline void writeI32(uint8_t *b, int32_t v)
+{
+    uint32_t u = (uint32_t)v;
+    b[0] = (uint8_t)(u & 0xFFu);
+    b[1] = (uint8_t)((u >> 8) & 0xFFu);
+    b[2] = (uint8_t)((u >> 16) & 0xFFu);
+    b[3] = (uint8_t)((u >> 24) & 0xFFu);
+}
+
+static inline int32_t readI32(const uint8_t *b)
+{
+    uint32_t u = (uint32_t)b[0]
+               | ((uint32_t)b[1] << 8)
+               | ((uint32_t)b[2] << 16)
+               | ((uint32_t)b[3] << 24);
+    return (int32_t)u;
+}
+
 // ---------------------------------------------------------------- Channel
 
 @implementation TTIOTransportChannelData
@@ -186,6 +204,47 @@ static inline int64_t readI64(const uint8_t *b)
                        mappingQuality:(uint8_t)mappingQuality
                                   flags:(uint16_t)flags
 {
+    return [self initWithSpectrumClass:spectrumClass
+                       acquisitionMode:acquisitionMode
+                               msLevel:msLevel
+                              polarity:polarity
+                         retentionTime:retentionTime
+                           precursorMz:precursorMz
+                       precursorCharge:precursorCharge
+                           ionMobility:ionMobility
+                     basePeakIntensity:basePeakIntensity
+                              channels:channels
+                                pixelX:pixelX
+                                pixelY:pixelY
+                                pixelZ:pixelZ
+                            chromosome:chromosome
+                              position:position
+                        mappingQuality:mappingQuality
+                                 flags:flags
+                          matePosition:-1
+                        templateLength:0];
+}
+
+- (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
+                      acquisitionMode:(uint8_t)acquisitionMode
+                              msLevel:(uint8_t)msLevel
+                             polarity:(uint8_t)polarity
+                        retentionTime:(double)retentionTime
+                          precursorMz:(double)precursorMz
+                      precursorCharge:(uint8_t)precursorCharge
+                          ionMobility:(double)ionMobility
+                    basePeakIntensity:(double)basePeakIntensity
+                             channels:(NSArray<TTIOTransportChannelData *> *)channels
+                               pixelX:(uint32_t)pixelX
+                               pixelY:(uint32_t)pixelY
+                               pixelZ:(uint32_t)pixelZ
+                            chromosome:(NSString *)chromosome
+                              position:(int64_t)position
+                       mappingQuality:(uint8_t)mappingQuality
+                                  flags:(uint16_t)flags
+                          matePosition:(int64_t)matePosition
+                        templateLength:(int32_t)templateLength
+{
     if ((self = [super init])) {
         _spectrumClass = spectrumClass;
         _acquisitionMode = acquisitionMode;
@@ -204,6 +263,8 @@ static inline int64_t readI64(const uint8_t *b)
         _position = position;
         _mappingQuality = mappingQuality;
         _flags = flags;
+        _matePosition = matePosition;
+        _templateLength = templateLength;
     }
     return self;
 }
@@ -245,6 +306,13 @@ static inline int64_t readI64(const uint8_t *b)
         suffix[8] = _mappingQuality;
         writeU16(&suffix[9], _flags);
         [buf appendBytes:suffix length:11];
+        // M90.9 mate extension — always emitted post-M90.9 so the
+        // wire is uniform. Decoders treat the extension as optional
+        // and default to -1 / 0 when absent (M89.1 fixtures).
+        uint8_t mate[12];
+        writeI64(&mate[0], _matePosition);
+        writeI32(&mate[8], _templateLength);
+        [buf appendBytes:mate length:12];
     }
     return buf;
 }
@@ -294,6 +362,10 @@ static inline int64_t readI64(const uint8_t *b)
     int64_t position = 0;
     uint8_t mappingQuality = 0;
     uint16_t flagsField = 0;
+    // M90.9 mate extension defaults — match the property defaults so
+    // M89.1 AUs (which lack the extension) decode unchanged.
+    int64_t matePosition = -1;
+    int32_t templateLength = 0;
     if (spectrumClass == 4) {
         if (length - offset < 12) {
             if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
@@ -339,6 +411,14 @@ static inline int64_t readI64(const uint8_t *b)
         position = readI64(&bytes[offset]);
         mappingQuality = bytes[offset + 8];
         flagsField = readU16(&bytes[offset + 9]);
+        offset += 11;
+        // M90.9 mate extension — optional. M89.1 payloads end right
+        // after flags; M90.9+ payloads carry 12 more bytes.
+        if (length - offset >= 12) {
+            matePosition = readI64(&bytes[offset]);
+            templateLength = readI32(&bytes[offset + 8]);
+            offset += 12;
+        }
     }
 
     return [[self alloc] initWithSpectrumClass:spectrumClass
@@ -357,7 +437,9 @@ static inline int64_t readI64(const uint8_t *b)
                                     chromosome:chromosome
                                       position:position
                                 mappingQuality:mappingQuality
-                                         flags:flagsField];
+                                         flags:flagsField
+                                  matePosition:matePosition
+                                templateLength:templateLength];
 }
 
 @end

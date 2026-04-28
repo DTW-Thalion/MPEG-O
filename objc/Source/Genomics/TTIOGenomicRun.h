@@ -105,6 +105,13 @@
                           name:(NSString *)name
                          error:(NSError **)error;
 
+/** M90.10: return the M86 codec id (TTIOCompression value) declared
+ *  on the named signal channel via its `@compression` attribute, or
+ *  0 (NONE) if the attribute is absent. The transport writer probes
+ *  this for sequences/qualities to decide whether each per-AU slice
+ *  should be re-encoded with that codec on the wire. */
+- (uint8_t)wireCompressionForChannel:(NSString *)name;
+
 @end
 
 #endif

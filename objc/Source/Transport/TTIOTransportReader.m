@@ -5,6 +5,8 @@
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOWrittenRun.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Codecs/TTIORans.h"        // M90.10: rANS wire codec dispatch
+#import "Codecs/TTIOBasePack.h"    // M90.10: BASE_PACK wire codec dispatch
 #import "ValueClasses/TTIOEnums.h"
 #import <string.h>
 #import <zlib.h>
@@ -288,6 +290,12 @@ typedef struct {
                 gd[@"qualities"] = [NSMutableData data];
                 gd[@"offsets"] = [NSMutableArray array];
                 gd[@"lengths"] = [NSMutableArray array];
+                // M90.9 compound-field accumulators.
+                gd[@"cigars"] = [NSMutableArray array];
+                gd[@"readNames"] = [NSMutableArray array];
+                gd[@"mateChromosomes"] = [NSMutableArray array];
+                gd[@"matePositions"] = [NSMutableArray array];
+                gd[@"templateLengths"] = [NSMutableArray array];
                 genomicData[@(did)] = gd;
                 continue;
             }
@@ -355,34 +363,77 @@ typedef struct {
                 [(NSMutableArray *)gd[@"positions"] addObject:@(au.position)];
                 [(NSMutableArray *)gd[@"mappingQualities"] addObject:@(au.mappingQuality)];
                 [(NSMutableArray *)gd[@"flags"] addObject:@((uint32_t)au.flags)];
+                // M90.9: AU mate extension — pulled directly off the
+                // decoded AU, defaults to -1 / 0 for M89.1 fixtures.
+                [(NSMutableArray *)gd[@"matePositions"] addObject:@(au.matePosition)];
+                [(NSMutableArray *)gd[@"templateLengths"] addObject:@(au.templateLength)];
                 NSMutableData *seqSink = gd[@"sequences"];
                 NSMutableData *qualSink = gd[@"qualities"];
                 NSUInteger length = 0;
+                // M90.9 compound-field defaults — empty when the AU
+                // omits the channel (M89.2-era stream).
+                NSString *cigarStr = @"";
+                NSString *readNameStr = @"";
+                NSString *mateChrStr = @"";
                 for (TTIOTransportChannelData *ch in au.channels) {
                     if (ch.precision != TTIOPrecisionUInt8) {
                         if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                                  code:TTIOTransportErrorUnexpectedPayload
                                                              userInfo:@{NSLocalizedDescriptionKey:
-                                             [NSString stringWithFormat:@"genomic channel precision %u not supported (UINT8 only in M89.2)",
+                                             [NSString stringWithFormat:@"genomic channel precision %u not supported (UINT8 only)",
                                                  (unsigned)ch.precision]}];
                         return NO;
                     }
+                    // M90.10: dispatch on the wire compression byte.
+                    // NONE → identity; RANS_ORDER0/1 → TTIORansDecode;
+                    // BASE_PACK → TTIOBasePackDecode. Other codecs
+                    // unsupported on the genomic transport path.
+                    NSData *decoded = ch.data;
                     if (ch.compression != TTIOCompressionNone) {
-                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                                 code:TTIOTransportErrorUnexpectedPayload
-                                                             userInfo:@{NSLocalizedDescriptionKey:
-                                             [NSString stringWithFormat:@"genomic channel compression %u not supported (NONE only in M89.2)",
-                                                 (unsigned)ch.compression]}];
-                        return NO;
+                        NSError *decErr = nil;
+                        NSData *out = nil;
+                        if (ch.compression == TTIOCompressionRansOrder0
+                            || ch.compression == TTIOCompressionRansOrder1) {
+                            out = TTIORansDecode(ch.data, &decErr);
+                        } else if (ch.compression == TTIOCompressionBasePack) {
+                            out = TTIOBasePackDecode(ch.data, &decErr);
+                        } else {
+                            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                     code:TTIOTransportErrorUnexpectedPayload
+                                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                                 [NSString stringWithFormat:@"genomic channel compression %u unsupported on transport (M90.10)",
+                                                     (unsigned)ch.compression]}];
+                            return NO;
+                        }
+                        if (!out) {
+                            if (error) *error = decErr ?: [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                                code:TTIOTransportErrorUnexpectedPayload
+                                                                            userInfo:@{NSLocalizedDescriptionKey:
+                                                  [NSString stringWithFormat:@"genomic channel '%@' codec decode failed", ch.name]}];
+                            return NO;
+                        }
+                        decoded = out;
                     }
                     if ([ch.name isEqualToString:@"sequences"]) {
-                        [seqSink appendData:ch.data];
-                        length = ch.data.length;
+                        [seqSink appendData:decoded];
+                        length = decoded.length;
                     } else if ([ch.name isEqualToString:@"qualities"]) {
-                        [qualSink appendData:ch.data];
-                        if (length == 0) length = ch.data.length;
+                        [qualSink appendData:decoded];
+                        if (length == 0) length = decoded.length;
+                    } else if ([ch.name isEqualToString:@"cigar"]) {
+                        cigarStr = [[NSString alloc] initWithData:decoded
+                                                          encoding:NSUTF8StringEncoding] ?: @"";
+                    } else if ([ch.name isEqualToString:@"read_name"]) {
+                        readNameStr = [[NSString alloc] initWithData:decoded
+                                                              encoding:NSUTF8StringEncoding] ?: @"";
+                    } else if ([ch.name isEqualToString:@"mate_chromosome"]) {
+                        mateChrStr = [[NSString alloc] initWithData:decoded
+                                                              encoding:NSUTF8StringEncoding] ?: @"";
                     }
                 }
+                [(NSMutableArray *)gd[@"cigars"] addObject:cigarStr];
+                [(NSMutableArray *)gd[@"readNames"] addObject:readNameStr];
+                [(NSMutableArray *)gd[@"mateChromosomes"] addObject:mateChrStr];
                 uint64_t curOffset = ((NSNumber *)gd[@"runningOffset"]).unsignedLongLongValue;
                 [(NSMutableArray *)gd[@"offsets"] addObject:@(curOffset)];
                 [(NSMutableArray *)gd[@"lengths"] addObject:@((uint32_t)length)];
@@ -602,23 +653,43 @@ typedef struct {
             [lengthsData appendBytes:&v length:4];
         }
 
-        // M89.2: compound fields not carried on the wire — defaults
-        // preserve shape on the materialised side. cigar="", read_name="",
-        // mate_chromosome="", mate_position=-1, template_length=0.
+        // M90.9: compound fields ride on the wire as 3 string channels
+        // + a 12-byte mate extension on the AU genomic suffix. The
+        // accumulator captured them per-AU; materialise into the
+        // run-level shapes the WrittenGenomicRun expects. M89.1-only
+        // streams default to "" / -1 / 0 because the AU decoder
+        // returns those defaults when the extension is absent.
         NSUInteger n = posArr.count;
+        NSArray *cigarsCollected = gd[@"cigars"] ?: @[];
+        NSArray *readNamesCollected = gd[@"readNames"] ?: @[];
+        NSArray *mateChromsCollected = gd[@"mateChromosomes"] ?: @[];
+        NSArray *matePositionsCollected = gd[@"matePositions"] ?: @[];
+        NSArray *templateLengthsCollected = gd[@"templateLengths"] ?: @[];
         NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:n];
         NSMutableArray *readNames = [NSMutableArray arrayWithCapacity:n];
         NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:n];
         for (NSUInteger i = 0; i < n; i++) {
-            [cigars addObject:@""];
-            [readNames addObject:@""];
-            [mateChroms addObject:@""];
+            [cigars addObject:(i < cigarsCollected.count
+                                ? cigarsCollected[i] : @"")];
+            [readNames addObject:(i < readNamesCollected.count
+                                   ? readNamesCollected[i] : @"")];
+            [mateChroms addObject:(i < mateChromsCollected.count
+                                    ? mateChromsCollected[i] : @"")];
         }
         NSMutableData *matePosData = [NSMutableData dataWithLength:n * sizeof(int64_t)];
         int64_t *matePosBuf = (int64_t *)matePosData.mutableBytes;
-        for (NSUInteger i = 0; i < n; i++) matePosBuf[i] = -1;
+        for (NSUInteger i = 0; i < n; i++) {
+            matePosBuf[i] = i < matePositionsCollected.count
+                ? [(NSNumber *)matePositionsCollected[i] longLongValue]
+                : -1;
+        }
         NSMutableData *tlenData = [NSMutableData dataWithLength:n * sizeof(int32_t)];
-        // tlen is zero-initialised by dataWithLength: — leave as-is.
+        int32_t *tlenBuf = (int32_t *)tlenData.mutableBytes;
+        for (NSUInteger i = 0; i < n; i++) {
+            tlenBuf[i] = i < templateLengthsCollected.count
+                ? (int32_t)[(NSNumber *)templateLengthsCollected[i] intValue]
+                : 0;
+        }
 
         TTIOWrittenGenomicRun *wgr = [[TTIOWrittenGenomicRun alloc]
             initWithAcquisitionMode:(TTIOAcquisitionMode)((NSNumber *)meta[@"acquisitionMode"]).unsignedIntegerValue

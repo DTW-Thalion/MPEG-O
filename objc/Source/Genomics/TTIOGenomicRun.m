@@ -222,6 +222,24 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return 0;
 }
 
+// M90.10: probe @compression on a signal channel without decoding
+// anything. Used by the transport writer to decide whether to re-
+// encode each per-AU UINT8 slice with the same M86 codec on the
+// wire. Returns 0 (NONE) when the attribute is absent or unreadable.
+- (uint8_t)wireCompressionForChannel:(NSString *)name
+{
+    if (!name.length) return 0;
+    id<TTIOStorageDataset> ds = [self signalDatasetNamed:name error:NULL];
+    if (!ds) return 0;
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        TTIOHDF5Dataset *hds = [hg openDatasetNamed:name error:NULL];
+        if (hds) return _ttio_m86_read_compression_attr([hds datasetId]);
+    }
+    return _ttio_m86_read_compression_attr_protocol(ds);
+}
+
 // M86: byte-channel slice helper.
 //
 // For byte channels (sequences, qualities) the read path may need to

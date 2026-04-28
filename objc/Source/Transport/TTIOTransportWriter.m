@@ -13,6 +13,8 @@
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOAlignedRead.h"
+#import "Codecs/TTIORans.h"        // M90.10: rANS wire codec dispatch
+#import "Codecs/TTIOBasePack.h"    // M90.10: BASE_PACK wire codec dispatch
 #import <time.h>
 #import <string.h>
 #import <zlib.h>
@@ -356,6 +358,31 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
     return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
 }
 
+// M90.10: encode a UINT8 channel slice with the requested wire codec.
+// codec==0 (NONE) is identity. RANS_ORDER0/1 + BASE_PACK dispatch to
+// the matching M86 codec. Other codec ids return the raw bytes (the
+// genomic-string channels never set this — this helper is only called
+// for sequences/qualities). Mirrors Python's _apply_wire_codec.
+static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
+{
+    if (codec == TTIOCompressionNone) return plaintext;
+    switch (codec) {
+        case TTIOCompressionRansOrder0:
+            return TTIORansEncode(plaintext, 0);
+        case TTIOCompressionRansOrder1:
+            return TTIORansEncode(plaintext, 1);
+        case TTIOCompressionBasePack:
+            return TTIOBasePackEncode(plaintext);
+        default:
+            // Unknown / unsupported genomic wire codec — fall back to
+            // identity so we don't silently corrupt the stream. The
+            // reader's _decodeWireCodec will error if it sees an
+            // unsupported value — but here we set NONE on the wire so
+            // the receiver decodes correctly (lossless fallback).
+            return plaintext;
+    }
+}
+
 - (BOOL)writeGenomicRun:(TTIOGenomicRun *)run
               datasetId:(uint16_t)datasetId
                    name:(NSString *)name
@@ -370,17 +397,28 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
     }
     NSUInteger nReads = run.readCount;
     NSString *instrJSON = genomicRunMetadataJSON(run);
+    // M90.9: emit all 5 channels (sequences, qualities, cigar,
+    // read_name, mate_chromosome). The 3 string channels carry one
+    // per-AU UTF-8 string each.
+    NSArray<NSString *> *channelNames = @[@"sequences", @"qualities",
+                                            @"cigar", @"read_name",
+                                            @"mate_chromosome"];
     if (![self writeDatasetHeaderWithDatasetId:datasetId
                                            name:(name ?: @"")
                                 acquisitionMode:(uint8_t)run.acquisitionMode
                                   spectrumClass:@"TTIOGenomicRead"
-                                   channelNames:@[@"sequences", @"qualities"]
+                                   channelNames:channelNames
                                  instrumentJSON:instrJSON
                                 expectedAUCount:(uint32_t)nReads
                                           error:error]) return NO;
 
     TTIOGenomicIndex *idx = run.index;
     uint8_t acqMode = (uint8_t)run.acquisitionMode;
+    // M90.10: probe @compression on the source's sequences / qualities
+    // datasets. The 3 string channels always ride uncompressed —
+    // per-AU codec framing dominates short strings.
+    uint8_t seqCodec = [run wireCompressionForChannel:@"sequences"];
+    uint8_t qualCodec = [run wireCompressionForChannel:@"qualities"];
     for (NSUInteger i = 0; i < nReads; i++) {
         NSError *readErr = nil;
         TTIOAlignedRead *r = [run readAtIndex:i error:&readErr];
@@ -396,18 +434,45 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
         NSData *qualData = r.qualities ?: [NSData data];
         uint32_t seqLen = (uint32_t)seqData.length;
         uint32_t qualLen = (uint32_t)qualData.length;
+        // M90.10: re-encode per-AU slice with the M86 codec when the
+        // source channel had an @compression attribute set.
+        NSData *seqPayload = applyWireCodecGenomic(seqData, seqCodec);
+        NSData *qualPayload = applyWireCodecGenomic(qualData, qualCodec);
         TTIOTransportChannelData *seqCh =
             [[TTIOTransportChannelData alloc] initWithName:@"sequences"
                                                   precision:TTIOPrecisionUInt8
-                                                compression:TTIOCompressionNone
+                                                compression:seqCodec
                                                   nElements:seqLen
-                                                       data:seqData];
+                                                       data:seqPayload];
         TTIOTransportChannelData *qualCh =
             [[TTIOTransportChannelData alloc] initWithName:@"qualities"
                                                   precision:TTIOPrecisionUInt8
-                                                compression:TTIOCompressionNone
+                                                compression:qualCodec
                                                   nElements:qualLen
-                                                       data:qualData];
+                                                       data:qualPayload];
+        // M90.9: the 3 compound-string channels. Each carries the
+        // per-read string's UTF-8 bytes for THIS AU only.
+        NSData *cigarData = [(r.cigar ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *nameData  = [(r.readName ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *mateChrData = [(r.mateChromosome ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        TTIOTransportChannelData *cigarCh =
+            [[TTIOTransportChannelData alloc] initWithName:@"cigar"
+                                                  precision:TTIOPrecisionUInt8
+                                                compression:TTIOCompressionNone
+                                                  nElements:(uint32_t)cigarData.length
+                                                       data:cigarData];
+        TTIOTransportChannelData *nameCh =
+            [[TTIOTransportChannelData alloc] initWithName:@"read_name"
+                                                  precision:TTIOPrecisionUInt8
+                                                compression:TTIOCompressionNone
+                                                  nElements:(uint32_t)nameData.length
+                                                       data:nameData];
+        TTIOTransportChannelData *mateChrCh =
+            [[TTIOTransportChannelData alloc] initWithName:@"mate_chromosome"
+                                                  precision:TTIOPrecisionUInt8
+                                                compression:TTIOCompressionNone
+                                                  nElements:(uint32_t)mateChrData.length
+                                                       data:mateChrData];
         // Prefer the index-side fields for chromosome/position/mapq/
         // flags — they're already in the wire-correct types and avoid
         // any sentinel conversion in AlignedRead. Falls back to the
@@ -432,12 +497,14 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
                                           precursorCharge:0
                                               ionMobility:0.0
                                         basePeakIntensity:0.0
-                                                 channels:@[seqCh, qualCh]
+                                                 channels:@[seqCh, qualCh, cigarCh, nameCh, mateChrCh]
                                                    pixelX:0 pixelY:0 pixelZ:0
                                                chromosome:(chrom ?: @"")
                                                  position:pos
                                            mappingQuality:mapq
-                                                    flags:flags];
+                                                    flags:flags
+                                             matePosition:r.matePosition
+                                           templateLength:r.templateLength];
         if (![self writeAccessUnit:au datasetId:datasetId auSequence:(uint32_t)i error:error]) {
             return NO;
         }
@@ -483,7 +550,11 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
         did++;
     }
     // M89.4: contiguous IDs after MS — genomic dataset_ids start at
-    // runNames.count + 1.
+    // runNames.count + 1. M90.9: 5 channels (sequences, qualities,
+    // cigar, read_name, mate_chromosome).
+    NSArray<NSString *> *gChannelNames = @[@"sequences", @"qualities",
+                                             @"cigar", @"read_name",
+                                             @"mate_chromosome"];
     for (NSString *name in genomicNames) {
         TTIOGenomicRun *grun = dataset.genomicRuns[name];
         NSString *instrJSON = genomicRunMetadataJSON(grun);
@@ -491,7 +562,7 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
                                                name:name
                                     acquisitionMode:(uint8_t)grun.acquisitionMode
                                       spectrumClass:@"TTIOGenomicRead"
-                                       channelNames:@[@"sequences", @"qualities"]
+                                       channelNames:gChannelNames
                                      instrumentJSON:instrJSON
                                    expectedAUCount:(uint32_t)grun.readCount
                                               error:error]) return NO;
@@ -514,14 +585,18 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
                                              error:error]) return NO;
         did++;
     }
-    // M89.4: genomic AU bursts. Reuses the per-run helper so the
-    // multiplexed flow shares a single emission path with manual
-    // writeGenomicRun: callers.
+    // M89.4 / M90.9 / M90.10: genomic AU bursts. The AU emission
+    // mirrors writeGenomicRun: for the standalone API; we inline
+    // here so writeDataset: stays a single transactional walk
+    // without re-emitting the dataset header.
     for (NSString *name in genomicNames) {
         TTIOGenomicRun *grun = dataset.genomicRuns[name];
         NSUInteger nReads = grun.readCount;
         uint8_t acqMode = (uint8_t)grun.acquisitionMode;
         TTIOGenomicIndex *idx = grun.index;
+        // M90.10: probe source's @compression on sequences + qualities.
+        uint8_t seqCodec = [grun wireCompressionForChannel:@"sequences"];
+        uint8_t qualCodec = [grun wireCompressionForChannel:@"qualities"];
         for (NSUInteger i = 0; i < nReads; i++) {
             NSError *readErr = nil;
             TTIOAlignedRead *r = [grun readAtIndex:i error:&readErr];
@@ -531,18 +606,43 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
             }
             NSData *seqData = [r.sequence dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
             NSData *qualData = r.qualities ?: [NSData data];
+            uint32_t seqLen = (uint32_t)seqData.length;
+            uint32_t qualLen = (uint32_t)qualData.length;
+            NSData *seqPayload = applyWireCodecGenomic(seqData, seqCodec);
+            NSData *qualPayload = applyWireCodecGenomic(qualData, qualCodec);
             TTIOTransportChannelData *seqCh =
                 [[TTIOTransportChannelData alloc] initWithName:@"sequences"
                                                       precision:TTIOPrecisionUInt8
-                                                    compression:TTIOCompressionNone
-                                                      nElements:(uint32_t)seqData.length
-                                                           data:seqData];
+                                                    compression:seqCodec
+                                                      nElements:seqLen
+                                                           data:seqPayload];
             TTIOTransportChannelData *qualCh =
                 [[TTIOTransportChannelData alloc] initWithName:@"qualities"
                                                       precision:TTIOPrecisionUInt8
+                                                    compression:qualCodec
+                                                      nElements:qualLen
+                                                           data:qualPayload];
+            NSData *cigarData = [(r.cigar ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+            NSData *nameData  = [(r.readName ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+            NSData *mateChrData = [(r.mateChromosome ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+            TTIOTransportChannelData *cigarCh =
+                [[TTIOTransportChannelData alloc] initWithName:@"cigar"
+                                                      precision:TTIOPrecisionUInt8
                                                     compression:TTIOCompressionNone
-                                                      nElements:(uint32_t)qualData.length
-                                                           data:qualData];
+                                                      nElements:(uint32_t)cigarData.length
+                                                           data:cigarData];
+            TTIOTransportChannelData *nameCh =
+                [[TTIOTransportChannelData alloc] initWithName:@"read_name"
+                                                      precision:TTIOPrecisionUInt8
+                                                    compression:TTIOCompressionNone
+                                                      nElements:(uint32_t)nameData.length
+                                                           data:nameData];
+            TTIOTransportChannelData *mateChrCh =
+                [[TTIOTransportChannelData alloc] initWithName:@"mate_chromosome"
+                                                      precision:TTIOPrecisionUInt8
+                                                    compression:TTIOCompressionNone
+                                                      nElements:(uint32_t)mateChrData.length
+                                                           data:mateChrData];
             NSString *chrom = r.chromosome;
             int64_t pos = r.position;
             uint8_t mapq = r.mappingQuality;
@@ -563,12 +663,14 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
                                               precursorCharge:0
                                                   ionMobility:0.0
                                             basePeakIntensity:0.0
-                                                     channels:@[seqCh, qualCh]
+                                                     channels:@[seqCh, qualCh, cigarCh, nameCh, mateChrCh]
                                                        pixelX:0 pixelY:0 pixelZ:0
                                                    chromosome:(chrom ?: @"")
                                                      position:pos
                                                mappingQuality:mapq
-                                                        flags:flags];
+                                                        flags:flags
+                                                 matePosition:r.matePosition
+                                               templateLength:r.templateLength];
             if (![self writeAccessUnit:au datasetId:did auSequence:(uint32_t)i error:error]) {
                 return NO;
             }

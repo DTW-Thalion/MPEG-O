@@ -154,8 +154,11 @@ static void testGenomicAUTruncatedSuffix(void)
 {
     TTIOAccessUnit *au = makeGenomicAU(@"chr1", 100, 60, 0, @[]);
     NSData *full = [au encode];
-    // Drop the trailing flags (last 2 bytes) so the suffix is short.
-    NSData *truncated = [full subdataWithRange:NSMakeRange(0, full.length - 2)];
+    // M90.9: the AU now ends with a 12-byte mate extension after the
+    // M89.1 fixed suffix. Drop the entire mate extension AND part of
+    // the M89.1 fixed suffix (14 bytes total) so the truncation cuts
+    // into the M89.1 layer that the decoder still validates strictly.
+    NSData *truncated = [full subdataWithRange:NSMakeRange(0, full.length - 14)];
     NSError *err = nil;
     TTIOAccessUnit *decoded =
         [TTIOAccessUnit decodeFromBytes:truncated.bytes length:truncated.length error:&err];

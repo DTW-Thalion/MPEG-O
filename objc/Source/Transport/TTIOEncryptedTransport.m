@@ -198,6 +198,18 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray *> *channelSegments;
 @property (nonatomic, strong) NSMutableArray<TTIOHeaderSegment *> *headerSegments;
 @property (nonatomic) BOOL usedEncryptedHeaders;
+// M90.8: genomic-only fields. isGenomic is set when DATASET_HEADER
+// declares spectrum_class==TTIOGenomicRead. Per-AU genomic suffix
+// values accumulate into the four arrays so the materialiser can
+// rebuild the plaintext genomic_index columns. genomicMetadataJSON
+// carries the per-run metadata (modality/platform/reference_uri/
+// sample_name) from the DATASET_HEADER instrument_json slot.
+@property (nonatomic) BOOL isGenomic;
+@property (nonatomic, strong) NSMutableArray<NSString *> *genomicChromosomes;
+@property (nonatomic, strong) NSMutableArray<NSNumber *> *genomicPositions;
+@property (nonatomic, strong) NSMutableArray<NSNumber *> *genomicMapqs;
+@property (nonatomic, strong) NSMutableArray<NSNumber *> *genomicFlags;
+@property (nonatomic, copy) NSString *genomicMetadataJSON;
 @end
 @implementation DatasetAccumulator
 @end
@@ -278,12 +290,26 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             if (![n hasPrefix:@"_"]) [runNames addObject:n];
         }
 
+        // M90.8: also walk study/genomic_runs/. dataset_id continues
+        // from MS so AAD reconstruction matches the per-AU encrypt
+        // path (M90.1).
+        NSMutableArray *genomicRunNames = [NSMutableArray array];
+        id<TTIOStorageGroup> genomicRunsGroup = nil;
+        if ([study hasChildNamed:@"genomic_runs"]) {
+            genomicRunsGroup = [study openGroupNamed:@"genomic_runs" error:error];
+            if (genomicRunsGroup) {
+                for (NSString *n in [genomicRunsGroup childNames]) {
+                    if (![n hasPrefix:@"_"]) [genomicRunNames addObject:n];
+                }
+            }
+        }
+
         // StreamHeader
         if (![writer writeStreamHeaderWithFormatVersion:@"1.2"
                                                    title:title
                                         isaInvestigation:isa
                                                 features:features
-                                               nDatasets:(uint16_t)runNames.count
+                                               nDatasets:(uint16_t)(runNames.count + genomicRunNames.count)
                                                    error:error]) return NO;
 
         // Per-run ProtectionMetadata + DatasetHeader
@@ -351,6 +377,90 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
                                               channelNames:channelNames
                                             instrumentJSON:@"{}"
                                           expectedAUCount:nSpectra
+                                                     error:error]) return NO;
+            did++;
+        }
+
+        // M90.8: per-genomic-run ProtectionMetadata + DatasetHeader.
+        // dataset_id continues from MS so AAD reconstruction matches.
+        for (NSString *gRunName in genomicRunNames) {
+            id<TTIOStorageGroup> gRun = [genomicRunsGroup openGroupNamed:gRunName error:error];
+            id<TTIOStorageGroup> gSig = [gRun openGroupNamed:@"signal_channels" error:error];
+            if (!gRun || !gSig) return NO;
+
+            // Genomic only encrypts sequences + qualities (M90.1).
+            NSMutableArray<NSString *> *gChannelNames = [NSMutableArray array];
+            for (NSString *cn in @[@"sequences", @"qualities"]) {
+                NSString *segName = [NSString stringWithFormat:@"%@_segments", cn];
+                if ([gSig hasChildNamed:segName]) [gChannelNames addObject:cn];
+            }
+            NSString *gFirst = gChannelNames.firstObject ?: @"sequences";
+            NSString *gCipherSuite = readStringAttr(gSig,
+                [NSString stringWithFormat:@"%@_algorithm", gFirst]) ?: @"aes-256-gcm";
+            NSString *gKek = readStringAttr(gSig,
+                [NSString stringWithFormat:@"%@_kek_algorithm", gFirst]) ?: @"";
+            NSData *gWrapped = [NSData data];
+            NSString *gWrappedAttr = [NSString stringWithFormat:@"%@_wrapped_dek", gFirst];
+            if ([gSig hasAttributeNamed:gWrappedAttr]) {
+                id v = [gSig attributeValueForName:gWrappedAttr error:NULL];
+                if ([v isKindOfClass:[NSData class]]) gWrapped = (NSData *)v;
+            }
+            NSMutableData *gPm = [NSMutableData data];
+            appendLEString(gPm, gCipherSuite, 2);
+            appendLEString(gPm, gKek, 2);
+            appendU32LE(gPm, (uint32_t)gWrapped.length);
+            [gPm appendData:gWrapped];
+            appendLEString(gPm, @"", 2);
+            appendU32LE(gPm, 0);
+            [writer _writeRawPacketHeader:TTIOTransportPacketProtectionMetadata
+                                     flags:0
+                                 datasetId:did
+                                auSequence:0
+                                   payload:gPm];
+
+            // Discover read count from sequences segments (count only).
+            TTIOHDF5Group *gHdf5Sig = [[[hdf5Root openGroupNamed:@"study" error:NULL]
+                                          openGroupNamed:@"genomic_runs" error:NULL]
+                                          openGroupNamed:gRunName error:NULL];
+            gHdf5Sig = [gHdf5Sig openGroupNamed:@"signal_channels" error:NULL];
+            NSString *gFirstSegName = [NSString stringWithFormat:@"%@_segments", gFirst];
+            NSArray *gFirstSegs =
+                [TTIOCompoundIO readGenericFromGroup:gHdf5Sig
+                                          datasetNamed:gFirstSegName
+                                                fields:channelSegFields()
+                                                 error:error];
+            if (!gFirstSegs) return NO;
+            uint32_t gNReads = (uint32_t)gFirstSegs.count;
+            int64_t gAcqMode = 0;
+            if ([gRun hasAttributeNamed:@"acquisition_mode"]) {
+                id v = [gRun attributeValueForName:@"acquisition_mode" error:NULL];
+                if ([v respondsToSelector:@selector(longLongValue)])
+                    gAcqMode = [v longLongValue];
+            }
+
+            // Build genomic-run metadata JSON (modality / platform /
+            // reference_uri / sample_name) per the M89.2 convention.
+            NSDictionary *gMetaDict = @{
+                @"modality":      readStringAttr(gRun, @"modality")      ?: @"",
+                @"platform":      readStringAttr(gRun, @"platform")      ?: @"",
+                @"reference_uri": readStringAttr(gRun, @"reference_uri") ?: @"",
+                @"sample_name":   readStringAttr(gRun, @"sample_name")   ?: @"",
+            };
+            NSData *gMetaJsonData =
+                [NSJSONSerialization dataWithJSONObject:gMetaDict
+                                                  options:NSJSONWritingSortedKeys
+                                                    error:NULL];
+            NSString *gMetaJson =
+                [[NSString alloc] initWithData:gMetaJsonData
+                                       encoding:NSUTF8StringEncoding] ?: @"{}";
+
+            if (![writer writeDatasetHeaderWithDatasetId:did
+                                                      name:gRunName
+                                           acquisitionMode:(uint8_t)gAcqMode
+                                             spectrumClass:@"TTIOGenomicRead"
+                                              channelNames:gChannelNames
+                                            instrumentJSON:gMetaJson
+                                          expectedAUCount:gNReads
                                                      error:error]) return NO;
             did++;
         }
@@ -504,6 +614,125 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             did++;
         }
 
+        // M90.8: genomic AU emission. Same dataset_id space as MS so
+        // AAD reconstruction (dataset_id + au_sequence) matches.
+        for (NSString *gRunName in genomicRunNames) {
+            id<TTIOStorageGroup> gRun = [genomicRunsGroup openGroupNamed:gRunName error:error];
+            id<TTIOStorageGroup> gSig = [gRun openGroupNamed:@"signal_channels" error:error];
+            id<TTIOStorageGroup> gIdx = [gRun openGroupNamed:@"genomic_index" error:error];
+            if (!gRun || !gSig || !gIdx) return NO;
+
+            NSMutableArray<NSString *> *gChannelNames = [NSMutableArray array];
+            for (NSString *cn in @[@"sequences", @"qualities"]) {
+                NSString *segName = [NSString stringWithFormat:@"%@_segments", cn];
+                if ([gSig hasChildNamed:segName]) [gChannelNames addObject:cn];
+            }
+
+            // Pre-load encrypted segments per genomic channel.
+            TTIOHDF5Group *gHdf5Run = [[[hdf5Root openGroupNamed:@"study" error:NULL]
+                                          openGroupNamed:@"genomic_runs" error:NULL]
+                                          openGroupNamed:gRunName error:NULL];
+            TTIOHDF5Group *gHdf5Sig = [gHdf5Run openGroupNamed:@"signal_channels" error:NULL];
+            NSMutableDictionary<NSString *, NSArray *> *gSegsByCh = [NSMutableDictionary dictionary];
+            for (NSString *cn in gChannelNames) {
+                NSString *segName = [NSString stringWithFormat:@"%@_segments", cn];
+                NSArray *rows =
+                    [TTIOCompoundIO readGenericFromGroup:gHdf5Sig
+                                              datasetNamed:segName
+                                                    fields:channelSegFields()
+                                                     error:error];
+                if (!rows) return NO;
+                gSegsByCh[cn] = rows;
+            }
+
+            // Plaintext genomic_index columns (NOT encrypted per M90.1).
+            id<TTIOStorageDataset> gPosDs = [gIdx openDatasetNamed:@"positions" error:NULL];
+            id<TTIOStorageDataset> gMqDs  = [gIdx openDatasetNamed:@"mapping_qualities" error:NULL];
+            id<TTIOStorageDataset> gFlDs  = [gIdx openDatasetNamed:@"flags" error:NULL];
+            NSData *gPosData = gPosDs ? [gPosDs readAll:NULL] : nil;
+            NSData *gMqData  = gMqDs  ? [gMqDs readAll:NULL]  : nil;
+            NSData *gFlData  = gFlDs  ? [gFlDs readAll:NULL]  : nil;
+            const int64_t *gPosArr = (const int64_t *)gPosData.bytes;
+            const uint8_t *gMqArr  = (const uint8_t *)gMqData.bytes;
+            const uint32_t *gFlArr = (const uint32_t *)gFlData.bytes;
+            // chromosomes compound (VL_STRING).
+            TTIOHDF5Group *gHdf5Idx = [gHdf5Run openGroupNamed:@"genomic_index" error:NULL];
+            NSArray<TTIOCompoundField *> *chromFields = @[
+                [TTIOCompoundField fieldWithName:@"value"
+                                            kind:TTIOCompoundFieldKindVLString],
+            ];
+            NSArray *gChromRows =
+                [TTIOCompoundIO readGenericFromGroup:gHdf5Idx
+                                          datasetNamed:@"chromosomes"
+                                                fields:chromFields
+                                                 error:error];
+            if (!gChromRows) return NO;
+            int64_t gAcqMode = 0;
+            if ([gRun hasAttributeNamed:@"acquisition_mode"]) {
+                id v = [gRun attributeValueForName:@"acquisition_mode" error:NULL];
+                if ([v respondsToSelector:@selector(longLongValue)])
+                    gAcqMode = [v longLongValue];
+            }
+            NSUInteger gN = [gSegsByCh[gChannelNames.firstObject] count];
+
+            for (NSUInteger i = 0; i < gN; i++) {
+                NSMutableArray<TTIOTransportChannelData *> *channels = [NSMutableArray array];
+                for (NSString *cname in gChannelNames) {
+                    NSDictionary *row = gSegsByCh[cname][i];
+                    NSData *iv = row[@"iv"];
+                    NSData *tag = row[@"tag"];
+                    NSData *ct = row[@"ciphertext"];
+                    NSMutableData *data = [NSMutableData data];
+                    [data appendData:iv];
+                    [data appendData:tag];
+                    [data appendData:ct];
+                    TTIOTransportChannelData *ch =
+                        [[TTIOTransportChannelData alloc] initWithName:cname
+                                                              precision:TTIOPrecisionUInt8
+                                                            compression:TTIOCompressionNone
+                                                              nElements:[row[@"length"] unsignedIntValue]
+                                                                   data:data];
+                    [channels addObject:ch];
+                }
+                NSString *chrom = @"";
+                id chromVal = gChromRows[i][@"value"];
+                if ([chromVal isKindOfClass:[NSString class]]) chrom = chromVal;
+                else if ([chromVal isKindOfClass:[NSData class]]) {
+                    chrom = [[NSString alloc] initWithData:chromVal
+                                                   encoding:NSUTF8StringEncoding] ?: @"";
+                }
+                int64_t pos = gPosArr ? gPosArr[i] : 0;
+                uint8_t mapq = gMqArr ? gMqArr[i] : 0;
+                uint16_t flags = (uint16_t)((gFlArr ? gFlArr[i] : 0) & 0xFFFFu);
+                TTIOAccessUnit *au =
+                    [[TTIOAccessUnit alloc] initWithSpectrumClass:5
+                                                  acquisitionMode:(uint8_t)gAcqMode
+                                                          msLevel:0
+                                                         polarity:2
+                                                    retentionTime:0.0
+                                                      precursorMz:0.0
+                                                  precursorCharge:0
+                                                      ionMobility:0.0
+                                                basePeakIntensity:0.0
+                                                         channels:channels
+                                                           pixelX:0 pixelY:0 pixelZ:0
+                                                       chromosome:chrom
+                                                         position:pos
+                                                   mappingQuality:mapq
+                                                            flags:flags];
+                NSData *payload = [au encode];
+                [writer _writeRawPacketHeader:TTIOTransportPacketAccessUnit
+                                         flags:TTIOTransportPacketFlagEncrypted
+                                     datasetId:did
+                                    auSequence:(uint32_t)i
+                                       payload:payload];
+            }
+            if (![writer writeEndOfDatasetWithDatasetId:did
+                                          finalAUSequence:(uint32_t)gN
+                                                     error:error]) return NO;
+            did++;
+        }
+
         if (![writer writeEndOfStreamWithError:error]) return NO;
         ok = YES;
     }
@@ -528,6 +757,14 @@ static DatasetAccumulator *makeAcc(NSString *name, uint8_t acqMode,
     for (NSString *c in channelNames) d.channelSegments[c] = [NSMutableArray array];
     d.headerSegments = [NSMutableArray array];
     d.usedEncryptedHeaders = NO;
+    // M90.8: pre-init genomic accumulators. isGenomic flips on when
+    // the DATASET_HEADER spectrum_class is TTIOGenomicRead.
+    d.isGenomic = [spectrumClass isEqualToString:@"TTIOGenomicRead"];
+    d.genomicChromosomes = [NSMutableArray array];
+    d.genomicPositions = [NSMutableArray array];
+    d.genomicMapqs = [NSMutableArray array];
+    d.genomicFlags = [NSMutableArray array];
+    d.genomicMetadataJSON = @"";
     return d;
 }
 
@@ -673,6 +910,22 @@ static BOOL ingestAU(TTIOTransportPacketRecord *record,
         double bpi; memcpy(&bpi, &buf[off], 8); off += 8;
         uint8_t nChannels = buf[off++];
 
+        // M90.8: capture genomic suffix when this is a genomic AU
+        // so the materialiser can rebuild the plaintext
+        // genomic_index columns. Decode through TTIOAccessUnit
+        // since it knows the chrom-len-prefixed layout.
+        if (acc.isGenomic) {
+            NSError *gAuErr = nil;
+            TTIOAccessUnit *gAu =
+                [TTIOAccessUnit decodeFromBytes:buf length:len error:&gAuErr];
+            if (gAu && gAu.spectrumClass == 5) {
+                [acc.genomicChromosomes addObject:(gAu.chromosome ?: @"")];
+                [acc.genomicPositions addObject:@(gAu.position)];
+                [acc.genomicMapqs addObject:@(gAu.mappingQuality)];
+                [acc.genomicFlags addObject:@((uint32_t)gAu.flags)];
+            }
+        }
+
         // Stash plaintext filter values in a parallel array held on
         // the accumulator under keys the writer can consume.
         NSMutableArray *rts = acc.channelSegments[@"__rt__"]
@@ -753,17 +1006,22 @@ static BOOL writeEncryptedFile(NSString *path,
         id<TTIOStorageGroup> msRuns =
             [study createGroupNamed:@"ms_runs" error:error];
         if (!msRuns) return NO;
-        NSMutableArray *runNamesList = [NSMutableArray array];
+        // M90.8: split into MS vs genomic datasets. Each gets its own
+        // /study/{ms_runs,genomic_runs}/ subtree.
         NSArray *sortedDids = [datasets.allKeys sortedArrayUsingSelector:
                                 @selector(compare:)];
+        NSMutableArray *msDids = [NSMutableArray array];
+        NSMutableArray *genomicDids = [NSMutableArray array];
         for (NSNumber *did in sortedDids) {
-            DatasetAccumulator *acc = datasets[did];
-            [runNamesList addObject:acc.name];
+            if (datasets[did].isGenomic) [genomicDids addObject:did];
+            else [msDids addObject:did];
         }
+        NSMutableArray *runNamesList = [NSMutableArray array];
+        for (NSNumber *did in msDids) [runNamesList addObject:datasets[did].name];
         if (![msRuns setAttributeValue:[runNamesList componentsJoinedByString:@","]
                                  forName:@"_run_names" error:error]) return NO;
 
-        for (NSNumber *didKey in sortedDids) {
+        for (NSNumber *didKey in msDids) {
             DatasetAccumulator *acc = datasets[didKey];
             id<TTIOStorageGroup> run =
                 [msRuns createGroupNamed:acc.name error:error];
@@ -933,6 +1191,183 @@ static BOOL writeEncryptedFile(NSString *path,
                 }
             }
         }
+        // M90.8: write study/genomic_runs/<name>/ for each genomic
+        // dataset captured on the wire. Encrypted segments round-trip
+        // verbatim; plaintext genomic_index columns are reconstructed
+        // from the per-AU genomic suffix arrays captured during ingest.
+        if (genomicDids.count > 0) {
+            id<TTIOStorageGroup> gRunsGroup =
+                [study createGroupNamed:@"genomic_runs" error:error];
+            if (!gRunsGroup) return NO;
+            NSMutableArray *gNamesList = [NSMutableArray array];
+            for (NSNumber *did in genomicDids) [gNamesList addObject:datasets[did].name];
+            if (![gRunsGroup setAttributeValue:[gNamesList componentsJoinedByString:@","]
+                                          forName:@"_run_names" error:error]) return NO;
+
+            for (NSNumber *didKey in genomicDids) {
+                DatasetAccumulator *acc = datasets[didKey];
+                id<TTIOStorageGroup> gRun =
+                    [gRunsGroup createGroupNamed:acc.name error:error];
+                if (!gRun) return NO;
+                if (![gRun setAttributeValue:@(acc.acquisitionMode)
+                                       forName:@"acquisition_mode" error:error]) return NO;
+                if (![gRun setAttributeValue:@"TTIOGenomicRead"
+                                       forName:@"spectrum_class" error:error]) return NO;
+                NSDictionary *gMeta = @{};
+                if (acc.genomicMetadataJSON.length > 0) {
+                    NSData *jd = [acc.genomicMetadataJSON dataUsingEncoding:NSUTF8StringEncoding];
+                    id parsed = [NSJSONSerialization JSONObjectWithData:jd
+                                                                  options:0 error:NULL];
+                    if ([parsed isKindOfClass:[NSDictionary class]]) gMeta = parsed;
+                }
+                for (NSString *fld in @[@"modality", @"platform",
+                                          @"reference_uri", @"sample_name"]) {
+                    NSString *v = [gMeta[fld] isKindOfClass:[NSString class]]
+                        ? gMeta[fld] : @"";
+                    [gRun setAttributeValue:v forName:fld error:NULL];
+                }
+
+                id<TTIOStorageGroup> gSig =
+                    [gRun createGroupNamed:@"signal_channels" error:error];
+                if (!gSig) return NO;
+                NSMutableArray *gRealCh = [NSMutableArray array];
+                for (NSString *c in acc.channelNames) {
+                    if (![c hasPrefix:@"__"]) [gRealCh addObject:c];
+                }
+                if (![gSig setAttributeValue:[gRealCh componentsJoinedByString:@","]
+                                       forName:@"channel_names" error:error]) return NO;
+
+                ProtectionMeta *pm = protection[didKey];
+                NSArray<TTIOCompoundField *> *chFields = channelSegFields();
+                for (NSString *cname in gRealCh) {
+                    NSArray<TTIOChannelSegment *> *segs = acc.channelSegments[cname];
+                    NSString *segName = [NSString stringWithFormat:@"%@_segments", cname];
+                    id<TTIOStorageDataset> ds =
+                        [gSig createCompoundDatasetNamed:segName
+                                                   fields:chFields
+                                                    count:segs.count
+                                                    error:error];
+                    if (!ds) return NO;
+                    NSMutableArray *rows = [NSMutableArray arrayWithCapacity:segs.count];
+                    for (TTIOChannelSegment *s in segs) {
+                        [rows addObject:@{
+                            @"offset": @(s.offset), @"length": @(s.length),
+                            @"iv": s.iv, @"tag": s.tag, @"ciphertext": s.ciphertext,
+                        }];
+                    }
+                    if (![ds writeAll:rows error:error]) return NO;
+                    if (![gSig setAttributeValue:(pm.cipherSuite ?: @"aes-256-gcm")
+                                           forName:[NSString stringWithFormat:@"%@_algorithm", cname]
+                                             error:error]) return NO;
+                    if (pm && pm.wrappedDek.length > 0) {
+                        [gSig setAttributeValue:pm.wrappedDek
+                                          forName:[NSString stringWithFormat:@"%@_wrapped_dek", cname]
+                                            error:NULL];
+                        [gSig setAttributeValue:(pm.kekAlgorithm ?: @"")
+                                          forName:[NSString stringWithFormat:@"%@_kek_algorithm", cname]
+                                            error:NULL];
+                    }
+                }
+
+                id<TTIOStorageGroup> gIdx =
+                    [gRun createGroupNamed:@"genomic_index" error:error];
+                if (!gIdx) return NO;
+                NSArray<TTIOChannelSegment *> *gFirstSegs =
+                    acc.channelSegments[gRealCh.firstObject];
+                NSUInteger gNReads = gFirstSegs.count;
+                [gIdx setAttributeValue:@((int64_t)gNReads)
+                                  forName:@"count" error:NULL];
+                NSMutableData *gOffData = [NSMutableData data];
+                NSMutableData *gLenData = [NSMutableData data];
+                for (TTIOChannelSegment *s in gFirstSegs) {
+                    uint64_t o = s.offset; [gOffData appendBytes:&o length:8];
+                    uint32_t l = s.length; [gLenData appendBytes:&l length:4];
+                }
+                id<TTIOStorageDataset> gOffDs =
+                    [gIdx createDatasetNamed:@"offsets"
+                                    precision:TTIOPrecisionUInt64
+                                       length:gNReads
+                                    chunkSize:0
+                                  compression:TTIOCompressionNone
+                             compressionLevel:0
+                                        error:error];
+                if (!gOffDs) return NO;
+                [gOffDs writeAll:gOffData error:error];
+                id<TTIOStorageDataset> gLenDs =
+                    [gIdx createDatasetNamed:@"lengths"
+                                    precision:TTIOPrecisionUInt32
+                                       length:gNReads
+                                    chunkSize:0
+                                  compression:TTIOCompressionNone
+                             compressionLevel:0
+                                        error:error];
+                if (!gLenDs) return NO;
+                [gLenDs writeAll:gLenData error:error];
+
+                NSMutableData *gPosData = [NSMutableData data];
+                NSMutableData *gMqData  = [NSMutableData data];
+                NSMutableData *gFlData  = [NSMutableData data];
+                for (NSUInteger i = 0; i < gNReads; i++) {
+                    int64_t p = i < acc.genomicPositions.count
+                        ? [acc.genomicPositions[i] longLongValue] : 0;
+                    [gPosData appendBytes:&p length:8];
+                    uint8_t mq = i < acc.genomicMapqs.count
+                        ? (uint8_t)[acc.genomicMapqs[i] unsignedCharValue] : 0;
+                    [gMqData appendBytes:&mq length:1];
+                    uint32_t fl = i < acc.genomicFlags.count
+                        ? (uint32_t)[acc.genomicFlags[i] unsignedIntValue] : 0;
+                    [gFlData appendBytes:&fl length:4];
+                }
+                id<TTIOStorageDataset> gPosDs =
+                    [gIdx createDatasetNamed:@"positions"
+                                    precision:TTIOPrecisionInt64
+                                       length:gNReads
+                                    chunkSize:0
+                                  compression:TTIOCompressionNone
+                             compressionLevel:0
+                                        error:error];
+                if (!gPosDs) return NO;
+                [gPosDs writeAll:gPosData error:error];
+                id<TTIOStorageDataset> gMqDs =
+                    [gIdx createDatasetNamed:@"mapping_qualities"
+                                    precision:TTIOPrecisionUInt8
+                                       length:gNReads
+                                    chunkSize:0
+                                  compression:TTIOCompressionNone
+                             compressionLevel:0
+                                        error:error];
+                if (!gMqDs) return NO;
+                [gMqDs writeAll:gMqData error:error];
+                id<TTIOStorageDataset> gFlDs =
+                    [gIdx createDatasetNamed:@"flags"
+                                    precision:TTIOPrecisionUInt32
+                                       length:gNReads
+                                    chunkSize:0
+                                  compression:TTIOCompressionNone
+                             compressionLevel:0
+                                        error:error];
+                if (!gFlDs) return NO;
+                [gFlDs writeAll:gFlData error:error];
+
+                NSArray<TTIOCompoundField *> *gChromFields = @[
+                    [TTIOCompoundField fieldWithName:@"value"
+                                                kind:TTIOCompoundFieldKindVLString],
+                ];
+                id<TTIOStorageDataset> gChromDs =
+                    [gIdx createCompoundDatasetNamed:@"chromosomes"
+                                               fields:gChromFields
+                                                count:gNReads
+                                                error:error];
+                if (!gChromDs) return NO;
+                NSMutableArray *gChromRowsW = [NSMutableArray arrayWithCapacity:gNReads];
+                for (NSUInteger i = 0; i < gNReads; i++) {
+                    NSString *c = i < acc.genomicChromosomes.count
+                        ? acc.genomicChromosomes[i] : @"";
+                    [gChromRowsW addObject:@{ @"value": c ?: @"" }];
+                }
+                if (![gChromDs writeAll:gChromRowsW error:error]) return NO;
+            }
+        }
     }
     @finally {
         [sp close];
@@ -1021,8 +1456,23 @@ static BOOL writeEncryptedFile(NSString *path,
                                                             encoding:NSUTF8StringEncoding]];
                 off += cl;
             }
-            // skip instrument_json + expected_au_count
-            datasets[@(did)] = makeAcc(runName, acq, spectrumClass, chNames);
+            // M90.8: read instrument_json — for genomic datasets it
+            // carries the per-run metadata (modality / platform /
+            // reference_uri / sample_name) which we re-emit on the
+            // materialised genomic_run group.
+            NSString *instrJson = @"";
+            if (off + 4 <= len) {
+                uint32_t jl = readU32LE(&b[off]); off += 4;
+                if (off + jl <= len) {
+                    instrJson = [[NSString alloc] initWithBytes:&b[off] length:jl
+                                                         encoding:NSUTF8StringEncoding] ?: @"";
+                    off += jl;
+                }
+            }
+            // expected_au_count u32 (skipped — discovered from AUs).
+            DatasetAccumulator *acc = makeAcc(runName, acq, spectrumClass, chNames);
+            acc.genomicMetadataJSON = instrJson;
+            datasets[@(did)] = acc;
         } else if (t == TTIOTransportPacketAccessUnit) {
             DatasetAccumulator *acc = datasets[@(rec.header.datasetId)];
             if (!acc) {
