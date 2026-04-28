@@ -310,6 +310,187 @@ static NSArray<TTIOChannelSegment *> *encryptChannelWithDispatch(
     return out;
 }
 
+// M90.11: reserved key name for encrypting genomic_index columns
+// under encryptFilePathByRegion's keyMap. The presence of this entry
+// is the opt-in signal for opt_encrypted_au_headers on genomic data.
+static NSString *const kTTIOPerAUHeadersKeyName = @"_headers";
+
+// M90.11: serialise the chromosomes list as compact JSON
+// ``["chr1","chr1","chr2"]`` — must match Python's
+// json.dumps(chromosomes) which uses double-quoted strings and a
+// single comma+space separator. Foundation's NSJSONSerialization
+// emits without whitespace by default; we then reconstruct the
+// "[\"chr1\", \"chr2\"]" shape Python uses (`json.dumps` default is
+// no whitespace either, both produce ``["chr1","chr2"]``). Verified
+// against test_m90_11 fixtures.
+static NSData *chromosomesToJSON(NSArray<NSString *> *chromosomes)
+{
+    NSError *jsonErr = nil;
+    NSData *d = [NSJSONSerialization dataWithJSONObject:chromosomes
+                                                  options:0
+                                                    error:&jsonErr];
+    return d ?: [NSData data];
+}
+
+// M90.11 encrypt: replace the four plaintext genomic_index columns
+// (chromosomes, positions, mapping_qualities, flags) with
+// ``<col>_encrypted`` uint8 1-D blobs containing iv || tag || ct.
+// AAD = "genomic_headers:<dataset_id>:<col>" (ASCII).
+// offsets/lengths stay plaintext — structural framing.
+static BOOL encryptGenomicIndex(id<TTIOStorageGroup> gIdx,
+                                  uint16_t datasetId,
+                                  NSData *key,
+                                  NSArray<NSString *> *chromosomes,
+                                  NSError **error)
+{
+    // Read the four columns into raw little-endian byte buffers.
+    NSData *chrJson = chromosomesToJSON(chromosomes);
+
+    id<TTIOStorageDataset> posDs =
+        [gIdx openDatasetNamed:@"positions" error:error];
+    if (!posDs) return NO;
+    NSData *posBytes = [posDs readAll:error];
+    if (!posBytes) return NO;
+
+    id<TTIOStorageDataset> mqDs =
+        [gIdx openDatasetNamed:@"mapping_qualities" error:error];
+    if (!mqDs) return NO;
+    NSData *mqBytes = [mqDs readAll:error];
+    if (!mqBytes) return NO;
+
+    id<TTIOStorageDataset> flagsDs =
+        [gIdx openDatasetNamed:@"flags" error:error];
+    if (!flagsDs) return NO;
+    NSData *flagsBytes = [flagsDs readAll:error];
+    if (!flagsBytes) return NO;
+
+    NSDictionary<NSString *, NSData *> *columns = @{
+        @"chromosomes": chrJson,
+        @"positions": posBytes,
+        @"mapping_qualities": mqBytes,
+        @"flags": flagsBytes,
+    };
+
+    // Encrypt + write each column as ``<col>_encrypted`` uint8 blob.
+    // Iterate in a fixed order so this routine is deterministic.
+    NSArray<NSString *> *order = @[
+        @"chromosomes", @"positions", @"mapping_qualities", @"flags",
+    ];
+    for (NSString *colName in order) {
+        NSData *plaintext = columns[colName];
+        NSString *aadStr =
+            [NSString stringWithFormat:@"genomic_headers:%u:%@",
+                (unsigned)datasetId, colName];
+        NSData *aad = [aadStr dataUsingEncoding:NSASCIIStringEncoding];
+        NSData *iv = [TTIOPerAUEncryption randomIVWithError:error];
+        if (!iv) return NO;
+        NSData *tag = nil;
+        NSData *ct = [TTIOPerAUEncryption encryptWithPlaintext:plaintext
+                                                            key:key
+                                                             iv:iv
+                                                            aad:aad
+                                                         outTag:&tag
+                                                          error:error];
+        if (!ct) return NO;
+
+        // Concat iv (12) || tag (16) || ciphertext into a single blob.
+        NSMutableData *blob = [NSMutableData dataWithCapacity:
+            iv.length + tag.length + ct.length];
+        [blob appendData:iv];
+        [blob appendData:tag];
+        [blob appendData:ct];
+
+        // Delete plaintext column (or any pre-existing _encrypted dataset).
+        if ([gIdx hasChildNamed:colName]) {
+            if (![gIdx deleteChildNamed:colName error:error]) return NO;
+        }
+        NSString *encName =
+            [NSString stringWithFormat:@"%@_encrypted", colName];
+        if ([gIdx hasChildNamed:encName]) {
+            if (![gIdx deleteChildNamed:encName error:error]) return NO;
+        }
+        id<TTIOStorageDataset> outDs =
+            [gIdx createDatasetNamed:encName
+                            precision:TTIOPrecisionUInt8
+                               length:blob.length
+                            chunkSize:0
+                          compression:TTIOCompressionNone
+                     compressionLevel:0
+                                error:error];
+        if (!outDs) return NO;
+        if (![outDs writeAll:blob error:error]) return NO;
+    }
+    return YES;
+}
+
+// M90.11 decrypt: read the ``<col>_encrypted`` blobs and recover the
+// four plaintext columns. Returns a dictionary
+// ``{"chromosomes": NSArray<NSString *>, "positions": NSData (i64
+// LE), "mapping_qualities": NSData (u1), "flags": NSData (u32 LE)}``
+// or nil + NSError on failure.
+static NSDictionary *decryptGenomicIndex(id<TTIOStorageGroup> gIdx,
+                                            uint16_t datasetId,
+                                            NSData *key,
+                                            NSError **error)
+{
+    NSArray<NSString *> *order = @[
+        @"chromosomes", @"positions", @"mapping_qualities", @"flags",
+    ];
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    for (NSString *colName in order) {
+        NSString *encName =
+            [NSString stringWithFormat:@"%@_encrypted", colName];
+        if (![gIdx hasChildNamed:encName]) {
+            if (error) *error = [NSError errorWithDomain:kDomain code:7
+                userInfo:@{NSLocalizedDescriptionKey:
+                    [NSString stringWithFormat:
+                        @"genomic_index/%@ missing — file does not "
+                        @"appear to carry M90.11 encrypted headers",
+                        encName]}];
+            return nil;
+        }
+        id<TTIOStorageDataset> ds =
+            [gIdx openDatasetNamed:encName error:error];
+        if (!ds) return nil;
+        NSData *blob = [ds readAll:error];
+        if (!blob) return nil;
+        if (blob.length < 12 + 16) {
+            if (error) *error = [NSError errorWithDomain:kDomain code:8
+                userInfo:@{NSLocalizedDescriptionKey:
+                    [NSString stringWithFormat:
+                        @"genomic_index/%@ too short for IV+TAG", encName]}];
+            return nil;
+        }
+        NSData *iv = [blob subdataWithRange:NSMakeRange(0, 12)];
+        NSData *tag = [blob subdataWithRange:NSMakeRange(12, 16)];
+        NSData *ct = [blob subdataWithRange:NSMakeRange(28, blob.length - 28)];
+        NSString *aadStr =
+            [NSString stringWithFormat:@"genomic_headers:%u:%@",
+                (unsigned)datasetId, colName];
+        NSData *aad = [aadStr dataUsingEncoding:NSASCIIStringEncoding];
+        NSData *plain = [TTIOPerAUEncryption
+            decryptWithCiphertext:ct key:key iv:iv tag:tag aad:aad
+                            error:error];
+        if (!plain) return nil;
+        if ([colName isEqualToString:@"chromosomes"]) {
+            NSError *jsonErr = nil;
+            id parsed = [NSJSONSerialization JSONObjectWithData:plain
+                                                          options:0
+                                                            error:&jsonErr];
+            if (![parsed isKindOfClass:[NSArray class]]) {
+                if (error) *error = [NSError errorWithDomain:kDomain code:9
+                    userInfo:@{NSLocalizedDescriptionKey:
+                        @"chromosomes column did not decode to JSON array"}];
+                return nil;
+            }
+            out[colName] = parsed;
+        } else {
+            out[colName] = plain;
+        }
+    }
+    return out;
+}
+
 // Per-AU dispatch decrypt — branches on len(seg.iv): 0 = clear
 // segment (ciphertext is plaintext), 12 = AES-256-GCM.
 static NSData *decryptChannelWithDispatch(
@@ -750,6 +931,16 @@ static NSData *decryptChannelWithDispatch(
         }
     }
 
+    // M90.11: split out the reserved "_headers" entry from the
+    // chromosome-keyed entries. Headers-key encrypts the four
+    // genomic_index columns (chromosomes, positions,
+    // mapping_qualities, flags). Chromosome keys encrypt signal
+    // channels per-AU.
+    NSData *headersKey = keyMap[kTTIOPerAUHeadersKeyName];
+    NSMutableDictionary<NSString *, NSData *> *chromosomeKeys =
+        [keyMap mutableCopy];
+    [chromosomeKeys removeObjectForKey:kTTIOPerAUHeadersKeyName];
+
     id<TTIOStorageProvider> sp =
         [[TTIOProviderRegistry sharedRegistry] openURL:path
                                                     mode:TTIOStorageOpenModeReadWrite
@@ -833,34 +1024,72 @@ static NSData *decryptChannelWithDispatch(
                 readChromosomes(hdf5GIdx, error);
             if (!chromosomes) return NO;
 
-            for (NSString *cname in @[@"sequences", @"qualities"]) {
-                if (![gSig hasChildNamed:cname]) continue;
-                id<TTIOStorageDataset> vDs =
-                    [gSig openDatasetNamed:cname error:error];
-                if (!vDs) return NO;
-                NSData *plaintext = [vDs readAll:error];
-                if (!plaintext) return NO;
-                NSArray<TTIOChannelSegment *> *segs =
-                    encryptChannelWithDispatch(plaintext,
-                                                  gOffsets, gLengths,
-                                                  chromosomes, gCount,
-                                                  datasetId, cname,
-                                                  keyMap, error);
-                if (!segs) return NO;
-                NSString *segName =
-                    [NSString stringWithFormat:@"%@_segments", cname];
-                if (!writeChannelSegments(gSig, segName, segs, error))
+            // M90.11: signal-channel encryption runs in two cases:
+            //   (a) caller supplied chromosome keys (M90.4 path)
+            //   (b) caller supplied an empty key_map (M90.4 no-op:
+            //       file gets opt_per_au_encryption with all-clear
+            //       segments)
+            // The only path that SKIPS signal-channel encryption is
+            // the headers-only case (key_map == {"_headers": K}).
+            BOOL runSignalEncrypt =
+                (chromosomeKeys.count > 0) || (headersKey == nil);
+            if (runSignalEncrypt) {
+                for (NSString *cname in @[@"sequences", @"qualities"]) {
+                    if (![gSig hasChildNamed:cname]) continue;
+                    id<TTIOStorageDataset> vDs =
+                        [gSig openDatasetNamed:cname error:error];
+                    if (!vDs) return NO;
+                    NSData *plaintext = [vDs readAll:error];
+                    if (!plaintext) return NO;
+                    NSArray<TTIOChannelSegment *> *segs =
+                        encryptChannelWithDispatch(plaintext,
+                                                      gOffsets, gLengths,
+                                                      chromosomes, gCount,
+                                                      datasetId, cname,
+                                                      chromosomeKeys, error);
+                    if (!segs) return NO;
+                    NSString *segName =
+                        [NSString stringWithFormat:@"%@_segments", cname];
+                    if (!writeChannelSegments(gSig, segName, segs, error))
+                        return NO;
+                    if (![gSig deleteChildNamed:cname error:error]) return NO;
+                    if (![gSig setAttributeValue:@"aes-256-gcm-by-region"
+                                          forName:[NSString stringWithFormat:@"%@_algorithm", cname]
+                                            error:error]) return NO;
+                }
+            }
+
+            // M90.11: when "_headers" key is present, encrypt the
+            // four genomic_index columns under it.
+            if (headersKey != nil) {
+                if (!encryptGenomicIndex(gIdx, datasetId, headersKey,
+                                            chromosomes, error)) {
                     return NO;
-                if (![gSig deleteChildNamed:cname error:error]) return NO;
-                if (![gSig setAttributeValue:@"aes-256-gcm-by-region"
-                                      forName:[NSString stringWithFormat:@"%@_algorithm", cname]
-                                        error:error]) return NO;
+                }
             }
             datasetId++;
         }
 
-        [featureSet addObject:@"opt_per_au_encryption"];
-        [featureSet addObject:@"opt_region_keyed_encryption"];
+        // Feature-flag set rules:
+        //  * opt_per_au_encryption — set whenever signal-channel
+        //    encryption ran (chromosome keys present OR empty key_map
+        //    no-op path) OR when headers_key is provided.
+        //  * opt_region_keyed_encryption — only when at least one
+        //    chromosome key was provided. Empty key_map leaves the
+        //    file with all-clear segments — that's M90.4's no-op
+        //    semantics, not a region-keyed file.
+        //  * opt_encrypted_au_headers — set when _headers key was
+        //    used (M90.11).
+        if (chromosomeKeys.count > 0 || headersKey == nil) {
+            [featureSet addObject:@"opt_per_au_encryption"];
+        }
+        if (chromosomeKeys.count > 0) {
+            [featureSet addObject:@"opt_region_keyed_encryption"];
+        }
+        if (headersKey != nil) {
+            [featureSet addObject:@"opt_per_au_encryption"];
+            [featureSet addObject:@"opt_encrypted_au_headers"];
+        }
         NSArray *sorted = [featureSet.allObjects
             sortedArrayUsingSelector:@selector(compare:)];
         if (!writeFeatureFlags(root, version, sorted, error)) return NO;
@@ -888,6 +1117,13 @@ static NSData *decryptChannelWithDispatch(
         }
     }
 
+    // M90.11: split out the reserved "_headers" entry from the
+    // chromosome keys.
+    NSData *headersKey = keyMap[kTTIOPerAUHeadersKeyName];
+    NSMutableDictionary<NSString *, NSData *> *chromosomeKeys =
+        [keyMap mutableCopy];
+    [chromosomeKeys removeObjectForKey:kTTIOPerAUHeadersKeyName];
+
     id<TTIOStorageProvider> sp =
         [[TTIOProviderRegistry sharedRegistry] openURL:path
                                                     mode:TTIOStorageOpenModeRead
@@ -902,6 +1138,20 @@ static NSData *decryptChannelWithDispatch(
         if (![features containsObject:@"opt_per_au_encryption"]) {
             if (error) *error = makeErr(2,
                 @"%@ does not carry opt_per_au_encryption", path);
+            return nil;
+        }
+
+        // M90.11: opt_encrypted_au_headers files require the
+        // "_headers" key — without it we can't even reconstruct the
+        // chromosomes column needed to dispatch signal-channel
+        // decryption.
+        BOOL headersEncrypted =
+            [features containsObject:@"opt_encrypted_au_headers"];
+        if (headersEncrypted && headersKey == nil) {
+            if (error) *error = makeErr(4,
+                @"%@ carries opt_encrypted_au_headers; caller must "
+                @"provide a '_headers' entry in keyMap to decrypt the "
+                @"genomic_index columns", path);
             return nil;
         }
 
@@ -955,11 +1205,23 @@ static NSData *decryptChannelWithDispatch(
             TTIOHDF5Group *hdf5GIdx =
                 [hdf5GRun openGroupNamed:@"genomic_index" error:NULL];
 
-            NSArray<NSString *> *chromosomes =
-                readChromosomes(hdf5GIdx, error);
-            if (!chromosomes) return nil;
-
             NSMutableDictionary *gRunOut = [NSMutableDictionary dictionary];
+            NSArray<NSString *> *chromosomes = nil;
+
+            // M90.11: when headers are encrypted, decrypt the four
+            // genomic_index columns FIRST so the per-AU signal-channel
+            // dispatch (which needs chromosomes) can proceed.
+            if (headersEncrypted) {
+                NSDictionary *indexPlain =
+                    decryptGenomicIndex(gIdx, datasetId, headersKey, error);
+                if (!indexPlain) return nil;
+                chromosomes = (NSArray<NSString *> *)indexPlain[@"chromosomes"];
+                gRunOut[@"__index__"] = indexPlain;
+            } else {
+                chromosomes = readChromosomes(hdf5GIdx, error);
+                if (!chromosomes) return nil;
+            }
+
             for (NSString *cname in @[@"sequences", @"qualities"]) {
                 NSString *segName =
                     [NSString stringWithFormat:@"%@_segments", cname];
@@ -969,7 +1231,7 @@ static NSData *decryptChannelWithDispatch(
                 NSData *plain = decryptChannelWithDispatch(segs,
                                                             chromosomes,
                                                             datasetId, cname,
-                                                            keyMap, error);
+                                                            chromosomeKeys, error);
                 if (!plain) return nil;
                 gRunOut[cname] = plain;
             }

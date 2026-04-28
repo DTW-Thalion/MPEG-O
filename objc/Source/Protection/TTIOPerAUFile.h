@@ -76,13 +76,23 @@ NS_ASSUME_NONNULL_BEGIN
  *  old M90.1 files (every IV is exactly 12 bytes) decode unchanged
  *  under the new code path.
  *
+ *  M90.11: when ``keyMap`` contains the reserved key ``"_headers"``,
+ *  the four genomic_index columns (chromosomes, positions,
+ *  mapping_qualities, flags) are ALSO encrypted with that key —
+ *  closing the gap where a reader without any signal-channel key
+ *  could still see read locations + counts. ``offsets`` and
+ *  ``lengths`` always stay plaintext (structural framing, not
+ *  semantic PHI). The presence of the ``"_headers"`` entry is the
+ *  opt-in signal for ``opt_encrypted_au_headers``.
+ *
  *  MS runs are NOT touched — chromosome is a genomic concept. Use
  *  ``encryptFilePath:`` for MS encryption.
  *
  *  Sets the ``opt_per_au_encryption`` and
- *  ``opt_region_keyed_encryption`` feature flags on the root group.
- *  The per-channel ``<channel>_algorithm`` attribute is set to
- *  ``"aes-256-gcm-by-region"``.
+ *  ``opt_region_keyed_encryption`` feature flags on the root group
+ *  (and ``opt_encrypted_au_headers`` when the ``"_headers"`` key is
+ *  used). The per-channel ``<channel>_algorithm`` attribute is set
+ *  to ``"aes-256-gcm-by-region"``.
  */
 + (BOOL)encryptFilePathByRegion:(NSString *)path
                           keyMap:(NSDictionary<NSString *, NSData *> *)keyMap

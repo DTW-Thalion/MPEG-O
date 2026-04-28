@@ -559,14 +559,18 @@ static BOOL markPQCPreviewFeature(TTIOHDF5Group *root, NSError **error)
 
 #pragma mark - M90.2 Genomic run-level convenience
 
-// Channels signed by signGenomicRun: / verifyGenomicRun:. The
-// chromosomes compound is intentionally NOT signed — see the header
-// docstring for rationale.
+// Channels signed by signGenomicRun: / verifyGenomicRun:. M90.15:
+// chromosomes (a VL_BYTES row compound) is now included alongside the
+// atomic columns. readDatasetCanonical handles compound datasets via
+// canonicalBytesForCompoundDataset, which already serialises
+// VL_STRING fields as u32_le(length) || utf-8_bytes — so signing the
+// chromosomes compound parallels Python's M90.15 path.
 static NSString *const kSignalChannelNames[] = {
     @"sequences", @"qualities",
 };
 static NSString *const kIndexColumnNames[] = {
     @"offsets", @"lengths", @"positions", @"mapping_qualities", @"flags",
+    @"chromosomes",
 };
 
 // Test whether ``parentPath/childName`` exists in the file. Used to
