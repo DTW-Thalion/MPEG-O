@@ -146,6 +146,37 @@ class GenomicRun:
         for i in range(len(self)):
             yield self[i]
 
+    def provenance_chain(self) -> "list":
+        """Return per-run provenance records in insertion order.
+
+        Closes the M91 read-side gap: until Phase 1 the lazy
+        ``GenomicRun`` view didn't expose provenance, so cross-
+        modality queries had to fall back to the ``sample_name``
+        attribute. Now both run types share the same accessor.
+
+        Reads from the ``<run>/provenance/steps`` compound dataset
+        written by :func:`spectral_dataset._write_genomic_run`.
+        Returns ``[]`` for runs that carry no provenance.
+        """
+        # Use the h5py-native path through the StorageGroup wrapper.
+        # The provenance compound layout is identical to the MS path
+        # (see acquisition_run.AcquisitionRun.provenance) and is
+        # decoded by the same helper.
+        from .acquisition_run import (
+            _decode_provenance_compound, _native_h5py,
+        )
+        try:
+            h5group = _native_h5py(self.group)
+        except Exception:
+            return []
+        if h5group is None:
+            return []
+        if "provenance" in h5group and "steps" in h5group["provenance"]:
+            return _decode_provenance_compound(
+                h5group["provenance"], "steps",
+            )
+        return []
+
     def __getitem__(self, i: int) -> AlignedRead:
         if i < 0:
             i += len(self)

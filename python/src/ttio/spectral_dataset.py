@@ -395,11 +395,74 @@ class SpectralDataset:
 
     @property
     def all_runs(self) -> Mapping[str, AcquisitionRun]:
-        """Union of MS and NMR runs, keyed by run name."""
+        """Union of MS and NMR runs, keyed by run name.
+
+        Note: This DOES NOT include ``genomic_runs`` — those have a
+        different return type (:class:`GenomicRun` rather than
+        :class:`AcquisitionRun`). For modality-agnostic iteration
+        across all run types, use :meth:`all_runs_unified` (Phase 1).
+        """
         merged: dict[str, AcquisitionRun] = dict(self.ms_runs)
         for k, v in self.nmr_runs.items():
             merged.setdefault(k, v)
         return merged
+
+    # ── Phase 1 (post-M91) — modality-agnostic accessors ────────────
+
+    @property
+    def all_runs_unified(self) -> Mapping[str, "Run"]:
+        """Union of every run type (MS, NMR, genomic) keyed by name.
+
+        Values conform to the :class:`ttio.protocols.run.Run`
+        Protocol so callers can iterate uniformly without knowing
+        the underlying modality. Use :meth:`runs_of_modality` to
+        narrow the type when needed.
+        """
+        merged: dict[str, Any] = dict(self.ms_runs)
+        for k, v in self.nmr_runs.items():
+            merged.setdefault(k, v)
+        for k, v in self.genomic_runs.items():
+            merged.setdefault(k, v)
+        return merged
+
+    def runs_for_sample(self, sample_uri: str) -> Mapping[str, "Run"]:
+        """Return every run associated with ``sample_uri``.
+
+        A run is considered associated when its
+        :meth:`ttio.protocols.run.Run.provenance_chain` carries
+        ``sample_uri`` in any record's ``input_refs``. Walks all
+        modalities (MS, NMR, genomic) uniformly via the Run
+        Protocol — closes the M91 cross-modality query gap that
+        previously had to fork on access pattern.
+
+        Returns a dict keyed by run name; empty when no run
+        matches.
+        """
+        out: dict[str, Any] = {}
+        for name, run in self.all_runs_unified.items():
+            try:
+                chain = run.provenance_chain()
+            except Exception:
+                continue
+            for prov in chain:
+                if sample_uri in prov.input_refs:
+                    out[name] = run
+                    break
+        return out
+
+    def runs_of_modality(self, run_type: type) -> Mapping[str, "Run"]:
+        """Return every run whose value is an instance of ``run_type``.
+
+        Pass :class:`AcquisitionRun` to get the union of MS + NMR
+        runs (any spectrum-class subtype); pass :class:`GenomicRun`
+        to get genomic only. The return is a thin filter over
+        :attr:`all_runs_unified`.
+        """
+        return {
+            name: run
+            for name, run in self.all_runs_unified.items()
+            if isinstance(run, run_type)
+        }
 
     def _study_target(self) -> Any:
         """Return the IO target representing ``/study``.
