@@ -33,6 +33,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .encryption import AES_IV_LEN, AES_KEY_LEN, AES_TAG_LEN
+from .enums import Precision  # M90.11 — used by _encrypt_genomic_index
 
 
 # ---------------------------------------------------------- AAD
@@ -644,6 +645,9 @@ decrypt_per_au_file = decrypt_per_au
 # ────────────────────────────────────────────────────────────────────
 
 
+_HEADERS_KEY_NAME = "_headers"
+
+
 def encrypt_per_au_by_region(
     path: str,
     key_map: dict[str, bytes],
@@ -657,11 +661,18 @@ def encrypt_per_au_by_region(
     chromosomes NOT in ``key_map`` are stored as "clear segments"
     (length-0 IV + plaintext bytes in the ciphertext slot).
 
+    M90.11: when ``key_map`` contains the reserved key ``"_headers"``,
+    the genomic_index columns (chromosomes, positions, mapping_qualities,
+    flags) are ALSO encrypted with that key — closing the gap where
+    a reader without any signal-channel key could still see read
+    locations + counts. ``offsets`` and ``lengths`` always stay
+    plaintext (structural framing, not semantic PHI).
+
     MS runs are NOT touched — chromosome is a genomic concept.
     Use the existing :func:`encrypt_per_au` for MS encryption.
 
-    The on-disk schema is identical to M90.1 (same
-    ``<channel>_segments`` compound). The reader distinguishes
+    The on-disk schema for signal channels is identical to M90.1
+    (same ``<channel>_segments`` compound). The reader distinguishes
     encrypted vs clear segments by ``len(seg.iv)``.
     """
     from . import _hdf5_io as io
@@ -673,6 +684,11 @@ def encrypt_per_au_by_region(
                 f"AES-256-GCM key for chromosome {chrom!r} must be "
                 f"32 bytes, got {len(key)}"
             )
+
+    chromosome_keys = {
+        k: v for k, v in key_map.items() if k != _HEADERS_KEY_NAME
+    }
+    headers_key = key_map.get(_HEADERS_KEY_NAME)
 
     sp = open_provider(path, provider=provider, mode="a")
     try:
@@ -716,32 +732,155 @@ def encrypt_per_au_by_region(
             )
             chromosomes = _read_chromosomes(g_idx)
 
-            for cname in ("sequences", "qualities"):
-                if not g_sig.has_child(cname):
-                    continue
-                plaintext = np.asarray(
-                    g_sig.open_dataset(cname).read(),
-                ).astype("<u1", copy=False)
-                segments = _encrypt_channel_with_dispatch(
-                    plaintext, g_offsets, g_lengths, chromosomes,
+            # Signal-channel encryption runs in two cases:
+            #   (a) caller supplied chromosome keys (M90.4 path)
+            #   (b) caller supplied an empty key_map (M90.4 no-op
+            #       behaviour: file gets opt_per_au_encryption with
+            #       all-clear segments)
+            # The only path that SKIPS signal-channel encryption is
+            # the M90.11 headers-only case (key_map == {"_headers": K}).
+            run_signal_encrypt = bool(chromosome_keys) or headers_key is None
+            if run_signal_encrypt:
+                for cname in ("sequences", "qualities"):
+                    if not g_sig.has_child(cname):
+                        continue
+                    plaintext = np.asarray(
+                        g_sig.open_dataset(cname).read(),
+                    ).astype("<u1", copy=False)
+                    segments = _encrypt_channel_with_dispatch(
+                        plaintext, g_offsets, g_lengths, chromosomes,
+                        dataset_id=dataset_id_counter,
+                        channel_name=cname,
+                        key_map=chromosome_keys,
+                    )
+                    io.write_channel_segments(
+                        g_sig, f"{cname}_segments", segments,
+                    )
+                    g_sig.delete_child(cname)
+                    g_sig.set_attribute(
+                        f"{cname}_algorithm", "aes-256-gcm-by-region",
+                    )
+
+            # M90.11: encrypt genomic_index columns under the
+            # reserved _headers key.
+            if headers_key is not None:
+                _encrypt_genomic_index(
+                    g_idx,
                     dataset_id=dataset_id_counter,
-                    channel_name=cname,
-                    key_map=key_map,
+                    key=headers_key,
+                    chromosomes=chromosomes,
                 )
-                io.write_channel_segments(
-                    g_sig, f"{cname}_segments", segments,
-                )
-                g_sig.delete_child(cname)
-                g_sig.set_attribute(
-                    f"{cname}_algorithm", "aes-256-gcm-by-region",
-                )
+
             dataset_id_counter += 1
 
-        features_set.add("opt_per_au_encryption")
-        features_set.add("opt_region_keyed_encryption")
+        # Feature-flag set rules:
+        #  * opt_per_au_encryption — set whenever signal-channel
+        #    encryption ran (chromosome keys present OR empty key_map
+        #    no-op path) OR when headers_key is provided.
+        #  * opt_region_keyed_encryption — only when at least one
+        #    chromosome key was provided. Empty key_map leaves the
+        #    file with all-clear segments — that's M90.4's no-op
+        #    semantics, not a region-keyed file.
+        #  * opt_encrypted_au_headers — set when _headers key was
+        #    used (M90.11).
+        if chromosome_keys or headers_key is None:
+            features_set.add("opt_per_au_encryption")
+        if chromosome_keys:
+            features_set.add("opt_region_keyed_encryption")
+        if headers_key is not None:
+            features_set.add("opt_per_au_encryption")
+            features_set.add("opt_encrypted_au_headers")
         io.write_feature_flags(root, version, sorted(features_set))
     finally:
         sp.close()
+
+
+def _encrypt_genomic_index(
+    g_idx,
+    *,
+    dataset_id: int,
+    key: bytes,
+    chromosomes: list[str],
+) -> None:
+    """M90.11: encrypt the four genomic_index columns
+    (chromosomes, positions, mapping_qualities, flags) and replace
+    the plaintext datasets with ``<column>_encrypted`` blobs
+    containing iv || tag || ciphertext. offsets/lengths stay
+    plaintext (structural framing).
+
+    Per-column AES-GCM with AAD = "genomic_headers:" + dataset_id +
+    ":" + column_name. Chromosomes (a VL compound) is JSON-serialised
+    before encryption; positions/mapping_qualities/flags are
+    serialised as little-endian byte buffers.
+    """
+    import json
+    # Serialise each column to bytes.
+    columns: dict[str, bytes] = {
+        "chromosomes": json.dumps(chromosomes).encode("utf-8"),
+        "positions": np.asarray(
+            g_idx.open_dataset("positions").read(), dtype="<i8",
+        ).tobytes(),
+        "mapping_qualities": np.asarray(
+            g_idx.open_dataset("mapping_qualities").read(), dtype="<u1",
+        ).tobytes(),
+        "flags": np.asarray(
+            g_idx.open_dataset("flags").read(), dtype="<u4",
+        ).tobytes(),
+    }
+    for col_name, plaintext in columns.items():
+        aad = f"genomic_headers:{dataset_id}:{col_name}".encode("ascii")
+        iv, tag, ciphertext = encrypt_with_aad(plaintext, key, aad)
+        blob = bytes(iv) + bytes(tag) + bytes(ciphertext)
+        # Delete plaintext dataset (or compound) and write the
+        # encrypted blob as a uint8 1-D dataset.
+        if g_idx.has_child(col_name):
+            g_idx.delete_child(col_name)
+        ds = g_idx.create_dataset(
+            f"{col_name}_encrypted", Precision.UINT8, len(blob),
+        )
+        ds.write(np.frombuffer(blob, dtype=np.uint8))
+
+
+def _decrypt_genomic_index(
+    g_idx,
+    *,
+    dataset_id: int,
+    key: bytes,
+) -> dict:
+    """Inverse of :func:`_encrypt_genomic_index`. Returns
+    ``{"chromosomes": list[str], "positions": np.ndarray,
+    "mapping_qualities": np.ndarray, "flags": np.ndarray}``.
+    """
+    import json
+    out: dict = {}
+    column_dtypes = {
+        "chromosomes": None,  # JSON-deserialised
+        "positions": np.dtype("<i8"),
+        "mapping_qualities": np.dtype("<u1"),
+        "flags": np.dtype("<u4"),
+    }
+    for col_name, dtype in column_dtypes.items():
+        enc_name = f"{col_name}_encrypted"
+        if not g_idx.has_child(enc_name):
+            raise ValueError(
+                f"genomic_index/{enc_name} missing — file does not "
+                f"appear to carry M90.11 encrypted headers"
+            )
+        blob = bytes(np.asarray(g_idx.open_dataset(enc_name).read()).tobytes())
+        if len(blob) < 12 + 16:
+            raise ValueError(
+                f"genomic_index/{enc_name} too short for IV+TAG"
+            )
+        iv = blob[:12]
+        tag = blob[12:28]
+        ciphertext = blob[28:]
+        aad = f"genomic_headers:{dataset_id}:{col_name}".encode("ascii")
+        plaintext = decrypt_with_aad(iv, tag, ciphertext, key, aad)
+        if dtype is None:
+            out[col_name] = json.loads(plaintext.decode("utf-8"))
+        else:
+            out[col_name] = np.frombuffer(plaintext, dtype=dtype).copy()
+    return out
 
 
 def decrypt_per_au_by_region(
@@ -791,6 +930,22 @@ def decrypt_per_au_by_region(
             ms_run_names = []
         dataset_id_counter = len(ms_run_names) + 1
 
+        # M90.11: when the file carries opt_encrypted_au_headers,
+        # decrypt requires the reserved "_headers" key. Without it,
+        # we can't even reconstruct the chromosomes column needed
+        # for per-AU dispatch on signal channels.
+        headers_encrypted = "opt_encrypted_au_headers" in features
+        headers_key = key_map.get(_HEADERS_KEY_NAME)
+        if headers_encrypted and headers_key is None:
+            raise ValueError(
+                f"file at {path!r} carries opt_encrypted_au_headers; "
+                f"caller must provide a '_headers' entry in key_map "
+                f"to decrypt the genomic_index columns"
+            )
+        chromosome_keys = {
+            k: v for k, v in key_map.items() if k != _HEADERS_KEY_NAME
+        }
+
         if not study.has_child("genomic_runs"):
             return out
         g_runs = study.open_group("genomic_runs")
@@ -803,8 +958,22 @@ def decrypt_per_au_by_region(
                 continue
             g_sig = g_group.open_group("signal_channels")
             g_idx = g_group.open_group("genomic_index")
-            chromosomes = _read_chromosomes(g_idx)
             g_run_out: dict[str, Any] = {}
+
+            # M90.11: decrypt the genomic_index columns first so the
+            # per-AU signal-channel dispatch (which needs chromosomes)
+            # can proceed even when the source columns were encrypted.
+            if headers_encrypted:
+                index_plain = _decrypt_genomic_index(
+                    g_idx,
+                    dataset_id=dataset_id_counter,
+                    key=headers_key,
+                )
+                chromosomes = list(index_plain["chromosomes"])
+                g_run_out["__index__"] = index_plain
+            else:
+                chromosomes = _read_chromosomes(g_idx)
+
             for cname in ("sequences", "qualities"):
                 seg_name = f"{cname}_segments"
                 if not g_sig.has_child(seg_name):
@@ -814,7 +983,7 @@ def decrypt_per_au_by_region(
                     segments, chromosomes,
                     dataset_id=dataset_id_counter,
                     channel_name=cname,
-                    key_map=key_map,
+                    key_map=chromosome_keys,
                 )
             out[g_run_name] = g_run_out
             dataset_id_counter += 1
