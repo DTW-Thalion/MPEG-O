@@ -2,10 +2,13 @@
 #define TTIO_GENOMIC_RUN_H
 
 #import <Foundation/Foundation.h>
+#import "Protocols/TTIOIndexable.h"
+#import "Protocols/TTIORun.h"
 #import "ValueClasses/TTIOEnums.h"
 
 @class TTIOAlignedRead;
 @class TTIOGenomicIndex;
+@class TTIOProvenanceRecord;
 @protocol TTIOStorageGroup;
 
 /**
@@ -22,7 +25,7 @@
  *   Python: ttio.genomic_run.GenomicRun
  *   Java:   global.thalion.ttio.genomics.GenomicRun
  */
-@interface TTIOGenomicRun : NSObject
+@interface TTIOGenomicRun : NSObject <TTIOIndexable, TTIORun>
 
 @property (readonly, copy) NSString *name;
 @property (readonly) TTIOAcquisitionMode acquisitionMode;
@@ -33,6 +36,22 @@
 @property (readonly, strong) TTIOGenomicIndex *index;
 
 - (NSUInteger)readCount;
+
+/** Phase 1 TTIORun + TTIOIndexable conformance. -count returns the
+ *  same value as -readCount; -objectAtIndex: returns the
+ *  TTIOAlignedRead at ``index`` (or nil on error / out-of-range,
+ *  matching the lenient TTIOIndexable contract used by
+ *  TTIOAcquisitionRun). */
+- (NSUInteger)count;
+- (id)objectAtIndex:(NSUInteger)index;
+
+/** Phase 1: per-run provenance records in insertion order. Reads
+ *  the ``<run>/provenance/steps`` compound dataset written by
+ *  +[TTIOSpectralDataset writeGenomicRun:toGroup:name:error:] when
+ *  the WrittenGenomicRun carried any. Returns ``@[]`` for runs
+ *  without provenance — closes the M91 read-side cross-modality
+ *  query gap. */
+- (NSArray<TTIOProvenanceRecord *> *)provenanceChain;
 
 /** Materialise the read at `index`. Returns nil and sets *error on
  *  invalid index or I/O failure. */

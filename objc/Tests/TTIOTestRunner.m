@@ -90,6 +90,7 @@ extern void testC5ProtectionGap(void);
 extern void testC3bProvidersWritePaths(void);
 extern void testC2bHDF5CompoundType(void);
 extern void testC3cCanonicalBytes(void);
+extern void testPhase12RunProtocol(void);
 
 int main(int argc, const char *argv[])
 {
@@ -449,6 +450,10 @@ int main(int argc, const char *argv[])
         START_SET("C3c: CanonicalBytes + SqliteProvider")
             testC3cCanonicalBytes();
         END_SET("C3c: CanonicalBytes + SqliteProvider")
+
+        START_SET("Phase 1+2: TTIORun protocol + mixed-dict write API")
+            testPhase12RunProtocol();
+        END_SET("Phase 1+2: TTIORun protocol + mixed-dict write API")
     }
     return 0;
 }

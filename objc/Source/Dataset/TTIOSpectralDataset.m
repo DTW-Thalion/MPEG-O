@@ -2003,6 +2003,20 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                                       fields:mateFields error:error]) return NO;
     }
 
+    // Phase 1: per-run provenance compound at <run>/provenance/steps,
+    // mirroring the AcquisitionRun MS path. Absent when the
+    // WrittenGenomicRun carries no records — preserving pre-Phase-1
+    // byte parity for callers that don't ship provenance.
+    if (run.provenanceRecords.count > 0) {
+        TTIOHDF5Group *provGroup =
+            [rg createGroupNamed:@"provenance" error:error];
+        if (!provGroup) return NO;
+        if (![TTIOCompoundIO writeProvenance:run.provenanceRecords
+                                   intoGroup:provGroup
+                                datasetNamed:@"steps"
+                                       error:error]) return NO;
+    }
+
     return YES;
 }
 
@@ -2020,6 +2034,66 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                  isaInvestigationId:isaId
                              msRuns:runs
                          genomicRuns:nil
+                     identifications:identifications
+                     quantifications:quantifications
+                  provenanceRecords:provenance
+                              error:error];
+}
+
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                  mixedRuns:(NSDictionary<NSString *, id> *)mixedRuns
+                genomicRuns:(NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
+            identifications:(NSArray *)identifications
+            quantifications:(NSArray *)quantifications
+          provenanceRecords:(NSArray *)provenance
+                      error:(NSError **)error
+{
+    // Phase 2: split the mixed dict into MS-only + genomic-only maps,
+    // dispatching per-value on isKindOfClass:. Pre-existing
+    // genomicRuns= entries are merged in; a name appearing in BOTH
+    // raises NSError with code 1100 (matches Python's ValueError on
+    // collision).
+    NSMutableDictionary<NSString *, TTIOWrittenRun *> *splitMS =
+        [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSString *, TTIOWrittenGenomicRun *> *splitG =
+        [NSMutableDictionary dictionaryWithDictionary:(genomicRuns ?: @{})];
+
+    for (NSString *name in mixedRuns) {
+        id value = mixedRuns[name];
+        if ([value isKindOfClass:[TTIOWrittenGenomicRun class]]) {
+            if (splitG[name] != nil) {
+                if (error) *error = [NSError
+                    errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:1100
+                           userInfo:@{NSLocalizedDescriptionKey:
+                               [NSString stringWithFormat:
+                                    @"Phase 2 mixed runs dict: name '%@' "
+                                    @"appears in both mixedRuns and "
+                                    @"genomicRuns", name]}];
+                return NO;
+            }
+            splitG[name] = (TTIOWrittenGenomicRun *)value;
+        } else if ([value isKindOfClass:[TTIOWrittenRun class]]) {
+            splitMS[name] = (TTIOWrittenRun *)value;
+        } else {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:1101
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"Phase 2 mixed runs dict: value for '%@' "
+                                @"is %@; expected TTIOWrittenRun or "
+                                @"TTIOWrittenGenomicRun",
+                                name, NSStringFromClass([value class])]}];
+            return NO;
+        }
+    }
+
+    return [self writeMinimalToPath:path
+                              title:title
+                 isaInvestigationId:isaId
+                             msRuns:splitMS
+                         genomicRuns:splitG
                      identifications:identifications
                      quantifications:quantifications
                   provenanceRecords:provenance
@@ -2550,6 +2624,65 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         if ([r containsInputRef:ref]) [out addObject:r];
     }
     return out;
+}
+
+#pragma mark - Phase 1 / Phase 2: modality-agnostic run accessors
+
+- (NSDictionary<NSString *, id<TTIORun>> *)runs
+{
+    NSMutableDictionary *merged = [NSMutableDictionary dictionary];
+    // MS first; preserve existing iteration order for caller stability.
+    for (NSString *k in _msRuns) {
+        merged[k] = _msRuns[k];
+    }
+    // Genomic runs second; do not overwrite an existing key (parity
+    // with Python's dict.setdefault path).
+    for (NSString *k in _genomicRuns) {
+        if (!merged[k]) merged[k] = _genomicRuns[k];
+    }
+    return [merged copy];
+}
+
+- (NSDictionary<NSString *, id<TTIORun>> *)allRunsUnified
+{
+    return [self runs];
+}
+
+- (NSDictionary<NSString *, id<TTIORun>> *)runsForSample:(NSString *)sampleURI
+{
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    if (sampleURI.length == 0) return @{};
+    NSDictionary<NSString *, id<TTIORun>> *all = [self runs];
+    for (NSString *name in all) {
+        id<TTIORun> run = all[name];
+        NSArray<TTIOProvenanceRecord *> *chain = nil;
+        NS_DURING
+            chain = [run provenanceChain];
+        NS_HANDLER
+            chain = nil;
+        NS_ENDHANDLER
+        for (TTIOProvenanceRecord *prov in chain) {
+            if ([prov.inputRefs containsObject:sampleURI]) {
+                out[name] = run;
+                break;
+            }
+        }
+    }
+    return [out copy];
+}
+
+- (NSDictionary<NSString *, id<TTIORun>> *)runsOfModality:(Class)runClass
+{
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    if (runClass == Nil) return @{};
+    NSDictionary<NSString *, id<TTIORun>> *all = [self runs];
+    for (NSString *name in all) {
+        id<TTIORun> run = all[name];
+        if ([(NSObject *)run isKindOfClass:runClass]) {
+            out[name] = run;
+        }
+    }
+    return [out copy];
 }
 
 #pragma mark - TTIOEncryptable

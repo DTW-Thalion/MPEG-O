@@ -24,6 +24,12 @@
 
 @implementation TTIOAcquisitionRun
 {
+    // Phase 1: Run protocol name. Set by readFromGroup:name: /
+    // readFromStorageGroup:name: at load time, by
+    // setPersistenceFilePath:runName: post-load (kept in sync with
+    // _persistenceRunName below), or remains @"" for in-memory runs
+    // not yet persisted.
+    NSString                    *_name;
     NSArray                     *_inMemorySpectra;       // nil when read-from-disk
     // v0.7 M44: storage-protocol iVars. Populated by
     // +readFromGroup:name:error: via TTIOHDF5Provider's adapter
@@ -61,6 +67,7 @@
 }
 
 @synthesize chromatograms = _chromatograms;
+@synthesize name = _name;
 
 #pragma mark - Construction
 
@@ -70,6 +77,7 @@
 {
     self = [super init];
     if (self) {
+        _name             = @"";
         _inMemorySpectra  = [spectra copy];
         _acquisitionMode  = mode;
         _instrumentConfig = config;
@@ -548,6 +556,7 @@
                                                                       detectorType:@""];
 
     TTIOAcquisitionRun *run = [[self alloc] init];
+    run->_name                 = [name copy] ?: @"";
     run->_acquisitionMode      = mode;
     run->_instrumentConfig     = cfg;
     run->_spectrumIndex        = idx;
@@ -706,6 +715,7 @@
     }
 
     TTIOAcquisitionRun *run = [[self alloc] init];
+    run->_name                 = [name copy] ?: @"";
     run->_acquisitionMode      = mode;
     run->_instrumentConfig     = cfg;
     run->_spectrumIndex        = idx;
@@ -949,6 +959,11 @@
 {
     _persistenceFilePath = [path copy];
     _persistenceRunName  = [runName copy];
+    // Phase 1: keep the public Run-protocol name in sync with the
+    // persistence-context run name when the latter is supplied.
+    if (runName.length > 0) {
+        _name = [runName copy];
+    }
 }
 
 - (void)releaseHDF5Handles

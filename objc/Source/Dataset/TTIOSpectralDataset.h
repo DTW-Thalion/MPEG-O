@@ -3,6 +3,7 @@
 
 #import <Foundation/Foundation.h>
 #import "Protocols/TTIOEncryptable.h"
+#import "Protocols/TTIORun.h"
 #import "ValueClasses/TTIOEnums.h"
 
 @class TTIOAcquisitionRun;
@@ -112,6 +113,28 @@
           provenanceRecords:(nullable NSArray *)provenance
                       error:(NSError * _Nullable * _Nullable)error;
 
+/** Phase 2 (post-M91) canonical mixed-dict write API. Accepts a
+ *  single ``mixedRuns`` dict whose values may be either
+ *  TTIOWrittenRun (MS) or TTIOWrittenGenomicRun (genomic);
+ *  dispatches per-value via -isKindOfClass: to the right write path.
+ *  ``genomicRuns`` may also be supplied for backward compatibility;
+ *  a name appearing in BOTH dicts raises NSError (returns NO with
+ *  the error populated) rather than silently picking one — matches
+ *  Python's ValueError on collision. Other-typed values in
+ *  ``mixedRuns`` produce an NSError.
+ *
+ *  Mirrors Python's Phase 2 ``SpectralDataset.write_minimal(runs=…)``
+ *  shape where ``runs`` may carry both kinds. */
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                  mixedRuns:(NSDictionary<NSString *, id> *)mixedRuns
+                genomicRuns:(nullable NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
+            identifications:(nullable NSArray *)identifications
+            quantifications:(nullable NSArray *)quantifications
+          provenanceRecords:(nullable NSArray *)provenance
+                      error:(NSError * _Nullable * _Nullable)error;
+
 /** Release the underlying HDF5 file handle. After this call, any
  *  further lazy hyperslab reads on contained runs will fail. Required
  *  before calling encryptWithKey: so the encryption manager can
@@ -130,6 +153,42 @@
 
 /** Provenance records whose inputRefs contain `ref`. */
 - (NSArray<TTIOProvenanceRecord *> *)provenanceRecordsForInputRef:(NSString *)ref;
+
+#pragma mark - Phase 1 / Phase 2: modality-agnostic run accessors
+
+/** Phase 2 canonical accessor: every run in the file (MS + NMR +
+ *  genomic) keyed by run name. Values conform to TTIORun so callers
+ *  can iterate uniformly across modalities without forking on
+ *  ms_runs vs genomic_runs. NMR runs (legacy plain NSArray-of-spectra
+ *  values) are intentionally omitted because they do not yet conform
+ *  to TTIORun in the ObjC tree; that aligns with the Python
+ *  reference impl's intent that values be Run-protocol-conforming.
+ *
+ *  Mirrors Python ``SpectralDataset.runs``.
+ *
+ *  Phase 1 added :meth:`allRunsUnified` as the same intent under a
+ *  longer name; Phase 2 promotes the accessor to ``runs`` and keeps
+ *  the alias for the brief transition window. */
+- (NSDictionary<NSString *, id<TTIORun>> *)runs;
+
+/** Phase 1 alias for :attr:`runs`. Kept for the brief Phase 1 →
+ *  Phase 2 transition window. */
+- (NSDictionary<NSString *, id<TTIORun>> *)allRunsUnified;
+
+/** Return every run associated with ``sampleURI``. A run is
+ *  considered associated when its
+ *  :meth:`-[TTIORun provenanceChain]` carries ``sampleURI`` in any
+ *  record's ``inputRefs``. Walks all modalities (MS, genomic)
+ *  uniformly via the TTIORun protocol — closes the M91 cross-
+ *  modality query gap that previously had to fork on access
+ *  pattern. Returns an empty dict when no run matches. */
+- (NSDictionary<NSString *, id<TTIORun>> *)runsForSample:(NSString *)sampleURI;
+
+/** Return every run whose value is an instance of ``runClass``.
+ *  Pass [TTIOAcquisitionRun class] to get MS+NMR runs of the
+ *  flat-buffer kind; pass [TTIOGenomicRun class] for genomic only.
+ *  Thin filter over :meth:`runs`. */
+- (NSDictionary<NSString *, id<TTIORun>> *)runsOfModality:(Class)runClass;
 
 #pragma mark - TTIOEncryptable
 

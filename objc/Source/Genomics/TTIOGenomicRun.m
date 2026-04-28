@@ -4,6 +4,7 @@
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOCompoundField.h"
 #import "Dataset/TTIOCompoundIO.h"
+#import "Dataset/TTIOProvenanceRecord.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Dataset.h"
 #import "Codecs/TTIORans.h"
@@ -1292,6 +1293,38 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
         if (r) [result addObject:r];
     }];
     return result;
+}
+
+#pragma mark - TTIOIndexable / TTIORun (Phase 1)
+
+- (NSUInteger)count
+{
+    return _index ? _index.count : 0;
+}
+
+- (id)objectAtIndex:(NSUInteger)index
+{
+    return [self readAtIndex:index error:NULL];
+}
+
+- (NSArray<TTIOProvenanceRecord *> *)provenanceChain
+{
+    // Mirrors Python GenomicRun.provenance_chain() — closes the M91
+    // read-side gap. Reads from <run>/provenance/steps using the same
+    // compound layout as TTIOAcquisitionRun. Returns @[] for runs with
+    // no provenance attached.
+    if (![_group respondsToSelector:@selector(unwrap)]) return @[];
+    TTIOHDF5Group *runH5 = [(id)_group performSelector:@selector(unwrap)];
+    if (!runH5) return @[];
+    if (![runH5 hasChildNamed:@"provenance"]) return @[];
+    TTIOHDF5Group *provGroup =
+        [runH5 openGroupNamed:@"provenance" error:NULL];
+    if (!provGroup || ![provGroup hasChildNamed:@"steps"]) return @[];
+    NSArray *records =
+        [TTIOCompoundIO readProvenanceFromGroup:provGroup
+                                   datasetNamed:@"steps"
+                                          error:NULL];
+    return records ? [records copy] : @[];
 }
 
 @end
