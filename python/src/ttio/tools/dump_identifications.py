@@ -66,8 +66,21 @@ def dump(path: str | Path) -> str:
         idents = [_identification_record(i) for i in ds.identifications()]
         quants = [_quantification_record(q) for q in ds.quantifications()]
         provs = [_provenance_record(p) for p in ds.provenance()]
+        # Per-run provenance, flattened across MS runs in sorted-name
+        # order. Each record carries the run name and a per-run sequence
+        # index so the byte-parity check stays stable across the three
+        # languages even when run iteration order differs.
+        ms_per_run: list[dict[str, Any]] = []
+        for run_name in sorted(ds.ms_runs.keys()):
+            run = ds.ms_runs[run_name]
+            for seq, p in enumerate(run.provenance()):
+                rec = _provenance_record(p)
+                rec["run"] = run_name
+                rec["seq"] = seq
+                ms_per_run.append(rec)
     return format_top_level({
         "identifications": idents,
+        "ms_per_run_provenance": ms_per_run,
         "quantifications": quants,
         "provenance": provs,
     })

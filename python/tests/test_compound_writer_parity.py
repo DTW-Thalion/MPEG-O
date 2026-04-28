@@ -88,8 +88,27 @@ skip_if_no_java = pytest.mark.skipif(
 
 def _write_fixture(path: Path) -> None:
     """Write a deterministic `.tio` file with 5 identifications, 3
-    quantifications, and 7 provenance records."""
+    quantifications, 7 study-level provenance records, and one MS run
+    carrying 2 per-run provenance records (for the M51 cross-language
+    byte-parity check covering the per-run provenance compound
+    dataset)."""
     n_spec, n_pts = 3, 4
+    run_provs = [
+        ProvenanceRecord(
+            timestamp_unix=1_700_500_000,
+            software="ms-pipeline/v2.1",
+            parameters={"mode": "centroid", "threshold": "0.05"},
+            input_refs=["raw:r_0"],
+            output_refs=["ttio:r_0"],
+        ),
+        ProvenanceRecord(
+            timestamp_unix=1_700_500_100,
+            software="ttio-py/0.3.0",
+            parameters={"step": "serialize"},
+            input_refs=["ttio:r_0"],
+            output_refs=["ttio:r_0"],
+        ),
+    ]
     run = WrittenRun(
         spectrum_class="TTIOMassSpectrum",
         acquisition_mode=int(AcquisitionMode.MS1_DDA),
@@ -105,6 +124,7 @@ def _write_fixture(path: Path) -> None:
         precursor_mzs=np.zeros(n_spec, dtype=np.float64),
         precursor_charges=np.zeros(n_spec, dtype=np.int32),
         base_peak_intensities=np.full(n_spec, 20.0, dtype=np.float64),
+        provenance_records=run_provs,
     )
     idents = [
         Identification(f"r_{i}", i, f"CHEBI:{100 + i}",
@@ -188,16 +208,22 @@ def _first_diff(a: bytes, b: bytes) -> str:
 
 
 def test_python_dumper_non_trivial(tmp_path: Path) -> None:
-    """Sanity check — the Python reference dumper emits the three
+    """Sanity check — the Python reference dumper emits the four
     sections with the expected shape."""
     p = tmp_path / "parity.tio"
     _write_fixture(p)
     out = python_dump(p)
     assert out.startswith("{\n")
     assert '"identifications":' in out
+    assert '"ms_per_run_provenance":' in out
     assert '"quantifications":' in out
     assert '"provenance":' in out
     assert out.endswith("\n}\n")
+    # Per-run section carries the run name + seq fields and the two
+    # records attached in _write_fixture.
+    assert '"run":"r_0"' in out
+    assert '"software":"ms-pipeline/v2.1"' in out
+    assert '"software":"ttio-py/0.3.0"' in out
 
 
 @skip_if_no_objc
