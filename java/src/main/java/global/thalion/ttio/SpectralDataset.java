@@ -130,6 +130,95 @@ public class SpectralDataset implements
     /** v0.11 M82.3: zero or more named genomic runs. Empty for pre-M82
      *  files; populated when {@code /study/genomic_runs/} is present. */
     public Map<String, GenomicRun> genomicRuns() { return genomicRuns; }
+
+    // ── Phase 2 (post-M91) — canonical unified runs accessor ────────
+
+    /** Phase 2: canonical mapping over every run in the file (MS +
+     *  genomic), keyed by run name. Values conform to the
+     *  {@link global.thalion.ttio.protocols.Run} interface so callers
+     *  can iterate uniformly without knowing the underlying modality:
+     *
+     *  <pre>{@code
+     *  for (var entry : ds.runs().entrySet()) {
+     *      Run run = entry.getValue();
+     *      System.out.println(run.name() + ": " + run.count() + " measurements");
+     *  }
+     *  }</pre>
+     *
+     *  <p>Use {@link #runsOfModality(Class)} to narrow by class, or
+     *  {@link #runsForSample(String)} to filter by provenance sample
+     *  URI. Phase 2 promotes this to the canonical access pattern;
+     *  the legacy {@link #msRuns()} / {@link #genomicRuns()} maps
+     *  continue to work, but new code should prefer {@code runs()}.</p>
+     *
+     *  <p>NMR runs are reported alongside MS runs because the Java
+     *  implementation does not split them on disk —
+     *  {@link AcquisitionRun} carries both modalities, and
+     *  {@code msRuns} already covers both.</p> */
+    public Map<String, global.thalion.ttio.protocols.Run> runs() {
+        Map<String, global.thalion.ttio.protocols.Run> merged =
+            new LinkedHashMap<>();
+        for (var entry : msRuns.entrySet()) {
+            merged.put(entry.getKey(), entry.getValue());
+        }
+        for (var entry : genomicRuns.entrySet()) {
+            // First-write-wins, matching Python's ``setdefault`` semantics.
+            merged.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+        return merged;
+    }
+
+    /** Phase 1 (post-M91): every run associated with {@code sampleUri}.
+     *  A run is considered associated when its
+     *  {@link global.thalion.ttio.protocols.Run#provenanceChain
+     *  provenanceChain} carries {@code sampleUri} in any record's
+     *  {@link ProvenanceRecord#inputRefs}. Walks all modalities (MS,
+     *  NMR, genomic) uniformly via the Run interface — closes the M91
+     *  cross-modality query gap that previously had to fork on
+     *  access pattern.
+     *
+     *  <p>Returns a map keyed by run name; empty when no run matches.
+     *  Iteration order is the unified order of {@link #runs()}.</p> */
+    public Map<String, global.thalion.ttio.protocols.Run> runsForSample(
+            String sampleUri) {
+        Map<String, global.thalion.ttio.protocols.Run> out =
+            new LinkedHashMap<>();
+        for (var entry : runs().entrySet()) {
+            global.thalion.ttio.protocols.Run run = entry.getValue();
+            List<ProvenanceRecord> chain;
+            try {
+                chain = run.provenanceChain();
+            } catch (Exception e) {
+                continue;
+            }
+            if (chain == null) continue;
+            for (ProvenanceRecord r : chain) {
+                if (r.inputRefs().contains(sampleUri)) {
+                    out.put(entry.getKey(), run);
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Phase 1 (post-M91): every run whose value is an instance of
+     *  {@code runType}. Pass {@link AcquisitionRun}{@code .class} to
+     *  get the union of MS + NMR runs (any spectrum-class subtype);
+     *  pass {@link GenomicRun}{@code .class} to get genomic only. The
+     *  return is a thin filter over {@link #runs()}. */
+    public Map<String, global.thalion.ttio.protocols.Run> runsOfModality(
+            Class<? extends global.thalion.ttio.protocols.Run> runType) {
+        Map<String, global.thalion.ttio.protocols.Run> out =
+            new LinkedHashMap<>();
+        for (var entry : runs().entrySet()) {
+            if (runType.isInstance(entry.getValue())) {
+                out.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return out;
+    }
+
     public List<Identification> identifications() { return identifications; }
     public List<Quantification> quantifications() { return quantifications; }
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
@@ -318,10 +407,11 @@ public class SpectralDataset implements
         }
     }
 
-    private static SpectralDataset createViaProvider(
+    private static SpectralDataset createViaProviderMixed(
             String url, String title, String isaInvestigationId,
             List<AcquisitionRun> runs,
             List<WrittenGenomicRun> genomicRuns,
+            List<String> genomicRunNames,
             List<Identification> identifications,
             List<Quantification> quantifications,
             List<ProvenanceRecord> provenanceRecords,
@@ -377,7 +467,7 @@ public class SpectralDataset implements
                         StringBuilder names = new StringBuilder();
                         for (int i = 0; i < genomicRuns.size(); i++) {
                             WrittenGenomicRun gr = genomicRuns.get(i);
-                            String gname = "genomic_" + String.format("%04d", i + 1);
+                            String gname = genomicRunNames.get(i);
                             if (i > 0) names.append(",");
                             names.append(gname);
                             writeGenomicRunSubtree(gG, gname, gr);
@@ -452,6 +542,87 @@ public class SpectralDataset implements
                 identifications, quantifications, provenanceRecords, featureFlags);
     }
 
+    /** Phase 2 (post-M91): mixed-Map create. The {@code runs} map may
+     *  carry both {@link AcquisitionRun} (MS / NMR) and
+     *  {@link WrittenGenomicRun} (genomic) values; this overload
+     *  dispatches by {@code instanceof} on each value and forwards to
+     *  the typed-list create API. Mirrors the Python
+     *  {@code SpectralDataset.write_minimal} mixed-dict path.
+     *
+     *  <p>Run-name collision between an MS entry and a genomic entry
+     *  raises {@link IllegalArgumentException}. Names are preserved on
+     *  disk as-is — the genomic entries no longer get an automatic
+     *  {@code genomic_NNNN} prefix when supplied via this overload, so
+     *  callers control the storage name.</p>
+     *
+     *  <p>{@code values} may be empty. Acquired ordering is preserved
+     *  (use {@link java.util.LinkedHashMap}). Other parameters mirror
+     *  the typed-list overload. */
+    public static SpectralDataset create(String pathOrUrl, String title,
+                                          String isaInvestigationId,
+                                          Map<String, Object> runs,
+                                          List<Identification> identifications,
+                                          List<Quantification> quantifications,
+                                          List<ProvenanceRecord> provenanceRecords,
+                                          FeatureFlags featureFlags) {
+        if (runs == null) runs = Map.of();
+        List<AcquisitionRun> msList = new ArrayList<>();
+        List<WrittenGenomicRun> gList = new ArrayList<>();
+        java.util.Set<String> msNames = new java.util.LinkedHashSet<>();
+        java.util.Set<String> gNames = new java.util.LinkedHashSet<>();
+        for (var entry : runs.entrySet()) {
+            String name = entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof AcquisitionRun ar) {
+                if (gNames.contains(name)) {
+                    throw new IllegalArgumentException(
+                        "Phase 2 mixed runs map: name '" + name
+                        + "' appears as both AcquisitionRun and "
+                        + "WrittenGenomicRun");
+                }
+                msNames.add(name);
+                // The on-disk name comes from the AcquisitionRun's own
+                // ``name()`` field; reject mismatches early so the
+                // caller doesn't silently get a different on-disk name.
+                if (!name.equals(ar.name())) {
+                    throw new IllegalArgumentException(
+                        "Phase 2 mixed runs map: key '" + name
+                        + "' does not match AcquisitionRun.name() = '"
+                        + ar.name() + "'");
+                }
+                msList.add(ar);
+            } else if (value instanceof WrittenGenomicRun gr) {
+                if (msNames.contains(name)) {
+                    throw new IllegalArgumentException(
+                        "Phase 2 mixed runs map: name '" + name
+                        + "' appears as both AcquisitionRun and "
+                        + "WrittenGenomicRun");
+                }
+                gNames.add(name);
+                gList.add(gr);
+            } else if (value == null) {
+                throw new IllegalArgumentException(
+                    "Phase 2 mixed runs map: value for '" + name
+                    + "' is null");
+            } else {
+                throw new IllegalArgumentException(
+                    "Phase 2 mixed runs map: value for '" + name
+                    + "' has unsupported type "
+                    + value.getClass().getName()
+                    + " (expected AcquisitionRun or WrittenGenomicRun)");
+            }
+        }
+        // Phase 2: the mixed-Map path uses the caller-supplied genomic
+        // run names verbatim, bypassing the ``genomic_NNNN`` auto-
+        // naming used by the typed-list create. Forward through a
+        // private helper so we keep the existing list-based factory
+        // intact for back-compat.
+        return createMixed(pathOrUrl, title, isaInvestigationId,
+                           msList, gList, gNames,
+                           identifications, quantifications,
+                           provenanceRecords, featureFlags);
+    }
+
     /** v0.11 M82.3: full create signature accepting genomic runs
      *  alongside MS runs. When {@code genomicRuns} is non-empty,
      *  {@link FeatureFlags#OPT_GENOMIC} is added (idempotent if the
@@ -465,6 +636,39 @@ public class SpectralDataset implements
                                           List<Quantification> quantifications,
                                           List<ProvenanceRecord> provenanceRecords,
                                           FeatureFlags featureFlags) {
+        // Phase 2: forward through the names-aware helper with the
+        // legacy auto-naming scheme (genomic_NNNN). The mixed-Map create
+        // overload calls createMixed directly with caller-supplied names.
+        java.util.List<String> autoNames = new java.util.ArrayList<>();
+        if (genomicRuns != null) {
+            for (int i = 0; i < genomicRuns.size(); i++) {
+                autoNames.add("genomic_" + String.format("%04d", i + 1));
+            }
+        }
+        return createMixed(pathOrUrl, title, isaInvestigationId,
+                runs != null ? runs : List.of(),
+                genomicRuns != null ? genomicRuns : List.of(),
+                autoNames,
+                identifications, quantifications, provenanceRecords,
+                featureFlags);
+    }
+
+    /** Phase 2 (post-M91): names-aware backend used by both the
+     *  typed-list {@link #create(String, String, String, List, List,
+     *  List, List, List, FeatureFlags) create} (auto-named genomic
+     *  runs) and the mixed-Map {@link #create(String, String, String,
+     *  Map, List, List, List, FeatureFlags) create} (caller-supplied
+     *  genomic names). Kept private — callers go through one of the
+     *  public {@code create} overloads. */
+    private static SpectralDataset createMixed(
+            String pathOrUrl, String title, String isaInvestigationId,
+            List<AcquisitionRun> runs,
+            List<WrittenGenomicRun> genomicRuns,
+            java.util.Collection<String> genomicRunNames,
+            List<Identification> identifications,
+            List<Quantification> quantifications,
+            List<ProvenanceRecord> provenanceRecords,
+            FeatureFlags featureFlags) {
         // M82.3: opt_genomic + format_version 1.4 when genomic content present.
         boolean hasGenomic = genomicRuns != null && !genomicRuns.isEmpty();
         if (hasGenomic && !featureFlags.features().contains(FeatureFlags.OPT_GENOMIC)) {
@@ -476,9 +680,18 @@ public class SpectralDataset implements
             featureFlags = new FeatureFlags("1.4", featureFlags.features());
         }
 
+        java.util.List<String> gNamesList = genomicRunNames != null
+            ? new java.util.ArrayList<>(genomicRunNames) : new java.util.ArrayList<>();
+        if (hasGenomic && gNamesList.size() != genomicRuns.size()) {
+            throw new IllegalStateException(
+                "createMixed: genomicRunNames (" + gNamesList.size()
+                + ") does not match genomicRuns (" + genomicRuns.size() + ")");
+        }
+
         if (pathOrUrl != null && isNonHdf5Url(pathOrUrl)) {
-            return createViaProvider(pathOrUrl, title, isaInvestigationId,
-                    runs, genomicRuns, identifications, quantifications,
+            return createViaProviderMixed(pathOrUrl, title, isaInvestigationId,
+                    runs, genomicRuns, gNamesList,
+                    identifications, quantifications,
                     provenanceRecords, featureFlags);
         }
         Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
@@ -516,7 +729,7 @@ public class SpectralDataset implements
                         StringBuilder names = new StringBuilder();
                         for (int i = 0; i < genomicRuns.size(); i++) {
                             WrittenGenomicRun gr = genomicRuns.get(i);
-                            String gname = "genomic_" + String.format("%04d", i + 1);
+                            String gname = gNamesList.get(i);
                             if (i > 0) names.append(",");
                             names.append(gname);
                             writeGenomicRunSubtree(
@@ -949,7 +1162,47 @@ public class SpectralDataset implements
                     }
                 }
             }
+
+            // Phase 1 (post-M91): per-run provenance, mirroring
+            // AcquisitionRun.writeProvenance — write a JSON array
+            // attribute on the run group itself. The empty
+            // ``provenance`` subgroup matches the MS layout exactly so
+            // both modalities present the same on-disk shape to
+            // downstream tools.
+            if (!run.provenanceRecords().isEmpty()) {
+                try (var prov = rg.createGroup("provenance")) {
+                    // The subgroup exists as a marker; the canonical
+                    // payload is the attribute below. Closing here is
+                    // intentional — no children to write on the Java
+                    // side (Python additionally emits a compound at
+                    // ``provenance/steps``; Java's reader does not
+                    // parse that path so we don't write it either).
+                }
+                rg.setAttribute("provenance_json",
+                    buildProvenanceJsonArray(run.provenanceRecords()));
+            }
         }
+    }
+
+    /** Phase 1: build the JSON array attribute carrying per-run
+     *  provenance for a genomic run. Same shape as
+     *  {@link global.thalion.ttio.AcquisitionRun#writeProvenance}. */
+    private static String buildProvenanceJsonArray(
+            List<ProvenanceRecord> records) {
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < records.size(); i++) {
+            if (i > 0) json.append(",");
+            ProvenanceRecord r = records.get(i);
+            json.append("{\"timestamp_unix\":").append(r.timestampUnix())
+                .append(",\"software\":\"").append(
+                    r.software().replace("\"", "\\\""))
+                .append("\"")
+                .append(",\"parameters\":").append(r.parametersJson())
+                .append(",\"input_refs\":").append(r.inputRefsJson())
+                .append(",\"output_refs\":").append(r.outputRefsJson())
+                .append("}");
+        }
+        return json.append("]").toString();
     }
 
     /** M86 Phase F: write the mate_info subgroup with per-field codec

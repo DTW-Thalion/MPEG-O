@@ -7,6 +7,7 @@ package global.thalion.ttio.genomics;
 
 import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.Enums.Compression;
+import global.thalion.ttio.ProvenanceRecord;
 
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,14 @@ import java.util.Objects;
  *                           {@link #signalCompression} HDF5-filter
  *                           dispatch path. Defaults to
  *                           {@link Map#of() empty}; never {@code null}.
+ * @param provenanceRecords  Phase 1 (post-M91): per-run provenance
+ *                           chain in insertion order. Defaults to
+ *                           {@link List#of() empty}; never {@code null}.
+ *                           Round-trips through the
+ *                           {@code <run>/provenance_json} attribute on
+ *                           the genomic run group, mirroring
+ *                           {@link global.thalion.ttio.AcquisitionRun}'s
+ *                           layout.
  */
 public record WrittenGenomicRun(
     AcquisitionMode acquisitionMode,
@@ -81,7 +90,8 @@ public record WrittenGenomicRun(
     int[]  templateLengths,
     List<String> chromosomes,
     Compression signalCompression,
-    Map<String, Compression> signalCodecOverrides
+    Map<String, Compression> signalCodecOverrides,
+    List<ProvenanceRecord> provenanceRecords
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -91,11 +101,14 @@ public record WrittenGenomicRun(
         Objects.requireNonNull(signalCompression);
         Objects.requireNonNull(signalCodecOverrides,
             "signalCodecOverrides must not be null; pass Map.of() for none");
+        Objects.requireNonNull(provenanceRecords,
+            "provenanceRecords must not be null; pass List.of() for none");
         cigars                = List.copyOf(cigars);
         readNames             = List.copyOf(readNames);
         mateChromosomes       = List.copyOf(mateChromosomes);
         chromosomes           = List.copyOf(chromosomes);
         signalCodecOverrides  = Map.copyOf(signalCodecOverrides);
+        provenanceRecords     = List.copyOf(provenanceRecords);
     }
 
     /**
@@ -128,7 +141,41 @@ public record WrittenGenomicRun(
              positions, mappingQualities, flags, sequences, qualities,
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
-             signalCompression, Map.of());
+             signalCompression, Map.of(), List.of());
+    }
+
+    /**
+     * Backwards-compatible constructor (M86 era, 19 components) that
+     * defaults {@link #provenanceRecords} to {@link List#of() empty}.
+     * Existing callers built before Phase 1 (post-M91) continue to
+     * work unchanged.
+     */
+    public WrittenGenomicRun(
+        AcquisitionMode acquisitionMode,
+        String referenceUri,
+        String platform,
+        String sampleName,
+        long[] positions,
+        byte[] mappingQualities,
+        int[]  flags,
+        byte[] sequences,
+        byte[] qualities,
+        long[] offsets,
+        int[]  lengths,
+        List<String> cigars,
+        List<String> readNames,
+        List<String> mateChromosomes,
+        long[] matePositions,
+        int[]  templateLengths,
+        List<String> chromosomes,
+        Compression signalCompression,
+        Map<String, Compression> signalCodecOverrides
+    ) {
+        this(acquisitionMode, referenceUri, platform, sampleName,
+             positions, mappingQualities, flags, sequences, qualities,
+             offsets, lengths, cigars, readNames, mateChromosomes,
+             matePositions, templateLengths, chromosomes,
+             signalCompression, signalCodecOverrides, List.of());
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

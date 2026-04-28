@@ -6,6 +6,7 @@
 package global.thalion.ttio.genomics;
 
 import global.thalion.ttio.Enums.AcquisitionMode;
+import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
@@ -35,6 +36,7 @@ import java.util.NoSuchElementException;
 public class GenomicRun
         implements global.thalion.ttio.protocols.Indexable<AlignedRead>,
                    global.thalion.ttio.protocols.Streamable<AlignedRead>,
+                   global.thalion.ttio.protocols.Run,
                    AutoCloseable {
 
     private final String name;
@@ -45,6 +47,11 @@ public class GenomicRun
     private final String sampleName;
     private final GenomicIndex index;
     private final StorageGroup runGroup;
+    // Phase 1 (post-M91): per-run provenance, cached at open time so
+    // provenanceChain() is a pure accessor. Eager because the on-disk
+    // form is a small JSON attribute on the run group; lazy decode
+    // would buy nothing and would complicate the Run protocol surface.
+    private final List<ProvenanceRecord> provenanceRecords;
 
     private StorageGroup signalChannels;                       // lazy
     private StorageDataset sequencesDs;                        // lazy
@@ -96,7 +103,8 @@ public class GenomicRun
     private GenomicRun(String name, AcquisitionMode acquisitionMode,
                        String modality, String referenceUri,
                        String platform, String sampleName,
-                       GenomicIndex index, StorageGroup runGroup) {
+                       GenomicIndex index, StorageGroup runGroup,
+                       List<ProvenanceRecord> provenanceRecords) {
         this.name = name;
         this.acquisitionMode = acquisitionMode;
         this.modality = modality;
@@ -105,6 +113,8 @@ public class GenomicRun
         this.sampleName = sampleName;
         this.index = index;
         this.runGroup = runGroup;
+        this.provenanceRecords = provenanceRecords != null
+            ? List.copyOf(provenanceRecords) : List.of();
     }
 
     public String name()                       { return name; }
@@ -130,8 +140,29 @@ public class GenomicRun
         String refUri     = stringAttr(runGroup, "reference_uri",  "");
         String platform   = stringAttr(runGroup, "platform",       "");
         String sampleName = stringAttr(runGroup, "sample_name",    "");
+        List<ProvenanceRecord> prov = readPerRunProvenance(runGroup);
         return new GenomicRun(name, mode, modality, refUri, platform,
-                              sampleName, idx, runGroup);
+                              sampleName, idx, runGroup, prov);
+    }
+
+    /** Phase 1 (post-M91): read per-run provenance from the
+     *  {@code provenance_json} attribute on the genomic run group.
+     *  Mirrors {@link global.thalion.ttio.AcquisitionRun}'s on-disk
+     *  pattern (the JSON attribute is the canonical Java write format;
+     *  the Python ref impl additionally writes a
+     *  {@code provenance/steps} compound dataset, which Java does not
+     *  parse here — Java-written files round-trip cleanly because
+     *  Java's writer emits the JSON attribute too). */
+    private static List<ProvenanceRecord> readPerRunProvenance(StorageGroup runGroup) {
+        if (!runGroup.hasAttribute("provenance_json")) {
+            return List.of();
+        }
+        Object v = runGroup.getAttribute("provenance_json");
+        if (v == null) return List.of();
+        String json = v instanceof String s ? s
+                    : v instanceof byte[] b ? new String(b, StandardCharsets.UTF_8)
+                    : v.toString();
+        return global.thalion.ttio.ProvenanceJsonParse.parseArray(json);
     }
 
     /** M90.10: probe the {@code @compression} attribute on a
@@ -217,6 +248,33 @@ public class GenomicRun
     // ── Indexable<AlignedRead> ─────────────────────────────────────
 
     @Override public int count() { return readCount(); }
+
+    // ── Run conformance (Phase 1, post-M91) ────────────────────────
+
+    /** Phase 1: modality-agnostic accessor required by
+     *  {@link global.thalion.ttio.protocols.Run}. Delegates to
+     *  {@link #objectAtIndex(int)}; the typed return is widened to
+     *  {@code Object} so callers iterating uniformly over
+     *  AcquisitionRun + GenomicRun see a single signature. */
+    @Override
+    public Object get(int index) { return objectAtIndex(index); }
+
+    /** Phase 1 (post-M91): per-run provenance chain in insertion
+     *  order. Closes the M91 read-side gap — until Phase 1 the lazy
+     *  {@code GenomicRun} view didn't expose provenance, so cross-
+     *  modality queries had to fall back to the {@code @sample_name}
+     *  attribute. Returns an empty list for runs that carry no
+     *  provenance.
+     *
+     *  <p>Source of record: the {@code provenance_json} attribute on
+     *  the {@code /study/genomic_runs/<name>/} group, written by
+     *  {@link global.thalion.ttio.SpectralDataset#writeGenomicRunSubtree}
+     *  (Phase 1) — same on-disk pattern as
+     *  {@link global.thalion.ttio.AcquisitionRun#writeProvenance}.</p> */
+    @Override
+    public List<ProvenanceRecord> provenanceChain() {
+        return provenanceRecords;
+    }
 
     // ── Streamable<AlignedRead> ────────────────────────────────────
 
