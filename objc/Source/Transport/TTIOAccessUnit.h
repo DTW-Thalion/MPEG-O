@@ -82,6 +82,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) int64_t position;
 @property (nonatomic, readonly) uint8_t mappingQuality;
 @property (nonatomic, readonly) uint16_t flags;
+// M90.9: mate extension fields. Optional on the wire — when absent
+// (M89.1 file or empty AU) they default to BAM unmapped sentinels
+// (-1 matePosition, 0 templateLength). Wire layout: appended after
+// the M89.1 fixed suffix as int64 matePosition + int32 templateLength
+// (12 bytes total).
+@property (nonatomic, readonly) int64_t matePosition;
+@property (nonatomic, readonly) int32_t templateLength;
 
 - (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
                       acquisitionMode:(uint8_t)acquisitionMode
@@ -97,9 +104,9 @@ NS_ASSUME_NONNULL_BEGIN
                                pixelY:(uint32_t)pixelY
                                pixelZ:(uint32_t)pixelZ;
 
-/** M89.1 designated initialiser including the GenomicRead suffix
- *  fields. The shorter pixel-only initialiser delegates here with
- *  chromosome=@"", position=0, mappingQuality=0, flags=0. */
+/** M89.1 initialiser including the GenomicRead suffix fields.
+ *  Delegates to the M90.9 designated initialiser with
+ *  matePosition=-1, templateLength=0. */
 - (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
                       acquisitionMode:(uint8_t)acquisitionMode
                               msLevel:(uint8_t)msLevel
@@ -117,6 +124,29 @@ NS_ASSUME_NONNULL_BEGIN
                               position:(int64_t)position
                        mappingQuality:(uint8_t)mappingQuality
                                   flags:(uint16_t)flags;
+
+/** M90.9 designated initialiser including the mate extension fields
+ *  (matePosition + templateLength). Older initialisers delegate here
+ *  with matePosition=-1, templateLength=0. */
+- (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
+                      acquisitionMode:(uint8_t)acquisitionMode
+                              msLevel:(uint8_t)msLevel
+                             polarity:(uint8_t)polarity
+                        retentionTime:(double)retentionTime
+                          precursorMz:(double)precursorMz
+                      precursorCharge:(uint8_t)precursorCharge
+                          ionMobility:(double)ionMobility
+                    basePeakIntensity:(double)basePeakIntensity
+                             channels:(NSArray<TTIOTransportChannelData *> *)channels
+                               pixelX:(uint32_t)pixelX
+                               pixelY:(uint32_t)pixelY
+                               pixelZ:(uint32_t)pixelZ
+                            chromosome:(NSString *)chromosome
+                              position:(int64_t)position
+                       mappingQuality:(uint8_t)mappingQuality
+                                  flags:(uint16_t)flags
+                         matePosition:(int64_t)matePosition
+                       templateLength:(int32_t)templateLength;
 
 - (NSData *)encode;
 
