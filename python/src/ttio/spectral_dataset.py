@@ -407,16 +407,27 @@ class SpectralDataset:
             merged.setdefault(k, v)
         return merged
 
-    # ── Phase 1 (post-M91) — modality-agnostic accessors ────────────
+    # ── Phase 2 (post-M91) — canonical unified runs accessor ────────
 
     @property
-    def all_runs_unified(self) -> Mapping[str, "Run"]:
-        """Union of every run type (MS, NMR, genomic) keyed by name.
+    def runs(self) -> Mapping[str, "Run"]:
+        """Canonical mapping over every run in the file (MS + NMR +
+        genomic), keyed by run name.
 
         Values conform to the :class:`ttio.protocols.run.Run`
         Protocol so callers can iterate uniformly without knowing
-        the underlying modality. Use :meth:`runs_of_modality` to
-        narrow the type when needed.
+        the underlying modality:
+
+            for name, run in ds.runs.items():
+                print(f"{name}: {len(run)} measurements")
+
+        Use :meth:`runs_of_modality` to narrow by class, or
+        :meth:`runs_for_sample` to filter by provenance sample URI.
+
+        Phase 2 promotes this to the canonical access pattern.
+        Backward-compat: the legacy ``ms_runs`` / ``nmr_runs`` /
+        ``genomic_runs`` dicts and the MS+NMR-only ``all_runs``
+        property continue to work; new code should prefer ``runs``.
         """
         merged: dict[str, Any] = dict(self.ms_runs)
         for k, v in self.nmr_runs.items():
@@ -424,6 +435,12 @@ class SpectralDataset:
         for k, v in self.genomic_runs.items():
             merged.setdefault(k, v)
         return merged
+
+    @property
+    def all_runs_unified(self) -> Mapping[str, "Run"]:
+        """Deprecated alias for :attr:`runs`. Kept for the brief
+        Phase 1 → Phase 2 transition; remove in v1.0."""
+        return self.runs
 
     def runs_for_sample(self, sample_uri: str) -> Mapping[str, "Run"]:
         """Return every run associated with ``sample_uri``.
@@ -439,7 +456,7 @@ class SpectralDataset:
         matches.
         """
         out: dict[str, Any] = {}
-        for name, run in self.all_runs_unified.items():
+        for name, run in self.runs.items():
             try:
                 chain = run.provenance_chain()
             except Exception:
@@ -460,7 +477,7 @@ class SpectralDataset:
         """
         return {
             name: run
-            for name, run in self.all_runs_unified.items()
+            for name, run in self.runs.items()
             if isinstance(run, run_type)
         }
 
@@ -680,6 +697,28 @@ class SpectralDataset:
             "compound_per_run_provenance",
             "opt_compound_headers",
         ]
+
+        # Phase 2: ``runs`` may be a MIXED dict carrying both WrittenRun
+        # (MS / NMR) and WrittenGenomicRun entries. Split them into the
+        # legacy two-kwarg internal layout BEFORE any MS-only
+        # introspection (e.g. activation_methods below). Callers using
+        # the pre-Phase-2 form (separate ``runs=`` and ``genomic_runs=``
+        # kwargs) are unaffected.
+        if any(isinstance(v, WrittenGenomicRun) for v in runs.values()):
+            split_ms: dict[str, WrittenRun] = {}
+            split_g: dict[str, WrittenGenomicRun] = dict(genomic_runs or {})
+            for name, value in runs.items():
+                if isinstance(value, WrittenGenomicRun):
+                    if name in split_g:
+                        raise ValueError(
+                            f"Phase 2 mixed runs dict: name {name!r} "
+                            f"appears in both runs= and genomic_runs="
+                        )
+                    split_g[name] = value
+                else:
+                    split_ms[name] = value
+            runs = split_ms
+            genomic_runs = split_g
 
         # M74 Slice E: if any run carries the four optional
         # activation/isolation columns, advertise the

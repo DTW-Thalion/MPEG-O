@@ -216,3 +216,124 @@ class TestCrossModalityHelpers:
                 assert isinstance(run, Run)
             for run in ds.runs_of_modality(GenomicRun).values():
                 assert isinstance(run, Run)
+
+
+class TestPhase2CanonicalRuns:
+    """Phase 2: dataset.runs is the canonical access pattern."""
+
+    def test_runs_property_returns_unified_mapping(self, tmp_path):
+        path = _make_mixed_dataset(tmp_path / "f.tio")
+        with SpectralDataset.open(path) as ds:
+            unified = ds.runs
+            assert "ms_0001" in unified
+            assert "genomic_0001" in unified
+            for name, run in unified.items():
+                assert isinstance(run, Run)
+
+    def test_all_runs_unified_alias_still_works(self, tmp_path):
+        """Phase 1 added all_runs_unified; Phase 2 promotes it to
+        runs and keeps the alias for the brief transition window."""
+        path = _make_mixed_dataset(tmp_path / "f.tio")
+        with SpectralDataset.open(path) as ds:
+            assert dict(ds.all_runs_unified) == dict(ds.runs)
+
+
+class TestPhase2WriteMinimalMixed:
+    """Phase 2: write_minimal accepts a mixed dict of WrittenRun +
+    WrittenGenomicRun in the ``runs`` kwarg, dispatching by
+    isinstance() to the right write path."""
+
+    def test_mixed_runs_dict_produces_correct_layout(self, tmp_path):
+        # Build a fresh fixture using the new canonical write API.
+        n_ms = 2
+        n_pts = 4
+        mz = np.tile(np.linspace(100, 200, n_pts), n_ms).astype(np.float64)
+        intensity = (np.arange(n_ms * n_pts, dtype=np.float64) + 1) * 1000.0
+        ms_run = WrittenRun(
+            spectrum_class="TTIOMassSpectrum",
+            acquisition_mode=int(AcquisitionMode.MS1_DDA),
+            channel_data={"mz": mz, "intensity": intensity},
+            offsets=np.arange(n_ms, dtype=np.uint64) * n_pts,
+            lengths=np.full(n_ms, n_pts, dtype=np.uint32),
+            retention_times=np.linspace(0.0, 4.0, n_ms),
+            ms_levels=np.ones(n_ms, dtype=np.int32),
+            polarities=np.full(n_ms, int(Polarity.POSITIVE), dtype=np.int32),
+            precursor_mzs=np.zeros(n_ms),
+            precursor_charges=np.zeros(n_ms, dtype=np.int32),
+            base_peak_intensities=intensity.reshape(n_ms, n_pts).max(axis=1),
+        )
+        n_g = 2
+        L = 4
+        g_run = WrittenGenomicRun(
+            acquisition_mode=7,
+            reference_uri="GRCh38.p14",
+            platform="ILLUMINA",
+            sample_name="NA12878",
+            positions=np.array([100, 200], dtype=np.int64),
+            mapping_qualities=np.full(n_g, 60, dtype=np.uint8),
+            flags=np.full(n_g, 0x0003, dtype=np.uint32),
+            sequences=np.frombuffer(b"ACGT" * n_g, dtype=np.uint8),
+            qualities=np.frombuffer(bytes([30] * (n_g * L)), dtype=np.uint8),
+            offsets=np.arange(n_g, dtype=np.uint64) * L,
+            lengths=np.full(n_g, L, dtype=np.uint32),
+            cigars=[f"{L}M"] * n_g,
+            read_names=[f"r{i}" for i in range(n_g)],
+            mate_chromosomes=[""] * n_g,
+            mate_positions=np.full(n_g, -1, dtype=np.int64),
+            template_lengths=np.zeros(n_g, dtype=np.int32),
+            chromosomes=["chr1"] * n_g,
+        )
+        path = tmp_path / "mixed.tio"
+        SpectralDataset.write_minimal(
+            path,
+            title="Phase2 mixed write",
+            isa_investigation_id="ISA-PHASE2",
+            runs={
+                "ms_0001": ms_run,        # WrittenRun
+                "genomic_0001": g_run,    # WrittenGenomicRun (mixed!)
+            },
+            # No genomic_runs= kwarg — split happens internally.
+        )
+        with SpectralDataset.open(path) as ds:
+            assert "ms_0001" in ds.ms_runs
+            assert "genomic_0001" in ds.genomic_runs
+            assert "ms_0001" in ds.runs
+            assert "genomic_0001" in ds.runs
+
+    def test_legacy_two_kwarg_form_still_works(self, tmp_path):
+        """Backward compat: callers using pre-Phase-2 separate
+        kwargs continue to work unchanged."""
+        path = _make_mixed_dataset(tmp_path / "f.tio")
+        with SpectralDataset.open(path) as ds:
+            assert "ms_0001" in ds.ms_runs
+            assert "genomic_0001" in ds.genomic_runs
+
+    def test_name_collision_between_kwargs_raises(self, tmp_path):
+        # If the caller mixes runs + genomic_runs and the SAME name
+        # appears in both, raise rather than silently picking one.
+        n_g = 1
+        L = 4
+        g_run = WrittenGenomicRun(
+            acquisition_mode=7, reference_uri="x", platform="x",
+            sample_name="x",
+            positions=np.array([1], dtype=np.int64),
+            mapping_qualities=np.array([60], dtype=np.uint8),
+            flags=np.array([0x0003], dtype=np.uint32),
+            sequences=np.frombuffer(b"ACGT", dtype=np.uint8),
+            qualities=np.frombuffer(bytes([30] * L), dtype=np.uint8),
+            offsets=np.array([0], dtype=np.uint64),
+            lengths=np.array([L], dtype=np.uint32),
+            cigars=[f"{L}M"],
+            read_names=["r0"],
+            mate_chromosomes=[""],
+            mate_positions=np.array([-1], dtype=np.int64),
+            template_lengths=np.array([0], dtype=np.int32),
+            chromosomes=["chr1"],
+        )
+        with pytest.raises(ValueError, match="appears in both"):
+            SpectralDataset.write_minimal(
+                tmp_path / "collision.tio",
+                title="x", isa_investigation_id="x",
+                runs={"x": g_run},
+                genomic_runs={"x": g_run},
+            )
