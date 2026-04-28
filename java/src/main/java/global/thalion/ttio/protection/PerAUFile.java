@@ -70,12 +70,25 @@ public final class PerAUFile {
             StorageGroup root = sp.rootGroup();
             FeatureFlags flags = FeatureFlags.readFrom(root);
 
-            try (StorageGroup study = root.openGroup("study");
-                 StorageGroup msRuns = study.openGroup("ms_runs")) {
-                int datasetId = 1;
-                for (String runName : runNames(msRuns)) {
-                    encryptOneRun(msRuns, runName, datasetId, key, encryptHeaders);
-                    datasetId++;
+            int datasetId = 1;
+            try (StorageGroup study = root.openGroup("study")) {
+                if (study.hasChild("ms_runs")) {
+                    try (StorageGroup msRuns = study.openGroup("ms_runs")) {
+                        for (String runName : runNames(msRuns)) {
+                            encryptOneRun(msRuns, runName, datasetId, key,
+                                            encryptHeaders);
+                            datasetId++;
+                        }
+                    }
+                }
+                // M90.1: continue dataset_id_counter into genomic_runs.
+                if (study.hasChild("genomic_runs")) {
+                    try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
+                        for (String runName : runNames(gRuns)) {
+                            encryptOneGenomicRun(gRuns, runName, datasetId, key);
+                            datasetId++;
+                        }
+                    }
                 }
             }
 
@@ -113,13 +126,146 @@ public final class PerAUFile {
             }
             boolean headersEncrypted = flags.has(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
 
-            try (StorageGroup study = root.openGroup("study");
-                 StorageGroup msRuns = study.openGroup("ms_runs")) {
-                int datasetId = 1;
-                for (String runName : runNames(msRuns)) {
-                    out.put(runName, decryptOneRun(msRuns, runName, datasetId, key,
-                                                     headersEncrypted));
-                    datasetId++;
+            int datasetId = 1;
+            try (StorageGroup study = root.openGroup("study")) {
+                if (study.hasChild("ms_runs")) {
+                    try (StorageGroup msRuns = study.openGroup("ms_runs")) {
+                        for (String runName : runNames(msRuns)) {
+                            out.put(runName, decryptOneRun(msRuns, runName,
+                                                             datasetId, key,
+                                                             headersEncrypted));
+                            datasetId++;
+                        }
+                    }
+                }
+                // M90.1: dataset_id_counter continues into genomic_runs so
+                // AAD reconstruction matches the encrypt path exactly.
+                if (study.hasChild("genomic_runs")) {
+                    try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
+                        for (String runName : runNames(gRuns)) {
+                            out.put(runName, decryptOneGenomicRun(
+                                gRuns, runName, datasetId, key));
+                            datasetId++;
+                        }
+                    }
+                }
+            }
+            return out;
+        } finally {
+            sp.close();
+        }
+    }
+
+    // ─────────────────────────────────────────── M90.4 region encryption
+
+    /** M90.4: encrypt genomic signal channels with a per-chromosome
+     *  key map. Reads whose chromosome appears in {@code keyMap} get
+     *  AES-256-GCM encrypted with that key; reads on chromosomes not
+     *  in the map are stored as clear segments (empty IV/tag,
+     *  plaintext rides in the ciphertext slot — see
+     *  {@link PerAUEncryption#encryptChannelByRegion}).
+     *
+     *  <p>MS runs are NOT touched — chromosome is a genomic concept.
+     *  Use {@link #encryptFile} for MS encryption.
+     *
+     *  <p>Sets both {@link FeatureFlags#OPT_PER_AU_ENCRYPTION} and
+     *  {@link FeatureFlags#OPT_REGION_KEYED_ENCRYPTION} on the root. */
+    public static void encryptByRegion(String path,
+                                         Map<String, byte[]> keyMap,
+                                         String providerName) {
+        for (Map.Entry<String, byte[]> e : keyMap.entrySet()) {
+            if (e.getValue().length != 32) {
+                throw new IllegalArgumentException(
+                    "AES-256-GCM key for chromosome '" + e.getKey()
+                    + "' must be 32 bytes, got " + e.getValue().length);
+            }
+        }
+        StorageProvider sp = ProviderRegistry.open(path,
+            StorageProvider.Mode.READ_WRITE, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            FeatureFlags flags = FeatureFlags.readFrom(root);
+
+            try (StorageGroup study = root.openGroup("study")) {
+                if (!study.hasChild("genomic_runs")) {
+                    return;  // no genomic data — nothing to encrypt
+                }
+                // Match the dataset_id_counter convention from the MS
+                // path: MS runs occupy 1..N, genomic N+1..N+M. Region
+                // encryption only touches genomic, but we still walk MS
+                // first to advance the counter.
+                int nMs = 0;
+                if (study.hasChild("ms_runs")) {
+                    try (StorageGroup msRuns = study.openGroup("ms_runs")) {
+                        nMs = runNames(msRuns).size();
+                    }
+                }
+                int datasetId = nMs + 1;
+                try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
+                    for (String runName : runNames(gRuns)) {
+                        encryptOneGenomicRunByRegion(gRuns, runName,
+                                                       datasetId, keyMap);
+                        datasetId++;
+                    }
+                }
+            }
+
+            List<String> updatedFeatures = new ArrayList<>(flags.features());
+            if (!updatedFeatures.contains(FeatureFlags.OPT_PER_AU_ENCRYPTION)) {
+                updatedFeatures.add(FeatureFlags.OPT_PER_AU_ENCRYPTION);
+            }
+            if (!updatedFeatures.contains(FeatureFlags.OPT_REGION_KEYED_ENCRYPTION)) {
+                updatedFeatures.add(FeatureFlags.OPT_REGION_KEYED_ENCRYPTION);
+            }
+            java.util.Collections.sort(updatedFeatures);
+            new FeatureFlags(flags.formatVersion(), updatedFeatures).writeTo(root);
+        } finally {
+            sp.close();
+        }
+    }
+
+    /** M90.4: decrypt a region-encrypted file using a per-chromosome
+     *  key map. Caller may supply a subset of the keys used at
+     *  encryption time — clear segments decode without any key, but
+     *  encrypted segments whose chromosome key isn't in {@code keyMap}
+     *  raise {@link IllegalStateException}.
+     *
+     *  <p>Returns {@code {runName -> DecryptedRun}}. The MS runs are
+     *  decrypted via the standard single-key path inside this function
+     *  iff the file also carries MS encryption under the supplied
+     *  key — the M90.4 convention is that MS encryption (if any)
+     *  uses the standard {@link #encryptFile} entry point first, and
+     *  region encryption layers on top for genomic only. */
+    public static Map<String, DecryptedRun> decryptByRegion(String path,
+            Map<String, byte[]> keyMap, String providerName) {
+        Map<String, DecryptedRun> out = new LinkedHashMap<>();
+        StorageProvider sp = ProviderRegistry.open(path,
+            StorageProvider.Mode.READ, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            FeatureFlags flags = FeatureFlags.readFrom(root);
+            if (!flags.has(FeatureFlags.OPT_PER_AU_ENCRYPTION)) {
+                throw new IllegalStateException(
+                    "file at " + path + " does not carry opt_per_au_encryption");
+            }
+
+            try (StorageGroup study = root.openGroup("study")) {
+                int nMs = 0;
+                if (study.hasChild("ms_runs")) {
+                    try (StorageGroup msRuns = study.openGroup("ms_runs")) {
+                        nMs = runNames(msRuns).size();
+                    }
+                }
+                if (!study.hasChild("genomic_runs")) {
+                    return out;
+                }
+                int datasetId = nMs + 1;
+                try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
+                    for (String runName : runNames(gRuns)) {
+                        out.put(runName, decryptOneGenomicRunByRegion(
+                            gRuns, runName, datasetId, keyMap));
+                        datasetId++;
+                    }
                 }
             }
             return out;
@@ -214,6 +360,131 @@ public final class PerAUFile {
                                                                      key);
             }
             return new DecryptedRun(channels, auHeaders);
+        }
+    }
+
+    // ─────────────────────────────────────── genomic encrypt / decrypt
+
+    /** M90.1: encrypt one {@code /study/genomic_runs/<name>/} subtree.
+     *  Sequences and qualities are uint8 (one byte per logical
+     *  element), AAD reuses the standard
+     *  {@code dataset_id || au_sequence || channel_name} layout. */
+    private static void encryptOneGenomicRun(StorageGroup gRuns, String runName,
+                                               int datasetId, byte[] key) {
+        try (StorageGroup run = gRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels");
+             StorageGroup idx = run.openGroup("genomic_index")) {
+
+            long[] offsets = readLongs(idx, "offsets");
+            int[] lengths = readInts(idx, "lengths");
+
+            for (String cname : new String[]{"sequences", "qualities"}) {
+                if (!sig.hasChild(cname)) continue;
+                byte[] plaintext;
+                try (StorageDataset ds = sig.openDataset(cname)) {
+                    plaintext = (byte[]) ds.readAll();
+                }
+                List<ChannelSegment> segs =
+                    PerAUEncryption.encryptChannelToSegments(
+                        plaintext, offsets, lengths, datasetId, cname, key, 1);
+                writeChannelSegments(sig, cname + "_segments", segs);
+                sig.deleteChild(cname);
+                sig.setAttribute(cname + "_algorithm", "aes-256-gcm");
+            }
+        }
+    }
+
+    /** M90.1: decrypt one genomic run subtree. Returns a
+     *  {@link DecryptedRun} whose {@code channels} map carries
+     *  {@code "sequences"} and {@code "qualities"} as flat uint8
+     *  byte arrays (no element-width unpacking). */
+    private static DecryptedRun decryptOneGenomicRun(StorageGroup gRuns,
+            String runName, int datasetId, byte[] key) {
+        try (StorageGroup run = gRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels")) {
+            Map<String, byte[]> channels = new LinkedHashMap<>();
+            for (String cname : new String[]{"sequences", "qualities"}) {
+                String segName = cname + "_segments";
+                if (!sig.hasChild(segName)) continue;
+                List<ChannelSegment> segs = readChannelSegments(sig, segName);
+                channels.put(cname,
+                    PerAUEncryption.decryptChannelFromSegments(
+                        segs, datasetId, cname, key, 1));
+            }
+            return new DecryptedRun(channels, null);
+        }
+    }
+
+    /** M90.4: encrypt one genomic run with per-chromosome dispatch. */
+    private static void encryptOneGenomicRunByRegion(StorageGroup gRuns,
+            String runName, int datasetId, Map<String, byte[]> keyMap) {
+        try (StorageGroup run = gRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels");
+             StorageGroup idx = run.openGroup("genomic_index")) {
+
+            long[] offsets = readLongs(idx, "offsets");
+            int[] lengths = readInts(idx, "lengths");
+            List<String> chromosomes = readChromosomes(idx);
+
+            for (String cname : new String[]{"sequences", "qualities"}) {
+                if (!sig.hasChild(cname)) continue;
+                byte[] plaintext;
+                try (StorageDataset ds = sig.openDataset(cname)) {
+                    plaintext = (byte[]) ds.readAll();
+                }
+                List<ChannelSegment> segs =
+                    PerAUEncryption.encryptChannelByRegion(
+                        plaintext, offsets, lengths, chromosomes,
+                        datasetId, cname, keyMap);
+                writeChannelSegments(sig, cname + "_segments", segs);
+                sig.deleteChild(cname);
+                sig.setAttribute(cname + "_algorithm",
+                                  "aes-256-gcm-by-region");
+            }
+        }
+    }
+
+    /** M90.4: decrypt one region-encrypted genomic run. */
+    private static DecryptedRun decryptOneGenomicRunByRegion(
+            StorageGroup gRuns, String runName, int datasetId,
+            Map<String, byte[]> keyMap) {
+        try (StorageGroup run = gRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels");
+             StorageGroup idx = run.openGroup("genomic_index")) {
+            List<String> chromosomes = readChromosomes(idx);
+            Map<String, byte[]> channels = new LinkedHashMap<>();
+            for (String cname : new String[]{"sequences", "qualities"}) {
+                String segName = cname + "_segments";
+                if (!sig.hasChild(segName)) continue;
+                List<ChannelSegment> segs = readChannelSegments(sig, segName);
+                channels.put(cname,
+                    PerAUEncryption.decryptChannelByRegion(
+                        segs, chromosomes, datasetId, cname, keyMap));
+            }
+            return new DecryptedRun(channels, null);
+        }
+    }
+
+    /** Read the genomic_index/chromosomes compound dataset into a
+     *  {@code List<String>}. The compound has a single VL_STRING
+     *  field named "value"; tolerates both {@code byte[]} and
+     *  {@code String} field representations across providers. */
+    @SuppressWarnings("unchecked")
+    private static List<String> readChromosomes(StorageGroup idx) {
+        try (StorageDataset ds = idx.openDataset("chromosomes")) {
+            List<Object[]> rows = (List<Object[]>) ds.readAll();
+            List<String> out = new ArrayList<>(rows.size());
+            for (Object[] r : rows) {
+                Object v = r[0];
+                if (v == null) {
+                    out.add("");
+                } else if (v instanceof byte[] b) {
+                    out.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+                } else {
+                    out.add(v.toString());
+                }
+            }
+            return out;
         }
     }
 

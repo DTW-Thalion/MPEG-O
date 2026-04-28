@@ -40,6 +40,14 @@ public final class FeatureFlags {
     public static final String OPT_PER_AU_ENCRYPTION = "opt_per_au_encryption";
     /** v1.0: AU semantic header encrypted. @since 1.0 */
     public static final String OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers";
+    /** v1.0 M90.4: per-AU encryption keyed by chromosome (region-based).
+     *  Set in addition to {@link #OPT_PER_AU_ENCRYPTION} when a file
+     *  was encrypted via the per-chromosome key-map dispatch path.
+     *  Clear AUs encode as a {@code <channel>_segments} row with
+     *  empty IV/tag and plaintext bytes in the ciphertext slot;
+     *  encrypted AUs use the standard 12/16-byte AES-GCM layout.
+     *  @since 1.0 M90.4 */
+    public static final String OPT_REGION_KEYED_ENCRYPTION = "opt_region_keyed_encryption";
     /** v0.12.0 M74: {@code spectrum_index} carries four optional
      *  parallel columns recording MS/MS activation method and precursor
      *  isolation window. Files that set this flag are written with
@@ -63,6 +71,7 @@ public final class FeatureFlags {
         OPT_DATASET_ENCRYPTION, OPT_DIGITAL_SIGNATURES, OPT_CANONICAL_SIGNATURES,
         OPT_KEY_ROTATION, OPT_ANONYMIZED, OPT_PQC_PREVIEW,
         OPT_PER_AU_ENCRYPTION, OPT_ENCRYPTED_AU_HEADERS,
+        OPT_REGION_KEYED_ENCRYPTION,
         OPT_MS2_ACTIVATION_DETAIL
     );
 

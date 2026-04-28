@@ -1,12 +1,17 @@
 /* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
 package global.thalion.ttio.protection;
 
+import global.thalion.ttio.providers.StorageDataset;
+import global.thalion.ttio.providers.StorageGroup;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -233,5 +238,141 @@ public final class SignatureManager {
             key[i] = (byte) ((0x5A ^ (i * 7)) & 0xFF);
         }
         return key;
+    }
+
+    // ────────────────────────────────────────────── M90.2 genomic runs
+
+    /** Channels signed by {@link #signGenomicRun}. */
+    private static final String[] GENOMIC_SIGNAL_CHANNELS = {
+        "sequences", "qualities"
+    };
+    /** Index columns signed by {@link #signGenomicRun}. The
+     *  {@code chromosomes} compound is intentionally excluded —
+     *  compound signing is covered by the dataset-level path on the
+     *  signal channels. */
+    private static final String[] GENOMIC_INDEX_COLUMNS = {
+        "offsets", "lengths", "positions", "mapping_qualities", "flags"
+    };
+
+    /** M90.2: sign every signal channel and every genomic_index
+     *  column under one {@code /study/genomic_runs/<name>/} group in
+     *  one call, storing each signature on the dataset's
+     *  {@code @ttio_signature} attribute.
+     *
+     *  <p>Returns a map from {@code "<sub>/<dataset>"} (e.g.
+     *  {@code "signal_channels/sequences"},
+     *  {@code "genomic_index/positions"}) to the prefixed signature
+     *  string. Datasets that don't exist on disk are silently skipped
+     *  (e.g. encrypted files have segments instead of plaintext signal
+     *  channels).
+     *
+     *  <p>{@code algorithm} dispatches identically to
+     *  {@link #sign(byte[], byte[], String)} —
+     *  {@code "hmac-sha256"} (default) or {@code "ml-dsa-87"} (PQC).
+     *
+     *  <p><b>Cross-language equivalents:</b> Python
+     *  {@code ttio.signatures.sign_genomic_run}, Objective-C
+     *  {@code TTIOSignatureManager#signGenomicRun:}.
+     *
+     *  @since 1.0 M90.2
+     */
+    public static Map<String, String> signGenomicRun(
+            StorageGroup runGroup, byte[] key, String algorithm) {
+        Map<String, String> out = new LinkedHashMap<>();
+        if (runGroup.hasChild("signal_channels")) {
+            try (StorageGroup sig = runGroup.openGroup("signal_channels")) {
+                for (String cname : GENOMIC_SIGNAL_CHANNELS) {
+                    if (!sig.hasChild(cname)) continue;
+                    try (StorageDataset ds = sig.openDataset(cname)) {
+                        byte[] canonical = ds.readCanonicalBytes();
+                        String s = sign(canonical, key, algorithm);
+                        ds.setAttribute("ttio_signature", s);
+                        out.put("signal_channels/" + cname, s);
+                    }
+                }
+            }
+        }
+        if (runGroup.hasChild("genomic_index")) {
+            try (StorageGroup idx = runGroup.openGroup("genomic_index")) {
+                for (String cname : GENOMIC_INDEX_COLUMNS) {
+                    if (!idx.hasChild(cname)) continue;
+                    try (StorageDataset ds = idx.openDataset(cname)) {
+                        byte[] canonical = ds.readCanonicalBytes();
+                        String s = sign(canonical, key, algorithm);
+                        ds.setAttribute("ttio_signature", s);
+                        out.put("genomic_index/" + cname, s);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** {@code signGenomicRun} convenience overload defaulting to
+     *  {@code "hmac-sha256"}. */
+    public static Map<String, String> signGenomicRun(
+            StorageGroup runGroup, byte[] key) {
+        return signGenomicRun(runGroup, key, "hmac-sha256");
+    }
+
+    /** M90.2: verify every signal channel and every genomic_index
+     *  column under one genomic run. Returns {@code true} iff every
+     *  present, signed dataset verifies under {@code key}.
+     *
+     *  <p>A dataset that was signed but is now tampered returns
+     *  {@code false}. A dataset that exists but has no
+     *  {@code @ttio_signature} attribute also returns {@code false}
+     *  — that's intentional, since a partial-signature run is not a
+     *  fully-signed run. Datasets that don't exist on disk are skipped.
+     *
+     *  @since 1.0 M90.2
+     */
+    public static boolean verifyGenomicRun(
+            StorageGroup runGroup, byte[] key, String algorithm) {
+        if (runGroup.hasChild("signal_channels")) {
+            try (StorageGroup sig = runGroup.openGroup("signal_channels")) {
+                for (String cname : GENOMIC_SIGNAL_CHANNELS) {
+                    if (!sig.hasChild(cname)) continue;
+                    if (!verifyOneDataset(sig, cname, key, algorithm)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        if (runGroup.hasChild("genomic_index")) {
+            try (StorageGroup idx = runGroup.openGroup("genomic_index")) {
+                for (String cname : GENOMIC_INDEX_COLUMNS) {
+                    if (!idx.hasChild(cname)) continue;
+                    if (!verifyOneDataset(idx, cname, key, algorithm)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /** {@code verifyGenomicRun} convenience overload defaulting to
+     *  {@code "hmac-sha256"}. */
+    public static boolean verifyGenomicRun(
+            StorageGroup runGroup, byte[] key) {
+        return verifyGenomicRun(runGroup, key, "hmac-sha256");
+    }
+
+    private static boolean verifyOneDataset(StorageGroup parent, String name,
+                                              byte[] key, String algorithm) {
+        try (StorageDataset ds = parent.openDataset(name)) {
+            if (!ds.hasAttribute("ttio_signature")) return false;
+            Object sigObj = ds.getAttribute("ttio_signature");
+            if (sigObj == null) return false;
+            String stored;
+            if (sigObj instanceof byte[] b) {
+                stored = new String(b, StandardCharsets.UTF_8);
+            } else {
+                stored = sigObj.toString();
+            }
+            byte[] canonical = ds.readCanonicalBytes();
+            return verify(canonical, stored, key, algorithm);
+        }
     }
 }

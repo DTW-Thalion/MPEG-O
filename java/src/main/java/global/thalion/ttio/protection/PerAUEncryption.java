@@ -9,6 +9,7 @@ import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -207,21 +208,45 @@ public final class PerAUEncryption {
     // ------------------------------------------------ Channel segments
 
     /** Slice flat float64 plaintext into per-spectrum rows and
-     *  encrypt each with a fresh IV. */
+     *  encrypt each with a fresh IV. Equivalent to
+     *  {@link #encryptChannelToSegments(byte[], long[], int[], int, String, byte[], int)}
+     *  with {@code bytesPerElement = 8} (legacy MS path). */
     public static List<ChannelSegment> encryptChannelToSegments(
             byte[] plaintextFloat64Le, long[] offsets, int[] lengths,
             int datasetId, String channelName, byte[] key) {
+        return encryptChannelToSegments(plaintextFloat64Le, offsets, lengths,
+                                          datasetId, channelName, key, 8);
+    }
+
+    /** M90.1: slice flat little-endian plaintext into per-AU rows of
+     *  {@code bytesPerElement} bytes per logical element and encrypt
+     *  each with a fresh IV.
+     *
+     *  <p>{@code bytesPerElement} mirrors the Python {@code dtype}
+     *  kwarg: pass {@code 8} for the legacy MS float64 channels and
+     *  {@code 1} for the M90.1 genomic uint8 sequences/qualities
+     *  channels. The {@code offsets} / {@code lengths} arrays are in
+     *  element units (not byte units), exactly as stored in the index
+     *  groups. */
+    public static List<ChannelSegment> encryptChannelToSegments(
+            byte[] plaintextLe, long[] offsets, int[] lengths,
+            int datasetId, String channelName, byte[] key,
+            int bytesPerElement) {
         if (offsets.length != lengths.length) {
             throw new IllegalArgumentException(
                 "offsets / lengths length mismatch");
+        }
+        if (bytesPerElement < 1) {
+            throw new IllegalArgumentException(
+                "bytesPerElement must be >= 1, got " + bytesPerElement);
         }
         List<ChannelSegment> out = new ArrayList<>(offsets.length);
         for (int auSeq = 0; auSeq < offsets.length; auSeq++) {
             long off = offsets[auSeq];
             int len = lengths[auSeq];
-            int byteOff = Math.toIntExact(off * 8L);
-            int byteLen = len * 8;
-            byte[] chunk = Arrays.copyOfRange(plaintextFloat64Le,
+            int byteOff = Math.toIntExact(off * (long) bytesPerElement);
+            int byteLen = len * bytesPerElement;
+            byte[] chunk = Arrays.copyOfRange(plaintextLe,
                                                 byteOff, byteOff + byteLen);
             byte[] aad = aadForChannel(datasetId, auSeq, channelName);
             GcmResult r = encryptWithAad(chunk, key, aad, null);
@@ -232,12 +257,32 @@ public final class PerAUEncryption {
     }
 
     /** Decrypt every row in order and concatenate plaintext float64
-     *  bytes. */
+     *  bytes. Equivalent to
+     *  {@link #decryptChannelFromSegments(List, int, String, byte[], int)}
+     *  with {@code bytesPerElement = 8} (legacy MS path). */
     public static byte[] decryptChannelFromSegments(
             List<ChannelSegment> segments, int datasetId,
             String channelName, byte[] key) {
+        return decryptChannelFromSegments(segments, datasetId, channelName,
+                                            key, 8);
+    }
+
+    /** M90.1: decrypt every row and concatenate the plaintext bytes,
+     *  validating the per-row plaintext length against
+     *  {@code length * bytesPerElement}.
+     *
+     *  <p>Pass {@code bytesPerElement = 8} for the legacy MS float64
+     *  channels and {@code 1} for the M90.1 genomic uint8
+     *  sequences/qualities channels. */
+    public static byte[] decryptChannelFromSegments(
+            List<ChannelSegment> segments, int datasetId,
+            String channelName, byte[] key, int bytesPerElement) {
+        if (bytesPerElement < 1) {
+            throw new IllegalArgumentException(
+                "bytesPerElement must be >= 1, got " + bytesPerElement);
+        }
         int total = 0;
-        for (ChannelSegment s : segments) total += s.length() * 8;
+        for (ChannelSegment s : segments) total += s.length() * bytesPerElement;
         byte[] out = new byte[total];
         int cursor = 0;
         for (int auSeq = 0; auSeq < segments.size(); auSeq++) {
@@ -245,7 +290,111 @@ public final class PerAUEncryption {
             byte[] aad = aadForChannel(datasetId, auSeq, channelName);
             byte[] plain = decryptWithAad(s.iv(), s.tag(), s.ciphertext(),
                                             key, aad);
-            int expected = s.length() * 8;
+            int expected = s.length() * bytesPerElement;
+            if (plain.length != expected) {
+                throw new IllegalStateException(
+                    "channel " + channelName + " segment " + auSeq
+                    + ": decrypted " + plain.length + " bytes, expected "
+                    + expected);
+            }
+            System.arraycopy(plain, 0, out, cursor, plain.length);
+            cursor += plain.length;
+        }
+        return out;
+    }
+
+    // ─────────────────────────────────────────── M90.4: region dispatch
+
+    /** M90.4: per-AU dispatch on chromosome name. Reads on chromosomes
+     *  in {@code keyMap} get encrypted with the corresponding
+     *  AES-256-GCM key; reads on chromosomes NOT in {@code keyMap}
+     *  emit a "clear segment" — same {@link ChannelSegment} compound
+     *  shape, but with empty IV ({@code iv.length == 0}), empty tag,
+     *  and the raw plaintext bytes ride in the {@code ciphertext} slot.
+     *
+     *  <p>The decoder branches on {@code seg.iv().length}: 0 = clear,
+     *  12 = AES-GCM. Old M90.1 files (every IV is exactly 12 bytes)
+     *  still decode unchanged under the same dispatch table. The
+     *  empty-IV sentinel is unambiguous because AES-GCM IVs are
+     *  always exactly 12 bytes per FIPS-198. */
+    public static List<ChannelSegment> encryptChannelByRegion(
+            byte[] plaintextLe, long[] offsets, int[] lengths,
+            List<String> chromosomes,
+            int datasetId, String channelName,
+            Map<String, byte[]> keyMap) {
+        if (offsets.length != lengths.length
+                || offsets.length != chromosomes.size()) {
+            throw new IllegalArgumentException(
+                "offsets / lengths / chromosomes length mismatch ("
+                + offsets.length + " / " + lengths.length + " / "
+                + chromosomes.size() + ")");
+        }
+        List<ChannelSegment> out = new ArrayList<>(offsets.length);
+        byte[] empty = new byte[0];
+        for (int auSeq = 0; auSeq < offsets.length; auSeq++) {
+            long off = offsets[auSeq];
+            int len = lengths[auSeq];
+            int byteOff = Math.toIntExact(off);  // bytesPerElement = 1
+            int byteLen = len;
+            byte[] chunk = Arrays.copyOfRange(plaintextLe,
+                                                byteOff, byteOff + byteLen);
+            byte[] key = keyMap.get(chromosomes.get(auSeq));
+            if (key == null) {
+                // Clear segment: empty IV + tag, plaintext rides in
+                // the ciphertext slot.
+                out.add(new ChannelSegment(off, len, empty, empty, chunk));
+            } else {
+                byte[] aad = aadForChannel(datasetId, auSeq, channelName);
+                GcmResult r = encryptWithAad(chunk, key, aad, null);
+                out.add(new ChannelSegment(off, len, r.iv(), r.tag(),
+                                             r.ciphertext()));
+            }
+        }
+        return out;
+    }
+
+    /** M90.4: inverse of
+     *  {@link #encryptChannelByRegion(byte[], long[], int[], List, int, String, Map)}.
+     *  Branches on {@code seg.iv().length}: 0 = clear segment (the
+     *  ciphertext IS the plaintext), 12 = AES-256-GCM (must have a
+     *  key for the segment's chromosome in {@code keyMap}, else
+     *  throws). */
+    public static byte[] decryptChannelByRegion(
+            List<ChannelSegment> segments, List<String> chromosomes,
+            int datasetId, String channelName,
+            Map<String, byte[]> keyMap) {
+        int total = 0;
+        for (ChannelSegment s : segments) total += s.length();
+        byte[] out = new byte[total];
+        int cursor = 0;
+        for (int auSeq = 0; auSeq < segments.size(); auSeq++) {
+            ChannelSegment s = segments.get(auSeq);
+            int expected = s.length();
+            if (s.iv().length == 0) {
+                // Clear segment: ciphertext is plaintext bytes.
+                if (s.ciphertext().length != expected) {
+                    throw new IllegalStateException(
+                        "channel " + channelName + " clear segment "
+                        + auSeq + ": " + s.ciphertext().length
+                        + " bytes, expected " + expected);
+                }
+                System.arraycopy(s.ciphertext(), 0, out, cursor,
+                                  s.ciphertext().length);
+                cursor += s.ciphertext().length;
+                continue;
+            }
+            String chrom = auSeq < chromosomes.size()
+                ? chromosomes.get(auSeq) : "";
+            byte[] key = keyMap.get(chrom);
+            if (key == null) {
+                throw new IllegalStateException(
+                    "chromosome '" + chrom + "' segment " + auSeq
+                    + " is encrypted but keyMap has no entry for '"
+                    + chrom + "'");
+            }
+            byte[] aad = aadForChannel(datasetId, auSeq, channelName);
+            byte[] plain = decryptWithAad(s.iv(), s.tag(), s.ciphertext(),
+                                            key, aad);
             if (plain.length != expected) {
                 throw new IllegalStateException(
                     "channel " + channelName + " segment " + auSeq
