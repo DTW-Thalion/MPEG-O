@@ -284,12 +284,32 @@ cleanup:
             @"H5Aopen failed for '%@'", name);
         return nil;
     }
-    hid_t  htype = H5Aget_type(aid);
-    size_t size  = H5Tget_size(htype);
-    char  *buf   = (char *)calloc(size + 1, 1);
-    H5Aread(aid, htype, buf);
-    NSString *result = [[NSString alloc] initWithUTF8String:buf];
-    free(buf);
+    hid_t htype = H5Aget_type(aid);
+    NSString *result = nil;
+    /* M91 follow-up to M90.7: Python (always) and Java (post-M90.7)
+     * write string attributes as VL_STRING with UTF-8 cset. Detect via
+     * H5Tis_variable_str and dispatch — old fixed-length attrs still
+     * decode through the legacy calloc path. */
+    if (H5Tis_variable_str(htype) > 0) {
+        char *vlbuf = NULL;
+        if (H5Aread(aid, htype, &vlbuf) >= 0 && vlbuf) {
+            result = [[NSString alloc] initWithUTF8String:vlbuf];
+            /* HDF5 1.10 reclaim API: H5Dvlen_reclaim (renamed to
+             * H5Treclaim in 1.12+; we target 1.10 as the lowest
+             * common system version on Linux distros). */
+            hid_t space = H5Aget_space(aid);
+            if (space >= 0) {
+                H5Dvlen_reclaim(htype, space, H5P_DEFAULT, &vlbuf);
+                H5Sclose(space);
+            }
+        }
+    } else {
+        size_t size = H5Tget_size(htype);
+        char *buf = (char *)calloc(size + 1, 1);
+        H5Aread(aid, htype, buf);
+        result = [[NSString alloc] initWithUTF8String:buf];
+        free(buf);
+    }
     H5Tclose(htype); H5Aclose(aid);
     [_file unlockForReading];
     return result;
