@@ -32,6 +32,7 @@ from ..enums import Compression, Polarity, Precision
 from ..mass_spectrum import MassSpectrum
 from ..spectral_dataset import SpectralDataset, WrittenRun
 from ..spectrum import Spectrum
+from .._hdf5_io import read_int_attr as io_attr_int  # M90.10 wire codec probe
 from .packets import (
     HEADER_MAGIC,
     HEADER_SIZE,
@@ -76,6 +77,48 @@ _SPECTRUM_CLASS_TO_WIRE = {
     "TTIOGenomicRead": 5,  # M89.2
 }
 _WIRE_TO_SPECTRUM_CLASS = {v: k for k, v in _SPECTRUM_CLASS_TO_WIRE.items()}
+
+
+# M90.10: M86 codec dispatch for genomic UINT8 channels on the wire.
+
+_RANS_ORDER0_WIRE = int(Compression.RANS_ORDER0)
+_RANS_ORDER1_WIRE = int(Compression.RANS_ORDER1)
+_BASE_PACK_WIRE = int(Compression.BASE_PACK)
+
+
+def _apply_wire_codec(plaintext: bytes, codec: int) -> bytes:
+    """Encode ``plaintext`` with the wire codec id (NONE → identity)."""
+    if codec == 0:  # NONE
+        return plaintext
+    if codec == _RANS_ORDER0_WIRE:
+        from ..codecs import rans
+        return rans.encode(plaintext, order=0)
+    if codec == _RANS_ORDER1_WIRE:
+        from ..codecs import rans
+        return rans.encode(plaintext, order=1)
+    if codec == _BASE_PACK_WIRE:
+        from ..codecs import base_pack
+        return base_pack.encode(plaintext)
+    # Other compression ids (zlib for MS, etc.) take the existing
+    # paths in this module; this helper is genomic-channel-only.
+    raise NotImplementedError(
+        f"_apply_wire_codec: codec id {codec} not supported for genomic UINT8"
+    )
+
+
+def _decode_wire_codec(payload: bytes, codec: int) -> bytes:
+    """Decode a payload encoded by :func:`_apply_wire_codec`."""
+    if codec == 0:
+        return payload
+    if codec == _RANS_ORDER0_WIRE or codec == _RANS_ORDER1_WIRE:
+        from ..codecs import rans
+        return rans.decode(payload)
+    if codec == _BASE_PACK_WIRE:
+        from ..codecs import base_pack
+        return base_pack.decode(payload)
+    raise NotImplementedError(
+        f"_decode_wire_codec: codec id {codec} not supported for genomic UINT8"
+    )
 
 
 # ---------------------------------------------------------- TransportWriter
@@ -290,6 +333,12 @@ class TransportWriter:
         string channels (one per AU). mate_position + template_length
         live in the M90.9 mate extension at the end of the AU genomic
         suffix.
+
+        M90.10: when the source channel carries an ``@compression``
+        attribute naming an M86 codec (RANS_ORDER0/1, BASE_PACK), the
+        writer re-encodes each per-AU slice with the same codec on
+        the wire. The wire ChannelData.compression byte tells the
+        reader which decoder to dispatch.
         """
         index = run.index
         n_reads = index.count
@@ -310,6 +359,24 @@ class TransportWriter:
         precision_uint8 = int(Precision.UINT8) & 0xFF
         compression_none = int(Compression.NONE) & 0xFF
         acq_mode = int(run.acquisition_mode) & 0xFF
+        # M90.10: probe source @compression on sequences + qualities
+        # so the wire codec mirrors the file's codec choice. The
+        # string channels (cigar/read_name/mate_chromosome) always
+        # ride uncompressed — they're per-AU short strings where
+        # codec framing overhead would dominate.
+        seq_codec = qual_codec = compression_none
+        try:
+            sig_group = run.group.open_group("signal_channels")
+            if sig_group.has_child("sequences"):
+                seq_ds = sig_group.open_dataset("sequences")
+                seq_codec = (io_attr_int(seq_ds, "compression",
+                                            default=0) or 0) & 0xFF
+            if sig_group.has_child("qualities"):
+                qual_ds = sig_group.open_dataset("qualities")
+                qual_codec = (io_attr_int(qual_ds, "compression",
+                                             default=0) or 0) & 0xFF
+        except Exception:
+            seq_codec = qual_codec = compression_none
 
         for i in range(n_reads):
             start = int(offsets[i])
@@ -317,6 +384,10 @@ class TransportWriter:
             stop = start + length
             seq_bytes = seq_full[start:stop]
             qual_bytes = qual_full[start:stop]
+            # M90.10: re-encode per-AU slice with the M86 codec when
+            # the source channel had an @compression attribute set.
+            seq_payload = _apply_wire_codec(bytes(seq_bytes), seq_codec)
+            qual_payload = _apply_wire_codec(bytes(qual_bytes), qual_codec)
             # M90.9: pull the per-read compound fields off the lazy
             # AlignedRead. read_name / cigar / mate_* go on the wire
             # so a transport round-trip preserves SAM-level fidelity.
@@ -326,9 +397,9 @@ class TransportWriter:
             mate_chr_bytes = (r.mate_chromosome or "").encode("utf-8")
             channels = [
                 ChannelData("sequences", precision_uint8,
-                            compression_none, length, seq_bytes),
+                            seq_codec, length, seq_payload),
                 ChannelData("qualities", precision_uint8,
-                            compression_none, length, qual_bytes),
+                            qual_codec, length, qual_payload),
                 ChannelData("cigar", precision_uint8,
                             compression_none, len(cigar_bytes), cigar_bytes),
                 ChannelData("read_name", precision_uint8,
@@ -845,26 +916,24 @@ def _ingest_genomic_access_unit_bytes(gd: dict, payload: bytes) -> None:
                 f"genomic channel precision {ch.precision} not yet supported "
                 "(UINT8 only in M89.2)"
             )
-        if ch.compression != int(Compression.NONE):
-            raise NotImplementedError(
-                f"genomic channel compression {ch.compression} not yet supported "
-                "(NONE only in M89.2)"
-            )
+        # M90.10: dispatch on wire compression byte (NONE / RANS_*
+        # / BASE_PACK). See _decode_wire_codec.
+        decoded = _decode_wire_codec(bytes(ch.data), int(ch.compression))
         if ch.name == "sequences":
-            arr = np.frombuffer(ch.data, dtype=np.uint8).copy()
+            arr = np.frombuffer(decoded, dtype=np.uint8).copy()
             gd["sequences_chunks"].append(arr)
             length = len(arr)
         elif ch.name == "qualities":
-            arr = np.frombuffer(ch.data, dtype=np.uint8).copy()
+            arr = np.frombuffer(decoded, dtype=np.uint8).copy()
             gd["qualities_chunks"].append(arr)
             if length == 0:
                 length = len(arr)
         elif ch.name == "cigar":
-            cigar_str = bytes(ch.data).decode("utf-8")
+            cigar_str = decoded.decode("utf-8")
         elif ch.name == "read_name":
-            name_str = bytes(ch.data).decode("utf-8")
+            name_str = decoded.decode("utf-8")
         elif ch.name == "mate_chromosome":
-            mate_chr_str = bytes(ch.data).decode("utf-8")
+            mate_chr_str = decoded.decode("utf-8")
     gd["cigars"].append(cigar_str)
     gd["read_names"].append(name_str)
     gd["mate_chromosomes"].append(mate_chr_str)
