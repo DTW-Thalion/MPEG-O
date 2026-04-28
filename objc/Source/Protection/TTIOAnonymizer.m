@@ -22,12 +22,28 @@
 // Forward-declare the private class method on TTIOSpectralDataset
 // that writes one genomic_runs subtree via the HDF5 fast path.
 // Defined in TTIOSpectralDataset.m; not exposed in the public
-// header but callable from within the framework.
+// header but callable from within the framework. Used only by the
+// mixed MS+genomic legacy fallback below — the genomic-only path
+// (gap #10 cosmetic refactor) goes through writeMinimalToPath:
+// instead.
 @interface TTIOSpectralDataset (TTIOPrivateGenomicWrite)
 + (BOOL)writeGenomicRun:(TTIOWrittenGenomicRun *)run
                   toGroup:(TTIOHDF5Group *)group
                      name:(NSString *)name
                     error:(NSError **)error;
+@end
+
+// Forward-declare the private helper for building transformed
+// genomic runs (without writing). Splits the original
+// _applyGenomicPolicies: into "build" + "write" so the genomic-only
+// path can hand the dict straight to writeMinimalToPath:.
+@interface TTIOAnonymizer ()
++ (NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)
+    _buildTransformedGenomicRuns:(TTIOSpectralDataset *)source
+                            policy:(TTIOAnonymizationPolicy *)policy
+                            result:(TTIOAnonymizationResult *)result
+                       appliedList:(NSMutableArray<NSString *> *)applied
+                             error:(NSError **)error;
 @end
 
 #pragma mark - Policy
@@ -87,6 +103,100 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
     for (NSUInteger i = 0; i < n; i++) {
         arr[i] = round(arr[i] * scale) / scale;
     }
+}
+
+// M90.13 — CIGAR reference span. Returns the number of reference
+// bases consumed by the alignment described by ``cigar``. Ops that
+// consume reference: M, D, N, =, X. Ops that don't: I, S, H, P. A
+// return of 0 means "unknown" (empty / "*" / non-parseable) and the
+// caller falls back to the M90.3 position-only check.
+static int64_t cigarRefSpan(NSString *cigar)
+{
+    if (cigar == nil || cigar.length == 0) return 0;
+    if ([cigar isEqualToString:@"*"]) return 0;
+    int64_t total = 0;
+    int64_t accum = 0;
+    BOOL haveDigits = NO;
+    NSUInteger n = cigar.length;
+    for (NSUInteger i = 0; i < n; i++) {
+        unichar ch = [cigar characterAtIndex:i];
+        if (ch >= '0' && ch <= '9') {
+            accum = accum * 10 + (int64_t)(ch - '0');
+            haveDigits = YES;
+        } else {
+            if (!haveDigits) return 0;  // op without count = malformed
+            if (ch == 'M' || ch == 'D' || ch == 'N'
+                || ch == '=' || ch == 'X') {
+                total += accum;
+            } else if (ch == 'I' || ch == 'S' || ch == 'H' || ch == 'P') {
+                // Don't consume reference bases.
+            } else {
+                return 0;  // unknown op — bail out
+            }
+            accum = 0;
+            haveDigits = NO;
+        }
+    }
+    if (haveDigits) return 0;  // trailing digits with no op = malformed
+    return total;
+}
+
+// M90.14 — xoshiro256** PRNG. Self-contained; seeded by splitmix64
+// from a single 64-bit seed. Reproducible within ObjC: same seed →
+// same byte sequence. NOT byte-equal to numpy's PCG64 (cross-
+// language byte parity is not a goal of M90.14 — that's a follow-up).
+typedef struct {
+    uint64_t s[4];
+} TTIORngState;
+
+static uint64_t splitmix64Next(uint64_t *state)
+{
+    uint64_t z = (*state += 0x9E3779B97F4A7C15ULL);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31);
+}
+
+static void ttioRngSeed(TTIORngState *r, uint64_t seed)
+{
+    uint64_t sm = seed;
+    r->s[0] = splitmix64Next(&sm);
+    r->s[1] = splitmix64Next(&sm);
+    r->s[2] = splitmix64Next(&sm);
+    r->s[3] = splitmix64Next(&sm);
+}
+
+static uint64_t ttioRngNextU64(TTIORngState *r)
+{
+    // xoshiro256**
+    uint64_t result = r->s[1] * 5;
+    result = ((result << 7) | (result >> (64 - 7))) * 9;
+    uint64_t t = r->s[1] << 17;
+    r->s[2] ^= r->s[0];
+    r->s[3] ^= r->s[1];
+    r->s[1] ^= r->s[2];
+    r->s[0] ^= r->s[3];
+    r->s[2] ^= t;
+    r->s[3] = (r->s[3] << 45) | (r->s[3] >> (64 - 45));
+    return result;
+}
+
+// Draw a uniform integer in [0, bound) via Lemire's debiased method.
+// Bound must be > 0.
+static uint32_t ttioRngNextBoundedU32(TTIORngState *r, uint32_t bound)
+{
+    uint64_t x = (uint32_t)(ttioRngNextU64(r) >> 32);
+    uint64_t m = x * (uint64_t)bound;
+    uint32_t l = (uint32_t)m;
+    if (l < bound) {
+        uint32_t t = (uint32_t)(-(int32_t)bound) % bound;
+        while (l < t) {
+            x = (uint32_t)(ttioRngNextU64(r) >> 32);
+            m = x * (uint64_t)bound;
+            l = (uint32_t)m;
+        }
+    }
+    return (uint32_t)(m >> 32);
 }
 
 #pragma mark - Anonymizer
@@ -247,7 +357,50 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
                    outputRefs:@[outputPath]
                 timestampUnix:(int64_t)time(NULL)];
 
-    // Write output
+    // Gap #10 cosmetic refactor: when the source carries genomic
+    // runs but zero MS/NMR runs (the common M90.3+ anonymisation
+    // case), thread the transformed WrittenGenomicRun dict through
+    // writeMinimalToPath: in a single write — no post-write open-RW
+    // append dance. Mirrors Python's anonymize() flow which builds
+    // both new_runs + new_genomic_runs and hands them to
+    // SpectralDataset.write_minimal in one call.
+    BOOL genomicOnly = (newRuns.count == 0)
+                        && (source.genomicRuns.count > 0);
+
+    if (genomicOnly) {
+        NSMutableArray<NSString *> *applied =
+            [NSMutableArray arrayWithArray:result.policiesApplied ?: @[]];
+        NSDictionary<NSString *, TTIOWrittenGenomicRun *> *transformed =
+            [self _buildTransformedGenomicRuns:source
+                                          policy:policy
+                                          result:result
+                                     appliedList:applied
+                                           error:error];
+        if (transformed == nil) return nil;
+        result.policiesApplied = applied;
+
+        if (![TTIOSpectralDataset
+                writeMinimalToPath:outputPath
+                              title:title
+                isaInvestigationId:source.isaInvestigationId
+                            msRuns:@{}
+                        genomicRuns:transformed
+                    identifications:source.identifications
+                    quantifications:source.quantifications
+                  provenanceRecords:@[prov]
+                              error:error]) {
+            return nil;
+        }
+        return result;
+    }
+
+    // Mixed MS+genomic or MS-only path — write MS via the
+    // TTIOSpectralDataset/TTIOMassSpectrum object graph, then (if
+    // needed) append genomic via the legacy reopen-RW helper. The
+    // legacy helper is retained here only because writeMinimalToPath
+    // requires TTIOWrittenRun for MS, and the policy path operates
+    // on TTIOAcquisitionRun-shaped data; converting that mid-flight
+    // is a larger surgery than gap #10 calls for.
     TTIOSpectralDataset *out =
         [[TTIOSpectralDataset alloc]
             initWithTitle:title
@@ -261,11 +414,6 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
 
     if (![out writeToFilePath:outputPath error:error]) return nil;
 
-    // M90.3 — apply genomic policies and append /study/genomic_runs/
-    // to the just-written file. Source.genomicRuns is iterated lazily
-    // (M82 reader); we materialise reads into TTIOWrittenGenomicRun
-    // objects with the requested transforms applied, then write each
-    // subtree under the existing /study group via the HDF5 fast path.
     if (source.genomicRuns.count > 0) {
         if (![self _applyGenomicPolicies:source
                                   output:outputPath
@@ -281,6 +429,22 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
 
 #pragma mark - M90.3 Genomic policies
 
++ (NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)
+    _buildTransformedGenomicRuns:(TTIOSpectralDataset *)source
+                            policy:(TTIOAnonymizationPolicy *)policy
+                            result:(TTIOAnonymizationResult *)result
+                       appliedList:(NSMutableArray<NSString *> *)applied
+                             error:(NSError **)error
+{
+    NSDictionary *built =
+        [self _buildOrApplyGenomicPolicies:source
+                                       policy:policy
+                                       result:result
+                                  appliedList:applied
+                                        error:error];
+    return built;
+}
+
 + (BOOL)_applyGenomicPolicies:(TTIOSpectralDataset *)source
                        output:(NSString *)outputPath
                        policy:(TTIOAnonymizationPolicy *)policy
@@ -293,7 +457,27 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
     // (likely an immutable NSArray) into a mutable shadow.
     NSMutableArray<NSString *> *applied =
         [NSMutableArray arrayWithArray:result.policiesApplied ?: @[]];
+    NSDictionary<NSString *, TTIOWrittenGenomicRun *> *transformed =
+        [self _buildOrApplyGenomicPolicies:source
+                                       policy:policy
+                                       result:result
+                                  appliedList:applied
+                                        error:error];
+    if (transformed == nil) return NO;
+    return [self _appendGenomicTransformedToFile:outputPath
+                                       transformed:transformed
+                                            applied:applied
+                                             result:result
+                                              error:error];
+}
 
++ (NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)
+    _buildOrApplyGenomicPolicies:(TTIOSpectralDataset *)source
+                            policy:(TTIOAnonymizationPolicy *)policy
+                            result:(TTIOAnonymizationResult *)result
+                       appliedList:(NSMutableArray<NSString *> *)applied
+                             error:(NSError **)error
+{
     NSArray<NSString *> *runNames =
         [[source.genomicRuns allKeys] sortedArrayUsingSelector:@selector(compare:)];
 
@@ -357,11 +541,29 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
 
         // ── randomise_qualities ──────────────────────────────────
         if (policy.randomiseQualities) {
-            uint8_t k = policy.randomiseQualitiesConstant;
-            for (NSUInteger i = 0; i < n; i++) {
-                NSMutableData *q = qualitiesList[i];
-                uint8_t *bytes = (uint8_t *)q.mutableBytes;
-                memset(bytes, k, q.length);
+            if (policy.randomiseQualitiesSeed != nil) {
+                // M90.14: seeded RNG path. Range [0, 93] matches the
+                // SAM spec valid Phred range. Reproducible within
+                // ObjC; cross-language byte equality is NOT a goal.
+                TTIORngState rng;
+                uint64_t seed =
+                    (uint64_t)[policy.randomiseQualitiesSeed unsignedLongLongValue];
+                ttioRngSeed(&rng, seed);
+                for (NSUInteger i = 0; i < n; i++) {
+                    NSMutableData *q = qualitiesList[i];
+                    uint8_t *bytes = (uint8_t *)q.mutableBytes;
+                    NSUInteger qlen = q.length;
+                    for (NSUInteger j = 0; j < qlen; j++) {
+                        bytes[j] = (uint8_t)ttioRngNextBoundedU32(&rng, 94);
+                    }
+                }
+            } else {
+                uint8_t k = policy.randomiseQualitiesConstant;
+                for (NSUInteger i = 0; i < n; i++) {
+                    NSMutableData *q = qualitiesList[i];
+                    uint8_t *bytes = (uint8_t *)q.mutableBytes;
+                    memset(bytes, k, q.length);
+                }
             }
             result.qualitiesRandomised += n;
             if (![applied containsObject:@"randomise_qualities"]) {
@@ -369,30 +571,43 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
             }
         }
 
-        // ── mask_regions ─────────────────────────────────────────
+        // ── mask_regions (M90.13: SAM-overlap by CIGAR walk) ─────
         if (policy.maskRegions.count > 0) {
-            for (NSUInteger i = 0; i < n; i++) {
-                NSString *chromI = [gr.index chromosomeAt:i];
-                int64_t posI = [gr.index positionAt:i];
-                BOOL hit = NO;
-                for (NSArray *region in policy.maskRegions) {
-                    if (region.count != 3) continue;
-                    NSString *rChr = region[0];
-                    int64_t rStart = [region[1] longLongValue];
-                    int64_t rEnd   = [region[2] longLongValue];
-                    if ([chromI isEqualToString:rChr]
-                        && posI >= rStart && posI <= rEnd) {
-                        hit = YES;
-                        break;
+            NSMutableIndexSet *alreadyMasked = [NSMutableIndexSet indexSet];
+            for (NSArray *region in policy.maskRegions) {
+                if (region.count != 3) continue;
+                NSString *rChr = region[0];
+                int64_t rStart = [region[1] longLongValue];
+                int64_t rEnd   = [region[2] longLongValue];
+                for (NSUInteger i = 0; i < n; i++) {
+                    if ([alreadyMasked containsIndex:i]) continue;
+                    NSString *chromI = [gr.index chromosomeAt:i];
+                    if (![chromI isEqualToString:rChr]) continue;
+                    int64_t posI = [gr.index positionAt:i];
+                    int64_t span = cigarRefSpan(cigars[i]);
+                    BOOL hit = NO;
+                    if (span > 0) {
+                        // SAM-overlap: read covers [pos, pos+span-1].
+                        int64_t readEnd = posI + span - 1;
+                        if (!(readEnd < rStart || posI > rEnd)) {
+                            hit = YES;
+                        }
+                    } else {
+                        // Empty / unparseable CIGAR — M90.3 fallback.
+                        if (posI >= rStart && posI <= rEnd) {
+                            hit = YES;
+                        }
                     }
-                }
-                if (hit) {
-                    NSMutableData *zeroSeq =
-                        [NSMutableData dataWithLength:[sequencesList[i] length]];
-                    [sequencesList replaceObjectAtIndex:i withObject:zeroSeq];
-                    NSMutableData *q = qualitiesList[i];
-                    memset(q.mutableBytes, 0, q.length);
-                    result.readsInMaskedRegion += 1;
+                    if (hit) {
+                        NSMutableData *zeroSeq = [NSMutableData
+                            dataWithLength:[sequencesList[i] length]];
+                        [sequencesList replaceObjectAtIndex:i
+                                                  withObject:zeroSeq];
+                        NSMutableData *q = qualitiesList[i];
+                        memset(q.mutableBytes, 0, q.length);
+                        result.readsInMaskedRegion += 1;
+                        [alreadyMasked addIndex:i];
+                    }
                 }
             }
             if (![applied containsObject:@"mask_regions"]) {
@@ -463,7 +678,19 @@ static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
         transformed[runName] = written;
     }
 
-    // Open the just-written file and append /study/genomic_runs/.
+    return transformed;
+}
+
+// Mixed-MS+genomic legacy fallback: open the just-written MS-only
+// file RW and append /study/genomic_runs/. Used only when the source
+// has BOTH MS and genomic runs; the genomic-only path handles
+// gap #10 by going through writeMinimalToPath: in a single shot.
++ (BOOL)_appendGenomicTransformedToFile:(NSString *)outputPath
+                            transformed:(NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)transformed
+                                applied:(NSMutableArray<NSString *> *)applied
+                                 result:(TTIOAnonymizationResult *)result
+                                  error:(NSError **)error
+{
     TTIOHDF5File *file =
         [TTIOHDF5File openAtPath:outputPath error:error];
     if (!file) return NO;

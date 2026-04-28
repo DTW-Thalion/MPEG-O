@@ -59,6 +59,13 @@ static void appendU32LE(NSMutableData *buf, uint32_t v)
     [buf appendBytes:b length:4];
 }
 
+// M90.12: MPAD v1 magic + per-entry dtype codes. Mirrors the
+// Python ``ttio.tools.per_au_cli`` constants.
+static const uint8_t kMpadDtypeFloat32 = 0;
+static const uint8_t kMpadDtypeFloat64 = 1;
+static const uint8_t kMpadDtypeUInt8   = 6;
+static const uint8_t kMpadDtypeBytes   = 0xFF;
+
 static NSString *jsonDouble(double d)
 {
     if (d == floor(d) && !isinf(d)) {
@@ -130,33 +137,56 @@ static int cmdDecrypt(int argc, const char **argv)
         return 1;
     }
 
-    NSMutableDictionary<NSString *, NSData *> *entries = [NSMutableDictionary dictionary];
+    // M90.12: each entry now carries an explicit dtype code so
+    // genomic uint8 channels (sequences/qualities) stay 1 B/element
+    // instead of being inflated 8x by a pre-cast to float64. MS
+    // channels remain float64 (dtype code 1); the synthesised
+    // au_headers JSON entry is opaque bytes (0xFF).
+    NSMutableDictionary<NSString *, NSArray *> *entries =
+        [NSMutableDictionary dictionary];
     for (NSString *runName in plain) {
         NSDictionary *run = plain[runName];
         for (NSString *key in run) {
             NSString *outKey;
             NSData *bytes;
+            uint8_t dtypeCode;
             if ([key isEqualToString:@"__au_headers__"]) {
                 outKey = [NSString stringWithFormat:@"%@__au_headers_json", runName];
                 bytes = [headersJson(run[key]) dataUsingEncoding:NSUTF8StringEncoding];
+                dtypeCode = kMpadDtypeBytes;
             } else {
                 outKey = [NSString stringWithFormat:@"%@__%@", runName, key];
-                bytes = run[key];   // NSData float64 LE
+                bytes = run[key];
+                // Genomic signal channels are uint8 (1 B/elem); MS
+                // channels are float64. The decryptFilePath: caller
+                // splits genomic_runs vs ms_runs structurally, and
+                // the only genomic channel names are "sequences" /
+                // "qualities" — match Python's _ndarray_to_mpad_entry
+                // dispatch by channel name.
+                if ([key isEqualToString:@"sequences"]
+                    || [key isEqualToString:@"qualities"]) {
+                    dtypeCode = kMpadDtypeUInt8;
+                } else {
+                    dtypeCode = kMpadDtypeFloat64;
+                }
             }
-            entries[outKey] = bytes;
+            entries[outKey] = @[@(dtypeCode), bytes];
         }
     }
 
     NSArray *sortedKeys =
         [entries.allKeys sortedArrayUsingSelector:@selector(compare:)];
     NSMutableData *buf = [NSMutableData data];
-    [buf appendBytes:"MPAD" length:4];
+    [buf appendBytes:"MPA1" length:4];   // M90.12: bumped from "MPAD"
     appendU32LE(buf, (uint32_t)sortedKeys.count);
     for (NSString *key in sortedKeys) {
         NSData *kb = [key dataUsingEncoding:NSUTF8StringEncoding];
         appendU16LE(buf, (uint16_t)kb.length);
         [buf appendData:kb];
-        NSData *v = entries[key];
+        NSArray *entry = entries[key];
+        uint8_t dtypeCode = (uint8_t)[entry[0] unsignedCharValue];
+        NSData *v = (NSData *)entry[1];
+        [buf appendBytes:&dtypeCode length:1];
         appendU32LE(buf, (uint32_t)v.length);
         [buf appendData:v];
     }

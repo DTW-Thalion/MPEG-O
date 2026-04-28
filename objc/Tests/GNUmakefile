@@ -77,6 +77,7 @@ TTIOTests_OBJC_FILES = \
 	TestM89GenomicTransport.m \
 	TestM90GenomicProtection.m \
 	TestM90Parity.m \
+	TestM90Final.m \
 	TestV4EdgeCases.m \
 	TestV8Hdf5Corruption.m \
 	TestC1ToolsCli.m \

@@ -106,13 +106,12 @@
  *
  *  Walks ``/study/genomic_runs/<runName>/signal_channels/{sequences,
  *  qualities}`` and ``/study/genomic_runs/<runName>/genomic_index/
- *  {offsets, lengths, positions, mapping_qualities, flags}`` and signs
- *  each existing dataset individually with HMAC-SHA256. The
- *  ``chromosomes`` compound is intentionally NOT signed (the
- *  canonical-bytes path for VL-string compounds is covered by the
- *  dataset-level routines but the run-level helper deliberately
- *  scopes to atomic numeric / uint8 channels for cross-language
- *  parity with the Python reference impl).
+ *  {offsets, lengths, positions, mapping_qualities, flags,
+ *  chromosomes}`` and signs each existing dataset individually with
+ *  HMAC-SHA256. M90.15: the ``chromosomes`` compound is now included
+ *  alongside the atomic columns — the canonical-bytes reader
+ *  serialises VL_STRING compound fields as u32_le(length) ||
+ *  utf-8_bytes so the chromosome signature matches Python.
  *
  *  Returns a dictionary mapping each signed sub-path
  *  (e.g. ``"signal_channels/sequences"``,

@@ -57,6 +57,17 @@
  *  randomiseQualities. Defaults to 30. */
 @property (nonatomic) uint8_t randomiseQualitiesConstant;
 
+/** M90.14: when set (non-nil NSNumber), randomiseQualities draws
+ *  per-byte Phred scores from a deterministic RNG seeded with this
+ *  64-bit value. Range is [0, 93] (SAM spec). Reproducible within
+ *  the ObjC implementation: same seed → same byte sequence. When
+ *  nil (default), the M90.3 constant-replacement path is used.
+ *
+ *  Cross-language byte equality with numpy's PCG64 is NOT a goal —
+ *  ObjC's RNG is a self-contained xoshiro256** so seeded outputs
+ *  are reproducible within ObjC only. */
+@property (nonatomic, copy, nullable) NSNumber *randomiseQualitiesSeed;
+
 /** A list of (chromosome, start, end) tuples; any read whose
  *  mapping position falls in any region has its sequence and
  *  qualities bytes zeroed (kept in the index so downstream tooling
