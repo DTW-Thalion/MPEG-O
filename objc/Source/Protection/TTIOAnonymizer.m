@@ -2,6 +2,7 @@
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOIdentification.h"
 #import "Dataset/TTIOProvenanceRecord.h"
+#import "Dataset/TTIOWrittenRun.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"
 #import "Run/TTIOSpectrumIndex.h"
@@ -19,24 +20,11 @@
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 
-// Forward-declare the private class method on TTIOSpectralDataset
-// that writes one genomic_runs subtree via the HDF5 fast path.
-// Defined in TTIOSpectralDataset.m; not exposed in the public
-// header but callable from within the framework. Used only by the
-// mixed MS+genomic legacy fallback below — the genomic-only path
-// (gap #10 cosmetic refactor) goes through writeMinimalToPath:
-// instead.
-@interface TTIOSpectralDataset (TTIOPrivateGenomicWrite)
-+ (BOOL)writeGenomicRun:(TTIOWrittenGenomicRun *)run
-                  toGroup:(TTIOHDF5Group *)group
-                     name:(NSString *)name
-                    error:(NSError **)error;
-@end
-
 // Forward-declare the private helper for building transformed
-// genomic runs (without writing). Splits the original
-// _applyGenomicPolicies: into "build" + "write" so the genomic-only
-// path can hand the dict straight to writeMinimalToPath:.
+// genomic runs (without writing). The unified write path threads
+// the resulting dict straight into ``writeMinimalToPath:msRuns:
+// genomicRuns:...`` alongside the MS dict — no per-modality
+// fallback writers.
 @interface TTIOAnonymizer ()
 + (NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)
     _buildTransformedGenomicRuns:(TTIOSpectralDataset *)source
@@ -85,16 +73,6 @@ static double *copyDoubleArray(TTIOSignalArray *arr)
     double *out = (double *)malloc(n * sizeof(double));
     memcpy(out, arr.buffer.bytes, n * sizeof(double));
     return out;
-}
-
-static TTIOSignalArray *arrayFromDoubles(double *buf, NSUInteger n)
-{
-    TTIOEncodingSpec *enc =
-        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
-                       compressionAlgorithm:TTIOCompressionZlib
-                                  byteOrder:TTIOByteOrderLittleEndian];
-    NSData *d = [NSData dataWithBytes:buf length:n * sizeof(double)];
-    return [[TTIOSignalArray alloc] initWithBuffer:d length:n encoding:enc axis:nil];
 }
 
 static void roundArray(double *arr, NSUInteger n, NSInteger decimals)
@@ -228,20 +206,43 @@ static uint32_t ttioRngNextBoundedU32(TTIORngState *r, uint32_t bound)
     // Rare metabolite lookup
     NSDictionary<NSString *, NSNumber *> *prevalence = policy.rareMetaboliteTable;
 
-    // Process each run
-    NSMutableDictionary<NSString *, TTIOAcquisitionRun *> *newRuns = [NSMutableDictionary dictionary];
-    NSArray<NSString *> *runNames = [[source.msRuns allKeys] sortedArrayUsingSelector:@selector(compare:)];
+    // Process each run. Build TTIOWrittenRun objects in-flight rather
+    // than TTIOAcquisitionRun + TTIOMassSpectrum object graphs: that
+    // lets the mixed MS+genomic write path below feed a single
+    // ``writeMinimalToPath:msRuns:genomicRuns:...`` call instead of
+    // the legacy ``writeToFilePath:`` + open-RW + append-genomic
+    // dance. Mirrors Python's ``anonymization.py`` flow which builds
+    // ``new_runs: dict[str, WrittenRun]`` and ``new_genomic_runs``
+    // up front and hands them to ``SpectralDataset.write_minimal`` in
+    // one shot.
+    NSMutableDictionary<NSString *, TTIOWrittenRun *> *newRuns =
+        [NSMutableDictionary dictionary];
+    NSArray<NSString *> *runNames =
+        [[source.msRuns allKeys] sortedArrayUsingSelector:@selector(compare:)];
 
     for (NSString *runName in runNames) {
         TTIOAcquisitionRun *run = source.msRuns[runName];
         NSUInteger nSpectra = run.spectrumIndex.count;
 
-        NSMutableArray *keptSpectra = [NSMutableArray array];
+        // Concatenated channel buffers + parallel index columns.
+        NSMutableData *mzBufConcat = [NSMutableData data];
+        NSMutableData *intBufConcat = [NSMutableData data];
+        NSMutableData *offsets = [NSMutableData data];
+        NSMutableData *lengths = [NSMutableData data];
+        NSMutableData *rts = [NSMutableData data];
+        NSMutableData *mlsBuf = [NSMutableData data];
+        NSMutableData *polsBuf = [NSMutableData data];
+        NSMutableData *pmzsBuf = [NSMutableData data];
+        NSMutableData *pcsBuf = [NSMutableData data];
+        NSMutableData *bpisBuf = [NSMutableData data];
+        int64_t cursor = 0;
+        NSUInteger keptCount = 0;
 
         for (NSUInteger i = 0; i < nSpectra; i++) {
             // SAAV redaction
             if (policy.redactSAAVSpectra) {
-                NSString *key = [NSString stringWithFormat:@"%@:%lu", runName, (unsigned long)i];
+                NSString *key = [NSString stringWithFormat:@"%@:%lu",
+                                 runName, (unsigned long)i];
                 if ([saavKeys containsObject:key]) {
                     result.spectraRedacted++;
                     continue;
@@ -252,73 +253,128 @@ static uint32_t ttioRngNextBoundedU32(TTIORngState *r, uint32_t bound)
             id specObj = [run spectrumAtIndex:i error:&specErr];
             if (!specObj) continue;
 
-            if ([specObj isKindOfClass:[TTIOMassSpectrum class]]) {
-                TTIOMassSpectrum *ms = (TTIOMassSpectrum *)specObj;
-                NSUInteger n = ms.mzArray.length;
-                double *mzBuf = copyDoubleArray(ms.mzArray);
-                double *intBuf = copyDoubleArray(ms.intensityArray);
+            // The MS-only object path: NMR / non-mass spectra are
+            // silently skipped here, matching the pre-refactor
+            // behaviour. Extending the anonymiser to NMR is a separate
+            // workstream tracked by the python reference impl's
+            // chemical-shift coarsening tests.
+            if (![specObj isKindOfClass:[TTIOMassSpectrum class]]) continue;
 
-                if (policy.coarsenMzDecimals >= 0) {
-                    roundArray(mzBuf, n, policy.coarsenMzDecimals);
-                    result.mzValuesCoarsened += n;
-                }
+            TTIOMassSpectrum *ms = (TTIOMassSpectrum *)specObj;
+            NSUInteger n = ms.mzArray.length;
+            double *mzBuf = copyDoubleArray(ms.mzArray);
+            double *intBuf = copyDoubleArray(ms.intensityArray);
 
-                if (policy.maskIntensityBelowQuantile > 0.0) {
-                    double sorted[n];
-                    memcpy(sorted, intBuf, n * sizeof(double));
-                    for (NSUInteger a = 0; a < n; a++)
-                        for (NSUInteger b = a + 1; b < n; b++)
-                            if (sorted[a] > sorted[b]) {
-                                double tmp = sorted[a]; sorted[a] = sorted[b]; sorted[b] = tmp;
-                            }
-                    NSUInteger qIdx = (NSUInteger)(policy.maskIntensityBelowQuantile * (double)(n - 1));
-                    double threshold = sorted[qIdx];
-                    for (NSUInteger j = 0; j < n; j++) {
-                        if (intBuf[j] < threshold) {
-                            intBuf[j] = 0.0;
-                            result.intensitiesZeroed++;
-                        }
-                    }
-                }
-
-                if (policy.maskRareMetabolites && prevalence) {
-                    for (TTIOIdentification *ident in identifications) {
-                        if (![ident.runName isEqualToString:runName]) continue;
-                        if (ident.spectrumIndex != i) continue;
-                        NSNumber *prev = prevalence[ident.chemicalEntity];
-                        if (prev && prev.doubleValue < policy.rareMetaboliteThreshold) {
-                            memset(intBuf, 0, n * sizeof(double));
-                            result.metabolitesMasked++;
-                            break;
-                        }
-                    }
-                }
-
-                TTIOSignalArray *newMz = arrayFromDoubles(mzBuf, n);
-                TTIOSignalArray *newInt = arrayFromDoubles(intBuf, n);
-                free(mzBuf); free(intBuf);
-
-                TTIOMassSpectrum *newSpec =
-                    [[TTIOMassSpectrum alloc] initWithMzArray:newMz
-                                               intensityArray:newInt
-                                                      msLevel:ms.msLevel
-                                                     polarity:ms.polarity
-                                                   scanWindow:nil
-                                                indexPosition:keptSpectra.count
-                                              scanTimeSeconds:ms.scanTimeSeconds
-                                                  precursorMz:ms.precursorMz
-                                              precursorCharge:ms.precursorCharge
-                                                        error:NULL];
-                if (newSpec) [keptSpectra addObject:newSpec];
+            if (policy.coarsenMzDecimals >= 0) {
+                roundArray(mzBuf, n, policy.coarsenMzDecimals);
+                result.mzValuesCoarsened += n;
             }
+
+            if (policy.maskIntensityBelowQuantile > 0.0) {
+                double sorted[n];
+                memcpy(sorted, intBuf, n * sizeof(double));
+                for (NSUInteger a = 0; a < n; a++)
+                    for (NSUInteger b = a + 1; b < n; b++)
+                        if (sorted[a] > sorted[b]) {
+                            double tmp = sorted[a];
+                            sorted[a] = sorted[b];
+                            sorted[b] = tmp;
+                        }
+                NSUInteger qIdx =
+                    (NSUInteger)(policy.maskIntensityBelowQuantile * (double)(n - 1));
+                double threshold = sorted[qIdx];
+                for (NSUInteger j = 0; j < n; j++) {
+                    if (intBuf[j] < threshold) {
+                        intBuf[j] = 0.0;
+                        result.intensitiesZeroed++;
+                    }
+                }
+            }
+
+            if (policy.maskRareMetabolites && prevalence) {
+                for (TTIOIdentification *ident in identifications) {
+                    if (![ident.runName isEqualToString:runName]) continue;
+                    if (ident.spectrumIndex != i) continue;
+                    NSNumber *prev = prevalence[ident.chemicalEntity];
+                    if (prev && prev.doubleValue < policy.rareMetaboliteThreshold) {
+                        memset(intBuf, 0, n * sizeof(double));
+                        result.metabolitesMasked++;
+                        break;
+                    }
+                }
+            }
+
+            // Recompute base peak intensity from the (possibly
+            // masked) intensity buffer so anonymised files don't
+            // carry stale base-peak metadata that contradicts the
+            // signal channel. Mirrors Python which copies it from
+            // the source index column unchanged; using the
+            // post-mask max keeps the field consistent under
+            // intensity-zero masking.
+            double bpi = 0.0;
+            for (NSUInteger j = 0; j < n; j++) {
+                if (intBuf[j] > bpi) bpi = intBuf[j];
+            }
+
+            // Append this spectrum's transformed buffers to the
+            // run-level concatenated channel data and parallel
+            // per-spectrum metadata columns.
+            [mzBufConcat appendBytes:mzBuf length:n * sizeof(double)];
+            [intBufConcat appendBytes:intBuf length:n * sizeof(double)];
+            free(mzBuf); free(intBuf);
+
+            int64_t off = cursor;
+            uint32_t len32 = (uint32_t)n;
+            double rt = ms.scanTimeSeconds;
+            int32_t mlv = (int32_t)ms.msLevel;
+            int32_t pol = (int32_t)ms.polarity;
+            double pmz = ms.precursorMz;
+            int32_t pc = (int32_t)ms.precursorCharge;
+
+            [offsets appendBytes:&off length:sizeof(off)];
+            [lengths appendBytes:&len32 length:sizeof(len32)];
+            [rts appendBytes:&rt length:sizeof(rt)];
+            [mlsBuf appendBytes:&mlv length:sizeof(mlv)];
+            [polsBuf appendBytes:&pol length:sizeof(pol)];
+            [pmzsBuf appendBytes:&pmz length:sizeof(pmz)];
+            [pcsBuf appendBytes:&pc length:sizeof(pc)];
+            [bpisBuf appendBytes:&bpi length:sizeof(bpi)];
+
+            cursor += (int64_t)n;
+            keptCount++;
         }
 
-        TTIOAcquisitionRun *newRun =
-            [[TTIOAcquisitionRun alloc] initWithSpectra:keptSpectra
-                                          chromatograms:run.chromatograms
-                                        acquisitionMode:run.acquisitionMode
-                                       instrumentConfig:run.instrumentConfig];
+        // Use the source run's spectrum class so NMR-shape runs
+        // (although currently skipped above) at least carry the
+        // right class string when downstream NMR support lands.
+        NSString *spectrumClass = run.spectrumClassName ?: @"TTIOMassSpectrum";
+
+        TTIOWrittenRun *newRun = [[TTIOWrittenRun alloc]
+            initWithSpectrumClassName:spectrumClass
+                      acquisitionMode:(int64_t)run.acquisitionMode
+                          channelData:@{@"mz": mzBufConcat,
+                                        @"intensity": intBufConcat}
+                              offsets:offsets
+                              lengths:lengths
+                       retentionTimes:rts
+                             msLevels:mlsBuf
+                           polarities:polsBuf
+                         precursorMzs:pmzsBuf
+                     precursorCharges:pcsBuf
+                  basePeakIntensities:bpisBuf];
+        if (run.nucleusType.length > 0) {
+            newRun.nucleusType = run.nucleusType;
+        }
+        // Carry per-run provenance forward so the anonymised file's
+        // MS run keeps its history (now that TTIOWrittenRun has the
+        // ``provenanceRecords`` field — the deferred parity gap was
+        // closed in the same workstream as this refactor).
+        NSArray<TTIOProvenanceRecord *> *srcChain = [run provenanceChain];
+        if (srcChain.count > 0) {
+            newRun.provenanceRecords = srcChain;
+        }
         newRuns[runName] = newRun;
+        (void)keptCount;
     }
 
     // Track which policies fired
@@ -357,71 +413,43 @@ static uint32_t ttioRngNextBoundedU32(TTIORngState *r, uint32_t bound)
                    outputRefs:@[outputPath]
                 timestampUnix:(int64_t)time(NULL)];
 
-    // Gap #10 cosmetic refactor: when the source carries genomic
-    // runs but zero MS/NMR runs (the common M90.3+ anonymisation
-    // case), thread the transformed WrittenGenomicRun dict through
-    // writeMinimalToPath: in a single write — no post-write open-RW
-    // append dance. Mirrors Python's anonymize() flow which builds
-    // both new_runs + new_genomic_runs and hands them to
-    // SpectralDataset.write_minimal in one call.
-    BOOL genomicOnly = (newRuns.count == 0)
-                        && (source.genomicRuns.count > 0);
-
-    if (genomicOnly) {
-        NSMutableArray<NSString *> *applied =
-            [NSMutableArray arrayWithArray:result.policiesApplied ?: @[]];
-        NSDictionary<NSString *, TTIOWrittenGenomicRun *> *transformed =
+    // Single unified write path: build the transformed genomic runs
+    // (if any) and hand both ms+genomic dicts to
+    // ``writeMinimalToPath:msRuns:genomicRuns:...`` in one call.
+    // Replaces the pre-refactor split between a "genomic-only" fast
+    // path through writeMinimalToPath: and a "mixed MS+genomic"
+    // legacy fallback that wrote MS via writeToFilePath: then
+    // re-opened the file RW to append /study/genomic_runs/. Mirrors
+    // Python's ``anonymization.anonymize()`` flow which always feeds
+    // ``SpectralDataset.write_minimal(..., runs=new_runs,
+    // genomic_runs=new_genomic_runs)`` regardless of which
+    // modalities are populated.
+    NSMutableArray<NSString *> *applied =
+        [NSMutableArray arrayWithArray:result.policiesApplied ?: @[]];
+    NSDictionary<NSString *, TTIOWrittenGenomicRun *> *transformedGenomic =
+        @{};
+    if (source.genomicRuns.count > 0) {
+        transformedGenomic =
             [self _buildTransformedGenomicRuns:source
                                           policy:policy
                                           result:result
                                      appliedList:applied
                                            error:error];
-        if (transformed == nil) return nil;
+        if (transformedGenomic == nil) return nil;
         result.policiesApplied = applied;
-
-        if (![TTIOSpectralDataset
-                writeMinimalToPath:outputPath
-                              title:title
-                isaInvestigationId:source.isaInvestigationId
-                            msRuns:@{}
-                        genomicRuns:transformed
-                    identifications:source.identifications
-                    quantifications:source.quantifications
-                  provenanceRecords:@[prov]
-                              error:error]) {
-            return nil;
-        }
-        return result;
     }
 
-    // Mixed MS+genomic or MS-only path — write MS via the
-    // TTIOSpectralDataset/TTIOMassSpectrum object graph, then (if
-    // needed) append genomic via the legacy reopen-RW helper. The
-    // legacy helper is retained here only because writeMinimalToPath
-    // requires TTIOWrittenRun for MS, and the policy path operates
-    // on TTIOAcquisitionRun-shaped data; converting that mid-flight
-    // is a larger surgery than gap #10 calls for.
-    TTIOSpectralDataset *out =
-        [[TTIOSpectralDataset alloc]
-            initWithTitle:title
-       isaInvestigationId:source.isaInvestigationId
-                   msRuns:newRuns
-                  nmrRuns:@{}
-          identifications:source.identifications
-          quantifications:source.quantifications
-        provenanceRecords:@[prov]
-              transitions:nil];
-
-    if (![out writeToFilePath:outputPath error:error]) return nil;
-
-    if (source.genomicRuns.count > 0) {
-        if (![self _applyGenomicPolicies:source
-                                  output:outputPath
-                                  policy:policy
-                                  result:result
-                                   error:error]) {
-            return nil;
-        }
+    if (![TTIOSpectralDataset
+            writeMinimalToPath:outputPath
+                          title:title
+            isaInvestigationId:source.isaInvestigationId
+                        msRuns:newRuns
+                    genomicRuns:transformedGenomic
+                identifications:source.identifications
+                quantifications:source.quantifications
+              provenanceRecords:@[prov]
+                          error:error]) {
+        return nil;
     }
     return result;
 }
@@ -443,32 +471,6 @@ static uint32_t ttioRngNextBoundedU32(TTIORngState *r, uint32_t bound)
                                   appliedList:applied
                                         error:error];
     return built;
-}
-
-+ (BOOL)_applyGenomicPolicies:(TTIOSpectralDataset *)source
-                       output:(NSString *)outputPath
-                       policy:(TTIOAnonymizationPolicy *)policy
-                       result:(TTIOAnonymizationResult *)result
-                        error:(NSError **)error
-{
-    // We need a mutable copy of the appliedPolicies list to track
-    // M90.3 policy firings — the result property is `copy` so we
-    // can't mutate it in place. Take ownership of the existing list
-    // (likely an immutable NSArray) into a mutable shadow.
-    NSMutableArray<NSString *> *applied =
-        [NSMutableArray arrayWithArray:result.policiesApplied ?: @[]];
-    NSDictionary<NSString *, TTIOWrittenGenomicRun *> *transformed =
-        [self _buildOrApplyGenomicPolicies:source
-                                       policy:policy
-                                       result:result
-                                  appliedList:applied
-                                        error:error];
-    if (transformed == nil) return NO;
-    return [self _appendGenomicTransformedToFile:outputPath
-                                       transformed:transformed
-                                            applied:applied
-                                             result:result
-                                              error:error];
 }
 
 + (NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)
@@ -679,68 +681,6 @@ static uint32_t ttioRngNextBoundedU32(TTIORngState *r, uint32_t bound)
     }
 
     return transformed;
-}
-
-// Mixed-MS+genomic legacy fallback: open the just-written MS-only
-// file RW and append /study/genomic_runs/. Used only when the source
-// has BOTH MS and genomic runs; the genomic-only path handles
-// gap #10 by going through writeMinimalToPath: in a single shot.
-+ (BOOL)_appendGenomicTransformedToFile:(NSString *)outputPath
-                            transformed:(NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)transformed
-                                applied:(NSMutableArray<NSString *> *)applied
-                                 result:(TTIOAnonymizationResult *)result
-                                  error:(NSError **)error
-{
-    TTIOHDF5File *file =
-        [TTIOHDF5File openAtPath:outputPath error:error];
-    if (!file) return NO;
-    TTIOHDF5Group *root = file.rootGroup;
-    TTIOHDF5Group *study = [root openGroupNamed:@"study" error:error];
-    if (!study) { [file close]; return NO; }
-    TTIOHDF5Group *gRunsGroup = nil;
-    if ([study hasChildNamed:@"genomic_runs"]) {
-        gRunsGroup = [study openGroupNamed:@"genomic_runs" error:error];
-    } else {
-        gRunsGroup = [study createGroupNamed:@"genomic_runs" error:error];
-    }
-    if (!gRunsGroup) { [file close]; return NO; }
-    NSArray<NSString *> *gNames =
-        [transformed.allKeys sortedArrayUsingSelector:@selector(compare:)];
-    if (![gRunsGroup setStringAttribute:@"_run_names"
-                                  value:[gNames componentsJoinedByString:@","]
-                                  error:error]) {
-        [file close]; return NO;
-    }
-    for (NSString *gName in gNames) {
-        TTIOWrittenGenomicRun *wgr = transformed[gName];
-        if (![TTIOSpectralDataset writeGenomicRun:wgr
-                                            toGroup:gRunsGroup
-                                               name:gName
-                                              error:error]) {
-            [file close];
-            return NO;
-        }
-    }
-
-    // Set the opt_genomic feature flag so the reader picks up the
-    // genomic_runs subtree on round-trip.
-    NSArray *currentFeatures = [TTIOFeatureFlags featuresForRoot:root] ?: @[];
-    if (![currentFeatures containsObject:[TTIOFeatureFlags featureOptGenomic]]) {
-        NSMutableArray *updated = [currentFeatures mutableCopy];
-        [updated addObject:[TTIOFeatureFlags featureOptGenomic]];
-        NSString *version = [TTIOFeatureFlags formatVersionForRoot:root] ?: @"1.4";
-        if (![TTIOFeatureFlags writeFormatVersion:version
-                                          features:updated
-                                            toRoot:root
-                                             error:error]) {
-            [file close]; return NO;
-        }
-    }
-
-    [file close];
-
-    result.policiesApplied = applied;
-    return YES;
 }
 
 @end

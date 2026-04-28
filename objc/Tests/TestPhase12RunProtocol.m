@@ -99,8 +99,15 @@ static TTIOWrittenRun *makeMSRunWithProv(BOOL withProv)
                      precursorMzs:_f64Buf(pmzs, n)
                  precursorCharges:_i32Buf(pcs, n)
               basePeakIntensities:_f64Buf(bpis, n)];
-    (void)withProv;  // MS-side provenance is not yet on TTIOWrittenRun
-                    // in the ObjC tree; the genomic side carries it.
+    if (withProv) {
+        TTIOProvenanceRecord *rec = [[TTIOProvenanceRecord alloc]
+            initWithInputRefs:@[kSampleURI]
+                     software:@"ms-pipeline"
+                   parameters:@{}
+                   outputRefs:@[@"ms://run_0001"]
+                timestampUnix:0];
+        r.provenanceRecords = @[rec];
+    }
     return r;
 }
 
@@ -167,18 +174,15 @@ static NSString *writeMixedFixture(void)
     NSString *path = tmpPathSuffix(@"mixed");
     unlink([path fileSystemRepresentation]);
 
-    TTIOWrittenRun *ms = makeMSRunWithProv(NO);
+    TTIOWrittenRun *ms = makeMSRunWithProv(YES);
     TTIOWrittenGenomicRun *g = makeGenomicRunWithProv(YES);
 
-    // Attach matching MS-side provenance via the dataset-wide list so
-    // the runsForSample query has a chain to walk on the MS run too.
-    // The TTIOAcquisitionRun -provenanceChain returns its own per-run
-    // chain; in the writeMinimal MS path the per-run chain is not yet
-    // wired through TTIOWrittenRun (see Python parity gap). For Phase 1
-    // this test treats MS as carrying *no* per-run prov and asserts
-    // runsForSample finds the genomic run by sample URI; the
-    // cross-modality assertion is satisfied because the protocol
-    // accessor walks both modalities uniformly.
+    // Both runs now carry a per-run provenance record whose inputRefs
+    // contain ``kSampleURI``; the MS side gained the field as part of
+    // closing the deferred ObjC parity gap with Python's
+    // ``WrittenRun.provenance_records`` and Java's
+    // ``WrittenRun.provenanceRecords``. ``runsForSample`` is therefore
+    // expected to find BOTH runs cross-modality.
     NSError *err = nil;
     BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
                                                   title:@"phase1 fixture"
@@ -251,6 +255,35 @@ static void testProtocolMethodsCallableUniformly(void)
     }
     PASS(allOk,
          "Phase1: TTIORun surface usable uniformly across modalities");
+
+    [ds closeFile];
+    unlink([path fileSystemRepresentation]);
+}
+
+static void testMSProvenanceChainPopulated(void)
+{
+    // Closes the ObjC-side parity gap with Python's
+    // ``WrittenRun.provenance_records`` / Java's
+    // ``WrittenRun.provenanceRecords``: writing an MS WrittenRun whose
+    // provenanceRecords carry one record must round-trip through
+    // ``writeMinimalToPath:`` and reappear on the reopened
+    // ``TTIOAcquisitionRun.provenanceChain``.
+    NSString *path = writeMixedFixture();
+    TTIOSpectralDataset *ds =
+        [TTIOSpectralDataset readFromFilePath:path error:NULL];
+
+    TTIOAcquisitionRun *ms = ds.msRuns[@"ms_0001"];
+    NSArray<TTIOProvenanceRecord *> *chain = [ms provenanceChain];
+    PASS(chain.count == 1,
+         "Item2: AcquisitionRun -provenanceChain returns 1 record from "
+         "MS WrittenRun.provenanceRecords");
+    if (chain.count == 1) {
+        TTIOProvenanceRecord *r = chain[0];
+        PASS([r.inputRefs containsObject:kSampleURI],
+             "Item2: MS chain[0].inputRefs contains sample URI");
+        PASS([r.software isEqualToString:@"ms-pipeline"],
+             "Item2: MS chain[0].software round-trips");
+    }
 
     [ds closeFile];
     unlink([path fileSystemRepresentation]);
@@ -344,15 +377,19 @@ static void testRunsForSampleCrossModality(void)
         [TTIOSpectralDataset readFromFilePath:path error:NULL];
 
     NSDictionary *matching = [ds runsForSample:kSampleURI];
-    // The genomic run carries the sample URI in its provenance chain;
-    // the MS run does not (TTIOWrittenRun does not yet ship per-run
-    // provenance through writeMinimal in the ObjC tree). The accessor
-    // must walk both modalities and surface the genomic match.
+    // Both runs now carry the sample URI in their per-run provenance
+    // chains; the accessor walks both modalities uniformly through
+    // the TTIORun protocol and surfaces both matches.
     PASS(matching[@"genomic_0001"] != nil,
          "Phase1: runsForSample finds genomic run via TTIORun protocol");
+    PASS(matching[@"ms_0001"] != nil,
+         "Phase1: runsForSample finds MS run via TTIORun protocol");
     PASS([(NSObject *)matching[@"genomic_0001"]
               conformsToProtocol:@protocol(TTIORun)],
-         "Phase1: runsForSample values conform to TTIORun");
+         "Phase1: runsForSample genomic value conforms to TTIORun");
+    PASS([(NSObject *)matching[@"ms_0001"]
+              conformsToProtocol:@protocol(TTIORun)],
+         "Phase1: runsForSample MS value conforms to TTIORun");
 
     NSDictionary *empty = [ds runsForSample:@"sample://UNKNOWN"];
     PASS(empty.count == 0,
@@ -464,6 +501,7 @@ void testPhase12RunProtocol(void)
 {
     testRunProtocolConformance();
     testProtocolMethodsCallableUniformly();
+    testMSProvenanceChainPopulated();
     testGenomicProvenanceChainPopulated();
     testGenomicProvenanceChainEmpty();
     testRunsCanonicalAccessor();

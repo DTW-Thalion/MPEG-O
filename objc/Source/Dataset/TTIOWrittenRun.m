@@ -32,6 +32,7 @@
     _basePeakIntensities = [basePeakIntensities copy];
     _nucleusType = @"";
     _signalCompression = @"gzip";
+    _provenanceRecords = @[];
     return self;
 }
 

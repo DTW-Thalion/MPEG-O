@@ -2203,6 +2203,43 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                                         value:run.nucleusType error:error]) return NO;
         }
 
+        // Per-run provenance — same compound + JSON-mirror layout as
+        // -[TTIOAcquisitionRun writeToGroup:name:error:]. Mirrors
+        // Python's ``_write_run`` helper (spectral_dataset.py) which
+        // emits ``<run>/provenance/steps`` plus a legacy
+        // ``@provenance_json`` attribute. Absent when the
+        // TTIOWrittenRun carries no records — preserves byte parity
+        // with pre-v0.6 callers.
+        if (run.provenanceRecords.count > 0) {
+            TTIOHDF5Group *provGroup =
+                [runGroup createGroupNamed:@"provenance" error:error];
+            if (!provGroup) return NO;
+            if (![TTIOCompoundIO writeProvenance:run.provenanceRecords
+                                       intoGroup:provGroup
+                                    datasetNamed:@"steps"
+                                           error:error]) return NO;
+
+            NSMutableArray *plists =
+                [NSMutableArray arrayWithCapacity:run.provenanceRecords.count];
+            for (TTIOProvenanceRecord *r in run.provenanceRecords) {
+                [plists addObject:[r asPlist]];
+            }
+            NSError *jErr = nil;
+            NSData *json =
+                [NSJSONSerialization dataWithJSONObject:plists
+                                                  options:0
+                                                    error:&jErr];
+            if (!json) {
+                if (error) *error = jErr;
+                return NO;
+            }
+            NSString *jstr =
+                [[NSString alloc] initWithData:json
+                                       encoding:NSUTF8StringEncoding];
+            if (![runGroup setStringAttribute:@"provenance_json"
+                                        value:jstr error:error]) return NO;
+        }
+
         // instrument_config subgroup — writeMinimal callers don't ship
         // instrument metadata; emit the same empty-string skeleton that
         // Python's write_minimal does so readers don't distinguish

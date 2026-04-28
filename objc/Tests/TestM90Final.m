@@ -26,6 +26,7 @@
 #import "Protection/TTIOSignatureManager.h"
 #import "Protection/TTIOAnonymizer.h"
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOGenomicIndex.h"
@@ -335,28 +336,288 @@ static void testM90_11RegionOnlyNoHeadersFlag(void)
 }
 
 
-// ── M90.12: uint8-aware MPAD format-level smoke ─────────────────
+// ── M90.12: uint8-aware MPAD wire format ────────────────────────
 //
-// Full cross-language byte-equivalence is exercised by the Python +
-// Java + ObjC subprocess harness; this in-process test only verifies
-// the two M90.12 invariants we ship in ObjC: (a) MPAD writer at
-// TtioPerAU emits "MPA1" magic and per-entry dtype byte, and (b)
-// uint8 channels stay 1B/element via the dtype dispatch in the CLI.
-// The byte layout itself is asserted by the Python test fixture (run
-// out-of-process if/when the conformance harness is enabled here).
+// The M90.12 wire bump (MPAD → MPA1 + per-entry dtype byte) lives
+// in ``TtioPerAU.m`` (a CLI binary), so this test spawns the CLI
+// via ``NSTask`` to exercise the on-the-wire byte layout end-to-end.
+// MS channels (mz / intensity) round-trip with dtype byte == 1
+// (FLOAT64); genomic channels (sequences / qualities) round-trip
+// with dtype byte == 6 (UINT8).
+//
+// Mirrors python/tests/test_m90_12_mpad_uint8.py. The cross-
+// language subprocess harness still asserts byte-for-byte
+// equivalence between Python/Java/ObjC outputs; this in-process
+// ObjC test only asserts that the ObjC CLI honours the M90.12
+// invariants on its own.
 
-static void testM90_12CompileTimeChecks(void)
+// MS fixture for M90.12: two spectra, four peaks each. Mirrors the
+// shape used by TestPerAUFile.m's buildPlaintextFixture and
+// TestM90_12 in the Python tree.
+static BOOL m90fBuildMSFixture(NSString *path, NSError **error)
 {
-    // Sanity assertion that the M90.12 magic + dtype constants are
-    // wired in TtioPerAU.m. We can't exec the CLI binary from the
-    // ObjC test harness portably, so we instead assert the reachable
-    // behaviour at the protocol-decrypt boundary: NSData lengths
-    // returned by decryptFilePath: are 1-byte-per-element for
-    // sequences/qualities, NOT 8x inflated. This was also the
-    // pre-M90.12 ObjC behaviour (the CLI was the bug surface), so
-    // the round-trip assertion is identical to TestM90_8 — included
-    // here for spec parity rather than coverage.
-    PASS(YES, "M90.12: MPAD wire bump documented (CLI-level)");
+    NSUInteger n = 2, p = 4, total = n * p;
+    double mz[8], intensity[8];
+    for (NSUInteger i = 0; i < total; i++) {
+        mz[i] = 100.0 + (double)i;
+        intensity[i] = (double)(i + 1) * 10.0;
+    }
+    int64_t offsets[2] = {0, 4};
+    uint32_t lengths[2] = {4, 4};
+    double rts[2] = {1.5, 3.0};
+    int32_t msLevels[2] = {1, 1};
+    int32_t pols[2] = {1, 1};
+    double pmzs[2] = {0.0, 0.0};
+    int32_t pcs[2] = {0, 0};
+    double bpis[2] = {40.0, 80.0};
+
+    TTIOWrittenRun *run = [[TTIOWrittenRun alloc]
+        initWithSpectrumClassName:@"TTIOMassSpectrum"
+                  acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
+                      channelData:@{@"mz":        [NSData dataWithBytes:mz length:total * sizeof(double)],
+                                    @"intensity": [NSData dataWithBytes:intensity length:total * sizeof(double)]}
+                          offsets:[NSData dataWithBytes:offsets length:n * sizeof(int64_t)]
+                          lengths:[NSData dataWithBytes:lengths length:n * sizeof(uint32_t)]
+                   retentionTimes:[NSData dataWithBytes:rts length:n * sizeof(double)]
+                         msLevels:[NSData dataWithBytes:msLevels length:n * sizeof(int32_t)]
+                       polarities:[NSData dataWithBytes:pols length:n * sizeof(int32_t)]
+                     precursorMzs:[NSData dataWithBytes:pmzs length:n * sizeof(double)]
+                 precursorCharges:[NSData dataWithBytes:pcs length:n * sizeof(int32_t)]
+              basePeakIntensities:[NSData dataWithBytes:bpis length:n * sizeof(double)]];
+    return [TTIOSpectralDataset writeMinimalToPath:path
+                                              title:@"M90.12 MS fixture"
+                                 isaInvestigationId:@"ISA-M90-12"
+                                             msRuns:@{@"run_0001": run}
+                                    identifications:nil
+                                    quantifications:nil
+                                  provenanceRecords:nil
+                                              error:error];
+}
+
+// Spawn TtioPerAU with argv. Sets LD_LIBRARY_PATH so the binary
+// can resolve libTTIO.so out of objc/Source/obj. Returns the
+// termination status; -1 means the binary isn't built (caller
+// should skip the assertion).
+static int m90fSpawnPerAU(NSArray<NSString *> *args)
+{
+    NSString *toolPath = @"/home/toddw/TTI-O/objc/Tools/obj/TtioPerAU";
+    if (![[NSFileManager defaultManager] isExecutableFileAtPath:toolPath]) {
+        return -1;
+    }
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = toolPath;
+    task.arguments = args;
+    NSMutableDictionary *env =
+        [[NSProcessInfo processInfo].environment mutableCopy];
+    NSString *libDir = @"/home/toddw/TTI-O/objc/Source/obj";
+    NSString *prev = env[@"LD_LIBRARY_PATH"] ?: @"";
+    env[@"LD_LIBRARY_PATH"] =
+        prev.length > 0
+            ? [NSString stringWithFormat:@"%@:%@", libDir, prev]
+            : libDir;
+    task.environment = env;
+    NSPipe *outPipe = [NSPipe pipe];
+    NSPipe *errPipe = [NSPipe pipe];
+    task.standardOutput = outPipe;
+    task.standardError = errPipe;
+    @try {
+        [task launch];
+    } @catch (NSException *exc) {
+        NSLog(@"M90.12: TtioPerAU launch failed: %@", exc.reason);
+        return -2;
+    }
+    [task waitUntilExit];
+    // Drain pipes so the child doesn't block on full buffers.
+    (void)[[outPipe fileHandleForReading] readDataToEndOfFile];
+    (void)[[errPipe fileHandleForReading] readDataToEndOfFile];
+    return task.terminationStatus;
+}
+
+// Read a length-prefixed key from the MPA1 buffer at offset *cur,
+// then the dtype byte + value-length-prefixed value bytes. Mutates
+// *cur. Returns YES on success, NO if the buffer runs short.
+static BOOL m90fParseMPA1Entry(NSData *buf, NSUInteger *cur,
+                                NSString **outKey, uint8_t *outDtype,
+                                NSUInteger *outValueLength)
+{
+    const uint8_t *bytes = (const uint8_t *)buf.bytes;
+    NSUInteger remaining = buf.length - *cur;
+    if (remaining < 2) return NO;
+    uint16_t keyLen = (uint16_t)bytes[*cur] | ((uint16_t)bytes[*cur + 1] << 8);
+    *cur += 2;
+    if (buf.length - *cur < keyLen + 5u) return NO;
+    NSString *key =
+        [[NSString alloc] initWithBytes:bytes + *cur
+                                  length:keyLen
+                                encoding:NSUTF8StringEncoding];
+    *cur += keyLen;
+    uint8_t dtype = bytes[*cur];
+    *cur += 1;
+    uint32_t vLen = (uint32_t)bytes[*cur]
+                  | ((uint32_t)bytes[*cur + 1] << 8)
+                  | ((uint32_t)bytes[*cur + 2] << 16)
+                  | ((uint32_t)bytes[*cur + 3] << 24);
+    *cur += 4;
+    if (buf.length - *cur < vLen) return NO;
+    *cur += vLen;
+    if (outKey) *outKey = key;
+    if (outDtype) *outDtype = dtype;
+    if (outValueLength) *outValueLength = vLen;
+    return YES;
+}
+
+static void testM90_12MPA1MSFixture(void)
+{
+    NSString *toolPath = @"/home/toddw/TTI-O/objc/Tools/obj/TtioPerAU";
+    if (![[NSFileManager defaultManager] isExecutableFileAtPath:toolPath]) {
+        NSLog(@"M90.12: TtioPerAU not built; skipping MS fixture test");
+        PASS(YES, "M90.12 MS: TtioPerAU not built (skipped)");
+        return;
+    }
+
+    NSString *fxPath = m90fTmp(@"m12_ms.tio");
+    NSString *encPath = m90fTmp(@"m12_ms_enc.tio");
+    NSString *mpadPath = m90fTmp(@"m12_ms.mpad");
+    NSString *keyPath = m90fTmp(@"m12_ms.key");
+    m90fRm(fxPath); m90fRm(encPath); m90fRm(mpadPath); m90fRm(keyPath);
+
+    NSError *err = nil;
+    PASS(m90fBuildMSFixture(fxPath, &err),
+         "M90.12 MS: build plaintext MS fixture");
+
+    // Write a 32-byte zero key. ``TtioPerAU encrypt <in> <out> <key>``
+    // copies <in> → <out> then encrypts <out> in place, so <in> and
+    // <out> must be distinct paths.
+    uint8_t zeroKey[32]; memset(zeroKey, 0, 32);
+    [[NSData dataWithBytes:zeroKey length:32]
+        writeToFile:keyPath atomically:YES];
+    int rcEnc = m90fSpawnPerAU(@[@"encrypt", fxPath, encPath, keyPath]);
+    PASS(rcEnc == 0, "M90.12 MS: TtioPerAU encrypt exits 0");
+
+    int rcDec = m90fSpawnPerAU(@[@"decrypt", encPath, mpadPath, keyPath]);
+    PASS(rcDec == 0, "M90.12 MS: TtioPerAU decrypt exits 0");
+
+    NSData *mpad = [NSData dataWithContentsOfFile:mpadPath];
+    PASS(mpad.length >= 8, "M90.12 MS: .mpad file has at least the header");
+    if (mpad.length < 8) {
+        m90fRm(fxPath); m90fRm(encPath); m90fRm(mpadPath); m90fRm(keyPath);
+        return;
+    }
+
+    const uint8_t *bytes = (const uint8_t *)mpad.bytes;
+    PASS(memcmp(bytes, "MPA1", 4) == 0,
+         "M90.12 MS: 4-byte magic == 'MPA1' (post-bump)");
+    uint32_t entryCount = (uint32_t)bytes[4]
+                       | ((uint32_t)bytes[5] << 8)
+                       | ((uint32_t)bytes[6] << 16)
+                       | ((uint32_t)bytes[7] << 24);
+    PASS(entryCount >= 2,
+         "M90.12 MS: entry count covers at least mz + intensity");
+
+    // Walk every entry; assert each MS channel carries dtype == 1
+    // (FLOAT64) and value-byte length matches the plaintext channel
+    // length (2 spectra × 4 peaks × 8 B = 64 B).
+    NSUInteger cur = 8;
+    BOOL anyFloat64 = NO;
+    BOOL allChannelsAreF64 = YES;
+    NSUInteger nChannelEntries = 0;
+    for (uint32_t i = 0; i < entryCount; i++) {
+        NSString *key = nil;
+        uint8_t dtype = 0;
+        NSUInteger vLen = 0;
+        if (!m90fParseMPA1Entry(mpad, &cur, &key, &dtype, &vLen)) break;
+        BOOL isMz = [key hasSuffix:@"__mz"];
+        BOOL isInt = [key hasSuffix:@"__intensity"];
+        if (isMz || isInt) {
+            nChannelEntries++;
+            if (dtype != 1) allChannelsAreF64 = NO;
+            if (dtype == 1) anyFloat64 = YES;
+            // 2 spectra × 4 peaks × 8 B/elem = 64 B
+            if (vLen != 64) allChannelsAreF64 = NO;
+        }
+    }
+    PASS(anyFloat64,
+         "M90.12 MS: at least one entry has dtype byte == 1 (FLOAT64)");
+    PASS(nChannelEntries >= 2,
+         "M90.12 MS: mz + intensity entries both present");
+    PASS(allChannelsAreF64,
+         "M90.12 MS: every mz/intensity entry has dtype 1 + 64 B value");
+
+    m90fRm(fxPath); m90fRm(encPath); m90fRm(mpadPath); m90fRm(keyPath);
+}
+
+static void testM90_12MPA1GenomicFixture(void)
+{
+    NSString *toolPath = @"/home/toddw/TTI-O/objc/Tools/obj/TtioPerAU";
+    if (![[NSFileManager defaultManager] isExecutableFileAtPath:toolPath]) {
+        NSLog(@"M90.12: TtioPerAU not built; skipping genomic fixture test");
+        PASS(YES, "M90.12 genomic: TtioPerAU not built (skipped)");
+        return;
+    }
+
+    NSString *fxPath = m90fTmp(@"m12_g.tio");
+    NSString *encPath = m90fTmp(@"m12_g_enc.tio");
+    NSString *mpadPath = m90fTmp(@"m12_g.mpad");
+    NSString *keyPath = m90fTmp(@"m12_g.key");
+    m90fRm(fxPath); m90fRm(encPath); m90fRm(mpadPath); m90fRm(keyPath);
+
+    NSError *err = nil;
+    PASS(m90fBuildHeadersFixture(fxPath, &err),
+         "M90.12 genomic: build plaintext genomic fixture");
+
+    uint8_t zeroKey[32]; memset(zeroKey, 0, 32);
+    [[NSData dataWithBytes:zeroKey length:32]
+        writeToFile:keyPath atomically:YES];
+    int rcEnc = m90fSpawnPerAU(@[@"encrypt", fxPath, encPath, keyPath]);
+    PASS(rcEnc == 0, "M90.12 genomic: TtioPerAU encrypt exits 0");
+    int rcDec = m90fSpawnPerAU(@[@"decrypt", encPath, mpadPath, keyPath]);
+    PASS(rcDec == 0, "M90.12 genomic: TtioPerAU decrypt exits 0");
+
+    NSData *mpad = [NSData dataWithContentsOfFile:mpadPath];
+    PASS(mpad.length >= 8,
+         "M90.12 genomic: .mpad file has at least the header");
+    if (mpad.length < 8) {
+        m90fRm(fxPath); m90fRm(encPath); m90fRm(mpadPath); m90fRm(keyPath);
+        return;
+    }
+
+    const uint8_t *bytes = (const uint8_t *)mpad.bytes;
+    PASS(memcmp(bytes, "MPA1", 4) == 0,
+         "M90.12 genomic: 4-byte magic == 'MPA1'");
+    uint32_t entryCount = (uint32_t)bytes[4]
+                       | ((uint32_t)bytes[5] << 8)
+                       | ((uint32_t)bytes[6] << 16)
+                       | ((uint32_t)bytes[7] << 24);
+    PASS(entryCount >= 2,
+         "M90.12 genomic: entry count covers sequences + qualities");
+
+    // 4 reads × 8 bases/read = 32 B for both sequences and qualities.
+    NSUInteger cur = 8;
+    NSUInteger nUint8 = 0;
+    BOOL allUint8 = YES;
+    for (uint32_t i = 0; i < entryCount; i++) {
+        NSString *key = nil;
+        uint8_t dtype = 0;
+        NSUInteger vLen = 0;
+        if (!m90fParseMPA1Entry(mpad, &cur, &key, &dtype, &vLen)) break;
+        BOOL isSeq = [key hasSuffix:@"__sequences"];
+        BOOL isQual = [key hasSuffix:@"__qualities"];
+        if (isSeq || isQual) {
+            nUint8++;
+            if (dtype != 6) allUint8 = NO;
+            // 4 reads × 8 = 32 B; the M90.12 invariant is that
+            // genomic uint8 channels stay 1 B/element rather than
+            // being inflated 8x by a pre-cast to float64.
+            if (vLen != 32) allUint8 = NO;
+        }
+    }
+    PASS(nUint8 >= 2,
+         "M90.12 genomic: sequences + qualities entries both present");
+    PASS(allUint8,
+         "M90.12 genomic: every sequences/qualities entry has dtype 6 + "
+         "32 B value (uint8, 1 B/elem)");
+
+    m90fRm(fxPath); m90fRm(encPath); m90fRm(mpadPath); m90fRm(keyPath);
 }
 
 
@@ -886,7 +1147,8 @@ void testM90Final(void)
     testM90_11ComposedHeadersAndRegion();
     testM90_11RegionOnlyNoHeadersFlag();
 
-    testM90_12CompileTimeChecks();
+    testM90_12MPA1MSFixture();
+    testM90_12MPA1GenomicFixture();
 
     testM90_13ReadStartingBeforeExtendingIntoRegion();
     testM90_13CigarInsertionDoesNotConsumeRef();
