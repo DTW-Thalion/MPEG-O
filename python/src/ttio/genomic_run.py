@@ -17,8 +17,17 @@ import numpy as np
 from typing import Any
 
 from .aligned_read import AlignedRead
-from .enums import AcquisitionMode
+from .enums import AcquisitionMode, Compression, Precision
 from .genomic_index import GenomicIndex
+from . import _hdf5_io as io
+
+# Hoist codec imports out of per-read accessor hot paths. Without
+# these, every per-read lazy decode call invokes
+# ``importlib._handle_fromlist`` — measured at ~6% of decode wall
+# (~9s on chr22) when these were inside the per-read methods.
+from .codecs import name_tokenizer as _name_tok
+from .codecs.rans import decode as _rans_decode
+from .codecs.name_tokenizer import _varint_decode as _name_tok_varint_decode
 
 
 # M86 Phase B: per-integer-channel dtype lookup, mirroring the
@@ -133,6 +142,16 @@ class GenomicRun:
     # populates the corresponding key on first access.
     _decoded_mate_info: dict[str, Any] = field(
         default_factory=dict, repr=False, compare=False,
+    )
+
+    # Cached result of `_mate_info_is_subgroup()`. Without this, the
+    # method does an HDF5 link-type probe on every call, and the
+    # per-read decode path calls it 3x per read — at chr22 scale
+    # (1.77M reads) that's 5.3M redundant probes resolving to the
+    # same answer, dominating decode wall-time. None = not yet
+    # computed; True/False = cached result.
+    _mate_info_subgroup_cached: "bool | None" = field(
+        default=None, repr=False, compare=False,
     )
 
     # ------------------------------------------------------------------
@@ -266,7 +285,6 @@ class GenomicRun:
         The genomic index and run-level attributes are loaded eagerly;
         signal channel datasets remain closed until first access.
         """
-        from . import _hdf5_io as io
 
         sgroup = _wrap_hdf5_group(group)
 
@@ -324,13 +342,11 @@ class GenomicRun:
             return cached[offset:offset + count]
 
         ds = self._signal_dataset(name)
-        from . import _hdf5_io as io
         codec_id = io.read_int_attr(ds, "compression", default=0) or 0
         if codec_id == 0:
             return bytes(ds.read(offset=offset, count=count))
 
         # Compressed: read all bytes, decode, cache for subsequent slices.
-        from .enums import Compression
         all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
         if codec_id == int(Compression.RANS_ORDER0):
             from .codecs.rans import decode as _dec
@@ -346,6 +362,28 @@ class GenomicRun:
             # decode is deterministic from the wire stream).
             from .codecs.quality import decode as _dec
             decoded = _dec(all_bytes)
+        elif codec_id == int(Compression.REF_DIFF):
+            # M93 v1.2: REF_DIFF is context-aware. The sequences blob
+            # carries a codec header naming the reference URI + md5; we
+            # resolve via :class:`ReferenceResolver` (embedded → external
+            # → RefMissingError per Q5c = A) and feed the per-read CIGARs
+            # + positions to the decoder. The decoder returns
+            # ``list[bytes]`` (one per read); we concat into the M82
+            # contract: a flat uint8 byte stream the same length as
+            # ``sum(lengths)``.
+            decoded = self._decode_ref_diff_sequences(all_bytes)
+        elif codec_id == int(Compression.FQZCOMP_NX16):
+            # M94 v1.2: FQZCOMP_NX16 lossless quality codec. The codec
+            # wire format carries read_lengths inside its sidecar; the
+            # revcomp_flags must be derived from run.flags & 16 (SAM
+            # REVERSE) to reproduce the encoder's context trajectory.
+            decoded = self._decode_fqzcomp_nx16_qualities(all_bytes)
+        elif codec_id == int(Compression.FQZCOMP_NX16_Z):
+            # M94.Z v1.2: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16). Same
+            # plumbing as v1: codec carries read_lengths inside its
+            # sidecar; revcomp_flags come from run.flags & 16. Different
+            # on-wire format (magic ``M94Z``).
+            decoded = self._decode_fqzcomp_nx16_z_qualities(all_bytes)
         else:
             raise ValueError(
                 f"signal_channel '{name}': @compression={codec_id} "
@@ -353,6 +391,131 @@ class GenomicRun:
             )
         self._decoded_byte_channels[name] = decoded
         return decoded[offset:offset + count]
+
+    def _decode_ref_diff_sequences(self, encoded: bytes) -> bytes:
+        """Decode the ``sequences`` channel encoded with the M93 REF_DIFF codec.
+
+        Returns the concatenated per-read sequence bytes — same shape and
+        dtype contract as the M82 ``sequences`` channel
+        (``uint8`` 1-D byte stream of total length ``sum(lengths)``).
+
+        Raises:
+            RefMissingError: when the reference can't be resolved.
+        """
+        from .codecs.ref_diff import (
+            decode as _ref_diff_decode,
+            unpack_codec_header as _unpack_header,
+        )
+        from .genomic.reference_resolver import ReferenceResolver
+        from .acquisition_run import _native_h5py
+
+        # Pull the URI + md5 out of the codec header so the resolver
+        # can verify against /study/references/<uri>/.
+        header, _ = _unpack_header(encoded)
+
+        # ReferenceResolver wants a native h5py.File handle; the writer
+        # always embeds at /study/references/<uri>/ in the same file.
+        try:
+            h5_grp = _native_h5py(self.group)
+        except TypeError as exc:
+            raise RuntimeError(
+                "REF_DIFF decode requires an HDF5-backed dataset; "
+                "non-HDF5 storage providers are not yet supported."
+            ) from exc
+        h5_file = h5_grp.file
+        resolver = ReferenceResolver(h5_file)
+
+        # Single-chromosome runs only (v1.2 first pass — write side
+        # rejects multi-chrom too).
+        unique_chroms = set(self.index.chromosomes)
+        if len(unique_chroms) == 0:
+            chrom = ""  # empty run; resolver will likely fail
+        elif len(unique_chroms) > 1:
+            raise RuntimeError(
+                "REF_DIFF v1.2 first pass supports single-chromosome "
+                f"runs only; this run carries {sorted(unique_chroms)}. "
+                "Multi-chromosome support is an M93.X follow-up."
+            )
+        else:
+            chrom = next(iter(unique_chroms))
+
+        chrom_seq = resolver.resolve(
+            uri=header.reference_uri,
+            expected_md5=header.reference_md5,
+            chromosome=chrom,
+        )
+
+        # Gather per-read positions + cigars for the slice walk.
+        positions = [int(p) for p in self.index.positions]
+        cigars = self._all_cigars()
+
+        per_read = _ref_diff_decode(encoded, cigars, positions, chrom_seq)
+        return b"".join(per_read)
+
+    def _decode_fqzcomp_nx16_qualities(self, encoded: bytes) -> bytes:
+        """Decode the ``qualities`` channel encoded with the M94 FQZCOMP_NX16 codec.
+
+        Returns the concatenated per-read quality byte stream — same
+        shape and dtype contract as the M82 ``qualities`` channel
+        (``uint8`` 1-D byte stream of total length ``sum(lengths)``).
+
+        The codec carries ``read_lengths`` inside its own header; we
+        recover ``revcomp_flags`` from ``run.flags & 16`` (SAM REVERSE
+        bit) to reproduce the encoder's context trajectory.
+        """
+        from .codecs.fqzcomp_nx16 import decode_with_metadata as _fqz_decode
+
+        SAM_REVERSE = 16
+        flags = self.index.flags  # numpy uint32 array
+        revcomp_flags = [
+            1 if (int(f) & SAM_REVERSE) else 0 for f in flags
+        ]
+        qualities, _, _ = _fqz_decode(encoded, revcomp_flags=revcomp_flags)
+        return qualities
+
+    def _decode_fqzcomp_nx16_z_qualities(self, encoded: bytes) -> bytes:
+        """Decode the ``qualities`` channel encoded with the M94.Z codec.
+
+        Drop-in parallel to :meth:`_decode_fqzcomp_nx16_qualities` — same
+        signature, same ``revcomp_flags`` derivation; only the underlying
+        codec module differs (``fqzcomp_nx16_z`` instead of v1's
+        ``fqzcomp_nx16``).
+        """
+        from .codecs.fqzcomp_nx16_z import (
+            decode_with_metadata as _fqz_z_decode,
+        )
+
+        SAM_REVERSE = 16
+        flags = self.index.flags  # numpy uint32 array
+        revcomp_flags = [
+            1 if (int(f) & SAM_REVERSE) else 0 for f in flags
+        ]
+        qualities, _, _ = _fqz_z_decode(encoded, revcomp_flags=revcomp_flags)
+        return qualities
+
+    def _all_cigars(self) -> list[str]:
+        """Return the full list of CIGAR strings for this run.
+
+        Honours the M86 Phase C codec dispatch on the ``cigars``
+        channel (RANS / NAME_TOKENIZED override → uint8 dataset; no
+        override → M82 compound dataset). Caches the result on
+        ``self._decoded_cigars`` so subsequent ``_cigar_at`` calls
+        hit the cache.
+        """
+        if self._decoded_cigars is not None:
+            return self._decoded_cigars
+        # Trigger the existing per-read decode path once; the helper
+        # populates ``self._decoded_cigars`` for the rANS / tokenised
+        # paths. The compound (M82) path doesn't populate the field,
+        # so fall back to a manual walk in that case.
+        _ = self._cigar_at(0) if len(self) > 0 else None
+        if self._decoded_cigars is not None:
+            return self._decoded_cigars
+        # M82 compound layout — gather from the compound cache.
+        cigars = self._compound("cigars")
+        out = [c["value"] for c in cigars]
+        self._decoded_cigars = out
+        return out
 
     def _int_channel_array(self, name: str) -> "np.ndarray":
         """Return the full integer array for ``name``, lazily decoded.
@@ -389,7 +552,6 @@ class GenomicRun:
             )
 
         ds = self._signal_dataset(name)
-        from . import _hdf5_io as io
         codec_id = io.read_int_attr(ds, "compression", default=0) or 0
 
         if codec_id == 0:
@@ -403,7 +565,6 @@ class GenomicRun:
             self._decoded_int_channels[name] = arr
             return arr
 
-        from .enums import Compression
         if codec_id in (
             int(Compression.RANS_ORDER0),
             int(Compression.RANS_ORDER1),
@@ -428,7 +589,6 @@ class GenomicRun:
         callers never need to check ``isinstance(v, bytes)``.
         """
         if name not in self._compound_cache:
-            from . import _hdf5_io as io
             sig = self.group.open_group("signal_channels")
             self._compound_cache[name] = io.read_compound_dataset(sig, name)
         return self._compound_cache[name]
@@ -461,14 +621,11 @@ class GenomicRun:
         # Shape dispatch: precision == UINT8 → codec path; otherwise
         # the dataset is the M82 compound (precision is None for
         # compound datasets, since they have no scalar Precision).
-        from .enums import Compression, Precision
         if ds.precision == Precision.UINT8:
-            from . import _hdf5_io as io
             codec_id = io.read_int_attr(ds, "compression", default=0) or 0
             if codec_id == int(Compression.NAME_TOKENIZED):
-                from .codecs import name_tokenizer as _nt
                 all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
-                self._decoded_read_names = _nt.decode(all_bytes)
+                self._decoded_read_names = _name_tok.decode(all_bytes)
                 return self._decoded_read_names[i]
             raise ValueError(
                 f"signal_channel 'read_names': @compression={codec_id} "
@@ -513,18 +670,15 @@ class GenomicRun:
         sig = self.group.open_group("signal_channels")
         ds = sig.open_dataset("cigars")
 
-        from .enums import Compression, Precision
         if ds.precision == Precision.UINT8:
-            from . import _hdf5_io as io
             codec_id = io.read_int_attr(ds, "compression", default=0) or 0
             all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
             if codec_id in (
                 int(Compression.RANS_ORDER0),
                 int(Compression.RANS_ORDER1),
             ):
-                from .codecs.rans import decode as _rans_dec
-                from .codecs.name_tokenizer import _varint_decode as _vd
-                decoded = _rans_dec(all_bytes)
+                decoded = _rans_decode(all_bytes)
+                _vd = _name_tok_varint_decode
                 # Walk the length-prefix-concat byte stream — the
                 # mirror of the writer's serialisation contract
                 # (§2.5). Each entry is varint(len) + len bytes
@@ -553,7 +707,7 @@ class GenomicRun:
                 self._decoded_cigars = out
                 return out[i]
             if codec_id == int(Compression.NAME_TOKENIZED):
-                from .codecs import name_tokenizer as _nt
+                _nt = _name_tok
                 self._decoded_cigars = _nt.decode(all_bytes)
                 return self._decoded_cigars[i]
             raise ValueError(
@@ -580,13 +734,20 @@ class GenomicRun:
         ``KeyError`` when the named child is a dataset (verified in
         :class:`ttio.providers.hdf5._Group.open_group`); we use that
         as the link-type query.
+
+        Result is cached on the instance — the file structure is
+        immutable for the lifetime of an open run, so the link-type
+        probe only runs once.
         """
+        if self._mate_info_subgroup_cached is not None:
+            return self._mate_info_subgroup_cached
         sig = self.group.open_group("signal_channels")
         try:
             sig.open_group("mate_info")
-            return True
+            self._mate_info_subgroup_cached = True
         except KeyError:
-            return False
+            self._mate_info_subgroup_cached = False
+        return self._mate_info_subgroup_cached
 
     def _decode_mate_chrom(self):
         """Lazily decode the chrom field from the Phase F subgroup.
@@ -605,19 +766,16 @@ class GenomicRun:
         # writer (§5.2), an overridden chrom field is a flat 1-D
         # uint8 dataset with @compression; an un-overridden chrom
         # is a compound (VL_STRING) dataset with no attribute.
-        from .enums import Compression, Precision
         ds = mate_group.open_dataset("chrom")
         if ds.precision == Precision.UINT8:
-            from . import _hdf5_io as io
             codec_id = io.read_int_attr(ds, "compression", default=0) or 0
             all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
             if codec_id in (
                 int(Compression.RANS_ORDER0),
                 int(Compression.RANS_ORDER1),
             ):
-                from .codecs.rans import decode as _rans_dec
-                from .codecs.name_tokenizer import _varint_decode as _vd
-                decoded = _rans_dec(all_bytes)
+                _vd = _name_tok_varint_decode
+                decoded = _rans_decode(all_bytes)
                 out: list[str] = []
                 offset = 0
                 n = len(decoded)
@@ -642,7 +800,7 @@ class GenomicRun:
                 self._decoded_mate_info["chrom"] = out
                 return out
             if codec_id == int(Compression.NAME_TOKENIZED):
-                from .codecs import name_tokenizer as _nt
+                _nt = _name_tok
                 out = _nt.decode(all_bytes)
                 self._decoded_mate_info["chrom"] = out
                 return out
@@ -655,7 +813,6 @@ class GenomicRun:
 
         # Natural dtype (compound VL_STRING) — un-overridden field
         # inside the subgroup. Read whole and extract the values.
-        from . import _hdf5_io as io
         out = [r["value"] for r in io.read_compound_dataset(mate_group, "chrom")]
         self._decoded_mate_info["chrom"] = out
         return out
@@ -678,8 +835,6 @@ class GenomicRun:
         mate_group = sig.open_group("mate_info")
         ds = mate_group.open_dataset(name)
 
-        from .enums import Compression, Precision
-        from . import _hdf5_io as io
 
         if ds.precision == Precision.UINT8:
             codec_id = io.read_int_attr(ds, "compression", default=0) or 0
