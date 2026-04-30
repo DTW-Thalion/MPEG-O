@@ -1,16 +1,20 @@
-# Migration Guide: mzML and nmrML to TTI-O (current: v0.11)
+# Migration Guide: mzML, nmrML, SAM/BAM/CRAM to TTI-O (current: v1.2)
 
 ## Audience and prerequisites
 
-This guide is for developers who already have mzML or nmrML tooling and want to
-write TTI-O (`.tio`) files instead. It covers only the Python implementation.
+This guide is for developers who already have mzML / nmrML / SAM / BAM /
+CRAM tooling and want to write TTI-O (`.tio`) files instead. It covers
+only the Python implementation; the ObjC and Java surfaces mirror it
+(see [ARCHITECTURE.md](../ARCHITECTURE.md) for the cross-language map).
 
 **You need:**
 
 - Python 3.11 or later
-- An TTI-O v0.7 checkout (PyPI publishing is deferred to M40; install from source)
+- A TTI-O v1.2 checkout (PyPI publishing is deferred until the M40
+  account-setup work clears; install from source today)
 - For Thermo `.raw` input: ThermoRawFileParser on your `PATH` (see section 6)
-- For a non-HDF5 backend: `pip install 'ttio[zarr]'` (v0.7 M46)
+- For SAM / BAM / CRAM input: `samtools` (≥ 1.19) on your `PATH`
+- For a non-HDF5 backend: `pip install 'ttio[zarr]'`
 
 ---
 
@@ -41,7 +45,7 @@ The public API shown in this guide will remain stable across that transition.
 `ttio.importers.mzml.read()` is a streaming SAX parser. It returns an
 `ImportResult` — a lightweight in-memory container — rather than a live
 `SpectralDataset`, because no backing HDF5 file exists yet. Call
-`result.to_mpgo()` to flush to disk.
+`result.to_ttio()` to flush to disk.
 
 ```python
 from ttio.importers.mzml import read as read_mzml
@@ -50,14 +54,14 @@ from ttio.importers.mzml import read as read_mzml
 result = read_mzml("sample.mzML")
 
 # Write to an TTI-O file
-result.to_mpgo("sample.tio")
+result.to_ttio("sample.tio")
 ```
 
-`to_mpgo()` returns the resolved `Path` of the written file. If you want to
+`to_ttio()` returns the resolved `Path` of the written file. If you want to
 pass optional feature flags (e.g. `"numpress-delta"`) at write time:
 
 ```python
-result.to_mpgo("sample.tio", features=["numpress-delta"])
+result.to_ttio("sample.tio", features=["numpress-delta"])
 ```
 
 Quick sanity check before writing:
@@ -114,7 +118,7 @@ if result.ms_spectra:
           f"polarity={s.polarity}")
 ```
 
-You can mutate or filter `result.ms_spectra` before calling `to_mpgo()` if you
+You can mutate or filter `result.ms_spectra` before calling `to_ttio()` if you
 need to strip certain scan levels, correct polarity flags, or attach
 identifications.
 
@@ -161,13 +165,13 @@ If chromatograms were present in the source mzML, they are stored inside
 
 ### 2.1 Python quickstart
 
-The nmrML importer follows the same `read()` / `to_mpgo()` pattern:
+The nmrML importer follows the same `read()` / `to_ttio()` pattern:
 
 ```python
 from ttio.importers.nmrml import read as read_nmrml
 
 result = read_nmrml("sample.nmrML")
-result.to_mpgo("sample.tio")
+result.to_ttio("sample.tio")
 ```
 
 Print a summary before writing:
@@ -270,7 +274,7 @@ https://github.com/compomics/ThermoRawFileParser and confirm it is on your
 ### Feature flags are opt-in
 
 Optional behaviors — numpress-delta compression, per-run provenance, ISA-Tab
-export — are enabled by passing `features=` to `to_mpgo()`. A file written
+export — are enabled by passing `features=` to `to_ttio()`. A file written
 without a feature flag will not contain those data even if the source had them.
 The full list of recognized flags is in `docs/feature-flags.md`.
 
@@ -292,7 +296,7 @@ mz = spectrum.signal_arrays["mz"]
 
 `read()` returns `ImportResult`, which is an in-memory structure without a
 backing HDF5 file. It does not have `.ms_runs`, `.open()`, or `.write()`. Call
-`result.to_mpgo(path)` first, then `SpectralDataset.open(path)` to get a live
+`result.to_ttio(path)` first, then `SpectralDataset.open(path)` to get a live
 dataset handle.
 
 ### NMR runs live in nmr_runs, not ms_runs
@@ -334,7 +338,7 @@ def convert_and_verify(mzml_path: str, out_path: str) -> None:
     print(f"Parsed {result.spectrum_count} spectra from {Path(mzml_path).name}")
 
     # Step 2: write
-    written = result.to_mpgo(out_path)
+    written = result.to_ttio(out_path)
     print(f"Wrote {written}")
 
     # Step 3: verify
@@ -370,7 +374,7 @@ def convert_and_verify_nmr(nmrml_path: str, out_path: str) -> None:
     result = read_nmrml(nmrml_path)
     print(f"Parsed {result.spectrum_count} NMR spectra, nucleus={result.nucleus_type!r}")
 
-    written = result.to_mpgo(out_path)
+    written = result.to_ttio(out_path)
     print(f"Wrote {written}")
 
     ds = SpectralDataset.open(written)
@@ -601,7 +605,7 @@ All three languages ship a JCAMP-DX 5.01 AFFN reader and writer:
 ```python
 from ttio.importers.jcampdx import read as read_jcampdx
 result = read_jcampdx("sample.jdx")
-result.to_mpgo("sample.tio")
+result.to_ttio("sample.tio")
 
 from ttio.exporters.jcampdx import write as write_jcampdx
 write_jcampdx(spectrum, "out.jdx")
@@ -628,7 +632,172 @@ only; UV-Vis `##DATA TYPE=UV/VIS SPECTRUM` is rejected). See
 v0.10 callers upgrade transparently; only codepaths that
 explicitly want Raman or IR need to reach for the new classes.
 
-## 12. See also
+## 12. Migrating from v1.1.x to v1.2 — genomic data + mixed-modality runs
+
+v1.2 is the project's largest single-version expansion: an
+end-to-end genomic data pathway alongside the spectroscopy/
+spectrometry stack, plus a `Run` protocol that unifies the MS and
+genomic surfaces. **Wire-format compatibility is a clean break
+from v1.1.x readers** per Binding Decision §74 — the M80 rebrand
+drops `mpgo` / `MPGO` for `ttio` / `TTIO`, the `.mpgo` extension
+for `.tio`, and the `MO` transport magic for `TI`. There is no
+dual-read shim. Files written by v1.1.x cannot be read by v1.2,
+and vice versa.
+
+### 12.1 Convert SAM / BAM / CRAM to TTI-O
+
+The v1.2 line ships SAM/BAM (M87) and CRAM (M88) importers in all
+three languages. They wrap `samtools view -h` as a subprocess —
+no htslib link, no Python C-extension build — and produce a
+`WrittenGenomicRun` ready to write through `SpectralDataset.write_minimal`.
+
+```python
+from ttio.importers.bam import BamReader
+from ttio import SpectralDataset
+
+# BAM → TTI-O
+written_run = BamReader("sample.bam").to_genomic_run(name="run_0001")
+SpectralDataset.write_minimal(
+    "sample.tio",
+    title="WGS sample 0001",
+    isa_investigation_id="EXAMPLE:WGS:0001",
+    runs={"run_0001": written_run},
+)
+```
+
+CRAM additionally requires a reference FASTA:
+
+```python
+from ttio.importers.cram import CramReader
+
+written_run = CramReader("sample.cram", "GRCh38.fa").to_genomic_run(
+    name="run_0001",
+)
+```
+
+Both readers accept an optional `region="chr1:1000-2000"` kwarg
+that passes through verbatim to `samtools view` for region-scoped
+imports. The shared `bam_dump` CLI auto-dispatches on `.cram`
+paths via `--reference <fasta>` (M88.1). On the read side,
+`GenomicRun` exposes per-read access via `run[i]` (returns
+`AlignedRead`), plus
+`GenomicIndex.indices_for_region(chrom, start, end)` for region
+scans without decoding payloads.
+
+### 12.2 Write a genomic run by hand (no SAM/BAM source)
+
+```python
+import numpy as np
+from ttio import SpectralDataset, WrittenGenomicRun
+from ttio.enums import AcquisitionMode
+
+n = 4
+reads = WrittenGenomicRun(
+    acquisition_mode=int(AcquisitionMode.GENOMIC_WGS),
+    reference_uri="GRCh38.p14",
+    platform="ILLUMINA",
+    sample_name="NA12878",
+    positions=np.array([1000, 1100, 2000, 2100], dtype=np.int64),
+    mapping_qualities=np.array([60, 60, 55, 55], dtype=np.uint8),
+    flags=np.array([0, 0, 16, 16], dtype=np.uint32),
+    sequences=np.frombuffer(b"ACGTACGT" * n, dtype=np.uint8),
+    qualities=np.full(8 * n, 30, dtype=np.uint8),
+    offsets=np.arange(n, dtype=np.uint64) * 8,
+    lengths=np.full(n, 8, dtype=np.uint32),
+    cigars=["8M"] * n,
+    read_names=[f"r{i}" for i in range(n)],
+    mate_chromosomes=["*"] * n,
+    mate_positions=np.full(n, -1, dtype=np.int64),
+    template_lengths=np.zeros(n, dtype=np.int32),
+    chromosomes=["chr1", "chr1", "chr2", "chr2"],
+)
+SpectralDataset.write_minimal(
+    "sample.tio",
+    title="manual write",
+    isa_investigation_id="EXAMPLE:GEN:MANUAL",
+    runs={"run_0001": reads},
+)
+```
+
+The genomic codec stack (M83 rANS, M84 BASE_PACK, M85 quality
+binning, M85.B name tokenisation, M86 pipeline wiring) attaches
+via `signal_codec_overrides` on `WrittenGenomicRun`; see
+[`docs/codecs/`](codecs/) for selection guidance.
+
+### 12.3 Mixed-modality writes (Phase 1+2)
+
+A single `.tio` may carry MS, NMR, and genomic runs. Pass them in
+a single `runs={...}` dict — `write_minimal` dispatches on type:
+
+```python
+SpectralDataset.write_minimal(
+    "multiomics.tio",
+    title="NA12878 multi-omics",
+    isa_investigation_id="EXAMPLE:OMICS:0001",
+    runs={
+        "wgs_run":         genomic_run,    # WrittenGenomicRun
+        "proteomics_run":  ms_run,          # WrittenRun
+        "metabolomics_run": nmr_run,        # WrittenRun
+    },
+)
+```
+
+Read-side cross-modality query uses the modality-agnostic
+helpers introduced in Phase 1+2:
+
+```python
+ds = SpectralDataset.open("multiomics.tio")
+
+# All runs across modalities (canonical accessor)
+for name, run in ds.runs.items():
+    print(name, type(run).__name__, len(run))
+
+# Filter by sample URI (matches against provenance input_refs).
+# Cross-modality requires that runs share a sample-keyed
+# provenance input_ref — see python/tests/integration/test_m91_*.py
+# for the canonical pattern.
+for name, run in ds.runs_for_sample("sample://NA12878").items():
+    print(name, type(run).__name__, run.acquisition_mode)
+
+# Filter by modality
+from ttio import GenomicRun
+genomic_only = ds.runs_of_modality(GenomicRun)
+```
+
+Both `AcquisitionRun` and `GenomicRun` conform to the `Run`
+protocol (`name`, `acquisition_mode`, `__len__`, `__getitem__`,
+`provenance_chain`), so client code can iterate without
+bifurcating by modality.
+
+### 12.4 What did NOT change
+
+- Existing MS / NMR / Raman / IR / UV-Vis / 2D-COS APIs:
+  unchanged. v1.1.x callers that only touch spectroscopy data
+  upgrade transparently — `write_minimal(runs=...)` with an
+  all-MS dict is the same call as `write_minimal(ms_runs=...)`
+  (the latter remains supported as an alias).
+- Per-AU encryption, transport, JCAMP-DX, mzTab, ISA-Tab,
+  storage providers, signature verification: all unchanged.
+- Format-version attribute: bumps from `1.3` to `1.4` only when
+  genomic content is present; pure-spectroscopy files written by
+  v1.2 still carry `@ttio_format_version = "1.3"` and round-trip
+  on a v1.1.x reader (modulo the rebrand, see below).
+
+### 12.5 The rebrand: identifiers that changed
+
+| Old (v1.1.x and earlier) | New (v1.2) |
+|---|---|
+| `mpeg_o` Python package | `ttio` |
+| `MPGOSpectralDataset` etc. | `TTIOSpectralDataset` |
+| `.mpgo` file extension | `.tio` |
+| `.mots` transport extension | `.tis` |
+| Transport magic `"MO"` | `"TI"` |
+| `result.to_mpgo(path)` | `result.to_ttio(path)` |
+
+Code written against v1.1.x or earlier needs a one-time
+sed-style rename. There is no dual-import shim.
+
+## 13. See also
 
 - `docs/api-review-v0.7.md` — three-column parity map (Python / ObjC / Java)
   with stability markers for every public class and method, plus

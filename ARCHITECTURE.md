@@ -2,22 +2,20 @@
 
 TTI-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data: mass spectrometry, NMR, and vibrational spectroscopy (Raman + IR).
 
-As of the current main (post-v1.1.1; M80–M86 unreleased work in
-the genomic data model + codec stack) there are three
-interoperable reference implementations:
+As of v1.2.0 (M80 TTI-O rebrand → M91 multi-omics integration →
+Phase 1+2 abstraction polish) there are three interoperable
+reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
   implementation. Every format guarantee in `docs/format-spec.md`
-  is rooted here. 2477 assertions passing (2 pre-existing M38
-  Thermo failures unrelated to current work).
+  is rooted here. **3070 assertions / 0 failures.**
 - **Python (`ttio` package)** (`python/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — a full reader/writer on top
   of `h5py` + `numpy` that mirrors the Objective-C class
-  hierarchy 1-to-1. 898 tests passing (42 pre-existing failures
-  in zarr-optional / smoke / mzML XSD areas, unrelated).
+  hierarchy 1-to-1. **1324 passed / 12 skipped / 4 xfailed.**
 - **Java (`global.thalion.ttio`)** (`java/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
-  mirroring the ObjC/Python class hierarchy. 512/0/0/0.
+  mirroring the ObjC/Python class hierarchy. **755 / 0 / 0 / 0.**
   Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
   crypto dependency). HDF5 via system `libhdf5-java` bindings.
 
@@ -28,14 +26,21 @@ The shipped conformance matrix covers v0.10 per-AU encryption
 (`test_per_au_cross_language.py`, 38 cells), the JCAMP-DX
 Raman/IR harness (`test_raman_ir_cross_language.py`, 6 cells),
 the M82.4 genomic data-model 9-cell matrix
-(`test_m82_3x3_matrix.py`), and the M83–M86 genomic codec
-fixtures (one per codec path under
-`python/tests/fixtures/codecs/` and
+(`test_m82_3x3_matrix.py`), the M83–M86 genomic codec fixtures
+(one per codec path under `python/tests/fixtures/codecs/` and
 `python/tests/fixtures/genomic/`; ObjC and Java each verify
-byte-exact decode against the Python-generated artefacts). Any
-language pair can exchange encrypted files, transport streams,
-vibrational spectra, and genomic runs (with or without codec
-compression) bit-for-bit.
+byte-exact decode against the Python-generated artefacts), the
+M89 transport extension (3×3 encode + decode for genomic AUs),
+the M90 per-region encryption + ML-DSA-87 signatures over the
+chromosomes VL compound, the M51 cross-language byte-parity
+harness (extended in Phase 2 with an `ms_per_run_provenance`
+section so per-run compound provenance dual-write is byte-
+identical), and the M91 multi-omics integration test (one `.tio`
+carrying WGS + proteomics MS + NMR metabolomics under a unified
+encryption envelope, query verified across all three languages).
+Any language pair can exchange encrypted files, transport
+streams, vibrational spectra, and genomic runs (with or without
+codec compression) bit-for-bit.
 
 All three implementations express the architecture in three layers:
 
@@ -194,9 +199,12 @@ generic access protocols:
 - `AutoCloseable` (Java) / NSObject lifecycle (ObjC) / context manager
   (Python) — resource cleanup.
 
-`AcquisitionRun` also implements `Provenanceable` and `Encryptable`;
-`GenomicRun` does not (yet — those would be additive when needed).
-Beyond those interfaces the field sets diverge entirely:
+`AcquisitionRun` also implements `Provenanceable` and `Encryptable`.
+`GenomicRun` implements `Provenanceable` (Phase 1+2) but does not
+yet implement `Encryptable` — encryption for genomic data ships at
+the dataset/AU level via M90 rather than through the run-level
+protocol surface. Beyond those interfaces the field sets diverge
+entirely:
 
 | Concern | `AcquisitionRun` | `GenomicRun` |
 |---|---|---|
@@ -207,9 +215,19 @@ Beyond those interfaces the field sets diverge entirely:
 | Auxiliary data | `chromatograms` (TIC/XIC/SRM) | mate-info, cigars, read-names compounds |
 | Storage subgroup | `/study/ms_runs/<name>/` | `/study/genomic_runs/<name>/` |
 
-**There is no shared `Run` base class, and adding one would only buy
-generic iteration** — instrument-config-vs-reference-uri is a real
-domain difference, not an artifact of the implementation.
+**Phase 1+2 added a generic `Run` protocol** (Python
+`runtime_checkable Protocol`, ObjC `@protocol TTIORun`, Java
+`interface Run`). Both `AcquisitionRun` and `GenomicRun` conform.
+Members exposed: `name`, `acquisition_mode`, length /
+`__getitem__` / `provenance_chain`. The earlier judgement that
+"adding one would only buy generic iteration" turned out to be
+exactly right *and* exactly the goal: M91 needed iteration over
+mixed-modality runs for cross-omics queries, and the
+`runs_for_sample(uri)` / `runs_of_modality(cls)` helpers on
+`SpectralDataset` use the protocol to avoid bifurcating client
+code. Modality-specific metadata (instrument-config vs
+reference-uri) is *not* part of the protocol — it remains on the
+concrete subclasses, where it belongs.
 
 ### Layer D — Element-level: hard wall
 
@@ -237,8 +255,8 @@ meaningfully spans both element types.
 | Layer | Sharing | Where divergence enters |
 |---|---|---|
 | **A. Storage** | 100% shared | n/a |
-| **B. Container** | Shared except parallel typed `msRuns` / `genomicRuns` collections | Two parallel getters + parallel write branches |
-| **C. Run** | Shared via `Indexable<T>` / `Streamable<T>` / `AutoCloseable` | Element type `T` and concrete field set |
+| **B. Container** | Shared via canonical `runs` / `runs_for_sample` / `runs_of_modality` accessors (Phase 1+2); typed `msRuns` / `genomicRuns` collections retained for write-side dispatch | Concrete write paths still bifurcate by modality |
+| **C. Run** | Shared via `Run` protocol (Phase 1+2) on top of `Indexable<T>` / `Streamable<T>` / `AutoCloseable` | Element type `T` and concrete field set |
 | **D. Element** | None | Entirely separate types — `Spectrum` ≠ `AlignedRead` |
 
 A generic "iterate any run and yield elements" function works across
@@ -679,21 +697,47 @@ bindings (`libhdf5-java`).
 
 LZ4 availability is runtime-detected via `H5Zfilter_avail(32004)` in ObjC and `hdf5plugin.PLUGIN_PATH` + `h5py.h5z.filter_avail(32004)` in Python; both implementations skip their LZ4 tests cleanly when the filter is absent. Numpress-delta is always available because it is a pure-library transform that produces an ordinary int64 HDF5 dataset.
 
-## Genomic compression codec stack (M83–M86, post-v1.1.1)
+## Genomic compression codec stack (M83–M86 + M93/M94/M94.Z/M95, v1.2)
 
-Five additional codecs ship for genomic signal channels —
-clean-room implementations from public-domain literature, with
-cross-language byte-exact conformance fixtures across Python,
-ObjC, and Java. Codec ids are reserved in the M79
-`Compression` enum:
+Nine codecs ship for genomic signal channels (six in v1.1.x, three
+new in v1.2 — REF_DIFF, FQZCOMP_NX16, FQZCOMP_NX16_Z — plus the
+planned DELTA_RANS_ORDER0). Clean-room implementations from
+public-domain literature, with cross-language byte-exact conformance
+fixtures across Python, ObjC, and Java. Codec ids are reserved in the
+M79 `Compression` enum:
 
-| Codec id | Codec          | Algorithm                                        | Lossy? | M79 enum         |
-|----------|----------------|--------------------------------------------------|--------|------------------|
-| `4`      | RANS_ORDER0    | Range Asymmetric Numeral Systems, marginal model | No     | `RANS_ORDER0`    |
-| `5`      | RANS_ORDER1    | rANS with 256 per-context frequency tables       | No     | `RANS_ORDER1`    |
-| `6`      | BASE_PACK      | 2-bit ACGT packing + sparse position+byte mask   | No     | `BASE_PACK`      |
-| `7`      | QUALITY_BINNED | Fixed Illumina-8 / CRUMBLE Phred → 4-bit indices | Yes    | `QUALITY_BINNED` |
-| `8`      | NAME_TOKENIZED | Lean two-token columnar (numeric / string runs)  | No     | `NAME_TOKENIZED` |
+| Codec id | Codec               | Algorithm                                        | Lossy? | M79 enum            |
+|----------|---------------------|--------------------------------------------------|--------|---------------------|
+| `4`      | RANS_ORDER0         | Range Asymmetric Numeral Systems, marginal model | No     | `RANS_ORDER0`       |
+| `5`      | RANS_ORDER1         | rANS with 256 per-context frequency tables       | No     | `RANS_ORDER1`       |
+| `6`      | BASE_PACK           | 2-bit ACGT packing + sparse position+byte mask   | No     | `BASE_PACK`         |
+| `7`      | QUALITY_BINNED      | Fixed Illumina-8 / CRUMBLE Phred → 4-bit indices | Yes    | `QUALITY_BINNED`    |
+| `8`      | NAME_TOKENIZED      | Lean two-token columnar (numeric / string runs)  | No     | `NAME_TOKENIZED`    |
+| `9`      | REF_DIFF (M93, v1.2)| Reference-based diff: bit-packed M-op flags + I/S-op bases, slice-based wire format with rANS body | No | `REF_DIFF`          |
+| `10`     | FQZCOMP_NX16 (M94, v1.2) | fqzcomp-Nx16 (Bonfield 2022) — context model + interleaved 4-way rANS, **per-symbol adaptive**, 8-bit renorm. **Retained** for v1.1.x backward compatibility. | No | `FQZCOMP_NX16` |
+| `11`     | DELTA_RANS_ORDER0 (M95, planned) | Running delta + zigzag-varint + rANS_ORDER0 on sorted-ascending integer arrays | No | `DELTA_RANS_ORDER0` |
+| `12`     | FQZCOMP_NX16_Z (M94.Z, v1.2) | CRAM-mimic rANS-Nx16 — **static-per-block** freq tables + 16-bit renorm + `T = 4096` fixed (`T \| b·L` exactly). ~22× faster encode than M94 v1 on chr22 lean. **Default for v1.5 quality channels.** | No | `FQZCOMP_NX16_Z` |
+
+M94 v1 (id `10`) and M94.Z (id `12`) coexist in the codebase. The
+on-disk `@compression` attribute carries the codec id; readers
+dispatch by attribute and (defensively) by codec magic (`FQZN` for
+v1, `M94Z` for v1.Z). Existing v1.1.x M94 v1 fixtures decode
+unchanged; new files written under the v1.5 default codec stack use
+id `12` on the `qualities` channel.
+
+### Context-aware codec interface (M93+)
+
+REF_DIFF is the first **context-aware** codec — its encode/decode
+contract takes more than the channel's bytes. The codec metadata
+registry (`ttio.codecs._codec_meta` /
+`TTIOCodecMeta.isContextAware:` / `codecs.CodecMeta.isContextAware`)
+declares which codec ids need plumbing for sibling channels and
+external resolvers; the M86 pipeline checks this flag before
+calling encode/decode and routes the extra arguments accordingly.
+For REF_DIFF the extras are `(positions, cigars,
+reference_resolver)`. The interface generalises cleanly to future
+cross-channel codecs (e.g. mate-info encoders correlated with
+positions) without further reshuffles.
 
 The codecs ship as standalone primitives in
 `python/src/ttio/codecs/`, `objc/Source/Codecs/`, and
