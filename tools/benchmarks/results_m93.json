@@ -1,0 +1,38 @@
+[
+  {
+    "dataset": "chr22_na12878_lean",
+    "bam_input_bytes": 152310575,
+    "started_at_unix": 1777420772.2073326,
+    "host": {
+      "hostname": "TTI-PC-0001",
+      "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "samtools": "samtools 1.19.2",
+      "ttio": "1.2.0"
+    },
+    "formats": {
+      "ttio": {
+        "compress": {
+          "format_name": "ttio",
+          "operation": "compress",
+          "wall_seconds": 48.09194564900008,
+          "output_size_bytes": 226774824,
+          "command": [
+            "<in-process: BamReader.to_genomic_run + SpectralDataset.write_minimal>"
+          ],
+          "notes": "Python reference path. Codecs (v1.2 / M93 stack): REF_DIFF on sequences (with embedded reference; falls back to BASE_PACK if ref load fails), RANS_ORDER0 on qualities, RANS_ORDER1 on cigars, NAME_TOKENIZED on read_names + mate_info_chrom. Lossless throughout."
+        },
+        "decompress": {
+          "format_name": "ttio",
+          "operation": "decompress",
+          "wall_seconds": 127.29435970500003,
+          "output_size_bytes": 76851654,
+          "command": [
+            "<in-process: SpectralDataset.open + per-read AlignedRead access>"
+          ],
+          "notes": "Touched 1,781,125 reads to force lazy decode of every channel."
+        }
+      }
+    }
+  }
+]
