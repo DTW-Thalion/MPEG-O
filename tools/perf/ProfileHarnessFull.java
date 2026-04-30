@@ -37,6 +37,16 @@ import global.thalion.ttio.protection.PerAUFile;
 import global.thalion.ttio.protection.SignatureManager;
 import global.thalion.ttio.transport.TransportReader;
 import global.thalion.ttio.transport.TransportWriter;
+import global.thalion.ttio.Enums.Compression;
+import global.thalion.ttio.Enums.Polarity;
+import global.thalion.ttio.FeatureFlags;
+import global.thalion.ttio.InstrumentConfig;
+import global.thalion.ttio.MassSpectrum;
+import global.thalion.ttio.StreamReader;
+import global.thalion.ttio.StreamWriter;
+import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.protection.EncryptionManager;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -431,6 +441,266 @@ public final class ProfileHarnessFull {
         return r;
     }
 
+    private static Result benchCodecsGenomic(int n) {
+        Result r = new Result();
+        long t;
+
+        // ── REF_DIFF: 100K reads × 100bp ──
+        int refLen = 100_000;
+        int readLen = 100;
+        int nReadsRd = 100_000;
+        java.util.Random rdRng = new java.util.Random(42);
+        byte[] refSeq = new byte[refLen];
+        byte[] alpha = {(byte) 'A', (byte) 'C', (byte) 'G', (byte) 'T'};
+        for (int i = 0; i < refLen; i++) refSeq[i] = alpha[rdRng.nextInt(4)];
+        byte[] refMd5;
+        try {
+            refMd5 = java.security.MessageDigest.getInstance("MD5").digest(refSeq);
+        } catch (Exception e) { throw new RuntimeException(e); }
+
+        java.util.List<byte[]> seqsRd = new java.util.ArrayList<>(nReadsRd);
+        long[] positionsRd = new long[nReadsRd];
+        // Generate sorted positions within reference range (matches Python).
+        java.util.Random posRng = new java.util.Random(42);
+        for (int i = 0; i < nReadsRd; i++) {
+            positionsRd[i] = 1 + (long)(posRng.nextDouble() * (refLen - readLen - 1));
+        }
+        java.util.Arrays.sort(positionsRd);
+        for (int i = 0; i < nReadsRd; i++) {
+            int start = (int) (positionsRd[i] % (refLen - readLen));
+            if (start < 0) start = 0;
+            byte[] seq = java.util.Arrays.copyOfRange(refSeq, start, start + readLen);
+            for (int j = 0; j < readLen; j++) {
+                if (rdRng.nextDouble() < 0.02) seq[j] = alpha[rdRng.nextInt(4)];
+            }
+            seqsRd.add(seq);
+        }
+        java.util.List<String> cigarsRd = new java.util.ArrayList<>(nReadsRd);
+        for (int i = 0; i < nReadsRd; i++) cigarsRd.add(readLen + "M");
+
+        t = System.nanoTime();
+        byte[] rdEnc = global.thalion.ttio.codecs.RefDiff.encode(
+                seqsRd, cigarsRd, positionsRd, refSeq, refMd5, "perf-ref");
+        r.timings.put("ref_diff_encode", (System.nanoTime() - t) / 1e6);
+
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.RefDiff.decode(rdEnc, cigarsRd, positionsRd, refSeq);
+        r.timings.put("ref_diff_decode", (System.nanoTime() - t) / 1e6);
+
+        // ── FQZCOMP_NX16: 100K × 100bp quality strings ──
+        int nQual = 100_000 * 100;
+        byte[] quals = new byte[nQual];
+        long qs = 0xBEEFL;
+        for (int i = 0; i < nQual; i++) {
+            qs = (qs * 6364136223846793005L + 1442695040888963407L);
+            quals[i] = (byte) (33 + 20 + (int) (((qs >>> 32) & 0xFFFFFFFFL) % 21));
+        }
+        int[] readLengths = new int[100_000];
+        java.util.Arrays.fill(readLengths, 100);
+        int[] revcomp = new int[100_000];
+
+        t = System.nanoTime();
+        byte[] fqzEnc = global.thalion.ttio.codecs.FqzcompNx16.encode(
+                quals, readLengths, revcomp);
+        r.timings.put("fqzcomp_nx16_encode", (System.nanoTime() - t) / 1e6);
+
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.FqzcompNx16.decode(fqzEnc);
+        r.timings.put("fqzcomp_nx16_decode", (System.nanoTime() - t) / 1e6);
+
+        // ── FQZCOMP_NX16_Z: same qualities, with revcomp flags ──
+        int[] revcompZ = new int[100_000];
+        for (int i = 0; i < 100_000; i++) revcompZ[i] = ((i & 7) == 0) ? 1 : 0;
+
+        t = System.nanoTime();
+        byte[] fqzZEnc = global.thalion.ttio.codecs.FqzcompNx16Z.encode(
+                quals, readLengths, revcompZ);
+        r.timings.put("fqzcomp_nx16_z_encode", (System.nanoTime() - t) / 1e6);
+
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.FqzcompNx16Z.decode(fqzZEnc, revcompZ);
+        r.timings.put("fqzcomp_nx16_z_decode", (System.nanoTime() - t) / 1e6);
+
+        // ── DELTA_RANS: 1.25M sorted int64 positions ──
+        int nPos = 1_250_000;
+        ByteBuffer bb = ByteBuffer.allocate(nPos * 8).order(ByteOrder.LITTLE_ENDIAN);
+        long dpos = 1000;
+        long ds = 0xBEEFL;
+        for (int i = 0; i < nPos; i++) {
+            bb.putLong(dpos);
+            ds = (ds * 6364136223846793005L + 1442695040888963407L);
+            long dd = 100 + (((ds >>> 32) & 0xFFFFFFFFL) % 401);
+            dpos += dd;
+        }
+        byte[] drInput = bb.array();
+
+        t = System.nanoTime();
+        byte[] drEnc = global.thalion.ttio.codecs.DeltaRans.encode(drInput, 8);
+        r.timings.put("delta_rans_encode", (System.nanoTime() - t) / 1e6);
+
+        t = System.nanoTime();
+        global.thalion.ttio.codecs.DeltaRans.decode(drEnc);
+        r.timings.put("delta_rans_decode", (System.nanoTime() - t) / 1e6);
+
+        return r;
+    }
+
+    // -- B2/B3/B4: Genomic pipeline: write, read, random access
+
+    private static WrittenGenomicRun makeGenomicRun() {
+        java.util.Random rng = new java.util.Random(42);
+        int n = 100_000;
+        int rl = 100;
+        char[] bases = {'A', 'C', 'G', 'T'};
+        long[] positions = new long[n];
+        long pos = 1_000;
+        long lcg = 0xBEEFL;
+        for (int i = 0; i < n; i++) {
+            positions[i] = pos;
+            lcg = lcg * 6364136223846793005L + 1442695040888963407L;
+            long delta = 100 + (((lcg >>> 32) & 0xFFFFFFFFL) % 401);
+            pos += delta;
+        }
+        Arrays.sort(positions);
+        int[] flagValues = {0, 16, 83, 99, 163};
+        int[] flags = new int[n];
+        for (int i = 0; i < n; i++) flags[i] = flagValues[i % flagValues.length];
+        byte[] mapqs = new byte[n];
+        for (int i = 0; i < n; i++) mapqs[i] = (byte)(i % 61);
+        byte[] sequences = new byte[n * rl];
+        for (int i = 0; i < n * rl; i++) sequences[i] = (byte) bases[i % 4];
+        for (int i = 0; i < n * rl; i++) {
+            if (rng.nextDouble() < 0.02) sequences[i] = (byte) bases[rng.nextInt(4)];
+        }
+        byte[] qualities = new byte[n * rl];
+        long qlcg = 0xBEEFL;
+        for (int i = 0; i < n * rl; i++) {
+            qlcg = qlcg * 6364136223846793005L + 1442695040888963407L;
+            qualities[i] = (byte)(20 + (int)(((qlcg >>> 32) & 0xFFFFFFFFL) % 21));
+        }
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        List<String> cigars = new java.util.ArrayList<>(n);
+        List<String> readNames = new java.util.ArrayList<>(n);
+        List<String> mateChroms = new java.util.ArrayList<>(n);
+        long[] matePos = new long[n];
+        int[] tlens = new int[n];
+        List<String> chroms = new java.util.ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            offsets[i] = (long) i * rl;
+            lengths[i] = rl;
+            cigars.add(rl + "M");
+            readNames.add(String.format("M88_%08d:001:01", i));
+            chroms.add("chr1");
+            mateChroms.add("chr1");
+            matePos[i] = positions[i] + 200L;
+            tlens[i] = 200;
+        }
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS,
+            "GRCh38.p14", "ILLUMINA", "NA12878",
+            positions, mapqs, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChroms,
+            matePos, tlens, chroms, Compression.ZLIB);
+    }
+
+    private static Result benchGenomic(Path tmp) throws Exception {
+        Result r = new Result();
+        Path tio = tmp.resolve("genomic.tio");
+        int n = 100_000;
+        WrittenGenomicRun gr = makeGenomicRun();
+        long s = System.nanoTime();
+        try (SpectralDataset ds = SpectralDataset.create(
+                tio.toString(), "perf-genomic", "ISA-GENOMIC-PERF",
+                List.of(), List.of(gr),
+                List.of(), List.of(), List.of(),
+                FeatureFlags.defaultCurrent())) {
+            // written on close
+        }
+        r.timing("write", System.nanoTime() - s);
+        r.size("write_mb", Files.size(tio));
+        s = System.nanoTime();
+        try (SpectralDataset ds = SpectralDataset.open(tio.toString())) {
+            GenomicRun run = ds.genomicRuns().get("genomic_0001");
+            for (int i = 0; i < n; i++) {
+                run.readAt(i);
+            }
+        }
+        r.timing("read", System.nanoTime() - s);
+        java.util.Random raRng = new java.util.Random(99);
+        int nRa = 1000;
+        long[] latencies = new long[nRa];
+        try (SpectralDataset ds = SpectralDataset.open(tio.toString())) {
+            GenomicRun run = ds.genomicRuns().get("genomic_0001");
+            for (int i = 0; i < nRa; i++) {
+                int idx = raRng.nextInt(n);
+                long t0 = System.nanoTime();
+                run.readAt(idx);
+                latencies[i] = System.nanoTime() - t0;
+            }
+        }
+        Arrays.sort(latencies);
+        r.timing("random_access_p50", latencies[nRa / 2]);
+        r.timing("random_access_p99", latencies[(int)(nRa * 0.99)]);
+        return r;
+    }
+
+    // -- B5: AES-256-GCM encrypt/decrypt on 10 MiB payload
+
+    private static Result benchEncryptionGenomic() {
+        Result r = new Result();
+        int tenMiB = 10 * 1024 * 1024;
+        byte[] plaintext = new byte[tenMiB];
+        new java.util.Random(42).nextBytes(plaintext);
+        byte[] key = new byte[32];
+        for (int i = 0; i < 32; i++) key[i] = (byte) i;
+        long s = System.nanoTime();
+        EncryptionManager.EncryptResult er = EncryptionManager.encrypt(plaintext, key);
+        r.timing("encrypt", System.nanoTime() - s);
+        s = System.nanoTime();
+        byte[] dec = EncryptionManager.decrypt(er.ciphertext(), er.iv(), er.tag(), key);
+        r.timing("decrypt", System.nanoTime() - s);
+        if (dec.length != tenMiB) throw new IllegalStateException("decrypt length mismatch");
+        r.size("bytes_mb", tenMiB);
+        return r;
+    }
+
+    // -- B6: StreamWriter/StreamReader throughput
+
+    private static Result benchStreaming(Path tmp) throws Exception {
+        Result r = new Result();
+        Path tio = tmp.resolve("stream.tio");
+        int nSpectra = 1_000;
+        int peaksPerSpectrum = 100;
+        InstrumentConfig ic = new InstrumentConfig("", "", "", "", "", "");
+        long s = System.nanoTime();
+        try (StreamWriter sw = new StreamWriter(
+                tio.toString(), "stream_run",
+                AcquisitionMode.MS1_DDA, ic)) {
+            for (int i = 0; i < nSpectra; i++) {
+                double[] mz = new double[peaksPerSpectrum];
+                double[] intensity = new double[peaksPerSpectrum];
+                for (int j = 0; j < peaksPerSpectrum; j++) {
+                    mz[j] = 100.0 + i + j * 0.5;
+                    intensity[j] = 1000.0 + ((i * 31 + j) % 1000);
+                }
+                sw.appendSpectrum(new MassSpectrum(
+                    mz, intensity, i, i * 0.06,
+                    0.0, 0, 1, Polarity.POSITIVE, null));
+            }
+            sw.flushAndClose();
+        }
+        r.timing("write", System.nanoTime() - s);
+        s = System.nanoTime();
+        try (StreamReader sr = new StreamReader(tio.toString(), "stream_run")) {
+            while (!sr.atEnd()) {
+                sr.nextSpectrum();
+            }
+        }
+        r.timing("read", System.nanoTime() - s);
+        return r;
+    }
+
     // ── Driver ──────────────────────────────────────────────────────
 
     private static final String[] BENCH_ORDER = {
@@ -438,6 +708,10 @@ public final class ProfileHarnessFull {
         "transport.plain", "transport.compressed",
         "encryption", "signatures", "jcamp", "spectra.build",
         "codecs",
+        "codecs.genomic",
+        "genomic",
+        "encryption.genomic",
+        "streaming",
     };
 
     private static Result runOne(String name, Path tmpRoot,
@@ -456,6 +730,10 @@ public final class ProfileHarnessFull {
             case "jcamp":        return benchJcamp(tmp, n);
             case "spectra.build": return benchSpectra(n);
             case "codecs":       return benchCodecs(n);
+            case "codecs.genomic": return benchCodecsGenomic(n);
+            case "genomic":            return benchGenomic(tmp);
+            case "encryption.genomic": return benchEncryptionGenomic();
+            case "streaming":          return benchStreaming(tmp);
             default: throw new IllegalArgumentException(name);
         }
     }

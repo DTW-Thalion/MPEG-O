@@ -611,12 +611,332 @@ static void bench_spectra_build(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
+/* Pipeline + Encryption + Streaming benchmarks (B2-B6) */
+
+static int cmp_double(const void *a, const void *b) {
+    double va = *(const double *)a, vb = *(const double *)b;
+    return (va > vb) - (va < vb);
+}
+
+#import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOAlignedRead.h"
+#import "Protection/TTIOEncryptionManager.h"
+#import "Query/TTIOStreamWriter.h"
+#import "Query/TTIOStreamReader.h"
+
+/* B2/B3/B4: Genomic pipeline (write, read, random access) */
+
+static void bench_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                           NSMutableDictionary *out)
+{
+    (void)peaks;
+    @autoreleasepool {
+        NSString *path = [tmp stringByAppendingPathComponent:@"genomic.tio"];
+        unlink([path fileSystemRepresentation]);
+
+        const NSUInteger nReads   = 100000;
+        const NSUInteger readLen  = 100;
+        (void)n;
+
+        /* Positions: sorted ascending, LCG seed 0xBEEF, deltas 100-500 */
+        NSMutableData *posData = [NSMutableData dataWithLength:nReads * sizeof(int64_t)];
+        int64_t *posPtr = (int64_t *)posData.mutableBytes;
+        uint64_t lcgState = 0xBEEF;
+        int64_t curPos = 0;
+        for (NSUInteger i = 0; i < nReads; i++) {
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            int64_t delta = 100 + (int64_t)((lcgState >> 33) % 401);
+            curPos += delta;
+            posPtr[i] = curPos;
+        }
+
+        /* Flags: 5 dominant values {0,16,83,99,163} */
+        static const uint32_t kDomFlags[5] = {0, 16, 83, 99, 163};
+        NSMutableData *flagData = [NSMutableData dataWithLength:nReads * sizeof(uint32_t)];
+        uint32_t *flagPtr = (uint32_t *)flagData.mutableBytes;
+        for (NSUInteger i = 0; i < nReads; i++) {
+            flagPtr[i] = kDomFlags[i % 5];
+        }
+
+        /* Mapping qualities: Q0-Q60 */
+        NSMutableData *mqData = [NSMutableData dataWithLength:nReads * sizeof(uint8_t)];
+        uint8_t *mqPtr = (uint8_t *)mqData.mutableBytes;
+        for (NSUInteger i = 0; i < nReads; i++) {
+            mqPtr[i] = (uint8_t)(i % 61);
+        }
+
+        /* Sequences: ACGT pattern with 2% mutations (srand(42)) */
+        const char kBases[] = "ACGT";
+        NSUInteger totalBases = nReads * readLen;
+        NSMutableData *seqData = [NSMutableData dataWithLength:totalBases];
+        uint8_t *seqPtr = (uint8_t *)seqData.mutableBytes;
+        srand(42);
+        for (NSUInteger i = 0; i < totalBases; i++) {
+            seqPtr[i] = (uint8_t)kBases[i % 4];
+            if ((rand() % 50) == 0) {
+                seqPtr[i] = (uint8_t)kBases[rand() % 4];
+            }
+        }
+
+        /* Qualities: Q20-Q40, LCG seed 0xBEEF */
+        NSMutableData *qualData = [NSMutableData dataWithLength:totalBases];
+        uint8_t *qualPtr = (uint8_t *)qualData.mutableBytes;
+        lcgState = 0xBEEF;
+        for (NSUInteger i = 0; i < totalBases; i++) {
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            qualPtr[i] = (uint8_t)(20 + (lcgState >> 33) % 21);
+        }
+
+        /* Offsets / lengths */
+        NSMutableData *offData = [NSMutableData dataWithLength:nReads * sizeof(uint64_t)];
+        NSMutableData *lenData = [NSMutableData dataWithLength:nReads * sizeof(uint32_t)];
+        uint64_t *offPtr = (uint64_t *)offData.mutableBytes;
+        uint32_t *lenPtr = (uint32_t *)lenData.mutableBytes;
+        for (NSUInteger i = 0; i < nReads; i++) {
+            offPtr[i] = (uint64_t)(i * readLen);
+            lenPtr[i] = (uint32_t)readLen;
+        }
+
+        /* Per-read arrays */
+        NSMutableArray *cigars     = [NSMutableArray arrayWithCapacity:nReads];
+        NSMutableArray *readNames  = [NSMutableArray arrayWithCapacity:nReads];
+        NSMutableArray *chroms     = [NSMutableArray arrayWithCapacity:nReads];
+        NSMutableArray *mateChroms = [NSMutableArray arrayWithCapacity:nReads];
+        NSMutableData *matePosData = [NSMutableData dataWithLength:nReads * sizeof(int64_t)];
+        NSMutableData *tplLenData  = [NSMutableData dataWithLength:nReads * sizeof(int32_t)];
+        int64_t *matePosPtr = (int64_t *)matePosData.mutableBytes;
+        int32_t *tplLenPtr  = (int32_t *)tplLenData.mutableBytes;
+        for (NSUInteger i = 0; i < nReads; i++) {
+            [cigars addObject:@"100M"];
+            [readNames addObject:[NSString stringWithFormat:@"M88_%08lu:001:01",
+                                  (unsigned long)i]];
+            [chroms addObject:@"chr1"];
+            [mateChroms addObject:@"chr1"];
+            matePosPtr[i] = posPtr[i] + (int64_t)readLen + 20;
+            tplLenPtr[i]  = (int32_t)(readLen * 2 + 20);
+        }
+
+        TTIOWrittenGenomicRun *wgr = [[TTIOWrittenGenomicRun alloc]
+            initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                       referenceUri:@"perf://ref/chr1"
+                           platform:@"Illumina"
+                         sampleName:@"perf-sample"
+                           positions:posData
+                    mappingQualities:mqData
+                               flags:flagData
+                           sequences:seqData
+                           qualities:qualData
+                             offsets:offData
+                             lengths:lenData
+                              cigars:cigars
+                           readNames:readNames
+                     mateChromosomes:mateChroms
+                       matePositions:matePosData
+                     templateLengths:tplLenData
+                         chromosomes:chroms
+                  signalCompression:TTIOCompressionZlib];
+
+        /* B2: Write */
+        NSError *err = nil;
+        double t0 = nowSeconds();
+        BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                     title:@"genomic-perf"
+                                       isaInvestigationId:@"ISA-GENOMIC-PERF"
+                                                   msRuns:@{}
+                                               genomicRuns:@{@"r": wgr}
+                                           identifications:nil
+                                           quantifications:nil
+                                         provenanceRecords:nil
+                                                     error:&err];
+        if (!ok) { NSLog(@"genomic write failed: %@", err); exit(1); }
+        putSeconds(out, @"write", nowSeconds() - t0);
+
+        NSDictionary *attrs = [[NSFileManager defaultManager]
+            attributesOfItemAtPath:path error:NULL];
+        putSeconds(out, @"write_mb",
+                    ((NSNumber *)attrs[NSFileSize]).doubleValue / 1e6);
+
+        /* B3: Sequential read-all (sampled) */
+        t0 = nowSeconds();
+        TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+        if (!ds) { NSLog(@"genomic read open failed: %@", err); exit(1); }
+        TTIOGenomicRun *gr = ds.genomicRuns[@"r"];
+        NSUInteger total = [gr readCount];
+        NSUInteger step = MAX(1UL, total / 100);
+        NSUInteger sampled = 0;
+        for (NSUInteger i = 0; i < total; i += step) {
+            TTIOAlignedRead *ar = [gr objectAtIndex:i];
+            sampled += ar.sequence.length;
+        }
+        (void)sampled;
+        [ds closeFile];
+        putSeconds(out, @"read", nowSeconds() - t0);
+
+        /* B4: Random access p50/p99 latency (1000 reads) */
+        ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+        if (!ds) { NSLog(@"genomic ra open failed: %@", err); exit(1); }
+        gr = ds.genomicRuns[@"r"];
+        total = [gr readCount];
+
+        const NSUInteger kRaSamples = 1000;
+        srand(99);
+        double *latencies = (double *)malloc(kRaSamples * sizeof(double));
+        for (NSUInteger i = 0; i < kRaSamples; i++) {
+            NSUInteger idx = (NSUInteger)((unsigned)rand() % (unsigned)total);
+            double ts = nowSeconds();
+            TTIOAlignedRead *ar = [gr objectAtIndex:idx];
+            (void)ar.sequence;
+            latencies[i] = nowSeconds() - ts;
+        }
+        [ds closeFile];
+
+        qsort(latencies, kRaSamples, sizeof(double), cmp_double);
+        putSeconds(out, @"random_access_p50", latencies[(NSUInteger)(kRaSamples * 0.50)]);
+        putSeconds(out, @"random_access_p99", latencies[(NSUInteger)(kRaSamples * 0.99)]);
+        free(latencies);
+    }
+}
+
+/* B5: Encryption -- AES-256-GCM on 10 MiB payload */
+
+static void bench_encryption_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                                      NSMutableDictionary *out)
+{
+    (void)tmp; (void)n; (void)peaks;
+    @autoreleasepool {
+        const NSUInteger payloadBytes = 10 * 1024 * 1024;
+
+        NSMutableData *payload = [NSMutableData dataWithLength:payloadBytes];
+        uint8_t *pp = payload.mutableBytes;
+        srand(42);
+        for (NSUInteger i = 0; i < payloadBytes; i++) {
+            pp[i] = (uint8_t)(rand() & 0xFF);
+        }
+
+        uint8_t keyBytes[32];
+        for (int i = 0; i < 32; i++) keyBytes[i] = (uint8_t)i;
+        NSData *key = [NSData dataWithBytes:keyBytes length:32];
+
+        NSError *err = nil;
+        NSData *iv = nil, *tag = nil;
+
+        double t0 = nowSeconds();
+        NSData *ciphertext = [TTIOEncryptionManager encryptData:payload
+                                                        withKey:key
+                                                             iv:&iv
+                                                        authTag:&tag
+                                                          error:&err];
+        if (!ciphertext) { NSLog(@"enc.genomic encrypt failed: %@", err); exit(1); }
+        putSeconds(out, @"encrypt", nowSeconds() - t0);
+
+        t0 = nowSeconds();
+        NSData *plaintext = [TTIOEncryptionManager decryptData:ciphertext
+                                                       withKey:key
+                                                            iv:iv
+                                                       authTag:tag
+                                                         error:&err];
+        if (!plaintext) { NSLog(@"enc.genomic decrypt failed: %@", err); exit(1); }
+        putSeconds(out, @"decrypt", nowSeconds() - t0);
+
+        putSeconds(out, @"bytes_mb", (double)payloadBytes / 1e6);
+    }
+}
+
+/* B6: Streaming -- StreamWriter/StreamReader throughput */
+
+static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                             NSMutableDictionary *out)
+{
+    @autoreleasepool {
+        NSString *srcPath    = [tmp stringByAppendingPathComponent:@"stream-src.tio"];
+        NSString *streamPath = [tmp stringByAppendingPathComponent:@"stream.tio"];
+        unlink([srcPath fileSystemRepresentation]);
+        unlink([streamPath fileSystemRepresentation]);
+
+        TTIOWrittenRun *run = buildMsRun(n, peaks);
+        NSError *err = nil;
+        if (![TTIOSpectralDataset writeMinimalToPath:srcPath
+                                                title:@"stream-src"
+                                  isaInvestigationId:@"ISA-STREAM"
+                                              msRuns:@{@"r": run}
+                                      identifications:nil
+                                      quantifications:nil
+                                    provenanceRecords:nil
+                                                error:&err]) {
+            NSLog(@"streaming src write failed: %@", err); exit(1);
+        }
+
+        TTIOSpectralDataset *srcDs = [TTIOSpectralDataset readFromFilePath:srcPath error:&err];
+        if (!srcDs) { NSLog(@"streaming src open failed: %@", err); exit(1); }
+        TTIOAcquisitionRun *srcRun = srcDs.msRuns[@"r"];
+        NSUInteger specCount = [srcRun count];
+
+        TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
+            initWithManufacturer:@"PerfInstruments"
+                           model:@"Bench-1"
+                    serialNumber:@"SN-PERF"
+                      sourceType:@"ESI"
+                    analyzerType:@"Orbitrap"
+                    detectorType:@"Detector"];
+
+        /* B6 write */
+        double t0 = nowSeconds();
+        TTIOStreamWriter *writer = [[TTIOStreamWriter alloc]
+            initWithFilePath:streamPath
+                     runName:@"r"
+             acquisitionMode:TTIOAcquisitionModeMS1DDA
+            instrumentConfig:cfg
+                       error:&err];
+        if (!writer) { NSLog(@"StreamWriter init failed: %@", err); exit(1); }
+
+        for (NSUInteger i = 0; i < specCount; i++) {
+            TTIOMassSpectrum *sp = [srcRun objectAtIndex:i];
+            if (![writer appendSpectrum:sp error:&err]) {
+                NSLog(@"StreamWriter append %lu failed: %@", (unsigned long)i, err);
+                exit(1);
+            }
+        }
+        if (![writer flushAndCloseWithError:&err]) {
+            NSLog(@"StreamWriter flush failed: %@", err); exit(1);
+        }
+        putSeconds(out, @"write", nowSeconds() - t0);
+        [srcDs closeFile];
+
+        /* B6 read */
+        t0 = nowSeconds();
+        TTIOStreamReader *reader = [[TTIOStreamReader alloc]
+            initWithFilePath:streamPath
+                     runName:@"r"
+                       error:&err];
+        if (!reader) { NSLog(@"StreamReader init failed: %@", err); exit(1); }
+
+        NSUInteger readBack = 0;
+        while (![reader atEnd]) {
+            TTIOMassSpectrum *sp = [reader nextSpectrumWithError:&err];
+            if (!sp) { NSLog(@"StreamReader next failed: %@", err); exit(1); }
+            readBack += sp.signalArrays[@"mz"].length;
+        }
+        (void)readBack;
+        [reader close];
+        putSeconds(out, @"read", nowSeconds() - t0);
+    }
+}
+
+
 /* ── codecs benchmark (P4 — perf workplan) ─────────────────────── */
 
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"
 #import "Codecs/TTIONameTokenizer.h"
+#import "Codecs/TTIORefDiff.h"
+#import "Codecs/TTIOFqzcompNx16.h"
+#import "Codecs/TTIOFqzcompNx16Z.h"
+#import "Codecs/TTIODeltaRans.h"
+#include <openssl/md5.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
                           NSMutableDictionary *out)
@@ -683,6 +1003,190 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
+/* ── Genomic codecs benchmark (B1) ────────────────────────────── */
+
+static int cmp_int64(const void *a, const void *b) {
+    int64_t va = *(const int64_t *)a, vb = *(const int64_t *)b;
+    return (va > vb) - (va < vb);
+}
+
+static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                                  NSMutableDictionary *out)
+{
+    (void)tmp; (void)n; (void)peaks;
+    @autoreleasepool {
+        NSError *err = nil;
+
+        // ── REF_DIFF: 100K reads × 100bp against 100Kbp reference ──
+        const NSUInteger rdNumReads = 100000;
+        const NSUInteger rdReadLen  = 100;
+        const NSUInteger rdRefLen   = 100000;
+
+        // Build reference sequence (all 'A' for simplicity).
+        NSMutableData *refSeqData = [NSMutableData dataWithLength:rdRefLen];
+        memset(refSeqData.mutableBytes, 'A', rdRefLen);
+
+        // Compute MD5 of reference.
+        unsigned char refMd5Bytes[16];
+        MD5(refSeqData.bytes, refSeqData.length, refMd5Bytes);
+        NSData *refMd5 = [NSData dataWithBytes:refMd5Bytes length:16];
+
+        // Build read sequences (all 100bp of 'A').
+        NSMutableArray<NSData *> *sequences =
+            [NSMutableArray arrayWithCapacity:rdNumReads];
+        NSMutableArray<NSString *> *cigars =
+            [NSMutableArray arrayWithCapacity:rdNumReads];
+        NSMutableData *positions =
+            [NSMutableData dataWithLength:rdNumReads * sizeof(int64_t)];
+        int64_t *posPtr = (int64_t *)positions.mutableBytes;
+
+        // LCG seed 0xBEEF for positions (1-based, clamped to ref).
+        uint64_t lcgState = 0xBEEF;
+        NSData *readSeq = [NSData dataWithBytes:refSeqData.bytes length:rdReadLen];
+        srand(42);
+        for (NSUInteger i = 0; i < rdNumReads; i++) {
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            int64_t pos = (int64_t)((lcgState >> 17) % (rdRefLen - rdReadLen)) + 1;
+            posPtr[i] = pos;
+            // Apply a mutation with low probability using srand(42) sequence.
+            if ((rand() % 20) == 0) {
+                // Mutate one base at random position within read.
+                NSMutableData *mutSeq = [NSMutableData dataWithData:readSeq];
+                uint8_t *bp = mutSeq.mutableBytes;
+                NSUInteger mpos = (NSUInteger)(rand() % (int)rdReadLen);
+                const char bases[] = "ACGT";
+                bp[mpos] = (uint8_t)bases[rand() % 4];
+                [sequences addObject:mutSeq];
+            } else {
+                [sequences addObject:readSeq];
+            }
+            [cigars addObject:[NSString stringWithFormat:@"%luM",
+                               (unsigned long)rdReadLen]];
+        }
+
+        double t0 = nowSeconds();
+        NSData *rdEnc = [TTIORefDiff encodeWithSequences:sequences
+                                                  cigars:cigars
+                                               positions:positions
+                                      referenceChromSeq:refSeqData
+                                            referenceMD5:refMd5
+                                            referenceURI:@"perf://ref/chr1"
+                                                   error:&err];
+        putSeconds(out, @"ref_diff_encode", nowSeconds() - t0);
+        if (!rdEnc) { NSLog(@"ref_diff encode failed: %@", err); }
+
+        if (rdEnc) {
+            t0 = nowSeconds();
+            (void)[TTIORefDiff decodeData:rdEnc
+                                   cigars:cigars
+                                positions:positions
+                       referenceChromSeq:refSeqData
+                                    error:&err];
+            putSeconds(out, @"ref_diff_decode", nowSeconds() - t0);
+            if (err) NSLog(@"ref_diff decode error: %@", err);
+        } else {
+            putSeconds(out, @"ref_diff_decode", 0.0);
+        }
+
+        // ── FQZCOMP_NX16: 100K × 100bp quality strings Q20-Q40 ─────
+        const NSUInteger fqNumReads = 100000;
+        const NSUInteger fqReadLen  = 100;
+        const NSUInteger fqTotalQual = fqNumReads * fqReadLen;
+
+        NSMutableData *qualities = [NSMutableData dataWithLength:fqTotalQual];
+        uint8_t *qPtr = (uint8_t *)qualities.mutableBytes;
+        lcgState = 0xBEEF;
+        for (NSUInteger i = 0; i < fqTotalQual; i++) {
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            qPtr[i] = (uint8_t)(20 + (lcgState >> 33) % 21); // Q20..Q40
+        }
+
+        NSMutableArray<NSNumber *> *readLengths =
+            [NSMutableArray arrayWithCapacity:fqNumReads];
+        NSMutableArray<NSNumber *> *revcompFlagsForward =
+            [NSMutableArray arrayWithCapacity:fqNumReads];
+        for (NSUInteger i = 0; i < fqNumReads; i++) {
+            [readLengths addObject:@((uint32_t)fqReadLen)];
+            [revcompFlagsForward addObject:@0];
+        }
+
+        t0 = nowSeconds();
+        NSData *fqEnc = [TTIOFqzcompNx16 encodeWithQualities:qualities
+                                                   readLengths:readLengths
+                                                  revcompFlags:revcompFlagsForward
+                                                         error:&err];
+        putSeconds(out, @"fqzcomp_nx16_encode", nowSeconds() - t0);
+        if (!fqEnc) { NSLog(@"fqzcomp_nx16 encode failed: %@", err); }
+
+        if (fqEnc) {
+            t0 = nowSeconds();
+            (void)[TTIOFqzcompNx16 decodeData:fqEnc error:&err];
+            putSeconds(out, @"fqzcomp_nx16_decode", nowSeconds() - t0);
+            if (err) NSLog(@"fqzcomp_nx16 decode error: %@", err);
+        } else {
+            putSeconds(out, @"fqzcomp_nx16_decode", 0.0);
+        }
+
+        // ── FQZCOMP_NX16_Z: same quality input, revcomp (i & 7) == 0 ─
+        NSMutableArray<NSNumber *> *revcompFlagsMixed =
+            [NSMutableArray arrayWithCapacity:fqNumReads];
+        for (NSUInteger i = 0; i < fqNumReads; i++) {
+            [revcompFlagsMixed addObject:@((i & 7) == 0 ? 1 : 0)];
+        }
+
+        t0 = nowSeconds();
+        NSData *fqzEnc = [TTIOFqzcompNx16Z encodeWithQualities:qualities
+                                                     readLengths:readLengths
+                                                    revcompFlags:revcompFlagsMixed
+                                                           error:&err];
+        putSeconds(out, @"fqzcomp_nx16_z_encode", nowSeconds() - t0);
+        if (!fqzEnc) { NSLog(@"fqzcomp_nx16_z encode failed: %@", err); }
+
+        if (fqzEnc) {
+            t0 = nowSeconds();
+            (void)[TTIOFqzcompNx16Z decodeData:fqzEnc
+                                   revcompFlags:revcompFlagsMixed
+                                          error:&err];
+            putSeconds(out, @"fqzcomp_nx16_z_decode", nowSeconds() - t0);
+            if (err) NSLog(@"fqzcomp_nx16_z decode error: %@", err);
+        } else {
+            putSeconds(out, @"fqzcomp_nx16_z_decode", 0.0);
+        }
+
+        // ── DELTA_RANS: 1.25M sorted int64 positions ────────────────
+        const NSUInteger drCount = 1250000;
+
+        NSMutableData *drData =
+            [NSMutableData dataWithLength:drCount * sizeof(int64_t)];
+        int64_t *drPtr = (int64_t *)drData.mutableBytes;
+        lcgState = 0xBEEF;
+        int64_t pos = 0;
+        for (NSUInteger i = 0; i < drCount; i++) {
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            int64_t delta = 100 + (int64_t)((lcgState >> 33) % 401); // 100..500
+            pos += delta;
+            drPtr[i] = pos;
+        }
+        // Sort to ensure ascending order (LCG already produces that via
+        // cumulative sum, but sort defensively).
+        qsort(drPtr, drCount, sizeof(int64_t), cmp_int64);
+
+        t0 = nowSeconds();
+        NSData *drEnc = TTIODeltaRansEncode(drData, 8, &err);
+        putSeconds(out, @"delta_rans_encode", nowSeconds() - t0);
+        if (!drEnc) { NSLog(@"delta_rans encode failed: %@", err); }
+
+        if (drEnc) {
+            t0 = nowSeconds();
+            (void)TTIODeltaRansDecode(drEnc, &err);
+            putSeconds(out, @"delta_rans_decode", nowSeconds() - t0);
+            if (err) NSLog(@"delta_rans decode error: %@", err);
+        } else {
+            putSeconds(out, @"delta_rans_decode", 0.0);
+        }
+    }
+}
+
 /* ── Registry + driver ─────────────────────────────────────────── */
 
 typedef struct {
@@ -702,6 +1206,10 @@ static BenchEntry kBenches[] = {
     { "jcamp",                bench_jcamp },
     { "spectra.build",        bench_spectra_build },
     { "codecs",               bench_codecs },
+    { "codecs.genomic",       bench_codecs_genomic },
+    { "genomic",              bench_genomic },
+    { "encryption.genomic",   bench_encryption_genomic },
+    { "streaming",            bench_streaming },
     { NULL, NULL }
 };
 
