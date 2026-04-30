@@ -460,14 +460,10 @@ public final class ProfileHarnessFull {
 
         java.util.List<byte[]> seqsRd = new java.util.ArrayList<>(nReadsRd);
         long[] positionsRd = new long[nReadsRd];
-        // Generate sorted positions via LCG.
-        long pos = 1000;
-        long lcg = 0xBEEFL;
+        // Generate sorted positions within reference range (matches Python).
+        java.util.Random posRng = new java.util.Random(42);
         for (int i = 0; i < nReadsRd; i++) {
-            positionsRd[i] = pos;
-            lcg = (lcg * 6364136223846793005L + 1442695040888963407L);
-            long delta = 100 + (((lcg >>> 32) & 0xFFFFFFFFL) % 401);
-            pos += delta;
+            positionsRd[i] = 1 + (long)(posRng.nextDouble() * (refLen - readLen - 1));
         }
         java.util.Arrays.sort(positionsRd);
         for (int i = 0; i < nReadsRd; i++) {
