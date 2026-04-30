@@ -740,11 +740,20 @@ public class GenomicRun
                 decodedIntChannels.put(name, arr);
                 return arr;
             }
+            if (codecId == global.thalion.ttio.Enums.Compression
+                    .DELTA_RANS_ORDER0.ordinal()) {
+                long total = ds.shape()[0];
+                byte[] all = (byte[]) ds.readSlice(0L, total);
+                byte[] decoded = global.thalion.ttio.codecs.DeltaRans.decode(all);
+                Object arr = deserialiseLeBytes(decoded, naturalDtype);
+                decodedIntChannels.put(name, arr);
+                return arr;
+            }
             throw new IllegalStateException(
                 "signal_channel '" + name + "': @compression=" + codecId
                 + " is not a supported TTIO codec id for an integer "
-                + "channel (only RANS_ORDER0 = 4 and RANS_ORDER1 = 5 "
-                + "are recognised)");
+                + "channel (RANS_ORDER0 = 4, RANS_ORDER1 = 5, "
+                + "DELTA_RANS_ORDER0 = 11)");
         }
     }
 
@@ -967,11 +976,21 @@ public class GenomicRun
                     decodedMateInfo.put(name, arr);
                     return arr;
                 }
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .DELTA_RANS_ORDER0.ordinal()) {
+                    long total = ds.shape()[0];
+                    byte[] all = (byte[]) ds.readSlice(0L, total);
+                    byte[] decoded = global.thalion.ttio.codecs
+                        .DeltaRans.decode(all);
+                    Object arr = deserialiseLeBytes(decoded, naturalPrecision);
+                    decodedMateInfo.put(name, arr);
+                    return arr;
+                }
                 throw new IllegalStateException(
                     "signal_channel 'mate_info/" + name + "': @compression="
                     + codecId + " is not a supported TTIO codec id for "
-                    + "an integer mate field (only RANS_ORDER0 = 4 and "
-                    + "RANS_ORDER1 = 5 are recognised)");
+                    + "an integer mate field (RANS_ORDER0 = 4, "
+                    + "RANS_ORDER1 = 5, DELTA_RANS_ORDER0 = 11)");
             }
             // Natural-dtype path — read the typed dataset directly.
             Object arr = ds.readAll();
