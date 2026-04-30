@@ -37,6 +37,16 @@ import global.thalion.ttio.protection.PerAUFile;
 import global.thalion.ttio.protection.SignatureManager;
 import global.thalion.ttio.transport.TransportReader;
 import global.thalion.ttio.transport.TransportWriter;
+import global.thalion.ttio.Enums.Compression;
+import global.thalion.ttio.Enums.Polarity;
+import global.thalion.ttio.FeatureFlags;
+import global.thalion.ttio.InstrumentConfig;
+import global.thalion.ttio.MassSpectrum;
+import global.thalion.ttio.StreamReader;
+import global.thalion.ttio.StreamWriter;
+import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.protection.EncryptionManager;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -539,6 +549,162 @@ public final class ProfileHarnessFull {
         return r;
     }
 
+    // -- B2/B3/B4: Genomic pipeline: write, read, random access
+
+    private static WrittenGenomicRun makeGenomicRun() {
+        java.util.Random rng = new java.util.Random(42);
+        int n = 100_000;
+        int rl = 100;
+        char[] bases = {'A', 'C', 'G', 'T'};
+        long[] positions = new long[n];
+        long pos = 1_000;
+        long lcg = 0xBEEFL;
+        for (int i = 0; i < n; i++) {
+            positions[i] = pos;
+            lcg = lcg * 6364136223846793005L + 1442695040888963407L;
+            long delta = 100 + (((lcg >>> 32) & 0xFFFFFFFFL) % 401);
+            pos += delta;
+        }
+        Arrays.sort(positions);
+        int[] flagValues = {0, 16, 83, 99, 163};
+        int[] flags = new int[n];
+        for (int i = 0; i < n; i++) flags[i] = flagValues[i % flagValues.length];
+        byte[] mapqs = new byte[n];
+        for (int i = 0; i < n; i++) mapqs[i] = (byte)(i % 61);
+        byte[] sequences = new byte[n * rl];
+        for (int i = 0; i < n * rl; i++) sequences[i] = (byte) bases[i % 4];
+        for (int i = 0; i < n * rl; i++) {
+            if (rng.nextDouble() < 0.02) sequences[i] = (byte) bases[rng.nextInt(4)];
+        }
+        byte[] qualities = new byte[n * rl];
+        long qlcg = 0xBEEFL;
+        for (int i = 0; i < n * rl; i++) {
+            qlcg = qlcg * 6364136223846793005L + 1442695040888963407L;
+            qualities[i] = (byte)(20 + (int)(((qlcg >>> 32) & 0xFFFFFFFFL) % 21));
+        }
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        List<String> cigars = new java.util.ArrayList<>(n);
+        List<String> readNames = new java.util.ArrayList<>(n);
+        List<String> mateChroms = new java.util.ArrayList<>(n);
+        long[] matePos = new long[n];
+        int[] tlens = new int[n];
+        List<String> chroms = new java.util.ArrayList<>(n);
+        for (int i = 0; i < n; i++) {
+            offsets[i] = (long) i * rl;
+            lengths[i] = rl;
+            cigars.add(rl + "M");
+            readNames.add(String.format("M88_%08d:001:01", i));
+            chroms.add("chr1");
+            mateChroms.add("chr1");
+            matePos[i] = positions[i] + 200L;
+            tlens[i] = 200;
+        }
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS,
+            "GRCh38.p14", "ILLUMINA", "NA12878",
+            positions, mapqs, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChroms,
+            matePos, tlens, chroms, Compression.ZLIB);
+    }
+
+    private static Result benchGenomic(Path tmp) throws Exception {
+        Result r = new Result();
+        Path tio = tmp.resolve("genomic.tio");
+        int n = 100_000;
+        WrittenGenomicRun gr = makeGenomicRun();
+        long s = System.nanoTime();
+        try (SpectralDataset ds = SpectralDataset.create(
+                tio.toString(), "perf-genomic", "ISA-GENOMIC-PERF",
+                List.of(), List.of(gr),
+                List.of(), List.of(), List.of(),
+                FeatureFlags.defaultCurrent())) {
+            // written on close
+        }
+        r.timing("write", System.nanoTime() - s);
+        r.size("write_mb", Files.size(tio));
+        s = System.nanoTime();
+        try (SpectralDataset ds = SpectralDataset.open(tio.toString())) {
+            GenomicRun run = ds.genomicRuns().get("genomic_0001");
+            for (int i = 0; i < n; i++) {
+                run.readAt(i);
+            }
+        }
+        r.timing("read", System.nanoTime() - s);
+        java.util.Random raRng = new java.util.Random(99);
+        int nRa = 1000;
+        long[] latencies = new long[nRa];
+        try (SpectralDataset ds = SpectralDataset.open(tio.toString())) {
+            GenomicRun run = ds.genomicRuns().get("genomic_0001");
+            for (int i = 0; i < nRa; i++) {
+                int idx = raRng.nextInt(n);
+                long t0 = System.nanoTime();
+                run.readAt(idx);
+                latencies[i] = System.nanoTime() - t0;
+            }
+        }
+        Arrays.sort(latencies);
+        r.timing("random_access_p50", latencies[nRa / 2]);
+        r.timing("random_access_p99", latencies[(int)(nRa * 0.99)]);
+        return r;
+    }
+
+    // -- B5: AES-256-GCM encrypt/decrypt on 10 MiB payload
+
+    private static Result benchEncryptionGenomic() {
+        Result r = new Result();
+        int tenMiB = 10 * 1024 * 1024;
+        byte[] plaintext = new byte[tenMiB];
+        new java.util.Random(42).nextBytes(plaintext);
+        byte[] key = new byte[32];
+        for (int i = 0; i < 32; i++) key[i] = (byte) i;
+        long s = System.nanoTime();
+        EncryptionManager.EncryptResult er = EncryptionManager.encrypt(plaintext, key);
+        r.timing("encrypt", System.nanoTime() - s);
+        s = System.nanoTime();
+        byte[] dec = EncryptionManager.decrypt(er.ciphertext(), er.iv(), er.tag(), key);
+        r.timing("decrypt", System.nanoTime() - s);
+        if (dec.length != tenMiB) throw new IllegalStateException("decrypt length mismatch");
+        r.size("bytes_mb", tenMiB);
+        return r;
+    }
+
+    // -- B6: StreamWriter/StreamReader throughput
+
+    private static Result benchStreaming(Path tmp) throws Exception {
+        Result r = new Result();
+        Path tio = tmp.resolve("stream.tio");
+        int nSpectra = 1_000;
+        int peaksPerSpectrum = 100;
+        InstrumentConfig ic = new InstrumentConfig("", "", "", "", "", "");
+        long s = System.nanoTime();
+        try (StreamWriter sw = new StreamWriter(
+                tio.toString(), "stream_run",
+                AcquisitionMode.MS1_DDA, ic)) {
+            for (int i = 0; i < nSpectra; i++) {
+                double[] mz = new double[peaksPerSpectrum];
+                double[] intensity = new double[peaksPerSpectrum];
+                for (int j = 0; j < peaksPerSpectrum; j++) {
+                    mz[j] = 100.0 + i + j * 0.5;
+                    intensity[j] = 1000.0 + ((i * 31 + j) % 1000);
+                }
+                sw.appendSpectrum(new MassSpectrum(
+                    mz, intensity, i, i * 0.06,
+                    0.0, 0, 1, Polarity.POSITIVE, null));
+            }
+            sw.flushAndClose();
+        }
+        r.timing("write", System.nanoTime() - s);
+        s = System.nanoTime();
+        try (StreamReader sr = new StreamReader(tio.toString(), "stream_run")) {
+            while (!sr.atEnd()) {
+                sr.nextSpectrum();
+            }
+        }
+        r.timing("read", System.nanoTime() - s);
+        return r;
+    }
+
     // ── Driver ──────────────────────────────────────────────────────
 
     private static final String[] BENCH_ORDER = {
@@ -547,6 +713,9 @@ public final class ProfileHarnessFull {
         "encryption", "signatures", "jcamp", "spectra.build",
         "codecs",
         "codecs.genomic",
+        "genomic",
+        "encryption.genomic",
+        "streaming",
     };
 
     private static Result runOne(String name, Path tmpRoot,
@@ -566,6 +735,9 @@ public final class ProfileHarnessFull {
             case "spectra.build": return benchSpectra(n);
             case "codecs":       return benchCodecs(n);
             case "codecs.genomic": return benchCodecsGenomic(n);
+            case "genomic":            return benchGenomic(tmp);
+            case "encryption.genomic": return benchEncryptionGenomic();
+            case "streaming":          return benchStreaming(tmp);
             default: throw new IllegalArgumentException(name);
         }
     }
