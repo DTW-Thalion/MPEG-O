@@ -1,0 +1,944 @@
+/*
+ * TTI-O Java Implementation
+ * Copyright (C) 2026 DTW-Thalion
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+package global.thalion.ttio.codecs;
+
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Arrays;
+import java.util.zip.Deflater;
+import java.util.zip.DeflaterOutputStream;
+import java.util.zip.Inflater;
+import java.util.zip.InflaterOutputStream;
+
+/**
+ * FQZCOMP_NX16.Z — CRAM-mimic (rANS-Nx16) lossless quality codec (M94.Z).
+ *
+ * <p>Clean-room Java port of the Python reference at
+ * {@code python/src/ttio/codecs/fqzcomp_nx16_z.py}. Spec at
+ * {@code docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md}.
+ *
+ * <p>Algorithm summary:
+ * <ul>
+ *   <li>{@code L = 2^15 = 32 768} state lower bound.</li>
+ *   <li>{@code B = 16}-bit renormalisation chunks
+ *       ({@code b = 2^16 = 65 536}, {@code b·L = 2^31}).</li>
+ *   <li>{@code N = 4} interleaved rANS states (round-robin by symbol index).</li>
+ *   <li>{@code T = 4096 = 2^12} fixed total per-context (CRAM-Nx16 discipline:
+ *       static-per-block freq tables, built once in pass 1, held constant in
+ *       pass 2).</li>
+ *   <li>Bit-packed CRAM-style context: 12-bit prev-q ring (3 × 4-bit window) |
+ *       2-bit position bucket | 1-bit revcomp.</li>
+ * </ul>
+ *
+ * <p>Wire format magic is {@code M94Z}, distinct from M94 v1's {@code FQZN}.
+ * This is an independent codec. M94 v1 fixtures stay valid; M94.Z fixtures
+ * are unrelated bytes. Both codecs exist side by side in the codebase.
+ *
+ * <p>Cross-language equivalents:
+ * <ul>
+ *   <li>Python: {@code ttio.codecs.fqzcomp_nx16_z}</li>
+ *   <li>Cython: {@code ttio.codecs._fqzcomp_nx16_z._fqzcomp_nx16_z}</li>
+ * </ul>
+ */
+public final class FqzcompNx16Z {
+
+    // ── rANS-Nx16 algorithm constants (per spec §1) ─────────────────
+
+    public static final int L = 1 << 15;            // 32 768
+    public static final int B_BITS = 16;
+    public static final int B = 1 << B_BITS;        // 65 536
+    public static final int B_MASK = B - 1;         // 0xFFFF
+    public static final int T = 1 << 12;            // 4096
+    public static final int T_BITS = 12;
+    public static final int T_MASK = T - 1;
+    public static final int NUM_STREAMS = 4;
+
+    /** {@code (L >> T_BITS) << B_BITS} = 2^19 = 524 288 — exact since T | b·L. */
+    public static final int X_MAX_PREFACTOR = (L >>> T_BITS) << B_BITS;
+
+    // ── Wire-format constants ───────────────────────────────────────
+
+    public static final byte[] MAGIC = new byte[]{'M', '9', '4', 'Z'};
+    public static final int VERSION = 1;
+    public static final int CONTEXT_PARAMS_SIZE = 8;
+
+    // ── Default context parameters ──────────────────────────────────
+
+    public static final int DEFAULT_QBITS = 12;
+    public static final int DEFAULT_PBITS = 2;
+    public static final int DEFAULT_DBITS = 0;
+    public static final int DEFAULT_SLOC = 14;
+
+    private FqzcompNx16Z() {
+        // Utility class.
+    }
+
+    // ── ContextParams ───────────────────────────────────────────────
+
+    /** Bit-pack context parameters (defaults: qbits=12, pbits=2, dbits=0, sloc=14). */
+    public static final class ContextParams {
+        public final int qbits;
+        public final int pbits;
+        public final int dbits;
+        public final int sloc;
+
+        public ContextParams(int qbits, int pbits, int dbits, int sloc) {
+            this.qbits = qbits;
+            this.pbits = pbits;
+            this.dbits = dbits;
+            this.sloc = sloc;
+        }
+
+        public static ContextParams defaults() {
+            return new ContextParams(DEFAULT_QBITS, DEFAULT_PBITS,
+                                     DEFAULT_DBITS, DEFAULT_SLOC);
+        }
+
+        @Override public boolean equals(Object o) {
+            if (!(o instanceof ContextParams)) return false;
+            ContextParams p = (ContextParams) o;
+            return p.qbits == qbits && p.pbits == pbits
+                && p.dbits == dbits && p.sloc == sloc;
+        }
+
+        @Override public int hashCode() {
+            return (qbits * 31 + pbits) * 31 * 31 + dbits * 31 + sloc;
+        }
+
+        @Override public String toString() {
+            return "ContextParams(qbits=" + qbits + ", pbits=" + pbits
+                + ", dbits=" + dbits + ", sloc=" + sloc + ")";
+        }
+    }
+
+    public static byte[] packContextParams(ContextParams p) {
+        byte[] out = new byte[CONTEXT_PARAMS_SIZE];
+        out[0] = (byte) (p.qbits & 0xFF);
+        out[1] = (byte) (p.pbits & 0xFF);
+        out[2] = (byte) (p.dbits & 0xFF);
+        out[3] = (byte) (p.sloc & 0xFF);
+        // bytes 4..7 reserved (zero)
+        return out;
+    }
+
+    public static ContextParams unpackContextParams(byte[] blob, int off) {
+        if (blob.length - off < CONTEXT_PARAMS_SIZE) {
+            throw new IllegalArgumentException("M94Z: context_params truncated");
+        }
+        int qb = blob[off] & 0xFF;
+        int pb = blob[off + 1] & 0xFF;
+        int db = blob[off + 2] & 0xFF;
+        int sl = blob[off + 3] & 0xFF;
+        return new ContextParams(qb, pb, db, sl);
+    }
+
+    // ── Context bit-pack (per spec §4.2) ────────────────────────────
+
+    /** Position bucket per spec §4.2:
+     *  {@code min(2^pbits - 1, (pos * 2^pbits) // read_length)}. */
+    public static int positionBucketPbits(int position, int readLength, int pbits) {
+        if (pbits <= 0) return 0;
+        int nBuckets = 1 << pbits;
+        if (readLength <= 0 || position <= 0) return 0;
+        if (position >= readLength) return nBuckets - 1;
+        // (position * nBuckets) / readLength — careful: position*nBuckets can
+        // overflow int for very long reads. Use long arithmetic.
+        long product = (long) position * (long) nBuckets;
+        int v = (int) (product / readLength);
+        return Math.min(nBuckets - 1, v);
+    }
+
+    /** Bit-pack context vector to {@code [0, 1<<sloc)}. */
+    public static int m94zContext(int prevQ, int posBucket, int revcomp,
+                                   int qbits, int pbits, int sloc) {
+        int qmask = (1 << qbits) - 1;
+        int pmask = (1 << pbits) - 1;
+        int smask = (1 << sloc) - 1;
+        int ctx = prevQ & qmask;
+        ctx |= (posBucket & pmask) << qbits;
+        ctx |= (revcomp & 1) << (qbits + pbits);
+        return ctx & smask;
+    }
+
+    // ── Frequency-table normalisation (matches Python ref §3.3) ─────
+
+    /**
+     * Normalise raw_count[256] to freq[256] with sum == total. Mirrors the
+     * Python {@code normalise_to_total} byte-for-byte:
+     * <ol>
+     *   <li>Empty input → freq[0] = total.</li>
+     *   <li>Scale: {@code freq[s] = max(1, (cnt * total + S/2) // S)} for
+     *       {@code cnt > 0} (rounded scaling, NOT floor).</li>
+     *   <li>delta &gt; 0: cycle through symbols ordered by (-freq, +sym),
+     *       only those with raw_count &gt; 0, adding 1 each pass.</li>
+     *   <li>delta &lt; 0: repeatedly find the largest freq with freq &gt; 1
+     *       (ties broken by smallest sym) and decrement.</li>
+     * </ol>
+     */
+    static int[] normaliseToTotal(int[] rawCount, int total) {
+        if (rawCount.length != 256) {
+            throw new IllegalArgumentException("rawCount length must be 256");
+        }
+        int[] freq = new int[256];
+
+        long s = 0L;
+        for (int i = 0; i < 256; i++) s += rawCount[i] & 0xFFFFFFFFL;
+        if (s == 0L) {
+            freq[0] = total;
+            return freq;
+        }
+
+        int fsum = 0;
+        for (int i = 0; i < 256; i++) {
+            int c = rawCount[i];
+            if (c == 0) continue;
+            // (c * total + s/2) // s — match Python integer rounding.
+            long scaled = ((long) c * (long) total + (s / 2L)) / s;
+            int f = (scaled < 1L) ? 1 : (int) scaled;
+            freq[i] = f;
+            fsum += f;
+        }
+
+        int delta = total - fsum;
+        if (delta == 0) return freq;
+
+        if (delta > 0) {
+            // Build order: nonzero raw_count syms, sorted by (-freq, +sym).
+            int n = 0;
+            int[] syms = new int[256];
+            for (int i = 0; i < 256; i++) {
+                if (rawCount[i] > 0) syms[n++] = i;
+            }
+            if (n == 0) {
+                // Pathological — degenerate to freq[0] = total.
+                Arrays.fill(freq, 0);
+                freq[0] = total;
+                return freq;
+            }
+            // Sort: pack (descending freq, ascending sym) → use long key.
+            long[] keys = new long[n];
+            for (int k = 0; k < n; k++) {
+                int sym = syms[k];
+                // ((-freq) << 32) | sym  →  ascending sort gives desired order.
+                keys[k] = ((long) (-freq[sym]) << 32) | (sym & 0xFFFFFFFFL);
+            }
+            Arrays.sort(keys, 0, n);
+            int kIdx = 0;
+            while (delta > 0) {
+                int sym = (int) (keys[kIdx % n] & 0xFFFFFFFFL);
+                freq[sym]++;
+                kIdx++;
+                delta--;
+            }
+            return freq;
+        }
+
+        // delta < 0
+        int deficit = -delta;
+        while (deficit > 0) {
+            int bestI = -1;
+            int bestV = -1;
+            for (int i = 0; i < 256; i++) {
+                if (freq[i] > 1 && freq[i] > bestV) {
+                    bestV = freq[i];
+                    bestI = i;
+                }
+            }
+            if (bestI < 0) {
+                throw new IllegalStateException(
+                    "normaliseToTotal: cannot reduce below floor=1");
+            }
+            freq[bestI]--;
+            deficit--;
+        }
+        return freq;
+    }
+
+    static int[] cumulative(int[] freq) {
+        int[] cum = new int[257];
+        int s = 0;
+        for (int i = 0; i < 256; i++) {
+            cum[i] = s;
+            s += freq[i];
+        }
+        cum[256] = s;
+        return cum;
+    }
+
+    // ── Per-symbol context evolution ───────────────────────────────
+
+    /**
+     * Compute the per-symbol context sequence — encoder & decoder must
+     * produce identical sequences. The "shift" used in the prev_q ring
+     * is {@code max(1, qbits/3)}; for qbits=12 this is 4, giving a
+     * 3-symbol window of 4-bit quantised qualities.
+     *
+     * <p>Padding positions ({@code i >= n}) get the all-zero context.
+     */
+    private static int[] buildContextSeq(byte[] qualities, int[] readLengths,
+                                          int[] revcompFlags, int nPadded,
+                                          int qbits, int pbits, int sloc) {
+        int n = qualities.length;
+        int[] contexts = new int[nPadded];
+        int padCtx = m94zContext(0, 0, 0, qbits, pbits, sloc);
+        if (nPadded == 0) return contexts;
+
+        int readIdx = 0;
+        int posInRead = 0;
+        int curReadLen = readLengths.length > 0 ? readLengths[0] : 0;
+        int curRevcomp = revcompFlags.length > 0 ? revcompFlags[0] : 0;
+        int cumulativeReadEnd = curReadLen;
+        int prevQ = 0;
+        int shift = Math.max(1, qbits / 3);
+        int qmaskLocal = (1 << qbits) - 1;
+        int symMask = (1 << shift) - 1;
+
+        for (int i = 0; i < nPadded; i++) {
+            if (i < n) {
+                if (i >= cumulativeReadEnd
+                    && readIdx < readLengths.length - 1) {
+                    readIdx++;
+                    posInRead = 0;
+                    curReadLen = readLengths[readIdx];
+                    curRevcomp = revcompFlags[readIdx];
+                    cumulativeReadEnd += curReadLen;
+                    prevQ = 0;
+                }
+                int pb = positionBucketPbits(posInRead, curReadLen, pbits);
+                contexts[i] = m94zContext(prevQ, pb, curRevcomp & 1,
+                                           qbits, pbits, sloc);
+                int sym = qualities[i] & 0xFF;
+                prevQ = ((prevQ << shift) | (sym & symMask)) & qmaskLocal;
+                posInRead++;
+            } else {
+                contexts[i] = padCtx;
+            }
+        }
+        return contexts;
+    }
+
+    // ── Read-length sidecar (deflate-compressed uint32 LE list) ─────
+
+    public static byte[] encodeReadLengths(int[] readLengths) {
+        if (readLengths.length == 0) {
+            return deflate(new byte[0]);
+        }
+        ByteBuffer buf = ByteBuffer.allocate(4 * readLengths.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        for (int v : readLengths) buf.putInt(v);
+        return deflate(buf.array());
+    }
+
+    public static int[] decodeReadLengths(byte[] encoded, int numReads) {
+        byte[] raw = inflate(encoded);
+        if (numReads == 0) {
+            if (raw.length != 0) {
+                throw new IllegalArgumentException(
+                    "M94Z: read_length_table non-empty but numReads=0");
+            }
+            return new int[0];
+        }
+        if (raw.length != 4 * numReads) {
+            throw new IllegalArgumentException(
+                "M94Z: read_length_table raw length " + raw.length
+                + " != " + (4 * numReads));
+        }
+        ByteBuffer bb = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+        int[] lens = new int[numReads];
+        for (int i = 0; i < numReads; i++) lens[i] = bb.getInt();
+        return lens;
+    }
+
+    // ── Deflate helpers ─────────────────────────────────────────────
+
+    private static byte[] deflate(byte[] data) {
+        // zlib level 6 to match Python's zlib.compress default.
+        Deflater d = new Deflater(6);
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(
+                Math.max(64, data.length / 4));
+            try (DeflaterOutputStream dos = new DeflaterOutputStream(baos, d)) {
+                dos.write(data);
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("deflate failed", e);
+            }
+            return baos.toByteArray();
+        } finally {
+            d.end();
+        }
+    }
+
+    private static byte[] inflate(byte[] data) {
+        if (data.length == 0) return new byte[0];
+        Inflater i = new Inflater();
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(
+                Math.max(64, data.length * 4));
+            try (InflaterOutputStream ios = new InflaterOutputStream(baos, i)) {
+                ios.write(data);
+            } catch (java.io.IOException e) {
+                throw new IllegalArgumentException("inflate failed: "
+                    + e.getMessage(), e);
+            }
+            return baos.toByteArray();
+        } finally {
+            i.end();
+        }
+    }
+
+    // ── Freq-table sidecar (per-context, deflate-compressed) ────────
+
+    /** Serialize freq tables as Python's {@code _serialize_freq_tables}:
+     *  {@code uint32 LE n_active; for each: uint32 LE ctx_id, 256×uint16 LE freq}.
+     *  Then deflate-compress. */
+    private static byte[] serializeFreqTables(int[] activeCtxs,
+                                                int[][] freqByCtx,
+                                                int sloc) {
+        int smask = (1 << sloc) - 1;
+        int n = activeCtxs.length;
+        int rawLen = 4 + n * (4 + 256 * 2);
+        ByteBuffer bb = ByteBuffer.allocate(rawLen).order(ByteOrder.LITTLE_ENDIAN);
+        bb.putInt(n);
+        for (int k = 0; k < n; k++) {
+            int ctx = activeCtxs[k];
+            if ((ctx & ~smask) != 0) {
+                throw new IllegalStateException(
+                    "M94Z: ctx " + ctx + " out of range for sloc=" + sloc);
+            }
+            bb.putInt(ctx);
+            int[] freq = freqByCtx[k];
+            for (int s = 0; s < 256; s++) bb.putShort((short) freq[s]);
+        }
+        return deflate(bb.array());
+    }
+
+    /** Deserialize freq tables → (activeCtxs, freqArrays) parallel arrays. */
+    private static FreqTables deserializeFreqTables(byte[] blob) {
+        byte[] raw = inflate(blob);
+        if (raw.length < 4) {
+            throw new IllegalArgumentException("M94Z: freq_tables too short");
+        }
+        ByteBuffer bb = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+        int nActive = bb.getInt();
+        int expected = 4 + nActive * (4 + 256 * 2);
+        if (raw.length != expected) {
+            throw new IllegalArgumentException(
+                "M94Z: freq_tables length " + raw.length
+                + " != expected " + expected);
+        }
+        int[] active = new int[nActive];
+        int[][] freqs = new int[nActive][];
+        for (int i = 0; i < nActive; i++) {
+            active[i] = bb.getInt();
+            int[] freq = new int[256];
+            for (int s = 0; s < 256; s++) {
+                freq[s] = bb.getShort() & 0xFFFF;
+            }
+            freqs[i] = freq;
+        }
+        return new FreqTables(active, freqs);
+    }
+
+    private static final class FreqTables {
+        final int[] activeCtxs;
+        final int[][] freqArrays;
+        FreqTables(int[] a, int[][] f) {
+            this.activeCtxs = a; this.freqArrays = f;
+        }
+    }
+
+    // ── Header pack/unpack ──────────────────────────────────────────
+
+    /** Header field record (pack/unpack only — internal layout). */
+    private static final class CodecHeader {
+        final int flags;
+        final long numQualities;
+        final int numReads;
+        final int rltCompressedLen;
+        final byte[] readLengthTable;
+        final ContextParams contextParams;
+        final byte[] freqTablesCompressed;
+        final long[] stateInit;  // uint32 each, stored as long
+
+        CodecHeader(int flags, long numQualities, int numReads,
+                    int rltCompressedLen, byte[] rlt,
+                    ContextParams cp, byte[] freqBlob, long[] stateInit) {
+            this.flags = flags;
+            this.numQualities = numQualities;
+            this.numReads = numReads;
+            this.rltCompressedLen = rltCompressedLen;
+            this.readLengthTable = rlt;
+            this.contextParams = cp;
+            this.freqTablesCompressed = freqBlob;
+            this.stateInit = stateInit;
+        }
+    }
+
+    /** Fixed prefix: magic(4) + ver(1) + flags(1) + numQ(8) + numR(4)
+     *  + rltLen(4) + ctxParams(8) + freqTablesLen(4) = 34 bytes. */
+    private static final int HEADER_FIXED_PREFIX =
+        4 + 1 + 1 + 8 + 4 + 4 + CONTEXT_PARAMS_SIZE + 4;
+
+    private static byte[] packCodecHeader(CodecHeader h) {
+        if (h.readLengthTable.length != h.rltCompressedLen) {
+            throw new IllegalArgumentException("rltCompressedLen mismatch");
+        }
+        // Total length: HEADER_FIXED_PREFIX + rltLen + ftLen + 16 (state_init).
+        int totalLen = HEADER_FIXED_PREFIX + h.rltCompressedLen
+            + h.freqTablesCompressed.length + 16;
+        ByteBuffer bb = ByteBuffer.allocate(totalLen).order(ByteOrder.LITTLE_ENDIAN);
+        bb.put(MAGIC);
+        bb.put((byte) VERSION);
+        bb.put((byte) (h.flags & 0xFF));
+        bb.putLong(h.numQualities);
+        bb.putInt(h.numReads);
+        bb.putInt(h.rltCompressedLen);
+        bb.put(packContextParams(h.contextParams));
+        bb.putInt(h.freqTablesCompressed.length);
+        bb.put(h.readLengthTable);
+        bb.put(h.freqTablesCompressed);
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            bb.putInt((int) (h.stateInit[k] & 0xFFFFFFFFL));
+        }
+        return bb.array();
+    }
+
+    private static final class HeaderUnpack {
+        final CodecHeader header;
+        final int bytesConsumed;
+        HeaderUnpack(CodecHeader h, int b) { this.header = h; this.bytesConsumed = b; }
+    }
+
+    private static HeaderUnpack unpackCodecHeader(byte[] blob) {
+        if (blob.length < HEADER_FIXED_PREFIX) {
+            throw new IllegalArgumentException(
+                "M94Z header too short: " + blob.length + " bytes");
+        }
+        for (int i = 0; i < 4; i++) {
+            if (blob[i] != MAGIC[i]) {
+                throw new IllegalArgumentException(
+                    "M94Z bad magic: expected M94Z");
+            }
+        }
+        int version = blob[4] & 0xFF;
+        if (version != VERSION) {
+            throw new IllegalArgumentException(
+                "M94Z unsupported version: " + version);
+        }
+        int flags = blob[5] & 0xFF;
+        ByteBuffer bb = ByteBuffer.wrap(blob, 6, blob.length - 6)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        long numQ = bb.getLong();
+        int numR = bb.getInt();
+        int rltLen = bb.getInt();
+        int cursor = 6 + 8 + 4 + 4;  // = 22
+        ContextParams cp = unpackContextParams(blob, cursor);
+        cursor += CONTEXT_PARAMS_SIZE;
+        ByteBuffer bb2 = ByteBuffer.wrap(blob, cursor, blob.length - cursor)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        int ftLen = bb2.getInt();
+        cursor += 4;
+        if (blob.length < cursor + rltLen + ftLen + 16) {
+            throw new IllegalArgumentException("M94Z header truncated");
+        }
+        byte[] rlt = Arrays.copyOfRange(blob, cursor, cursor + rltLen);
+        cursor += rltLen;
+        byte[] freqBlob = Arrays.copyOfRange(blob, cursor, cursor + ftLen);
+        cursor += ftLen;
+        ByteBuffer bb3 = ByteBuffer.wrap(blob, cursor, blob.length - cursor)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        long[] stateInit = new long[NUM_STREAMS];
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            stateInit[k] = bb3.getInt() & 0xFFFFFFFFL;
+        }
+        cursor += 16;
+        return new HeaderUnpack(
+            new CodecHeader(flags, numQ, numR, rltLen, rlt, cp, freqBlob, stateInit),
+            cursor);
+    }
+
+    // ── DecodeResult ────────────────────────────────────────────────
+
+    public static final class DecodeResult {
+        private final byte[] qualities;
+        private final int[] readLengths;
+        public DecodeResult(byte[] q, int[] rl) {
+            this.qualities = q;
+            this.readLengths = rl;
+        }
+        public byte[] qualities() { return qualities; }
+        public int[] readLengths() { return readLengths; }
+    }
+
+    // ── Top-level encoder ───────────────────────────────────────────
+
+    public static byte[] encode(byte[] qualities, int[] readLengths,
+                                int[] revcompFlags) {
+        return encode(qualities, readLengths, revcompFlags,
+                      ContextParams.defaults());
+    }
+
+    public static byte[] encode(byte[] qualities, int[] readLengths,
+                                int[] revcompFlags, ContextParams params) {
+        if (qualities == null) {
+            throw new IllegalArgumentException("qualities must not be null");
+        }
+        if (readLengths.length != revcompFlags.length) {
+            throw new IllegalArgumentException(
+                "readLengths (" + readLengths.length + ") != revcompFlags ("
+                + revcompFlags.length + ")");
+        }
+        long total = 0L;
+        for (int v : readLengths) total += v;
+        if (total != qualities.length) {
+            throw new IllegalArgumentException(
+                "sum(readLengths) (" + total + ") != qualities.length ("
+                + qualities.length + ")");
+        }
+        if (params == null) params = ContextParams.defaults();
+
+        int n = qualities.length;
+        int padCount = (-n) & 3;
+        int nPadded = n + padCount;
+
+        // Pass 1: build per-symbol context sequence + per-context counts.
+        int[] contexts = buildContextSeq(qualities, readLengths, revcompFlags,
+                                          nPadded, params.qbits, params.pbits,
+                                          params.sloc);
+        int ctxCap = 1 << params.sloc;
+        int[][] rawCounts = new int[ctxCap][];
+        for (int i = 0; i < nPadded; i++) {
+            int ctx = contexts[i];
+            int[] arr = rawCounts[ctx];
+            if (arr == null) {
+                arr = new int[256];
+                rawCounts[ctx] = arr;
+            }
+            int sym = (i < n) ? (qualities[i] & 0xFF) : 0;
+            arr[sym]++;
+        }
+
+        // Normalise per-context, build cumulative tables, count active.
+        // Pack (f, c, xMax) into a single long[256] per context for the
+        // hot encode loop:
+        //   bits 48..63 = freq (12 bits, padded)
+        //   bits 32..47 = cum  (16 bits)
+        //   bits  0..31 = xMax (32 bits)
+        // This collapses three array dereferences to one in pass 2.
+        int[][] freqByCtx = new int[ctxCap][];
+        long[][] packByCtx = new long[ctxCap][];
+        int active = 0;
+        for (int c = 0; c < ctxCap; c++) {
+            if (rawCounts[c] == null) continue;
+            int[] freq = normaliseToTotal(rawCounts[c], T);
+            freqByCtx[c] = freq;
+            int[] cum = cumulative(freq);
+            long[] pk = new long[256];
+            for (int s = 0; s < 256; s++) {
+                long xMax = (long) X_MAX_PREFACTOR * (long) freq[s];
+                pk[s] = ((long) freq[s] << 48)
+                      | ((long) cum[s] << 32)
+                      | (xMax & 0xFFFFFFFFL);
+            }
+            packByCtx[c] = pk;
+            active++;
+        }
+
+        // Pass 2: reverse rANS encode with 16-bit renorm.
+        long[] state = new long[NUM_STREAMS];
+        for (int k = 0; k < NUM_STREAMS; k++) state[k] = L;
+        long[] stateInit = new long[]{L, L, L, L};
+
+        // Per-stream growable u16 chunk buffers (we'll reverse to bytes
+        // at the end). Use byte arrays sized to upper bound.
+        // Worst case: every symbol triggers one renorm (16 bits = 2 bytes).
+        // So per stream upper bound is 2 * (nPadded / 4) bytes.
+        int initCap = Math.max(64, (nPadded / NUM_STREAMS) * 2 + 16);
+        byte[][] streamBufs = new byte[NUM_STREAMS][];
+        int[] streamLens = new int[NUM_STREAMS];
+        for (int k = 0; k < NUM_STREAMS; k++) streamBufs[k] = new byte[initCap];
+
+        for (int i = nPadded - 1; i >= 0; i--) {
+            int sIdx = i & 3;
+            int ctx = contexts[i];
+            int sym = (i < n) ? (qualities[i] & 0xFF) : 0;
+            long packed = packByCtx[ctx][sym];
+            int f = (int) (packed >>> 48) & 0xFFFF;
+            int c = (int) (packed >>> 32) & 0xFFFF;
+            long xMax = packed & 0xFFFFFFFFL;
+            if (f == 0) {
+                throw new IllegalStateException(
+                    "M94Z encoder: ctx=" + ctx + " sym=" + sym + " has freq=0");
+            }
+
+            long x = state[sIdx];
+            // Renorm: typically at most one iteration.
+            byte[] buf = streamBufs[sIdx];
+            int len = streamLens[sIdx];
+            while (x >= xMax) {
+                if (len + 2 > buf.length) {
+                    buf = Arrays.copyOf(buf, buf.length * 2);
+                    streamBufs[sIdx] = buf;
+                }
+                buf[len]     = (byte) (x & 0xFFL);
+                buf[len + 1] = (byte) ((x >>> 8) & 0xFFL);
+                len += 2;
+                x >>>= B_BITS;
+            }
+            streamLens[sIdx] = len;
+            x = (x / f) * T + (x % f) + c;
+            state[sIdx] = x;
+        }
+
+        long[] stateFinal = new long[NUM_STREAMS];
+        for (int k = 0; k < NUM_STREAMS; k++) stateFinal[k] = state[k];
+
+        // Reverse each stream's bytes — per Python reference, the bytes
+        // were appended LIFO during reverse encode, and we need to flip
+        // them in 2-byte (chunk) units so each LE pair stays intact.
+        byte[][] streams = new byte[NUM_STREAMS][];
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            int len = streamLens[k];
+            if ((len & 1) != 0) {
+                throw new IllegalStateException("stream " + k + " has odd length");
+            }
+            byte[] src = streamBufs[k];
+            byte[] dst = new byte[len];
+            int nChunks = len / 2;
+            for (int j = 0; j < nChunks; j++) {
+                byte lo = src[2 * j];
+                byte hi = src[2 * j + 1];
+                int dj = nChunks - 1 - j;
+                dst[2 * dj] = lo;
+                dst[2 * dj + 1] = hi;
+            }
+            streams[k] = dst;
+        }
+
+        // Build active-ctxs / freq-arrays for the freq-tables sidecar.
+        int[] activeCtxs = new int[active];
+        int[][] activeFreqs = new int[active][];
+        int j = 0;
+        for (int c = 0; c < ctxCap; c++) {
+            if (freqByCtx[c] != null) {
+                activeCtxs[j] = c;
+                activeFreqs[j] = freqByCtx[c];
+                j++;
+            }
+        }
+        byte[] freqBlob = serializeFreqTables(activeCtxs, activeFreqs, params.sloc);
+
+        // Build wire format.
+        byte[] rlt = encodeReadLengths(readLengths);
+        int flags = (padCount & 0x3) << 4;
+
+        CodecHeader header = new CodecHeader(
+            flags, n, readLengths.length, rlt.length,
+            rlt, params, freqBlob, stateInit);
+        byte[] headerBytes = packCodecHeader(header);
+
+        // Body: 16 bytes substream lengths + each substream concatenated.
+        int bodyLen = 16;
+        for (int k = 0; k < NUM_STREAMS; k++) bodyLen += streams[k].length;
+
+        // Trailer: 16 bytes of state_final (uint32 LE × 4).
+        int totalLen = headerBytes.length + bodyLen + 16;
+        byte[] out = new byte[totalLen];
+        System.arraycopy(headerBytes, 0, out, 0, headerBytes.length);
+        ByteBuffer body = ByteBuffer.wrap(out, headerBytes.length, bodyLen + 16)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        for (int k = 0; k < NUM_STREAMS; k++) body.putInt(streams[k].length);
+        for (int k = 0; k < NUM_STREAMS; k++) body.put(streams[k]);
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            body.putInt((int) (stateFinal[k] & 0xFFFFFFFFL));
+        }
+        return out;
+    }
+
+    // ── Top-level decoder ───────────────────────────────────────────
+
+    public static DecodeResult decode(byte[] encoded, int[] revcompFlags) {
+        if (encoded == null) {
+            throw new IllegalArgumentException("encoded must not be null");
+        }
+        HeaderUnpack hu = unpackCodecHeader(encoded);
+        CodecHeader header = hu.header;
+        int headerSize = hu.bytesConsumed;
+
+        long nQ64 = header.numQualities;
+        if (nQ64 < 0 || nQ64 > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                "M94Z: numQualities out of range: " + nQ64);
+        }
+        int nQualities = (int) nQ64;
+        int nReads = header.numReads;
+        int padCount = (header.flags >>> 4) & 0x3;
+
+        int[] readLengths = decodeReadLengths(header.readLengthTable, nReads);
+
+        if (revcompFlags == null) revcompFlags = new int[nReads];
+        else if (revcompFlags.length != nReads) {
+            throw new IllegalArgumentException(
+                "revcompFlags length " + revcompFlags.length
+                + " != numReads " + nReads);
+        }
+
+        int nPadded = nQualities + padCount;
+        if ((nPadded & 3) != 0) {
+            throw new IllegalArgumentException(
+                "M94Z: nPadded " + nPadded + " not a multiple of 4");
+        }
+
+        int trailerOff = encoded.length - 16;
+        if (trailerOff < headerSize) {
+            throw new IllegalArgumentException("M94Z: encoded too short");
+        }
+        ByteBuffer tb = ByteBuffer.wrap(encoded, trailerOff, 16)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        long[] stateFinal = new long[NUM_STREAMS];
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            stateFinal[k] = tb.getInt() & 0xFFFFFFFFL;
+        }
+
+        int bodyLen = trailerOff - headerSize;
+        if (bodyLen < 16) {
+            throw new IllegalArgumentException("M94Z: body too short");
+        }
+        ByteBuffer bb = ByteBuffer.wrap(encoded, headerSize, bodyLen)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        int[] subLens = new int[NUM_STREAMS];
+        for (int k = 0; k < NUM_STREAMS; k++) subLens[k] = bb.getInt();
+        byte[][] streams = new byte[NUM_STREAMS][];
+        int cursor = headerSize + 16;
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            int len = subLens[k];
+            if (cursor + len > trailerOff) {
+                throw new IllegalArgumentException(
+                    "M94Z: substream " + k + " truncated");
+            }
+            streams[k] = Arrays.copyOfRange(encoded, cursor, cursor + len);
+            cursor += len;
+        }
+
+        int qbits = header.contextParams.qbits;
+        int pbits = header.contextParams.pbits;
+        int sloc = header.contextParams.sloc;
+
+        // Recover freq tables. Build per-context cum[] and packed (f, c)
+        // table packed as (freq << 16) | cum (both fit in 16 bits since
+        // bounded by T = 4096).
+        FreqTables ft = deserializeFreqTables(header.freqTablesCompressed);
+        int ctxCap = 1 << sloc;
+        int[][] cumByCtx = new int[ctxCap][];
+        int[][] packedFCByCtx = new int[ctxCap][];
+        for (int i = 0; i < ft.activeCtxs.length; i++) {
+            int c = ft.activeCtxs[i];
+            int[] freq = ft.freqArrays[i];
+            int[] cum = cumulative(freq);
+            cumByCtx[c] = cum;
+            int[] pk = new int[256];
+            for (int s = 0; s < 256; s++) {
+                pk[s] = (freq[s] << 16) | (cum[s] & 0xFFFF);
+            }
+            packedFCByCtx[c] = pk;
+        }
+
+        // Forward decode with lockstep context evolution.
+        long[] state = new long[NUM_STREAMS];
+        for (int k = 0; k < NUM_STREAMS; k++) state[k] = stateFinal[k];
+        int[] pos = new int[NUM_STREAMS];
+        byte[] out = new byte[nPadded];
+
+        int padCtx = m94zContext(0, 0, 0, qbits, pbits, sloc);
+        int shift = Math.max(1, qbits / 3);
+        int qmaskLocal = (1 << qbits) - 1;
+        int symMask = (1 << shift) - 1;
+
+        int readIdx = 0;
+        int posInRead = 0;
+        int curReadLen = readLengths.length > 0 ? readLengths[0] : 0;
+        int curRevcomp = revcompFlags.length > 0 ? revcompFlags[0] : 0;
+        int cumulativeReadEnd = curReadLen;
+        int prevQ = 0;
+
+        for (int i = 0; i < nPadded; i++) {
+            int ctx;
+            if (i < nQualities) {
+                if (i >= cumulativeReadEnd
+                    && readIdx < readLengths.length - 1) {
+                    readIdx++;
+                    posInRead = 0;
+                    curReadLen = readLengths[readIdx];
+                    curRevcomp = revcompFlags[readIdx];
+                    cumulativeReadEnd += curReadLen;
+                    prevQ = 0;
+                }
+                int pb = positionBucketPbits(posInRead, curReadLen, pbits);
+                ctx = m94zContext(prevQ, pb, curRevcomp & 1, qbits, pbits, sloc);
+            } else {
+                ctx = padCtx;
+            }
+
+            int[] pkFC = packedFCByCtx[ctx];
+            int[] cum = cumByCtx[ctx];
+            if (pkFC == null) {
+                throw new IllegalArgumentException(
+                    "M94Z decoder: ctx " + ctx + " not in freq_tables");
+            }
+            int sIdx = i & 3;
+            long x = state[sIdx];
+            int slot = (int) (x & T_MASK);
+
+            // Binary search on cum[1..256] for largest sym with cum[sym] <= slot.
+            // Equivalent to bisect_right(cum, slot) - 1 in the Python ref.
+            int lo = 1, hi = 257;
+            while (lo < hi) {
+                int mid = (lo + hi) >>> 1;
+                if (cum[mid] <= slot) lo = mid + 1;
+                else hi = mid;
+            }
+            int sym = lo - 1;
+            int packed = pkFC[sym];
+            int f = packed >>> 16;
+            int c = packed & 0xFFFF;
+            x = (long) f * (x >>> T_BITS) + (long) slot - (long) c;
+
+            byte[] stream = streams[sIdx];
+            int p = pos[sIdx];
+            while (x < L) {
+                if (p + 1 >= stream.length) {
+                    throw new IllegalArgumentException(
+                        "M94Z: substream " + sIdx + " exhausted at i=" + i);
+                }
+                int chunk = (stream[p] & 0xFF) | ((stream[p + 1] & 0xFF) << 8);
+                p += 2;
+                x = (x << B_BITS) | (long) chunk;
+            }
+            pos[sIdx] = p;
+            state[sIdx] = x;
+            out[i] = (byte) sym;
+
+            if (i < nQualities) {
+                prevQ = ((prevQ << shift) | (sym & symMask)) & qmaskLocal;
+                posInRead++;
+            }
+        }
+
+        // Verify post-decode state == state_init.
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            if (state[k] != header.stateInit[k]) {
+                throw new IllegalArgumentException(
+                    "M94Z: post-decode state " + state[k]
+                    + " != state_init " + header.stateInit[k]
+                    + " (lane " + k + "); stream is corrupt");
+            }
+        }
+
+        byte[] qualities = Arrays.copyOf(out, nQualities);
+        return new DecodeResult(qualities, readLengths);
+    }
+}
