@@ -254,16 +254,26 @@ input) on the project Linux/AMD64 development host:
 
 | Language        | Encode (MB/s) | Decode (MB/s) | Notes                                                  |
 |-----------------|--------------:|--------------:|--------------------------------------------------------|
-| Python (Cython) |       **145** |        **94** | Default for the `ttio` package; Cython `cdef`-typed inner loops, reciprocal-mul divide elimination |
-| Objective-C     |        **51** |        **31** | Inline-C hot loop in the `.m` file; `NS_DURING` guards outside loop body |
+| Objective-C     |        **52** |        **30** | Inline-C hot loop in the `.m` file; `NS_DURING` guards outside loop body |
+| Python (Cython) |        **50** |        **17** | End-to-end including wire-format pack/unpack; Cython kernel alone is ~95/50 |
 | Java            |        **33** |        **14** | `long`-typed unsigned-uint32 emulation via `& 0xFFFFFFFFL` |
 
-The Python (Cython) path is the fastest of the three because the codec
-hot loop spends nearly all its time in straight C with no FFI boundary
-crossing, while ObjC and Java pay per-call dispatch costs that the
-M94.Z hot loop's lower op-count amortises poorly. SIMD intrinsics
-(N=32, AVX2/NEON) are out of scope for v1 and tracked as M94.Z+
-follow-ups.
+ObjC and Python (Cython) are within measurement noise on encode; ObjC
+leads on decode because it avoids the Python wrapper's wire-format
+serialisation overhead (freq-table zlib, struct.pack header assembly).
+The Cython kernel alone (no wire-format) measures ~95/50 MB/s, but the
+end-to-end `ttio` API includes ~50% encode and ~66% decode overhead
+from `_serialize_freq_tables_from_arrays` (zlib), `_pack_wire_format`,
+and `_decode_freq_tables` (zlib.decompress + struct.unpack). Java's
+gap is due to jagged 2D context arrays and per-symbol cumulative-sum
+recomputation. SIMD intrinsics (N=32, AVX2/NEON) are out of scope for
+v1 and tracked as M94.Z+ follow-ups.
+
+> **Measurement correction (2026-04-30):** Earlier versions of this
+> table reported Python (Cython) at 145/94 MB/s. Those numbers
+> reflected the Cython kernel in isolation, not the end-to-end `ttio`
+> API that applications actually call. The table now reports end-to-end
+> throughput for all three languages on the same hardware.
 
 ### 4.2 Pipeline wall-clock comparison (chr22 lean)
 
