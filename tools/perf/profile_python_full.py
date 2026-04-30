@@ -46,11 +46,14 @@ from ttio import (
     UVVisSpectrum,
     WrittenRun,
 )
+from ttio.encryption import encrypt_bytes, decrypt_bytes
 from ttio.encryption_per_au import (
     decrypt_per_au_file,
     encrypt_per_au_file,
 )
 from ttio.enums import AcquisitionMode, IRMode
+from ttio.stream_writer import StreamWriter
+from ttio.stream_reader import StreamReader
 from ttio.written_genomic_run import WrittenGenomicRun
 from ttio.exporters.jcamp_dx import (
     write_ir_spectrum,
@@ -663,6 +666,97 @@ def bench_genomic_write_read(tmp: Path, _n: int) -> dict[str, float]:
     }
 
 
+def bench_encryption_genomic(_tmp: Path, _n: int) -> dict[str, float]:
+    """AES-256-GCM encrypt/decrypt on a 10 MiB payload (V10 B5).
+
+    Confirms no size-dependent perf cliff vs. the existing ~0.33 MiB
+    spectral encryption benchmark.
+    """
+    payload_size = 10 * 1024 * 1024  # 10 MiB
+    rng = np.random.default_rng(42)
+    payload = rng.integers(0, 256, size=payload_size, dtype=np.uint8).tobytes()
+    key = bytes(range(32))
+
+    t_enc, sealed = _timed(encrypt_bytes, payload, key)
+    t_dec, _ = _timed(decrypt_bytes, sealed, key)
+
+    mb = payload_size / 1e6
+    print(f"  [encryption.genomic] {mb:.1f} MiB  "
+          f"enc={t_enc:.3f}s  dec={t_dec:.3f}s")
+
+    return {
+        "encrypt": t_enc,
+        "decrypt": t_dec,
+        "bytes_mb": mb,
+    }
+
+
+def bench_streaming(tmp: Path, n: int, peaks: int) -> dict[str, float]:
+    """StreamWriter/StreamReader throughput: n spectra (V10 B6).
+
+    Builds MassSpectrum objects directly (no intermediate .tio),
+    appends them via StreamWriter, then reads them back via StreamReader.
+    """
+    from ttio.instrument_config import InstrumentConfig
+    from ttio.mass_spectrum import MassSpectrum
+    from ttio.signal_array import SignalArray
+    from ttio.enums import Polarity
+
+    tio_path = str(tmp / "streaming-bench.tio")
+
+    # Pre-build spectra data arrays once (outside timing loop).
+    mz_data = [
+        np.linspace(100.0, 100.0 + peaks * 0.1, peaks, dtype=np.float64)
+        for _ in range(n)
+    ]
+    int_data = [
+        1000.0 + (np.arange(peaks, dtype=np.float64) % 1000)
+        for _ in range(n)
+    ]
+
+    def _stream_write() -> None:
+        writer = StreamWriter(
+            file_path=tio_path,
+            run_name="r",
+            acquisition_mode=AcquisitionMode.MS1_DDA,
+            instrument_config=InstrumentConfig(),
+        )
+        for i in range(n):
+            ms = MassSpectrum(
+                signal_arrays={
+                    "mz":       SignalArray(data=mz_data[i]),
+                    "intensity": SignalArray(data=int_data[i]),
+                },
+                index_position=i,
+                scan_time_seconds=float(i) * 0.06,
+                ms_level=1,
+                polarity=Polarity.POSITIVE,
+            )
+            writer.append_spectrum(ms)
+        writer.flush_and_close()
+
+    t_write, _ = _timed(_stream_write)
+
+    def _stream_read() -> int:
+        reader = StreamReader(tio_path, "r")
+        count = 0
+        with reader:
+            while not reader.at_end():
+                reader.next_spectrum()
+                count += 1
+        return count
+
+    t_read, count = _timed(_stream_read)
+
+    print(f"  [streaming] {n} spectra × {peaks} peaks  "
+          f"write={t_write:.2f}s  read={t_read:.2f}s ({count} read back)")
+
+    return {
+        "write": t_write,
+        "read": t_read,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -682,8 +776,10 @@ BENCHMARKS: dict[str, Any] = {
     "jcamp":          lambda tmp, a: bench_jcamp(tmp, a.n),
     "spectra.build":  lambda tmp, a: bench_spectra_inmemory(a.n),
     "codecs":         lambda tmp, a: bench_codecs(tmp, a.n),
-    "codecs.genomic": lambda tmp, a: bench_codecs_genomic(tmp, a.n),
-    "genomic":        lambda tmp, a: bench_genomic_write_read(tmp, a.n),
+    "codecs.genomic":    lambda tmp, a: bench_codecs_genomic(tmp, a.n),
+    "genomic":           lambda tmp, a: bench_genomic_write_read(tmp, a.n),
+    "encryption.genomic": lambda tmp, a: bench_encryption_genomic(tmp, a.n),
+    "streaming":          lambda tmp, a: bench_streaming(tmp, a.n, a.peaks),
 }
 
 
