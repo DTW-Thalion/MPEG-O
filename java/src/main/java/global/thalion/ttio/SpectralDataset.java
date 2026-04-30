@@ -828,7 +828,9 @@ public class SpectralDataset implements
                     // Carries read_lengths + revcomp_flags inside the
                     // codec wire format; the M86 pipeline derives them
                     // from run.lengths and run.flags & 16 (SAM REVERSE).
-                    Enums.Compression.FQZCOMP_NX16),
+                    Enums.Compression.FQZCOMP_NX16,
+                    // M94.Z v1.2: CRAM-mimic rANS-Nx16 quality codec.
+                    Enums.Compression.FQZCOMP_NX16_Z),
                 "read_names", java.util.Set.of(
                     Enums.Compression.NAME_TOKENIZED),
                 "cigars", java.util.Set.of(
@@ -837,13 +839,16 @@ public class SpectralDataset implements
                     Enums.Compression.NAME_TOKENIZED),
                 "positions", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1),
+                    Enums.Compression.RANS_ORDER1,
+                    Enums.Compression.DELTA_RANS_ORDER0),
                 "flags", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1),
+                    Enums.Compression.RANS_ORDER1,
+                    Enums.Compression.DELTA_RANS_ORDER0),
                 "mapping_qualities", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1),
+                    Enums.Compression.RANS_ORDER1,
+                    Enums.Compression.DELTA_RANS_ORDER0),
                 // M86 Phase F: per-field decomposition of the M82
                 // mate_info compound dataset. The bare key "mate_info"
                 // is reserved and rejected (Binding Decision §126);
@@ -858,10 +863,12 @@ public class SpectralDataset implements
                     Enums.Compression.NAME_TOKENIZED),
                 "mate_info_pos", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1),
+                    Enums.Compression.RANS_ORDER1,
+                    Enums.Compression.DELTA_RANS_ORDER0),
                 "mate_info_tlen", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1));
+                    Enums.Compression.RANS_ORDER1,
+                    Enums.Compression.DELTA_RANS_ORDER0));
         java.util.Set<String> integerChannelNames = java.util.Set.of(
             "positions", "flags", "mapping_qualities",
             "mate_info_pos", "mate_info_tlen");
@@ -1045,7 +1052,7 @@ public class SpectralDataset implements
                 // with M82/Phase A/D/E files is preserved.
                 writeIntChannelWithCodec(sc, "positions",
                     run.positions(), run.signalCompression(),
-                    run.signalCodecOverrides().get("positions"));
+                    resolveIntOverride(run, "positions"));
                 // M86: sequences/qualities go through the codec
                 // dispatch helper; absent from the override map →
                 // existing HDF5-filter path with @compression unset.
@@ -1089,7 +1096,9 @@ public class SpectralDataset implements
                         for (Enums.Compression ovr
                                 : run.signalCodecOverrides().values()) {
                             if (ovr == Enums.Compression.REF_DIFF
-                                || ovr == Enums.Compression.FQZCOMP_NX16) {
+                                || ovr == Enums.Compression.FQZCOMP_NX16
+                                || ovr == Enums.Compression.FQZCOMP_NX16_Z
+                                || ovr == Enums.Compression.DELTA_RANS_ORDER0) {
                                 isV1_5Candidate = true;
                                 break;
                             }
@@ -1108,10 +1117,10 @@ public class SpectralDataset implements
                 }
                 writeIntChannelWithCodec(sc, "flags",
                     run.flags(), run.signalCompression(),
-                    run.signalCodecOverrides().get("flags"));
+                    resolveIntOverride(run, "flags"));
                 writeIntChannelWithCodec(sc, "mapping_qualities",
                     run.mappingQualities(), run.signalCompression(),
-                    run.signalCodecOverrides().get("mapping_qualities"));
+                    resolveIntOverride(run, "mapping_qualities"));
 
                 // Compound datasets: cigars + read_names (single
                 // VL_STRING). M82.4: Java now reads VL_STRING in
@@ -1210,9 +1219,9 @@ public class SpectralDataset implements
                     new java.util.LinkedHashMap<>();
                 for (String k : new String[]{"mate_info_chrom",
                         "mate_info_pos", "mate_info_tlen"}) {
-                    if (run.signalCodecOverrides().containsKey(k)) {
-                        mateOverrides.put(k,
-                            run.signalCodecOverrides().get(k));
+                    Enums.Compression resolved = resolveIntOverride(run, k);
+                    if (resolved != null) {
+                        mateOverrides.put(k, resolved);
                     }
                 }
                 if (!mateOverrides.isEmpty()) {
@@ -1433,7 +1442,8 @@ public class SpectralDataset implements
             return;
         }
         if (codec != Enums.Compression.RANS_ORDER0
-                && codec != Enums.Compression.RANS_ORDER1) {
+                && codec != Enums.Compression.RANS_ORDER1
+                && codec != Enums.Compression.DELTA_RANS_ORDER0) {
             // Defensive — caller-side validation rejects this first.
             throw new IllegalArgumentException(
                 "writeMateIntField: unsupported codec " + codec
@@ -1441,6 +1451,7 @@ public class SpectralDataset implements
         }
         // Serialise array → little-endian byte buffer (mirrors §118).
         byte[] leBytes;
+        int elemSize;
         if (naturalPrecision == Enums.Precision.INT64) {
             long[] arr = (long[]) data;
             java.nio.ByteBuffer bb = java.nio.ByteBuffer
@@ -1448,6 +1459,7 @@ public class SpectralDataset implements
                 .order(java.nio.ByteOrder.LITTLE_ENDIAN);
             for (long v : arr) bb.putLong(v);
             leBytes = bb.array();
+            elemSize = 8;
         } else if (naturalPrecision == Enums.Precision.INT32) {
             int[] arr = (int[]) data;
             java.nio.ByteBuffer bb = java.nio.ByteBuffer
@@ -1455,14 +1467,21 @@ public class SpectralDataset implements
                 .order(java.nio.ByteOrder.LITTLE_ENDIAN);
             for (int v : arr) bb.putInt(v);
             leBytes = bb.array();
+            elemSize = 4;
         } else {
             throw new IllegalArgumentException(
                 "writeMateIntField: unsupported precision "
                 + naturalPrecision);
         }
-        int order = (codec == Enums.Compression.RANS_ORDER0) ? 0 : 1;
-        byte[] encoded = global.thalion.ttio.codecs.Rans
-            .encode(leBytes, order);
+        byte[] encoded;
+        if (codec == Enums.Compression.DELTA_RANS_ORDER0) {
+            encoded = global.thalion.ttio.codecs.DeltaRans
+                .encode(leBytes, elemSize);
+        } else {
+            int order = (codec == Enums.Compression.RANS_ORDER0) ? 0 : 1;
+            encoded = global.thalion.ttio.codecs.Rans
+                .encode(leBytes, order);
+        }
         global.thalion.ttio.providers.StorageDataset ds;
         try {
             ds = mateGroup.createDataset(name, Enums.Precision.UINT8,
@@ -1480,37 +1499,23 @@ public class SpectralDataset implements
     // ── M93 v1.2 / M94 v1.2 — v1.5 codec dispatch ────────────────────
 
     /** Return {@code true} if any genomic run carries a v1.5 codec
-     *  (REF_DIFF or FQZCOMP_NX16). Used to gate the format-version bump
-     *  from 1.4 → 1.5: only files that actually exercise an M93+ codec
-     *  get the new version string, so M82-only writes preserve byte-
-     *  parity with existing fixtures.
+     *  (REF_DIFF, FQZCOMP_NX16, FQZCOMP_NX16_Z, or DELTA_RANS_ORDER0).
+     *  Used to gate the format-version bump from 1.4 → 1.5: only files
+     *  that actually exercise an M93+ codec get the new version string,
+     *  so M82-only writes preserve byte-parity with existing fixtures.
      *
-     *  <p>M93 registered REF_DIFF as v1.5; M94 adds FQZCOMP_NX16. Both
-     *  are v1.5 codecs even though only REF_DIFF is "context-aware" in
-     *  the M93 sense (consumes sibling channels via the M86 pipeline
-     *  hook). FQZCOMP_NX16 carries its sibling-channel metadata
+     *  <p>M93 registered REF_DIFF as v1.5; M94 adds FQZCOMP_NX16 /
+     *  FQZCOMP_NX16_Z; M95 adds DELTA_RANS_ORDER0. All are v1.5 codecs
+     *  even though only REF_DIFF is "context-aware" in the M93 sense
+     *  (consumes sibling channels via the M86 pipeline hook).
+     *  FQZCOMP_NX16 carries its sibling-channel metadata
      *  ({@code read_lengths} / {@code revcomp_flags}) inside the codec
      *  wire format. */
     private static boolean hasAnyContextAwareCodec(
             List<WrittenGenomicRun> genomicRuns) {
         if (genomicRuns == null) return false;
         for (WrittenGenomicRun run : genomicRuns) {
-            for (Enums.Compression codec
-                    : run.signalCodecOverrides().values()) {
-                if (codec == Enums.Compression.REF_DIFF
-                    || codec == Enums.Compression.FQZCOMP_NX16) {
-                    return true;
-                }
-            }
-            // v1.5 default codec lookup (Q5a=B): when no explicit
-            // override is set BUT signal_compression == ZLIB AND a
-            // reference is present, the writer auto-applies REF_DIFF.
-            // The version bump must reflect that as well.
-            if (run.signalCompression() == Enums.Compression.ZLIB
-                && run.referenceChromSeqs() != null
-                && !run.signalCodecOverrides().containsKey("sequences")) {
-                return true;
-            }
+            if (isV15Candidate(run)) return true;
         }
         return false;
     }
@@ -1915,6 +1920,60 @@ public class SpectralDataset implements
         out.write((int) (n & 0x7FL));
     }
 
+    // ── M95 v1.2 — auto-default integer channel codecs ──────────────
+
+    /** M95 v1.2: default codecs for integer channels in v1.5 files.
+     *  When the run is a v1.5 candidate and the caller has not set an
+     *  explicit override for a given integer channel, the writer applies
+     *  these defaults. Mirrors Python's DEFAULT_CODECS_V1_5 / ObjC's
+     *  _TTIO_M95_ResolveIntOverride. */
+    private static final java.util.Map<String, Enums.Compression>
+        V1_5_INT_DEFAULTS = java.util.Map.of(
+            "positions", Enums.Compression.DELTA_RANS_ORDER0,
+            "flags", Enums.Compression.RANS_ORDER0,
+            "mapping_qualities", Enums.Compression.RANS_ORDER0,
+            "template_lengths", Enums.Compression.RANS_ORDER0,
+            "mate_info_pos", Enums.Compression.RANS_ORDER0,
+            "mate_info_tlen", Enums.Compression.RANS_ORDER0,
+            "mate_info_chrom", Enums.Compression.NAME_TOKENIZED
+        );
+
+    /** M95 v1.2: return {@code true} when the run will produce a v1.5
+     *  file — either because sequences will auto-default to REF_DIFF
+     *  (reference available, no explicit sequence override, ZLIB
+     *  default) or because an explicit v1.5 codec is already in the
+     *  override map. */
+    private static boolean isV15Candidate(WrittenGenomicRun run) {
+        // Sequences will auto-default to REF_DIFF?
+        if (run.signalCodecOverrides().get("sequences") == null
+            && run.signalCompression() == Enums.Compression.ZLIB
+            && run.referenceChromSeqs() != null) {
+            return true;
+        }
+        for (Enums.Compression ovr : run.signalCodecOverrides().values()) {
+            if (ovr == Enums.Compression.REF_DIFF
+                || ovr == Enums.Compression.FQZCOMP_NX16
+                || ovr == Enums.Compression.FQZCOMP_NX16_Z
+                || ovr == Enums.Compression.DELTA_RANS_ORDER0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** M95 v1.2: resolve the codec override for an integer channel.
+     *  Returns the explicit override if present, the v1.5 auto-default
+     *  when the run is a v1.5 candidate with ZLIB base compression, or
+     *  {@code null} for the uncompressed typed-writer path. */
+    private static Enums.Compression resolveIntOverride(
+            WrittenGenomicRun run, String channel) {
+        Enums.Compression ovr = run.signalCodecOverrides().get(channel);
+        if (ovr != null) return ovr;
+        if (run.signalCompression() != Enums.Compression.ZLIB) return null;
+        if (!isV15Candidate(run)) return null;
+        return V1_5_INT_DEFAULTS.get(channel);
+    }
+
     /** M86 Phase B: write an integer signal channel, optionally through
      *  a TTI-O rANS codec. When {@code codecOverride} is {@code null}
      *  the channel is written via the existing typed writer (identical
@@ -1957,7 +2016,8 @@ public class SpectralDataset implements
             return;
         }
         if (codecOverride != Enums.Compression.RANS_ORDER0
-                && codecOverride != Enums.Compression.RANS_ORDER1) {
+                && codecOverride != Enums.Compression.RANS_ORDER1
+                && codecOverride != Enums.Compression.DELTA_RANS_ORDER0) {
             // Defensive — the caller-side validation in
             // writeGenomicRunSubtree rejects this combination first
             // with a clearer message.
@@ -1994,9 +2054,21 @@ public class SpectralDataset implements
                 "writeIntChannelWithCodec: unknown integer channel '"
                 + name + "'");
         }
-        // Encode through M83 rANS.
-        int order = (codecOverride == Enums.Compression.RANS_ORDER0) ? 0 : 1;
-        byte[] encoded = global.thalion.ttio.codecs.Rans.encode(leBytes, order);
+        // Encode through the resolved codec.
+        byte[] encoded;
+        if (codecOverride == Enums.Compression.DELTA_RANS_ORDER0) {
+            int elemSize = switch (name) {
+                case "positions" -> 8;
+                case "flags" -> 4;
+                case "mapping_qualities" -> 1;
+                default -> throw new IllegalArgumentException(
+                    "writeIntChannelWithCodec: unknown channel " + name);
+            };
+            encoded = global.thalion.ttio.codecs.DeltaRans.encode(leBytes, elemSize);
+        } else {
+            int order = (codecOverride == Enums.Compression.RANS_ORDER0) ? 0 : 1;
+            encoded = global.thalion.ttio.codecs.Rans.encode(leBytes, order);
+        }
         // Write as flat unfiltered uint8 dataset.
         global.thalion.ttio.providers.StorageDataset ds;
         try {
