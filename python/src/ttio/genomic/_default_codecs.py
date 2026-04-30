@@ -5,7 +5,7 @@ When a :class:`~ttio.WrittenGenomicRun` is written with ``signal_compression="gz
 the writer applies the codec from this table.
 
 M93 registers ``sequences → REF_DIFF``; M94 adds ``qualities →
-FQZCOMP_NX16``. M95 will add the integer channels.
+FQZCOMP_NX16``. M95 adds the integer channels.
 
 Cross-language: ObjC ``TTIODefaultCodecsV15``; Java
 ``codecs.DefaultCodecsV15``.
@@ -19,13 +19,15 @@ from ttio.enums import Compression
 # auto-selection. If a channel is not in this table, the writer falls back to
 # the existing ``signal_compression`` string path (zlib/none).
 DEFAULT_CODECS_V1_5: dict[str, Compression] = {
-    "sequences": Compression.REF_DIFF,  # falls back to BASE_PACK if no ref (Q5b=C)
-    "qualities": Compression.FQZCOMP_NX16,  # M94 lossless quality codec
-    # M95 will register: "positions": Compression.DELTA_RANS_ORDER0,
-    #                    "flags": Compression.RANS_ORDER0,
-    #                    "mapping_qualities": Compression.RANS_ORDER0,
-    #                    "template_lengths": Compression.RANS_ORDER0,
-    #                    "mate_info_pos": Compression.RANS_ORDER0,
+    "sequences": Compression.REF_DIFF,
+    "qualities": Compression.FQZCOMP_NX16,
+    "positions": Compression.DELTA_RANS_ORDER0,
+    "flags": Compression.RANS_ORDER0,
+    "mapping_qualities": Compression.RANS_ORDER0,
+    "template_lengths": Compression.RANS_ORDER0,
+    "mate_info_pos": Compression.RANS_ORDER0,
+    "mate_info_tlen": Compression.RANS_ORDER0,
+    "mate_info_chrom": Compression.NAME_TOKENIZED,
 }
 
 

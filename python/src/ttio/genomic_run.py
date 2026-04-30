@@ -576,10 +576,18 @@ class GenomicRun:
             self._decoded_int_channels[name] = arr
             return arr
 
+        if codec_id == int(Compression.DELTA_RANS_ORDER0):
+            from .codecs.delta_rans import decode as _dec
+            all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+            decoded_bytes = _dec(all_bytes)
+            arr = np.frombuffer(decoded_bytes, dtype=dtype_str)
+            self._decoded_int_channels[name] = arr
+            return arr
+
         raise ValueError(
             f"signal_channel '{name}': @compression={codec_id} "
             "is not a supported TTIO codec id for an integer channel "
-            "(only RANS_ORDER0 = 4 and RANS_ORDER1 = 5 are recognised)"
+            "(RANS_ORDER0 = 4, RANS_ORDER1 = 5, DELTA_RANS_ORDER0 = 11)"
         )
 
     def _compound(self, name: str) -> list[dict]:

@@ -750,14 +750,15 @@ def _write_int_channel_with_codec(
     if codec_override not in (
         Compression.RANS_ORDER0,
         Compression.RANS_ORDER1,
+        Compression.DELTA_RANS_ORDER0,
     ):
         # Defensive — the caller-side validation in
         # ``_write_genomic_run`` rejects this combination first
         # with a clearer message.
         raise ValueError(
             f"signal_codec_overrides['{name}'] = {codec_override!r}: "
-            "only RANS_ORDER0 and RANS_ORDER1 are supported on "
-            "integer channels"
+            "only RANS_ORDER0, RANS_ORDER1, and DELTA_RANS_ORDER0 "
+            "are supported on integer channels"
         )
 
     dtype_str = _INTEGER_CHANNEL_DTYPES.get(name)
@@ -773,10 +774,15 @@ def _write_int_channel_with_codec(
     arr = np.ascontiguousarray(np.asarray(data).astype(dtype_str, copy=False))
     le_bytes = bytes(arr.tobytes())
 
-    # Encode through the M83 rANS codec.
-    from .codecs.rans import encode as _enc
-    order = 0 if codec_override == Compression.RANS_ORDER0 else 1
-    encoded = _enc(le_bytes, order=order)
+    # Encode through the appropriate codec.
+    if codec_override == Compression.DELTA_RANS_ORDER0:
+        from .codecs.delta_rans import encode as _dra_enc
+        elem_size = {"<i8": 8, "<u4": 4, "<u1": 1}[dtype_str]
+        encoded = _dra_enc(le_bytes, element_size=elem_size)
+    else:
+        from .codecs.rans import encode as _enc
+        order = 0 if codec_override == Compression.RANS_ORDER0 else 1
+        encoded = _enc(le_bytes, order=order)
 
     # Write the codec output as a flat unfiltered uint8 dataset.
     arr_u8 = np.frombuffer(encoded, dtype=np.uint8)
