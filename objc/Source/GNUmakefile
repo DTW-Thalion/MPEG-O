@@ -112,7 +112,11 @@ libTTIO_HEADER_FILES = \
 	Codecs/TTIORans.h \
 	Codecs/TTIOBasePack.h \
 	Codecs/TTIOQuality.h \
-	Codecs/TTIONameTokenizer.h
+	Codecs/TTIONameTokenizer.h \
+	Codecs/TTIORefDiff.h \
+	Codecs/TTIOFqzcompNx16.h \
+	Codecs/TTIOFqzcompNx16Z.h \
+	Codecs/TTIOReferenceResolver.h
 
 libTTIO_OBJC_FILES = \
 	ValueClasses/TTIOCVParam.m \
@@ -214,7 +218,11 @@ libTTIO_OBJC_FILES = \
 	Codecs/TTIORans.m \
 	Codecs/TTIOBasePack.m \
 	Codecs/TTIOQuality.m \
-	Codecs/TTIONameTokenizer.m
+	Codecs/TTIONameTokenizer.m \
+	Codecs/TTIORefDiff.m \
+	Codecs/TTIOFqzcompNx16.m \
+	Codecs/TTIOFqzcompNx16Z.m \
+	Codecs/TTIOReferenceResolver.m
 
 libTTIO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
 
