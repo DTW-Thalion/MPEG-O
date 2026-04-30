@@ -109,7 +109,12 @@ public final class Enums {
          *  format; the M86 pipeline derives revcomp from
          *  {@code run.flags & 16} (SAM REVERSE bit). Pipeline plumbing
          *  lives in {@link global.thalion.ttio.SpectralDataset}. */
-        FQZCOMP_NX16
+        FQZCOMP_NX16,
+        /** Delta + zigzag + varint + rANS order-0 for sorted integer channels
+         *  (M95 v1.2, codec id 11). */
+        DELTA_RANS_ORDER0,
+        /** CRAM-mimic rANS-Nx16 quality codec (M94.Z v1.2, codec id 12). */
+        FQZCOMP_NX16_Z
     }
 
     /** Ion polarity for mass spectrometry. */
