@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import os
 import sys
@@ -437,7 +438,6 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
     Production-scale inputs (~10 MiB each) so inner loops are hot for
     seconds. Deterministic seeds for cross-language parity.
     """
-    import hashlib
     rng = np.random.default_rng(42)
 
     # ── REF_DIFF: 100K reads × 100bp against a 100Kbp reference ──
