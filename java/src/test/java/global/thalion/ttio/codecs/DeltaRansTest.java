@@ -166,4 +166,26 @@ final class DeltaRansTest {
         byte[] reEncoded = DeltaRans.encode(decoded, 8);
         assertArrayEquals(encoded, reEncoded, "re-encode must be byte-exact");
     }
+
+    @Test void fixtureBReEncodeExact() throws IOException {
+        byte[] encoded = loadFixture("delta_rans_b.bin");
+        byte[] decoded = DeltaRans.decode(encoded);
+        byte[] reEncoded = DeltaRans.encode(decoded, 4);
+        assertArrayEquals(encoded, reEncoded, "re-encode must be byte-exact");
+    }
+
+    @Test void roundTripInt8WrappingDeltas() {
+        byte[] raw = {127, -128, 0, -1, 1};
+        byte[] encoded = DeltaRans.encode(raw, 1);
+        assertArrayEquals(raw, DeltaRans.decode(encoded));
+    }
+
+    @Test void roundTripInt32WrappingDeltas() {
+        ByteBuffer bb = ByteBuffer.allocate(3 * 4).order(ByteOrder.LITTLE_ENDIAN);
+        bb.putInt(Integer.MAX_VALUE);
+        bb.putInt(Integer.MIN_VALUE);
+        bb.putInt(0);
+        byte[] raw = bb.array();
+        assertArrayEquals(raw, DeltaRans.decode(DeltaRans.encode(raw, 4)));
+    }
 }

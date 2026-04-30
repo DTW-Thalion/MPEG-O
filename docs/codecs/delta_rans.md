@@ -110,7 +110,7 @@ Each implementation:
 Fixture locations:
 
 - Python — `python/tests/fixtures/codecs/`
-- Objective-C — `objc/Tests/Fixtures/codecs/` (verbatim copies)
+- Objective-C — `objc/Tests/Fixtures/` (verbatim copies)
 - Java — `java/src/test/resources/ttio/codecs/` (verbatim copies)
 
 Fixtures (c) and (d) are degenerate by design; (c) is the empty-input

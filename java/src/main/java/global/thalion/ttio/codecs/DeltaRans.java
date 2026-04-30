@@ -89,11 +89,21 @@ public final class DeltaRans {
         // Delta + zigzag + varint
         ByteArrayOutputStream varintBuf = new ByteArrayOutputStream();
         long prev = 0;
+        int bits = elementSize * 8;
         for (int i = 0; i < nElements; i++) {
             long delta = values[i] - prev;
-            // Zigzag encode (works for all widths when values are already sign-extended)
-            long zz = (delta << 1) ^ (delta >> 63);
-            // Varint encode (unsigned LEB128)
+            if (bits < 64) {
+                long half = 1L << (bits - 1);
+                long full = 1L << bits;
+                if (delta < -half) delta += full;
+                else if (delta >= half) delta -= full;
+            }
+            long zz;
+            if (bits < 64) {
+                zz = ((delta << 1) ^ (delta >> (bits - 1))) & ((1L << bits) - 1);
+            } else {
+                zz = (delta << 1) ^ (delta >> 63);
+            }
             writeVarint(varintBuf, zz);
             prev = values[i];
         }
