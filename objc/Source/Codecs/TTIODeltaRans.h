@@ -17,8 +17,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-NSData *TTIODeltaRansEncode(NSData *data, uint8_t elementSize,
-                            NSError * _Nullable * _Nullable error);
+NSData * _Nullable TTIODeltaRansEncode(NSData *data, uint8_t elementSize,
+                                      NSError * _Nullable * _Nullable error);
 
 NSData * _Nullable TTIODeltaRansDecode(NSData *encoded,
                                        NSError * _Nullable * _Nullable error);
