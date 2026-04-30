@@ -13,6 +13,7 @@
 #import "Codecs/TTIONameTokenizer.h"   // M86 Phase E
 #import "Codecs/TTIORefDiff.h"            // M93 v1.2
 #import "Codecs/TTIOFqzcompNx16.h"         // M94 v1.2
+#import "Codecs/TTIODeltaRans.h"           // M95 v1.2
 #import "Codecs/TTIOReferenceResolver.h"  // M93 v1.2
 #import <hdf5.h>
 
@@ -312,6 +313,9 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
             break;
         case 10: // TTIOCompressionFqzcompNx16 (M94 v1.2)
             decoded = [self _ttio_m94_decodeFqzcompNx16:encoded error:&decErr];
+            break;
+        case 11: // TTIOCompressionDeltaRansOrder0 (M95 v1.2)
+            decoded = TTIODeltaRansDecode(encoded, &decErr);
             break;
         default:
             if (error) *error = [NSError
@@ -894,30 +898,39 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
         return _decodedIntChannels[name];
     }
 
-    if (codec_id != 4 /* RansOrder0 */ && codec_id != 5 /* RansOrder1 */) {
-        if (error) *error = [NSError
-            errorWithDomain:@"TTIOGenomicRun" code:2051
-                   userInfo:@{NSLocalizedDescriptionKey:
-                       [NSString stringWithFormat:
-                            @"signal_channel '%@': @compression=%u "
-                            @"is not a supported TTIO codec id for an "
-                            @"integer channel (only RANS_ORDER0 = 4 "
-                            @"and RANS_ORDER1 = 5 are recognised)",
-                            name, (unsigned)codec_id]}];
-        return nil;
-    }
-
     id allRaw = [ds readAll:error];
     if (![allRaw isKindOfClass:[NSData class]]) return nil;
     NSError *decErr = nil;
-    NSData *decoded = TTIORansDecode((NSData *)allRaw, &decErr);
+    NSData *decoded = nil;
+    switch (codec_id) {
+        case 4: // TTIOCompressionRansOrder0
+        case 5: // TTIOCompressionRansOrder1
+            decoded = TTIORansDecode((NSData *)allRaw, &decErr);
+            break;
+        case 11: // TTIOCompressionDeltaRansOrder0 (M95)
+            decoded = TTIODeltaRansDecode((NSData *)allRaw, &decErr);
+            break;
+        default:
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2051
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"signal_channel '%@': @compression=%u "
+                                @"is not a supported TTIO codec id for "
+                                @"an integer channel (only RANS_ORDER0 "
+                                @"= 4, RANS_ORDER1 = 5, "
+                                @"DELTA_RANS_ORDER0 = 11 are "
+                                @"recognised)",
+                                name, (unsigned)codec_id]}];
+            return nil;
+    }
     if (!decoded) {
         if (error) *error = decErr ?: [NSError
             errorWithDomain:@"TTIOGenomicRun" code:2052
                    userInfo:@{NSLocalizedDescriptionKey:
                        [NSString stringWithFormat:
-                            @"signal_channel '%@' rANS decode failed",
-                            name]}];
+                            @"signal_channel '%@' codec %u decode "
+                            @"failed", name, (unsigned)codec_id]}];
         return nil;
     }
     _decodedIntChannels[name] = decoded;

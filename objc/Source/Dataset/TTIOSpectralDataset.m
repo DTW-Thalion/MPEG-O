@@ -29,6 +29,7 @@
 #import "Codecs/TTIONameTokenizer.h"            // M86 Phase E
 #import "Codecs/TTIORefDiff.h"                 // M93 v1.2
 #import "Codecs/TTIOFqzcompNx16.h"              // M94 v1.2
+#import "Codecs/TTIODeltaRans.h"                // M95 v1.2
 #import <hdf5.h>
 #include <openssl/md5.h>                          // M93 v1.2 ref MD5
 
@@ -46,6 +47,13 @@
 #  define TTIO_HOST_TO_LE32(x) htole32(x)
 #  define TTIO_HOST_TO_LE64(x) htole64(x)
 #endif
+
+// Forward declarations — needed because mate_info write paths call
+// functions defined later in the file.
+@class TTIOWrittenGenomicRun;
+static NSNumber *_TTIO_M95_ResolveIntOverride(TTIOWrittenGenomicRun *run,
+                                               NSString *channel);
+static BOOL _TTIO_M94_RunIsV15Candidate(TTIOWrittenGenomicRun *run);
 
 // Internal SPI surfaced by TTIOAcquisitionRun for the dataset-level
 // decrypt lifecycle. Not part of the public header.
@@ -140,7 +148,8 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @(TTIOCompressionRansOrder1),
             @(TTIOCompressionBasePack),
             @(TTIOCompressionQualityBinned),
-            @(TTIOCompressionFqzcompNx16),  // M94 v1.2: lossless quality codec
+            @(TTIOCompressionFqzcompNx16),   // M94 v1.2: lossless quality codec
+            @(TTIOCompressionFqzcompNx16Z),  // M94.Z v1.2
         ]];
         NSSet *nameAllowed = [NSSet setWithArray:@[
             @(TTIOCompressionNameTokenized),
@@ -169,6 +178,7 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
         NSSet *intAllowed = [NSSet setWithArray:@[
             @(TTIOCompressionRansOrder0),
             @(TTIOCompressionRansOrder1),
+            @(TTIOCompressionDeltaRansOrder0),  // M95: delta + rANS
         ]];
         // M86 Phase F (Binding Decision §130): mate_info_chrom shares
         // cigars' allowed set (rANS pair via length-prefix-concat plus
@@ -760,9 +770,22 @@ static NSData *_TTIO_M86_IntChannelToLEBytes(NSString *name, NSData *data)
     return [data copy];
 }
 
+/** M95: element size in bytes for a named integer channel.  Used by
+ *  the delta-rANS encoder which needs the element width to compute
+ *  deltas across typed values rather than raw bytes. */
+static uint8_t _TTIO_M95_IntChannelElementSize(NSString *name) {
+    if ([name isEqualToString:@"positions"])         return 8;
+    if ([name isEqualToString:@"flags"])             return 4;
+    if ([name isEqualToString:@"mapping_qualities"]) return 1;
+    if ([name isEqualToString:@"mate_info_pos"])     return 8;
+    if ([name isEqualToString:@"mate_info_tlen"])    return 4;
+    return 0;  // unreachable; validation rejects others
+}
+
 /** Write an integer signal channel either directly with the M82 typed
- *  dataset (when no override) or through the rANS codec with the LE-
- *  serialisation contract (when overridden). The HDF5 fast path. */
+ *  dataset (when no override) or through the rANS/delta-rANS codec
+ *  with the LE-serialisation contract (when overridden). HDF5 fast
+ *  path. */
 static BOOL _TTIO_M86_WriteIntChannel(TTIOHDF5Group *group,
                                       NSString *name,
                                       NSData *data,
@@ -787,7 +810,8 @@ static BOOL _TTIO_M86_WriteIntChannel(TTIOHDF5Group *group,
 
     TTIOCompression codec = (TTIOCompression)[codecOverride unsignedIntegerValue];
     if (codec != TTIOCompressionRansOrder0
-        && codec != TTIOCompressionRansOrder1) {
+        && codec != TTIOCompressionRansOrder1
+        && codec != TTIOCompressionDeltaRansOrder0) {
         // Defensive — _TTIO_M86_ValidateOverrides rejects this first.
         if (error) *error = [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2050
@@ -795,19 +819,30 @@ static BOOL _TTIO_M86_WriteIntChannel(TTIOHDF5Group *group,
                        [NSString stringWithFormat:
                             @"M86 Phase B: codec %lu is not valid on "
                             @"integer channel '%@' (only RANS_ORDER0/"
-                            @"RANS_ORDER1 supported)",
+                            @"RANS_ORDER1/DELTA_RANS_ORDER0 supported)",
                             (unsigned long)codec, name]}];
         return NO;
     }
     NSData *leBytes = _TTIO_M86_IntChannelToLEBytes(name, data);
-    int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
-    NSData *encoded = TTIORansEncode(leBytes, order);
+    NSData *encoded = nil;
+    if (codec == TTIOCompressionDeltaRansOrder0) {
+        uint8_t elemSize = _TTIO_M95_IntChannelElementSize(name);
+        NSError *encErr = nil;
+        encoded = TTIODeltaRansEncode(leBytes, elemSize, &encErr);
+        if (!encoded) {
+            if (error) *error = encErr;
+            return NO;
+        }
+    } else {
+        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+        encoded = TTIORansEncode(leBytes, order);
+    }
     if (!encoded) {
         if (error) *error = [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2051
                    userInfo:@{NSLocalizedDescriptionKey:
                        [NSString stringWithFormat:
-                            @"M86 Phase B: rANS encode failed for "
+                            @"M86 Phase B: codec encode failed for "
                             @"integer channel '%@'", name]}];
         return NO;
     }
@@ -850,26 +885,38 @@ static BOOL _TTIO_M86_WriteIntChannelStorage(id<TTIOStorageGroup> group,
 
     TTIOCompression codec = (TTIOCompression)[codecOverride unsignedIntegerValue];
     if (codec != TTIOCompressionRansOrder0
-        && codec != TTIOCompressionRansOrder1) {
+        && codec != TTIOCompressionRansOrder1
+        && codec != TTIOCompressionDeltaRansOrder0) {
         if (error) *error = [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2052
                    userInfo:@{NSLocalizedDescriptionKey:
                        [NSString stringWithFormat:
                             @"M86 Phase B: codec %lu is not valid on "
                             @"integer channel '%@' (only RANS_ORDER0/"
-                            @"RANS_ORDER1 supported)",
+                            @"RANS_ORDER1/DELTA_RANS_ORDER0 supported)",
                             (unsigned long)codec, name]}];
         return NO;
     }
     NSData *leBytes = _TTIO_M86_IntChannelToLEBytes(name, data);
-    int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
-    NSData *encoded = TTIORansEncode(leBytes, order);
+    NSData *encoded = nil;
+    if (codec == TTIOCompressionDeltaRansOrder0) {
+        uint8_t elemSize = _TTIO_M95_IntChannelElementSize(name);
+        NSError *encErr = nil;
+        encoded = TTIODeltaRansEncode(leBytes, elemSize, &encErr);
+        if (!encoded) {
+            if (error) *error = encErr;
+            return NO;
+        }
+    } else {
+        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+        encoded = TTIORansEncode(leBytes, order);
+    }
     if (!encoded) {
         if (error) *error = [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2053
                    userInfo:@{NSLocalizedDescriptionKey:
                        [NSString stringWithFormat:
-                            @"M86 Phase B: rANS encode failed for "
+                            @"M86 Phase B: codec encode failed for "
                             @"integer channel '%@'", name]}];
         return NO;
     }
@@ -952,7 +999,7 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroup(TTIOHDF5Group *sc,
     if (!mate) return NO;
 
     // ---- chrom field ----
-    NSNumber *chromOverride = run.signalCodecOverrides[@"mate_info_chrom"];
+    NSNumber *chromOverride = _TTIO_M95_ResolveIntOverride(run, @"mate_info_chrom");
     if (chromOverride == nil) {
         // Natural dtype: VL_STRING in compound dataset with HDF5 ZLIB.
         NSArray *vlValueField = @[
@@ -992,8 +1039,8 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroup(TTIOHDF5Group *sc,
                                            (uint8_t)codec, error)) return NO;
     }
 
-    // ---- pos field (int64 / RANS only) ----
-    NSNumber *posOverride = run.signalCodecOverrides[@"mate_info_pos"];
+    // ---- pos field (int64 / rANS or delta-rANS) ----
+    NSNumber *posOverride = _TTIO_M95_ResolveIntOverride(run, @"mate_info_pos");
     if (posOverride == nil) {
         // Natural dtype: INT64 typed dataset with HDF5 ZLIB.
         NSUInteger nPos = run.matePositionsData.length / sizeof(int64_t);
@@ -1018,13 +1065,20 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroup(TTIOHDF5Group *sc,
             uint64_t le = TTIO_HOST_TO_LE64((uint64_t)src[i]);
             memcpy(&dst[i], &le, sizeof(uint64_t));
         }
-        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
-        NSData *encoded = TTIORansEncode(leBytes, order);
+        NSData *encoded = nil;
+        if (codec == TTIOCompressionDeltaRansOrder0) {
+            NSError *encErr = nil;
+            encoded = TTIODeltaRansEncode(leBytes, 8, &encErr);
+            if (!encoded) { if (error) *error = encErr; return NO; }
+        } else {
+            int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+            encoded = TTIORansEncode(leBytes, order);
+        }
         if (!encoded) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2071
                        userInfo:@{NSLocalizedDescriptionKey:
-                           @"M86 Phase F: mate_info_pos rANS encode failed"}];
+                           @"M86 Phase F: mate_info_pos encode failed"}];
             return NO;
         }
         TTIOHDF5Dataset *ds = [mate createDatasetNamed:@"pos"
@@ -1040,8 +1094,8 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroup(TTIOHDF5Group *sc,
                                            (uint8_t)codec, error)) return NO;
     }
 
-    // ---- tlen field (int32 / RANS only) ----
-    NSNumber *tlenOverride = run.signalCodecOverrides[@"mate_info_tlen"];
+    // ---- tlen field (int32 / rANS or delta-rANS) ----
+    NSNumber *tlenOverride = _TTIO_M95_ResolveIntOverride(run, @"mate_info_tlen");
     if (tlenOverride == nil) {
         // Natural dtype: INT32 typed dataset with HDF5 ZLIB.
         NSUInteger nT = run.templateLengthsData.length / sizeof(int32_t);
@@ -1064,13 +1118,20 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroup(TTIOHDF5Group *sc,
         for (NSUInteger i = 0; i < n; i++) {
             dst[i] = (int32_t)TTIO_HOST_TO_LE32((uint32_t)src[i]);
         }
-        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
-        NSData *encoded = TTIORansEncode(leBytes, order);
+        NSData *encoded = nil;
+        if (codec == TTIOCompressionDeltaRansOrder0) {
+            NSError *encErr = nil;
+            encoded = TTIODeltaRansEncode(leBytes, 4, &encErr);
+            if (!encoded) { if (error) *error = encErr; return NO; }
+        } else {
+            int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+            encoded = TTIORansEncode(leBytes, order);
+        }
         if (!encoded) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2072
                        userInfo:@{NSLocalizedDescriptionKey:
-                           @"M86 Phase F: mate_info_tlen rANS encode failed"}];
+                           @"M86 Phase F: mate_info_tlen encode failed"}];
             return NO;
         }
         TTIOHDF5Dataset *ds = [mate createDatasetNamed:@"tlen"
@@ -1099,7 +1160,7 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroupStorage(id<TTIOStorageGroup> sc,
     if (!mate) return NO;
 
     // ---- chrom field ----
-    NSNumber *chromOverride = run.signalCodecOverrides[@"mate_info_chrom"];
+    NSNumber *chromOverride = _TTIO_M95_ResolveIntOverride(run, @"mate_info_chrom");
     if (chromOverride == nil) {
         NSArray *vlValueField = @[
             [TTIOCompoundField fieldWithName:@"value"
@@ -1142,7 +1203,7 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroupStorage(id<TTIOStorageGroup> sc,
     }
 
     // ---- pos field ----
-    NSNumber *posOverride = run.signalCodecOverrides[@"mate_info_pos"];
+    NSNumber *posOverride = _TTIO_M95_ResolveIntOverride(run, @"mate_info_pos");
     if (posOverride == nil) {
         NSUInteger nPos = run.matePositionsData.length / sizeof(int64_t);
         id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"pos"
@@ -1165,13 +1226,20 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroupStorage(id<TTIOStorageGroup> sc,
             uint64_t le = TTIO_HOST_TO_LE64((uint64_t)src[i]);
             memcpy(&dst[i], &le, sizeof(uint64_t));
         }
-        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
-        NSData *encoded = TTIORansEncode(leBytes, order);
+        NSData *encoded = nil;
+        if (codec == TTIOCompressionDeltaRansOrder0) {
+            NSError *encErr = nil;
+            encoded = TTIODeltaRansEncode(leBytes, 8, &encErr);
+            if (!encoded) { if (error) *error = encErr; return NO; }
+        } else {
+            int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+            encoded = TTIORansEncode(leBytes, order);
+        }
         if (!encoded) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2081
                        userInfo:@{NSLocalizedDescriptionKey:
-                           @"M86 Phase F: mate_info_pos rANS encode failed"}];
+                           @"M86 Phase F: mate_info_pos encode failed"}];
             return NO;
         }
         id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"pos"
@@ -1189,7 +1257,7 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroupStorage(id<TTIOStorageGroup> sc,
     }
 
     // ---- tlen field ----
-    NSNumber *tlenOverride = run.signalCodecOverrides[@"mate_info_tlen"];
+    NSNumber *tlenOverride = _TTIO_M95_ResolveIntOverride(run, @"mate_info_tlen");
     if (tlenOverride == nil) {
         NSUInteger nT = run.templateLengthsData.length / sizeof(int32_t);
         id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"tlen"
@@ -1211,13 +1279,20 @@ static BOOL _TTIO_M86F_WriteMateInfoSubgroupStorage(id<TTIOStorageGroup> sc,
         for (NSUInteger i = 0; i < n; i++) {
             dst[i] = (int32_t)TTIO_HOST_TO_LE32((uint32_t)src[i]);
         }
-        int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
-        NSData *encoded = TTIORansEncode(leBytes, order);
+        NSData *encoded = nil;
+        if (codec == TTIOCompressionDeltaRansOrder0) {
+            NSError *encErr = nil;
+            encoded = TTIODeltaRansEncode(leBytes, 4, &encErr);
+            if (!encoded) { if (error) *error = encErr; return NO; }
+        } else {
+            int order = (codec == TTIOCompressionRansOrder0) ? 0 : 1;
+            encoded = TTIORansEncode(leBytes, order);
+        }
         if (!encoded) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2082
                        userInfo:@{NSLocalizedDescriptionKey:
-                           @"M86 Phase F: mate_info_tlen rANS encode failed"}];
+                           @"M86 Phase F: mate_info_tlen encode failed"}];
             return NO;
         }
         id<TTIOStorageDataset> ds = [mate createDatasetNamed:@"tlen"
@@ -1243,6 +1318,15 @@ static BOOL _TTIO_M86F_HasMateOverrides(NSDictionary<NSString *, NSNumber *> *ov
     return overrides[@"mate_info_chrom"] != nil
         || overrides[@"mate_info_pos"]   != nil
         || overrides[@"mate_info_tlen"]  != nil;
+}
+
+/** M95: returns YES when ANY mate_info_* field has an explicit
+ *  override OR an auto-default via _TTIO_M95_ResolveIntOverride. */
+static BOOL _TTIO_M95_HasMateOverridesOrDefaults(TTIOWrittenGenomicRun *run)
+{
+    return _TTIO_M95_ResolveIntOverride(run, @"mate_info_chrom") != nil
+        || _TTIO_M95_ResolveIntOverride(run, @"mate_info_pos")  != nil
+        || _TTIO_M95_ResolveIntOverride(run, @"mate_info_tlen") != nil;
 }
 
 @implementation TTIOSpectralDataset
@@ -1499,6 +1583,8 @@ static BOOL _TTIO_M94_AnyV15Codec(NSDictionary *genomicRuns)
                 (TTIOCompression)[codecBox unsignedIntegerValue];
             if (codec == TTIOCompressionRefDiff) return YES;
             if (codec == TTIOCompressionFqzcompNx16) return YES;
+            if (codec == TTIOCompressionFqzcompNx16Z) return YES;
+            if (codec == TTIOCompressionDeltaRansOrder0) return YES;
         }
     }
     return NO;
@@ -1521,6 +1607,8 @@ static BOOL _TTIO_M94_RunIsV15Candidate(TTIOWrittenGenomicRun *run)
             (TTIOCompression)[codecBox unsignedIntegerValue];
         if (codec == TTIOCompressionRefDiff) return YES;
         if (codec == TTIOCompressionFqzcompNx16) return YES;
+        if (codec == TTIOCompressionFqzcompNx16Z) return YES;
+        if (codec == TTIOCompressionDeltaRansOrder0) return YES;
     }
     // REF_DIFF auto-default on sequences makes this run a v1.5 candidate.
     if (run.signalCodecOverrides[@"sequences"] == nil
@@ -1772,6 +1860,34 @@ static NSNumber *_TTIO_M94_DefaultQualitiesCodec(TTIOWrittenGenomicRun *run)
     return @(TTIOCompressionFqzcompNx16);
 }
 
+/** M95 auto-default codec for integer channels. Returns the v1.5
+ *  default codec for the given channel when the run has no explicit
+ *  override AND passes v1.5 candidacy. Returns nil when no auto-
+ *  default applies. Mirrors Python's ``_resolve_int_override``. */
+static NSNumber *_TTIO_M95_ResolveIntOverride(TTIOWrittenGenomicRun *run,
+                                               NSString *channel)
+{
+    NSNumber *ovr = run.signalCodecOverrides[channel];
+    if (ovr != nil) return ovr;
+    if (run.signalCompression != TTIOCompressionZlib) return nil;
+    if (!_TTIO_M94_RunIsV15Candidate(run)) return nil;
+    // v1.5 auto-defaults (mirrors Python DEFAULT_CODECS_V1_5)
+    static NSDictionary *defaults = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        defaults = @{
+            @"positions":         @(TTIOCompressionDeltaRansOrder0),
+            @"flags":             @(TTIOCompressionRansOrder0),
+            @"mapping_qualities": @(TTIOCompressionRansOrder0),
+            @"template_lengths":  @(TTIOCompressionRansOrder0),
+            @"mate_info_pos":     @(TTIOCompressionRansOrder0),
+            @"mate_info_tlen":    @(TTIOCompressionRansOrder0),
+            @"mate_info_chrom":   @(TTIOCompressionNameTokenized),
+        };
+    });
+    return defaults[channel];
+}
+
 /** Write the qualities channel through FQZCOMP_NX16. Derives
  *  read_lengths from run.lengthsData (uint32 LE) and revcomp_flags
  *  from run.flagsData[i] & 16 (SAM REVERSE bit). Stamps the
@@ -1894,7 +2010,8 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     for (NSString *chName in @[@"positions", @"flags", @"mapping_qualities"]) {
         if (!_TTIO_M86_WriteIntChannelStorage(
                 sc, chName, intChannels[chName], codec,
-                run.signalCodecOverrides[chName], error)) return NO;
+                _TTIO_M95_ResolveIntOverride(run, chName), error))
+            return NO;
     }
     // M86: sequences/qualities through codec-aware byte-channel writer.
     if (!_TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
@@ -1991,9 +2108,10 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
 
     // M86 Phase F: schema lift for mate_info on the provider path.
     // Same dispatch as the HDF5 fast path above: when ANY of the
-    // three per-field overrides is set, route through the subgroup
-    // writer; otherwise preserve the M82 compound write.
-    if (_TTIO_M86F_HasMateOverrides(run.signalCodecOverrides)) {
+    // three per-field overrides (or M95 auto-defaults) is set, route
+    // through the subgroup writer; otherwise preserve the M82 compound
+    // write.
+    if (_TTIO_M95_HasMateOverridesOrDefaults(run)) {
         if (!_TTIO_M86F_WriteMateInfoSubgroupStorage(sc, run, error)) return NO;
     } else {
         NSArray *mateFields = @[
@@ -2209,7 +2327,7 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     for (NSString *chName in @[@"positions", @"flags", @"mapping_qualities"]) {
         if (!_TTIO_M86_WriteIntChannel(sc, chName, intChannels[chName],
                                        codec,
-                                       run.signalCodecOverrides[chName],
+                                       _TTIO_M95_ResolveIntOverride(run, chName),
                                        error)) return NO;
     }
     // sequences (uint8) — codec-aware. M93 v1.2: when the override
@@ -2342,9 +2460,9 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     // signal_channels/mate_info/ containing three child datasets
     // (Binding Decisions §125-§128). Per-field dispatch routes through
     // _TTIO_M86F_WriteMateInfoSubgroup. When NO mate_info_* override
-    // is set the M82 compound write path is preserved unchanged for
-    // byte parity with pre-Phase-F files.
-    if (_TTIO_M86F_HasMateOverrides(run.signalCodecOverrides)) {
+    // (or M95 auto-default) is set the M82 compound write path is
+    // preserved unchanged for byte parity with pre-Phase-F files.
+    if (_TTIO_M95_HasMateOverridesOrDefaults(run)) {
         if (!_TTIO_M86F_WriteMateInfoSubgroup(sc, run, error)) return NO;
     } else {
         // mate_info compound: chrom (VL str) + pos (int64) + tlen (int32 → boxed as int64 via VLString-or-int64 schema).
