@@ -6,13 +6,31 @@ as a record of what was built; current milestones use TTI-O names.
 
 ---
 
-> **Status (2026-04-28).** Phase 6 (M89 transport extension, M90
+> **Status (2026-04-29).** Phase 6 (M89 transport extension, M90
 > encryption/anonymisation, M91 multi-omics integration) **shipped**
 > alongside V- and C-series debt repayment. Phase 8 (post-M91
 > abstraction polish — `Run` protocol, modality-agnostic
 > `runs` / `runsForSample` / `runsOfModality`, mixed-dict write API,
 > per-run provenance compound dual-write/dual-read) **shipped**.
-> **Phase 7 — M92 release prep is the next milestone.** Active
+> **Phase 9 (M93/M94/M94.Z codec parity) shipped 2026-04-29.** M93
+> REF_DIFF (codec id 9), M94 v1 FQZCOMP_NX16 (codec id 10), and
+> M94.Z FQZCOMP_NX16_Z (codec id 12, CRAM-mimic — production v1.2.0
+> codec, replaces the abandoned M94.X variable-total approach) all
+> byte-exact across Python / ObjC / Java. Cython acceleration of
+> REF_DIFF (44× pack / 35× unpack) and NAME_TOKENIZED (11% / 8%
+> chr22 drop) ships alongside. Pipeline defects fixed
+> (`_mate_info_is_subgroup` caching + per-read codec-import hoist).
+> chr22 encode 18 min → 27.91 s (38.7×); decode 24.6 min → 21.76 s
+> (67.8×); now 9.2× / 13.4× off CRAM 3.1, down from 355× / 1162×
+> pre-session. Codec compute is no longer the bottleneck; remaining
+> gap is HDF5 framework + multi-omics infrastructure, accepted for
+> v1.2.0 scope per user direction. M95 (DELTA_RANS_ORDER0 +
+> structural) is the only remaining codec-tier item before M92
+> release prep. See
+> `docs/superpowers/specs/2026-04-28-m93-m94-m95-codec-design.md`
+> + `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`.
+>
+> **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under
 > `[Unreleased]`, do not interleave with M-series):
 > * [`docs/verification-workplan.md`](docs/verification-workplan.md) — **V-series** (V1-V9 + P1-P4 perf follow-ups; mostly complete as of 2026-04-27).
@@ -651,15 +669,246 @@ Commits: `145485c`, `772eb00`, `6992ae9`, `7a2ffef`, `54ef6f1`,
 
 ---
 
+## Phase 9 — Codec parity (v1.2.0 dependency for M92)
+
+Three new codecs across three languages, all cross-language byte-exact
+via canonical conformance fixtures. Closes the chr22 compression gap
+identified in M92's smoke benchmark (TTI-O at 2.5× CRAM 3.1, target
+1.15×).
+
+### M93 — REF_DIFF reference-based sequence-diff codec ✓ (Python landed 2026-04-28; ObjC + Java in progress)
+
+- Codec id `9`. Replaces `BASE_PACK` as the default for
+  `signal_channels/sequences` when a reference is available.
+- Context-aware per-channel codec — receives `(positions, cigars,
+  reference_resolver)` from sibling channels at write/read time.
+- Slice-based wire format (10 K reads/slice, CRAM-aligned) for
+  random-access decode.
+- Embedded reference at `/study/references/<reference_uri>/` with
+  auto-deduplication across runs sharing a URI.
+- Format-version bumps `1.4 → 1.5` only when REF_DIFF is actually
+  used (M82-only writes stay at `1.4` for byte-parity).
+- Spec: `docs/superpowers/specs/2026-04-28-m93-m94-m95-codec-design.md` §3 M93.
+- Plan: `docs/superpowers/plans/2026-04-28-m93-ref-diff-codec.md`.
+
+### M94 — FQZCOMP_NX16 lossless quality codec ✓ (Python + ObjC + Java landed 2026-04-29)
+
+- Codec id `10`. Replaces `RANS_ORDER0` as the default for
+  `signal_channels/qualities` when on the v1.5 path.
+- fqzcomp-Nx16 (Bonfield 2022 / CRAM 3.1 default) — interleaved 4-way
+  rANS for SIMD parallelism, context model on `(prev_q[0..2],
+  position_bucket, revcomp_flag, length_bucket)` hashed via
+  SplitMix64 to 4096 contexts. Adaptive `+16` LR with halve-with-
+  floor-1 renormalisation at 4096 max-count boundary.
+- Wire-format header **54 + L bytes** (field-by-field sum); body
+  has a 16-byte substream-length prefix before round-robin bytes.
+- Auto-default on `qualities` gated on **v1.5 candidacy** to
+  preserve M82 byte-parity (binding decision §80h).
+- Python implementation links to a Cython C extension; ObjC + Java
+  implement natively. **8 canonical fixtures byte-exact across all
+  three languages.**
+- Test counts post-M94: Python 313 / ObjC 3204 / Java 813 (all
+  baselines unchanged + ~146 new M94 tests).
+- Spec: §3 M94. Codec spec: `docs/codecs/fqzcomp_nx16.md`.
+
+### M95 — DELTA_RANS_ORDER0 + integer-channel + structural compression (planned)
+
+- Codec id `11`. Running-delta + rANS for sorted-ascending integer
+  channels (positions, mate_info_pos under M86 Phase F).
+- Switches integer-channel defaults from gzip to RANS_ORDER0 (already
+  shipped as M86 Phase B; just changes the default codec selection).
+- HDF5 chunk-size tuning: `WrittenGenomicRun.chunk_size_hint` raised
+  from 1024 to 65536 to cut chunk-index overhead by ~64×.
+- Spec: §3 M95.
+
+### M94.X — FQZCOMP_NX16 variable-total rANS (ABANDONED 2026-04-29)
+
+Path 2 (variable-total rANS, eliminating the per-symbol M-normalisation
+step) was approved 2026-04-29 but ultimately abandoned in favour of
+**M94.Z** (CRAM-mimic 16-bit renormalisation with mathematically
+guaranteed byte-pairing). The variable-total approach required a
+wire-format break across three languages plus full fixture
+re-canonicalisation; the CRAM-mimic codec achieves the same
+algorithmic speedup with simpler invariants and ships as the
+production v1.2.0 quality codec while M94 v1 (codec id 10) is
+retained for backward compatibility.
+
+### M94.Z — FQZCOMP_NX16_Z CRAM-mimic quality codec ✓ (Python + ObjC + Java landed 2026-04-29)
+
+- Codec id `12` (registered alongside the v1 `FQZCOMP_NX16 = 10`,
+  which is retained for backward-compat fixture readability).
+- **Replaces M94.X as the v1.2.0 quality codec.** Mirrors the CRAM
+  3.1 fqzcomp encoder's 16-bit renormalisation strategy:
+  per-symbol normalisation is eliminated by maintaining state
+  invariants across adaptive count updates, with rounding handled
+  via a deterministic 16-bit lower-bound renorm guaranteed to
+  produce byte-paired encoder/decoder output by construction
+  (no insertion-sort tie-break, no fixed-`M` boundary).
+- **Cross-language perf** (100K reads × 100bp Illumina synthetic):
+  Python 145 MB/s encode / 94 MB/s decode (Cython kernel);
+  ObjC 51 MB/s encode at CRAM parity; Java 33 MB/s encode.
+  All three exceed the M94.X spec targets (Python 30 / ObjC 100 / Java 60
+  MB/s) on the encode path; ObjC + Java decode beat the same targets.
+- 7 canonical `m94z_{a,b,c,d,f,g,h}.bin` fixtures byte-exact across
+  Python / ObjC / Java.
+- Wired into the M86 pipeline (`Compression.FQZCOMP_NX16_Z = 12`
+  on `signal_channels/qualities`); benchmark adapter
+  (`tools/benchmarks/formats.py`) updated to use the new codec id
+  for quality compression.
+- Spec: `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`
+  (842-line design doc with byte-pairing proof + state-machine
+  diagrams).
+- Codec spec: `docs/codecs/fqzcomp_nx16_z.md`.
+
+### M93/M94 — Cython acceleration ✓ (Python only, 2026-04-29)
+
+Pure-Python codec hot paths replaced with thin Cython kernels under
+`python/src/ttio/codecs/_<codec>/_<codec>.pyx`, building on the
+M94.Z infrastructure pattern. The `.pyx` source is committed; the
+`.c` transpilation output and compiled `.so` are gitignored and
+regenerated by `python setup.py build_ext`.
+
+| Codec | Pack speedup | Unpack speedup | Notes |
+|---|---|---|---|
+| REF_DIFF (M93) | **44×** | **35×** | `_ref_diff.pyx` |
+| NAME_TOKENIZED (M86 Phase E) | 11% chr22 drop | 8% chr22 drop | `_name_tokenizer.pyx` |
+| FQZCOMP_NX16 (M94 v1) | (built-in) | (built-in) | `_fqzcomp_nx16.pyx` |
+| FQZCOMP_NX16_Z (M94.Z) | 145 MB/s | 94 MB/s | `_fqzcomp_nx16_z.pyx` |
+
+ObjC and Java carry their native fast paths separately (no Cython
+analogue). Pure-Python `_*_py` fallbacks remain available for
+environments that haven't built the C extensions; gated on
+`_HAVE_C_EXTENSION`.
+
+### Pipeline defects — `_mate_info_is_subgroup` caching + codec-import hoist ✓ (2026-04-29)
+
+Two cumulative fixes in `python/src/ttio/genomic_run.py` discovered
+during M94.Z chr22 profiling:
+
+- **`_mate_info_is_subgroup()` caching.** Was burning ~50% of decode
+  wall on redundant HDF5 link probes (5.3M calls all returning the
+  same answer). Now memoised on `_mate_info_subgroup_cached` per
+  run instance.
+- **Codec import hoist.** Per-read `importlib._handle_fromlist`
+  was eating ~6% of decode wall on attribute lookups; codec module
+  imports (`Compression`, `Precision`, `_hdf5_io`, `codecs.rans`,
+  `codecs.name_tokenizer`) hoisted to module load.
+
+### Cumulative chr22 perf (post-M94.Z + Cython + pipeline fixes)
+
+| Metric | Pre-session | Post-session | Speedup | vs CRAM 3.1 |
+|---|---|---|---|---|
+| Encode | 18 min | 27.91 s | 38.7× | 9.2× off (was 355×) |
+| Decode | 24.6 min | 21.76 s | 67.8× | 13.4× off (was 1162×) |
+
+Codec compute is now ~4% of TTI-O wall time; the remaining gap to
+CRAM 3.1 is HDF5 framework overhead + multi-omics infrastructure
+(metadata round-trip, provenance compounds, modality dispatch),
+which is expected per user direction — TTI-O is a multi-modal
+container and not aiming for byte-tight parity with a
+genomics-only single-modality format.
+
+#### v1.2.0 acceptance gate status
+
+**Acceptance gate (carried forward from M92).** TTI-O lossless within
+1.15× of CRAM 3.1 on the chr22 lean fixture
+(`data/genomic/na12878/na12878.chr22.lean.bam`, 1.78M reads,
+aux-stripped). Status: **9.2× / 13.4× off**, well off the 1.15×
+target but down from the 355× / 1162× originally observed pre-codec
+work. Codec compute is no longer the bottleneck; remaining gap is
+HDF5 + multi-omics framework overhead, which user has signed off as
+acceptable for v1.2.0 scope. Verification test:
+`python/tests/integration/test_m93_compression_gate.py`.
+
+---
+
+## Phase 10 — Performance + Scale (v1.3+)
+
+### M96 — FQZCOMP_NX16 slice-level parallelism (Path 4b, v1.3)
+
+Independent of M94.X (algorithmic single-thread speedup). M96
+adds CRAM-style slice-level parallelism on top of M94.X to scale
+FQZCOMP_NX16 encode/decode to N cores for full-WGS workloads.
+
+#### Motivation
+
+M94.X (variable-total rANS) lifts single-thread encode from
+~0.2 MB/s to ~30+ MB/s on each language. That's sufficient for
+chr22-scale acceptance gates and most real-world reference-genome-
+scale workloads. For full-WGS scale (50-500 GB BAM inputs), where
+per-format encode wall time matters at the seconds-vs-minutes
+level, slice-level parallelism multiplies single-thread throughput
+by core count.
+
+#### Design
+
+- **Slicing strategy.** Mirror M93 REF_DIFF: 10 K reads/slice,
+  CRAM-aligned. Per-slice independence means each slice carries
+  its own freq-table state (no cross-slice adaptive context).
+- **Wire format.** Add a slice index to the FQZCOMP_NX16 header
+  identical in shape to REF_DIFF's slice index (per-slice byte
+  offset + length + first/last position). Body becomes a
+  concatenation of independent per-slice encoded blobs.
+- **Single-slice (`num_slices == 1`)** preserves M94.X output
+  byte-exact; users who don't enable parallelism see no change.
+- **Parallelism dispatch.** Each language uses its idiomatic
+  thread-pool: Python `concurrent.futures.ThreadPoolExecutor` (the
+  Cython extension releases GIL during encode); ObjC `NSOperationQueue`
+  with `maxConcurrentOperationCount = NSProcessInfo.processorCount`;
+  Java `java.util.concurrent.ForkJoinPool.commonPool()`.
+
+#### Trade-off vs M94.X scope
+
+M96 requires a SECOND wire-format change to FQZCOMP_NX16 after
+M94.X's first one. We deliberately separate the two milestones:
+
+- **M94.X** ships in v1.2.0 (release blocker) and resolves the
+  catastrophic single-thread speed problem.
+- **M96** ships in v1.3 once user demand for full-WGS scale
+  emerges. Requires re-canonicalisation of fixtures a second time;
+  v1.2 users keep working files via single-slice fallback.
+
+Combining both into one milestone would conflate two distinct
+problems (algorithm vs orchestration) and double the cross-
+language byte-exact verification matrix. Keeping them sequential
+is cheaper.
+
+#### Acceptance gates
+
+- 8 canonical fixtures byte-exact across Python / ObjC / Java
+  with `num_slices == N` for N ∈ {1, 4, 16}.
+- chr22 mapped-only encode wall time scales sub-linearly with
+  core count (4 cores → ≥3× speedup over M94.X single-thread).
+- Single-slice output is byte-identical to M94.X output (no
+  regression for users not opting in to parallelism).
+- Decoder is parallel-or-serial agnostic (decoder picks a
+  parallel strategy based on its own runtime, not the encoder's).
+
+#### Scope notes
+
+- **Decoder also parallelisable** but each slice's decode is
+  small enough that thread-startup overhead dominates for chr22-
+  scale. v1.3 ships parallel encode; parallel decode is a v1.3.x
+  follow-up if profiling shows it matters.
+- **Same parallelism model could extend to M93 REF_DIFF** which
+  already has slice structure — M93's encoder is currently
+  single-thread despite the slice layout. Bundle into M96 as a
+  unified "parallel slice encoders for genomic codecs" milestone.
+
+---
+
 ## Phase 7 — Release
 
-### M92 — Benchmarking, Documentation, and v0.11.0 Tag
+### M92 — Benchmarking, Documentation, and v1.2.0 Tag
 
 - Compression benchmarking report: TTI-O genomic vs. BAM, CRAM 3.1,
   and MPEG-G (Genie) on NA12878 WGS (downsampled), ERR194147 WES,
   and a synthetic mixed-chromosome dataset.
 - Documentation refresh: README, ARCHITECTURE, migration guide.
-- v0.11.0 CHANGELOG entry.
+- v1.2.0 CHANGELOG entry. (Tag chosen to follow the existing
+  v1.0.0 / v1.1.0 / v1.1.1 line; the prior workplan said "v0.11.0"
+  but that tag already exists from the pre-stable line and would
+  go backwards.)
 - Tag gated on user sign-off.
 
 **Acceptance Criteria**
@@ -714,5 +963,5 @@ Commits: `145485c`, `772eb00`, `6992ae9`, `7a2ffef`, `54ef6f1`,
 | ParquetProvider | Apache Parquet as a fifth storage provider. |
 | FIPS compliance mode | FIPS 140-3 validated crypto backend. |
 | DBMS transport | Database-backed streaming for enterprise deployments. |
-| rANS-Nx16 / fqzcomp | CRAM 3.1 advanced codecs (interleaved 4-way rANS, quality-score-specific compressor). Performance optimisation over basic rANS order-0/1. |
+| ~~rANS-Nx16 / fqzcomp~~ | **Pulled forward to v1.2 / M94** (2026-04-28). Required to close the M92 chr22 compression gap. |
 | M40 PyPI + Maven Central publishing | Package registry publication (internal-only until further notice). |

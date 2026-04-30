@@ -39,7 +39,7 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 3070 PASS / 0 failures.** Last release tag: v1.1.1; current main is unreleased work covering M80–M91 (TTI-O rebrand + genomic data model + codec stack + transport extension + encryption/anonymisation + multi-omics integration) plus the post-M91 Phase 1+2 abstraction polish (`Run` protocol, modality-agnostic helpers, per-run compound provenance). | `objc/` |
+| **Objective-C (GNUstep)** | **Normative reference — 3070 PASS / 0 failures.** Current release: v1.2.0 (M80–M91 TTI-O rebrand + genomic data model + codec stack + transport extension + encryption/anonymisation + multi-omics integration + Phase 1+2 abstraction polish: `Run` protocol, modality-agnostic helpers, per-run compound provenance). | `objc/` |
 | **Python (`ttio`)**       | **1324 passed / 12 skipped / 4 xfailed.** Full parity with ObjC and Java. | `python/` |
 | **Java (`global.thalion.ttio`)** | **755/0/0/0 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
 

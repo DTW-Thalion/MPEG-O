@@ -5,13 +5,141 @@ implementation. Dates are release dates; the repository commits record
 the actual timeline.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versioning follows [Semantic Versioning](https://semver.org/) — the
-leading `0.` means the public API is still stabilising; see
+Versioning follows [Semantic Versioning](https://semver.org/); the
+public API is stable from v1.0.0 onward (tagged 2026-04-23). See
 `docs/api-stability-v0.8.md` for the per-symbol stability tags.
 
 ---
 
-## [Unreleased] — M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84 BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85 QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer + M88 CRAM importer + BAM/CRAM exporters + M88.1 bam_dump CRAM dispatch + M89 transport extension + M90 genomic encryption/anonymisation + M91 multi-omics integration + Phase 1+2 abstraction polish
+## [Unreleased]
+
+### Added
+
+- **M93 — REF_DIFF reference-based sequence-diff codec** (codec id `9`).
+  Context-aware per-channel codec: encoder/decoder consume
+  `(positions, cigars, reference_resolver)` alongside the channel
+  bytes. Slice-based wire format (10 K reads/slice, CRAM-aligned)
+  for random-access decode. Embedded reference at
+  `/study/references/<reference_uri>/` with auto-deduplication across
+  runs sharing a URI. Falls back silently to BASE_PACK when reference
+  unavailable at write (Q5b); raises `RefMissingError` on read when
+  unresolvable (Q5c). Closes ~80% of the M92 chr22 sequence-channel
+  compression gap to CRAM 3.1.
+  - Python reference: `python/src/ttio/codecs/ref_diff.py` (480
+    lines), `python/src/ttio/genomic/reference_resolver.py`,
+    pipeline integration in `python/src/ttio/spectral_dataset.py` +
+    `python/src/ttio/genomic_run.py`.
+  - Format version bumps `1.4 → 1.5` when REF_DIFF is used; M82-only
+    writes stay at `1.4` for byte-parity with existing fixtures.
+  - 53 new Python tests across unit + pipeline + canonical fixture
+    + perf + reference-resolver coverage. Four canonical fixtures
+    (`ref_diff_a/b/c/d.bin`) committed under
+    `python/tests/fixtures/codecs/`.
+  - **Single-chromosome-per-run limitation** in v1.2 first pass
+    enforced at write + read with a clear error; multi-chromosome
+    is a future M93.X follow-up.
+  - **`Cython>=3.0` build dep added** to `pyproject.toml` (used by
+    the upcoming M94 C extension; M93 itself is pure Python).
+  - Cross-language: ObjC + Java parity in progress.
+  - Spec: `docs/superpowers/specs/2026-04-28-m93-m94-m95-codec-design.md`.
+  - Plan: `docs/superpowers/plans/2026-04-28-m93-ref-diff-codec.md`.
+  - Codec spec: `docs/codecs/ref_diff.md`.
+
+### Added (continued)
+
+- **M94 — FQZCOMP_NX16 lossless quality codec** (codec id `10`).
+  Context-modeled adaptive arithmetic coding with 4-way interleaved
+  rANS, mirroring CRAM 3.1's default fqzcomp-Nx16 (Bonfield 2022).
+  Context vector `(prev_q[0..2], position_bucket, revcomp_flag,
+  length_bucket)` hashed via SplitMix64 to a 12-bit index. Per-
+  symbol freq update (`+16`) with halve-with-floor-1 renormalisation
+  at 4096 max-count. Wire-format header 54+L bytes; body has a
+  16-byte substream-length prefix before round-robin interleaved
+  bytes. Auto-default on `qualities` gated on v1.5 candidacy
+  (§80h) to preserve M82 byte-parity.
+  - Python reference: `python/src/ttio/codecs/fqzcomp_nx16.py`
+    (~880 lines pure-Python ref) + `_fqzcomp_nx16/_fqzcomp_nx16.pyx`
+    (~470 lines Cython accelerator). Adds `Cython>=3.0` to
+    `pyproject.toml` build deps.
+  - Objective-C native: `objc/Source/Codecs/TTIOFqzcompNx16.{h,m}`.
+    Reuses M83's `TTIORans` normaliseFreqs verbatim.
+  - Java native: `java/src/main/java/global/thalion/ttio/codecs/FqzcompNx16.java`.
+    `long`-typed unsigned-uint32 emulation; reuses
+    `Rans.normaliseFreqs` verbatim.
+  - 8 canonical conformance fixtures (`fqzcomp_nx16_a/b/c/d/e/f/g/h.bin`)
+    byte-exact across Python, ObjC, Java.
+  - ~146 new M94 tests across the three languages, zero regressions.
+  - **Known limitation (M94.X follow-up, REQUIRED for v1.2.0)**:
+    Python encoder at 0.19 MB/s vs 30 MB/s spec target. Hot path is
+    M83's pure-Python `_normalise_freqs` called per symbol. Tracked
+    in `WORKPLAN.md` Phase 9 as release-prep blocker.
+  - Spec: `docs/superpowers/specs/2026-04-28-m93-m94-m95-codec-design.md`.
+  - Plan: `docs/superpowers/plans/2026-04-28-m94-fqzcomp-nx16-codec.md`.
+  - Codec spec: `docs/codecs/fqzcomp_nx16.md`.
+
+### Added (continued)
+
+- **M94.Z (FQZCOMP_NX16_Z, codec id 12)**: CRAM-mimic FQZCOMP_NX16 variant.
+  Static-per-block frequency tables, 16-bit renormalization, T=4096 fixed.
+  Mathematically guaranteed byte-pairing (T divides b·L=2^31 exactly).
+  ~145 MB/s encode in Python (Cython); ~22× faster than M94 v1 on chr22.
+  Cross-language byte-exact (Python / ObjC / Java) on 7 canonical fixtures.
+  Spec at docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md.
+  - Python reference: `python/src/ttio/codecs/fqzcomp_nx16_z.py` (~1015
+    lines pure-Python ref) + `_fqzcomp_nx16_z/_fqzcomp_nx16_z.pyx`
+    (~702 lines Cython accelerator).
+  - Objective-C native: `objc/Source/Codecs/TTIOFqzcompNx16Z.{h,m}` (~1339 lines).
+  - Java native: `java/src/main/java/global/thalion/ttio/codecs/FqzcompNx16Z.java`
+    (~944 lines), `long`-typed unsigned-uint32 emulation.
+  - 7 canonical conformance fixtures (`m94z_a/b/c/d/f/g/h.bin`)
+    byte-exact across Python, ObjC, Java.
+  - Per-language measured perf (synthetic 100 K reads × 100bp Q20-Q40):
+    Python (Cython) 145 MB/s encode / 94 MB/s decode; ObjC 51 / 31 MB/s;
+    Java 33 / 14 MB/s.
+  - chr22.lean.mapped.bam (145 MiB, 1.77 M reads) full-pipeline wall:
+    encode 48.77 s (vs 18 min under M94 v1), decode 141.66 s (vs 24.6 min).
+    CRAM 3.1 reference baseline on the same chr22: 3.03 s enc / 1.63 s dec.
+    Codec compute is now ~4 % of pipeline wall; remaining ~95 % is M93 +
+    HDF5 framework + non-Cython codecs.
+  - Spec: `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`.
+  - Codec spec: `docs/codecs/fqzcomp_nx16_z.md`.
+
+### Changed
+
+- Default qualities codec for v1.5 files is now FQZCOMP_NX16_Z (id 12).
+  Files with FQZCOMP_NX16 (id 10, M94 v1) still decode via the legacy path.
+  M94 v1 (`FQZN`, id 10) and M94.Z (`M94Z`, id 12) coexist in the codebase;
+  the reader dispatches by `@compression` attribute and, defensively, by
+  magic. There is no automatic in-file migration — rewriting an existing
+  M94 v1 file under M94.Z is an application-layer decode-then-encode.
+
+### Pending (M95)
+
+M95 (DELTA_RANS_ORDER0, codec id `11` + structural HDF5 tuning)
+follows M94 to complete the v1.2.0 acceptance-gate target of
+≤1.15× CRAM 3.1 on chr22 lean.
+
+---
+
+## [1.2.0] — 2026-04-28 — TTI-O rebrand + genomic stack + multi-omics integration
+
+M80 TTI-O rebrand + M81 reverse-DNS Java groupId + M83 rANS + M84
+BASE_PACK + M86 codec wiring (A + B + C + D + E + F) + M85
+QUALITY_BINNED + NAME_TOKENIZED + M87 SAM/BAM importer + M88 CRAM
+importer + BAM/CRAM exporters + M88.1 bam_dump CRAM dispatch + M89
+transport extension + M90 genomic encryption/anonymisation + M91
+multi-omics integration + Phase 1+2 abstraction polish + M92
+benchmarking + docs refresh.
+
+> **Wire-format compatibility:** clean break from v1.1.x readers per
+> Binding Decision §74 (M80 rebrand drops `mpgo` / `MPGO` for `ttio` /
+> `TTIO`). Within v1.2.0 the M82–M91 + Phase 1+2 line is internally
+> backward-compatible: M86 codec attributes are absent on M82-shape
+> files (readers see uncompressed natural-dtype channels); pre-M89
+> transport readers reject genomic streams cleanly via the
+> `opt_genomic` flag check; Phase 2 per-run provenance writes BOTH
+> the canonical compound dataset and the legacy `@provenance_json`
+> attribute mirror so Phase 1 readers round-trip without loss.
 
 ### Phase 1+2 abstraction polish — `Run` protocol + per-run compound provenance dual-write (2026-04-28)
 
