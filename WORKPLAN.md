@@ -6,29 +6,30 @@ as a record of what was built; current milestones use TTI-O names.
 
 ---
 
-> **Status (2026-04-29).** Phase 6 (M89 transport extension, M90
+> **Status (2026-04-30).** Phase 6 (M89 transport extension, M90
 > encryption/anonymisation, M91 multi-omics integration) **shipped**
 > alongside V- and C-series debt repayment. Phase 8 (post-M91
 > abstraction polish — `Run` protocol, modality-agnostic
 > `runs` / `runsForSample` / `runsOfModality`, mixed-dict write API,
 > per-run provenance compound dual-write/dual-read) **shipped**.
-> **Phase 9 (M93/M94/M94.Z codec parity) shipped 2026-04-29.** M93
-> REF_DIFF (codec id 9), M94 v1 FQZCOMP_NX16 (codec id 10), and
-> M94.Z FQZCOMP_NX16_Z (codec id 12, CRAM-mimic — production v1.2.0
-> codec, replaces the abandoned M94.X variable-total approach) all
-> byte-exact across Python / ObjC / Java. Cython acceleration of
-> REF_DIFF (44× pack / 35× unpack) and NAME_TOKENIZED (11% / 8%
-> chr22 drop) ships alongside. Pipeline defects fixed
+> **Phase 9 (M93/M94/M94.Z/M95 codec parity) shipped 2026-04-30.**
+> M93 REF_DIFF (codec id 9), M94 v1 FQZCOMP_NX16 (codec id 10),
+> M94.Z FQZCOMP_NX16_Z (codec id 12, CRAM-mimic), and M95
+> DELTA_RANS_ORDER0 (codec id 11, delta + zigzag + varint + rANS
+> order-0 for sorted-ascending integer channels) all byte-exact
+> across Python / ObjC / Java. Cython acceleration of REF_DIFF
+> (44× pack / 35× unpack) and NAME_TOKENIZED (11% / 8% chr22 drop)
+> ships alongside. Pipeline defects fixed
 > (`_mate_info_is_subgroup` caching + per-read codec-import hoist).
 > chr22 encode 18 min → 27.91 s (38.7×); decode 24.6 min → 21.76 s
 > (67.8×); now 9.2× / 13.4× off CRAM 3.1, down from 355× / 1162×
 > pre-session. Codec compute is no longer the bottleneck; remaining
 > gap is HDF5 framework + multi-omics infrastructure, accepted for
-> v1.2.0 scope per user direction. M95 (DELTA_RANS_ORDER0 +
-> structural) is the only remaining codec-tier item before M92
-> release prep. See
+> v1.2.0 scope per user direction. All codec-tier items complete;
+> M92 release prep follows. See
 > `docs/superpowers/specs/2026-04-28-m93-m94-m95-codec-design.md`
-> + `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`.
+> + `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`
+> + `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.
 >
 > **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under
@@ -711,15 +712,23 @@ identified in M92's smoke benchmark (TTI-O at 2.5× CRAM 3.1, target
   baselines unchanged + ~146 new M94 tests).
 - Spec: §3 M94. Codec spec: `docs/codecs/fqzcomp_nx16.md`.
 
-### M95 — DELTA_RANS_ORDER0 + integer-channel + structural compression (planned)
+### M95 — DELTA_RANS_ORDER0 + integer-channel auto-defaults ✓ (Python + ObjC + Java landed 2026-04-30)
 
-- Codec id `11`. Running-delta + rANS for sorted-ascending integer
-  channels (positions, mate_info_pos under M86 Phase F).
-- Switches integer-channel defaults from gzip to RANS_ORDER0 (already
-  shipped as M86 Phase B; just changes the default codec selection).
-- HDF5 chunk-size tuning: `WrittenGenomicRun.chunk_size_hint` raised
-  from 1024 to 65536 to cut chunk-index overhead by ~64×.
-- Spec: §3 M95.
+- Codec id `11`. Delta + zigzag + unsigned LEB128 varint + rANS
+  order-0 wrapper for sorted-ascending integer channels.
+- Wire format: 8-byte header (`DRA0` magic, version 1,
+  `element_size` uint8, 2 reserved bytes) + rANS order-0 body.
+- Auto-default integer channel compression on v1.5 genomic runs:
+  `positions → DELTA_RANS_ORDER0`, `flags / mapping_qualities /
+  template_lengths / mate_info_pos / mate_info_tlen → RANS_ORDER0`,
+  `mate_info_chrom → NAME_TOKENIZED`.
+- 4 canonical cross-language fixtures (`delta_rans_{a,b,c,d}.bin`)
+  byte-exact across Python / ObjC / Java.
+- Python reference: `python/src/ttio/codecs/delta_rans.py`.
+  ObjC: `objc/Source/Codecs/TTIODeltaRans.{h,m}`.
+  Java: `java/src/main/java/global/thalion/ttio/codecs/DeltaRans.java`.
+- Spec: `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.
+- Codec spec: `docs/codecs/delta_rans.md`.
 
 ### M94.X — FQZCOMP_NX16 variable-total rANS (ABANDONED 2026-04-29)
 
