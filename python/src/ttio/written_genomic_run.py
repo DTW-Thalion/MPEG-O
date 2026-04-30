@@ -7,6 +7,7 @@ via the ``genomic_runs`` parameter. Genomic analogue of
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 
@@ -58,3 +59,25 @@ class WrittenGenomicRun:
     # accepted as codec values. Channels not in this dict use the
     # existing signal_compression string path.
     signal_codec_overrides: dict[str, Compression] = field(default_factory=dict)
+
+    # M93 v1.2 — reference embed for the REF_DIFF codec on the
+    # ``sequences`` channel. When ``embed_reference=True`` (the default)
+    # AND a REF_DIFF override is set on ``sequences``, the writer
+    # embeds the chromosome sequences provided in
+    # ``reference_chrom_seqs`` at ``/study/references/<reference_uri>/``
+    # in the output file. When ``embed_reference=False``, the writer
+    # records ``reference_uri`` and ``reference_md5`` only and expects
+    # the reader to resolve via REF_PATH or an explicit external path.
+    embed_reference: bool = True
+
+    # Mapping ``chromosome_name → uppercase ACGTN bytes``, supplied at
+    # write time for any chromosome that has at least one read aligned
+    # to it. Required when ``embed_reference=True`` and REF_DIFF is
+    # selected on the ``sequences`` channel; otherwise REF_DIFF falls
+    # back to BASE_PACK per design spec Q5b.
+    reference_chrom_seqs: dict[str, bytes] | None = None
+
+    # External reference path stamped into the file's metadata for
+    # decoder fallback when the embedded reference is absent. The
+    # writer never reads this path; it is metadata only.
+    external_reference_path: Path | None = None

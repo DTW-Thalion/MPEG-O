@@ -86,6 +86,13 @@
             ? [signalCodecOverrides copy]
             : @{};
         _provenanceRecords    = @[];
+        // M93 v1.2 defaults — embedReference defaults to YES; the writer
+        // only acts on it when a context-aware codec is selected on the
+        // sequences channel AND referenceChromSeqs is non-nil. The two
+        // companion fields stay nil until callers set them.
+        _embedReference        = YES;
+        _referenceChromSeqs    = nil;
+        _externalReferencePath = nil;
     }
     return self;
 }

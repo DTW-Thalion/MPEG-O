@@ -98,7 +98,18 @@ public final class Enums {
         /** Quality-score binning (Illumina-style). v0.11 M79 reservation; codec lands in M75. */
         QUALITY_BINNED,
         /** Read-name tokenisation. v0.11 M79 reservation; codec lands in M75. */
-        NAME_TOKENIZED
+        NAME_TOKENIZED,
+        /** Reference-based sequence-diff codec (M93 v1.2). Context-aware:
+         *  encode/decode require positions, cigars, and a reference
+         *  chromosome alongside the raw byte stream. Pipeline plumbing
+         *  lives in {@link global.thalion.ttio.SpectralDataset}. */
+        REF_DIFF,
+        /** FQZCOMP_NX16 — lossless quality codec (M94 v1.2). Carries
+         *  per-read length and revcomp metadata inside its own wire
+         *  format; the M86 pipeline derives revcomp from
+         *  {@code run.flags & 16} (SAM REVERSE bit). Pipeline plumbing
+         *  lives in {@link global.thalion.ttio.SpectralDataset}. */
+        FQZCOMP_NX16
     }
 
     /** Ion polarity for mass spectrometry. */

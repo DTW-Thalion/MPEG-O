@@ -9,6 +9,7 @@ import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.ProvenanceRecord;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -70,6 +71,27 @@ import java.util.Objects;
  *                           the genomic run group, mirroring
  *                           {@link global.thalion.ttio.AcquisitionRun}'s
  *                           layout.
+ * @param embedReference     M93 (v1.5): when true (default), the writer
+ *                           embeds {@link #referenceChromSeqs} at
+ *                           {@code /study/references/<reference_uri>/}.
+ *                           Set to false when the reference is supplied
+ *                           externally and the file should not duplicate
+ *                           the bytes. Has no effect when
+ *                           {@link #referenceChromSeqs} is {@code null}.
+ * @param referenceChromSeqs M93 (v1.5): per-chromosome reference
+ *                           sequence bytes (uppercase ACGTN), keyed by
+ *                           chromosome name. Required input for the
+ *                           REF_DIFF context-aware codec on the
+ *                           {@code sequences} channel; absent values
+ *                           cause REF_DIFF to fall back to BASE_PACK
+ *                           silently (Q5b=C). May be {@code null}.
+ * @param externalReferencePath M93 (v1.5): optional explicit external
+ *                           FASTA path that REF_DIFF readers can fall
+ *                           back to when the reference is not embedded
+ *                           and {@code REF_PATH} is unset. May be
+ *                           {@code null}; not yet honoured by Java
+ *                           writers (kept for symmetry with Python /
+ *                           ObjC).
  */
 public record WrittenGenomicRun(
     AcquisitionMode acquisitionMode,
@@ -91,7 +113,10 @@ public record WrittenGenomicRun(
     List<String> chromosomes,
     Compression signalCompression,
     Map<String, Compression> signalCodecOverrides,
-    List<ProvenanceRecord> provenanceRecords
+    List<ProvenanceRecord> provenanceRecords,
+    boolean embedReference,
+    Map<String, byte[]> referenceChromSeqs,
+    Path externalReferencePath
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -109,6 +134,10 @@ public record WrittenGenomicRun(
         chromosomes           = List.copyOf(chromosomes);
         signalCodecOverrides  = Map.copyOf(signalCodecOverrides);
         provenanceRecords     = List.copyOf(provenanceRecords);
+        // referenceChromSeqs / externalReferencePath are intentionally
+        // not deep-copied — byte[] values are large and the writer
+        // does not mutate them. The map reference is kept verbatim
+        // (may be null).
     }
 
     /**
@@ -141,7 +170,8 @@ public record WrittenGenomicRun(
              positions, mappingQualities, flags, sequences, qualities,
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
-             signalCompression, Map.of(), List.of());
+             signalCompression, Map.of(), List.of(),
+             true, null, null);
     }
 
     /**
@@ -175,7 +205,61 @@ public record WrittenGenomicRun(
              positions, mappingQualities, flags, sequences, qualities,
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
-             signalCompression, signalCodecOverrides, List.of());
+             signalCompression, signalCodecOverrides, List.of(),
+             true, null, null);
+    }
+
+    /**
+     * Backwards-compatible constructor (Phase 1 / post-M91, 20 components)
+     * that defaults the M93 reference-related fields to their natural
+     * "no reference embedded" values. Existing callers that don't yet
+     * carry a reference continue to work unchanged.
+     */
+    public WrittenGenomicRun(
+        AcquisitionMode acquisitionMode,
+        String referenceUri,
+        String platform,
+        String sampleName,
+        long[] positions,
+        byte[] mappingQualities,
+        int[]  flags,
+        byte[] sequences,
+        byte[] qualities,
+        long[] offsets,
+        int[]  lengths,
+        List<String> cigars,
+        List<String> readNames,
+        List<String> mateChromosomes,
+        long[] matePositions,
+        int[]  templateLengths,
+        List<String> chromosomes,
+        Compression signalCompression,
+        Map<String, Compression> signalCodecOverrides,
+        List<ProvenanceRecord> provenanceRecords
+    ) {
+        this(acquisitionMode, referenceUri, platform, sampleName,
+             positions, mappingQualities, flags, sequences, qualities,
+             offsets, lengths, cigars, readNames, mateChromosomes,
+             matePositions, templateLengths, chromosomes,
+             signalCompression, signalCodecOverrides, provenanceRecords,
+             true, null, null);
+    }
+
+    /**
+     * M93 (v1.5) full-fat builder. Returns a new instance with the same
+     * payload but with the M93 reference fields replaced. Builder-style
+     * convenience for callers that already have a base run and want to
+     * attach a reference for REF_DIFF dispatch.
+     */
+    public WrittenGenomicRun withReference(
+        boolean embed, Map<String, byte[]> chromSeqs, Path externalPath) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embed, chromSeqs, externalPath);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

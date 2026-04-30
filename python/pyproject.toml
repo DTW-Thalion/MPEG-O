@@ -1,10 +1,14 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+# v1.2 M94: Cython>=3.0 build dep for the FQZCOMP_NX16 C extension at
+# ttio.codecs._fqzcomp_nx16. The extension is optional; the pure-Python
+# reference implementation in ttio/codecs/fqzcomp_nx16.py produces
+# byte-identical output, just slower. See spec §80e (binding decision).
+requires = ["setuptools>=68", "wheel", "Cython>=3.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ttio"
-version = "1.1.1"
+version = "1.2.0"
 description = "Python reader/writer for the TTI-O multi-omics data standard"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -89,8 +93,12 @@ ttio = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra -m 'not slow and not perf'"
 asyncio_mode = "strict"
+markers = [
+    "slow: tests that take more than ~30s; deselected by default — opt in via `-m slow`",
+    "perf: throughput regression smoke; opt in via `-m perf`",
+]
 
 # V1 (verification workplan): code coverage. C7 added the
 # fail_under threshold below; CI publishes coverage.xml + htmlcov/

@@ -12,6 +12,11 @@ Codecs:
 from __future__ import annotations
 
 from .base_pack import decode as base_pack_decode, encode as base_pack_encode
+from .fqzcomp_nx16 import decode as fqzcomp_nx16_decode, encode as fqzcomp_nx16_encode
+from .fqzcomp_nx16_z import (
+    decode_with_metadata as fqzcomp_nx16_z_decode,
+    encode as fqzcomp_nx16_z_encode,
+)
 from .name_tokenizer import decode as name_tok_decode, encode as name_tok_encode
 from .quality import decode as quality_decode, encode as quality_encode
 from .rans import decode as rans_decode, encode as rans_encode
@@ -19,6 +24,10 @@ from .rans import decode as rans_decode, encode as rans_encode
 __all__ = [
     "base_pack_decode",
     "base_pack_encode",
+    "fqzcomp_nx16_decode",
+    "fqzcomp_nx16_encode",
+    "fqzcomp_nx16_z_decode",
+    "fqzcomp_nx16_z_encode",
     "name_tok_decode",
     "name_tok_encode",
     "quality_decode",

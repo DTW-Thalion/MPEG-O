@@ -49,7 +49,9 @@ typedef NS_ENUM(NSUInteger, TTIOCompression) {
     TTIOCompressionRansOrder1,       // v0.11 M79: rANS order-1 entropy coder
     TTIOCompressionBasePack,         // v0.11 M79: 2-bit ACGT packed bases
     TTIOCompressionQualityBinned,    // v0.11 M79: Illumina-style quality binning
-    TTIOCompressionNameTokenized     // v0.11 M79: read-name tokenisation
+    TTIOCompressionNameTokenized,    // v0.11 M79: read-name tokenisation
+    TTIOCompressionRefDiff = 9,      // v1.2 M93: reference-based sequence diff
+    TTIOCompressionFqzcompNx16 = 10  // v1.2 M94: lossless quality codec (fqzcomp-Nx16)
 };
 
 typedef NS_ENUM(NSUInteger, TTIOByteOrder) {
