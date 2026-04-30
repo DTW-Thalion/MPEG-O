@@ -91,6 +91,8 @@ class Compression(IntEnum):
     # sibling channels via the M86 pipeline hook); read_lengths +
     # revcomp_flags travel inside the codec's own wire format.
     FQZCOMP_NX16 = 10
+    # v1.2 M95: delta + zigzag + varint + rANS order-0 — sorted integer channels.
+    DELTA_RANS_ORDER0 = 11
     # v1.2 M94.Z: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16) — parallel codec
     # following the CRAM 3.1 rANS-Nx16 discipline (static-per-block
     # frequency tables, L=2^15, B=16, N=4, bit-pack 15-bit context).
