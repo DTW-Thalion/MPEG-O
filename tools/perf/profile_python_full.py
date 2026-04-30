@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import os
 import sys
@@ -45,11 +46,15 @@ from ttio import (
     UVVisSpectrum,
     WrittenRun,
 )
+from ttio.encryption import encrypt_bytes, decrypt_bytes
 from ttio.encryption_per_au import (
     decrypt_per_au_file,
     encrypt_per_au_file,
 )
-from ttio.enums import IRMode
+from ttio.enums import AcquisitionMode, IRMode
+from ttio.stream_writer import StreamWriter
+from ttio.stream_reader import StreamReader
+from ttio.written_genomic_run import WrittenGenomicRun
 from ttio.exporters.jcamp_dx import (
     write_ir_spectrum,
     write_raman_spectrum,
@@ -64,6 +69,14 @@ from ttio.codecs import base_pack as _bp
 from ttio.codecs import name_tokenizer as _nt
 from ttio.codecs import quality as _qb
 from ttio.codecs import rans as _rans
+
+# V10: genomic codec benchmarks.
+from ttio.codecs.ref_diff import encode as _ref_diff_encode, decode as _ref_diff_decode
+from ttio.codecs.fqzcomp_nx16 import encode as _fqzcomp_encode
+from ttio.codecs.fqzcomp_nx16 import decode as _fqzcomp_decode
+from ttio.codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
+from ttio.codecs.fqzcomp_nx16_z import decode_with_metadata as _fqzcomp_z_decode
+from ttio.codecs.delta_rans import encode as _delta_rans_encode, decode as _delta_rans_decode
 
 # ---------------------------------------------------------------------------
 # Workload helpers
@@ -423,6 +436,327 @@ def bench_codecs(_tmp: Path, _n: int) -> dict[str, float]:
     }
 
 
+def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
+    """Isolated encode/decode for the 4 genomic codecs (V10).
+
+    Production-scale inputs (~10 MiB each) so inner loops are hot for
+    seconds. Deterministic seeds for cross-language parity.
+    """
+    rng = np.random.default_rng(42)
+
+    # ── REF_DIFF: 100K reads × 100bp against a 100Kbp reference ──
+    ref_len = 100_000
+    ref_seq = bytes(rng.choice(list(b"ACGT"), size=ref_len).tolist())
+    ref_md5 = hashlib.md5(ref_seq).digest()
+    n_reads_rd = 100_000
+    read_len = 100
+    sequences_rd: list[bytes] = []
+    for i in range(n_reads_rd):
+        start = i % (ref_len - read_len)
+        seq = bytearray(ref_seq[start:start + read_len])
+        # ~2% mutation rate
+        for j in range(read_len):
+            if rng.random() < 0.02:
+                seq[j] = rng.choice(list(b"ACGT"))
+        sequences_rd.append(bytes(seq))
+    cigars_rd = [f"{read_len}M"] * n_reads_rd
+    positions_rd = sorted(rng.integers(1, ref_len - read_len, size=n_reads_rd).tolist())
+
+    t_rd_enc, rd_encoded = _timed(
+        _ref_diff_encode, sequences_rd, cigars_rd, positions_rd,
+        ref_seq, ref_md5, "perf-ref")
+    t_rd_dec, _ = _timed(
+        _ref_diff_decode, rd_encoded, cigars_rd, positions_rd, ref_seq)
+
+    # ── FQZCOMP_NX16: 100K × 100bp quality strings, Q20-Q40 LCG ──
+    n_qual = 100_000 * 100
+    qual_buf = bytearray(n_qual)
+    s = 0xBEEF
+    mask64 = (1 << 64) - 1
+    for i in range(n_qual):
+        s = (s * 6364136223846793005 + 1442695040888963407) & mask64
+        qual_buf[i] = 33 + 20 + ((s >> 32) % 21)
+    qualities = bytes(qual_buf)
+    read_lengths = [100] * 100_000
+    revcomp_flags = [0] * 100_000
+
+    t_fqz_enc, fqz_encoded = _timed(
+        _fqzcomp_encode, qualities, read_lengths, revcomp_flags)
+    t_fqz_dec, _ = _timed(_fqzcomp_decode, fqz_encoded)
+
+    # ── FQZCOMP_NX16_Z: same quality input ──
+    revcomp_flags_z = [(1 if (i & 7) == 0 else 0) for i in range(100_000)]
+    t_fqz_z_enc, fqz_z_encoded = _timed(
+        _fqzcomp_z_encode, qualities, read_lengths, revcomp_flags_z)
+    t_fqz_z_dec, _ = _timed(
+        _fqzcomp_z_decode, fqz_z_encoded, revcomp_flags_z)
+
+    # ── DELTA_RANS: 1.25M sorted int64 positions, LCG deltas 100-500 ──
+    n_pos = 1_250_000
+    pos_vals = np.empty(n_pos, dtype=np.int64)
+    pos_vals[0] = 1000
+    s = 0xBEEF
+    for i in range(1, n_pos):
+        s = (s * 6364136223846793005 + 1442695040888963407) & mask64
+        delta = 100 + ((s >> 32) % 401)  # 100..500
+        pos_vals[i] = pos_vals[i - 1] + delta
+    dr_input = pos_vals.astype("<i8").tobytes()
+
+    t_dr_enc, dr_encoded = _timed(_delta_rans_encode, dr_input, 8)
+    t_dr_dec, _ = _timed(_delta_rans_decode, dr_encoded)
+
+    raw_mb_rd = sum(len(sq) for sq in sequences_rd) / 1e6
+    print(f"  [genomic codec] ref_diff   {raw_mb_rd:.1f} MiB  "
+          f"enc={t_rd_enc:.2f}s  dec={t_rd_dec:.2f}s")
+    print(f"  [genomic codec] fqzcomp    {n_qual/1e6:.1f} MiB  "
+          f"enc={t_fqz_enc:.2f}s  dec={t_fqz_dec:.2f}s")
+    print(f"  [genomic codec] fqzcomp_z  {n_qual/1e6:.1f} MiB  "
+          f"enc={t_fqz_z_enc:.2f}s  dec={t_fqz_z_dec:.2f}s")
+    print(f"  [genomic codec] delta_rans {len(dr_input)/1e6:.1f} MiB  "
+          f"enc={t_dr_enc:.2f}s  dec={t_dr_dec:.2f}s")
+
+    return {
+        "ref_diff_encode": t_rd_enc,
+        "ref_diff_decode": t_rd_dec,
+        "fqzcomp_nx16_encode": t_fqz_enc,
+        "fqzcomp_nx16_decode": t_fqz_dec,
+        "fqzcomp_nx16_z_encode": t_fqz_z_enc,
+        "fqzcomp_nx16_z_decode": t_fqz_z_dec,
+        "delta_rans_encode": t_dr_enc,
+        "delta_rans_decode": t_dr_dec,
+    }
+
+
+def _build_genomic_run(rng) -> WrittenGenomicRun:
+    """100K-read synthetic WGS run with all channels populated (V10)."""
+    n_reads = 100_000
+    read_len = 100
+
+    # Positions: sorted ascending, LCG deltas 100-500.
+    positions = np.empty(n_reads, dtype=np.int64)
+    positions[0] = 1000
+    s = 0xBEEF
+    mask64 = (1 << 64) - 1
+    for i in range(1, n_reads):
+        s = (s * 6364136223846793005 + 1442695040888963407) & mask64
+        delta = 100 + ((s >> 32) % 401)
+        positions[i] = positions[i - 1] + delta
+    positions.sort()
+
+    # Flags: 5 dominant values.
+    flag_vals = np.array([0, 16, 83, 99, 163], dtype=np.uint32)
+    flags = rng.choice(flag_vals, size=n_reads).astype(np.uint32)
+
+    # Mapping qualities: Q0-Q60.
+    mapping_qualities = rng.integers(0, 61, size=n_reads, dtype=np.uint8)
+
+    # Sequences: ACGT pattern with seeded mutations, 100bp per read.
+    base_pattern = b"ACGTACGTAC" * 10  # 100bp
+    seq_buf = bytearray()
+    for i in range(n_reads):
+        seq = bytearray(base_pattern)
+        for j in range(read_len):
+            if rng.random() < 0.02:
+                seq[j] = rng.choice(list(b"ACGT"))
+        seq_buf.extend(seq)
+    sequences = np.frombuffer(bytes(seq_buf), dtype=np.uint8)
+
+    # Qualities: Q20-Q40 LCG profile.
+    n_qual = n_reads * read_len
+    qual_buf = bytearray(n_qual)
+    qs = 0xBEEF
+    for i in range(n_qual):
+        qs = (qs * 6364136223846793005 + 1442695040888963407) & mask64
+        qual_buf[i] = 33 + 20 + ((qs >> 32) % 21)
+    qualities = np.frombuffer(bytes(qual_buf), dtype=np.uint8)
+
+    offsets = np.arange(n_reads, dtype=np.uint64) * read_len
+    lengths = np.full(n_reads, read_len, dtype=np.uint32)
+
+    cigars = [f"{read_len}M"] * n_reads
+    read_names = [f"M88_{i:08d}:001:01" for i in range(n_reads)]
+
+    # Mate info.
+    mate_chromosomes = ["chr1"] * n_reads
+    mate_positions = (positions + rng.integers(100, 500, size=n_reads)).astype(np.int64)
+    template_lengths = rng.integers(200, 500, size=n_reads, dtype=np.int32)
+
+    # chromosomes: one entry per read (not unique values).
+    chromosomes = ["chr1"] * n_reads
+
+    return WrittenGenomicRun(
+        acquisition_mode=AcquisitionMode.GENOMIC_WGS,
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="V10-BENCH",
+        positions=positions,
+        mapping_qualities=mapping_qualities,
+        flags=flags,
+        sequences=sequences,
+        qualities=qualities,
+        offsets=offsets,
+        lengths=lengths,
+        cigars=cigars,
+        read_names=read_names,
+        mate_chromosomes=mate_chromosomes,
+        mate_positions=mate_positions,
+        template_lengths=template_lengths,
+        chromosomes=chromosomes,
+    )
+
+
+def bench_genomic_write_read(tmp: Path, _n: int) -> dict[str, float]:
+    """E2E genomic pipeline: write 100K reads → .tio, read all back,
+    random-access 1000 reads (V10 B2-B4)."""
+    rng = np.random.default_rng(42)
+    genomic_run = _build_genomic_run(rng)
+
+    tio_path = str(tmp / "genomic-bench.tio")
+    raw_bytes = (
+        genomic_run.sequences.nbytes +
+        genomic_run.qualities.nbytes +
+        genomic_run.positions.nbytes +
+        genomic_run.flags.nbytes +
+        genomic_run.mapping_qualities.nbytes
+    )
+
+    # B2: write (runs={} required by write_minimal; genomic_runs carries the data)
+    t_write, _ = _timed(
+        SpectralDataset.write_minimal,
+        tio_path, title="v10-bench", isa_investigation_id="ISA-V10",
+        runs={}, genomic_runs={"bench": genomic_run},
+    )
+
+    # B3: sequential read
+    def _seq_read() -> int:
+        with SpectralDataset.open(tio_path) as ds:
+            run = ds.genomic_runs["bench"]
+            count = 0
+            for read in run:
+                count += 1
+            return count
+    t_read, n_read = _timed(_seq_read)
+
+    # B4: random access — 1000 reads at random indices
+    access_rng = np.random.default_rng(99)
+    indices = access_rng.integers(0, 100_000, size=1000).tolist()
+    latencies: list[float] = []
+
+    with SpectralDataset.open(tio_path) as ds:
+        run = ds.genomic_runs["bench"]
+        for idx in indices:
+            t0 = time.perf_counter()
+            _ = run[idx]
+            latencies.append(time.perf_counter() - t0)
+
+    latencies.sort()
+    p50 = latencies[len(latencies) // 2]
+    p99 = latencies[int(len(latencies) * 0.99)]
+
+    print(f"  [genomic] write: {t_write:.2f}s  "
+          f"read: {t_read:.2f}s ({n_read} reads)  "
+          f"random p50={p50*1000:.2f}ms  p99={p99*1000:.2f}ms")
+
+    return {
+        "write": t_write,
+        "write_mb": raw_bytes / 1e6,
+        "read": t_read,
+        "random_access_p50": p50,
+        "random_access_p99": p99,
+    }
+
+
+def bench_encryption_genomic(_tmp: Path, _n: int) -> dict[str, float]:
+    """AES-256-GCM encrypt/decrypt on a 10 MiB payload (V10 B5).
+
+    Confirms no size-dependent perf cliff vs. the existing ~0.33 MiB
+    spectral encryption benchmark.
+    """
+    payload_size = 10 * 1024 * 1024  # 10 MiB
+    rng = np.random.default_rng(42)
+    payload = rng.integers(0, 256, size=payload_size, dtype=np.uint8).tobytes()
+    key = bytes(range(32))
+
+    t_enc, sealed = _timed(encrypt_bytes, payload, key)
+    t_dec, _ = _timed(decrypt_bytes, sealed, key)
+
+    mb = payload_size / 1e6
+    print(f"  [encryption.genomic] {mb:.1f} MiB  "
+          f"enc={t_enc:.3f}s  dec={t_dec:.3f}s")
+
+    return {
+        "encrypt": t_enc,
+        "decrypt": t_dec,
+        "bytes_mb": mb,
+    }
+
+
+def bench_streaming(tmp: Path, n: int, peaks: int) -> dict[str, float]:
+    """StreamWriter/StreamReader throughput: n spectra (V10 B6).
+
+    Builds MassSpectrum objects directly (no intermediate .tio),
+    appends them via StreamWriter, then reads them back via StreamReader.
+    """
+    from ttio.instrument_config import InstrumentConfig
+    from ttio.mass_spectrum import MassSpectrum
+    from ttio.signal_array import SignalArray
+    from ttio.enums import Polarity
+
+    tio_path = str(tmp / "streaming-bench.tio")
+
+    # Pre-build spectra data arrays once (outside timing loop).
+    mz_data = [
+        np.linspace(100.0, 100.0 + peaks * 0.1, peaks, dtype=np.float64)
+        for _ in range(n)
+    ]
+    int_data = [
+        1000.0 + (np.arange(peaks, dtype=np.float64) % 1000)
+        for _ in range(n)
+    ]
+
+    def _stream_write() -> None:
+        writer = StreamWriter(
+            file_path=tio_path,
+            run_name="r",
+            acquisition_mode=AcquisitionMode.MS1_DDA,
+            instrument_config=InstrumentConfig(),
+        )
+        for i in range(n):
+            ms = MassSpectrum(
+                signal_arrays={
+                    "mz":       SignalArray(data=mz_data[i]),
+                    "intensity": SignalArray(data=int_data[i]),
+                },
+                index_position=i,
+                scan_time_seconds=float(i) * 0.06,
+                ms_level=1,
+                polarity=Polarity.POSITIVE,
+            )
+            writer.append_spectrum(ms)
+        writer.flush_and_close()
+
+    t_write, _ = _timed(_stream_write)
+
+    def _stream_read() -> int:
+        reader = StreamReader(tio_path, "r")
+        count = 0
+        with reader:
+            while not reader.at_end():
+                reader.next_spectrum()
+                count += 1
+        return count
+
+    t_read, count = _timed(_stream_read)
+
+    print(f"  [streaming] {n} spectra × {peaks} peaks  "
+          f"write={t_write:.2f}s  read={t_read:.2f}s ({count} read back)")
+
+    return {
+        "write": t_write,
+        "read": t_read,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -442,6 +776,10 @@ BENCHMARKS: dict[str, Any] = {
     "jcamp":          lambda tmp, a: bench_jcamp(tmp, a.n),
     "spectra.build":  lambda tmp, a: bench_spectra_inmemory(a.n),
     "codecs":         lambda tmp, a: bench_codecs(tmp, a.n),
+    "codecs.genomic":    lambda tmp, a: bench_codecs_genomic(tmp, a.n),
+    "genomic":           lambda tmp, a: bench_genomic_write_read(tmp, a.n),
+    "encryption.genomic": lambda tmp, a: bench_encryption_genomic(tmp, a.n),
+    "streaming":          lambda tmp, a: bench_streaming(tmp, a.n, a.peaks),
 }
 
 
