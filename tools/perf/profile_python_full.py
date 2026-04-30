@@ -65,6 +65,14 @@ from ttio.codecs import name_tokenizer as _nt
 from ttio.codecs import quality as _qb
 from ttio.codecs import rans as _rans
 
+# V10: genomic codec benchmarks.
+from ttio.codecs.ref_diff import encode as _ref_diff_encode, decode as _ref_diff_decode
+from ttio.codecs.fqzcomp_nx16 import encode as _fqzcomp_encode
+from ttio.codecs.fqzcomp_nx16 import decode as _fqzcomp_decode
+from ttio.codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
+from ttio.codecs.fqzcomp_nx16_z import decode_with_metadata as _fqzcomp_z_decode
+from ttio.codecs.delta_rans import encode as _delta_rans_encode, decode as _delta_rans_decode
+
 # ---------------------------------------------------------------------------
 # Workload helpers
 # ---------------------------------------------------------------------------
@@ -423,6 +431,98 @@ def bench_codecs(_tmp: Path, _n: int) -> dict[str, float]:
     }
 
 
+def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
+    """Isolated encode/decode for the 4 genomic codecs (V10).
+
+    Production-scale inputs (~10 MiB each) so inner loops are hot for
+    seconds. Deterministic seeds for cross-language parity.
+    """
+    import hashlib
+    rng = np.random.default_rng(42)
+
+    # ── REF_DIFF: 100K reads × 100bp against a 100Kbp reference ──
+    ref_len = 100_000
+    ref_seq = bytes(rng.choice(list(b"ACGT"), size=ref_len).tolist())
+    ref_md5 = hashlib.md5(ref_seq).digest()
+    n_reads_rd = 100_000
+    read_len = 100
+    sequences_rd: list[bytes] = []
+    for i in range(n_reads_rd):
+        start = i % (ref_len - read_len)
+        seq = bytearray(ref_seq[start:start + read_len])
+        # ~2% mutation rate
+        for j in range(read_len):
+            if rng.random() < 0.02:
+                seq[j] = rng.choice(list(b"ACGT"))
+        sequences_rd.append(bytes(seq))
+    cigars_rd = [f"{read_len}M"] * n_reads_rd
+    positions_rd = sorted(rng.integers(1, ref_len - read_len, size=n_reads_rd).tolist())
+
+    t_rd_enc, rd_encoded = _timed(
+        _ref_diff_encode, sequences_rd, cigars_rd, positions_rd,
+        ref_seq, ref_md5, "perf-ref")
+    t_rd_dec, _ = _timed(
+        _ref_diff_decode, rd_encoded, cigars_rd, positions_rd, ref_seq)
+
+    # ── FQZCOMP_NX16: 100K × 100bp quality strings, Q20-Q40 LCG ──
+    n_qual = 100_000 * 100
+    qual_buf = bytearray(n_qual)
+    s = 0xBEEF
+    mask64 = (1 << 64) - 1
+    for i in range(n_qual):
+        s = (s * 6364136223846793005 + 1442695040888963407) & mask64
+        qual_buf[i] = 33 + 20 + ((s >> 32) % 21)
+    qualities = bytes(qual_buf)
+    read_lengths = [100] * 100_000
+    revcomp_flags = [0] * 100_000
+
+    t_fqz_enc, fqz_encoded = _timed(
+        _fqzcomp_encode, qualities, read_lengths, revcomp_flags)
+    t_fqz_dec, _ = _timed(_fqzcomp_decode, fqz_encoded)
+
+    # ── FQZCOMP_NX16_Z: same quality input ──
+    revcomp_flags_z = [(1 if (i & 7) == 0 else 0) for i in range(100_000)]
+    t_fqz_z_enc, fqz_z_encoded = _timed(
+        _fqzcomp_z_encode, qualities, read_lengths, revcomp_flags_z)
+    t_fqz_z_dec, _ = _timed(
+        _fqzcomp_z_decode, fqz_z_encoded, revcomp_flags_z)
+
+    # ── DELTA_RANS: 1.25M sorted int64 positions, LCG deltas 100-500 ──
+    n_pos = 1_250_000
+    pos_vals = np.empty(n_pos, dtype=np.int64)
+    pos_vals[0] = 1000
+    s = 0xBEEF
+    for i in range(1, n_pos):
+        s = (s * 6364136223846793005 + 1442695040888963407) & mask64
+        delta = 100 + ((s >> 32) % 401)  # 100..500
+        pos_vals[i] = pos_vals[i - 1] + delta
+    dr_input = pos_vals.astype("<i8").tobytes()
+
+    t_dr_enc, dr_encoded = _timed(_delta_rans_encode, dr_input, 8)
+    t_dr_dec, _ = _timed(_delta_rans_decode, dr_encoded)
+
+    raw_mb_rd = sum(len(sq) for sq in sequences_rd) / 1e6
+    print(f"  [genomic codec] ref_diff   {raw_mb_rd:.1f} MiB  "
+          f"enc={t_rd_enc:.2f}s  dec={t_rd_dec:.2f}s")
+    print(f"  [genomic codec] fqzcomp    {n_qual/1e6:.1f} MiB  "
+          f"enc={t_fqz_enc:.2f}s  dec={t_fqz_dec:.2f}s")
+    print(f"  [genomic codec] fqzcomp_z  {n_qual/1e6:.1f} MiB  "
+          f"enc={t_fqz_z_enc:.2f}s  dec={t_fqz_z_dec:.2f}s")
+    print(f"  [genomic codec] delta_rans {len(dr_input)/1e6:.1f} MiB  "
+          f"enc={t_dr_enc:.2f}s  dec={t_dr_dec:.2f}s")
+
+    return {
+        "ref_diff_encode": t_rd_enc,
+        "ref_diff_decode": t_rd_dec,
+        "fqzcomp_nx16_encode": t_fqz_enc,
+        "fqzcomp_nx16_decode": t_fqz_dec,
+        "fqzcomp_nx16_z_encode": t_fqz_z_enc,
+        "fqzcomp_nx16_z_decode": t_fqz_z_dec,
+        "delta_rans_encode": t_dr_enc,
+        "delta_rans_decode": t_dr_dec,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -442,6 +542,7 @@ BENCHMARKS: dict[str, Any] = {
     "jcamp":          lambda tmp, a: bench_jcamp(tmp, a.n),
     "spectra.build":  lambda tmp, a: bench_spectra_inmemory(a.n),
     "codecs":         lambda tmp, a: bench_codecs(tmp, a.n),
+    "codecs.genomic": lambda tmp, a: bench_codecs_genomic(tmp, a.n),
 }
 
 
