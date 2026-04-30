@@ -617,6 +617,13 @@ static void bench_spectra_build(NSString *tmp, NSUInteger n, NSUInteger peaks,
 #import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"
 #import "Codecs/TTIONameTokenizer.h"
+#import "Codecs/TTIORefDiff.h"
+#import "Codecs/TTIOFqzcompNx16.h"
+#import "Codecs/TTIOFqzcompNx16Z.h"
+#import "Codecs/TTIODeltaRans.h"
+#include <openssl/md5.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
                           NSMutableDictionary *out)
@@ -683,6 +690,190 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
+/* ── Genomic codecs benchmark (B1) ────────────────────────────── */
+
+static int cmp_int64(const void *a, const void *b) {
+    int64_t va = *(const int64_t *)a, vb = *(const int64_t *)b;
+    return (va > vb) - (va < vb);
+}
+
+static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                                  NSMutableDictionary *out)
+{
+    (void)tmp; (void)n; (void)peaks;
+    @autoreleasepool {
+        NSError *err = nil;
+
+        // ── REF_DIFF: 100K reads × 100bp against 100Kbp reference ──
+        const NSUInteger rdNumReads = 100000;
+        const NSUInteger rdReadLen  = 100;
+        const NSUInteger rdRefLen   = 100000;
+
+        // Build reference sequence (all 'A' for simplicity).
+        NSMutableData *refSeqData = [NSMutableData dataWithLength:rdRefLen];
+        memset(refSeqData.mutableBytes, 'A', rdRefLen);
+
+        // Compute MD5 of reference.
+        unsigned char refMd5Bytes[16];
+        MD5(refSeqData.bytes, refSeqData.length, refMd5Bytes);
+        NSData *refMd5 = [NSData dataWithBytes:refMd5Bytes length:16];
+
+        // Build read sequences (all 100bp of 'A').
+        NSMutableArray<NSData *> *sequences =
+            [NSMutableArray arrayWithCapacity:rdNumReads];
+        NSMutableArray<NSString *> *cigars =
+            [NSMutableArray arrayWithCapacity:rdNumReads];
+        NSMutableData *positions =
+            [NSMutableData dataWithLength:rdNumReads * sizeof(int64_t)];
+        int64_t *posPtr = (int64_t *)positions.mutableBytes;
+
+        // LCG seed 0xBEEF for positions (1-based, clamped to ref).
+        uint64_t lcgState = 0xBEEF;
+        NSData *readSeq = [NSData dataWithBytes:refSeqData.bytes length:rdReadLen];
+        srand(42);
+        for (NSUInteger i = 0; i < rdNumReads; i++) {
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            int64_t pos = (int64_t)((lcgState >> 17) % (rdRefLen - rdReadLen)) + 1;
+            posPtr[i] = pos;
+            // Apply a mutation with low probability using srand(42) sequence.
+            if ((rand() % 20) == 0) {
+                // Mutate one base at random position within read.
+                NSMutableData *mutSeq = [NSMutableData dataWithData:readSeq];
+                uint8_t *bp = mutSeq.mutableBytes;
+                NSUInteger mpos = (NSUInteger)(rand() % (int)rdReadLen);
+                const char bases[] = "ACGT";
+                bp[mpos] = (uint8_t)bases[rand() % 4];
+                [sequences addObject:mutSeq];
+            } else {
+                [sequences addObject:readSeq];
+            }
+            [cigars addObject:[NSString stringWithFormat:@"%luM",
+                               (unsigned long)rdReadLen]];
+        }
+
+        double t0 = nowSeconds();
+        NSData *rdEnc = [TTIORefDiff encodeWithSequences:sequences
+                                                  cigars:cigars
+                                               positions:positions
+                                      referenceChromSeq:refSeqData
+                                            referenceMD5:refMd5
+                                            referenceURI:@"perf://ref/chr1"
+                                                   error:&err];
+        putSeconds(out, @"ref_diff_encode", nowSeconds() - t0);
+        if (!rdEnc) { NSLog(@"ref_diff encode failed: %@", err); }
+
+        if (rdEnc) {
+            t0 = nowSeconds();
+            (void)[TTIORefDiff decodeData:rdEnc
+                                   cigars:cigars
+                                positions:positions
+                       referenceChromSeq:refSeqData
+                                    error:&err];
+            putSeconds(out, @"ref_diff_decode", nowSeconds() - t0);
+            if (err) NSLog(@"ref_diff decode error: %@", err);
+        } else {
+            putSeconds(out, @"ref_diff_decode", 0.0);
+        }
+
+        // ── FQZCOMP_NX16: 100K × 100bp quality strings Q20-Q40 ─────
+        const NSUInteger fqNumReads = 100000;
+        const NSUInteger fqReadLen  = 100;
+        const NSUInteger fqTotalQual = fqNumReads * fqReadLen;
+
+        NSMutableData *qualities = [NSMutableData dataWithLength:fqTotalQual];
+        uint8_t *qPtr = (uint8_t *)qualities.mutableBytes;
+        lcgState = 0xBEEF;
+        for (NSUInteger i = 0; i < fqTotalQual; i++) {
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            qPtr[i] = (uint8_t)(20 + (lcgState >> 33) % 21); // Q20..Q40
+        }
+
+        NSMutableArray<NSNumber *> *readLengths =
+            [NSMutableArray arrayWithCapacity:fqNumReads];
+        NSMutableArray<NSNumber *> *revcompFlagsForward =
+            [NSMutableArray arrayWithCapacity:fqNumReads];
+        for (NSUInteger i = 0; i < fqNumReads; i++) {
+            [readLengths addObject:@((uint32_t)fqReadLen)];
+            [revcompFlagsForward addObject:@0];
+        }
+
+        t0 = nowSeconds();
+        NSData *fqEnc = [TTIOFqzcompNx16 encodeWithQualities:qualities
+                                                   readLengths:readLengths
+                                                  revcompFlags:revcompFlagsForward
+                                                         error:&err];
+        putSeconds(out, @"fqzcomp_nx16_encode", nowSeconds() - t0);
+        if (!fqEnc) { NSLog(@"fqzcomp_nx16 encode failed: %@", err); }
+
+        if (fqEnc) {
+            t0 = nowSeconds();
+            (void)[TTIOFqzcompNx16 decodeData:fqEnc error:&err];
+            putSeconds(out, @"fqzcomp_nx16_decode", nowSeconds() - t0);
+            if (err) NSLog(@"fqzcomp_nx16 decode error: %@", err);
+        } else {
+            putSeconds(out, @"fqzcomp_nx16_decode", 0.0);
+        }
+
+        // ── FQZCOMP_NX16_Z: same quality input, revcomp (i & 7) == 0 ─
+        NSMutableArray<NSNumber *> *revcompFlagsMixed =
+            [NSMutableArray arrayWithCapacity:fqNumReads];
+        for (NSUInteger i = 0; i < fqNumReads; i++) {
+            [revcompFlagsMixed addObject:@((i & 7) == 0 ? 1 : 0)];
+        }
+
+        t0 = nowSeconds();
+        NSData *fqzEnc = [TTIOFqzcompNx16Z encodeWithQualities:qualities
+                                                     readLengths:readLengths
+                                                    revcompFlags:revcompFlagsMixed
+                                                           error:&err];
+        putSeconds(out, @"fqzcomp_nx16_z_encode", nowSeconds() - t0);
+        if (!fqzEnc) { NSLog(@"fqzcomp_nx16_z encode failed: %@", err); }
+
+        if (fqzEnc) {
+            t0 = nowSeconds();
+            (void)[TTIOFqzcompNx16Z decodeData:fqzEnc
+                                   revcompFlags:revcompFlagsMixed
+                                          error:&err];
+            putSeconds(out, @"fqzcomp_nx16_z_decode", nowSeconds() - t0);
+            if (err) NSLog(@"fqzcomp_nx16_z decode error: %@", err);
+        } else {
+            putSeconds(out, @"fqzcomp_nx16_z_decode", 0.0);
+        }
+
+        // ── DELTA_RANS: 1.25M sorted int64 positions ────────────────
+        const NSUInteger drCount = 1250000;
+
+        NSMutableData *drData =
+            [NSMutableData dataWithLength:drCount * sizeof(int64_t)];
+        int64_t *drPtr = (int64_t *)drData.mutableBytes;
+        lcgState = 0xBEEF;
+        int64_t pos = 0;
+        for (NSUInteger i = 0; i < drCount; i++) {
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            int64_t delta = 100 + (int64_t)((lcgState >> 33) % 401); // 100..500
+            pos += delta;
+            drPtr[i] = pos;
+        }
+        // Sort to ensure ascending order (LCG already produces that via
+        // cumulative sum, but sort defensively).
+        qsort(drPtr, drCount, sizeof(int64_t), cmp_int64);
+
+        t0 = nowSeconds();
+        NSData *drEnc = TTIODeltaRansEncode(drData, 8, &err);
+        putSeconds(out, @"delta_rans_encode", nowSeconds() - t0);
+        if (!drEnc) { NSLog(@"delta_rans encode failed: %@", err); }
+
+        if (drEnc) {
+            t0 = nowSeconds();
+            (void)TTIODeltaRansDecode(drEnc, &err);
+            putSeconds(out, @"delta_rans_decode", nowSeconds() - t0);
+            if (err) NSLog(@"delta_rans decode error: %@", err);
+        } else {
+            putSeconds(out, @"delta_rans_decode", 0.0);
+        }
+    }
+}
+
 /* ── Registry + driver ─────────────────────────────────────────── */
 
 typedef struct {
@@ -702,6 +893,7 @@ static BenchEntry kBenches[] = {
     { "jcamp",                bench_jcamp },
     { "spectra.build",        bench_spectra_build },
     { "codecs",               bench_codecs },
+    { "codecs.genomic",       bench_codecs_genomic },
     { NULL, NULL }
 };
 
