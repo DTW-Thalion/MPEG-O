@@ -77,6 +77,32 @@
       "quality_binned_decode": 0.0008822610000152054,
       "name_tokenized_encode": 0.026575819999834494,
       "name_tokenized_decode": 0.002286876999960441
+    },
+    "codecs.genomic": {
+      "ref_diff_encode": 1.1068,
+      "ref_diff_decode": 1.2896,
+      "fqzcomp_nx16_encode": 59.5573,
+      "fqzcomp_nx16_decode": 59.8884,
+      "fqzcomp_nx16_z_encode": 0.2154,
+      "fqzcomp_nx16_z_decode": 0.5715,
+      "delta_rans_encode": 0.6508,
+      "delta_rans_decode": 0.6334
+    },
+    "genomic": {
+      "write": 0.9472,
+      "write_mb": 21.3,
+      "read": 14.5884,
+      "random_access_p50": 0.000147,
+      "random_access_p99": 0.000673
+    },
+    "encryption.genomic": {
+      "encrypt": 0.0444,
+      "decrypt": 0.0084,
+      "bytes_mb": 10.4858
+    },
+    "streaming": {
+      "write": 0.0728,
+      "read": 0.1246
     }
   },
   "java": {
@@ -143,6 +169,32 @@
       "quality_binned_decode": 0.0108554,
       "name_tokenized_encode": 0.0289,
       "name_tokenized_decode": 0.0055436
+    },
+    "codecs.genomic": {
+      "ref_diff_encode": 0.7300,
+      "ref_diff_decode": 0.2623,
+      "fqzcomp_nx16_encode": 18.1238,
+      "fqzcomp_nx16_decode": 17.6461,
+      "fqzcomp_nx16_z_encode": 0.3518,
+      "fqzcomp_nx16_z_decode": 0.6954,
+      "delta_rans_encode": 0.0693,
+      "delta_rans_decode": 0.0357
+    },
+    "genomic": {
+      "write": 0.6264,
+      "read": 5.2264,
+      "random_access_p50": 0.000443,
+      "random_access_p99": 0.000508,
+      "write_mb": 26.4743
+    },
+    "encryption.genomic": {
+      "encrypt": 0.1370,
+      "decrypt": 0.1055,
+      "bytes_mb": 10.4858
+    },
+    "streaming": {
+      "write": 0.0185,
+      "read": 0.0048
     }
   },
   "objc": {
@@ -209,6 +261,32 @@
       "decode": 0.0859208,
       "mots_mb": 3.5703,
       "src_mb": 0.332448
+    },
+    "codecs.genomic": {
+      "ref_diff_encode": 0.0316,
+      "ref_diff_decode": 0.1128,
+      "fqzcomp_nx16_encode": 63.6430,
+      "fqzcomp_nx16_decode": 63.9805,
+      "fqzcomp_nx16_z_encode": 0.2027,
+      "fqzcomp_nx16_z_decode": 0.3592,
+      "delta_rans_encode": 0.0183,
+      "delta_rans_decode": 0.0573
+    },
+    "genomic": {
+      "write": 0.5812,
+      "write_mb": 26.4501,
+      "read": 0.2553,
+      "random_access_p50": 0.000391,
+      "random_access_p99": 0.000489
+    },
+    "encryption.genomic": {
+      "encrypt": 0.0032,
+      "decrypt": 0.0020,
+      "bytes_mb": 10.4858
+    },
+    "streaming": {
+      "write": 0.1046,
+      "read": 0.0472
     }
   }
 }
