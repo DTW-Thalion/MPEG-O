@@ -72,6 +72,13 @@ TTIOTests_OBJC_FILES = \
 	TestM85Quality.m \
 	TestM85bNameTokenizer.m \
 	TestM86GenomicCodecWiring.m \
+	TestM93RefDiffUnit.m \
+	TestM93RefDiffPipeline.m \
+	TestM94FqzcompUnit.m \
+	TestM94FqzcompPipeline.m \
+	TestM94FqzcompPerf.m \
+	TestM94ZFqzcompUnit.m \
+	TestM94ZFqzcompPerf.m \
 	TestM87BamImporter.m \
 	TestM88CramBamRoundTrip.m \
 	TestM89GenomicTransport.m \
