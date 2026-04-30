@@ -78,6 +78,21 @@ from __future__ import annotations
 import re
 import struct
 
+# ─── Optional Cython acceleration ──────────────────────────────────
+#
+# When the compiled extension at ``ttio.codecs._name_tokenizer._name_tokenizer``
+# is available, the hot tokeniser + columnar/verbatim encode+decode kernels
+# transparently route through it. Output is byte-identical either way —
+# the Python implementations below remain the spec contract.
+
+try:  # pragma: no cover — extension may be absent in source-only installs
+    from ttio.codecs._name_tokenizer import _name_tokenizer as _ext  # type: ignore[import-not-found]
+    _HAVE_C_EXTENSION = True
+except ImportError:  # pragma: no cover
+    _HAVE_C_EXTENSION = False
+    _ext = None  # type: ignore[assignment]
+
+
 # ── Internal compiled regex (tokeniser fast-path) ──────────────────
 
 #: Splits on maximal digit-runs. Each match is either a digit-run
@@ -203,6 +218,23 @@ def _tokenize(name: str) -> list[tuple[str, object]]:
     character "0" or has length ≥ 1 with a non-"0" first character,
     and whose value < 2^63. Otherwise the digit-run is absorbed into
     the surrounding string token.
+    """
+    if _HAVE_C_EXTENSION:
+        # Encode once to bytes; ASCII-only contract is enforced upstream
+        # in :func:`encode`. For decode-side / direct callers, fall back
+        # to the Python path on encoding errors.
+        try:
+            return _ext.tokenize_c(name.encode("ascii"))
+        except UnicodeEncodeError:
+            return _tokenize_py(name)
+    return _tokenize_py(name)
+
+
+def _tokenize_py(name: str) -> list[tuple[str, object]]:
+    """Pure-Python reference implementation of :func:`_tokenize`.
+
+    Kept as the byte-exact spec contract; called as a fallback when the
+    C extension is absent.
     """
     if not name:
         return []
@@ -398,6 +430,16 @@ def _encode_columnar(
     type_table: list[int],
 ) -> bytes:
     """Emit the columnar body. Caller has already chosen this mode."""
+    if _HAVE_C_EXTENSION:
+        return _ext.encode_columnar_c(tokenised, type_table)
+    return _encode_columnar_py(tokenised, type_table)
+
+
+def _encode_columnar_py(
+    tokenised: list[list[tuple[str, object]]],
+    type_table: list[int],
+) -> bytes:
+    """Pure-Python reference implementation of :func:`_encode_columnar`."""
     n_reads = len(tokenised)
     n_columns = len(type_table)
     if n_columns > 0xFF:
@@ -453,6 +495,18 @@ def _decode_columnar(
 
     Returns (names, new_offset).
     """
+    if _HAVE_C_EXTENSION:
+        # The C path requires bytes input (not memoryview/bytearray).
+        if not isinstance(buf, bytes):
+            buf = bytes(buf)
+        return _ext.decode_columnar_c(buf, offset, n_reads)
+    return _decode_columnar_py(buf, offset, n_reads)
+
+
+def _decode_columnar_py(
+    buf: bytes, offset: int, n_reads: int
+) -> tuple[list[str], int]:
+    """Pure-Python reference implementation of :func:`_decode_columnar`."""
     if offset >= len(buf):
         raise ValueError(
             "NAME_TOKENIZED columnar body missing n_columns byte"
@@ -541,6 +595,12 @@ def _decode_columnar(
 
 
 def _encode_verbatim(encoded_names: list[bytes]) -> bytes:
+    if _HAVE_C_EXTENSION:
+        return _ext.encode_verbatim_c(encoded_names)
+    return _encode_verbatim_py(encoded_names)
+
+
+def _encode_verbatim_py(encoded_names: list[bytes]) -> bytes:
     out = bytearray()
     for payload in encoded_names:
         out.extend(_varint_encode(len(payload)))
@@ -549,6 +609,16 @@ def _encode_verbatim(encoded_names: list[bytes]) -> bytes:
 
 
 def _decode_verbatim(
+    buf: bytes, offset: int, n_reads: int
+) -> tuple[list[str], int]:
+    if _HAVE_C_EXTENSION:
+        if not isinstance(buf, bytes):
+            buf = bytes(buf)
+        return _ext.decode_verbatim_c(buf, offset, n_reads)
+    return _decode_verbatim_py(buf, offset, n_reads)
+
+
+def _decode_verbatim_py(
     buf: bytes, offset: int, n_reads: int
 ) -> tuple[list[str], int]:
     names: list[str] = []
