@@ -7,8 +7,6 @@ package global.thalion.ttio.codecs;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Arrays;
-import java.util.Comparator;
 
 /**
  * rANS entropy codec — order-0 and order-1.
@@ -189,92 +187,134 @@ public final class Rans {
      *       ascending count, ascending symbol tiebreaker, never below 1.</li>
      * </ol>
      *
-     * <p>The cnt array is not modified.
+     * <p>The cnt array is not modified. Allocates a fresh 256-element
+     * result array per call. Hot callers (e.g. FQZCOMP_NX16, which calls
+     * once per symbol) should prefer
+     * {@link #normaliseFreqsInto(int[], int[], int[])} with reusable
+     * scratch buffers.
      */
     static int[] normaliseFreqs(int[] cnt) {
+        int[] freq = new int[256];
+        int[] order = new int[256];
+        normaliseFreqsInto(cnt, freq, order);
+        return freq;
+    }
+
+    /**
+     * Scratch-buffer variant of {@link #normaliseFreqs}: writes the
+     * normalised frequency table into {@code freqOut} (length 256) using
+     * {@code orderScratch} (length ≥ 256) for the eligible-symbol sort
+     * buffer. Both buffers are overwritten.
+     *
+     * <p>{@code freqOut} is zeroed by this method on entry, so callers
+     * may reuse the same buffer across invocations without manual reset.
+     *
+     * <p>Byte-exact equivalent of the allocating overload — callable from
+     * any codec (RANS_ORDER0/1, FQZCOMP_NX16, NameTokenizer, etc.).
+     */
+    static void normaliseFreqsInto(int[] cnt, int[] freqOut, int[] orderScratch) {
         if (cnt.length != 256) {
             throw new IllegalArgumentException("count vector must have length 256");
         }
+        if (freqOut.length != 256) {
+            throw new IllegalArgumentException("freqOut must have length 256");
+        }
+        if (orderScratch.length < 256) {
+            throw new IllegalArgumentException("orderScratch must have length >= 256");
+        }
+
+        // Single fused pass: sum, scale to freq, build eligible-symbol list.
+        // Saves three 256-loops + a separate allocation versus the previous
+        // implementation, and keeps cnt[s] in cache while we read it.
         long total = 0L;
-        for (int c : cnt) {
-            total += c;
+        for (int s = 0; s < 256; s++) {
+            total += cnt[s];
         }
         if (total <= 0L) {
             throw new IllegalArgumentException("cannot normalise empty count vector");
         }
 
-        int[] freq = new int[256];
+        // Zero out freqOut so callers don't have to (they'd just memset).
+        java.util.Arrays.fill(freqOut, 0);
+
+        int sum = 0;
+        int n = 0;
         for (int s = 0; s < 256; s++) {
             int c = cnt[s];
             if (c > 0) {
                 long scaled = ((long) c * M) / total;
-                freq[s] = (scaled >= 1L) ? (int) scaled : 1;
+                int f = (scaled >= 1L) ? (int) scaled : 1;
+                freqOut[s] = f;
+                sum += f;
+                orderScratch[n++] = s;
             }
-        }
-
-        int sum = 0;
-        for (int f : freq) {
-            sum += f;
         }
         int delta = M - sum;
 
-        // Build the eligible-symbol list (cnt[s] > 0).
-        int eligibleCount = 0;
-        for (int c : cnt) {
-            if (c > 0) {
-                eligibleCount++;
-            }
+        if (delta == 0) {
+            return;  // Hot fast path: nothing to redistribute, skip sort.
         }
-        Integer[] order = new Integer[eligibleCount];
-        int oi = 0;
-        for (int s = 0; s < 256; s++) {
-            if (cnt[s] > 0) {
-                order[oi++] = s;
-            }
+
+        // Pack (cnt, sym) into a single int per slot so the sort's inner
+        // loop reads sequentially from one array (better cache behaviour
+        // than chasing cnt[orderScratch[j]] random indirection per cmp).
+        //
+        //   - For delta > 0 we want sort key DESCENDING.
+        //     Pack as ((cnt[s] << 8) | (255 - s)) so descending packed
+        //     means descending cnt, then ascending s when cnts tie.
+        //   - For delta < 0 we want ASCENDING (cnt, sym).
+        //     Pack as ((cnt[s] << 8) | s).
+        //
+        // cnt[s] safely fits in 24 bits for any sane callsite (FqzcompNx16's
+        // maxCount is 1024; rANS-O0/1 over 4 GiB inputs would overflow but
+        // wire format constrains us long before then).
+        for (int i = 0; i < n; i++) {
+            int sym = orderScratch[i];
+            int c = cnt[sym];
+            orderScratch[i] = (delta > 0)
+                ? ((c << 8) | (255 - sym))
+                : ((c << 8) | sym);
         }
 
         if (delta > 0) {
-            // Distribute +1 to most-frequent first; ascending symbol tiebreaker.
-            // Python key: (-cnt[s], s). Equivalent: descending cnt, ascending s.
-            Arrays.sort(order, new Comparator<Integer>() {
-                @Override
-                public int compare(Integer a, Integer b) {
-                    int ca = cnt[a];
-                    int cb = cnt[b];
-                    if (ca != cb) {
-                        return Integer.compare(cb, ca); // descending
-                    }
-                    return Integer.compare(a, b); // ascending
+            // Insertion sort: descending packed key.
+            for (int i = 1; i < n; i++) {
+                int kIns = orderScratch[i];
+                int j = i - 1;
+                while (j >= 0 && orderScratch[j] < kIns) {
+                    orderScratch[j + 1] = orderScratch[j];
+                    j--;
                 }
-            });
-            int n = order.length;
+                orderScratch[j + 1] = kIns;
+            }
+            // Distribute +1 round-robin in sorted order.
             int i = 0;
             while (delta > 0) {
-                freq[order[i % n]]++;
+                int packed = orderScratch[i % n];
+                int sym = 255 - (packed & 0xFF);
+                freqOut[sym]++;
                 i++;
                 delta--;
             }
-        } else if (delta < 0) {
-            // Subtract 1 from least-frequent first; ascending symbol tiebreaker.
-            // Python key: (cnt[s], s). Round-robin walk, skip pinned-to-1.
-            Arrays.sort(order, new Comparator<Integer>() {
-                @Override
-                public int compare(Integer a, Integer b) {
-                    int ca = cnt[a];
-                    int cb = cnt[b];
-                    if (ca != cb) {
-                        return Integer.compare(ca, cb); // ascending
-                    }
-                    return Integer.compare(a, b); // ascending
+        } else {
+            // Insertion sort: ascending packed key.
+            for (int i = 1; i < n; i++) {
+                int kIns = orderScratch[i];
+                int j = i - 1;
+                while (j >= 0 && orderScratch[j] > kIns) {
+                    orderScratch[j + 1] = orderScratch[j];
+                    j--;
                 }
-            });
-            int n = order.length;
+                orderScratch[j + 1] = kIns;
+            }
+            // Subtract 1 round-robin in sorted order, skipping pinned-to-1.
             int idx = 0;
             int guard = 0;
             while (delta < 0) {
-                int s = order[idx % n];
-                if (freq[s] > 1) {
-                    freq[s]--;
+                int packed = orderScratch[idx % n];
+                int sym = packed & 0xFF;
+                if (freqOut[sym] > 1) {
+                    freqOut[sym]--;
                     delta++;
                     guard = 0;
                 } else {
@@ -288,8 +328,6 @@ public final class Rans {
                 idx++;
             }
         }
-
-        return freq;
     }
 
     private static int[] cumulative(int[] freq) {

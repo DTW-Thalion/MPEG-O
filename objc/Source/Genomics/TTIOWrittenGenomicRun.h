@@ -6,6 +6,8 @@
 
 @class TTIOProvenanceRecord;
 
+NS_ASSUME_NONNULL_BEGIN
+
 /**
  * Write-side container for a single genomic run, passed to
  * +[TTIOSpectralDataset writeMinimalToPath:...genomicRuns:...].
@@ -71,6 +73,22 @@
  *  without binding the (already large) initialiser surface. */
 @property (nonatomic, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
 
+/** M93 v1.2: when YES (default) AND a context-aware codec is selected
+ *  on the ``sequences`` channel, the writer embeds the chromosome
+ *  sequences supplied in ``referenceChromSeqs`` at
+ *  ``/study/references/<referenceUri>/`` in the output file. */
+@property (nonatomic, assign) BOOL embedReference;
+
+/** M93 v1.2: chromosome name -> uppercase ACGTN bytes. Required when
+ *  REF_DIFF is selected on ``sequences`` and ``embedReference`` is YES;
+ *  otherwise REF_DIFF falls back silently to BASE_PACK on this channel. */
+@property (nonatomic, copy, nullable) NSDictionary<NSString *, NSData *> *referenceChromSeqs;
+
+/** M93 v1.2: external reference path stamped into file metadata for
+ *  decoder fallback when the embedded reference is absent. The writer
+ *  never reads this path; metadata only. */
+@property (nonatomic, copy, nullable) NSString *externalReferencePath;
+
 @property (readonly) NSUInteger readCount;
 
 - (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode
@@ -114,5 +132,7 @@
                      signalCodecOverrides:(NSDictionary<NSString *, NSNumber *> *)signalCodecOverrides;
 
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif

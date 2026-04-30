@@ -11,6 +11,9 @@
 #import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"   // M86 Phase D
 #import "Codecs/TTIONameTokenizer.h"   // M86 Phase E
+#import "Codecs/TTIORefDiff.h"            // M93 v1.2
+#import "Codecs/TTIOFqzcompNx16.h"         // M94 v1.2
+#import "Codecs/TTIOReferenceResolver.h"  // M93 v1.2
 #import <hdf5.h>
 
 @implementation TTIOGenomicRun {
@@ -304,6 +307,12 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         case 7: // TTIOCompressionQualityBinned (M86 Phase D)
             decoded = TTIOQualityDecode(encoded, &decErr);
             break;
+        case 9: // TTIOCompressionRefDiff (M93 v1.2)
+            decoded = [self _ttio_m93_decodeRefDiff:encoded error:&decErr];
+            break;
+        case 10: // TTIOCompressionFqzcompNx16 (M94 v1.2)
+            decoded = [self _ttio_m94_decodeFqzcompNx16:encoded error:&decErr];
+            break;
         default:
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOGenomicRun" code:2020
@@ -327,6 +336,146 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     NSUInteger from = MIN(offset, decoded.length);
     NSUInteger to   = MIN(from + count, decoded.length);
     return [decoded subdataWithRange:NSMakeRange(from, to - from)];
+}
+
+// M93 v1.2: REF_DIFF decode helper. Reads the codec header to discover
+// the reference URI + MD5, resolves the chromosome via TTIOReferenceResolver
+// (embedded → REF_PATH external → NSError), gathers the run's per-read
+// CIGARs + positions, and concatenates the decoder's per-read NSDatas
+// into a single flat byte buffer matching the M82 sequences-channel
+// contract.
+- (NSData *)_ttio_m93_decodeRefDiff:(NSData *)encoded
+                                error:(NSError **)error
+{
+    NSError *headerErr = nil;
+    NSUInteger headerEnd = 0;
+    TTIORefDiffCodecHeader *h = [TTIORefDiffCodecHeader
+        headerFromData:encoded bytesConsumed:&headerEnd error:&headerErr];
+    if (!h) {
+        if (error) *error = headerErr;
+        return nil;
+    }
+
+    // Locate the file root for the resolver. Required for embedded
+    // /study/references/<uri>/. Fall back to nil + REF_PATH only when
+    // we cannot navigate up (non-HDF5 backend).
+    TTIOHDF5Group *rootHDF5 = nil;
+    if ([_group respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *runG = [(id)_group performSelector:@selector(unwrap)];
+        hid_t fid = H5Iget_file_id([runG groupId]);
+        if (fid >= 0) {
+            hid_t rootId = H5Gopen2(fid, "/", H5P_DEFAULT);
+            if (rootId >= 0) {
+                rootHDF5 = [[TTIOHDF5Group alloc] initWithGroupId:rootId
+                                                          retainer:nil];
+            }
+            H5Idec_ref(fid);
+        }
+    }
+
+    TTIOReferenceResolver *resolver = [[TTIOReferenceResolver alloc]
+        initWithRootGroup:rootHDF5
+    externalReferencePath:nil];
+
+    // Single-chromosome v1.2 limitation: collect unique chromosomes.
+    NSMutableSet<NSString *> *unique = [NSMutableSet set];
+    for (NSUInteger i = 0; i < _index.count; i++) {
+        NSString *c = [_index chromosomeAt:i];
+        if (c.length) [unique addObject:c];
+    }
+    NSString *chrom = unique.count == 1 ? [unique anyObject] : @"";
+    if (unique.count > 1) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2090
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"REF_DIFF v1.2 first pass supports single-"
+                            @"chromosome runs only; this run carries %lu "
+                            @"distinct chromosomes. Multi-chromosome "
+                            @"support is an M93.X follow-up.",
+                            (unsigned long)unique.count]}];
+        return nil;
+    }
+
+    NSError *resolveErr = nil;
+    NSData *chromSeq = [resolver resolveURI:h.referenceURI
+                                expectedMD5:h.referenceMD5
+                                 chromosome:chrom
+                                      error:&resolveErr];
+    if (!chromSeq) {
+        if (error) *error = resolveErr;
+        return nil;
+    }
+
+    // Gather the cigars list. Trigger -cigarAtIndex:0 once to populate
+    // _decodedCigars when the cigars channel uses the codec path; for
+    // the compound layout fall back to manual enumeration.
+    NSMutableArray<NSString *> *cigars = nil;
+    if (_index.count > 0) {
+        NSError *cigErr = nil;
+        (void)[self cigarAtIndex:0 error:&cigErr];
+    }
+    if (_decodedCigars != nil) {
+        cigars = [NSMutableArray arrayWithArray:_decodedCigars];
+    } else {
+        cigars = [NSMutableArray arrayWithCapacity:_index.count];
+        for (NSUInteger i = 0; i < _index.count; i++) {
+            NSError *cigErr = nil;
+            NSString *cig = [self cigarAtIndex:i error:&cigErr];
+            if (!cig) {
+                if (error) *error = cigErr;
+                return nil;
+            }
+            [cigars addObject:cig];
+        }
+    }
+
+    // Pack positions into a contiguous int64 LE NSData (host LE on
+    // x86/ARM; the codec consumes raw int64_t pointers).
+    NSMutableData *positions = [NSMutableData
+        dataWithLength:_index.count * sizeof(int64_t)];
+    int64_t *pp = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < _index.count; i++) {
+        pp[i] = [_index positionAt:i];
+    }
+
+    NSError *decErr = nil;
+    NSArray<NSData *> *perRead = [TTIORefDiff decodeData:encoded
+                                                    cigars:cigars
+                                                 positions:positions
+                                        referenceChromSeq:chromSeq
+                                                      error:&decErr];
+    if (!perRead) {
+        if (error) *error = decErr;
+        return nil;
+    }
+    NSMutableData *flat = [NSMutableData data];
+    for (NSData *d in perRead) [flat appendData:d];
+    return flat;
+}
+
+// M94 v1.2: FQZCOMP_NX16 decode helper. The codec needs revcomp_flags
+// (derived from the run's flags channel & SAM REVERSE bit, 16) and
+// produces a flat byte stream matching the M82 qualities-channel
+// contract. read_lengths come back from inside the codec wire format.
+- (NSData *)_ttio_m94_decodeFqzcompNx16:(NSData *)encoded
+                                    error:(NSError **)error
+{
+    NSUInteger n = _index ? _index.count : 0;
+    NSMutableArray<NSNumber *> *revcompFlags = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        uint32_t f = [_index flagsAt:i];
+        [revcompFlags addObject:(f & 16u) ? @1 : @0];
+    }
+    NSError *decErr = nil;
+    NSDictionary *out = [TTIOFqzcompNx16 decodeData:encoded
+                                       revcompFlags:revcompFlags
+                                              error:&decErr];
+    if (!out) {
+        if (error) *error = decErr;
+        return nil;
+    }
+    return out[@"qualities"];
 }
 
 // M86 Phase E: read_names dispatch helper.

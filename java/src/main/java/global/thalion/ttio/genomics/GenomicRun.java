@@ -370,6 +370,28 @@ public class GenomicRun
             // Caller of byteChannelSlice gets the bin-centre values,
             // not the original Phred bytes.
             decoded = global.thalion.ttio.codecs.Quality.decode(all);
+        } else if (codecId == global.thalion.ttio.Enums.Compression.REF_DIFF.ordinal()) {
+            // M93 v1.2: REF_DIFF is context-aware. Resolve the
+            // reference via ReferenceResolver, then decode the per-
+            // read slices and concatenate into the M82 contract: a
+            // flat uint8 byte stream the same length as sum(lengths).
+            decoded = decodeRefDiffSequences(all);
+        } else if (codecId == global.thalion.ttio.Enums.Compression
+                .FQZCOMP_NX16.ordinal()) {
+            // M94 v1.2: FQZCOMP_NX16 is a v1.5 quality codec. The
+            // wire format carries read_lengths in the header sidecar;
+            // revcomp_flags must be reconstructed from the M86 flags
+            // channel (run.flags()[i] & 16, the SAM REVERSE bit).
+            int n = index.count();
+            int[] revcompFlags = new int[n];
+            for (int i = 0; i < n; i++) {
+                int f = index.flagsAt(i);
+                revcompFlags[i] = ((f & 16) != 0) ? 1 : 0;
+            }
+            global.thalion.ttio.codecs.FqzcompNx16.DecodeResult dr =
+                global.thalion.ttio.codecs.FqzcompNx16
+                    .decodeWithMetadata(all, revcompFlags);
+            decoded = dr.qualities();
         } else {
             throw new IllegalStateException(
                 "signal_channel '" + name + "': @compression="
@@ -379,6 +401,90 @@ public class GenomicRun
         byte[] out = new byte[count];
         System.arraycopy(decoded, (int) offset, out, 0, count);
         return out;
+    }
+
+    /** M93 v1.2: decode the {@code sequences} channel encoded with the
+     *  REF_DIFF codec. Returns the concatenated per-read sequence bytes
+     *  — same shape and dtype contract as the M82 sequences channel
+     *  (uint8 1-D byte stream of total length sum(lengths)).
+     *
+     *  @throws global.thalion.ttio.codecs.RefMissingException when the
+     *      reference can't be resolved. */
+    private byte[] decodeRefDiffSequences(byte[] encoded) {
+        global.thalion.ttio.codecs.RefDiff.HeaderUnpack hu =
+            global.thalion.ttio.codecs.RefDiff.unpackCodecHeader(encoded);
+        // ReferenceResolver wants an Hdf5File; the writer always
+        // embeds at /study/references/<uri>/ in the same file.
+        global.thalion.ttio.hdf5.Hdf5Group h5g = global.thalion.ttio.providers
+            .Hdf5Provider.tryUnwrapHdf5Group(runGroup);
+        if (h5g == null) {
+            throw new RuntimeException(
+                "REF_DIFF decode requires an HDF5-backed dataset; "
+                + "non-HDF5 storage providers are not yet supported.");
+        }
+        global.thalion.ttio.hdf5.Hdf5File h5File = h5g.owningFile();
+        global.thalion.ttio.codecs.ReferenceResolver resolver =
+            new global.thalion.ttio.codecs.ReferenceResolver(h5File);
+
+        // Single-chromosome runs only (v1.2 first pass).
+        java.util.Set<String> uniqueChroms =
+            new java.util.LinkedHashSet<>();
+        for (int i = 0; i < index.count(); i++) {
+            uniqueChroms.add(index.chromosomeAt(i));
+        }
+        String chrom;
+        if (uniqueChroms.isEmpty()) {
+            chrom = "";
+        } else if (uniqueChroms.size() > 1) {
+            throw new RuntimeException(
+                "REF_DIFF v1.2 first pass supports single-chromosome "
+                + "runs only; this run carries " + uniqueChroms
+                + ". Multi-chromosome support is an M93.X follow-up.");
+        } else {
+            chrom = uniqueChroms.iterator().next();
+        }
+        byte[] chromSeq = resolver.resolve(
+            hu.header().referenceUri(),
+            hu.header().referenceMd5(),
+            chrom);
+
+        // Gather per-read positions + cigars for the slice walk.
+        long[] positions = new long[index.count()];
+        for (int i = 0; i < index.count(); i++) {
+            positions[i] = index.positionAt(i);
+        }
+        java.util.List<String> cigars = allCigars();
+
+        java.util.List<byte[]> perRead = global.thalion.ttio.codecs
+            .RefDiff.decode(encoded, cigars, positions, chromSeq);
+        // Concat into the flat M82 contract.
+        int total = 0;
+        for (byte[] p : perRead) total += p.length;
+        byte[] out = new byte[total];
+        int off = 0;
+        for (byte[] p : perRead) {
+            System.arraycopy(p, 0, out, off, p.length);
+            off += p.length;
+        }
+        return out;
+    }
+
+    /** Return the full list of CIGAR strings for this run. Honours the
+     *  M86 Phase C codec dispatch on the cigars channel (RANS /
+     *  NAME_TOKENIZED override → uint8 dataset; no override → M82
+     *  compound dataset). Caches the result on
+     *  {@link #decodedCigars}. */
+    private java.util.List<String> allCigars() {
+        if (decodedCigars != null) return decodedCigars;
+        java.util.List<String> out = new java.util.ArrayList<>(index.count());
+        for (int i = 0; i < index.count(); i++) {
+            out.add(cigarAt(i));
+        }
+        // cigarAt() populates decodedCigars when the codec path is hit;
+        // the compound-path doesn't set the cache, so set it explicitly
+        // here to avoid re-walking on subsequent calls.
+        if (decodedCigars == null) decodedCigars = out;
+        return decodedCigars;
     }
 
     /** M86 Phase E: return the read name at index {@code i}, dispatching

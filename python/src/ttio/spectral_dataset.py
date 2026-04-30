@@ -746,6 +746,13 @@ class SpectralDataset:
         if has_genomic:
             format_version = "1.4"
 
+        # M93/M94 v1.2: bump to 1.5 ONLY when at least one genomic_run
+        # uses a v1.5 codec (REF_DIFF, FQZCOMP_NX16). M82-only writes
+        # stay at 1.4 to preserve byte-parity with existing M82/M86
+        # fixtures.
+        if has_genomic and _any_v1_5_codec(genomic_runs):
+            format_version = "1.5"
+
         # HDF5 fast path keeps the legacy byte layout (fixed-length
         # string attrs, padded compound types) so existing tests and
         # cross-language readers continue to round-trip bit-for-bit.
@@ -765,6 +772,11 @@ class SpectralDataset:
                 io.write_fixed_string_attr(nmr_group, "_run_names", "")
 
                 if has_genomic:
+                    # M93 v1.2: embed referenced chromosome sequences at
+                    # /study/references/<uri>/ before writing genomic runs,
+                    # so the writer's REF_DIFF dispatch can resolve the
+                    # md5 attribute back from disk if needed.
+                    _embed_references_for_runs(study, genomic_runs)
                     g_group = study.create_group("genomic_runs")
                     io.write_fixed_string_attr(
                         g_group, "_run_names", ",".join(genomic_runs.keys())
@@ -807,6 +819,9 @@ class SpectralDataset:
             io.write_fixed_string_attr(nmr_group, "_run_names", "")
 
             if has_genomic:
+                # M93 v1.2: embed referenced chromosome sequences before
+                # writing the runs (provider path mirror of the HDF5 path).
+                _embed_references_for_runs(study, genomic_runs)
                 g_group = study.create_group("genomic_runs")
                 io.write_fixed_string_attr(
                     g_group, "_run_names", ",".join(genomic_runs.keys())
@@ -954,6 +969,325 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
         write_chromatograms_to_run_group(g, run.chromatograms)
 
 
+# M93 v1.2 — context-aware codec / reference-embed helpers.
+
+def _any_v1_5_codec(
+    genomic_runs: "Mapping[str, WrittenGenomicRun] | None",
+) -> bool:
+    """Return True if any run carries a v1.5 codec (REF_DIFF or FQZCOMP_NX16).
+
+    Used to gate the format-version bump from 1.4 → 1.5: only files that
+    actually exercise an M93+ codec get the new version string, so
+    M82-only writes preserve byte-parity with existing fixtures.
+
+    M93 registered REF_DIFF as v1.5; M94 adds FQZCOMP_NX16. Both are
+    v1.5 codecs even though only REF_DIFF is "context-aware" in the M93
+    sense (consumes sibling channels via the M86 pipeline hook).
+    FQZCOMP_NX16 carries its sibling-channel metadata
+    (``read_lengths``/``revcomp_flags``) inside the codec wire format,
+    so it does not register as context-aware in :mod:`._codec_meta`,
+    but it IS a v1.5 codec for format-version-gating purposes.
+    """
+    if not genomic_runs:
+        return False
+    from .enums import Compression as _Compression
+    _V1_5_CODECS = frozenset({
+        _Compression.REF_DIFF,         # M93
+        _Compression.FQZCOMP_NX16,     # M94
+        _Compression.FQZCOMP_NX16_Z,   # M94.Z (CRAM-mimic rANS-Nx16)
+    })
+    for run in genomic_runs.values():
+        for codec in run.signal_codec_overrides.values():
+            try:
+                ce = _Compression(codec)
+            except ValueError:
+                continue
+            if ce in _V1_5_CODECS:
+                return True
+    return False
+
+
+# Back-compat alias — pre-M94 callers used this name.
+_any_context_aware_codec = _any_v1_5_codec
+
+
+def _reference_md5_for_run(run: WrittenGenomicRun) -> bytes:
+    """MD5 of concatenated chromosome sequences, in sorted-name order.
+
+    Mirrors the on-disk ``@md5`` attribute computation. Returns an empty
+    digest when ``reference_chrom_seqs`` is absent.
+    """
+    import hashlib
+    if run.reference_chrom_seqs is None:
+        return b""
+    md5 = hashlib.md5()
+    for chrom_name in sorted(run.reference_chrom_seqs):
+        md5.update(run.reference_chrom_seqs[chrom_name])
+    return md5.digest()
+
+
+def _embed_references_for_runs(
+    study, genomic_runs: "Mapping[str, WrittenGenomicRun]",
+) -> None:
+    """Embed each unique reference (by ``reference_uri``) once at
+    ``/study/references/<reference_uri>/``.
+
+    Only runs that have ``embed_reference=True`` AND a context-aware
+    codec override on ``sequences`` AND non-None ``reference_chrom_seqs``
+    contribute; the dedup key is ``reference_uri``. When the same URI
+    carries two different MD5s across runs, raises :class:`ValueError`
+    (Q6 = C, single source of truth per file).
+
+    Accepts either a raw ``h5py.Group`` (HDF5 fast path) or a
+    :class:`StorageGroup` (provider path). Internally normalises to
+    ``StorageGroup``.
+    """
+    from .codecs._codec_meta import is_context_aware
+    from .enums import Compression as _Compression, Precision as _Precision
+    from .providers.hdf5 import _Group as _H5Group
+
+    needs_embed: dict[str, tuple[bytes, dict[str, bytes]]] = {}
+    for run in genomic_runs.values():
+        if not run.embed_reference:
+            continue
+        if run.reference_chrom_seqs is None:
+            continue
+        # Only embed if a context-aware codec is in use on this run.
+        if not any(
+            is_context_aware(_Compression(c))
+            for c in run.signal_codec_overrides.values()
+            if _is_valid_compression(c)
+        ):
+            continue
+        md5 = _reference_md5_for_run(run)
+        if run.reference_uri in needs_embed:
+            existing_md5, _ = needs_embed[run.reference_uri]
+            if existing_md5 != md5:
+                raise ValueError(
+                    f"reference_uri {run.reference_uri!r} carries two "
+                    "different MD5s across runs in this dataset: "
+                    f"{existing_md5.hex()} vs {md5.hex()} — same URI "
+                    "cannot map to two different reference contents."
+                )
+            continue
+        needs_embed[run.reference_uri] = (md5, dict(run.reference_chrom_seqs))
+
+    if not needs_embed:
+        return
+
+    # Normalise study to a StorageGroup so create_group / create_dataset
+    # have a single API surface.
+    if isinstance(study, h5py.Group):
+        study_sg = _H5Group(study)
+    else:
+        study_sg = study
+
+    if study_sg.has_child("references"):
+        refs_grp = study_sg.open_group("references")
+    else:
+        refs_grp = study_sg.create_group("references")
+
+    for uri, (md5, chrom_seqs) in needs_embed.items():
+        if refs_grp.has_child(uri):
+            existing = refs_grp.open_group(uri)
+            existing_md5_hex = io.read_string_attr(existing, "md5") or ""
+            if existing_md5_hex != md5.hex():
+                raise ValueError(
+                    f"reference_uri {uri!r} already embedded with a "
+                    f"different MD5 ({existing_md5_hex!r} != "
+                    f"{md5.hex()!r}); same URI cannot map to two "
+                    "different reference contents in one file."
+                )
+            continue
+        ref_grp = refs_grp.create_group(uri)
+        io.write_fixed_string_attr(ref_grp, "md5", md5.hex())
+        io.write_fixed_string_attr(ref_grp, "reference_uri", uri)
+        chroms_grp = ref_grp.create_group("chromosomes")
+        for chrom_name in sorted(chrom_seqs):
+            seq = chrom_seqs[chrom_name]
+            c = chroms_grp.create_group(chrom_name)
+            io.write_int_attr(c, "length", len(seq))
+            arr = np.frombuffer(seq, dtype=np.uint8)
+            ds = c.create_dataset(
+                "data",
+                _Precision.UINT8,
+                length=int(arr.shape[0]),
+                chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+                compression=_Compression.ZLIB,
+                compression_level=6,
+            )
+            ds.write(arr)
+
+
+def _is_valid_compression(value: object) -> bool:
+    from .enums import Compression as _Compression
+    try:
+        _Compression(value)
+        return True
+    except ValueError:
+        return False
+
+
+def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
+    """Write the ``sequences`` channel through the REF_DIFF codec.
+
+    REF_DIFF is **context-aware** and needs ``positions``, ``cigars``,
+    and the reference chromosome sequence. The writer:
+
+      1. Splits ``run.sequences`` into per-read slices via
+         ``run.offsets`` / ``run.lengths``.
+      2. Computes the reference MD5 the same way :func:`_embed_references_for_runs`
+         does (concat sorted chromosomes → md5).
+      3. Calls :func:`ttio.codecs.ref_diff.encode` and stores the
+         result as a flat uint8 dataset with ``@compression = 9``.
+
+    **Single-chromosome limitation (v1.2 first pass):** This helper
+    requires that all reads in the run are aligned to a single
+    chromosome. Multi-chromosome runs are an M93.X follow-up; for
+    now they raise :class:`ValueError`.
+
+    **Fallback (Q5b = C):** When ``run.reference_chrom_seqs`` is None
+    (or doesn't cover the run's chromosome), falls back silently to
+    BASE_PACK and stamps ``@compression = 6``. The per-channel
+    ``@compression`` attribute is the source of truth — no warning,
+    no exception.
+    """
+    from .codecs.ref_diff import encode as _ref_diff_encode
+    from .codecs.base_pack import encode as _base_pack_encode
+    from .enums import Compression as _Compression, Precision as _Precision
+
+    # Resolve the reference sequence for this run.
+    chrom_seq: bytes | None = None
+    if run.reference_chrom_seqs is not None:
+        unique_chroms = set(run.chromosomes)
+        if len(unique_chroms) == 0:
+            chrom_seq = None
+        elif len(unique_chroms) > 1:
+            raise ValueError(
+                "REF_DIFF v1.2 first pass supports single-chromosome runs only; "
+                f"this run carries reads on chromosomes {sorted(unique_chroms)}. "
+                "Multi-chromosome support is an M93.X follow-up — split into "
+                "per-chromosome runs as a workaround."
+            )
+        else:
+            chrom = next(iter(unique_chroms))
+            chrom_seq = run.reference_chrom_seqs.get(chrom)
+
+    raw_bytes = bytes(run.sequences.tobytes())
+
+    # M93 v1.2: REF_DIFF can't encode unmapped reads (cigar="*"). When
+    # any read in the run is unmapped, fall back to BASE_PACK on the
+    # whole channel — same Q5b=C semantics as missing-reference. The
+    # M93.X follow-up will introduce a sequences_unmapped sub-channel
+    # to carry the unmapped-read bytes through BASE_PACK while mapped
+    # reads use REF_DIFF.
+    has_unmapped = any(c == "*" or c == "" for c in run.cigars)
+
+    if chrom_seq is None or has_unmapped:
+        # Q5b = C: silent fallback to BASE_PACK on this channel.
+        encoded = _base_pack_encode(raw_bytes)
+        codec_id = int(_Compression.BASE_PACK)
+    else:
+        # Split sequences into per-read slices using offsets/lengths.
+        offsets = [int(o) for o in run.offsets]
+        lengths = [int(l) for l in run.lengths]
+        per_read: list[bytes] = []
+        for off, ln in zip(offsets, lengths):
+            per_read.append(raw_bytes[off:off + ln])
+        positions = [int(p) for p in run.positions]
+        cigars = list(run.cigars)
+        md5 = _reference_md5_for_run(run)
+        encoded = _ref_diff_encode(
+            per_read, cigars, positions, chrom_seq, md5, run.reference_uri,
+        )
+        codec_id = int(_Compression.REF_DIFF)
+
+    arr = np.frombuffer(encoded, dtype=np.uint8)
+    ds = sc.create_dataset(
+        "sequences",
+        _Precision.UINT8,
+        length=int(arr.shape[0]),
+        chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+        compression=_Compression.NONE,
+    )
+    ds.write(arr)
+    io.write_int_attr(ds, "compression", codec_id, dtype="<u1")
+
+
+# M94 — FQZCOMP_NX16 quality codec. Same dispatch pattern as
+# _write_sequences_ref_diff but for the qualities channel. The codec
+# carries read_lengths + revcomp_flags inside its own wire format, so
+# the channel dataset stores only the encoded byte stream.
+SAM_REVERSE_FLAG = 16
+
+
+def _write_qualities_fqzcomp_nx16(sc, run: WrittenGenomicRun) -> None:
+    """Write the ``qualities`` channel through the FQZCOMP_NX16 codec.
+
+    The codec needs per-read ``read_lengths`` and ``revcomp_flags``,
+    derived here from ``run.lengths`` and ``run.flags & 16`` (SAM REVERSE
+    bit). The encoded blob is written as a flat uint8 dataset with
+    ``@compression = 10``.
+    """
+    from .codecs.fqzcomp_nx16 import encode as _fqzcomp_encode
+    from .enums import Compression as _Compression, Precision as _Precision
+
+    qualities = bytes(run.qualities.tobytes())
+    read_lengths = [int(x) for x in run.lengths]
+    revcomp_flags = [
+        1 if (int(f) & SAM_REVERSE_FLAG) else 0 for f in run.flags
+    ]
+
+    encoded = _fqzcomp_encode(qualities, read_lengths, revcomp_flags)
+
+    arr = np.frombuffer(encoded, dtype=np.uint8)
+    ds = sc.create_dataset(
+        "qualities",
+        _Precision.UINT8,
+        length=int(arr.shape[0]),
+        chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+        compression=_Compression.NONE,
+    )
+    ds.write(arr)
+    io.write_int_attr(
+        ds, "compression",
+        int(_Compression.FQZCOMP_NX16), dtype="<u1",
+    )
+
+
+def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
+    """Write the ``qualities`` channel through the FQZCOMP_NX16_Z codec.
+
+    M94.Z is the CRAM-mimic rANS-Nx16 variant — parallel to v1, same
+    sibling-channel inputs (read_lengths + revcomp_flags) but a different
+    on-wire format (magic ``M94Z`` instead of ``FQZN``). Codec id 12.
+    """
+    from .codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
+    from .enums import Compression as _Compression, Precision as _Precision
+
+    qualities = bytes(run.qualities.tobytes())
+    read_lengths = [int(x) for x in run.lengths]
+    revcomp_flags = [
+        1 if (int(f) & SAM_REVERSE_FLAG) else 0 for f in run.flags
+    ]
+
+    encoded = _fqzcomp_z_encode(qualities, read_lengths, revcomp_flags)
+
+    arr = np.frombuffer(encoded, dtype=np.uint8)
+    ds = sc.create_dataset(
+        "qualities",
+        _Precision.UINT8,
+        length=int(arr.shape[0]),
+        chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+        compression=_Compression.NONE,
+    )
+    ds.write(arr)
+    io.write_int_attr(
+        ds, "compression",
+        int(_Compression.FQZCOMP_NX16_Z), dtype="<u1",
+    )
+
+
 def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     """Write one /study/genomic_runs/<name>/ subtree.
 
@@ -993,12 +1327,26 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
             _Compression.BASE_PACK,
+            # M93 v1.2: reference-based diff. Context-aware codec —
+            # the writer plumbs positions, cigars, and the reference
+            # sequences through to ref_diff.encode(); per-channel
+            # validation here only checks codec applicability.
+            _Compression.REF_DIFF,
         }),
         "qualities": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
             _Compression.BASE_PACK,
             _Compression.QUALITY_BINNED,
+            # M94 v1.2: lossless quality codec (fqzcomp-Nx16). Carries
+            # read_lengths + revcomp_flags inside the codec wire format;
+            # the M86 pipeline derives them from run.lengths and
+            # run.flags & 16 (SAM REVERSE bit).
+            _Compression.FQZCOMP_NX16,
+            # M94.Z v1.2: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16). Parallel
+            # codec to FQZCOMP_NX16; same pipeline plumbing (carries its
+            # own read_lengths + needs revcomp_flags from run.flags & 16).
+            _Compression.FQZCOMP_NX16_Z,
         }),
         # M86 Phase E: NAME_TOKENIZED is only valid on read_names
         # (Binding Decision §113). The codec tokenises UTF-8 strings
@@ -1252,14 +1600,94 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         sc, "positions", run.positions, run.signal_compression,
         run.signal_codec_overrides.get("positions"),
     )
-    io._write_byte_channel_with_codec(
-        sc, "sequences", run.sequences, run.signal_compression,
-        run.signal_codec_overrides.get("sequences"),
-    )
-    io._write_byte_channel_with_codec(
-        sc, "qualities", run.qualities, run.signal_compression,
-        run.signal_codec_overrides.get("qualities"),
-    )
+    # M93 v1.2: REF_DIFF is a context-aware codec — encoding requires
+    # positions, cigars, and the reference sequence in addition to the
+    # raw byte stream. Dispatch on a special branch when the override
+    # selects it; everything else falls through to the existing helper.
+    _seq_codec = run.signal_codec_overrides.get("sequences")
+    # v1.5 default codec lookup (Q5a=B, no feature flag): when caller
+    # has not selected a per-channel codec AND signal_compression is the
+    # "auto-pick best lossless" gzip default AND a reference is available,
+    # apply REF_DIFF. The REF_DIFF branch below handles BASE_PACK
+    # fallback (Q5b=C) when ref is absent.
+    if (
+        _seq_codec is None
+        and run.signal_compression == "gzip"
+        and run.reference_chrom_seqs is not None
+    ):
+        from .genomic._default_codecs import default_codec_for
+        _default = default_codec_for("sequences")
+        if _default is not None:
+            _seq_codec = _default
+    if (
+        _seq_codec is not None
+        and _is_valid_compression(_seq_codec)
+        and _Compression(_seq_codec) == _Compression.REF_DIFF
+    ):
+        _write_sequences_ref_diff(sc, run)
+    else:
+        io._write_byte_channel_with_codec(
+            sc, "sequences", run.sequences, run.signal_compression,
+            _seq_codec,
+        )
+    # M94 v1.2: FQZCOMP_NX16 is a v1.5 quality codec — carries
+    # read_lengths + revcomp_flags inside the codec wire format. Apply
+    # auto-default (Q5a=B): when signal_compression="gzip" AND empty
+    # qualities override AND the run is ALREADY a v1.5 candidate (i.e.
+    # at least one v1.5 codec is active on this run, whether through an
+    # explicit override or the REF_DIFF auto-default we just resolved
+    # for sequences), use FQZCOMP_NX16.
+    #
+    # The "v1.5 candidate" gate preserves byte-parity for pure-M82
+    # baseline writes (no reference, no v1.5 overrides) — those keep
+    # the legacy uncompressed/zlib qualities path so existing M82+
+    # fixtures remain stable.
+    _qual_codec = run.signal_codec_overrides.get("qualities")
+    if (
+        _qual_codec is None
+        and run.signal_compression == "gzip"
+    ):
+        # Detect v1.5 candidacy: any explicit override is a v1.5 codec,
+        # or the sequences channel is going through REF_DIFF (resolved
+        # above into _seq_codec).
+        _is_v1_5_candidate = False
+        if (_seq_codec is not None
+                and _is_valid_compression(_seq_codec)
+                and _Compression(_seq_codec) == _Compression.REF_DIFF):
+            _is_v1_5_candidate = True
+        else:
+            for _ovr in run.signal_codec_overrides.values():
+                if _is_valid_compression(_ovr):
+                    _ce = _Compression(_ovr)
+                    if _ce in (
+                        _Compression.REF_DIFF,
+                        _Compression.FQZCOMP_NX16,
+                        _Compression.FQZCOMP_NX16_Z,
+                    ):
+                        _is_v1_5_candidate = True
+                        break
+        if _is_v1_5_candidate:
+            from .genomic._default_codecs import default_codec_for
+            _default = default_codec_for("qualities")
+            if _default is not None:
+                _qual_codec = _default
+    if (
+        _qual_codec is not None
+        and _is_valid_compression(_qual_codec)
+        and _Compression(_qual_codec) == _Compression.FQZCOMP_NX16
+    ):
+        _write_qualities_fqzcomp_nx16(sc, run)
+    elif (
+        _qual_codec is not None
+        and _is_valid_compression(_qual_codec)
+        and _Compression(_qual_codec) == _Compression.FQZCOMP_NX16_Z
+    ):
+        _write_qualities_fqzcomp_nx16_z(sc, run)
+    else:
+        io._write_byte_channel_with_codec(
+            sc, "qualities", run.qualities, run.signal_compression,
+            _qual_codec,
+        )
     io._write_int_channel_with_codec(
         sc, "flags", run.flags, run.signal_compression,
         run.signal_codec_overrides.get("flags"),

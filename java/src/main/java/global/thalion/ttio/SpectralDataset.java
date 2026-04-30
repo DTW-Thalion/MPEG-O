@@ -463,6 +463,10 @@ public class SpectralDataset implements
                 // M82.3: genomic_runs subtree (provider-agnostic).
                 Map<String, GenomicRun> genomicMap = new LinkedHashMap<>();
                 if (genomicRuns != null && !genomicRuns.isEmpty()) {
+                    // M93 v1.2: embed references at /study/references/
+                    // before writing genomic_runs (provider-agnostic
+                    // mirror of the HDF5 fast path).
+                    embedReferencesForRuns(study, genomicRuns);
                     try (var gG = study.createGroup("genomic_runs")) {
                         StringBuilder names = new StringBuilder();
                         for (int i = 0; i < genomicRuns.size(); i++) {
@@ -671,13 +675,20 @@ public class SpectralDataset implements
             FeatureFlags featureFlags) {
         // M82.3: opt_genomic + format_version 1.4 when genomic content present.
         boolean hasGenomic = genomicRuns != null && !genomicRuns.isEmpty();
+        // M93 v1.2: bump to 1.5 ONLY when at least one genomic_run uses a
+        // context-aware codec (currently REF_DIFF). M82-only writes stay
+        // at 1.4 to preserve byte-parity with existing M82/M86 fixtures.
+        boolean anyContextAware = hasGenomic
+            && hasAnyContextAwareCodec(genomicRuns);
+        String targetVersion = anyContextAware ? "1.5"
+            : (hasGenomic ? "1.4" : featureFlags.formatVersion());
         if (hasGenomic && !featureFlags.features().contains(FeatureFlags.OPT_GENOMIC)) {
             java.util.Set<String> withFlag =
                 new java.util.LinkedHashSet<>(featureFlags.features());
             withFlag.add(FeatureFlags.OPT_GENOMIC);
-            featureFlags = new FeatureFlags("1.4", withFlag);
-        } else if (hasGenomic && !"1.4".equals(featureFlags.formatVersion())) {
-            featureFlags = new FeatureFlags("1.4", featureFlags.features());
+            featureFlags = new FeatureFlags(targetVersion, withFlag);
+        } else if (hasGenomic && !targetVersion.equals(featureFlags.formatVersion())) {
+            featureFlags = new FeatureFlags(targetVersion, featureFlags.features());
         }
 
         java.util.List<String> gNamesList = genomicRunNames != null
@@ -725,6 +736,12 @@ public class SpectralDataset implements
                 // M82.3: genomic_runs subtree (only when non-empty).
                 Map<String, GenomicRun> genomicMap = new LinkedHashMap<>();
                 if (hasGenomic) {
+                    // M93 v1.2: embed referenced chromosome sequences at
+                    // /study/references/<uri>/ before writing genomic
+                    // runs so the writer's REF_DIFF dispatch can resolve
+                    // the md5 attribute back from disk if needed.
+                    embedReferencesForRuns(
+                        Hdf5Provider.adapterForGroup(study), genomicRuns);
                     try (Hdf5Group gRunsGroup = study.createGroup("genomic_runs")) {
                         StringBuilder names = new StringBuilder();
                         for (int i = 0; i < genomicRuns.size(); i++) {
@@ -796,12 +813,22 @@ public class SpectralDataset implements
                 "sequences", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
                     Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.BASE_PACK),
+                    Enums.Compression.BASE_PACK,
+                    // M93 v1.2: REF_DIFF is context-aware. Caller-side
+                    // validation here only checks codec applicability;
+                    // the writer plumbs positions, cigars, and
+                    // referenceChromSeqs through to RefDiff.encode().
+                    Enums.Compression.REF_DIFF),
                 "qualities", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
                     Enums.Compression.RANS_ORDER1,
                     Enums.Compression.BASE_PACK,
-                    Enums.Compression.QUALITY_BINNED),
+                    Enums.Compression.QUALITY_BINNED,
+                    // M94 v1.2: FQZCOMP_NX16 lossless quality codec.
+                    // Carries read_lengths + revcomp_flags inside the
+                    // codec wire format; the M86 pipeline derives them
+                    // from run.lengths and run.flags & 16 (SAM REVERSE).
+                    Enums.Compression.FQZCOMP_NX16),
                 "read_names", java.util.Set.of(
                     Enums.Compression.NAME_TOKENIZED),
                 "cigars", java.util.Set.of(
@@ -1022,12 +1049,63 @@ public class SpectralDataset implements
                 // M86: sequences/qualities go through the codec
                 // dispatch helper; absent from the override map →
                 // existing HDF5-filter path with @compression unset.
-                writeByteChannelWithCodec(sc, "sequences",
-                    run.sequences(), run.signalCompression(),
-                    run.signalCodecOverrides().get("sequences"));
-                writeByteChannelWithCodec(sc, "qualities",
-                    run.qualities(), run.signalCompression(),
-                    run.signalCodecOverrides().get("qualities"));
+                // M93 v1.2: REF_DIFF is context-aware — needs positions,
+                // cigars, and a reference. Apply via auto-default
+                // (Q5a=B) when the caller hasn't picked a codec but a
+                // reference is available; dispatch to the dedicated
+                // writeSequencesRefDiff branch when the resolved
+                // codec is REF_DIFF; otherwise fall through.
+                Enums.Compression seqCodec =
+                    run.signalCodecOverrides().get("sequences");
+                if (seqCodec == null
+                    && run.signalCompression() == Enums.Compression.ZLIB
+                    && run.referenceChromSeqs() != null) {
+                    // v1.5 default for sequences: REF_DIFF when a
+                    // reference is available. Mirrors Python's
+                    // DEFAULT_CODECS_V1_5["sequences"] = REF_DIFF.
+                    seqCodec = Enums.Compression.REF_DIFF;
+                }
+                if (seqCodec == Enums.Compression.REF_DIFF) {
+                    writeSequencesRefDiff(sc, run);
+                } else {
+                    writeByteChannelWithCodec(sc, "sequences",
+                        run.sequences(), run.signalCompression(),
+                        seqCodec);
+                }
+                // M94 v1.2: FQZCOMP_NX16 is a v1.5 quality codec. Apply
+                // the auto-default ONLY when the run is already a v1.5
+                // candidate (i.e. at least one v1.5 codec is active —
+                // either via explicit override OR the REF_DIFF auto-
+                // default we just resolved for sequences). This gate
+                // preserves M82 byte-parity for pure-baseline writes
+                // (no reference, no v1.5 overrides).
+                Enums.Compression qualCodec =
+                    run.signalCodecOverrides().get("qualities");
+                if (qualCodec == null
+                    && run.signalCompression() == Enums.Compression.ZLIB) {
+                    boolean isV1_5Candidate =
+                        (seqCodec == Enums.Compression.REF_DIFF);
+                    if (!isV1_5Candidate) {
+                        for (Enums.Compression ovr
+                                : run.signalCodecOverrides().values()) {
+                            if (ovr == Enums.Compression.REF_DIFF
+                                || ovr == Enums.Compression.FQZCOMP_NX16) {
+                                isV1_5Candidate = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (isV1_5Candidate) {
+                        qualCodec = Enums.Compression.FQZCOMP_NX16;
+                    }
+                }
+                if (qualCodec == Enums.Compression.FQZCOMP_NX16) {
+                    writeQualitiesFqzcompNx16(sc, run);
+                } else {
+                    writeByteChannelWithCodec(sc, "qualities",
+                        run.qualities(), run.signalCompression(),
+                        qualCodec);
+                }
                 writeIntChannelWithCodec(sc, "flags",
                     run.flags(), run.signalCompression(),
                     run.signalCodecOverrides().get("flags"));
@@ -1396,6 +1474,304 @@ public class SpectralDataset implements
         try (var closeMe = ds) {
             closeMe.writeAll(encoded);
             closeMe.setAttribute("compression", codecIdFor(codec));
+        }
+    }
+
+    // ── M93 v1.2 / M94 v1.2 — v1.5 codec dispatch ────────────────────
+
+    /** Return {@code true} if any genomic run carries a v1.5 codec
+     *  (REF_DIFF or FQZCOMP_NX16). Used to gate the format-version bump
+     *  from 1.4 → 1.5: only files that actually exercise an M93+ codec
+     *  get the new version string, so M82-only writes preserve byte-
+     *  parity with existing fixtures.
+     *
+     *  <p>M93 registered REF_DIFF as v1.5; M94 adds FQZCOMP_NX16. Both
+     *  are v1.5 codecs even though only REF_DIFF is "context-aware" in
+     *  the M93 sense (consumes sibling channels via the M86 pipeline
+     *  hook). FQZCOMP_NX16 carries its sibling-channel metadata
+     *  ({@code read_lengths} / {@code revcomp_flags}) inside the codec
+     *  wire format. */
+    private static boolean hasAnyContextAwareCodec(
+            List<WrittenGenomicRun> genomicRuns) {
+        if (genomicRuns == null) return false;
+        for (WrittenGenomicRun run : genomicRuns) {
+            for (Enums.Compression codec
+                    : run.signalCodecOverrides().values()) {
+                if (codec == Enums.Compression.REF_DIFF
+                    || codec == Enums.Compression.FQZCOMP_NX16) {
+                    return true;
+                }
+            }
+            // v1.5 default codec lookup (Q5a=B): when no explicit
+            // override is set BUT signal_compression == ZLIB AND a
+            // reference is present, the writer auto-applies REF_DIFF.
+            // The version bump must reflect that as well.
+            if (run.signalCompression() == Enums.Compression.ZLIB
+                && run.referenceChromSeqs() != null
+                && !run.signalCodecOverrides().containsKey("sequences")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Compute the canonical reference MD5 for a run as
+     *  {@code md5(concat(referenceChromSeqs[k] for k in sorted(keys)))}.
+     *  Mirrors the Python {@code _reference_md5_for_run} helper. */
+    private static byte[] referenceMd5ForRun(WrittenGenomicRun run) {
+        if (run.referenceChromSeqs() == null) {
+            return new byte[0];
+        }
+        try {
+            java.security.MessageDigest md =
+                java.security.MessageDigest.getInstance("MD5");
+            java.util.List<String> sortedKeys =
+                new java.util.ArrayList<>(run.referenceChromSeqs().keySet());
+            java.util.Collections.sort(sortedKeys);
+            for (String k : sortedKeys) {
+                md.update(run.referenceChromSeqs().get(k));
+            }
+            return md.digest();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("MD5 unavailable", e);
+        }
+    }
+
+    /** Embed each unique reference (by {@code reference_uri}) once at
+     *  {@code /study/references/<uri>/}. Only runs that have
+     *  {@code embedReference=true} AND a context-aware codec on
+     *  {@code sequences} (or auto-default REF_DIFF) AND non-null
+     *  {@code referenceChromSeqs} contribute; the dedup key is the
+     *  reference URI. When the same URI carries two different MD5s
+     *  across runs, raises {@link IllegalArgumentException}. */
+    private static void embedReferencesForRuns(
+            global.thalion.ttio.providers.StorageGroup study,
+            List<WrittenGenomicRun> genomicRuns) {
+        java.util.Map<String, byte[]> needsEmbedMd5 =
+            new java.util.LinkedHashMap<>();
+        java.util.Map<String, java.util.Map<String, byte[]>> needsEmbedSeqs =
+            new java.util.LinkedHashMap<>();
+        for (WrittenGenomicRun run : genomicRuns) {
+            if (!run.embedReference()) continue;
+            if (run.referenceChromSeqs() == null) continue;
+            // Only embed when REF_DIFF will actually be applied.
+            boolean hasRefDiff = false;
+            for (Enums.Compression c : run.signalCodecOverrides().values()) {
+                if (c == Enums.Compression.REF_DIFF) {
+                    hasRefDiff = true;
+                    break;
+                }
+            }
+            if (!hasRefDiff
+                && run.signalCompression() == Enums.Compression.ZLIB
+                && !run.signalCodecOverrides().containsKey("sequences")) {
+                hasRefDiff = true;  // v1.5 auto-default
+            }
+            if (!hasRefDiff) continue;
+
+            byte[] md5 = referenceMd5ForRun(run);
+            if (needsEmbedMd5.containsKey(run.referenceUri())) {
+                byte[] existing = needsEmbedMd5.get(run.referenceUri());
+                if (!java.util.Arrays.equals(existing, md5)) {
+                    throw new IllegalArgumentException(
+                        "reference_uri '" + run.referenceUri()
+                        + "' carries two different MD5s across runs in "
+                        + "this dataset: " + bytesToHexLocal(existing)
+                        + " vs " + bytesToHexLocal(md5)
+                        + " — same URI cannot map to two different "
+                        + "reference contents.");
+                }
+                continue;
+            }
+            needsEmbedMd5.put(run.referenceUri(), md5);
+            needsEmbedSeqs.put(run.referenceUri(),
+                new java.util.LinkedHashMap<>(run.referenceChromSeqs()));
+        }
+        if (needsEmbedMd5.isEmpty()) return;
+
+        global.thalion.ttio.providers.StorageGroup refsGrp;
+        if (study.hasChild("references")) {
+            refsGrp = study.openGroup("references");
+        } else {
+            refsGrp = study.createGroup("references");
+        }
+        try (var ignored = refsGrp) {
+            for (var entry : needsEmbedMd5.entrySet()) {
+                String uri = entry.getKey();
+                byte[] md5 = entry.getValue();
+                java.util.Map<String, byte[]> chromSeqs =
+                    needsEmbedSeqs.get(uri);
+                if (refsGrp.hasChild(uri)) {
+                    try (var existing = refsGrp.openGroup(uri)) {
+                        Object md5Attr = existing.getAttribute("md5");
+                        String existingHex = md5Attr != null
+                            ? md5Attr.toString() : "";
+                        if (!existingHex.equals(bytesToHexLocal(md5))) {
+                            throw new IllegalArgumentException(
+                                "reference_uri '" + uri + "' already "
+                                + "embedded with a different MD5 ("
+                                + existingHex + " != "
+                                + bytesToHexLocal(md5) + ")");
+                        }
+                    }
+                    continue;
+                }
+                try (var refGrp = refsGrp.createGroup(uri)) {
+                    refGrp.setAttribute("md5", bytesToHexLocal(md5));
+                    refGrp.setAttribute("reference_uri", uri);
+                    try (var chromsGrp = refGrp.createGroup("chromosomes")) {
+                        java.util.List<String> sortedNames =
+                            new java.util.ArrayList<>(chromSeqs.keySet());
+                        java.util.Collections.sort(sortedNames);
+                        for (String chromName : sortedNames) {
+                            byte[] seq = chromSeqs.get(chromName);
+                            try (var c = chromsGrp.createGroup(chromName)) {
+                                c.setAttribute("length", (long) seq.length);
+                                global.thalion.ttio.providers.StorageDataset ds;
+                                try {
+                                    ds = c.createDataset("data",
+                                        Enums.Precision.UINT8, seq.length,
+                                        65536, Enums.Compression.ZLIB, 6);
+                                } catch (UnsupportedOperationException e) {
+                                    ds = c.createDataset("data",
+                                        Enums.Precision.UINT8, seq.length,
+                                        0, Enums.Compression.NONE, 0);
+                                }
+                                try (var closeMe = ds) {
+                                    closeMe.writeAll(seq);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static String bytesToHexLocal(byte[] buf) {
+        StringBuilder sb = new StringBuilder(buf.length * 2);
+        for (byte b : buf) sb.append(String.format("%02x", b & 0xFF));
+        return sb.toString();
+    }
+
+    /** Write the {@code sequences} channel through the REF_DIFF codec.
+     *
+     *  <p>Mirrors Python's {@code _write_sequences_ref_diff}. REF_DIFF
+     *  is context-aware: it needs positions, cigars, and the reference
+     *  chromosome sequence in addition to the raw byte stream. The
+     *  writer:
+     *  <ol>
+     *    <li>Splits {@code run.sequences} into per-read slices via
+     *        {@code run.offsets} / {@code run.lengths}.</li>
+     *    <li>Computes the reference MD5 the same way as the embed
+     *        helper.</li>
+     *    <li>Calls {@link global.thalion.ttio.codecs.RefDiff#encode}
+     *        and stores the result as a flat uint8 dataset with
+     *        {@code @compression = 9}.</li>
+     *  </ol>
+     *
+     *  <p><b>Single-chromosome limitation (v1.2 first pass):</b> all
+     *  reads must align to a single chromosome. Multi-chrom is M93.X.
+     *
+     *  <p><b>Fallback (Q5b=C):</b> when {@code referenceChromSeqs} is
+     *  null (or doesn't cover the run's chromosome), falls back silently
+     *  to BASE_PACK and stamps {@code @compression = 6}. */
+    private static void writeSequencesRefDiff(
+            global.thalion.ttio.providers.StorageGroup sc,
+            WrittenGenomicRun run) {
+        byte[] chromSeq = null;
+        if (run.referenceChromSeqs() != null) {
+            java.util.Set<String> uniqueChroms =
+                new java.util.LinkedHashSet<>(run.chromosomes());
+            if (uniqueChroms.size() > 1) {
+                throw new IllegalArgumentException(
+                    "REF_DIFF v1.2 first pass supports single-chromosome "
+                    + "runs only; this run carries reads on chromosomes "
+                    + uniqueChroms
+                    + ". Multi-chromosome support is an M93.X follow-up — "
+                    + "split into per-chromosome runs as a workaround.");
+            }
+            if (!uniqueChroms.isEmpty()) {
+                String chrom = uniqueChroms.iterator().next();
+                chromSeq = run.referenceChromSeqs().get(chrom);
+            }
+        }
+
+        byte[] rawBytes = run.sequences();
+        byte[] encoded;
+        int codecId;
+        if (chromSeq == null) {
+            // Q5b=C: silent fallback to BASE_PACK on this channel.
+            encoded = global.thalion.ttio.codecs.BasePack.encode(rawBytes);
+            codecId = Enums.Compression.BASE_PACK.ordinal();
+        } else {
+            // Split sequences into per-read slices using offsets/lengths.
+            java.util.List<byte[]> perRead =
+                new java.util.ArrayList<>(run.readCount());
+            for (int i = 0; i < run.readCount(); i++) {
+                int off = (int) run.offsets()[i];
+                int len = run.lengths()[i];
+                byte[] slice = new byte[len];
+                System.arraycopy(rawBytes, off, slice, 0, len);
+                perRead.add(slice);
+            }
+            byte[] md5 = referenceMd5ForRun(run);
+            encoded = global.thalion.ttio.codecs.RefDiff.encode(
+                perRead, run.cigars(), run.positions(),
+                chromSeq, md5, run.referenceUri());
+            codecId = Enums.Compression.REF_DIFF.ordinal();
+        }
+
+        global.thalion.ttio.providers.StorageDataset ds;
+        try {
+            ds = sc.createDataset("sequences", Enums.Precision.UINT8,
+                encoded.length, 65536, Enums.Compression.NONE, 0);
+        } catch (UnsupportedOperationException e) {
+            ds = sc.createDataset("sequences", Enums.Precision.UINT8,
+                encoded.length, 0, Enums.Compression.NONE, 0);
+        }
+        try (var closeMe = ds) {
+            closeMe.writeAll(encoded);
+            closeMe.setAttribute("compression", codecId);
+        }
+    }
+
+    /** SAM REVERSE flag bit (0x10). */
+    private static final int SAM_REVERSE_FLAG = 16;
+
+    /** M94 v1.2: write the {@code qualities} channel through the
+     *  FQZCOMP_NX16 codec.
+     *
+     *  <p>Mirrors Python's {@code _write_qualities_fqzcomp_nx16}. The
+     *  codec needs per-read {@code read_lengths} and {@code revcomp_flags},
+     *  derived here from {@code run.lengths} and
+     *  {@code run.flags & 16} (SAM REVERSE bit). The encoded blob is
+     *  written as a flat uint8 dataset with {@code @compression = 10}. */
+    private static void writeQualitiesFqzcompNx16(
+            global.thalion.ttio.providers.StorageGroup sc,
+            WrittenGenomicRun run) {
+        int n = run.readCount();
+        int[] readLengths = new int[n];
+        for (int i = 0; i < n; i++) readLengths[i] = run.lengths()[i];
+        int[] revcompFlags = new int[n];
+        for (int i = 0; i < n; i++) {
+            revcompFlags[i] =
+                ((run.flags()[i] & SAM_REVERSE_FLAG) != 0) ? 1 : 0;
+        }
+        byte[] encoded = global.thalion.ttio.codecs.FqzcompNx16.encode(
+            run.qualities(), readLengths, revcompFlags);
+        global.thalion.ttio.providers.StorageDataset ds;
+        try {
+            ds = sc.createDataset("qualities", Enums.Precision.UINT8,
+                encoded.length, 65536, Enums.Compression.NONE, 0);
+        } catch (UnsupportedOperationException e) {
+            ds = sc.createDataset("qualities", Enums.Precision.UINT8,
+                encoded.length, 0, Enums.Compression.NONE, 0);
+        }
+        try (var closeMe = ds) {
+            closeMe.writeAll(encoded);
+            closeMe.setAttribute("compression",
+                Enums.Compression.FQZCOMP_NX16.ordinal());
         }
     }
 

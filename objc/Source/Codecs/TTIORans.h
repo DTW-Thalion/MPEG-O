@@ -69,6 +69,21 @@ NSData *TTIORansEncode(NSData *data, int order);
 NSData * _Nullable TTIORansDecode(NSData *encoded,
                                   NSError * _Nullable * _Nullable error);
 
+/**
+ * Normalise a 256-entry count vector so it sums exactly to M=4096.
+ *
+ * Cross-language byte-exact contract — identical algorithm to
+ * Python's ``ttio.codecs.rans._normalise_freqs`` and Java's
+ * ``Rans.normaliseFreqs``. Reused verbatim by FQZCOMP_NX16 (M94)
+ * for per-symbol M-normalisation of its adaptive count tables;
+ * the byte-parity of the M94 wire format depends on this exact
+ * tie-break ordering.
+ *
+ * Returns 0 on success, -1 if @p cnt is all-zero (cannot normalise
+ * an empty alphabet to M).
+ */
+int TTIORansNormaliseFreqs(const uint64_t cnt[256], uint16_t freq[256]);
+
 NS_ASSUME_NONNULL_END
 
 #endif /* TTIO_RANS_H */
