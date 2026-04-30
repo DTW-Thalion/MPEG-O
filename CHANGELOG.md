@@ -113,11 +113,22 @@ public API is stable from v1.0.0 onward (tagged 2026-04-23). See
   magic. There is no automatic in-file migration — rewriting an existing
   M94 v1 file under M94.Z is an application-layer decode-then-encode.
 
-### Pending (M95)
+### Added (continued)
 
-M95 (DELTA_RANS_ORDER0, codec id `11` + structural HDF5 tuning)
-follows M94 to complete the v1.2.0 acceptance-gate target of
-≤1.15× CRAM 3.1 on chr22 lean.
+- **M95 — DELTA_RANS_ORDER0 integer-channel codec** (codec id `11`).
+  Delta + zigzag + unsigned LEB128 varint + rANS order-0 wrapper for
+  sorted-ascending integer channels. 8-byte header (`DRA0` magic) +
+  rANS body. Auto-default integer channel compression on v1.5 genomic
+  runs: `positions → DELTA_RANS_ORDER0`, `flags / mapping_qualities /
+  template_lengths / mate_info_pos / mate_info_tlen → RANS_ORDER0`,
+  `mate_info_chrom → NAME_TOKENIZED`.
+  - Python reference: `python/src/ttio/codecs/delta_rans.py`.
+  - Objective-C: `objc/Source/Codecs/TTIODeltaRans.{h,m}`.
+  - Java: `java/src/main/java/global/thalion/ttio/codecs/DeltaRans.java`.
+  - 4 canonical fixtures (`delta_rans_{a,b,c,d}.bin`) byte-exact across
+    Python / ObjC / Java.
+  - Spec: `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.
+  - Codec spec: `docs/codecs/delta_rans.md`.
 
 ---
 
