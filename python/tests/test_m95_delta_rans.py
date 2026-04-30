@@ -107,3 +107,36 @@ class TestDeltaRansWireFormat:
         encoded[5] = 3
         with pytest.raises(ValueError, match="element_size"):
             decode(bytes(encoded))
+
+
+import pathlib
+
+FIXTURE_DIR = pathlib.Path(__file__).parent / "fixtures" / "codecs"
+
+
+class TestFixtureRoundTrip:
+    """Verify the canonical fixtures decode correctly."""
+
+    def test_fixture_a_sorted_int64(self):
+        encoded = (FIXTURE_DIR / "delta_rans_a.bin").read_bytes()
+        decoded = decode(encoded)
+        assert len(decoded) == 1000 * 8
+        values = list(struct.unpack("<1000q", decoded))
+        assert all(values[i] < values[i + 1] for i in range(999))
+
+    def test_fixture_b_uint32_flags(self):
+        encoded = (FIXTURE_DIR / "delta_rans_b.bin").read_bytes()
+        decoded = decode(encoded)
+        assert len(decoded) == 100 * 4
+        values = list(struct.unpack("<100I", decoded))
+        assert set(values) == {0, 16, 83, 99, 163}
+
+    def test_fixture_c_empty(self):
+        encoded = (FIXTURE_DIR / "delta_rans_c.bin").read_bytes()
+        decoded = decode(encoded)
+        assert decoded == b""
+
+    def test_fixture_d_single(self):
+        encoded = (FIXTURE_DIR / "delta_rans_d.bin").read_bytes()
+        decoded = decode(encoded)
+        assert struct.unpack("<q", decoded)[0] == 1234567890
