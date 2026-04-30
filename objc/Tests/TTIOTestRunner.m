@@ -82,6 +82,7 @@ extern void testM94FqzcompPipeline(void);
 extern void testM94FqzcompPerf(void);
 extern void testM94ZFqzcompUnit(void);
 extern void testM94ZFqzcompPerf(void);
+extern void testM95DeltaRansUnit(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
 extern void testM89GenomicTransport(void);
@@ -425,6 +426,10 @@ int main(int argc, const char *argv[])
         START_SET("M94.Z: CRAM-mimic FQZCOMP_NX16 throughput")
             testM94ZFqzcompPerf();
         END_SET("M94.Z: CRAM-mimic FQZCOMP_NX16 throughput")
+
+        START_SET("M95: DELTA_RANS_ORDER0 codec unit")
+            testM95DeltaRansUnit();
+        END_SET("M95: DELTA_RANS_ORDER0 codec unit")
 
         START_SET("M87: BAM importer")
             testM87BamImporter();

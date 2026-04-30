@@ -116,6 +116,7 @@ libTTIO_HEADER_FILES = \
 	Codecs/TTIORefDiff.h \
 	Codecs/TTIOFqzcompNx16.h \
 	Codecs/TTIOFqzcompNx16Z.h \
+	Codecs/TTIODeltaRans.h \
 	Codecs/TTIOReferenceResolver.h
 
 libTTIO_OBJC_FILES = \
@@ -222,6 +223,7 @@ libTTIO_OBJC_FILES = \
 	Codecs/TTIORefDiff.m \
 	Codecs/TTIOFqzcompNx16.m \
 	Codecs/TTIOFqzcompNx16Z.m \
+	Codecs/TTIODeltaRans.m \
 	Codecs/TTIOReferenceResolver.m
 
 libTTIO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets

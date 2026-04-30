@@ -79,6 +79,7 @@ TTIOTests_OBJC_FILES = \
 	TestM94FqzcompPerf.m \
 	TestM94ZFqzcompUnit.m \
 	TestM94ZFqzcompPerf.m \
+	TestM95DeltaRansUnit.m \
 	TestM87BamImporter.m \
 	TestM88CramBamRoundTrip.m \
 	TestM89GenomicTransport.m \
