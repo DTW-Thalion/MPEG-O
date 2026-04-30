@@ -1381,14 +1381,17 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         "positions": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
+            _Compression.DELTA_RANS_ORDER0,
         }),
         "flags": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
+            _Compression.DELTA_RANS_ORDER0,
         }),
         "mapping_qualities": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
+            _Compression.DELTA_RANS_ORDER0,
         }),
         # M86 Phase F: per-field decomposition of the M82 mate_info
         # compound dataset. The bare key "mate_info" is reserved and
@@ -1407,10 +1410,12 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         "mate_info_pos": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
+            _Compression.DELTA_RANS_ORDER0,
         }),
         "mate_info_tlen": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
+            _Compression.DELTA_RANS_ORDER0,
         }),
     }
     _INTEGER_CHANNEL_NAMES = frozenset(
@@ -1590,16 +1595,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # M86 lets per-channel overrides route sequences/qualities through
     # the rANS / BASE_PACK codecs instead.
     sc = rg.create_group("signal_channels")
-    # M86 Phase B: integer channels dispatch through
-    # ``_write_int_channel_with_codec``; when the per-channel
-    # override is rANS the channel is serialised to little-endian
-    # bytes and written as flat uint8 with @compression. When the
-    # override is absent (the M82 default), the helper delegates to
-    # the existing typed writer so byte parity is preserved.
-    io._write_int_channel_with_codec(
-        sc, "positions", run.positions, run.signal_compression,
-        run.signal_codec_overrides.get("positions"),
-    )
+
     # M93 v1.2: REF_DIFF is a context-aware codec — encoding requires
     # positions, cigars, and the reference sequence in addition to the
     # raw byte stream. Dispatch on a special branch when the override
@@ -1619,17 +1615,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         _default = default_codec_for("sequences")
         if _default is not None:
             _seq_codec = _default
-    if (
-        _seq_codec is not None
-        and _is_valid_compression(_seq_codec)
-        and _Compression(_seq_codec) == _Compression.REF_DIFF
-    ):
-        _write_sequences_ref_diff(sc, run)
-    else:
-        io._write_byte_channel_with_codec(
-            sc, "sequences", run.sequences, run.signal_compression,
-            _seq_codec,
-        )
+
     # M94 v1.2: FQZCOMP_NX16 is a v1.5 quality codec — carries
     # read_lengths + revcomp_flags inside the codec wire format. Apply
     # auto-default (Q5a=B): when signal_compression="gzip" AND empty
@@ -1643,6 +1629,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # the legacy uncompressed/zlib qualities path so existing M82+
     # fixtures remain stable.
     _qual_codec = run.signal_codec_overrides.get("qualities")
+    _is_v1_5_candidate = False
     if (
         _qual_codec is None
         and run.signal_compression == "gzip"
@@ -1650,7 +1637,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         # Detect v1.5 candidacy: any explicit override is a v1.5 codec,
         # or the sequences channel is going through REF_DIFF (resolved
         # above into _seq_codec).
-        _is_v1_5_candidate = False
         if (_seq_codec is not None
                 and _is_valid_compression(_seq_codec)
                 and _Compression(_seq_codec) == _Compression.REF_DIFF):
@@ -1663,6 +1649,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                         _Compression.REF_DIFF,
                         _Compression.FQZCOMP_NX16,
                         _Compression.FQZCOMP_NX16_Z,
+                        _Compression.DELTA_RANS_ORDER0,
                     ):
                         _is_v1_5_candidate = True
                         break
@@ -1671,6 +1658,39 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _default = default_codec_for("qualities")
             if _default is not None:
                 _qual_codec = _default
+
+    def _resolve_int_override(channel: str):
+        ovr = run.signal_codec_overrides.get(channel)
+        if ovr is not None:
+            return ovr
+        if _is_v1_5_candidate:
+            from .genomic._default_codecs import default_codec_for
+            d = default_codec_for(channel)
+            if d is not None:
+                return d
+        return None
+
+    # M86 Phase B: integer channels dispatch through
+    # ``_write_int_channel_with_codec``; when the per-channel
+    # override is rANS the channel is serialised to little-endian
+    # bytes and written as flat uint8 with @compression. When the
+    # override is absent (the M82 default), the helper delegates to
+    # the existing typed writer so byte parity is preserved.
+    io._write_int_channel_with_codec(
+        sc, "positions", run.positions, run.signal_compression,
+        _resolve_int_override("positions"),
+    )
+    if (
+        _seq_codec is not None
+        and _is_valid_compression(_seq_codec)
+        and _Compression(_seq_codec) == _Compression.REF_DIFF
+    ):
+        _write_sequences_ref_diff(sc, run)
+    else:
+        io._write_byte_channel_with_codec(
+            sc, "sequences", run.sequences, run.signal_compression,
+            _seq_codec,
+        )
     if (
         _qual_codec is not None
         and _is_valid_compression(_qual_codec)
@@ -1690,12 +1710,12 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         )
     io._write_int_channel_with_codec(
         sc, "flags", run.flags, run.signal_compression,
-        run.signal_codec_overrides.get("flags"),
+        _resolve_int_override("flags"),
     )
     io._write_int_channel_with_codec(
         sc, "mapping_qualities", run.mapping_qualities,
         run.signal_compression,
-        run.signal_codec_overrides.get("mapping_qualities"),
+        _resolve_int_override("mapping_qualities"),
     )
     # Variable-length per-read string fields — cigars and read_names are
     # 7-bit ASCII; vl_str() (ASCII encoding) matches the ObjC reader.
@@ -1813,11 +1833,11 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     _mate_override_keys = {
         "mate_info_chrom", "mate_info_pos", "mate_info_tlen",
     }
-    _mate_overrides = {
-        k: run.signal_codec_overrides[k]
-        for k in _mate_override_keys
-        if k in run.signal_codec_overrides
-    }
+    _mate_overrides = {}
+    for k in _mate_override_keys:
+        _resolved = _resolve_int_override(k)
+        if _resolved is not None:
+            _mate_overrides[k] = _resolved
     if _mate_overrides:
         _write_mate_info_subgroup(sc, run, _mate_overrides)
     else:
@@ -1978,17 +1998,24 @@ def _write_mate_int_field(
     if codec_enum not in (
         _Compression.RANS_ORDER0,
         _Compression.RANS_ORDER1,
+        _Compression.DELTA_RANS_ORDER0,
     ):  # pragma: no cover — validation rejects this
         raise ValueError(
             f"signal_codec_overrides['mate_info_{name}']: codec "
-            f"{codec!r} is not supported (only RANS_ORDER0 and "
-            "RANS_ORDER1 are valid for the integer mate fields)"
+            f"{codec!r} is not supported (only RANS_ORDER0, "
+            "RANS_ORDER1, and DELTA_RANS_ORDER0 are valid for "
+            "the integer mate fields)"
         )
 
     le_bytes = bytes(np.ascontiguousarray(arr).tobytes())
-    from .codecs.rans import encode as _enc
-    order = 0 if codec_enum == _Compression.RANS_ORDER0 else 1
-    encoded = _enc(le_bytes, order=order)
+    if codec_enum == _Compression.DELTA_RANS_ORDER0:
+        from .codecs.delta_rans import encode as _dra_enc
+        elem_size = {"<i8": 8, "<i4": 4, "<u4": 4, "<u1": 1}[dtype_str]
+        encoded = _dra_enc(le_bytes, element_size=elem_size)
+    else:
+        from .codecs.rans import encode as _enc
+        order = 0 if codec_enum == _Compression.RANS_ORDER0 else 1
+        encoded = _enc(le_bytes, order=order)
     arr_u8 = np.frombuffer(encoded, dtype=np.uint8)
     ds = mate_group.create_dataset(
         name,
