@@ -179,9 +179,9 @@ static int ttio_rans_normalise_freqs(const uint64_t cnt[256], uint16_t freq[256]
     return 0;
 }
 
-// Public re-export for FQZCOMP_NX16 (M94) and any other future codec
+// Public re-export for FQZCOMP_NX16_Z (M94.Z) and any other future codec
 // that needs the M83 deterministic normaliser. The byte-parity of the
-// M94 wire format depends on this exact tie-break ordering — DO NOT
+// M94.Z wire format depends on this exact tie-break ordering — DO NOT
 // duplicate the implementation; reuse this symbol.
 int TTIORansNormaliseFreqs(const uint64_t cnt[256], uint16_t freq[256])
 {

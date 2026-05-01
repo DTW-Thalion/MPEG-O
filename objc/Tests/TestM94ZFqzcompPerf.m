@@ -81,7 +81,7 @@ static void testM94ZEncodeDecodeThroughput(void)
     double ratio = (double)encoded.length / (double)nQual;
 
     fprintf(stderr,
-            "  M94.Z FQZCOMP_NX16 throughput (ObjC, %lu reads x %lu bp = %.1f MB raw): "
+            "  M94.Z FQZCOMP_NX16_Z throughput (ObjC, %lu reads x %lu bp = %.1f MB raw): "
             "encode %.1f MB/s (%.2fs), decode %.1f MB/s (%.2fs), ratio %.3fx\n",
             (unsigned long)nReads, (unsigned long)readLen,
             mb, encMBs, tEnc, decMBs, tDec, ratio);

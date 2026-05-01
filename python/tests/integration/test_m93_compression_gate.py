@@ -1,8 +1,9 @@
 """M93 compression-gate integration test.
 
-Once M94 (FQZCOMP_NX16) and M95 (DELTA_RANS_ORDER0 + structural) land,
-this test becomes the v1.2.0 acceptance gate: TTI-O lossless within
-1.15× of CRAM 3.1 on the chr22 mapped-only fixture.
+With M94.Z (FQZCOMP_NX16_Z, CRAM-mimic) and M95 (DELTA_RANS_ORDER0 +
+structural) shipped, this test serves as the v1.2.0 acceptance gate:
+TTI-O lossless within 1.15× of CRAM 3.1 on the chr22 mapped-only
+fixture.
 
 For M93 alone, the gate is relaxed to **≤2.5×** CRAM 3.1 — the M93
 contribution closes ~10–15% of the gap on this dataset (45 MB BASE_PACK

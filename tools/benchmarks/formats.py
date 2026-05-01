@@ -182,7 +182,7 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
 
     codec_overrides = {
         "sequences":          Compression.REF_DIFF,           # M93 v1.2 — was BASE_PACK
-        "qualities":          Compression.FQZCOMP_NX16_Z,     # M94.Z — was FQZCOMP_NX16 (v1)
+        "qualities":          Compression.FQZCOMP_NX16_Z,     # M94.Z (CRAM-mimic)
         "cigars":             Compression.RANS_ORDER1,
         "read_names":         Compression.NAME_TOKENIZED,
         "mate_info_chrom":    Compression.NAME_TOKENIZED,
