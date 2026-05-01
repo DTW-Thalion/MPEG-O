@@ -741,6 +741,7 @@ except ImportError:  # pragma: no cover
 #     follow-on task once Task 14's V2 encoder/decoder is plumbed through
 #     the Python wire layer.
 
+import array  # noqa: E402
 import ctypes  # noqa: E402  (kept here so lib loader stays close to flag)
 import ctypes.util  # noqa: E402
 import os  # noqa: E402
@@ -983,14 +984,16 @@ def _encode_via_native(
         )
 
     sym_buf = (ctypes.c_uint8 * n_symbols).from_buffer_copy(bytes(symbols))
-    ctx_buf = (ctypes.c_uint16 * n_symbols)(*contexts)
+    # Bulk-marshal contexts via array.array (avoids per-element Python overhead)
+    _ctx_arr = array.array('H', contexts)  # uint16
+    ctx_buf = (ctypes.c_uint16 * n_symbols).from_buffer(_ctx_arr)
 
-    freq_flat = (ctypes.c_uint32 * (n_contexts * 256))()
+    # Bulk-marshal freq table: flatten all rows into one array.array, then
+    # share its buffer with the ctypes array (single bulk copy, no per-element loop)
+    _freq_arr = array.array('I')  # uint32
     for c in range(n_contexts):
-        row = freq_table[c]
-        base = c * 256
-        for s in range(256):
-            freq_flat[base + s] = row[s]
+        _freq_arr.extend(freq_table[c])
+    freq_flat = (ctypes.c_uint32 * (n_contexts * 256)).from_buffer(_freq_arr)
 
     out_cap = max(64, n_symbols * 4 + 64)
     out_buf = (ctypes.c_uint8 * out_cap)()
@@ -1037,22 +1040,23 @@ def _decode_via_native(
             f"n_contexts ({n_contexts}) must be in [1, 65535]"
         )
 
-    freq_flat = (ctypes.c_uint32 * (n_contexts * 256))()
-    cum_flat = (ctypes.c_uint32 * (n_contexts * 256))()
-    for c in range(n_contexts):
-        frow = freq_table[c]
-        base = c * 256
-        if cum_table is not None:
-            crow = cum_table[c]
-            for s in range(256):
-                freq_flat[base + s] = frow[s]
-                cum_flat[base + s] = crow[s]
-        else:
+    # Bulk-marshal freq and cum tables via array.array to avoid per-element Python overhead
+    _freq_arr = array.array('I')  # uint32
+    _cum_arr = array.array('I')   # uint32
+    if cum_table is not None:
+        for c in range(n_contexts):
+            _freq_arr.extend(freq_table[c])
+            _cum_arr.extend(cum_table[c])
+    else:
+        for c in range(n_contexts):
+            frow = freq_table[c]
+            _freq_arr.extend(frow)
             running = 0
-            for s in range(256):
-                freq_flat[base + s] = frow[s]
-                cum_flat[base + s] = running
-                running += frow[s]
+            for val in frow:
+                _cum_arr.append(running)
+                running += val
+    freq_flat = (ctypes.c_uint32 * (n_contexts * 256)).from_buffer(_freq_arr)
+    cum_flat = (ctypes.c_uint32 * (n_contexts * 256)).from_buffer(_cum_arr)
 
     dtab = (ctypes.c_uint8 * (n_contexts * T))()
     rc = _lib.ttio_rans_build_decode_table(
@@ -1065,7 +1069,9 @@ def _decode_via_native(
         raise RuntimeError(f"ttio_rans_build_decode_table failed: rc={rc}")
 
     comp_buf = (ctypes.c_uint8 * len(compressed)).from_buffer_copy(bytes(compressed))
-    ctx_buf = (ctypes.c_uint16 * n_symbols)(*contexts)
+    # Bulk-marshal contexts via array.array buffer protocol
+    _ctx_arr = array.array('H', contexts)  # uint16
+    ctx_buf = (ctypes.c_uint16 * n_symbols).from_buffer(_ctx_arr)
     sym_buf = (ctypes.c_uint8 * n_symbols)()
 
     rc = _lib.ttio_rans_decode_block(
