@@ -77,6 +77,38 @@ public final class FqzcompNx16Z {
         // Utility class.
     }
 
+    /**
+     * Reports which rANS backend will service encode/decode calls in the
+     * current JVM.
+     *
+     * <p>Returns one of:
+     * <ul>
+     *   <li>{@code "native-avx2"}, {@code "native-sse4.1"}, or
+     *       {@code "native-scalar"} when libttio_rans_jni is loaded — the
+     *       suffix is the kernel selected by CPUID dispatch.</li>
+     *   <li>{@code "native"} as a defensive fallback if the library loaded
+     *       but kernel introspection fails.</li>
+     *   <li>{@code "pure-java"} when the JNI library is not on
+     *       {@code java.library.path}; the Java codec uses its built-in
+     *       {@link Rans} backend.</li>
+     * </ul>
+     *
+     * <p>TODO(v2-dispatch): wire {@link TtioRansNative} into encode()/decode()
+     * once V2 multi-block container parsing is implemented in Java. As of
+     * Task 16, the native library is exposed for introspection and direct
+     * use only; the existing V1 encode/decode path is unchanged.
+     */
+    public static String getBackendName() {
+        if (TtioRansNative.isAvailable()) {
+            try {
+                return "native-" + TtioRansNative.kernelName();
+            } catch (Throwable t) {
+                return "native";
+            }
+        }
+        return "pure-java";
+    }
+
     // ── ContextParams ───────────────────────────────────────────────
 
     /** Bit-pack context parameters (defaults: qbits=12, pbits=2, dbits=0, sloc=14). */
