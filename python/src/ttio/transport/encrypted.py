@@ -374,13 +374,21 @@ def write_encrypted_dataset(
 
 
 def _read_chromosomes_compound(idx_group) -> list[str]:
-    """Read the genomic_index/chromosomes compound dataset → list[str]."""
-    rows = io.read_compound_dataset(idx_group, "chromosomes")
-    out: list[str] = []
-    for row in rows:
-        v = row["value"]
-        out.append(v.decode("utf-8") if isinstance(v, bytes) else v)
-    return out
+    """Read the genomic_index chromosome columns → list[str].
+
+    L1 (Task #82 Phase B.1, 2026-05-01): chromosomes are now stored as
+    a uint16 id column + compound name lookup table. Materialize back
+    to ``list[str]`` for callers that still want the per-read view.
+    """
+    import numpy as np
+    ids_ds = idx_group.open_dataset("chromosome_ids")
+    ids = np.asarray(ids_ds.read(), dtype=np.uint16)
+    name_rows = io.read_compound_dataset(idx_group, "chromosome_names")
+    name_table: list[str] = []
+    for row in name_rows:
+        v = row["name"]
+        name_table.append(v.decode("utf-8") if isinstance(v, bytes) else v)
+    return [name_table[i] for i in ids.tolist()]
 
 
 def _wire_polarity(raw: int) -> int:
@@ -653,12 +661,30 @@ def read_encrypted_to_file(
                     "flags", Precision.UINT32, n_reads,
                 )
                 ds_fl.write(np.array(d["genomic_flags"], dtype=np.uint32))
-                # Chromosomes compound (VL string column).
+                # L1 (Task #82 Phase B.1): write chromosomes as
+                # uint16 id column + compound name lookup table —
+                # the M82-era VL-string compound cost 42 MB of
+                # fractal-heap overhead per chr22 file.
+                _chroms = d["genomic_chromosomes"]
+                _name_to_id: dict[str, int] = {}
+                _names: list[str] = []
+                _ids = np.empty(len(_chroms), dtype=np.uint16)
+                for _i, _name in enumerate(_chroms):
+                    _slot = _name_to_id.get(_name)
+                    if _slot is None:
+                        _slot = len(_names)
+                        _name_to_id[_name] = _slot
+                        _names.append(_name)
+                    _ids[_i] = _slot
+                ds_cids = g_idx.create_dataset(
+                    "chromosome_ids", Precision.UINT16, n_reads,
+                )
+                ds_cids.write(_ids)
                 io.write_compound_dataset(
                     g_idx,
-                    "chromosomes",
-                    [{"value": c} for c in d["genomic_chromosomes"]],
-                    [("value", io.vl_str())],
+                    "chromosome_names",
+                    [{"name": n} for n in _names],
+                    [("name", io.vl_str())],
                 )
     finally:
         sp_out.close()

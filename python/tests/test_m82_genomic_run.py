@@ -347,9 +347,14 @@ def test_write_minimal_creates_genomic_runs_group(tmp_path: Path):
         # Sub-groups
         assert "genomic_index" in run
         assert "signal_channels" in run
-        # Index columns
+        # Index columns. L1 (Task #82 Phase B.1, 2026-05-01):
+        # chromosomes are stored as ``chromosome_ids`` (uint16) +
+        # ``chromosome_names`` (compound) instead of a single
+        # VL-string compound — the old layout cost 42 MB of HDF5
+        # fractal-heap overhead per chr22 file.
         assert "offsets" in run["genomic_index"]
-        assert "chromosomes" in run["genomic_index"]
+        assert "chromosome_ids" in run["genomic_index"]
+        assert "chromosome_names" in run["genomic_index"]
         # Signal channels
         assert "sequences" in run["signal_channels"]
         assert "qualities" in run["signal_channels"]
