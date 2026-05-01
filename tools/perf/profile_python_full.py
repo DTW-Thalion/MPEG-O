@@ -440,6 +440,9 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
     Production-scale inputs (~10 MiB each) so inner loops are hot for
     seconds. Deterministic seeds for cross-language parity.
     """
+    from ttio.codecs.fqzcomp_nx16_z import get_backend_name
+    print(f"  [fqzcomp_nx16_z backend: {get_backend_name()}]")
+
     rng = np.random.default_rng(42)
 
     # ── REF_DIFF: 100K reads × 100bp against a 100Kbp reference ──
