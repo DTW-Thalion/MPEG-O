@@ -154,7 +154,12 @@ class M90FinalTest {
                 "positions should be encrypted");
             assertFalse(idx.hasChild("mapping_qualities"));
             assertFalse(idx.hasChild("flags"));
+            // L1 (Task #82 Phase B.1): chromosomes are stored as
+            // chromosome_ids + chromosome_names; encrypting wipes
+            // both.
             assertFalse(idx.hasChild("chromosomes"));
+            assertFalse(idx.hasChild("chromosome_ids"));
+            assertFalse(idx.hasChild("chromosome_names"));
             // Encrypted blobs should be present.
             assertTrue(idx.hasChild("positions_encrypted"));
             assertTrue(idx.hasChild("mapping_qualities_encrypted"));
@@ -276,7 +281,11 @@ class M90FinalTest {
             assertTrue(idx.hasChild("positions"));
             assertTrue(idx.hasChild("mapping_qualities"));
             assertTrue(idx.hasChild("flags"));
-            assertTrue(idx.hasChild("chromosomes"));
+            // L1 (Task #82 Phase B.1): chromosomes are decomposed
+            // into chromosome_ids + chromosome_names instead of a
+            // single chromosomes compound.
+            assertTrue(idx.hasChild("chromosome_ids"));
+            assertTrue(idx.hasChild("chromosome_names"));
             assertFalse(idx.hasChild("positions_encrypted"));
         }
         FeatureFlags flags;
@@ -818,9 +827,15 @@ class M90FinalTest {
              StorageGroup run = gRuns.openGroup("genomic_0001")) {
             sigs = SignatureManager.signGenomicRun(run, key);
         }
-        assertTrue(sigs.containsKey("genomic_index/chromosomes"),
-            "M90.15: chromosomes compound must be signed");
-        assertTrue(sigs.get("genomic_index/chromosomes").startsWith("v2:"));
+        // L1 (Task #82 Phase B.1, 2026-05-01): chromosomes column
+        // is decomposed into chromosome_ids + chromosome_names; both
+        // are signed.
+        assertTrue(sigs.containsKey("genomic_index/chromosome_ids"),
+            "L1: chromosome_ids must be signed");
+        assertTrue(sigs.containsKey("genomic_index/chromosome_names"),
+            "L1: chromosome_names must be signed");
+        assertTrue(sigs.get("genomic_index/chromosome_ids").startsWith("v2:"));
+        assertTrue(sigs.get("genomic_index/chromosome_names").startsWith("v2:"));
     }
 
     @Test
@@ -849,24 +864,19 @@ class M90FinalTest {
              StorageGroup gRuns = study.openGroup("genomic_runs");
              StorageGroup run = gRuns.openGroup("genomic_0001")) {
             SignatureManager.signGenomicRun(run, key);
-            // Tamper with the chromosomes compound: rewrite row 0
-            // value to a different chromosome name.
+            // L1: tamper with chromosome_ids — flip read 0's id
+            // from 0 to 1 (changes canonical bytes; verify must fail).
             try (StorageGroup idx = run.openGroup("genomic_index")) {
-                @SuppressWarnings("unchecked")
-                List<Object[]> rows;
-                try (StorageDataset ds = idx.openDataset("chromosomes")) {
-                    rows = (List<Object[]>) ds.readAll();
+                short[] ids;
+                try (StorageDataset ds = idx.openDataset("chromosome_ids")) {
+                    ids = (short[]) ds.readAll();
                 }
-                // VL_STRING field expects a String at write time.
-                rows.get(0)[0] = "chrTAMPERED";
-                idx.deleteChild("chromosomes");
-                List<global.thalion.ttio.providers.CompoundField> fields = List.of(
-                    new global.thalion.ttio.providers.CompoundField(
-                        "value",
-                        global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
-                try (StorageDataset ds = idx.createCompoundDataset(
-                        "chromosomes", fields, rows.size())) {
-                    ds.writeAll(rows);
+                ids[0] = (short) ((ids[0] + 1) & 0xFFFF);
+                idx.deleteChild("chromosome_ids");
+                try (StorageDataset ds = idx.createDataset(
+                        "chromosome_ids", Enums.Precision.UINT16, ids.length,
+                        0, Enums.Compression.NONE, 0)) {
+                    ds.writeAll(ids);
                 }
             }
             assertFalse(SignatureManager.verifyGenomicRun(run, key),

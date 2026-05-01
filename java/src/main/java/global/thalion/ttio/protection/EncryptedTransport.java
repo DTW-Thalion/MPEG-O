@@ -281,14 +281,28 @@ public final class EncryptedTransport {
 
     @SuppressWarnings("unchecked")
     private static List<String> readGenomicChromosomes(StorageGroup idx) {
-        try (StorageDataset ds = idx.openDataset("chromosomes")) {
-            List<Object[]> rows = (List<Object[]>) ds.readAll();
-            List<String> out = new ArrayList<>(rows.size());
-            for (Object[] r : rows) {
-                Object v = r[0];
-                if (v == null) out.add("");
-                else if (v instanceof byte[] b) out.add(new String(b, StandardCharsets.UTF_8));
-                else out.add(v.toString());
+        // L1 (Task #82 Phase B.1): chromosomes are stored as
+        // chromosome_ids (uint16) + chromosome_names (compound).
+        short[] ids;
+        try (StorageDataset ds = idx.openDataset("chromosome_ids")) {
+            ids = (short[]) ds.readAll();
+        }
+        List<Object[]> nameRows;
+        try (StorageDataset ds = idx.openDataset("chromosome_names")) {
+            nameRows = (List<Object[]>) ds.readAll();
+        }
+        List<String> nameTable = new ArrayList<>(nameRows.size());
+        for (Object[] r : nameRows) {
+            Object v = r[0];
+            if (v == null) nameTable.add("");
+            else if (v instanceof byte[] b) nameTable.add(new String(b, StandardCharsets.UTF_8));
+            else nameTable.add(v.toString());
+        }
+        {
+            List<String> out = new ArrayList<>(ids.length);
+            for (short id : ids) {
+                int idx2 = Short.toUnsignedInt(id);
+                out.add(idx2 < nameTable.size() ? nameTable.get(idx2) : "");
             }
             return out;
         }
@@ -902,17 +916,41 @@ public final class EncryptedTransport {
     }
 
     /** M90.8: write a chromosomes compound dataset (single VL_STRING
-     *  field {@code value}) mirroring the GenomicIndex layout. */
+     *  field {@code value}) mirroring the GenomicIndex layout.
+     *  L1 (Task #82 Phase B.1, 2026-05-01): write chromosomes as
+     *  {@code chromosome_ids} (uint16) + {@code chromosome_names}
+     *  (compound) instead of a single VL-string compound. */
     private static void writeChromosomesCompound(StorageGroup idx,
                                                     List<String> chromosomes) {
+        java.util.LinkedHashMap<String, Integer> nameToId = new java.util.LinkedHashMap<>();
+        short[] ids = new short[chromosomes.size()];
+        for (int i = 0; i < chromosomes.size(); i++) {
+            String name = chromosomes.get(i);
+            if (name == null) name = "";
+            Integer slot = nameToId.get(name);
+            if (slot == null) {
+                if (nameToId.size() > 65535) {
+                    throw new IllegalStateException(
+                        "encrypted-transport: > 65,535 unique chromosome names");
+                }
+                slot = nameToId.size();
+                nameToId.put(name, slot);
+            }
+            ids[i] = slot.shortValue();
+        }
+        try (StorageDataset cids = idx.createDataset(
+                "chromosome_ids", Enums.Precision.UINT16, ids.length,
+                0, Enums.Compression.NONE, 0)) {
+            cids.writeAll(ids);
+        }
         java.util.List<global.thalion.ttio.providers.CompoundField> fields =
             java.util.List.of(new global.thalion.ttio.providers.CompoundField(
-                "value",
+                "name",
                 global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
-        java.util.List<Object[]> rows = new java.util.ArrayList<>(chromosomes.size());
-        for (String c : chromosomes) rows.add(new Object[]{ c == null ? "" : c });
+        java.util.List<Object[]> rows = new java.util.ArrayList<>(nameToId.size());
+        for (String n : nameToId.keySet()) rows.add(new Object[]{ n });
         try (StorageDataset ds = idx.createCompoundDataset(
-                "chromosomes", fields, rows.size())) {
+                "chromosome_names", fields, rows.size())) {
             ds.writeAll(rows);
         }
     }

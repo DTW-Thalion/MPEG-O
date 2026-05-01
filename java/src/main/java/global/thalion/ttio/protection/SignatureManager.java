@@ -246,14 +246,15 @@ public final class SignatureManager {
     private static final String[] GENOMIC_SIGNAL_CHANNELS = {
         "sequences", "qualities"
     };
-    /** Index columns signed by {@link #signGenomicRun}. M90.15: the
-     *  {@code chromosomes} VL_BYTES row compound is now signed
-     *  alongside the atomic columns — {@link StorageDataset#readCanonicalBytes}
-     *  handles VL compounds via {@code canonicaliseCompoundRows}, so
-     *  the M90.2 deferral was speculative. */
+    /** Index columns signed by {@link #signGenomicRun}. L1
+     *  (Task #82 Phase B.1, 2026-05-01): the M82-era VL-string
+     *  {@code chromosomes} compound was replaced with
+     *  {@code chromosome_ids} (uint16) +
+     *  {@code chromosome_names} (compound) — both new columns
+     *  are signed in place of the old single column. */
     private static final String[] GENOMIC_INDEX_COLUMNS = {
         "offsets", "lengths", "positions", "mapping_qualities", "flags",
-        "chromosomes"
+        "chromosome_ids", "chromosome_names"
     };
 
     /** M90.2: sign every signal channel and every genomic_index

@@ -632,6 +632,18 @@ public final class PerAUFile {
             if (idx.hasChild(colName)) {
                 idx.deleteChild(colName);
             }
+            // L1 (Task #82 Phase B.1): the on-disk chromosomes column
+            // is now decomposed into chromosome_ids + chromosome_names
+            // — also delete those when encrypting the logical
+            // "chromosomes" column.
+            if ("chromosomes".equals(colName)) {
+                if (idx.hasChild("chromosome_ids")) {
+                    idx.deleteChild("chromosome_ids");
+                }
+                if (idx.hasChild("chromosome_names")) {
+                    idx.deleteChild("chromosome_names");
+                }
+            }
             String encName = colName + "_encrypted";
             if (idx.hasChild(encName)) {
                 idx.deleteChild(encName);
@@ -762,27 +774,38 @@ public final class PerAUFile {
         return out;
     }
 
-    /** Read the genomic_index/chromosomes compound dataset into a
-     *  {@code List<String>}. The compound has a single VL_STRING
-     *  field named "value"; tolerates both {@code byte[]} and
-     *  {@code String} field representations across providers. */
+    /** Read the genomic_index chromosome columns into a
+     *  {@code List<String>}. L1 (Task #82 Phase B.1, 2026-05-01):
+     *  chromosomes are stored as {@code chromosome_ids} (uint16) +
+     *  {@code chromosome_names} (compound) instead of a single
+     *  VL-string compound. */
     @SuppressWarnings("unchecked")
     private static List<String> readChromosomes(StorageGroup idx) {
-        try (StorageDataset ds = idx.openDataset("chromosomes")) {
-            List<Object[]> rows = (List<Object[]>) ds.readAll();
-            List<String> out = new ArrayList<>(rows.size());
-            for (Object[] r : rows) {
-                Object v = r[0];
-                if (v == null) {
-                    out.add("");
-                } else if (v instanceof byte[] b) {
-                    out.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
-                } else {
-                    out.add(v.toString());
-                }
-            }
-            return out;
+        short[] ids;
+        try (StorageDataset ds = idx.openDataset("chromosome_ids")) {
+            ids = (short[]) ds.readAll();
         }
+        List<Object[]> nameRows;
+        try (StorageDataset ds = idx.openDataset("chromosome_names")) {
+            nameRows = (List<Object[]>) ds.readAll();
+        }
+        List<String> nameTable = new ArrayList<>(nameRows.size());
+        for (Object[] r : nameRows) {
+            Object v = r[0];
+            if (v == null) {
+                nameTable.add("");
+            } else if (v instanceof byte[] b) {
+                nameTable.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+            } else {
+                nameTable.add(v.toString());
+            }
+        }
+        List<String> out = new ArrayList<>(ids.length);
+        for (short id : ids) {
+            int idx2 = Short.toUnsignedInt(id);
+            out.add(idx2 < nameTable.size() ? nameTable.get(idx2) : "");
+        }
+        return out;
     }
 
     // ────────────────────────────────────────────── compound I/O helpers

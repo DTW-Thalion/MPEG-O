@@ -835,6 +835,15 @@ def _encrypt_genomic_index(
         # encrypted blob as a uint8 1-D dataset.
         if g_idx.has_child(col_name):
             g_idx.delete_child(col_name)
+        # L1 (Task #82 Phase B.1): the on-disk chromosomes column is
+        # decomposed into chromosome_ids + chromosome_names. When
+        # encrypting the logical "chromosomes" column we also delete
+        # those L1 datasets so plaintext doesn't linger alongside the
+        # encrypted blob.
+        if col_name == "chromosomes":
+            for sub in ("chromosome_ids", "chromosome_names"):
+                if g_idx.has_child(sub):
+                    g_idx.delete_child(sub)
         ds = g_idx.create_dataset(
             f"{col_name}_encrypted", Precision.UINT8, len(blob),
         )
