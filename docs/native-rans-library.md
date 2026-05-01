@@ -66,6 +66,34 @@ int ttio_rans_decode_block_streaming(
     ttio_rans_context_resolver  resolver,
     void                       *user_data);
 
+/* M94.Z decode with inline context derivation (Task #81, 2026-05-01).
+ * Replaces the per-symbol callback round-trip of
+ * ttio_rans_decode_block_streaming for the M94.Z codec — bakes the
+ * (prev_q ring + position bucket + revcomp) → context formula
+ * directly into native code, byte-for-byte against the Python and
+ * Java references. */
+typedef struct {
+    uint32_t qbits;
+    uint32_t pbits;
+    uint32_t sloc;
+} ttio_m94z_params;
+
+int ttio_rans_decode_block_m94z(
+    const uint8_t            *compressed,
+    size_t                    comp_len,
+    uint16_t                  n_contexts,
+    const uint32_t          (*freq)[256],
+    const uint32_t          (*cum)[256],
+    const uint8_t           (*dtab)[TTIO_RANS_T],
+    const ttio_m94z_params   *params,
+    const uint16_t           *ctx_remap,    /* sparse->dense, len 1<<sloc */
+    const uint32_t           *read_lengths,
+    size_t                    n_reads,
+    const uint8_t            *revcomp_flags,
+    uint16_t                  pad_ctx_dense,
+    uint8_t                  *symbols,
+    size_t                    n_symbols);
+
 /* Multi-block V2 wire format with thread-pool parallelism. */
 ttio_rans_pool *ttio_rans_pool_create(int n_threads);
 int ttio_rans_encode_mt(...);
@@ -102,6 +130,7 @@ reference exactly:
 | `native/src/rans_encode_scalar.c` | Reference scalar encode kernel. |
 | `native/src/rans_decode_scalar.c` | Reference scalar decode kernel. |
 | `native/src/rans_decode_streaming.c` | Streaming-context decoder (callback-driven). |
+| `native/src/rans_decode_m94z.c` | M94.Z decoder with inline context derivation — eliminates the per-symbol callback round-trip in `decode_streaming` for the M94.Z codec specifically. |
 | `native/src/rans_encode_sse41.c`, `..._avx2.c` | SIMD encode kernels — currently delegate to scalar with `-msse4.1` / `-mavx2` so gcc auto-vectorises. Hand-rolled `__m128i` prototypes were 55 % slower than auto-vec; documented as `TODO(Task 18)`. |
 | `native/src/rans_decode_sse41.c`, `..._avx2.c` | Same for decode. |
 | `native/src/dispatch.c` | Runtime cpuid detection + function-pointer dispatch. Selects AVX2 → SSE4.1 → scalar at library load via `__attribute__((constructor))`. |
@@ -140,8 +169,9 @@ based on the CPU's reported feature flags.
 | `thread_safety` | 5 | Concurrent encodes through a shared pool. TSAN target verifies under sanitiser. |
 | `v2_format` | 7 | V2 multi-block container encode + decode + V1 backwards-compatibility decode. |
 | `streaming` | 8 | Streaming-context decoder parity vs. regular decoder. |
+| `m94z_decode` | 1 | M94.Z inline-context decoder parity vs. streaming-callback path on a 1000-symbol / 10-read input. |
 
-29 sub-tests total, 0 warnings under `-Wall -Wextra -Wpedantic`.
+30 sub-tests total, 0 warnings under `-Wall -Wextra -Wpedantic`.
 
 ---
 
@@ -218,15 +248,42 @@ typedef uint16_t (*ttio_rans_context_resolver)(
 
 The decoder calls `resolver(user_data, i, prev_sym)` before
 decoding each symbol; the caller maintains the prev_q ring inside
-the callback. This unblocks future fully-native V2 decode once the
-M94.Z context derivation moves from Python/Java/ObjC into C — the
-infrastructure is ready, only the context-model port is
-outstanding.
+the callback. The streaming path is general and unblocks any
+codec whose context depends on previously-decoded symbols.
 
 Per-symbol callback overhead (Python `CFUNCTYPE`: ~6–8 µs/call;
-JNI `CallIntMethod`: ~10–15 µs/call) currently dominates the C
-decode gain. The streaming path is therefore wired but off by
-default in all three bindings.
+JNI `CallIntMethod`: ~10–15 µs/call) dominates the C decode gain
+in practice, so the streaming path is wired but **superseded by
+the M94.Z inline-context decoder** for the only codec that needed
+it. The streaming path is kept as infrastructure for future
+context-models that are not amenable to a fixed C implementation.
+
+### 4.1 M94.Z inline-context decoder (Task #81, 2026-05-01)
+
+`ttio_rans_decode_block_m94z` implements the M94.Z context formula
+directly in C, byte-for-byte against the
+`ttio.codecs.fqzcomp_nx16_z` and
+`global.thalion.ttio.codecs.FqzcompNx16Z` references. The forward
+decode loop never leaves native code — no callback, no FFI
+round-trip per symbol. The caller passes the read metadata
+(`read_lengths[]`, `revcomp_flags[]`) and a sparse→dense context
+remap table (`ctx_remap[]` of length `1 << sloc`); the function
+synthesises the context for each position inline using the same
+prev_q ring + position-bucket + revcomp logic as the
+pure-language decoders.
+
+Throughput: the C decode kernel itself runs at ~107 MiB/s on a
+10 MB qualities block (vs ~96 MiB/s for the Cython M94.Z
+decoder). End-to-end Python V2 decode is currently still
+dominated by metadata-setup overhead in the wrapper (read-length
+table decode, freq blob decompress) — closing that gap is a
+follow-up. Java JNI and ObjC linkage to this entry point are
+deferred; Python is the load-bearing decode path for V2 native.
+
+Parity test: `native/tests/test_m94z_decode.c` round-trips a
+1000-symbol / 10-read input through both the streaming-callback
+path and the new inline-context path, asserting byte-equality.
+Registered as ctest suite `m94z_decode`.
 
 ---
 

@@ -324,6 +324,48 @@ v1 and tracked as M94.Z+ follow-ups.
 > API that applications actually call. The table now reports end-to-end
 > throughput for all three languages on the same hardware.
 
+### 4.1.1 Java encode hot-loop optimisations (Task #78, 2026-05-01)
+
+Two changes in `FqzcompNx16Z.encode` pass 2 lifted Java warm-state
+encode from ~25 MB/s to ~34 MB/s on the 10 MB `FqzcompNx16ZPerfTest`
+input:
+
+* Per-stream chunk buffers as `short[]` instead of `byte[]` — each
+  16-bit renorm step is a single `short` store, replacing two byte
+  stores plus the `+=2` length increment. The reverse step packs
+  `short[] -> byte[]` in 16-bit LE pairs at the very end.
+* `qualities` is pre-padded to `nPadded` with zero tail bytes, so the
+  hot loop reads `qPadded[i] & 0xFF` unconditionally — drops the
+  `(i < n) ? qualities[i] : 0` branch from every iteration.
+
+The flat `ctxCap*256` packed-table experiment was tried and rejected:
+its warm-state gain didn't justify the 32 MB cold-allocation regression
+in the cold-path perf harness.
+
+### 4.1.2 Native V2 decode entry — `ttio_rans_decode_block_m94z` (Task #81, 2026-05-01)
+
+The libttio_rans library now exposes
+`ttio_rans_decode_block_m94z(...)` — a V2-decode entry point with the
+M94.Z context formula (prev_q ring + position bucket + revcomp) baked
+inline into C. Replaces the per-symbol `ctypes.CFUNCTYPE` callback
+round-trip that previously made the streaming-decode path slower than
+the pure-language decoder.
+
+The C decode kernel itself runs at ~107 MiB/s on a 10 MB qualities
+block (vs ~96 MiB/s for the Cython M94.Z decoder). End-to-end Python
+V2 decode throughput is currently still bottlenecked by metadata-setup
+overhead in `_decode_v2_via_native_streaming` (read-length table
+zlib-decode, freq-tables blob decompression) — ~110 ms of wrapper
+work on top of the 93 ms C kernel for a 10 MB block. Closing that
+wrapper gap is a follow-up; the C plumbing is in place and proven
+byte-exact via `native/tests/test_m94z_decode.c`.
+
+Java JNI and ObjC linkage to the new entry point are intentionally
+deferred — Python is the load-bearing decode path for V2 native, and
+proving the C plumbing in one binding first keeps the change
+reviewable. See `docs/native-rans-library.md §4.1` for the full
+function signature and parity test.
+
 ### 4.2 Pipeline wall-clock comparison (chr22 lean)
 
 Full-pipeline TTI-O write/read on `chr22.lean.mapped.bam` (145 MiB,

@@ -234,22 +234,26 @@ laptop:
 
 | Language | Encode (order-0) | Decode (order-0) | Notes |
 |----------|------------------|------------------|-------|
-| Python   | ≥ 2 MB/s         | ≥ 5 MB/s         | Pure Python — Cython acceleration deferred |
+| Python   | ≥ 100 MB/s       | ≥ 150 MB/s       | Cython-accelerated as of 2026-05-01; pure-Python fallback ≥ 2 MB/s |
 | Objective-C / C | ≥ 50 MB/s | ≥ 200 MB/s | Hard floors: 25 / 100 MB/s |
 | Java     | (logged, no threshold) | (logged, no threshold) | JIT warm-up variance |
 
-Measured on the M83 reference host:
+Measured on the reference host (350 KB input, best of 5 warm runs):
 
-| Language | Encode | Decode |
-|----------|--------|--------|
-| Python   | 7.25 MB/s | 6.79 MB/s |
-| Objective-C | 181.6 MB/s | 229.4 MB/s |
-| Java     | 86.12 MB/s | 167.61 MB/s |
+| Language | Encode (O0) | Decode (O0) | Encode (O1) | Decode (O1) |
+|----------|-------------|-------------|-------------|-------------|
+| Python (Cython) | 167 MB/s | 218 MB/s | 38 MB/s  | 21 MB/s  |
+| Objective-C     | 73 MB/s  | 80 MB/s  | 41 MB/s  | 27 MB/s  |
+| Java            | 86 MB/s  | 168 MB/s | (varies) | (varies) |
 
-The ObjC and Java numbers are within the htslib rANS ballpark
-without SIMD acceleration. The Python target is intentionally
-relaxed; pure-Python rANS exists to anchor the reference, not to
-serve as a production codec.
+The Python Cython extension at `ttio.codecs._rans._rans` is byte-exact
+against the pure-Python reference at `ttio.codecs.rans` and matches
+the per-language wire-format conformance fixtures. The wrapper at
+`ttio/codecs/rans.py` auto-detects the extension on import and falls
+back to pure Python silently when absent. Python's encode/decode are
+now competitive with — and often faster than — ObjC's hand-rolled C,
+because Cython compiles to native code with the same algorithm
+parameters and no Python interpreter overhead in the hot loop.
 
 ---
 

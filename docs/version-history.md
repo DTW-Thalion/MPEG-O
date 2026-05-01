@@ -242,6 +242,55 @@ Compression-benchmark report comparing TTI-O genomic against BAM, CRAM 3.1, and 
   * **ObjC M44 catch-up (Tasks 30 + 31, 2026-05-01).** Brings ObjC's writer chain to parity with Python's M44 (v0.7) and Java's M44 (v0.7) migrations. ~2200 lines refactored across `TTIOSignalArray`, `TTIOSpectrum` + 7 subclasses, `TTIOInstrumentConfig`, `TTIOSpectrumIndex`, `TTIOAcquisitionRun`, `TTIOCompoundIO`, and `TTIOSpectralDataset.m -writeToFilePath:` — all now accept `id<TTIOStorageGroup>` instead of `TTIOHDF5Group *`. `TTIOHDF5Group` and `TTIOHDF5Dataset` formally implement `<TTIOStorageGroup>` / `<TTIOStorageDataset>` directly via bridge methods. MS-only datasets now write through `memory://`, `sqlite://`, `zarr://` URLs via both `+writeMinimalToPath:` (Task 30) and `-writeToFilePath:` (Task 31). NMR runs and Image-subclass datasets remain HDF5-only by design (H5DSset_scale dimension scales / native 3D cubes have no protocol equivalents — same scope as Python and Java). Includes `TTIOZarrProvider.createDatasetNamed:` fix to silently ignore unsupported `TTIOCompression` instead of erroring (was a protocol-contract violation).
   * **chr22 ratio holds at 1.965× CRAM 3.1** under both V1 and V2 (codec is not the bottleneck — gap is HDF5 multi-omics framing). Test counts: Python 540/540, Java 845/845, ObjC 3256/2 (the 2 are pre-existing TestMilestone29 Thermo mock-binary tests, unrelated).
 
+* **Phase 11 — cross-language perf sweep (2026-05-01).** Five focused wins,
+  no wire-format breaks, all byte-exact contracts preserved. Full session
+  detail in `CHANGELOG.md` under "Performance — 2026-05-01 cross-language
+  sweep"; summary:
+  * **Python rANS — Cython accelerator (Task #83).** New
+    `python/src/ttio/codecs/_rans/_rans.pyx` byte-exact mirror of the
+    pure-Python reference. Same wire format (L=2²³, M=4096, B=2⁸,
+    big-endian header). 17–29× faster on rans_o0/o1, with 6.8× cascading
+    speedup on REF_DIFF and 2× on DELTA_RANS (both internally call
+    `rans.encode/decode`). Python rans_o0 now runs faster than ObjC's
+    hand-rolled C (2.1 ms Cython vs 4.8 ms ObjC warm).
+  * **Native M94.Z decode entry (Task #81).** New
+    `ttio_rans_decode_block_m94z` C entry point bakes the M94.Z context
+    formula (prev_q ring + position bucket + revcomp) directly into
+    native code, eliminating the per-symbol cross-language callback
+    round-trip that previously made the streaming-decode path slower
+    than pure-language. The C decode kernel runs at ~107 MiB/s on a
+    10 MB qualities block (vs ~96 MiB/s for the Cython M94.Z decoder).
+    Wired via Python ctypes; Java JNI + ObjC linkage deferred. Adds
+    `native/src/rans_decode_m94z.c` + `native/tests/test_m94z_decode.c`
+    (ctest suite `m94z_decode`).
+  * **Python provider registry — lazy zarr import (Task #80).** The
+    `discover_providers()` fallback used to eagerly import the zarr
+    package (~135 ms), inflating ms.memory write to 167 ms vs ObjC's
+    0.9 ms — a 30× apparent slowdown that was entirely measurement
+    attribution. Now registered lazily via `_try_register_zarr()` only
+    when a zarr URL or `provider="zarr"` is requested. Result:
+    `ms.memory write 167 ms → 5.5 ms` (30×); cost moved to ms.zarr
+    where it belongs.
+  * **Java jcamp reader — boolean[] detect + double[] preallocate
+    (Task #79).** Replaced `HashSet<Character>` autobox-per-char in
+    `JcampDxDecode.hasCompression` with `boolean[128]` ASCII table;
+    pre-allocated `double[]` from NPOINTS hint and replaced
+    `ArrayList<Double> + line.split("\\s+") + Double.parseDouble` with
+    a manual whitespace tokenizer in `JcampDxReader`. jcamp benchmark:
+    280 ms → 134 ms (2.1×); ir_read alone 109 ms → 39 ms (2.8×).
+  * **Java FQZCOMP_NX16_Z encode — short[] chunks + padded sym (Task
+    #78).** Per-stream chunk buffers as `short[]` (one store per
+    16-bit renorm replaces two byte stores); pre-padded qualities to
+    `nPadded` so the hot loop drops the `(i < n) ? qualities[i] : 0`
+    branch. Warm encode: ~25 MB/s → ~34 MB/s (36% faster).
+
+  Test counts after Phase 11: Python 1800/1800 (1785 unit + 15 native
+  V2 dispatch), Java 879/879, ObjC unchanged. Native ctest 5/5
+  (`roundtrip`, `thread_safety`, `v2_format`, `streaming`,
+  `m94z_decode`). chr22 ratio against CRAM 3.1 unchanged at 1.965×
+  (the perf wins are at the codec layer; the residual gap is still
+  HDF5 multi-omics framing — Task #82, deferred).
+
 ## Format compatibility
 
 Every version's files remain readable by later versions. v0.11 readers open
