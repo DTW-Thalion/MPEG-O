@@ -29,7 +29,7 @@ package global.thalion.ttio.codecs;
  *       {@code _randbelow_with_getrandbits}.</li>
  * </ul>
  *
- * <p>Used only by FQZCOMP_NX16 fixture-builder unit tests; not part of
+ * <p>Used only by FQZCOMP_NX16_Z fixture-builder unit tests; not part of
  * the public codec API.
  */
 final class PyRandom {

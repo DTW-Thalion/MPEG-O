@@ -74,10 +74,9 @@ NSData * _Nullable TTIORansDecode(NSData *encoded,
  *
  * Cross-language byte-exact contract — identical algorithm to
  * Python's ``ttio.codecs.rans._normalise_freqs`` and Java's
- * ``Rans.normaliseFreqs``. Reused verbatim by FQZCOMP_NX16 (M94)
- * for per-symbol M-normalisation of its adaptive count tables;
- * the byte-parity of the M94 wire format depends on this exact
- * tie-break ordering.
+ * ``Rans.normaliseFreqs``. Reused verbatim by FQZCOMP_NX16_Z (M94.Z)
+ * for normalisation of its per-block frequency tables; the byte-parity
+ * of the M94.Z wire format depends on this exact tie-break ordering.
  *
  * Returns 0 on success, -1 if @p cnt is all-zero (cannot normalise
  * an empty alphabet to M).
