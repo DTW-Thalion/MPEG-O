@@ -130,6 +130,117 @@ public API is stable from v1.0.0 onward (tagged 2026-04-23). See
   - Spec: `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.
   - Codec spec: `docs/codecs/delta_rans.md`.
 
+### Added (continued)
+
+- **`libttio_rans` C library + AVX2/SSE4.1 SIMD dispatch** (Phase B —
+  2026-04-30). Self-contained C library at `native/` providing rANS
+  encode/decode kernels, runtime cpuid SIMD dispatch
+  (AVX2 → SSE4.1 → scalar), pthread thread pool with submit/wait/destroy
+  (TSAN- and valgrind-clean), and a multi-block V2 wire format. AVX2
+  achieves ~510 MiB/s encode / ~605 MiB/s decode on dev hardware (gcc
+  13 auto-vectorisation; hand-rolled __m128i prototypes were 55%
+  slower, kept as TODO comments). Built via CMake; optional JNI and
+  TSAN targets.
+  - C library: `native/include/ttio_rans.h`, `native/src/` (rans_core,
+    rans_encode/decode_scalar/sse41/avx2, dispatch, threadpool,
+    wire_format, rans_decode_streaming).
+  - 4 ctest suites: `roundtrip`, `thread_safety`, `v2_format`,
+    `streaming` — 29 sub-tests, 0 warnings under
+    `-Wall -Wextra -Wpedantic`.
+  - Plan: `docs/superpowers/plans/2026-04-30-fqzcomp-acceleration.md`.
+  - Spec: `docs/superpowers/specs/2026-04-30-fqzcomp-acceleration-design.md`.
+
+- **M94.Z V2 wire format + native dispatch (Python ctypes / Java JNI /
+  ObjC direct linkage)**. New M94.Z streams may carry version byte =
+  2 indicating the rANS body uses libttio_rans's `[4×states LE]
+  [4×lane_sizes LE][per-lane data]` layout. V1 streams (version byte
+  = 1) remain canonical and unchanged. Opt-in via `prefer_native`
+  parameter or `TTIO_M94Z_USE_NATIVE` env var; V1 is the default for
+  all writers. V2 decode is currently pure-language in all three
+  bindings (callback-overhead per symbol exceeds the C decode gain
+  for both `ctypes.CFUNCTYPE` and JNI `CallIntMethod`); native-decode
+  via `ttio_rans_decode_block_streaming` is wired but not on by
+  default.
+  - Python ctypes integration: `python/src/ttio/codecs/fqzcomp_nx16_z.py`
+    (~1725 lines — V2 helpers, three-tier dispatch native → cython →
+    pure-python). 13 new V2 dispatch tests in
+    `python/tests/test_m94z_v2_dispatch.py` plus 6 streaming-decode
+    tests; 540/540 codec tests pass with native loaded.
+  - Java JNI integration: `native/src/ttio_rans_jni.c`,
+    `java/src/main/java/global/thalion/ttio/codecs/TtioRansNative.java`,
+    `FqzcompNx16Z.getBackendName()`. 14 V2 dispatch tests + 6
+    streaming tests. Full Java suite: 845/845 pass.
+  - ObjC direct C linkage: `__has_include("ttio_rans.h")` guarded
+    integration in `objc/Source/Codecs/TTIOFqzcompNx16Z.m`,
+    `+[TTIOFqzcompNx16Z backendName]` introspection. 19 V2 dispatch
+    tests across `TestM94ZV2Dispatch.m`. Full ObjC suite: 3256 PASS.
+  - C-side streaming context API
+    (`ttio_rans_decode_block_streaming`) in
+    `native/src/rans_decode_streaming.c` — calls a caller-supplied
+    `ttio_rans_context_resolver(user_data, i, prev_sym)` callback
+    before decoding each symbol. Unblocks future native V2 decode
+    once context-derivation moves into C (currently still in
+    Python/Java/ObjC, hence the callback-overhead bottleneck).
+  - chr22 ratio holds at 1.965× CRAM 3.1 under both V1 and V2 (codec
+    is not the bottleneck — gap is HDF5 multi-omics framing).
+
+- **ObjC storage-provider parity (Task 30 + 31, M44 catch-up)**.
+  Brings ObjC's writer chain to parity with Python and Java's M44
+  migration: upper-layer classes accept any provider via
+  `id<TTIOStorageGroup>` instead of the concrete `TTIOHDF5Group *`.
+  MS-only `TTIOSpectralDataset` instances now write through
+  `memory://`, `sqlite://`, and `zarr://` URLs via both the class
+  method `+writeMinimalToPath:` (Task 30, 2026-05-01) and the
+  instance method `-writeToFilePath:` (Task 31, 2026-05-01). The
+  protocol abstraction reaches `TTIOAcquisitionRun`,
+  `TTIOSpectrumIndex`, `TTIOSpectrum` + 7 subclasses (MassSpectrum,
+  IRSpectrum, RamanSpectrum, UVVisSpectrum, NMRSpectrum, NMR2DSpectrum,
+  FreeInductionDecay, Chromatogram), `TTIOInstrumentConfig`,
+  `TTIOSignalArray`, and `TTIOCompoundIO` (~2200 lines refactored).
+  - `TTIOHDF5Group` and `TTIOHDF5Dataset` now formally implement
+    `<TTIOStorageGroup>` / `<TTIOStorageDataset>` directly
+    (`setAttributeValue:forName:`, `attributeValueForName:`,
+    `writeAll:`, `readAll:`, `readSliceAtOffset:count:`,
+    `createDatasetNDNamed:`, `createCompoundDatasetNamed:`). Old
+    HDF5-typed methods (`setStringAttribute:`, `writeData:`, etc.)
+    remain as convenience wrappers; the HDF5 byte-exact contract is
+    preserved.
+  - `TTIOCompoundIO` write/read of identifications, quantifications,
+    and dataset-level provenance now route through
+    `[group createCompoundDatasetNamed:fields:count:] + [ds writeAll:]`
+    on non-HDF5 providers. The HDF5 fast path (H5Tcompound +
+    H5Dwrite via TTIOHDF5CompoundType) is preserved for byte-exact
+    output.
+  - Subclass HDF5-only paths (TTIONMR2DSpectrum's
+    `H5DSset_scale` dimension scales for opt_native_2d_nmr,
+    TTIOMSImage / TTIORamanImage / TTIOIRImage 3-D cube via
+    `H5Pset_chunk`) are reachable via `isKindOfClass:[TTIOHDF5Group]`
+    guard + cast. NMR runs and Image-subclass datasets continue to
+    require an HDF5 backing file (same scope as Python / Java).
+  - `TTIOZarrProvider.createDatasetNamed:` now silently ignores
+    `TTIOCompression` instead of erroring (was a protocol-contract
+    violation; Memory and SQLite already complied).
+  - Tests: `TestTask30MSProviderURL.m` (4 tests) and
+    `TestTask31InstanceWriterParity.m` (4 tests) verify HDF5,
+    memory, sqlite, zarr round-trips through both writer entry
+    points. Full ObjC suite: 3256 PASS, 2 FAIL (pre-existing
+    TestMilestone29 Thermo reader mock-binary tests, unrelated).
+
+### Changed
+
+- **Default qualities codec for v1.5 files is now FQZCOMP_NX16_Z**
+  (id 12). The legacy FQZCOMP_NX16 (id 10, M94 v1) codec was removed
+  entirely (~4500 lines deleted across Python / Java / ObjC). Java
+  preserves enum ordinal 10 with a `@Deprecated _RESERVED_10`
+  placeholder; ObjC uses explicit `TTIOCompressionReserved10 = 10`.
+  Decoder dispatch in `genomic_run.py` /
+  `GenomicRun.java` / `TTIOGenomicRun.m` now goes
+  `REF_DIFF (9) → NX16_Z (12) → error` with no NX16 (10) path.
+  Existing `.tio` files written with NX16_Z continue to read
+  unchanged; files written with NX16 cannot be read by this version
+  (no .tio files in the wild used the v1 codec — it never shipped
+  outside development).
+
 ---
 
 ## [1.2.0] — 2026-04-28 — TTI-O rebrand + genomic stack + multi-omics integration

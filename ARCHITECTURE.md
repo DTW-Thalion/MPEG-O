@@ -402,7 +402,7 @@ Java and ObjC entry points:
 |---|---|---|---|
 | Python  | All 4 providers | All 4 providers | HDF5 fast path + StorageGroup path (M64.5 phase A) |
 | Java    | All 4 providers | All 4 providers | M64.5-objc-java: `ProviderRegistry.open` + JSON-attribute metadata path. `ZarrProvider` reads gzip-compressed Zarr v3 chunks via JDK `GZIPInputStream`. |
-| ObjC    | All 4 providers (read) | HDF5 only | v0.9 follow-up: `+readViaProviderURL:` uses `TTIOProviderRegistry` + new `TTIOAcquisitionRun readFromStorageGroup:` + new `TTIOSpectrumIndex readFromStorageGroup:` + JSON-attribute metadata. `TTIOZarrProvider` reads gzip-compressed Zarr v3 chunks via libz. Write-side caller refactor is a v1.0+ item. |
+| ObjC    | All 4 providers | All 4 providers (MS-only datasets) | **Task 30 + 31 (2026-05-01) closed the M44 catch-up**: `+writeMinimalToPath:` and instance `-writeToFilePath:` both dispatch through `TTIOProviderRegistry`. The writer chain (`TTIOAcquisitionRun`, `TTIOSpectrumIndex`, `TTIOSpectrum`+subclasses, `TTIOInstrumentConfig`, `TTIOSignalArray`, `TTIOCompoundIO`) accepts `id<TTIOStorageGroup>`. NMR runs and Image-subclass datasets remain HDF5-only (H5DSset_scale dimension scales / native 3D cubes — same scope as Python and Java). |
 
 **Cross-language cross-provider interop** is tested by
 `python/tests/validation/test_cross_language_smoke.py` — 10 cells:
@@ -421,8 +421,12 @@ limit rather than an implementation gap. Persistent-file interop
 
 **v1.0+ follow-ups**:
 
-* ObjC *write* via provider URL — currently HDF5-only; producers
-  should use Python or Java for non-HDF5 writes.
+* ~~ObjC *write* via provider URL~~ — **shipped 2026-05-01 (Task 30 +
+  31).** ObjC's `+writeMinimalToPath:` and instance
+  `-writeToFilePath:` both dispatch through `TTIOProviderRegistry`,
+  matching Python's M44 and Java's M44 migrations. MS-only datasets
+  write to memory:// / sqlite:// / zarr:// URLs; NMR runs and
+  Image-subclass datasets stay HDF5-only by design.
 * Python SQLite `spectrum_index` UINT64 native support — v0.9
   maps `<u8` to INT64 at the provider boundary (byte-lossless
   because offsets are always < 2^63).
@@ -494,15 +498,25 @@ TTI-O files are HDF5 files with the `.tio` extension. The internal hierarchy mir
 Every persistent class implements a pair of methods:
 
 ```objc
-- (BOOL)writeToGroup:(TTIOHDF5Group *)group name:(NSString *)name error:(NSError **)error;
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)group name:(NSString *)name error:(NSError **)error;
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group name:(NSString *)name error:(NSError **)error;
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)group name:(NSString *)name error:(NSError **)error;
 ```
 
+The signature takes the storage protocol abstraction (since Task 31,
+2026-05-01) so any registered provider — HDF5, Memory, SQLite,
+Zarr — can serve as the persistent backing store. Callers may pass
+either a `TTIOHDF5Group *` directly (it conforms to
+`<TTIOStorageGroup>`) or an `id<TTIOStorageGroup>` returned by
+`TTIOProviderRegistry`. Mirrors Python (M44) and Java (M44).
+
 In-memory objects can be constructed, mutated, and held without
-touching HDF5 at all — persistence is explicit. `TTIOSpectralDataset`
-provides file-level entry points (`-writeToFilePath:error:` /
-`+readFromFilePath:error:`) and `TTIOStreamWriter` / `TTIOStreamReader`
-support incremental ingestion of large runs.
+touching the storage layer at all — persistence is explicit.
+`TTIOSpectralDataset` provides file-level entry points
+(`-writeToFilePath:error:` / `+readFromFilePath:error:`) and
+`TTIOStreamWriter` / `TTIOStreamReader` support incremental ingestion
+of large runs. The instance writer accepts memory:// / sqlite:// /
+zarr:// URLs for MS-only datasets; NMR runs and Image subclasses
+require an HDF5 backing file.
 
 ## Thread Safety
 

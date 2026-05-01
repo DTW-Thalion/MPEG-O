@@ -72,12 +72,28 @@ Explicit override via `provider="<name>"` bypasses URL detection.
 
 ## v0.7 → v0.8 roadmap
 
-| Provider | Python | Java | ObjC |
-|---|---|---|---|
-| HDF5 | v0.6 | v0.6 | v0.6 |
-| Memory | v0.6 | v0.6 | v0.6 |
-| SQLite | v0.7 M41 | v0.7 M41 | v0.7 M41 |
-| Zarr | v0.7 M46 | **v0.8 M52** | **v0.8 M52** |
+| Provider | Python | Java | ObjC | ObjC writer parity |
+|---|---|---|---|---|
+| HDF5 | v0.6 | v0.6 | v0.6 | M44 (Python/Java) → **Task 31, 2026-05-01** (ObjC) |
+| Memory | v0.6 | v0.6 | v0.6 | Same |
+| SQLite | v0.7 M41 | v0.7 M41 | v0.7 M41 | Same |
+| Zarr | v0.7 M46 | **v0.8 M52** | **v0.8 M52** | Same |
+
+**Writer parity column** indicates when each language's upper-layer
+writer chain (`AcquisitionRun`, `SpectrumIndex`, `Spectrum`+
+subclasses, `InstrumentConfig`, `SignalArray`, compound IO,
+top-level dataset writer) was migrated from the concrete
+HDF5-backend type to the protocol abstraction
+(`StorageGroup`/`StorageDataset`). Python and Java did this in v0.7
+M44; ObjC closed the gap in Task 31 (2026-05-01). Before Task 31 the
+ObjC writer chain leaked `TTIOHDF5Group *` into upper-layer methods,
+limiting non-HDF5 URLs to read-only access via
+`+readViaProviderURL:`. After Task 31 both `+writeMinimalToPath:`
+and `-writeToFilePath:` accept any registered provider URL for
+MS-only datasets; NMR runs and Image-subclass datasets continue to
+require an HDF5 backing file (H5DSset_scale dimension scales /
+native 3D cubes have no protocol equivalents — same scope as
+Python and Java).
 
 Java and ObjC ZarrProvider ports shipped in v0.8 M52 as
 self-contained LocalStore implementations — no external zarr
@@ -98,7 +114,11 @@ Scope of the Java + ObjC ZarrProviders:
 
 - URL schemes: `zarr:///abs/path` and bare local paths.
   `zarr+memory://` and `zarr+s3://` remain Python-only.
-- Compression: write side emits uncompressed chunks. Read side
+- Compression: write side emits uncompressed chunks. The
+  `compression` argument to `create_dataset` is silently ignored
+  (per the protocol's "accept argument for interface compatibility
+  but silently ignore" contract — fixed in Task 31, 2026-05-01;
+  earlier versions returned `TTIOErrorDatasetCreate`). Read side
   accepts the `gzip` codec entry written by zarr-python's
   `GzipCodec`; other codecs raise.
 - Primitive dtypes: float64, float32, int64, int32, uint32

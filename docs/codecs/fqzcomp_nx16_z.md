@@ -121,7 +121,22 @@ to equalise lengths. Padding symbols use the all-zero context vector
 
 ## 2. Wire format (codec id 12)
 
+Two on-disk shapes share the magic `M94Z` and codec id `12`,
+distinguished by the version byte:
+
+* **Version 1** (default; canonical for v1.5 files) — pure-language
+  rANS body laid out as four contiguous substreams. Produced by
+  Cython-accelerated Python, pure-Java, and pure-ObjC encoders.
+* **Version 2** (opt-in via `prefer_native` / `TTIO_M94Z_USE_NATIVE`,
+  added 2026-04-30) — `libttio_rans` byte layout
+  `[4×states LE][4×lane_sizes LE][per-lane data]`. Faster encode at
+  the rANS layer (see §4.3); decode currently runs in pure language
+  due to chicken-and-egg context derivation, see §7. V1 readers
+  reject the version byte cleanly.
+
 All multi-byte integers little-endian.
+
+### V1 (version byte = 1)
 
 ```
 [Codec header]
@@ -152,6 +167,40 @@ Header fixed prefix is 34 bytes (magic 4 + version 1 + flags 1 +
 num_qualities 8 + num_reads 4 + rlt_compressed_len 4 +
 context_params 8 + freq_tables_compressed_len 4); total header size is
 `34 + R + F + 16`.
+
+### V2 (version byte = 2, libttio_rans native body)
+
+```
+[Codec header]
+  magic                : 4 bytes  "M94Z"
+  version              : uint8    = 2
+  flags                : uint8
+  num_qualities        : uint64   LE
+  num_reads            : uint32   LE
+  rlt_compressed_len   : uint32   LE   (= R)
+  context_params       : 8 bytes
+  freq_tables_compressed_len : uint32 LE  (= F)
+  read_length_table    : R bytes  zlib(deflate(uint32[num_reads] LE))
+  freq_tables_blob     : F bytes  zlib(deflate(freq table blob))
+
+[Body — output of ttio_rans_encode_block]
+  state_final[4]       : 4 x uint32 LE
+  lane_sizes[4]        : 4 x uint32 LE
+  lane_0_data          : lane_sizes[0] bytes (16-bit LE renorm chunks)
+  lane_1_data          : lane_sizes[1] bytes
+  lane_2_data          : lane_sizes[2] bytes
+  lane_3_data          : lane_sizes[3] bytes
+
+[No trailer]
+```
+
+V2 omits the V1 header's `state_init[4]` suffix and the V1 trailer
+(states are embedded in the body). The freq-table contents and
+read-length table are unchanged — the M94.Z framing stays the same;
+only the rANS bitstream layout differs. Sparse context IDs are
+remapped to a dense `[0, n_active)` range for the C call but the
+freq-tables blob retains the ORIGINAL sparse IDs so V2 decode can
+rebuild contexts using the unchanged context model.
 
 ### Flags byte layout
 
