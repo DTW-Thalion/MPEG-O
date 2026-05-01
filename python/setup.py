@@ -37,6 +37,12 @@ try:
                     "src/ttio/codecs/_name_tokenizer/_name_tokenizer.pyx",
                 ],
             ),
+            Extension(
+                name="ttio.codecs._rans._rans",
+                sources=[
+                    "src/ttio/codecs/_rans/_rans.pyx",
+                ],
+            ),
         ],
         compiler_directives={"language_level": "3"},
     )
