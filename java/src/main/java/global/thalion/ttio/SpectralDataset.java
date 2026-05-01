@@ -824,11 +824,6 @@ public class SpectralDataset implements
                     Enums.Compression.RANS_ORDER1,
                     Enums.Compression.BASE_PACK,
                     Enums.Compression.QUALITY_BINNED,
-                    // M94 v1.2: FQZCOMP_NX16 lossless quality codec.
-                    // Carries read_lengths + revcomp_flags inside the
-                    // codec wire format; the M86 pipeline derives them
-                    // from run.lengths and run.flags & 16 (SAM REVERSE).
-                    Enums.Compression.FQZCOMP_NX16,
                     // M94.Z v1.2: CRAM-mimic rANS-Nx16 quality codec.
                     Enums.Compression.FQZCOMP_NX16_Z),
                 "read_names", java.util.Set.of(
@@ -1079,7 +1074,7 @@ public class SpectralDataset implements
                         run.sequences(), run.signalCompression(),
                         seqCodec);
                 }
-                // M94 v1.2: FQZCOMP_NX16 is a v1.5 quality codec. Apply
+                // M94.Z v1.2: FQZCOMP_NX16_Z is the v1.5 quality codec. Apply
                 // the auto-default ONLY when the run is already a v1.5
                 // candidate (i.e. at least one v1.5 codec is active —
                 // either via explicit override OR the REF_DIFF auto-
@@ -1096,7 +1091,6 @@ public class SpectralDataset implements
                         for (Enums.Compression ovr
                                 : run.signalCodecOverrides().values()) {
                             if (ovr == Enums.Compression.REF_DIFF
-                                || ovr == Enums.Compression.FQZCOMP_NX16
                                 || ovr == Enums.Compression.FQZCOMP_NX16_Z
                                 || ovr == Enums.Compression.DELTA_RANS_ORDER0) {
                                 isV1_5Candidate = true;
@@ -1105,11 +1099,11 @@ public class SpectralDataset implements
                         }
                     }
                     if (isV1_5Candidate) {
-                        qualCodec = Enums.Compression.FQZCOMP_NX16;
+                        qualCodec = Enums.Compression.FQZCOMP_NX16_Z;
                     }
                 }
-                if (qualCodec == Enums.Compression.FQZCOMP_NX16) {
-                    writeQualitiesFqzcompNx16(sc, run);
+                if (qualCodec == Enums.Compression.FQZCOMP_NX16_Z) {
+                    writeQualitiesFqzcompNx16Z(sc, run);
                 } else {
                     writeByteChannelWithCodec(sc, "qualities",
                         run.qualities(), run.signalCompression(),
@@ -1499,18 +1493,17 @@ public class SpectralDataset implements
     // ── M93 v1.2 / M94 v1.2 — v1.5 codec dispatch ────────────────────
 
     /** Return {@code true} if any genomic run carries a v1.5 codec
-     *  (REF_DIFF, FQZCOMP_NX16, FQZCOMP_NX16_Z, or DELTA_RANS_ORDER0).
+     *  (REF_DIFF, FQZCOMP_NX16_Z, or DELTA_RANS_ORDER0).
      *  Used to gate the format-version bump from 1.4 → 1.5: only files
      *  that actually exercise an M93+ codec get the new version string,
      *  so M82-only writes preserve byte-parity with existing fixtures.
      *
-     *  <p>M93 registered REF_DIFF as v1.5; M94 adds FQZCOMP_NX16 /
-     *  FQZCOMP_NX16_Z; M95 adds DELTA_RANS_ORDER0. All are v1.5 codecs
-     *  even though only REF_DIFF is "context-aware" in the M93 sense
-     *  (consumes sibling channels via the M86 pipeline hook).
-     *  FQZCOMP_NX16 carries its sibling-channel metadata
-     *  ({@code read_lengths} / {@code revcomp_flags}) inside the codec
-     *  wire format. */
+     *  <p>M93 registered REF_DIFF as v1.5; M94.Z adds FQZCOMP_NX16_Z;
+     *  M95 adds DELTA_RANS_ORDER0. All are v1.5 codecs even though only
+     *  REF_DIFF is "context-aware" in the M93 sense (consumes sibling
+     *  channels via the M86 pipeline hook). FQZCOMP_NX16_Z carries its
+     *  sibling-channel metadata ({@code read_lengths} / {@code revcomp_flags})
+     *  inside the codec wire format. */
     private static boolean hasAnyContextAwareCodec(
             List<WrittenGenomicRun> genomicRuns) {
         if (genomicRuns == null) return false;
@@ -1744,15 +1737,15 @@ public class SpectralDataset implements
     /** SAM REVERSE flag bit (0x10). */
     private static final int SAM_REVERSE_FLAG = 16;
 
-    /** M94 v1.2: write the {@code qualities} channel through the
-     *  FQZCOMP_NX16 codec.
+    /** M94.Z v1.2: write the {@code qualities} channel through the
+     *  FQZCOMP_NX16_Z codec.
      *
-     *  <p>Mirrors Python's {@code _write_qualities_fqzcomp_nx16}. The
+     *  <p>Mirrors Python's {@code _write_qualities_fqzcomp_nx16_z}. The
      *  codec needs per-read {@code read_lengths} and {@code revcomp_flags},
      *  derived here from {@code run.lengths} and
      *  {@code run.flags & 16} (SAM REVERSE bit). The encoded blob is
-     *  written as a flat uint8 dataset with {@code @compression = 10}. */
-    private static void writeQualitiesFqzcompNx16(
+     *  written as a flat uint8 dataset with {@code @compression = 12}. */
+    private static void writeQualitiesFqzcompNx16Z(
             global.thalion.ttio.providers.StorageGroup sc,
             WrittenGenomicRun run) {
         int n = run.readCount();
@@ -1763,7 +1756,7 @@ public class SpectralDataset implements
             revcompFlags[i] =
                 ((run.flags()[i] & SAM_REVERSE_FLAG) != 0) ? 1 : 0;
         }
-        byte[] encoded = global.thalion.ttio.codecs.FqzcompNx16.encode(
+        byte[] encoded = global.thalion.ttio.codecs.FqzcompNx16Z.encode(
             run.qualities(), readLengths, revcompFlags);
         global.thalion.ttio.providers.StorageDataset ds;
         try {
@@ -1776,7 +1769,7 @@ public class SpectralDataset implements
         try (var closeMe = ds) {
             closeMe.writeAll(encoded);
             closeMe.setAttribute("compression",
-                Enums.Compression.FQZCOMP_NX16.ordinal());
+                Enums.Compression.FQZCOMP_NX16_Z.ordinal());
         }
     }
 
@@ -1952,7 +1945,6 @@ public class SpectralDataset implements
         }
         for (Enums.Compression ovr : run.signalCodecOverrides().values()) {
             if (ovr == Enums.Compression.REF_DIFF
-                || ovr == Enums.Compression.FQZCOMP_NX16
                 || ovr == Enums.Compression.FQZCOMP_NX16_Z
                 || ovr == Enums.Compression.DELTA_RANS_ORDER0) {
                 return true;
