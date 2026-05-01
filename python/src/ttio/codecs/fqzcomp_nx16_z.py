@@ -53,6 +53,7 @@ X_MAX_PREFACTOR: int = (L >> T_BITS) << B_BITS  # 524288
 
 MAGIC = b"M94Z"
 VERSION = 1
+VERSION_V2_NATIVE = 2  # M94.Z V2: body produced by libttio_rans (Task 21 wiring)
 
 
 # ── Default context parameters (per spec §4.3) ──────────────────────────
@@ -589,24 +590,51 @@ def _pack_codec_header(h: CodecHeader) -> bytes:
     return bytes(out)
 
 
+def _pack_codec_header_v2(h: CodecHeader) -> bytes:
+    """Pack a V2 (native-body) header.
+
+    Same layout as V1 EXCEPT:
+      * version byte = ``VERSION_V2_NATIVE`` (=2)
+      * no 16-byte state_init suffix (V2 body embeds final states at its
+        own offset 0..15).
+
+    The ``state_init`` field on the input :class:`CodecHeader` is ignored
+    for V2 (caller may pass any tuple).
+    """
+    if len(h.read_length_table) != h.rlt_compressed_len:
+        raise ValueError("rlt_compressed_len mismatch")
+    out = bytearray()
+    out += MAGIC
+    out += struct.pack(
+        "<BBQII",
+        VERSION_V2_NATIVE,
+        h.flags & 0xFF,
+        h.num_qualities,
+        h.num_reads,
+        h.rlt_compressed_len,
+    )
+    out += pack_context_params(h.context_params)
+    out += struct.pack("<I", len(h.freq_tables_compressed))
+    out += h.read_length_table
+    out += h.freq_tables_compressed
+    return bytes(out)
+
+
 def _unpack_codec_header(blob: bytes) -> tuple[CodecHeader, int]:
+    """Parse a V1 M94.Z header.
+
+    Raises ``ValueError`` if the version byte is not 1. V2 streams must
+    be parsed via :func:`_unpack_codec_header_v2`. Callers that don't
+    know the version up front can peek ``blob[4]`` and dispatch.
+    """
     if len(blob) < HEADER_FIXED_PREFIX:
         raise ValueError(f"M94Z header too short: {len(blob)} bytes")
     if blob[:4] != MAGIC:
         raise ValueError(f"M94Z bad magic: {blob[:4]!r}, expected {MAGIC!r}")
     version = blob[4]
-    if version == 2:
-        # V2 multi-block container produced by libttio_rans (Task 14).
-        # Decoding requires the native C library via ctypes (Task 15).
-        # The Python pure path cannot decode V2 streams because the
-        # original (symbol, context) sequence used for freq-table
-        # construction is required at decode time and is supplied by
-        # the higher-level Task-15 wrapper.
-        raise NotImplementedError(
-            "M94Z V2 multi-block format requires libttio_rans native "
-            "library (Task 15 wires this up). To decode this stream, "
-            "install the native library or re-encode with the V1 "
-            "pure-Python encoder."
+    if version == VERSION_V2_NATIVE:
+        raise ValueError(
+            "M94Z V2 stream — call _unpack_codec_header_v2 instead"
         )
     if version != VERSION:
         raise ValueError(f"M94Z unsupported version: {version}")
@@ -634,6 +662,51 @@ def _unpack_codec_header(blob: bytes) -> tuple[CodecHeader, int]:
         context_params=ctx_params,
         freq_tables_compressed=freq_tables_blob,
         state_init=state_init,
+    )
+    return header, cursor
+
+
+def _unpack_codec_header_v2(blob: bytes) -> tuple[CodecHeader, int]:
+    """Parse a V2 (native-body) M94.Z header.
+
+    Returns ``(header, body_offset)`` where ``body_offset`` is the byte
+    offset at which the native rANS payload begins. The returned
+    :class:`CodecHeader` has ``state_init`` set to all-zero (V2 stores
+    states inside the body itself).
+    """
+    if len(blob) < HEADER_FIXED_PREFIX:
+        raise ValueError(f"M94Z header too short: {len(blob)} bytes")
+    if blob[:4] != MAGIC:
+        raise ValueError(f"M94Z bad magic: {blob[:4]!r}, expected {MAGIC!r}")
+    version = blob[4]
+    if version != VERSION_V2_NATIVE:
+        raise ValueError(
+            f"_unpack_codec_header_v2: expected version {VERSION_V2_NATIVE}, "
+            f"got {version}"
+        )
+    flags = blob[5]
+    num_qualities, num_reads, rlt_len = struct.unpack_from("<QII", blob, 6)
+    cursor = 22
+    ctx_params = unpack_context_params(blob, cursor)
+    cursor += CONTEXT_PARAMS_SIZE
+    (ft_len,) = struct.unpack_from("<I", blob, cursor)
+    cursor += 4
+    # V2: no 16-byte state_init suffix on the header itself.
+    if len(blob) < cursor + rlt_len + ft_len:
+        raise ValueError("M94Z V2 header truncated")
+    rlt = blob[cursor:cursor + rlt_len]
+    cursor += rlt_len
+    freq_tables_blob = blob[cursor:cursor + ft_len]
+    cursor += ft_len
+    header = CodecHeader(
+        flags=flags,
+        num_qualities=num_qualities,
+        num_reads=num_reads,
+        rlt_compressed_len=rlt_len,
+        read_length_table=rlt,
+        context_params=ctx_params,
+        freq_tables_compressed=freq_tables_blob,
+        state_init=(0, 0, 0, 0),  # not used for V2
     )
     return header, cursor
 
@@ -1103,12 +1176,80 @@ def _deserialize_freq_tables_to_arrays(
     return active, arrays
 
 
+def _encode_v2_native(
+    qualities: bytes,
+    read_lengths: list[int],
+    revcomp_flags: list[int],
+    context_params: ContextParams,
+    n: int,
+    n_padded: int,
+    pad_count: int,
+) -> bytes:
+    """V2 (libttio_rans-format) encode dispatch.
+
+    Builds context sequence + per-context freq tables (same as V1),
+    then remaps sparse context IDs to a dense [0, n_active) range so
+    the native encoder's freq table is compact, calls
+    :func:`_encode_via_native`, and packs a V2 wire-format header
+    plus the native body. The freq_tables blob still uses ORIGINAL
+    (sparse) context IDs so V2 decode can reconstruct contexts using
+    the unchanged M94.Z context model.
+    """
+    # Pass 1: build per-context counts and the context sequence.
+    contexts = _build_context_seq(
+        qualities, read_lengths, revcomp_flags, n_padded,
+        context_params.qbits, context_params.pbits, context_params.sloc,
+    )
+
+    raw_counts: dict[int, list[int]] = {}
+    symbols = bytearray(n_padded)
+    symbols[:n] = qualities  # padding stays 0
+    for i in range(n_padded):
+        ctx = contexts[i]
+        sym = symbols[i]
+        if ctx not in raw_counts:
+            raw_counts[ctx] = [0] * 256
+        raw_counts[ctx][sym] += 1
+
+    # Normalise to T per context.
+    freq_per_ctx: dict[int, list[int]] = {}
+    for ctx, rc in raw_counts.items():
+        freq_per_ctx[ctx] = normalise_to_total(rc, T)
+
+    # Remap sparse ctx IDs → dense [0, n_active) for the native call.
+    active_ctxs = sorted(freq_per_ctx.keys())
+    ctx_remap = {old: new for new, old in enumerate(active_ctxs)}
+    dense_contexts = [ctx_remap[c] for c in contexts]
+    dense_freq = [freq_per_ctx[c] for c in active_ctxs]
+
+    # Native encode (V2 byte format).
+    native_body = _encode_via_native(bytes(symbols), dense_contexts, dense_freq)
+
+    # Wire format.
+    rlt = _encode_read_lengths(read_lengths)
+    freq_tables_blob = _serialize_freq_tables(freq_per_ctx, context_params.sloc)
+    flags = (pad_count & 0x3) << 4
+
+    header_bytes = _pack_codec_header_v2(CodecHeader(
+        flags=flags,
+        num_qualities=n,
+        num_reads=len(read_lengths),
+        rlt_compressed_len=len(rlt),
+        read_length_table=rlt,
+        context_params=context_params,
+        freq_tables_compressed=freq_tables_blob,
+        state_init=(0, 0, 0, 0),  # not used in V2
+    ))
+    return header_bytes + native_body
+
+
 def encode(
     qualities: bytes,
     read_lengths: list[int],
     revcomp_flags: list[int],
     *,
     context_params: ContextParams | None = None,
+    prefer_native: bool | None = None,
 ) -> bytes:
     """Top-level M94.Z encoder.
 
@@ -1118,9 +1259,17 @@ def encode(
         revcomp_flags: parallel list of 0/1.
         context_params: optional :class:`ContextParams`; default is
             ``qbits=12, pbits=2, sloc=14``.
+        prefer_native: when ``True``, dispatch to the V2 native encoder
+            (libttio_rans). When ``False``, force the V1 path (Cython
+            or pure-Python). When ``None`` (default), respect the
+            environment variable ``TTIO_M94Z_USE_NATIVE`` — V1 is the
+            default unless that env var is "1" or "true". V1 streams
+            remain backwards-compatible (version byte = 1); V2 streams
+            carry version byte = 2 and a self-contained native body.
 
     Returns:
-        On-wire byte stream: header || body || trailer.
+        On-wire byte stream: header || body || trailer (V1) or
+        header || native body (V2).
     """
     if not isinstance(qualities, (bytes, bytearray, memoryview)):
         raise TypeError("qualities must be bytes-like")
@@ -1142,6 +1291,18 @@ def encode(
     n = len(qualities)
     pad_count = (-n) & 3
     n_padded = n + pad_count
+
+    # ── V2 native dispatch decision ─────────────────────────────────────
+    if prefer_native is None:
+        env_val = os.environ.get("TTIO_M94Z_USE_NATIVE", "").strip().lower()
+        prefer_native = env_val in ("1", "true", "yes", "on")
+    use_native_v2 = bool(prefer_native) and _HAVE_NATIVE_LIB
+
+    if use_native_v2:
+        return _encode_v2_native(
+            qualities, list(read_lengths), list(revcomp_flags),
+            context_params, n, n_padded, pad_count,
+        )
 
     if _HAVE_C_EXTENSION:
         # Cython fast path: do passes 1+2 + lane reverse in C.
@@ -1231,6 +1392,147 @@ def encode(
     return header_bytes + bytes(body) + trailer
 
 
+def _decode_v2_with_metadata(
+    encoded: bytes,
+    revcomp_flags: list[int] | None,
+) -> tuple[bytes, list[int], list[int]]:
+    """Decode a V2 (libttio_rans-body) M94.Z blob.
+
+    Uses pure-Python decode of the V2 body byte format with on-the-fly
+    context derivation from previously-decoded symbols. This is a
+    correctness-first implementation; native-accelerated V2 decode is
+    deferred to a follow-up task (would require a streaming/iterator
+    API on the C side).
+    """
+    header, body_off = _unpack_codec_header_v2(encoded)
+    n_qualities = header.num_qualities
+    n_reads = header.num_reads
+    pad_count = (header.flags >> 4) & 0x3
+
+    read_lengths = _decode_read_lengths(header.read_length_table, n_reads)
+
+    if revcomp_flags is None:
+        revcomp_flags = [0] * n_reads
+    elif len(revcomp_flags) != n_reads:
+        raise ValueError(
+            f"revcomp_flags length {len(revcomp_flags)} != num_reads {n_reads}"
+        )
+
+    n_padded = n_qualities + pad_count
+    if (n_padded & 3) != 0:
+        raise ValueError(
+            f"M94Z: n_padded {n_padded} not a multiple of 4 "
+            f"(num_qualities={n_qualities}, pad_count={pad_count})"
+        )
+
+    body = encoded[body_off:]
+    if len(body) < 32:
+        raise ValueError("M94Z V2: body shorter than native header")
+
+    # Recover sparse freq tables.
+    freq_per_ctx = _deserialize_freq_tables(header.freq_tables_compressed)
+    cum_per_ctx = {ctx: cumulative(freq) for ctx, freq in freq_per_ctx.items()}
+
+    qbits = header.context_params.qbits
+    pbits = header.context_params.pbits
+    sloc = header.context_params.sloc
+    pad_ctx = m94z_context(0, 0, 0, qbits, pbits, sloc)
+    shift = max(1, qbits // 3)
+    qmask_local = (1 << qbits) - 1
+
+    # Parse V2 body header (states, lane sizes).
+    states = list(struct.unpack_from("<IIII", body, 0))
+    lane_bytes = list(struct.unpack_from("<IIII", body, 16))
+    total_data = sum(lane_bytes)
+    if len(body) < 32 + total_data:
+        raise ValueError(
+            f"M94Z V2: body truncated (have {len(body)}, "
+            f"need {32 + total_data})"
+        )
+
+    # Per-lane sub-buffer pointers.
+    mv = memoryview(body)
+    lane_data = []
+    lane_pos = [0, 0, 0, 0]
+    offset = 32
+    for s_idx in range(NUM_STREAMS):
+        lane_data.append(mv[offset:offset + lane_bytes[s_idx]])
+        offset += lane_bytes[s_idx]
+
+    out = bytearray(n_padded)
+
+    # Forward decode with on-the-fly context derivation (same model as V1).
+    read_idx = 0
+    pos_in_read = 0
+    cur_read_len = read_lengths[0] if read_lengths else 0
+    cur_revcomp = revcomp_flags[0] if revcomp_flags else 0
+    cumulative_read_end = cur_read_len
+    prev_q = 0
+
+    for i in range(n_padded):
+        s_idx = i & 3
+        if i < n_qualities:
+            if (i >= cumulative_read_end
+                    and read_idx < len(read_lengths) - 1):
+                read_idx += 1
+                pos_in_read = 0
+                cur_read_len = read_lengths[read_idx]
+                cur_revcomp = revcomp_flags[read_idx]
+                cumulative_read_end += cur_read_len
+                prev_q = 0
+            pb = position_bucket_pbits(pos_in_read, cur_read_len, pbits)
+            ctx = m94z_context(prev_q, pb, cur_revcomp & 1, qbits, pbits, sloc)
+        else:
+            ctx = pad_ctx
+
+        if ctx not in freq_per_ctx:
+            raise ValueError(
+                f"M94Z V2 decoder: ctx {ctx} not in freq_tables (corrupt blob)"
+            )
+        freq = freq_per_ctx[ctx]
+        cum = cum_per_ctx[ctx]
+        x = states[s_idx]
+        slot = x & T_MASK
+        sym = bisect_right(cum, slot) - 1
+        f = freq[sym]
+        c = cum[sym]
+        x = (x >> T_BITS) * f + slot - c
+        # Renormalise: read 16-bit LE chunks while x < L (matches C lib).
+        while x < L:
+            ld = lane_data[s_idx]
+            lp = lane_pos[s_idx]
+            if lp + 2 > len(ld):
+                raise ValueError(
+                    f"M94Z V2: lane {s_idx} exhausted at i={i}"
+                )
+            chunk = ld[lp] | (ld[lp + 1] << 8)
+            lane_pos[s_idx] = lp + 2
+            x = (x << B_BITS) | chunk
+        states[s_idx] = x
+        out[i] = sym
+
+        if i < n_qualities:
+            prev_q = ((prev_q << shift) | (sym & ((1 << shift) - 1))) & qmask_local
+            pos_in_read += 1
+
+    # Sanity: after decoding all symbols + padding, every state should
+    # equal L (the encoder's initial state). Mismatch indicates corruption.
+    for s_idx in range(NUM_STREAMS):
+        if states[s_idx] != L:
+            raise ValueError(
+                f"M94Z V2: post-decode state[{s_idx}]={states[s_idx]} != "
+                f"L={L}; stream is corrupt"
+            )
+        if lane_pos[s_idx] != lane_bytes[s_idx]:
+            raise ValueError(
+                f"M94Z V2: lane {s_idx} consumed {lane_pos[s_idx]} of "
+                f"{lane_bytes[s_idx]} bytes; stream may be malformed"
+            )
+
+    qualities = bytes(out[:n_qualities])
+    return qualities, read_lengths, list(revcomp_flags)
+
+
 def decode_with_metadata(
     encoded: bytes,
     revcomp_flags: list[int] | None = None,
@@ -1238,8 +1540,22 @@ def decode_with_metadata(
     """Decode an M94.Z blob.
 
     ``revcomp_flags`` must match the encoder's trajectory (as in M94 v1).
-    If ``None``, all-zero is assumed.
+    If ``None``, all-zero is assumed. Both V1 (default) and V2
+    (native-body) streams are supported. V2 decode is currently
+    pure-Python regardless of ``_HAVE_NATIVE_LIB`` because contexts
+    in M94.Z are derived from previously-decoded symbols and the C
+    library's :c:func:`ttio_rans_decode_block` requires a fully
+    pre-computed contexts vector — see Task 21 design notes.
     """
+    if len(encoded) < 5:
+        raise ValueError("M94Z: encoded too short to read magic+version")
+    if encoded[:4] != MAGIC:
+        raise ValueError(
+            f"M94Z bad magic: {encoded[:4]!r}, expected {MAGIC!r}"
+        )
+    if encoded[4] == VERSION_V2_NATIVE:
+        return _decode_v2_with_metadata(encoded, revcomp_flags)
+
     header, header_size = _unpack_codec_header(encoded)
     n_qualities = header.num_qualities
     n_reads = header.num_reads
@@ -1379,6 +1695,7 @@ __all__ = [
     "CodecHeader",
     "MAGIC",
     "VERSION",
+    "VERSION_V2_NATIVE",
     "L",
     "B_BITS",
     "B",
