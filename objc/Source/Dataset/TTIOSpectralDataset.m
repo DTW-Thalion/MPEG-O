@@ -59,7 +59,7 @@ static BOOL _TTIO_M94_RunIsV15Candidate(TTIOWrittenGenomicRun *run);
 // decrypt lifecycle. Not part of the public header.
 @interface TTIOAcquisitionRun (TTIOSpectralDatasetInternal)
 - (NSData *)decryptedChannelNamed:(NSString *)chName;
-- (BOOL)reattachSignalHandlesFromGroup:(TTIOHDF5Group *)channels error:(NSError **)error;
+- (BOOL)reattachSignalHandlesFromGroup:(id<TTIOStorageGroup>)channels error:(NSError **)error;
 @end
 
 // v0.2 format version emitted by this writer.
