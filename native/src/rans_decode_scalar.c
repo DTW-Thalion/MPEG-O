@@ -13,6 +13,7 @@
  */
 
 #include "ttio_rans.h"
+#include "rans_internal.h"
 #include <string.h>
 
 /* ── tiny helpers ──────────────────────────────────────────────────── */
@@ -30,9 +31,9 @@ static inline uint16_t read_le16(const uint8_t *p)
     return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
 }
 
-/* ── public API ────────────────────────────────────────────────────── */
+/* ── internal kernel: scalar reference ────────────────────────────── */
 
-int ttio_rans_decode_block(
+int _ttio_rans_decode_block_scalar(
     const uint8_t  *compressed,
     size_t          comp_len,
     const uint16_t *contexts,

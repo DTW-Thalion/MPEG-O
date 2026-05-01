@@ -79,6 +79,11 @@ int ttio_rans_decode_mt(
 
 void ttio_rans_pool_destroy(ttio_rans_pool *pool);
 
+/* Diagnostic: name of the kernel selected at library-load time by cpuid
+ * dispatch.  Returns a pointer to a static string — one of
+ * "scalar", "sse4.1", "avx2".  Never returns NULL. */
+const char *ttio_rans_kernel_name(void);
+
 #ifdef __cplusplus
 }
 #endif
