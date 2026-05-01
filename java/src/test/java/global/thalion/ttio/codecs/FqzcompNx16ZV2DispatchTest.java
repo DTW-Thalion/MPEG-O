@@ -13,6 +13,7 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -276,5 +277,168 @@ final class FqzcompNx16ZV2DispatchTest {
         byte[] truncated = Arrays.copyOf(enc, enc.length - 4);
         assertThrows(IllegalArgumentException.class,
             () -> FqzcompNx16Z.decode(truncated, rcs));
+    }
+
+    // ── V2 native streaming decode (Task 26c) ──────────────────────
+    //
+    // The streaming decode path routes the inner rANS loop through the
+    // libttio_rans `ttio_rans_decode_block_streaming` API with a Java
+    // ContextResolver lambda for per-symbol context derivation. The path
+    // is shipped as infrastructure proving the C streaming API is wired
+    // end-to-end across all bindings; per-symbol JNI dispatch is too
+    // expensive to be a perf win for realistic blocks. The streaming
+    // path is opt-in (gated on TTIO_M94Z_USE_NATIVE_STREAMING env var);
+    // these tests force-invoke it via the package-private
+    // decodeV2ForceNativeStreamingForTest entry point.
+
+    @Test
+    @EnabledIf("isNativeAvailable")
+    void v2NativeStreamingRoundTrip() {
+        byte[] q = makeQualities(32, 50);
+        int[] rls = fill(32, 50);
+        int[] rcs = new int[32];
+
+        byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
+            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+        assertEquals(2, enc[4]);
+
+        FqzcompNx16Z.DecodeResult r =
+            FqzcompNx16Z.decodeV2ForceNativeStreamingForTest(enc, rcs);
+        assertNotNull(r, "streaming decode must not be null on valid V2 blob");
+        assertArrayEquals(q, r.qualities());
+        assertArrayEquals(rls, r.readLengths());
+    }
+
+    @Test
+    @EnabledIf("isNativeAvailable")
+    void v2NativeStreamingRoundTripUnaligned() {
+        // Unaligned (n_qualities not multiple of 4) — exercises padding.
+        byte[] q = makeQualities(7, 13);
+        int[] rls = fill(7, 13);
+        int[] rcs = new int[7];
+
+        byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
+            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+        assertEquals(2, enc[4]);
+        FqzcompNx16Z.DecodeResult r =
+            FqzcompNx16Z.decodeV2ForceNativeStreamingForTest(enc, rcs);
+        assertNotNull(r);
+        assertArrayEquals(q, r.qualities());
+    }
+
+    @Test
+    @EnabledIf("isNativeAvailable")
+    void v2NativeStreamingRoundTripWithRevcomp() {
+        byte[] q = makeQualities(50, 80);
+        int[] rls = fill(50, 80);
+        int[] rcs = new int[50];
+        for (int i = 0; i < 50; i++) rcs[i] = (i & 1);
+
+        byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
+            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+        FqzcompNx16Z.DecodeResult r =
+            FqzcompNx16Z.decodeV2ForceNativeStreamingForTest(enc, rcs);
+        assertNotNull(r);
+        assertArrayEquals(q, r.qualities());
+    }
+
+    @Test
+    @EnabledIf("isNativeAvailable")
+    void v2NativeStreamingMatchesPureJava() {
+        // Both paths must decode to identical output.
+        byte[] q = makeQualities(20, 32);
+        int[] rls = fill(20, 32);
+        int[] rcs = new int[20];
+
+        byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
+            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+
+        FqzcompNx16Z.DecodeResult viaPureJava = FqzcompNx16Z.decode(enc, rcs);
+        FqzcompNx16Z.DecodeResult viaStreaming =
+            FqzcompNx16Z.decodeV2ForceNativeStreamingForTest(enc, rcs);
+        assertNotNull(viaStreaming);
+        assertArrayEquals(viaPureJava.qualities(), viaStreaming.qualities());
+        assertArrayEquals(viaPureJava.readLengths(), viaStreaming.readLengths());
+    }
+
+    /**
+     * Direct invocation of the streaming JNI API — verifies the binding
+     * itself works against a hand-rolled ContextResolver. Independent of
+     * the M94.Z dispatch path so a regression in {@link FqzcompNx16Z}
+     * doesn't mask a binding bug.
+     */
+    @Test
+    @EnabledIf("isNativeAvailable")
+    void streamingApiDirectInvocation() {
+        // Encode a small fixed-context block via TtioRansNative.encodeBlock,
+        // then decode it back via the streaming API using a constant
+        // resolver. This isolates the streaming binding from M94.Z logic.
+        int nSymbols = 64;
+        int nContexts = 1;
+        byte[] symbols = new byte[nSymbols];
+        for (int i = 0; i < nSymbols; i++) symbols[i] = (byte) ((i * 7) % 16);
+        short[] contexts = new short[nSymbols];  // all zero
+
+        // Build a freq table that sums to T=4096.
+        int[] freqRow = new int[256];
+        // Use only 16 distinct symbols → 16 buckets of 256 each = 4096.
+        for (int s = 0; s < 16; s++) freqRow[s] = 256;
+        int[][] freq = new int[][] { freqRow };
+
+        // Encode.
+        byte[] outBuf = new byte[nSymbols * 4 + 64];
+        int[] outLen = new int[] { outBuf.length };
+        int rcEnc = TtioRansNative.encodeBlock(
+            symbols, contexts, nContexts, freq, outBuf, outLen);
+        assertEquals(0, rcEnc, "encodeBlock rc");
+        byte[] body = Arrays.copyOf(outBuf, outLen[0]);
+
+        // Build matching cum table.
+        int[] cumRow = new int[256];
+        int running = 0;
+        for (int s = 0; s < 256; s++) { cumRow[s] = running; running += freqRow[s]; }
+        int[][] cum = new int[][] { cumRow };
+
+        // Streaming decode with a constant resolver (always returns 0).
+        byte[] decoded = new byte[nSymbols];
+        int[] callCount = new int[1];
+        TtioRansNative.ContextResolver resolver = (i, prev) -> {
+            callCount[0]++;
+            return 0;
+        };
+        int rcDec = TtioRansNative.decodeBlockStreaming(
+            body, nContexts, freq, cum, decoded, nSymbols, resolver);
+        assertEquals(0, rcDec, "decodeBlockStreaming rc");
+        assertArrayEquals(symbols, decoded);
+        // Resolver must have been called at least nSymbols times
+        // (the C lib skips the call for padding positions, but for
+        // nSymbols=64, padding=0).
+        assertTrue(callCount[0] >= nSymbols,
+            "resolver called " + callCount[0] + " times, expected >= " + nSymbols);
+    }
+
+    @Test
+    @EnabledIf("isNativeAvailable")
+    void streamingApiInvalidContextReturnsParam() {
+        // Resolver returning ctx >= nContexts must trigger ERR_PARAM (-1).
+        int nSymbols = 16;
+        byte[] decoded = new byte[nSymbols];
+        // Body is irrelevant since the resolver fails before any decode.
+        // Build a minimal valid header (32 bytes: 4×state + 4×lane_size=0).
+        byte[] body = new byte[32];
+        // states all 0 (will be invalid but irrelevant — we fail in resolver)
+        int[] freqRow = new int[256];
+        for (int s = 0; s < 16; s++) freqRow[s] = 256;
+        int[] cumRow = new int[256];
+        int running = 0;
+        for (int s = 0; s < 256; s++) { cumRow[s] = running; running += freqRow[s]; }
+
+        TtioRansNative.ContextResolver bad = (i, prev) -> 999;  // out of range
+        int rc = TtioRansNative.decodeBlockStreaming(
+            body, 1, new int[][]{ freqRow }, new int[][]{ cumRow },
+            decoded, nSymbols, bad);
+        // Expect either ERR_PARAM (-1) or some other negative code; the
+        // contract is "non-zero on error".
+        assertNotEquals(0, rc, "expected non-zero return for invalid resolver output");
     }
 }

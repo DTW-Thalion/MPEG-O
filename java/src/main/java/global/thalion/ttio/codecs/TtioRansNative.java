@@ -89,4 +89,63 @@ public final class TtioRansNative {
      *         {@code dispatch.c}.
      */
     public static native String kernelName();
+
+    /**
+     * Per-symbol context resolver used by {@link #decodeBlockStreaming}.
+     *
+     * <p>Implementations must derive a context id from the current symbol
+     * index {@code i} and the previously decoded symbol {@code prevSym}
+     * (0 when {@code i == 0}). Must be deterministic. The returned int
+     * is treated as an unsigned 16-bit context id; it must be less than
+     * the {@code nContexts} passed to {@link #decodeBlockStreaming}, or
+     * the native call returns {@code TTIO_RANS_ERR_PARAM}.
+     *
+     * <p><b>Performance reality (Task 26c)</b>: per-symbol JNI dispatch
+     * has a JVM context-switch cost that is much higher than ctypes
+     * callback dispatch in Python (which itself was a wash with
+     * pure-Python in Task 26b). For realistic block sizes the streaming
+     * path is expected to be SLOWER than the pure-Java V2 decoder. The
+     * binding is shipped as infrastructure; codec callers gate it
+     * behind an opt-in path with a safe pure-Java fallback.
+     */
+    @FunctionalInterface
+    public interface ContextResolver {
+        /**
+         * @param i        current symbol index (0-based, in [0, nSymbols))
+         * @param prevSym  previously decoded symbol (or 0 for i==0); the
+         *                 byte is passed as an unsigned int via JNI
+         * @return         context id, treated as unsigned 16-bit
+         */
+        int resolve(long i, int prevSym);
+    }
+
+    /**
+     * Decode a block via libttio_rans's streaming context API.
+     *
+     * <p>The native library calls back into {@code resolver.resolve(i, prevSym)}
+     * before decoding each non-padding symbol, so codecs whose context
+     * derives from previously-decoded symbols (e.g. M94.Z order-1
+     * cascades) can drive the C decode kernel without materialising the
+     * contexts vector up front. Padding positions use {@code ctx=0}
+     * (matching the encoder) and skip the callback.
+     *
+     * <p>See {@link ContextResolver} for the per-call cost reality. Callers
+     * should treat this as an opt-in path with a safe pure-Java fallback
+     * on {@code rc != 0} or any thrown exception.
+     *
+     * @param compressed encoded body bytes (V2 native body — same layout
+     *                   as {@link #decodeBlock} input)
+     * @param nContexts  number of contexts (= freq.length = cum.length)
+     * @param freq       freq table, shape [nContexts][256]
+     * @param cum        cumulative table, shape [nContexts][256]
+     * @param symbols    output buffer, length >= nSymbols
+     * @param nSymbols   number of symbols to decode
+     * @param resolver   per-symbol context derivation callback
+     * @return TTIO_RANS_OK (0) or negative error code
+     */
+    public static native int decodeBlockStreaming(
+        byte[] compressed, int nContexts,
+        int[][] freq, int[][] cum,
+        byte[] symbols, int nSymbols,
+        ContextResolver resolver);
 }

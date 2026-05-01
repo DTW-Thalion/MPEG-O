@@ -1239,16 +1239,201 @@ public final class FqzcompNx16Z {
     /**
      * Decode a V2 (libttio_rans-body) M94.Z blob.
      *
-     * <p>Pure-Java implementation that parses the V2 body byte format
-     * (per {@code rans_encode_scalar.c}) and walks forward with on-the-fly
-     * context derivation. V2 decode is currently pure-Java because the
-     * C library's {@code ttio_rans_decode_block} requires a fully
-     * pre-computed contexts vector — the M94.Z context model derives
-     * contexts from previously-decoded symbols, so a streaming/iterator
-     * C API would be needed (deferred follow-up). V1 decode (above)
-     * remains the same pure-Java path.
+     * <p>The default path is pure-Java. When the env var
+     * {@code TTIO_M94Z_USE_NATIVE_STREAMING=1} is set AND the
+     * libttio_rans JNI library is available, dispatch first attempts
+     * native streaming decode via {@link #decodeV2ViaNativeStreaming},
+     * which routes the inner rANS loop through the C kernel using a
+     * per-symbol Java {@link TtioRansNative.ContextResolver} callback
+     * (Task 26c). On any error from the streaming path it falls back
+     * to the pure-Java decoder.
+     *
+     * <p><b>Performance reality (Task 26c)</b>: per-symbol JNI dispatch
+     * is much heavier than the pure-Java decode loop. The streaming path
+     * is shipped as infrastructure proving the C streaming context API
+     * works end-to-end across all bindings; for realistic blocks the
+     * pure-Java path is faster. Mirrors the Task 26b finding in Python.
+     * The streaming path is also less defensive about corrupt streams —
+     * the C library does not validate the post-decode final state. So
+     * the streaming path is opt-in and not the default.
+     *
+     * <p>The pure-Java path parses the V2 body byte format (per
+     * {@code rans_encode_scalar.c}) and walks forward with on-the-fly
+     * context derivation. V1 decode (above) remains the same pure-Java
+     * path.
      */
     private static DecodeResult decodeV2(byte[] encoded, int[] revcompFlags) {
+        if (preferNativeStreamingDecode() && TtioRansNative.isAvailable()) {
+            try {
+                DecodeResult r = decodeV2ViaNativeStreaming(encoded, revcompFlags);
+                if (r != null) return r;
+            } catch (Throwable t) {
+                // Fall through to pure-Java decode.
+            }
+        }
+        return decodeV2PureJava(encoded, revcompFlags);
+    }
+
+    /** Reads {@code TTIO_M94Z_USE_NATIVE_STREAMING} env var (truthy = enabled). */
+    private static boolean preferNativeStreamingDecode() {
+        String s = System.getenv("TTIO_M94Z_USE_NATIVE_STREAMING");
+        if (s == null) return false;
+        s = s.trim().toLowerCase();
+        return s.equals("1") || s.equals("true") || s.equals("yes") || s.equals("on");
+    }
+
+    /**
+     * Test-only entry point: force-decode a V2 blob via the native
+     * streaming path, bypassing the env-var guard. Returns {@code null}
+     * if the streaming path declines (unparseable blob, native lib
+     * unavailable, or the resolver returns out-of-range ctx). Throws if
+     * any underlying validation throws.
+     *
+     * <p>Visible to tests in the same package; not part of the public
+     * API.
+     */
+    static DecodeResult decodeV2ForceNativeStreamingForTest(byte[] encoded, int[] revcompFlags) {
+        if (!TtioRansNative.isAvailable()) return null;
+        return decodeV2ViaNativeStreaming(encoded, revcompFlags);
+    }
+
+    /**
+     * Decode a V2 body via the libttio_rans streaming context API.
+     *
+     * <p>Mirrors the Python {@code _decode_v2_via_native_streaming} helper
+     * (Task 26b). Builds a dense ctx remap, flat freq/cum tables, then
+     * invokes {@link TtioRansNative#decodeBlockStreaming} with a Java
+     * lambda that derives the M94.Z context for each position from
+     * read-tracking state and the just-decoded symbol.
+     *
+     * <p>Returns {@code null} on any unexpected internal condition; the
+     * caller treats {@code null} or a thrown exception as a fallback
+     * trigger.
+     */
+    private static DecodeResult decodeV2ViaNativeStreaming(
+            byte[] encoded, int[] revcompFlags) {
+        HeaderUnpack hu = unpackCodecHeaderV2(encoded);
+        CodecHeader header = hu.header;
+        int bodyOff = hu.bytesConsumed;
+
+        long nQ64 = header.numQualities;
+        if (nQ64 < 0 || nQ64 > Integer.MAX_VALUE) return null;
+        int nQualities = (int) nQ64;
+        int nReads = header.numReads;
+        int padCount = (header.flags >>> 4) & 0x3;
+
+        int[] readLengths = decodeReadLengths(header.readLengthTable, nReads);
+        if (revcompFlags == null) revcompFlags = new int[nReads];
+        else if (revcompFlags.length != nReads) return null;
+
+        int nPadded = nQualities + padCount;
+        if ((nPadded & 3) != 0) return null;
+
+        int bodyLen = encoded.length - bodyOff;
+        if (bodyLen < 32) return null;
+
+        // Recover sparse freq tables (still keyed by ORIGINAL sparse ctx id).
+        FreqTables ft = deserializeFreqTables(header.freqTablesCompressed);
+        final int qbits = header.contextParams.qbits;
+        final int pbits = header.contextParams.pbits;
+        final int sloc  = header.contextParams.sloc;
+
+        // Build dense (sorted-by-ctx) freq + cum tables for libttio_rans
+        // and a sparse_ctx → dense_idx remap mirroring the encoder.
+        int nContexts = ft.activeCtxs.length;
+        if (nContexts == 0 || nContexts > 0xFFFF) return null;
+
+        int ctxCap = 1 << sloc;
+        int[] ctxRemap = new int[ctxCap];
+        Arrays.fill(ctxRemap, -1);
+        int[][] freqDense = new int[nContexts][];
+        int[][] cumDense  = new int[nContexts][];
+        for (int i = 0; i < nContexts; i++) {
+            int sparse = ft.activeCtxs[i];
+            int[] freq = ft.freqArrays[i];
+            int[] cum  = new int[256];
+            int running = 0;
+            for (int s = 0; s < 256; s++) {
+                cum[s] = running;
+                running += freq[s];
+            }
+            freqDense[i] = freq;
+            cumDense[i]  = cum;
+            ctxRemap[sparse] = i;
+        }
+
+        // The encoder uses dense_pad_ctx for padding positions, but the C
+        // streaming decoder hardcodes ctx=0 for those (matching the
+        // pre-existing rans_decode_scalar contract). Both encoder and
+        // decoder agree on padding bytes being sym=0, ctx=0, so no
+        // resolver call is needed there.
+        int padCtxSparse = m94zContext(0, 0, 0, qbits, pbits, sloc);
+        final int padCtxDense = ctxRemap[padCtxSparse]; // unused, kept for parity
+
+        // Slice out the body bytes; the streaming decode entry point
+        // expects raw V2 body (4×state + 4×lane_size + lane data).
+        byte[] body = Arrays.copyOfRange(encoded, bodyOff, encoded.length);
+
+        byte[] out = new byte[nPadded];
+
+        // Mutable resolver state.  Boxed in a length-1 array so the
+        // lambda can mutate.  Layout: [readIdx, posInRead, curReadLen,
+        // curRevcomp, cumulativeReadEnd, prevQ].
+        final int[] state = new int[6];
+        state[2] = readLengths.length > 0 ? readLengths[0] : 0;
+        state[3] = revcompFlags.length > 0 ? revcompFlags[0] : 0;
+        state[4] = state[2];
+
+        final int[] readLengthsF = readLengths;
+        final int[] revcompFlagsF = revcompFlags;
+        final int shift = Math.max(1, qbits / 3);
+        final int qmaskLocal = (1 << qbits) - 1;
+        final int symMask = (1 << shift) - 1;
+        final int nQ = nQualities;
+        final int[] ctxRemapF = ctxRemap;
+
+        TtioRansNative.ContextResolver resolver = (i, prevSym) -> {
+            // Called BEFORE decoding symbol[i].  prevSym is the symbol
+            // decoded at i-1 (or 0 for i==0).
+            if (i >= nQ) {
+                // Padding ctx — but the C streaming decoder does NOT
+                // call us for i >= n_symbols (passes 0 internally), so
+                // this branch is defensive only.
+                return padCtxDense;
+            }
+
+            if (i > 0) {
+                state[5] = ((state[5] << shift) | (prevSym & symMask)) & qmaskLocal;
+                state[1]++;  // posInRead
+            }
+
+            // Read-boundary check (mirrors Python and pure-Java decoder).
+            if (i > 0 && i >= (long)state[4]
+                    && state[0] < readLengthsF.length - 1) {
+                state[0]++;                              // readIdx
+                state[1] = 0;                            // posInRead
+                state[2] = readLengthsF[state[0]];       // curReadLen
+                state[3] = revcompFlagsF[state[0]];      // curRevcomp
+                state[4] += state[2];                    // cumulativeReadEnd
+                state[5] = 0;                            // prevQ
+            }
+
+            int pb = positionBucketPbits(state[1], state[2], pbits);
+            int ctxSparse = m94zContext(state[5], pb, state[3] & 1, qbits, pbits, sloc);
+            int dense = ctxRemapF[ctxSparse];
+            if (dense < 0) return padCtxDense; // defensive fallback
+            return dense;
+        };
+
+        int rc = TtioRansNative.decodeBlockStreaming(
+            body, nContexts, freqDense, cumDense, out, nPadded, resolver);
+        if (rc != 0) return null;
+
+        byte[] qualities = Arrays.copyOf(out, nQualities);
+        return new DecodeResult(qualities, readLengths);
+    }
+
+    private static DecodeResult decodeV2PureJava(byte[] encoded, int[] revcompFlags) {
         HeaderUnpack hu = unpackCodecHeaderV2(encoded);
         CodecHeader header = hu.header;
         int bodyOff = hu.bytesConsumed;
