@@ -206,3 +206,97 @@ def test_v2_decode_when_native_only_for_encode():
     encoded_v2 = encode(qualities, rls, rcs, prefer_native=True)
     decoded, _, _ = decode_with_metadata(encoded_v2, revcomp_flags=rcs)
     assert decoded == qualities
+
+
+# Task 26b: V2 native streaming decode
+
+def _helper_decode_v2_streaming(enc_v2, rcs):
+    from ttio.codecs.fqzcomp_nx16_z import (
+        _decode_v2_via_native_streaming,
+        _unpack_codec_header_v2,
+        _deserialize_freq_tables,
+        _decode_read_lengths,
+    )
+    header, body_off = _unpack_codec_header_v2(enc_v2)
+    body = enc_v2[body_off:]
+    n_qualities = header.num_qualities
+    pad_count = (header.flags >> 4) & 0x3
+    n_padded = n_qualities + pad_count
+    freq_per_ctx = _deserialize_freq_tables(header.freq_tables_compressed)
+    ctx_params = header.context_params
+    read_lengths = _decode_read_lengths(header.read_length_table, header.num_reads)
+    return _decode_v2_via_native_streaming(
+        bytes(body), n_qualities, n_padded, freq_per_ctx,
+        ctx_params.qbits, ctx_params.pbits, ctx_params.sloc,
+        read_lengths, rcs,
+    )
+
+@pytest.mark.skipif(not _native_available(), reason='native libttio_rans not available')
+def test_v2_streaming_matches_pure_python():
+    import ttio.codecs.fqzcomp_nx16_z as _mod
+    qualities, rls, rcs = _make_data()
+    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    # Pure-Python decode
+    orig_flag = _mod._HAVE_NATIVE_LIB
+    _mod._HAVE_NATIVE_LIB = False
+    try:
+        dec_pure, _, _ = _mod._decode_v2_with_metadata(enc_v2, rcs)
+    finally:
+        _mod._HAVE_NATIVE_LIB = orig_flag
+    # Native streaming decode
+    dec_native = _helper_decode_v2_streaming(enc_v2, rcs)
+    assert dec_native == qualities
+    assert dec_native == dec_pure
+
+
+@pytest.mark.skipif(not _native_available(), reason='native libttio_rans not available')
+def test_v2_streaming_roundtrip_small():
+    qualities = b'!' * 16
+    rls = [16]
+    rcs = [0]
+    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    dec = _helper_decode_v2_streaming(enc_v2, rcs)
+    assert dec == qualities
+
+
+@pytest.mark.skipif(not _native_available(), reason='native libttio_rans not available')
+def test_v2_streaming_roundtrip_unaligned():
+    qualities = bytes(range(33, 33 + 17))
+    rls = [17]
+    rcs = [0]
+    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    dec = _helper_decode_v2_streaming(enc_v2, rcs)
+    assert dec == qualities
+
+
+@pytest.mark.skipif(not _native_available(), reason='native libttio_rans not available')
+def test_v2_streaming_roundtrip_multi_read():
+    rls = [50, 80, 60, 70, 40]
+    rcs = [0, 1, 0, 1, 0]
+    qualities = bytes((33 + 30 + ((i * 17) % 31)) for i in range(sum(rls)))
+    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    dec = _helper_decode_v2_streaming(enc_v2, rcs)
+    assert dec == qualities
+
+
+@pytest.mark.skipif(not _native_available(), reason='native libttio_rans not available')
+def test_v2_decode_uses_native_streaming_larger_block():
+    qualities, rls, rcs = _make_data(n_reads=200, read_len=100)
+    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    assert enc_v2[4] == 2
+    dec, _, _ = decode_with_metadata(enc_v2, revcomp_flags=rcs)
+    assert dec == qualities
+
+
+def test_v2_streaming_raises_when_no_native():
+    import ttio.codecs.fqzcomp_nx16_z as _mod
+    from ttio.codecs.fqzcomp_nx16_z import _decode_v2_via_native_streaming
+    orig_flag = _mod._HAVE_NATIVE_LIB
+    _mod._HAVE_NATIVE_LIB = False
+    try:
+        with pytest.raises(RuntimeError, match='libttio_rans not available'):
+            _decode_v2_via_native_streaming(
+                b'dummy', 0, 0, {0: [1] + [0] * 255}, 12, 2, 14, [0], [0],
+            )
+    finally:
+        _mod._HAVE_NATIVE_LIB = orig_flag
