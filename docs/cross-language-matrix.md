@@ -101,6 +101,10 @@ contract levels per language pair. Footnotes follow the table.
 8. **M64.5 Python↔Java 4-provider:** SQLite + Zarr cross-language reads
    pass after v0.9 fixes; `memory://` is xfail by design (in-process only).
    ObjC reads HDF5 + SQLite + Zarr via `readViaProviderURL` (Memory rejects).
+   **Task 31 (2026-05-01) extended ObjC to writes** — `+writeMinimalToPath:`
+   and `-writeToFilePath:` both accept memory:// / sqlite:// / zarr:// URLs
+   for MS-only datasets. NMR runs and Image-subclass datasets remain
+   HDF5-only across all three languages by design.
 9. **M64 cross-tool validation:** Validates Python exporter against
    *external* validators (lxml + PSI XSDs, pyteomics, pymzml, isatools).
    Not a Python↔ObjC↔Java check; included here because it's the closest

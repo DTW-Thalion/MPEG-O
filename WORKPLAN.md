@@ -6,13 +6,31 @@ as a record of what was built; current milestones use TTI-O names.
 
 ---
 
-> **Status (2026-04-30).** Phase 6 (M89 transport extension, M90
+> **Status (2026-05-01).** Phase 6 (M89 transport extension, M90
 > encryption/anonymisation, M91 multi-omics integration) **shipped**
 > alongside V- and C-series debt repayment. Phase 8 (post-M91
 > abstraction polish — `Run` protocol, modality-agnostic
 > `runs` / `runsForSample` / `runsOfModality`, mixed-dict write API,
 > per-run provenance compound dual-write/dual-read) **shipped**.
 > **Phase 9 (M93/M94/M94.Z/M95 codec parity) shipped 2026-04-30.**
+> **Phase 10 — FQZCOMP acceleration + ObjC M44 catch-up shipped
+> 2026-05-01:** removed legacy FQZCOMP_NX16 (M94 v1, codec id 10);
+> built `libttio_rans` C library at `native/` (AVX2/SSE4.1/scalar
+> SIMD dispatch, pthread thread pool, V2 multi-block wire format,
+> ~510 MiB/s encode / ~605 MiB/s decode); wired V2 dispatch through
+> Python ctypes / Java JNI / ObjC direct linkage with `prefer_native`
+> opt-in; refactored ObjC writer chain (TTIOAcquisitionRun,
+> SpectrumIndex, Spectrum + 7 subclasses, InstrumentConfig,
+> SignalArray, CompoundIO, SpectralDataset.writeToFilePath:) to
+> accept `id<TTIOStorageGroup>` — closing the 2026-04 gap with
+> Python's M44 and Java's M44 migrations. ObjC MS-only datasets
+> now write through memory:// / sqlite:// / zarr:// URLs via either
+> the class-method (Task 30) or instance-method (Task 31) entry
+> point. Test counts: Python 540/540, Java 845/845, ObjC 3256/2
+> (the 2 are pre-existing TestMilestone29 Thermo mock-binary tests,
+> unrelated). NMR runs and Image-subclass datasets continue to
+> require HDF5 (H5DSset_scale dimension scales / native 3D cubes
+> have no protocol equivalents — same scope as Python and Java).
 > M93 REF_DIFF (codec id 9), M94 v1 FQZCOMP_NX16 (codec id 10),
 > M94.Z FQZCOMP_NX16_Z (codec id 12, CRAM-mimic), and M95
 > DELTA_RANS_ORDER0 (codec id 11, delta + zigzag + varint + rANS
@@ -955,6 +973,10 @@ is cheaper.
 | 77 | Wire format: big-endian, self-contained header. | Embeddable in HDF5 datasets or .tis packets without external metadata. |
 | 78 | Frequency rounding: descending count, stable by symbol value. | Deterministic cross-language byte-exact conformance. |
 | 79 | MPGO remnant cleanup mandatory in M83. | Zero tolerance for stale pre-rebrand identifiers. |
+| 80 | M94.Z V2 wire format (version byte = 2) carries the libttio_rans byte layout `[4×states LE][4×lane_sizes LE][per-lane data]`; V1 (version byte = 1) remains canonical. | New V2 streams encode at native rANS speed without breaking V1 readers. |
+| 81 | `prefer_native` is opt-in for V2 writes (parameter or `TTIO_M94Z_USE_NATIVE` env var); V1 is the default. | Existing call sites are unaffected; new builds opt in explicitly. |
+| 82 | ObjC writer chain takes `id<TTIOStorageGroup>` (Python/Java M44 parity, Task 31). NMR runs and Image-subclass datasets stay HDF5-only. | The HDF5-direct features (H5DSset_scale, native 3D cubes) have no protocol equivalents — same scope as Python and Java. |
+| 83 | Provider compression-unsupported behaviour is "accept argument and silently ignore" per `<TTIOStorageProvider>` protocol. | Memory / SQLite / Zarr accept `TTIOCompressionZlib` from upstream callers without erroring; HDF5 honors it. |
 
 ---
 
