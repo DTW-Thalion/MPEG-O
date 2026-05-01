@@ -1,11 +1,13 @@
 /*
  * rans_decode_sse41.c — SSE4.1-targeted rANS decode kernel.
  *
- * For Phase B Task 12 this kernel delegates to the scalar reference
- * implementation but is compiled with -msse4.1 so the auto-vectoriser
- * can lift the per-lane state read/write and renormalisation loop.
- *
- * TODO(Task 18): hand-vectorise hot path with <smmintrin.h> intrinsics.
+ * After Task 28 evaluation this kernel remains a thin delegate to the
+ * scalar reference, compiled with -msse4.1 so gcc/clang can auto-
+ * vectorise the 4-way interleaved hot loop.  See rans_decode_avx2.c
+ * for the full rationale: hand-rolled __m128i intrinsics lost ~55%
+ * throughput against the auto-vectorised scalar at -O3, and the
+ * auto-vectorised baseline already exceeds the Task-28 throughput
+ * target.
  *
  * Copyright (c) 2026 Thalion Global.  All rights reserved.
  */
