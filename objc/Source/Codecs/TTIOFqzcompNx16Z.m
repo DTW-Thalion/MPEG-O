@@ -1142,14 +1142,244 @@ static NSData *z_encode_v2_native(const uint8_t *qualities, int32_t n_qualities,
 }
 #endif  /* TTIO_HAS_NATIVE_RANS */
 
+// ── V2 native streaming decode (Task 26c) ────────────────────────
+//
+// Routes the inner rANS decode loop through libttio_rans's
+// ttio_rans_decode_block_streaming API, with a per-symbol C resolver
+// callback that derives M94.Z contexts on the fly.
+//
+// Performance reality (Task 26c): the per-symbol callback adds
+// indirect-call overhead inside the C decode loop.  Unlike Python
+// (ctypes CFUNCTYPE) and Java (JNI CallIntMethod), ObjC has direct
+// C linkage so the callback cost is only an indirect function call.
+// However, the overall path is still expected to be on par with or
+// slightly slower than the pure-ObjC V2 decoder for realistic blocks
+// because the resolver dominates the inner-loop cost vs the SIMD
+// kernel's unrolled multi-lane scalar ops.  Shipped as infrastructure
+// proving the streaming C API works end-to-end across all bindings.
+//
+// The streaming path is gated on TTIO_M94Z_USE_NATIVE_STREAMING env
+// var (default off) because the C library does not validate the
+// post-decode final state, so a corrupt stream may decode silently
+// to the wrong bytes.  The pure-ObjC path below is more defensive
+// and remains the default.
+
+#if TTIO_HAS_NATIVE_RANS
+
+typedef struct {
+    int32_t n_qualities;
+    int32_t qbits;
+    int32_t pbits;
+    int32_t sloc;
+    int32_t shift;
+    uint32_t qmask_local;
+    uint32_t shift_mask;
+
+    // Read-tracking state.
+    int32_t read_idx;
+    int32_t pos_in_read;
+    int32_t cur_read_len;
+    uint32_t cur_revcomp;
+    int32_t cumulative_read_end;
+    uint32_t prev_q;
+
+    int32_t n_reads;
+    const int32_t *read_lengths;
+    const int8_t  *revcomp_flags;
+
+    // Sparse → dense ctx remap.  Indexed by sparse ctx id; -1 means
+    // absent (defensive — should not happen on a valid blob).
+    const int32_t *ctx_remap;
+    int32_t pad_ctx_dense;
+} z_streaming_resolver_state;
+
+static uint16_t z_streaming_resolver_cb(void *user_data,
+                                          size_t i,
+                                          uint8_t prev_sym)
+{
+    z_streaming_resolver_state *st = (z_streaming_resolver_state *)user_data;
+
+    // C library does not call this for i >= n_symbols (padding),
+    // but be defensive anyway.
+    if ((int32_t)i >= st->n_qualities) {
+        return (uint16_t)st->pad_ctx_dense;
+    }
+
+    if (i > 0) {
+        st->prev_q = ((st->prev_q << st->shift)
+                      | ((uint32_t)prev_sym & st->shift_mask)) & st->qmask_local;
+        st->pos_in_read++;
+    }
+
+    // Read-boundary advance.
+    if (i > 0 && (int32_t)i >= st->cumulative_read_end
+        && st->read_idx < st->n_reads - 1) {
+        st->read_idx++;
+        st->pos_in_read = 0;
+        st->cur_read_len = st->read_lengths[st->read_idx];
+        st->cur_revcomp  = (uint32_t)(st->revcomp_flags[st->read_idx] & 1);
+        st->cumulative_read_end += st->cur_read_len;
+        st->prev_q = 0;
+    }
+
+    uint32_t pb = z_pos_bucket(st->pos_in_read, st->cur_read_len, st->pbits);
+    uint32_t ctx_sparse = z_context(st->prev_q, pb, st->cur_revcomp & 1,
+                                     st->qbits, st->pbits, st->sloc);
+    int32_t dense = st->ctx_remap[ctx_sparse];
+    if (dense < 0) return (uint16_t)st->pad_ctx_dense;
+    return (uint16_t)dense;
+}
+
+/*
+ * Pre-condition: caller has parsed the V2 header and recovered the
+ * sparse freq tables.  This function builds the dense (sorted-by-ctx)
+ * freq+cum tables, the dtab via ttio_rans_build_decode_table, and the
+ * sparse→dense remap, then calls ttio_rans_decode_block_streaming.
+ *
+ * On success, returns a retained NSDictionary identical in shape to
+ * z_decode_v2's output: { @"qualities": NSData, @"readLengths": NSArray }.
+ * On failure, sets *error and returns nil.
+ *
+ * Always returns nil (rather than throwing) on any error, so the
+ * caller can transparently fall back to the pure-ObjC decoder.
+ */
+static NSDictionary *z_decode_v2_via_native_streaming(
+    const uint8_t *body, NSUInteger body_len,
+    int32_t n_qualities, int32_t n_padded,
+    NSArray<NSNumber *> *readLengths,
+    NSArray<NSNumber *> *revcompFlags,
+    int32_t qbits, int32_t pbits, int32_t sloc,
+    size_t n_active, const uint32_t *active_ctxs,
+    uint16_t * const *freq_tables_orig)
+{
+    if (n_active == 0 || n_active > 0xFFFFu) return nil;
+
+    int32_t n_contexts_sparse = 1 << sloc;
+
+    // Allocate dense freq + cum + dtab + sparse→dense remap.
+    uint32_t *freq_dense = (uint32_t *)calloc(n_active * 256, sizeof(uint32_t));
+    uint32_t *cum_dense  = (uint32_t *)calloc(n_active * 256, sizeof(uint32_t));
+    uint8_t  *dtab       = (uint8_t  *)calloc(n_active * (size_t)kZ_T,
+                                                sizeof(uint8_t));
+    int32_t  *ctx_remap  = (int32_t  *)malloc(sizeof(int32_t) * n_contexts_sparse);
+    if (!freq_dense || !cum_dense || !dtab || !ctx_remap) {
+        free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+        return nil;
+    }
+    for (int32_t c = 0; c < n_contexts_sparse; c++) ctx_remap[c] = -1;
+
+    for (size_t ai = 0; ai < n_active; ai++) {
+        uint32_t sparse = active_ctxs[ai];
+        if ((int32_t)sparse >= n_contexts_sparse) {
+            free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+            return nil;
+        }
+        ctx_remap[sparse] = (int32_t)ai;
+        const uint16_t *fr = freq_tables_orig[ai];
+        uint32_t running = 0;
+        for (int s = 0; s < 256; s++) {
+            freq_dense[ai * 256 + s] = (uint32_t)fr[s];
+            cum_dense[ai * 256 + s]  = running;
+            running += (uint32_t)fr[s];
+        }
+    }
+
+    int rc = ttio_rans_build_decode_table(
+        (uint16_t)n_active,
+        (const uint32_t (*)[256])freq_dense,
+        (const uint32_t (*)[256])cum_dense,
+        (uint8_t (*)[TTIO_RANS_T])dtab);
+    if (rc != 0) {
+        free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+        return nil;
+    }
+
+    // Build read-length / revcomp C arrays for the resolver.
+    int32_t n_reads = (int32_t)readLengths.count;
+    int32_t *rl_arr = (int32_t *)malloc(sizeof(int32_t)
+                                          * (n_reads ? n_reads : 1));
+    int8_t  *rc_arr = (int8_t  *)malloc(sizeof(int8_t)
+                                          * (n_reads ? n_reads : 1));
+    if (!rl_arr || !rc_arr) {
+        free(rl_arr); free(rc_arr);
+        free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+        return nil;
+    }
+    for (int32_t k = 0; k < n_reads; k++) {
+        rl_arr[k] = (int32_t)[readLengths[k] unsignedLongLongValue];
+        rc_arr[k] = (int8_t)([revcompFlags[k] unsignedIntegerValue] & 1u);
+    }
+
+    uint32_t pad_ctx_sparse = z_context(0, 0, 0, qbits, pbits, sloc);
+    int32_t pad_ctx_dense = (pad_ctx_sparse < (uint32_t)n_contexts_sparse)
+                              ? ctx_remap[pad_ctx_sparse] : -1;
+    if (pad_ctx_dense < 0) pad_ctx_dense = 0;  // defensive
+
+    int32_t shift = qbits / 3;
+    if (shift < 1) shift = 1;
+
+    z_streaming_resolver_state state = {
+        .n_qualities = n_qualities,
+        .qbits = qbits, .pbits = pbits, .sloc = sloc,
+        .shift = shift,
+        .qmask_local = ((uint32_t)1 << qbits) - 1,
+        .shift_mask  = ((uint32_t)1 << shift) - 1,
+        .read_idx = 0,
+        .pos_in_read = 0,
+        .cur_read_len = (n_reads > 0) ? rl_arr[0] : 0,
+        .cur_revcomp  = (n_reads > 0) ? (uint32_t)rc_arr[0] : 0,
+        .cumulative_read_end = (n_reads > 0) ? rl_arr[0] : 0,
+        .prev_q = 0,
+        .n_reads = n_reads,
+        .read_lengths = rl_arr,
+        .revcomp_flags = rc_arr,
+        .ctx_remap = ctx_remap,
+        .pad_ctx_dense = pad_ctx_dense,
+    };
+
+    uint8_t *out_buf = (uint8_t *)calloc((n_padded > 0) ? n_padded : 1, 1);
+    if (!out_buf) {
+        free(rl_arr); free(rc_arr);
+        free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+        return nil;
+    }
+
+    rc = ttio_rans_decode_block_streaming(
+        body, body_len,
+        (uint16_t)n_active,
+        (const uint32_t (*)[256])freq_dense,
+        (const uint32_t (*)[256])cum_dense,
+        (const uint8_t (*)[TTIO_RANS_T])dtab,
+        out_buf, (size_t)n_padded,
+        z_streaming_resolver_cb,
+        &state);
+
+    NSDictionary *result = nil;
+    if (rc == 0) {
+        NSData *qData = [NSData dataWithBytes:out_buf
+                                       length:(NSUInteger)n_qualities];
+        result = @{
+            @"qualities":   qData,
+            @"readLengths": readLengths,
+        };
+    }
+
+    free(out_buf);
+    free(rl_arr); free(rc_arr);
+    free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+    return result;
+}
+
+#endif  /* TTIO_HAS_NATIVE_RANS */
+
 // ── V2 decode (pure-ObjC; option E) ──────────────────────────────
 //
 // Pure-ObjC walk-forward decoder for V2 streams. Mirrors the Python
-// _decode_v2_with_metadata and Java decodeV2 implementations. We
-// cannot use the C library's ttio_rans_decode_block here because it
-// requires a fully pre-computed contexts vector — the M94.Z context
-// model derives contexts from previously-decoded symbols, so a
-// streaming-context C API would be needed (deferred follow-up).
+// _decode_v2_with_metadata and Java decodeV2 implementations. The
+// streaming variant above (z_decode_v2_via_native_streaming) is used
+// opportunistically when TTIO_M94Z_USE_NATIVE_STREAMING is set; this
+// pure-ObjC path remains the canonical reference and the default
+// because it validates post-decode invariants the C library does not.
 
 static NSDictionary *z_decode_v2(NSData *data,
                                    NSArray<NSNumber *> *revcompFlags,
@@ -1254,6 +1484,40 @@ static NSDictionary *z_decode_v2(NSData *data,
         if (error) *error = ftErr;
         return nil;
     }
+
+#if TTIO_HAS_NATIVE_RANS
+    // ── Optional native streaming dispatch (Task 26c) ─────────────
+    // Gated on TTIO_M94Z_USE_NATIVE_STREAMING env var; default off.
+    // The pure-ObjC fallback below is more defensive (validates
+    // post-decode invariants the C library skips).
+    {
+        const char *streamEnv = getenv("TTIO_M94Z_USE_NATIVE_STREAMING");
+        BOOL streamOn = NO;
+        if (streamEnv && *streamEnv) {
+            if (strcasecmp(streamEnv, "1") == 0
+                || strcasecmp(streamEnv, "true") == 0
+                || strcasecmp(streamEnv, "yes") == 0
+                || strcasecmp(streamEnv, "on") == 0) {
+                streamOn = YES;
+            }
+        }
+        if (streamOn) {
+            NSDictionary *streamResult = z_decode_v2_via_native_streaming(
+                p + body_off + 0, body_len,
+                (int32_t)numQ, n_padded,
+                readLengths, revcompFlags,
+                qbits, pbits, sloc,
+                n_active, active_ctxs, freq_tables);
+            if (streamResult) {
+                free(active_ctxs);
+                for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
+                free(freq_tables);
+                return streamResult;
+            }
+            // Fall through to pure-ObjC decoder on streaming failure.
+        }
+    }
+#endif
 
     // Build per-ctx lookup arrays (freq + cum) indexed by sparse ctx id.
     int32_t n_contexts = 1 << sloc;

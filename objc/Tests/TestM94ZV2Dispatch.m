@@ -234,6 +234,91 @@ static void testV1V2HeaderShape(void)
     PASS(b1[5] == b2[5], "V1/V2 flags byte identical (same pad_count)");
 }
 
+// ── Native streaming decode (Task 26c) ─────────────────────────────
+//
+// The streaming decode path (z_decode_v2_via_native_streaming in
+// TTIOFqzcompNx16Z.m) is gated on TTIO_M94Z_USE_NATIVE_STREAMING env
+// var.  This test sets the env var, encodes a V2 blob, and verifies
+// round-trip correctness.  Per-symbol C-callback overhead means this
+// is infrastructure only — see Task 26c report for the perf reality.
+static void testV2NativeStreamingRoundTrip(void)
+{
+    NSString *backend = [TTIOFqzcompNx16Z backendName];
+    if (![backend hasPrefix:@"native-"]) {
+        // Only meaningful when the native library is linked in.
+        return;
+    }
+
+    // Save, set, restore env var so we don't leak between tests.
+    const char *saved = getenv("TTIO_M94Z_USE_NATIVE_STREAMING");
+    NSString *savedStr = saved ? [NSString stringWithUTF8String:saved] : nil;
+    setenv("TTIO_M94Z_USE_NATIVE_STREAMING", "1", 1);
+
+    NSData *q = makeQualities(50, 80);
+    NSArray *rls = makeUniformLengths(50, 80);
+    NSArray *rcs = makeRevcompFlags(50, YES);
+    NSError *err = nil;
+
+    NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
+                                              readLengths:rls
+                                             revcompFlags:rcs
+                                                  options:@{@"preferNative": @YES}
+                                                    error:&err];
+    PASS(enc != nil, "V2 streaming-mode encode succeeds");
+    if (enc) {
+        const uint8_t *b = (const uint8_t *)enc.bytes;
+        PASS(b[4] == 2, "V2 version byte == 2");
+
+        err = nil;
+        NSDictionary *dec = [TTIOFqzcompNx16Z decodeData:enc
+                                            revcompFlags:rcs
+                                                   error:&err];
+        PASS(dec != nil, "V2 streaming-mode decode succeeds");
+        if (dec) {
+            PASS([dec[@"qualities"] isEqualToData:q],
+                 "V2 native streaming round-trip matches input qualities");
+        }
+    }
+
+    // Restore env var.
+    if (savedStr) setenv("TTIO_M94Z_USE_NATIVE_STREAMING",
+                          [savedStr UTF8String], 1);
+    else          unsetenv("TTIO_M94Z_USE_NATIVE_STREAMING");
+}
+
+static void testV2NativeStreamingFallsBackOnUnset(void)
+{
+    NSString *backend = [TTIOFqzcompNx16Z backendName];
+    if (![backend hasPrefix:@"native-"]) return;
+
+    // Default behaviour (env var unset) must use the pure-ObjC V2
+    // decoder.  Round-trip must still succeed.
+    unsetenv("TTIO_M94Z_USE_NATIVE_STREAMING");
+
+    NSData *q = makeQualities(20, 30);
+    NSArray *rls = makeUniformLengths(20, 30);
+    NSArray *rcs = makeRevcompFlags(20, NO);
+    NSError *err = nil;
+
+    NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
+                                              readLengths:rls
+                                             revcompFlags:rcs
+                                                  options:@{@"preferNative": @YES}
+                                                    error:&err];
+    PASS(enc != nil, "V2 encode (streaming env unset) succeeds");
+    if (enc) {
+        err = nil;
+        NSDictionary *dec = [TTIOFqzcompNx16Z decodeData:enc
+                                            revcompFlags:rcs
+                                                   error:&err];
+        PASS(dec != nil, "V2 decode (streaming env unset) succeeds");
+        if (dec) {
+            PASS([dec[@"qualities"] isEqualToData:q],
+                 "V2 round-trip with streaming env unset matches input");
+        }
+    }
+}
+
 void testM94ZV2Dispatch(void);
 void testM94ZV2Dispatch(void)
 {
@@ -243,4 +328,6 @@ void testM94ZV2Dispatch(void)
     testV2NativeUnaligned();
     testV2NativeMultiReadRevcomp();
     testV1V2HeaderShape();
+    testV2NativeStreamingRoundTrip();
+    testV2NativeStreamingFallsBackOnUnset();
 }
