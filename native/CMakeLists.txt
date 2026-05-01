@@ -146,3 +146,8 @@ if(TTIO_RANS_ENABLE_TSAN)
         PRIVATE ttio_rans_tsan Threads::Threads)
     add_test(NAME thread_safety_tsan COMMAND test_thread_safety_tsan)
 endif()
+
+# Benchmark (not registered as a ctest; run manually)
+add_executable(bench_throughput bench/bench_throughput.c)
+target_link_libraries(bench_throughput PRIVATE ttio_rans)
+target_compile_options(bench_throughput PRIVATE -O3)
