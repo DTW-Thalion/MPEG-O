@@ -47,6 +47,50 @@ int ttio_rans_decode_block(
     size_t          n_symbols
 );
 
+/*
+ * Caller-provided context resolver.
+ *
+ * Called before decoding each symbol.  Receives:
+ *   user_data : opaque pointer passed at decode time
+ *   i         : current symbol index (0-based, in range [0, n_symbols))
+ *   prev_sym  : the symbol just decoded (or 0 for i==0)
+ * Returns the context ID for position i.
+ *
+ * Must be deterministic and side-effect free except for the caller's
+ * own bookkeeping.  Must not return a context >= n_contexts; doing so
+ * causes ttio_rans_decode_block_streaming to return TTIO_RANS_ERR_PARAM.
+ */
+typedef uint16_t (*ttio_rans_context_resolver)(
+    void    *user_data,
+    size_t   i,
+    uint8_t  prev_sym
+);
+
+/*
+ * Decode a block with on-the-fly context derivation.
+ *
+ * Same compressed-byte layout as ttio_rans_decode_block.  Calls
+ * `resolver(user_data, i, prev_sym)` to obtain the context for each
+ * position before decoding it.  Intended for codecs whose context
+ * depends on previously decoded symbols (e.g. M94.Z order-1 cascades),
+ * where the contexts[] array is unavailable up front.
+ *
+ * Note: the streaming decoder is scalar-only — it is bottlenecked by
+ * the per-symbol callback, so SIMD acceleration would not help.
+ */
+int ttio_rans_decode_block_streaming(
+    const uint8_t              *compressed,
+    size_t                      comp_len,
+    uint16_t                    n_contexts,
+    const uint32_t            (*freq)[256],
+    const uint32_t            (*cum)[256],
+    const uint8_t             (*dtab)[TTIO_RANS_T],
+    uint8_t                    *symbols,
+    size_t                      n_symbols,
+    ttio_rans_context_resolver  resolver,
+    void                       *user_data
+);
+
 int ttio_rans_build_decode_table(
     uint16_t        n_contexts,
     const uint32_t (*freq)[256],
