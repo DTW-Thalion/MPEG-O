@@ -487,7 +487,7 @@ public final class ProfileHarnessFull {
         global.thalion.ttio.codecs.RefDiff.decode(rdEnc, cigarsRd, positionsRd, refSeq);
         r.timings.put("ref_diff_decode", (System.nanoTime() - t) / 1e6);
 
-        // ── FQZCOMP_NX16: 100K × 100bp quality strings ──
+        // ── Quality test data: 100K × 100bp quality strings ──
         int nQual = 100_000 * 100;
         byte[] quals = new byte[nQual];
         long qs = 0xBEEFL;
@@ -497,16 +497,6 @@ public final class ProfileHarnessFull {
         }
         int[] readLengths = new int[100_000];
         java.util.Arrays.fill(readLengths, 100);
-        int[] revcomp = new int[100_000];
-
-        t = System.nanoTime();
-        byte[] fqzEnc = global.thalion.ttio.codecs.FqzcompNx16.encode(
-                quals, readLengths, revcomp);
-        r.timings.put("fqzcomp_nx16_encode", (System.nanoTime() - t) / 1e6);
-
-        t = System.nanoTime();
-        global.thalion.ttio.codecs.FqzcompNx16.decode(fqzEnc);
-        r.timings.put("fqzcomp_nx16_decode", (System.nanoTime() - t) / 1e6);
 
         // ── FQZCOMP_NX16_Z: same qualities, with revcomp flags ──
         int[] revcompZ = new int[100_000];
