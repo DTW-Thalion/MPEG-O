@@ -5,6 +5,7 @@
 #import "TTIOHDF5Types.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOCompoundField.h"
+#import "Providers/TTIOHDF5Provider.h"
 #import <hdf5.h>
 
 @implementation TTIOHDF5Group
@@ -566,17 +567,16 @@ static herr_t collect_link(hid_t loc, const char *name,
                                                   count:(NSUInteger)count
                                                   error:(NSError **)error
 {
-    (void)name; (void)fields; (void)count;
-    // Compound dataset construction on TTIOHDF5Group requires lazy H5T
-    // materialisation that lives in TTIOHDF5CompoundDatasetAdapter.
-    // Callers that need this go through TTIOHDF5Provider's
-    // rootGroupWithError: which returns the adapter chain; direct
-    // TTIOHDF5Group callers shouldn't hit this path. CompoundIO will
-    // refactor through the adapter explicitly (step 5).
-    if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
-        @"createCompoundDatasetNamed: on raw TTIOHDF5Group is not "
-        @"supported; route through TTIOHDF5Provider adapter chain");
-    return nil;
+    (void)error;
+    // Compound dataset construction is lazy: the H5T compound type is
+    // built when writeAll: is called (it needs the row data to size
+    // VL strings). The adapter wraps this group + schema; the actual
+    // write goes through TTIOCompoundIO writeGeneric:, preserving HDF5
+    // byte-exact behavior.
+    return [TTIOHDF5Provider adapterForCompoundDatasetWithParent:self
+                                                            name:name
+                                                          fields:fields
+                                                           count:count];
 }
 
 @end

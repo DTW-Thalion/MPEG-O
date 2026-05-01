@@ -504,4 +504,13 @@
     return [[TTIOHDF5DatasetAdapter alloc] initWithDataset:dataset name:name];
 }
 
++ (id<TTIOStorageDataset>)adapterForCompoundDatasetWithParent:(TTIOHDF5Group *)parent
+                                                          name:(NSString *)name
+                                                        fields:(NSArray<TTIOCompoundField *> *)fields
+                                                         count:(NSUInteger)count
+{
+    return [[TTIOHDF5CompoundDatasetAdapter alloc]
+            initWithParent:parent name:name fields:fields count:count];
+}
+
 @end
