@@ -372,12 +372,6 @@ class GenomicRun:
             # contract: a flat uint8 byte stream the same length as
             # ``sum(lengths)``.
             decoded = self._decode_ref_diff_sequences(all_bytes)
-        elif codec_id == int(Compression.FQZCOMP_NX16):
-            # M94 v1.2: FQZCOMP_NX16 lossless quality codec. The codec
-            # wire format carries read_lengths inside its sidecar; the
-            # revcomp_flags must be derived from run.flags & 16 (SAM
-            # REVERSE) to reproduce the encoder's context trajectory.
-            decoded = self._decode_fqzcomp_nx16_qualities(all_bytes)
         elif codec_id == int(Compression.FQZCOMP_NX16_Z):
             # M94.Z v1.2: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16). Same
             # plumbing as v1: codec carries read_lengths inside its
@@ -451,27 +445,6 @@ class GenomicRun:
 
         per_read = _ref_diff_decode(encoded, cigars, positions, chrom_seq)
         return b"".join(per_read)
-
-    def _decode_fqzcomp_nx16_qualities(self, encoded: bytes) -> bytes:
-        """Decode the ``qualities`` channel encoded with the M94 FQZCOMP_NX16 codec.
-
-        Returns the concatenated per-read quality byte stream — same
-        shape and dtype contract as the M82 ``qualities`` channel
-        (``uint8`` 1-D byte stream of total length ``sum(lengths)``).
-
-        The codec carries ``read_lengths`` inside its own header; we
-        recover ``revcomp_flags`` from ``run.flags & 16`` (SAM REVERSE
-        bit) to reproduce the encoder's context trajectory.
-        """
-        from .codecs.fqzcomp_nx16 import decode_with_metadata as _fqz_decode
-
-        SAM_REVERSE = 16
-        flags = self.index.flags  # numpy uint32 array
-        revcomp_flags = [
-            1 if (int(f) & SAM_REVERSE) else 0 for f in flags
-        ]
-        qualities, _, _ = _fqz_decode(encoded, revcomp_flags=revcomp_flags)
-        return qualities
 
     def _decode_fqzcomp_nx16_z_qualities(self, encoded: bytes) -> bytes:
         """Decode the ``qualities`` channel encoded with the M94.Z codec.
