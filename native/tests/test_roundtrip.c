@@ -255,6 +255,7 @@ static void test_err_build_decode_table_overflow(void) {
 int main(void)
 {
     printf("ttio_rans C tests:\n");
+    printf("  selected kernel: %s\n", ttio_rans_kernel_name());
 
     /* Round-trip tests */
     test_empty_input();

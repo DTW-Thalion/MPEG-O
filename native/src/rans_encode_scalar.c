@@ -15,6 +15,7 @@
  */
 
 #include "ttio_rans.h"
+#include "rans_internal.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -29,9 +30,9 @@ static inline void write_le32(uint8_t *p, uint32_t v)
     p[3] = (uint8_t)(v >> 24);
 }
 
-/* ── public API ────────────────────────────────────────────────────── */
+/* ── internal kernel: scalar reference ────────────────────────────── */
 
-int ttio_rans_encode_block(
+int _ttio_rans_encode_block_scalar(
     const uint8_t  *symbols,
     const uint16_t *contexts,
     size_t          n_symbols,
