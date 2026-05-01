@@ -953,12 +953,12 @@ static BOOL zIsGroupDir(NSString *p)
                              compressionLevel:(int)compressionLevel
                                         error:(NSError **)error
 {
-    (void)compressionLevel;
-    if (compression != TTIOCompressionNone) {
-        if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
-            @"ZarrProvider: compression not implemented in v0.8");
-        return nil;
-    }
+    // Task 31: silently ignore compression — the protocol's
+    // -supportsCompression returns NO for Zarr (default), so callers
+    // know not to expect compressed output. Erroring here violates the
+    // protocol contract ("accept argument for interface compatibility
+    // but silently ignore" — TTIOStorageProtocols.h).
+    (void)compression; (void)compressionLevel;
     NSString *p = [self childPath:n];
     if ([[NSFileManager defaultManager] fileExistsAtPath:p]) {
         if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
@@ -986,12 +986,8 @@ static BOOL zIsGroupDir(NSString *p)
                                compressionLevel:(int)compressionLevel
                                           error:(NSError **)error
 {
-    (void)compressionLevel;
-    if (compression != TTIOCompressionNone) {
-        if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
-            @"ZarrProvider: compression not implemented in v0.8");
-        return nil;
-    }
+    // Task 31: silently ignore compression (see -createDatasetNamed:).
+    (void)compression; (void)compressionLevel;
     NSString *p = [self childPath:n];
     if ([[NSFileManager defaultManager] fileExistsAtPath:p]) {
         if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
