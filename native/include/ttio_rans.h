@@ -91,6 +91,71 @@ int ttio_rans_decode_block_streaming(
     void                       *user_data
 );
 
+/*
+ * M94.Z context-derivation parameters — mirrors the Python
+ * ``ContextParams`` and Java ``ContextParams`` records used by the
+ * pure-language reference implementations.  Defaults are
+ * qbits=12, pbits=2, sloc=14 (see DEFAULT_QBITS / DEFAULT_PBITS /
+ * DEFAULT_SLOC in fqzcomp_nx16_z.py and FqzcompNx16Z.java).
+ */
+typedef struct {
+    uint32_t qbits;
+    uint32_t pbits;
+    uint32_t sloc;
+} ttio_m94z_params;
+
+/*
+ * Decode a V2 block whose contexts follow the M94.Z scheme, with the
+ * context derivation done inline in C.
+ *
+ * Replaces the per-symbol cross-language callback path of
+ * `ttio_rans_decode_block_streaming` for the M94.Z codec — the JNI/
+ * ctypes/objc round-trip per symbol made that approach slower than
+ * the pure-language decoder.  By baking the (prev_q ring + position
+ * bucket + revcomp) → context formula directly into C, the entire
+ * decode loop runs without leaving native code.
+ *
+ * Inputs:
+ *   compressed / comp_len  — same V2 byte layout as
+ *                            `ttio_rans_decode_block`
+ *   n_contexts             — number of dense contexts in freq/cum/dtab
+ *   freq / cum / dtab      — per-DENSE-context frequency tables
+ *   params                 — qbits / pbits / sloc (CRAM-Nx16 discipline)
+ *   ctx_remap              — optional sparse→dense map of length
+ *                            `1u << params->sloc`.  NULL means identity
+ *                            (each sparse ctx == its dense index).  Any
+ *                            sparse ctx not present in the active set
+ *                            should map to `pad_ctx_dense` (typically 0).
+ *   read_lengths           — uint32 lengths of each read, total ==
+ *                            n_symbols
+ *   n_reads                — number of entries in read_lengths /
+ *                            revcomp_flags
+ *   revcomp_flags          — 0/1 reverse-complement flag per read
+ *   pad_ctx_dense          — dense ctx ID assigned to padding positions
+ *                            (i >= n_symbols) and any sparse->dense miss
+ *
+ * Outputs:
+ *   symbols  — decoded bytes, length n_symbols
+ *
+ * Returns TTIO_RANS_OK on success.
+ */
+int ttio_rans_decode_block_m94z(
+    const uint8_t            *compressed,
+    size_t                    comp_len,
+    uint16_t                  n_contexts,
+    const uint32_t          (*freq)[256],
+    const uint32_t          (*cum)[256],
+    const uint8_t           (*dtab)[TTIO_RANS_T],
+    const ttio_m94z_params   *params,
+    const uint16_t           *ctx_remap,
+    const uint32_t           *read_lengths,
+    size_t                    n_reads,
+    const uint8_t            *revcomp_flags,
+    uint16_t                  pad_ctx_dense,
+    uint8_t                  *symbols,
+    size_t                    n_symbols
+);
+
 int ttio_rans_build_decode_table(
     uint16_t        n_contexts,
     const uint32_t (*freq)[256],
