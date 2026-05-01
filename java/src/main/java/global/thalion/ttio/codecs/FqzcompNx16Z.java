@@ -778,6 +778,19 @@ public final class FqzcompNx16Z {
                                    params, n, nPadded, padCount);
         }
 
+        // Pad qualities to nPadded with sym=0 — drops the per-iteration
+        // {@code (i < n) ? qualities[i] : 0} branch from both pass 1
+        // and pass 2 hot loops. padCount is at most 3 bytes so the
+        // copy cost is negligible.
+        byte[] qPadded;
+        if (padCount == 0) {
+            qPadded = qualities;
+        } else {
+            qPadded = new byte[nPadded];
+            System.arraycopy(qualities, 0, qPadded, 0, n);
+            // tail bytes default to 0
+        }
+
         // Pass 1: build per-symbol context sequence + per-context counts.
         int[] contexts = buildContextSeq(qualities, readLengths, revcompFlags,
                                           nPadded, params.qbits, params.pbits,
@@ -791,17 +804,19 @@ public final class FqzcompNx16Z {
                 arr = new int[256];
                 rawCounts[ctx] = arr;
             }
-            int sym = (i < n) ? (qualities[i] & 0xFF) : 0;
-            arr[sym]++;
+            arr[qPadded[i] & 0xFF]++;
         }
 
         // Normalise per-context, build cumulative tables, count active.
-        // Pack (f, c, xMax) into a single long[256] per context for the
-        // hot encode loop:
+        // Pack (f, c, xMax) into a single long[256] per active context
+        // for the hot encode loop. Per-context allocation (rather than
+        // a flat ctxCap*256 array) keeps the working set small for
+        // sparse usage — a flat 32 MB table regressed cold-start
+        // throughput in the perf harness without buying enough warm-state
+        // gain to justify the allocation cost.
         //   bits 48..63 = freq (12 bits, padded)
         //   bits 32..47 = cum  (16 bits)
         //   bits  0..31 = xMax (32 bits)
-        // This collapses three array dereferences to one in pass 2.
         int[][] freqByCtx = new int[ctxCap][];
         long[][] packByCtx = new long[ctxCap][];
         int active = 0;
@@ -826,19 +841,19 @@ public final class FqzcompNx16Z {
         for (int k = 0; k < NUM_STREAMS; k++) state[k] = L;
         long[] stateInit = new long[]{L, L, L, L};
 
-        // Per-stream growable u16 chunk buffers (we'll reverse to bytes
-        // at the end). Use byte arrays sized to upper bound.
-        // Worst case: every symbol triggers one renorm (16 bits = 2 bytes).
-        // So per stream upper bound is 2 * (nPadded / 4) bytes.
-        int initCap = Math.max(64, (nPadded / NUM_STREAMS) * 2 + 16);
-        byte[][] streamBufs = new byte[NUM_STREAMS][];
+        // Per-stream chunk buffers as short[] — each renorm emits one
+        // 16-bit chunk, so a single store per renorm replaces the two
+        // byte stores in the previous byte[] layout. Worst case is one
+        // chunk per symbol, bounded by nPadded/4 chunks per stream.
+        int initCap = Math.max(64, (nPadded / NUM_STREAMS) + 16);
+        short[][] streamBufs = new short[NUM_STREAMS][];
         int[] streamLens = new int[NUM_STREAMS];
-        for (int k = 0; k < NUM_STREAMS; k++) streamBufs[k] = new byte[initCap];
+        for (int k = 0; k < NUM_STREAMS; k++) streamBufs[k] = new short[initCap];
 
         for (int i = nPadded - 1; i >= 0; i--) {
             int sIdx = i & 3;
             int ctx = contexts[i];
-            int sym = (i < n) ? (qualities[i] & 0xFF) : 0;
+            int sym = qPadded[i] & 0xFF;
             long packed = packByCtx[ctx][sym];
             int f = (int) (packed >>> 48) & 0xFFFF;
             int c = (int) (packed >>> 32) & 0xFFFF;
@@ -849,17 +864,14 @@ public final class FqzcompNx16Z {
             }
 
             long x = state[sIdx];
-            // Renorm: typically at most one iteration.
-            byte[] buf = streamBufs[sIdx];
+            short[] buf = streamBufs[sIdx];
             int len = streamLens[sIdx];
             while (x >= xMax) {
-                if (len + 2 > buf.length) {
-                    buf = Arrays.copyOf(buf, buf.length * 2);
+                if (len >= buf.length) {
+                    buf = Arrays.copyOf(buf, buf.length << 1);
                     streamBufs[sIdx] = buf;
                 }
-                buf[len]     = (byte) (x & 0xFFL);
-                buf[len + 1] = (byte) ((x >>> 8) & 0xFFL);
-                len += 2;
+                buf[len++] = (short) (x & 0xFFFFL);
                 x >>>= B_BITS;
             }
             streamLens[sIdx] = len;
@@ -870,24 +882,18 @@ public final class FqzcompNx16Z {
         long[] stateFinal = new long[NUM_STREAMS];
         for (int k = 0; k < NUM_STREAMS; k++) stateFinal[k] = state[k];
 
-        // Reverse each stream's bytes — per Python reference, the bytes
-        // were appended LIFO during reverse encode, and we need to flip
-        // them in 2-byte (chunk) units so each LE pair stays intact.
+        // Reverse each stream's chunks (LIFO during encode) and pack
+        // them to bytes as 16-bit LE pairs.
         byte[][] streams = new byte[NUM_STREAMS][];
         for (int k = 0; k < NUM_STREAMS; k++) {
-            int len = streamLens[k];
-            if ((len & 1) != 0) {
-                throw new IllegalStateException("stream " + k + " has odd length");
-            }
-            byte[] src = streamBufs[k];
-            byte[] dst = new byte[len];
-            int nChunks = len / 2;
+            int nChunks = streamLens[k];
+            byte[] dst = new byte[2 * nChunks];
+            short[] src = streamBufs[k];
             for (int j = 0; j < nChunks; j++) {
-                byte lo = src[2 * j];
-                byte hi = src[2 * j + 1];
+                int chunk = src[j] & 0xFFFF;
                 int dj = nChunks - 1 - j;
-                dst[2 * dj] = lo;
-                dst[2 * dj + 1] = hi;
+                dst[2 * dj]     = (byte) chunk;
+                dst[2 * dj + 1] = (byte) (chunk >>> 8);
             }
             streams[k] = dst;
         }
