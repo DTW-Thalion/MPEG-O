@@ -45,9 +45,29 @@ def register_provider(name: str, cls: type[StorageProvider]) -> None:
     _REGISTRY[name] = cls
 
 
+def _try_register_zarr() -> bool:
+    """Lazy-register the optional ZarrProvider. The zarr package's import
+    chain is heavy (~135ms) so we defer it until a caller actually asks
+    for the zarr provider — the previous eager fallback inside
+    :func:`discover_providers` made every non-HDF5 provider lookup pay
+    that cost on first call."""
+    if "zarr" in _REGISTRY:
+        return True
+    try:
+        from .zarr import ZarrProvider
+    except ImportError:
+        return False
+    _REGISTRY["zarr"] = ZarrProvider
+    return True
+
+
 def discover_providers() -> dict[str, type[StorageProvider]]:
     """Return the full map of registered providers, loading entry
-    points lazily on first call. Subsequent calls reuse the cache."""
+    points lazily on first call. Subsequent calls reuse the cache.
+
+    The optional zarr provider is NOT loaded by this function — it is
+    registered lazily via :func:`_try_register_zarr` only when a caller
+    requests the ``zarr`` scheme/name."""
     if _REGISTRY:
         return dict(_REGISTRY)
     try:
@@ -55,6 +75,10 @@ def discover_providers() -> dict[str, type[StorageProvider]]:
     except TypeError:  # pragma: no cover — older importlib.metadata
         eps = entry_points().get("ttio.providers", [])
     for ep in eps:
+        # Skip the zarr entry point during eager discovery; it loads on
+        # demand only.
+        if ep.name == "zarr":
+            continue
         try:
             cls = ep.load()
         except Exception:
@@ -72,31 +96,24 @@ def discover_providers() -> dict[str, type[StorageProvider]]:
     if "sqlite" not in _REGISTRY:
         from .sqlite import SqliteProvider
         _REGISTRY["sqlite"] = SqliteProvider
-    # v0.7 M46: register the optional ZarrProvider when zarr is
-    # available. Absence is fine — importers that need it will fall
-    # through to ImportError from the provider module.
-    if "zarr" not in _REGISTRY:
-        try:
-            from .zarr import ZarrProvider
-        except ImportError:
-            pass
-        else:
-            _REGISTRY["zarr"] = ZarrProvider
     return dict(_REGISTRY)
+
+
+_ZARR_SCHEMES = {"zarr", "zarr+memory", "zarr+s3", "zarr+file"}
 
 
 def _class_for_scheme(scheme: str) -> type[StorageProvider]:
     providers = discover_providers()
     if scheme in providers:
         return providers[scheme]
+    # Zarr is registered lazily — load it now if a zarr-flavoured scheme
+    # asked for it, then re-check the registry.
+    if scheme in _ZARR_SCHEMES:
+        if _try_register_zarr() and "zarr" in _REGISTRY:
+            return _REGISTRY["zarr"]
     # Map transport / filesystem schemes onto storage providers.
     aliases = {
         "file": "hdf5", "http": "hdf5", "https": "hdf5", "s3": "hdf5",
-        # v0.7 M46: zarr composite schemes all route to the
-        # ZarrProvider; the provider itself inspects the URL to pick
-        # the backing store (DirectoryStore, FSStore, MemoryStore).
-        "zarr": "zarr", "zarr+memory": "zarr",
-        "zarr+s3": "zarr", "zarr+file": "zarr",
     }
     mapped = aliases.get(scheme)
     if mapped and mapped in providers:
@@ -120,6 +137,10 @@ def open_provider(path_or_url: str, *, provider: str | None = None,
     """
     if provider is not None:
         cls = discover_providers().get(provider)
+        if cls is None and provider == "zarr":
+            # Lazy zarr — only load if explicitly asked.
+            if _try_register_zarr():
+                cls = _REGISTRY.get("zarr")
         if cls is None:
             raise ValueError(
                 f"unknown provider '{provider}'. "

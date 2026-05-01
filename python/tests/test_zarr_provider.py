@@ -44,6 +44,12 @@ def mem_url():
 
 
 def test_zarr_discovered_by_registry() -> None:
+    # Zarr is registered LAZILY — `discover_providers()` no longer
+    # imports the heavy zarr package eagerly (the import takes ~135ms,
+    # which previously inflated every non-HDF5 provider's first
+    # `open_provider` call). Instead, zarr is registered on demand
+    # when a caller passes ``provider="zarr"`` or a ``zarr://`` URL.
+    open_provider("zarr+memory://discovery-probe", mode="w").close()
     providers = discover_providers()
     assert "zarr" in providers
     assert providers["zarr"] is ZarrProvider
