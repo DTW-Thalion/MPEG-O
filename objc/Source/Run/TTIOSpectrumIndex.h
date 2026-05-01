@@ -4,8 +4,9 @@
 #import <Foundation/Foundation.h>
 #import "ValueClasses/TTIOEnums.h"
 
+#import "Providers/TTIOStorageProtocols.h"
+
 @class TTIOValueRange;
-@class TTIOHDF5Group;
 @class TTIOIsolationWindow;
 
 /**
@@ -87,12 +88,13 @@
           isolationLowerOffsets:(NSData *)isolationLowerOffsets
           isolationUpperOffsets:(NSData *)isolationUpperOffsets;
 
-#pragma mark - HDF5
+#pragma mark - Storage round-trip (provider-agnostic)
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)parent error:(NSError **)error;
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)parent error:(NSError **)error;
+/** v0.7 M44 / Task 31: I/O routed through StorageGroup / StorageDataset. */
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error;
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error;
 
-/** v0.9 M64.5-objc-java: storage-protocol read for cross-provider support. */
+/** v0.9 M64.5-objc-java: legacy alias kept for source compatibility. */
 + (instancetype)readFromStorageGroup:(id)parent error:(NSError **)error;
 
 @end
