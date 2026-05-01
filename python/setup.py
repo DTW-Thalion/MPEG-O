@@ -1,13 +1,12 @@
-"""TTI-O — setuptools entry point for the Cython extension.
+"""TTI-O — setuptools entry point for the Cython extensions.
 
 Most package metadata lives in ``pyproject.toml``. This file only exists
-because the Cython extension at ``ttio.codecs._fqzcomp_nx16`` needs an
-``Extension`` declaration that PEP 621 ``[project]`` doesn't support.
+because Cython extensions need ``Extension`` declarations that PEP 621
+``[project]`` doesn't support.
 
 When ``Cython`` is unavailable, the build silently emits no extension
-modules — the pure-Python reference at :mod:`ttio.codecs.fqzcomp_nx16`
-provides byte-identical output, just slower. ObjC + Java implementations
-are unaffected.
+modules — the pure-Python references provide byte-identical output, just
+slower. ObjC + Java implementations are unaffected.
 """
 from __future__ import annotations
 
@@ -20,12 +19,6 @@ try:
 
     ext_modules = cythonize(
         [
-            Extension(
-                name="ttio.codecs._fqzcomp_nx16._fqzcomp_nx16",
-                sources=[
-                    "src/ttio/codecs/_fqzcomp_nx16/_fqzcomp_nx16.pyx",
-                ],
-            ),
             Extension(
                 name="ttio.codecs._fqzcomp_nx16_z._fqzcomp_nx16_z",
                 sources=[

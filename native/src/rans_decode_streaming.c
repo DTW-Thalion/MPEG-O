@@ -1,0 +1,140 @@
+/*
+ * rans_decode_streaming.c — Streaming/callback-based scalar rANS decoder.
+ *
+ * Identical byte layout and decode kernel as rans_decode_scalar.c, but
+ * the contexts[] array is replaced by a caller-provided resolver
+ * callback that is invoked before decoding each symbol.  This lets
+ * codecs whose context derives from previously decoded symbols
+ * (e.g. M94.Z order-1 cascades) accelerate decode in C without having
+ * to materialise the contexts vector up front.
+ *
+ * The streaming variant is scalar-only: it is bottlenecked by the
+ * per-symbol callback, so SIMD lanes would not help.
+ *
+ * Copyright (c) 2026 Thalion Global.  All rights reserved.
+ */
+
+#include "ttio_rans.h"
+#include "rans_internal.h"
+#include <string.h>
+
+/* ── tiny helpers (duplicated from rans_decode_scalar.c for clarity) ── */
+
+static inline uint32_t read_le32(const uint8_t *p)
+{
+    return (uint32_t)p[0]
+        | ((uint32_t)p[1] << 8)
+        | ((uint32_t)p[2] << 16)
+        | ((uint32_t)p[3] << 24);
+}
+
+static inline uint16_t read_le16(const uint8_t *p)
+{
+    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+}
+
+/* ── public entry point ───────────────────────────────────────────── */
+
+int ttio_rans_decode_block_streaming(
+    const uint8_t              *compressed,
+    size_t                      comp_len,
+    uint16_t                    n_contexts,
+    const uint32_t            (*freq)[256],
+    const uint32_t            (*cum)[256],
+    const uint8_t             (*dtab)[TTIO_RANS_T],
+    uint8_t                    *symbols,
+    size_t                      n_symbols,
+    ttio_rans_context_resolver  resolver,
+    void                       *user_data)
+{
+    /* ── 0. Validate ──────────────────────────────────────────────── */
+    if (!compressed || !freq || !cum || !dtab || !symbols || !resolver)
+        return TTIO_RANS_ERR_PARAM;
+    if (n_symbols == 0)
+        return TTIO_RANS_OK;
+    if (n_contexts == 0)
+        return TTIO_RANS_ERR_PARAM;
+
+    const size_t header_size = 32;
+    if (comp_len < header_size)
+        return TTIO_RANS_ERR_CORRUPT;
+
+    /* ── 1. Read header ──────────────────────────────────────────── */
+    uint32_t state[TTIO_RANS_STREAMS];
+    for (int lane = 0; lane < TTIO_RANS_STREAMS; lane++)
+        state[lane] = read_le32(compressed + lane * 4);
+
+    uint32_t lane_bytes[TTIO_RANS_STREAMS];
+    size_t total_data = 0;
+    for (int lane = 0; lane < TTIO_RANS_STREAMS; lane++) {
+        lane_bytes[lane] = read_le32(compressed + 16 + lane * 4);
+        total_data += lane_bytes[lane];
+    }
+
+    if (comp_len < header_size + total_data)
+        return TTIO_RANS_ERR_CORRUPT;
+
+    /* Set up per-lane sub-buffer pointers and positions */
+    const uint8_t *lane_data[TTIO_RANS_STREAMS];
+    size_t lane_pos[TTIO_RANS_STREAMS];
+    size_t offset = header_size;
+    for (int lane = 0; lane < TTIO_RANS_STREAMS; lane++) {
+        lane_data[lane] = compressed + offset;
+        lane_pos[lane]  = 0;
+        offset += lane_bytes[lane];
+    }
+
+    /* ── 2. Pad to multiple of TTIO_RANS_STREAMS ─────────────────── */
+    /* Guard against n_symbols near SIZE_MAX causing n_padded to wrap */
+    if (n_symbols > (size_t)0 - 3)
+        return TTIO_RANS_ERR_PARAM;
+    size_t pad_count = (TTIO_RANS_STREAMS - (n_symbols & (TTIO_RANS_STREAMS - 1))) & (TTIO_RANS_STREAMS - 1);
+    size_t n_padded  = n_symbols + pad_count;
+
+    /* ── 3. Forward decode pass ──────────────────────────────────── */
+    uint8_t prev_sym = 0;
+    for (size_t i = 0; i < n_padded; i++) {
+        int lane = (int)(i & (TTIO_RANS_STREAMS - 1));
+        uint32_t x = state[lane];
+
+        /* Determine context for this position.
+         * Padding positions use ctx=0; real positions ask the resolver. */
+        uint16_t ctx;
+        if (i >= n_symbols) {
+            ctx = 0;
+        } else {
+            ctx = resolver(user_data, i, prev_sym);
+            if (ctx >= n_contexts)
+                return TTIO_RANS_ERR_PARAM;
+        }
+
+        /* Decode step: slot = x & T_MASK */
+        uint32_t slot = x & TTIO_RANS_T_MASK;
+        uint8_t sym = dtab[ctx][slot];
+        uint32_t f  = freq[ctx][sym];
+        uint32_t c  = cum[ctx][sym];
+
+        /* State update: x' = (x >> T_BITS) * f + slot - c */
+        x = (x >> TTIO_RANS_T_BITS) * f + slot - c;
+
+        /* Renormalise: read 16-bit chunks while x < L */
+        while (x < TTIO_RANS_L) {
+            if (lane_pos[lane] + 2 > lane_bytes[lane])
+                return TTIO_RANS_ERR_CORRUPT;
+            uint16_t chunk = read_le16(lane_data[lane] + lane_pos[lane]);
+            x = (x << TTIO_RANS_B_BITS) | (uint32_t)chunk;
+            lane_pos[lane] += 2;
+        }
+
+        state[lane] = x;
+
+        /* Store decoded symbol (only for non-padding positions) and
+         * thread it into prev_sym for the next iteration. */
+        if (i < n_symbols) {
+            symbols[i] = sym;
+            prev_sym = sym;
+        }
+    }
+
+    return TTIO_RANS_OK;
+}

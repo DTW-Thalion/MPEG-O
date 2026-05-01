@@ -931,7 +931,6 @@ static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
 #import "Codecs/TTIOQuality.h"
 #import "Codecs/TTIONameTokenizer.h"
 #import "Codecs/TTIORefDiff.h"
-#import "Codecs/TTIOFqzcompNx16.h"
 #import "Codecs/TTIOFqzcompNx16Z.h"
 #import "Codecs/TTIODeltaRans.h"
 #include <openssl/md5.h>
@@ -1088,7 +1087,7 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
             putSeconds(out, @"ref_diff_decode", 0.0);
         }
 
-        // ── FQZCOMP_NX16: 100K × 100bp quality strings Q20-Q40 ─────
+        // ── Quality test data: 100K × 100bp quality strings Q20-Q40 ─────
         const NSUInteger fqNumReads = 100000;
         const NSUInteger fqReadLen  = 100;
         const NSUInteger fqTotalQual = fqNumReads * fqReadLen;
@@ -1103,28 +1102,8 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         NSMutableArray<NSNumber *> *readLengths =
             [NSMutableArray arrayWithCapacity:fqNumReads];
-        NSMutableArray<NSNumber *> *revcompFlagsForward =
-            [NSMutableArray arrayWithCapacity:fqNumReads];
         for (NSUInteger i = 0; i < fqNumReads; i++) {
             [readLengths addObject:@((uint32_t)fqReadLen)];
-            [revcompFlagsForward addObject:@0];
-        }
-
-        t0 = nowSeconds();
-        NSData *fqEnc = [TTIOFqzcompNx16 encodeWithQualities:qualities
-                                                   readLengths:readLengths
-                                                  revcompFlags:revcompFlagsForward
-                                                         error:&err];
-        putSeconds(out, @"fqzcomp_nx16_encode", nowSeconds() - t0);
-        if (!fqEnc) { NSLog(@"fqzcomp_nx16 encode failed: %@", err); }
-
-        if (fqEnc) {
-            t0 = nowSeconds();
-            (void)[TTIOFqzcompNx16 decodeData:fqEnc error:&err];
-            putSeconds(out, @"fqzcomp_nx16_decode", nowSeconds() - t0);
-            if (err) NSLog(@"fqzcomp_nx16 decode error: %@", err);
-        } else {
-            putSeconds(out, @"fqzcomp_nx16_decode", 0.0);
         }
 
         // ── FQZCOMP_NX16_Z: same quality input, revcomp (i & 7) == 0 ─

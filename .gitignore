@@ -76,3 +76,9 @@ python/src/ttio/codecs/_*/*.so
 data/genomic/
 tools/benchmarks/_work/
 tools/benchmarks/_cache/
+
+# Phase B (libttio_rans) CMake build directories. The C library
+# sources under native/{src,include,tests,bench} are committed;
+# build outputs are regenerated via `cmake .. && make`.
+native/_build/
+native/_build_tsan/

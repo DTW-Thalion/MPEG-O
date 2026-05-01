@@ -81,8 +81,6 @@
     "codecs.genomic": {
       "ref_diff_encode": 1.1068,
       "ref_diff_decode": 1.2896,
-      "fqzcomp_nx16_encode": 59.5573,
-      "fqzcomp_nx16_decode": 59.8884,
       "fqzcomp_nx16_z_encode": 0.2154,
       "fqzcomp_nx16_z_decode": 0.5715,
       "delta_rans_encode": 0.6508,
@@ -173,8 +171,6 @@
     "codecs.genomic": {
       "ref_diff_encode": 0.7300,
       "ref_diff_decode": 0.2623,
-      "fqzcomp_nx16_encode": 18.1238,
-      "fqzcomp_nx16_decode": 17.6461,
       "fqzcomp_nx16_z_encode": 0.3518,
       "fqzcomp_nx16_z_decode": 0.6954,
       "delta_rans_encode": 0.0693,
@@ -265,8 +261,6 @@
     "codecs.genomic": {
       "ref_diff_encode": 0.0316,
       "ref_diff_decode": 0.1128,
-      "fqzcomp_nx16_encode": 63.6430,
-      "fqzcomp_nx16_decode": 63.9805,
       "fqzcomp_nx16_z_encode": 0.2027,
       "fqzcomp_nx16_z_decode": 0.3592,
       "delta_rans_encode": 0.0183,

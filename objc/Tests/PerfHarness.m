@@ -1,6 +1,6 @@
-// PerfHarness.m — standalone FQZCOMP_NX16 perf+profile entry point.
+// PerfHarness.m — standalone FQZCOMP_NX16_Z perf+profile entry point.
 #import <Foundation/Foundation.h>
-#import "Codecs/TTIOFqzcompNx16.h"
+#import "Codecs/TTIOFqzcompNx16Z.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +43,7 @@ int main(int argc, const char *argv[])
         }
         double t0 = monoSeconds();
         NSError *err = nil;
-        NSData *encoded = [TTIOFqzcompNx16 encodeWithQualities:qualities
+        NSData *encoded = [TTIOFqzcompNx16Z encodeWithQualities:qualities
                                                    readLengths:readLengths
                                                   revcompFlags:revcompFlags
                                                          error:&err];

@@ -12,7 +12,7 @@
 #import "Codecs/TTIOQuality.h"   // M86 Phase D
 #import "Codecs/TTIONameTokenizer.h"   // M86 Phase E
 #import "Codecs/TTIORefDiff.h"            // M93 v1.2
-#import "Codecs/TTIOFqzcompNx16.h"         // M94 v1.2
+#import "Codecs/TTIOFqzcompNx16Z.h"        // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"           // M95 v1.2
 #import "Codecs/TTIOReferenceResolver.h"  // M93 v1.2
 #import <hdf5.h>
@@ -311,11 +311,11 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         case 9: // TTIOCompressionRefDiff (M93 v1.2)
             decoded = [self _ttio_m93_decodeRefDiff:encoded error:&decErr];
             break;
-        case 10: // TTIOCompressionFqzcompNx16 (M94 v1.2)
-            decoded = [self _ttio_m94_decodeFqzcompNx16:encoded error:&decErr];
-            break;
         case 11: // TTIOCompressionDeltaRansOrder0 (M95 v1.2)
             decoded = TTIODeltaRansDecode(encoded, &decErr);
+            break;
+        case 12: // TTIOCompressionFqzcompNx16Z (M94.Z v1.2)
+            decoded = [self _ttio_m94z_decodeFqzcompNx16Z:encoded error:&decErr];
             break;
         default:
             if (error) *error = [NSError
@@ -458,12 +458,11 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return flat;
 }
 
-// M94 v1.2: FQZCOMP_NX16 decode helper. The codec needs revcomp_flags
-// (derived from the run's flags channel & SAM REVERSE bit, 16) and
-// produces a flat byte stream matching the M82 qualities-channel
-// contract. read_lengths come back from inside the codec wire format.
-- (NSData *)_ttio_m94_decodeFqzcompNx16:(NSData *)encoded
-                                    error:(NSError **)error
+// M94.Z v1.2: FQZCOMP_NX16_Z (CRAM-mimic rANS-Nx16) decode helper.
+// Same plumbing as the old NX16: revcomp_flags from run.flags & 16,
+// read_lengths carried inside the codec wire format.
+- (NSData *)_ttio_m94z_decodeFqzcompNx16Z:(NSData *)encoded
+                                     error:(NSError **)error
 {
     NSUInteger n = _index ? _index.count : 0;
     NSMutableArray<NSNumber *> *revcompFlags = [NSMutableArray arrayWithCapacity:n];
@@ -472,9 +471,9 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         [revcompFlags addObject:(f & 16u) ? @1 : @0];
     }
     NSError *decErr = nil;
-    NSDictionary *out = [TTIOFqzcompNx16 decodeData:encoded
-                                       revcompFlags:revcompFlags
-                                              error:&decErr];
+    NSDictionary *out = [TTIOFqzcompNx16Z decodeData:encoded
+                                          revcompFlags:revcompFlags
+                                                 error:&decErr];
     if (!out) {
         if (error) *error = decErr;
         return nil;

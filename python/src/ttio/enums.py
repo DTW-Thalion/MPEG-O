@@ -84,21 +84,11 @@ class Compression(IntEnum):
     # v1.2 M93: reference-based sequence diff (context-aware — receives
     # positions, cigars, ref_resolver alongside the channel bytes).
     REF_DIFF = 9
-    # v1.2 M94: lossless quality compression (fqzcomp-Nx16, Bonfield 2022).
-    # Context-modeled adaptive arithmetic coding + 4-way interleaved rANS;
-    # consumes per-read lengths + revcomp flags alongside the qualities
-    # byte stream. NOT context-aware in the M93 sense (does not receive
-    # sibling channels via the M86 pipeline hook); read_lengths +
-    # revcomp_flags travel inside the codec's own wire format.
-    FQZCOMP_NX16 = 10
     # v1.2 M95: delta + zigzag + varint + rANS order-0 — sorted integer channels.
     DELTA_RANS_ORDER0 = 11
-    # v1.2 M94.Z: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16) — parallel codec
-    # following the CRAM 3.1 rANS-Nx16 discipline (static-per-block
-    # frequency tables, L=2^15, B=16, N=4, bit-pack 15-bit context).
-    # Drop-in alternative to FQZCOMP_NX16 for the qualities channel;
-    # same encode/decode signatures, different on-wire format (magic
-    # ``M94Z``). Wire-incompatible with FQZCOMP_NX16 — distinct codec id.
+    # v1.2 M94.Z: CRAM-mimic rANS-Nx16 quality codec. Static-per-block
+    # frequency tables, L=2^15, B=16, N=4, bit-pack 15-bit context.
+    # Sole quality codec for the qualities channel; wire magic ``M94Z``.
     FQZCOMP_NX16_Z = 12
 
 

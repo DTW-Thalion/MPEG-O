@@ -747,7 +747,7 @@ class SpectralDataset:
             format_version = "1.4"
 
         # M93/M94 v1.2: bump to 1.5 ONLY when at least one genomic_run
-        # uses a v1.5 codec (REF_DIFF, FQZCOMP_NX16). M82-only writes
+        # uses a v1.5 codec (REF_DIFF, FQZCOMP_NX16_Z). M82-only writes
         # stay at 1.4 to preserve byte-parity with existing M82/M86
         # fixtures.
         if has_genomic and _any_v1_5_codec(genomic_runs):
@@ -974,16 +974,16 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
 def _any_v1_5_codec(
     genomic_runs: "Mapping[str, WrittenGenomicRun] | None",
 ) -> bool:
-    """Return True if any run carries a v1.5 codec (REF_DIFF or FQZCOMP_NX16).
+    """Return True if any run carries a v1.5 codec (REF_DIFF or FQZCOMP_NX16_Z).
 
     Used to gate the format-version bump from 1.4 → 1.5: only files that
     actually exercise an M93+ codec get the new version string, so
     M82-only writes preserve byte-parity with existing fixtures.
 
-    M93 registered REF_DIFF as v1.5; M94 adds FQZCOMP_NX16. Both are
+    M93 registered REF_DIFF as v1.5; M94.Z adds FQZCOMP_NX16_Z. Both are
     v1.5 codecs even though only REF_DIFF is "context-aware" in the M93
     sense (consumes sibling channels via the M86 pipeline hook).
-    FQZCOMP_NX16 carries its sibling-channel metadata
+    FQZCOMP_NX16_Z carries its sibling-channel metadata
     (``read_lengths``/``revcomp_flags``) inside the codec wire format,
     so it does not register as context-aware in :mod:`._codec_meta`,
     but it IS a v1.5 codec for format-version-gating purposes.
@@ -993,7 +993,6 @@ def _any_v1_5_codec(
     from .enums import Compression as _Compression
     _V1_5_CODECS = frozenset({
         _Compression.REF_DIFF,         # M93
-        _Compression.FQZCOMP_NX16,     # M94
         _Compression.FQZCOMP_NX16_Z,   # M94.Z (CRAM-mimic rANS-Nx16)
     })
     for run in genomic_runs.values():
@@ -1214,45 +1213,9 @@ def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
     io.write_int_attr(ds, "compression", codec_id, dtype="<u1")
 
 
-# M94 — FQZCOMP_NX16 quality codec. Same dispatch pattern as
-# _write_sequences_ref_diff but for the qualities channel. The codec
-# carries read_lengths + revcomp_flags inside its own wire format, so
-# the channel dataset stores only the encoded byte stream.
+# M94.Z — FQZCOMP_NX16_Z quality codec. Same dispatch pattern as
+# _write_sequences_ref_diff but for the qualities channel.
 SAM_REVERSE_FLAG = 16
-
-
-def _write_qualities_fqzcomp_nx16(sc, run: WrittenGenomicRun) -> None:
-    """Write the ``qualities`` channel through the FQZCOMP_NX16 codec.
-
-    The codec needs per-read ``read_lengths`` and ``revcomp_flags``,
-    derived here from ``run.lengths`` and ``run.flags & 16`` (SAM REVERSE
-    bit). The encoded blob is written as a flat uint8 dataset with
-    ``@compression = 10``.
-    """
-    from .codecs.fqzcomp_nx16 import encode as _fqzcomp_encode
-    from .enums import Compression as _Compression, Precision as _Precision
-
-    qualities = bytes(run.qualities.tobytes())
-    read_lengths = [int(x) for x in run.lengths]
-    revcomp_flags = [
-        1 if (int(f) & SAM_REVERSE_FLAG) else 0 for f in run.flags
-    ]
-
-    encoded = _fqzcomp_encode(qualities, read_lengths, revcomp_flags)
-
-    arr = np.frombuffer(encoded, dtype=np.uint8)
-    ds = sc.create_dataset(
-        "qualities",
-        _Precision.UINT8,
-        length=int(arr.shape[0]),
-        chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-        compression=_Compression.NONE,
-    )
-    ds.write(arr)
-    io.write_int_attr(
-        ds, "compression",
-        int(_Compression.FQZCOMP_NX16), dtype="<u1",
-    )
 
 
 def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
@@ -1338,14 +1301,8 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _Compression.RANS_ORDER1,
             _Compression.BASE_PACK,
             _Compression.QUALITY_BINNED,
-            # M94 v1.2: lossless quality codec (fqzcomp-Nx16). Carries
-            # read_lengths + revcomp_flags inside the codec wire format;
-            # the M86 pipeline derives them from run.lengths and
-            # run.flags & 16 (SAM REVERSE bit).
-            _Compression.FQZCOMP_NX16,
-            # M94.Z v1.2: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16). Parallel
-            # codec to FQZCOMP_NX16; same pipeline plumbing (carries its
-            # own read_lengths + needs revcomp_flags from run.flags & 16).
+            # M94.Z v1.2: CRAM-mimic rANS-Nx16 quality codec. Carries its
+            # own read_lengths + needs revcomp_flags from run.flags & 16.
             _Compression.FQZCOMP_NX16_Z,
         }),
         # M86 Phase E: NAME_TOKENIZED is only valid on read_names
@@ -1616,13 +1573,13 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         if _default is not None:
             _seq_codec = _default
 
-    # M94 v1.2: FQZCOMP_NX16 is a v1.5 quality codec — carries
+    # M94.Z v1.2: FQZCOMP_NX16_Z is a v1.5 quality codec — carries
     # read_lengths + revcomp_flags inside the codec wire format. Apply
     # auto-default (Q5a=B): when signal_compression="gzip" AND empty
     # qualities override AND the run is ALREADY a v1.5 candidate (i.e.
     # at least one v1.5 codec is active on this run, whether through an
     # explicit override or the REF_DIFF auto-default we just resolved
-    # for sequences), use FQZCOMP_NX16.
+    # for sequences), use FQZCOMP_NX16_Z.
     #
     # The "v1.5 candidate" gate preserves byte-parity for pure-M82
     # baseline writes (no reference, no v1.5 overrides) — those keep
@@ -1647,7 +1604,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                     _ce = _Compression(_ovr)
                     if _ce in (
                         _Compression.REF_DIFF,
-                        _Compression.FQZCOMP_NX16,
                         _Compression.FQZCOMP_NX16_Z,
                         _Compression.DELTA_RANS_ORDER0,
                     ):
@@ -1692,12 +1648,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _seq_codec,
         )
     if (
-        _qual_codec is not None
-        and _is_valid_compression(_qual_codec)
-        and _Compression(_qual_codec) == _Compression.FQZCOMP_NX16
-    ):
-        _write_qualities_fqzcomp_nx16(sc, run)
-    elif (
         _qual_codec is not None
         and _is_valid_compression(_qual_codec)
         and _Compression(_qual_codec) == _Compression.FQZCOMP_NX16_Z

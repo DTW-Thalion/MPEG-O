@@ -20,6 +20,7 @@ import pytest
 
 from ttio.codecs.fqzcomp_nx16_z import decode_with_metadata
 from ttio.codecs.fqzcomp_nx16_z import encode as fqz_encode
+from ttio.codecs.fqzcomp_nx16_z import get_backend_name
 
 MIN_ENCODE_MBPS = 30.0
 MIN_DECODE_MBPS = 10.0
@@ -47,6 +48,8 @@ def test_m94z_encode_decode_throughput(capsys):
     read_lengths = [read_len] * n_reads
     revcomp_flags = [(1 if (i & 7) == 0 else 0) for i in range(n_reads)]
 
+    backend = get_backend_name()
+
     t0 = time.perf_counter()
     encoded = fqz_encode(qualities, read_lengths, revcomp_flags)
     t_enc = time.perf_counter() - t0
@@ -64,7 +67,8 @@ def test_m94z_encode_decode_throughput(capsys):
 
     with capsys.disabled():
         print(
-            f"\n[m94z perf] {n_reads:,} reads x {read_len}bp, "
+            f"\n[m94z perf] backend={backend}, "
+            f"{n_reads:,} reads x {read_len}bp, "
             f"{raw_mb:.1f}MB raw -> {len(encoded)/1e6:.2f}MB encoded "
             f"({ratio:.3f}x ratio)"
         )

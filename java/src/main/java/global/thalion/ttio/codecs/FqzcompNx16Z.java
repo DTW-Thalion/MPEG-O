@@ -64,6 +64,8 @@ public final class FqzcompNx16Z {
 
     public static final byte[] MAGIC = new byte[]{'M', '9', '4', 'Z'};
     public static final int VERSION = 1;
+    /** M94.Z V2 wire-format version: body produced by libttio_rans (Task 21/22). */
+    public static final int VERSION_V2_NATIVE = 2;
     public static final int CONTEXT_PARAMS_SIZE = 8;
 
     // ── Default context parameters ──────────────────────────────────
@@ -75,6 +77,38 @@ public final class FqzcompNx16Z {
 
     private FqzcompNx16Z() {
         // Utility class.
+    }
+
+    /**
+     * Reports which rANS backend will service encode/decode calls in the
+     * current JVM.
+     *
+     * <p>Returns one of:
+     * <ul>
+     *   <li>{@code "native-avx2"}, {@code "native-sse4.1"}, or
+     *       {@code "native-scalar"} when libttio_rans_jni is loaded — the
+     *       suffix is the kernel selected by CPUID dispatch.</li>
+     *   <li>{@code "native"} as a defensive fallback if the library loaded
+     *       but kernel introspection fails.</li>
+     *   <li>{@code "pure-java"} when the JNI library is not on
+     *       {@code java.library.path}; the Java codec uses its built-in
+     *       {@link Rans} backend.</li>
+     * </ul>
+     *
+     * <p>Backend selection only affects V2 (native-body) dispatch — see
+     * {@link EncodeOptions#preferNative(boolean)} or the
+     * {@code TTIO_M94Z_USE_NATIVE} environment variable. V1 encode/decode
+     * always uses pure-Java for both paths.
+     */
+    public static String getBackendName() {
+        if (TtioRansNative.isAvailable()) {
+            try {
+                return "native-" + TtioRansNative.kernelName();
+            } catch (Throwable t) {
+                return "native";
+            }
+        }
+        return "pure-java";
     }
 
     // ── ContextParams ───────────────────────────────────────────────
@@ -112,6 +146,37 @@ public final class FqzcompNx16Z {
         @Override public String toString() {
             return "ContextParams(qbits=" + qbits + ", pbits=" + pbits
                 + ", dbits=" + dbits + ", sloc=" + sloc + ")";
+        }
+    }
+
+    // ── EncodeOptions ───────────────────────────────────────────────
+
+    /**
+     * Encoder options bag. Currently exposes a single knob:
+     * {@link #preferNative(boolean)} — when {@code true} (and the
+     * native library is available), {@link #encode} emits a V2 wire
+     * format with body produced by libttio_rans's
+     * {@code ttio_rans_encode_block}. When {@code false}, the V1 path
+     * is forced (default behaviour, byte-identical to historical
+     * encoders). When this method is never called (or the native
+     * library is unavailable), the encoder consults the environment
+     * variable {@code TTIO_M94Z_USE_NATIVE} — values {@code "1"},
+     * {@code "true"}, {@code "yes"}, {@code "on"} (case-insensitive)
+     * enable V2 dispatch.
+     *
+     * <p>V2 encode is fast (native rANS); V2 decode is pure-Java
+     * because contexts are derived from previously-decoded symbols
+     * (see Task 21/22 design notes — the C library's decode requires
+     * a fully pre-computed contexts vector). V1 streams continue to
+     * round-trip via the existing pure-Java path.
+     */
+    public static final class EncodeOptions {
+        // null = consult env var; Boolean.TRUE/FALSE = explicit override.
+        Boolean preferNative = null;
+
+        public EncodeOptions preferNative(boolean v) {
+            this.preferNative = v;
+            return this;
         }
     }
 
@@ -507,6 +572,32 @@ public final class FqzcompNx16Z {
         return bb.array();
     }
 
+    /** Pack a V2 (native-body) header — same layout as V1 EXCEPT
+     *  version byte = {@link #VERSION_V2_NATIVE} (=2) and no 16-byte
+     *  state_init suffix (V2 body embeds final states at its own
+     *  offset 0..15). The {@code stateInit} field on the input
+     *  {@link CodecHeader} is ignored. */
+    private static byte[] packCodecHeaderV2(CodecHeader h) {
+        if (h.readLengthTable.length != h.rltCompressedLen) {
+            throw new IllegalArgumentException("rltCompressedLen mismatch");
+        }
+        // Total length: HEADER_FIXED_PREFIX + rltLen + ftLen (no state_init).
+        int totalLen = HEADER_FIXED_PREFIX + h.rltCompressedLen
+            + h.freqTablesCompressed.length;
+        ByteBuffer bb = ByteBuffer.allocate(totalLen).order(ByteOrder.LITTLE_ENDIAN);
+        bb.put(MAGIC);
+        bb.put((byte) VERSION_V2_NATIVE);
+        bb.put((byte) (h.flags & 0xFF));
+        bb.putLong(h.numQualities);
+        bb.putInt(h.numReads);
+        bb.putInt(h.rltCompressedLen);
+        bb.put(packContextParams(h.contextParams));
+        bb.putInt(h.freqTablesCompressed.length);
+        bb.put(h.readLengthTable);
+        bb.put(h.freqTablesCompressed);
+        return bb.array();
+    }
+
     private static final class HeaderUnpack {
         final CodecHeader header;
         final int bytesConsumed;
@@ -525,6 +616,10 @@ public final class FqzcompNx16Z {
             }
         }
         int version = blob[4] & 0xFF;
+        if (version == VERSION_V2_NATIVE) {
+            throw new IllegalArgumentException(
+                "M94Z V2 stream — call unpackCodecHeaderV2 instead");
+        }
         if (version != VERSION) {
             throw new IllegalArgumentException(
                 "M94Z unsupported version: " + version);
@@ -561,6 +656,53 @@ public final class FqzcompNx16Z {
             cursor);
     }
 
+    /** Parse a V2 (native-body) header. Returns {@code (header, bodyOffset)}.
+     *  The returned {@link CodecHeader#stateInit} is all-zero (V2 stores
+     *  states inside the body itself, not in the codec header). */
+    private static HeaderUnpack unpackCodecHeaderV2(byte[] blob) {
+        if (blob.length < HEADER_FIXED_PREFIX) {
+            throw new IllegalArgumentException(
+                "M94Z header too short: " + blob.length + " bytes");
+        }
+        for (int i = 0; i < 4; i++) {
+            if (blob[i] != MAGIC[i]) {
+                throw new IllegalArgumentException(
+                    "M94Z bad magic: expected M94Z");
+            }
+        }
+        int version = blob[4] & 0xFF;
+        if (version != VERSION_V2_NATIVE) {
+            throw new IllegalArgumentException(
+                "unpackCodecHeaderV2: expected version "
+                + VERSION_V2_NATIVE + ", got " + version);
+        }
+        int flags = blob[5] & 0xFF;
+        ByteBuffer bb = ByteBuffer.wrap(blob, 6, blob.length - 6)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        long numQ = bb.getLong();
+        int numR = bb.getInt();
+        int rltLen = bb.getInt();
+        int cursor = 6 + 8 + 4 + 4;  // = 22
+        ContextParams cp = unpackContextParams(blob, cursor);
+        cursor += CONTEXT_PARAMS_SIZE;
+        ByteBuffer bb2 = ByteBuffer.wrap(blob, cursor, blob.length - cursor)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        int ftLen = bb2.getInt();
+        cursor += 4;
+        // V2: no 16-byte state_init suffix.
+        if (blob.length < cursor + rltLen + ftLen) {
+            throw new IllegalArgumentException("M94Z V2 header truncated");
+        }
+        byte[] rlt = Arrays.copyOfRange(blob, cursor, cursor + rltLen);
+        cursor += rltLen;
+        byte[] freqBlob = Arrays.copyOfRange(blob, cursor, cursor + ftLen);
+        cursor += ftLen;
+        long[] stateInit = new long[NUM_STREAMS];  // zeros — not used in V2
+        return new HeaderUnpack(
+            new CodecHeader(flags, numQ, numR, rltLen, rlt, cp, freqBlob, stateInit),
+            cursor);
+    }
+
     // ── DecodeResult ────────────────────────────────────────────────
 
     public static final class DecodeResult {
@@ -579,11 +721,23 @@ public final class FqzcompNx16Z {
     public static byte[] encode(byte[] qualities, int[] readLengths,
                                 int[] revcompFlags) {
         return encode(qualities, readLengths, revcompFlags,
-                      ContextParams.defaults());
+                      ContextParams.defaults(), null);
+    }
+
+    public static byte[] encode(byte[] qualities, int[] readLengths,
+                                int[] revcompFlags, EncodeOptions opts) {
+        return encode(qualities, readLengths, revcompFlags,
+                      ContextParams.defaults(), opts);
     }
 
     public static byte[] encode(byte[] qualities, int[] readLengths,
                                 int[] revcompFlags, ContextParams params) {
+        return encode(qualities, readLengths, revcompFlags, params, null);
+    }
+
+    public static byte[] encode(byte[] qualities, int[] readLengths,
+                                int[] revcompFlags, ContextParams params,
+                                EncodeOptions opts) {
         if (qualities == null) {
             throw new IllegalArgumentException("qualities must not be null");
         }
@@ -604,6 +758,25 @@ public final class FqzcompNx16Z {
         int n = qualities.length;
         int padCount = (-n) & 3;
         int nPadded = n + padCount;
+
+        // ── V2 native dispatch decision ─────────────────────────────
+        boolean preferNative;
+        if (opts != null && opts.preferNative != null) {
+            preferNative = opts.preferNative;
+        } else {
+            String envVal = System.getenv("TTIO_M94Z_USE_NATIVE");
+            if (envVal == null) {
+                preferNative = false;
+            } else {
+                String v = envVal.trim().toLowerCase(java.util.Locale.ROOT);
+                preferNative = v.equals("1") || v.equals("true")
+                    || v.equals("yes") || v.equals("on");
+            }
+        }
+        if (preferNative && TtioRansNative.isAvailable()) {
+            return encodeV2Native(qualities, readLengths, revcompFlags,
+                                   params, n, nPadded, padCount);
+        }
 
         // Pass 1: build per-symbol context sequence + per-context counts.
         int[] contexts = buildContextSeq(qualities, readLengths, revcompFlags,
@@ -759,11 +932,130 @@ public final class FqzcompNx16Z {
         return out;
     }
 
+    // ── V2 native dispatch (encode) ─────────────────────────────────
+
+    /**
+     * V2 (libttio_rans-format) encode dispatch.
+     *
+     * <p>Builds context sequence + per-context freq tables (same as V1),
+     * remaps sparse context IDs to a dense [0, nActive) range so the
+     * native encoder's freq table is compact, calls
+     * {@link TtioRansNative#encodeBlock}, then packs a V2 wire-format
+     * header plus the native body. The freq_tables blob still uses
+     * ORIGINAL (sparse) context IDs so V2 decode can reconstruct
+     * contexts using the unchanged M94.Z context model.
+     */
+    private static byte[] encodeV2Native(byte[] qualities, int[] readLengths,
+                                          int[] revcompFlags,
+                                          ContextParams params,
+                                          int n, int nPadded, int padCount) {
+        // Pass 1: build context sequence + per-context counts.
+        int[] contexts = buildContextSeq(qualities, readLengths, revcompFlags,
+                                          nPadded, params.qbits, params.pbits,
+                                          params.sloc);
+        int ctxCap = 1 << params.sloc;
+        int[][] rawCounts = new int[ctxCap][];
+        for (int i = 0; i < nPadded; i++) {
+            int ctx = contexts[i];
+            int[] arr = rawCounts[ctx];
+            if (arr == null) {
+                arr = new int[256];
+                rawCounts[ctx] = arr;
+            }
+            int sym = (i < n) ? (qualities[i] & 0xFF) : 0;
+            arr[sym]++;
+        }
+
+        // Normalise per-context, count active, pack into sorted-by-ctx arrays.
+        int[][] freqByCtx = new int[ctxCap][];
+        int active = 0;
+        for (int c = 0; c < ctxCap; c++) {
+            if (rawCounts[c] == null) continue;
+            freqByCtx[c] = normaliseToTotal(rawCounts[c], T);
+            active++;
+        }
+
+        // Build active-ctxs / freq-arrays sidecar AND remap ctx → dense index.
+        int[] activeCtxs = new int[active];
+        int[][] denseFreq = new int[active][];
+        // ctxRemap maps sparse ctx id → dense index in [0, active).
+        // Use a flat int[] indexed by sparse id, set to -1 for absent.
+        int[] ctxRemap = new int[ctxCap];
+        Arrays.fill(ctxRemap, -1);
+        int j = 0;
+        for (int c = 0; c < ctxCap; c++) {
+            if (freqByCtx[c] != null) {
+                activeCtxs[j] = c;
+                denseFreq[j] = freqByCtx[c];
+                ctxRemap[c] = j;
+                j++;
+            }
+        }
+        if (active == 0 || active > 0xFFFF) {
+            throw new IllegalStateException(
+                "M94Z V2: nActive (" + active + ") must be in [1, 65535]");
+        }
+
+        // Build dense (remapped) contexts + symbol buffer (with zero padding).
+        short[] denseContexts = new short[nPadded];
+        for (int i = 0; i < nPadded; i++) {
+            int dense = ctxRemap[contexts[i]];
+            // dense fits in uint16 since active <= 65535.
+            denseContexts[i] = (short) (dense & 0xFFFF);
+        }
+        byte[] symbols = new byte[nPadded];
+        System.arraycopy(qualities, 0, symbols, 0, n);
+        // Padding bytes already 0.
+
+        // Native encode (V2 byte format).
+        // Worst case: header(32) + 4 bytes per padded symbol + slack.
+        int outCap = Math.max(64, nPadded * 4 + 64);
+        byte[] outBuf = new byte[outCap];
+        int[] outLen = new int[]{outCap};
+        int rc = TtioRansNative.encodeBlock(
+            symbols, denseContexts, active, denseFreq, outBuf, outLen);
+        if (rc != 0) {
+            throw new IllegalStateException(
+                "M94Z V2: ttio_rans_encode_block failed: rc=" + rc);
+        }
+        byte[] nativeBody = Arrays.copyOf(outBuf, outLen[0]);
+
+        // Wire format: header (V2) + native body. No trailer.
+        byte[] rlt = encodeReadLengths(readLengths);
+        byte[] freqBlob = serializeFreqTables(activeCtxs, denseFreq, params.sloc);
+        int flags = (padCount & 0x3) << 4;
+        long[] zeroStateInit = new long[NUM_STREAMS];  // unused for V2
+
+        CodecHeader header = new CodecHeader(
+            flags, n, readLengths.length, rlt.length,
+            rlt, params, freqBlob, zeroStateInit);
+        byte[] headerBytes = packCodecHeaderV2(header);
+
+        byte[] out = new byte[headerBytes.length + nativeBody.length];
+        System.arraycopy(headerBytes, 0, out, 0, headerBytes.length);
+        System.arraycopy(nativeBody, 0, out,
+                         headerBytes.length, nativeBody.length);
+        return out;
+    }
+
     // ── Top-level decoder ───────────────────────────────────────────
 
     public static DecodeResult decode(byte[] encoded, int[] revcompFlags) {
         if (encoded == null) {
             throw new IllegalArgumentException("encoded must not be null");
+        }
+        if (encoded.length < 5) {
+            throw new IllegalArgumentException(
+                "M94Z: encoded too short to read magic+version");
+        }
+        for (int i = 0; i < 4; i++) {
+            if (encoded[i] != MAGIC[i]) {
+                throw new IllegalArgumentException(
+                    "M94Z bad magic: expected M94Z");
+            }
+        }
+        if ((encoded[4] & 0xFF) == VERSION_V2_NATIVE) {
+            return decodeV2(encoded, revcompFlags);
         }
         HeaderUnpack hu = unpackCodecHeader(encoded);
         CodecHeader header = hu.header;
@@ -935,6 +1227,384 @@ public final class FqzcompNx16Z {
                     "M94Z: post-decode state " + state[k]
                     + " != state_init " + header.stateInit[k]
                     + " (lane " + k + "); stream is corrupt");
+            }
+        }
+
+        byte[] qualities = Arrays.copyOf(out, nQualities);
+        return new DecodeResult(qualities, readLengths);
+    }
+
+    // ── V2 native dispatch (decode) ─────────────────────────────────
+
+    /**
+     * Decode a V2 (libttio_rans-body) M94.Z blob.
+     *
+     * <p>The default path is pure-Java. When the env var
+     * {@code TTIO_M94Z_USE_NATIVE_STREAMING=1} is set AND the
+     * libttio_rans JNI library is available, dispatch first attempts
+     * native streaming decode via {@link #decodeV2ViaNativeStreaming},
+     * which routes the inner rANS loop through the C kernel using a
+     * per-symbol Java {@link TtioRansNative.ContextResolver} callback
+     * (Task 26c). On any error from the streaming path it falls back
+     * to the pure-Java decoder.
+     *
+     * <p><b>Performance reality (Task 26c)</b>: per-symbol JNI dispatch
+     * is much heavier than the pure-Java decode loop. The streaming path
+     * is shipped as infrastructure proving the C streaming context API
+     * works end-to-end across all bindings; for realistic blocks the
+     * pure-Java path is faster. Mirrors the Task 26b finding in Python.
+     * The streaming path is also less defensive about corrupt streams —
+     * the C library does not validate the post-decode final state. So
+     * the streaming path is opt-in and not the default.
+     *
+     * <p>The pure-Java path parses the V2 body byte format (per
+     * {@code rans_encode_scalar.c}) and walks forward with on-the-fly
+     * context derivation. V1 decode (above) remains the same pure-Java
+     * path.
+     */
+    private static DecodeResult decodeV2(byte[] encoded, int[] revcompFlags) {
+        if (preferNativeStreamingDecode() && TtioRansNative.isAvailable()) {
+            try {
+                DecodeResult r = decodeV2ViaNativeStreaming(encoded, revcompFlags);
+                if (r != null) return r;
+            } catch (Throwable t) {
+                // Fall through to pure-Java decode.
+            }
+        }
+        return decodeV2PureJava(encoded, revcompFlags);
+    }
+
+    /** Reads {@code TTIO_M94Z_USE_NATIVE_STREAMING} env var (truthy = enabled). */
+    private static boolean preferNativeStreamingDecode() {
+        String s = System.getenv("TTIO_M94Z_USE_NATIVE_STREAMING");
+        if (s == null) return false;
+        s = s.trim().toLowerCase();
+        return s.equals("1") || s.equals("true") || s.equals("yes") || s.equals("on");
+    }
+
+    /**
+     * Test-only entry point: force-decode a V2 blob via the native
+     * streaming path, bypassing the env-var guard. Returns {@code null}
+     * if the streaming path declines (unparseable blob, native lib
+     * unavailable, or the resolver returns out-of-range ctx). Throws if
+     * any underlying validation throws.
+     *
+     * <p>Visible to tests in the same package; not part of the public
+     * API.
+     */
+    static DecodeResult decodeV2ForceNativeStreamingForTest(byte[] encoded, int[] revcompFlags) {
+        if (!TtioRansNative.isAvailable()) return null;
+        return decodeV2ViaNativeStreaming(encoded, revcompFlags);
+    }
+
+    /**
+     * Decode a V2 body via the libttio_rans streaming context API.
+     *
+     * <p>Mirrors the Python {@code _decode_v2_via_native_streaming} helper
+     * (Task 26b). Builds a dense ctx remap, flat freq/cum tables, then
+     * invokes {@link TtioRansNative#decodeBlockStreaming} with a Java
+     * lambda that derives the M94.Z context for each position from
+     * read-tracking state and the just-decoded symbol.
+     *
+     * <p>Returns {@code null} on any unexpected internal condition; the
+     * caller treats {@code null} or a thrown exception as a fallback
+     * trigger.
+     */
+    private static DecodeResult decodeV2ViaNativeStreaming(
+            byte[] encoded, int[] revcompFlags) {
+        HeaderUnpack hu = unpackCodecHeaderV2(encoded);
+        CodecHeader header = hu.header;
+        int bodyOff = hu.bytesConsumed;
+
+        long nQ64 = header.numQualities;
+        if (nQ64 < 0 || nQ64 > Integer.MAX_VALUE) return null;
+        int nQualities = (int) nQ64;
+        int nReads = header.numReads;
+        int padCount = (header.flags >>> 4) & 0x3;
+
+        int[] readLengths = decodeReadLengths(header.readLengthTable, nReads);
+        if (revcompFlags == null) revcompFlags = new int[nReads];
+        else if (revcompFlags.length != nReads) return null;
+
+        int nPadded = nQualities + padCount;
+        if ((nPadded & 3) != 0) return null;
+
+        int bodyLen = encoded.length - bodyOff;
+        if (bodyLen < 32) return null;
+
+        // Recover sparse freq tables (still keyed by ORIGINAL sparse ctx id).
+        FreqTables ft = deserializeFreqTables(header.freqTablesCompressed);
+        final int qbits = header.contextParams.qbits;
+        final int pbits = header.contextParams.pbits;
+        final int sloc  = header.contextParams.sloc;
+
+        // Build dense (sorted-by-ctx) freq + cum tables for libttio_rans
+        // and a sparse_ctx → dense_idx remap mirroring the encoder.
+        int nContexts = ft.activeCtxs.length;
+        if (nContexts == 0 || nContexts > 0xFFFF) return null;
+
+        int ctxCap = 1 << sloc;
+        int[] ctxRemap = new int[ctxCap];
+        Arrays.fill(ctxRemap, -1);
+        int[][] freqDense = new int[nContexts][];
+        int[][] cumDense  = new int[nContexts][];
+        for (int i = 0; i < nContexts; i++) {
+            int sparse = ft.activeCtxs[i];
+            int[] freq = ft.freqArrays[i];
+            int[] cum  = new int[256];
+            int running = 0;
+            for (int s = 0; s < 256; s++) {
+                cum[s] = running;
+                running += freq[s];
+            }
+            freqDense[i] = freq;
+            cumDense[i]  = cum;
+            ctxRemap[sparse] = i;
+        }
+
+        // The encoder uses dense_pad_ctx for padding positions, but the C
+        // streaming decoder hardcodes ctx=0 for those (matching the
+        // pre-existing rans_decode_scalar contract). Both encoder and
+        // decoder agree on padding bytes being sym=0, ctx=0, so no
+        // resolver call is needed there.
+        int padCtxSparse = m94zContext(0, 0, 0, qbits, pbits, sloc);
+        final int padCtxDense = ctxRemap[padCtxSparse]; // unused, kept for parity
+
+        // Slice out the body bytes; the streaming decode entry point
+        // expects raw V2 body (4×state + 4×lane_size + lane data).
+        byte[] body = Arrays.copyOfRange(encoded, bodyOff, encoded.length);
+
+        byte[] out = new byte[nPadded];
+
+        // Mutable resolver state.  Boxed in a length-1 array so the
+        // lambda can mutate.  Layout: [readIdx, posInRead, curReadLen,
+        // curRevcomp, cumulativeReadEnd, prevQ].
+        final int[] state = new int[6];
+        state[2] = readLengths.length > 0 ? readLengths[0] : 0;
+        state[3] = revcompFlags.length > 0 ? revcompFlags[0] : 0;
+        state[4] = state[2];
+
+        final int[] readLengthsF = readLengths;
+        final int[] revcompFlagsF = revcompFlags;
+        final int shift = Math.max(1, qbits / 3);
+        final int qmaskLocal = (1 << qbits) - 1;
+        final int symMask = (1 << shift) - 1;
+        final int nQ = nQualities;
+        final int[] ctxRemapF = ctxRemap;
+
+        TtioRansNative.ContextResolver resolver = (i, prevSym) -> {
+            // Called BEFORE decoding symbol[i].  prevSym is the symbol
+            // decoded at i-1 (or 0 for i==0).
+            if (i >= nQ) {
+                // Padding ctx — but the C streaming decoder does NOT
+                // call us for i >= n_symbols (passes 0 internally), so
+                // this branch is defensive only.
+                return padCtxDense;
+            }
+
+            if (i > 0) {
+                state[5] = ((state[5] << shift) | (prevSym & symMask)) & qmaskLocal;
+                state[1]++;  // posInRead
+            }
+
+            // Read-boundary check (mirrors Python and pure-Java decoder).
+            if (i > 0 && i >= (long)state[4]
+                    && state[0] < readLengthsF.length - 1) {
+                state[0]++;                              // readIdx
+                state[1] = 0;                            // posInRead
+                state[2] = readLengthsF[state[0]];       // curReadLen
+                state[3] = revcompFlagsF[state[0]];      // curRevcomp
+                state[4] += state[2];                    // cumulativeReadEnd
+                state[5] = 0;                            // prevQ
+            }
+
+            int pb = positionBucketPbits(state[1], state[2], pbits);
+            int ctxSparse = m94zContext(state[5], pb, state[3] & 1, qbits, pbits, sloc);
+            int dense = ctxRemapF[ctxSparse];
+            if (dense < 0) return padCtxDense; // defensive fallback
+            return dense;
+        };
+
+        int rc = TtioRansNative.decodeBlockStreaming(
+            body, nContexts, freqDense, cumDense, out, nPadded, resolver);
+        if (rc != 0) return null;
+
+        byte[] qualities = Arrays.copyOf(out, nQualities);
+        return new DecodeResult(qualities, readLengths);
+    }
+
+    private static DecodeResult decodeV2PureJava(byte[] encoded, int[] revcompFlags) {
+        HeaderUnpack hu = unpackCodecHeaderV2(encoded);
+        CodecHeader header = hu.header;
+        int bodyOff = hu.bytesConsumed;
+
+        long nQ64 = header.numQualities;
+        if (nQ64 < 0 || nQ64 > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                "M94Z V2: numQualities out of range: " + nQ64);
+        }
+        int nQualities = (int) nQ64;
+        int nReads = header.numReads;
+        int padCount = (header.flags >>> 4) & 0x3;
+
+        int[] readLengths = decodeReadLengths(header.readLengthTable, nReads);
+
+        if (revcompFlags == null) revcompFlags = new int[nReads];
+        else if (revcompFlags.length != nReads) {
+            throw new IllegalArgumentException(
+                "revcompFlags length " + revcompFlags.length
+                + " != numReads " + nReads);
+        }
+
+        int nPadded = nQualities + padCount;
+        if ((nPadded & 3) != 0) {
+            throw new IllegalArgumentException(
+                "M94Z V2: nPadded " + nPadded + " not a multiple of 4");
+        }
+
+        int bodyLen = encoded.length - bodyOff;
+        if (bodyLen < 32) {
+            throw new IllegalArgumentException(
+                "M94Z V2: body shorter than native header");
+        }
+
+        // Recover sparse freq tables (still keyed by ORIGINAL sparse ctx id).
+        FreqTables ft = deserializeFreqTables(header.freqTablesCompressed);
+        int qbits = header.contextParams.qbits;
+        int pbits = header.contextParams.pbits;
+        int sloc = header.contextParams.sloc;
+        int ctxCap = 1 << sloc;
+        int[][] freqByCtx = new int[ctxCap][];
+        int[][] cumByCtx = new int[ctxCap][];
+        for (int i = 0; i < ft.activeCtxs.length; i++) {
+            int c = ft.activeCtxs[i];
+            int[] freq = ft.freqArrays[i];
+            freqByCtx[c] = freq;
+            cumByCtx[c] = cumulative(freq);
+        }
+
+        // Parse V2 body header: [0..15] 4×uint32 LE final states,
+        // [16..31] 4×uint32 LE lane sizes, [32..] per-lane data.
+        ByteBuffer bb = ByteBuffer.wrap(encoded, bodyOff, bodyLen)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        long[] state = new long[NUM_STREAMS];
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            state[k] = bb.getInt() & 0xFFFFFFFFL;
+        }
+        int[] laneBytes = new int[NUM_STREAMS];
+        long totalData = 0L;
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            laneBytes[k] = bb.getInt();
+            if (laneBytes[k] < 0) {
+                throw new IllegalArgumentException(
+                    "M94Z V2: lane " + k + " size " + laneBytes[k] + " is negative");
+            }
+            totalData += laneBytes[k];
+        }
+        if (bodyLen < 32L + totalData) {
+            throw new IllegalArgumentException(
+                "M94Z V2: body truncated (have " + bodyLen
+                + ", need " + (32L + totalData) + ")");
+        }
+
+        // Per-lane sub-buffer offsets into encoded[].
+        int[] laneStart = new int[NUM_STREAMS];
+        int[] lanePos = new int[NUM_STREAMS];
+        int laneOff = bodyOff + 32;
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            laneStart[k] = laneOff;
+            laneOff += laneBytes[k];
+        }
+
+        byte[] out = new byte[nPadded];
+        int padCtx = m94zContext(0, 0, 0, qbits, pbits, sloc);
+        int shift = Math.max(1, qbits / 3);
+        int qmaskLocal = (1 << qbits) - 1;
+        int symMask = (1 << shift) - 1;
+
+        int readIdx = 0;
+        int posInRead = 0;
+        int curReadLen = readLengths.length > 0 ? readLengths[0] : 0;
+        int curRevcomp = revcompFlags.length > 0 ? revcompFlags[0] : 0;
+        int cumulativeReadEnd = curReadLen;
+        int prevQ = 0;
+
+        for (int i = 0; i < nPadded; i++) {
+            int sIdx = i & 3;
+            int ctx;
+            if (i < nQualities) {
+                if (i >= cumulativeReadEnd
+                    && readIdx < readLengths.length - 1) {
+                    readIdx++;
+                    posInRead = 0;
+                    curReadLen = readLengths[readIdx];
+                    curRevcomp = revcompFlags[readIdx];
+                    cumulativeReadEnd += curReadLen;
+                    prevQ = 0;
+                }
+                int pb = positionBucketPbits(posInRead, curReadLen, pbits);
+                ctx = m94zContext(prevQ, pb, curRevcomp & 1, qbits, pbits, sloc);
+            } else {
+                ctx = padCtx;
+            }
+
+            int[] freq = freqByCtx[ctx];
+            int[] cum = cumByCtx[ctx];
+            if (freq == null) {
+                throw new IllegalArgumentException(
+                    "M94Z V2 decoder: ctx " + ctx + " not in freq_tables");
+            }
+
+            long x = state[sIdx];
+            int slot = (int) (x & T_MASK);
+
+            // bisect_right(cum, slot) - 1 over cum[1..256].
+            int lo = 1, hi = 257;
+            while (lo < hi) {
+                int mid = (lo + hi) >>> 1;
+                if (cum[mid] <= slot) lo = mid + 1;
+                else hi = mid;
+            }
+            int sym = lo - 1;
+            int f = freq[sym];
+            int c = cum[sym];
+            x = (long) f * (x >>> T_BITS) + (long) slot - (long) c;
+
+            // Renormalise: read 16-bit LE chunks while x < L.
+            int p = lanePos[sIdx];
+            int laneEnd = laneBytes[sIdx];
+            int laneBase = laneStart[sIdx];
+            while (x < L) {
+                if (p + 2 > laneEnd) {
+                    throw new IllegalArgumentException(
+                        "M94Z V2: lane " + sIdx + " exhausted at i=" + i);
+                }
+                int chunk = (encoded[laneBase + p] & 0xFF)
+                    | ((encoded[laneBase + p + 1] & 0xFF) << 8);
+                p += 2;
+                x = (x << B_BITS) | (long) chunk;
+            }
+            lanePos[sIdx] = p;
+            state[sIdx] = x;
+            out[i] = (byte) sym;
+
+            if (i < nQualities) {
+                prevQ = ((prevQ << shift) | (sym & symMask)) & qmaskLocal;
+                posInRead++;
+            }
+        }
+
+        // Sanity: post-decode states should equal L (encoder's initial state).
+        for (int k = 0; k < NUM_STREAMS; k++) {
+            if (state[k] != (long) L) {
+                throw new IllegalArgumentException(
+                    "M94Z V2: post-decode state[" + k + "]=" + state[k]
+                    + " != L=" + L + "; stream is corrupt");
+            }
+            if (lanePos[k] != laneBytes[k]) {
+                throw new IllegalArgumentException(
+                    "M94Z V2: lane " + k + " consumed " + lanePos[k]
+                    + " of " + laneBytes[k] + " bytes; stream may be malformed");
             }
         }
 
