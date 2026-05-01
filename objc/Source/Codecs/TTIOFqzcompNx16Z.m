@@ -14,6 +14,23 @@
 #include <string.h>
 #include <zlib.h>
 
+// ── Optional native rANS fast path (Task 17, Phase B) ────────────────
+// libttio_rans (native/) ships an SIMD-dispatched rANS-Nx16 kernel. The
+// build wires it in only when present (see Source/GNUmakefile.preamble).
+// We probe with __has_include so this translation unit still compiles
+// when the header is absent; +backendName then returns "pure-objc".
+//
+// TODO(v2-dispatch): wire ttio_rans_encode_block / ttio_rans_decode_block
+// into encode/decode once V2 multi-block container parsing lands. The C
+// library's wire format differs from M94.Z's pure-ObjC framing, so swapping
+// it into the V1 path would break byte-exact cross-language fixtures.
+#if __has_include("ttio_rans.h")
+#  include "ttio_rans.h"
+#  define TTIO_HAS_NATIVE_RANS 1
+#else
+#  define TTIO_HAS_NATIVE_RANS 0
+#endif
+
 NSString * const TTIOFqzcompNx16ZErrorDomain = @"TTIOFqzcompNx16ZError";
 
 // ── Algorithm constants (per spec §1) ──────────────────────────────
@@ -1222,6 +1239,24 @@ cleanup:
         @"qualities": outQ,
         @"readLengths": readLengths,
     };
+}
+
+// ── Backend introspection (Task 17, Phase B) ─────────────────────────
+// Mirrors Python's get_backend_name() and Java's FqzcompNx16Z.getBackendName().
+// The native library is currently exposed for direct use only; the V1
+// encode/decode dispatch above is unchanged.
+
++ (NSString *)backendName
+{
+#if TTIO_HAS_NATIVE_RANS
+    const char *kernel = ttio_rans_kernel_name();
+    if (kernel == NULL || kernel[0] == '\0') {
+        return @"native-unknown";
+    }
+    return [NSString stringWithFormat:@"native-%s", kernel];
+#else
+    return @"pure-objc";
+#endif
 }
 
 @end

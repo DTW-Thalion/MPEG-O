@@ -105,6 +105,24 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
 + (nullable NSDictionary *)decodeData:(NSData *)data
                                  error:(NSError * _Nullable *)error;
 
+/**
+ * Reports which rANS backend is wired into this build.
+ *
+ * Returns one of:
+ *   - @"native-avx2", @"native-sse4.1", @"native-scalar" — when
+ *     libttio_rans is linked in and its CPUID dispatch picked that kernel.
+ *   - @"native-unknown" — defensive fallback if the library was linked in
+ *     but kernel introspection returned an unexpected value.
+ *   - @"pure-objc" — when libttio_rans is not linked; the codec uses the
+ *     pure-ObjC implementation in this file.
+ *
+ * As of Task 17 the native library is exposed for introspection only;
+ * the V1 +encodeWithQualities:.../+decodeData:... path is unchanged.
+ * Wiring native into V1 dispatch would break byte-exact wire-format
+ * compatibility — full integration awaits V2 container support.
+ */
++ (NSString *)backendName;
+
 @end
 
 NS_ASSUME_NONNULL_END
