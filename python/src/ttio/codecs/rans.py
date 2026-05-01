@@ -47,6 +47,17 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
+# ── Optional Cython acceleration ────────────────────────────────────
+# Loaded lazily; absence is silently fine — the pure-Python reference
+# below is byte-exact and acts as the fallback. See setup.py for the
+# extension declaration.
+try:
+    from ._rans import _rans as _crans  # type: ignore[import-not-found]
+    _HAVE_C_EXTENSION = True
+except ImportError:  # pragma: no cover — Cython optional
+    _crans = None
+    _HAVE_C_EXTENSION = False
+
 # ── Algorithm constants ─────────────────────────────────────────────
 
 #: Total of normalised frequency table.  Power of two so that ``x % M``
@@ -505,10 +516,16 @@ def encode(data: bytes, order: int = 0) -> bytes:
         raise ValueError("rANS encode: input exceeds 4 GiB header limit")
 
     if order == 0:
-        payload, freq = _encode_order0(data)
+        if _HAVE_C_EXTENSION:
+            payload, freq = _crans.encode_order0_c(data)
+        else:
+            payload, freq = _encode_order0(data)
         ft = _serialise_freqs_o0(freq)
     else:
-        payload, freqs = _encode_order1(data)
+        if _HAVE_C_EXTENSION:
+            payload, freqs = _crans.encode_order1_c(data)
+        else:
+            payload, freqs = _encode_order1(data)
         ft = _serialise_freqs_o1(freqs)
 
     header = bytearray(HEADER_LEN)
@@ -555,8 +572,12 @@ def decode(encoded: bytes) -> bytes:
     payload = encoded[off : off + payload_len]
 
     if order == 0:
+        if _HAVE_C_EXTENSION:
+            return _crans.decode_order0_c(payload, orig_len, freq)
         return _decode_order0(payload, orig_len, freq)
     else:
+        if _HAVE_C_EXTENSION:
+            return _crans.decode_order1_c(payload, orig_len, freqs)
         return _decode_order1(payload, orig_len, freqs)
 
 
