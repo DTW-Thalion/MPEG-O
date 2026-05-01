@@ -915,8 +915,42 @@ if _HAVE_NATIVE_LIB:
     # const char *ttio_rans_kernel_name(void);
     _lib.ttio_rans_kernel_name.argtypes = []
     _lib.ttio_rans_kernel_name.restype = ctypes.c_char_p
+
+    # ttio_rans_context_resolver: uint16_t (*)(void *user_data, size_t i, uint8_t prev_sym)
+    _TTIORansContextResolver = ctypes.CFUNCTYPE(
+        ctypes.c_uint16,        # return: context
+        ctypes.c_void_p,        # user_data
+        ctypes.c_size_t,        # i
+        ctypes.c_uint8,         # prev_sym
+    )
+
+    # int ttio_rans_decode_block_streaming(
+    #     const uint8_t              *compressed,
+    #     size_t                      comp_len,
+    #     uint16_t                    n_contexts,
+    #     const uint32_t            (*freq)[256],
+    #     const uint32_t            (*cum)[256],
+    #     const uint8_t             (*dtab)[TTIO_RANS_T],
+    #     uint8_t                    *symbols,
+    #     size_t                      n_symbols,
+    #     ttio_rans_context_resolver  resolver,
+    #     void                       *user_data);
+    _lib.ttio_rans_decode_block_streaming.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),     # compressed
+        ctypes.c_size_t,                     # comp_len
+        ctypes.c_uint16,                     # n_contexts
+        ctypes.POINTER(ctypes.c_uint32),    # freq[n_contexts][256] flat
+        ctypes.POINTER(ctypes.c_uint32),    # cum[n_contexts][256] flat
+        ctypes.POINTER(ctypes.c_uint8),     # dtab[n_contexts][T] flat
+        ctypes.POINTER(ctypes.c_uint8),     # symbols
+        ctypes.c_size_t,                     # n_symbols
+        _TTIORansContextResolver,            # resolver
+        ctypes.c_void_p,                     # user_data
+    ]
+    _lib.ttio_rans_decode_block_streaming.restype = ctypes.c_int
 else:
     _lib = None
+    _TTIORansContextResolver = None
 
 
 def _native_kernel_name() -> str:
@@ -1398,6 +1432,141 @@ def encode(
     return header_bytes + bytes(body) + trailer
 
 
+def _decode_v2_via_native_streaming(
+    body_bytes: bytes,
+    n_symbols: int,
+    n_padded: int,
+    freq_per_ctx: dict,
+    qbits: int,
+    pbits: int,
+    sloc: int,
+    read_lengths: list,
+    revcomp_flags: list,
+) -> bytes:
+    """Decode V2 body via libttio_rans streaming API.
+
+    Uses a Python callback (_TTIORansContextResolver) to derive M94.Z
+    contexts on-the-fly.  The C library handles the inner rANS decode
+    loop; the Python callback derives the context for each position using
+    the same prev_q ring + position-bucket + revcomp logic as the
+    pure-Python V2 decoder.
+
+    Performance note (Task 25/26b findings): despite routing the rANS
+    decode into C, the per-symbol Python callback incurs significant
+    overhead due to ctypes CFUNCTYPE dispatch.  For large blocks the
+    callback overhead dominates and the streaming path is NOT faster than
+    the pure-Python V2 decoder in practice.  The value of this
+    implementation is infrastructure: it proves the streaming C API works
+    end-to-end and creates the path for a future fully-C context
+    derivation (where the callback overhead goes away).
+
+    Raises RuntimeError if _HAVE_NATIVE_LIB is False.
+    """
+    if not _HAVE_NATIVE_LIB:
+        raise RuntimeError("libttio_rans not available")
+
+    # ── Build dense freq / cum / dtab arrays ───────────────────────────
+    # The V2 encoder remapped sparse ctx IDs to dense [0, n_active).
+    # We must apply the same remap so the dense IDs in the native body
+    # match what the decoder expects.
+    active_ctxs = sorted(freq_per_ctx.keys())
+    n_contexts = len(active_ctxs)
+    if n_contexts == 0:
+        raise ValueError("_decode_v2_via_native_streaming: empty freq_per_ctx")
+
+    # sparse_id -> dense_id remap used inside the callback.
+    ctx_remap = {sparse: dense for dense, sparse in enumerate(active_ctxs)}
+
+    # Flat freq + cum arrays (row-major: row c is [c*256, (c+1)*256)).
+    _freq_arr = array.array('I', [0] * (n_contexts * 256))
+    _cum_arr = array.array('I', [0] * (n_contexts * 256))
+    for dense, sparse in enumerate(active_ctxs):
+        base = dense * 256
+        freq_row = freq_per_ctx[sparse]
+        running = 0
+        for s in range(256):
+            _freq_arr[base + s] = freq_row[s]
+            _cum_arr[base + s] = running
+            running += freq_row[s]
+
+    freq_flat = (ctypes.c_uint32 * (n_contexts * 256)).from_buffer(_freq_arr)
+    cum_flat = (ctypes.c_uint32 * (n_contexts * 256)).from_buffer(_cum_arr)
+
+    # Build dtab via the C library.
+    dtab_size = n_contexts * T  # T = 4096
+    dtab_arr = (ctypes.c_uint8 * dtab_size)()
+    rc = _lib.ttio_rans_build_decode_table(
+        ctypes.c_uint16(n_contexts),
+        freq_flat, cum_flat, dtab_arr,
+    )
+    if rc != 0:
+        raise RuntimeError(f"build_decode_table failed: rc={rc}")
+
+    # ── Build the M94.Z context callback ─────────────────────────────
+    pad_ctx_sparse = m94z_context(0, 0, 0, qbits, pbits, sloc)
+    pad_ctx_dense = ctx_remap.get(pad_ctx_sparse, 0)
+    shift = max(1, qbits // 3)
+    qmask_local = (1 << qbits) - 1
+    shift_mask = (1 << shift) - 1
+
+    # Mutable decode state captured by the closure (list for mutability).
+    # [0] read_idx  [1] pos_in_read  [2] cur_read_len
+    # [3] cur_revcomp  [4] cumulative_read_end  [5] prev_q
+    state = [
+        0,
+        0,
+        read_lengths[0] if read_lengths else 0,
+        revcomp_flags[0] if revcomp_flags else 0,
+        read_lengths[0] if read_lengths else 0,
+        0,
+    ]
+
+    def resolver(user_data_ptr, i, prev_sym):
+        # Called BEFORE decoding symbol[i].
+        # prev_sym is the symbol decoded at position i-1 (or 0 for i==0).
+        if i >= n_symbols:
+            return pad_ctx_dense
+
+        if i > 0:
+            # Update prev_q ring with the just-decoded symbol (at i-1).
+            state[5] = ((state[5] << shift) | (prev_sym & shift_mask)) & qmask_local
+            state[1] += 1  # pos_in_read
+
+        # Check read boundary.
+        if i > 0 and i >= state[4] and state[0] < len(read_lengths) - 1:
+            state[0] += 1                      # read_idx
+            state[1] = 0                       # pos_in_read reset
+            state[2] = read_lengths[state[0]]  # cur_read_len
+            state[3] = revcomp_flags[state[0]] # cur_revcomp
+            state[4] += state[2]               # cumulative_read_end
+            state[5] = 0                       # prev_q reset
+
+        pb = position_bucket_pbits(state[1], state[2], pbits)
+        ctx_sparse = m94z_context(state[5], pb, state[3] & 1, qbits, pbits, sloc)
+        return ctx_remap.get(ctx_sparse, pad_ctx_dense)
+
+    cb = _TTIORansContextResolver(resolver)
+
+    # ── Call streaming decode ─────────────────────────────────────────
+    body_buf = (ctypes.c_uint8 * len(body_bytes)).from_buffer_copy(body_bytes)
+    out_buf = (ctypes.c_uint8 * n_padded)()
+
+    rc = _lib.ttio_rans_decode_block_streaming(
+        body_buf,
+        ctypes.c_size_t(len(body_bytes)),
+        ctypes.c_uint16(n_contexts),
+        freq_flat, cum_flat, dtab_arr,
+        out_buf,
+        ctypes.c_size_t(n_padded),
+        cb,
+        None,  # user_data unused; closure captures state
+    )
+    if rc != 0:
+        raise RuntimeError(f"decode_block_streaming failed: rc={rc}")
+
+    return bytes(out_buf[:n_symbols])
+
+
 def _decode_v2_with_metadata(
     encoded: bytes,
     revcomp_flags: list[int] | None,
@@ -1464,6 +1633,26 @@ def _decode_v2_with_metadata(
     for s_idx in range(NUM_STREAMS):
         lane_data.append(mv[offset:offset + lane_bytes[s_idx]])
         offset += lane_bytes[s_idx]
+
+    # ── Native streaming dispatch ──────────────────────────────────────
+    # Try libttio_rans streaming decode first.  Falls back to pure-Python
+    # on any error (e.g. if the streaming API is unavailable at runtime).
+    if _HAVE_NATIVE_LIB:
+        try:
+            q_bytes = _decode_v2_via_native_streaming(
+                bytes(body),
+                n_qualities,
+                n_padded,
+                freq_per_ctx,
+                qbits,
+                pbits,
+                sloc,
+                read_lengths,
+                list(revcomp_flags),
+            )
+            return q_bytes, read_lengths, list(revcomp_flags)
+        except Exception:
+            pass  # fall through to pure-Python decode
 
     out = bytearray(n_padded)
 
@@ -1547,11 +1736,11 @@ def decode_with_metadata(
 
     ``revcomp_flags`` must match the encoder's trajectory (as in M94 v1).
     If ``None``, all-zero is assumed. Both V1 (default) and V2
-    (native-body) streams are supported. V2 decode is currently
-    pure-Python regardless of ``_HAVE_NATIVE_LIB`` because contexts
-    in M94.Z are derived from previously-decoded symbols and the C
-    library's :c:func:`ttio_rans_decode_block` requires a fully
-    pre-computed contexts vector — see Task 21 design notes.
+    (native-body) streams are supported.
+
+    V2 decode dispatches to _decode_v2_via_native_streaming when
+    libttio_rans is available (Task 26b), falling back to the pure-Python
+    implementation on any error.
     """
     if len(encoded) < 5:
         raise ValueError("M94Z: encoded too short to read magic+version")
