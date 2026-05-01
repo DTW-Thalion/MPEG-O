@@ -7,6 +7,7 @@
 #import "HDF5/TTIOHDF5Errors.h"
 #import "HDF5/TTIOHDF5CompoundType.h"
 #import "Providers/TTIOCompoundField.h"
+#import "Providers/TTIOStorageProtocols.h"
 #import "ValueClasses/TTIOEnums.h"
 #import <hdf5.h>
 #import <stdlib.h>
@@ -97,7 +98,7 @@ static char *dupCString(NSString *s, NSMutableArray *retained)
 // Top-level dataset names only — per-run "steps" dataset does not
 // get a mirror (its parent group does not model this format-spec §6
 // attribute).
-static void writeJsonMirrorForDatasetNamed(TTIOHDF5Group *parent,
+static void writeJsonMirrorForDatasetNamed(id<TTIOStorageGroup> parent,
                                              NSString *datasetName,
                                              NSArray *plists)
 {
@@ -115,7 +116,7 @@ static void writeJsonMirrorForDatasetNamed(TTIOHDF5Group *parent,
     NSData *d = [NSJSONSerialization dataWithJSONObject:plists options:0 error:&jerr];
     if (!d) return;
     NSString *json = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
-    [parent setStringAttribute:attrName value:json error:NULL];
+    [parent setAttributeValue:json forName:attrName error:NULL];
 }
 
 #pragma mark - Low-level write/read
@@ -200,297 +201,202 @@ static BOOL readCompoundDataset(hid_t group_id,
 
 #pragma mark - Identifications
 
+// Schema descriptors for the three canonical compound layouts.
+static NSArray<TTIOCompoundField *> *identificationFields(void)
+{
+    return @[
+        [TTIOCompoundField fieldWithName:@"run_name"            kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"spectrum_index"      kind:TTIOCompoundFieldKindUInt32],
+        [TTIOCompoundField fieldWithName:@"chemical_entity"     kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"confidence_score"    kind:TTIOCompoundFieldKindFloat64],
+        [TTIOCompoundField fieldWithName:@"evidence_chain_json" kind:TTIOCompoundFieldKindVLString],
+    ];
+}
+
 + (BOOL)writeIdentifications:(NSArray<TTIOIdentification *> *)idents
-                    intoGroup:(TTIOHDF5Group *)parent
+                    intoGroup:(id<TTIOStorageGroup>)parent
                  datasetNamed:(NSString *)name
                         error:(NSError **)error
 {
-    NSUInteger n = idents.count;
-    TTIOHDF5CompoundType *t =
-        [[TTIOHDF5CompoundType alloc] initWithSize:sizeof(ttio_ident_record_t)];
-    if (!t) {
-        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite, @"compound type alloc failed");
-        return NO;
+    NSMutableArray<NSDictionary *> *rows =
+        [NSMutableArray arrayWithCapacity:idents.count];
+    for (TTIOIdentification *ident in idents) {
+        [rows addObject:@{
+            @"run_name":            ident.runName ?: @"",
+            @"spectrum_index":      @(ident.spectrumIndex),
+            @"chemical_entity":     ident.chemicalEntity ?: @"",
+            @"confidence_score":    @(ident.confidenceScore),
+            @"evidence_chain_json": jsonFromArray(ident.evidenceChain),
+        }];
     }
-    [t addVariableLengthStringFieldNamed:@"run_name"
-                                 atOffset:HOFFSET(ttio_ident_record_t, run_name)];
-    [t addField:@"spectrum_index"
-           type:H5T_NATIVE_UINT32
-         offset:HOFFSET(ttio_ident_record_t, spectrum_index)];
-    [t addVariableLengthStringFieldNamed:@"chemical_entity"
-                                 atOffset:HOFFSET(ttio_ident_record_t, chemical_entity)];
-    [t addField:@"confidence_score"
-           type:H5T_NATIVE_DOUBLE
-         offset:HOFFSET(ttio_ident_record_t, confidence_score)];
-    [t addVariableLengthStringFieldNamed:@"evidence_chain_json"
-                                 atOffset:HOFFSET(ttio_ident_record_t, evidence_chain_json)];
+    if (![self writeGeneric:rows
+                   intoGroup:parent
+                datasetNamed:name
+                      fields:identificationFields()
+                       error:error]) return NO;
 
-    ttio_ident_record_t *records = calloc(n > 0 ? n : 1, sizeof(ttio_ident_record_t));
-    NSMutableArray *retained = [NSMutableArray array];  // keep NSStrings alive
-    for (NSUInteger i = 0; i < n; i++) {
-        TTIOIdentification *ident = idents[i];
-        records[i].run_name            = dupCString(ident.runName, retained);
-        records[i].spectrum_index      = (uint32_t)ident.spectrumIndex;
-        records[i].chemical_entity     = dupCString(ident.chemicalEntity, retained);
-        records[i].confidence_score    = ident.confidenceScore;
-        records[i].evidence_chain_json = dupCString(jsonFromArray(ident.evidenceChain), retained);
-    }
-
-    BOOL ok = writeCompoundDataset(parent.groupId, [name UTF8String],
-                                    t.typeId, n, records, error);
-    free(records);
-    [retained removeAllObjects];
-    [t close];
-    if (ok) {
-        NSMutableArray *plists = [NSMutableArray arrayWithCapacity:n];
-        for (TTIOIdentification *i in idents) [plists addObject:[i asPlist]];
-        writeJsonMirrorForDatasetNamed(parent, name, plists);
-    }
-    return ok;
+    NSMutableArray *plists = [NSMutableArray arrayWithCapacity:idents.count];
+    for (TTIOIdentification *i in idents) [plists addObject:[i asPlist]];
+    writeJsonMirrorForDatasetNamed(parent, name, plists);
+    return YES;
 }
 
-+ (NSArray<TTIOIdentification *> *)readIdentificationsFromGroup:(TTIOHDF5Group *)parent
++ (NSArray<TTIOIdentification *> *)readIdentificationsFromGroup:(id<TTIOStorageGroup>)parent
                                                     datasetNamed:(NSString *)name
                                                            error:(NSError **)error
 {
-    TTIOHDF5CompoundType *t =
-        [[TTIOHDF5CompoundType alloc] initWithSize:sizeof(ttio_ident_record_t)];
-    [t addVariableLengthStringFieldNamed:@"run_name"
-                                 atOffset:HOFFSET(ttio_ident_record_t, run_name)];
-    [t addField:@"spectrum_index"
-           type:H5T_NATIVE_UINT32
-         offset:HOFFSET(ttio_ident_record_t, spectrum_index)];
-    [t addVariableLengthStringFieldNamed:@"chemical_entity"
-                                 atOffset:HOFFSET(ttio_ident_record_t, chemical_entity)];
-    [t addField:@"confidence_score"
-           type:H5T_NATIVE_DOUBLE
-         offset:HOFFSET(ttio_ident_record_t, confidence_score)];
-    [t addVariableLengthStringFieldNamed:@"evidence_chain_json"
-                                 atOffset:HOFFSET(ttio_ident_record_t, evidence_chain_json)];
+    NSArray<NSDictionary *> *rows =
+        [self readGenericFromGroup:parent
+                       datasetNamed:name
+                             fields:identificationFields()
+                              error:error];
+    if (!rows) return nil;
 
-    NSUInteger n = 0;
-    void *buf = NULL;
-    hid_t space_id = -1;
-    if (!readCompoundDataset(parent.groupId, [name UTF8String],
-                              t.typeId, sizeof(ttio_ident_record_t),
-                              &n, &buf, &space_id, error)) {
-        [t close];
-        return nil;
-    }
-
-    NSMutableArray *out = [NSMutableArray arrayWithCapacity:n];
-    ttio_ident_record_t *records = (ttio_ident_record_t *)buf;
-    for (NSUInteger i = 0; i < n; i++) {
-        NSString *runName = records[i].run_name
-            ? [NSString stringWithUTF8String:records[i].run_name] : @"";
-        NSString *chem = records[i].chemical_entity
-            ? [NSString stringWithUTF8String:records[i].chemical_entity] : @"";
-        NSArray *chain = arrayFromJson(records[i].evidence_chain_json);
-
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:rows.count];
+    for (NSDictionary *r in rows) {
+        NSString *chainJson = r[@"evidence_chain_json"] ?: @"";
+        NSArray *chain = arrayFromJson([chainJson UTF8String]);
         [out addObject:[[TTIOIdentification alloc]
-                         initWithRunName:runName
-                           spectrumIndex:records[i].spectrum_index
-                          chemicalEntity:chem
-                         confidenceScore:records[i].confidence_score
+                         initWithRunName:r[@"run_name"] ?: @""
+                           spectrumIndex:[r[@"spectrum_index"] unsignedIntValue]
+                          chemicalEntity:r[@"chemical_entity"] ?: @""
+                         confidenceScore:[r[@"confidence_score"] doubleValue]
                            evidenceChain:chain]];
     }
-
-    H5Dvlen_reclaim(t.typeId, space_id, H5P_DEFAULT, buf);
-    free(buf);
-    H5Sclose(space_id);
-    [t close];
     return out;
 }
 
 #pragma mark - Quantifications
 
+static NSArray<TTIOCompoundField *> *quantificationFields(void)
+{
+    return @[
+        [TTIOCompoundField fieldWithName:@"chemical_entity"      kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"sample_ref"           kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"abundance"            kind:TTIOCompoundFieldKindFloat64],
+        [TTIOCompoundField fieldWithName:@"normalization_method" kind:TTIOCompoundFieldKindVLString],
+    ];
+}
+
 + (BOOL)writeQuantifications:(NSArray<TTIOQuantification *> *)quants
-                    intoGroup:(TTIOHDF5Group *)parent
+                    intoGroup:(id<TTIOStorageGroup>)parent
                  datasetNamed:(NSString *)name
                         error:(NSError **)error
 {
-    NSUInteger n = quants.count;
-    TTIOHDF5CompoundType *t =
-        [[TTIOHDF5CompoundType alloc] initWithSize:sizeof(ttio_quant_record_t)];
-    [t addVariableLengthStringFieldNamed:@"chemical_entity"
-                                 atOffset:HOFFSET(ttio_quant_record_t, chemical_entity)];
-    [t addVariableLengthStringFieldNamed:@"sample_ref"
-                                 atOffset:HOFFSET(ttio_quant_record_t, sample_ref)];
-    [t addField:@"abundance"
-           type:H5T_NATIVE_DOUBLE
-         offset:HOFFSET(ttio_quant_record_t, abundance)];
-    [t addVariableLengthStringFieldNamed:@"normalization_method"
-                                 atOffset:HOFFSET(ttio_quant_record_t, normalization_method)];
-
-    ttio_quant_record_t *records = calloc(n > 0 ? n : 1, sizeof(ttio_quant_record_t));
-    NSMutableArray *retained = [NSMutableArray array];
-    for (NSUInteger i = 0; i < n; i++) {
-        TTIOQuantification *q = quants[i];
-        records[i].chemical_entity      = dupCString(q.chemicalEntity, retained);
-        records[i].sample_ref           = dupCString(q.sampleRef, retained);
-        records[i].abundance            = q.abundance;
-        records[i].normalization_method = dupCString(q.normalizationMethod ?: @"", retained);
+    NSMutableArray<NSDictionary *> *rows =
+        [NSMutableArray arrayWithCapacity:quants.count];
+    for (TTIOQuantification *q in quants) {
+        [rows addObject:@{
+            @"chemical_entity":      q.chemicalEntity ?: @"",
+            @"sample_ref":           q.sampleRef ?: @"",
+            @"abundance":            @(q.abundance),
+            @"normalization_method": q.normalizationMethod ?: @"",
+        }];
     }
+    if (![self writeGeneric:rows
+                   intoGroup:parent
+                datasetNamed:name
+                      fields:quantificationFields()
+                       error:error]) return NO;
 
-    BOOL ok = writeCompoundDataset(parent.groupId, [name UTF8String],
-                                    t.typeId, n, records, error);
-    free(records);
-    [retained removeAllObjects];
-    [t close];
-    if (ok) {
-        NSMutableArray *plists = [NSMutableArray arrayWithCapacity:n];
-        for (TTIOQuantification *q in quants) [plists addObject:[q asPlist]];
-        writeJsonMirrorForDatasetNamed(parent, name, plists);
-    }
-    return ok;
+    NSMutableArray *plists = [NSMutableArray arrayWithCapacity:quants.count];
+    for (TTIOQuantification *q in quants) [plists addObject:[q asPlist]];
+    writeJsonMirrorForDatasetNamed(parent, name, plists);
+    return YES;
 }
 
-+ (NSArray<TTIOQuantification *> *)readQuantificationsFromGroup:(TTIOHDF5Group *)parent
++ (NSArray<TTIOQuantification *> *)readQuantificationsFromGroup:(id<TTIOStorageGroup>)parent
                                                     datasetNamed:(NSString *)name
                                                            error:(NSError **)error
 {
-    TTIOHDF5CompoundType *t =
-        [[TTIOHDF5CompoundType alloc] initWithSize:sizeof(ttio_quant_record_t)];
-    [t addVariableLengthStringFieldNamed:@"chemical_entity"
-                                 atOffset:HOFFSET(ttio_quant_record_t, chemical_entity)];
-    [t addVariableLengthStringFieldNamed:@"sample_ref"
-                                 atOffset:HOFFSET(ttio_quant_record_t, sample_ref)];
-    [t addField:@"abundance"
-           type:H5T_NATIVE_DOUBLE
-         offset:HOFFSET(ttio_quant_record_t, abundance)];
-    [t addVariableLengthStringFieldNamed:@"normalization_method"
-                                 atOffset:HOFFSET(ttio_quant_record_t, normalization_method)];
+    NSArray<NSDictionary *> *rows =
+        [self readGenericFromGroup:parent
+                       datasetNamed:name
+                             fields:quantificationFields()
+                              error:error];
+    if (!rows) return nil;
 
-    NSUInteger n = 0;
-    void *buf = NULL;
-    hid_t space_id = -1;
-    if (!readCompoundDataset(parent.groupId, [name UTF8String],
-                              t.typeId, sizeof(ttio_quant_record_t),
-                              &n, &buf, &space_id, error)) {
-        [t close];
-        return nil;
-    }
-
-    NSMutableArray *out = [NSMutableArray arrayWithCapacity:n];
-    ttio_quant_record_t *records = (ttio_quant_record_t *)buf;
-    for (NSUInteger i = 0; i < n; i++) {
-        NSString *chem   = records[i].chemical_entity
-            ? [NSString stringWithUTF8String:records[i].chemical_entity] : @"";
-        NSString *sample = records[i].sample_ref
-            ? [NSString stringWithUTF8String:records[i].sample_ref] : @"";
-        NSString *norm   = records[i].normalization_method
-            ? [NSString stringWithUTF8String:records[i].normalization_method] : nil;
-        if (norm.length == 0) norm = nil;
-
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:rows.count];
+    for (NSDictionary *r in rows) {
+        NSString *norm = r[@"normalization_method"];
+        if ([norm isKindOfClass:[NSString class]] && norm.length == 0) norm = nil;
         [out addObject:[[TTIOQuantification alloc]
-                         initWithChemicalEntity:chem
-                                      sampleRef:sample
-                                      abundance:records[i].abundance
+                         initWithChemicalEntity:r[@"chemical_entity"] ?: @""
+                                      sampleRef:r[@"sample_ref"] ?: @""
+                                      abundance:[r[@"abundance"] doubleValue]
                             normalizationMethod:norm]];
     }
-
-    H5Dvlen_reclaim(t.typeId, space_id, H5P_DEFAULT, buf);
-    free(buf);
-    H5Sclose(space_id);
-    [t close];
     return out;
 }
 
 #pragma mark - Provenance
 
+static NSArray<TTIOCompoundField *> *provenanceFields(void)
+{
+    return @[
+        [TTIOCompoundField fieldWithName:@"timestamp_unix"   kind:TTIOCompoundFieldKindInt64],
+        [TTIOCompoundField fieldWithName:@"software"         kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"parameters_json"  kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"input_refs_json"  kind:TTIOCompoundFieldKindVLString],
+        [TTIOCompoundField fieldWithName:@"output_refs_json" kind:TTIOCompoundFieldKindVLString],
+    ];
+}
+
 + (BOOL)writeProvenance:(NSArray<TTIOProvenanceRecord *> *)records
-               intoGroup:(TTIOHDF5Group *)parent
+               intoGroup:(id<TTIOStorageGroup>)parent
             datasetNamed:(NSString *)name
                    error:(NSError **)error
 {
-    NSUInteger n = records.count;
-    TTIOHDF5CompoundType *t =
-        [[TTIOHDF5CompoundType alloc] initWithSize:sizeof(ttio_prov_record_t)];
-    [t addField:@"timestamp_unix"
-           type:H5T_NATIVE_INT64
-         offset:HOFFSET(ttio_prov_record_t, timestamp_unix)];
-    [t addVariableLengthStringFieldNamed:@"software"
-                                 atOffset:HOFFSET(ttio_prov_record_t, software)];
-    [t addVariableLengthStringFieldNamed:@"parameters_json"
-                                 atOffset:HOFFSET(ttio_prov_record_t, parameters_json)];
-    [t addVariableLengthStringFieldNamed:@"input_refs_json"
-                                 atOffset:HOFFSET(ttio_prov_record_t, input_refs_json)];
-    [t addVariableLengthStringFieldNamed:@"output_refs_json"
-                                 atOffset:HOFFSET(ttio_prov_record_t, output_refs_json)];
-
-    ttio_prov_record_t *recs = calloc(n > 0 ? n : 1, sizeof(ttio_prov_record_t));
-    NSMutableArray *retained = [NSMutableArray array];
-    for (NSUInteger i = 0; i < n; i++) {
-        TTIOProvenanceRecord *r = records[i];
-        recs[i].timestamp_unix  = r.timestampUnix;
-        recs[i].software        = dupCString(r.software, retained);
-        recs[i].parameters_json = dupCString(jsonFromDict(r.parameters), retained);
-        recs[i].input_refs_json = dupCString(jsonFromArray(r.inputRefs), retained);
-        recs[i].output_refs_json= dupCString(jsonFromArray(r.outputRefs), retained);
+    NSMutableArray<NSDictionary *> *rows =
+        [NSMutableArray arrayWithCapacity:records.count];
+    for (TTIOProvenanceRecord *r in records) {
+        [rows addObject:@{
+            @"timestamp_unix":   @(r.timestampUnix),
+            @"software":         r.software ?: @"",
+            @"parameters_json":  jsonFromDict(r.parameters),
+            @"input_refs_json":  jsonFromArray(r.inputRefs),
+            @"output_refs_json": jsonFromArray(r.outputRefs),
+        }];
     }
+    if (![self writeGeneric:rows
+                   intoGroup:parent
+                datasetNamed:name
+                      fields:provenanceFields()
+                       error:error]) return NO;
 
-    BOOL ok = writeCompoundDataset(parent.groupId, [name UTF8String],
-                                    t.typeId, n, recs, error);
-    free(recs);
-    [retained removeAllObjects];
-    [t close];
-    if (ok) {
-        NSMutableArray *plists = [NSMutableArray arrayWithCapacity:n];
-        for (TTIOProvenanceRecord *r in records) [plists addObject:[r asPlist]];
-        writeJsonMirrorForDatasetNamed(parent, name, plists);
-    }
-    return ok;
+    NSMutableArray *plists = [NSMutableArray arrayWithCapacity:records.count];
+    for (TTIOProvenanceRecord *r in records) [plists addObject:[r asPlist]];
+    writeJsonMirrorForDatasetNamed(parent, name, plists);
+    return YES;
 }
 
-+ (NSArray<TTIOProvenanceRecord *> *)readProvenanceFromGroup:(TTIOHDF5Group *)parent
++ (NSArray<TTIOProvenanceRecord *> *)readProvenanceFromGroup:(id<TTIOStorageGroup>)parent
                                                  datasetNamed:(NSString *)name
                                                         error:(NSError **)error
 {
-    TTIOHDF5CompoundType *t =
-        [[TTIOHDF5CompoundType alloc] initWithSize:sizeof(ttio_prov_record_t)];
-    [t addField:@"timestamp_unix"
-           type:H5T_NATIVE_INT64
-         offset:HOFFSET(ttio_prov_record_t, timestamp_unix)];
-    [t addVariableLengthStringFieldNamed:@"software"
-                                 atOffset:HOFFSET(ttio_prov_record_t, software)];
-    [t addVariableLengthStringFieldNamed:@"parameters_json"
-                                 atOffset:HOFFSET(ttio_prov_record_t, parameters_json)];
-    [t addVariableLengthStringFieldNamed:@"input_refs_json"
-                                 atOffset:HOFFSET(ttio_prov_record_t, input_refs_json)];
-    [t addVariableLengthStringFieldNamed:@"output_refs_json"
-                                 atOffset:HOFFSET(ttio_prov_record_t, output_refs_json)];
+    NSArray<NSDictionary *> *rows =
+        [self readGenericFromGroup:parent
+                       datasetNamed:name
+                             fields:provenanceFields()
+                              error:error];
+    if (!rows) return nil;
 
-    NSUInteger n = 0;
-    void *buf = NULL;
-    hid_t space_id = -1;
-    if (!readCompoundDataset(parent.groupId, [name UTF8String],
-                              t.typeId, sizeof(ttio_prov_record_t),
-                              &n, &buf, &space_id, error)) {
-        [t close];
-        return nil;
-    }
-
-    NSMutableArray *out = [NSMutableArray arrayWithCapacity:n];
-    ttio_prov_record_t *recs = (ttio_prov_record_t *)buf;
-    for (NSUInteger i = 0; i < n; i++) {
-        NSString *software = recs[i].software
-            ? [NSString stringWithUTF8String:recs[i].software] : @"";
-        NSDictionary *params = dictFromJson(recs[i].parameters_json);
-        NSArray *inRefs  = arrayFromJson(recs[i].input_refs_json);
-        NSArray *outRefs = arrayFromJson(recs[i].output_refs_json);
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:rows.count];
+    for (NSDictionary *r in rows) {
+        NSString *paramsJson = r[@"parameters_json"]  ?: @"";
+        NSString *inJson     = r[@"input_refs_json"]  ?: @"";
+        NSString *outJson    = r[@"output_refs_json"] ?: @"";
+        NSDictionary *params = dictFromJson([paramsJson UTF8String]);
+        NSArray *inRefs  = arrayFromJson([inJson UTF8String]);
+        NSArray *outRefs = arrayFromJson([outJson UTF8String]);
 
         [out addObject:[[TTIOProvenanceRecord alloc]
                          initWithInputRefs:inRefs
-                                  software:software
+                                  software:r[@"software"] ?: @""
                                 parameters:params
                                 outputRefs:outRefs
-                             timestampUnix:recs[i].timestamp_unix]];
+                             timestampUnix:[r[@"timestamp_unix"] longLongValue]]];
     }
-
-    H5Dvlen_reclaim(t.typeId, space_id, H5P_DEFAULT, buf);
-    free(buf);
-    H5Sclose(space_id);
-    [t close];
     return out;
 }
 
@@ -598,11 +504,25 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
 }
 
 + (BOOL)writeGeneric:(NSArray<NSDictionary *> *)rows
-            intoGroup:(TTIOHDF5Group *)parent
+            intoGroup:(id<TTIOStorageGroup>)parent
          datasetNamed:(NSString *)name
                fields:(NSArray<TTIOCompoundField *> *)fields
                 error:(NSError **)error
 {
+    // Non-HDF5 providers route through the protocol's compound dataset
+    // API (Memory/SQLite/Zarr implementations handle row serialisation).
+    if (![parent isKindOfClass:[TTIOHDF5Group class]]) {
+        id<TTIOStorageDataset> ds =
+            [parent createCompoundDatasetNamed:name
+                                         fields:fields
+                                          count:rows.count
+                                          error:error];
+        if (!ds) return NO;
+        return [ds writeAll:rows error:error];
+    }
+    // HDF5 fast path: build the H5T compound type and use H5Dwrite
+    // directly. Preserves byte-exact compatibility with v0.2 readers.
+    TTIOHDF5Group *hdf5Parent = (TTIOHDF5Group *)parent;
     NSUInteger n = rows.count;
     size_t recSize = 0;
     NSMutableArray<NSNumber *> *offsets = [NSMutableArray array];
@@ -689,7 +609,7 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
         }
     }
 
-    BOOL ok = writeCompoundDataset(parent.groupId, [name UTF8String],
+    BOOL ok = writeCompoundDataset(hdf5Parent.groupId, [name UTF8String],
                                     t.typeId, n, buf, error);
     free(buf);
     for (NSValue *v in vlBytesAllocs) {
@@ -702,11 +622,18 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     return ok;
 }
 
-+ (NSArray<NSDictionary *> *)readGenericFromGroup:(TTIOHDF5Group *)parent
++ (NSArray<NSDictionary *> *)readGenericFromGroup:(id<TTIOStorageGroup>)parent
                                        datasetNamed:(NSString *)name
                                              fields:(NSArray<TTIOCompoundField *> *)fields
                                               error:(NSError **)error
 {
+    // Non-HDF5: route through the protocol's compound read.
+    if (![parent isKindOfClass:[TTIOHDF5Group class]]) {
+        id<TTIOStorageDataset> ds = [parent openDatasetNamed:name error:error];
+        if (!ds) return nil;
+        return [ds readRows:error];
+    }
+    TTIOHDF5Group *hdf5Parent = (TTIOHDF5Group *)parent;
     size_t recSize = 0;
     NSMutableArray<NSNumber *> *offsets = [NSMutableArray array];
     for (TTIOCompoundField *f in fields) {
@@ -740,7 +667,7 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     NSUInteger n = 0;
     void *buf = NULL;
     hid_t space_id = -1;
-    if (!readCompoundDataset(parent.groupId, [name UTF8String],
+    if (!readCompoundDataset(hdf5Parent.groupId, [name UTF8String],
                               t.typeId, recSize, &n, &buf, &space_id, error)) {
         [t close];
         return nil;

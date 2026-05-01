@@ -9,6 +9,7 @@
 
 @class TTIOHDF5Group;
 @class TTIOHDF5Dataset;
+@class TTIOCompoundField;
 
 /**
  * HDF5 storage provider. Adapter over the existing
@@ -38,6 +39,16 @@
  *  @since 0.7 */
 + (id<TTIOStorageDataset>)adapterForDataset:(TTIOHDF5Dataset *)dataset
                                          name:(NSString *)name;
+
+/** Task 31: lazy compound-dataset adapter for the
+ *  ``createCompoundDatasetNamed:`` protocol method when called on a
+ *  raw TTIOHDF5Group. The first ``writeAll:`` materialises the H5T
+ *  compound type via the existing TTIOCompoundIO fast path, so the
+ *  HDF5 byte format is preserved. */
++ (id<TTIOStorageDataset>)adapterForCompoundDatasetWithParent:(TTIOHDF5Group *)parent
+                                                          name:(NSString *)name
+                                                        fields:(NSArray<TTIOCompoundField *> *)fields
+                                                         count:(NSUInteger)count;
 
 @end
 
