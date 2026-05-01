@@ -1,6 +1,4 @@
 #import "TTIOSignalArray.h"
-#import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
 @implementation TTIOSignalArray
@@ -30,51 +28,51 @@
 
 #pragma mark - HDF5
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)group
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
                 name:(NSString *)name
            chunkSize:(NSUInteger)chunkSize
     compressionLevel:(int)compressionLevel
                error:(NSError **)error
 {
-    TTIOHDF5Group *sub = [group createGroupNamed:name error:error];
+    id<TTIOStorageGroup> sub = [group createGroupNamed:name error:error];
     if (!sub) return NO;
 
-    TTIOHDF5Dataset *ds =
+    id<TTIOStorageDataset> ds =
         [sub createDatasetNamed:@"buffer"
                       precision:_encoding.precision
                          length:_length
                       chunkSize:chunkSize
+                    compression:TTIOCompressionZlib
                compressionLevel:compressionLevel
                           error:error];
     if (!ds) return NO;
-    if (![ds writeData:_buffer error:error]) return NO;
+    if (![ds writeAll:_buffer error:error]) return NO;
 
-    if (![sub setIntegerAttribute:@"compression"
-                            value:(int64_t)_encoding.compressionAlgorithm
-                            error:error]) return NO;
-    if (![sub setIntegerAttribute:@"byte_order"
-                            value:(int64_t)_encoding.byteOrder
-                            error:error]) return NO;
-    if (![sub setIntegerAttribute:@"precision"
-                            value:(int64_t)_encoding.precision
-                            error:error]) return NO;
+    if (![sub setAttributeValue:@((int64_t)_encoding.compressionAlgorithm)
+                        forName:@"compression" error:error]) return NO;
+    if (![sub setAttributeValue:@((int64_t)_encoding.byteOrder)
+                        forName:@"byte_order" error:error]) return NO;
+    if (![sub setAttributeValue:@((int64_t)_encoding.precision)
+                        forName:@"precision" error:error]) return NO;
 
     if (_axis) {
-        if (![sub setStringAttribute:@"axis_name"  value:_axis.name  error:error]) return NO;
-        if (![sub setStringAttribute:@"axis_unit"  value:_axis.unit  error:error]) return NO;
-        if (![sub setIntegerAttribute:@"axis_sampling_mode"
-                                value:(int64_t)_axis.samplingMode error:error]) return NO;
+        if (![sub setAttributeValue:_axis.name forName:@"axis_name" error:error]) return NO;
+        if (![sub setAttributeValue:_axis.unit forName:@"axis_unit" error:error]) return NO;
+        if (![sub setAttributeValue:@((int64_t)_axis.samplingMode)
+                            forName:@"axis_sampling_mode" error:error]) return NO;
         // Encode range as two doubles via a dataset to keep the attribute API simple.
-        TTIOHDF5Dataset *rng = [sub createDatasetNamed:@"axis_range"
-                                             precision:TTIOPrecisionFloat64
-                                                length:2
-                                             chunkSize:0
-                                      compressionLevel:0
-                                                 error:error];
+        id<TTIOStorageDataset> rng =
+            [sub createDatasetNamed:@"axis_range"
+                          precision:TTIOPrecisionFloat64
+                             length:2
+                          chunkSize:0
+                        compression:TTIOCompressionZlib
+                   compressionLevel:0
+                              error:error];
         if (!rng) return NO;
         double r[2] = { _axis.valueRange.minimum, _axis.valueRange.maximum };
         NSData *rdata = [NSData dataWithBytes:r length:sizeof(r)];
-        if (![rng writeData:rdata error:error]) return NO;
+        if (![rng writeAll:rdata error:error]) return NO;
     }
 
     if (_cvParams.count > 0) {
@@ -94,49 +92,49 @@
         if (!json) return NO;
         NSString *jsonStr = [[NSString alloc] initWithData:json
                                                   encoding:NSUTF8StringEncoding];
-        if (![sub setStringAttribute:@"cv_params" value:jsonStr error:error]) return NO;
+        if (![sub setAttributeValue:jsonStr forName:@"cv_params" error:error]) return NO;
     }
 
     return YES;
 }
 
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)group
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)group
                          name:(NSString *)name
                         error:(NSError **)error
 {
-    TTIOHDF5Group *sub = [group openGroupNamed:name error:error];
+    id<TTIOStorageGroup> sub = [group openGroupNamed:name error:error];
     if (!sub) return nil;
 
-    TTIOHDF5Dataset *ds = [sub openDatasetNamed:@"buffer" error:error];
+    id<TTIOStorageDataset> ds = [sub openDatasetNamed:@"buffer" error:error];
     if (!ds) return nil;
 
-    NSData *bytes = [ds readDataWithError:error];
+    NSData *bytes = [ds readAll:error];
     if (!bytes) return nil;
 
-    BOOL exists = NO;
-    int64_t comp = [sub integerAttributeNamed:@"compression" exists:&exists error:error];
-    if (!exists) {
+    NSNumber *compNum = [sub attributeValueForName:@"compression" error:error];
+    if (!compNum) {
         if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
             @"signal array missing 'compression' attribute");
         return nil;
     }
-    int64_t byte = [sub integerAttributeNamed:@"byte_order" exists:&exists error:error];
-    if (!exists) return nil;
+    NSNumber *byteNum = [sub attributeValueForName:@"byte_order" error:error];
+    if (!byteNum) return nil;
 
     TTIOEncodingSpec *enc =
         [TTIOEncodingSpec specWithPrecision:ds.precision
-                       compressionAlgorithm:(TTIOCompression)comp
-                                  byteOrder:(TTIOByteOrder)byte];
+                       compressionAlgorithm:(TTIOCompression)[compNum longLongValue]
+                                  byteOrder:(TTIOByteOrder)[byteNum longLongValue]];
 
     TTIOAxisDescriptor *axis = nil;
     if ([sub hasAttributeNamed:@"axis_name"]) {
-        NSString *axName = [sub stringAttributeNamed:@"axis_name" error:error];
-        NSString *axUnit = [sub stringAttributeNamed:@"axis_unit" error:error];
-        int64_t  axMode  = [sub integerAttributeNamed:@"axis_sampling_mode"
-                                               exists:&exists error:error];
-        TTIOHDF5Dataset *rng = [sub openDatasetNamed:@"axis_range" error:error];
+        NSString *axName = [sub attributeValueForName:@"axis_name" error:error];
+        NSString *axUnit = [sub attributeValueForName:@"axis_unit" error:error];
+        NSNumber *axModeNum = [sub attributeValueForName:@"axis_sampling_mode"
+                                                   error:error];
+        int64_t axMode = axModeNum ? [axModeNum longLongValue] : 0;
+        id<TTIOStorageDataset> rng = [sub openDatasetNamed:@"axis_range" error:error];
         if (!rng) return nil;
-        NSData *rdata = [rng readDataWithError:error];
+        NSData *rdata = [rng readAll:error];
         if (!rdata || rdata.length < 2 * sizeof(double)) return nil;
         const double *rp = rdata.bytes;
         TTIOValueRange *vr = [TTIOValueRange rangeWithMinimum:rp[0] maximum:rp[1]];
@@ -152,7 +150,7 @@
                                                    axis:axis];
 
     if ([sub hasAttributeNamed:@"cv_params"]) {
-        NSString *json = [sub stringAttributeNamed:@"cv_params" error:error];
+        NSString *json = [sub attributeValueForName:@"cv_params" error:error];
         NSData *jdata = [json dataUsingEncoding:NSUTF8StringEncoding];
         NSArray *items = [NSJSONSerialization JSONObjectWithData:jdata options:0 error:error];
         for (NSDictionary *d in items) {

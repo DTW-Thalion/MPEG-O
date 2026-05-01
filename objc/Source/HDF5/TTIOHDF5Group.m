@@ -3,6 +3,8 @@
 #import "TTIOHDF5File.h"
 #import "TTIOHDF5Errors.h"
 #import "TTIOHDF5Types.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "Providers/TTIOCompoundField.h"
 #import <hdf5.h>
 
 @implementation TTIOHDF5Group
@@ -442,6 +444,139 @@ static herr_t collect_link(hid_t loc, const char *name,
 - (void)dealloc
 {
     if (_gid >= 0) H5Gclose(_gid);
+}
+
+#pragma mark - <TTIOStorageGroup> bridge methods (Option B / M44 catch-up)
+
+// Protocol method names that delegate to the HDF5-typed methods above.
+// Upper-layer writers (AcquisitionRun, SpectrumIndex, SignalArray, ...)
+// call only these protocol methods so they work against any provider.
+// Concrete TTIOHDF5Group objects can be passed directly as
+// id<TTIOStorageGroup> without an adapter wrap.
+
+- (NSString *)name { return [self groupName]; }
+
+- (id)attributeValueForName:(NSString *)name error:(NSError **)error
+{
+    // Inspect the HDF5 type and dispatch to the correctly-typed reader.
+    // Probing string first (as the adapter does) corrupts integer
+    // attributes because H5Aread with a fixed-size buffer interprets
+    // raw int bytes as UTF-8.
+    [_file lockForReading];
+    if (H5Aexists(_gid, [name UTF8String]) <= 0) {
+        [_file unlockForReading];
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
+            @"attribute '%@' not found", name);
+        return nil;
+    }
+    hid_t aid = H5Aopen(_gid, [name UTF8String], H5P_DEFAULT);
+    if (aid < 0) {
+        [_file unlockForReading];
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
+            @"H5Aopen failed for '%@'", name);
+        return nil;
+    }
+    hid_t htype = H5Aget_type(aid);
+    H5T_class_t klass = H5Tget_class(htype);
+    H5Tclose(htype);
+    H5Aclose(aid);
+    [_file unlockForReading];
+
+    if (klass == H5T_STRING) {
+        return [self stringAttributeNamed:name error:error];
+    }
+    if (klass == H5T_INTEGER) {
+        BOOL exists = NO;
+        int64_t v = [self integerAttributeNamed:name exists:&exists error:error];
+        if (exists) return @(v);
+        return nil;
+    }
+    if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
+        @"attribute '%@' has unsupported HDF5 class %d", name, (int)klass);
+    return nil;
+}
+
+- (BOOL)setAttributeValue:(id)value forName:(NSString *)name error:(NSError **)error
+{
+    if ([value isKindOfClass:[NSString class]]) {
+        return [self setStringAttribute:name value:(NSString *)value error:error];
+    }
+    if ([value isKindOfClass:[NSNumber class]]) {
+        return [self setIntegerAttribute:name
+                                   value:[(NSNumber *)value longLongValue]
+                                   error:error];
+    }
+    if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
+            @"attribute '%@' value type %@ not supported",
+            name, [value class]);
+    return NO;
+}
+
+- (id<TTIOStorageDataset>)createDatasetNDNamed:(NSString *)name
+                                      precision:(TTIOPrecision)precision
+                                          shape:(NSArray<NSNumber *> *)shape
+                                         chunks:(NSArray<NSNumber *> *)chunks
+                                    compression:(TTIOCompression)compression
+                               compressionLevel:(int)compressionLevel
+                                          error:(NSError **)error
+{
+    // 1-D fast path: equivalent to createDatasetNamed: with single length.
+    if (shape.count == 1) {
+        NSUInteger chunkSize = chunks.count > 0 ? [chunks[0] unsignedIntegerValue] : 0;
+        return [self createDatasetNamed:name
+                              precision:precision
+                                 length:[shape[0] unsignedIntegerValue]
+                              chunkSize:chunkSize
+                            compression:compression
+                       compressionLevel:compressionLevel
+                                  error:error];
+    }
+    // Rank ≥ 2: store as flat 1-D + __shape_<name>__ attribute on the
+    // parent (matches SqliteProvider/ZarrProvider layout for byte-exact
+    // canonical bytes across backends — same as TTIOHDF5GroupAdapter).
+    NSUInteger total = 1;
+    for (NSNumber *n in shape) total *= [n unsignedIntegerValue];
+    NSUInteger chunkSize = 0;
+    if (chunks.count > 0) {
+        NSUInteger chunkTotal = 1;
+        for (NSNumber *c in chunks) chunkTotal *= [c unsignedIntegerValue];
+        chunkSize = MIN(chunkTotal, total);
+    }
+    TTIOHDF5Dataset *ds = [self createDatasetNamed:name
+                                          precision:precision
+                                             length:total
+                                          chunkSize:chunkSize
+                                        compression:compression
+                                   compressionLevel:compressionLevel
+                                              error:error];
+    if (!ds) return nil;
+    NSMutableString *sb = [NSMutableString stringWithString:@"["];
+    for (NSUInteger i = 0; i < shape.count; i++) {
+        if (i > 0) [sb appendString:@","];
+        [sb appendFormat:@"%lu", (unsigned long)[shape[i] unsignedIntegerValue]];
+    }
+    [sb appendString:@"]"];
+    NSString *shapeAttr = [NSString stringWithFormat:@"__shape_%@__", name];
+    [self setStringAttribute:shapeAttr value:sb error:error];
+    return ds;
+}
+
+- (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
+                                                 fields:(NSArray<TTIOCompoundField *> *)fields
+                                                  count:(NSUInteger)count
+                                                  error:(NSError **)error
+{
+    (void)name; (void)fields; (void)count;
+    // Compound dataset construction on TTIOHDF5Group requires lazy H5T
+    // materialisation that lives in TTIOHDF5CompoundDatasetAdapter.
+    // Callers that need this go through TTIOHDF5Provider's
+    // rootGroupWithError: which returns the adapter chain; direct
+    // TTIOHDF5Group callers shouldn't hit this path. CompoundIO will
+    // refactor through the adapter explicitly (step 5).
+    if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
+        @"createCompoundDatasetNamed: on raw TTIOHDF5Group is not "
+        @"supported; route through TTIOHDF5Provider adapter chain");
+    return nil;
 }
 
 @end

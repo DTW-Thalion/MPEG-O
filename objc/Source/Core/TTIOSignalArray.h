@@ -6,9 +6,7 @@
 #import "ValueClasses/TTIOEncodingSpec.h"
 #import "ValueClasses/TTIOAxisDescriptor.h"
 #import "ValueClasses/TTIOCVParam.h"
-
-@class TTIOHDF5Group;
-@class TTIOHDF5Dataset;
+#import "Providers/TTIOStorageProtocols.h"
 
 /**
  * The atomic unit of measured signal in TTI-O. A SignalArray is a
@@ -41,15 +39,18 @@
                       encoding:(TTIOEncodingSpec *)encoding
                           axis:(TTIOAxisDescriptor *)axis;
 
-#pragma mark - HDF5 round-trip
+#pragma mark - Storage round-trip (provider-agnostic)
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)group
+/** v0.7 M44: I/O routed through StorageGroup / StorageDataset; this
+ *  class no longer references the low-level Hdf5Group / Hdf5Dataset
+ *  types. */
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
                 name:(NSString *)name
            chunkSize:(NSUInteger)chunkSize
     compressionLevel:(int)compressionLevel
                error:(NSError **)error;
 
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)group
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)group
                          name:(NSString *)name
                         error:(NSError **)error;
 
