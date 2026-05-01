@@ -1434,18 +1434,44 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
 
 - (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error
 {
+    // Task 31: narrow the non-HDF5 rejection. MS-only datasets without
+    // Image-subclass hooks can write to memory/sqlite/zarr URLs through
+    // the protocol path. NMR runs and Image subclasses use HDF5-direct
+    // features (TTIONMR2DSpectrum H5DSset_scale dimension scales,
+    // MSImage 3-D cube via H5Pset_chunk) that don't have protocol
+    // equivalents — those still require an HDF5 backing file.
     if (isNonHdf5ProviderURL(path)) {
-        if (error) *error = makeProviderWriteNotImplementedError(path);
-        return NO;
+        BOOL hasNmrRuns      = (_nmrRuns.count > 0);
+        BOOL isImageSubclass = ([self class] != [TTIOSpectralDataset class]);
+        if (hasNmrRuns || isImageSubclass) {
+            if (error) *error = makeProviderWriteNotImplementedError(path);
+            return NO;
+        }
     }
-    // M39: route through TTIOHDF5Provider. writeToFilePath: is a
-    // transactional create-write-close (handle isn't retained) so we
-    // close the provider at the tail of the method.
-    TTIOHDF5Provider *p = [[TTIOHDF5Provider alloc] init];
-    if (![p openURL:path mode:TTIOStorageOpenModeCreate error:error]) return NO;
-    TTIOHDF5File *f = (TTIOHDF5File *)[p nativeHandle];
-    if (!f) return NO;
-    TTIOHDF5Group *root = [f rootGroup];
+
+    // Open the appropriate provider based on URL scheme. Plain paths
+    // and file:// URLs go to TTIOHDF5Provider; memory:// / sqlite:// /
+    // zarr:// to their respective providers (registered via +load).
+    id<TTIOStorageProvider> provider =
+        [[TTIOProviderRegistry sharedRegistry] openURL:path
+                                                  mode:TTIOStorageOpenModeCreate
+                                              provider:nil
+                                                 error:error];
+    if (!provider) return NO;
+
+    // For HDF5, use the raw TTIOHDF5Group (which conforms to
+    // <TTIOStorageGroup> via Task 31 bridge methods). This keeps Image
+    // subclass and 2D-NMR HDF5-direct features (H5DSset_scale, native
+    // 3D cubes) reachable without wrapper-unwrap dance. Non-HDF5
+    // providers continue to expose their group via rootGroupWithError:.
+    id<TTIOStorageGroup> root = nil;
+    if ([provider isKindOfClass:[TTIOHDF5Provider class]]) {
+        TTIOHDF5File *f = (TTIOHDF5File *)[provider nativeHandle];
+        if (f) root = [f rootGroup];
+    } else {
+        root = [provider rootGroupWithError:error];
+    }
+    if (!root) { [provider close]; return NO; }
 
     // Emit v0.2 format + feature flags. The per-run compound provenance
     // flag (M17) is emitted unconditionally: every v0.3 writer produces
@@ -1467,99 +1493,150 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
         [features addObject:[TTIOFeatureFlags featureMS2ActivationDetail]];
     }
     NSString *formatVersion = anyM74 ? kTTIOFormatVersionM74 : kTTIOFormatVersion;
-    if (![TTIOFeatureFlags writeFormatVersion:formatVersion
-                                      features:features
-                                        toRoot:root
-                                         error:error]) return NO;
+    if (![root setAttributeValue:formatVersion
+                         forName:@"ttio_format_version" error:error]) {
+        [provider close]; return NO;
+    }
+    NSData *featJSON =
+        [NSJSONSerialization dataWithJSONObject:features options:0 error:NULL];
+    NSString *featStr =
+        [[NSString alloc] initWithData:featJSON encoding:NSUTF8StringEncoding];
+    if (![root setAttributeValue:featStr
+                         forName:@"ttio_features" error:error]) {
+        [provider close]; return NO;
+    }
 
     // Access policy, if set.
     NSString *apJson = encodeAccessPolicy(_accessPolicy);
     if (apJson) {
-        if (![root setStringAttribute:@"access_policy_json"
-                                value:apJson error:error]) return NO;
+        if (![root setAttributeValue:apJson
+                             forName:@"access_policy_json" error:error]) {
+            [provider close]; return NO;
+        }
     }
 
-    TTIOHDF5Group *study = [root createGroupNamed:@"study" error:error];
-    if (!study) return NO;
-    if (![study setStringAttribute:@"title" value:(_title ?: @"") error:error]) return NO;
-    if (![study setStringAttribute:@"isa_investigation_id"
-                              value:(_isaInvestigationId ?: @"")
-                              error:error]) return NO;
+    id<TTIOStorageGroup> study = [root createGroupNamed:@"study" error:error];
+    if (!study) { [provider close]; return NO; }
+    if (![study setAttributeValue:(_title ?: @"")
+                          forName:@"title" error:error]) {
+        [provider close]; return NO;
+    }
+    if (![study setAttributeValue:(_isaInvestigationId ?: @"")
+                          forName:@"isa_investigation_id" error:error]) {
+        [provider close]; return NO;
+    }
 
     // MS runs
-    TTIOHDF5Group *msRunsGroup = [study createGroupNamed:@"ms_runs" error:error];
-    if (!msRunsGroup) return NO;
+    id<TTIOStorageGroup> msRunsGroup = [study createGroupNamed:@"ms_runs" error:error];
+    if (!msRunsGroup) { [provider close]; return NO; }
     NSArray *msNames = [[_msRuns allKeys] sortedArrayUsingSelector:@selector(compare:)];
-    if (![msRunsGroup setStringAttribute:@"_run_names"
-                                    value:[msNames componentsJoinedByString:@","]
-                                    error:error]) return NO;
+    if (![msRunsGroup setAttributeValue:[msNames componentsJoinedByString:@","]
+                                forName:@"_run_names" error:error]) {
+        [provider close]; return NO;
+    }
     for (NSString *runName in msNames) {
         TTIOAcquisitionRun *run = _msRuns[runName];
-        if (![run writeToGroup:msRunsGroup name:runName error:error]) return NO;
+        if (![run writeToGroup:msRunsGroup name:runName error:error]) {
+            [provider close]; return NO;
+        }
 
         // Write compound headers alongside the parallel index datasets.
-        TTIOHDF5Group *runG = [msRunsGroup openGroupNamed:runName error:NULL];
-        TTIOHDF5Group *idxG = [runG openGroupNamed:@"spectrum_index" error:NULL];
-        if (idxG) {
+        // HDF5-only feature (h5dump readability via VL compound type);
+        // skip silently for non-HDF5 providers.
+        id<TTIOStorageGroup> runG = [msRunsGroup openGroupNamed:runName error:NULL];
+        id<TTIOStorageGroup> idxG = [runG openGroupNamed:@"spectrum_index" error:NULL];
+        if (idxG && [idxG isKindOfClass:[TTIOHDF5Group class]]) {
             [TTIOCompoundIO writeCompoundHeadersForIndex:run.spectrumIndex
-                                                intoGroup:idxG
+                                                intoGroup:(TTIOHDF5Group *)idxG
                                                     error:NULL];
         }
     }
 
-    // NMR runs (legacy nmrRuns dict, kept for backward compat)
-    TTIOHDF5Group *nmrRunsGroup = [study createGroupNamed:@"nmr_runs" error:error];
-    if (!nmrRunsGroup) return NO;
+    // NMR runs (legacy nmrRuns dict, kept for backward compat). The
+    // writer above guards non-HDF5 URLs from reaching here when nmrRuns
+    // is non-empty, so this path is effectively HDF5-only. We still use
+    // protocol methods for byte-exact symmetry with the MS path.
+    id<TTIOStorageGroup> nmrRunsGroup = [study createGroupNamed:@"nmr_runs" error:error];
+    if (!nmrRunsGroup) { [provider close]; return NO; }
     NSArray *nmrNames = [[_nmrRuns allKeys] sortedArrayUsingSelector:@selector(compare:)];
-    if (![nmrRunsGroup setStringAttribute:@"_run_names"
-                                     value:[nmrNames componentsJoinedByString:@","]
-                                     error:error]) return NO;
+    if (![nmrRunsGroup setAttributeValue:[nmrNames componentsJoinedByString:@","]
+                                 forName:@"_run_names" error:error]) {
+        [provider close]; return NO;
+    }
     for (NSString *runName in nmrNames) {
-        TTIOHDF5Group *nmrRun = [nmrRunsGroup createGroupNamed:runName error:error];
-        if (!nmrRun) return NO;
+        id<TTIOStorageGroup> nmrRun = [nmrRunsGroup createGroupNamed:runName error:error];
+        if (!nmrRun) { [provider close]; return NO; }
         NSArray<TTIONMRSpectrum *> *spectra = _nmrRuns[runName];
-        if (![nmrRun setIntegerAttribute:@"count" value:(int64_t)spectra.count
-                                   error:error]) return NO;
+        if (![nmrRun setAttributeValue:@((int64_t)spectra.count)
+                               forName:@"count" error:error]) {
+            [provider close]; return NO;
+        }
         for (NSUInteger i = 0; i < spectra.count; i++) {
             NSString *name = [NSString stringWithFormat:@"spec_%06lu", (unsigned long)i];
-            if (![spectra[i] writeToGroup:nmrRun name:name error:error]) return NO;
+            if (![spectra[i] writeToGroup:nmrRun name:name error:error]) {
+                [provider close]; return NO;
+            }
         }
     }
 
-    // Compound identifications / quantifications / provenance
+    // Compound identifications / quantifications / provenance.
+    // Task 31: TTIOCompoundIO routes HDF5 through its fast path and
+    // non-HDF5 through createCompoundDatasetNamed: + writeAll:.
     if (_identifications.count > 0) {
         if (![TTIOCompoundIO writeIdentifications:_identifications
                                          intoGroup:study
                                       datasetNamed:@"identifications"
-                                             error:error]) return NO;
+                                             error:error]) {
+            [provider close]; return NO;
+        }
     }
     if (_quantifications.count > 0) {
         if (![TTIOCompoundIO writeQuantifications:_quantifications
                                          intoGroup:study
                                       datasetNamed:@"quantifications"
-                                             error:error]) return NO;
+                                             error:error]) {
+            [provider close]; return NO;
+        }
     }
     if (_provenanceRecords.count > 0) {
         if (![TTIOCompoundIO writeProvenance:_provenanceRecords
                                     intoGroup:study
                                  datasetNamed:@"provenance"
-                                        error:error]) return NO;
+                                        error:error]) {
+            [provider close]; return NO;
+        }
     }
 
     // Subclass hook: adds its own datasets under /study/ before close.
-    if (![self writeAdditionalStudyContent:study error:error]) return NO;
+    // Subclasses use HDF5-direct features (MSImage cube), so this hook
+    // takes a concrete TTIOHDF5Group *. The non-HDF5 rejection above
+    // ensures we only get here with HDF5 when a subclass is involved,
+    // so the cast is safe.
+    if ([self class] != [TTIOSpectralDataset class]) {
+        if (![study isKindOfClass:[TTIOHDF5Group class]]) {
+            if (error) *error = makeProviderWriteNotImplementedError(path);
+            [provider close]; return NO;
+        }
+        if (![self writeAdditionalStudyContent:(TTIOHDF5Group *)study error:error]) {
+            [provider close]; return NO;
+        }
+    }
 
     if (_transitions) {
         NSData *tdata = [NSJSONSerialization dataWithJSONObject:[_transitions asPlist]
                                                         options:0
                                                           error:error];
-        if (!tdata) return NO;
+        if (!tdata) { [provider close]; return NO; }
         NSString *tjson = [[NSString alloc] initWithData:tdata encoding:NSUTF8StringEncoding];
-        if (![study setStringAttribute:@"transitions_json" value:tjson error:error]) return NO;
+        if (![study setAttributeValue:tjson
+                              forName:@"transitions_json" error:error]) {
+            [provider close]; return NO;
+        }
     }
 
     _filePath = [path copy];
-    return [f close];
+    [provider close];
+    return YES;
 }
 
 #pragma mark - HDF5 write (flat-buffer fast path)
