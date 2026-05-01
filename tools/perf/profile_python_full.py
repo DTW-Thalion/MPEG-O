@@ -72,8 +72,6 @@ from ttio.codecs import rans as _rans
 
 # V10: genomic codec benchmarks.
 from ttio.codecs.ref_diff import encode as _ref_diff_encode, decode as _ref_diff_decode
-from ttio.codecs.fqzcomp_nx16 import encode as _fqzcomp_encode
-from ttio.codecs.fqzcomp_nx16 import decode as _fqzcomp_decode
 from ttio.codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
 from ttio.codecs.fqzcomp_nx16_z import decode_with_metadata as _fqzcomp_z_decode
 from ttio.codecs.delta_rans import encode as _delta_rans_encode, decode as _delta_rans_decode
@@ -468,7 +466,7 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
     t_rd_dec, _ = _timed(
         _ref_diff_decode, rd_encoded, cigars_rd, positions_rd, ref_seq)
 
-    # ── FQZCOMP_NX16: 100K × 100bp quality strings, Q20-Q40 LCG ──
+    # ── Quality test data: 100K × 100bp quality strings, Q20-Q40 LCG ──
     n_qual = 100_000 * 100
     qual_buf = bytearray(n_qual)
     s = 0xBEEF
@@ -478,11 +476,6 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
         qual_buf[i] = 33 + 20 + ((s >> 32) % 21)
     qualities = bytes(qual_buf)
     read_lengths = [100] * 100_000
-    revcomp_flags = [0] * 100_000
-
-    t_fqz_enc, fqz_encoded = _timed(
-        _fqzcomp_encode, qualities, read_lengths, revcomp_flags)
-    t_fqz_dec, _ = _timed(_fqzcomp_decode, fqz_encoded)
 
     # ── FQZCOMP_NX16_Z: same quality input ──
     revcomp_flags_z = [(1 if (i & 7) == 0 else 0) for i in range(100_000)]
@@ -508,8 +501,6 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
     raw_mb_rd = sum(len(sq) for sq in sequences_rd) / 1e6
     print(f"  [genomic codec] ref_diff   {raw_mb_rd:.1f} MiB  "
           f"enc={t_rd_enc:.2f}s  dec={t_rd_dec:.2f}s")
-    print(f"  [genomic codec] fqzcomp    {n_qual/1e6:.1f} MiB  "
-          f"enc={t_fqz_enc:.2f}s  dec={t_fqz_dec:.2f}s")
     print(f"  [genomic codec] fqzcomp_z  {n_qual/1e6:.1f} MiB  "
           f"enc={t_fqz_z_enc:.2f}s  dec={t_fqz_z_dec:.2f}s")
     print(f"  [genomic codec] delta_rans {len(dr_input)/1e6:.1f} MiB  "
@@ -518,8 +509,6 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
     return {
         "ref_diff_encode": t_rd_enc,
         "ref_diff_decode": t_rd_dec,
-        "fqzcomp_nx16_encode": t_fqz_enc,
-        "fqzcomp_nx16_decode": t_fqz_dec,
         "fqzcomp_nx16_z_encode": t_fqz_z_enc,
         "fqzcomp_nx16_z_decode": t_fqz_z_dec,
         "delta_rans_encode": t_dr_enc,
