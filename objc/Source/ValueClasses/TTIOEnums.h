@@ -51,7 +51,7 @@ typedef NS_ENUM(NSUInteger, TTIOCompression) {
     TTIOCompressionQualityBinned,    // v0.11 M79: Illumina-style quality binning
     TTIOCompressionNameTokenized,    // v0.11 M79: read-name tokenisation
     TTIOCompressionRefDiff = 9,      // v1.2 M93: reference-based sequence diff
-    TTIOCompressionFqzcompNx16 = 10, // v1.2 M94: lossless quality codec (fqzcomp-Nx16)
+    TTIOCompressionReserved10 = 10,   // removed — no legacy .tio files exist
     TTIOCompressionDeltaRansOrder0 = 11,  // v1.2 M95: delta + rANS for integer channels
     TTIOCompressionFqzcompNx16Z = 12      // v1.2 M94.Z: CRAM-mimic rANS-Nx16 quality codec
 };
