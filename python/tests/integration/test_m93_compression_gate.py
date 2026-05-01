@@ -33,7 +33,7 @@ M93_RATIO_CEILING = 2.5
 
 # v1.2.0 final acceptance gate — only enforce when M94 + M95 marker files exist.
 V1_2_0_RATIO_CEILING = 1.15
-V1_2_0_MARKER = REPO_ROOT / "python" / "src" / "ttio" / "codecs" / "fqzcomp_nx16.py"
+V1_2_0_MARKER = REPO_ROOT / "python" / "src" / "ttio" / "codecs" / "fqzcomp_nx16_z.py"
 
 
 pytestmark = pytest.mark.skipif(
