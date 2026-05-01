@@ -7,6 +7,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TTIO_RANS_ENABLE_TSAN
     "Build a separate test_thread_safety_tsan target with -fsanitize=thread" OFF)
+option(TTIO_RANS_BUILD_JNI
+    "Build the JNI wrapper library (libttio_rans_jni.so) for Java integration" OFF)
 
 find_package(Threads REQUIRED)
 
@@ -46,6 +48,41 @@ endif()
 # Install
 install(TARGETS ttio_rans LIBRARY DESTINATION lib)
 install(FILES include/ttio_rans.h DESTINATION include)
+
+# Optional JNI wrapper.  Enable with `-DTTIO_RANS_BUILD_JNI=ON`.
+# Java loads the library by base name "ttio_rans_jni" via System.loadLibrary,
+# which expands to libttio_rans_jni.so / libttio_rans_jni.dylib /
+# ttio_rans_jni.dll on Linux/macOS/Windows respectively.
+if(TTIO_RANS_BUILD_JNI)
+    # We only need the jni.h headers — not AWT, which is missing on
+    # headless JDK installs. Use Java::JNI from FindJavaInclude when
+    # available; otherwise fall back to manual JAVA_HOME probing.
+    find_package(JNI COMPONENTS JVM)
+    if(NOT JNI_INCLUDE_DIRS)
+        # Manual fallback: probe $JAVA_HOME/include and the standard
+        # Debian/Ubuntu JDK location.
+        if(DEFINED ENV{JAVA_HOME})
+            set(_jdk_root "$ENV{JAVA_HOME}")
+        else()
+            execute_process(
+                COMMAND bash -c "readlink -f $(which javac) | sed 's|/bin/javac||'"
+                OUTPUT_VARIABLE _jdk_root
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+        endif()
+        if(_jdk_root AND EXISTS "${_jdk_root}/include/jni.h")
+            set(JNI_INCLUDE_DIRS "${_jdk_root}/include" "${_jdk_root}/include/linux")
+            message(STATUS "JNI: using ${_jdk_root}/include (manual probe)")
+        else()
+            message(FATAL_ERROR "JNI headers not found; set JAVA_HOME to a JDK")
+        endif()
+    endif()
+    add_library(ttio_rans_jni SHARED src/ttio_rans_jni.c)
+    target_link_libraries(ttio_rans_jni PRIVATE ttio_rans)
+    target_include_directories(ttio_rans_jni PRIVATE ${JNI_INCLUDE_DIRS})
+    target_compile_options(ttio_rans_jni PRIVATE -Wall -Wextra -Wpedantic)
+    set_target_properties(ttio_rans_jni PROPERTIES PREFIX "lib")
+    install(TARGETS ttio_rans_jni LIBRARY DESTINATION lib)
+endif()
 
 # Tests
 enable_testing()
