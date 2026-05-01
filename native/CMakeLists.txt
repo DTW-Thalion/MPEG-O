@@ -16,6 +16,7 @@ add_library(ttio_rans SHARED
     src/rans_decode_scalar.c
     src/dispatch.c
     src/threadpool.c
+    src/wire_format.c
 )
 target_include_directories(ttio_rans
     PUBLIC  include
@@ -58,6 +59,11 @@ target_link_libraries(test_thread_safety PRIVATE ttio_rans Threads::Threads)
 target_compile_options(test_thread_safety PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME thread_safety COMMAND test_thread_safety)
 
+add_executable(test_v2_format tests/test_v2_format.c)
+target_link_libraries(test_v2_format PRIVATE ttio_rans Threads::Threads)
+target_compile_options(test_v2_format PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME v2_format COMMAND test_v2_format)
+
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
 #   cmake -DTTIO_RANS_ENABLE_TSAN=ON ..
@@ -68,6 +74,7 @@ if(TTIO_RANS_ENABLE_TSAN)
         src/rans_decode_scalar.c
         src/dispatch.c
         src/threadpool.c
+        src/wire_format.c
     )
     target_include_directories(ttio_rans_tsan
         PUBLIC  include

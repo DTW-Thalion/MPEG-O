@@ -595,6 +595,19 @@ def _unpack_codec_header(blob: bytes) -> tuple[CodecHeader, int]:
     if blob[:4] != MAGIC:
         raise ValueError(f"M94Z bad magic: {blob[:4]!r}, expected {MAGIC!r}")
     version = blob[4]
+    if version == 2:
+        # V2 multi-block container produced by libttio_rans (Task 14).
+        # Decoding requires the native C library via ctypes (Task 15).
+        # The Python pure path cannot decode V2 streams because the
+        # original (symbol, context) sequence used for freq-table
+        # construction is required at decode time and is supplied by
+        # the higher-level Task-15 wrapper.
+        raise NotImplementedError(
+            "M94Z V2 multi-block format requires libttio_rans native "
+            "library (Task 15 wires this up). To decode this stream, "
+            "install the native library or re-encode with the V1 "
+            "pure-Python encoder."
+        )
     if version != VERSION:
         raise ValueError(f"M94Z unsupported version: {version}")
     flags = blob[5]

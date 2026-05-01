@@ -226,20 +226,19 @@ int _ttio_rans_pool_n_threads(const ttio_rans_pool *pool)
 
 /* ── public API: encode_mt / decode_mt ─────────────────────────────────
  *
- * Single-block delegate stubs.  Task 14 will introduce the V2 wire
- * format and use the pool above to encode/decode blocks in parallel.
+ * Task 14: dispatch to the V2 multi-block wire-format implementation
+ * defined in wire_format.c.
  *
- * For now, encode_mt computes a per-input frequency table from the
- * symbols (so callers can use the MT API without separately building
- * one) and calls ttio_rans_encode_block() once.  decode_mt likewise
- * delegates to ttio_rans_decode_block() on the entire buffer; since
- * single-block input has no V2 container header, the contracts of
- * the two MT entry points are not yet symmetric — Task 14 fixes
- * this when the wire format lands.
+ * encode_mt always writes V2.  decode_mt reads the version byte and
+ * dispatches to V1 or V2; V1 is the single-block fallback for streams
+ * produced by libttio_rans's own ttio_rans_encode_mt during Task 13
+ * (and any future caller that constructs a V1 stream by hand).
  *
- * The pool argument is accepted but currently unused; it is required
- * for forward-compatibility so the API does not change once Task 14
- * wires up real parallelism.
+ * V1 compatibility in this C library handles streams produced by
+ * libttio_rans's own ttio_rans_encode_block.  Streams produced by
+ * the Cython implementation use a different lane layout and must be
+ * decoded by the Cython path in Python (see fqzcomp_nx16_z.py
+ * three-tier dispatch).
  */
 
 int ttio_rans_encode_mt(
@@ -254,94 +253,9 @@ int ttio_rans_encode_mt(
     uint8_t        *out,
     size_t         *out_len)
 {
-    /* Task 14 will use these for block splitting. */
-    (void)pool;
-    (void)reads_per_block;
-    (void)read_lengths;
-    (void)n_reads;
-
-    if (!out_len) return TTIO_RANS_ERR_PARAM;
-    if (n_contexts == 0)
-        return TTIO_RANS_ERR_PARAM;
-
-    /* Compute per-context frequency table by scaling counts to T = 4096. */
-    uint32_t (*freq)[256] = (uint32_t (*)[256])
-        calloc(n_contexts, 256 * sizeof(uint32_t));
-    if (!freq) return TTIO_RANS_ERR_ALLOC;
-
-    /* Raw counts. */
-    uint32_t *totals = (uint32_t *)calloc(n_contexts, sizeof(uint32_t));
-    if (!totals) { free(freq); return TTIO_RANS_ERR_ALLOC; }
-
-    for (size_t i = 0; i < n_symbols; i++) {
-        uint16_t c = contexts ? contexts[i] : 0;
-        if (c >= n_contexts) {
-            free(totals); free(freq);
-            return TTIO_RANS_ERR_PARAM;
-        }
-        freq[c][symbols[i]]++;
-        totals[c]++;
-    }
-
-    /* Scale each context's counts into the [0, T] range, ensuring
-     * non-zero entries remain at least 1 and the row sums to exactly T.
-     * (For Task 14 the encoder will receive a precomputed freq table;
-     * this scaling here exists only so the single-block delegate path
-     * is end-to-end usable.) */
-    for (uint16_t c = 0; c < n_contexts; c++) {
-        if (totals[c] == 0) {
-            /* Degenerate: no symbols with this context.  Fill with a
-             * uniform single-symbol distribution so decode tables are
-             * still well-formed.  No symbols actually use this context
-             * so it cannot affect the round-trip. */
-            freq[c][0] = TTIO_RANS_T;
-            continue;
-        }
-        uint64_t T = TTIO_RANS_T;
-        uint64_t tot = totals[c];
-        uint32_t running = 0;
-        int last_nz = -1;
-        for (int s = 0; s < 256; s++) {
-            if (freq[c][s] == 0) continue;
-            uint64_t scaled = (freq[c][s] * T) / tot;
-            if (scaled == 0) scaled = 1;
-            freq[c][s] = (uint32_t)scaled;
-            running += freq[c][s];
-            last_nz = s;
-        }
-        /* Adjust last non-zero bucket to make the sum hit T exactly. */
-        if (last_nz < 0) {
-            freq[c][0] = TTIO_RANS_T;
-        } else if (running != TTIO_RANS_T) {
-            int64_t delta = (int64_t)TTIO_RANS_T - (int64_t)running;
-            int64_t adj = (int64_t)freq[c][last_nz] + delta;
-            if (adj < 1) {
-                /* Pick a different non-zero bucket with enough slack. */
-                for (int s = 0; s < 256; s++) {
-                    if (freq[c][s] >= 1 + (uint32_t)(-delta)) {
-                        freq[c][s] = (uint32_t)((int64_t)freq[c][s] + delta);
-                        adj = -1;
-                        break;
-                    }
-                }
-                if (adj != -1) {
-                    /* Could not adjust — give up by uniform fallback. */
-                    free(totals); free(freq);
-                    return TTIO_RANS_ERR_PARAM;
-                }
-            } else {
-                freq[c][last_nz] = (uint32_t)adj;
-            }
-        }
-    }
-
-    int rc = ttio_rans_encode_block(symbols, contexts, n_symbols,
-                                    n_contexts,
-                                    (const uint32_t (*)[256])freq,
-                                    out, out_len);
-    free(totals);
-    free(freq);
-    return rc;
+    return ttio_rans_encode_mt_v2(pool, symbols, contexts, n_symbols,
+                                  n_contexts, reads_per_block,
+                                  read_lengths, n_reads, out, out_len);
 }
 
 int ttio_rans_decode_mt(
@@ -351,15 +265,18 @@ int ttio_rans_decode_mt(
     uint8_t        *symbols,
     size_t         *n_symbols)
 {
-    /* Task 14 will use the pool + V2 container header. */
-    (void)pool;
-    (void)compressed;
-    (void)comp_len;
-    (void)symbols;
-    (void)n_symbols;
-    /* Without a wire-format container, we cannot recover contexts /
-     * freq table from the compressed payload alone.  Until Task 14
-     * adds the V2 header, callers should use ttio_rans_decode_block
-     * directly with the metadata they already hold. */
-    return TTIO_RANS_ERR_PARAM;
+    if (!compressed || !n_symbols) return TTIO_RANS_ERR_PARAM;
+    if (comp_len < 5) return TTIO_RANS_ERR_CORRUPT;
+    /* magic check */
+    if (compressed[0] != 'M' || compressed[1] != '9' ||
+        compressed[2] != '4' || compressed[3] != 'Z')
+        return TTIO_RANS_ERR_CORRUPT;
+    uint8_t version = compressed[4];
+    if (version == 1) {
+        return ttio_rans_decode_mt_v1(compressed, comp_len, symbols, n_symbols);
+    } else if (version == 2) {
+        return ttio_rans_decode_mt_v2(pool, compressed, comp_len,
+                                      symbols, n_symbols);
+    }
+    return TTIO_RANS_ERR_CORRUPT;
 }

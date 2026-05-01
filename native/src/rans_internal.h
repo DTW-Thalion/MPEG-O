@@ -121,6 +121,41 @@ void _ttio_rans_pool_wait(ttio_rans_pool *pool);
 /* Number of worker threads in the pool (read-only, set at create time). */
 int  _ttio_rans_pool_n_threads(const ttio_rans_pool *pool);
 
+/* ── V2 wire-format entry points (defined in wire_format.c) ──────────
+ *
+ * V2 multi-block container format.  See wire_format.c for the byte
+ * layout.  These are the actual workhorses behind the public
+ * ttio_rans_encode_mt / ttio_rans_decode_mt entry points.
+ *
+ * Internal-only — not exported in include/ttio_rans.h.  Callers
+ * should use the public ttio_rans_encode_mt / ttio_rans_decode_mt
+ * which dispatch to V2 (encode) or V1/V2 (decode by version byte).
+ */
+int ttio_rans_encode_mt_v2(
+    ttio_rans_pool *pool,
+    const uint8_t  *symbols,
+    const uint16_t *contexts,
+    size_t          n_symbols,
+    uint16_t        n_contexts,
+    size_t          reads_per_block,
+    const size_t   *read_lengths,
+    size_t          n_reads,
+    uint8_t        *out,
+    size_t         *out_len);
+
+int ttio_rans_decode_mt_v2(
+    ttio_rans_pool *pool,
+    const uint8_t  *compressed,
+    size_t          comp_len,
+    uint8_t        *symbols,
+    size_t         *n_symbols);
+
+int ttio_rans_decode_mt_v1(
+    const uint8_t  *compressed,
+    size_t          comp_len,
+    uint8_t        *symbols,
+    size_t         *n_symbols);
+
 #ifdef __cplusplus
 }
 #endif
