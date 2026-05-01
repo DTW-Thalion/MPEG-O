@@ -83,11 +83,11 @@ public final class JcampDxReader {
         double yfactor = parseDouble(ldrs.getOrDefault("YFACTOR", "1"));
         if (yfactor == 0.0) yfactor = 1.0;
 
-        String body = String.join("\n", bodyLines);
-
         double[] xs;
         double[] ys;
-        if (JcampDxDecode.hasCompression(body)) {
+        // hasCompression(List<String>) avoids the String.join allocation
+        // that the original String-based overload required.
+        if (JcampDxDecode.hasCompression(bodyLines)) {
             if (!ldrs.containsKey("FIRSTX") || !ldrs.containsKey("LASTX")
                     || !ldrs.containsKey("NPOINTS")) {
                 throw new IllegalArgumentException(
@@ -106,30 +106,70 @@ public final class JcampDxReader {
             xs = d.xs;
             ys = d.ys;
         } else {
-            List<Double> xList = new ArrayList<>();
-            List<Double> yList = new ArrayList<>();
-            for (String raw : bodyLines) {
-                String line = raw.strip();
-                if (line.isEmpty()) continue;
-                String[] toks = line.split("\\s+");
-                List<Double> nums = new ArrayList<>(toks.length);
-                for (String t : toks) {
-                    if (t.isEmpty()) continue;
-                    try {
-                        nums.add(Double.parseDouble(t));
-                    } catch (NumberFormatException ignored) {
-                        // skip non-numeric tokens
-                    }
-                }
-                if (nums.size() >= 2) {
-                    xList.add(nums.get(0) * xfactor);
-                    yList.add(nums.get(1) * yfactor);
-                } else if (nums.size() == 1 && xList.size() == yList.size() + 1) {
-                    yList.add(nums.get(0) * yfactor);
+            // AFFN fast path: pre-allocate double[] from NPOINTS hint
+            // (default 1024, grown geometrically). Avoids the
+            // ArrayList<Double> autoboxing that dominated this path —
+            // 20K Double allocations per spectrum at n=10K.
+            int hint = 1024;
+            String npointsLdr = ldrs.get("NPOINTS");
+            if (npointsLdr != null && !npointsLdr.isEmpty()) {
+                try {
+                    int parsed = (int) Double.parseDouble(npointsLdr);
+                    if (parsed > 0 && parsed < (1 << 30)) hint = parsed;
+                } catch (NumberFormatException ignored) {
+                    // fall through to default
                 }
             }
-            xs = toArray(xList);
-            ys = toArray(yList);
+            xs = new double[hint];
+            ys = new double[hint];
+            int count = 0;
+            for (String raw : bodyLines) {
+                int len = raw.length();
+                int p = 0;
+                // Manual whitespace tokenizer — avoids regex compile
+                // and String[] allocation per line.
+                while (p < len && isAffnSpace(raw.charAt(p))) p++;
+                if (p >= len) continue;
+                int t1s = p;
+                while (p < len && !isAffnSpace(raw.charAt(p))) p++;
+                int t1e = p;
+                while (p < len && isAffnSpace(raw.charAt(p))) p++;
+                if (p >= len) {
+                    // Line carries a single number: continuation Y
+                    // value when count of pending Xs runs ahead.
+                    // Rare for writer output but tolerated by spec.
+                    if (count > 0) {
+                        // No-op: the single-value-line case is only
+                        // legal when xList.size == yList.size + 1, but
+                        // this fast path never produces that state.
+                        // Fall through.
+                    }
+                    continue;
+                }
+                int t2s = p;
+                while (p < len && !isAffnSpace(raw.charAt(p))) p++;
+                int t2e = p;
+                double x;
+                double y;
+                try {
+                    x = Double.parseDouble(raw.substring(t1s, t1e));
+                    y = Double.parseDouble(raw.substring(t2s, t2e));
+                } catch (NumberFormatException ignored) {
+                    continue;
+                }
+                if (count >= xs.length) {
+                    int next = xs.length << 1;
+                    xs = Arrays.copyOf(xs, next);
+                    ys = Arrays.copyOf(ys, next);
+                }
+                xs[count] = x * xfactor;
+                ys[count] = y * yfactor;
+                count++;
+            }
+            if (count < xs.length) {
+                xs = Arrays.copyOf(xs, count);
+                ys = Arrays.copyOf(ys, count);
+            }
         }
 
         if (xs.length != ys.length || xs.length == 0) {
@@ -185,9 +225,14 @@ public final class JcampDxReader {
         }
     }
 
-    private static double[] toArray(List<Double> list) {
-        double[] out = new double[list.size()];
-        for (int i = 0; i < list.size(); i++) out[i] = list.get(i);
-        return out;
+    /**
+     * Whitespace classification matching the previous {@code \s+}
+     * regex split: ASCII space, tab, vertical tab, form feed, and
+     * embedded line terminators (already excluded by the line-split
+     * upstream, but kept for safety).
+     */
+    private static boolean isAffnSpace(char c) {
+        return c == ' ' || c == '\t' || c == '\u000B' || c == '\f'
+            || c == '\r' || c == '\n';
     }
 }
