@@ -99,6 +99,7 @@ extern void testC2bHDF5CompoundType(void);
 extern void testC3cCanonicalBytes(void);
 extern void testPhase12RunProtocol(void);
 extern void testTask30MSProviderURL(void);
+extern void testTask31InstanceWriterParity(void);
 
 int main(int argc, const char *argv[])
 {
@@ -494,6 +495,10 @@ int main(int argc, const char *argv[])
         START_SET("Task 30: MS runs via memory/sqlite/zarr provider URL")
             testTask30MSProviderURL();
         END_SET("Task 30: MS runs via memory/sqlite/zarr provider URL")
+
+        START_SET("Task 31: instance writer (-writeToFilePath:) via memory/sqlite/zarr URL")
+            testTask31InstanceWriterParity();
+        END_SET("Task 31: instance writer (-writeToFilePath:) via memory/sqlite/zarr URL")
     }
     return 0;
 }

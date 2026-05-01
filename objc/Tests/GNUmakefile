@@ -95,7 +95,8 @@ TTIOTests_OBJC_FILES = \
 	TestC2bHDF5CompoundType.m \
 	TestC3cCanonicalBytes.m \
 	TestPhase12RunProtocol.m \
-	TestTask30MSProviderURL.m
+	TestTask30MSProviderURL.m \
+	TestTask31InstanceWriterParity.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
