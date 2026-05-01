@@ -79,6 +79,7 @@ extern void testM93RefDiffUnit(void);
 extern void testM93RefDiffPipeline(void);
 extern void testM94ZFqzcompUnit(void);
 extern void testM94ZFqzcompPerf(void);
+extern void testTtioRansNative(void);
 extern void testM95DeltaRansUnit(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
@@ -411,6 +412,10 @@ int main(int argc, const char *argv[])
         START_SET("M94.Z: CRAM-mimic FQZCOMP_NX16 throughput")
             testM94ZFqzcompPerf();
         END_SET("M94.Z: CRAM-mimic FQZCOMP_NX16 throughput")
+
+        START_SET("Task 17: libttio_rans native backend introspection")
+            testTtioRansNative();
+        END_SET("Task 17: libttio_rans native backend introspection")
 
         START_SET("M95: DELTA_RANS_ORDER0 codec unit")
             testM95DeltaRansUnit();

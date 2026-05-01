@@ -76,6 +76,7 @@ TTIOTests_OBJC_FILES = \
 	TestM93RefDiffPipeline.m \
 	TestM94ZFqzcompUnit.m \
 	TestM94ZFqzcompPerf.m \
+	TTIORansNativeTest.m \
 	TestM95DeltaRansUnit.m \
 	TestM87BamImporter.m \
 	TestM88CramBamRoundTrip.m \
