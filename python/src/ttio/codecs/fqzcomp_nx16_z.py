@@ -646,6 +646,371 @@ except ImportError:  # pragma: no cover
     _ext = None  # type: ignore[assignment]
 
 
+# ── libttio_rans native library loader (Task 15) ────────────────────────
+#
+# Three-tier acceleration: native (libttio_rans via ctypes) → Cython
+# (_fqzcomp_nx16_z) → pure Python. The native library implements the
+# inner rANS hot loop with cpuid-dispatched scalar/SSE4.1/AVX2 kernels.
+#
+# IMPORTANT scope limits:
+#   * The native library produces a SELF-CONTAINED V2 byte format with
+#     embedded lane sizes that DOES NOT match the V1 wire format used by
+#     the Cython / pure-Python paths. So we cannot simply swap the native
+#     entrypoints into the V1 encode/decode dispatch — V1 streams remain
+#     canonical and continue to flow through Cython/pure-Python.
+#   * What this module currently exposes from the native lib:
+#       - the loader (_HAVE_NATIVE_LIB flag, _native_lib handle)
+#       - ctypes argtype/restype configuration for the public C API
+#       - thin _encode_via_native / _decode_via_native helpers for callers
+#         that want to use the V2 native path explicitly
+#       - get_backend_name() introspection
+#   * Wiring native acceleration into a V2-aware top-level dispatch is a
+#     follow-on task once Task 14's V2 encoder/decoder is plumbed through
+#     the Python wire layer.
+
+import ctypes  # noqa: E402  (kept here so lib loader stays close to flag)
+import ctypes.util  # noqa: E402
+import os  # noqa: E402
+
+_native_lib = None
+
+
+def _load_native_lib():
+    """Locate and dlopen libttio_rans (.so/.dylib/.dll).
+
+    Search order:
+      1. $TTIO_RANS_LIB_PATH (full path or directory containing the lib)
+      2. Bare names — letting the dynamic loader use LD_LIBRARY_PATH /
+         DYLD_LIBRARY_PATH / PATH (Windows) / RPATH.
+      3. ctypes.util.find_library("ttio_rans") as a last resort.
+
+    Returns the CDLL handle on success, ``None`` on failure (caller
+    treats absence as "no native acceleration available").
+    """
+    global _native_lib
+    if _native_lib is not None:
+        return _native_lib
+
+    candidates: list[str] = []
+
+    env_path = os.environ.get("TTIO_RANS_LIB_PATH")
+    if env_path:
+        if os.path.isdir(env_path):
+            for name in (
+                "libttio_rans.so",
+                "libttio_rans.dylib",
+                "ttio_rans.dll",
+                "libttio_rans.dll",
+            ):
+                candidates.append(os.path.join(env_path, name))
+        else:
+            candidates.append(env_path)
+
+    candidates.extend([
+        "libttio_rans.so",
+        "libttio_rans.dylib",
+        "ttio_rans.dll",
+        "libttio_rans.dll",
+    ])
+
+    for name in candidates:
+        try:
+            _native_lib = ctypes.CDLL(name)
+            return _native_lib
+        except OSError:
+            continue
+
+    path = ctypes.util.find_library("ttio_rans")
+    if path:
+        try:
+            _native_lib = ctypes.CDLL(path)
+            return _native_lib
+        except OSError:
+            pass
+    return None
+
+
+_HAVE_NATIVE_LIB = _load_native_lib() is not None
+
+if _HAVE_NATIVE_LIB:
+    _lib = _native_lib
+
+    # int ttio_rans_encode_block(
+    #     const uint8_t  *symbols,
+    #     const uint16_t *contexts,
+    #     size_t          n_symbols,
+    #     uint16_t        n_contexts,
+    #     const uint32_t (*freq)[256],
+    #     uint8_t        *out,
+    #     size_t         *out_len);
+    _lib.ttio_rans_encode_block.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_uint16),
+        ctypes.c_size_t,
+        ctypes.c_uint16,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    _lib.ttio_rans_encode_block.restype = ctypes.c_int
+
+    # int ttio_rans_decode_block(
+    #     const uint8_t  *compressed,
+    #     size_t          comp_len,
+    #     const uint16_t *contexts,
+    #     uint16_t        n_contexts,
+    #     const uint32_t (*freq)[256],
+    #     const uint32_t (*cum)[256],
+    #     const uint8_t  (*dtab)[TTIO_RANS_T],
+    #     uint8_t        *symbols,
+    #     size_t          n_symbols);
+    _lib.ttio_rans_decode_block.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint16),
+        ctypes.c_uint16,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+    ]
+    _lib.ttio_rans_decode_block.restype = ctypes.c_int
+
+    # int ttio_rans_build_decode_table(
+    #     uint16_t        n_contexts,
+    #     const uint32_t (*freq)[256],
+    #     const uint32_t (*cum)[256],
+    #     uint8_t        (*dtab)[TTIO_RANS_T]);
+    _lib.ttio_rans_build_decode_table.argtypes = [
+        ctypes.c_uint16,
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_uint8),
+    ]
+    _lib.ttio_rans_build_decode_table.restype = ctypes.c_int
+
+    # ttio_rans_pool *ttio_rans_pool_create(int n_threads);
+    _lib.ttio_rans_pool_create.argtypes = [ctypes.c_int]
+    _lib.ttio_rans_pool_create.restype = ctypes.c_void_p
+
+    # void ttio_rans_pool_destroy(ttio_rans_pool *pool);
+    _lib.ttio_rans_pool_destroy.argtypes = [ctypes.c_void_p]
+    _lib.ttio_rans_pool_destroy.restype = None
+
+    # int ttio_rans_encode_mt(
+    #     ttio_rans_pool *pool,
+    #     const uint8_t  *symbols,
+    #     const uint16_t *contexts,
+    #     size_t          n_symbols,
+    #     uint16_t        n_contexts,
+    #     size_t          reads_per_block,
+    #     const size_t   *read_lengths,
+    #     size_t          n_reads,
+    #     uint8_t        *out,
+    #     size_t         *out_len);
+    _lib.ttio_rans_encode_mt.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_uint16),
+        ctypes.c_size_t,
+        ctypes.c_uint16,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    _lib.ttio_rans_encode_mt.restype = ctypes.c_int
+
+    # int ttio_rans_decode_mt(
+    #     ttio_rans_pool *pool,
+    #     const uint8_t  *compressed,
+    #     size_t          comp_len,
+    #     uint8_t        *symbols,
+    #     size_t         *n_symbols);
+    _lib.ttio_rans_decode_mt.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    _lib.ttio_rans_decode_mt.restype = ctypes.c_int
+
+    # const char *ttio_rans_kernel_name(void);
+    _lib.ttio_rans_kernel_name.argtypes = []
+    _lib.ttio_rans_kernel_name.restype = ctypes.c_char_p
+else:
+    _lib = None
+
+
+def _native_kernel_name() -> str:
+    """Return the native kernel name (``"scalar"``/``"sse4.1"``/``"avx2"``).
+
+    Returns the empty string when the native library is not available.
+    """
+    if not _HAVE_NATIVE_LIB:
+        return ""
+    raw = _lib.ttio_rans_kernel_name()
+    if raw is None:
+        return ""
+    return raw.decode("ascii", errors="replace")
+
+
+def get_backend_name() -> str:
+    """Return the active inner-loop backend.
+
+    One of:
+        ``"native-<kernel>"``  e.g. ``"native-avx2"``  (libttio_rans available)
+        ``"cython"``           (Cython extension available)
+        ``"pure-python"``      (fallback)
+
+    Selection precedence is determined at module-import time. Note that
+    the V1 M94.Z encode/decode top-level functions currently always
+    dispatch via Cython/pure-Python regardless of native availability —
+    this introspector just reports the *highest tier loaded*. A V2-aware
+    encode/decode dispatch will use the native path in a follow-on task.
+    """
+    if _HAVE_NATIVE_LIB:
+        kernel = _native_kernel_name() or "unknown"
+        return f"native-{kernel}"
+    if _HAVE_C_EXTENSION:
+        return "cython"
+    return "pure-python"
+
+
+def _encode_via_native(
+    symbols: bytes,
+    contexts,  # iterable of uint16
+    freq_table,  # 2D sequence shape (n_contexts, 256)
+) -> bytes:
+    """Encode a single block via libttio_rans (V2 byte format).
+
+    ``freq_table`` rows must each sum to ``T = 4096`` (caller's
+    responsibility — same invariant as V1).
+
+    Returns the V2 self-contained byte stream produced by
+    :c:func:`ttio_rans_encode_block`. Note: this byte stream is NOT
+    interchangeable with V1 wire-format bodies; it is consumed only by
+    :func:`_decode_via_native` (or the higher-level V2 container).
+
+    Raises ``RuntimeError`` if the native library is unavailable or the
+    C call returns a non-zero status code.
+    """
+    if not _HAVE_NATIVE_LIB:
+        raise RuntimeError(
+            "_encode_via_native called but libttio_rans is not available"
+        )
+    n_symbols = len(symbols)
+    n_contexts = len(freq_table)
+    if n_contexts == 0 or n_contexts > 0xFFFF:
+        raise ValueError(
+            f"n_contexts ({n_contexts}) must be in [1, 65535]"
+        )
+
+    sym_buf = (ctypes.c_uint8 * n_symbols).from_buffer_copy(bytes(symbols))
+    ctx_buf = (ctypes.c_uint16 * n_symbols)(*contexts)
+
+    freq_flat = (ctypes.c_uint32 * (n_contexts * 256))()
+    for c in range(n_contexts):
+        row = freq_table[c]
+        base = c * 256
+        for s in range(256):
+            freq_flat[base + s] = row[s]
+
+    out_cap = max(64, n_symbols * 4 + 64)
+    out_buf = (ctypes.c_uint8 * out_cap)()
+    out_len = ctypes.c_size_t(out_cap)
+
+    rc = _lib.ttio_rans_encode_block(
+        sym_buf,
+        ctx_buf,
+        ctypes.c_size_t(n_symbols),
+        ctypes.c_uint16(n_contexts),
+        freq_flat,
+        out_buf,
+        ctypes.byref(out_len),
+    )
+    if rc != 0:
+        raise RuntimeError(f"ttio_rans_encode_block failed: rc={rc}")
+    return bytes(out_buf[:out_len.value])
+
+
+def _decode_via_native(
+    compressed: bytes,
+    contexts,  # iterable of uint16, length == n_symbols
+    freq_table,  # 2D sequence (n_contexts, 256)
+    cum_table,  # 2D sequence (n_contexts, 256), or None to derive
+    n_symbols: int,
+) -> bytes:
+    """Decode a native V2 block via libttio_rans.
+
+    If ``cum_table`` is None, derives cumulative tables from
+    ``freq_table``. Builds the dtab via
+    :c:func:`ttio_rans_build_decode_table` and then calls
+    :c:func:`ttio_rans_decode_block`.
+
+    Raises ``RuntimeError`` if the native library is unavailable or any
+    C call returns a non-zero status code.
+    """
+    if not _HAVE_NATIVE_LIB:
+        raise RuntimeError(
+            "_decode_via_native called but libttio_rans is not available"
+        )
+    n_contexts = len(freq_table)
+    if n_contexts == 0 or n_contexts > 0xFFFF:
+        raise ValueError(
+            f"n_contexts ({n_contexts}) must be in [1, 65535]"
+        )
+
+    freq_flat = (ctypes.c_uint32 * (n_contexts * 256))()
+    cum_flat = (ctypes.c_uint32 * (n_contexts * 256))()
+    for c in range(n_contexts):
+        frow = freq_table[c]
+        base = c * 256
+        if cum_table is not None:
+            crow = cum_table[c]
+            for s in range(256):
+                freq_flat[base + s] = frow[s]
+                cum_flat[base + s] = crow[s]
+        else:
+            running = 0
+            for s in range(256):
+                freq_flat[base + s] = frow[s]
+                cum_flat[base + s] = running
+                running += frow[s]
+
+    dtab = (ctypes.c_uint8 * (n_contexts * T))()
+    rc = _lib.ttio_rans_build_decode_table(
+        ctypes.c_uint16(n_contexts),
+        freq_flat,
+        cum_flat,
+        dtab,
+    )
+    if rc != 0:
+        raise RuntimeError(f"ttio_rans_build_decode_table failed: rc={rc}")
+
+    comp_buf = (ctypes.c_uint8 * len(compressed)).from_buffer_copy(bytes(compressed))
+    ctx_buf = (ctypes.c_uint16 * n_symbols)(*contexts)
+    sym_buf = (ctypes.c_uint8 * n_symbols)()
+
+    rc = _lib.ttio_rans_decode_block(
+        comp_buf,
+        ctypes.c_size_t(len(compressed)),
+        ctx_buf,
+        ctypes.c_uint16(n_contexts),
+        freq_flat,
+        cum_flat,
+        dtab,
+        sym_buf,
+        ctypes.c_size_t(n_symbols),
+    )
+    if rc != 0:
+        raise RuntimeError(f"ttio_rans_decode_block failed: rc={rc}")
+    return bytes(sym_buf)
+
+
 def _pack_wire_format(
     qualities_len: int,
     read_lengths: list[int],
@@ -1025,4 +1390,5 @@ __all__ = [
     "position_bucket_pbits",
     "normalise_to_total",
     "cumulative",
+    "get_backend_name",
 ]
