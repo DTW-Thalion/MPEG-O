@@ -38,6 +38,7 @@ int ttio_rans_encode_block(
 int ttio_rans_decode_block(
     const uint8_t  *compressed,
     size_t          comp_len,
+    const uint16_t *contexts,
     uint16_t        n_contexts,
     const uint32_t (*freq)[256],
     const uint32_t (*cum)[256],
