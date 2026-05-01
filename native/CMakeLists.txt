@@ -17,6 +17,7 @@ add_library(ttio_rans SHARED
     src/rans_encode_scalar.c
     src/rans_decode_scalar.c
     src/rans_decode_streaming.c
+    src/rans_decode_m94z.c
     src/dispatch.c
     src/threadpool.c
     src/wire_format.c
@@ -106,6 +107,11 @@ add_executable(test_streaming tests/test_streaming.c)
 target_link_libraries(test_streaming PRIVATE ttio_rans)
 target_compile_options(test_streaming PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME streaming COMMAND test_streaming)
+
+add_executable(test_m94z_decode tests/test_m94z_decode.c)
+target_link_libraries(test_m94z_decode PRIVATE ttio_rans)
+target_compile_options(test_m94z_decode PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME m94z_decode COMMAND test_m94z_decode)
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
