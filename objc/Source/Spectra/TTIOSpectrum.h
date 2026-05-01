@@ -3,9 +3,10 @@
 
 #import <Foundation/Foundation.h>
 
+#import "Providers/TTIOStorageProtocols.h"
+
 @class TTIOSignalArray;
 @class TTIOAxisDescriptor;
-@class TTIOHDF5Group;
 
 /**
  * Base class for any spectrum. Holds an ordered dictionary of named
@@ -60,7 +61,7 @@
  * Subclasses override -writeAdditionalAttributesToGroup:error: to add
  * their typed metadata after the base class has written the common fields.
  */
-- (BOOL)writeToGroup:(TTIOHDF5Group *)parent
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent
                 name:(NSString *)name
                error:(NSError **)error;
 
@@ -69,18 +70,18 @@
  * subclasses override -readAdditionalAttributesFromGroup:error: to pull
  * their typed metadata.
  */
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)parent
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent
                          name:(NSString *)name
                         error:(NSError **)error;
 
 #pragma mark - Subclass hooks
 
 /** Override to write subclass-specific attributes. Default is a no-op. */
-- (BOOL)writeAdditionalAttributesToGroup:(TTIOHDF5Group *)group
+- (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group
                                    error:(NSError **)error;
 
 /** Override to read subclass-specific attributes. Default is a no-op. */
-- (BOOL)readAdditionalAttributesFromGroup:(TTIOHDF5Group *)group
+- (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group
                                     error:(NSError **)error;
 
 @end

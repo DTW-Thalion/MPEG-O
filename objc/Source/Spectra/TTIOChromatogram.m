@@ -1,7 +1,5 @@
 #import "TTIOChromatogram.h"
 #import "Core/TTIOSignalArray.h"
-#import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
 @implementation TTIOChromatogram
@@ -38,28 +36,28 @@
 - (TTIOSignalArray *)timeArray      { return self.signalArrays[@"time"]; }
 - (TTIOSignalArray *)intensityArray { return self.signalArrays[@"intensity"]; }
 
-- (BOOL)writeAdditionalAttributesToGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    if (![group setIntegerAttribute:@"chromatogram_type"
-                              value:(int64_t)_type error:error]) return NO;
+    if (![group setAttributeValue:@((int64_t)_type)
+                          forName:@"chromatogram_type" error:error]) return NO;
     double tp[3] = { _targetMz, _precursorProductMz, _productMz };
-    TTIOHDF5Dataset *d = [group createDatasetNamed:@"_chromatogram_mzs"
-                                          precision:TTIOPrecisionFloat64
-                                             length:3
-                                          chunkSize:0
-                                   compressionLevel:0
-                                              error:error];
+    id<TTIOStorageDataset> d = [group createDatasetNamed:@"_chromatogram_mzs"
+                                               precision:TTIOPrecisionFloat64
+                                                  length:3
+                                               chunkSize:0
+                                             compression:TTIOCompressionZlib
+                                        compressionLevel:0
+                                                   error:error];
     if (!d) return NO;
-    return [d writeData:[NSData dataWithBytes:tp length:sizeof(tp)] error:error];
+    return [d writeAll:[NSData dataWithBytes:tp length:sizeof(tp)] error:error];
 }
 
-- (BOOL)readAdditionalAttributesFromGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    BOOL exists = NO;
-    _type = (TTIOChromatogramType)[group integerAttributeNamed:@"chromatogram_type"
-                                                        exists:&exists error:error];
-    TTIOHDF5Dataset *d = [group openDatasetNamed:@"_chromatogram_mzs" error:error];
-    NSData *data = [d readDataWithError:error];
+    NSNumber *t = [group attributeValueForName:@"chromatogram_type" error:error];
+    if (t) _type = (TTIOChromatogramType)[t longLongValue];
+    id<TTIOStorageDataset> d = [group openDatasetNamed:@"_chromatogram_mzs" error:error];
+    NSData *data = [d readAll:error];
     if (!data) return NO;
     const double *p = data.bytes;
     _targetMz           = p[0];

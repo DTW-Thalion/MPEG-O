@@ -1,7 +1,5 @@
 #import "TTIOUVVisSpectrum.h"
 #import "Core/TTIOSignalArray.h"
-#import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
 @implementation TTIOUVVisSpectrum
@@ -36,38 +34,39 @@
 - (TTIOSignalArray *)wavelengthArray { return self.signalArrays[@"wavelength"]; }
 - (TTIOSignalArray *)absorbanceArray { return self.signalArrays[@"absorbance"]; }
 
-static BOOL writeDoubleScalar(TTIOHDF5Group *group, NSString *name,
+static BOOL writeDoubleScalar(id<TTIOStorageGroup> group, NSString *name,
                               double value, NSError **error)
 {
-    TTIOHDF5Dataset *d = [group createDatasetNamed:name
-                                          precision:TTIOPrecisionFloat64
-                                             length:1
-                                          chunkSize:0
-                                   compressionLevel:0
-                                              error:error];
+    id<TTIOStorageDataset> d = [group createDatasetNamed:name
+                                               precision:TTIOPrecisionFloat64
+                                                  length:1
+                                               chunkSize:0
+                                             compression:TTIOCompressionZlib
+                                        compressionLevel:0
+                                                   error:error];
     if (!d) return NO;
     double buf[1] = { value };
-    return [d writeData:[NSData dataWithBytes:buf length:sizeof(buf)] error:error];
+    return [d writeAll:[NSData dataWithBytes:buf length:sizeof(buf)] error:error];
 }
 
-static BOOL readDoubleScalar(TTIOHDF5Group *group, NSString *name,
+static BOOL readDoubleScalar(id<TTIOStorageGroup> group, NSString *name,
                              double *out, NSError **error)
 {
-    TTIOHDF5Dataset *d = [group openDatasetNamed:name error:error];
+    id<TTIOStorageDataset> d = [group openDatasetNamed:name error:error];
     if (!d) return NO;
-    NSData *data = [d readDataWithError:error];
+    NSData *data = [d readAll:error];
     if (!data) return NO;
     *out = ((const double *)data.bytes)[0];
     return YES;
 }
 
-- (BOOL)writeAdditionalAttributesToGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
     if (!writeDoubleScalar(group, @"_path_length_cm", _pathLengthCm, error)) return NO;
     return YES;
 }
 
-- (BOOL)readAdditionalAttributesFromGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
     if (!readDoubleScalar(group, @"_path_length_cm", &_pathLengthCm, error)) return NO;
     return YES;

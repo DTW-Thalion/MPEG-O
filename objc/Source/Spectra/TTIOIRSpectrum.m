@@ -1,7 +1,5 @@
 #import "TTIOIRSpectrum.h"
 #import "Core/TTIOSignalArray.h"
-#import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
 @implementation TTIOIRSpectrum
@@ -38,35 +36,34 @@
 - (TTIOSignalArray *)wavenumberArray { return self.signalArrays[@"wavenumber"]; }
 - (TTIOSignalArray *)intensityArray  { return self.signalArrays[@"intensity"]; }
 
-- (BOOL)writeAdditionalAttributesToGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
     NSString *modeStr = (_mode == TTIOIRModeAbsorbance) ? @"absorbance" : @"transmittance";
-    if (![group setStringAttribute:@"ir_mode" value:modeStr error:error]) return NO;
-    if (![group setIntegerAttribute:@"number_of_scans"
-                              value:(int64_t)_numberOfScans
-                              error:error]) return NO;
-    TTIOHDF5Dataset *d = [group createDatasetNamed:@"_resolution_cm_inv"
-                                          precision:TTIOPrecisionFloat64
-                                             length:1
-                                          chunkSize:0
-                                   compressionLevel:0
-                                              error:error];
+    if (![group setAttributeValue:modeStr forName:@"ir_mode" error:error]) return NO;
+    if (![group setAttributeValue:@((int64_t)_numberOfScans)
+                          forName:@"number_of_scans" error:error]) return NO;
+    id<TTIOStorageDataset> d = [group createDatasetNamed:@"_resolution_cm_inv"
+                                               precision:TTIOPrecisionFloat64
+                                                  length:1
+                                               chunkSize:0
+                                             compression:TTIOCompressionZlib
+                                        compressionLevel:0
+                                                   error:error];
     if (!d) return NO;
     double buf[1] = { _resolutionCmInv };
-    return [d writeData:[NSData dataWithBytes:buf length:sizeof(buf)] error:error];
+    return [d writeAll:[NSData dataWithBytes:buf length:sizeof(buf)] error:error];
 }
 
-- (BOOL)readAdditionalAttributesFromGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    NSString *modeStr = [group stringAttributeNamed:@"ir_mode" error:error];
+    NSString *modeStr = [group attributeValueForName:@"ir_mode" error:error];
     _mode = [modeStr isEqualToString:@"absorbance"] ? TTIOIRModeAbsorbance
                                                     : TTIOIRModeTransmittance;
-    BOOL exists = NO;
-    _numberOfScans = (NSUInteger)[group integerAttributeNamed:@"number_of_scans"
-                                                       exists:&exists error:error];
-    TTIOHDF5Dataset *d = [group openDatasetNamed:@"_resolution_cm_inv" error:error];
+    NSNumber *ns = [group attributeValueForName:@"number_of_scans" error:error];
+    if (ns) _numberOfScans = (NSUInteger)[ns longLongValue];
+    id<TTIOStorageDataset> d = [group openDatasetNamed:@"_resolution_cm_inv" error:error];
     if (!d) return NO;
-    NSData *data = [d readDataWithError:error];
+    NSData *data = [d readAll:error];
     if (!data) return NO;
     _resolutionCmInv = ((const double *)data.bytes)[0];
     return YES;
