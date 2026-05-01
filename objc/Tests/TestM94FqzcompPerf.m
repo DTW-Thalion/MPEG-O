@@ -1,8 +1,8 @@
-// TestM94FqzcompPerf.m — v1.2 M94 throughput regression smoke (ObjC).
+// TestM94FqzcompPerf.m — v1.2 M94.Z (CRAM-mimic FQZCOMP_NX16_Z) throughput smoke (ObjC).
 //
+// NX16 (id=10) was removed; this file now tests TTIOFqzcompNx16Z (id=12).
 // Encodes 100K reads × 100bp varied Illumina-profile qualities (~10 MB
-// raw) and asserts encode throughput. Mirrors python/tests/perf/
-// test_m94_throughput.py and java/.../FqzcompNx16PerfTest.java.
+// raw) and asserts encode throughput.
 //
 // Spec target (§11): ≥100 MB/s native ObjC encode.
 // Hard regression floor (this gate): ≥30 MB/s.
@@ -11,7 +11,7 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#import "Codecs/TTIOFqzcompNx16.h"
+#import "Codecs/TTIOFqzcompNx16Z.h"
 #include <stdint.h>
 #include <time.h>
 
@@ -53,13 +53,13 @@ static void testEncodeThroughput(void)
 
     double t0 = monoSeconds();
     NSError *err = nil;
-    NSData *encoded = [TTIOFqzcompNx16 encodeWithQualities:qualities
-                                               readLengths:readLengths
-                                              revcompFlags:revcompFlags
-                                                     error:&err];
+    NSData *encoded = [TTIOFqzcompNx16Z encodeWithQualities:qualities
+                                                readLengths:readLengths
+                                               revcompFlags:revcompFlags
+                                                      error:&err];
     double tEnc = monoSeconds() - t0;
 
-    PASS(encoded != nil, "M94 perf: encode produced bytes (err=%@)",
+    PASS(encoded != nil, "M94.Z perf: encode produced bytes (err=%@)",
          err.localizedDescription);
     if (encoded == nil) return;
 
@@ -68,13 +68,13 @@ static void testEncodeThroughput(void)
     double ratio = (double)encoded.length / (double)nQual;
 
     fprintf(stderr,
-            "  M94 FQZCOMP_NX16 throughput (ObjC, %lu reads x %lu bp = %.1f MB raw): "
+            "  M94.Z FQZCOMP_NX16_Z throughput (ObjC, %lu reads x %lu bp = %.1f MB raw): "
             "encode %.1f MB/s (%.2fs), ratio %.3fx\n",
             (unsigned long)nReads, (unsigned long)readLen,
             mb, encMBs, tEnc, ratio);
 
     PASS(encMBs >= 30.0,
-         "M94 ObjC: encode throughput >= 30 MB/s regression floor "
+         "M94.Z ObjC: encode throughput >= 30 MB/s regression floor "
          "(got %.1f MB/s, spec target 100 MB/s)",
          encMBs);
 }
