@@ -424,9 +424,10 @@ public class Hdf5Group implements AutoCloseable {
             case INT32   -> HDF5Constants.H5T_NATIVE_INT32;
             case INT64   -> HDF5Constants.H5T_NATIVE_INT64;
             case UINT32  -> HDF5Constants.H5T_NATIVE_UINT32;
+            case UINT16  -> HDF5Constants.H5T_NATIVE_UINT16;  // L1: chromosome_ids
             case UINT8   -> HDF5Constants.H5T_NATIVE_UINT8;
             case UINT64  -> HDF5Constants.H5T_NATIVE_UINT64;
-            case _RESERVED_UINT16, _RESERVED_INT8 ->
+            case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + precision + " is reserved (cross-lang parity)");
             case COMPLEX128 -> {
@@ -459,6 +460,10 @@ public class Hdf5Group implements AutoCloseable {
         // metadata differs.
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT64))
             return Precision.UINT64;
+        // L1 (Task #82 Phase B.1): H5T_NATIVE_UINT16 is the on-disk
+        // type for genomic_index/chromosome_ids.
+        if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT16))
+            return Precision.UINT16;
         // v0.11 M79: H5T_NATIVE_UINT8 is the on-disk type for genomic
         // base/quality byte arrays.
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT8))

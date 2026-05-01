@@ -348,7 +348,12 @@ public final class SqliteProvider implements StorageProvider {
                 byte[] arr = toByteArray(data);
                 buf.put(arr);
             }
-            case _RESERVED_UINT16, _RESERVED_INT8 ->
+            case UINT16 -> {
+                // L1 (Task #82 Phase B.1): chromosome_ids.
+                short[] arr = toShortArray(data);
+                for (short s : arr) buf.putShort(s);
+            }
+            case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + precision + " is reserved (cross-lang parity)");
         }
@@ -398,7 +403,13 @@ public final class SqliteProvider implements StorageProvider {
                 buf.get(arr);
                 yield arr;
             }
-            case _RESERVED_UINT16, _RESERVED_INT8 ->
+            case UINT16 -> {
+                // L1: chromosome_ids unpacks as little-endian uint16.
+                short[] arr = new short[n];
+                for (int i = 0; i < n; i++) arr[i] = buf.getShort();
+                yield arr;
+            }
+            case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + precision + " is reserved (cross-lang parity)");
         };
@@ -689,6 +700,12 @@ public final class SqliteProvider implements StorageProvider {
     private static byte[] toByteArray(Object data) {
         if (data instanceof byte[] a) return a;
         throw new IllegalArgumentException("Cannot convert to byte[]: " + data.getClass());
+    }
+
+    private static short[] toShortArray(Object data) {
+        if (data instanceof short[] a) return a;
+        if (data instanceof int[] a) { short[] r = new short[a.length]; for (int i=0;i<a.length;i++) r[i]=(short)a[i]; return r; }
+        throw new IllegalArgumentException("Cannot convert to short[]: " + data.getClass());
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -1244,7 +1261,8 @@ public final class SqliteProvider implements StorageProvider {
                 case INT64, UINT64 -> new long[0];  // M82
                 case COMPLEX128 -> new double[0];
                 case UINT8 -> new byte[0];
-                case _RESERVED_UINT16, _RESERVED_INT8 ->
+                case UINT16 -> new short[0];  // L1: chromosome_ids
+                case _RESERVED_INT8 ->
                     throw new UnsupportedOperationException(
                         "Precision " + precision + " is reserved (cross-lang parity)");
             };

@@ -262,7 +262,16 @@ public interface StorageDataset extends AutoCloseable {
                 // v0.11 M79: bytes are endian-neutral; copy through.
                 yield (byte[]) raw;
             }
-            case _RESERVED_UINT16, _RESERVED_INT8 ->
+            case UINT16 -> {
+                // L1 (Task #82 Phase B.1): genomic_index/chromosome_ids.
+                // Pack short[] as little-endian uint16.
+                short[] a = (short[]) raw;
+                ByteBuffer bb = ByteBuffer.allocate(a.length * 2)
+                        .order(ByteOrder.LITTLE_ENDIAN);
+                for (short s : a) bb.putShort(s);
+                yield bb.array();
+            }
+            case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + p + " is reserved for cross-language parity");
             case UINT64 -> {

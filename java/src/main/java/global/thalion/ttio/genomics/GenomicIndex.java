@@ -115,18 +115,54 @@ public final class GenomicIndex {
         writeBytes(idxGroup, "mapping_qualities", Precision.UINT8, mappingQualities);
         writeInts (idxGroup, "flags",            Precision.UINT32, flags);
 
-        // chromosomes: compound VL string with one field "value".
-        // M82.4: Java now reads VL_STRING in compounds correctly
-        // (Hdf5CompoundIO.readCompoundFull dereferences the char*
-        // pointers via Unsafe), so we use the same VL_STRING wire
-        // format as Python and ObjC for cross-language parity.
-        List<CompoundField> fields = List.of(
-            new CompoundField("value", CompoundField.Kind.VL_STRING));
-        List<Object[]> rows = new ArrayList<>(chromosomes.size());
-        for (String c : chromosomes) rows.add(new Object[]{ c });
+        // L1 (Task #82 Phase B.1, 2026-05-01): chromosomes are stored
+        // as `chromosome_ids` (uint16) + `chromosome_names` (compound)
+        // instead of a single VL-string compound. The old layout cost
+        // 42 MB of HDF5 fractal-heap overhead per chr22 .tio file
+        // (one heap block per chunk × 432 chunks) just to repeat one
+        // byte-string 1.77M times. Encounter-order id assignment —
+        // first occurrence gets the next unused id; cross-language
+        // byte-exact contract.
+        java.util.LinkedHashMap<String, Integer> nameToId = new java.util.LinkedHashMap<>();
+        short[] ids = new short[chromosomes.size()];
+        for (int i = 0; i < chromosomes.size(); i++) {
+            String name = chromosomes.get(i);
+            Integer slot = nameToId.get(name);
+            if (slot == null) {
+                if (nameToId.size() > 65535) {
+                    throw new IllegalStateException(
+                        "genomic_index: > 65,535 unique chromosome names; "
+                        + "uint16 chromosome_ids would overflow.");
+                }
+                slot = nameToId.size();
+                nameToId.put(name, slot);
+            }
+            ids[i] = slot.shortValue();
+        }
+        // Write chromosome_ids as uint16 (Java has no unsigned short,
+        // so we pass the ids array via the StorageDataset writeAll
+        // path which interprets the raw 16-bit pattern).
+        StorageDataset cids;
+        try {
+            cids = idxGroup.createDataset(
+                "chromosome_ids", Precision.UINT16, ids.length,
+                CHUNK_SIZE, Compression.ZLIB, COMPRESSION_LEVEL);
+        } catch (UnsupportedOperationException e) {
+            cids = idxGroup.createDataset(
+                "chromosome_ids", Precision.UINT16, ids.length,
+                0, Compression.NONE, 0);
+        }
+        try (StorageDataset closeMe = cids) {
+            closeMe.writeAll(ids);
+        }
+        // Write chromosome_names as compound[(name, VL_str)].
+        List<CompoundField> nameFields = List.of(
+            new CompoundField("name", CompoundField.Kind.VL_STRING));
+        List<Object[]> nameRows = new ArrayList<>(nameToId.size());
+        for (String n : nameToId.keySet()) nameRows.add(new Object[]{ n });
         try (StorageDataset ds = idxGroup.createCompoundDataset(
-                "chromosomes", fields, rows.size())) {
-            ds.writeAll(rows);
+                "chromosome_names", nameFields, nameRows.size())) {
+            ds.writeAll(nameRows);
         }
     }
 
@@ -140,18 +176,30 @@ public final class GenomicIndex {
         byte[]  mapqs     = readBytes(idxGroup, "mapping_qualities");
         int[]   flags     = readInts (idxGroup, "flags");
 
-        List<Object[]> chromRows;
-        try (StorageDataset ds = idxGroup.openDataset("chromosomes")) {
-            chromRows = (List<Object[]>) ds.readAll();
+        // L1: read chromosome_ids (uint16) + chromosome_names
+        // (compound) and materialise back to a List<String> so the
+        // GenomicIndex API surface stays unchanged for callers.
+        short[] ids;
+        try (StorageDataset ds = idxGroup.openDataset("chromosome_ids")) {
+            ids = (short[]) ds.readAll();
         }
-        List<String> chroms = new ArrayList<>(chromRows.size());
-        for (Object[] row : chromRows) {
+        List<Object[]> nameRows;
+        try (StorageDataset ds = idxGroup.openDataset("chromosome_names")) {
+            nameRows = (List<Object[]>) ds.readAll();
+        }
+        List<String> nameTable = new ArrayList<>(nameRows.size());
+        for (Object[] row : nameRows) {
             Object v = row[0];
             if (v instanceof byte[] b) {
-                chroms.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+                nameTable.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
             } else {
-                chroms.add(v == null ? "" : v.toString());
+                nameTable.add(v == null ? "" : v.toString());
             }
+        }
+        List<String> chroms = new ArrayList<>(ids.length);
+        for (short id : ids) {
+            int idx = Short.toUnsignedInt(id);
+            chroms.add(idx < nameTable.size() ? nameTable.get(idx) : "");
         }
 
         return new GenomicIndex(offsets, lengths, chroms, positions, mapqs, flags);

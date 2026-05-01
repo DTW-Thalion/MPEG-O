@@ -297,9 +297,10 @@ public final class ZarrProvider implements StorageProvider {
             case INT64   -> "int64";
             case INT32   -> "int32";
             case UINT32  -> "uint32";
+            case UINT16  -> "uint16";   // L1 (Task #82): chromosome_ids
             case UINT8   -> "uint8";
             case UINT64  -> "uint64";   // M82
-            case _RESERVED_UINT16, _RESERVED_INT8 ->
+            case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + p + " is reserved (cross-lang parity)");
             case COMPLEX128 -> throw new UnsupportedOperationException(
@@ -316,6 +317,7 @@ public final class ZarrProvider implements StorageProvider {
             case "int64",   "<i8", "|i8" -> Precision.INT64;
             case "int32",   "<i4", "|i4" -> Precision.INT32;
             case "uint32",  "<u4", "|u4" -> Precision.UINT32;
+            case "uint16",  "<u2", "|u2" -> Precision.UINT16;
             case "uint8",   "<u1", "|u1", "u1" -> Precision.UINT8;
             default -> throw new UnsupportedOperationException(
                     "ZarrProvider: unsupported dtype " + dtype);
@@ -385,8 +387,9 @@ public final class ZarrProvider implements StorageProvider {
             case FLOAT64, INT64, UINT64 -> 8;   // M82: UINT64 is 8 bytes
             case FLOAT32, INT32, UINT32 -> 4;
             case COMPLEX128 -> 16;
+            case UINT16 -> 2;  // L1: chromosome_ids
             case UINT8 -> 1;
-            case _RESERVED_UINT16, _RESERVED_INT8 ->
+            case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + p + " is reserved (cross-lang parity)");
         };
@@ -1167,7 +1170,14 @@ public final class ZarrProvider implements StorageProvider {
                 System.arraycopy(raw, 0, out, 0, raw.length);
                 yield out;
             }
-            case _RESERVED_UINT16, _RESERVED_INT8 ->
+            case UINT16 -> {
+                // L1: chromosome_ids unpacks as little-endian uint16.
+                int n = raw.length / 2;
+                short[] out = new short[n];
+                for (int i = 0; i < n; i++) out[i] = bb.getShort();
+                yield out;
+            }
+            case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + p + " is reserved (cross-lang parity)");
             case COMPLEX128 -> raw;

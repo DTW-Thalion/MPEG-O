@@ -374,8 +374,9 @@ public class Hdf5Dataset implements AutoCloseable {
             case INT32, UINT32 -> new int[n];
             case INT64, UINT64 -> new long[n];  // M82: UINT64 packs as long[]
             case COMPLEX128 -> new byte[n * 16];
+            case UINT16 -> new short[n];  // L1: chromosome_ids
             case UINT8 -> new byte[n];
-            case _RESERVED_UINT16, _RESERVED_INT8 ->
+            case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + precision + " is reserved (cross-lang parity)");
         };

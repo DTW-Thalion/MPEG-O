@@ -49,13 +49,15 @@ public final class Enums {
         /** Unsigned 8-bit integer (1 byte). v0.11 M79. */
         UINT8(1),
         /**
-         * Reserved for cross-language UINT16 parity (ordinal slot 7).
-         * Python {@code Precision.UINT64 = 9} expects positions 7 and
-         * 8 to be reserved; Java pads the enum with placeholder
-         * constants so {@code UINT64.ordinal() == 9} matches.
-         * @deprecated never use directly; reserved for future extension.
+         * Unsigned 16-bit integer (2 bytes). v1.2.0 L1 (Task #82
+         * Phase B.1, 2026-05-01): used by
+         * {@code genomic_index/chromosome_ids} after the
+         * VL-string-compound chromosomes column was decomposed into a
+         * {@code (uint16 ids, compound names)} pair (recovered 42 MB
+         * of HDF5 fractal-heap overhead per chr22 .tio file). Ordinal
+         * 7 matches Python {@code Precision.UINT16 = 7}.
          */
-        @Deprecated _RESERVED_UINT16(2),
+        UINT16(2),
         /**
          * Reserved for cross-language INT8 parity (ordinal slot 8).
          * @deprecated never use directly; reserved for future extension.
