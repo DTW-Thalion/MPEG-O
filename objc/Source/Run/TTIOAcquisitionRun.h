@@ -9,12 +9,13 @@
 #import "Protocols/TTIORun.h"
 #import "ValueClasses/TTIOEnums.h"
 
+#import "Providers/TTIOStorageProtocols.h"
+
 @class TTIOSpectrum;
 @class TTIOMassSpectrum;
 @class TTIOChromatogram;
 @class TTIOInstrumentConfig;
 @class TTIOSpectrumIndex;
-@class TTIOHDF5Group;
 @class TTIOValueRange;
 @class TTIOProvenanceRecord;
 @class TTIOAccessPolicy;
@@ -106,23 +107,20 @@
                 acquisitionMode:(TTIOAcquisitionMode)mode
                instrumentConfig:(TTIOInstrumentConfig *)config;
 
-#pragma mark - HDF5
+#pragma mark - Storage round-trip (provider-agnostic)
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)parent
+/** v0.7 M44 / Task 31: I/O routed through StorageGroup / StorageDataset. */
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent
                 name:(NSString *)name
                error:(NSError **)error;
 
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)parent
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent
                          name:(NSString *)name
                         error:(NSError **)error;
 
-/** v0.9 M64.5-objc-java: storage-protocol read for cross-provider
- *  Memory/SQLite/Zarr datasets. Returns a read-only AcquisitionRun
- *  whose spectrumIndex / channelNames / provenance reflect the
- *  on-disk metadata; lazy spectrum materialisation is NOT wired
- *  (signal-channel reads on non-HDF5 providers are a v1.0+ item).
- *  ``parent`` is an ``id<TTIOStorageGroup>`` — typed as ``id`` to
- *  keep the header HDF5-free. */
+/** v0.9 M64.5-objc-java: legacy alias for the storage-protocol read
+ *  path. Now identical to +readFromGroup:name:error:; retained for
+ *  source compatibility with v0.9 callers. */
 + (instancetype)readFromStorageGroup:(id)parent
                                  name:(NSString *)name
                                 error:(NSError **)error;

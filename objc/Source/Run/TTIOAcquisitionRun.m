@@ -249,32 +249,33 @@
 
 #pragma mark - HDF5 write
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)parent name:(NSString *)name error:(NSError **)error
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent name:(NSString *)name error:(NSError **)error
 {
     NSParameterAssert(_inMemorySpectra != nil);  // disk-backed runs are read-only
 
-    TTIOHDF5Group *runGroup = [parent createGroupNamed:name error:error];
+    id<TTIOStorageGroup> runGroup = [parent createGroupNamed:name error:error];
     if (!runGroup) return NO;
 
-    if (![runGroup setIntegerAttribute:@"acquisition_mode"
-                                 value:(int64_t)_acquisitionMode error:error]) return NO;
-    if (![runGroup setIntegerAttribute:@"spectrum_count"
-                                 value:(int64_t)_inMemorySpectra.count error:error]) return NO;
-    if (![runGroup setStringAttribute:@"spectrum_class"
-                                value:_spectrumClassName error:error]) return NO;
+    if (![runGroup setAttributeValue:@((int64_t)_acquisitionMode)
+                             forName:@"acquisition_mode" error:error]) return NO;
+    if (![runGroup setAttributeValue:@((int64_t)_inMemorySpectra.count)
+                             forName:@"spectrum_count" error:error]) return NO;
+    if (![runGroup setAttributeValue:_spectrumClassName
+                             forName:@"spectrum_class" error:error]) return NO;
 
     if (_nucleusType) {
-        if (![runGroup setStringAttribute:@"nucleus_type"
-                                    value:_nucleusType error:error]) return NO;
-        TTIOHDF5Dataset *fd = [runGroup createDatasetNamed:@"_spectrometer_freq_mhz"
-                                                 precision:TTIOPrecisionFloat64
-                                                    length:1
-                                                 chunkSize:0
-                                          compressionLevel:0
-                                                     error:error];
+        if (![runGroup setAttributeValue:_nucleusType
+                                 forName:@"nucleus_type" error:error]) return NO;
+        id<TTIOStorageDataset> fd = [runGroup createDatasetNamed:@"_spectrometer_freq_mhz"
+                                                       precision:TTIOPrecisionFloat64
+                                                          length:1
+                                                       chunkSize:0
+                                                     compression:TTIOCompressionZlib
+                                                compressionLevel:0
+                                                           error:error];
         if (!fd) return NO;
         double f[1] = { _spectrometerFrequencyMHz };
-        if (![fd writeData:[NSData dataWithBytes:f length:sizeof(f)] error:error]) return NO;
+        if (![fd writeAll:[NSData dataWithBytes:f length:sizeof(f)] error:error]) return NO;
     }
 
     // Per-run provenance.
@@ -291,7 +292,7 @@
     // mirror with a canonical-byte-order signature path that covers the
     // compound dataset directly; until then the mirror is intentional.
     if (_provenance.count > 0) {
-        TTIOHDF5Group *provGroup =
+        id<TTIOStorageGroup> provGroup =
             [runGroup createGroupNamed:@"provenance" error:error];
         if (!provGroup) return NO;
         if (![TTIOCompoundIO writeProvenance:_provenance
@@ -308,19 +309,19 @@
             return NO;
         }
         NSString *jstr = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
-        if (![runGroup setStringAttribute:@"provenance_json"
-                                    value:jstr error:error]) return NO;
+        if (![runGroup setAttributeValue:jstr
+                                 forName:@"provenance_json" error:error]) return NO;
     }
 
     if (![_instrumentConfig writeToGroup:runGroup error:error]) return NO;
     if (![_spectrumIndex    writeToGroup:runGroup error:error]) return NO;
 
-    TTIOHDF5Group *channels = [runGroup createGroupNamed:@"signal_channels" error:error];
+    id<TTIOStorageGroup> channels = [runGroup createGroupNamed:@"signal_channels" error:error];
     if (!channels) return NO;
 
     NSString *namesJoined = [_channelNames componentsJoinedByString:@","];
-    if (![channels setStringAttribute:@"channel_names"
-                                value:namesJoined error:error]) return NO;
+    if (![channels setAttributeValue:namesJoined
+                             forName:@"channel_names" error:error]) return NO;
 
     NSUInteger total = 0;
     for (TTIOSpectrum *s in _inMemorySpectra) {
@@ -373,7 +374,7 @@
                     @"numpress encode failed for '%@'", dsName);
                 return NO;
             }
-            TTIOHDF5Dataset *ds =
+            id<TTIOStorageDataset> ds =
                 [channels createDatasetNamed:dsName
                                    precision:TTIOPrecisionInt64
                                       length:total
@@ -382,13 +383,13 @@
                             compressionLevel:6
                                        error:error];
             if (!ds) return NO;
-            if (![ds writeData:deltas error:error]) return NO;
-            if (![channels setIntegerAttribute:
-                    [NSString stringWithFormat:@"%@_numpress_fixed_point", chName]
-                                         value:scale
-                                         error:error]) return NO;
+            if (![ds writeAll:deltas error:error]) return NO;
+            NSString *spAttr =
+                [NSString stringWithFormat:@"%@_numpress_fixed_point", chName];
+            if (![channels setAttributeValue:@(scale)
+                                     forName:spAttr error:error]) return NO;
         } else {
-            TTIOHDF5Dataset *ds =
+            id<TTIOStorageDataset> ds =
                 [channels createDatasetNamed:dsName
                                    precision:TTIOPrecisionFloat64
                                       length:total
@@ -397,7 +398,7 @@
                             compressionLevel:6
                                        error:error];
             if (!ds) return NO;
-            if (![ds writeData:all error:error]) return NO;
+            if (![ds writeAll:all error:error]) return NO;
         }
     }
 
@@ -411,16 +412,15 @@
 
 // M24 helper — lays out /chromatograms/ with concatenated time/intensity
 // datasets and a chromatogram_index/ subgroup of parallel metadata.
-- (BOOL)writeChromatogramsToRunGroup:(TTIOHDF5Group *)runGroup
+- (BOOL)writeChromatogramsToRunGroup:(id<TTIOStorageGroup>)runGroup
                                 error:(NSError **)error
 {
     NSUInteger nChroms = _chromatograms.count;
-    TTIOHDF5Group *chromGroup =
+    id<TTIOStorageGroup> chromGroup =
         [runGroup createGroupNamed:@"chromatograms" error:error];
     if (!chromGroup) return NO;
-    if (![chromGroup setIntegerAttribute:@"count"
-                                    value:(int64_t)nChroms
-                                    error:error]) return NO;
+    if (![chromGroup setAttributeValue:@((int64_t)nChroms)
+                               forName:@"count" error:error]) return NO;
 
     NSUInteger totalPoints = 0;
     for (TTIOChromatogram *c in _chromatograms) totalPoints += c.timeArray.length;
@@ -455,21 +455,22 @@
     BOOL ok = YES;
 
     #define WRITE_DS(_grp, _dname, _prec, _nelem, _data) do { \
-        TTIOHDF5Dataset *_ds = [(_grp) createDatasetNamed:(_dname) \
-                                                precision:(_prec) \
-                                                   length:(_nelem) \
-                                                chunkSize:0 \
-                                         compressionLevel:0 \
-                                                    error:error]; \
+        id<TTIOStorageDataset> _ds = [(_grp) createDatasetNamed:(_dname) \
+                                                      precision:(_prec) \
+                                                         length:(_nelem) \
+                                                      chunkSize:0 \
+                                                    compression:TTIOCompressionZlib \
+                                               compressionLevel:0 \
+                                                          error:error]; \
         if (!_ds) { ok = NO; break; } \
-        if (![_ds writeData:(_data) error:error]) { ok = NO; break; } \
+        if (![_ds writeAll:(_data) error:error]) { ok = NO; break; } \
     } while (0)
 
     do {
         WRITE_DS(chromGroup, @"time_values",      TTIOPrecisionFloat64, totalPoints, timeAll);
         WRITE_DS(chromGroup, @"intensity_values", TTIOPrecisionFloat64, totalPoints, intAll);
 
-        TTIOHDF5Group *idx =
+        id<TTIOStorageGroup> idx =
             [chromGroup createGroupNamed:@"chromatogram_index" error:error];
         if (!idx) { ok = NO; break; }
 
@@ -576,15 +577,13 @@
     return run;
 }
 
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)parent name:(NSString *)name error:(NSError **)error
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent name:(NSString *)name error:(NSError **)error
 {
-    TTIOHDF5Group *runGroup = [parent openGroupNamed:name error:error];
+    id<TTIOStorageGroup> runGroup = [parent openGroupNamed:name error:error];
     if (!runGroup) return nil;
 
-    BOOL exists = NO;
-    TTIOAcquisitionMode mode =
-        (TTIOAcquisitionMode)[runGroup integerAttributeNamed:@"acquisition_mode"
-                                                       exists:&exists error:error];
+    NSNumber *modeNum = [runGroup attributeValueForName:@"acquisition_mode" error:error];
+    TTIOAcquisitionMode mode = modeNum ? (TTIOAcquisitionMode)[modeNum longLongValue] : 0;
 
     TTIOInstrumentConfig *cfg = [TTIOInstrumentConfig readFromGroup:runGroup error:error];
     if (!cfg) return nil;
@@ -595,24 +594,24 @@
     // v0.2 additions; v0.1 fallback if missing.
     NSString *className = @"TTIOMassSpectrum";
     if ([runGroup hasAttributeNamed:@"spectrum_class"]) {
-        className = [runGroup stringAttributeNamed:@"spectrum_class" error:NULL];
-        if (className.length == 0) className = @"TTIOMassSpectrum";
+        NSString *cn = [runGroup attributeValueForName:@"spectrum_class" error:NULL];
+        if (cn.length > 0) className = cn;
     }
 
     // v0.11 M79: @modality with pre-v0.11 mass-spec fallback.
     NSString *modality = @"mass_spectrometry";
     if ([runGroup hasAttributeNamed:@"modality"]) {
-        NSString *m = [runGroup stringAttributeNamed:@"modality" error:NULL];
+        NSString *m = [runGroup attributeValueForName:@"modality" error:NULL];
         if (m.length > 0) modality = m;
     }
 
     NSString *nucleus = nil;
     double freqMHz = 0.0;
     if ([runGroup hasAttributeNamed:@"nucleus_type"]) {
-        nucleus = [runGroup stringAttributeNamed:@"nucleus_type" error:NULL];
+        nucleus = [runGroup attributeValueForName:@"nucleus_type" error:NULL];
         if ([runGroup hasChildNamed:@"_spectrometer_freq_mhz"]) {
-            TTIOHDF5Dataset *fd = [runGroup openDatasetNamed:@"_spectrometer_freq_mhz" error:NULL];
-            NSData *fdata = [fd readDataWithError:NULL];
+            id<TTIOStorageDataset> fd = [runGroup openDatasetNamed:@"_spectrometer_freq_mhz" error:NULL];
+            NSData *fdata = [fd readAll:NULL];
             if (fdata.length >= sizeof(double)) {
                 freqMHz = ((const double *)fdata.bytes)[0];
             }
@@ -625,7 +624,7 @@
     // neither form, in which case `provenance` remains an empty array.
     NSMutableArray<TTIOProvenanceRecord *> *provenance = [NSMutableArray array];
     if ([runGroup hasChildNamed:@"provenance"]) {
-        TTIOHDF5Group *provGroup = [runGroup openGroupNamed:@"provenance" error:NULL];
+        id<TTIOStorageGroup> provGroup = [runGroup openGroupNamed:@"provenance" error:NULL];
         if (provGroup && [provGroup hasChildNamed:@"steps"]) {
             NSArray *compound =
                 [TTIOCompoundIO readProvenanceFromGroup:provGroup
@@ -635,7 +634,7 @@
         }
     }
     if (provenance.count == 0 && [runGroup hasAttributeNamed:@"provenance_json"]) {
-        NSString *jstr = [runGroup stringAttributeNamed:@"provenance_json" error:NULL];
+        NSString *jstr = [runGroup attributeValueForName:@"provenance_json" error:NULL];
         NSData *jdata = [jstr dataUsingEncoding:NSUTF8StringEncoding];
         NSArray *plists = [NSJSONSerialization JSONObjectWithData:jdata
                                                            options:0
@@ -646,22 +645,20 @@
         }
     }
 
-    TTIOHDF5Group *channels = [runGroup openGroupNamed:@"signal_channels" error:error];
+    id<TTIOStorageGroup> channels = [runGroup openGroupNamed:@"signal_channels" error:error];
     if (!channels) return nil;
 
     NSArray<NSString *> *channelNames = nil;
     if ([channels hasAttributeNamed:@"channel_names"]) {
-        NSString *joined = [channels stringAttributeNamed:@"channel_names" error:NULL];
+        NSString *joined = [channels attributeValueForName:@"channel_names" error:NULL];
         channelNames = [joined componentsSeparatedByString:@","];
     } else {
         // v0.1 fallback
         channelNames = @[@"mz", @"intensity"];
     }
 
-    // v0.7 M44: channelDatasets is a protocol-valued dictionary so
-    // the hot-path read routes through TTIOStorageDataset. Each
-    // TTIOHDF5Dataset is wrapped via +[TTIOHDF5Provider adapterForDataset:name:]
-    // before being stored.
+    // v0.7 M44 / Task 31: channelDatasets is a protocol-valued
+    // dictionary so the hot-path read routes through TTIOStorageDataset.
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *channelDatasets =
         [NSMutableDictionary dictionaryWithCapacity:channelNames.count];
     NSMutableDictionary<NSString *, NSData *> *numpressChannels =
@@ -678,19 +675,16 @@
         }
 
         // M21: detect Numpress-delta encoding via the per-channel
-        // ``@<chName>_numpress_fixed_point`` attribute. If present,
-        // open the dataset as int64, decode via TTIONumpress, cache
-        // the float64 result, and record the codec choice on the run
-        // so writers that re-persist this dataset preserve it.
+        // ``@<chName>_numpress_fixed_point`` attribute.
         NSString *scaleAttr = [NSString stringWithFormat:@"%@_numpress_fixed_point", chName];
         if ([channels hasAttributeNamed:scaleAttr]) {
-            BOOL exists = NO;
-            int64_t scale =
-                [channels integerAttributeNamed:scaleAttr exists:&exists error:NULL];
-            TTIOHDF5Dataset *ds =
+            NSNumber *scaleNum =
+                [channels attributeValueForName:scaleAttr error:NULL];
+            int64_t scale = scaleNum ? [scaleNum longLongValue] : 0;
+            id<TTIOStorageDataset> ds =
                 [channels openDatasetNamed:dsName error:error];
             if (!ds) return nil;
-            NSData *raw = [ds readDataWithError:error];
+            NSData *raw = [ds readAll:error];
             if (!raw) return nil;
             NSUInteger nElems = raw.length / sizeof(int64_t);
             NSMutableData *decoded =
@@ -708,10 +702,9 @@
             continue;
         }
 
-        TTIOHDF5Dataset *ds = [channels openDatasetNamed:dsName error:error];
+        id<TTIOStorageDataset> ds = [channels openDatasetNamed:dsName error:error];
         if (!ds) return nil;
-        channelDatasets[chName] =
-            [TTIOHDF5Provider adapterForDataset:ds name:dsName];
+        channelDatasets[chName] = ds;
     }
 
     TTIOAcquisitionRun *run = [[self alloc] init];
@@ -719,7 +712,7 @@
     run->_acquisitionMode      = mode;
     run->_instrumentConfig     = cfg;
     run->_spectrumIndex        = idx;
-    run->_storageSignalGroup   = [TTIOHDF5Provider adapterForGroup:channels];
+    run->_storageSignalGroup   = channels;
     run->_storageDatasets      = channelDatasets;
     run->_channelNames         = [channelNames copy];
     run->_spectrumClassName    = [className copy];
@@ -737,32 +730,33 @@
     return run;
 }
 
-+ (NSArray<TTIOChromatogram *> *)readChromatogramsFromRunGroup:(TTIOHDF5Group *)runGroup
++ (NSArray<TTIOChromatogram *> *)readChromatogramsFromRunGroup:(id<TTIOStorageGroup>)runGroup
 {
     if (![runGroup hasChildNamed:@"chromatograms"]) return @[];
-    TTIOHDF5Group *chromGroup = [runGroup openGroupNamed:@"chromatograms" error:NULL];
+    id<TTIOStorageGroup> chromGroup = [runGroup openGroupNamed:@"chromatograms" error:NULL];
     if (!chromGroup) return @[];
 
-    BOOL exists = NO;
-    int64_t count = [chromGroup integerAttributeNamed:@"count" exists:&exists error:NULL];
-    if (!exists || count <= 0) return @[];
+    NSNumber *cntNum = [chromGroup attributeValueForName:@"count" error:NULL];
+    if (!cntNum) return @[];
+    int64_t count = [cntNum longLongValue];
+    if (count <= 0) return @[];
 
-    TTIOHDF5Dataset *timeDs = [chromGroup openDatasetNamed:@"time_values" error:NULL];
-    TTIOHDF5Dataset *intDs  = [chromGroup openDatasetNamed:@"intensity_values" error:NULL];
+    id<TTIOStorageDataset> timeDs = [chromGroup openDatasetNamed:@"time_values" error:NULL];
+    id<TTIOStorageDataset> intDs  = [chromGroup openDatasetNamed:@"intensity_values" error:NULL];
     if (!timeDs || !intDs) return @[];
-    NSData *timeAll = [timeDs readDataWithError:NULL];
-    NSData *intAll  = [intDs  readDataWithError:NULL];
+    NSData *timeAll = [timeDs readAll:NULL];
+    NSData *intAll  = [intDs  readAll:NULL];
     if (!timeAll || !intAll) return @[];
 
-    TTIOHDF5Group *idxGroup = [chromGroup openGroupNamed:@"chromatogram_index" error:NULL];
+    id<TTIOStorageGroup> idxGroup = [chromGroup openGroupNamed:@"chromatogram_index" error:NULL];
     if (!idxGroup) return @[];
 
-    NSData *offsetsData   = [[idxGroup openDatasetNamed:@"offsets" error:NULL] readDataWithError:NULL];
-    NSData *lengthsData   = [[idxGroup openDatasetNamed:@"lengths" error:NULL] readDataWithError:NULL];
-    NSData *typesData     = [[idxGroup openDatasetNamed:@"types" error:NULL] readDataWithError:NULL];
-    NSData *targetData    = [[idxGroup openDatasetNamed:@"target_mzs" error:NULL] readDataWithError:NULL];
-    NSData *precursorData = [[idxGroup openDatasetNamed:@"precursor_mzs" error:NULL] readDataWithError:NULL];
-    NSData *productData   = [[idxGroup openDatasetNamed:@"product_mzs" error:NULL] readDataWithError:NULL];
+    NSData *offsetsData   = [[idxGroup openDatasetNamed:@"offsets" error:NULL] readAll:NULL];
+    NSData *lengthsData   = [[idxGroup openDatasetNamed:@"lengths" error:NULL] readAll:NULL];
+    NSData *typesData     = [[idxGroup openDatasetNamed:@"types" error:NULL] readAll:NULL];
+    NSData *targetData    = [[idxGroup openDatasetNamed:@"target_mzs" error:NULL] readAll:NULL];
+    NSData *precursorData = [[idxGroup openDatasetNamed:@"precursor_mzs" error:NULL] readAll:NULL];
+    NSData *productData   = [[idxGroup openDatasetNamed:@"product_mzs" error:NULL] readAll:NULL];
     if (!offsetsData || !lengthsData || !typesData ||
         !targetData || !precursorData || !productData) return @[];
 
@@ -1066,7 +1060,7 @@
  *  (mz, chemical_shift, ...) from disk. The decrypted intensity
  *  channel continues to serve from the in-memory cache. Internal API
  *  — called only by TTIOSpectralDataset. */
-- (BOOL)reattachSignalHandlesFromGroup:(TTIOHDF5Group *)channels error:(NSError **)error
+- (BOOL)reattachSignalHandlesFromGroup:(id<TTIOStorageGroup>)channels error:(NSError **)error
 {
     if (!channels) return NO;
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *datasets =
@@ -1074,11 +1068,11 @@
     for (NSString *chName in _channelNames) {
         NSString *dsName = [chName stringByAppendingString:@"_values"];
         if (![channels hasChildNamed:dsName]) continue;  // encrypted / absent
-        TTIOHDF5Dataset *ds = [channels openDatasetNamed:dsName error:error];
+        id<TTIOStorageDataset> ds = [channels openDatasetNamed:dsName error:error];
         if (!ds) return NO;
-        datasets[chName] = [TTIOHDF5Provider adapterForDataset:ds name:dsName];
+        datasets[chName] = ds;
     }
-    _storageSignalGroup = [TTIOHDF5Provider adapterForGroup:channels];
+    _storageSignalGroup = channels;
     _storageDatasets    = datasets;
     return YES;
 }
