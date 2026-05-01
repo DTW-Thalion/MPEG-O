@@ -49,6 +49,42 @@ as a record of what was built; current milestones use TTI-O names.
 > + `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`
 > + `docs/superpowers/specs/2026-04-30-m95-delta-rans-design.md`.
 >
+> **Phase 11 — cross-language perf sweep shipped 2026-05-01.** Five
+> focused wins, no wire-format breaks. Tasks #78–#81 + #83 from the
+> v1.2.0 codec parity workplan all closed in a single session:
+> * **Task #83 — Python rANS Cython accelerator.** New
+>   `python/src/ttio/codecs/_rans/_rans.pyx` (byte-exact mirror of
+>   `rans.py`) drops rans_o0 17–29× and cascades 6.8× into REF_DIFF and
+>   2× into DELTA_RANS — both internally call `rans.encode/decode`.
+>   Python rans_o0 now runs faster than ObjC's hand-rolled C.
+> * **Task #81 — Native M94.Z decode entry.** New
+>   `ttio_rans_decode_block_m94z` C entry point bakes the M94.Z context
+>   formula directly into native code. C decode kernel ~107 MiB/s vs
+>   Cython's ~96 MiB/s; full V2 wrapper still has ~110 ms metadata-setup
+>   overhead in Python (follow-up). Java JNI + ObjC linkage to the new
+>   entry deferred.
+> * **Task #80 — Python lazy zarr import.** `discover_providers()`
+>   eager `from .zarr import ZarrProvider` was loading zarr (~135 ms)
+>   on every non-HDF5 first call, inflating ms.memory write to 167 ms.
+>   Made lazy via `_try_register_zarr()`. Result: ms.memory write
+>   167 ms → 5.5 ms (30×).
+> * **Task #79 — Java jcamp reader.** Replaced
+>   `HashSet<Character>.contains` autobox-per-char in
+>   `JcampDxDecode.hasCompression` with `boolean[128]`; pre-allocated
+>   `double[]` from NPOINTS hint and replaced
+>   `ArrayList<Double> + line.split("\\s+") + Double.parseDouble`
+>   with a manual whitespace tokenizer in `JcampDxReader`. jcamp:
+>   280 ms → 134 ms (2.1×).
+> * **Task #78 — Java FQZCOMP_NX16_Z encode.** Per-stream chunk buffers
+>   as `short[]` (one store per renorm replaces two byte stores);
+>   pre-padded qualities to drop the `(i < n)` branch from the hot
+>   loop. Warm encode: ~25 MB/s → ~34 MB/s (36% faster).
+>
+> Test counts after Phase 11: Python 1800/1800, Java 879/879, native
+> ctest 5/5. chr22 ratio against CRAM 3.1 unchanged at 1.965× — the
+> perf wins are at the codec layer; the residual gap is still HDF5
+> multi-omics framing (Task #82, deferred as multi-week scope).
+>
 > **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under
 > `[Unreleased]`, do not interleave with M-series):

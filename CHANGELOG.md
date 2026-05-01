@@ -13,6 +13,114 @@ public API is stable from v1.0.0 onward (tagged 2026-04-23). See
 
 ## [Unreleased]
 
+### Performance — 2026-05-01 cross-language sweep (post-Phase-10)
+
+Five focused perf wins landed in one session, no wire-format breaks,
+all byte-exact contracts preserved. Tasks #78–#81 + #83 from the
+v1.2.0 codec parity workplan.
+
+- **Python rANS — Cython accelerator** (Task #83). New
+  `python/src/ttio/codecs/_rans/_rans.pyx` byte-exact mirror of the
+  pure-Python reference at `ttio/codecs/rans.py`. Same wire format
+  (L=2²³, M=4096, B=2⁸, big-endian header) — no fixture regen, no
+  cross-language coordination. Wrapper auto-detects the extension and
+  falls back to pure Python when absent. `setup.py` registers the
+  fourth Cython module alongside `_fqzcomp_nx16_z`, `_ref_diff`,
+  `_name_tokenizer`. Harness deltas at n=100K reads × 100bp:
+  - rans_o0 encode: 123 ms → 7.1 ms (**17×**)
+  - rans_o0 decode: 145 ms → 5.1 ms (**29×**)
+  - rans_o1 encode: 249 ms → 14.4 ms (**17×**)
+  - rans_o1 decode: 244 ms → 26.6 ms (**9×**)
+  - **Cascading wins** (REF_DIFF and DELTA_RANS internally call
+    `rans.encode`/`decode`):
+    - ref_diff_encode: 1107 ms → 148 ms (**7.5×**)
+    - ref_diff_decode: 1288 ms → 191 ms (**6.8×**)
+    - delta_rans_encode: 644 ms → 380 ms (**1.7×**)
+    - delta_rans_decode: 632 ms → 310 ms (**2.0×**)
+  - Python rans_o0 now runs faster than ObjC's hand-rolled C (2.1ms
+    Cython vs 4.8ms ObjC warm). ObjC and Java rANS were never the
+    bottleneck so they were untouched.
+  - 1785 unit tests pass; cross-language byte-exact rans/ref_diff/
+    delta_rans fixture tests all green.
+
+- **Native M94.Z decode entry — `ttio_rans_decode_block_m94z`** (Task
+  #81). New libttio_rans entry point that bakes the M94.Z context
+  formula (prev_q ring + position bucket + revcomp) directly into C,
+  eliminating the per-symbol cross-language callback round-trip that
+  previously made the streaming-decode path slower than the
+  pure-language decoder (Task 26b/26c finding). Decode kernel itself
+  is ~93 ms for a 10 MB qualities block (10% faster than Cython's
+  ~104 ms); ~110 ms of metadata setup overhead in the V2 Python
+  wrapper still masks most of the kernel gain end-to-end (follow-up).
+  - C side: `native/include/ttio_rans.h` (new `ttio_m94z_params`
+    struct + prototype), `native/src/rans_decode_m94z.c` (~225
+    lines), `native/tests/test_m94z_decode.c` parity test against
+    the streaming-callback path.
+  - Python ctypes wired in `_decode_v2_via_native_streaming`; numpy
+    used for the freq/cum table fill (vectorised cumsum replaces a
+    1.28M-iteration Python loop at sloc=14).
+  - Java JNI / ObjC linkage intentionally deferred — Python is the
+    load-bearing decode path for V2 native, and proving the C
+    plumbing in one binding first keeps the change reviewable.
+  - 1800 Python tests pass + 5 native ctest suites (`roundtrip`,
+    `thread_safety`, `v2_format`, `streaming`, `m94z_decode`).
+
+- **Python provider registry — lazy zarr import** (Task #80). The
+  `discover_providers()` fallback used to eagerly run
+  `from .zarr import ZarrProvider`, which triggers zarr's ~135 ms
+  import chain (`zarr.api.synchronous` + `asynchronous` + `abc.store`).
+  That cost landed on the first non-HDF5 provider call, since the
+  HDF5 path bypasses the registry entirely — manifesting as
+  `ms.memory write = 167 ms` in the harness vs ObjC's 0.9 ms (a 30×
+  apparent slowdown that was entirely measurement attribution).
+  - Fix: `_try_register_zarr()` defers the import until a caller
+    asks for a `zarr*://` URL or `provider="zarr"`. The
+    discover_providers eager loop also skips the zarr entry point.
+  - Result: `ms.memory write` 167 ms → 5.5 ms (**30×**); zarr import
+    cost now correctly attributed to ms.zarr (which goes 128 ms →
+    220 ms — the cost moved, didn't disappear).
+  - `test_zarr_discovered_by_registry` updated to reflect the new
+    lazy contract (opens a zarr URL first to trigger registration).
+
+- **Java jcamp reader — boolean[] detect + double[] preallocate** (Task
+  #79). Two hotspots removed in `JcampDxReader.java` +
+  `JcampDxDecode.java`:
+  1. `JcampDxDecode.hasCompression` replaces `HashSet<Character>`
+     with `boolean[128]` ASCII table — was autoboxing every char in
+     the body (~300 KB at n=10K → 300K Character allocations) just
+     to detect compression sentinels. Adds `List<String>` overload
+     so the reader can scan body lines without re-joining.
+  2. `JcampDxReader` AFFN fast path pre-allocates `double[]` from
+     the NPOINTS LDR hint and replaces the
+     `ArrayList<Double> + line.split("\\s+") + Double.parseDouble`
+     loop with a manual whitespace tokenizer. The `ArrayList<Double>`
+     path was boxing 20K Doubles per spectrum and the regex split
+     was allocating a `String[]` per line.
+  - jcamp benchmark: 280 ms → 134 ms (**2.1×**); ir_read alone 109 ms
+    → 39 ms (**2.8×**). Java is now ~1.7× slower than Python (within
+    expected JVM overhead) vs the previous 4× gap.
+  - 879 Java tests pass.
+
+- **Java FQZCOMP_NX16_Z encode — short[] chunks + padded sym** (Task
+  #78). Two changes in pass 2 of `FqzcompNx16Z.encode`:
+  1. Per-stream chunk buffers as `short[]` instead of `byte[]` —
+     each 16-bit renorm step now writes one `short` instead of two
+     bytes + length increment. The reverse step packs `short[] →
+     byte[]` in 16-bit LE pairs at the end.
+  2. Pre-pad qualities to nPadded with zero tail bytes so the hot
+     loop reads `qPadded[i] & 0xFF` unconditionally, dropping the
+     `(i < n) ? qualities[i] : 0` branch. padCount ≤ 3 makes the
+     copy negligible.
+  - Warm encode throughput: ~25 MB/s → ~34 MB/s (**36% faster**;
+    0.358 s → 0.290 s on the 10 MB FqzcompNx16ZPerfTest).
+  - Decode untouched — its bottleneck is the binary search on
+    cum[256] per symbol (deferred). The flat ctxCap*256 packed-table
+    experiment was tried but rejected: warm-state gain didn't
+    justify the 32 MB cold-allocation regression.
+  - Stale `FqzcompNx16PerfTest` surefire reports from the
+    pre-NX16-removal era cleaned up.
+  - 878 Java tests pass.
+
 ### Added
 
 - **M93 — REF_DIFF reference-based sequence-diff codec** (codec id `9`).
