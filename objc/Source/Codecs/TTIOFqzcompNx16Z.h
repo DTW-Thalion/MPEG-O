@@ -51,6 +51,14 @@
  *       4     4    ctx_id            (uint32 LE)
  *       8     512  freq[256]         (256 × uint16 LE)
  *
+ * Wire format V2 (version byte = 2; body produced by libttio_rans):
+ *   Header: same fields as V1 EXCEPT no 16-byte state_init suffix
+ *           (V2 body embeds final states at its own offset 0..15).
+ *   Body  : raw output of ttio_rans_encode_block — self-contained
+ *             [4 × uint32 LE final states][4 × uint32 LE lane sizes]
+ *             [per-lane 16-bit LE chunks]
+ *   No trailer.
+ *
  * Cross-language equivalents:
  *   Python: ttio.codecs.fqzcomp_nx16_z
  *   Java:   global.thalion.ttio.codecs.FqzcompNx16Z (M94.Z.4)
@@ -86,6 +94,32 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
                                     error:(NSError * _Nullable *)error;
 
 /**
+ * Encode with optional V2 native dispatch.
+ *
+ * Mirrors the four-arg variant but accepts an options dictionary. The
+ * recognised key is:
+ *
+ *   - @c "preferNative" (NSNumber BOOL): when @c YES (and libttio_rans
+ *     is linked in), emit a V2 wire-format stream (version byte = 2)
+ *     whose body is produced by the native rANS encoder. When @c NO,
+ *     force the V1 path. When the key is absent, the encoder consults
+ *     the environment variable @c TTIO_M94Z_USE_NATIVE — values
+ *     @c "1", @c "true", @c "yes", @c "on" (case-insensitive) enable
+ *     V2 dispatch, otherwise V1 (the default).
+ *
+ * V2 streams are decoded transparently by @c +decodeData:revcompFlags:error:
+ * (the version byte is auto-detected). V2 decode is currently
+ * pure-ObjC because contexts in M94.Z are derived from previously-
+ * decoded symbols, which the C library's pre-computed-contexts API
+ * cannot supply (option E: V2 encode native, V2 decode pure-ObjC).
+ */
++ (nullable NSData *)encodeWithQualities:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                  options:(nullable NSDictionary<NSString *, id> *)options
+                                    error:(NSError * _Nullable *)error;
+
+/**
  * Decode a byte stream produced by +encodeWithQualities:.
  *
  * @param data           Encoded byte stream.
@@ -104,6 +138,26 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
 /** Convenience: decode with all-zero (forward) revcomp flags. */
 + (nullable NSDictionary *)decodeData:(NSData *)data
                                  error:(NSError * _Nullable *)error;
+
+/**
+ * Reports which rANS backend is wired into this build.
+ *
+ * Returns one of:
+ *   - @"native-avx2", @"native-sse4.1", @"native-scalar" — when
+ *     libttio_rans is linked in and its CPUID dispatch picked that kernel.
+ *   - @"native-unknown" — defensive fallback if the library was linked in
+ *     but kernel introspection returned an unexpected value.
+ *   - @"pure-objc" — when libttio_rans is not linked; the codec uses the
+ *     pure-ObjC implementation in this file.
+ *
+ * Backend selection only affects V2 (native-body) dispatch — see the
+ * @c options dictionary on the encode method or the
+ * @c TTIO_M94Z_USE_NATIVE environment variable. V1 streams are always
+ * encoded and decoded via pure-ObjC. V2 decode is also pure-ObjC
+ * (option E) because the C library cannot derive M94.Z contexts on
+ * the fly — it requires a fully pre-computed contexts vector.
+ */
++ (NSString *)backendName;
 
 @end
 

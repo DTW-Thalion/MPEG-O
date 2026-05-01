@@ -14,6 +14,27 @@
 #include <string.h>
 #include <zlib.h>
 
+// ── Optional native rANS fast path (Task 17, Phase B) ────────────────
+// libttio_rans (native/) ships an SIMD-dispatched rANS-Nx16 kernel. The
+// build wires it in only when present (see Source/GNUmakefile.preamble).
+// We probe with __has_include so this translation unit still compiles
+// when the header is absent; +backendName then returns "pure-objc".
+//
+// V2 dispatch (Task 23): when the encode-options dictionary specifies
+// "preferNative":@YES (or env var TTIO_M94Z_USE_NATIVE is set), encode
+// emits a V2 wire-format stream (version byte = 2) whose body is
+// produced by ttio_rans_encode_block. V1 streams remain the default
+// and round-trip via the existing pure-ObjC path. V2 decode is also
+// pure-ObjC because contexts in M94.Z are derived from previously-
+// decoded symbols, which the C library's pre-computed-contexts API
+// cannot supply (option E).
+#if __has_include("ttio_rans.h")
+#  include "ttio_rans.h"
+#  define TTIO_HAS_NATIVE_RANS 1
+#else
+#  define TTIO_HAS_NATIVE_RANS 0
+#endif
+
 NSString * const TTIOFqzcompNx16ZErrorDomain = @"TTIOFqzcompNx16ZError";
 
 // ── Algorithm constants (per spec §1) ──────────────────────────────
@@ -37,6 +58,7 @@ enum {
     // Wire format constants.
     kZ_MAGIC_LEN              = 4,
     kZ_VERSION                = 1,
+    kZ_VERSION_V2_NATIVE      = 2,  // V2 body produced by libttio_rans
     kZ_CONTEXT_PARAMS_SIZE    = 8,
     kZ_HEADER_FIXED_PREFIX    = 4 + 1 + 1 + 8 + 4 + 4 + 8 + 4,  // 34
     kZ_STATE_INIT_SIZE        = 16,
@@ -898,6 +920,760 @@ cleanup:
     return rc;
 }
 
+// ── V2 native dispatch (Task 23) ─────────────────────────────────
+//
+// Mirrors python/src/ttio/codecs/fqzcomp_nx16_z.py::_encode_v2_native
+// and java FqzcompNx16Z.encodeV2Native. V2 wire format = same header
+// fields as V1 EXCEPT version byte = 2 and no 16-byte state_init suffix
+// (V2 body embeds final states at its own offset 0..15). V2 body =
+// raw ttio_rans_encode_block output (self-contained).
+//
+// V2 encode dispatches on TTIO_HAS_NATIVE_RANS at compile time AND on
+// the runtime presence of preferNative=@YES (or env var). When the
+// native lib is absent, callers are silently downgraded to V1.
+
+#if TTIO_HAS_NATIVE_RANS
+static NSData *z_encode_v2_native(const uint8_t *qualities, int32_t n_qualities,
+                                    NSArray<NSNumber *> *readLengthsArr,
+                                    const int32_t *read_lengths, int32_t n_reads,
+                                    const int8_t *revcomp_flags,
+                                    int32_t qbits, int32_t pbits,
+                                    int32_t dbits, int32_t sloc,
+                                    NSError **error)
+{
+    int32_t pad_count = (-n_qualities) & 3;
+    int32_t n_padded = n_qualities + pad_count;
+    int32_t n_contexts = 1 << sloc;
+
+    int32_t **ctx_counts = (int32_t **)calloc(n_contexts, sizeof(int32_t *));
+    uint32_t *contexts   = (uint32_t *)malloc(sizeof(uint32_t)
+                                                * ((n_padded > 0) ? n_padded : 1));
+    uint8_t  *symbols    = (uint8_t  *)malloc((n_padded > 0) ? n_padded : 1);
+    if (!ctx_counts || !contexts || !symbols) {
+        free(ctx_counts); free(contexts); free(symbols);
+        z_set_error(error, 150, @"M94Z V2 native: alloc failed");
+        return nil;
+    }
+
+    if (n_padded > 0) {
+        memset(symbols, 0, n_padded);
+        for (int32_t i = 0; i < n_qualities; i++) symbols[i] = qualities[i];
+    }
+
+    z_build_context_seq(qualities, n_qualities, n_padded,
+                          read_lengths, n_reads, revcomp_flags,
+                          qbits, pbits, sloc, contexts);
+
+    // Helper macro for failure-path cleanup of the C buffers we own
+    // before any NSObject is created. Defined inline to avoid the
+    // ARC-vs-goto-jump-past-strong-init issue.
+    #define Z_V2_FAIL_C() do { \
+        if (ctx_counts) { \
+            for (int32_t cc_ = 0; cc_ < n_contexts; cc_++) free(ctx_counts[cc_]); \
+            free(ctx_counts); \
+        } \
+        free(contexts); free(symbols); \
+        return nil; \
+    } while (0)
+
+    // Pass 1: per-context raw counts.
+    for (int32_t i = 0; i < n_padded; i++) {
+        uint32_t ctx = contexts[i];
+        if (ctx_counts[ctx] == NULL) {
+            ctx_counts[ctx] = (int32_t *)calloc(256, sizeof(int32_t));
+            if (!ctx_counts[ctx]) {
+                z_set_error(error, 151, @"M94Z V2 native: per-ctx count alloc failed");
+                Z_V2_FAIL_C();
+            }
+        }
+        ctx_counts[ctx][symbols[i]]++;
+    }
+
+    // Count active and normalise per-ctx freq tables.
+    size_t n_active = 0;
+    for (int32_t c = 0; c < n_contexts; c++) {
+        if (ctx_counts[c]) n_active++;
+    }
+    if (n_active == 0 || n_active > 0xFFFFu) {
+        z_set_error(error, 152,
+            @"M94Z V2 native: nActive (%zu) must be in [1, 65535]", n_active);
+        Z_V2_FAIL_C();
+    }
+
+    uint32_t *active_ctxs = (uint32_t *)malloc(sizeof(uint32_t) * n_active);
+    uint16_t **ft_orig    = (uint16_t **)calloc(n_active, sizeof(uint16_t *));
+    int32_t  *ctx_remap   = (int32_t *)malloc(sizeof(int32_t) * n_contexts);
+    uint32_t *freq_dense  = (uint32_t *)calloc(n_active * 256, sizeof(uint32_t));
+    uint16_t *contexts_remapped = (uint16_t *)malloc(sizeof(uint16_t)
+                                          * ((n_padded > 0) ? n_padded : 1));
+
+    // From here on, additional buffers must be cleaned via this macro.
+    #define Z_V2_FREE_DENSE_C() do { \
+        if (ft_orig) { \
+            for (size_t jj_ = 0; jj_ < n_active; jj_++) free(ft_orig[jj_]); \
+        } \
+        free(ft_orig); free(active_ctxs); free(ctx_remap); \
+        free(freq_dense); free(contexts_remapped); \
+    } while (0)
+
+    if (!active_ctxs || !ft_orig || !ctx_remap || !freq_dense || !contexts_remapped) {
+        z_set_error(error, 153, @"M94Z V2 native: dense alloc failed");
+        Z_V2_FREE_DENSE_C();
+        Z_V2_FAIL_C();
+    }
+    for (int32_t c = 0; c < n_contexts; c++) ctx_remap[c] = -1;
+
+    size_t ai = 0;
+    int normalize_failed = 0;
+    int alloc_failed = 0;
+    for (int32_t c = 0; c < n_contexts; c++) {
+        if (!ctx_counts[c]) continue;
+        active_ctxs[ai] = (uint32_t)c;
+        ctx_remap[c] = (int32_t)ai;
+        uint16_t *fr = (uint16_t *)malloc(sizeof(uint16_t) * 256);
+        if (!fr) { alloc_failed = 1; break; }
+        if (z_normalise_to_total(ctx_counts[c], fr) != 0) {
+            free(fr); normalize_failed = 1; break;
+        }
+        ft_orig[ai] = fr;
+        for (int k = 0; k < 256; k++) {
+            freq_dense[ai * 256 + k] = (uint32_t)fr[k];
+        }
+        ai++;
+    }
+    if (alloc_failed) {
+        z_set_error(error, 154, @"M94Z V2 native: freq dup alloc failed");
+        n_active = ai;  // only [0..ai) freq arrays were allocated
+        Z_V2_FREE_DENSE_C();
+        Z_V2_FAIL_C();
+    }
+    if (normalize_failed) {
+        z_set_error(error, 155,
+            @"M94Z V2 native: normalise_to_total cannot reduce below floor=1");
+        n_active = ai;
+        Z_V2_FREE_DENSE_C();
+        Z_V2_FAIL_C();
+    }
+
+    // Build remapped (dense) contexts buffer.
+    for (int32_t i = 0; i < n_padded; i++) {
+        int32_t dense = ctx_remap[contexts[i]];
+        contexts_remapped[i] = (uint16_t)(dense & 0xFFFF);
+    }
+
+    // Native encode.
+    size_t out_cap = (size_t)n_padded * 4 + 64;
+    if (out_cap < 64) out_cap = 64;
+    uint8_t *out_buf = (uint8_t *)malloc(out_cap);
+    if (!out_buf) {
+        z_set_error(error, 156, @"M94Z V2 native: out buffer alloc failed");
+        Z_V2_FREE_DENSE_C();
+        Z_V2_FAIL_C();
+    }
+    size_t out_len = out_cap;
+    int rc = ttio_rans_encode_block(
+        symbols,
+        contexts_remapped,
+        (size_t)n_padded,
+        (uint16_t)n_active,
+        (const uint32_t (*)[256])freq_dense,
+        out_buf,
+        &out_len);
+    if (rc != 0) {
+        free(out_buf);
+        z_set_error(error, 157,
+            @"M94Z V2 native: ttio_rans_encode_block failed (rc=%d)", rc);
+        Z_V2_FREE_DENSE_C();
+        Z_V2_FAIL_C();
+    }
+
+    // Build sidecars: rlt + freq_tables blob (with ORIGINAL sparse ctx ids).
+    NSData *rlt = z_encode_read_lengths(readLengthsArr);
+    if (!rlt) {
+        free(out_buf);
+        z_set_error(error, 158, @"M94Z V2 native: rlt deflate failed");
+        Z_V2_FREE_DENSE_C();
+        Z_V2_FAIL_C();
+    }
+    NSData *ft_blob = z_serialize_freq_tables(active_ctxs, n_active,
+                                                ft_orig, sloc);
+    if (!ft_blob) {
+        free(out_buf);
+        z_set_error(error, 159, @"M94Z V2 native: freq_tables deflate failed");
+        Z_V2_FREE_DENSE_C();
+        Z_V2_FAIL_C();
+    }
+
+    // V2 wire format: header (no state_init suffix) + native body.
+    NSUInteger header_size = (NSUInteger)kZ_HEADER_FIXED_PREFIX
+                               + (NSUInteger)rlt.length
+                               + (NSUInteger)ft_blob.length;
+    NSUInteger total_size = header_size + (NSUInteger)out_len;
+    NSMutableData *out = [NSMutableData dataWithLength:total_size];
+    uint8_t *p = (uint8_t *)out.mutableBytes;
+    uint8_t flagsByte = (uint8_t)((pad_count & 0x3) << 4);
+
+    memcpy(p, kZ_MAGIC, 4); p += 4;
+    *p++ = (uint8_t)kZ_VERSION_V2_NATIVE;
+    *p++ = flagsByte;
+    le_pack_u64(p, (uint64_t)n_qualities);     p += 8;
+    le_pack_u32(p, (uint32_t)n_reads);          p += 4;
+    le_pack_u32(p, (uint32_t)rlt.length);       p += 4;
+    *p++ = (uint8_t)(qbits & 0xFF);
+    *p++ = (uint8_t)(pbits & 0xFF);
+    *p++ = (uint8_t)(dbits & 0xFF);
+    *p++ = (uint8_t)(sloc  & 0xFF);
+    memset(p, 0, 4); p += 4;
+    le_pack_u32(p, (uint32_t)ft_blob.length); p += 4;
+    if (rlt.length) memcpy(p, rlt.bytes, rlt.length);
+    p += rlt.length;
+    if (ft_blob.length) memcpy(p, ft_blob.bytes, ft_blob.length);
+    p += ft_blob.length;
+    memcpy(p, out_buf, out_len);
+
+    // Cleanup all C resources.
+    free(out_buf);
+    Z_V2_FREE_DENSE_C();
+    for (int32_t c = 0; c < n_contexts; c++) free(ctx_counts[c]);
+    free(ctx_counts); free(contexts); free(symbols);
+    #undef Z_V2_FREE_DENSE_C
+    #undef Z_V2_FAIL_C
+    return out;
+}
+#endif  /* TTIO_HAS_NATIVE_RANS */
+
+// ── V2 native streaming decode (Task 26c) ────────────────────────
+//
+// Routes the inner rANS decode loop through libttio_rans's
+// ttio_rans_decode_block_streaming API, with a per-symbol C resolver
+// callback that derives M94.Z contexts on the fly.
+//
+// Performance reality (Task 26c): the per-symbol callback adds
+// indirect-call overhead inside the C decode loop.  Unlike Python
+// (ctypes CFUNCTYPE) and Java (JNI CallIntMethod), ObjC has direct
+// C linkage so the callback cost is only an indirect function call.
+// However, the overall path is still expected to be on par with or
+// slightly slower than the pure-ObjC V2 decoder for realistic blocks
+// because the resolver dominates the inner-loop cost vs the SIMD
+// kernel's unrolled multi-lane scalar ops.  Shipped as infrastructure
+// proving the streaming C API works end-to-end across all bindings.
+//
+// The streaming path is gated on TTIO_M94Z_USE_NATIVE_STREAMING env
+// var (default off) because the C library does not validate the
+// post-decode final state, so a corrupt stream may decode silently
+// to the wrong bytes.  The pure-ObjC path below is more defensive
+// and remains the default.
+
+#if TTIO_HAS_NATIVE_RANS
+
+typedef struct {
+    int32_t n_qualities;
+    int32_t qbits;
+    int32_t pbits;
+    int32_t sloc;
+    int32_t shift;
+    uint32_t qmask_local;
+    uint32_t shift_mask;
+
+    // Read-tracking state.
+    int32_t read_idx;
+    int32_t pos_in_read;
+    int32_t cur_read_len;
+    uint32_t cur_revcomp;
+    int32_t cumulative_read_end;
+    uint32_t prev_q;
+
+    int32_t n_reads;
+    const int32_t *read_lengths;
+    const int8_t  *revcomp_flags;
+
+    // Sparse → dense ctx remap.  Indexed by sparse ctx id; -1 means
+    // absent (defensive — should not happen on a valid blob).
+    const int32_t *ctx_remap;
+    int32_t pad_ctx_dense;
+} z_streaming_resolver_state;
+
+static uint16_t z_streaming_resolver_cb(void *user_data,
+                                          size_t i,
+                                          uint8_t prev_sym)
+{
+    z_streaming_resolver_state *st = (z_streaming_resolver_state *)user_data;
+
+    // C library does not call this for i >= n_symbols (padding),
+    // but be defensive anyway.
+    if ((int32_t)i >= st->n_qualities) {
+        return (uint16_t)st->pad_ctx_dense;
+    }
+
+    if (i > 0) {
+        st->prev_q = ((st->prev_q << st->shift)
+                      | ((uint32_t)prev_sym & st->shift_mask)) & st->qmask_local;
+        st->pos_in_read++;
+    }
+
+    // Read-boundary advance.
+    if (i > 0 && (int32_t)i >= st->cumulative_read_end
+        && st->read_idx < st->n_reads - 1) {
+        st->read_idx++;
+        st->pos_in_read = 0;
+        st->cur_read_len = st->read_lengths[st->read_idx];
+        st->cur_revcomp  = (uint32_t)(st->revcomp_flags[st->read_idx] & 1);
+        st->cumulative_read_end += st->cur_read_len;
+        st->prev_q = 0;
+    }
+
+    uint32_t pb = z_pos_bucket(st->pos_in_read, st->cur_read_len, st->pbits);
+    uint32_t ctx_sparse = z_context(st->prev_q, pb, st->cur_revcomp & 1,
+                                     st->qbits, st->pbits, st->sloc);
+    int32_t dense = st->ctx_remap[ctx_sparse];
+    if (dense < 0) return (uint16_t)st->pad_ctx_dense;
+    return (uint16_t)dense;
+}
+
+/*
+ * Pre-condition: caller has parsed the V2 header and recovered the
+ * sparse freq tables.  This function builds the dense (sorted-by-ctx)
+ * freq+cum tables, the dtab via ttio_rans_build_decode_table, and the
+ * sparse→dense remap, then calls ttio_rans_decode_block_streaming.
+ *
+ * On success, returns a retained NSDictionary identical in shape to
+ * z_decode_v2's output: { @"qualities": NSData, @"readLengths": NSArray }.
+ * On failure, sets *error and returns nil.
+ *
+ * Always returns nil (rather than throwing) on any error, so the
+ * caller can transparently fall back to the pure-ObjC decoder.
+ */
+static NSDictionary *z_decode_v2_via_native_streaming(
+    const uint8_t *body, NSUInteger body_len,
+    int32_t n_qualities, int32_t n_padded,
+    NSArray<NSNumber *> *readLengths,
+    NSArray<NSNumber *> *revcompFlags,
+    int32_t qbits, int32_t pbits, int32_t sloc,
+    size_t n_active, const uint32_t *active_ctxs,
+    uint16_t * const *freq_tables_orig)
+{
+    if (n_active == 0 || n_active > 0xFFFFu) return nil;
+
+    int32_t n_contexts_sparse = 1 << sloc;
+
+    // Allocate dense freq + cum + dtab + sparse→dense remap.
+    uint32_t *freq_dense = (uint32_t *)calloc(n_active * 256, sizeof(uint32_t));
+    uint32_t *cum_dense  = (uint32_t *)calloc(n_active * 256, sizeof(uint32_t));
+    uint8_t  *dtab       = (uint8_t  *)calloc(n_active * (size_t)kZ_T,
+                                                sizeof(uint8_t));
+    int32_t  *ctx_remap  = (int32_t  *)malloc(sizeof(int32_t) * n_contexts_sparse);
+    if (!freq_dense || !cum_dense || !dtab || !ctx_remap) {
+        free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+        return nil;
+    }
+    for (int32_t c = 0; c < n_contexts_sparse; c++) ctx_remap[c] = -1;
+
+    for (size_t ai = 0; ai < n_active; ai++) {
+        uint32_t sparse = active_ctxs[ai];
+        if ((int32_t)sparse >= n_contexts_sparse) {
+            free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+            return nil;
+        }
+        ctx_remap[sparse] = (int32_t)ai;
+        const uint16_t *fr = freq_tables_orig[ai];
+        uint32_t running = 0;
+        for (int s = 0; s < 256; s++) {
+            freq_dense[ai * 256 + s] = (uint32_t)fr[s];
+            cum_dense[ai * 256 + s]  = running;
+            running += (uint32_t)fr[s];
+        }
+    }
+
+    int rc = ttio_rans_build_decode_table(
+        (uint16_t)n_active,
+        (const uint32_t (*)[256])freq_dense,
+        (const uint32_t (*)[256])cum_dense,
+        (uint8_t (*)[TTIO_RANS_T])dtab);
+    if (rc != 0) {
+        free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+        return nil;
+    }
+
+    // Build read-length / revcomp C arrays for the resolver.
+    int32_t n_reads = (int32_t)readLengths.count;
+    int32_t *rl_arr = (int32_t *)malloc(sizeof(int32_t)
+                                          * (n_reads ? n_reads : 1));
+    int8_t  *rc_arr = (int8_t  *)malloc(sizeof(int8_t)
+                                          * (n_reads ? n_reads : 1));
+    if (!rl_arr || !rc_arr) {
+        free(rl_arr); free(rc_arr);
+        free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+        return nil;
+    }
+    for (int32_t k = 0; k < n_reads; k++) {
+        rl_arr[k] = (int32_t)[readLengths[k] unsignedLongLongValue];
+        rc_arr[k] = (int8_t)([revcompFlags[k] unsignedIntegerValue] & 1u);
+    }
+
+    uint32_t pad_ctx_sparse = z_context(0, 0, 0, qbits, pbits, sloc);
+    int32_t pad_ctx_dense = (pad_ctx_sparse < (uint32_t)n_contexts_sparse)
+                              ? ctx_remap[pad_ctx_sparse] : -1;
+    if (pad_ctx_dense < 0) pad_ctx_dense = 0;  // defensive
+
+    int32_t shift = qbits / 3;
+    if (shift < 1) shift = 1;
+
+    z_streaming_resolver_state state = {
+        .n_qualities = n_qualities,
+        .qbits = qbits, .pbits = pbits, .sloc = sloc,
+        .shift = shift,
+        .qmask_local = ((uint32_t)1 << qbits) - 1,
+        .shift_mask  = ((uint32_t)1 << shift) - 1,
+        .read_idx = 0,
+        .pos_in_read = 0,
+        .cur_read_len = (n_reads > 0) ? rl_arr[0] : 0,
+        .cur_revcomp  = (n_reads > 0) ? (uint32_t)rc_arr[0] : 0,
+        .cumulative_read_end = (n_reads > 0) ? rl_arr[0] : 0,
+        .prev_q = 0,
+        .n_reads = n_reads,
+        .read_lengths = rl_arr,
+        .revcomp_flags = rc_arr,
+        .ctx_remap = ctx_remap,
+        .pad_ctx_dense = pad_ctx_dense,
+    };
+
+    uint8_t *out_buf = (uint8_t *)calloc((n_padded > 0) ? n_padded : 1, 1);
+    if (!out_buf) {
+        free(rl_arr); free(rc_arr);
+        free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+        return nil;
+    }
+
+    rc = ttio_rans_decode_block_streaming(
+        body, body_len,
+        (uint16_t)n_active,
+        (const uint32_t (*)[256])freq_dense,
+        (const uint32_t (*)[256])cum_dense,
+        (const uint8_t (*)[TTIO_RANS_T])dtab,
+        out_buf, (size_t)n_padded,
+        z_streaming_resolver_cb,
+        &state);
+
+    NSDictionary *result = nil;
+    if (rc == 0) {
+        NSData *qData = [NSData dataWithBytes:out_buf
+                                       length:(NSUInteger)n_qualities];
+        result = @{
+            @"qualities":   qData,
+            @"readLengths": readLengths,
+        };
+    }
+
+    free(out_buf);
+    free(rl_arr); free(rc_arr);
+    free(freq_dense); free(cum_dense); free(dtab); free(ctx_remap);
+    return result;
+}
+
+#endif  /* TTIO_HAS_NATIVE_RANS */
+
+// ── V2 decode (pure-ObjC; option E) ──────────────────────────────
+//
+// Pure-ObjC walk-forward decoder for V2 streams. Mirrors the Python
+// _decode_v2_with_metadata and Java decodeV2 implementations. The
+// streaming variant above (z_decode_v2_via_native_streaming) is used
+// opportunistically when TTIO_M94Z_USE_NATIVE_STREAMING is set; this
+// pure-ObjC path remains the canonical reference and the default
+// because it validates post-decode invariants the C library does not.
+
+static NSDictionary *z_decode_v2(NSData *data,
+                                   NSArray<NSNumber *> *revcompFlags,
+                                   NSError **error)
+{
+    const uint8_t *p = (const uint8_t *)data.bytes;
+    if (data.length < kZ_HEADER_FIXED_PREFIX) {
+        z_set_error(error, 220, @"M94Z V2: encoded too short (%lu bytes)",
+                    (unsigned long)data.length);
+        return nil;
+    }
+    // Magic + version were already checked by the caller.
+    uint8_t flags = p[5];
+    uint64_t numQ = le_read_u64(p + 6);
+    uint32_t numR = le_read_u32(p + 14);
+    uint32_t rlt_len = le_read_u32(p + 18);
+    int32_t qbits = (int32_t)p[22];
+    int32_t pbits = (int32_t)p[23];
+    // dbits = p[24]; ignored
+    int32_t sloc  = (int32_t)p[25];
+    uint32_t ft_len = le_read_u32(p + 30);
+
+    int32_t pad_count = (flags >> 4) & 0x3;
+
+    NSUInteger header_end = (NSUInteger)kZ_HEADER_FIXED_PREFIX
+                              + (NSUInteger)rlt_len
+                              + (NSUInteger)ft_len;
+    if (data.length < header_end) {
+        z_set_error(error, 221,
+            @"M94Z V2: header size %lu exceeds data length %lu",
+            (unsigned long)header_end, (unsigned long)data.length);
+        return nil;
+    }
+    NSData *rltData    = [data subdataWithRange:NSMakeRange(34, rlt_len)];
+    NSData *ftBlobData = [data subdataWithRange:NSMakeRange(34 + rlt_len, ft_len)];
+
+    NSError *rltErr = nil;
+    NSArray<NSNumber *> *readLengths = z_decode_read_lengths(rltData, numR, &rltErr);
+    if (!readLengths) {
+        if (error) *error = rltErr;
+        return nil;
+    }
+
+    if (revcompFlags == nil) {
+        NSMutableArray *zeros = [NSMutableArray arrayWithCapacity:numR];
+        for (uint32_t i = 0; i < numR; i++) [zeros addObject:@0];
+        revcompFlags = zeros;
+    } else if (revcompFlags.count != numR) {
+        z_set_error(error, 222,
+            @"M94Z V2: revcompFlags.count %lu != num_reads %u",
+            (unsigned long)revcompFlags.count, numR);
+        return nil;
+    }
+
+    uint64_t n_padded64 = numQ + (uint64_t)pad_count;
+    if (n_padded64 & 3) {
+        z_set_error(error, 223,
+            @"M94Z V2: n_padded %llu not a multiple of 4 (numQ=%llu, pad=%d)",
+            (unsigned long long)n_padded64, (unsigned long long)numQ, pad_count);
+        return nil;
+    }
+    int32_t n_padded = (int32_t)n_padded64;
+
+    // Body parse: starts at header_end, must hold at least 32 bytes
+    // (4×state + 4×lane_size).
+    NSUInteger body_off = header_end;
+    NSUInteger body_len = data.length - body_off;
+    if (body_len < 32) {
+        z_set_error(error, 224, @"M94Z V2: body shorter than native header (%lu)",
+                    (unsigned long)body_len);
+        return nil;
+    }
+    uint32_t state[4];
+    uint32_t lane_bytes[4];
+    for (int k = 0; k < 4; k++) state[k] = le_read_u32(p + body_off + k * 4);
+    for (int k = 0; k < 4; k++) lane_bytes[k] = le_read_u32(p + body_off + 16 + k * 4);
+    uint64_t total_data = (uint64_t)lane_bytes[0] + lane_bytes[1]
+                          + lane_bytes[2] + lane_bytes[3];
+    if ((uint64_t)body_len < 32u + total_data) {
+        z_set_error(error, 225,
+            @"M94Z V2: body truncated (have %lu, need %llu)",
+            (unsigned long)body_len, (unsigned long long)(32u + total_data));
+        return nil;
+    }
+    const uint8_t *lane_base[4];
+    {
+        NSUInteger off = body_off + 32;
+        for (int k = 0; k < 4; k++) {
+            lane_base[k] = p + off;
+            off += lane_bytes[k];
+        }
+    }
+    uint32_t lane_pos[4] = { 0, 0, 0, 0 };
+
+    // Recover sparse freq tables.
+    size_t n_active = 0;
+    uint32_t *active_ctxs = NULL;
+    uint16_t **freq_tables = NULL;
+    NSError *ftErr = nil;
+    if (z_deserialize_freq_tables(ftBlobData, &n_active, &active_ctxs,
+                                    &freq_tables, &ftErr) != 0) {
+        if (error) *error = ftErr;
+        return nil;
+    }
+
+#if TTIO_HAS_NATIVE_RANS
+    // ── Optional native streaming dispatch (Task 26c) ─────────────
+    // Gated on TTIO_M94Z_USE_NATIVE_STREAMING env var; default off.
+    // The pure-ObjC fallback below is more defensive (validates
+    // post-decode invariants the C library skips).
+    {
+        const char *streamEnv = getenv("TTIO_M94Z_USE_NATIVE_STREAMING");
+        BOOL streamOn = NO;
+        if (streamEnv && *streamEnv) {
+            if (strcasecmp(streamEnv, "1") == 0
+                || strcasecmp(streamEnv, "true") == 0
+                || strcasecmp(streamEnv, "yes") == 0
+                || strcasecmp(streamEnv, "on") == 0) {
+                streamOn = YES;
+            }
+        }
+        if (streamOn) {
+            NSDictionary *streamResult = z_decode_v2_via_native_streaming(
+                p + body_off + 0, body_len,
+                (int32_t)numQ, n_padded,
+                readLengths, revcompFlags,
+                qbits, pbits, sloc,
+                n_active, active_ctxs, freq_tables);
+            if (streamResult) {
+                free(active_ctxs);
+                for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
+                free(freq_tables);
+                return streamResult;
+            }
+            // Fall through to pure-ObjC decoder on streaming failure.
+        }
+    }
+#endif
+
+    // Build per-ctx lookup arrays (freq + cum) indexed by sparse ctx id.
+    int32_t n_contexts = 1 << sloc;
+    uint16_t **freq_by_ctx = (uint16_t **)calloc(n_contexts, sizeof(uint16_t *));
+    uint32_t **cum_by_ctx  = (uint32_t **)calloc(n_contexts, sizeof(uint32_t *));
+    if (!freq_by_ctx || !cum_by_ctx) {
+        free(freq_by_ctx); free(cum_by_ctx);
+        free(active_ctxs);
+        for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
+        free(freq_tables);
+        z_set_error(error, 226, @"M94Z V2 decoder: per-ctx alloc failed");
+        return nil;
+    }
+    uint32_t *cum_storage = (uint32_t *)calloc(n_active * 257, sizeof(uint32_t));
+    if (!cum_storage) {
+        free(freq_by_ctx); free(cum_by_ctx);
+        free(active_ctxs);
+        for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
+        free(freq_tables);
+        z_set_error(error, 227, @"M94Z V2 decoder: cum_storage alloc failed");
+        return nil;
+    }
+    for (size_t i = 0; i < n_active; i++) {
+        uint32_t c = active_ctxs[i];
+        if (c >= (uint32_t)n_contexts) {
+            free(cum_storage);
+            free(freq_by_ctx); free(cum_by_ctx);
+            free(active_ctxs);
+            for (size_t j = 0; j < n_active; j++) free(freq_tables[j]);
+            free(freq_tables);
+            z_set_error(error, 228, @"M94Z V2 decoder: ctx %u out of range",
+                        (unsigned)c);
+            return nil;
+        }
+        freq_by_ctx[c] = freq_tables[i];
+        uint32_t *cum = cum_storage + i * 257;
+        cum[0] = 0;
+        for (int k = 0; k < 256; k++) cum[k + 1] = cum[k] + (uint32_t)freq_tables[i][k];
+        cum_by_ctx[c] = cum;
+    }
+
+    NSMutableData *outQ = [NSMutableData dataWithLength:(NSUInteger)numQ];
+    uint8_t *outBuf = (uint8_t *)outQ.mutableBytes;
+
+    uint32_t pad_ctx = z_context(0, 0, 0, qbits, pbits, sloc);
+    int32_t shift = qbits / 3;
+    if (shift < 1) shift = 1;
+    uint32_t qmask_local = ((uint32_t)1 << qbits) - 1;
+    uint32_t shift_mask = ((uint32_t)1 << shift) - 1;
+
+    int32_t read_idx = 0;
+    int32_t pos_in_read = 0;
+    int32_t cur_read_len = (numR > 0)
+                           ? (int32_t)[readLengths[0] unsignedLongLongValue]
+                           : 0;
+    uint32_t cur_revcomp = (numR > 0)
+                           ? (uint32_t)([revcompFlags[0] unsignedIntegerValue] & 1u)
+                           : 0;
+    int32_t cumulative_read_end = cur_read_len;
+    uint32_t prev_q = 0;
+
+    int rc = -1;
+
+    for (int32_t i = 0; i < n_padded; i++) {
+        int s_idx = i & 3;
+        uint32_t ctx;
+        if (i < (int32_t)numQ) {
+            if (i >= cumulative_read_end && read_idx < (int32_t)numR - 1) {
+                read_idx++;
+                pos_in_read = 0;
+                cur_read_len = (int32_t)[readLengths[read_idx] unsignedLongLongValue];
+                cur_revcomp = (uint32_t)(
+                    [revcompFlags[read_idx] unsignedIntegerValue] & 1u);
+                cumulative_read_end += cur_read_len;
+                prev_q = 0;
+            }
+            uint32_t pb = z_pos_bucket(pos_in_read, cur_read_len, pbits);
+            ctx = z_context(prev_q, pb, cur_revcomp & 1, qbits, pbits, sloc);
+        } else {
+            ctx = pad_ctx;
+        }
+
+        const uint16_t *freq = freq_by_ctx[ctx];
+        const uint32_t *cum  = cum_by_ctx[ctx];
+        if (!freq) {
+            z_set_error(error, 229,
+                @"M94Z V2 decoder: ctx %u not in freq_tables", (unsigned)ctx);
+            goto v2_cleanup;
+        }
+
+        uint32_t x = state[s_idx];
+        uint32_t slot = x & (uint32_t)kZ_T_MASK;
+
+        // bisect_right(cum, slot) - 1: linear scan from top is fine
+        // for small symbol set; matches V1 decoder pattern.
+        int sym = 255;
+        while (sym > 0 && cum[sym] > slot) sym--;
+        uint32_t f = (uint32_t)freq[sym];
+        uint32_t c = cum[sym];
+        x = f * (x >> kZ_T_BITS) + slot - c;
+        // Renormalise.
+        while (x < (uint32_t)kZ_L) {
+            uint32_t lp = lane_pos[s_idx];
+            if (lp + 2 > lane_bytes[s_idx]) {
+                z_set_error(error, 230,
+                    @"M94Z V2: lane %d exhausted at i=%d (pos=%u, len=%u)",
+                    s_idx, i, (unsigned)lp, (unsigned)lane_bytes[s_idx]);
+                goto v2_cleanup;
+            }
+            uint32_t chunk = (uint32_t)lane_base[s_idx][lp]
+                             | ((uint32_t)lane_base[s_idx][lp + 1] << 8);
+            lane_pos[s_idx] = lp + 2;
+            x = (x << kZ_B_BITS) | chunk;
+        }
+        state[s_idx] = x;
+
+        if (i < (int32_t)numQ) {
+            outBuf[i] = (uint8_t)sym;
+            prev_q = ((prev_q << shift) | ((uint32_t)sym & shift_mask))
+                       & qmask_local;
+            pos_in_read++;
+        }
+        // Else: padding — symbol decoded but not stored.
+    }
+
+    // Sanity: post-decode states must equal L (encoder's initial state).
+    for (int k = 0; k < 4; k++) {
+        if (state[k] != (uint32_t)kZ_L) {
+            z_set_error(error, 231,
+                @"M94Z V2: post-decode state[%d]=%u != L=%u; stream is corrupt",
+                k, (unsigned)state[k], (unsigned)kZ_L);
+            goto v2_cleanup;
+        }
+        if (lane_pos[k] != lane_bytes[k]) {
+            z_set_error(error, 232,
+                @"M94Z V2: lane %d consumed %u of %u bytes; stream may be malformed",
+                k, (unsigned)lane_pos[k], (unsigned)lane_bytes[k]);
+            goto v2_cleanup;
+        }
+    }
+    rc = 0;
+
+v2_cleanup:
+    free(cum_storage);
+    free(freq_by_ctx); free(cum_by_ctx);
+    free(active_ctxs);
+    for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
+    free(freq_tables);
+    if (rc != 0) return nil;
+
+    return @{
+        @"qualities": outQ,
+        @"readLengths": readLengths,
+    };
+}
+
 // ── Top-level encode / decode ────────────────────────────────────
 
 @implementation TTIOFqzcompNx16Z
@@ -905,6 +1681,19 @@ cleanup:
 + (nullable NSData *)encodeWithQualities:(NSData *)qualities
                               readLengths:(NSArray<NSNumber *> *)readLengths
                              revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                    error:(NSError * _Nullable *)error
+{
+    return [self encodeWithQualities:qualities
+                          readLengths:readLengths
+                         revcompFlags:revcompFlags
+                              options:nil
+                                error:error];
+}
+
++ (nullable NSData *)encodeWithQualities:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                  options:(nullable NSDictionary<NSString *, id> *)options
                                     error:(NSError * _Nullable *)error
 {
     if (qualities == nil) {
@@ -944,6 +1733,46 @@ cleanup:
     int32_t pbits = kZ_DEFAULT_PBITS;
     int32_t dbits = kZ_DEFAULT_DBITS;
     int32_t sloc  = kZ_DEFAULT_SLOC;
+
+    // ── V2 native dispatch decision ────────────────────────────────
+    BOOL preferNative = NO;
+    BOOL preferNativeSet = NO;
+    if (options != nil) {
+        id v = options[@"preferNative"];
+        if ([v isKindOfClass:[NSNumber class]]) {
+            preferNative = [(NSNumber *)v boolValue];
+            preferNativeSet = YES;
+        }
+    }
+    if (!preferNativeSet) {
+        const char *envc = getenv("TTIO_M94Z_USE_NATIVE");
+        if (envc && envc[0]) {
+            // Lower-case compare against "1", "true", "yes", "on".
+            // Use NSString for trimming + case-insensitive compare.
+            NSString *envStr = [[NSString stringWithUTF8String:envc]
+                stringByTrimmingCharactersInSet:
+                  [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            NSString *lower = [envStr lowercaseString];
+            if ([lower isEqualToString:@"1"] || [lower isEqualToString:@"true"]
+                || [lower isEqualToString:@"yes"] || [lower isEqualToString:@"on"]) {
+                preferNative = YES;
+            }
+        }
+    }
+#if TTIO_HAS_NATIVE_RANS
+    if (preferNative) {
+        NSData *v2 = z_encode_v2_native(
+            (const uint8_t *)qualities.bytes, (int32_t)qualities.length,
+            readLengths,
+            rls, (int32_t)nReads, rcs,
+            qbits, pbits, dbits, sloc,
+            error);
+        free(rls); free(rcs);
+        return v2;  // nil on failure (error set by helper)
+    }
+#else
+    (void)preferNative;
+#endif
 
     uint8_t **streams = NULL;
     uint32_t stream_lens[4] = { 0, 0, 0, 0 };
@@ -1065,7 +1894,8 @@ cleanup:
         z_set_error(error, 200, @"data must not be nil");
         return nil;
     }
-    if (data.length < kZ_HEADER_FIXED_PREFIX + kZ_STATE_INIT_SIZE + kZ_TRAILER_SIZE) {
+    // Need enough bytes to read magic + version byte before dispatching.
+    if (data.length < 5) {
         z_set_error(error, 201, @"M94Z: encoded too short (%lu bytes)",
                     (unsigned long)data.length);
         return nil;
@@ -1078,8 +1908,18 @@ cleanup:
         return nil;
     }
     uint8_t version = p[4];
+    // ── V2 dispatch (Task 23, option E: pure-ObjC decoder) ──
+    if (version == kZ_VERSION_V2_NATIVE) {
+        return z_decode_v2(data, revcompFlags, error);
+    }
     if (version != kZ_VERSION) {
         z_set_error(error, 203, @"M94Z: unsupported version 0x%02x", version);
+        return nil;
+    }
+    // V1: re-validate full minimum length.
+    if (data.length < kZ_HEADER_FIXED_PREFIX + kZ_STATE_INIT_SIZE + kZ_TRAILER_SIZE) {
+        z_set_error(error, 201, @"M94Z: encoded too short (%lu bytes)",
+                    (unsigned long)data.length);
         return nil;
     }
     uint8_t flags = p[5];
@@ -1222,6 +2062,24 @@ cleanup:
         @"qualities": outQ,
         @"readLengths": readLengths,
     };
+}
+
+// ── Backend introspection (Task 17, Phase B) ─────────────────────────
+// Mirrors Python's get_backend_name() and Java's FqzcompNx16Z.getBackendName().
+// The native library is currently exposed for direct use only; the V1
+// encode/decode dispatch above is unchanged.
+
++ (NSString *)backendName
+{
+#if TTIO_HAS_NATIVE_RANS
+    const char *kernel = ttio_rans_kernel_name();
+    if (kernel == NULL || kernel[0] == '\0') {
+        return @"native-unknown";
+    }
+    return [NSString stringWithFormat:@"native-%s", kernel];
+#else
+    return @"pure-objc";
+#endif
 }
 
 @end

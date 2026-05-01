@@ -188,8 +188,7 @@ public final class Rans {
      * </ol>
      *
      * <p>The cnt array is not modified. Allocates a fresh 256-element
-     * result array per call. Hot callers (e.g. FQZCOMP_NX16, which calls
-     * once per symbol) should prefer
+     * result array per call. Hot callers should prefer
      * {@link #normaliseFreqsInto(int[], int[], int[])} with reusable
      * scratch buffers.
      */
@@ -210,7 +209,7 @@ public final class Rans {
      * may reuse the same buffer across invocations without manual reset.
      *
      * <p>Byte-exact equivalent of the allocating overload — callable from
-     * any codec (RANS_ORDER0/1, FQZCOMP_NX16, NameTokenizer, etc.).
+     * any codec (RANS_ORDER0/1, FQZCOMP_NX16_Z, NameTokenizer, etc.).
      */
     static void normaliseFreqsInto(int[] cnt, int[] freqOut, int[] orderScratch) {
         if (cnt.length != 256) {

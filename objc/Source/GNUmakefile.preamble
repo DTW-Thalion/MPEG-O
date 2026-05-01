@@ -3,3 +3,26 @@
 include ../GNUmakefile.preamble
 
 ADDITIONAL_CPPFLAGS += -I.
+
+# ---------------------------------------------------------------------------
+# Optional native rANS fast path (Task 17, Phase B)
+# ---------------------------------------------------------------------------
+# When libttio_rans.so has been built (native/_build/libttio_rans.so) wire
+# its header search path and link flag in. The codec sources guard their
+# inclusion with __has_include("ttio_rans.h") so the build still works when
+# the native library is absent — TTIOFqzcompNx16Z then reports
+# backendName == "pure-objc". When present, backendName is "native-<kernel>".
+#
+# We do NOT wire the native library into the V1 encode/decode dispatch:
+# the C library produces a different multi-block container format than
+# the existing pure-ObjC M94.Z wire format, so swapping it in would break
+# byte-exact wire compatibility. Full integration awaits V2 container
+# support (TODO in TTIOFqzcompNx16Z.m).
+TTIO_RANS_NATIVE_LIB := ../../native/_build/libttio_rans.so
+TTIO_RANS_NATIVE_HDR := ../../native/include/ttio_rans.h
+ifeq ($(shell test -f $(TTIO_RANS_NATIVE_LIB) && test -f $(TTIO_RANS_NATIVE_HDR) && echo yes),yes)
+  ADDITIONAL_CPPFLAGS  += -I../../native/include
+  ADDITIONAL_OBJCFLAGS += -I../../native/include
+  ADDITIONAL_LDFLAGS   += -L../../native/_build -lttio_rans
+  ADDITIONAL_LDFLAGS   += -Wl,-rpath,$(abspath ../../native/_build)
+endif

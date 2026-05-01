@@ -104,12 +104,9 @@ public final class Enums {
          *  chromosome alongside the raw byte stream. Pipeline plumbing
          *  lives in {@link global.thalion.ttio.SpectralDataset}. */
         REF_DIFF,
-        /** FQZCOMP_NX16 — lossless quality codec (M94 v1.2). Carries
-         *  per-read length and revcomp metadata inside its own wire
-         *  format; the M86 pipeline derives revcomp from
-         *  {@code run.flags & 16} (SAM REVERSE bit). Pipeline plumbing
-         *  lives in {@link global.thalion.ttio.SpectralDataset}. */
-        FQZCOMP_NX16,
+        /** @deprecated Codec id 10 removed — no legacy .tio files exist. */
+        @Deprecated
+        _RESERVED_10,
         /** Delta + zigzag + varint + rANS order-0 for sorted integer channels
          *  (M95 v1.2, codec id 11). */
         DELTA_RANS_ORDER0,

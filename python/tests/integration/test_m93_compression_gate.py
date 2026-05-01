@@ -1,8 +1,9 @@
 """M93 compression-gate integration test.
 
-Once M94 (FQZCOMP_NX16) and M95 (DELTA_RANS_ORDER0 + structural) land,
-this test becomes the v1.2.0 acceptance gate: TTI-O lossless within
-1.15× of CRAM 3.1 on the chr22 mapped-only fixture.
+With M94.Z (FQZCOMP_NX16_Z, CRAM-mimic) and M95 (DELTA_RANS_ORDER0 +
+structural) shipped, this test serves as the v1.2.0 acceptance gate:
+TTI-O lossless within 1.15× of CRAM 3.1 on the chr22 mapped-only
+fixture.
 
 For M93 alone, the gate is relaxed to **≤2.5×** CRAM 3.1 — the M93
 contribution closes ~10–15% of the gap on this dataset (45 MB BASE_PACK
@@ -33,7 +34,7 @@ M93_RATIO_CEILING = 2.5
 
 # v1.2.0 final acceptance gate — only enforce when M94 + M95 marker files exist.
 V1_2_0_RATIO_CEILING = 1.15
-V1_2_0_MARKER = REPO_ROOT / "python" / "src" / "ttio" / "codecs" / "fqzcomp_nx16.py"
+V1_2_0_MARKER = REPO_ROOT / "python" / "src" / "ttio" / "codecs" / "fqzcomp_nx16_z.py"
 
 
 pytestmark = pytest.mark.skipif(
@@ -94,3 +95,77 @@ def test_m93_compression_within_ratio(tmp_path):
         f"changed the codec stack and the ratio went UP, investigate before "
         f"committing."
     )
+
+
+# ---------------------------------------------------------------------------
+# Task 27: V2 wire format smoke test
+# ---------------------------------------------------------------------------
+
+def _native_lib_available() -> bool:
+    """Return True if libttio_rans.so is loadable (TTIO_RANS_LIB_PATH set)."""
+    import os as _os
+    lib_path = _os.environ.get("TTIO_RANS_LIB_PATH", "")
+    if not lib_path:
+        return False
+    from pathlib import Path as _Path
+    return _Path(lib_path).is_file()
+
+
+@pytest.mark.skipif(
+    not _native_lib_available(),
+    reason="TTIO_RANS_LIB_PATH not set or file not found — V2 native lib required",
+)
+def test_ttio_compress_v2_wire_format(tmp_path):
+    """ttio_compress with TTIO_M94Z_USE_NATIVE=1 writes V2 qualities stream.
+
+    Verifies Task 27: the FQZCOMP_NX16_Z channel carries magic=M94Z and
+    version byte=2 when the env var is set.
+    """
+    import h5py
+    from tools.benchmarks.formats import ttio_compress
+
+    out = tmp_path / "v2_smoke.tio"
+    with _SetEnv("TTIO_M94Z_USE_NATIVE", "1"):
+        result = ttio_compress(CHR22_BAM, CHR22_REF, out)
+
+    assert result.output_size_bytes > 0
+    assert out.stat().st_size == result.output_size_bytes
+
+    # Parse the HDF5 and verify the qualities channel is V2.
+    with h5py.File(out, "r") as f:
+        qual_ds = f["study/genomic_runs/run_0001/signal_channels/qualities"]
+        assert qual_ds.attrs.get("compression") == 12, (
+            "codec id must be FQZCOMP_NX16_Z (12)"
+        )
+        raw = qual_ds[:]
+        assert bytes(raw[:4]) == b"M94Z", (
+            f"expected M94Z magic, got {bytes(raw[:4])!r}"
+        )
+        assert raw[4] == 2, f"expected version byte 2 (V2), got {raw[4]}"
+
+    print(
+        f"\n[Task 27 smoke] V2 qualities stream confirmed: "
+        f"magic=M94Z, version=2; file size {result.output_size_bytes:,} bytes"
+    )
+
+
+class _SetEnv:
+    """Context manager: temporarily override an environment variable."""
+
+    def __init__(self, key: str, value: str) -> None:
+        self._key = key
+        self._value = value
+        self._old: str | None = None
+
+    def __enter__(self) -> "_SetEnv":
+        import os
+        self._old = os.environ.get(self._key)
+        os.environ[self._key] = self._value
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        import os
+        if self._old is None:
+            os.environ.pop(self._key, None)
+        else:
+            os.environ[self._key] = self._old

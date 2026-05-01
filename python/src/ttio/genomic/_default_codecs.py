@@ -4,8 +4,8 @@ When a :class:`~ttio.WrittenGenomicRun` is written with ``signal_compression="gz
 (the default) AND ``signal_codec_overrides`` is empty for a given channel,
 the writer applies the codec from this table.
 
-M93 registers ``sequences → REF_DIFF``; M94 adds ``qualities →
-FQZCOMP_NX16``. M95 adds the integer channels.
+M93 registers ``sequences → REF_DIFF``; M94.Z adds ``qualities →
+FQZCOMP_NX16_Z``. M95 adds the integer channels.
 
 Cross-language: ObjC ``TTIODefaultCodecsV15``; Java
 ``codecs.DefaultCodecsV15``.
@@ -20,7 +20,7 @@ from ttio.enums import Compression
 # the existing ``signal_compression`` string path (zlib/none).
 DEFAULT_CODECS_V1_5: dict[str, Compression] = {
     "sequences": Compression.REF_DIFF,
-    "qualities": Compression.FQZCOMP_NX16,
+    "qualities": Compression.FQZCOMP_NX16_Z,
     "positions": Compression.DELTA_RANS_ORDER0,
     "flags": Compression.RANS_ORDER0,
     "mapping_qualities": Compression.RANS_ORDER0,

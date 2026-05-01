@@ -28,7 +28,7 @@
 #import "Codecs/TTIOQuality.h"                 // M86 Phase D
 #import "Codecs/TTIONameTokenizer.h"            // M86 Phase E
 #import "Codecs/TTIORefDiff.h"                 // M93 v1.2
-#import "Codecs/TTIOFqzcompNx16.h"              // M94 v1.2
+#import "Codecs/TTIOFqzcompNx16Z.h"             // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"                // M95 v1.2
 #import <hdf5.h>
 #include <openssl/md5.h>                          // M93 v1.2 ref MD5
@@ -148,7 +148,6 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @(TTIOCompressionRansOrder1),
             @(TTIOCompressionBasePack),
             @(TTIOCompressionQualityBinned),
-            @(TTIOCompressionFqzcompNx16),   // M94 v1.2: lossless quality codec
             @(TTIOCompressionFqzcompNx16Z),  // M94.Z v1.2
         ]];
         NSSet *nameAllowed = [NSSet setWithArray:@[
@@ -1568,7 +1567,7 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
 // ── M93 v1.2: REF_DIFF reference-embed + write helpers ─────────────
 
 /** Returns YES when at least one genomic run uses a v1.5 codec on any
- *  channel (REF_DIFF on sequences, FQZCOMP_NX16 on qualities). Used to
+ *  channel (REF_DIFF on sequences, FQZCOMP_NX16_Z on qualities). Used to
  *  gate the format-version bump from 1.4 → 1.5 and the qualities auto-
  *  default's v1.5-candidacy check.
  *
@@ -1582,7 +1581,6 @@ static BOOL _TTIO_M94_AnyV15Codec(NSDictionary *genomicRuns)
             TTIOCompression codec =
                 (TTIOCompression)[codecBox unsignedIntegerValue];
             if (codec == TTIOCompressionRefDiff) return YES;
-            if (codec == TTIOCompressionFqzcompNx16) return YES;
             if (codec == TTIOCompressionFqzcompNx16Z) return YES;
             if (codec == TTIOCompressionDeltaRansOrder0) return YES;
         }
@@ -1606,7 +1604,6 @@ static BOOL _TTIO_M94_RunIsV15Candidate(TTIOWrittenGenomicRun *run)
         TTIOCompression codec =
             (TTIOCompression)[codecBox unsignedIntegerValue];
         if (codec == TTIOCompressionRefDiff) return YES;
-        if (codec == TTIOCompressionFqzcompNx16) return YES;
         if (codec == TTIOCompressionFqzcompNx16Z) return YES;
         if (codec == TTIOCompressionDeltaRansOrder0) return YES;
     }
@@ -1849,7 +1846,7 @@ static NSNumber *_TTIO_M93_DefaultSequencesCodec(TTIOWrittenGenomicRun *run)
 /** v1.5 default codec for qualities (M94 Q5a=B): when caller supplied
  *  no override on qualities, signal_compression is the gzip default,
  *  AND the run is a v1.5 candidate (per _TTIO_M94_RunIsV15Candidate),
- *  return FQZCOMP_NX16. The v1.5-candidacy gate preserves byte-parity
+ *  return FQZCOMP_NX16_Z. The v1.5-candidacy gate preserves byte-parity
  *  with M82-only writes that don't use any v1.5 codec — those keep the
  *  legacy uncompressed-qualities path. */
 static NSNumber *_TTIO_M94_DefaultQualitiesCodec(TTIOWrittenGenomicRun *run)
@@ -1857,7 +1854,7 @@ static NSNumber *_TTIO_M94_DefaultQualitiesCodec(TTIOWrittenGenomicRun *run)
     if (run.signalCodecOverrides[@"qualities"] != nil) return nil;
     if (run.signalCompression != TTIOCompressionZlib) return nil;
     if (!_TTIO_M94_RunIsV15Candidate(run)) return nil;
-    return @(TTIOCompressionFqzcompNx16);
+    return @(TTIOCompressionFqzcompNx16Z);
 }
 
 /** M95 auto-default codec for integer channels. Returns the v1.5
@@ -1888,14 +1885,14 @@ static NSNumber *_TTIO_M95_ResolveIntOverride(TTIOWrittenGenomicRun *run,
     return defaults[channel];
 }
 
-/** Write the qualities channel through FQZCOMP_NX16. Derives
+/** Write the qualities channel through FQZCOMP_NX16_Z. Derives
  *  read_lengths from run.lengthsData (uint32 LE) and revcomp_flags
  *  from run.flagsData[i] & 16 (SAM REVERSE bit). Stamps the
- *  @compression attribute with codec id 10. Mirrors Python's
- *  ``_write_qualities_fqzcomp_nx16``. */
-static BOOL _TTIO_M94_WriteQualitiesFqzcompNx16(TTIOHDF5Group *sc,
-                                                  TTIOWrittenGenomicRun *run,
-                                                  NSError **error)
+ *  @compression attribute with codec id 12. Mirrors Python's
+ *  ``_write_qualities_fqzcomp_nx16z``. */
+static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16Z(TTIOHDF5Group *sc,
+                                                    TTIOWrittenGenomicRun *run,
+                                                    NSError **error)
 {
     NSUInteger n = run.lengthsData.length / sizeof(uint32_t);
     const uint32_t *lens = (const uint32_t *)run.lengthsData.bytes;
@@ -1908,10 +1905,10 @@ static BOOL _TTIO_M94_WriteQualitiesFqzcompNx16(TTIOHDF5Group *sc,
                        ? flgs[i] : 0;
         [revcompFlags addObject:(f & 16u) ? @1 : @0];
     }
-    NSData *encoded = [TTIOFqzcompNx16 encodeWithQualities:run.qualitiesData
-                                                readLengths:readLengths
-                                               revcompFlags:revcompFlags
-                                                      error:error];
+    NSData *encoded = [TTIOFqzcompNx16Z encodeWithQualities:run.qualitiesData
+                                                 readLengths:readLengths
+                                                revcompFlags:revcompFlags
+                                                       error:error];
     if (!encoded) return NO;
     TTIOHDF5Dataset *ds = [sc createDatasetNamed:@"qualities"
                                         precision:TTIOPrecisionUInt8
@@ -1923,7 +1920,7 @@ static BOOL _TTIO_M94_WriteQualitiesFqzcompNx16(TTIOHDF5Group *sc,
     if (!ds) return NO;
     if (![ds writeData:encoded error:error]) return NO;
     return _TTIO_M86_WriteUInt8Attribute([ds datasetId], "compression",
-                                         (uint8_t)TTIOCompressionFqzcompNx16,
+                                         (uint8_t)TTIOCompressionFqzcompNx16Z,
                                          error);
 }
 
@@ -2348,8 +2345,8 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                                         seqOverride,
                                         error)) return NO;
     }
-    // qualities (uint8) — codec-aware. M94 v1.2: when the override
-    // (or v1.5 auto-default) selects FQZCOMP_NX16, dispatch to the
+    // qualities (uint8) — codec-aware. M94.Z v1.2: when the override
+    // (or v1.5 auto-default) selects FQZCOMP_NX16_Z, dispatch to the
     // context-aware encoder; otherwise fall through to the M86 byte-
     // channel writer.
     NSNumber *qualOverride = run.signalCodecOverrides[@"qualities"];
@@ -2358,8 +2355,8 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     }
     if (qualOverride != nil &&
         (TTIOCompression)[qualOverride unsignedIntegerValue]
-            == TTIOCompressionFqzcompNx16) {
-        if (!_TTIO_M94_WriteQualitiesFqzcompNx16(sc, run, error)) return NO;
+            == TTIOCompressionFqzcompNx16Z) {
+        if (!_TTIO_M94Z_WriteQualitiesFqzcompNx16Z(sc, run, error)) return NO;
     } else {
         if (!_TTIO_M86_WriteByteChannel(sc, @"qualities", run.qualitiesData,
                                         codec,
@@ -2649,8 +2646,8 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         }
         formatVersion = kTTIOFormatVersionM82;
     }
-    // M93/M94 v1.2: bump to 1.5 when at least one run uses ANY v1.5
-    // codec (REF_DIFF on sequences or FQZCOMP_NX16 on qualities), either
+    // M93/M94.Z v1.2: bump to 1.5 when at least one run uses ANY v1.5
+    // codec (REF_DIFF on sequences or FQZCOMP_NX16_Z on qualities), either
     // explicitly OR via the auto-default. We also check the auto-default
     // helpers so the version stamp reflects the codec actually written.
     BOOL anyV15 = _TTIO_M94_AnyV15Codec(genomicRuns);
@@ -2664,7 +2661,7 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
             }
             NSNumber *qBox = _TTIO_M94_DefaultQualitiesCodec(r);
             if (qBox != nil && (TTIOCompression)[qBox unsignedIntegerValue]
-                                 == TTIOCompressionFqzcompNx16) {
+                                 == TTIOCompressionFqzcompNx16Z) {
                 anyV15 = YES;
                 break;
             }

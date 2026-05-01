@@ -9,3 +9,16 @@ ADDITIONAL_LDFLAGS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 # Compile the test driver in MRC mode; libTTIO itself remains under ARC.
 ADDITIONAL_OBJCFLAGS  += -fno-objc-arc
 ADDITIONAL_OBJCCFLAGS += -fno-objc-arc
+
+# Optional native rANS fast path (Task 17, Phase B). Mirrors the conditional
+# in ../Source/GNUmakefile.preamble: when libttio_rans.so is built, link the
+# test binary against it and bake an rpath so the test harness can resolve
+# it at runtime without the user having to set LD_LIBRARY_PATH.
+TTIO_RANS_NATIVE_LIB := ../../native/_build/libttio_rans.so
+TTIO_RANS_NATIVE_HDR := ../../native/include/ttio_rans.h
+ifeq ($(shell test -f $(TTIO_RANS_NATIVE_LIB) && test -f $(TTIO_RANS_NATIVE_HDR) && echo yes),yes)
+  ADDITIONAL_CPPFLAGS  += -I../../native/include
+  ADDITIONAL_OBJCFLAGS += -I../../native/include
+  ADDITIONAL_LDFLAGS   += -L../../native/_build -lttio_rans
+  ADDITIONAL_LDFLAGS   += -Wl,-rpath,$(abspath ../../native/_build)
+endif

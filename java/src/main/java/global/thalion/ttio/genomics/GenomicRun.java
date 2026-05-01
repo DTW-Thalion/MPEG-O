@@ -377,20 +377,19 @@ public class GenomicRun
             // flat uint8 byte stream the same length as sum(lengths).
             decoded = decodeRefDiffSequences(all);
         } else if (codecId == global.thalion.ttio.Enums.Compression
-                .FQZCOMP_NX16.ordinal()) {
-            // M94 v1.2: FQZCOMP_NX16 is a v1.5 quality codec. The
-            // wire format carries read_lengths in the header sidecar;
-            // revcomp_flags must be reconstructed from the M86 flags
-            // channel (run.flags()[i] & 16, the SAM REVERSE bit).
+                .FQZCOMP_NX16_Z.ordinal()) {
+            // M94.Z v1.2: CRAM-mimic rANS-Nx16 quality codec.
+            // Wire format carries read_lengths in the header sidecar;
+            // revcomp_flags reconstructed from run.flags & 16 (SAM REVERSE).
             int n = index.count();
             int[] revcompFlags = new int[n];
             for (int i = 0; i < n; i++) {
                 int f = index.flagsAt(i);
                 revcompFlags[i] = ((f & 16) != 0) ? 1 : 0;
             }
-            global.thalion.ttio.codecs.FqzcompNx16.DecodeResult dr =
-                global.thalion.ttio.codecs.FqzcompNx16
-                    .decodeWithMetadata(all, revcompFlags);
+            global.thalion.ttio.codecs.FqzcompNx16Z.DecodeResult dr =
+                global.thalion.ttio.codecs.FqzcompNx16Z
+                    .decode(all, revcompFlags);
             decoded = dr.qualities();
         } else {
             throw new IllegalStateException(
