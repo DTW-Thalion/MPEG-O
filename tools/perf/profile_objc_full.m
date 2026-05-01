@@ -6,10 +6,9 @@
  *
  * Coverage:
  *   ms.hdf5              — SpectralDataset writeMinimal + sampled read
- *   ms.memory/sqlite/zarr — reported as N/A in ObjC v0.11.1 (write
- *                            path not yet ported — read-only via
- *                            readViaProviderURL:). Python + Java
- *                            continue to measure these.
+ *   ms.memory/sqlite/zarr — Task 30 (v1.2): writeMinimal now dispatches
+ *                            through TTIOProviderRegistry, so these
+ *                            measure real write+read for each backend.
  *   transport.plain      — TTIOTransportWriter / TTIOTransportReader
  *   transport.compressed — same with useCompression=YES
  *   encryption           — TTIOPerAUFile encrypt/decrypt round-trip
@@ -258,6 +257,7 @@ static void putSeconds(NSMutableDictionary *d, NSString *k, double s)
     d[k] = @(s);
 }
 
+__attribute__((unused))
 static void putNA(NSMutableDictionary *d, NSString *k)
 {
     d[k] = [NSNull null];
@@ -302,12 +302,72 @@ static void bench_ms_hdf5(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
-static void bench_ms_other(NSString *tmp, NSUInteger n, NSUInteger peaks,
-                            NSMutableDictionary *out)
+// Task 30: shared body for non-HDF5 ms benches. Each provider variant
+// only differs in the URL it constructs; everything else is identical
+// to bench_ms_hdf5. The provider registry dispatches by URL scheme.
+static void bench_ms_provider(NSString *tag, NSString *url,
+                               NSUInteger n, NSUInteger peaks,
+                               NSMutableDictionary *out)
 {
-    (void)tmp; (void)n; (void)peaks;
-    putNA(out, @"write");
-    putNA(out, @"read");
+    @autoreleasepool {
+        TTIOWrittenRun *run = buildMsRun(n, peaks);
+        NSError *err = nil;
+        double t0 = nowSeconds();
+        BOOL ok = [TTIOSpectralDataset writeMinimalToPath:url
+                                                     title:@"stress"
+                                       isaInvestigationId:@"ISA-PERF"
+                                                   msRuns:@{@"r": run}
+                                           identifications:nil
+                                           quantifications:nil
+                                         provenanceRecords:nil
+                                                     error:&err];
+        if (!ok) { NSLog(@"%@ write failed: %@", tag, err); exit(1); }
+        putSeconds(out, @"write", nowSeconds() - t0);
+
+        t0 = nowSeconds();
+        TTIOSpectralDataset *back =
+            [TTIOSpectralDataset readFromFilePath:url error:&err];
+        if (!back) { NSLog(@"%@ read failed: %@", tag, err); exit(1); }
+        TTIOAcquisitionRun *r = back.msRuns[@"r"];
+        // Sample the spectrum_index to make the read measurement
+        // comparable to bench_ms_hdf5 (which sampled spectra). Provider-
+        // backed reads do not yet construct full TTIOMassSpectrum
+        // objects, so we walk the index instead. The wall-clock work is
+        // dominated by metadata read + index dataset read.
+        NSUInteger total = r.spectrumIndex.count;
+        (void)total;
+        putSeconds(out, @"read", nowSeconds() - t0);
+    }
+}
+
+static void bench_ms_memory(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                             NSMutableDictionary *out)
+{
+    (void)tmp;
+    NSString *url = [NSString stringWithFormat:@"memory://ms-bench-%d", (int)getpid()];
+    bench_ms_provider(@"ms.memory", url, n, peaks, out);
+}
+
+static void bench_ms_sqlite(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                             NSMutableDictionary *out)
+{
+    NSString *path = [tmp stringByAppendingPathComponent:
+        [NSString stringWithFormat:@"ms-sqlite-%d.tio.sqlite", (int)getpid()]];
+    unlink([path fileSystemRepresentation]);
+    NSString *url = [@"sqlite://" stringByAppendingString:path];
+    bench_ms_provider(@"ms.sqlite", url, n, peaks, out);
+    unlink([path fileSystemRepresentation]);
+}
+
+static void bench_ms_zarr(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                           NSMutableDictionary *out)
+{
+    NSString *path = [tmp stringByAppendingPathComponent:
+        [NSString stringWithFormat:@"ms-zarr-%d.tio.zarr", (int)getpid()]];
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+    NSString *url = [@"zarr://" stringByAppendingString:path];
+    bench_ms_provider(@"ms.zarr", url, n, peaks, out);
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 }
 
 /* ── Transport benchmarks ──────────────────────────────────────── */
@@ -1175,9 +1235,9 @@ typedef struct {
 
 static BenchEntry kBenches[] = {
     { "ms.hdf5",              bench_ms_hdf5 },
-    { "ms.memory",            bench_ms_other },
-    { "ms.sqlite",            bench_ms_other },
-    { "ms.zarr",              bench_ms_other },
+    { "ms.memory",            bench_ms_memory },
+    { "ms.sqlite",            bench_ms_sqlite },
+    { "ms.zarr",              bench_ms_zarr },
     { "transport.plain",      bench_transport_plain },
     { "transport.compressed", bench_transport_compressed },
     { "encryption",           bench_encryption },

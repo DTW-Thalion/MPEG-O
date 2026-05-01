@@ -1945,6 +1945,48 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     return [ds writeData:data error:error];
 }
 
+// Task 30: provider-agnostic 1-D index array writer. Mirrors
+// writeIndexArrayDS but speaks the StorageGroup protocol so it works
+// for memory:// / sqlite:// / zarr:// targets. Layout matches the HDF5
+// fast path (precision, length); chunkSize/compression are honoured by
+// HDF5 only and harmless on other backends per Appendix B Gap 3.
+//
+// The ``compression`` arg is the codec the caller WOULD use against an
+// HDF5 target. The ObjC Zarr provider rejects any non-None compression
+// (rather than silently ignoring it like Memory/SQLite do), so the
+// caller must downgrade to TTIOCompressionNone for that backend; see
+// task30CompressionForProvider() below.
+static BOOL writeIndexArrayStorage(id<TTIOStorageGroup> g, NSString *name,
+                                    TTIOPrecision p, NSData *data,
+                                    TTIOCompression compression,
+                                    NSError **error)
+{
+    if (!data) return YES;
+    NSUInteger n = data.length / TTIOPrecisionElementSize(p);
+    id<TTIOStorageDataset> ds = [g createDatasetNamed:name
+                                            precision:p
+                                               length:n
+                                            chunkSize:4096
+                                          compression:compression
+                                     compressionLevel:6
+                                                error:error];
+    if (!ds) return NO;
+    return [ds writeAll:data error:error];
+}
+
+// Task 30: choose a write-time compression that the provider accepts.
+// Memory/SQLite providers ignore the compression argument; HDF5 honours
+// it; Zarr (ObjC) rejects anything non-None at the dataset-create step.
+// This helper centralises the downgrade so per-call sites stay flat.
+static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
+{
+    if ([p respondsToSelector:@selector(supportsCompression)]
+        && [p supportsCompression]) {
+        return TTIOCompressionZlib;
+    }
+    return TTIOCompressionNone;
+}
+
 // M82: provider-agnostic write of one /study/genomic_runs/<name>/
 // subtree via the StorageGroup protocol. Used by the memory:// /
 // sqlite:// / zarr:// write path. The HDF5 fast path uses
@@ -2136,11 +2178,141 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
     return YES;
 }
 
+// Task 30: provider-agnostic write of one /study/ms_runs/<name>/
+// subtree via the StorageGroup protocol. Mirrors the per-MS-run section
+// of -writeMinimalToPath: (HDF5 fast path, lines 2693-2815), but using
+// only protocol-level primitives so memory:// / sqlite:// / zarr:// URLs
+// work for write as they already do for read.
+//
+// Byte-exact parity with the HDF5 fast path is unattainable for
+// non-HDF5 providers (each backend has its own physical layout), but
+// the *logical* layout (groups, datasets, attribute names, attribute
+// values, dataset precisions, dataset lengths) is identical so the
+// existing read path (TTIOAcquisitionRun readFromStorageGroup:name:)
+// reconstructs an equivalent in-memory dataset.
++ (BOOL)writeMSRunStorage:(TTIOWrittenRun *)run
+                  toGroup:(id<TTIOStorageGroup>)parent
+                     name:(NSString *)name
+              compression:(TTIOCompression)compression
+                    error:(NSError **)error
+{
+    id<TTIOStorageGroup> runGroup = [parent createGroupNamed:name error:error];
+    if (!runGroup) return NO;
+
+    NSUInteger spectrumCount = run.offsets.length / sizeof(int64_t);
+    if (![runGroup setAttributeValue:@(run.acquisitionMode)
+                              forName:@"acquisition_mode" error:error]) return NO;
+    if (![runGroup setAttributeValue:@((int64_t)spectrumCount)
+                              forName:@"spectrum_count" error:error]) return NO;
+    if (![runGroup setAttributeValue:run.spectrumClassName ?: @""
+                              forName:@"spectrum_class" error:error]) return NO;
+    if (run.nucleusType.length > 0) {
+        if (![runGroup setAttributeValue:run.nucleusType
+                                  forName:@"nucleus_type" error:error]) return NO;
+    }
+
+    // Per-run provenance: write the JSON mirror so the storage-protocol
+    // read path (which only consumes @provenance_json) finds the records.
+    // The compound-dataset emission is intentionally HDF5-only — the
+    // read-side fallback handles the missing /steps gracefully.
+    if (run.provenanceRecords.count > 0) {
+        NSMutableArray *plists =
+            [NSMutableArray arrayWithCapacity:run.provenanceRecords.count];
+        for (TTIOProvenanceRecord *r in run.provenanceRecords) {
+            [plists addObject:[r asPlist]];
+        }
+        NSError *jErr = nil;
+        NSData *json =
+            [NSJSONSerialization dataWithJSONObject:plists
+                                              options:0
+                                                error:&jErr];
+        if (!json) {
+            if (error) *error = jErr;
+            return NO;
+        }
+        NSString *jstr =
+            [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+        if (![runGroup setAttributeValue:jstr
+                                  forName:@"provenance_json" error:error]) return NO;
+    }
+
+    // Empty instrument_config skeleton for parity with HDF5 writeMinimal.
+    id<TTIOStorageGroup> cfg =
+        [runGroup createGroupNamed:@"instrument_config" error:error];
+    if (!cfg) return NO;
+    for (NSString *fieldName in @[@"manufacturer", @"model", @"serial_number",
+                                   @"source_type", @"analyzer_type",
+                                   @"detector_type"]) {
+        if (![cfg setAttributeValue:@""
+                            forName:fieldName error:error]) return NO;
+    }
+
+    // spectrum_index — same layout as TTIOSpectrumIndex -writeToGroup:.
+    id<TTIOStorageGroup> idxG = [runGroup createGroupNamed:@"spectrum_index" error:error];
+    if (!idxG) return NO;
+    if (![idxG setAttributeValue:@((int64_t)spectrumCount)
+                          forName:@"count" error:error]) return NO;
+    if (!writeIndexArrayStorage(idxG, @"offsets",
+                                 TTIOPrecisionInt64, run.offsets,
+                                 compression, error)) return NO;
+    if (!writeIndexArrayStorage(idxG, @"lengths",
+                                 TTIOPrecisionUInt32, run.lengths,
+                                 compression, error)) return NO;
+    if (!writeIndexArrayStorage(idxG, @"retention_times",
+                                 TTIOPrecisionFloat64, run.retentionTimes,
+                                 compression, error)) return NO;
+    if (!writeIndexArrayStorage(idxG, @"ms_levels",
+                                 TTIOPrecisionInt32, run.msLevels,
+                                 compression, error)) return NO;
+    if (!writeIndexArrayStorage(idxG, @"polarities",
+                                 TTIOPrecisionInt32, run.polarities,
+                                 compression, error)) return NO;
+    if (!writeIndexArrayStorage(idxG, @"precursor_mzs",
+                                 TTIOPrecisionFloat64, run.precursorMzs,
+                                 compression, error)) return NO;
+    if (!writeIndexArrayStorage(idxG, @"precursor_charges",
+                                 TTIOPrecisionInt32, run.precursorCharges,
+                                 compression, error)) return NO;
+    if (!writeIndexArrayStorage(idxG, @"base_peak_intensities",
+                                 TTIOPrecisionFloat64, run.basePeakIntensities,
+                                 compression, error)) return NO;
+
+    // signal_channels — pre-flattened NSData buffers, written straight
+    // through. channel_names attribute is the comma-joined ordered list
+    // (matches the HDF5 fast path's allKeys ordering for the parity
+    // case where channels are mz + intensity).
+    id<TTIOStorageGroup> channels =
+        [runGroup createGroupNamed:@"signal_channels" error:error];
+    if (!channels) return NO;
+    NSArray *channelNames = run.channelData.allKeys;
+    NSString *namesJoined = [channelNames componentsJoinedByString:@","];
+    if (![channels setAttributeValue:namesJoined
+                              forName:@"channel_names" error:error]) return NO;
+
+    for (NSString *chName in channelNames) {
+        NSData *buf = run.channelData[chName];
+        NSUInteger total = buf.length / sizeof(double);
+        NSString *dsName = [chName stringByAppendingString:@"_values"];
+        id<TTIOStorageDataset> ds =
+            [channels createDatasetNamed:dsName
+                               precision:TTIOPrecisionFloat64
+                                  length:total
+                               chunkSize:65536
+                             compression:compression
+                        compressionLevel:6
+                                   error:error];
+        if (!ds) return NO;
+        if (![ds writeAll:buf error:error]) return NO;
+    }
+
+    return YES;
+}
+
 // M82: provider-agnostic minimal write — supports memory:// /
-// sqlite:// / zarr:// URLs. Currently genomic-only (no MS runs);
-// MS run support via non-HDF5 providers requires the larger writer
-// refactor to use the StorageGroup protocol throughout (M64.5 read
-// side already does this; write side is HDF5-fast-path-only today).
+// sqlite:// / zarr:// URLs. Task 30 (v1.2): MS runs are now supported
+// via the StorageGroup protocol path; the HDF5 fast path in
+// -writeMinimalToPath: still handles plain filesystem paths for
+// byte-exact parity.
 + (BOOL)writeMinimalGenomicViaProviderURL:(NSString *)url
                                        title:(NSString *)title
                           isaInvestigationId:(NSString *)isaId
@@ -2148,18 +2320,6 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                                  genomicRuns:(NSDictionary *)genomicRuns
                                        error:(NSError **)error
 {
-    if (msRuns.count > 0) {
-        if (error) *error = [NSError
-            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:1000
-                   userInfo:@{NSLocalizedDescriptionKey:
-                       [NSString stringWithFormat:
-                            @"writeMinimal via provider URL '%@' does not yet "
-                            @"support MS runs (genomic_runs only). Use the "
-                            @"HDF5 fast path or wait for the writer refactor.",
-                            url]}];
-        return NO;
-    }
-
     id<TTIOStorageProvider> prov =
         [[TTIOProviderRegistry sharedRegistry] openURL:url
                                                   mode:TTIOStorageOpenModeCreate
@@ -2207,11 +2367,24 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
         if (![study setAttributeValue:isaId ?: @""
                                forName:@"isa_investigation_id" error:error]) return NO;
 
-        // Empty ms_runs/nmr_runs for parity (readers expect them).
+        // ms_runs subtree — Task 30 wires MS runs through the storage
+        // protocol so memory/sqlite/zarr URLs work for write. Compression
+        // is downgraded to None for backends that reject it (Zarr).
+        TTIOCompression cx = task30CompressionForProvider(prov);
         id<TTIOStorageGroup> msG = [study createGroupNamed:@"ms_runs" error:error];
         if (!msG) return NO;
-        if (![msG setAttributeValue:@""
+        NSArray *msNames = [[msRuns allKeys] sortedArrayUsingSelector:@selector(compare:)];
+        if (![msG setAttributeValue:[msNames componentsJoinedByString:@","]
                             forName:@"_run_names" error:error]) return NO;
+        for (NSString *runName in msNames) {
+            TTIOWrittenRun *run = msRuns[runName];
+            if (![self writeMSRunStorage:run
+                                  toGroup:msG
+                                     name:runName
+                              compression:cx
+                                    error:error]) return NO;
+        }
+        // Empty nmr_runs for parity (readers expect the group).
         id<TTIOStorageGroup> nmrG = [study createGroupNamed:@"nmr_runs" error:error];
         if (!nmrG) return NO;
         if (![nmrG setAttributeValue:@""
@@ -2590,11 +2763,13 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
           provenanceRecords:(NSArray *)provenance
                       error:(NSError **)error
 {
-    // M82.2: provider-agnostic write path for non-HDF5 URLs.
-    // Currently genomic-only (no MS runs); MS via memory needs the
-    // full writer refactor (HDF5-direct → StorageGroup protocol).
-    // The HDF5 fast path below preserves byte parity with pre-M82.2
-    // file output for ms_runs.
+    // M82.2 + Task 30: provider-agnostic write path for non-HDF5 URLs.
+    // MS runs are now wired through the StorageGroup protocol (Task 30);
+    // genomic_runs were already supported via M82.2. Identifications /
+    // quantifications / provenance still go HDF5-only — they require
+    // compound-dataset writes through TTIOCompoundIO which is HDF5-direct
+    // today (follow-up work; the JSON-mirror attribute mechanism is the
+    // workaround per-run for provenance).
     if (isNonHdf5ProviderURL(path)) {
         if (identifications.count > 0 || quantifications.count > 0 ||
             provenance.count > 0) {
@@ -2602,8 +2777,10 @@ static BOOL writeIndexArrayDS(TTIOHDF5Group *g, NSString *name,
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:1001
                        userInfo:@{NSLocalizedDescriptionKey:
                            @"writeMinimal via provider URL does not yet "
-                           @"support identifications/quantifications/provenance "
-                           @"(genomic_runs only)."}];
+                           @"support dataset-level identifications / "
+                           @"quantifications / provenance (use the HDF5 "
+                           @"fast path for those, or pass them as per-run "
+                           @"provenance which is supported)."}];
             return NO;
         }
         return [self writeMinimalGenomicViaProviderURL:path

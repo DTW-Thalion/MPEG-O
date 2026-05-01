@@ -98,6 +98,7 @@ extern void testC3bProvidersWritePaths(void);
 extern void testC2bHDF5CompoundType(void);
 extern void testC3cCanonicalBytes(void);
 extern void testPhase12RunProtocol(void);
+extern void testTask30MSProviderURL(void);
 
 int main(int argc, const char *argv[])
 {
@@ -489,6 +490,10 @@ int main(int argc, const char *argv[])
         START_SET("Phase 1+2: TTIORun protocol + mixed-dict write API")
             testPhase12RunProtocol();
         END_SET("Phase 1+2: TTIORun protocol + mixed-dict write API")
+
+        START_SET("Task 30: MS runs via memory/sqlite/zarr provider URL")
+            testTask30MSProviderURL();
+        END_SET("Task 30: MS runs via memory/sqlite/zarr provider URL")
     }
     return 0;
 }
