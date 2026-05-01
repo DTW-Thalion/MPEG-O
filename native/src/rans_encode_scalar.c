@@ -2,8 +2,8 @@
  * rans_encode_scalar.c — Scalar 4-way interleaved rANS encoder for TTI-O.
  *
  * Byte layout of the encoded output:
- *   [0..15]   4 × uint32 LE  — final rANS states for lanes 0–3
- *   [16..31]  4 × uint32 LE  — per-lane data sizes in bytes
+ *   [0..15]   4 x uint32 LE  — final rANS states for lanes 0-3
+ *   [16..31]  4 x uint32 LE  — per-lane data sizes in bytes
  *   [32..]    lane 0 data || lane 1 data || lane 2 data || lane 3 data
  *             Each lane's data is the reversed chunk list, stored as
  *             consecutive 16-bit LE values in decode-forward order.
@@ -17,6 +17,7 @@
 #include "ttio_rans.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 /* ── tiny helpers ──────────────────────────────────────────────────── */
 
@@ -48,9 +49,9 @@ int ttio_rans_encode_block(
             return TTIO_RANS_ERR_PARAM;
         memset(out, 0, 32);
         /* Final states = L, sizes = 0 */
-        for (int lane = 0; lane < 4; lane++)
+        for (int lane = 0; lane < TTIO_RANS_STREAMS; lane++)
             write_le32(out + lane * 4, TTIO_RANS_L);
-        for (int lane = 0; lane < 4; lane++)
+        for (int lane = 0; lane < TTIO_RANS_STREAMS; lane++)
             write_le32(out + 16 + lane * 4, 0);
         *out_len = 32;
         return TTIO_RANS_OK;
@@ -72,8 +73,13 @@ int ttio_rans_encode_block(
         }
     }
 
-    /* ── 2. Pad to multiple of 4 ─────────────────────────────────── */
-    size_t pad_count = (4 - (n_symbols & 3)) & 3;
+    /* ── 2. Pad to multiple of TTIO_RANS_STREAMS ─────────────────── */
+    /* Guard against n_symbols near SIZE_MAX causing n_padded to wrap */
+    if (n_symbols > (size_t)0 - 3) {
+        free(cum);
+        return TTIO_RANS_ERR_PARAM;
+    }
+    size_t pad_count = (TTIO_RANS_STREAMS - (n_symbols & (TTIO_RANS_STREAMS - 1))) & (TTIO_RANS_STREAMS - 1);
     size_t n_padded  = n_symbols + pad_count;
 
     /* Padding symbols use ctx=0, sym=0 — freq[0][0] must be non-zero */
@@ -83,29 +89,31 @@ int ttio_rans_encode_block(
     }
 
     /* ── 3. Allocate per-lane chunk buffers ───────────────────────── */
-    size_t cap_per_lane = (n_padded / 4 + 16) * 2 + 32;
-    uint16_t *lane_chunks[4] = {NULL, NULL, NULL, NULL};
-    size_t    lane_n[4]      = {0, 0, 0, 0};
-
-    for (int lane = 0; lane < 4; lane++) {
+    size_t cap_per_lane = (n_padded / TTIO_RANS_STREAMS + 16) * 2 + 32;
+    uint16_t *lane_chunks[TTIO_RANS_STREAMS];
+    size_t    lane_n[TTIO_RANS_STREAMS];
+    int lane;
+    for (lane = 0; lane < TTIO_RANS_STREAMS; lane++) {
+        lane_chunks[lane] = NULL;
+        lane_n[lane] = 0;
+    }
+    for (lane = 0; lane < TTIO_RANS_STREAMS; lane++) {
         lane_chunks[lane] = (uint16_t *)malloc(cap_per_lane * sizeof(uint16_t));
         if (!lane_chunks[lane]) {
-            for (int j = 0; j < lane; j++) free(lane_chunks[j]);
+            for (int j = 0; j < TTIO_RANS_STREAMS; j++) free(lane_chunks[j]);
             free(cum);
             return TTIO_RANS_ERR_ALLOC;
         }
     }
 
     /* ── 4. Initialise states to L ───────────────────────────────── */
-    uint32_t state[4];
-    state[0] = TTIO_RANS_L;
-    state[1] = TTIO_RANS_L;
-    state[2] = TTIO_RANS_L;
-    state[3] = TTIO_RANS_L;
+    uint32_t state[TTIO_RANS_STREAMS];
+    for (lane = 0; lane < TTIO_RANS_STREAMS; lane++)
+        state[lane] = TTIO_RANS_L;
 
     /* ── 5. Reverse encode pass ──────────────────────────────────── */
     for (size_t ii = n_padded; ii-- > 0; ) {
-        int lane = (int)(ii & 3);
+        lane = (int)(ii & (TTIO_RANS_STREAMS - 1));
         uint16_t ctx;
         uint8_t  sym;
 
@@ -116,10 +124,25 @@ int ttio_rans_encode_block(
         } else {
             ctx = contexts[ii];
             sym = symbols[ii];
+            /* Bounds check: ctx must be a valid context index */
+            if (ctx >= n_contexts) {
+                for (int l = 0; l < TTIO_RANS_STREAMS; l++) free(lane_chunks[l]);
+                free(cum);
+                return TTIO_RANS_ERR_PARAM;
+            }
         }
 
         uint32_t f = freq[ctx][sym];
         uint32_t c = cum[ctx][sym];
+
+        /* Guard against zero-frequency symbol — would cause div-by-zero
+         * and infinite loop in the renormalisation below. */
+        if (f == 0) {
+            for (int l = 0; l < TTIO_RANS_STREAMS; l++) free(lane_chunks[l]);
+            free(cum);
+            return TTIO_RANS_ERR_PARAM;
+        }
+
         uint32_t x = state[lane];
         uint32_t x_max = TTIO_RANS_X_MAX_PREFACTOR * f;
 
@@ -135,35 +158,35 @@ int ttio_rans_encode_block(
     }
 
     /* ── 6. Compute output size and pack ─────────────────────────── */
-    size_t lane_bytes[4];
+    size_t lane_bytes[TTIO_RANS_STREAMS];
     size_t total_data = 0;
-    for (int lane = 0; lane < 4; lane++) {
+    for (lane = 0; lane < TTIO_RANS_STREAMS; lane++) {
         lane_bytes[lane] = lane_n[lane] * 2;
         total_data += lane_bytes[lane];
     }
 
-    size_t header_size = 32; /* 4*4 states + 4*4 lane sizes */
+    size_t header_size = 32; /* TTIO_RANS_STREAMS*4 states + TTIO_RANS_STREAMS*4 lane sizes */
     size_t needed = header_size + total_data;
     if (*out_len < needed) {
-        for (int lane = 0; lane < 4; lane++) free(lane_chunks[lane]);
+        for (lane = 0; lane < TTIO_RANS_STREAMS; lane++) free(lane_chunks[lane]);
         free(cum);
         *out_len = needed; /* Tell caller the required size */
         return TTIO_RANS_ERR_PARAM;
     }
 
-    /* Write final states (4 × uint32 LE) */
-    for (int lane = 0; lane < 4; lane++)
+    /* Write final states (TTIO_RANS_STREAMS x uint32 LE) */
+    for (lane = 0; lane < TTIO_RANS_STREAMS; lane++)
         write_le32(out + lane * 4, state[lane]);
 
-    /* Write lane sizes (4 × uint32 LE) */
-    for (int lane = 0; lane < 4; lane++)
+    /* Write lane sizes (TTIO_RANS_STREAMS x uint32 LE) */
+    for (lane = 0; lane < TTIO_RANS_STREAMS; lane++)
         write_le32(out + 16 + lane * 4, (uint32_t)lane_bytes[lane]);
 
     /* Write lane data: chunks were appended in LIFO order during the
      * reverse pass, so we reverse them to produce decode-forward order.
      * Each chunk is a 16-bit LE value. */
     uint8_t *wp = out + header_size;
-    for (int lane = 0; lane < 4; lane++) {
+    for (lane = 0; lane < TTIO_RANS_STREAMS; lane++) {
         size_t nc = lane_n[lane];
         for (size_t k = nc; k-- > 0; ) {
             uint16_t chunk = lane_chunks[lane][k];
@@ -175,7 +198,7 @@ int ttio_rans_encode_block(
 
     *out_len = needed;
 
-    for (int lane = 0; lane < 4; lane++) free(lane_chunks[lane]);
+    for (lane = 0; lane < TTIO_RANS_STREAMS; lane++) free(lane_chunks[lane]);
     free(cum);
     return TTIO_RANS_OK;
 }

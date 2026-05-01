@@ -56,13 +56,13 @@ int ttio_rans_decode_block(
         return TTIO_RANS_ERR_CORRUPT;
 
     /* ── 1. Read header ──────────────────────────────────────────── */
-    uint32_t state[4];
-    for (int lane = 0; lane < 4; lane++)
+    uint32_t state[TTIO_RANS_STREAMS];
+    for (int lane = 0; lane < TTIO_RANS_STREAMS; lane++)
         state[lane] = read_le32(compressed + lane * 4);
 
-    uint32_t lane_bytes[4];
+    uint32_t lane_bytes[TTIO_RANS_STREAMS];
     size_t total_data = 0;
-    for (int lane = 0; lane < 4; lane++) {
+    for (int lane = 0; lane < TTIO_RANS_STREAMS; lane++) {
         lane_bytes[lane] = read_le32(compressed + 16 + lane * 4);
         total_data += lane_bytes[lane];
     }
@@ -71,22 +71,25 @@ int ttio_rans_decode_block(
         return TTIO_RANS_ERR_CORRUPT;
 
     /* Set up per-lane sub-buffer pointers and positions */
-    const uint8_t *lane_data[4];
-    size_t lane_pos[4];
+    const uint8_t *lane_data[TTIO_RANS_STREAMS];
+    size_t lane_pos[TTIO_RANS_STREAMS];
     size_t offset = header_size;
-    for (int lane = 0; lane < 4; lane++) {
+    for (int lane = 0; lane < TTIO_RANS_STREAMS; lane++) {
         lane_data[lane] = compressed + offset;
         lane_pos[lane]  = 0;
         offset += lane_bytes[lane];
     }
 
-    /* ── 2. Pad to multiple of 4 ────────────────────────────────── */
-    size_t pad_count = (4 - (n_symbols & 3)) & 3;
+    /* ── 2. Pad to multiple of TTIO_RANS_STREAMS ─────────────────── */
+    /* Guard against n_symbols near SIZE_MAX causing n_padded to wrap */
+    if (n_symbols > (size_t)0 - 3)
+        return TTIO_RANS_ERR_PARAM;
+    size_t pad_count = (TTIO_RANS_STREAMS - (n_symbols & (TTIO_RANS_STREAMS - 1))) & (TTIO_RANS_STREAMS - 1);
     size_t n_padded  = n_symbols + pad_count;
 
     /* ── 3. Forward decode pass ──────────────────────────────────── */
     for (size_t i = 0; i < n_padded; i++) {
-        int lane = (int)(i & 3);
+        int lane = (int)(i & (TTIO_RANS_STREAMS - 1));
         uint32_t x = state[lane];
 
         /* Determine context for this position */
@@ -95,6 +98,9 @@ int ttio_rans_decode_block(
             ctx = 0; /* padding uses ctx=0, sym=0 */
         } else {
             ctx = contexts[i];
+            /* Bounds check: ctx must be a valid context index */
+            if (ctx >= n_contexts)
+                return TTIO_RANS_ERR_PARAM;
         }
 
         /* Decode step: slot = x & T_MASK */
