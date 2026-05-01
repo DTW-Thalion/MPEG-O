@@ -4,7 +4,6 @@
 #import "ValueClasses/TTIOAxisDescriptor.h"
 #import "ValueClasses/TTIOValueRange.h"
 #import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import <hdf5.h>
 #import <hdf5_hl.h>
@@ -65,17 +64,21 @@
     return self;
 }
 
-- (BOOL)writeAdditionalAttributesToGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    if (![group setIntegerAttribute:@"matrix_width"  value:(int64_t)_width  error:error]) return NO;
-    if (![group setIntegerAttribute:@"matrix_height" value:(int64_t)_height error:error]) return NO;
-    if (![group setStringAttribute:@"nucleus_f1" value:(_nucleusF1 ?: @"") error:error]) return NO;
-    if (![group setStringAttribute:@"nucleus_f2" value:(_nucleusF2 ?: @"") error:error]) return NO;
+    if (![group setAttributeValue:@((int64_t)_width)  forName:@"matrix_width"  error:error]) return NO;
+    if (![group setAttributeValue:@((int64_t)_height) forName:@"matrix_height" error:error]) return NO;
+    if (![group setAttributeValue:(_nucleusF1 ?: @"") forName:@"nucleus_f1" error:error]) return NO;
+    if (![group setAttributeValue:(_nucleusF2 ?: @"") forName:@"nucleus_f2" error:error]) return NO;
 
-    // Native 2-D representation (opt_native_2d_nmr). Written alongside
-    // the flattened 1-D TTIOSignalArray that the base class persisted;
-    // readers prefer this when present.
-    hid_t parentGid = group.groupId;
+    // Native 2-D representation (opt_native_2d_nmr). HDF5-only feature
+    // (uses dimension scales / H5DSset_scale). Skip silently for
+    // non-HDF5 providers — the flat 1-D TTIOSignalArray written by the
+    // base class is the cross-provider fallback.
+    if (![group isKindOfClass:[TTIOHDF5Group class]]) {
+        return YES;
+    }
+    hid_t parentGid = ((TTIOHDF5Group *)group).groupId;
     hsize_t dims[2] = { (hsize_t)_height, (hsize_t)_width };
     hid_t space = H5Screate_simple(2, dims, NULL);
     hid_t plist = H5Pcreate(H5P_DATASET_CREATE);
@@ -154,20 +157,20 @@
     free(vals);
 }
 
-- (BOOL)readAdditionalAttributesFromGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    BOOL exists = NO;
-    _width  = (NSUInteger)[group integerAttributeNamed:@"matrix_width"
-                                                exists:&exists error:error];
-    _height = (NSUInteger)[group integerAttributeNamed:@"matrix_height"
-                                                exists:&exists error:error];
-    _nucleusF1 = [group stringAttributeNamed:@"nucleus_f1" error:error];
-    _nucleusF2 = [group stringAttributeNamed:@"nucleus_f2" error:error];
+    NSNumber *w = [group attributeValueForName:@"matrix_width" error:error];
+    if (w) _width = (NSUInteger)[w longLongValue];
+    NSNumber *h = [group attributeValueForName:@"matrix_height" error:error];
+    if (h) _height = (NSUInteger)[h longLongValue];
+    _nucleusF1 = [group attributeValueForName:@"nucleus_f1" error:error];
+    _nucleusF2 = [group attributeValueForName:@"nucleus_f2" error:error];
 
-    // Prefer the native 2-D dataset if present; fall back to the
-    // flattened 1-D signal array (v0.1 / fallback path).
-    if ([group hasChildNamed:@"intensity_matrix_2d"]) {
-        hid_t did = H5Dopen2(group.groupId, "intensity_matrix_2d", H5P_DEFAULT);
+    // Prefer the native 2-D dataset if present (HDF5-only feature);
+    // fall back to the flattened 1-D signal array on any provider.
+    if ([group isKindOfClass:[TTIOHDF5Group class]]
+        && [group hasChildNamed:@"intensity_matrix_2d"]) {
+        hid_t did = H5Dopen2(((TTIOHDF5Group *)group).groupId, "intensity_matrix_2d", H5P_DEFAULT);
         if (did >= 0) {
             NSUInteger total = _width * _height;
             NSMutableData *m = [NSMutableData dataWithLength:total * sizeof(double)];

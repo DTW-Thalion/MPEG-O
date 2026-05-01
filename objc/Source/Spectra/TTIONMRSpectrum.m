@@ -1,7 +1,5 @@
 #import "TTIONMRSpectrum.h"
 #import "Core/TTIOSignalArray.h"
-#import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
 @implementation TTIONMRSpectrum
@@ -36,26 +34,27 @@
 - (TTIOSignalArray *)chemicalShiftArray { return self.signalArrays[@"chemical_shift"]; }
 - (TTIOSignalArray *)intensityArray     { return self.signalArrays[@"intensity"]; }
 
-- (BOOL)writeAdditionalAttributesToGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    if (![group setStringAttribute:@"nucleus_type" value:(_nucleusType ?: @"")
-                              error:error]) return NO;
-    TTIOHDF5Dataset *d = [group createDatasetNamed:@"_spectrometer_freq_mhz"
-                                          precision:TTIOPrecisionFloat64
-                                             length:1
-                                          chunkSize:0
-                                   compressionLevel:0
-                                              error:error];
+    if (![group setAttributeValue:(_nucleusType ?: @"")
+                          forName:@"nucleus_type" error:error]) return NO;
+    id<TTIOStorageDataset> d = [group createDatasetNamed:@"_spectrometer_freq_mhz"
+                                               precision:TTIOPrecisionFloat64
+                                                  length:1
+                                               chunkSize:0
+                                             compression:TTIOCompressionZlib
+                                        compressionLevel:0
+                                                   error:error];
     if (!d) return NO;
     double f[1] = { _spectrometerFrequencyMHz };
-    return [d writeData:[NSData dataWithBytes:f length:sizeof(f)] error:error];
+    return [d writeAll:[NSData dataWithBytes:f length:sizeof(f)] error:error];
 }
 
-- (BOOL)readAdditionalAttributesFromGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    _nucleusType = [group stringAttributeNamed:@"nucleus_type" error:error];
-    TTIOHDF5Dataset *d = [group openDatasetNamed:@"_spectrometer_freq_mhz" error:error];
-    NSData *data = [d readDataWithError:error];
+    _nucleusType = [group attributeValueForName:@"nucleus_type" error:error];
+    id<TTIOStorageDataset> d = [group openDatasetNamed:@"_spectrometer_freq_mhz" error:error];
+    NSData *data = [d readAll:error];
     if (!data) return NO;
     _spectrometerFrequencyMHz = ((const double *)data.bytes)[0];
     return YES;

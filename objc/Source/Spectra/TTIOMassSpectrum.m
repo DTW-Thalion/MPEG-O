@@ -1,7 +1,5 @@
 #import "TTIOMassSpectrum.h"
 #import "Core/TTIOSignalArray.h"
-#import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
 @implementation TTIOMassSpectrum
@@ -70,34 +68,34 @@
 - (TTIOSignalArray *)mzArray        { return self.signalArrays[@"mz"]; }
 - (TTIOSignalArray *)intensityArray { return self.signalArrays[@"intensity"]; }
 
-- (BOOL)writeAdditionalAttributesToGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    if (![group setIntegerAttribute:@"ms_level" value:(int64_t)_msLevel error:error]) return NO;
-    if (![group setIntegerAttribute:@"polarity" value:(int64_t)_polarity error:error]) return NO;
+    if (![group setAttributeValue:@((int64_t)_msLevel) forName:@"ms_level" error:error]) return NO;
+    if (![group setAttributeValue:@((int64_t)_polarity) forName:@"polarity" error:error]) return NO;
     if (_scanWindow) {
-        TTIOHDF5Dataset *d = [group createDatasetNamed:@"_scan_window"
-                                              precision:TTIOPrecisionFloat64
-                                                 length:2
-                                              chunkSize:0
-                                       compressionLevel:0
-                                                  error:error];
+        id<TTIOStorageDataset> d = [group createDatasetNamed:@"_scan_window"
+                                                   precision:TTIOPrecisionFloat64
+                                                      length:2
+                                                   chunkSize:0
+                                                 compression:TTIOCompressionZlib
+                                            compressionLevel:0
+                                                       error:error];
         if (!d) return NO;
         double sw[2] = { _scanWindow.minimum, _scanWindow.maximum };
-        if (![d writeData:[NSData dataWithBytes:sw length:sizeof(sw)] error:error]) return NO;
+        if (![d writeAll:[NSData dataWithBytes:sw length:sizeof(sw)] error:error]) return NO;
     }
     return YES;
 }
 
-- (BOOL)readAdditionalAttributesFromGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    BOOL exists = NO;
-    _msLevel  = (NSUInteger)[group integerAttributeNamed:@"ms_level"
-                                                  exists:&exists error:error];
-    _polarity = (TTIOPolarity)[group integerAttributeNamed:@"polarity"
-                                                    exists:&exists error:error];
+    NSNumber *ms = [group attributeValueForName:@"ms_level" error:error];
+    if (ms) _msLevel = (NSUInteger)[ms longLongValue];
+    NSNumber *pol = [group attributeValueForName:@"polarity" error:error];
+    if (pol) _polarity = (TTIOPolarity)[pol longLongValue];
     if ([group hasChildNamed:@"_scan_window"]) {
-        TTIOHDF5Dataset *d = [group openDatasetNamed:@"_scan_window" error:error];
-        NSData *data = [d readDataWithError:error];
+        id<TTIOStorageDataset> d = [group openDatasetNamed:@"_scan_window" error:error];
+        NSData *data = [d readAll:error];
         if (!data) return NO;
         const double *p = data.bytes;
         _scanWindow = [TTIOValueRange rangeWithMinimum:p[0] maximum:p[1]];

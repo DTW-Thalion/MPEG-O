@@ -1,7 +1,5 @@
 #import "TTIOSpectrum.h"
 #import "Core/TTIOSignalArray.h"
-#import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import "ValueClasses/TTIOEnums.h"
 #import "ValueClasses/TTIOAxisDescriptor.h"
@@ -29,55 +27,51 @@
 
 #pragma mark - HDF5
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)parent name:(NSString *)name error:(NSError **)error
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent name:(NSString *)name error:(NSError **)error
 {
-    TTIOHDF5Group *group = [parent createGroupNamed:name error:error];
+    id<TTIOStorageGroup> group = [parent createGroupNamed:name error:error];
     if (!group) return NO;
 
-    if (![group setStringAttribute:@"ttio_class"
-                              value:NSStringFromClass([self class])
-                              error:error]) return NO;
-    if (![group setIntegerAttribute:@"index_position"
-                              value:(int64_t)_indexPosition
-                              error:error]) return NO;
+    if (![group setAttributeValue:NSStringFromClass([self class])
+                          forName:@"ttio_class" error:error]) return NO;
+    if (![group setAttributeValue:@((int64_t)_indexPosition)
+                          forName:@"index_position" error:error]) return NO;
 
     // Scan time and precursor mz are doubles; pack each as a 1-element
-    // dataset so we don't need a typed-double attribute path. Keep this
-    // simple: store as base64 of bytes via a string attribute? No —
-    // use the existing 1-element float64 dataset trick.
+    // dataset so we don't need a typed-double attribute path.
     {
         double sd[1] = { _scanTimeSeconds };
-        TTIOHDF5Dataset *d = [group createDatasetNamed:@"_scan_time"
-                                              precision:TTIOPrecisionFloat64
-                                                 length:1
-                                              chunkSize:0
-                                       compressionLevel:0
-                                                  error:error];
+        id<TTIOStorageDataset> d = [group createDatasetNamed:@"_scan_time"
+                                                   precision:TTIOPrecisionFloat64
+                                                      length:1
+                                                   chunkSize:0
+                                                 compression:TTIOCompressionZlib
+                                            compressionLevel:0
+                                                       error:error];
         if (!d) return NO;
-        if (![d writeData:[NSData dataWithBytes:sd length:sizeof(sd)] error:error]) return NO;
+        if (![d writeAll:[NSData dataWithBytes:sd length:sizeof(sd)] error:error]) return NO;
     }
     {
         double pmz[1] = { _precursorMz };
-        TTIOHDF5Dataset *d = [group createDatasetNamed:@"_precursor_mz"
-                                              precision:TTIOPrecisionFloat64
-                                                 length:1
-                                              chunkSize:0
-                                       compressionLevel:0
-                                                  error:error];
+        id<TTIOStorageDataset> d = [group createDatasetNamed:@"_precursor_mz"
+                                                   precision:TTIOPrecisionFloat64
+                                                      length:1
+                                                   chunkSize:0
+                                                 compression:TTIOCompressionZlib
+                                            compressionLevel:0
+                                                       error:error];
         if (!d) return NO;
-        if (![d writeData:[NSData dataWithBytes:pmz length:sizeof(pmz)] error:error]) return NO;
+        if (![d writeAll:[NSData dataWithBytes:pmz length:sizeof(pmz)] error:error]) return NO;
     }
-    if (![group setIntegerAttribute:@"precursor_charge"
-                              value:(int64_t)_precursorCharge
-                              error:error]) return NO;
+    if (![group setAttributeValue:@((int64_t)_precursorCharge)
+                          forName:@"precursor_charge" error:error]) return NO;
 
     // SignalArrays as named sub-groups under "arrays/".
-    TTIOHDF5Group *arrays = [group createGroupNamed:@"arrays" error:error];
+    id<TTIOStorageGroup> arrays = [group createGroupNamed:@"arrays" error:error];
     if (!arrays) return NO;
     NSArray *names = [[_signalArrays allKeys] sortedArrayUsingSelector:@selector(compare:)];
-    if (![arrays setStringAttribute:@"_array_names"
-                              value:[names componentsJoinedByString:@","]
-                              error:error]) return NO;
+    if (![arrays setAttributeValue:[names componentsJoinedByString:@","]
+                           forName:@"_array_names" error:error]) return NO;
     for (NSString *aname in names) {
         if (![_signalArrays[aname] writeToGroup:arrays
                                            name:aname
@@ -89,34 +83,31 @@
     return [self writeAdditionalAttributesToGroup:group error:error];
 }
 
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)parent name:(NSString *)name error:(NSError **)error
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent name:(NSString *)name error:(NSError **)error
 {
-    TTIOHDF5Group *group = [parent openGroupNamed:name error:error];
+    id<TTIOStorageGroup> group = [parent openGroupNamed:name error:error];
     if (!group) return nil;
 
-    BOOL exists = NO;
-    NSUInteger indexPosition = (NSUInteger)[group integerAttributeNamed:@"index_position"
-                                                                exists:&exists
-                                                                 error:error];
-    if (!exists) return nil;
+    NSNumber *idxNum = [group attributeValueForName:@"index_position" error:error];
+    if (!idxNum) return nil;
+    NSUInteger indexPosition = (NSUInteger)[idxNum longLongValue];
 
-    TTIOHDF5Dataset *stD = [group openDatasetNamed:@"_scan_time" error:error];
-    NSData *stData = [stD readDataWithError:error];
+    id<TTIOStorageDataset> stD = [group openDatasetNamed:@"_scan_time" error:error];
+    NSData *stData = [stD readAll:error];
     if (!stData) return nil;
     double scanTime = ((const double *)stData.bytes)[0];
 
-    TTIOHDF5Dataset *pmzD = [group openDatasetNamed:@"_precursor_mz" error:error];
-    NSData *pmzData = [pmzD readDataWithError:error];
+    id<TTIOStorageDataset> pmzD = [group openDatasetNamed:@"_precursor_mz" error:error];
+    NSData *pmzData = [pmzD readAll:error];
     if (!pmzData) return nil;
     double precursorMz = ((const double *)pmzData.bytes)[0];
 
-    NSUInteger precursorCharge =
-        (NSUInteger)[group integerAttributeNamed:@"precursor_charge"
-                                          exists:&exists error:error];
+    NSNumber *pchgNum = [group attributeValueForName:@"precursor_charge" error:error];
+    NSUInteger precursorCharge = pchgNum ? (NSUInteger)[pchgNum longLongValue] : 0;
 
-    TTIOHDF5Group *arraysGroup = [group openGroupNamed:@"arrays" error:error];
+    id<TTIOStorageGroup> arraysGroup = [group openGroupNamed:@"arrays" error:error];
     if (!arraysGroup) return nil;
-    NSString *namesStr = [arraysGroup stringAttributeNamed:@"_array_names" error:error];
+    NSString *namesStr = [arraysGroup attributeValueForName:@"_array_names" error:error];
     NSArray *names = [namesStr componentsSeparatedByString:@","];
     NSMutableDictionary *arrays = [NSMutableDictionary dictionary];
     for (NSString *aname in names) {
@@ -138,12 +129,12 @@
     return spec;
 }
 
-- (BOOL)writeAdditionalAttributesToGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
     return YES;
 }
 
-- (BOOL)readAdditionalAttributesFromGroup:(TTIOHDF5Group *)group error:(NSError **)error
+- (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
     return YES;
 }
