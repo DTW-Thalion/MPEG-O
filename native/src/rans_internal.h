@@ -104,6 +104,23 @@ int _ttio_rans_decode_block_avx2(
  * Returns one of "scalar", "sse4.1", "avx2".  Useful for tests. */
 const char *ttio_rans_kernel_name(void);
 
+/* ── Internal thread-pool task submission API ──────────────────────────
+ *
+ * These are not part of the public ABI.  They are used by
+ * ttio_rans_encode_mt / ttio_rans_decode_mt (and tests) to dispatch
+ * parallel work to the pool created by ttio_rans_pool_create().
+ *
+ * Submit:  enqueues a task.  Returns 0 on success, non-zero on failure.
+ * Wait:    blocks until the queue is empty AND no workers are running
+ *          a task.  Subsequent submits after wait() returns are fine.
+ */
+int  _ttio_rans_pool_submit(ttio_rans_pool *pool,
+                            void (*fn)(void *), void *arg);
+void _ttio_rans_pool_wait(ttio_rans_pool *pool);
+
+/* Number of worker threads in the pool (read-only, set at create time). */
+int  _ttio_rans_pool_n_threads(const ttio_rans_pool *pool);
+
 #ifdef __cplusplus
 }
 #endif
