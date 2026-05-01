@@ -2,8 +2,7 @@
 #define TTIO_INSTRUMENT_CONFIG_H
 
 #import <Foundation/Foundation.h>
-
-@class TTIOHDF5Group;
+#import "Providers/TTIOStorageProtocols.h"
 
 /**
  * Immutable value class describing the instrument used to acquire a
@@ -32,8 +31,8 @@
                         analyzerType:(NSString *)analyzerType
                         detectorType:(NSString *)detectorType;
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)parent error:(NSError **)error;
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)parent error:(NSError **)error;
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error;
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error;
 
 @end
 
