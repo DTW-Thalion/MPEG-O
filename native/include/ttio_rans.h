@@ -47,7 +47,7 @@ int ttio_rans_decode_block(
     size_t          n_symbols
 );
 
-void ttio_rans_build_decode_table(
+int ttio_rans_build_decode_table(
     uint16_t        n_contexts,
     const uint32_t (*freq)[256],
     const uint32_t (*cum)[256],
