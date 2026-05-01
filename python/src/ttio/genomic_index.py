@@ -92,7 +92,15 @@ class GenomicIndex:
 
     @classmethod
     def read(cls, idx_group: "StorageGroup") -> "GenomicIndex":
-        """Load all columns from a ``genomic_index/`` StorageGroup."""
+        """Load all columns from a ``genomic_index/`` StorageGroup.
+
+        L1 (Task #82 Phase B.1, 2026-05-01): chromosomes are stored as
+        a uint16 id column + compound name lookup table (sibling
+        datasets ``chromosome_ids`` and ``chromosome_names``) instead
+        of the M82-era ``chromosomes`` VL-string compound. The single
+        compound was costing 42 MB of HDF5 fractal-heap overhead per
+        chr22 .tio file (one fractal-heap block per chunk × 432 chunks).
+        """
         from ttio import _hdf5_io as io
 
         offsets_ds = idx_group.open_dataset("offsets")
@@ -107,11 +115,14 @@ class GenomicIndex:
         mapping_qualities = np.asarray(mq_ds.read(), dtype=np.uint8)
         flags = np.asarray(flags_ds.read(), dtype=np.uint32)
 
-        chrom_rows = io.read_compound_dataset(idx_group, "chromosomes")
-        chromosomes: list[str] = []
-        for row in chrom_rows:
-            v = row["value"]
-            chromosomes.append(v.decode("utf-8") if isinstance(v, bytes) else v)
+        ids_ds = idx_group.open_dataset("chromosome_ids")
+        ids = np.asarray(ids_ds.read(), dtype=np.uint16)
+        name_rows = io.read_compound_dataset(idx_group, "chromosome_names")
+        name_table: list[str] = []
+        for row in name_rows:
+            v = row["name"]
+            name_table.append(v.decode("utf-8") if isinstance(v, bytes) else v)
+        chromosomes = [name_table[i] for i in ids.tolist()]
 
         return cls(
             offsets=offsets,
@@ -123,8 +134,15 @@ class GenomicIndex:
         )
 
     def write(self, idx_group: "StorageGroup") -> None:
-        """Write all columns into ``idx_group``."""
+        """Write all columns into ``idx_group``.
+
+        L1 layout: ``chromosome_ids`` (uint16) + ``chromosome_names``
+        (compound, one row per unique chromosome). Encounter-order id
+        assignment — first occurrence of a name gets the next unused
+        id. Cross-language byte-exact contract.
+        """
         from ttio import _hdf5_io as io
+        from .enums import Precision
 
         io._write_uint64_channel(idx_group, "offsets", self.offsets, "gzip")
         io._write_uint32_channel(idx_group, "lengths", self.lengths, "gzip")
@@ -133,9 +151,34 @@ class GenomicIndex:
             idx_group, "mapping_qualities", self.mapping_qualities, "gzip"
         )
         io._write_uint32_channel(idx_group, "flags", self.flags, "gzip")
+
+        name_to_id: dict[str, int] = {}
+        names_in_order: list[str] = []
+        ids = np.empty(len(self.chromosomes), dtype=np.uint16)
+        for i, name in enumerate(self.chromosomes):
+            slot = name_to_id.get(name)
+            if slot is None:
+                if len(names_in_order) > 65535:
+                    raise ValueError(
+                        "genomic_index: > 65,535 unique chromosome names; "
+                        "uint16 chromosome_ids would overflow."
+                    )
+                slot = len(names_in_order)
+                name_to_id[name] = slot
+                names_in_order.append(name)
+            ids[i] = slot
+
+        ds = idx_group.create_dataset(
+            "chromosome_ids", Precision.UINT16,
+            length=int(ids.shape[0]),
+            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=io._compression_for("gzip"),
+            compression_level=6,
+        )
+        ds.write(ids)
         io.write_compound_dataset(
             idx_group,
-            "chromosomes",
-            [{"value": c} for c in self.chromosomes],
-            [("value", io.vl_str())],
+            "chromosome_names",
+            [{"name": n} for n in names_in_order],
+            [("name", io.vl_str())],
         )

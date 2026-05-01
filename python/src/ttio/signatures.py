@@ -219,13 +219,14 @@ def verify_provenance(run_group: h5py.Group, key: bytes) -> bool:
 # rows.
 
 _GENOMIC_SIGNAL_CHANNELS = ("sequences", "qualities")
-# M90.15: chromosomes (VL_BYTES row compound) is now signed alongside
-# the atomic columns. read_canonical_bytes handles VL compounds via
-# canonicalise_compound_rows / canonicalise_compound_structured —
-# the M90.2 deferral was speculative.
+# L1 (Task #82 Phase B.1, 2026-05-01): the M82-era VL-string
+# `chromosomes` compound was replaced with a `chromosome_ids` (uint16)
+# + `chromosome_names` (VL-compound) pair, eliminating 42 MB of HDF5
+# fractal-heap overhead per chr22 file. Both new columns are signed
+# in place of the old single column.
 _GENOMIC_INDEX_COLUMNS = (
     "offsets", "lengths", "positions", "mapping_qualities", "flags",
-    "chromosomes",
+    "chromosome_ids", "chromosome_names",
 )
 
 

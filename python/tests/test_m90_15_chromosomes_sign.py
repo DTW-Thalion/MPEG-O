@@ -66,11 +66,19 @@ class TestChromosomesSigning:
         path = _make_genomic_dataset(tmp_path / "src.tio")
         with h5py.File(path, "r+") as f:
             sigs = sign_genomic_run(f["/study/genomic_runs/genomic_0001"], KEY)
-        assert "genomic_index/chromosomes" in sigs, (
-            "M90.15: chromosomes compound must be signed"
+        # L1 (Task #82 Phase B.1, 2026-05-01): chromosomes are now
+        # stored as ``chromosome_ids`` (uint16) + ``chromosome_names``
+        # (compound) instead of a single VL-string compound. Both
+        # columns are signed.
+        assert "genomic_index/chromosome_ids" in sigs, (
+            "L1: chromosome_ids must be signed"
         )
-        # Signature is HMAC-SHA256 v2-prefixed.
-        assert sigs["genomic_index/chromosomes"].startswith("v2:")
+        assert "genomic_index/chromosome_names" in sigs, (
+            "L1: chromosome_names must be signed"
+        )
+        # Signatures are HMAC-SHA256 v2-prefixed.
+        assert sigs["genomic_index/chromosome_ids"].startswith("v2:")
+        assert sigs["genomic_index/chromosome_names"].startswith("v2:")
 
     def test_verify_passes_on_clean_run(self, tmp_path):
         path = _make_genomic_dataset(tmp_path / "v.tio")
@@ -84,16 +92,16 @@ class TestChromosomesSigning:
         with h5py.File(path, "r+") as f:
             run = f["/study/genomic_runs/genomic_0001"]
             sign_genomic_run(run, KEY)
-            # Tamper with the chromosomes compound by deleting a row's
-            # value and rewriting (changes the canonical bytes).
-            chrom_ds = run["genomic_index/chromosomes"]
-            current = chrom_ds[()]
-            # Mutate index 0's value field. Compound row read returns
-            # a numpy structured array.
-            new_rows = current.copy()
-            # Field name is "value" per genomic_index._write helper.
-            new_rows[0]["value"] = b"chrTAMPERED"
-            chrom_ds[...] = new_rows
+            # L1: tamper with the chromosome_ids column (uint16
+            # per-read indices into the chromosome_names lookup).
+            ids_ds = run["genomic_index/chromosome_ids"]
+            current = ids_ds[()]
+            new_ids = current.copy()
+            # Flip read 0's chromosome from id 0 to id 1 (the test
+            # fixture uses 2 unique chroms so id 1 is valid but
+            # changes the canonical bytes).
+            new_ids[0] = (int(new_ids[0]) + 1) % 2
+            ids_ds[...] = new_ids
             assert verify_genomic_run(run, KEY) is False, (
-                "M90.15: tampered chromosomes compound must verify=False"
+                "L1: tampered chromosome_ids must verify=False"
             )

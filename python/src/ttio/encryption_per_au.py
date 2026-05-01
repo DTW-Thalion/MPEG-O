@@ -994,15 +994,24 @@ def decrypt_per_au_by_region(
 
 
 def _read_chromosomes(idx_group) -> list[str]:
-    """Read the genomic_index chromosomes compound dataset. Returns a
-    list[str], one entry per read."""
+    """Read the genomic_index chromosome columns. Returns a list[str],
+    one entry per read.
+
+    L1 (Task #82 Phase B.1): chromosomes are stored as
+    ``chromosome_ids`` (uint16) + ``chromosome_names`` (compound
+    lookup); materialize back to ``list[str]`` for callers that still
+    want the per-read view.
+    """
     from . import _hdf5_io as io
-    rows = io.read_compound_dataset(idx_group, "chromosomes")
-    out: list[str] = []
-    for row in rows:
-        v = row["value"]
-        out.append(v.decode("utf-8") if isinstance(v, bytes) else v)
-    return out
+    import numpy as np
+    ids_ds = idx_group.open_dataset("chromosome_ids")
+    ids = np.asarray(ids_ds.read(), dtype=np.uint16)
+    name_rows = io.read_compound_dataset(idx_group, "chromosome_names")
+    name_table: list[str] = []
+    for row in name_rows:
+        v = row["name"]
+        name_table.append(v.decode("utf-8") if isinstance(v, bytes) else v)
+    return [name_table[i] for i in ids.tolist()]
 
 
 def _encrypt_channel_with_dispatch(

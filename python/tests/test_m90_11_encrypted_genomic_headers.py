@@ -201,7 +201,11 @@ class TestNoOpWithoutHeadersKey:
             assert "positions" in idx
             assert "mapping_qualities" in idx
             assert "flags" in idx
-            assert "chromosomes" in idx
+            # L1 (Task #82 Phase B.1): chromosomes are stored as
+            # ``chromosome_ids`` + ``chromosome_names`` instead of a
+            # single VL-string compound.
+            assert "chromosome_ids" in idx
+            assert "chromosome_names" in idx
             assert "positions_encrypted" not in idx
             features = f["/"].attrs.get("ttio_features") or ""
             if isinstance(features, bytes):
