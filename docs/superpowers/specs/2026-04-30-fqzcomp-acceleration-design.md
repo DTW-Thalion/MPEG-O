@@ -68,8 +68,8 @@ V2 Container Layout:
 ┌──────────────────────────────────────────┐
 │ magic: "M94Z"  (4 bytes)                │
 │ version: 2     (1 byte)                 │
-│ block_count: N (varint)                 │
-│ reads_per_block: 65536 (varint)         │
+│ block_count: N (uint32 LE)              │
+│ reads_per_block: 65536 (uint32 LE)      │
 │ context_params: {qbits, pbits, dbits,   │
 │                  sloc} (4 bytes)         │
 ├──────────────────────────────────────────┤
@@ -237,7 +237,9 @@ void ttio_rans_pool_destroy(ttio_rans_pool *pool);
 
 The frequency table construction and context computation remain in the
 calling language (Python/Java/ObjC). Only the rANS encode/decode hot loops
-and thread management are in C.
+and thread management are in C. Each V2 block carries its own serialized
+frequency tables, so `ttio_rans_decode_mt` extracts them from the compressed
+stream — the caller does not pass freq/cum tables for multi-block decode.
 
 ---
 
