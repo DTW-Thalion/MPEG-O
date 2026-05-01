@@ -1,10 +1,7 @@
 #import "TTIOSpectrumIndex.h"
 #import "ValueClasses/TTIOValueRange.h"
 #import "ValueClasses/TTIOIsolationWindow.h"
-#import "HDF5/TTIOHDF5Group.h"
-#import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
-#import "Providers/TTIOStorageProtocols.h"
 #import "HDF5/TTIOHDF5Types.h"
 
 @implementation TTIOSpectrumIndex
@@ -137,34 +134,36 @@
     return out;
 }
 
-#pragma mark - HDF5
+#pragma mark - Storage round-trip (provider-agnostic)
 
-static BOOL writeArray(TTIOHDF5Group *g, NSString *name, TTIOPrecision p,
+static BOOL writeArray(id<TTIOStorageGroup> g, NSString *name, TTIOPrecision p,
                        NSData *data, NSError **error)
 {
     NSUInteger n = data.length / TTIOPrecisionElementSize(p);
-    TTIOHDF5Dataset *ds = [g createDatasetNamed:name
-                                       precision:p
-                                          length:n
-                                       chunkSize:4096
-                                compressionLevel:6
-                                           error:error];
+    id<TTIOStorageDataset> ds = [g createDatasetNamed:name
+                                            precision:p
+                                               length:n
+                                            chunkSize:4096
+                                          compression:TTIOCompressionZlib
+                                     compressionLevel:6
+                                                error:error];
     if (!ds) return NO;
-    return [ds writeData:data error:error];
+    return [ds writeAll:data error:error];
 }
 
-static NSData *readArray(TTIOHDF5Group *g, NSString *name, NSError **error)
+static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error)
 {
-    TTIOHDF5Dataset *ds = [g openDatasetNamed:name error:error];
+    id<TTIOStorageDataset> ds = [g openDatasetNamed:name error:error];
     if (!ds) return nil;
-    return [ds readDataWithError:error];
+    id val = [ds readAll:error];
+    return [val isKindOfClass:[NSData class]] ? val : nil;
 }
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)parent error:(NSError **)error
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error
 {
-    TTIOHDF5Group *g = [parent createGroupNamed:@"spectrum_index" error:error];
+    id<TTIOStorageGroup> g = [parent createGroupNamed:@"spectrum_index" error:error];
     if (!g) return NO;
-    if (![g setIntegerAttribute:@"count" value:(int64_t)_count error:error]) return NO;
+    if (![g setAttributeValue:@((int64_t)_count) forName:@"count" error:error]) return NO;
     if (!writeArray(g, @"offsets",          TTIOPrecisionInt64,   _offsets,          error)) return NO;
     if (!writeArray(g, @"lengths",          TTIOPrecisionUInt32,  _lengths,          error)) return NO;
     if (!writeArray(g, @"retention_times",  TTIOPrecisionFloat64, _retentionTimes,   error)) return NO;
@@ -185,9 +184,9 @@ static NSData *readArray(TTIOHDF5Group *g, NSString *name, NSError **error)
     return YES;
 }
 
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)parent error:(NSError **)error
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error
 {
-    TTIOHDF5Group *g = [parent openGroupNamed:@"spectrum_index" error:error];
+    id<TTIOStorageGroup> g = [parent openGroupNamed:@"spectrum_index" error:error];
     if (!g) return nil;
     NSData *offsets = readArray(g, @"offsets", error);
     NSData *lengths = readArray(g, @"lengths", error);
@@ -220,50 +219,13 @@ static NSData *readArray(TTIOHDF5Group *g, NSString *name, NSError **error)
                    isolationUpperOffsets:iup];
 }
 
-static NSData *readStorageArray(id<TTIOStorageGroup> g, NSString *name, NSError **error)
-{
-    id<TTIOStorageDataset> ds = [g openDatasetNamed:name error:error];
-    if (!ds) return nil;
-    id val = [ds readAll:error];
-    if ([val isKindOfClass:[NSData class]]) return val;
-    return nil;
-}
-
 + (instancetype)readFromStorageGroup:(id)parent error:(NSError **)error
 {
+    // Legacy alias — readFromGroup: now takes id<TTIOStorageGroup>
+    // directly. Kept for source-compatibility with v0.9 callers.
     id<TTIOStorageGroup> par = (id<TTIOStorageGroup>)parent;
     if (![par hasChildNamed:@"spectrum_index"]) return nil;
-    id<TTIOStorageGroup> g = [par openGroupNamed:@"spectrum_index" error:error];
-    if (!g) return nil;
-    NSData *offsets = readStorageArray(g, @"offsets", error);
-    NSData *lengths = readStorageArray(g, @"lengths", error);
-    NSData *rts     = readStorageArray(g, @"retention_times", error);
-    NSData *ml      = readStorageArray(g, @"ms_levels", error);
-    NSData *pol     = readStorageArray(g, @"polarities", error);
-    NSData *pmz     = readStorageArray(g, @"precursor_mzs", error);
-    NSData *pc      = readStorageArray(g, @"precursor_charges", error);
-    NSData *bp      = readStorageArray(g, @"base_peak_intensities", error);
-    if (!offsets || !lengths || !rts || !ml || !pol || !pmz || !pc || !bp) return nil;
-    // M74 schema-gating: probe for the four optional columns.
-    NSData *am = nil, *itm = nil, *ilo = nil, *iup = nil;
-    if ([g hasChildNamed:@"activation_methods"]) {
-        am  = readStorageArray(g, @"activation_methods",      error); if (!am)  return nil;
-        itm = readStorageArray(g, @"isolation_target_mzs",    error); if (!itm) return nil;
-        ilo = readStorageArray(g, @"isolation_lower_offsets", error); if (!ilo) return nil;
-        iup = readStorageArray(g, @"isolation_upper_offsets", error); if (!iup) return nil;
-    }
-    return [[self alloc] initWithOffsets:offsets
-                                 lengths:lengths
-                          retentionTimes:rts
-                                msLevels:ml
-                              polarities:pol
-                            precursorMzs:pmz
-                        precursorCharges:pc
-                     basePeakIntensities:bp
-                        activationMethods:am
-                      isolationTargetMzs:itm
-                   isolationLowerOffsets:ilo
-                   isolationUpperOffsets:iup];
+    return [self readFromGroup:par error:error];
 }
 
 @end
