@@ -1,5 +1,4 @@
 #import "TTIOInstrumentConfig.h"
-#import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
 @implementation TTIOInstrumentConfig
@@ -45,29 +44,29 @@
     [c encodeObject:_detectorType forKey:@"detectorType"];
 }
 
-- (BOOL)writeToGroup:(TTIOHDF5Group *)parent error:(NSError **)error
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error
 {
-    TTIOHDF5Group *g = [parent createGroupNamed:@"instrument_config" error:error];
+    id<TTIOStorageGroup> g = [parent createGroupNamed:@"instrument_config" error:error];
     if (!g) return NO;
-    if (![g setStringAttribute:@"manufacturer" value:_manufacturer error:error]) return NO;
-    if (![g setStringAttribute:@"model"        value:_model        error:error]) return NO;
-    if (![g setStringAttribute:@"serial_number" value:_serialNumber error:error]) return NO;
-    if (![g setStringAttribute:@"source_type"  value:_sourceType   error:error]) return NO;
-    if (![g setStringAttribute:@"analyzer_type" value:_analyzerType error:error]) return NO;
-    if (![g setStringAttribute:@"detector_type" value:_detectorType error:error]) return NO;
+    if (![g setAttributeValue:_manufacturer forName:@"manufacturer"  error:error]) return NO;
+    if (![g setAttributeValue:_model        forName:@"model"         error:error]) return NO;
+    if (![g setAttributeValue:_serialNumber forName:@"serial_number" error:error]) return NO;
+    if (![g setAttributeValue:_sourceType   forName:@"source_type"   error:error]) return NO;
+    if (![g setAttributeValue:_analyzerType forName:@"analyzer_type" error:error]) return NO;
+    if (![g setAttributeValue:_detectorType forName:@"detector_type" error:error]) return NO;
     return YES;
 }
 
-+ (instancetype)readFromGroup:(TTIOHDF5Group *)parent error:(NSError **)error
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error
 {
-    TTIOHDF5Group *g = [parent openGroupNamed:@"instrument_config" error:error];
+    id<TTIOStorageGroup> g = [parent openGroupNamed:@"instrument_config" error:error];
     if (!g) return nil;
-    return [[self alloc] initWithManufacturer:[g stringAttributeNamed:@"manufacturer" error:error]
-                                        model:[g stringAttributeNamed:@"model" error:error]
-                                 serialNumber:[g stringAttributeNamed:@"serial_number" error:error]
-                                   sourceType:[g stringAttributeNamed:@"source_type" error:error]
-                                 analyzerType:[g stringAttributeNamed:@"analyzer_type" error:error]
-                                 detectorType:[g stringAttributeNamed:@"detector_type" error:error]];
+    return [[self alloc] initWithManufacturer:[g attributeValueForName:@"manufacturer"  error:error]
+                                        model:[g attributeValueForName:@"model"         error:error]
+                                 serialNumber:[g attributeValueForName:@"serial_number" error:error]
+                                   sourceType:[g attributeValueForName:@"source_type"   error:error]
+                                 analyzerType:[g attributeValueForName:@"analyzer_type" error:error]
+                                 detectorType:[g attributeValueForName:@"detector_type" error:error]];
 }
 
 - (BOOL)isEqual:(id)other
