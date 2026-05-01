@@ -175,6 +175,16 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
     # byte-identical output by construction (M82.4 conformance).
     # Enables the full M83–M86 + M93 codec stack on every applicable
     # channel; lossless throughout (no QUALITY_BINNED).
+    #
+    # M94.Z V2 wire format (Task 27): set TTIO_M94Z_USE_NATIVE=1 (and
+    # TTIO_RANS_LIB_PATH pointing to libttio_rans.so) to dispatch the
+    # FQZCOMP_NX16_Z quality channel through the native rANS encoder,
+    # producing V2 streams (magic=M94Z, version byte=2) instead of V1.
+    # The codec reads this env var internally when prefer_native=None.
+    _use_native_v2 = os.environ.get("TTIO_M94Z_USE_NATIVE", "").strip().lower() in (
+        "1", "true", "yes", "on"
+    )
+
     from ttio import SpectralDataset
     from ttio.enums import Compression
     from ttio.importers.bam import BamReader
@@ -229,7 +239,8 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
             "Python reference path. Codecs (v1.2 / M93 + M94.Z stack): "
             "REF_DIFF on sequences (with embedded reference; falls "
             "back to BASE_PACK if ref load fails), FQZCOMP_NX16_Z "
-            "(CRAM-mimic rANS-Nx16) on qualities, RANS_ORDER1 on "
+            f"(CRAM-mimic rANS-Nx16, {'V2/native' if _use_native_v2 else 'V1'}) "
+            "on qualities, RANS_ORDER1 on "
             "cigars, NAME_TOKENIZED on read_names + mate_info_chrom. "
             "Lossless throughout."
         ),
