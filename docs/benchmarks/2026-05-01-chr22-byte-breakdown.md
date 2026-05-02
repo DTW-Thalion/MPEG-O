@@ -207,9 +207,35 @@ register), rare-symbol escape models, per-position model mixing,
 length bucket, distance from read start. Each is its own subsystem.
 Tracked as **WORKPLAN Task #84** (richer-context M94.Z).
 
-Encode wall: 124.79 s (V3 ctypes per-block overhead — much slower than
-V1 ~28 s; closing this is itself a follow-up). Decode wall: 19.12 s
-(V3 native fast-path).
+Encode wall: 25.83 s (numpy-vectorized context derivation + first-
+encounter pass, see §8.1 below). Decode wall: 19.15 s (V3 native
+fast-path).
+
+### 8.1 V3 encode perf — vectorization follow-up
+
+The first V3 wrapper landed at HEAD `72eb845` did context derivation
+(`_build_context_seq`) and the sparse-→-dense first-encounter pass in
+pure Python loops over the full 178 M-quality sequence — no Cython,
+no numpy. cProfile + wall-clock cross-check on chr22 attributed
+~89 s of the 110 s wall to `_build_context_seq` alone (178 M calls
+each into `m94z_context` and `position_bucket_pbits`), and ~7 s to the
+dict-based first-encounter pass.
+
+Both paths were rewritten using numpy at HEAD `<this commit>`:
+
+* `_build_context_seq_arr_vec` — iterates `p = 0..max_len-1` (≤ 101
+  on chr22) and updates `n_reads` per-read `prev_q` ring states in
+  parallel. Output is `ndarray[uint16]` — zero-copy ctypes view into
+  the C kernel's `dense_seq` buffer.
+* `_vectorize_first_encounter` — exploits the bounded value range
+  (`[0, 1 << sloc)` = 16 384 buckets) to do a scatter-min via
+  `np.minimum.at`, then `argsort(first_idx, kind="stable")` to recover
+  the encounter order. Identical `sparse_ids` ordering to the dict-loop.
+
+Result on chr22: encode wall **124.79 s → 25.83 s (4.8×)**; output
+byte-exact (113.3261 MB / qualities 69 299 472 bytes / version byte
+`0x03` all match the pre-vectorization run). 553 M94.Z tests green;
+full Python suite 1811 passed.
 
 ## 9. Remaining 1.32× → 1.15× gap (~14 MB)
 
