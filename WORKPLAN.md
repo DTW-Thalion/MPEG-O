@@ -129,22 +129,27 @@ as a record of what was built; current milestones use TTI-O names.
 >   - **c4** (SplitMix64 hash, CRAM-exact) is *worse than V3* on
 >     every corpus (8-21% worse) — the hash-escalation path is
 >     conclusively refuted across Illumina diversity.
->   - **PacBio HiFi platform diversity remains untested**: every
->     public HG002 PacBio HiFi BAM checked (NIST GIAB GRCh38/GRCh37,
->     PacBio cloud HG002-CpG-methylation-202202, both aligned and
->     raw `hifi_reads.bam`) had `SEQ`/`QUAL` stripped to `*`. Future
->     re-charter must source PacBio HiFi from a less-processed
->     pipeline before adopting any Stage 2 design as platform-robust.
+>   - **HG002 PacBio HiFi (~14K reads, 18.5 kb mean): c0 (V3
+>     baseline) wins, every richer-context candidate is *worse*.**
+>     Sourced via raw GIAB `*.fastq.gz` → `samtools import` (public
+>     PacBio BAMs strip QUAL; see `feedback_pacbio_hifi_qual_stripped`).
+>     PacBio HiFi qualities cluster at Q60+ with a peak at Q93;
+>     narrow distribution defeats richer context conditioning.
+>     B/qual ~0.42 may be near-optimal for this data shape.
 >
->   **Re-charter pending:** Stage 2 design likely keys on c3's bit
->   budget (not c2's). The remaining ~half-bit-per-quality gap to
->   CRAM 3.1's 0.20-0.25 B/qual likely needs richer features beyond
->   CRAM's set: mate-pair orientation, distance-from-read-end,
->   error-context, or non-bit-pack mixture-model approaches. Plan +
->   results: `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage1.md`,
+>   **Re-charter pending — design space changed.** No single static
+>   bit-pack design wins across platforms: c3 dominates Illumina;
+>   c0 dominates PacBio HiFi. Stage 2 must adopt an adaptive
+>   mechanism (per-platform header flag, per-block adaptive sloc,
+>   or two-pass encoder picking smaller of c3/c0) rather than lock
+>   in a single bit budget. The 1.15× CRAM gate is chr22-v1.2.0-
+>   specific; multi-platform robustness is a separate acceptance
+>   criterion. Plan + results:
+>   `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage1.md`,
 >   `docs/benchmarks/2026-05-02-m94z-v4-multi-corpus.md` (cross-corpus
->   summary), per-corpus docs `2026-05-02-m94z-v4-{candidates,
->   na12878_wes_chr22, hg002_illumina_2x250_chr22}.md`.
+>   summary, 4 corpora), per-corpus docs
+>   `2026-05-02-m94z-v4-{candidates, na12878_wes_chr22,
+>   hg002_illumina_2x250_chr22, hg002_pacbio_hifi}.md`.
 >
 > **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under

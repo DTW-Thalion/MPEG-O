@@ -1,12 +1,19 @@
 # M94.Z V4 candidate prototype — multi-corpus comparison
 
-> **Update to the Stage 1 chr22-only result.** The original §5
-> conclusion was based on `chr22_na12878_mapped` alone; this doc
-> extends the comparison to two additional Illumina corpora. The
-> chr22-only winner (c2) does **not** generalize: c3 wins on 2 of 3
-> corpora and c2 wins on the third by a razor-thin margin. The
-> SplitMix64-hash baseline (c4) is the worst candidate on every
-> corpus. Re-charter framing updated.
+> **Update 2 (PacBio HiFi added).** The Illumina-only conclusion
+> ("c3 is cross-corpus winner") **does not survive contact with
+> PacBio HiFi data.** On HG002 PacBio HiFi (~18.5 kb CCS reads,
+> qualities clustering at Q93+), **c0 (V3 baseline) wins outright**
+> and every bit-pack candidate does worse. The right codec depends
+> on the platform's quality-distribution shape. Re-charter framing
+> updated again — the design choice is now "pick a single codec
+> that's competent across platforms" vs "platform-adaptive codec."
+
+> **Update 1 (Illumina cross-corpus).** The original §5
+> conclusion was based on `chr22_na12878_mapped` alone. Extending to
+> NA12878 WES + HG002 Illumina 2×250: chr22-only winner (c2) does not
+> generalize; c3 wins on 2 of 3 Illumina corpora.
+> SplitMix64-hash (c4) was worst on every Illumina corpus.
 
 - Date: 2026-05-02
 - Spec: `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage1-design.md`
@@ -15,6 +22,7 @@
   - chr22: `docs/benchmarks/2026-05-02-m94z-v4-candidates.md`
   - WES: `docs/benchmarks/2026-05-02-m94z-v4-na12878_wes_chr22.md`
   - HG002 Illumina 2×250: `docs/benchmarks/2026-05-02-m94z-v4-hg002_illumina_2x250_chr22.md`
+  - HG002 PacBio HiFi: `docs/benchmarks/2026-05-02-m94z-v4-hg002_pacbio_hifi.md`
 
 ## 1. Corpora
 
@@ -23,16 +31,18 @@
 | `chr22_na12878_mapped` | GIAB NA12878 chr22 (Illumina HiSeq 2×100, lean+mapped) | 1,766,433 | 178,409,733 | 101 bp | WGS, uniform |
 | `na12878_wes_chr22` | GIAB Garvan_NA12878 HiSeq exome chr22 slice | 992,974 | 95,035,281 | 95.7 bp | exome capture, variable |
 | `hg002_illumina_2x250_chr22` | GIAB HG002 NIST Illumina 2×250bp chr22 (1M-read subset of 10.6M-read full chr22) | 997,415 | 248,184,765 | 248.7 bp | WGS, uniform |
+| `hg002_pacbio_hifi` | GIAB HG002 PacBio HiFi CCS (raw FASTQ → BAM via `samtools import`, ~14K-read subset from `m64011_190830_220126.fastq.gz`) | 14,284 | 264,190,341 | 18,495 bp | long-read, narrow Q (Q60+) |
 
-All Illumina. **HG002 PacBio HiFi was attempted but every public BAM
-we checked (NIST GIAB GRCh38/GRCh37 alignment variants, PacBio cloud
-HG002-CpG-methylation-202202 dataset, both aligned and raw
-`hifi_reads.bam`) had `SEQ` and `QUAL` stripped to `*`** — the
-PacBio HiFi public-data ecosystem treats per-base qualities as
-expendable because CCS reads cluster at Q30+ and storage cost
-dominates. A future round must source PacBio HiFi from a less-
-processed pipeline (subreads.bam pre-CCS, or PacBio Sequel II raw
-output) to test long-read platform diversity.
+The first three corpora are all Illumina; PacBio HiFi (long-read,
+narrow Q-distribution) is the platform diversity probe. **All public
+PacBio HiFi BAMs we initially tried** (NIST GIAB GRCh38/GRCh37
+alignment variants, PacBio cloud HG002-CpG-methylation-202202 dataset,
+both aligned and raw `hifi_reads.bam`) **had `SEQ` and `QUAL`
+stripped to `*`**. The workaround was to fetch the raw `*.fastq.gz`
+files (which preserve QUAL as ASCII), stream a partial download
+through `head` to limit record count, and pipe to `samtools import`
+to produce an unaligned BAM. See `feedback_pacbio_hifi_qual_stripped`
+memory.
 
 ## 2. Per-corpus winners
 
@@ -69,50 +79,107 @@ B/qual (= body / n_qualities). Lower is better.
 | **c3** | **64.16** | **0.259** | **-2.4%** |
 | c4 | 73.48 | 0.296 | +11.8% |
 
-## 3. Cross-corpus winner: c3
+### hg002_pacbio_hifi (PacBio HiFi CCS, ~18.5 kb reads)
 
-c3 (length-heavy: 8 bit prev_q full-Phred + 4 bit pos + 4 bit length
-+ 1 bit revcomp, sloc=17) wins outright on the WES and HG002 Illumina
-2×250 corpora and is within 0.7% of c2 on chr22. Across all three:
+| Cand | Body MB | B/qual | vs c0 |
+|---|---:|---:|---:|
+| **c0** | **109.68** | **0.415** | — |
+| c1 | 112.21 | 0.425 | +2.3% |
+| c2 | 112.44 | 0.426 | +2.5% |
+| c3 | 112.08 | 0.424 | +2.2% |
+| c4 | 113.22 | 0.428 | +3.2% |
 
-| Cand | chr22 rank | WES rank | HG002 2×250 rank | mean rank |
-|---|---:|---:|---:|---:|
-| c0 (V3) | 4 | 3 | 4 | 3.67 |
-| c1 | 2 | 4 | 3 | 3.00 |
-| c2 | **1** | 2 | 2 | 1.67 |
-| **c3** | 3 | **1** | **1** | **1.67** |
-| c4 (hash) | 5 | 5 | 5 | 5.00 |
+**Every richer-context candidate is *worse* than V3 baseline c0.**
+PacBio HiFi qualities cluster heavily at Q60+ (byte values ≥ 93,
+many at the maximum Q93 = `~`). The narrow value range means:
+- prev_q[0] is nearly constant across positions → deeper history (c1,
+  c2) provides almost no conditioning gain.
+- The richer-feature candidates spread their data across more
+  contexts (c2 uses 65,319 of 131,072 possible at sloc=17), each
+  with sparse statistics and similar near-constant freq tables —
+  the freq-table overhead per context outweighs the marginal
+  conditioning gain.
+- c0's smaller table (16,384 contexts at sloc=14) concentrates more
+  symbols per context, giving the adaptive RC kernel cleaner freq
+  estimates.
 
-Tied mean rank between c2 and c3, with c3 winning the more diverse
-corpora (variable read lengths via WES, longer reads via 2×250).
+The B/qual range (0.42 vs Illumina's 0.26-0.39) reflects that
+PacBio HiFi qualities are themselves higher-entropy in raw bytes
+(more distinct Q values used) but contain less *informative*
+structure for codec exploitation — most prediction power is already
+captured by the unconditional symbol distribution. CRAM 3.1's
+0.20-0.25 B/qual target is an Illumina figure; PacBio HiFi has a
+fundamentally different ceiling.
 
-### Why c3 beats c2 on length-variable / non-100bp Illumina
+## 3. Cross-corpus winner depends on platform — no single best
 
-c2's "drop length, equal-precision history" bet wins on chr22's
-uniform 100 bp reads because length_bucket adds zero conditioning
-power and the 4 extra bits c2 reinvested in `prev_q[2]` give a
-real (small) edge.
+No single candidate wins across all corpora. The winner depends on
+the platform's quality-distribution shape:
 
-But on WES (variable read lengths from exon-by-exon capture) and
-HG002 2×250 (250 bp instead of 100 bp), `length_bucket` carries real
-signal — different read-length classes have different per-position
-quality decay profiles. c3's full-Phred 8-bit prev_q[0] also
-distinguishes adjacent Q values that c2's 4-bit-binned `prev_q[0..2]`
-collapses, which matters when the quality distribution has narrow
-modes.
+| Cand | chr22 | WES | HG002 2×250 | PacBio HiFi | mean rank |
+|---|---:|---:|---:|---:|---:|
+| **c0 (V3, sloc=14)** | 4 | 3 | 4 | **1** | 3.0 |
+| c1 (4+3+2 prev_q, length, sloc=17) | 2 | 4 | 3 | 2 | 2.75 |
+| **c2** (4+4+4 prev_q, no length, sloc=17) | **1** | 2 | 2 | 4 | 2.25 |
+| **c3** (8 prev_q, length, sloc=17) | 3 | **1** | **1** | 3 | 2.0 |
+| c4 (SplitMix64 hash, sloc=12) | 5 | 5 | 5 | 5 | **5.0** |
 
-The key Stage 2 design implication: **prefer c3's bit budget over
-c2's** if we want a single static codec design that works robustly
-across Illumina coverage patterns and read lengths.
+c3 has the best mean rank but only by virtue of two strong wins
+(WES, HG002 2×250) — it's middle-of-the-pack on chr22 and PacBio.
+c0 (V3 baseline) is the only candidate that wins outright on PacBio
+HiFi.
+
+### Why the platform matters
+
+**Illumina (chr22, WES, HG002 2×250):** quality bytes span Q0-Q40
+(34 distinct values when `(q-33)>>0` though most cluster in Q15-30).
+Adjacent Q values carry information about base-call confidence;
+context-conditional freq tables for prev_q[0]-prev_q[2] capture real
+local correlation. c3's 8-bit full-Phred prev_q[0] + length_bucket
+extracts more signal than c0's 4-bit hash prev_q ring on chr22 —
+and the gap widens on WES (variable read lengths → length_bucket
+carries real signal) and HG002 2×250 (longer reads → more position
+variance). Within Illumina, c3 dominates.
+
+**PacBio HiFi:** quality bytes cluster at Q60+ (byte values ≥ 93)
+with a peak at Q93 (`~`). Most prev_q windows are nearly constant.
+Per-context freq tables converge to nearly-identical
+near-deterministic distributions. Conditioning power vanishes;
+splitting into more contexts (sloc=17) only fragments the data
+without informational benefit. c0's 16K context space is already
+enough to soak up the residual variance. **c0 wins.**
+
+### Implication for Stage 2
+
+There is **no single static bit-pack design that wins across
+platforms**. Three viable directions for Stage 2:
+
+1. **Per-platform codec selection.** Sender includes a "quality
+   profile" metadata flag (Illumina / PacBio HiFi / ONT / etc.); the
+   wire format carries an `sloc` parameter the encoder picks based
+   on the data's empirical entropy. Decode is unaffected — it just
+   reads `sloc` from the header.
+2. **Adaptive sloc per block.** Encoder measures quality entropy
+   over the block, picks `sloc` to balance freq-table overhead vs
+   conditioning power. No platform tag needed; the data tells the
+   encoder. Slightly more encoder complexity.
+3. **Ship c3 as default, fall back to c0 when the data doesn't
+   benefit.** Encoder runs both candidates on a sample, picks the
+   smaller. Adds encode wall but no wire-format complication.
+
+The one option Stage 2 should NOT take: lock in c3 as a static
+choice without an adaptive mechanism. PacBio HiFi proves c3 is
+strictly worse on long-read data.
 
 ## 4. Cross-corpus loser: c4 (SplitMix64 hash, CRAM-exact)
 
-c4 is the worst candidate on every corpus, ranging from 8.3% worse
-than c0 (chr22) to 20.9% worse (WES). The CRAM 3.1 fqzcomp default
-of 4096 contexts (sloc=12) is too few for any of these corpora at
-their context-feature density. The hash-escalation path (Option A
-from brainstorming) is conclusively refuted across Illumina diversity.
-**Stage 2 should not adopt SplitMix64 hashing.**
+c4 is the worst candidate on every corpus, ranging from 2.3-3.2%
+worse than c0 (PacBio) to 20.9% worse (WES). The CRAM 3.1 fqzcomp
+default of 4096 contexts (sloc=12) is too few for any of these
+corpora at their context-feature density. The hash-escalation path
+(Option A from brainstorming) is conclusively refuted across
+platforms — Illumina or PacBio. **Stage 2 should not adopt
+SplitMix64 hashing.**
 
 ## 5. Diagnostic: c3's `n_active` collapse on WES
 
@@ -132,33 +199,29 @@ collapse: the right contexts get more data.
 
 ## 6. Re-charter implications
 
-The Stage 1 §5 outcome `all_fail_recharter` (chr22-only) is reinforced:
-no candidate hits the 1.15× CRAM gate on the chr22 reference — the
-gate reflects v1.2.0's framework cost which is irrelevant on
-non-chr22 datasets. The cross-corpus signal is more useful for the
-re-brainstorm session:
+The Stage 1 §5 outcome `all_fail_recharter` is now strengthened by
+PacBio HiFi data. The cross-platform signal:
 
-1. **c3 is the strongest existing candidate** for a Stage 2 codec.
-   Bit budget: 8 bit prev_q[0] + 4 bit pos + 4 bit length + 1 bit
-   revcomp, sloc=17. Implements value-aligned `_q_to_8bit` via
-   `(q-33).clip(0,255)` and CRAM-finer `_length_bucket_4bit` (16
-   buckets, finer than CRAM 3.1 default 8).
-2. **The bit-pack > hash hypothesis is confirmed across corpora.**
-   No hash-based escalation needed.
-3. **The remaining gap to CRAM 3.1's 0.20-0.25 B/qual** (we're at
-   0.26-0.39 B/qual depending on corpus) is roughly half the
-   B/qual the spec target wanted. Likely sources:
-   - Multi-symbol history (chr22 c1's 4+3+2 prev_q didn't help, but
-     a richer non-bit-pack model might — e.g. mixture of
-     prev_q-conditional submodels)
-   - Mate-pair features (paired-end orientation/distance)
-   - Error-context (post-mismatch quality bias)
-   - Distance-from-read-end (cycle-bias on the trailing end)
-4. **PacBio HiFi platform diversity remains untested.** A re-charter
-   session that sources HG002 PacBio HiFi with QUAL preserved (e.g.
-   from raw subreads or a different pipeline) would be valuable
-   before any Stage 2 implementation since long-read characteristics
-   differ fundamentally.
+1. **No single static bit-pack design wins across platforms.** c3
+   dominates Illumina; c0 (V3 baseline) dominates PacBio HiFi. Stage
+   2 must either pick an adaptive mechanism or lock in to a single
+   platform.
+2. **Stage 2 design directions** (see §3 "Implication for Stage 2"
+   above):
+   - Per-platform codec selection via header flag
+   - Adaptive `sloc` per block based on measured entropy
+   - Two-pass encode (try c3 + c0, pick smaller)
+3. **Bit-pack > hash universally confirmed.** No hash-based
+   escalation needed for any platform.
+4. **PacBio HiFi B/qual ceiling is around 0.42** with the current
+   feature set; that may be near-optimal for narrow Q-distribution
+   data and additional features (mate-pair, error-context) may not
+   move the needle. Illumina retains room to grow toward CRAM 3.1's
+   0.20-0.25 B/qual via richer features.
+5. **The 1.15× CRAM gate is chr22-v1.2.0-specific and not directly
+   applicable to other corpora.** Re-charter discussion should
+   distinguish "chr22 v1.2.0 release gate" from "M94.Z multi-platform
+   robustness" — they are different acceptance criteria.
 
 ## 7. Reproducing this report
 
@@ -175,16 +238,26 @@ Each invocation produces `docs/benchmarks/2026-05-02-m94z-v4-<slug>.md`.
 
 ## 8. Open follow-ups
 
-- **PacBio HiFi sourcing.** Find a public HG002 (or any) PacBio HiFi
-  BAM that retains per-base qualities. Try PacBio's bioinformatics
-  test datasets, or convert from FASTQ via `samtools import`.
-- **ONT.** User dropped from this round but adding HG001 ONT (chr22
-  slice) is the highest-value missing platform.
-- **Sample variability within a platform.** A second NA12878
-  Illumina source (different lab, different read length, different
-  binning policy) would test whether platform calibration drift
-  matters for the right c3 vs c2 choice.
+- ✅ **PacBio HiFi sourcing.** Solved by streaming the raw GIAB
+  `*.fastq.gz` files (which preserve QUAL as ASCII) and piping
+  through `samtools import` to produce an unaligned BAM. See
+  `feedback_pacbio_hifi_qual_stripped` memory. The harness handles
+  unaligned BAMs without changes (no genomic positions needed for
+  the qualities-only analysis).
+- **ONT.** User dropped from this round; adding HG001 ONT (chr22
+  slice or raw FASTQ subset) would test the second long-read
+  platform with a different quality distribution shape from PacBio
+  HiFi (ONT typically Q5-Q20 vs HiFi Q60+).
+- **Sample variability within a platform.** A second Illumina source
+  (different lab, different binning policy, different prep) would
+  test whether platform calibration drift matters for the right c3
+  vs c0 choice within Illumina.
 - **Re-run on full HG002 Illumina (10.6M reads).** This run used a
   1M-read subset for tractability; the full 2.6B-quality corpus
   would test scale effects on `n_active` and per-context freq
   convergence.
+- **PacBio HiFi at larger scale.** This run used 14K reads
+  (~264M qualities) — comparable per-quality count to chr22
+  but only 14K distinct reads. Repeat with 50K-100K reads to see
+  if the c0-wins ranking holds at scale or if c3's extra contexts
+  start to pay off when there's more data per context.
