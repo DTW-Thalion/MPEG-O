@@ -54,6 +54,11 @@ X_MAX_PREFACTOR: int = (L >> T_BITS) << B_BITS  # 524288
 MAGIC = b"M94Z"
 VERSION = 1
 VERSION_V2_NATIVE = 2  # M94.Z V2: body produced by libttio_rans (Task 21 wiring)
+VERSION_V3_ADAPTIVE = 3  # M94.Z V3: adaptive Range Coder (L2 / Task #82 Phase B.2)
+
+# V3 adaptive RC params (mirror native ttio_rans.h)
+ADAPTIVE_STEP: int = 16
+ADAPTIVE_T_MAX: int = 65519
 
 
 # ── Default context parameters (per spec §4.3) ──────────────────────────
@@ -711,6 +716,104 @@ def _unpack_codec_header_v2(blob: bytes) -> tuple[CodecHeader, int]:
     return header, cursor
 
 
+# ── V3 (adaptive Range Coder) header — L2 / Task #82 Phase B.2 ──────────
+#
+# V3 wire format (spec 2026-05-01-l2-m94z-adaptive-design.md §5.1):
+#   0   4    magic = "M94Z"
+#   4   1    version = 3
+#   5   1    flags (bits 4-5 = pad_count)
+#   6   8    num_qualities (uint64 LE)
+#   14  8    num_reads (uint64 LE)
+#   22  4    rlt_compressed_len (uint32 LE)
+#   26  8    context_params (qbits, pbits, dbits, sloc, 4 reserved)
+#   34  2    max_sym (uint16 LE)
+#   36  var  read_length_table (deflated)
+#
+# Body prelude (after header):
+#   +0   4    n_active (uint32 LE)
+#   +4   2*n  sparse_ids[n_active] (uint16 LE × n_active)
+#
+# Then RC body (from C kernel):
+#   +0   16   lane_lengths (uint32 LE × 4)
+#   +16  var  4 lane byte streams concatenated.
+
+V3_HEADER_FIXED_PREFIX: int = 4 + 1 + 1 + 8 + 8 + 4 + CONTEXT_PARAMS_SIZE + 2
+# magic(4) + version(1) + flags(1) + num_qualities(8) + num_reads(8)
+# + rlt_compressed_len(4) + context_params(8) + max_sym(2) = 36 bytes
+
+
+def _pack_codec_header_v3(
+    flags: int,
+    num_qualities: int,
+    num_reads: int,
+    rlt_compressed: bytes,
+    context_params: ContextParams,
+    max_sym: int,
+) -> bytes:
+    """Pack a V3 (adaptive RC) header.
+
+    Differs from V1/V2:
+      - version byte = 3 (``VERSION_V3_ADAPTIVE``)
+      - num_reads is uint64 LE (was uint32 in V1/V2)
+      - 2-byte ``max_sym`` field at offset 34 (no freq_tables_compressed_len)
+      - no freq_tables blob (decoder rebuilds via adaptive update rules)
+      - no state_init/state_final trailer (RC has none)
+    """
+    if not (1 <= max_sym <= 256):
+        raise ValueError(
+            f"M94Z V3: max_sym {max_sym} out of valid range [1, 256]"
+        )
+    out = bytearray()
+    out += MAGIC
+    out += struct.pack(
+        "<BBQQI",
+        VERSION_V3_ADAPTIVE,
+        flags & 0xFF,
+        num_qualities,
+        num_reads,
+        len(rlt_compressed),
+    )
+    out += pack_context_params(context_params)
+    out += struct.pack("<H", max_sym & 0xFFFF)
+    out += rlt_compressed
+    return bytes(out)
+
+
+def _unpack_codec_header_v3(
+    blob: bytes,
+) -> tuple[int, int, int, bytes, ContextParams, int, int]:
+    """Parse a V3 header.
+
+    Returns ``(flags, num_qualities, num_reads, read_length_table,
+    context_params, max_sym, body_offset)``.
+    """
+    if len(blob) < V3_HEADER_FIXED_PREFIX:
+        raise ValueError(
+            f"M94Z V3 header too short: {len(blob)} bytes "
+            f"(need {V3_HEADER_FIXED_PREFIX})"
+        )
+    if blob[:4] != MAGIC:
+        raise ValueError(f"M94Z bad magic: {blob[:4]!r}, expected {MAGIC!r}")
+    version = blob[4]
+    if version != VERSION_V3_ADAPTIVE:
+        raise ValueError(
+            f"_unpack_codec_header_v3: expected version "
+            f"{VERSION_V3_ADAPTIVE}, got {version}"
+        )
+    flags = blob[5]
+    num_qualities, num_reads, rlt_len = struct.unpack_from("<QQI", blob, 6)
+    cursor = 6 + 8 + 8 + 4  # = 26
+    ctx_params = unpack_context_params(blob, cursor)
+    cursor += CONTEXT_PARAMS_SIZE
+    (max_sym,) = struct.unpack_from("<H", blob, cursor)
+    cursor += 2
+    if len(blob) < cursor + rlt_len:
+        raise ValueError("M94Z V3 header truncated (rlt)")
+    rlt = bytes(blob[cursor:cursor + rlt_len])
+    cursor += rlt_len
+    return flags, num_qualities, num_reads, rlt, ctx_params, max_sym, cursor
+
+
 try:  # pragma: no cover — extension may be absent
     from ttio.codecs._fqzcomp_nx16_z import _fqzcomp_nx16_z as _ext
     _HAVE_C_EXTENSION = True
@@ -983,6 +1086,45 @@ if _HAVE_NATIVE_LIB:
         ctypes.c_size_t,                     # n_symbols
     ]
     _lib.ttio_rans_decode_block_m94z.restype = ctypes.c_int
+
+    # ── L2 adaptive (V3) bindings — Task #82 Phase B.2 ──────────────────
+    # int ttio_rans_encode_block_adaptive(
+    #     const uint8_t *symbols, const uint16_t *contexts,
+    #     size_t n_symbols, uint16_t n_contexts, uint16_t max_sym,
+    #     uint8_t *out, size_t *out_len);
+    _lib.ttio_rans_encode_block_adaptive.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_uint16),
+        ctypes.c_size_t,
+        ctypes.c_uint16,
+        ctypes.c_uint16,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    _lib.ttio_rans_encode_block_adaptive.restype = ctypes.c_int
+
+    # int ttio_rans_decode_block_adaptive_m94z(
+    #     const uint8_t *compressed, size_t comp_len,
+    #     uint16_t n_contexts, uint16_t max_sym,
+    #     const ttio_m94z_params *params, const uint16_t *ctx_remap,
+    #     const uint32_t *read_lengths, size_t n_reads,
+    #     const uint8_t *revcomp_flags, uint16_t pad_ctx_dense,
+    #     uint8_t *symbols, size_t n_symbols);
+    _lib.ttio_rans_decode_block_adaptive_m94z.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+        ctypes.c_uint16,
+        ctypes.c_uint16,
+        ctypes.POINTER(_TTIOM94ZParams),
+        ctypes.POINTER(ctypes.c_uint16),
+        ctypes.POINTER(ctypes.c_uint32),
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_uint16,
+        ctypes.POINTER(ctypes.c_uint8),
+        ctypes.c_size_t,
+    ]
+    _lib.ttio_rans_decode_block_adaptive_m94z.restype = ctypes.c_int
 else:
     _lib = None
     _TTIORansContextResolver = None
@@ -1319,6 +1461,245 @@ def _encode_v2_native(
     return header_bytes + native_body
 
 
+# ── V3 adaptive RC encode / decode (L2, Task #82 Phase B.2) ─────────────
+
+
+def _encode_v3_native(
+    qualities: bytes,
+    read_lengths: list[int],
+    revcomp_flags: list[int],
+    context_params: ContextParams,
+    n: int,
+    n_padded: int,
+    pad_count: int,
+) -> bytes:
+    """V3 (adaptive RC) encode.
+
+    Single-pass encoder:
+      1. Build sparse context sequence via :func:`_build_context_seq`.
+      2. Walk symbols once, assigning dense ids to sparse ctxs in
+         first-encounter order (parallel to the C kernel's slab indexing).
+      3. Compute ``max_sym`` from the actual symbol byte range.
+      4. Call ``ttio_rans_encode_block_adaptive`` to produce the RC body.
+      5. Pack header || body prelude || body.
+
+    The body prelude carries ``n_active`` + ``sparse_ids[]`` so the
+    decoder can rebuild the same dense-id mapping.
+    """
+    if not _HAVE_NATIVE_LIB:
+        raise RuntimeError(
+            "_encode_v3_native called but libttio_rans is not available"
+        )
+
+    sparse_seq = _build_context_seq(
+        qualities, read_lengths, revcomp_flags, n_padded,
+        context_params.qbits, context_params.pbits, context_params.sloc,
+    )
+
+    # Pad the symbol buffer with zeros (matches V1/V2 conventions; the
+    # adaptive C kernel encodes symbol byte 0 in the pad context, which
+    # the decoder mirrors lockstep).
+    symbols = bytearray(n_padded)
+    symbols[:n] = qualities
+
+    # First-encounter pass: build sparse_ids (encounter order) +
+    # dense_seq (per-symbol dense id). Limit n_active to uint16.
+    sparse_to_dense: dict[int, int] = {}
+    sparse_ids: list[int] = []
+    dense_seq = array.array('H', [0] * n_padded)
+    for i in range(n_padded):
+        sp = sparse_seq[i]
+        d = sparse_to_dense.get(sp)
+        if d is None:
+            d = len(sparse_ids)
+            if d > 0xFFFF:
+                raise ValueError(
+                    "M94Z V3: more than 65535 distinct contexts in input"
+                )
+            sparse_to_dense[sp] = d
+            sparse_ids.append(sp)
+        dense_seq[i] = d
+    n_active = len(sparse_ids)
+    if n_active == 0:
+        # Empty input — n_padded == 0; treat as a degenerate encode with
+        # n_contexts = 1, max_sym = 1 to keep the C entry happy.
+        n_active = 1
+        sparse_ids = [m94z_context(
+            0, 0, 0,
+            context_params.qbits, context_params.pbits, context_params.sloc,
+        )]
+
+    # max_sym = max byte in input + 1, clamped to [1, 256].
+    if n_padded == 0:
+        max_sym = 1
+    else:
+        max_sym = max(symbols) + 1
+        if max_sym < 1:
+            max_sym = 1
+        if max_sym > 256:
+            max_sym = 256
+
+    # Marshal symbols + dense contexts.
+    sym_buf = (ctypes.c_uint8 * n_padded).from_buffer_copy(bytes(symbols))
+    ctx_buf = (ctypes.c_uint16 * n_padded).from_buffer(dense_seq)
+
+    # Output capacity: 16-byte lane header + ~ N bytes for RC body. RC is
+    # bounded above by entropy plus a flush; budget 2 bytes per symbol +
+    # 64 byte slack.
+    out_cap = 16 + n_padded * 2 + 64
+    out_buf = (ctypes.c_uint8 * out_cap)()
+    out_len = ctypes.c_size_t(out_cap)
+
+    rc = _lib.ttio_rans_encode_block_adaptive(
+        sym_buf,
+        ctx_buf,
+        ctypes.c_size_t(n_padded),
+        ctypes.c_uint16(n_active),
+        ctypes.c_uint16(max_sym),
+        out_buf,
+        ctypes.byref(out_len),
+    )
+    if rc != 0:
+        raise RuntimeError(
+            f"ttio_rans_encode_block_adaptive failed: rc={rc}"
+        )
+    rc_body = bytes(out_buf[:out_len.value])
+
+    # Pack wire format.
+    rlt = _encode_read_lengths(read_lengths)
+    flags = (pad_count & 0x3) << 4
+    header_bytes = _pack_codec_header_v3(
+        flags=flags,
+        num_qualities=n,
+        num_reads=len(read_lengths),
+        rlt_compressed=rlt,
+        context_params=context_params,
+        max_sym=max_sym,
+    )
+    # Body prelude: n_active (u32 LE) + sparse_ids[] (u16 LE × n_active).
+    prelude = bytearray(4 + 2 * n_active)
+    struct.pack_into("<I", prelude, 0, n_active)
+    sid_arr = array.array('H', sparse_ids)
+    prelude[4:4 + 2 * n_active] = sid_arr.tobytes()
+    return header_bytes + bytes(prelude) + rc_body
+
+
+def _decode_v3_via_native(
+    encoded: bytes,
+    revcomp_flags: list[int] | None,
+) -> tuple[bytes, list[int], list[int]]:
+    """Decode a V3 (adaptive RC) M94.Z blob.
+
+    Pipeline:
+      1. Parse V3 header (read_lengths + max_sym + ContextParams).
+      2. Parse body prelude (n_active + sparse_ids).
+      3. Build ``ctx_remap[1 << sloc]`` of uint16 with 0xFFFF default
+         and fill ``ctx_remap[sparse_ids[i]] = i``.
+      4. Call ``ttio_rans_decode_block_adaptive_m94z`` with the RC
+         body bytes (i.e. encoded[body_off + prelude_len :]).
+    """
+    if not _HAVE_NATIVE_LIB:
+        raise RuntimeError(
+            "_decode_v3_via_native called but libttio_rans is not available"
+        )
+
+    (flags, num_qualities, num_reads, rlt, ctx_params, max_sym,
+     body_off) = _unpack_codec_header_v3(encoded)
+    pad_count = (flags >> 4) & 0x3
+    read_lengths = _decode_read_lengths(rlt, num_reads)
+
+    if revcomp_flags is None:
+        revcomp_flags = [0] * num_reads
+    elif len(revcomp_flags) != num_reads:
+        raise ValueError(
+            f"revcomp_flags length {len(revcomp_flags)} != "
+            f"num_reads {num_reads}"
+        )
+
+    n_padded = num_qualities + pad_count
+    if (n_padded & 3) != 0:
+        raise ValueError(
+            f"M94Z V3: n_padded {n_padded} not a multiple of 4"
+        )
+
+    # Parse body prelude.
+    if len(encoded) < body_off + 4:
+        raise ValueError("M94Z V3: body prelude truncated (n_active)")
+    (n_active,) = struct.unpack_from("<I", encoded, body_off)
+    pre_off = body_off + 4
+    if n_active > 0xFFFF:
+        raise ValueError(f"M94Z V3: n_active {n_active} exceeds 65535")
+    if len(encoded) < pre_off + 2 * n_active:
+        raise ValueError("M94Z V3: body prelude truncated (sparse_ids)")
+    sparse_ids = list(struct.unpack_from(f"<{n_active}H", encoded, pre_off))
+    pre_off += 2 * n_active
+
+    # Build ctx_remap (size 1 << sloc, uint16, 0xFFFF default).
+    sloc = ctx_params.sloc
+    ctx_cap = 1 << sloc
+    remap = array.array('H', [0xFFFF] * ctx_cap)
+    for dense, sparse in enumerate(sparse_ids):
+        if sparse >= ctx_cap:
+            raise ValueError(
+                f"M94Z V3: sparse_id {sparse} >= {ctx_cap} (sloc={sloc})"
+            )
+        remap[sparse] = dense
+    remap_buf = (ctypes.c_uint16 * ctx_cap).from_buffer(remap)
+
+    pad_ctx_sparse = m94z_context(
+        0, 0, 0, ctx_params.qbits, ctx_params.pbits, ctx_params.sloc,
+    )
+    pad_ctx_dense_val = remap[pad_ctx_sparse]
+    if pad_ctx_dense_val == 0xFFFF:
+        # Pad ctx not in active set — fall back to dense 0 (matches the
+        # V2 streaming convention).
+        pad_ctx_dense_val = 0
+
+    # Read length / revcomp arrays.
+    if num_reads:
+        _rl = array.array('I', read_lengths)
+        _rc = array.array('B', [v & 1 for v in revcomp_flags])
+        rl_buf = (ctypes.c_uint32 * num_reads).from_buffer(_rl)
+        rc_buf = (ctypes.c_uint8 * num_reads).from_buffer(_rc)
+    else:
+        rl_buf = None
+        rc_buf = None
+
+    params = _TTIOM94ZParams(
+        qbits=ctx_params.qbits,
+        pbits=ctx_params.pbits,
+        sloc=ctx_params.sloc,
+    )
+
+    rc_body = encoded[pre_off:]
+    body_buf = (ctypes.c_uint8 * len(rc_body)).from_buffer_copy(bytes(rc_body))
+
+    # Output: n_qualities bytes (the C entry decodes symbols 0..n_padded
+    # internally and writes the first n_qualities into the output buffer).
+    out_buf = (ctypes.c_uint8 * num_qualities)()
+
+    rc = _lib.ttio_rans_decode_block_adaptive_m94z(
+        body_buf,
+        ctypes.c_size_t(len(rc_body)),
+        ctypes.c_uint16(n_active),
+        ctypes.c_uint16(max_sym),
+        ctypes.byref(params),
+        remap_buf,
+        rl_buf,
+        ctypes.c_size_t(num_reads),
+        rc_buf,
+        ctypes.c_uint16(int(pad_ctx_dense_val)),
+        out_buf,
+        ctypes.c_size_t(num_qualities),
+    )
+    if rc != 0:
+        raise RuntimeError(
+            f"ttio_rans_decode_block_adaptive_m94z failed: rc={rc}"
+        )
+
+    return bytes(out_buf), read_lengths, list(revcomp_flags)
+
+
 def encode(
     qualities: bytes,
     read_lengths: list[int],
@@ -1326,26 +1707,32 @@ def encode(
     *,
     context_params: ContextParams | None = None,
     prefer_native: bool | None = None,
+    prefer_v3: bool | None = None,
 ) -> bytes:
     """Top-level M94.Z encoder.
 
+    Version dispatch (in priority order):
+      1. ``prefer_v3 is True`` → V3 (adaptive Range Coder).
+      2. ``prefer_v3 is False`` → fall back to V1/V2 based on
+         ``prefer_native``.
+      3. ``prefer_v3 is None`` (default) → consult env var
+         ``TTIO_M94Z_VERSION``: ``"3"`` → V3 (default), ``"2"`` → V2,
+         ``"1"`` → V1. If unset, **V3 is the default** when libttio_rans
+         is available; otherwise V1 (Cython / pure-Python).
+
     Args:
         qualities: concatenated Phred quality byte stream.
-        read_lengths: per-read length list (sum must equal len(qualities)).
+        read_lengths: per-read length list (sum must equal
+            len(qualities)).
         revcomp_flags: parallel list of 0/1.
         context_params: optional :class:`ContextParams`; default is
             ``qbits=12, pbits=2, sloc=14``.
-        prefer_native: when ``True``, dispatch to the V2 native encoder
-            (libttio_rans). When ``False``, force the V1 path (Cython
-            or pure-Python). When ``None`` (default), respect the
-            environment variable ``TTIO_M94Z_USE_NATIVE`` — V1 is the
-            default unless that env var is "1" or "true". V1 streams
-            remain backwards-compatible (version byte = 1); V2 streams
-            carry version byte = 2 and a self-contained native body.
+        prefer_native: legacy V1↔V2 toggle. Ignored when V3 is selected.
+        prefer_v3: explicit override for V3 encode.
 
     Returns:
-        On-wire byte stream: header || body || trailer (V1) or
-        header || native body (V2).
+        On-wire byte stream. Version byte is 1, 2, or 3 depending on
+        the active codec path.
     """
     if not isinstance(qualities, (bytes, bytearray, memoryview)):
         raise TypeError("qualities must be bytes-like")
@@ -1368,10 +1755,38 @@ def encode(
     pad_count = (-n) & 3
     n_padded = n + pad_count
 
-    # ── V2 native dispatch decision ─────────────────────────────────────
+    # ── Version-selection ladder ────────────────────────────────────────
+    # Resolve prefer_v3 / prefer_native against env vars:
+    #   TTIO_M94Z_VERSION:  "3" / "2" / "1" → force that version.
+    #   TTIO_M94Z_USE_NATIVE (legacy): truthy → enable V2 (V1 v V2 toggle).
+    env_ver = os.environ.get("TTIO_M94Z_VERSION", "").strip()
+    if prefer_v3 is None:
+        if env_ver == "3":
+            prefer_v3 = True
+        elif env_ver in ("1", "2"):
+            prefer_v3 = False
+        else:
+            # No explicit selection — V3 is the default when native is
+            # available. Without the native library V3 isn't possible,
+            # so the legacy V1/V2 ladder takes over.
+            prefer_v3 = _HAVE_NATIVE_LIB
+
+    if prefer_v3 and _HAVE_NATIVE_LIB:
+        return _encode_v3_native(
+            qualities, list(read_lengths), list(revcomp_flags),
+            context_params, n, n_padded, pad_count,
+        )
+
     if prefer_native is None:
-        env_val = os.environ.get("TTIO_M94Z_USE_NATIVE", "").strip().lower()
-        prefer_native = env_val in ("1", "true", "yes", "on")
+        if env_ver == "2":
+            prefer_native = True
+        elif env_ver == "1":
+            prefer_native = False
+        else:
+            env_val = os.environ.get(
+                "TTIO_M94Z_USE_NATIVE", "",
+            ).strip().lower()
+            prefer_native = env_val in ("1", "true", "yes", "on")
     use_native_v2 = bool(prefer_native) and _HAVE_NATIVE_LIB
 
     if use_native_v2:
@@ -1759,6 +2174,14 @@ def decode_with_metadata(
         raise ValueError(
             f"M94Z bad magic: {encoded[:4]!r}, expected {MAGIC!r}"
         )
+    if encoded[4] == VERSION_V3_ADAPTIVE:
+        if not _HAVE_NATIVE_LIB:
+            raise RuntimeError(
+                "M94Z V3 decode requires libttio_rans (set "
+                "TTIO_RANS_LIB_PATH or install the native library)"
+            )
+        return _decode_v3_via_native(encoded, revcomp_flags)
+
     if encoded[4] == VERSION_V2_NATIVE:
         return _decode_v2_with_metadata(encoded, revcomp_flags)
 
@@ -1902,6 +2325,9 @@ __all__ = [
     "MAGIC",
     "VERSION",
     "VERSION_V2_NATIVE",
+    "VERSION_V3_ADAPTIVE",
+    "ADAPTIVE_STEP",
+    "ADAPTIVE_T_MAX",
     "L",
     "B_BITS",
     "B",

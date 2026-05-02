@@ -5,6 +5,12 @@ produced by libttio_rans's :c:func:`ttio_rans_encode_block`. V1 streams
 remain the default unless ``prefer_native=True`` (or env var
 ``TTIO_M94Z_USE_NATIVE`` is set) is passed to :func:`encode`.
 
+NOTE: as of L2 (Task #82 Phase B.2, 2026-05-01) V3 (adaptive Range Coder)
+is the default when libttio_rans is available. The V1/V2 round-trip
+tests below explicitly request the legacy code paths via
+``prefer_v3=False`` (and either ``prefer_native=True`` for V2 or
+``prefer_native=False`` for V1).
+
 V2 decode is pure-Python in this revision (Task 21 scope) — see
 ``_decode_v2_with_metadata`` in fqzcomp_nx16_z.py for design notes on
 why the C library cannot drive V2 decode without a streaming context
@@ -24,6 +30,20 @@ from ttio.codecs.fqzcomp_nx16_z import (
 )
 
 
+def _v1(*args, **kwargs) -> bytes:
+    """Encode forcing V1 (legacy Cython / pure-Python path)."""
+    kwargs.setdefault("prefer_v3", False)
+    kwargs.setdefault("prefer_native", False)
+    return encode(*args, **kwargs)
+
+
+def _v2(*args, **kwargs) -> bytes:
+    """Encode forcing V2 (native body, legacy)."""
+    kwargs["prefer_v3"] = False
+    kwargs["prefer_native"] = True
+    return encode(*args, **kwargs)
+
+
 def _make_data(n_reads: int = 100, read_len: int = 80) -> tuple[bytes, list[int], list[int]]:
     """Synthetic FASTQ-like quality stream for round-trip testing."""
     qualities = bytes((33 + 20 + ((i * 31) % 21)) for i in range(n_reads * read_len))
@@ -39,18 +59,20 @@ def _native_available() -> bool:
 # ── V1 default path ────────────────────────────────────────────────────
 
 
-def test_default_encode_emits_v1():
-    """Default encoder (no prefer_native) must produce V1 (version=1)."""
+def test_v1_explicit_emits_version_byte_1():
+    """``prefer_v3=False, prefer_native=False`` must produce V1."""
     qualities, rls, rcs = _make_data(n_reads=20, read_len=64)
-    encoded = encode(qualities, rls, rcs)
+    encoded = _v1(qualities, rls, rcs)
     assert encoded[:4] == b"M94Z"
-    assert encoded[4] == 1, f"default encode must produce V1, got version={encoded[4]}"
+    assert encoded[4] == 1, (
+        f"explicit V1 encode must produce V1, got version={encoded[4]}"
+    )
 
 
-def test_v1_roundtrip_default():
-    """V1 (default) round-trips qualities exactly."""
+def test_v1_roundtrip_explicit():
+    """V1 (explicit) round-trips qualities exactly."""
     qualities, rls, rcs = _make_data(n_reads=30, read_len=72)
-    encoded = encode(qualities, rls, rcs)
+    encoded = _v1(qualities, rls, rcs)
     decoded, dec_rls, dec_rcs = decode_with_metadata(encoded, revcomp_flags=rcs)
     assert decoded == qualities
     assert dec_rls == rls
@@ -64,7 +86,7 @@ def test_v1_roundtrip_default():
 def test_v2_encode_emits_version_byte_2():
     """encode(prefer_native=True) must produce V2 (version=2)."""
     qualities, rls, rcs = _make_data(n_reads=40, read_len=64)
-    encoded = encode(qualities, rls, rcs, prefer_native=True)
+    encoded = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     assert encoded[:4] == b"M94Z"
     assert encoded[4] == VERSION_V2_NATIVE
     assert encoded[4] == 2
@@ -74,7 +96,7 @@ def test_v2_encode_emits_version_byte_2():
 def test_v2_roundtrip_native_encode():
     """V2 encode (native) + V2 decode (pure-python) round-trips qualities."""
     qualities, rls, rcs = _make_data()
-    encoded = encode(qualities, rls, rcs, prefer_native=True)
+    encoded = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     assert encoded[4] == 2
 
     decoded, dec_rls, dec_rcs = decode_with_metadata(encoded, revcomp_flags=rcs)
@@ -93,7 +115,7 @@ def test_v2_roundtrip_small():
     qualities = b"!" * 16  # 16 bytes, all same symbol
     rls = [16]
     rcs = [0]
-    encoded = encode(qualities, rls, rcs, prefer_native=True)
+    encoded = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     decoded, _, _ = decode_with_metadata(encoded, revcomp_flags=rcs)
     assert decoded == qualities
 
@@ -104,7 +126,7 @@ def test_v2_roundtrip_unaligned():
     qualities = bytes(range(33, 33 + 17))  # 17 bytes
     rls = [17]
     rcs = [0]
-    encoded = encode(qualities, rls, rcs, prefer_native=True)
+    encoded = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     decoded, _, _ = decode_with_metadata(encoded, revcomp_flags=rcs)
     assert decoded == qualities
 
@@ -115,7 +137,7 @@ def test_v2_roundtrip_multi_read():
     rls = [50, 80, 60, 70, 40]
     rcs = [0, 1, 0, 1, 0]
     qualities = bytes((33 + 30 + ((i * 17) % 31)) for i in range(sum(rls)))
-    encoded = encode(qualities, rls, rcs, prefer_native=True)
+    encoded = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     decoded, dec_rls, _ = decode_with_metadata(encoded, revcomp_flags=rcs)
     assert decoded == qualities
     assert dec_rls == rls
@@ -123,18 +145,22 @@ def test_v2_roundtrip_multi_read():
 
 @pytest.mark.skipif(not _native_available(), reason="native libttio_rans not available")
 def test_v2_env_var_enables_native():
-    """TTIO_M94Z_USE_NATIVE=1 must opt into V2 encode."""
+    """TTIO_M94Z_VERSION=2 must opt into V2 encode."""
     qualities, rls, rcs = _make_data(n_reads=10, read_len=32)
-    old = os.environ.get("TTIO_M94Z_USE_NATIVE")
+    old_ver = os.environ.get("TTIO_M94Z_VERSION")
+    old_use = os.environ.get("TTIO_M94Z_USE_NATIVE")
     try:
-        os.environ["TTIO_M94Z_USE_NATIVE"] = "1"
+        os.environ["TTIO_M94Z_VERSION"] = "2"
+        os.environ.pop("TTIO_M94Z_USE_NATIVE", None)
         encoded = encode(qualities, rls, rcs)
-        assert encoded[4] == 2, "env var should enable V2 path"
+        assert encoded[4] == 2, "TTIO_M94Z_VERSION=2 should enable V2"
     finally:
-        if old is None:
-            os.environ.pop("TTIO_M94Z_USE_NATIVE", None)
+        if old_ver is None:
+            os.environ.pop("TTIO_M94Z_VERSION", None)
         else:
-            os.environ["TTIO_M94Z_USE_NATIVE"] = old
+            os.environ["TTIO_M94Z_VERSION"] = old_ver
+        if old_use is not None:
+            os.environ["TTIO_M94Z_USE_NATIVE"] = old_use
 
     # Round-trip via the env-var-enabled stream.
     decoded, _, _ = decode_with_metadata(encoded, revcomp_flags=rcs)
@@ -143,41 +169,56 @@ def test_v2_env_var_enables_native():
 
 @pytest.mark.skipif(not _native_available(), reason="native libttio_rans not available")
 def test_v2_env_var_off_does_not_enable_native():
-    """TTIO_M94Z_USE_NATIVE unset → V1 default."""
+    """Without TTIO_M94Z_VERSION/USE_NATIVE → V3 default (native available)."""
     qualities, rls, rcs = _make_data(n_reads=10, read_len=32)
-    old = os.environ.get("TTIO_M94Z_USE_NATIVE")
+    old_ver = os.environ.get("TTIO_M94Z_VERSION")
+    old_use = os.environ.get("TTIO_M94Z_USE_NATIVE")
     try:
+        os.environ.pop("TTIO_M94Z_VERSION", None)
         os.environ.pop("TTIO_M94Z_USE_NATIVE", None)
         encoded = encode(qualities, rls, rcs)
-        assert encoded[4] == 1, "without env var, must default to V1"
+        assert encoded[4] == 3, (
+            "without env vars, default must be V3 (native available)"
+        )
     finally:
-        if old is not None:
-            os.environ["TTIO_M94Z_USE_NATIVE"] = old
+        if old_ver is not None:
+            os.environ["TTIO_M94Z_VERSION"] = old_ver
+        if old_use is not None:
+            os.environ["TTIO_M94Z_USE_NATIVE"] = old_use
 
 
 @pytest.mark.skipif(not _native_available(), reason="native libttio_rans not available")
 def test_v2_explicit_false_overrides_env():
-    """prefer_native=False overrides env var."""
+    """prefer_native=False (with prefer_v3=False) forces V1 regardless of env."""
     qualities, rls, rcs = _make_data(n_reads=8, read_len=32)
-    old = os.environ.get("TTIO_M94Z_USE_NATIVE")
+    old_ver = os.environ.get("TTIO_M94Z_VERSION")
+    old_use = os.environ.get("TTIO_M94Z_USE_NATIVE")
     try:
+        os.environ["TTIO_M94Z_VERSION"] = "2"
         os.environ["TTIO_M94Z_USE_NATIVE"] = "1"
-        encoded = encode(qualities, rls, rcs, prefer_native=False)
-        assert encoded[4] == 1, "prefer_native=False must force V1"
+        encoded = encode(
+            qualities, rls, rcs,
+            prefer_v3=False, prefer_native=False,
+        )
+        assert encoded[4] == 1, "explicit V1 must override env vars"
     finally:
-        if old is None:
+        if old_ver is None:
+            os.environ.pop("TTIO_M94Z_VERSION", None)
+        else:
+            os.environ["TTIO_M94Z_VERSION"] = old_ver
+        if old_use is None:
             os.environ.pop("TTIO_M94Z_USE_NATIVE", None)
         else:
-            os.environ["TTIO_M94Z_USE_NATIVE"] = old
+            os.environ["TTIO_M94Z_USE_NATIVE"] = old_use
 
 
 # ── V1 / V2 byte-format independence ───────────────────────────────────
 
 
-def test_v1_v2_decode_compatibility():
-    """V1 (default) decode unchanged."""
+def test_v1_decode_compatibility():
+    """Explicit-V1 decode unchanged (post-L2 default is V3 — opt out)."""
     qualities, rls, rcs = _make_data(n_reads=25, read_len=48)
-    encoded_v1 = encode(qualities, rls, rcs)  # default: V1
+    encoded_v1 = _v1(qualities, rls, rcs)
     assert encoded_v1[4] == 1
     decoded_v1, _, _ = decode_with_metadata(encoded_v1, revcomp_flags=rcs)
     assert decoded_v1 == qualities
@@ -187,8 +228,8 @@ def test_v1_v2_decode_compatibility():
 def test_v1_v2_produce_same_qualities():
     """V1 and V2 must decode to the same payload (compressed bytes differ)."""
     qualities, rls, rcs = _make_data(n_reads=15, read_len=64)
-    enc_v1 = encode(qualities, rls, rcs)
-    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    enc_v1 = _v1(qualities, rls, rcs)
+    enc_v2 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     assert enc_v1[4] == 1
     assert enc_v2[4] == 2
     # Compressed bytes WILL differ — different wire format.
@@ -203,7 +244,7 @@ def test_v1_v2_produce_same_qualities():
 def test_v2_decode_when_native_only_for_encode():
     """V2 streams round-trip whether or not native is the encode default."""
     qualities, rls, rcs = _make_data(n_reads=50, read_len=64)
-    encoded_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    encoded_v2 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     decoded, _, _ = decode_with_metadata(encoded_v2, revcomp_flags=rcs)
     assert decoded == qualities
 
@@ -235,7 +276,7 @@ def _helper_decode_v2_streaming(enc_v2, rcs):
 def test_v2_streaming_matches_pure_python():
     import ttio.codecs.fqzcomp_nx16_z as _mod
     qualities, rls, rcs = _make_data()
-    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    enc_v2 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     # Pure-Python decode
     orig_flag = _mod._HAVE_NATIVE_LIB
     _mod._HAVE_NATIVE_LIB = False
@@ -254,7 +295,7 @@ def test_v2_streaming_roundtrip_small():
     qualities = b'!' * 16
     rls = [16]
     rcs = [0]
-    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    enc_v2 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     dec = _helper_decode_v2_streaming(enc_v2, rcs)
     assert dec == qualities
 
@@ -264,7 +305,7 @@ def test_v2_streaming_roundtrip_unaligned():
     qualities = bytes(range(33, 33 + 17))
     rls = [17]
     rcs = [0]
-    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    enc_v2 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     dec = _helper_decode_v2_streaming(enc_v2, rcs)
     assert dec == qualities
 
@@ -274,7 +315,7 @@ def test_v2_streaming_roundtrip_multi_read():
     rls = [50, 80, 60, 70, 40]
     rcs = [0, 1, 0, 1, 0]
     qualities = bytes((33 + 30 + ((i * 17) % 31)) for i in range(sum(rls)))
-    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    enc_v2 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     dec = _helper_decode_v2_streaming(enc_v2, rcs)
     assert dec == qualities
 
@@ -282,7 +323,7 @@ def test_v2_streaming_roundtrip_multi_read():
 @pytest.mark.skipif(not _native_available(), reason='native libttio_rans not available')
 def test_v2_decode_uses_native_streaming_larger_block():
     qualities, rls, rcs = _make_data(n_reads=200, read_len=100)
-    enc_v2 = encode(qualities, rls, rcs, prefer_native=True)
+    enc_v2 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=True)
     assert enc_v2[4] == 2
     dec, _, _ = decode_with_metadata(enc_v2, revcomp_flags=rcs)
     assert dec == qualities
