@@ -6,7 +6,7 @@ as a record of what was built; current milestones use TTI-O names.
 
 ---
 
-> **Status (2026-05-01).** Phase 6 (M89 transport extension, M90
+> **Status (2026-05-02).** Phase 6 (M89 transport extension, M90
 > encryption/anonymisation, M91 multi-omics integration) **shipped**
 > alongside V- and C-series debt repayment. Phase 8 (post-M91
 > abstraction polish — `Run` protocol, modality-agnostic
@@ -84,6 +84,36 @@ as a record of what was built; current milestones use TTI-O names.
 > ctest 5/5. chr22 ratio against CRAM 3.1 unchanged at 1.965× — the
 > perf wins are at the codec layer; the residual gap is still HDF5
 > multi-omics framing (Task #82, deferred as multi-week scope).
+>
+> **Phase B.2 — L2 adaptive M94.Z V3 (Range Coder) infrastructure
+> shipped 2026-05-02.** HEAD `72eb845`. Range-Coder pivot during
+> Phase 2 (rANS state-range constraint blocked variable-T close to
+> 2¹⁶; see memory `rans_nx16_variable_t_invariant`); native C kernel
+> + V3 wire format + Python ctypes wrapper all green (8/8 native
+> ctests, 553/553 Python M94.Z tests). **Phase 4 chr22 hard gate:
+> FAILED** — measured 113.72 MB / 1.321× CRAM (target ≤ 99 MB / 1.15×),
+> over by 14.71 MB. Qualities essentially unchanged at 0.396 B/qual
+> (vs 0.395 under V1 static-per-block). Per-symbol adaptive freqs
+> alone, on top of the existing context formula (`prev_q × pos_bucket
+> × revcomp`, sloc=14), do not move the needle on chr22 — block sizes
+> already let static freqs converge to the empirical distribution.
+> Per spec §10, this **blocks Phase 5 (Java JNI) and Phase 6 (ObjC)**
+> wrappers; the V3 infrastructure stays Python-only until a model
+> beats V1 substantially. The Range-Coder kernel itself is reusable.
+> Next step is **Task #84** (below): brainstorm a richer context
+> model before any further codec work. See
+> `docs/benchmarks/2026-05-01-chr22-byte-breakdown.md` §8.
+>
+> * **Task #84 — Richer-context M94.Z (PLACEHOLDER).** A
+>   model-design problem, not a coder problem. Probable directions:
+>   length bucket (read length), distance-from-read-start (cycle-bias
+>   like Illumina), pair orientation, mate-cigar interaction,
+>   error-context (after-mismatch bias). Requires a fresh
+>   `superpowers:brainstorming` session, then a math/spec proof phase
+>   per `feedback_phase_0_spec_proof` before any C-kernel work. No
+>   implementation start until brainstorm + spec are user-reviewed.
+>   Wire-format break possible (V4) — V3 stays as the floor that's
+>   already shipped.
 >
 > **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under

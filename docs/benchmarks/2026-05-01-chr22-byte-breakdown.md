@@ -165,16 +165,53 @@ break checklist.
   risk of breaking >4 GB-offset files (uint32 overflow at 4 GB total
   read-data; reachable on deep WGS). Deferred.
 
-## 8. Remaining 1.32× → 1.15× gap (~14 MB)
+## 8. Phase B.2 (L2) results — adaptive M94.Z V3 (Range Coder)
+
+Measured 2026-05-02 at HEAD `72eb845` with
+`TTIO_RANS_LIB_PATH=$PWD/native/_build/libttio_rans.so`:
+
+| Stage | TTI-O | × CRAM | Δ vs prev |
+|---|---:|---:|---:|
+| Pre-L2 (post-L1+L3) | 113.72 MB | 1.321× | — |
+| L2 — adaptive M94.Z V3 (sloc=14) | **113.72 MB** | **1.321×** | **−0.001 MB** |
+
+**Phase 4 hard gate: FAILED.** Target was ≤ 99 MB (1.15× CRAM); we are
+14.71 MB over. Per spec §10, this blocks Phase 5 (Java JNI) and Phase 6
+(ObjC) wrappers — those only run after the gate passes.
+
+Qualities still account for 69.73 MB at **0.396 B/qual** — essentially
+unchanged from V1 static-per-block (0.395 B/qual). This is the key
+finding: per-symbol adaptive frequencies alone, on top of the same
+context formula (`prev_q × pos_bucket × revcomp`, sloc=14), do not move
+the needle on chr22. Block sizes are large enough that per-block static
+freqs already converge toward the empirical distribution; adaptivity
+buys negligible additional model fit.
+
+The Range-Coder pivot itself is sound: the V3 wire format, C kernel
+(`ttio_rans_encode_block_adaptive` / `ttio_rans_decode_block_adaptive_m94z`),
+and Python ctypes wrapper all ship working with 553 M94.Z tests green.
+That infrastructure is reusable for any future richer-context attempt.
+
+**What's needed to close the gap:** a richer **context model**, not a
+better entropy coder. CRAM 3.1 fqzcomp's actual edge over us comes from
+context features we don't capture — length bucket, distance from read
+start, pair orientation, mate-cigar interaction, error-context. Adding
+those is a model-design problem requiring a fresh spec/proof phase.
+Tracked as **WORKPLAN Task #84** (richer-context M94.Z).
+
+Encode wall: 17.58 s; decode wall: 15.72 s (V3 native fast-path).
+
+## 9. Remaining 1.32× → 1.15× gap (~14 MB)
 
 Almost the entire remaining gap is **qualities** (currently 61% of the
-file at 0.395 bytes/quality vs CRAM's ~0.20-0.25). Closing this needs
-codec-level work on M94.Z — adaptive freq updates inside a block,
-larger context window, or per-quality bucket modelling. That is L2
-from §6, multi-week scope, and requires a math/spec proof phase per
-``feedback_phase_0_spec_proof`` before implementation.
+file at 0.396 bytes/quality vs CRAM's ~0.20-0.25). Closing this needs
+codec-level work on M94.Z — richer context model (length bucket,
+distance from read start, error context), per-quality bucket modelling,
+or a fundamentally different scheme (e.g. neural / mixture model). That
+is **WORKPLAN Task #84**, multi-week scope, and requires a math/spec
+proof phase per ``feedback_phase_0_spec_proof`` before implementation.
 
-## 9. Reproducing this report
+## 10. Reproducing this report
 
 ```bash
 # Fresh chr22 benchmark
