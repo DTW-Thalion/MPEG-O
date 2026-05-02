@@ -31,6 +31,8 @@ import zlib
 from bisect import bisect_right
 from dataclasses import dataclass
 
+import numpy as np
+
 
 # ── rANS-Nx16 algorithm constants (per spec §1) ─────────────────────────
 
@@ -311,6 +313,113 @@ def _build_context_seq(
         else:
             contexts[i] = pad_ctx
     return contexts
+
+
+def _build_context_seq_arr_vec(
+    qualities: bytes,
+    read_lengths: list[int],
+    revcomp_flags: list[int],
+    n_padded: int,
+    qbits: int,
+    pbits: int,
+    sloc: int,
+) -> np.ndarray:
+    """Numpy-vectorized variant of :func:`_build_context_seq`, returning
+    ``ndarray[uint16]`` of length ``n_padded``.
+
+    Fast-path preconditions (caller is expected to enforce or fall back):
+      * ``len(qualities) == sum(read_lengths)``
+      * ``len(revcomp_flags) == len(read_lengths)``
+
+    The ring update for ``prev_q`` is sequential within a read but
+    independent across reads. We iterate ``p = 0..max_len-1`` and update
+    ``n_reads`` per-read states in parallel via numpy.
+    """
+    n = len(qualities)
+    pad_ctx = m94z_context(0, 0, 0, qbits, pbits, sloc)
+    if n_padded == 0:
+        return np.zeros(0, dtype=np.uint16)
+    n_reads = len(read_lengths)
+    if n_reads == 0 or n == 0:
+        return np.full(n_padded, pad_ctx, dtype=np.uint16)
+
+    qmask = (1 << qbits) - 1
+    pmask = (1 << pbits) - 1
+    smask = (1 << sloc) - 1
+    n_buckets = 1 << pbits
+    shift = max(1, qbits // 3)
+    shift_mask = (1 << shift) - 1
+
+    read_lens = np.asarray(read_lengths, dtype=np.int64)
+    revcomps = (np.asarray(revcomp_flags, dtype=np.int64) & 1)
+    qual_arr = np.frombuffer(qualities, dtype=np.uint8)
+
+    starts = np.empty(n_reads, dtype=np.int64)
+    starts[0] = 0
+    if n_reads > 1:
+        np.cumsum(read_lens[:-1], out=starts[1:])
+
+    contexts = np.full(n_padded, pad_ctx, dtype=np.uint16)
+    revcomp_term = (revcomps & 1) << (qbits + pbits)
+    prev_q = np.zeros(n_reads, dtype=np.int64)
+
+    max_len = int(read_lens.max())
+    denom = np.maximum(read_lens, 1)
+    for p in range(max_len):
+        active = read_lens > p
+        if not active.any():
+            break
+        flat_pos = starts + p
+        if p == 0:
+            pb = np.zeros(n_reads, dtype=np.int64)
+        else:
+            pb = np.minimum(n_buckets - 1, (p * n_buckets) // denom)
+        ctx_p = ((prev_q & qmask) | ((pb & pmask) << qbits) | revcomp_term) & smask
+        active_flat = flat_pos[active]
+        contexts[active_flat] = ctx_p[active].astype(np.uint16)
+        sym_p = qual_arr[active_flat].astype(np.int64)
+        prev_q[active] = ((prev_q[active] << shift) | (sym_p & shift_mask)) & qmask
+
+    return contexts
+
+
+def _vectorize_first_encounter(
+    sparse_seq: np.ndarray,
+    sloc: int,
+) -> tuple[np.ndarray, list[int], int]:
+    """Build (dense_seq, sparse_ids, n_active) from ``sparse_seq`` in
+    encounter order — vectorized equivalent of the dict-based scalar pass
+    in :func:`_encode_v3_native`.
+
+    ``sparse_seq`` values are bounded by ``1 << sloc`` (the ``smask`` in
+    :func:`m94z_context`); we exploit that to do a bounded scatter-min
+    rather than a full ``np.unique``.
+    """
+    n_padded = int(sparse_seq.shape[0])
+    if n_padded == 0:
+        return np.zeros(0, dtype=np.uint16), [], 0
+
+    n_buckets_total = 1 << sloc
+    arr = sparse_seq.astype(np.int64, copy=False)
+
+    first_idx_full = np.full(n_buckets_total, n_padded, dtype=np.int64)
+    np.minimum.at(first_idx_full, arr, np.arange(n_padded, dtype=np.int64))
+    seen_mask = first_idx_full < n_padded
+    seen_vals = np.flatnonzero(seen_mask)
+    first_idx = first_idx_full[seen_vals]
+    order = np.argsort(first_idx, kind="stable")
+    n_active = int(order.shape[0])
+    if n_active > 0xFFFF:
+        raise ValueError(
+            f"M94Z V3: more than 65535 distinct contexts in input ({n_active})"
+        )
+    sparse_ids_arr = seen_vals[order]
+
+    value_to_dense = np.full(n_buckets_total, 0xFFFF, dtype=np.uint16)
+    value_to_dense[sparse_ids_arr] = np.arange(n_active, dtype=np.uint16)
+    dense_seq = value_to_dense[arr]
+
+    return dense_seq, sparse_ids_arr.tolist(), n_active
 
 
 # ── Encoder / decoder core ──────────────────────────────────────────────
@@ -1491,35 +1600,32 @@ def _encode_v3_native(
             "_encode_v3_native called but libttio_rans is not available"
         )
 
-    sparse_seq = _build_context_seq(
-        qualities, read_lengths, revcomp_flags, n_padded,
-        context_params.qbits, context_params.pbits, context_params.sloc,
+    fast_path = (
+        len(qualities) == sum(read_lengths)
+        and len(revcomp_flags) == len(read_lengths)
     )
+    if fast_path:
+        sparse_seq_arr = _build_context_seq_arr_vec(
+            qualities, read_lengths, revcomp_flags, n_padded,
+            context_params.qbits, context_params.pbits, context_params.sloc,
+        )
+    else:
+        sparse_seq_list = _build_context_seq(
+            qualities, read_lengths, revcomp_flags, n_padded,
+            context_params.qbits, context_params.pbits, context_params.sloc,
+        )
+        sparse_seq_arr = np.asarray(sparse_seq_list, dtype=np.int64)
 
-    # Pad the symbol buffer with zeros (matches V1/V2 conventions; the
-    # adaptive C kernel encodes symbol byte 0 in the pad context, which
-    # the decoder mirrors lockstep).
-    symbols = bytearray(n_padded)
-    symbols[:n] = qualities
+    # Symbol buffer: padding stays 0 (the C kernel encodes pad bytes in the
+    # pad context; the decoder mirrors lockstep).
+    sym_arr = np.zeros(n_padded, dtype=np.uint8)
+    if n > 0:
+        sym_arr[:n] = np.frombuffer(qualities, dtype=np.uint8)
 
-    # First-encounter pass: build sparse_ids (encounter order) +
-    # dense_seq (per-symbol dense id). Limit n_active to uint16.
-    sparse_to_dense: dict[int, int] = {}
-    sparse_ids: list[int] = []
-    dense_seq = array.array('H', [0] * n_padded)
-    for i in range(n_padded):
-        sp = sparse_seq[i]
-        d = sparse_to_dense.get(sp)
-        if d is None:
-            d = len(sparse_ids)
-            if d > 0xFFFF:
-                raise ValueError(
-                    "M94Z V3: more than 65535 distinct contexts in input"
-                )
-            sparse_to_dense[sp] = d
-            sparse_ids.append(sp)
-        dense_seq[i] = d
-    n_active = len(sparse_ids)
+    # First-encounter pass — vectorized.
+    dense_seq_arr, sparse_ids, n_active = _vectorize_first_encounter(
+        sparse_seq_arr, context_params.sloc,
+    )
     if n_active == 0:
         # Empty input — n_padded == 0; treat as a degenerate encode with
         # n_contexts = 1, max_sym = 1 to keep the C entry happy.
@@ -1533,15 +1639,16 @@ def _encode_v3_native(
     if n_padded == 0:
         max_sym = 1
     else:
-        max_sym = max(symbols) + 1
+        max_sym = int(sym_arr.max()) + 1
         if max_sym < 1:
             max_sym = 1
         if max_sym > 256:
             max_sym = 256
 
-    # Marshal symbols + dense contexts.
-    sym_buf = (ctypes.c_uint8 * n_padded).from_buffer_copy(bytes(symbols))
-    ctx_buf = (ctypes.c_uint16 * n_padded).from_buffer(dense_seq)
+    # Marshal symbols + dense contexts (zero-copy ctypes views over the
+    # numpy buffers).
+    sym_buf = (ctypes.c_uint8 * n_padded).from_buffer(sym_arr)
+    ctx_buf = (ctypes.c_uint16 * n_padded).from_buffer(dense_seq_arr)
 
     # Output capacity: 16-byte lane header + ~ N bytes for RC body. RC is
     # bounded above by entropy plus a flush; budget 2 bytes per symbol +

@@ -86,7 +86,12 @@ as a record of what was built; current milestones use TTI-O names.
 > multi-omics framing (Task #82, deferred as multi-week scope).
 >
 > **Phase B.2 — L2 adaptive M94.Z V3 (Range Coder) infrastructure
-> shipped 2026-05-02.** HEAD `72eb845`. Range-Coder pivot during
+> shipped 2026-05-02; encode-perf follow-up landed same day.**
+> Initial V3 wrapper at HEAD `72eb845`; numpy-vectorized context
+> derivation + first-encounter pass at the next commit drops V3
+> encode wall **124.79 s → 25.83 s (4.8×)** on chr22, beating V1's
+> ~28 s. Output byte-exact, 1811 Python tests green. Range-Coder
+> pivot during
 > Phase 2 (rANS state-range constraint blocked variable-T close to
 > 2¹⁶; see memory `rans_nx16_variable_t_invariant`); native C kernel
 > + V3 wire format + Python ctypes wrapper all green (8/8 native
