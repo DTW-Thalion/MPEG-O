@@ -324,8 +324,13 @@ static void testM90_11RegionOnlyNoHeadersFlag(void)
                     openGroupNamed:@"genomic_index" error:NULL];
     PASS([idx hasChildNamed:@"positions"],
          "M90.11 regonly: positions stays plaintext");
-    PASS([idx hasChildNamed:@"chromosomes"],
-         "M90.11 regonly: chromosomes stays plaintext");
+    // L1 (Task #82 Phase B.1): chromosomes are decomposed into
+    // chromosome_ids + chromosome_names instead of a single
+    // chromosomes compound.
+    PASS([idx hasChildNamed:@"chromosome_ids"],
+         "M90.11 regonly: chromosome_ids stays plaintext");
+    PASS([idx hasChildNamed:@"chromosome_names"],
+         "M90.11 regonly: chromosome_names stays plaintext");
     PASS(![idx hasChildNamed:@"positions_encrypted"],
          "M90.11 regonly: no positions_encrypted blob");
     NSArray *features = [TTIOFeatureFlags featuresForRoot:f.rootGroup] ?: @[];
@@ -1120,11 +1125,16 @@ static void testM90_15ChromosomesSigned(void)
                                      withKey:m90fKey(0x42)
                                        error:&err];
     PASS(sigs != nil, "M90.15: signGenomicRun returned dict");
-    PASS(sigs[@"genomic_index/chromosomes"] != nil,
-         "M90.15: chromosomes compound signed");
-    NSString *sig = sigs[@"genomic_index/chromosomes"];
+    // L1 (Task #82 Phase B.1, 2026-05-01): chromosomes are
+    // decomposed into chromosome_ids (uint16) + chromosome_names
+    // (compound) — both columns are signed.
+    PASS(sigs[@"genomic_index/chromosome_ids"] != nil,
+         "L1: chromosome_ids signed");
+    PASS(sigs[@"genomic_index/chromosome_names"] != nil,
+         "L1: chromosome_names signed");
+    NSString *sig = sigs[@"genomic_index/chromosome_ids"];
     PASS([sig hasPrefix:@"v2:"],
-         "M90.15: chromosomes signature carries v2: prefix");
+         "L1: chromosome_ids signature carries v2: prefix");
 
     BOOL verified =
         [TTIOSignatureManager verifyGenomicRun:@"genomic_0001"

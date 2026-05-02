@@ -232,27 +232,39 @@ static NSArray<TTIOHeaderSegment *> *readAUHeaderSegments(
 // ---------------------------------------------------------------- M90.4 helpers
 
 // Read /study/genomic_runs/<name>/genomic_index/chromosomes as
-// NSArray<NSString *>. The chromosomes compound is one row per read
-// with a single VL_STRING field "value".
+// NSArray<NSString *>. L1 (Task #82 Phase B.1, 2026-05-01):
+// chromosomes are stored as chromosome_ids (uint16) +
+// chromosome_names (compound) instead of a single VL-string compound.
 static NSArray<NSString *> *readChromosomes(TTIOHDF5Group *hdf5Idx,
                                               NSError **error)
 {
-    NSArray *fields = @[[TTIOCompoundField fieldWithName:@"value"
+    id<TTIOStorageDataset> idsDs = [hdf5Idx openDatasetNamed:@"chromosome_ids" error:error];
+    if (!idsDs) return nil;
+    NSData *idsData = [idsDs readAll:error];
+    if (!idsData) return nil;
+    NSArray *fields = @[[TTIOCompoundField fieldWithName:@"name"
                                                      kind:TTIOCompoundFieldKindVLString]];
-    NSArray<NSDictionary *> *rows =
+    NSArray<NSDictionary *> *nameRows =
         [TTIOCompoundIO readGenericFromGroup:hdf5Idx
-                                  datasetNamed:@"chromosomes"
+                                  datasetNamed:@"chromosome_names"
                                         fields:fields
                                          error:error];
-    if (!rows) return nil;
-    NSMutableArray *out = [NSMutableArray arrayWithCapacity:rows.count];
-    for (NSDictionary *row in rows) {
-        id v = row[@"value"];
+    if (!nameRows) return nil;
+    NSMutableArray *nameTable = [NSMutableArray arrayWithCapacity:nameRows.count];
+    for (NSDictionary *row in nameRows) {
+        id v = row[@"name"];
         if ([v isKindOfClass:[NSData class]]) {
             v = [[NSString alloc] initWithData:v
                                        encoding:NSUTF8StringEncoding];
         }
-        [out addObject:(NSString *)v ?: @""];
+        [nameTable addObject:(NSString *)v ?: @""];
+    }
+    const uint16_t *ids = (const uint16_t *)idsData.bytes;
+    NSUInteger nIds = idsData.length / sizeof(uint16_t);
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:nIds];
+    for (NSUInteger i = 0; i < nIds; i++) {
+        NSUInteger idx = ids[i];
+        [out addObject:idx < nameTable.count ? nameTable[idx] : @""];
     }
     return out;
 }
@@ -403,6 +415,18 @@ static BOOL encryptGenomicIndex(id<TTIOStorageGroup> gIdx,
         // Delete plaintext column (or any pre-existing _encrypted dataset).
         if ([gIdx hasChildNamed:colName]) {
             if (![gIdx deleteChildNamed:colName error:error]) return NO;
+        }
+        // L1 (Task #82 Phase B.1): the on-disk chromosomes column is
+        // decomposed into chromosome_ids + chromosome_names — also
+        // delete those when encrypting the logical "chromosomes"
+        // column so plaintext doesn't linger alongside the encrypted
+        // blob.
+        if ([colName isEqualToString:@"chromosomes"]) {
+            for (NSString *sub in @[@"chromosome_ids", @"chromosome_names"]) {
+                if ([gIdx hasChildNamed:sub]) {
+                    if (![gIdx deleteChildNamed:sub error:error]) return NO;
+                }
+            }
         }
         NSString *encName =
             [NSString stringWithFormat:@"%@_encrypted", colName];

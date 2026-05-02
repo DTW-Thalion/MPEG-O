@@ -50,6 +50,7 @@ static NSString *zDtypeFor(TTIOPrecision p)
         case TTIOPrecisionInt32:   return @"int32";
         case TTIOPrecisionUInt32:  return @"uint32";
         case TTIOPrecisionUInt8:   return @"uint8";
+        case TTIOPrecisionUInt16:  return @"uint16";  // L1
         case TTIOPrecisionUInt64:  return @"uint64";
         case TTIOPrecisionComplex128:
         default:
@@ -99,6 +100,7 @@ static NSUInteger zBytesPerElement(TTIOPrecision p)
         case TTIOPrecisionInt32:
         case TTIOPrecisionUInt32:  return 4;
         case TTIOPrecisionUInt8:   return 1;
+        case TTIOPrecisionUInt16:  return 2;  // L1
         case TTIOPrecisionComplex128: return 16;
     }
     return 8;

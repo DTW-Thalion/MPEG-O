@@ -568,9 +568,12 @@ static BOOL markPQCPreviewFeature(TTIOHDF5Group *root, NSError **error)
 static NSString *const kSignalChannelNames[] = {
     @"sequences", @"qualities",
 };
+// L1 (Task #82 Phase B.1, 2026-05-01): chromosomes are decomposed
+// into chromosome_ids (uint16) + chromosome_names (compound) — both
+// new columns are signed in place of the old single column.
 static NSString *const kIndexColumnNames[] = {
     @"offsets", @"lengths", @"positions", @"mapping_qualities", @"flags",
-    @"chromosomes",
+    @"chromosome_ids", @"chromosome_names",
 };
 
 // Test whether ``parentPath/childName`` exists in the file. Used to
