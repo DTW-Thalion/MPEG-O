@@ -296,6 +296,66 @@ def derive_contexts_c2(
     return contexts, int(np.unique(contexts).shape[0])
 
 
+# --- c3: Length-heavy, single full-Phred prev_q (sloc=17) ----------------
+
+C3_SLOC = 17
+C3_PBITS = 4
+C3_PB_BUCKETS = 1 << C3_PBITS  # 16
+
+
+def derive_contexts_c3(
+    qualities: bytes,
+    read_lengths: np.ndarray,
+    revcomp_flags: np.ndarray,
+    n_padded: int,
+) -> tuple[np.ndarray, int]:
+    """Length-heavy: 8 prev_q (full Phred) + 4 pos + 4 length(16) + 1 revcomp."""
+    smask = (1 << C3_SLOC) - 1
+    n = len(qualities)
+    if n_padded == 0:
+        return np.zeros(0, dtype=np.uint32), 0
+    n_reads = read_lengths.shape[0]
+    if n_reads == 0 or n == 0:
+        return np.zeros(n_padded, dtype=np.uint32), 1
+
+    qual_arr = np.frombuffer(qualities, dtype=np.uint8)
+    starts = np.empty(n_reads, dtype=np.int64)
+    starts[0] = 0
+    if n_reads > 1:
+        np.cumsum(read_lengths[:-1], out=starts[1:])
+
+    length_buckets = _length_bucket_4bit(read_lengths)        # 0..15
+    revcomp_bits = (revcomp_flags.astype(np.int64) & 1)
+    static_term = (length_buckets << 12) | (revcomp_bits << 16)
+
+    contexts = np.zeros(n_padded, dtype=np.uint32)
+    prev_q0 = np.zeros(n_reads, dtype=np.int64)
+
+    max_len = int(read_lengths.max())
+    denom = np.maximum(read_lengths, 1)
+    for p in range(max_len):
+        active = read_lengths > p
+        if not active.any():
+            break
+        flat_pos = starts + p
+        if p == 0:
+            pb = np.zeros(n_reads, dtype=np.int64)
+        else:
+            pb = np.minimum(C3_PB_BUCKETS - 1,
+                            (p * C3_PB_BUCKETS) // denom)
+        ctx_p = (
+            (prev_q0 & 0xFF)
+            | ((pb & 0xF) << 8)
+            | static_term
+        ) & smask
+        active_flat = flat_pos[active]
+        contexts[active_flat] = ctx_p[active].astype(np.uint32)
+        sym_p = qual_arr[active_flat]
+        prev_q0[active] = _q_to_8bit(sym_p)
+
+    return contexts, int(np.unique(contexts).shape[0])
+
+
 # --- Candidate registry --------------------------------------------------
 
 # (name, sloc, derive_function, description)
@@ -306,4 +366,6 @@ CANDIDATES = [
      "CRAM-faithful: 4+3+2 prev_q + 4 pos + 3 length + 1 revcomp (sloc=17)"),
     ("c2", C2_SLOC, derive_contexts_c2,
      "Equal-precision history, drop length: 4+4+4 prev_q + 4 pos + 1 revcomp (sloc=17)"),
+    ("c3", C3_SLOC, derive_contexts_c3,
+     "Length-heavy: 8 prev_q + 4 pos + 4 length + 1 revcomp (sloc=17)"),
 ]
