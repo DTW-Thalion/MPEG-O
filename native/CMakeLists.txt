@@ -158,6 +158,17 @@ target_link_libraries(test_fqzcomp_qual_strategy1 ttio_rans)
 target_compile_options(test_fqzcomp_qual_strategy1 PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fqzcomp_qual_strategy1 COMMAND test_fqzcomp_qual_strategy1)
 
+# Phase 3 byte-equality gate: auto-tune (strategy_hint = -1) vs htscodecs
+# fqz_compress(gp=NULL) across multiple corpora.
+# Argv-parametrized; driven by tools/perf/htscodecs_compare.sh which
+# extracts each corpus's inputs and compares bytes against
+# tools/perf/m94z_v4_prototype/fqzcomp_htscodecs_ref_autotune.
+# Not registered as a ctest (requires per-invocation argv + corpus on disk).
+add_executable(test_fqzcomp_qual_autotune tests/test_fqzcomp_qual_autotune.c)
+target_include_directories(test_fqzcomp_qual_autotune PRIVATE src)
+target_link_libraries(test_fqzcomp_qual_autotune ttio_rans)
+target_compile_options(test_fqzcomp_qual_autotune PRIVATE -Wall -Wextra -Wpedantic)
+
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
