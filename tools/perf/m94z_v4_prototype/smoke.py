@@ -66,8 +66,8 @@ def main() -> int:
         )
         assert len(result.body_bytes) > 0, \
             f"{name}: kernel produced empty body"
-        assert result.n_active >= 1, \
-            f"{name}: n_active < 1"
+        assert result.n_active >= 2, \
+            f"{name}: n_active={result.n_active} < 2 (degenerate model)"
         print(f"  {name} (sloc={sloc}): n_active={result.n_active}, "
               f"body={len(result.body_bytes)} B  OK")
 
