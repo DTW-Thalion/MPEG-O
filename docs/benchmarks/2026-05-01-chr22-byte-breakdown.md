@@ -135,7 +135,46 @@ L1 is the single biggest, lowest-risk win. L2 is the only one that
 requires codec-level work and a spec-proof phase per the wire-format-
 break checklist.
 
-## 7. Reproducing this report
+## 7. Phase B.1 progress — actual savings
+
+| Stage | TTI-O size | × CRAM | Δ | Lever |
+|-------|-----------:|-------:|---:|-------|
+| Pre-L1 | 169.17 MB | **1.965×** | — | baseline |
+| L1 (Python+Java+ObjC) | 123.61 MB | 1.436× | -45.56 MB | chromosome_ids + names |
+| L3 (Python+Java+ObjC) | 113.72 MB | **1.321×** | -9.89 MB | default embed_reference=False |
+
+**Cumulative:** -55.45 MB (33% smaller). Closed 60% of the gap to the
+1.15× CRAM target.
+
+### L4 / L5 status (deferred)
+
+* **L4 — drop genomic_index/{positions, mapping_qualities, flags}
+  duplicates:** estimated ~4 MB. Implementation attempt revealed an
+  architectural conflict — when v1.5 auto-codec defaults are active
+  (which is the chr22 benchmark's case AND most production paths),
+  ``signal_channels/{positions, mapping_qualities, flags}`` are stored
+  as rANS-encoded byte streams, not raw integer arrays. The
+  ``GenomicIndex`` reader can't simply pivot to read from there
+  without going through the codec dispatch in
+  ``GenomicRun._int_channel_array``, which has chicken-and-egg
+  ordering against ``GenomicIndex.read``. Reverted; needs a
+  pre-Phase-A redesign. Tracked as deferred.
+
+* **L5 — tune genomic_index/offsets encoding:** estimated ~1-2 MB
+  (uint64 → uint32 + gzip, or DELTA_RANS). Modest payoff against the
+  risk of breaking >4 GB-offset files (uint32 overflow at 4 GB total
+  read-data; reachable on deep WGS). Deferred.
+
+## 8. Remaining 1.32× → 1.15× gap (~14 MB)
+
+Almost the entire remaining gap is **qualities** (currently 61% of the
+file at 0.395 bytes/quality vs CRAM's ~0.20-0.25). Closing this needs
+codec-level work on M94.Z — adaptive freq updates inside a block,
+larger context window, or per-quality bucket modelling. That is L2
+from §6, multi-week scope, and requires a math/spec proof phase per
+``feedback_phase_0_spec_proof`` before implementation.
+
+## 9. Reproducing this report
 
 ```bash
 # Fresh chr22 benchmark
