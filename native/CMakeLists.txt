@@ -146,6 +146,18 @@ target_link_libraries(test_rc_cram_byte_equal ttio_rans)
 target_compile_options(test_rc_cram_byte_equal PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME rc_cram_byte_equal COMMAND test_rc_cram_byte_equal)
 
+# Phase 2 byte-equality + round-trip gate: ttio_fqzcomp_qual_compress
+# strategy 1 vs htscodecs --strategy=1 on chr22.
+# Inputs: extract via tools/perf/m94z_v4_prototype/extract_chr22_inputs.py
+# Reference: tools/perf/m94z_v4_prototype/fqzcomp_htscodecs_ref
+# Run manually: ./test_fqzcomp_qual_strategy1 /tmp/our_chr22_strategy1.fqz
+# then cmp /tmp/our_chr22_strategy1.fqz /tmp/htscodecs_chr22_strategy1.fqz
+add_executable(test_fqzcomp_qual_strategy1 tests/test_fqzcomp_qual_strategy1.c)
+target_include_directories(test_fqzcomp_qual_strategy1 PRIVATE src)
+target_link_libraries(test_fqzcomp_qual_strategy1 ttio_rans)
+target_compile_options(test_fqzcomp_qual_strategy1 PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME fqzcomp_qual_strategy1 COMMAND test_fqzcomp_qual_strategy1)
+
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
