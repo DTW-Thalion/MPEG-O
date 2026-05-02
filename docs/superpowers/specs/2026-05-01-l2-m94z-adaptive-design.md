@@ -28,24 +28,51 @@ math in §2 is the gating constraint and must be reviewed before any
 C code is committed. M94.X failed precisely because it skipped the
 proof phase (per memory `feedback_phase_0_spec_proof`).
 
+> **Implementation pivot (2026-05-01):** Phase 2 implementation
+> revealed that the variable-T byte-pairing proof in §2 below is
+> incomplete — it establishes `x' < M` (upper bound) but missed the
+> lower bound `x' ≥ L`. With T_max = 65519 close to b = 2^16, rANS
+> state can collapse to 0 and the decoder cannot recover (caught
+> deterministically by `test_adaptive_halve_boundary`). CRAM 3.1's
+> `fqzcomp_qual.c` uses a **Range Coder**, not rANS, which is why
+> their T_max = 65519 works.
+>
+> **L2 was pivoted to a Subbotin Range Coder** (32-bit state, 24-bit
+> renorm threshold, carry handled via Subbotin's merged-renorm
+> idiom). Range Coders have no `[L, M)` state-range invariant, so
+> any T_max fits. See `native/src/rc_arith.h`.
+>
+> The §2 byte-pairing proof below is left as the rANS analysis but
+> is **not the implementation**. The Range Coder correctness
+> argument is the standard arithmetic-coder result and does not
+> require restating here. §3 (adaptive update rules) and §4
+> (context model) are unchanged. §5 (wire format) was simplified —
+> body has no `state_final` (RC has no trailing state). See
+> memory `feedback_rans_nx16_variable_t_invariant` for the full
+> rationale.
+
 ## 1. Algorithmic invariants
 
-Same rANS-Nx16 state machine as the current M94.Z (4-way interleaved,
-L=2^15, B=16). The single difference is variable T:
+The L2 codec uses a Subbotin Range Coder (32-bit state, 24-bit
+renorm) with adaptive per-context freq tables. 4-way interleaved
+(lane = symbol_index mod 4) for parity with M94.Z V1.
 
 | Constant | Value | Notes |
 |---|---|---|
-| L | 2^15 = 32768 | state lower bound |
-| B (renorm bits) | 16 | b = 2^16 = 65536 |
-| b · L | 2^31 | state upper bound (= M) |
+| RC_TOP | 2^24 | renorm fires when range < this |
+| RC_BOT | 2^16 | underflow squeeze threshold (carry handling) |
 | N (interleaved streams) | 4 | unchanged |
 | T_init | max_sym | initial total per context (sum of count[s] = 1 each) |
 | T_max | 65519 | halve trigger threshold (CRAM compatibility) |
 | STEP | 16 | per-symbol count increment |
 | max_sym | dynamic | active symbol range, stored 2 bytes (uint16 LE) in header; valid range [1, 256] |
 
-T is no longer a fixed `2^12 = 4096` — it grows monotonically from
-T_init up to T_max, then halves and grows again.
+T grows monotonically from T_init up to T_max, then halves and
+grows again. Per-context (count, cum, T) tables maintained
+identically on encoder and decoder side (lockstep adaptive
+symmetry — see §2.4 below; the inductive proof there is unchanged
+because it doesn't depend on which entropy coder consumes the
+freq tables).
 
 ## 2. Byte-pairing proof (variable-T extension)
 
@@ -387,19 +414,39 @@ Offset  Size   Field
 
 ### 5.2 Body
 
+After the header (and before passing to the C kernel), the wrapper
+prepends a sparse → dense context remap prelude so the decoder can
+rebuild the same `ctx_remap` table the encoder used:
+
 ```
-+0      16     substream_lengths: 4× uint32 LE (lane_bytes[0..3])
-+16     var    4 substream byte streams (concatenated)
-+body   16     state_final:        4× uint32 LE (sanity check)
+prelude  4      n_active                  (uint32 LE; count of
+                                           sparse ctxs encountered)
++4       2*n    sparse_ids[n_active]      (uint16 LE × n_active;
+                                           order = encoder
+                                           encounter order)
 ```
+
+The actual RC-encoded payload (produced by the C kernel) follows:
+
+```
++0      16     lane_lengths: 4× uint32 LE (lane_bytes[0..3])
++16     var    4 lane byte streams (concatenated, FIFO)
+```
+
+There is no `state_final` — the Range Coder's terminal state is
+folded into the byte stream by the encoder's 4-byte flush. The
+decoder reads bytes as needed; if it tries to read past the end of
+a lane, it returns `TTIO_RANS_ERR_CORRUPT`.
 
 ### 5.3 Removed vs current M94.Z V1
 
 - `freq_tables_compressed_len` (4 bytes) — removed (decoder rebuilds
   freq tables from adaptive update).
 - `freq_tables` blob (~5–10 KB on chr22) — removed.
-- `state_init` (16 bytes) — removed (implicit `L = 2^15` for all
-  four lanes).
+- `state_init` (16 bytes) — removed (RC's initial state is implicit:
+  `low = 0, range = 0xFFFFFFFF`).
+- `state_final` (16 bytes) — removed (RC has no rANS-style trailing
+  state to carry over the decode boundary).
 
 ### 5.4 Format version
 
