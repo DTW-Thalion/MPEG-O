@@ -356,6 +356,97 @@ def derive_contexts_c3(
     return contexts, int(np.unique(contexts).shape[0])
 
 
+# --- c4: SplitMix64 hash, CRAM exact (sloc=12, 4096 contexts) ------------
+
+C4_SLOC = 12
+C4_PBITS = 4
+C4_PB_BUCKETS = 1 << C4_PBITS  # 16
+SPLITMIX64_SEED = 0xC0FFEE
+
+
+def _splitmix64(x: np.ndarray) -> np.ndarray:
+    """Vectorized SplitMix64. Operates on uint64 arrays."""
+    a = np.uint64(0xbf58476d1ce4e5b9)
+    b = np.uint64(0x94d049bb133111eb)
+    s30 = np.uint64(30)
+    s27 = np.uint64(27)
+    s31 = np.uint64(31)
+    x = (x ^ (x >> s30)) * a
+    x = (x ^ (x >> s27)) * b
+    x = x ^ (x >> s31)
+    return x
+
+
+def derive_contexts_c4(
+    qualities: bytes,
+    read_lengths: np.ndarray,
+    revcomp_flags: np.ndarray,
+    n_padded: int,
+) -> tuple[np.ndarray, int]:
+    """SplitMix64 hash on CRAM 3.1 feature vec → 12-bit index."""
+    smask = (1 << C4_SLOC) - 1
+    n = len(qualities)
+    if n_padded == 0:
+        return np.zeros(0, dtype=np.uint32), 0
+    n_reads = read_lengths.shape[0]
+    if n_reads == 0 or n == 0:
+        return np.zeros(n_padded, dtype=np.uint32), 1
+
+    qual_arr = np.frombuffer(qualities, dtype=np.uint8)
+    starts = np.empty(n_reads, dtype=np.int64)
+    starts[0] = 0
+    if n_reads > 1:
+        np.cumsum(read_lengths[:-1], out=starts[1:])
+
+    # Per-read constants. Length bucket = CRAM 3-bit. Hash seed in high 32.
+    length_buckets = _length_bucket_3bit(read_lengths).astype(np.uint64)  # 0..7
+    revcomp_bits = (revcomp_flags.astype(np.uint64) & 1)
+    seed_term = np.uint64(SPLITMIX64_SEED) << np.uint64(32)
+    # bits 28: revcomp, bits 29..31: length (per spec §4.6)
+    static_high = (revcomp_bits << np.uint64(28)) | (length_buckets << np.uint64(29)) | seed_term
+
+    contexts = np.zeros(n_padded, dtype=np.uint32)
+    prev_q0 = np.zeros(n_reads, dtype=np.uint64)
+    prev_q1 = np.zeros(n_reads, dtype=np.uint64)
+    prev_q2 = np.zeros(n_reads, dtype=np.uint64)
+
+    max_len = int(read_lengths.max())
+    denom = np.maximum(read_lengths, 1)
+    for p in range(max_len):
+        active = read_lengths > p
+        if not active.any():
+            break
+        flat_pos = starts + p
+        if p == 0:
+            pb = np.zeros(n_reads, dtype=np.uint64)
+        else:
+            pb = np.minimum(C4_PB_BUCKETS - 1,
+                            (p * C4_PB_BUCKETS) // denom).astype(np.uint64)
+        # CRAM key: bits 0..7=prev_q[0], 8..15=prev_q[1], 16..23=prev_q[2],
+        # 24..27=pos_bucket, 28=revcomp, 29..31=length, 32..63=seed
+        key = (
+            prev_q0
+            | (prev_q1 << np.uint64(8))
+            | (prev_q2 << np.uint64(16))
+            | (pb << np.uint64(24))
+            | static_high
+        )
+        h = _splitmix64(key)
+        ctx_p = (h & np.uint64(smask)).astype(np.uint32)
+        active_flat = flat_pos[active]
+        contexts[active_flat] = ctx_p[active]
+        # Shift history: prev_q[2] <- prev_q[1], prev_q[1] <- prev_q[0],
+        # prev_q[0] <- raw byte (NOT value-aligned, per CRAM exact)
+        sym_p = qual_arr[active_flat].astype(np.uint64)
+        old_q0 = prev_q0[active]
+        old_q1 = prev_q1[active]
+        prev_q2[active] = old_q1
+        prev_q1[active] = old_q0
+        prev_q0[active] = sym_p
+
+    return contexts, int(np.unique(contexts).shape[0])
+
+
 # --- Candidate registry --------------------------------------------------
 
 # (name, sloc, derive_function, description)
@@ -368,4 +459,6 @@ CANDIDATES = [
      "Equal-precision history, drop length: 4+4+4 prev_q + 4 pos + 1 revcomp (sloc=17)"),
     ("c3", C3_SLOC, derive_contexts_c3,
      "Length-heavy: 8 prev_q + 4 pos + 4 length + 1 revcomp (sloc=17)"),
+    ("c4", C4_SLOC, derive_contexts_c4,
+     "SplitMix64 hash on CRAM 3.1 feature vec → 12-bit (sloc=12, 4096 ctx)"),
 ]
