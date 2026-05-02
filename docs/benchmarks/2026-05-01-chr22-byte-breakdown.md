@@ -168,24 +168,31 @@ break checklist.
 ## 8. Phase B.2 (L2) results — adaptive M94.Z V3 (Range Coder)
 
 Measured 2026-05-02 at HEAD `72eb845` with
-`TTIO_RANS_LIB_PATH=$PWD/native/_build/libttio_rans.so`:
+`TTIO_RANS_LIB_PATH=/home/toddw/TTI-O/native/_build/libttio_rans.so`
+(absolute path required — `$PWD` does not survive nested `wsl … bash -c`
+invocations, see `feedback_msys2_paths`). Qualities-stream version byte
+verified `0x03` end-to-end.
 
-| Stage | TTI-O | × CRAM | Δ vs prev |
-|---|---:|---:|---:|
-| Pre-L2 (post-L1+L3) | 113.72 MB | 1.321× | — |
-| L2 — adaptive M94.Z V3 (sloc=14) | **113.72 MB** | **1.321×** | **−0.001 MB** |
+| Stage | TTI-O | × CRAM | qualities | B/qual | Δ vs prev |
+|---|---:|---:|---:|---:|---:|
+| Pre-L2 (post-L1+L3, V1 static) | 113.72 MB | 1.321× | 69.73 MB | 0.395 | — |
+| L2 — adaptive M94.Z V3 (sloc=14) | **113.33 MB** | **1.316×** | 69.34 MB | 0.393 | **−0.39 MB** |
 
 **Phase 4 hard gate: FAILED.** Target was ≤ 99 MB (1.15× CRAM); we are
-14.71 MB over. Per spec §10, this blocks Phase 5 (Java JNI) and Phase 6
+14.32 MB over. Per spec §10, this blocks Phase 5 (Java JNI) and Phase 6
 (ObjC) wrappers — those only run after the gate passes.
 
-Qualities still account for 69.73 MB at **0.396 B/qual** — essentially
-unchanged from V1 static-per-block (0.395 B/qual). This is the key
-finding: per-symbol adaptive frequencies alone, on top of the same
-context formula (`prev_q × pos_bucket × revcomp`, sloc=14), do not move
-the needle on chr22. Block sizes are large enough that per-block static
-freqs already converge toward the empirical distribution; adaptivity
-buys negligible additional model fit.
+The key finding is the **0.002 B/qual** delta on chr22 qualities
+(0.395 → 0.393). Per-symbol adaptive frequencies alone, on top of the
+same context formula (`prev_q × pos_bucket × revcomp`, sloc=14), do
+not move the needle. Block sizes (~177 M qualities ÷ 16 384 contexts ≈
+10 800 symbols/ctx) are large enough that V1's per-block static
+frequency fit is already near-optimal for that context model.
+Adaptivity essentially saves only the freq-tables sidecar (~5–10 KB),
+which amortizes to rounding error at chr22 scale. The fixtures showed
+dramatic V3 drops (`m94z_b` 49 945 → 22 188 bytes, 0.444 → 0.197 B/sym)
+because at small scale the freq-tables blob dominates V1 overhead — at
+chr22 scale that blob amortizes to nothing.
 
 The Range-Coder pivot itself is sound: the V3 wire format, C kernel
 (`ttio_rans_encode_block_adaptive` / `ttio_rans_decode_block_adaptive_m94z`),
@@ -194,18 +201,21 @@ That infrastructure is reusable for any future richer-context attempt.
 
 **What's needed to close the gap:** a richer **context model**, not a
 better entropy coder. CRAM 3.1 fqzcomp's actual edge over us comes from
-context features we don't capture — length bucket, distance from read
-start, pair orientation, mate-cigar interaction, error-context. Adding
-those is a model-design problem requiring a fresh spec/proof phase.
+context features we don't capture — per-quality bucket selectors
+(`last_qN` ladder), 2-symbol joint history (not bit-packed shift
+register), rare-symbol escape models, per-position model mixing,
+length bucket, distance from read start. Each is its own subsystem.
 Tracked as **WORKPLAN Task #84** (richer-context M94.Z).
 
-Encode wall: 17.58 s; decode wall: 15.72 s (V3 native fast-path).
+Encode wall: 124.79 s (V3 ctypes per-block overhead — much slower than
+V1 ~28 s; closing this is itself a follow-up). Decode wall: 19.12 s
+(V3 native fast-path).
 
 ## 9. Remaining 1.32× → 1.15× gap (~14 MB)
 
-Almost the entire remaining gap is **qualities** (currently 61% of the
-file at 0.396 bytes/quality vs CRAM's ~0.20-0.25). Closing this needs
-codec-level work on M94.Z — richer context model (length bucket,
+Almost the entire remaining gap is **qualities** (post-V3 still 61% of
+the file at 0.393 bytes/quality vs CRAM's ~0.20-0.25). Closing this
+needs codec-level work on M94.Z — richer context model (length bucket,
 distance from read start, error context), per-quality bucket modelling,
 or a fundamentally different scheme (e.g. neural / mixture model). That
 is **WORKPLAN Task #84**, multi-week scope, and requires a math/spec
