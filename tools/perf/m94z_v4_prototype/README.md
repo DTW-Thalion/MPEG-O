@@ -1,7 +1,7 @@
 # M94.Z V4 candidate prototype
 
 Stage 1 prototype harness for Task #84 — richer-context M94.Z. See
-[the design spec](../../docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage1-design.md)
+[the design spec](../../../docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage1-design.md)
 for the full design.
 
 ## How to run
