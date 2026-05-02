@@ -164,7 +164,12 @@ def derive_contexts_c1(
     revcomp_flags: np.ndarray,
     n_padded: int,
 ) -> tuple[np.ndarray, int]:
-    """CRAM-faithful: 4 + 3 + 2 prev_q + 4 pos + 3 length + 1 revcomp."""
+    """CRAM-faithful: 4 + 3 + 2 prev_q + 4 pos + 3 length + 1 revcomp.
+
+    Spec §4.1: each prev_q slot is value-aligned at its declared
+    precision. We carry forward original quality bytes (3 history
+    slots) and re-quantize on the fly.
+    """
     smask = (1 << C1_SLOC) - 1
     n = len(qualities)
     pad_ctx = 0  # all features zero
@@ -187,10 +192,12 @@ def derive_contexts_c1(
     static_term = (length_buckets << 13) | (revcomp_bits << 16)  # int64
 
     contexts = np.full(n_padded, pad_ctx, dtype=np.uint32)
-    # Per-read history state, value-aligned: prev_q[0]=4b, [1]=3b, [2]=2b
-    prev_q0 = np.zeros(n_reads, dtype=np.int64)
-    prev_q1 = np.zeros(n_reads, dtype=np.int64)
-    prev_q2 = np.zeros(n_reads, dtype=np.int64)
+    # Per-read byte-history state. At iteration p, prev_byte0 holds
+    # the quality byte from p-1, prev_byte1 from p-2, prev_byte2
+    # from p-3. Quantize on-the-fly to value-aligned bins per spec.
+    prev_byte0 = np.zeros(n_reads, dtype=np.int64)
+    prev_byte1 = np.zeros(n_reads, dtype=np.int64)
+    prev_byte2 = np.zeros(n_reads, dtype=np.int64)
 
     max_len = int(read_lengths.max())
     denom = np.maximum(read_lengths, 1)
@@ -204,26 +211,26 @@ def derive_contexts_c1(
         else:
             pb = np.minimum(C1_PB_BUCKETS - 1,
                             (p * C1_PB_BUCKETS) // denom)
+        # Value-aligned quantizations of the BYTE history
+        pq0_4bit = _q_to_4bit(prev_byte0)
+        pq1_3bit = _q_to_3bit(prev_byte1)
+        pq2_2bit = _q_to_2bit(prev_byte2)
         ctx_p = (
-            (prev_q0 & 0xF)
-            | ((prev_q1 & 0x7) << 4)
-            | ((prev_q2 & 0x3) << 7)
+            (pq0_4bit & 0xF)
+            | ((pq1_3bit & 0x7) << 4)
+            | ((pq2_2bit & 0x3) << 7)
             | ((pb & 0xF) << 9)
             | static_term
         ) & smask
         active_flat = flat_pos[active]
         contexts[active_flat] = ctx_p[active].astype(np.uint32)
-        # Shift the history: prev_q[2] <- prev_q[1] (truncated to 2 bits),
-        # prev_q[1] <- prev_q[0] (truncated to 3 bits), prev_q[0] <- new sym.
-        sym_p = qual_arr[active_flat]
-        # Compute new value-aligned bins for ACTIVE reads only
-        new_q0 = _q_to_4bit(sym_p)
-        # Save existing prev_q before overwrite
-        old_q0 = prev_q0[active]
-        old_q1 = prev_q1[active]
-        prev_q2[active] = old_q1 & 0x3   # 3-bit -> 2-bit
-        prev_q1[active] = old_q0 & 0x7   # 4-bit -> 3-bit
-        prev_q0[active] = new_q0
+        # Update byte history: shift older bytes back one slot
+        sym_p = qual_arr[active_flat].astype(np.int64)
+        old_byte0 = prev_byte0[active]
+        old_byte1 = prev_byte1[active]
+        prev_byte2[active] = old_byte1
+        prev_byte1[active] = old_byte0
+        prev_byte0[active] = sym_p
 
     return contexts, int(np.unique(contexts).shape[0])
 

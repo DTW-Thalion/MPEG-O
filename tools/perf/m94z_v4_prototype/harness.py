@@ -256,6 +256,18 @@ def write_results_doc(
             f"{r.mean_symbols_per_ctx:.0f} |"
         )
     lines.append("")
+    lines.append("## Top-10 most-frequent contexts per candidate")
+    lines.append("")
+    for r in results:
+        if r.error or not r.top10_ctx:
+            continue
+        lines.append(f"### {r.name}")
+        lines.append("")
+        lines.append("| Rank | Context ID | Count |")
+        lines.append("|---:|---:|---:|")
+        for rank, (ctx_id, count) in enumerate(r.top10_ctx, 1):
+            lines.append(f"| {rank} | {ctx_id} | {count:,} |")
+        lines.append("")
     lines.append("## §5 decision-rule outcome")
     lines.append("")
     lines.append(f"**Case:** `{case}`")
@@ -271,6 +283,17 @@ def write_results_doc(
             lines.append(f"- {r.name}: `{r.error}`")
     if not any_err:
         lines.append("(none)")
+    lines.append("")
+    lines.append("## Deferred verification")
+    lines.append("")
+    lines.append("Round-trip verification (decode + byte-equality of recovered")
+    lines.append("qualities vs input, per spec §6.4 + §8 acceptance criterion #3)")
+    lines.append("was not run in Stage 1. The compressed-size numbers are")
+    lines.append("indicative — they reflect what the V3 RC kernel produced for")
+    lines.append("each candidate's sparse_seq, not whether decode-side context")
+    lines.append("re-derivation can recover the input. **If Stage 2 ever opens,")
+    lines.append("the winning candidate must be round-trip-verified before any")
+    lines.append("production work.**")
     lines.append("")
     os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
     with open(RESULTS_PATH, "w", encoding="utf-8") as f:
