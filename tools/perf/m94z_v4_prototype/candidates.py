@@ -228,6 +228,74 @@ def derive_contexts_c1(
     return contexts, int(np.unique(contexts).shape[0])
 
 
+# --- c2: Equal-precision history, drop length (sloc=17) ------------------
+
+C2_SLOC = 17
+C2_PBITS = 4
+C2_PB_BUCKETS = 1 << C2_PBITS  # 16
+
+
+def derive_contexts_c2(
+    qualities: bytes,
+    read_lengths: np.ndarray,
+    revcomp_flags: np.ndarray,
+    n_padded: int,
+) -> tuple[np.ndarray, int]:
+    """Equal-precision: 4+4+4 prev_q + 4 pos + 1 revcomp (no length)."""
+    smask = (1 << C2_SLOC) - 1
+    n = len(qualities)
+    if n_padded == 0:
+        return np.zeros(0, dtype=np.uint32), 0
+    n_reads = read_lengths.shape[0]
+    if n_reads == 0 or n == 0:
+        return np.zeros(n_padded, dtype=np.uint32), 1
+
+    qual_arr = np.frombuffer(qualities, dtype=np.uint8)
+    starts = np.empty(n_reads, dtype=np.int64)
+    starts[0] = 0
+    if n_reads > 1:
+        np.cumsum(read_lengths[:-1], out=starts[1:])
+
+    revcomp_bits = (revcomp_flags.astype(np.int64) & 1)
+    revcomp_term = revcomp_bits << 16
+
+    contexts = np.zeros(n_padded, dtype=np.uint32)
+    prev_q0 = np.zeros(n_reads, dtype=np.int64)
+    prev_q1 = np.zeros(n_reads, dtype=np.int64)
+    prev_q2 = np.zeros(n_reads, dtype=np.int64)
+
+    max_len = int(read_lengths.max())
+    denom = np.maximum(read_lengths, 1)
+    for p in range(max_len):
+        active = read_lengths > p
+        if not active.any():
+            break
+        flat_pos = starts + p
+        if p == 0:
+            pb = np.zeros(n_reads, dtype=np.int64)
+        else:
+            pb = np.minimum(C2_PB_BUCKETS - 1,
+                            (p * C2_PB_BUCKETS) // denom)
+        ctx_p = (
+            (prev_q0 & 0xF)
+            | ((prev_q1 & 0xF) << 4)
+            | ((prev_q2 & 0xF) << 8)
+            | ((pb & 0xF) << 12)
+            | revcomp_term
+        ) & smask
+        active_flat = flat_pos[active]
+        contexts[active_flat] = ctx_p[active].astype(np.uint32)
+        sym_p = qual_arr[active_flat]
+        new_q0 = _q_to_4bit(sym_p)
+        old_q0 = prev_q0[active]
+        old_q1 = prev_q1[active]
+        prev_q2[active] = old_q1
+        prev_q1[active] = old_q0
+        prev_q0[active] = new_q0
+
+    return contexts, int(np.unique(contexts).shape[0])
+
+
 # --- Candidate registry --------------------------------------------------
 
 # (name, sloc, derive_function, description)
@@ -236,4 +304,6 @@ CANDIDATES = [
      "V3 baseline mirror (sloc=14, low-bit hash prev_q ring)"),
     ("c1", C1_SLOC, derive_contexts_c1,
      "CRAM-faithful: 4+3+2 prev_q + 4 pos + 3 length + 1 revcomp (sloc=17)"),
+    ("c2", C2_SLOC, derive_contexts_c2,
+     "Equal-precision history, drop length: 4+4+4 prev_q + 4 pos + 1 revcomp (sloc=17)"),
 ]
