@@ -18,6 +18,7 @@ add_library(ttio_rans SHARED
     src/rans_decode_scalar.c
     src/rans_decode_streaming.c
     src/rans_decode_m94z.c
+    src/rans_encode_adaptive.c
     src/dispatch.c
     src/threadpool.c
     src/wire_format.c
