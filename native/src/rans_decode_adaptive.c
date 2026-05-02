@@ -1,20 +1,31 @@
 /*
- * rans_decode_adaptive.c — adaptive M94.Z decoder with inline
- * M94.Z context derivation.
+ * rans_decode_adaptive.c — adaptive M94.Z decoder using a Range Coder.
  *
- * Mirrors rans_decode_m94z.c (Task #81) but uses adaptive freq
- * updates instead of pre-computed static freq tables. The adaptive
- * symmetry lemma (spec §2.4) guarantees encoder/decoder maintain
- * identical (count[][], T[]) trajectories.
+ * NOTE: despite the file name, the implementation here is a Subbotin
+ * Range Coder (arithmetic coder), NOT rANS. See encode kernel
+ * comment for why we pivoted from rANS-Nx16.
  *
- * Forward decode pass: derive context inline from prev_q ring +
- * pos_in_read + revcomp; lookup in current adaptive table; decode
- * symbol; update table.
+ * Decoder flow (single forward pass):
+ *   1. Read 16 bytes lane_lengths header.
+ *   2. Initialise 4 RC decoders, each consuming one lane stream.
+ *   3. Initialise per-context (count, cum, T) tables.
+ *   4. For each symbol i in order:
+ *      - Compute M94.Z context (prev_q ring + position bucket +
+ *        revcomp); map sparse -> dense via ctx_remap.
+ *      - lane = i & 3
+ *      - Look up T from slab[ctx_dense]
+ *      - slot = rc_dec_get_freq(&rc[lane], T)
+ *      - sym = inv_cum(cum, max_sym, slot)
+ *      - Look up f = count[sym], c = cum[sym]
+ *      - rc_dec_advance(&rc[lane], c, f)
+ *      - symbols[i] = sym
+ *      - update_ctx(slab[ctx_dense], sym)
  *
  * Copyright (c) 2026 Thalion Global. All rights reserved.
  */
 #include "ttio_rans.h"
 #include "rans_adaptive_internal.h"
+#include "rc_arith.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -24,11 +35,6 @@ static inline uint32_t read_le32(const uint8_t *p)
         | ((uint32_t)p[1] << 8)
         | ((uint32_t)p[2] << 16)
         | ((uint32_t)p[3] << 24);
-}
-
-static inline uint16_t read_le16(const uint8_t *p)
-{
-    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
 }
 
 /* M94.Z context formula — mirrors rans_decode_m94z.c. */
@@ -83,39 +89,40 @@ int ttio_rans_decode_block_adaptive_m94z(
 
     if (n_symbols == 0) return TTIO_RANS_OK;
 
-    /* Body header: 16 bytes substream_lengths + lane bytes + 16
-     * bytes state_final. */
-    if (comp_len < 32) return TTIO_RANS_ERR_CORRUPT;
+    /* Body header: 16 bytes lane_lengths. */
+    if (comp_len < 16) return TTIO_RANS_ERR_CORRUPT;
     uint32_t lane_bytes[4];
     size_t total_lane_bytes = 0;
     for (int lane = 0; lane < 4; lane++) {
         lane_bytes[lane] = read_le32(compressed + lane * 4);
         total_lane_bytes += lane_bytes[lane];
     }
-    if (comp_len < 16u + total_lane_bytes + 16u) return TTIO_RANS_ERR_CORRUPT;
+    if (comp_len < 16u + total_lane_bytes) return TTIO_RANS_ERR_CORRUPT;
 
-    const uint8_t *lane_data[4];
-    size_t lane_pos[4] = {0, 0, 0, 0};
+    /* Initialise per-lane RC decoders. */
+    ttio_rc_dec_t rc[4];
     size_t off = 16u;
     for (int lane = 0; lane < 4; lane++) {
-        lane_data[lane] = compressed + off;
+        if (lane_bytes[lane] < 4u) {
+            /* A lane with no symbols is allowed only if n_symbols ≤ lane.
+             * For non-empty lane streams, we need >= 4 bytes for init. */
+            if (lane_bytes[lane] != 0) return TTIO_RANS_ERR_CORRUPT;
+            /* Mark as unused. */
+            ttio_rc_dec_init(&rc[lane], NULL, 0);
+            rc[lane].err = 0;
+        } else {
+            if (ttio_rc_dec_init(&rc[lane], compressed + off, lane_bytes[lane]) != 0) {
+                return TTIO_RANS_ERR_CORRUPT;
+            }
+        }
         off += lane_bytes[lane];
     }
-    const uint8_t *state_final_p = compressed + off;
 
     /* Read sanity: n_reads sums to n_symbols. */
     if (n_reads > 0) {
         uint64_t sum = 0;
         for (size_t r = 0; r < n_reads; r++) sum += read_lengths[r];
         if (sum != n_symbols) return TTIO_RANS_ERR_PARAM;
-    }
-
-    /* Initial state: state_final from wire (per wire format §5.3,
-     * state_final is the encoder's final state which IS the decoder's
-     * starting state). */
-    uint64_t state[4];
-    for (int lane = 0; lane < 4; lane++) {
-        state[lane] = read_le32(state_final_p + lane * 4);
     }
 
     /* Allocate adaptive table slab. */
@@ -146,7 +153,6 @@ int ttio_rans_decode_block_adaptive_m94z(
     for (size_t i = 0; i < n_symbols; i++) {
         int lane = (int)(i & 3u);
 
-        /* Update prev_q with the just-decoded symbol from i-1. */
         if (i > 0) {
             prev_q = ((prev_q << shift)
                       | ((uint32_t)prev_sym & shift_mask)) & qmask_local;
@@ -179,39 +185,22 @@ int ttio_rans_decode_block_adaptive_m94z(
             + ttio_adaptive_cum_offset(ctx_dense, max_sym));
         const uint16_t *Tp    = (const uint16_t *)(const void *)(slab
             + ttio_adaptive_T_offset(ctx_dense, max_sym));
-        uint16_t T = *Tp;
+        uint32_t T = *Tp;
 
-        uint64_t x = state[lane];
-        uint32_t slot = (uint32_t)(x % T);
+        uint32_t slot = ttio_rc_dec_get_freq(&rc[lane], T);
         uint16_t sym = ttio_adaptive_inv_cum(cum, max_sym, slot);
-        uint16_t f = count[sym];
+        uint32_t f = count[sym];
         uint32_t c = cum[sym];
 
-        x = (x / T) * (uint64_t)f + (uint64_t)slot - (uint64_t)c;
-
-        while (x < TTIO_RANS_L) {
-            if (lane_pos[lane] + 2u > lane_bytes[lane]) {
-                free(slab);
-                return TTIO_RANS_ERR_CORRUPT;
-            }
-            uint16_t chunk = read_le16(lane_data[lane] + lane_pos[lane]);
-            x = (x << 16) | (uint64_t)chunk;
-            lane_pos[lane] += 2u;
-        }
-        state[lane] = x;
-        symbols[i] = (uint8_t)sym;
-        prev_sym = (uint8_t)sym;
-
-        ttio_adaptive_update_ctx(slab, ctx_dense, max_sym, sym);
-    }
-
-    /* Sanity: post-decode state must equal initial encoder state (L)
-     * for each lane — encoder started at L and is reversible. */
-    for (int lane = 0; lane < 4; lane++) {
-        if (state[lane] != TTIO_RANS_L) {
+        ttio_rc_dec_advance(&rc[lane], c, f);
+        if (rc[lane].err) {
             free(slab);
             return TTIO_RANS_ERR_CORRUPT;
         }
+
+        symbols[i] = (uint8_t)sym;
+        prev_sym = (uint8_t)sym;
+        ttio_adaptive_update_ctx(slab, ctx_dense, max_sym, sym);
     }
 
     free(slab);

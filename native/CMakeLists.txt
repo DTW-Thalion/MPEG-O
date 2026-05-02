@@ -121,6 +121,21 @@ target_link_libraries(test_adaptive_roundtrip PRIVATE ttio_rans)
 target_compile_options(test_adaptive_roundtrip PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME adaptive_roundtrip COMMAND test_adaptive_roundtrip)
 
+add_executable(test_adaptive_byte_pairing tests/test_adaptive_byte_pairing.c)
+target_link_libraries(test_adaptive_byte_pairing PRIVATE ttio_rans)
+target_compile_options(test_adaptive_byte_pairing PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME adaptive_byte_pairing COMMAND test_adaptive_byte_pairing)
+
+add_executable(test_adaptive_halve_boundary tests/test_adaptive_halve_boundary.c)
+target_link_libraries(test_adaptive_halve_boundary PRIVATE ttio_rans)
+target_compile_options(test_adaptive_halve_boundary PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME adaptive_halve_boundary COMMAND test_adaptive_halve_boundary)
+
+add_executable(test_adaptive_max_sym_bounds tests/test_adaptive_max_sym_bounds.c)
+target_link_libraries(test_adaptive_max_sym_bounds PRIVATE ttio_rans)
+target_compile_options(test_adaptive_max_sym_bounds PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME adaptive_max_sym_bounds COMMAND test_adaptive_max_sym_bounds)
+
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
 #   cmake -DTTIO_RANS_ENABLE_TSAN=ON ..
