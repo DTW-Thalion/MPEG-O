@@ -111,24 +111,40 @@ as a record of what was built; current milestones use TTI-O names.
 > `docs/benchmarks/2026-05-01-chr22-byte-breakdown.md` §8.
 >
 > * **Task #84 — Richer-context M94.Z (Stage 1 done 2026-05-02;
->   re-charter pending).** Stage 1 prototype harness at
->   `tools/perf/m94z_v4_prototype/` measured 5 candidate context-model
->   designs on chr22 against the 1.15× CRAM hard gate; **all 5 fail
->   the gate**. Best is **c2** (equal-precision 4+4+4 prev_q + 4 pos
->   + 1 revcomp, drop length, sloc=17) at **1.2539× CRAM** (107.95 MB
->   total, 5.3 MB better than V3 baseline but 9 MB over the gate).
->   Notable: c4 (SplitMix64 hash, CRAM-exact) is *worse* than V3 by
->   5.7 MB — bit-pack at sloc=17 outperforms hash at sloc=12; the
->   "hash is better" hypothesis is refuted, do NOT escalate Stage 2
->   to hash discipline. c3 (length-heavy full-Phred) collapses to
->   1471 distinct contexts from sparsity. **Re-charter pending:**
->   either extend feature set beyond CRAM's (distance_from_end,
->   mate-pair, error-context, possibly larger sloc above 17 with
->   explicit memory-budget renegotiation) or accept 1.15× is
->   unreachable inside current constraints and renegotiate the
->   v1.2.0 gate. No Stage 2 spec until re-charter resolves. Plan +
+>   multi-corpus extension shipped same day; re-charter pending).**
+>   Stage 1 prototype harness at `tools/perf/m94z_v4_prototype/`
+>   measured 5 candidate context-model designs on three Illumina
+>   corpora: chr22 NA12878 (100 bp WGS), NA12878 WES (capture, ~95 bp),
+>   HG002 Illumina 2×250 (250 bp WGS, 1 M-read subset of 10.6 M-read
+>   chr22). All candidates miss the 1.15× CRAM gate on chr22; the
+>   gate is chr22-v1.2.0-specific and not directly applicable to other
+>   corpora. **Cross-corpus signal:**
+>   - **c3** (length-heavy: 8 bit full-Phred prev_q + 4 bit pos +
+>     4 bit length + 1 bit revcomp, sloc=17) is the cross-corpus
+>     winner — outright on WES and HG002 2×250, within 0.7% of c2
+>     on chr22.
+>   - **c2** (equal-precision 4+4+4 prev_q, drop length, sloc=17)
+>     wins only on chr22 — its uniform-100bp Illumina assumption
+>     does not generalize to length-variable or longer-read corpora.
+>   - **c4** (SplitMix64 hash, CRAM-exact) is *worse than V3* on
+>     every corpus (8-21% worse) — the hash-escalation path is
+>     conclusively refuted across Illumina diversity.
+>   - **PacBio HiFi platform diversity remains untested**: every
+>     public HG002 PacBio HiFi BAM checked (NIST GIAB GRCh38/GRCh37,
+>     PacBio cloud HG002-CpG-methylation-202202, both aligned and
+>     raw `hifi_reads.bam`) had `SEQ`/`QUAL` stripped to `*`. Future
+>     re-charter must source PacBio HiFi from a less-processed
+>     pipeline before adopting any Stage 2 design as platform-robust.
+>
+>   **Re-charter pending:** Stage 2 design likely keys on c3's bit
+>   budget (not c2's). The remaining ~half-bit-per-quality gap to
+>   CRAM 3.1's 0.20-0.25 B/qual likely needs richer features beyond
+>   CRAM's set: mate-pair orientation, distance-from-read-end,
+>   error-context, or non-bit-pack mixture-model approaches. Plan +
 >   results: `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage1.md`,
->   `docs/benchmarks/2026-05-02-m94z-v4-candidates.md`.
+>   `docs/benchmarks/2026-05-02-m94z-v4-multi-corpus.md` (cross-corpus
+>   summary), per-corpus docs `2026-05-02-m94z-v4-{candidates,
+>   na12878_wes_chr22, hg002_illumina_2x250_chr22}.md`.
 >
 > **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under
