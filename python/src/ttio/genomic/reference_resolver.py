@@ -126,6 +126,10 @@ def _read_chrom_from_fasta(path: Path, chromosome: str) -> bytes | None:
 
     Returns ``None`` if the chromosome is not present in the FASTA.
     Matches headers on the first whitespace-delimited token after ``>``.
+    L3 (Task #82 Phase B.1, 2026-05-01): uppercase-normalise the
+    bytes to match the encoder's ``_load_reference_chroms`` —
+    soft-masked FASTAs (lowercase repeat regions) otherwise produce
+    a different MD5 than the encoder computed.
     """
     target = chromosome.encode("ascii")
     out = bytearray()
@@ -134,7 +138,7 @@ def _read_chrom_from_fasta(path: Path, chromosome: str) -> bytes | None:
         for line in fh:
             if line.startswith(b">"):
                 if in_target:
-                    return bytes(out)
+                    return bytes(out).upper()
                 # Header line: ">chrom_name optional comment\n"
                 hdr = line[1:].split()[0] if len(line) > 1 else b""
                 in_target = (hdr == target)
@@ -142,5 +146,5 @@ def _read_chrom_from_fasta(path: Path, chromosome: str) -> bytes | None:
             elif in_target:
                 out.extend(line.strip())
     if in_target:
-        return bytes(out)
+        return bytes(out).upper()
     return None

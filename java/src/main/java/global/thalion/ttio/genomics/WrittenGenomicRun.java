@@ -171,7 +171,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, Map.of(), List.of(),
-             true, null, null);
+             false, null, null);
     }
 
     /**
@@ -206,7 +206,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, List.of(),
-             true, null, null);
+             false, null, null);
     }
 
     /**
@@ -242,7 +242,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, provenanceRecords,
-             true, null, null);
+             false, null, null);
     }
 
     /**

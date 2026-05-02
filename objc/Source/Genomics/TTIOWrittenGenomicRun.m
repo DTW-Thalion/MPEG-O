@@ -86,11 +86,13 @@
             ? [signalCodecOverrides copy]
             : @{};
         _provenanceRecords    = @[];
-        // M93 v1.2 defaults — embedReference defaults to YES; the writer
-        // only acts on it when a context-aware codec is selected on the
-        // sequences channel AND referenceChromSeqs is non-nil. The two
-        // companion fields stay nil until callers set them.
-        _embedReference        = YES;
+        // L3 (Task #82 Phase B.1, 2026-05-01): embedReference now
+        // defaults to NO so chr22-style benchmarks don't carry the
+        // ~10 MB embedded reference blob by default. CRAM 3.1's
+        // default is also external-reference; users who want
+        // self-contained .tio files set embedReference = YES
+        // explicitly.
+        _embedReference        = NO;
         _referenceChromSeqs    = nil;
         _externalReferencePath = nil;
     }

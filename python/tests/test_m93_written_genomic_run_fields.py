@@ -35,16 +35,21 @@ def _minimal_run(**overrides):
     return WrittenGenomicRun(**base)
 
 
-def test_default_embed_reference_is_true():
+def test_default_embed_reference_is_false():
+    # L3 (Task #82 Phase B.1, 2026-05-01): the default flipped from
+    # True to False so chr22-style benchmarks don't carry the ~10 MB
+    # embedded reference blob by default. CRAM 3.1's default is also
+    # external-reference; users that want self-contained .tio files
+    # set embed_reference=True explicitly.
     r = _minimal_run()
-    assert r.embed_reference is True
+    assert r.embed_reference is False
     assert r.reference_chrom_seqs is None
     assert r.external_reference_path is None
 
 
-def test_embed_reference_can_be_disabled():
-    r = _minimal_run(embed_reference=False)
-    assert r.embed_reference is False
+def test_embed_reference_can_be_enabled():
+    r = _minimal_run(embed_reference=True)
+    assert r.embed_reference is True
 
 
 def test_reference_chrom_seqs_accepts_dict():
