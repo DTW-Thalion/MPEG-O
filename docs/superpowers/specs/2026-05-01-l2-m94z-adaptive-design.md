@@ -73,42 +73,104 @@ with 64-bit integer arithmetic. Bound: `M · f ≤ 2^31 · 65519 ≈ 1.4 ×
 
 **Claim:** for `x ∈ [L, x_max(s, T))`, the post-encode `x' < M`.
 
-**Proof sketch:**
-- `x' = (x // f) · T + (x mod f) + c`
-- Since `(x mod f) ≤ f - 1` and `c ≤ T - f` (cumulative bound):
-  `x' ≤ (x // f) · T + (f - 1) + (T - f) = (x // f) · T + T - 1`
-- For `x < x_max(s, T) = floor(M · f / T)`: by definition, `(x · T) <
-  M · f + T` (the floor adds a remainder ≤ T-1)
-- So `(x // f) · T ≤ x · T / f ≤ (M · f + T - 1) / f ≤ M + (T - 1) / f`
-- `x' < M + (T - 1) / f + T - 1 ≤ M + T(1 + 1/f) - 1 - 1/f`
-- Using `T ≤ T_max = 65519` and `M = 2^31`: the slack is ≤ 65519,
-  i.e. `x' < M + 65519`. **This is too loose** for byte-pairing.
+**Proof.**
 
-The above sketch reveals the issue: a naive bound gives `x' < M + T`,
-not `x' < M`. The correct proof needs a tighter argument. Options:
+For symbol `s` at context with current `count[s] = f` and current
+`cum[s] = c`: the encoder computes
 
-**(A) Tightening via `x_max` definition.** The precise condition for
-`x' < M` is that the encoder pops chunks until `x` is small enough
-that the encode step can't push past M. The right `x_max` is the
-*largest* `x` such that `((x // f) · T + (T - 1)) < M`, i.e.,
-`(x // f) ≤ (M - T) / T`, i.e., `x // f ≤ M/T − 1`, i.e.,
-`x ≤ f · (M/T − 1) + (f − 1) = f · M/T − 1`. So
-  `x_max(s, T) = floor(f · M / T)` — same as before, but the
-post-encode bound `x' < M` follows from `x // f ≤ M/T − 1` strictly,
-so `x' ≤ (M/T − 1) · T + (T − 1) = M − 1 < M`. ✓
+```
+x' = (x // f) · T + (x mod f) + c.
+```
+
+Bounds on the components:
+- `(x mod f) ∈ [0, f − 1]` (definition of integer remainder)
+- `c ∈ [0, T − f]` (cumulative is at most `T − f` for the largest
+  symbol — by `cum[max_sym] = T` and `cum[s] + count[s] ≤ T`)
+
+so
+
+```
+x' ≤ (x // f) · T + (f − 1) + (T − f) = (x // f) · T + T − 1.
+```
+
+We require `x' < M = b · L = 2^31`. This holds when
+
+```
+(x // f) · T ≤ M − T,
+i.e. (x // f) ≤ (M − T) / T = M/T − 1,
+i.e. (x // f) < M/T   (strict).
+```
+
+The largest `x` satisfying `x // f < M/T` is
+
+```
+x_max(s, T) = floor(f · M / T).
+```
+
+**Verification (algebraic).** For `x ∈ [L, x_max(s, T))`,
+`x ≤ x_max − 1 = floor(f · M / T) − 1 ≤ (f · M / T) − 1`, so
+`x · T ≤ f · M − T`, so `(x // f) · T ≤ x · T / f · (1 + ε) ≤ M − T/f
+≤ M − 1` (with `f ≥ 1`). Hence
+`x' ≤ (x // f) · T + T − 1 ≤ M − 1 < M`. ✓
+
+**Pre-encode lower bound.** The encoder enters the encode step with
+`x ∈ [L, x_max(s, T))`. If `x ≥ x_max`, it first pops 16-bit chunks
+to bring `x` into range:
+
+```
+while x ≥ x_max:
+    emit_chunk(x & 0xFFFF)
+    x >>= 16
+```
+
+Each pop divides `x` by `b = 2^16`, which is much larger than the
+ratio `x_max / L = floor(f · M / T) / L`. With `f ≥ 1`, `T ≤ 65519`,
+`M = 2^31`, `L = 2^15`: `x_max / L ≥ 2^31 / 65519 / 2^15 = 2^16 /
+65519 ≈ 1`. So a single pop is sufficient to bring any `x < M` into
+`[L, x_max)`.
+
+**Lower bound on `x_max`.** The encoder must not enter an infinite-pop
+loop, which requires `x_max(s, T) ≥ L` for any active symbol
+(`f ≥ 1`). We have `x_max(1, T) = floor(M / T)`. With
+`T ≤ T_max = 65519` and `M = 2^31`:
+
+```
+floor(M / T) ≥ floor(2^31 / 65519) = 32768 ≥ L = 2^15. ✓
+```
+
+So even at `f = 1` and `T = T_max`, `x_max ≥ L`. Active symbols
+always have `f ≥ 1` by construction. Inactive symbols
+(`count[s] = 0`) are never encoded, so their `x_max` is irrelevant.
+
+**Decoder symmetry.** The decoder reads `x ∈ [L, M)`, computes
+
+```
+slot   = x mod T
+sym    = inverse_cum(slot)
+x_pre  = (x // T) · f + slot − c
+```
+
+By construction, `x_pre = original_x_pre` (the encoder's pre-encode
+state), since rANS is an exact bijection on `(x_pre, s) ↔ x'` modulo
+identical `(T, f, c)`. The decoder pulls 16-bit chunks while
+`x_pre < L`:
+
+```
+while x_pre < L:
+    x_pre = (x_pre << 16) | pull_chunk()
+```
+
+The number of pulls equals the number of encoder pops by the
+symmetric renorm boundary: encoder pops while `x ≥ x_max`, decoder
+pulls while `x_pre < L`. Both conditions are equivalent under the
+encode/decode bijection, so chunk counts match. ∎
 
 **(B) Verification by exhaustive search at boundaries.** The C
-implementation includes a debug-mode assert that checks
-`x' < M` after every encode step. Fuzz tests run random
+implementation includes a debug-mode assert that checks `x' < M`
+after every encode step. Fuzz tests run random
 `(symbols, contexts, max_sym)` over millions of inputs. Any boundary
-violation aborts with a stack trace.
-
-The proof (A) above relies on `floor(f · M / T) ≥ L` (otherwise
-encoder enters infinite-pop loop). This requires `f ≥ T · L / M = T /
-b = T / 65536`. Since `T ≤ T_max = 65519 < b`, we have `T / b < 1`,
-so `f ≥ 1` is sufficient. **Active symbols always have f ≥ 1 by
-construction**; inactive symbols (count = 0) are never encoded, so
-their `x_max` is irrelevant. ✓
+violation aborts with a stack trace. See
+`native/tests/test_adaptive_byte_pairing.c`.
 
 ### 2.3 Decoder symmetry
 
@@ -147,11 +209,45 @@ if (T > T_max - STEP) {
 }
 ```
 
-Identical input symbol stream ⇒ identical `(count[], T)` trajectories
-⇒ byte-pairing holds at every step.
+**Lemma (adaptive symmetry).** Encoder and decoder maintain
+identical `(count[ctx][·], T[ctx])` trajectories at every step.
 
-The halve (§3.2) is deterministic and identical on both sides, so
-post-halve states are also identical.
+**Proof by induction on symbol index `i`:**
+
+*Base case `(i = 0)`:* both sides initialise
+`count[ctx][s] = 1` for `s ∈ [0, max_sym)`, `0` otherwise;
+`T[ctx] = max_sym`. Identical by construction.
+
+*Inductive step:* assume identical trajectories at step `i`, i.e.,
+both sides have the same `count[][]`, `T[]` tables. Symbol `i` is
+encoded by the encoder using freq `f = count[ctx_i][sym_i]` and
+cumulative `c = cum[ctx_i][sym_i]` derived from these tables. The
+decoder, having received the same byte stream from the encoder,
+recovers `slot = x mod T[ctx_i]` and looks up `sym_i` via the same
+`inv_cum` on the same `count[][], T[]` tables (induction hypothesis
++ encoder/decoder bijection from §2.3). So
+`sym_i_decoded = sym_i_encoded`. Both sides then update:
+
+```
+count[ctx_i][sym_i] += 16
+T[ctx_i]            += 16
+```
+
+Both sides apply the halve check `T[ctx_i] + STEP > T_max`
+identically (deterministic predicate over identical state). The
+halve operation (§3.2) is deterministic. So post-update tables are
+identical at step `i+1`. ∎
+
+**Context remap symmetry.** The `ctx_remap` (sparse → dense) is
+identical encoder/decoder side because:
+- Encoder builds it from a forward pass over input symbols,
+  recording first-encounter order of sparse ctx ids.
+- Decoder reads the active sparse ctx ids from the body header
+  prelude (`n_active` + `sparse_ids[]`, see §5.2) and rebuilds the
+  remap in the same order.
+
+Both sides see the same sequence of dense ctx ids and apply
+`update_ctx(ctx_dense, sym)` identically. ∎
 
 ### 2.5 State-range invariants under adaptive T
 
