@@ -136,6 +136,15 @@ add_executable(test_adaptive_max_sym_bounds tests/test_adaptive_max_sym_bounds.c
 target_link_libraries(test_adaptive_max_sym_bounds PRIVATE ttio_rans)
 target_compile_options(test_adaptive_max_sym_bounds PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME adaptive_max_sym_bounds COMMAND test_adaptive_max_sym_bounds)
+# Phase 1 byte-equality gate: rc_cram vs htscodecs reference.
+# Run manually: ./test_rc_cram_byte_equal /tmp/rc_cram_ours.bin
+# then cmp /tmp/rc_cram_ours.bin /tmp/rc_cram_htscodecs.bin
+add_executable(test_rc_cram_byte_equal tests/test_rc_cram_byte_equal.c)
+target_include_directories(test_rc_cram_byte_equal PRIVATE src)
+target_link_libraries(test_rc_cram_byte_equal ttio_rans)
+target_compile_options(test_rc_cram_byte_equal PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME rc_cram_byte_equal COMMAND test_rc_cram_byte_equal)
+
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
