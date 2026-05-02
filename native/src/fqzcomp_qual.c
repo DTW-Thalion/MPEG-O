@@ -750,7 +750,11 @@ static int compress_new_read(const fqz_gparams *gp,
                              rc_cram_encoder *e,
                              uint32_t *last) {
     (void)gp;
-    (void)flags; /* with do_sel=0 and gflags & GFLAG_DO_REV = 0, flags are unused */
+    /* flags: unused in Phase 2 strategy 1 (GFLAG_DO_REV=0, do_sel=0, do_r2 path
+     * dormant). When Task 8 lands auto-tune, flags becomes the per-read flag
+     * stream consumed here for do_r2 / do_sel — wire it into the sm_encode
+     * call sites for the rev bit and selector. */
+    (void)flags;
 
     if (pm->do_sel) {
         st->s = 0;
@@ -819,7 +823,16 @@ static int decompress_new_read(const fqz_gparams *gp,
         st->first_len = 0;
         st->last_len  = (int)len;
     }
-    if (len == 0 || len > out_remaining) return -1;
+    /* Accept len == 0 (SAM permits empty SEQ/QUAL "*"). The outer
+     * decode loop is gated by `i < n_qualities`, so a 0-length read at
+     * the very end of the stream is a no-op (outer-while exits before
+     * the inner do/while can fire). A 0-length read in the middle of a
+     * stream is NOT yet handled correctly here — the inner do/while is
+     * post-test and would consume one quality from the next record. If
+     * Task 9 corpora ever contain mid-stream empty reads, the outer
+     * loop must be restructured to skip the inner emit when st->p == 0
+     * after a fresh new_read. */
+    if (len > out_remaining) return -1;
 
     /* Sanity: if we know read_lengths up front (Phase 2 always does),
      * cross-check. This catches off-by-one parameter-header errors early. */
@@ -942,6 +955,10 @@ int ttio_fqzcomp_qual_uncompress(
     uint8_t        *out,
     size_t          n_qualities)
 {
+    /* flags: unused in Phase 2 strategy 1 (GFLAG_DO_REV=0, do_sel=0). When
+     * Task 8 lands auto-tune, flags becomes the per-read flag stream that
+     * decompress_new_read consumes for do_r2 / do_sel — pass it through
+     * to the helper rather than discarding here. */
     (void)flags;
 
     if (!in || !out || in_len < 10) return -3;
