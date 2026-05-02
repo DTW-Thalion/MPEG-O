@@ -33,11 +33,22 @@ from tools.perf.m94z_v4_prototype.encode_pipeline import (
 
 # --- Constants -----------------------------------------------------------
 
-CHR22_BAM = "/home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.lean.mapped.bam"
-CRAM_BYTES = 86_094_472  # CRAM 3.1 chr22 reference, from prior measurements
+# Default dataset (the original chr22 NA12878 lean+mapped). Override via
+# env vars for multi-corpus runs:
+#   TTIO_PROTOTYPE_BAM       absolute BAM path
+#   TTIO_PROTOTYPE_NAME      slug used in the results-doc filename
+#   TTIO_PROTOTYPE_CRAM_BYTES external CRAM reference total bytes
+DEFAULT_BAM = "/home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.lean.mapped.bam"
+DEFAULT_NAME = "candidates"
+DEFAULT_CRAM_BYTES = 86_094_472  # CRAM 3.1 chr22 NA12878 lean+mapped
+
+CHR22_BAM = os.environ.get("TTIO_PROTOTYPE_BAM", DEFAULT_BAM)
+DATASET_NAME = os.environ.get("TTIO_PROTOTYPE_NAME", DEFAULT_NAME)
+CRAM_BYTES = int(os.environ.get("TTIO_PROTOTYPE_CRAM_BYTES", DEFAULT_CRAM_BYTES))
+
 SAM_REVERSE_FLAG = 16
 GATE_RATIO = 1.15  # hard gate: TTI-O / CRAM <= 1.15 to "pass"
-RESULTS_PATH = "docs/benchmarks/2026-05-02-m94z-v4-candidates.md"
+RESULTS_PATH = f"docs/benchmarks/2026-05-02-m94z-v4-{DATASET_NAME}.md"
 
 
 @dataclass
@@ -198,7 +209,7 @@ def main() -> int:
             ))
 
     case, narrative = classify_outcome(results)
-    write_results_doc(results, case, narrative, bam_load_s)
+    write_results_doc(results, case, narrative, bam_load_s, n, read_lengths.shape[0])
     print(f"[harness] §5 outcome: {case}")
     print(f"[harness] {narrative}")
     print(f"[harness] results doc: {RESULTS_PATH}")
@@ -210,37 +221,59 @@ def write_results_doc(
     case: str,
     narrative: str,
     bam_load_s: float,
+    n_qualities: int,
+    n_reads: int,
 ) -> None:
     head = _git_head()
     host = socket.gethostname()
+    # Chr22 NA12878 lean+mapped baseline: pre-L2 file = 113.72 MB,
+    # qualities body = 69.73 MB, non-qualities ~44 MB. The §5 outcome
+    # categories use this constant. For non-chr22 datasets the absolute
+    # ratio is informational only — the per-candidate ranking and
+    # B/qual deltas are the cross-dataset signal.
     NON_QUALS_BYTES = 113_720_000 - 69_730_000
+    chr22_native = (DATASET_NAME == DEFAULT_NAME)
     lines: list[str] = []
-    lines.append("# M94.Z V4 candidate prototype — chr22 results")
+    lines.append(f"# M94.Z V4 candidate prototype — {DATASET_NAME} results")
     lines.append("")
+    lines.append(f"- Dataset name: `{DATASET_NAME}`")
+    lines.append(f"- BAM: `{CHR22_BAM}`")
     lines.append(f"- Date: 2026-05-02")
     lines.append(f"- Host: {host} ({platform.system()} {platform.release()})")
     lines.append(f"- Git HEAD: `{head}`")
     lines.append(f"- BAM load: {bam_load_s:.2f}s")
+    lines.append(f"- n_qualities: {n_qualities:,} ; n_reads: {n_reads:,}")
+    lines.append(f"- CRAM reference: {CRAM_BYTES:,} bytes "
+                 f"({CRAM_BYTES/1e6:.3f} MB)")
     lines.append(f"- Spec: `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage1-design.md`")
     lines.append("")
     lines.append("## Per-candidate compression")
     lines.append("")
-    lines.append("Total file size = qualities body + ~44 MB non-qualities "
-                 "(constant across candidates, from chr22 L1+L3 baseline). "
-                 "Ratio is total / CRAM 3.1 (86.094 MB).")
+    if chr22_native:
+        lines.append("Total file size = qualities body + ~44 MB non-qualities "
+                     "(constant across candidates, from chr22 L1+L3 baseline). "
+                     f"Ratio is total / CRAM 3.1 ({CRAM_BYTES/1e6:.3f} MB).")
+    else:
+        lines.append("For non-chr22 datasets the +44 MB non-qualities constant "
+                     "and the 1.15× CRAM gate are NOT directly applicable — "
+                     "the cross-dataset signal is the per-candidate body bytes "
+                     "and B/qual ranking. The total/×CRAM columns are still "
+                     "reported using the chr22 framework as a rough yardstick.")
     lines.append("")
-    lines.append("| Candidate | Description | Body MB | Total MB | × CRAM | Pass 1.15x | Encode s |")
-    lines.append("|---|---|---:|---:|---:|---|---:|")
+    lines.append("| Candidate | Description | Body MB | B/qual | Total MB | × CRAM | Pass 1.15x | Encode s |")
+    lines.append("|---|---|---:|---:|---:|---:|---|---:|")
     for r in results:
         if r.error:
-            lines.append(f"| {r.name} | {r.description} | — | — | — | error | — |")
+            lines.append(f"| {r.name} | {r.description} | — | — | — | — | error | — |")
             continue
         body_mb = r.body_bytes / 1e6
+        b_per_qual = r.body_bytes / max(n_qualities, 1)
         total_mb = (r.body_bytes + NON_QUALS_BYTES) / 1e6
-        ratio = total_mb / 86.094
+        ratio = total_mb / (CRAM_BYTES / 1e6)
         passes = "✓" if ratio <= 1.15 else "✗"
         lines.append(
-            f"| {r.name} | {r.description} | {body_mb:.4f} | {total_mb:.4f} | "
+            f"| {r.name} | {r.description} | {body_mb:.4f} | "
+            f"{b_per_qual:.4f} | {total_mb:.4f} | "
             f"{ratio:.4f} | {passes} | {r.encode_wall_s:.2f} |"
         )
     lines.append("")
