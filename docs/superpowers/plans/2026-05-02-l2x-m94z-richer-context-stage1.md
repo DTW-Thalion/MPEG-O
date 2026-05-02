@@ -256,7 +256,7 @@ def encode_with_kernel(
 
 
 def pad_count_for(n: int) -> int:
-    """V3 wire format pads to a multiple of 4 symbols."""
+    """Return the number of zero pad bytes to append so n + pad is a multiple of 4."""
     return (-n) & 0x3
 ```
 
