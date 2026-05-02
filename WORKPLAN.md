@@ -151,6 +151,21 @@ as a record of what was built; current milestones use TTI-O names.
 >   `2026-05-02-m94z-v4-{candidates, na12878_wes_chr22,
 >   hg002_illumina_2x250_chr22, hg002_pacbio_hifi}.md`.
 >
+>   **Stage 2 (V4 CRAM 3.1 fqzcomp port) IN PROGRESS — paused
+>   2026-05-02 at 5/15 tasks (HEAD `416bf6f`).** Phase 0 (sanity)
+>   + Phase 1 (RC primitives byte-equal htscodecs on 1M-symbol flat
+>   freq) done; Phase 2 fqzcomp_qual.h scaffolded. Phase 0 verdict:
+>   PROCEED-WITH-KNOWN-LIMITATION (htscodecs hits 0.398 B/qual on
+>   PacBio HiFi — auto-tune does NOT save PacBio, V4 still wins on
+>   Illumina). Resume with Task 6 (the substantive ~600-line
+>   `fqzcomp_qual_compress` port mirroring htscodecs). Handoff doc
+>   at `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage2-progress.md`
+>   captures plan-template bugs caught + fixed in Task 3, working
+>   tree state, and resume instructions. Spec at
+>   `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage2-design.md`;
+>   plan at
+>   `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage2.md`.
+>
 > **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under
 > `[Unreleased]`, do not interleave with M-series):
