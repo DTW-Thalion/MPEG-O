@@ -21,6 +21,7 @@ add_library(ttio_rans SHARED
     src/rans_encode_adaptive.c
     src/rans_decode_adaptive.c
     src/rc_cram.c
+    src/fqzcomp_qual.c
     src/dispatch.c
     src/threadpool.c
     src/wire_format.c
