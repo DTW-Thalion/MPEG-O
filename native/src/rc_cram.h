@@ -23,7 +23,9 @@ extern "C" {
 typedef struct rc_cram_encoder {
     uint32_t low;
     uint32_t range;
-    uint32_t carry;
+    uint32_t carry;   /* carry flag for overflow propagation */
+    uint32_t ff_num;  /* count of pending 0xFF bytes (deferred emit) */
+    uint32_t cache;   /* top byte of low, ready to emit on next flush */
     uint8_t  *out;          /* output buffer (caller-owned) */
     size_t    out_pos;      /* next write position */
     size_t    out_cap;      /* output buffer capacity */
