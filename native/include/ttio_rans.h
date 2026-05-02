@@ -163,6 +163,44 @@ int ttio_rans_build_decode_table(
     uint8_t        (*dtab)[TTIO_RANS_T]
 );
 
+/*
+ * L2 (Task #82 Phase B.2, 2026-05-01): adaptive M94.Z (CRAM-mimic).
+ *
+ * Per-symbol adaptive freq updates: count[sym] += STEP, halve when
+ * T > T_max - STEP. T_max = 65519, STEP = 16. Encoder maintains
+ * the freq tables internally; decoder rebuilds them via the same
+ * update rules. Wire format omits the freq-tables sidecar.
+ *
+ * See docs/superpowers/specs/2026-05-01-l2-m94z-adaptive-design.md
+ * for the byte-pairing proof and wire format spec.
+ */
+
+#define TTIO_RANS_ADAPTIVE_STEP     16u
+#define TTIO_RANS_ADAPTIVE_T_MAX    65519u
+
+int ttio_rans_encode_block_adaptive(
+    const uint8_t  *symbols,         /* n_symbols quality bytes      */
+    const uint16_t *contexts,        /* n_symbols dense ctx indices  */
+    size_t          n_symbols,
+    uint16_t        n_contexts,      /* dense context count          */
+    uint16_t        max_sym,         /* active range [0, max_sym)    */
+    uint8_t        *out,             /* output buffer                */
+    size_t         *out_len);        /* in: cap; out: actual         */
+
+int ttio_rans_decode_block_adaptive_m94z(
+    const uint8_t           *compressed,
+    size_t                   comp_len,
+    uint16_t                 n_contexts,
+    uint16_t                 max_sym,
+    const ttio_m94z_params  *params,
+    const uint16_t          *ctx_remap,        /* len 1<<sloc        */
+    const uint32_t          *read_lengths,
+    size_t                   n_reads,
+    const uint8_t           *revcomp_flags,
+    uint16_t                 pad_ctx_dense,
+    uint8_t                 *symbols,
+    size_t                   n_symbols);
+
 ttio_rans_pool *ttio_rans_pool_create(int n_threads);
 
 int ttio_rans_encode_mt(
