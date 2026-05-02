@@ -823,16 +823,8 @@ static int decompress_new_read(const fqz_gparams *gp,
         st->first_len = 0;
         st->last_len  = (int)len;
     }
-    /* Accept len == 0 (SAM permits empty SEQ/QUAL "*"). The outer
-     * decode loop is gated by `i < n_qualities`, so a 0-length read at
-     * the very end of the stream is a no-op (outer-while exits before
-     * the inner do/while can fire). A 0-length read in the middle of a
-     * stream is NOT yet handled correctly here — the inner do/while is
-     * post-test and would consume one quality from the next record. If
-     * Task 9 corpora ever contain mid-stream empty reads, the outer
-     * loop must be restructured to skip the inner emit when st->p == 0
-     * after a fresh new_read. */
-    if (len > out_remaining) return -1;
+    /* matches htscodecs decompress_new_read line 1416-1417: `len <= 0` is rejected. */
+    if (len == 0 || len > out_remaining) return -1;
 
     /* Sanity: if we know read_lengths up front (Phase 2 always does),
      * cross-check. This catches off-by-one parameter-header errors early. */
