@@ -115,6 +115,12 @@ target_link_libraries(test_m94z_decode PRIVATE ttio_rans)
 target_compile_options(test_m94z_decode PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME m94z_decode COMMAND test_m94z_decode)
 
+# L2: adaptive M94.Z (CRAM-mimic) tests.
+add_executable(test_adaptive_roundtrip tests/test_adaptive_roundtrip.c)
+target_link_libraries(test_adaptive_roundtrip PRIVATE ttio_rans)
+target_compile_options(test_adaptive_roundtrip PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME adaptive_roundtrip COMMAND test_adaptive_roundtrip)
+
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
 #   cmake -DTTIO_RANS_ENABLE_TSAN=ON ..
