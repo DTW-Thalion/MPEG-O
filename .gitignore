@@ -82,3 +82,4 @@ tools/benchmarks/_cache/
 # build outputs are regenerated via `cmake .. && make`.
 native/_build/
 native/_build_tsan/
+tools/perf/htscodecs/
