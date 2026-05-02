@@ -231,6 +231,45 @@ void ttio_rans_pool_destroy(ttio_rans_pool *pool);
  * "scalar", "sse4.1", "avx2".  Never returns NULL. */
 const char *ttio_rans_kernel_name(void);
 
+/* M94.Z V4: CRAM 3.1 fqzcomp port. See native/src/m94z_v4_wire.h
+ * + native/src/fqzcomp_qual.h for details. The V4 outer wire format
+ * wraps a CRAM-byte-compatible fqzcomp body with an M94.Z header
+ * (magic "M94Z", version=4) so codec layers can dispatch on version.
+ *
+ * Encode:
+ *   qual_in        — n_qualities bytes (Phred-33 ASCII)
+ *   read_lengths   — n_reads uint32 (sum must equal n_qualities)
+ *   flags          — n_reads bytes (bit 4 = SAM_REVERSE)
+ *   strategy_hint  — -1 = auto-tune, 0..4 = preset
+ *   pad_count      — 0..3 (V3 pad-count convention, packed in flags)
+ *   out, *out_len  — caller-owned buffer + capacity-in/length-out
+ *
+ * Decode:
+ *   read_lengths   — caller-allocated, n_reads entries; populated
+ *                    from the V4 header's deflated RLT
+ *   flags          — n_reads bytes (must match those used at encode)
+ *   out_qual       — caller-owned, n_qualities bytes
+ */
+int ttio_m94z_v4_encode(
+    const uint8_t  *qual_in,
+    size_t          n_qualities,
+    const uint32_t *read_lengths,
+    size_t          n_reads,
+    const uint8_t  *flags,
+    int             strategy_hint,
+    uint8_t         pad_count,
+    uint8_t        *out,
+    size_t         *out_len);
+
+int ttio_m94z_v4_decode(
+    const uint8_t  *in,
+    size_t          in_len,
+    uint32_t       *read_lengths,
+    size_t          n_reads,
+    const uint8_t  *flags,
+    uint8_t        *out_qual,
+    size_t          n_qualities);
+
 #ifdef __cplusplus
 }
 #endif

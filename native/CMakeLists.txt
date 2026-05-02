@@ -11,6 +11,7 @@ option(TTIO_RANS_BUILD_JNI
     "Build the JNI wrapper library (libttio_rans_jni.so) for Java integration" OFF)
 
 find_package(Threads REQUIRED)
+find_package(ZLIB REQUIRED)
 
 add_library(ttio_rans SHARED
     src/rans_core.c
@@ -22,6 +23,7 @@ add_library(ttio_rans SHARED
     src/rans_decode_adaptive.c
     src/rc_cram.c
     src/fqzcomp_qual.c
+    src/m94z_v4_wire.c
     src/dispatch.c
     src/threadpool.c
     src/wire_format.c
@@ -31,7 +33,7 @@ target_include_directories(ttio_rans
     PRIVATE src
 )
 target_compile_options(ttio_rans PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(ttio_rans PRIVATE Threads::Threads m)
+target_link_libraries(ttio_rans PRIVATE Threads::Threads m ZLIB::ZLIB)
 
 # x86_64: build SSE4.1 / AVX2 kernels with appropriate per-file flags.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
