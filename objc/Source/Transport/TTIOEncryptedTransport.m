@@ -655,18 +655,39 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             const int64_t *gPosArr = (const int64_t *)gPosData.bytes;
             const uint8_t *gMqArr  = (const uint8_t *)gMqData.bytes;
             const uint32_t *gFlArr = (const uint32_t *)gFlData.bytes;
-            // chromosomes compound (VL_STRING).
+            // L1 (Task #82 Phase B.1): chromosomes are stored as
+            // chromosome_ids (uint16) + chromosome_names (compound).
             TTIOHDF5Group *gHdf5Idx = [gHdf5Run openGroupNamed:@"genomic_index" error:NULL];
+            id<TTIOStorageDataset> gChromIdsDs = [gHdf5Idx openDatasetNamed:@"chromosome_ids" error:NULL];
+            NSData *gChromIdsData = gChromIdsDs ? [gChromIdsDs readAll:NULL] : nil;
             NSArray<TTIOCompoundField *> *chromFields = @[
-                [TTIOCompoundField fieldWithName:@"value"
+                [TTIOCompoundField fieldWithName:@"name"
                                             kind:TTIOCompoundFieldKindVLString],
             ];
-            NSArray *gChromRows =
+            NSArray *gChromNameRows =
                 [TTIOCompoundIO readGenericFromGroup:gHdf5Idx
-                                          datasetNamed:@"chromosomes"
+                                          datasetNamed:@"chromosome_names"
                                                 fields:chromFields
                                                  error:error];
-            if (!gChromRows) return NO;
+            if (!gChromIdsData || !gChromNameRows) return NO;
+            NSMutableArray<NSString *> *gChromNameTable =
+                [NSMutableArray arrayWithCapacity:gChromNameRows.count];
+            for (NSDictionary *row in gChromNameRows) {
+                id v = row[@"name"];
+                if ([v isKindOfClass:[NSData class]])
+                    v = [[NSString alloc] initWithData:v encoding:NSUTF8StringEncoding];
+                [gChromNameTable addObject:(NSString *)v ?: @""];
+            }
+            const uint16_t *gChromIds = (const uint16_t *)gChromIdsData.bytes;
+            NSUInteger gNChromIds = gChromIdsData.length / sizeof(uint16_t);
+            NSMutableArray<NSDictionary *> *gChromRows =
+                [NSMutableArray arrayWithCapacity:gNChromIds];
+            for (NSUInteger i = 0; i < gNChromIds; i++) {
+                NSUInteger idx = gChromIds[i];
+                NSString *name = idx < gChromNameTable.count
+                    ? gChromNameTable[idx] : @"";
+                [gChromRows addObject:@{@"value": name}];
+            }
             int64_t gAcqMode = 0;
             if ([gRun hasAttributeNamed:@"acquisition_mode"]) {
                 id v = [gRun attributeValueForName:@"acquisition_mode" error:NULL];
@@ -1349,23 +1370,49 @@ static BOOL writeEncryptedFile(NSString *path,
                 if (!gFlDs) return NO;
                 [gFlDs writeAll:gFlData error:error];
 
-                NSArray<TTIOCompoundField *> *gChromFields = @[
-                    [TTIOCompoundField fieldWithName:@"value"
-                                                kind:TTIOCompoundFieldKindVLString],
-                ];
-                id<TTIOStorageDataset> gChromDs =
-                    [gIdx createCompoundDatasetNamed:@"chromosomes"
-                                               fields:gChromFields
-                                                count:gNReads
-                                                error:error];
-                if (!gChromDs) return NO;
-                NSMutableArray *gChromRowsW = [NSMutableArray arrayWithCapacity:gNReads];
+                // L1 (Task #82 Phase B.1): write chromosomes as
+                // chromosome_ids (uint16) + chromosome_names (compound).
+                NSMutableDictionary<NSString *, NSNumber *> *gNameToId = [NSMutableDictionary dictionary];
+                NSMutableArray<NSString *> *gNamesInOrder = [NSMutableArray array];
+                NSMutableData *gIdsData = [NSMutableData dataWithLength:gNReads * sizeof(uint16_t)];
+                uint16_t *gIdsBuf = (uint16_t *)gIdsData.mutableBytes;
                 for (NSUInteger i = 0; i < gNReads; i++) {
                     NSString *c = i < acc.genomicChromosomes.count
                         ? acc.genomicChromosomes[i] : @"";
-                    [gChromRowsW addObject:@{ @"value": c ?: @"" }];
+                    if (!c) c = @"";
+                    NSNumber *slot = gNameToId[c];
+                    if (!slot) {
+                        slot = @(gNamesInOrder.count);
+                        gNameToId[c] = slot;
+                        [gNamesInOrder addObject:c];
+                    }
+                    gIdsBuf[i] = (uint16_t)slot.unsignedShortValue;
                 }
-                if (![gChromDs writeAll:gChromRowsW error:error]) return NO;
+                id<TTIOStorageDataset> gCidsDs =
+                    [gIdx createDatasetNamed:@"chromosome_ids"
+                                    precision:TTIOPrecisionUInt16
+                                       length:gNReads
+                                    chunkSize:0
+                                  compression:TTIOCompressionNone
+                             compressionLevel:0
+                                        error:error];
+                if (!gCidsDs) return NO;
+                if (![gCidsDs writeAll:gIdsData error:error]) return NO;
+                NSArray<TTIOCompoundField *> *gNameFields = @[
+                    [TTIOCompoundField fieldWithName:@"name"
+                                                kind:TTIOCompoundFieldKindVLString],
+                ];
+                id<TTIOStorageDataset> gNamesDs =
+                    [gIdx createCompoundDatasetNamed:@"chromosome_names"
+                                               fields:gNameFields
+                                                count:gNamesInOrder.count
+                                                error:error];
+                if (!gNamesDs) return NO;
+                NSMutableArray *gNameRowsW = [NSMutableArray arrayWithCapacity:gNamesInOrder.count];
+                for (NSString *n in gNamesInOrder) {
+                    [gNameRowsW addObject:@{ @"name": n }];
+                }
+                if (![gNamesDs writeAll:gNameRowsW error:error]) return NO;
             }
         }
     }

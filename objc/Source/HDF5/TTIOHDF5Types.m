@@ -10,6 +10,7 @@ NSUInteger TTIOPrecisionElementSize(TTIOPrecision precision)
         case TTIOPrecisionUInt32:     return 4;
         case TTIOPrecisionComplex128: return 16;
         case TTIOPrecisionUInt8:      return 1;
+        case TTIOPrecisionUInt16:     return 2;  // L1: chromosome_ids
         case TTIOPrecisionUInt64:     return 8;
     }
     return 0;
@@ -28,6 +29,7 @@ hid_t TTIOHDF5TypeForPrecision(TTIOPrecision precision)
         case TTIOPrecisionInt32:   return H5T_NATIVE_INT32;
         case TTIOPrecisionInt64:   return H5T_NATIVE_INT64;
         case TTIOPrecisionUInt32:  return H5T_NATIVE_UINT32;
+        case TTIOPrecisionUInt16:  return H5T_NATIVE_UINT16;  // L1: chromosome_ids
         case TTIOPrecisionUInt8:   return H5T_NATIVE_UINT8;
         case TTIOPrecisionUInt64:  return H5T_NATIVE_UINT64;
         case TTIOPrecisionComplex128: {

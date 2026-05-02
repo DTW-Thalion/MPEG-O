@@ -138,32 +138,54 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
     if (!writeTypedChannel(group, @"mapping_qualities", TTIOPrecisionUInt8,  _mappingQualitiesData, error)) return NO;
     if (!writeTypedChannel(group, @"flags",             TTIOPrecisionUInt32, _flagsData,            error)) return NO;
 
-    // chromosomes — compound VL string with one field "value".
-    // For HDF5 (group responds to `unwrap`), TTIOCompoundIO writes a
-    // genuine HDF5 compound dataset that round-trips with Python's
-    // write_compound_dataset output. For other providers (Memory etc.)
-    // the storage-protocol compound API works because they bind fields
-    // to the dataset at creation.
-    NSArray *fields = @[[TTIOCompoundField fieldWithName:@"value"
-                                                     kind:TTIOCompoundFieldKindVLString]];
-    NSMutableArray *rows = [NSMutableArray arrayWithCapacity:_chromosomes.count];
-    for (NSString *c in _chromosomes) {
-        [rows addObject:@{@"value": c}];
+    // L1 (Task #82 Phase B.1, 2026-05-01): chromosomes are stored as
+    // chromosome_ids (uint16) + chromosome_names (compound) instead
+    // of a single VL-string compound. The old layout cost 42 MB of
+    // HDF5 fractal-heap overhead per chr22 file (one heap block per
+    // chunk × 432 chunks). Encounter-order id assignment —
+    // first occurrence gets the next unused id.
+    NSMutableDictionary<NSString *, NSNumber *> *nameToId = [NSMutableDictionary dictionary];
+    NSMutableArray<NSString *> *namesInOrder = [NSMutableArray array];
+    NSMutableData *idsData = [NSMutableData dataWithLength:_chromosomes.count * sizeof(uint16_t)];
+    uint16_t *idsBuf = (uint16_t *)idsData.mutableBytes;
+    NSUInteger idx = 0;
+    for (NSString *name in _chromosomes) {
+        NSNumber *slot = nameToId[name];
+        if (!slot) {
+            if (namesInOrder.count > 65535) {
+                if (error) *error = [NSError errorWithDomain:@"TTIOGenomicIndex"
+                                                         code:1
+                                                     userInfo:@{NSLocalizedDescriptionKey: @"> 65,535 unique chromosome names; uint16 chromosome_ids would overflow"}];
+                return NO;
+            }
+            slot = @(namesInOrder.count);
+            nameToId[name] = slot;
+            [namesInOrder addObject:name];
+        }
+        idsBuf[idx++] = (uint16_t)slot.unsignedShortValue;
+    }
+    if (!writeTypedChannel(group, @"chromosome_ids", TTIOPrecisionUInt16, idsData, error)) return NO;
+
+    NSArray *nameFields = @[[TTIOCompoundField fieldWithName:@"name"
+                                                        kind:TTIOCompoundFieldKindVLString]];
+    NSMutableArray *nameRows = [NSMutableArray arrayWithCapacity:namesInOrder.count];
+    for (NSString *n in namesInOrder) {
+        [nameRows addObject:@{@"name": n}];
     }
     if ([group respondsToSelector:@selector(unwrap)]) {
         TTIOHDF5Group *h5 = [(id)group performSelector:@selector(unwrap)];
-        return [TTIOCompoundIO writeGeneric:rows
+        return [TTIOCompoundIO writeGeneric:nameRows
                                    intoGroup:h5
-                                datasetNamed:@"chromosomes"
-                                      fields:fields
+                                datasetNamed:@"chromosome_names"
+                                      fields:nameFields
                                        error:error];
     }
-    id<TTIOStorageDataset> ds = [group createCompoundDatasetNamed:@"chromosomes"
-                                                            fields:fields
-                                                             count:_chromosomes.count
+    id<TTIOStorageDataset> ds = [group createCompoundDatasetNamed:@"chromosome_names"
+                                                            fields:nameFields
+                                                             count:namesInOrder.count
                                                              error:error];
     if (!ds) return NO;
-    return [ds writeAll:rows error:error];
+    return [ds writeAll:nameRows error:error];
 }
 
 + (instancetype)readFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
@@ -180,29 +202,39 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
     NSData *flags     = readTypedChannel(group, @"flags",             &cerr);
     if (!flags)     { if (error) *error = cerr; return nil; }
 
-    NSArray<NSDictionary *> *chromRows = nil;
+    // L1 (Task #82 Phase B.1): read chromosome_ids (uint16) +
+    // chromosome_names (compound) instead of a single VL-string
+    // compound; materialise back to NSArray<NSString *> for callers.
+    NSData *idsData = readTypedChannel(group, @"chromosome_ids", &cerr);
+    if (!idsData) { if (error) *error = cerr; return nil; }
+    NSArray<NSDictionary *> *nameRows = nil;
     if ([group respondsToSelector:@selector(unwrap)]) {
         TTIOHDF5Group *h5 = [(id)group performSelector:@selector(unwrap)];
-        NSArray *fields = @[[TTIOCompoundField fieldWithName:@"value"
+        NSArray *fields = @[[TTIOCompoundField fieldWithName:@"name"
                                                          kind:TTIOCompoundFieldKindVLString]];
-        chromRows = [TTIOCompoundIO readGenericFromGroup:h5
-                                             datasetNamed:@"chromosomes"
-                                                   fields:fields
-                                                    error:&cerr];
+        nameRows = [TTIOCompoundIO readGenericFromGroup:h5
+                                            datasetNamed:@"chromosome_names"
+                                                  fields:fields
+                                                   error:&cerr];
     } else {
-        id<TTIOStorageDataset> chromDs = [group openDatasetNamed:@"chromosomes" error:&cerr];
-        if (chromDs) chromRows = [chromDs readAll:&cerr];
+        id<TTIOStorageDataset> nameDs = [group openDatasetNamed:@"chromosome_names" error:&cerr];
+        if (nameDs) nameRows = [nameDs readAll:&cerr];
     }
-    if (!chromRows) { if (error) *error = cerr; return nil; }
-    if (![chromRows isKindOfClass:[NSArray class]]) return nil;
-
-    NSMutableArray<NSString *> *chroms = [NSMutableArray arrayWithCapacity:chromRows.count];
-    for (NSDictionary *row in chromRows) {
-        id v = row[@"value"];
+    if (!nameRows) { if (error) *error = cerr; return nil; }
+    NSMutableArray<NSString *> *nameTable = [NSMutableArray arrayWithCapacity:nameRows.count];
+    for (NSDictionary *row in nameRows) {
+        id v = row[@"name"];
         if ([v isKindOfClass:[NSData class]]) {
             v = [[NSString alloc] initWithData:v encoding:NSUTF8StringEncoding];
         }
-        [chroms addObject:(NSString *)v ?: @""];
+        [nameTable addObject:(NSString *)v ?: @""];
+    }
+    const uint16_t *ids = (const uint16_t *)idsData.bytes;
+    NSUInteger nIds = idsData.length / sizeof(uint16_t);
+    NSMutableArray<NSString *> *chroms = [NSMutableArray arrayWithCapacity:nIds];
+    for (NSUInteger i = 0; i < nIds; i++) {
+        NSUInteger idx = ids[i];
+        [chroms addObject:idx < nameTable.count ? nameTable[idx] : @""];
     }
 
     return [[TTIOGenomicIndex alloc]

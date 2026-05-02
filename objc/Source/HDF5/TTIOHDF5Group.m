@@ -217,6 +217,9 @@ cleanup:
     // SpectrumIndex's internal ivars treat them as uint64 either way.
     else if (H5Tequal(htype, H5T_NATIVE_UINT64) > 0) precision = TTIOPrecisionUInt64;
     else if (H5Tequal(htype, H5T_NATIVE_UINT32) > 0) precision = TTIOPrecisionUInt32;
+    // L1 (Task #82 Phase B.1, 2026-05-01): genomic_index/chromosome_ids
+    // is the on-disk consumer of TTIOPrecisionUInt16.
+    else if (H5Tequal(htype, H5T_NATIVE_UINT16) > 0) precision = TTIOPrecisionUInt16;
     else if (H5Tequal(htype, H5T_NATIVE_UINT8)  > 0) precision = TTIOPrecisionUInt8;
     else if (H5Tget_class(htype) == H5T_COMPOUND && H5Tget_size(htype) == 2 * sizeof(double)) {
         precision = TTIOPrecisionComplex128;

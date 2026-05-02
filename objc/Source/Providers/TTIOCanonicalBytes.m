@@ -19,6 +19,7 @@ static NSUInteger elementSizeForPrecision(TTIOPrecision p)
         case TTIOPrecisionUInt32:     return 4;
         case TTIOPrecisionComplex128: return 16;
         case TTIOPrecisionUInt8:      return 1;
+        case TTIOPrecisionUInt16:     return 2;  // L1
     }
     return 0;
 }
