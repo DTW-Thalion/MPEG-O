@@ -31,7 +31,7 @@ target_include_directories(ttio_rans
     PRIVATE src
 )
 target_compile_options(ttio_rans PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(ttio_rans PRIVATE Threads::Threads)
+target_link_libraries(ttio_rans PRIVATE Threads::Threads m)
 
 # x86_64: build SSE4.1 / AVX2 kernels with appropriate per-file flags.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
