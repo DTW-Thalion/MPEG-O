@@ -110,16 +110,25 @@ as a record of what was built; current milestones use TTI-O names.
 > model before any further codec work. See
 > `docs/benchmarks/2026-05-01-chr22-byte-breakdown.md` §8.
 >
-> * **Task #84 — Richer-context M94.Z (PLACEHOLDER).** A
->   model-design problem, not a coder problem. Probable directions:
->   length bucket (read length), distance-from-read-start (cycle-bias
->   like Illumina), pair orientation, mate-cigar interaction,
->   error-context (after-mismatch bias). Requires a fresh
->   `superpowers:brainstorming` session, then a math/spec proof phase
->   per `feedback_phase_0_spec_proof` before any C-kernel work. No
->   implementation start until brainstorm + spec are user-reviewed.
->   Wire-format break possible (V4) — V3 stays as the floor that's
->   already shipped.
+> * **Task #84 — Richer-context M94.Z (Stage 1 done 2026-05-02;
+>   re-charter pending).** Stage 1 prototype harness at
+>   `tools/perf/m94z_v4_prototype/` measured 5 candidate context-model
+>   designs on chr22 against the 1.15× CRAM hard gate; **all 5 fail
+>   the gate**. Best is **c2** (equal-precision 4+4+4 prev_q + 4 pos
+>   + 1 revcomp, drop length, sloc=17) at **1.2539× CRAM** (107.95 MB
+>   total, 5.3 MB better than V3 baseline but 9 MB over the gate).
+>   Notable: c4 (SplitMix64 hash, CRAM-exact) is *worse* than V3 by
+>   5.7 MB — bit-pack at sloc=17 outperforms hash at sloc=12; the
+>   "hash is better" hypothesis is refuted, do NOT escalate Stage 2
+>   to hash discipline. c3 (length-heavy full-Phred) collapses to
+>   1471 distinct contexts from sparsity. **Re-charter pending:**
+>   either extend feature set beyond CRAM's (distance_from_end,
+>   mate-pair, error-context, possibly larger sloc above 17 with
+>   explicit memory-budget renegotiation) or accept 1.15× is
+>   unreachable inside current constraints and renegotiate the
+>   v1.2.0 gate. No Stage 2 spec until re-charter resolves. Plan +
+>   results: `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage1.md`,
+>   `docs/benchmarks/2026-05-02-m94z-v4-candidates.md`.
 >
 > **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under
