@@ -18,9 +18,29 @@
 #include "fqzcomp_qual.h"
 
 #include <limits.h>
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* fast_log: vendored verbatim from htscodecs/utils.h:69 to match the
+ * auto-tune entropy calculations bit-for-bit. (htscodecs's fqz_qual_stats
+ * uses fast_log() for the do_qa entropy and log() for the do_r2 entropy;
+ * we mirror that exactly.) */
+static inline double fast_log_local(double a) {
+    union { double d; long long x; } u = { a };
+    return (u.x - 4606921278410026770LL) * 1.539095918623324e-16;
+}
+
+/* Helpers extracted from htscodecs's two divide-by-log expressions.
+ * htscodecs writes:
+ *   e1 /= -log(2)/8;   // do_qa branch
+ *   e1 /= log(2)*8;    // do_r2 branch
+ * We compute these once at link time; grouping them in helpers keeps
+ * the qual_stats body close to the htscodecs source. */
+static inline double log_local(double a)        { return log(a); }
+static inline double log_local_2_div_8(void)    { return log(2.0) / 8.0; }
+static inline double log_local_2_x_8(void)      { return log(2.0) * 8.0; }
 
 /* ---------------------------------------------------------------------------
  * Constants and helpers
@@ -250,31 +270,42 @@ static uint16_t sm_decode(sm_model *m, rc_cram_decoder *d) {
  * ------------------------------------------------------------------------ */
 
 typedef struct {
-    /* Stored in parameter header */
-    uint16_t context;
+    /* Stored in parameter header. NOTE: htscodecs uses signed `int` for these
+     * (qbits, qshift, etc.) and stores -1 as a "auto-tune" sentinel for
+     * pshift / do_qa. We mirror that with `int`. The on-the-wire encoding
+     * still nibble-packs them as uint8 in fqz_store_parameters1 (auto-tune
+     * runs first and resolves negatives before any storage). */
+    int      context;
     uint8_t  pflags;
-    uint8_t  max_sym;     /* max symbol value (NOT count) */
-    uint8_t  qbits;
-    uint8_t  qshift;
-    uint8_t  qloc;
-    uint8_t  sloc;
-    uint8_t  ploc;
-    uint8_t  dloc;
+    int      max_sym;     /* max symbol value (NOT count) */
+    int      qbits;
+    int      qshift;
+    int      qloc;
+    int      sloc;
+    int      ploc;
+    int      dloc;
 
     /* Computed from stored bits */
-    uint8_t  pbits;
-    uint8_t  pshift;
-    uint8_t  dbits;
-    uint8_t  dshift;
+    int      pbits;
+    int      pshift;
+    int      dbits;
+    int      dshift;
+    int      sbits;       /* selector bits — derived from sloc, kept for table */
     uint32_t qmask;       /* (1<<qbits) - 1 */
 
-    int      use_qtab;
-    int      use_ptab;
-    int      use_dtab;
+    /* Auto-tune control + outputs of fqz_qual_stats */
+    int      do_qa;       /* -1 = auto, 0 = off, >=2 = forced split */
+    int      do_r2;       /* 1 = consider READ1/READ2 split */
     int      do_sel;
     int      do_dedup;
     int      fixed_len;
     int      store_qmap;
+    int      nsym;        /* unique-symbol count; populated by fqz_qual_stats */
+    int      max_sel;     /* max selector index used; populated by stats */
+
+    int      use_qtab;
+    int      use_ptab;
+    int      use_dtab;
 
     /* Tables — values include the <<ploc / <<dloc shift that has been
      * factored in after fqz_create_models. qmap is plain (no shift). */
@@ -317,20 +348,33 @@ typedef struct {
 } fqz_state;
 
 /* ---------------------------------------------------------------------------
- * Strategy 1 (HiSeq) parameterisation
+ * Strategy preset table + auto-tune (Phase 3)
  *
- * htscodecs strat_opts[1] = {qb=8,qs=5,pb=7,ps=0,db=0,ds=0,
- *                            ql=0,sl=14,pl=8,dl=14, r2=1,qa=-1}
+ * Verbatim mirror of htscodecs strat_opts[][12] (lines ~175-200).
+ * Field order: { qbits, qshift, pbits, pshift, dbits, dshift,
+ *                qloc, sloc, ploc, dloc, do_r2, do_qa }.
  *
- * Phase 2 skips fqz_qual_stats / auto-tune entirely:
- *   - do_qa is forced to 0 (no average-quality selector)
- *   - do_sel  = 0 (no selector encoded)
- *   - do_r2 = 1 in strat_opts[1] only takes effect via auto-tune; here it's
- *             a no-op without auto-tune.
+ * Note pshift=-1 (strategy 0) and do_qa=-1 (strategies 0,1) are signed
+ * sentinels resolved by fqz_pick_parameters.
  *
- * dsqr table from htscodecs (approx sqrt(delta), used for dtab[]). With
- * dbits=0 for HiSeq, dtab[] collapses to all-zero anyway.
+ * dsqr table from htscodecs (approx sqrt(delta), used for dtab[]).
  * ------------------------------------------------------------------------ */
+
+#define FQZ_NSTRATS 5
+
+typedef struct {
+    int qbits, qshift, pbits, pshift, dbits, dshift;
+    int qloc, sloc, ploc, dloc;
+    int do_r2, do_qa;
+} fqz_strat_opts_t;
+
+static const fqz_strat_opts_t FQZ_STRAT_OPTS[FQZ_NSTRATS] = {
+    /* 0: Generic (level<7) */ {10, 5, 4,-1, 2, 1, 0, 14, 10, 14, 0,-1},
+    /* 1: HiSeq 2000        */ { 8, 5, 7, 0, 0, 0, 0, 14,  8, 14, 1,-1},
+    /* 2: MiSeq             */ {12, 6, 2, 0, 2, 3, 0,  9, 12, 14, 0, 0},
+    /* 3: IonTorrent        */ {12, 6, 0, 0, 0, 0, 0, 12,  0,  0, 0, 0},
+    /* 4: Custom (reserved) */ { 0, 0, 0, 0, 0, 0, 0,  0,  0,  0, 0, 0},
+};
 
 static const int g_dsqr[] = {
     0, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3,
@@ -339,66 +383,88 @@ static const int g_dsqr[] = {
     6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
 };
 
-/* Configure gparams for strategy 1 against the given quality stream metadata.
- * Mirrors fqz_pick_parameters but skips fqz_qual_stats (auto-tune). */
-static void fqz_setup_strat1(fqz_gparams *gp,
-                             const uint32_t *read_lengths, size_t n_reads) {
+/* Per-record metadata for fqz_qual_stats / fqz_pick_parameters. The selector
+ * lives in the high 16 bits of `flags[rec]` (matches htscodecs convention).
+ *
+ * Memory ownership: the caller (compress entry) allocates `flags[]` from the
+ * public-API uint8 stream and writes selector bits into the high half during
+ * auto-tune. */
+typedef struct {
+    size_t          num_records;
+    const uint32_t *len;     /* size num_records */
+    uint32_t       *flags;   /* size num_records — mutable for selector bits */
+} fqz_slice_internal;
+
+/* Configure gparams from a raw preset index (no histogram pass / no
+ * auto-tune adjustments). Used by `strategy_hint = 0..3`; the auto-tune
+ * (-1) path goes through fqz_pick_parameters_internal instead.
+ *
+ * Generalised replacement for the original strategy-1-only fqz_setup_strat1,
+ * extended to all four real presets via FQZ_STRAT_OPTS.
+ *
+ * NB: do_qa = -1 in the preset is a sentinel for the auto-tune path; raw
+ * mode just clamps it to 0 (no average-quality split). */
+static int fqz_setup_strategy(fqz_gparams *gp, int strat_idx,
+                              const uint32_t *read_lengths, size_t n_reads) {
+    if (strat_idx < 0 || strat_idx >= FQZ_NSTRATS - 1) return -1;
+
     memset(gp, 0, sizeof(*gp));
     gp->vers    = FQZ_VERS;
-    gp->gflags  = 0;            /* CRAM 3.1: no GFLAG_DO_REV */
+    gp->gflags  = 0;
     gp->nparam  = 1;
     gp->max_sel = 0;
-    gp->max_sym = 255;          /* full-byte alphabet (no qmap stripping) */
+    gp->max_sym = 255;
 
     fqz_param *pm = &gp->p;
-    pm->context  = 0;
+    pm->context = 0;
 
-    /* HiSeq preset, exact values */
-    pm->qbits  = 8;
-    pm->qshift = 5;
-    pm->qloc   = 0;
-    pm->sloc   = 14;
-    pm->ploc   = 8;
-    pm->dloc   = 14;
-    pm->pbits  = 7;
-    pm->pshift = 0;
-    pm->dbits  = 0;
-    pm->dshift = 0;
-    pm->qmask  = (1u << pm->qbits) - 1u;
+    pm->qbits  = FQZ_STRAT_OPTS[strat_idx].qbits;
+    pm->qshift = FQZ_STRAT_OPTS[strat_idx].qshift;
+    pm->qloc   = FQZ_STRAT_OPTS[strat_idx].qloc;
+    pm->sloc   = FQZ_STRAT_OPTS[strat_idx].sloc;
+    pm->ploc   = FQZ_STRAT_OPTS[strat_idx].ploc;
+    pm->dloc   = FQZ_STRAT_OPTS[strat_idx].dloc;
+    pm->pbits  = FQZ_STRAT_OPTS[strat_idx].pbits;
+    pm->pshift = FQZ_STRAT_OPTS[strat_idx].pshift;
+    pm->dbits  = FQZ_STRAT_OPTS[strat_idx].dbits;
+    pm->dshift = FQZ_STRAT_OPTS[strat_idx].dshift;
+    pm->do_r2  = FQZ_STRAT_OPTS[strat_idx].do_r2;
+    pm->do_qa  = 0;  /* raw mode: skip auto-tune entirely */
 
-    pm->store_qmap = 0;         /* identity qmap */
+    /* pshift = -1 (strategy 0) is an auto-tune sentinel meaning
+     * "derive from read length". Raw mode falls back to 0. */
+    if (pm->pshift < 0) pm->pshift = 0;
+
+    pm->qmask    = (1u << pm->qbits) - 1u;
+    pm->store_qmap = 0;
     pm->do_sel     = 0;
     pm->do_dedup   = 0;
 
-    /* fixed_len iff all read_lengths are equal AND non-zero */
-    pm->fixed_len = (n_reads > 0);
+    pm->fixed_len = (n_reads > 0) ? 1 : 0;
     for (size_t i = 1; i < n_reads; i++) {
         if (read_lengths[i] != read_lengths[0]) { pm->fixed_len = 0; break; }
     }
 
-    pm->use_qtab = 0;           /* identity qtab */
-    pm->use_ptab = (pm->pbits > 0);
-    pm->use_dtab = (pm->dbits > 0);
+    pm->use_qtab = 0;
+    pm->use_ptab = (pm->pbits > 0) ? 1 : 0;
+    pm->use_dtab = (pm->dbits > 0) ? 1 : 0;
+    pm->max_sym  = 255;
 
-    pm->max_sym = 255;          /* full alphabet */
-
-    /* qmap: identity (since !store_qmap) */
-    for (int i = 0; i < 256; i++)
+    for (int i = 0; i < 256; i++) {
         pm->qmap[i] = (uint32_t)i;
-
-    /* qtab: identity */
-    for (int i = 0; i < 256; i++)
         pm->qtab[i] = (uint32_t)i;
+    }
 
-    /* ptab: MIN((1<<pbits)-1, i>>pshift) */
-    for (int i = 0; i < 1024; i++)
-        pm->ptab[i] = (uint32_t)MIN((1<<pm->pbits)-1, i >> pm->pshift);
+    if (pm->pbits) {
+        for (int i = 0; i < 1024; i++)
+            pm->ptab[i] = (uint32_t)MIN((1 << pm->pbits) - 1, i >> pm->pshift);
+    } else {
+        for (int i = 0; i < 1024; i++) pm->ptab[i] = 0;
+    }
 
-    /* dtab: dsqr[MIN(63, i>>dshift)], capped at (1<<dbits)-1.
-     * For dbits=0, dtab values get clamped to 0 below. */
     {
         int dlim = (pm->dbits == 0) ? 0 : ((1 << pm->dbits) - 1);
-        int dlen = (int)(sizeof(g_dsqr)/sizeof(*g_dsqr));
+        int dlen = (int)(sizeof(g_dsqr) / sizeof(*g_dsqr));
         for (int i = 0; i < 256; i++) {
             int v = g_dsqr[MIN(dlen - 1, i >> pm->dshift)];
             if (v > dlim) v = dlim;
@@ -414,6 +480,433 @@ static void fqz_setup_strat1(fqz_gparams *gp,
                   (pm->fixed_len  ? PFLAG_DO_LEN    : 0) |
                   (pm->do_dedup   ? PFLAG_DO_DEDUP  : 0) |
                   (pm->store_qmap ? PFLAG_HAVE_QMAP : 0));
+    return 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * fqz_qual_stats — verbatim port from htscodecs (lines 392-674).
+ *
+ * Walks the quality stream, builds per-position histograms, sets nsym, do_dedup,
+ * and (when do_qa != 0) computes 1/2/4-way average-quality selector entropy and
+ * may write selector indices into the high 16 bits of s->flags[rec].
+ *
+ * Skipped: the `one_param` path (htscodecs only uses it from TEST_MAIN).
+ * We always pass one_param=-1 (gather over the whole input).
+ * ------------------------------------------------------------------------ */
+
+static void fqz_qual_stats_internal(fqz_slice_internal *s,
+                                    const uint8_t *in, size_t in_size,
+                                    fqz_param *pm,
+                                    uint32_t qhist[256])
+{
+#define NP 32
+    uint32_t qhistb[NP][256] = {{0}};   /* both reads */
+    uint32_t qhist1[NP][256] = {{0}};   /* READ1 only */
+    uint32_t qhist2[NP][256] = {{0}};   /* READ2 only */
+    uint64_t t1[NP] = {0};
+    uint64_t t2[NP] = {0};
+    uint32_t avg[2560] = {0};
+
+    int dir = 0;
+    int last_len = 0;
+    int do_dedup = 0;
+    size_t rec;
+    size_t i, j;
+    int num_rec = 0;
+
+    int max_sel = 0;
+    int has_r2 = 0;
+    for (rec = 0; rec < s->num_records; rec++) {
+        num_rec++;
+        if (max_sel < (int)(s->flags[rec] >> 16))
+            max_sel = (int)(s->flags[rec] >> 16);
+        if (s->flags[rec] & FQZ_FREAD2)
+            has_r2 = 1;
+    }
+
+    int *avg_qual = (int *)calloc((s->num_records + 1), sizeof(int));
+    if (!avg_qual) return;
+
+    rec = i = j = 0;
+    while (i < in_size) {
+        if (rec < s->num_records) {
+            j = s->len[rec];
+            dir = (s->flags[rec] & FQZ_FREAD2) ? 1 : 0;
+            if (i > 0 && (int)j == last_len &&
+                !memcmp(in + i - last_len, in + i, j))
+                do_dedup++;
+        } else {
+            j = in_size - i;
+            dir = 0;
+        }
+        last_len = (int)j;
+
+        uint32_t (*qh)[256] = dir ? qhist2 : qhist1;
+        uint64_t *th        = dir ? t2     : t1;
+
+        uint32_t tot = 0;
+        for (; i < in_size && j > 0; i++, j--) {
+            tot += in[i];
+            qhist[in[i]]++;
+            qhistb[j & (NP - 1)][in[i]]++;
+            qh    [j & (NP - 1)][in[i]]++;
+            th    [j & (NP - 1)]++;
+        }
+        tot = last_len ? (uint32_t)((tot * 10.0) / last_len + 0.5) : 0;
+
+        avg_qual[rec] = (int)tot;
+        avg[MIN(2559u, tot)]++;
+        rec++;
+    }
+    pm->do_dedup = (((int)rec + 1) / (do_dedup + 1) < 500) ? 1 : 0;
+
+    last_len = 0;
+
+    /* Unique symbol count */
+    pm->max_sym = 0;
+    pm->nsym    = 0;
+    for (i = 0; i < 256; i++) {
+        if (qhist[i]) {
+            pm->max_sym = (int)i;
+            pm->nsym++;
+        }
+    }
+
+    /* Auto-tune: does average-quality help? */
+    if (pm->do_qa != 0) {
+        double qf0 = pm->nsym > 8 ? 0.2 : 0.05;
+        double qf1 = pm->nsym > 8 ? 0.5 : 0.22;
+        double qf2 = pm->nsym > 8 ? 0.8 : 0.60;
+
+        int total = 0;
+        i = 0;
+        while (i < 2560) {
+            total += avg[i];
+            if (total > qf0 * num_rec) break;
+            avg[i++] = 0;
+        }
+        while (i < 2560) {
+            total += avg[i];
+            if (total > qf1 * num_rec) break;
+            avg[i++] = 1;
+        }
+        while (i < 2560) {
+            total += avg[i];
+            if (total > qf2 * num_rec) break;
+            avg[i++] = 2;
+        }
+        while (i < 2560)
+            avg[i++] = 3;
+
+        /* Compute simple entropy of merged signal vs split signal. */
+        int qbin4[4][NP][256] = {{{0}}};
+        int qbin2[2][NP][256] = {{{0}}};
+        int qbin1   [NP][256] = {{0}};
+        int qcnt4[4][NP] = {{0}};
+        int qcnt2[4][NP] = {{0}};
+        int qcnt1   [NP] = {0};
+
+        i = 0; rec = 0;
+        while (i < in_size) {
+            if ((rec & 7) && rec < s->num_records) {
+                /* Subsample for speed */
+                i += s->len[rec++];
+                continue;
+            }
+            if (rec < s->num_records)
+                j = s->len[rec];
+            else
+                j = in_size - i;
+            last_len = (int)j;
+
+            uint32_t tot = (uint32_t)avg_qual[rec];
+            int qb4 = (int)avg[MIN(2559u, tot)];
+            int qb2 = qb4 / 2;
+
+            for (; i < in_size && j > 0; i++, j--) {
+                int x = (int)(j & (NP - 1));
+                qbin4[qb4][x][in[i]]++;  qcnt4[qb4][x]++;
+                qbin2[qb2][x][in[i]]++;  qcnt2[qb2][x]++;
+                qbin1     [x][in[i]]++;  qcnt1     [x]++;
+            }
+            rec++;
+        }
+
+        double e1 = 0, e2 = 0, e4 = 0;
+        for (j = 0; j < NP; j++) {
+            for (i = 0; i < 256; i++) {
+                if (qbin1   [j][i]) e1 += qbin1   [j][i] * fast_log_local(qbin1   [j][i] / (double)qcnt1   [j]);
+                if (qbin2[0][j][i]) e2 += qbin2[0][j][i] * fast_log_local(qbin2[0][j][i] / (double)qcnt2[0][j]);
+                if (qbin2[1][j][i]) e2 += qbin2[1][j][i] * fast_log_local(qbin2[1][j][i] / (double)qcnt2[1][j]);
+                if (qbin4[0][j][i]) e4 += qbin4[0][j][i] * fast_log_local(qbin4[0][j][i] / (double)qcnt4[0][j]);
+                if (qbin4[1][j][i]) e4 += qbin4[1][j][i] * fast_log_local(qbin4[1][j][i] / (double)qcnt4[1][j]);
+                if (qbin4[2][j][i]) e4 += qbin4[2][j][i] * fast_log_local(qbin4[2][j][i] / (double)qcnt4[2][j]);
+                if (qbin4[3][j][i]) e4 += qbin4[3][j][i] * fast_log_local(qbin4[3][j][i] / (double)qcnt4[3][j]);
+            }
+        }
+        e1 /= -log_local_2_div_8();
+        e2 /= -log_local_2_div_8();
+        e4 /= -log_local_2_div_8();
+
+        double qm = pm->do_qa > 0 ? 1.0 : 0.98;
+        if ((pm->do_qa == -1 || pm->do_qa >= 4) &&
+            e4 + (double)s->num_records / 4 < e2 * qm + (double)s->num_records / 8 &&
+            e4 + (double)s->num_records / 4 < e1 * qm) {
+            for (i = 0; i < s->num_records; i++)
+                s->flags[i] |= avg[MIN(2559u, (uint32_t)avg_qual[i])] << 16;
+            pm->do_sel = 1;
+            max_sel = 3;
+        } else if ((pm->do_qa == -1 || pm->do_qa >= 2) &&
+                   e2 + (double)s->num_records / 8 < e1 * qm) {
+            for (i = 0; i < s->num_records; i++)
+                s->flags[i] |= (avg[MIN(2559u, (uint32_t)avg_qual[i])] >> 1) << 16;
+            pm->do_sel = 1;
+            max_sel = 1;
+        }
+
+        if (pm->do_qa == -1) {
+            /* Assume qual, pos, delta in that order. */
+            if (pm->pbits > 0 && pm->dbits > 0) {
+                pm->sloc = pm->dloc - 1;
+                pm->pbits--;
+                pm->dbits--;
+                pm->dloc++;
+            } else if (pm->dbits >= 2) {
+                pm->sloc = pm->dloc;
+                pm->dbits -= 2;
+                pm->dloc += 2;
+            } else if (pm->qbits >= 2) {
+                pm->qbits -= 2;
+                pm->ploc -= 2;
+                pm->sloc = 16 - 2 - pm->do_r2;
+                if (pm->qbits == 6 && pm->qshift == 5)
+                    pm->qbits--;
+            }
+            pm->do_qa = 4;
+        }
+    }
+
+    /* Auto-tune: does READ1/READ2 split help? */
+    if (has_r2 || pm->do_r2) {
+        double e1 = 0, e2 = 0;
+
+        for (j = 0; j < NP; j++) {
+            if (!t1[j] || !t2[j]) continue;
+            for (i = 0; i < 256; i++) {
+                if (!qhistb[j][i]) continue;
+                e1 -= (qhistb[j][i]) * log_local((double)qhistb[j][i] / (double)(t1[j] + t2[j]));
+                if (qhist1[j][i])
+                    e2 -= qhist1[j][i] * log_local((double)qhist1[j][i] / (double)t1[j]);
+                if (qhist2[j][i])
+                    e2 -= qhist2[j][i] * log_local((double)qhist2[j][i] / (double)t2[j]);
+            }
+        }
+        e1 /= log_local_2_x_8();
+        e2 /= log_local_2_x_8();
+
+        double qm = pm->do_r2 > 0 ? 1.0 : 0.95;
+        if (e2 + (8 + (double)s->num_records / 8) < e1 * qm) {
+            for (rec = 0; rec < s->num_records; rec++) {
+                int sel = (int)(s->flags[rec] >> 16);
+                s->flags[rec] = (s->flags[rec] & 0xffff) |
+                    ((s->flags[rec] & FQZ_FREAD2)
+                     ? ((uint32_t)((sel * 2) + 1) << 16)
+                     : ((uint32_t)((sel * 2) + 0) << 16));
+                if (max_sel < (int)(s->flags[rec] >> 16))
+                    max_sel = (int)(s->flags[rec] >> 16);
+            }
+        }
+    }
+
+    if (max_sel > 0) {
+        pm->do_sel  = 1;
+        pm->max_sel = max_sel;
+    }
+
+    free(avg_qual);
+#undef NP
+}
+
+/* ---------------------------------------------------------------------------
+ * fqz_pick_parameters — verbatim port from htscodecs (lines 736-925).
+ *
+ * Builds a fqz_gparams from the strategy preset and the histogram pass.
+ * `strat == FQZ_NSTRATS-1` (Custom) bypasses the auto-adjust pass — used
+ * internally by Custom; we don't expose strategy_hint=4 to public callers.
+ * ------------------------------------------------------------------------ */
+
+static int fqz_pick_parameters_internal(fqz_gparams *gp,
+                                        int vers,
+                                        int strat,
+                                        fqz_slice_internal *s,
+                                        const uint8_t *in,
+                                        size_t in_size)
+{
+    /* dsqr from htscodecs — local copy; clamped per-call by dbits below. */
+    int dsqr[64];
+    for (int k = 0; k < 64; k++) dsqr[k] = g_dsqr[k];
+
+    uint32_t qhist[256] = {0};
+
+    if (strat >= FQZ_NSTRATS) strat = FQZ_NSTRATS - 1;
+
+    memset(gp, 0, sizeof(*gp));
+    gp->vers    = FQZ_VERS;
+    gp->nparam  = 1;
+    gp->max_sel = 0;
+
+    /* CRAM 3.1 doesn't reverse upfront, so DO_REV is gated on vers == 3
+     * (which we never use). */
+    if (vers == 3) gp->gflags |= GFLAG_DO_REV;
+
+    fqz_param *pm = &gp->p;
+
+    pm->qbits  = FQZ_STRAT_OPTS[strat].qbits;
+    pm->qshift = FQZ_STRAT_OPTS[strat].qshift;
+    pm->pbits  = FQZ_STRAT_OPTS[strat].pbits;
+    pm->pshift = FQZ_STRAT_OPTS[strat].pshift;
+    pm->dbits  = FQZ_STRAT_OPTS[strat].dbits;
+    pm->dshift = FQZ_STRAT_OPTS[strat].dshift;
+    pm->qloc   = FQZ_STRAT_OPTS[strat].qloc;
+    pm->sloc   = FQZ_STRAT_OPTS[strat].sloc;
+    pm->ploc   = FQZ_STRAT_OPTS[strat].ploc;
+    pm->dloc   = FQZ_STRAT_OPTS[strat].dloc;
+    pm->do_r2  = FQZ_STRAT_OPTS[strat].do_r2;
+    pm->do_qa  = FQZ_STRAT_OPTS[strat].do_qa;
+
+    /* Validity-check input lengths vs buffer size (htscodecs does this). */
+    size_t tlen = 0;
+    for (size_t i = 0; i < s->num_records; i++) {
+        if (tlen + s->len[i] > in_size) {
+            /* htscodecs mutates s->len[i] here; we treat it as a hard error
+             * since our public API guarantees sum(read_lengths)==n_qualities
+             * (compress entry already validated). */
+            return -1;
+        }
+        tlen += s->len[i];
+    }
+    if (s->num_records > 0 && tlen < in_size) {
+        return -1;
+    }
+
+    /* Quality stats over all records (one_param=-1) */
+    fqz_qual_stats_internal(s, in, in_size, pm, qhist);
+
+    pm->store_qmap = (pm->nsym <= 8 && pm->nsym * 2 < pm->max_sym) ? 1 : 0;
+
+    /* Fixed-length detection */
+    {
+        uint32_t first_len = s->num_records ? s->len[0] : 0;
+        size_t i;
+        for (i = 1; i < s->num_records; i++) {
+            if (s->len[i] != first_len) break;
+        }
+        pm->fixed_len = (i == s->num_records) ? 1 : 0;
+    }
+    pm->use_qtab = 0;
+
+    if (strat >= FQZ_NSTRATS - 1)
+        goto manually_set;
+
+    if (pm->pshift < 0) {
+        double l0 = (double)(s->num_records ? s->len[0] : 1);
+        pm->pshift = (int)MAX(0, log_local((double)l0 / (1 << pm->pbits)) /
+                                  log_local(2.0) + 0.5);
+    }
+
+    if (pm->nsym <= 4) {
+        /* NovaSeq Q4 */
+        pm->qshift = 2;
+        if (in_size < 5000000) {
+            pm->pbits  = 2;
+            pm->pshift = 5;
+        }
+    } else if (pm->nsym <= 8) {
+        /* HiSeqX */
+        pm->qbits  = MIN(pm->qbits, 9);
+        pm->qshift = 3;
+        if (in_size < 5000000)
+            pm->qbits = 6;
+    }
+
+    if (in_size < 300000) {
+        pm->qbits = pm->qshift;
+        pm->dbits = 2;
+    }
+
+manually_set:
+    {
+        size_t k;
+        for (k = 0; k < sizeof(dsqr) / sizeof(*dsqr); k++)
+            if (dsqr[k] > (1 << pm->dbits) - 1)
+                dsqr[k] = (1 << pm->dbits) - 1;
+    }
+
+    if (pm->store_qmap) {
+        int j;
+        size_t i2;
+        for (i2 = 0, j = 0; i2 < 256; i2++) {
+            if (qhist[i2]) pm->qmap[i2] = (uint32_t)j++;
+            else           pm->qmap[i2] = (uint32_t)INT_MAX;
+        }
+        pm->max_sym = pm->nsym;
+    } else {
+        pm->nsym = 255;
+        for (size_t i2 = 0; i2 < 256; i2++)
+            pm->qmap[i2] = (uint32_t)i2;
+    }
+    if (gp->max_sym < pm->max_sym)
+        gp->max_sym = pm->max_sym;
+
+    /* qtab: 1:1 (htscodecs leaves room for custom mappings) */
+    if (pm->qbits) {
+        for (size_t i2 = 0; i2 < 256; i2++)
+            pm->qtab[i2] = (uint32_t)i2;
+    }
+    pm->qmask = (1u << pm->qbits) - 1u;
+
+    if (pm->pbits) {
+        for (size_t i2 = 0; i2 < 1024; i2++)
+            pm->ptab[i2] = (uint32_t)MIN((1 << pm->pbits) - 1,
+                                          (int)(i2 >> pm->pshift));
+    }
+
+    if (pm->dbits) {
+        for (size_t i2 = 0; i2 < 256; i2++)
+            pm->dtab[i2] = (uint32_t)dsqr[MIN(
+                sizeof(dsqr)/sizeof(*dsqr) - 1,
+                (size_t)(i2 >> pm->dshift))];
+    }
+
+    pm->use_ptab = (pm->pbits > 0) ? 1 : 0;
+    pm->use_dtab = (pm->dbits > 0) ? 1 : 0;
+
+    pm->pflags =
+        (uint8_t)((pm->use_qtab   ? PFLAG_HAVE_QTAB : 0) |
+                  (pm->use_dtab   ? PFLAG_HAVE_DTAB : 0) |
+                  (pm->use_ptab   ? PFLAG_HAVE_PTAB : 0) |
+                  (pm->do_sel     ? PFLAG_DO_SEL    : 0) |
+                  (pm->fixed_len  ? PFLAG_DO_LEN    : 0) |
+                  (pm->do_dedup   ? PFLAG_DO_DEDUP  : 0) |
+                  (pm->store_qmap ? PFLAG_HAVE_QMAP : 0));
+
+    gp->max_sel = 0;
+    if (pm->do_sel) {
+        gp->max_sel = 1;
+        gp->gflags |= GFLAG_HAVE_STAB;
+        /* stab is already zero from memset */
+    }
+
+    if (gp->max_sel && s->num_records) {
+        int max = 0;
+        for (size_t i2 = 0; i2 < s->num_records; i2++) {
+            if (max < (int)(s->flags[i2] >> 16))
+                max = (int)(s->flags[i2] >> 16);
+        }
+        gp->max_sel = max;
+    }
+
+    return 0;
 }
 
 /* Pre-shift ptab/dtab so the inner loop is a plain add. Mirrors the
@@ -525,7 +1018,7 @@ static int fqz_store_parameters1(const fqz_param *pm, uint8_t *out) {
     out[idx++] = (uint8_t)(pm->context >> 8);
 
     out[idx++] = pm->pflags;
-    out[idx++] = pm->max_sym;
+    out[idx++] = (uint8_t)pm->max_sym;
 
     out[idx++] = (uint8_t)((pm->qbits << 4) | pm->qshift);
     out[idx++] = (uint8_t)((pm->qloc  << 4) | pm->sloc);
@@ -744,20 +1237,21 @@ static int compress_new_read(const fqz_gparams *gp,
                              const fqz_param *pm,
                              const uint32_t *read_lengths,
                              size_t n_reads,
-                             const uint8_t *flags,
+                             const uint32_t *flags_u32,
+                             const uint8_t *qual_in,
+                             size_t *in_i,
                              fqz_state *st,
                              fqz_model *model,
                              rc_cram_encoder *e,
                              uint32_t *last) {
     (void)gp;
-    /* flags: unused in Phase 2 strategy 1 (GFLAG_DO_REV=0, do_sel=0, do_r2 path
-     * dormant). When Task 8 lands auto-tune, flags becomes the per-read flag
-     * stream consumed here for do_r2 / do_sel — wire it into the sm_encode
-     * call sites for the rev bit and selector. */
-    (void)flags;
 
     if (pm->do_sel) {
-        st->s = 0;
+        /* Selector lives in the high 16 bits of flags_u32[rec] (placed there
+         * by fqz_qual_stats during auto-tune). Mirror htscodecs's encoder. */
+        st->s = (st->rec < n_reads && flags_u32)
+                ? (flags_u32[st->rec] >> 16)
+                : 0;
         sm_encode(&model->sel, e, (uint16_t)st->s);
     } else {
         st->s = 0;
@@ -787,8 +1281,23 @@ static int compress_new_read(const fqz_gparams *gp,
     *last = pm->context;
 
     if (pm->do_dedup) {
-        /* Phase 2: do_dedup is forced 0; this branch is unreachable. */
-        return -1;
+        /* Mirror htscodecs (lines 983-998): emit a 1-bit dup flag indicating
+         * whether this read is byte-identical to the previous one. If yes,
+         * skip its quality bytes; the decoder will re-emit them from the
+         * previous read's buffer. */
+        size_t i = *in_i;
+        if (i && len == st->last_len &&
+            qual_in &&
+            !memcmp(qual_in + i - st->last_len, qual_in + i, (size_t)len)) {
+            sm_encode(&model->dup, e, 1);
+            *in_i = i + (size_t)(len - 1);
+            st->p = 0;
+            st->last_len = len;
+            return 1;  /* signal "is a dup, skip quality emit" */
+        } else {
+            sm_encode(&model->dup, e, 0);
+        }
+        st->last_len = len;
     }
 
     return 0;
@@ -798,6 +1307,8 @@ static int decompress_new_read(const fqz_gparams *gp,
                                const fqz_param *pm_in,
                                size_t expected_reads,
                                const uint32_t *read_lengths,
+                               uint8_t *out_buf,
+                               size_t *out_i,
                                fqz_state *st,
                                fqz_model *model,
                                rc_cram_decoder *d,
@@ -833,8 +1344,23 @@ static int decompress_new_read(const fqz_gparams *gp,
     }
 
     if (pm_in->do_dedup) {
-        /* Phase 2: do_dedup is forced 0; this branch is unreachable. */
-        return -1;
+        /* Mirror htscodecs decompress_new_read (around line 1428):
+         * read 1-bit dup flag; if set, copy previous read's qualities into
+         * out_buf and advance, returning 1 to signal "no quality decode". */
+        uint16_t dup_flag = sm_decode(&model->dup, d);
+        if (dup_flag == 1) {
+            if (!out_buf || !out_i) return -1;
+            size_t i = *out_i;
+            if (i < (size_t)st->last_len) return -1;
+            if (i + (size_t)len > i + out_remaining) return -1;
+            memcpy(out_buf + i, out_buf + i - st->last_len, (size_t)len);
+            *out_i = i + len;
+            st->rec++;
+            st->p = 0;
+            st->last_len = (int)len;
+            return 1;
+        }
+        st->last_len = (int)len;
     }
 
     st->rec++;
@@ -860,9 +1386,10 @@ int ttio_fqzcomp_qual_compress(
     uint8_t        *out,
     size_t         *out_len)
 {
-    /* Phase 2: only strategy 1 supported. Auto-tune (-1) and other
-     * presets land in Phase 3. */
-    if (strategy_hint != 1) return -2;
+    /* Strategy 4 (Custom) is reserved for internal auto-tune use; not exposed
+     * via the public API. */
+    if (!(strategy_hint == -1 ||
+          (strategy_hint >= 0 && strategy_hint <= 3))) return -2;
     if (!qual_in || !read_lengths || !out || !out_len) return -3;
     if (n_reads == 0 || n_qualities == 0) return -3;
 
@@ -875,21 +1402,47 @@ int ttio_fqzcomp_qual_compress(
     if (out_cap < 64) return -4;
 
     fqz_gparams gp;
-    fqz_setup_strat1(&gp, read_lengths, n_reads);
+    uint32_t *flags_u32 = NULL;
+
+    if (strategy_hint == -1) {
+        /* Auto-tune: histogram pass + htscodecs-style parameter dispatch.
+         * fqz_qual_stats writes selector bits into the high 16 bits of
+         * flags[], so we need a mutable uint32_t copy of the public uint8
+         * stream. */
+        flags_u32 = (uint32_t *)calloc(n_reads ? n_reads : 1, sizeof(uint32_t));
+        if (!flags_u32) return -5;
+        if (flags) {
+            for (size_t i = 0; i < n_reads; i++)
+                flags_u32[i] = (uint32_t)flags[i];
+        }
+        fqz_slice_internal slice = { n_reads, read_lengths, flags_u32 };
+        /* Default starting strategy for auto-tune is 0 (Generic, level<7),
+         * matching htscodecs's typical interp_compress dispatch. */
+        if (fqz_pick_parameters_internal(&gp, FQZ_VERS, /*strat=*/0,
+                                         &slice, qual_in, n_qualities) < 0) {
+            free(flags_u32);
+            return -5;
+        }
+    } else {
+        /* Fixed preset: raw values from FQZ_STRAT_OPTS, no histogram pass.
+         * No selector ever set, so flags_u32 stays NULL. */
+        if (fqz_setup_strategy(&gp, strategy_hint, read_lengths, n_reads) < 0)
+            return -5;
+    }
 
     /* Header: var_put_u32(in_size) + parameter block */
     int hdr = 0;
     hdr += var_put_u32(out + hdr, (uint32_t)n_qualities);
     hdr += fqz_store_parameters(&gp, out + hdr);
 
-    if ((size_t)hdr + 5 > out_cap) return -4;
+    if ((size_t)hdr + 5 > out_cap) { free(flags_u32); return -4; }
 
     /* Pre-shift ptab/dtab so the inner loop is plain add */
     fqz_pre_shift_tables(&gp.p);
 
     /* Build models */
     fqz_model model;
-    if (fqz_create_models(&model, &gp) < 0) return -5;
+    if (fqz_create_models(&model, &gp) < 0) { free(flags_u32); return -5; }
 
     /* Range coder writes after the header */
     rc_cram_encoder e;
@@ -905,10 +1458,20 @@ int ttio_fqzcomp_qual_compress(
     size_t i = 0;
     while (i < n_qualities) {
         if (st.p == 0) {
-            int r = compress_new_read(&gp, pm, read_lengths, n_reads, flags,
+            int r = compress_new_read(&gp, pm, read_lengths, n_reads,
+                                      flags_u32, qual_in, &i,
                                       &st, &model, &e, &last);
-            if (r < 0) { fqz_destroy_models(&model); return -6; }
-            if (r > 0) continue; /* dedup hit (unreachable Phase 2) */
+            if (r < 0) {
+                fqz_destroy_models(&model);
+                free(flags_u32);
+                return -6;
+            }
+            if (r > 0) {
+                /* Dedup hit: compress_new_read already advanced `i` to the
+                 * last byte of this read; bump past it and continue. */
+                i++;
+                continue;
+            }
         }
 
         /* Emit one quality */
@@ -919,6 +1482,7 @@ int ttio_fqzcomp_qual_compress(
 
         if (e.err) {
             fqz_destroy_models(&model);
+            free(flags_u32);
             return -7;
         }
     }
@@ -926,11 +1490,13 @@ int ttio_fqzcomp_qual_compress(
     size_t rc_bytes = rc_cram_encoder_finish(&e);
     if (e.err) {
         fqz_destroy_models(&model);
+        free(flags_u32);
         return -7;
     }
 
     *out_len = (size_t)hdr + rc_bytes;
     fqz_destroy_models(&model);
+    free(flags_u32);
     return 0;
 }
 
@@ -987,9 +1553,11 @@ int ttio_fqzcomp_qual_uncompress(
     while (i < n_qualities) {
         if (st.p == 0) {
             int r = decompress_new_read(&gp, pm, n_reads, read_lengths,
+                                        out, &i,
                                         &st, &model, &d, &pm,
                                         n_qualities - i);
             if (r < 0) { fqz_destroy_models(&model); return -6; }
+            if (r > 0) continue;  /* dedup hit: bytes already copied into out */
             last = st.ctx;
         }
 
