@@ -61,14 +61,20 @@ class WrittenGenomicRun:
     signal_codec_overrides: dict[str, Compression] = field(default_factory=dict)
 
     # M93 v1.2 — reference embed for the REF_DIFF codec on the
-    # ``sequences`` channel. When ``embed_reference=True`` (the default)
-    # AND a REF_DIFF override is set on ``sequences``, the writer
-    # embeds the chromosome sequences provided in
-    # ``reference_chrom_seqs`` at ``/study/references/<reference_uri>/``
-    # in the output file. When ``embed_reference=False``, the writer
-    # records ``reference_uri`` and ``reference_md5`` only and expects
-    # the reader to resolve via REF_PATH or an explicit external path.
-    embed_reference: bool = True
+    # ``sequences`` channel. When ``embed_reference=True`` AND a
+    # REF_DIFF override is set on ``sequences``, the writer embeds
+    # the chromosome sequences provided in ``reference_chrom_seqs``
+    # at ``/study/references/<reference_uri>/`` in the output file.
+    # When ``embed_reference=False`` (the default since L3, Task #82
+    # Phase B.1, 2026-05-01), the writer records ``reference_uri``
+    # and ``reference_md5`` only and expects the reader to resolve
+    # via REF_PATH or an explicit external path.
+    #
+    # The default flipped to ``False`` to match CRAM 3.1's default
+    # (external reference) and to drop the ~10 MB chr22 reference
+    # blob from the v1.2.0 chr22 benchmark; users who want
+    # self-contained files set ``embed_reference=True`` explicitly.
+    embed_reference: bool = False
 
     # Mapping ``chromosome_name → uppercase ACGTN bytes``, supplied at
     # write time for any chromosome that has at least one read aligned

@@ -204,6 +204,11 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
     # M93 v1.2: load the chromosomes touched by the run from the
     # benchmark's reference FASTA so REF_DIFF can apply. Falls back
     # to BASE_PACK silently if the reference can't be loaded.
+    # L3 (Task #82 Phase B.1, 2026-05-01): we no longer embed the
+    # reference in the .tio file by default — it's a 9-10 MB blob
+    # for chr22 that CRAM 3.1 doesn't carry by default either. The
+    # reference path is stamped into external_reference_path so
+    # the read side can resolve via REF_PATH or the path metadata.
     chroms_used = set(written.chromosomes) - {"*"}
     try:
         chrom_seqs = _load_reference_chroms(ref_fasta, chroms_used)
@@ -219,8 +224,13 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
         written,
         signal_compression="gzip",
         signal_codec_overrides=codec_overrides,
-        embed_reference=bool(chrom_seqs),
+        # L3: chrom_seqs is still passed (REF_DIFF needs them at
+        # encode time to compute the diff against), but we do NOT
+        # embed them in the file. Reader resolves via the FASTA
+        # path stamped in external_reference_path.
+        embed_reference=False,
         reference_chrom_seqs=chrom_seqs if chrom_seqs else None,
+        external_reference_path=ref_fasta if chrom_seqs else None,
     )
     SpectralDataset.write_minimal(
         out_path,
@@ -250,7 +260,12 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
 def ttio_decompress(in_path: Path, ref_fasta: Path, out_sam_path: Path) -> Result:
     # Walk every read to force full decode of every channel; emit a
     # minimal SAM-like dump so output_size_bytes is comparable.
+    # L3 (Task #82 Phase B.1, 2026-05-01): the .tio file no longer
+    # embeds the reference by default — stamp REF_PATH so the
+    # REF_DIFF reference resolver can find the FASTA.
     from ttio import SpectralDataset
+    prev_ref_path = os.environ.get("REF_PATH")
+    os.environ["REF_PATH"] = str(ref_fasta)
 
     t0 = time.perf_counter()
     n_reads = 0
@@ -274,6 +289,10 @@ def ttio_decompress(in_path: Path, ref_fasta: Path, out_sam_path: Path) -> Resul
                 n_bytes_dumped += len(line)
                 n_reads += 1
     elapsed = time.perf_counter() - t0
+    if prev_ref_path is None:
+        os.environ.pop("REF_PATH", None)
+    else:
+        os.environ["REF_PATH"] = prev_ref_path
     return Result(
         format_name="ttio",
         operation="decompress",
