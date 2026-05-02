@@ -91,12 +91,13 @@ as a record of what was built; current milestones use TTI-O names.
 > 2¹⁶; see memory `rans_nx16_variable_t_invariant`); native C kernel
 > + V3 wire format + Python ctypes wrapper all green (8/8 native
 > ctests, 553/553 Python M94.Z tests). **Phase 4 chr22 hard gate:
-> FAILED** — measured 113.72 MB / 1.321× CRAM (target ≤ 99 MB / 1.15×),
-> over by 14.71 MB. Qualities essentially unchanged at 0.396 B/qual
-> (vs 0.395 under V1 static-per-block). Per-symbol adaptive freqs
-> alone, on top of the existing context formula (`prev_q × pos_bucket
-> × revcomp`, sloc=14), do not move the needle on chr22 — block sizes
-> already let static freqs converge to the empirical distribution.
+> FAILED** — measured 113.33 MB / 1.316× CRAM (target ≤ 99 MB / 1.15×),
+> over by 14.32 MB. Qualities 69.34 MB at 0.393 B/qual (vs V1: 69.73 MB
+> at 0.395 B/qual) — adaptive moves the needle by ~0.4 MB / 0.002 B/qual.
+> Per-symbol adaptive freqs alone, on top of the existing context
+> formula (`prev_q × pos_bucket × revcomp`, sloc=14), do not move the
+> needle on chr22 — block sizes already let static freqs converge to
+> the empirical distribution.
 > Per spec §10, this **blocks Phase 5 (Java JNI) and Phase 6 (ObjC)**
 > wrappers; the V3 infrastructure stays Python-only until a model
 > beats V1 substantially. The Range-Coder kernel itself is reusable.
