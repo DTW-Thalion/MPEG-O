@@ -66,6 +66,11 @@ public final class FqzcompNx16Z {
     public static final int VERSION = 1;
     /** M94.Z V2 wire-format version: body produced by libttio_rans (Task 21/22). */
     public static final int VERSION_V2_NATIVE = 2;
+    /** M94.Z V4 wire-format version: CRAM 3.1 fqzcomp port (Stage 2/3). */
+    public static final int VERSION_V4_FQZCOMP = 4;
+    /** Env var that overrides the default M94.Z dispatch version
+     *  ("1"/"2"/"3" → force pre-V4 path; "4" → force V4). */
+    public static final String ENV_VERSION_OVERRIDE = "TTIO_M94Z_VERSION";
     public static final int CONTEXT_PARAMS_SIZE = 8;
 
     // ── Default context parameters ──────────────────────────────────
@@ -174,8 +179,26 @@ public final class FqzcompNx16Z {
         // null = consult env var; Boolean.TRUE/FALSE = explicit override.
         Boolean preferNative = null;
 
+        // V4 (CRAM 3.1 fqzcomp) dispatch knobs:
+        //   preferV4: null = follow env / default (V4 when JNI loaded);
+        //             TRUE  = force V4 path (throws if JNI not loaded);
+        //             FALSE = force pre-V4 (V1/V2) path.
+        //   v4StrategyHint: null = -1 (auto-tune); 0..3 = explicit preset.
+        Boolean preferV4 = null;
+        Integer v4StrategyHint = null;
+
         public EncodeOptions preferNative(boolean v) {
             this.preferNative = v;
+            return this;
+        }
+
+        public EncodeOptions preferV4(boolean v) {
+            this.preferV4 = v;
+            return this;
+        }
+
+        public EncodeOptions v4StrategyHint(int hint) {
+            this.v4StrategyHint = hint;
             return this;
         }
     }
@@ -716,6 +739,69 @@ public final class FqzcompNx16Z {
         public int[] readLengths() { return readLengths; }
     }
 
+    // ── V4 (CRAM 3.1 fqzcomp) dispatch helpers ──────────────────────
+
+    /**
+     * Encode via the M94.Z V4 (CRAM 3.1 fqzcomp) path through JNI.
+     * Throws {@link IllegalStateException} if libttio_rans_jni is not loaded.
+     */
+    private static byte[] encodeV4Internal(byte[] qualities, int[] readLengths,
+                                            int[] revcompFlags, int strategyHint,
+                                            int padCount) {
+        if (!TtioRansNative.isAvailable()) {
+            throw new IllegalStateException(
+                "encodeV4Internal called but libttio_rans_jni not loaded");
+        }
+        // Convert revcompFlags 0/1 to SAM-flag byte (bit 4 = SAM_REVERSE).
+        int[] samFlags = new int[revcompFlags.length];
+        for (int i = 0; i < revcompFlags.length; i++) {
+            samFlags[i] = (revcompFlags[i] & 1) != 0 ? 16 : 0;
+        }
+        return TtioRansNative.encodeV4(qualities, readLengths, samFlags,
+                                        strategyHint, padCount);
+    }
+
+    /**
+     * Decode an M94.Z V4 stream via JNI. Returns the recovered qualities
+     * + read_lengths.
+     *
+     * <p>The V4 outer header carries num_qualities + num_reads + RLT; we
+     * parse the first 22 bytes of the stream to extract them so we can
+     * pre-allocate buffers.
+     */
+    private static DecodeResult decodeV4Internal(byte[] encoded, int[] revcompFlags) {
+        if (!TtioRansNative.isAvailable()) {
+            throw new IllegalStateException(
+                "decodeV4Internal called but libttio_rans_jni not loaded");
+        }
+        if (encoded.length < 30 || encoded[0] != 'M' || encoded[1] != '9'
+            || encoded[2] != '4' || encoded[3] != 'Z' || encoded[4] != 4) {
+            throw new IllegalArgumentException("not an M94.Z V4 stream");
+        }
+        // Parse num_qualities (uint64 LE @ offset 6) and num_reads (@ offset 14).
+        long numQual = 0L, numReads = 0L;
+        for (int i = 0; i < 8; i++) numQual  |= ((long)(encoded[6 + i] & 0xFF)) << (8 * i);
+        for (int i = 0; i < 8; i++) numReads |= ((long)(encoded[14 + i] & 0xFF)) << (8 * i);
+        if (numQual > Integer.MAX_VALUE || numReads > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("V4 stream too large for Java int sizes");
+        }
+        int nQual  = (int) numQual;
+        int nReads = (int) numReads;
+        if (revcompFlags == null) revcompFlags = new int[nReads];
+        if (revcompFlags.length != nReads) {
+            throw new IllegalArgumentException(
+                "revcompFlags length " + revcompFlags.length + " != numReads " + nReads);
+        }
+        int[] samFlags = new int[nReads];
+        for (int i = 0; i < nReads; i++) {
+            samFlags[i] = (revcompFlags[i] & 1) != 0 ? 16 : 0;
+        }
+        Object[] result = TtioRansNative.decodeV4(encoded, nReads, nQual, samFlags);
+        byte[] qual = (byte[]) result[0];
+        int[]  lens = (int[])  result[1];
+        return new DecodeResult(qual, lens);
+    }
+
     // ── Top-level encoder ───────────────────────────────────────────
 
     public static byte[] encode(byte[] qualities, int[] readLengths,
@@ -758,6 +844,30 @@ public final class FqzcompNx16Z {
         int n = qualities.length;
         int padCount = (-n) & 3;
         int nPadded = n + padCount;
+
+        // ── V4 (CRAM 3.1 fqzcomp) dispatch decision ─────────────────
+        // V4 is the new default whenever libttio_rans_jni is loaded.
+        // Per-call opts.preferV4 wins; otherwise consult the
+        // TTIO_M94Z_VERSION env var; otherwise default to V4 if JNI
+        // is available. preferV4=FALSE forces the pre-V4 (V1/V2) path.
+        Boolean preferV4 = (opts != null) ? opts.preferV4 : null;
+        if (preferV4 == null) {
+            String env = System.getenv(ENV_VERSION_OVERRIDE);
+            if ("4".equals(env)) {
+                preferV4 = Boolean.TRUE;
+            } else if (env != null
+                && (env.equals("1") || env.equals("2") || env.equals("3"))) {
+                preferV4 = Boolean.FALSE;
+            } else {
+                preferV4 = TtioRansNative.isAvailable();
+            }
+        }
+        if (preferV4 && TtioRansNative.isAvailable()) {
+            int strategy = (opts != null && opts.v4StrategyHint != null)
+                ? opts.v4StrategyHint : -1;
+            return encodeV4Internal(qualities, readLengths, revcompFlags,
+                                     strategy, padCount);
+        }
 
         // ── V2 native dispatch decision ─────────────────────────────
         boolean preferNative;
@@ -1060,7 +1170,11 @@ public final class FqzcompNx16Z {
                     "M94Z bad magic: expected M94Z");
             }
         }
-        if ((encoded[4] & 0xFF) == VERSION_V2_NATIVE) {
+        int versionByte = encoded[4] & 0xFF;
+        if (versionByte == VERSION_V4_FQZCOMP) {
+            return decodeV4Internal(encoded, revcompFlags);
+        }
+        if (versionByte == VERSION_V2_NATIVE) {
             return decodeV2(encoded, revcompFlags);
         }
         HeaderUnpack hu = unpackCodecHeader(encoded);
