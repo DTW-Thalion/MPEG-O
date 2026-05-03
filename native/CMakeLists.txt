@@ -171,6 +171,17 @@ target_include_directories(test_fqzcomp_qual_autotune PRIVATE src)
 target_link_libraries(test_fqzcomp_qual_autotune ttio_rans)
 target_compile_options(test_fqzcomp_qual_autotune PRIVATE -Wall -Wextra -Wpedantic)
 
+# Stage 4 fast unit gate: threaded auto-tune histogram pass produces
+# byte-identical output to the sequential path on synthetic input.
+# Cross-corpus integration is gated by python/tests/integration/
+# test_m94z_v4_byte_exact.py (and Java/ObjC mirrors); this is the
+# fast-running ctest that catches partition / merge regressions.
+add_executable(test_fqzcomp_qual_threaded tests/test_fqzcomp_qual_threaded.c)
+target_include_directories(test_fqzcomp_qual_threaded PRIVATE src)
+target_link_libraries(test_fqzcomp_qual_threaded PRIVATE ttio_rans)
+target_compile_options(test_fqzcomp_qual_threaded PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME fqzcomp_qual_threaded COMMAND test_fqzcomp_qual_threaded)
+
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:

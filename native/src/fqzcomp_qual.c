@@ -16,12 +16,14 @@
  *   ttio_fqzcomp_qual_uncompress
  */
 #include "fqzcomp_qual.h"
+#include "rans_internal.h"
 
 #include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 /* fast_log: vendored verbatim from htscodecs/utils.h:69 to match the
  * auto-tune entropy calculations bit-for-bit. (htscodecs's fqz_qual_stats
@@ -492,14 +494,256 @@ static int fqz_setup_strategy(fqz_gparams *gp, int strat_idx,
  *
  * Skipped: the `one_param` path (htscodecs only uses it from TEST_MAIN).
  * We always pass one_param=-1 (gather over the whole input).
+ *
+ * Pass 1 (the per-byte histogram walk) is the dominant cost on large inputs
+ * and is partitionable across worker threads — each chunk maintains its own
+ * local accumulators which the dispatcher merges back into the canonical
+ * arrays. Boundary records preserve do_dedup correctness by carrying the
+ * previous record's length through `prev_len`. Pass 2 (entropy) and Pass 3
+ * (READ1/READ2 split test) stay sequential.
  * ------------------------------------------------------------------------ */
+
+#define FQZ_NP 32
+
+typedef struct fqz_stats_chunk {
+    /* Inputs (read-only) */
+    const fqz_slice_internal *s;
+    const uint8_t            *in;
+    size_t                    byte_start;   /* sum of s->len[0..rec_start) */
+    size_t                    byte_end;     /* sum of s->len[0..rec_end) */
+    size_t                    rec_start;    /* inclusive */
+    size_t                    rec_end;      /* exclusive */
+    int                       prev_len;     /* s->len[rec_start - 1], 0 if rec_start==0 */
+    /* avg_qual slot is the global pointer; chunks write to disjoint
+     * indices [rec_start, rec_end). */
+    int                      *avg_qual;
+
+    /* Outputs (zeroed by caller) */
+    uint32_t                  qhist[256];
+    uint32_t                  qhistb[FQZ_NP][256];
+    uint32_t                  qhist1[FQZ_NP][256];
+    uint32_t                  qhist2[FQZ_NP][256];
+    uint64_t                  t1[FQZ_NP];
+    uint64_t                  t2[FQZ_NP];
+    uint32_t                  avg[2560];
+    int                       do_dedup;
+
+    /* Sync (only used when dispatched onto the thread pool) */
+    pthread_mutex_t          *done_mtx;
+    pthread_cond_t           *done_cv;
+    int                      *done_count;
+} fqz_stats_chunk;
+
+/* Run Pass 1 over the chunk's record range. Mirrors lines 530-560 of the
+ * sequential body. Each chunk's `prev_len` carries s->len[rec_start - 1]
+ * (or 0 for the first chunk) so the boundary record's do_dedup check sees
+ * the same `last_len` it would have in a serial walk. */
+static void fqz_qual_stats_pass1_run(fqz_stats_chunk *c)
+{
+    int last_len = c->prev_len;
+    size_t i = c->byte_start;
+    size_t end = c->byte_end;
+
+    for (size_t rec = c->rec_start; rec < c->rec_end; rec++) {
+        size_t j;
+        int dir = 0;
+        if (rec < c->s->num_records) {
+            j = c->s->len[rec];
+            dir = (c->s->flags[rec] & FQZ_FREAD2) ? 1 : 0;
+            if (i > 0 && (int)j == last_len &&
+                !memcmp(c->in + i - last_len, c->in + i, j))
+                c->do_dedup++;
+        } else {
+            j = end - i;
+            dir = 0;
+        }
+        last_len = (int)j;
+
+        uint32_t (*qh)[256] = dir ? c->qhist2 : c->qhist1;
+        uint64_t *th        = dir ? c->t2     : c->t1;
+
+        uint32_t tot = 0;
+        for (; i < end && j > 0; i++, j--) {
+            tot += c->in[i];
+            c->qhist[c->in[i]]++;
+            c->qhistb[j & (FQZ_NP - 1)][c->in[i]]++;
+            qh       [j & (FQZ_NP - 1)][c->in[i]]++;
+            th       [j & (FQZ_NP - 1)]++;
+        }
+        tot = last_len ? (uint32_t)((tot * 10.0) / last_len + 0.5) : 0;
+
+        c->avg_qual[rec] = (int)tot;
+        c->avg[MIN(2559u, tot)]++;
+    }
+}
+
+/* Pool worker entry point: runs the chunk and signals completion via the
+ * caller's done-condition variable. */
+static void fqz_qual_stats_pass1_worker(void *arg)
+{
+    fqz_stats_chunk *c = (fqz_stats_chunk *)arg;
+    fqz_qual_stats_pass1_run(c);
+    pthread_mutex_lock(c->done_mtx);
+    (*c->done_count)++;
+    pthread_cond_broadcast(c->done_cv);
+    pthread_mutex_unlock(c->done_mtx);
+}
+
+/* Read TTIO_FQZCOMP_THREADS env var (1..64). Default 1 = sequential. */
+static int fqz_qual_stats_threads_from_env(void)
+{
+    const char *e = getenv("TTIO_FQZCOMP_THREADS");
+    if (!e || !e[0]) return 1;
+    char *end = NULL;
+    long v = strtol(e, &end, 10);
+    if (end == e || v < 1) return 1;
+    if (v > 64) v = 64;
+    return (int)v;
+}
+
+/* Partition records into n_chunks contiguous ranges with roughly equal
+ * byte counts. Caller pre-allocates `chunks` and the global `avg_qual`
+ * buffer; this function fills the per-chunk metadata + zeroes the
+ * accumulator arrays. */
+static void fqz_qual_stats_partition(fqz_stats_chunk *chunks, int n_chunks,
+                                     const fqz_slice_internal *s,
+                                     const uint8_t *in, size_t in_size,
+                                     int *avg_qual)
+{
+    size_t target_chunk_bytes = in_size / (size_t)n_chunks;
+    size_t cum_bytes = 0;
+    size_t cur_rec = 0;
+
+    for (int t = 0; t < n_chunks; t++) {
+        memset(&chunks[t], 0, sizeof(chunks[t]));
+        chunks[t].s          = s;
+        chunks[t].in         = in;
+        chunks[t].byte_start = cum_bytes;
+        chunks[t].rec_start  = cur_rec;
+        chunks[t].prev_len   = (cur_rec > 0) ? (int)s->len[cur_rec - 1] : 0;
+        chunks[t].avg_qual   = avg_qual;
+
+        size_t target_end = (t == n_chunks - 1)
+            ? in_size
+            : (size_t)(t + 1) * target_chunk_bytes;
+        while (cur_rec < s->num_records && cum_bytes < target_end) {
+            cum_bytes += s->len[cur_rec];
+            cur_rec++;
+        }
+        chunks[t].rec_end  = cur_rec;
+        chunks[t].byte_end = cum_bytes;
+    }
+    /* Last chunk absorbs any tail past the final record. */
+    chunks[n_chunks - 1].byte_end = in_size;
+}
+
+/* Dispatch Pass 1 across `n_threads` workers (or run inline when 1).
+ * Outputs are merged into the caller's accumulator arrays. */
+static void fqz_qual_stats_pass1_dispatch(
+    const fqz_slice_internal *s, const uint8_t *in, size_t in_size,
+    int n_threads,
+    uint32_t qhist[256], uint32_t qhistb[FQZ_NP][256],
+    uint32_t qhist1[FQZ_NP][256], uint32_t qhist2[FQZ_NP][256],
+    uint64_t t1[FQZ_NP], uint64_t t2[FQZ_NP], uint32_t avg[2560],
+    int *do_dedup, int *avg_qual)
+{
+    /* Sub-threshold inputs use a single chunk to avoid pool spin-up cost. */
+    const size_t MIN_BYTES_PER_THREAD = 1 << 20;  /* 1 MiB */
+    if (n_threads < 1) n_threads = 1;
+    if ((size_t)n_threads * MIN_BYTES_PER_THREAD > in_size && in_size > 0)
+        n_threads = (int)(in_size / MIN_BYTES_PER_THREAD);
+    if (n_threads < 1) n_threads = 1;
+    if ((size_t)n_threads > s->num_records && s->num_records > 0)
+        n_threads = (int)s->num_records;
+    if (n_threads < 1) n_threads = 1;
+
+    fqz_stats_chunk *chunks =
+        (fqz_stats_chunk *)calloc((size_t)n_threads, sizeof(*chunks));
+    if (!chunks) {
+        /* Fallback: single-chunk inline. */
+        fqz_stats_chunk solo;
+        memset(&solo, 0, sizeof(solo));
+        solo.s = s; solo.in = in;
+        solo.byte_start = 0; solo.byte_end = in_size;
+        solo.rec_start  = 0; solo.rec_end  = s->num_records;
+        solo.prev_len   = 0;
+        solo.avg_qual   = avg_qual;
+        fqz_qual_stats_pass1_run(&solo);
+        memcpy(qhist,  solo.qhist,  sizeof(solo.qhist));
+        memcpy(qhistb, solo.qhistb, sizeof(solo.qhistb));
+        memcpy(qhist1, solo.qhist1, sizeof(solo.qhist1));
+        memcpy(qhist2, solo.qhist2, sizeof(solo.qhist2));
+        memcpy(t1, solo.t1, sizeof(solo.t1));
+        memcpy(t2, solo.t2, sizeof(solo.t2));
+        memcpy(avg, solo.avg, sizeof(solo.avg));
+        *do_dedup = solo.do_dedup;
+        return;
+    }
+
+    fqz_qual_stats_partition(chunks, n_threads, s, in, in_size, avg_qual);
+
+    if (n_threads == 1) {
+        fqz_qual_stats_pass1_run(&chunks[0]);
+    } else {
+        ttio_rans_pool *pool = ttio_rans_pool_create(n_threads);
+        if (!pool) {
+            /* Fallback: process chunks serially in this thread. */
+            for (int t = 0; t < n_threads; t++)
+                fqz_qual_stats_pass1_run(&chunks[t]);
+        } else {
+            pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+            pthread_cond_t  cv  = PTHREAD_COND_INITIALIZER;
+            int done = 0;
+            for (int t = 0; t < n_threads; t++) {
+                chunks[t].done_mtx   = &mtx;
+                chunks[t].done_cv    = &cv;
+                chunks[t].done_count = &done;
+                int rc = _ttio_rans_pool_submit(pool,
+                    fqz_qual_stats_pass1_worker, &chunks[t]);
+                if (rc != 0) {
+                    /* Run in this thread on submit failure. */
+                    fqz_qual_stats_pass1_run(&chunks[t]);
+                    pthread_mutex_lock(&mtx);
+                    done++;
+                    pthread_mutex_unlock(&mtx);
+                }
+            }
+            pthread_mutex_lock(&mtx);
+            while (done < n_threads)
+                pthread_cond_wait(&cv, &mtx);
+            pthread_mutex_unlock(&mtx);
+            ttio_rans_pool_destroy(pool);
+            pthread_cond_destroy(&cv);
+            pthread_mutex_destroy(&mtx);
+        }
+    }
+
+    /* Merge per-chunk outputs into the canonical accumulators. */
+    *do_dedup = 0;
+    for (int t = 0; t < n_threads; t++) {
+        fqz_stats_chunk *c = &chunks[t];
+        for (int q = 0; q < 256; q++) qhist[q] += c->qhist[q];
+        for (int b = 0; b < FQZ_NP; b++) {
+            for (int q = 0; q < 256; q++) {
+                qhistb[b][q] += c->qhistb[b][q];
+                qhist1[b][q] += c->qhist1[b][q];
+                qhist2[b][q] += c->qhist2[b][q];
+            }
+            t1[b] += c->t1[b];
+            t2[b] += c->t2[b];
+        }
+        for (int x = 0; x < 2560; x++) avg[x] += c->avg[x];
+        *do_dedup += c->do_dedup;
+    }
+    free(chunks);
+}
 
 static void fqz_qual_stats_internal(fqz_slice_internal *s,
                                     const uint8_t *in, size_t in_size,
                                     fqz_param *pm,
                                     uint32_t qhist[256])
 {
-#define NP 32
+#define NP FQZ_NP
     uint32_t qhistb[NP][256] = {{0}};   /* both reads */
     uint32_t qhist1[NP][256] = {{0}};   /* READ1 only */
     uint32_t qhist2[NP][256] = {{0}};   /* READ2 only */
@@ -507,12 +751,11 @@ static void fqz_qual_stats_internal(fqz_slice_internal *s,
     uint64_t t2[NP] = {0};
     uint32_t avg[2560] = {0};
 
-    int dir = 0;
-    int last_len = 0;
     int do_dedup = 0;
     size_t rec;
     size_t i, j;
     int num_rec = 0;
+    int last_len = 0;
 
     int max_sel = 0;
     int has_r2 = 0;
@@ -527,37 +770,19 @@ static void fqz_qual_stats_internal(fqz_slice_internal *s,
     int *avg_qual = (int *)calloc((s->num_records + 1), sizeof(int));
     if (!avg_qual) return;
 
-    rec = i = j = 0;
-    while (i < in_size) {
-        if (rec < s->num_records) {
-            j = s->len[rec];
-            dir = (s->flags[rec] & FQZ_FREAD2) ? 1 : 0;
-            if (i > 0 && (int)j == last_len &&
-                !memcmp(in + i - last_len, in + i, j))
-                do_dedup++;
-        } else {
-            j = in_size - i;
-            dir = 0;
-        }
-        last_len = (int)j;
+    /* Pass 1: histogram walk. Threaded when TTIO_FQZCOMP_THREADS > 1
+     * AND the input is large enough to amortize pool spin-up. The
+     * sequential path is the in-order single-chunk run. */
+    int n_threads = fqz_qual_stats_threads_from_env();
+    fqz_qual_stats_pass1_dispatch(s, in, in_size, n_threads,
+                                   qhist, qhistb, qhist1, qhist2,
+                                   t1, t2, avg, &do_dedup, avg_qual);
 
-        uint32_t (*qh)[256] = dir ? qhist2 : qhist1;
-        uint64_t *th        = dir ? t2     : t1;
+    /* num_rec is the total record count; cum-walking happens inside
+     * the dispatcher / chunk workers. The do_dedup heuristic mirrors
+     * htscodecs exactly: ratio of records to dedup hits. */
+    rec = s->num_records;
 
-        uint32_t tot = 0;
-        for (; i < in_size && j > 0; i++, j--) {
-            tot += in[i];
-            qhist[in[i]]++;
-            qhistb[j & (NP - 1)][in[i]]++;
-            qh    [j & (NP - 1)][in[i]]++;
-            th    [j & (NP - 1)]++;
-        }
-        tot = last_len ? (uint32_t)((tot * 10.0) / last_len + 0.5) : 0;
-
-        avg_qual[rec] = (int)tot;
-        avg[MIN(2559u, tot)]++;
-        rec++;
-    }
     pm->do_dedup = (((int)rec + 1) / (do_dedup + 1) < 500) ? 1 : 0;
 
     last_len = 0;
