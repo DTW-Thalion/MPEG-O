@@ -114,9 +114,13 @@ static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
         // mate_info schema lift (Binding Decisions §125, §126). The
         // bare "mate_info" key remains rejected with a discoverable
         // error pointing at the per-field names (Gotcha §143).
+        // v1.6: positions / flags / mapping_qualities REMOVED from the
+        // override-eligible set. These per-record integer fields are
+        // stored only under genomic_index/ now (mirroring MS's
+        // spectrum_index/ pattern). _TTIO_M86_DroppedIntChannels
+        // catches the keys with a dedicated v1.6 error.
         s = [NSSet setWithArray:@[
             @"sequences", @"qualities", @"read_names", @"cigars",
-            @"positions", @"flags", @"mapping_qualities",
             @"mate_info_chrom", @"mate_info_pos", @"mate_info_tlen",
         ]];
     });
@@ -189,14 +193,13 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @(TTIOCompressionRansOrder1),
             @(TTIOCompressionNameTokenized),
         ]];
+        // v1.6: positions / flags / mapping_qualities REMOVED — see
+        // _TTIO_M86_DroppedIntChannels for the dedicated reject.
         d = @{
             @"sequences":         seqAllowed,
             @"qualities":         qualAllowed,
             @"read_names":        nameAllowed,
             @"cigars":            cigarAllowed,
-            @"positions":         intAllowed,
-            @"flags":             intAllowed,
-            @"mapping_qualities": intAllowed,
             @"mate_info_chrom":   mateChromAllowed,
             @"mate_info_pos":     intAllowed,
             @"mate_info_tlen":    intAllowed,
@@ -214,9 +217,26 @@ static NSSet<NSString *> *_TTIO_M86_IntegerChannelNames(void)
     static NSSet *s = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
+        // v1.6: positions / flags / mapping_qualities removed — they
+        // live only in genomic_index/ now.
+        s = [NSSet setWithArray:@[
+            @"mate_info_pos", @"mate_info_tlen",
+        ]];
+    });
+    return s;
+}
+
+/** v1.6 (L4): per-record integer metadata channels no longer accept
+ *  signal_codec_overrides — they are stored exclusively under
+ *  genomic_index/ now. Validation raises a dedicated v1.6 error
+ *  pointing at genomic_index/ when one of these keys is present. */
+static NSSet<NSString *> *_TTIO_M86_DroppedIntChannels(void)
+{
+    static NSSet *s = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
         s = [NSSet setWithArray:@[
             @"positions", @"flags", @"mapping_qualities",
-            @"mate_info_pos", @"mate_info_tlen",
         ]];
     });
     return s;
@@ -232,7 +252,23 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
     NSDictionary<NSString *, NSSet<NSNumber *> *> *allowedByChan =
         _TTIO_M86_AllowedOverrideCodecsByChannel();
     NSSet<NSString *> *intChannels = _TTIO_M86_IntegerChannelNames();
+    NSSet<NSString *> *droppedIntChannels = _TTIO_M86_DroppedIntChannels();
     for (NSString *chName in overrides) {
+        // v1.6 (L4): per-record integer metadata channels removed from
+        // the signal_channels/ override surface. They live exclusively
+        // under genomic_index/ now (mirroring MS's spectrum_index/
+        // pattern). Hard-error so callers with stale code learn
+        // immediately. See docs/format-spec.md §4 and §10.7.
+        if ([droppedIntChannels containsObject:chName]) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"signalCodecOverrides[\"%@\"]: removed in "
+                               @"v1.6 — per-record integer metadata fields "
+                               @"(positions, flags, mapping_qualities) are "
+                               @"stored only under genomic_index/, not "
+                               @"signal_channels/. The override no longer "
+                               @"applies. See docs/format-spec.md §4 and "
+                               @"§10.7.", chName];
+        }
         // M86 Phase F (Binding Decision §126, Gotcha §143): the bare
         // 'mate_info' key is reserved and rejected with a discoverable
         // error pointing at the three per-field virtual channel names.
@@ -1945,15 +1981,15 @@ static NSNumber *_TTIO_M95_ResolveIntOverride(TTIOWrittenGenomicRun *run,
     if (ovr != nil) return ovr;
     if (run.signalCompression != TTIOCompressionZlib) return nil;
     if (!_TTIO_M94_RunIsV15Candidate(run)) return nil;
-    // v1.5 auto-defaults (mirrors Python DEFAULT_CODECS_V1_5)
+    // v1.5 auto-defaults (mirrors Python DEFAULT_CODECS_V1_5).
+    // v1.6: positions / flags / mapping_qualities / template_lengths
+    // REMOVED — these per-record integer fields are stored only under
+    // genomic_index/ (positions / flags / mapping_qualities) or inside
+    // the mate_info subgroup (template_lengths via mate_info_tlen).
     static NSDictionary *defaults = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         defaults = @{
-            @"positions":         @(TTIOCompressionDeltaRansOrder0),
-            @"flags":             @(TTIOCompressionRansOrder0),
-            @"mapping_qualities": @(TTIOCompressionRansOrder0),
-            @"template_lengths":  @(TTIOCompressionRansOrder0),
             @"mate_info_pos":     @(TTIOCompressionRansOrder0),
             @"mate_info_tlen":    @(TTIOCompressionRansOrder0),
             @"mate_info_chrom":   @(TTIOCompressionNameTokenized),
@@ -2114,21 +2150,11 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     if (!sc) return NO;
     TTIOCompression codec = run.signalCompression;
 
-    // M86 Phase B: integer channels dispatch through
-    // _TTIO_M86_WriteIntChannelStorage; when an rANS override is set
-    // the buffer is serialised LE and encoded; otherwise the M82
-    // typed write is preserved for byte parity.
-    NSDictionary *intChannels = @{
-        @"positions"         : run.positionsData,
-        @"flags"             : run.flagsData,
-        @"mapping_qualities" : run.mappingQualitiesData,
-    };
-    for (NSString *chName in @[@"positions", @"flags", @"mapping_qualities"]) {
-        if (!_TTIO_M86_WriteIntChannelStorage(
-                sc, chName, intChannels[chName], codec,
-                _TTIO_M95_ResolveIntOverride(run, chName), error))
-            return NO;
-    }
+    // v1.6: positions / flags / mapping_qualities are NOT written
+    // under signal_channels/. They live exclusively under
+    // genomic_index/, mirroring MS's spectrum_index/ pattern. See
+    // docs/format-spec.md §4 and §10.7. Override-validation rejects
+    // these channel names.
     // M86: sequences/qualities through codec-aware byte-channel writer.
     if (!_TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
                                            run.sequencesData, codec,
@@ -2561,22 +2587,11 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     //
     // M86: sequences and qualities go through the byte-channel codec
     // dispatcher so an override (rANS / BASE_PACK) is honoured.
-    // M86 Phase B: positions/flags/mapping_qualities (integer
-    // channels) go through the int-channel codec dispatcher; when an
-    // rANS override is set the array is serialised LE and encoded,
-    // otherwise the M82 typed write is preserved for byte parity.
+    // v1.6: positions / flags / mapping_qualities are NOT written
+    // under signal_channels/. They live exclusively under
+    // genomic_index/, mirroring MS's spectrum_index/ pattern. See
+    // docs/format-spec.md §4 and §10.7.
     TTIOCompression codec = run.signalCompression;
-    NSDictionary *intChannels = @{
-        @"positions"         : run.positionsData,
-        @"flags"             : run.flagsData,
-        @"mapping_qualities" : run.mappingQualitiesData,
-    };
-    for (NSString *chName in @[@"positions", @"flags", @"mapping_qualities"]) {
-        if (!_TTIO_M86_WriteIntChannel(sc, chName, intChannels[chName],
-                                       codec,
-                                       _TTIO_M95_ResolveIntOverride(run, chName),
-                                       error)) return NO;
-    }
     // sequences (uint8) — codec-aware. M93 v1.2: when the override
     // (or v1.5 auto-default) selects REF_DIFF, dispatch to the
     // context-aware encoder; otherwise fall through to the M86 byte-
