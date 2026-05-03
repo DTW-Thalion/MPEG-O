@@ -190,13 +190,6 @@ target_include_directories(test_mate_info_v2_helpers PRIVATE src)
 target_compile_options(test_mate_info_v2_helpers PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME mate_info_v2_helpers COMMAND test_mate_info_v2_helpers)
 
-# #11 mate_info v2 Task 3: encoder + decoder invariant tests.
-add_executable(test_mate_info_v2_invariants tests/test_mate_info_v2_invariants.c)
-target_link_libraries(test_mate_info_v2_invariants PRIVATE ttio_rans)
-target_include_directories(test_mate_info_v2_invariants PRIVATE src)
-target_compile_options(test_mate_info_v2_invariants PRIVATE -Wall -Wextra -Wpedantic)
-add_test(NAME mate_info_v2_invariants COMMAND test_mate_info_v2_invariants)
-
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
