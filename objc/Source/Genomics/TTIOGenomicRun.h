@@ -87,36 +87,12 @@
                                           start:(int64_t)start
                                             end:(int64_t)end;
 
-/** M86 Phase B: return the full integer signal-channel array for
- *  `name` ("positions", "flags", or "mapping_qualities"), lazily
- *  decoded.
- *
- *  For codec-compressed integer channels (`@compression` names a TTIO
- *  rANS id) the entire dataset is read once on first access, decoded
- *  through the rANS codec, re-interpreted as the channel's natural
- *  little-endian integer dtype (positions → int64, flags → uint32,
- *  mapping_qualities → uint8 — Binding Decision §115), and cached on
- *  this `TTIOGenomicRun` instance per Binding Decision §116. For
- *  uncompressed channels (no `@compression` attribute or value 0) the
- *  dataset is read directly and re-interpreted via the same channel-
- *  name dtype lookup.
- *
- *  The returned NSData carries the LE byte representation of the
- *  array — callers re-interpret via `(int64_t *)data.bytes` etc. (the
- *  GNUstep host is little-endian on x86/ARM, so the LE bytes match
- *  the host representation directly; on big-endian platforms the
- *  caller must byte-swap, mirroring the write-side LE serialisation
- *  contract per Gotcha §128).
- *
- *  Per Binding Decision §119, this helper is **callable but not
- *  consumed by `-readAtIndex:`** — the per-read access path continues
- *  to use `self.index.{positions,mappingQualities,flags}` for byte
- *  parity with M82 readers. Phase B is primarily a write-side file-
- *  size optimisation; this reader hook is wired for round-trip
- *  conformance and any future reader that prefers `signal_channels/`
- *  over `genomic_index/`. */
-- (NSData *)intChannelArrayNamed:(NSString *)name
-                            error:(NSError **)error;
+// v1.6 (L4): -intChannelArrayNamed:error: REMOVED. The helper supported
+// reading positions/flags/mapping_qualities from signal_channels/ via
+// codec dispatch — but those datasets no longer exist in v1.6 files
+// (they live exclusively in genomic_index/, accessed via
+// self.index.{positions,mappingQualities,flags}). See
+// docs/format-spec.md §10.7.
 
 /** Open an existing /study/genomic_runs/<name>/ group. The caller
  *  resolves the run group and passes it as `runGroup`. */

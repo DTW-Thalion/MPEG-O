@@ -82,19 +82,16 @@ public class GenomicRun
     // M86 Phase B: lazy decode cache for integer channels. Per Binding
     // Decision §116 this is a separate cache from decodedByteChannels
     // (byte[]) and decodedReadNames (List<String>) because the value
-    // type differs — typed integer arrays (long[]/int[]/byte[]). The
-    // decode happens whole-channel on first access through
-    // intChannelArray(name); per Binding Decision §119 alignedReadAt
-    // does NOT consume this cache (it still uses self.index for per-
-    // read integer fields), so this cache is exercised by callers that
-    // want bulk access to the compressed signal_channels integer data.
-    private final Map<String, Object> decodedIntChannels = new HashMap<>();
+    // v1.6 (L4): decodedIntChannels removed. The cache supported the
+    // intChannelArray helper which read positions/flags/mapping_qualities
+    // from signal_channels/ via codec dispatch — but those datasets no
+    // longer exist in v1.6 files (they live exclusively in
+    // genomic_index/). See docs/format-spec.md §10.7.
     // M86 Phase F: combined per-field cache for the mate_info subgroup
     // layout (Binding Decision §129). Keyed by on-disk child name
     // ("chrom" → List<String>; "pos" → long[]; "tlen" → int[]).
     // Separate from compoundCache (M82 path), decodedByteChannels,
-    // decodedReadNames, decodedCigars, decodedIntChannels — three
-    // value types in one cache, one entry per per-read decode.
+    // decodedReadNames, decodedCigars — value types differ.
     // Mutable HashMap so the per-field accessors can populate it.
     private final Map<String, Object> decodedMateInfo = new HashMap<>();
 
@@ -700,63 +697,13 @@ public class GenomicRun
      *  {@code signal_channels/} integer datasets is therefore a
      *  write-side file-size optimisation; tests verify the round-trip
      *  by calling this helper directly. */
-    public Object intChannelArray(String name) {
-        Object cached = decodedIntChannels.get(name);
-        if (cached != null) return cached;
+    // v1.6 (L4): intChannelArray removed. The helper supported reading
+    // positions/flags/mapping_qualities from signal_channels/ via codec
+    // dispatch — but those datasets no longer exist in v1.6 files. See
+    // docs/format-spec.md §10.7. The deserialiseLeBytes helper below
+    // is retained because Phase F mate_info reads still use it.
 
-        global.thalion.ttio.Enums.Precision naturalDtype;
-        switch (name) {
-            case "positions" -> naturalDtype = global.thalion.ttio.Enums
-                .Precision.INT64;
-            case "flags" -> naturalDtype = global.thalion.ttio.Enums
-                .Precision.UINT32;
-            case "mapping_qualities" -> naturalDtype = global.thalion.ttio
-                .Enums.Precision.UINT8;
-            default -> throw new IllegalArgumentException(
-                "intChannelArray: unknown integer channel '" + name + "'");
-        }
-
-        ensureSignalChannels();
-        try (StorageDataset ds = signalChannels.openDataset(name)) {
-            Object codecAttr = ds.getAttribute("compression");
-            long codecId = (codecAttr instanceof Number n)
-                ? n.longValue() : 0L;
-            if (codecId == 0L) {
-                // Uncompressed: dataset stored at its natural integer
-                // precision; readAll returns the typed array directly.
-                Object arr = ds.readAll();
-                decodedIntChannels.put(name, arr);
-                return arr;
-            }
-            if (codecId == global.thalion.ttio.Enums.Compression
-                    .RANS_ORDER0.ordinal()
-                || codecId == global.thalion.ttio.Enums.Compression
-                    .RANS_ORDER1.ordinal()) {
-                long total = ds.shape()[0];
-                byte[] all = (byte[]) ds.readSlice(0L, total);
-                byte[] decoded = global.thalion.ttio.codecs.Rans.decode(all);
-                Object arr = deserialiseLeBytes(decoded, naturalDtype);
-                decodedIntChannels.put(name, arr);
-                return arr;
-            }
-            if (codecId == global.thalion.ttio.Enums.Compression
-                    .DELTA_RANS_ORDER0.ordinal()) {
-                long total = ds.shape()[0];
-                byte[] all = (byte[]) ds.readSlice(0L, total);
-                byte[] decoded = global.thalion.ttio.codecs.DeltaRans.decode(all);
-                Object arr = deserialiseLeBytes(decoded, naturalDtype);
-                decodedIntChannels.put(name, arr);
-                return arr;
-            }
-            throw new IllegalStateException(
-                "signal_channel '" + name + "': @compression=" + codecId
-                + " is not a supported TTIO codec id for an integer "
-                + "channel (RANS_ORDER0 = 4, RANS_ORDER1 = 5, "
-                + "DELTA_RANS_ORDER0 = 11)");
-        }
-    }
-
-    /** M86 Phase B: re-interpret a little-endian byte buffer as the
+    /** Re-interpret a little-endian byte buffer as the
      *  channel's natural integer array. */
     private static Object deserialiseLeBytes(
             byte[] bytes,

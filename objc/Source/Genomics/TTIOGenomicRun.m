@@ -61,7 +61,8 @@
     // typed integers via channel-name dtype lookup (§115), not as
     // a uint8 byte stream. Cache lifetime is the TTIOGenomicRun
     // instance.
-    NSMutableDictionary<NSString *, NSData *> *_decodedIntChannels;
+    // v1.6 (L4): _decodedIntChannels removed (cache for the dropped
+    // intChannelArrayNamed: helper).
     // M86 Phase F: combined per-field cache for the mate_info subgroup
     // (Binding Decision §129). Single NSMutableDictionary keyed by the
     // on-disk child name (@"chrom", @"pos", @"tlen") since the three
@@ -104,7 +105,6 @@
         _signalCache      = [NSMutableDictionary dictionary];
         _compoundCache    = [NSMutableDictionary dictionary];
         _decodedByteChannels = [NSMutableDictionary dictionary];
-        _decodedIntChannels  = [NSMutableDictionary dictionary];
         _decodedMateInfo     = [NSMutableDictionary dictionary];
         _mateInfoLinkType    = -1;  // not yet probed
     }
@@ -850,91 +850,10 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
 // wired for round-trip conformance and for any future reader that
 // prefers signal_channels/ over genomic_index/ (Phase B is primarily
 // a write-side file-size optimisation).
-- (NSData *)intChannelArrayNamed:(NSString *)name error:(NSError **)error
-{
-    if (![name isEqualToString:@"positions"]
-        && ![name isEqualToString:@"flags"]
-        && ![name isEqualToString:@"mapping_qualities"]) {
-        if (error) *error = [NSError
-            errorWithDomain:@"TTIOGenomicRun" code:2050
-                   userInfo:@{NSLocalizedDescriptionKey:
-                       [NSString stringWithFormat:
-                            @"intChannelArrayNamed: '%@' is not a "
-                            @"recognised integer signal channel "
-                            @"(only positions, flags, "
-                            @"mapping_qualities)", name]}];
-        return nil;
-    }
-    NSData *cached = _decodedIntChannels[name];
-    if (cached) return cached;
-
-    id<TTIOStorageDataset> ds = [self signalDatasetNamed:name error:error];
-    if (!ds) return nil;
-
-    // Detect codec via @compression on the dataset. HDF5 backend
-    // exposes the underlying TTIOHDF5Dataset; non-HDF5 backends
-    // route through the storage protocol's attributeValueForName:.
-    uint8_t codec_id = 0;
-    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
-    if ([sig respondsToSelector:@selector(unwrap)]) {
-        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
-        TTIOHDF5Dataset *hds = [hg openDatasetNamed:name error:NULL];
-        if (hds) {
-            codec_id = _ttio_m86_read_compression_attr([hds datasetId]);
-        }
-    } else {
-        codec_id = _ttio_m86_read_compression_attr_protocol(ds);
-    }
-
-    if (codec_id == 0) {
-        // Uncompressed: read the typed dataset whole. The storage
-        // protocol returns NSData carrying the native (host LE on
-        // x86/ARM) byte representation; that matches the documented
-        // LE serialisation contract for the cached output.
-        id allRaw = [ds readAll:error];
-        if (![allRaw isKindOfClass:[NSData class]]) return nil;
-        _decodedIntChannels[name] = (NSData *)allRaw;
-        return _decodedIntChannels[name];
-    }
-
-    id allRaw = [ds readAll:error];
-    if (![allRaw isKindOfClass:[NSData class]]) return nil;
-    NSError *decErr = nil;
-    NSData *decoded = nil;
-    switch (codec_id) {
-        case 4: // TTIOCompressionRansOrder0
-        case 5: // TTIOCompressionRansOrder1
-            decoded = TTIORansDecode((NSData *)allRaw, &decErr);
-            break;
-        case 11: // TTIOCompressionDeltaRansOrder0 (M95)
-            decoded = TTIODeltaRansDecode((NSData *)allRaw, &decErr);
-            break;
-        default:
-            if (error) *error = [NSError
-                errorWithDomain:@"TTIOGenomicRun" code:2051
-                       userInfo:@{NSLocalizedDescriptionKey:
-                           [NSString stringWithFormat:
-                                @"signal_channel '%@': @compression=%u "
-                                @"is not a supported TTIO codec id for "
-                                @"an integer channel (only RANS_ORDER0 "
-                                @"= 4, RANS_ORDER1 = 5, "
-                                @"DELTA_RANS_ORDER0 = 11 are "
-                                @"recognised)",
-                                name, (unsigned)codec_id]}];
-            return nil;
-    }
-    if (!decoded) {
-        if (error) *error = decErr ?: [NSError
-            errorWithDomain:@"TTIOGenomicRun" code:2052
-                   userInfo:@{NSLocalizedDescriptionKey:
-                       [NSString stringWithFormat:
-                            @"signal_channel '%@' codec %u decode "
-                            @"failed", name, (unsigned)codec_id]}];
-        return nil;
-    }
-    _decodedIntChannels[name] = decoded;
-    return decoded;
-}
+// v1.6 (L4): -intChannelArrayNamed:error: removed. The helper read
+// positions/flags/mapping_qualities from signal_channels/ via codec
+// dispatch — but those datasets no longer exist in v1.6 files. See
+// docs/format-spec.md §10.7.
 
 // M86 Phase F: HDF5 link-type query for signal_channels/mate_info.
 // Per Binding Decision §128 / Gotcha §141, dispatch is on HDF5 link
