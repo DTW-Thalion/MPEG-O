@@ -197,6 +197,12 @@ target_link_libraries(test_rans_o0_byte_exact PRIVATE ttio_rans)
 target_compile_options(test_rans_o0_byte_exact PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME rans_o0_byte_exact COMMAND test_rans_o0_byte_exact)
 
+# #11 mate_info v2 task 3: invariants test (MF exhaustiveness, round-trip, error paths).
+add_executable(test_mate_info_v2_invariants tests/test_mate_info_v2_invariants.c)
+target_link_libraries(test_mate_info_v2_invariants PRIVATE ttio_rans)
+target_include_directories(test_mate_info_v2_invariants PRIVATE src)
+add_test(NAME mate_info_v2_invariants COMMAND test_mate_info_v2_invariants)
+
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
