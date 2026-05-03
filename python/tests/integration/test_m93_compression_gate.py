@@ -125,7 +125,11 @@ def test_ttio_compress_v2_wire_format(tmp_path):
     from tools.benchmarks.formats import ttio_compress
 
     out = tmp_path / "v2_smoke.tio"
-    with _SetEnv("TTIO_M94Z_USE_NATIVE", "1"):
+    # L2.X V4 (Task 12+): V4 is the default when libttio_rans is loaded,
+    # so we must explicitly pin the codec to V2 via TTIO_M94Z_VERSION=2
+    # to exercise the V2 wire format. TTIO_M94Z_USE_NATIVE=1 is retained
+    # for parity with the original Task 27 dispatch gate.
+    with _SetEnv("TTIO_M94Z_VERSION", "2"), _SetEnv("TTIO_M94Z_USE_NATIVE", "1"):
         result = ttio_compress(CHR22_BAM, CHR22_REF, out)
 
     assert result.output_size_bytes > 0
