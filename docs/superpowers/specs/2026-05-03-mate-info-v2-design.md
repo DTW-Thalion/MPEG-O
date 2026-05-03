@@ -49,7 +49,7 @@ gap** by mirroring the CRAM substream taxonomy.
 
 ## 1. Goal
 
-Add a new compression codec id `MATE_INLINE_V2 = 21` and a new
+Add a new compression codec id `MATE_INLINE_V2 = 13` and a new
 on-disk layout `signal_channels/mate_info/inline_v2` that encodes the
 full mate triple (`mate_chrom_id`, `mate_pos`, `tlen`) per record as
 a CRAM-style 4-substream blob. Default ON in v1.7 with an opt-out
@@ -70,14 +70,14 @@ flag. Saves ≥5 MB on chr22 NA12878 lean+mapped (target 7-8 MB).
   `ttio_rans_decode_block` (the existing rANS-O0 pass).
 - **Backward-compatibility for v1.6 readers on v1.7 files.** Soft
   wire-format addition: v1.6 readers fail on v1.7 files with a clear
-  "unknown compression id 21" error. Users who need v1.6 round-trip
+  "unknown compression id 13" error. Users who need v1.6 round-trip
   must opt out of v1.7's default.
 
 ## 3. Design summary
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Wire-format strategy | Soft addition: new codec id `MATE_INLINE_V2 = 21` alongside v1 streams | Per `feedback_phase_0_spec_proof`, full Phase 0 discipline; clean migration |
+| Wire-format strategy | Soft addition: new codec id `MATE_INLINE_V2 = 13` alongside v1 streams | Per `feedback_phase_0_spec_proof`, full Phase 0 discipline; clean migration |
 | Internal model | CRAM-style 4-substream decomposition (MF / NS / NP / TS) | Each substream's distribution is qualitatively different; separate streams let each rANS-O0 pass model its own distribution |
 | Linkage | Shared C kernel, V4 Stage 2 pattern (`native/src/mate_info_v2.{c,h}` + Python ctypes + Java JNI + ObjC direct link) | One source of truth for the modeling logic; eliminates cross-language ratio drift |
 | Substream entropy coders | Per-stream best-fit from existing arsenal (rANS-O0 + zigzag-varint; MF auto-pick 2-bit-pack vs rANS-O0) | Reuses `ttio_rans_encode_block`; no new entropy coder code; per L2 V3 lesson, static rANS at chr22 scale is near-optimal |
@@ -89,10 +89,10 @@ flag. Saves ≥5 MB on chr22 NA12878 lean+mapped (target 7-8 MB).
 
 ### 4.1 Codec id and on-disk path
 
-- Compression enum entry: `MATE_INLINE_V2 = 21` (next free id; current
-  max is 20).
+- Compression enum entry: `MATE_INLINE_V2 = 13` (next free id; current
+  max is 12, `FQZCOMP_NX16_Z`; id 10 is `_RESERVED_10` and not reused).
 - HDF5 path: `signal_channels/mate_info/inline_v2` (uint8 1-D dataset,
-  no HDF5 filter, `@compression = 21`).
+  no HDF5 filter, `@compression = 13`).
 
 ### 4.2 Inputs at encode time
 
@@ -358,7 +358,7 @@ Writer logic in `_write_mate_info_subgroup` (Python) and equivalents:
   is present → fall through to existing v1 write path (unchanged).
 - Otherwise → call `mate_info_v2.encode(...)`, write resulting bytes
   as `signal_channels/mate_info/inline_v2` uint8 dataset with
-  `@compression = 21`.
+  `@compression = 13`.
 
 `signal_codec_overrides` keys (`mate_info_chrom`, `mate_info_pos`,
 `mate_info_tlen`) become **disallowed** when
@@ -379,8 +379,8 @@ In `GenomicRun.read` (or equivalent), check for
   `mate_info/{chrom,pos,tlen}` separately). Unchanged.
 
 A v1.6 reader on a v1.7 file: encounters `inline_v2` dataset with
-`@compression = 21`, doesn't recognize the codec id, raises a clear
-error: "unknown compression id 21 in
+`@compression = 13`, doesn't recognize the codec id, raises a clear
+error: "unknown compression id 13 in
 signal_channels/mate_info/inline_v2 — file written by TTI-O v1.7+;
 upgrade reader."
 
