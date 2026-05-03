@@ -93,11 +93,12 @@ ttio = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra -m 'not slow and not perf'"
+addopts = "-ra -m 'not slow and not perf and not integration'"
 asyncio_mode = "strict"
 markers = [
     "slow: tests that take more than ~30s; deselected by default — opt in via `-m slow`",
     "perf: throughput regression smoke; opt in via `-m perf`",
+    "integration: end-to-end tests that exercise external binaries / large corpora; opt in via `-m integration`",
 ]
 
 # V1 (verification workplan): code coverage. C7 added the
