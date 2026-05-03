@@ -24,6 +24,7 @@ add_library(ttio_rans SHARED
     src/rc_cram.c
     src/fqzcomp_qual.c
     src/m94z_v4_wire.c
+    src/mate_info_v2.c
     src/dispatch.c
     src/threadpool.c
     src/wire_format.c
@@ -181,6 +182,13 @@ target_include_directories(test_fqzcomp_qual_threaded PRIVATE src)
 target_link_libraries(test_fqzcomp_qual_threaded PRIVATE ttio_rans)
 target_compile_options(test_fqzcomp_qual_threaded PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fqzcomp_qual_threaded COMMAND test_fqzcomp_qual_threaded)
+
+# #11 mate_info v2: varint + zigzag helper unit tests.
+add_executable(test_mate_info_v2_helpers tests/test_mate_info_v2_helpers.c)
+target_link_libraries(test_mate_info_v2_helpers PRIVATE ttio_rans)
+target_include_directories(test_mate_info_v2_helpers PRIVATE src)
+target_compile_options(test_mate_info_v2_helpers PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME mate_info_v2_helpers COMMAND test_mate_info_v2_helpers)
 
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
