@@ -22,6 +22,8 @@ extern "C" {
 #define TTIO_RANS_ERR_PARAM   -1
 #define TTIO_RANS_ERR_ALLOC   -2
 #define TTIO_RANS_ERR_CORRUPT -3
+#define TTIO_RANS_ERR_RESERVED_MF        -4   /* mate_info_v2: MF value 3 seen */
+#define TTIO_RANS_ERR_NS_LENGTH_MISMATCH -5   /* mate_info_v2: NS varint count != NUM_CROSS */
 
 typedef struct ttio_rans_pool ttio_rans_pool;
 
@@ -269,6 +271,49 @@ int ttio_m94z_v4_decode(
     const uint8_t  *flags,
     uint8_t        *out_qual,
     size_t          n_qualities);
+
+/* ──────────────────────────────────────────────────────────────────────
+ * mate_info v2 — CRAM-style inline mate-pair encoding.
+ * Spec: docs/superpowers/specs/2026-05-03-mate-info-v2-design.md
+ *
+ * Encode produces a self-contained uint8 blob written as
+ * signal_channels/mate_info/inline_v2 with @compression = 13.
+ *
+ * Encode inputs:
+ *   mate_chrom_ids[N]    — int32, -1 if RNEXT='*'
+ *   mate_positions[N]    — int64, 0-based POS
+ *   template_lengths[N]  — int32, signed tlen
+ *   own_chrom_ids[N]     — uint16 from genomic_index/chromosome_ids;
+ *                          0xFFFF treated as -1
+ *   own_positions[N]     — int64 from genomic_index/positions
+ *
+ * Decode requires (own_chrom_ids, own_positions, n_records) to
+ * reconstruct mate_pos for SAME_CHROM records.
+ *
+ * Returns 0 on success; negative TTIO_RANS_ERR_* on framing,
+ * length, or reserved-value violations.
+ * ────────────────────────────────────────────────────────────────────── */
+size_t ttio_mate_info_v2_max_encoded_size(uint64_t n_records);
+
+int ttio_mate_info_v2_encode(
+    const int32_t  *mate_chrom_ids,
+    const int64_t  *mate_positions,
+    const int32_t  *template_lengths,
+    const uint16_t *own_chrom_ids,
+    const int64_t  *own_positions,
+    uint64_t        n_records,
+    uint8_t        *out,
+    size_t         *out_len);  /* in: capacity, out: actual size */
+
+int ttio_mate_info_v2_decode(
+    const uint8_t  *encoded,
+    size_t          encoded_size,
+    const uint16_t *own_chrom_ids,
+    const int64_t  *own_positions,
+    uint64_t        n_records,
+    int32_t        *out_mate_chrom_ids,
+    int64_t        *out_mate_positions,
+    int32_t        *out_template_lengths);
 
 #ifdef __cplusplus
 }
