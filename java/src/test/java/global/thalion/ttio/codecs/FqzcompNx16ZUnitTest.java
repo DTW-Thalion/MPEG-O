@@ -265,8 +265,13 @@ final class FqzcompNx16ZUnitTest {
     private static void assertFixture(String name, FixtureInputs in)
             throws IOException {
         byte[] expected = loadFixture(name);
+        // Canonical fixtures are V1 byte-equality; explicitly suppress the
+        // V4 (CRAM 3.1 fqzcomp) and V2 (libttio_rans body) dispatch paths
+        // so the encoder follows the pure-Java V1 codec.
+        FqzcompNx16Z.EncodeOptions opts = new FqzcompNx16Z.EncodeOptions()
+            .preferV4(false).preferNative(false);
         byte[] encoded = FqzcompNx16Z.encode(
-            in.qualities(), in.readLengths(), in.revcompFlags());
+            in.qualities(), in.readLengths(), in.revcompFlags(), opts);
         assertArrayEquals(expected, encoded,
             name + ": Java encode() must match Python fixture byte-exact "
             + "(got " + encoded.length + " bytes vs "

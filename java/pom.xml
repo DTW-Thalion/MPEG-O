@@ -103,7 +103,13 @@
             </activation>
             <properties>
                 <hdf5.jar.path>/usr/share/java/jarhdf5.jar</hdf5.jar.path>
-                <hdf5.native.path>/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial</hdf5.native.path>
+                <!-- L3 V4 (CRAM 3.1 fqzcomp) tests need libttio_rans_jni.so on
+                     java.library.path. The native build dir is appended so
+                     `mvn test` works from any session without a per-invocation
+                     -Dhdf5.native.path override. CI/devs without the native
+                     build still pass — V4 tests are gated on
+                     TtioRansNative.isAvailable(). -->
+                <hdf5.native.path>/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial:/home/toddw/TTI-O/native/_build</hdf5.native.path>
             </properties>
         </profile>
     </profiles>
