@@ -110,8 +110,41 @@ as a record of what was built; current milestones use TTI-O names.
 > model before any further codec work. See
 > `docs/benchmarks/2026-05-01-chr22-byte-breakdown.md` §8.
 >
-> * **Task #84 — Richer-context M94.Z (Stage 1 done 2026-05-02;
->   multi-corpus extension shipped same day; re-charter pending).**
+> * **Task #84 — Richer-context M94.Z (Stage 1 + Stage 2 done
+>   2026-05-02; V4 SHIPPED).**
+>
+>   **Stage 2 (V4 CRAM 3.1 fqzcomp port) SHIPPED 2026-05-02.** The
+>   native C port of `htscodecs/fqzcomp_qual.c` lives in
+>   `native/src/{rc_cram,fqzcomp_qual,m94z_v4_wire}.{c,h}`; htscodecs
+>   SHA `7dd27f4` is vendored at `tools/perf/htscodecs/` for test-time
+>   byte-equality only (no runtime link). The Python ctypes wrapper at
+>   `python/src/ttio/codecs/fqzcomp_nx16_z.py` exposes
+>   `_encode_v4_native` / `_decode_v4_via_native`; **V4 is the default
+>   encoded format when `_HAVE_NATIVE_LIB`**, V3 stays as the no-native
+>   fallback and read-compat path. V4 byte-equality with htscodecs is
+>   guaranteed across all 4 benchmark corpora. Per-corpus B/qual:
+>   - chr22 NA12878 100bp WGS: **0.365 B/qual**
+>   - NA12878 WES (capture, ~95 bp): **0.273 B/qual**
+>   - HG002 Illumina 2×250: **0.259 B/qual**
+>   - HG002 PacBio HiFi (~14K reads, 18.5 kb mean): **0.398 B/qual
+>     (4% better than V3 — V4 actually beats V3 on PacBio HiFi
+>     despite Phase 0's auto-tune-doesn't-save-PacBio finding;
+>     fqzcomp_qual's per-block strategy selection captures structure
+>     the bit-pack candidates missed)**.
+>   chr22 V4 encode wall is **3.4× faster** than V3 end-to-end. Test
+>   counts: 11/11 native ctests, 48/48 V4-related Python tests, full
+>   1800/1800 baseline. Java JNI + ObjC wrappers are **Stage 3
+>   follow-up** — Python is the load-bearing V4 path; the C plumbing
+>   is proven byte-exact and ready for binding without further model
+>   work. Spec at
+>   `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage2-design.md`;
+>   plan at
+>   `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage2.md`;
+>   results at
+>   `docs/benchmarks/2026-05-02-m94z-v4-stage2-results.md`; V4 wire
+>   format documented in `docs/codecs/fqzcomp_nx16_z.md` §2.
+>
+>   **Stage 1 (cross-corpus prototype, 2026-05-02 — historical).**
 >   Stage 1 prototype harness at `tools/perf/m94z_v4_prototype/`
 >   measured 5 candidate context-model designs on three Illumina
 >   corpora: chr22 NA12878 (100 bp WGS), NA12878 WES (capture, ~95 bp),
@@ -151,20 +184,15 @@ as a record of what was built; current milestones use TTI-O names.
 >   `2026-05-02-m94z-v4-{candidates, na12878_wes_chr22,
 >   hg002_illumina_2x250_chr22, hg002_pacbio_hifi}.md`.
 >
->   **Stage 2 (V4 CRAM 3.1 fqzcomp port) IN PROGRESS — paused
->   2026-05-02 at 5/15 tasks (HEAD `416bf6f`).** Phase 0 (sanity)
->   + Phase 1 (RC primitives byte-equal htscodecs on 1M-symbol flat
->   freq) done; Phase 2 fqzcomp_qual.h scaffolded. Phase 0 verdict:
->   PROCEED-WITH-KNOWN-LIMITATION (htscodecs hits 0.398 B/qual on
->   PacBio HiFi — auto-tune does NOT save PacBio, V4 still wins on
->   Illumina). Resume with Task 6 (the substantive ~600-line
->   `fqzcomp_qual_compress` port mirroring htscodecs). Handoff doc
->   at `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage2-progress.md`
->   captures plan-template bugs caught + fixed in Task 3, working
->   tree state, and resume instructions. Spec at
->   `docs/superpowers/specs/2026-05-02-l2x-m94z-richer-context-stage2-design.md`;
->   plan at
->   `docs/superpowers/plans/2026-05-02-l2x-m94z-richer-context-stage2.md`.
+>   **Stage 2 (V4 CRAM 3.1 fqzcomp port) — see top-level status above
+>   for shipped outcomes; this block kept as historical context.** All
+>   15 tasks landed 2026-05-02 (Phase 0 sanity → Phase 1 RC primitives
+>   → Phase 2 model → Phase 3 strategies/auto-tune → Phase 4 wire
+>   format + Python ctypes → Phase 5 cross-corpus + docs). Phase 0
+>   verdict (auto-tune does NOT save PacBio at the C level) was
+>   **superseded by the end-to-end measurement** — V4 beats V3 by 4%
+>   on PacBio HiFi via the auto-tuner's per-block strategy selection.
+>
 >
 > **Phase 7 — M92 release prep (v1.2.0) follows the codec trio.** Active
 > sibling workplans (separate CHANGELOG sections under

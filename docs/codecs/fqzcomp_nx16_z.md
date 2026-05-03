@@ -121,18 +121,26 @@ to equalise lengths. Padding symbols use the all-zero context vector
 
 ## 2. Wire format (codec id 12)
 
-Two on-disk shapes share the magic `M94Z` and codec id `12`,
+Four on-disk shapes share the magic `M94Z` and codec id `12`,
 distinguished by the version byte:
 
-* **Version 1** (default; canonical for v1.5 files) — pure-language
+* **Version 1** (canonical for v1.5 pre-Stage-2 files) — pure-language
   rANS body laid out as four contiguous substreams. Produced by
   Cython-accelerated Python, pure-Java, and pure-ObjC encoders.
 * **Version 2** (opt-in via `prefer_native` / `TTIO_M94Z_USE_NATIVE`,
   added 2026-04-30) — `libttio_rans` byte layout
   `[4×states LE][4×lane_sizes LE][per-lane data]`. Faster encode at
-  the rANS layer (see §4.3); decode currently runs in pure language
+  the rANS layer; decode currently runs in pure language
   due to chicken-and-egg context derivation, see §7. V1 readers
   reject the version byte cleanly.
+* **Version 3** (added 2026-05-02) — adaptive Range Coder body, no
+  freq-tables sidecar. V3 was the L2/Phase-B.2 infrastructure
+  precursor to V4 and stays as the no-native-lib fallback.
+* **Version 4** (default when `_HAVE_NATIVE_LIB`, added 2026-05-02
+  Stage 2) — CRAM 3.1 fqzcomp_qual byte-compatible inner body wrapped
+  by an M94.Z outer header. Auto-tuning encoder; byte-equal with
+  htscodecs on all 4 benchmark corpora. **This is the default for
+  files written under v1.5 with the native library loaded.**
 
 All multi-byte integers little-endian.
 
@@ -201,6 +209,89 @@ only the rANS bitstream layout differs. Sparse context IDs are
 remapped to a dense `[0, n_active)` range for the C call but the
 freq-tables blob retains the ORIGINAL sparse IDs so V2 decode can
 rebuild contexts using the unchanged context model.
+
+### V3 (version byte = 3, adaptive Range Coder)
+
+V3 replaces V1/V2's static-per-block bit-pack rANS with an adaptive
+Range Coder (Subbotin 32-bit RC, carry-propagation idiom). Per-context
+frequency tables update as symbols are emitted; no freq-tables sidecar
+is shipped. V3 was added 2026-05-02 to close the per-block freq-table
+overhead gap on small inputs.
+
+```
+[Codec header]
+  magic                : 4 bytes  "M94Z"
+  version              : uint8    = 3
+  flags                : uint8    (pad_count in bits 4..5; rest reserved)
+  num_qualities        : uint64   LE
+  num_reads            : uint32   LE
+  rlt_compressed_len   : uint32   LE   (= R)
+  context_params       : 8 bytes  (qbits/pbits/dbits/sloc + reserved)
+  read_length_table    : R bytes  zlib(deflate(uint32[num_reads] LE))
+
+[Body — Range Coder output]
+  n_active             : uint32   LE   (count of contexts seen)
+  sparse_ids           : n_active × uint16 LE  (sorted ascending)
+  lane_lengths         : 4 × uint32 LE
+  lane_streams         : per-lane RC byte streams concatenated
+```
+
+V3 omits the freq-tables blob (the RC adapts on the fly); it omits
+`state_init`/`state_final` (RC has no rANS-style state-range
+invariant). The context formula is identical to V1/V2 (`prev_q ×
+position_bucket × revcomp`, sloc=14 by default). On chr22 the V3
+encoded body is 0.393 B/qual vs V1's 0.395 B/qual — the freq-tables
+sidecar amortises to nothing at scale, so V3 is strictly an
+infrastructure step that prepares the entropy-coder layer for the
+richer context model used by V4.
+
+### V4 (version byte = 4, CRAM 3.1 fqzcomp_qual port — Stage 2 / 2026-05-02)
+
+V4 replaces V3's bit-pack adaptive context model with a CRAM 3.1
+fqzcomp_qual byte-compatible port (clean-room from htscodecs SHA
+`7dd27f4`, header-read-only — no source carried over). The outer M94.Z
+header preserves V3's framing pattern; the inner body is a
+CRAM-byte-compatible blob produced by `ttio_fqzcomp_qual_compress`
+(an auto-tuning encoder that picks the smaller of 5 fixed presets per
+block).
+
+```
+[Codec header]
+  magic                : 4 bytes  "M94Z"
+  version              : uint8    = 4
+  flags                : uint8    (bit 0 = has_cram_body, MUST be 1;
+                                   bits 4..5 = pad_count; rest reserved)
+  num_qualities        : uint64   LE
+  num_reads            : uint64   LE
+  rlt_compressed_len   : uint32   LE   (= R)
+  read_length_table    : R bytes  zlib(deflate(uint32[num_reads] LE))
+  cram_body_len        : uint32   LE   (= C)
+  cram_body            : C bytes  CRAM 3.1 fqzcomp_qual blob
+```
+
+Total = `30 + R + C` bytes. Header fixed prefix is 26 bytes (magic 4
++ version 1 + flags 1 + num_qualities 8 + num_reads 8 + R 4); the
+4-byte `cram_body_len` lives at offset `26 + R`.
+
+V4 differs from V3's outer shape on three points:
+- `num_reads` widens from `uint32` to `uint64` (matches CRAM
+  fqzcomp_qual's per-read metadata layout).
+- Context-params/freq-tables/sparse-IDs are absent — the CRAM body
+  is self-describing (its own header carries the model strategy and
+  per-context state).
+- Body is a single contiguous CRAM blob (no lane-split, no separate
+  state vectors).
+
+V4 is the **default** encoded format when `_HAVE_NATIVE_LIB` is true
+(`libttio_rans` is loaded). V3 stays as the no-native-lib fallback
+and the read-compat path for legacy files. V1/V2 read-compat
+unchanged.
+
+V4 byte-equality with htscodecs is guaranteed across all 4 benchmark
+corpora (chr22 NA12878 100bp WGS, NA12878 WES, HG002 Illumina 2×250,
+HG002 PacBio HiFi). See
+`docs/benchmarks/2026-05-02-m94z-v4-stage2-results.md` for per-corpus
+B/qual numbers and the encode-wall comparison vs V3.
 
 ### Flags byte layout
 
