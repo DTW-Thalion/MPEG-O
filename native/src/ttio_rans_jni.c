@@ -382,3 +382,175 @@ cleanup_tables:
     free(dtab);
     return rc;
 }
+
+/* ----- V4 (CRAM 3.1 fqzcomp byte-compatible) JNI bindings ----- */
+
+#include <stdio.h>  /* snprintf */
+
+/*
+ * Java_global_thalion_ttio_codecs_TtioRansNative_encodeV4Native
+ *   ([B[I[III)[B
+ *
+ * Marshal Java arrays -> C uint8/uint32 buffers, call ttio_m94z_v4_encode,
+ * marshal C output -> new Java byte[].
+ */
+JNIEXPORT jbyteArray JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_encodeV4Native(
+    JNIEnv *env, jclass cls,
+    jbyteArray qualArr, jintArray lensArr, jintArray flagsArr,
+    jint strategyHint, jint padCount)
+{
+    (void)cls;
+    jsize n_qual    = (*env)->GetArrayLength(env, qualArr);
+    jsize n_reads   = (*env)->GetArrayLength(env, lensArr);
+    jsize n_flags   = (*env)->GetArrayLength(env, flagsArr);
+    if (n_flags != n_reads) {
+        jclass exClass = (*env)->FindClass(env, "java/lang/IllegalArgumentException");
+        (*env)->ThrowNew(env, exClass, "flags length must equal readLengths length");
+        return NULL;
+    }
+
+    jbyte *qual_jbytes = (*env)->GetByteArrayElements(env, qualArr, NULL);
+    jint  *lens_jints  = (*env)->GetIntArrayElements(env, lensArr, NULL);
+    jint  *flags_jints = (*env)->GetIntArrayElements(env, flagsArr, NULL);
+
+    /* Convert lens int[] to uint32_t[] (in-place safe: same width on LP64). */
+    uint32_t *lens_u32 = (uint32_t *)lens_jints;
+
+    /* Convert flags int[] to uint8_t[] (low byte; bit 4 carries SAM_REVERSE). */
+    uint8_t *flags_u8 = malloc((size_t)n_reads);
+    if (!flags_u8) {
+        (*env)->ReleaseByteArrayElements(env, qualArr, qual_jbytes, JNI_ABORT);
+        (*env)->ReleaseIntArrayElements(env, lensArr, lens_jints, JNI_ABORT);
+        (*env)->ReleaseIntArrayElements(env, flagsArr, flags_jints, JNI_ABORT);
+        jclass exClass = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
+        (*env)->ThrowNew(env, exClass, "encodeV4Native: flags malloc failed");
+        return NULL;
+    }
+    for (jsize i = 0; i < n_reads; i++) flags_u8[i] = (uint8_t)flags_jints[i];
+
+    size_t out_cap = (size_t)n_qual + (size_t)n_qual / 4 + (1u << 20);
+    uint8_t *out = malloc(out_cap);
+    if (!out) {
+        free(flags_u8);
+        (*env)->ReleaseByteArrayElements(env, qualArr, qual_jbytes, JNI_ABORT);
+        (*env)->ReleaseIntArrayElements(env, lensArr, lens_jints, JNI_ABORT);
+        (*env)->ReleaseIntArrayElements(env, flagsArr, flags_jints, JNI_ABORT);
+        jclass exClass = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
+        (*env)->ThrowNew(env, exClass, "encodeV4Native: out malloc failed");
+        return NULL;
+    }
+    size_t out_len = out_cap;
+
+    int rc = ttio_m94z_v4_encode(
+        (const uint8_t *)qual_jbytes, (size_t)n_qual,
+        lens_u32, (size_t)n_reads,
+        flags_u8,
+        (int)strategyHint,
+        (uint8_t)padCount,
+        out, &out_len);
+
+    free(flags_u8);
+    (*env)->ReleaseByteArrayElements(env, qualArr, qual_jbytes, JNI_ABORT);
+    (*env)->ReleaseIntArrayElements(env, lensArr, lens_jints, JNI_ABORT);
+    (*env)->ReleaseIntArrayElements(env, flagsArr, flags_jints, JNI_ABORT);
+
+    if (rc != 0) {
+        free(out);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "ttio_m94z_v4_encode rc=%d", rc);
+        jclass exClass = (*env)->FindClass(env, "java/lang/RuntimeException");
+        (*env)->ThrowNew(env, exClass, msg);
+        return NULL;
+    }
+
+    jbyteArray result = (*env)->NewByteArray(env, (jsize)out_len);
+    if (result) {
+        (*env)->SetByteArrayRegion(env, result, 0, (jsize)out_len, (const jbyte *)out);
+    }
+    free(out);
+    return result;
+}
+
+/*
+ * Java_global_thalion_ttio_codecs_TtioRansNative_decodeV4Native
+ *   ([BII[I)[Ljava/lang/Object;
+ *
+ * Returns Object[2]: [byte[] qualities, int[] readLengths].
+ */
+JNIEXPORT jobjectArray JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_decodeV4Native(
+    JNIEnv *env, jclass cls,
+    jbyteArray encArr, jint numReads, jint numQualities, jintArray flagsArr)
+{
+    (void)cls;
+    jsize enc_len  = (*env)->GetArrayLength(env, encArr);
+    jsize n_flags  = (*env)->GetArrayLength(env, flagsArr);
+    if (n_flags != numReads) {
+        jclass exClass = (*env)->FindClass(env, "java/lang/IllegalArgumentException");
+        (*env)->ThrowNew(env, exClass, "flags length must equal numReads");
+        return NULL;
+    }
+
+    jbyte *enc_jbytes  = (*env)->GetByteArrayElements(env, encArr, NULL);
+    jint  *flags_jints = (*env)->GetIntArrayElements(env, flagsArr, NULL);
+
+    uint8_t *flags_u8 = malloc((size_t)numReads);
+    if (!flags_u8) {
+        (*env)->ReleaseByteArrayElements(env, encArr, enc_jbytes, JNI_ABORT);
+        (*env)->ReleaseIntArrayElements(env, flagsArr, flags_jints, JNI_ABORT);
+        jclass exClass = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
+        (*env)->ThrowNew(env, exClass, "decodeV4Native: flags malloc failed");
+        return NULL;
+    }
+    for (jsize i = 0; i < numReads; i++) flags_u8[i] = (uint8_t)flags_jints[i];
+
+    uint32_t *lens_u32 = malloc((size_t)numReads * sizeof(uint32_t));
+    uint8_t  *qual_out = malloc((size_t)numQualities);
+    if (!lens_u32 || !qual_out) {
+        free(flags_u8); free(lens_u32); free(qual_out);
+        (*env)->ReleaseByteArrayElements(env, encArr, enc_jbytes, JNI_ABORT);
+        (*env)->ReleaseIntArrayElements(env, flagsArr, flags_jints, JNI_ABORT);
+        jclass exClass = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
+        (*env)->ThrowNew(env, exClass, "decodeV4Native: output malloc failed");
+        return NULL;
+    }
+
+    int rc = ttio_m94z_v4_decode(
+        (const uint8_t *)enc_jbytes, (size_t)enc_len,
+        lens_u32, (size_t)numReads,
+        flags_u8,
+        qual_out, (size_t)numQualities);
+
+    free(flags_u8);
+    (*env)->ReleaseByteArrayElements(env, encArr, enc_jbytes, JNI_ABORT);
+    (*env)->ReleaseIntArrayElements(env, flagsArr, flags_jints, JNI_ABORT);
+
+    if (rc != 0) {
+        free(lens_u32); free(qual_out);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "ttio_m94z_v4_decode rc=%d", rc);
+        jclass exClass = (*env)->FindClass(env, "java/lang/RuntimeException");
+        (*env)->ThrowNew(env, exClass, msg);
+        return NULL;
+    }
+
+    /* Build return Object[2] = [byte[] qualities, int[] readLengths] */
+    jclass objClass = (*env)->FindClass(env, "java/lang/Object");
+    jobjectArray result = (*env)->NewObjectArray(env, 2, objClass, NULL);
+
+    jbyteArray qualResult = (*env)->NewByteArray(env, (jsize)numQualities);
+    (*env)->SetByteArrayRegion(env, qualResult, 0, (jsize)numQualities,
+                                 (const jbyte *)qual_out);
+    (*env)->SetObjectArrayElement(env, result, 0, qualResult);
+
+    jintArray lensResult = (*env)->NewIntArray(env, (jsize)numReads);
+    /* lens_u32 -> jint copy (same width on LP64) */
+    (*env)->SetIntArrayRegion(env, lensResult, 0, (jsize)numReads,
+                                (const jint *)lens_u32);
+    (*env)->SetObjectArrayElement(env, result, 1, lensResult);
+
+    free(lens_u32);
+    free(qual_out);
+    return result;
+}
