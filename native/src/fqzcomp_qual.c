@@ -1440,9 +1440,16 @@ int ttio_fqzcomp_qual_compress(
     /* Pre-shift ptab/dtab so the inner loop is plain add */
     fqz_pre_shift_tables(&gp.p);
 
-    /* Build models */
-    fqz_model model;
-    if (fqz_create_models(&model, &gp) < 0) { free(flags_u32); return -5; }
+    /* Build models.
+     * Heap-allocate: fqz_model is ~2 MB (sm_model qual[65536]); larger than
+     * default thread stack on JVM/ObjC NSOperation queues. */
+    fqz_model *model = malloc(sizeof(fqz_model));
+    if (!model) { free(flags_u32); return -5; }
+    if (fqz_create_models(model, &gp) < 0) {
+        free(model);
+        free(flags_u32);
+        return -5;
+    }
 
     /* Range coder writes after the header */
     rc_cram_encoder e;
@@ -1460,9 +1467,10 @@ int ttio_fqzcomp_qual_compress(
         if (st.p == 0) {
             int r = compress_new_read(&gp, pm, read_lengths, n_reads,
                                       flags_u32, qual_in, &i,
-                                      &st, &model, &e, &last);
+                                      &st, model, &e, &last);
             if (r < 0) {
-                fqz_destroy_models(&model);
+                fqz_destroy_models(model);
+                free(model);
                 free(flags_u32);
                 return -6;
             }
@@ -1477,11 +1485,12 @@ int ttio_fqzcomp_qual_compress(
         /* Emit one quality */
         uint8_t q  = qual_in[i++];
         uint8_t qm = (uint8_t)pm->qmap[q];
-        sm_encode(&model.qual[last], &e, qm);
+        sm_encode(&model->qual[last], &e, qm);
         last = fqz_update_ctx(pm, &st, qm);
 
         if (e.err) {
-            fqz_destroy_models(&model);
+            fqz_destroy_models(model);
+            free(model);
             free(flags_u32);
             return -7;
         }
@@ -1489,13 +1498,15 @@ int ttio_fqzcomp_qual_compress(
 
     size_t rc_bytes = rc_cram_encoder_finish(&e);
     if (e.err) {
-        fqz_destroy_models(&model);
+        fqz_destroy_models(model);
+        free(model);
         free(flags_u32);
         return -7;
     }
 
     *out_len = (size_t)hdr + rc_bytes;
-    fqz_destroy_models(&model);
+    fqz_destroy_models(model);
+    free(model);
     free(flags_u32);
     return 0;
 }
@@ -1535,12 +1546,15 @@ int ttio_fqzcomp_qual_uncompress(
     /* Pre-shift ptab/dtab (decoder mirrors encoder) */
     fqz_pre_shift_tables(&gp.p);
 
-    fqz_model model;
-    if (fqz_create_models(&model, &gp) < 0) return -5;
+    /* Heap-allocate: fqz_model is ~2 MB (sm_model qual[65536]); larger than
+     * default thread stack on JVM/ObjC NSOperation queues. */
+    fqz_model *model = malloc(sizeof(fqz_model));
+    if (!model) return -5;
+    if (fqz_create_models(model, &gp) < 0) { free(model); return -5; }
 
     rc_cram_decoder d;
     rc_cram_decoder_init(&d, in + hdr, in_len - (size_t)hdr);
-    if (d.err) { fqz_destroy_models(&model); return -6; }
+    if (d.err) { fqz_destroy_models(model); free(model); return -6; }
 
     fqz_state st = {0};
     st.first_len = 1;
@@ -1554,21 +1568,22 @@ int ttio_fqzcomp_qual_uncompress(
         if (st.p == 0) {
             int r = decompress_new_read(&gp, pm, n_reads, read_lengths,
                                         out, &i,
-                                        &st, &model, &d, &pm,
+                                        &st, model, &d, &pm,
                                         n_qualities - i);
-            if (r < 0) { fqz_destroy_models(&model); return -6; }
+            if (r < 0) { fqz_destroy_models(model); free(model); return -6; }
             if (r > 0) continue;  /* dedup hit: bytes already copied into out */
             last = st.ctx;
         }
 
         do {
-            uint16_t Q = sm_decode(&model.qual[last], &d);
+            uint16_t Q = sm_decode(&model->qual[last], &d);
             last = fqz_update_ctx(pm, &st, Q);
             out[i++] = (uint8_t)pm->qmap[Q];
-            if (d.err) { fqz_destroy_models(&model); return -6; }
+            if (d.err) { fqz_destroy_models(model); free(model); return -6; }
         } while (st.p != 0 && i < n_qualities);
     }
 
-    fqz_destroy_models(&model);
+    fqz_destroy_models(model);
+    free(model);
     return 0;
 }
