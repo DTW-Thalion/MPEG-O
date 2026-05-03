@@ -81,6 +81,7 @@ extern void testM94ZFqzcompUnit(void);
 extern void testM94ZFqzcompPerf(void);
 extern void testTtioRansNative(void);
 extern void testM94ZV2Dispatch(void);
+extern void testM94ZV4Dispatch(void);
 extern void testM95DeltaRansUnit(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
@@ -423,6 +424,10 @@ int main(int argc, const char *argv[])
         START_SET("M94.Z V2 native dispatch (Task 23)")
             testM94ZV2Dispatch();
         END_SET("M94.Z V2 native dispatch (Task 23)")
+
+        START_SET("M94.Z V4 CRAM-mimic dispatch (Stage 3 Task 8)")
+            testM94ZV4Dispatch();
+        END_SET("M94.Z V4 CRAM-mimic dispatch (Stage 3 Task 8)")
 
         START_SET("M95: DELTA_RANS_ORDER0 codec unit")
             testM95DeltaRansUnit();
