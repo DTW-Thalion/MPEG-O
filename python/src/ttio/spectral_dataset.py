@@ -740,6 +740,14 @@ class SpectralDataset:
         # their own features list (idempotent — no duplicate if already present).
         if has_genomic and "opt_genomic" not in feature_list:
             feature_list = feature_list + ["opt_genomic"]
+        # v1.6 (L4): files written by this codebase no longer carry
+        # signal_channels/{positions,flags,mapping_qualities} duplicates
+        # of the genomic_index/ index. Always set the flag when genomic
+        # content is present so tooling can detect v1.6+ layout cheaply
+        # (without enumerating signal_channels/). Pre-v1.6 readers
+        # ignore unknown opt_* flags.
+        if has_genomic and "opt_no_signal_int_dups" not in feature_list:
+            feature_list = feature_list + ["opt_no_signal_int_dups"]
         # M82: bump to 1.4 when genomic content present. 1.4 implies 1.3 (M74)
         # implies 1.1 (base). Readers gate features by feature flag list, not by
         # version equality.

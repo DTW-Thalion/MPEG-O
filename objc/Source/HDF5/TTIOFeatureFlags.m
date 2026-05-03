@@ -19,6 +19,7 @@
 + (NSString *)featurePQCPreview              { return @"opt_pqc_preview"; }
 + (NSString *)featureMS2ActivationDetail     { return @"opt_ms2_activation_detail"; }
 + (NSString *)featureOptGenomic              { return @"opt_genomic"; }
++ (NSString *)featureNoSignalIntDups         { return @"opt_no_signal_int_dups"; }
 
 + (NSString *)formatVersionForRoot:(TTIOHDF5Group *)root
 {

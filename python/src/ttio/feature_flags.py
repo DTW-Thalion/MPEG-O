@@ -63,6 +63,15 @@ OPT_NATIVE_2D_COS = "opt_native_2d_cos"
 # parse the base columns.
 OPT_MS2_ACTIVATION_DETAIL = "opt_ms2_activation_detail"
 
+# v1.6 (L4): genomic runs in this file do NOT carry the
+# signal_channels/{positions,flags,mapping_qualities} duplicates that
+# v1.5 and earlier wrote alongside the canonical genomic_index/ copies.
+# Tooling that wants to detect v1.6 layout (without enumerating the
+# signal_channels/ group) can check for this flag. Strictly additive:
+# pre-v1.6 readers ignore unknown opt_* flags and continue to read
+# from genomic_index/ correctly.
+OPT_NO_SIGNAL_INT_DUPS = "opt_no_signal_int_dups"
+
 
 @dataclass(frozen=True, slots=True)
 class FeatureFlags:
