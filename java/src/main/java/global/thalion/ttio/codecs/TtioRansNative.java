@@ -194,4 +194,43 @@ public final class TtioRansNative {
 
     private static native Object[] decodeV4Native(byte[] encoded, int numReads,
                                                     int numQualities, int[] flags);
+
+    /**
+     * Encode a mate triple via libttio_rans (mate_info v2).
+     *
+     * @param mateChromIds    int[N] — -1 if RNEXT='*', else id >= 0
+     * @param matePositions   long[N] — 0-based POS
+     * @param templateLengths int[N] — signed tlen
+     * @param ownChromIds     short[N] — uint16 from L1 chrom_ids;
+     *                        (short)0xFFFF treated as unmapped sentinel
+     * @param ownPositions    long[N] — own POS
+     * @return encoded inline_v2 blob ready for HDF5 write
+     * @throws RuntimeException on native error
+     */
+    public static byte[] encodeMateInfoV2(
+            int[] mateChromIds, long[] matePositions, int[] templateLengths,
+            short[] ownChromIds, long[] ownPositions) {
+        if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
+        return encodeMateInfoV2Native(mateChromIds, matePositions, templateLengths,
+                                       ownChromIds, ownPositions);
+    }
+
+    /**
+     * Decode an inline_v2 blob via libttio_rans.
+     *
+     * @return Object[3]: int[] mateChromIds, long[] matePositions, int[] templateLengths
+     * @throws RuntimeException on native error
+     */
+    public static Object[] decodeMateInfoV2(
+            byte[] encoded, short[] ownChromIds, long[] ownPositions, int nRecords) {
+        if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
+        return decodeMateInfoV2Native(encoded, ownChromIds, ownPositions, nRecords);
+    }
+
+    private static native byte[] encodeMateInfoV2Native(
+        int[] mateChromIds, long[] matePositions, int[] templateLengths,
+        short[] ownChromIds, long[] ownPositions);
+
+    private static native Object[] decodeMateInfoV2Native(
+        byte[] encoded, short[] ownChromIds, long[] ownPositions, int nRecords);
 }
