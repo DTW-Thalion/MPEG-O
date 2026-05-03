@@ -176,14 +176,26 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
     # Enables the full M83–M86 + M93 codec stack on every applicable
     # channel; lossless throughout (no QUALITY_BINNED).
     #
-    # M94.Z V2 wire format (Task 27): set TTIO_M94Z_USE_NATIVE=1 (and
-    # TTIO_RANS_LIB_PATH pointing to libttio_rans.so) to dispatch the
-    # FQZCOMP_NX16_Z quality channel through the native rANS encoder,
-    # producing V2 streams (magic=M94Z, version byte=2) instead of V1.
-    # The codec reads this env var internally when prefer_native=None.
+    # M94.Z dispatch detection (for the notes string only — the codec
+    # itself reads its own env vars when invoked).
+    #   - V4 (CRAM 3.1 fqzcomp port, the default since Stage 2/M94.Z)
+    #     activates when libttio_rans is loadable: TTIO_RANS_LIB_PATH
+    #     set + the .so present.
+    #   - V2 (older native rANS path) activates via TTIO_M94Z_USE_NATIVE
+    #     when V4 is not chosen — only relevant if a caller forces
+    #     TTIO_M94Z_VERSION=2.
+    #   - V1 is the pure-Python fallback when no native lib is available.
+    _have_rans_lib = os.environ.get("TTIO_RANS_LIB_PATH", "").strip() != ""
+    _force_pre_v4 = os.environ.get("TTIO_M94Z_VERSION", "").strip() in ("1", "2", "3")
     _use_native_v2 = os.environ.get("TTIO_M94Z_USE_NATIVE", "").strip().lower() in (
         "1", "true", "yes", "on"
     )
+    if _have_rans_lib and not _force_pre_v4:
+        _quality_codec_label = "V4/CRAM 3.1 fqzcomp byte-equal"
+    elif _have_rans_lib and _use_native_v2:
+        _quality_codec_label = "V2/native rANS"
+    else:
+        _quality_codec_label = "V1/pure-Python"
 
     from ttio import SpectralDataset
     from ttio.enums import Compression
@@ -249,8 +261,7 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
             "Python reference path. Codecs (v1.2 / M93 + M94.Z stack): "
             "REF_DIFF on sequences (with embedded reference; falls "
             "back to BASE_PACK if ref load fails), FQZCOMP_NX16_Z "
-            f"(CRAM-mimic rANS-Nx16, {'V2/native' if _use_native_v2 else 'V1'}) "
-            "on qualities, RANS_ORDER1 on "
+            f"({_quality_codec_label}) on qualities, RANS_ORDER1 on "
             "cigars, NAME_TOKENIZED on read_names + mate_info_chrom. "
             "Lossless throughout."
         ),

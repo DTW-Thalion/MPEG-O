@@ -2104,10 +2104,16 @@ def encode(
             prefer_v4 = _HAVE_NATIVE_LIB
 
     if prefer_v4 and _HAVE_NATIVE_LIB:
-        return _encode_v4_native(
-            qualities, list(read_lengths), list(revcomp_flags),
-            pad_count, strategy_hint=v4_strategy_hint,
-        )
+        # V4 native rejects n_qualities==0 (the htscodecs fqzcomp_qual
+        # core requires at least one symbol). Fall through to V3 in
+        # that edge case so callers don't have to special-case empty
+        # runs. (Stage 2 Task 12 deferred this; landed in v1.6.)
+        if n > 0:
+            return _encode_v4_native(
+                qualities, list(read_lengths), list(revcomp_flags),
+                pad_count, strategy_hint=v4_strategy_hint,
+            )
+        # n == 0: cascade to V3, then V2, then V1.
 
     if prefer_v3 is None:
         if env_ver == "3":
