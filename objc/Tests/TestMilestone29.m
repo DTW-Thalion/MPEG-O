@@ -137,11 +137,26 @@ void testMilestone29(void)
     {
         NSFileManager *fm = [NSFileManager defaultManager];
         NSString *cwd = [fm currentDirectoryPath];
-        NSString *fixtureAbs = [cwd stringByAppendingPathComponent:
-                                @"Tests/Fixtures/tiny.pwiz.1.1.mzML"];
-        if (![fm fileExistsAtPath:fixtureAbs]) {
-            fixtureAbs = [cwd stringByAppendingPathComponent:
-                         @"objc/Tests/Fixtures/tiny.pwiz.1.1.mzML"];
+        // gnustep-tests / `gmake check` runs the test from objc/Tests/,
+        // so the fixture is at <cwd>/Fixtures/. Fall back to the older
+        // layouts (one level up from objc/, or two levels up from Tests/)
+        // for direct binary invocation.
+        NSArray *candidates = @[
+            [cwd stringByAppendingPathComponent:@"Fixtures/tiny.pwiz.1.1.mzML"],
+            [cwd stringByAppendingPathComponent:@"Tests/Fixtures/tiny.pwiz.1.1.mzML"],
+            [cwd stringByAppendingPathComponent:@"objc/Tests/Fixtures/tiny.pwiz.1.1.mzML"],
+        ];
+        NSString *fixtureAbs = nil;
+        for (NSString *p in candidates) {
+            if ([fm fileExistsAtPath:p]) { fixtureAbs = p; break; }
+        }
+        if (!fixtureAbs) {
+            fprintf(stderr,
+                "M38: skipping mock binary test — tiny.pwiz.1.1.mzML "
+                "fixture not found in any of: Fixtures/, Tests/Fixtures/, "
+                "objc/Tests/Fixtures/ (cwd=%s)\n",
+                [cwd UTF8String]);
+            return;
         }
 
         NSString *tmpDir = m29TempPath(@"thermodir");

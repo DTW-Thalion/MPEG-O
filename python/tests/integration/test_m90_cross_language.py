@@ -64,6 +64,14 @@ def _java_classpath() -> str | None:
     if not cp_file.exists():
         return None
     cp = cp_file.read_text().strip()
+    # HDF5 is declared as a 'system' scope dependency in pom.xml
+    # (jhdf5 → /usr/share/java/jarhdf5.jar), which mvn
+    # dependency:build-classpath -DincludeScope=test does NOT emit.
+    # Append it explicitly so PerAUCli + writers can load
+    # hdf.hdf5lib.* classes at runtime.
+    hdf5_jar = "/usr/share/java/jarhdf5.jar"
+    if Path(hdf5_jar).exists():
+        cp = f"{cp}:{hdf5_jar}"
     return f"{classes}:{cp}"
 
 

@@ -86,9 +86,18 @@ static void testM94ZEncodeDecodeThroughput(void)
             (unsigned long)nReads, (unsigned long)readLen,
             mb, encMBs, tEnc, decMBs, tDec, ratio);
 
-    PASS(encMBs >= 30.0,
-         "M94.Z ObjC: encode throughput >= 30 MB/s regression floor "
-         "(got %.1f MB/s, spec target 100 MB/s)",
+    // Threshold reality check (Stage 3 + v1.6 era):
+    //   V1 (pure ObjC):   ~50 MB/s encode
+    //   V2 (libttio_rans, AVX2 SIMD): ~45 MB/s encode
+    //   V4 (CRAM 3.1 fqzcomp port, the v1.6 default): ~22 MB/s encode
+    // V4's range coder is single-state serial — no SIMD path
+    // possible. The 30 MB/s threshold from the V2 era is not
+    // achievable on the V4 default. Set the regression floor to
+    // 18 MB/s (≈80% of measured V4) so genuine regressions trip
+    // without flaking on normal load variance.
+    PASS(encMBs >= 18.0,
+         "M94.Z ObjC: encode throughput >= 18 MB/s regression floor "
+         "(got %.1f MB/s; V4 sequential range coder ceiling ~22 MB/s)",
          encMBs);
 }
 
