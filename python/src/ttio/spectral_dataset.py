@@ -1326,30 +1326,13 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _Compression.RANS_ORDER1,
             _Compression.NAME_TOKENIZED,
         }),
-        # M86 Phase B: integer channels accept ONLY the rANS codecs
-        # (Binding Decision §117). The rANS coders are content-
-        # agnostic byte-stream codecs and operate correctly on the
-        # little-endian byte representation of int64/uint32/uint8
-        # arrays (§118). The other byte-channel codecs do not
-        # preserve integer values: BASE_PACK 2-bit-packs ACGT bytes
-        # (mangling everything else), QUALITY_BINNED quantises Phred
-        # scores onto an 8-bin centre table, and NAME_TOKENIZED
-        # tokenises UTF-8 strings.
-        "positions": frozenset({
-            _Compression.RANS_ORDER0,
-            _Compression.RANS_ORDER1,
-            _Compression.DELTA_RANS_ORDER0,
-        }),
-        "flags": frozenset({
-            _Compression.RANS_ORDER0,
-            _Compression.RANS_ORDER1,
-            _Compression.DELTA_RANS_ORDER0,
-        }),
-        "mapping_qualities": frozenset({
-            _Compression.RANS_ORDER0,
-            _Compression.RANS_ORDER1,
-            _Compression.DELTA_RANS_ORDER0,
-        }),
+        # v1.6: positions / flags / mapping_qualities REMOVED from the
+        # override surface. These per-record integer fields live only
+        # in genomic_index/ now. See _DROPPED_INT_CHANNELS below for
+        # the explicit reject path. (M86 Phase B integer-channel
+        # codec wiring under signal_channels/ was a write-side
+        # optimisation per former format-spec §10.7 — no reader ever
+        # consumed those bytes; the genomic_index/ copy is canonical.)
         # M86 Phase F: per-field decomposition of the M82 mate_info
         # compound dataset. The bare key "mate_info" is reserved and
         # rejected (Binding Decision §126); callers must use the
@@ -1376,13 +1359,27 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         }),
     }
     _INTEGER_CHANNEL_NAMES = frozenset(
-        {"positions", "flags", "mapping_qualities",
-         "mate_info_pos", "mate_info_tlen"}
+        {"mate_info_pos", "mate_info_tlen"}
     )
     _MATE_INFO_FIELD_NAMES = frozenset(
         {"mate_info_chrom", "mate_info_pos", "mate_info_tlen"}
     )
+    # v1.6: per-record integer metadata channels removed from the
+    # signal_channels/ override surface. They live exclusively in
+    # genomic_index/ now (see comment above). Hard-error so callers
+    # with stale code learn immediately.
+    _DROPPED_INT_CHANNELS = frozenset(
+        {"positions", "flags", "mapping_qualities"}
+    )
     for ch_name, codec in run.signal_codec_overrides.items():
+        if ch_name in _DROPPED_INT_CHANNELS:
+            raise ValueError(
+                f"signal_codec_overrides[{ch_name!r}]: removed in v1.6 — "
+                f"per-record integer metadata fields ({sorted(_DROPPED_INT_CHANNELS)!r}) "
+                f"are stored only under genomic_index/, not "
+                f"signal_channels/. The override no longer applies. "
+                f"See docs/format-spec.md §4 and §10.7."
+            )
         # M86 Phase F Binding Decision §126 / Gotcha §143: the bare
         # "mate_info" key is reserved and rejected with a message
         # pointing at the three per-field names. Without the
@@ -1626,16 +1623,14 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 return d
         return None
 
-    # M86 Phase B: integer channels dispatch through
-    # ``_write_int_channel_with_codec``; when the per-channel
-    # override is rANS the channel is serialised to little-endian
-    # bytes and written as flat uint8 with @compression. When the
-    # override is absent (the M82 default), the helper delegates to
-    # the existing typed writer so byte parity is preserved.
-    io._write_int_channel_with_codec(
-        sc, "positions", run.positions, run.signal_compression,
-        _resolve_int_override("positions"),
-    )
+    # v1.6: positions / flags / mapping_qualities are NOT written
+    # under signal_channels/. They live exclusively in genomic_index/,
+    # mirroring MS's spectrum_index/ pattern (per-record metadata =
+    # index; signal_channels = bulk data). See docs/format-spec.md
+    # §4 and §10.7. Override-validation rejects these channel names.
+    # Old files (v1.5 and earlier) may carry these under
+    # signal_channels/ — readers ignore them; the genomic_index/ copy
+    # is canonical.
     if (
         _seq_codec is not None
         and _is_valid_compression(_seq_codec)
@@ -1658,15 +1653,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             sc, "qualities", run.qualities, run.signal_compression,
             _qual_codec,
         )
-    io._write_int_channel_with_codec(
-        sc, "flags", run.flags, run.signal_compression,
-        _resolve_int_override("flags"),
-    )
-    io._write_int_channel_with_codec(
-        sc, "mapping_qualities", run.mapping_qualities,
-        run.signal_compression,
-        _resolve_int_override("mapping_qualities"),
-    )
     # Variable-length per-read string fields — cigars and read_names are
     # 7-bit ASCII; vl_str() (ASCII encoding) matches the ObjC reader.
     # M86 Phase C: schema lift for cigars. When an override is

@@ -5,7 +5,9 @@ When a :class:`~ttio.WrittenGenomicRun` is written with ``signal_compression="gz
 the writer applies the codec from this table.
 
 M93 registers ``sequences → REF_DIFF``; M94.Z adds ``qualities →
-FQZCOMP_NX16_Z``. M95 adds the integer channels.
+FQZCOMP_NX16_Z``. M95 added the integer channels — REMOVED in v1.6
+(positions / flags / mapping_qualities now live exclusively under
+genomic_index/, mirroring MS's spectrum_index/ pattern).
 
 Cross-language: ObjC ``TTIODefaultCodecsV15``; Java
 ``codecs.DefaultCodecsV15``.
@@ -18,13 +20,14 @@ from ttio.enums import Compression
 # Channel-name → default codec when caller relies on signal_compression="gzip"
 # auto-selection. If a channel is not in this table, the writer falls back to
 # the existing ``signal_compression`` string path (zlib/none).
+#
+# v1.6: positions / flags / mapping_qualities / template_lengths
+# REMOVED — these per-record integer fields are stored only under
+# genomic_index/ (positions / flags / mapping_qualities) or inside
+# the mate_info subgroup (template_lengths via mate_info_tlen).
 DEFAULT_CODECS_V1_5: dict[str, Compression] = {
     "sequences": Compression.REF_DIFF,
     "qualities": Compression.FQZCOMP_NX16_Z,
-    "positions": Compression.DELTA_RANS_ORDER0,
-    "flags": Compression.RANS_ORDER0,
-    "mapping_qualities": Compression.RANS_ORDER0,
-    "template_lengths": Compression.RANS_ORDER0,
     "mate_info_pos": Compression.RANS_ORDER0,
     "mate_info_tlen": Compression.RANS_ORDER0,
     "mate_info_chrom": Compression.NAME_TOKENIZED,
