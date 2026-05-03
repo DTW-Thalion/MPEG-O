@@ -24,8 +24,10 @@ if not miv2.HAVE_NATIVE_LIB:
 from ._mate_info_corpus import extract_mate_triples
 
 CORPORA = {
-    "chr22_lean_mapped":
-        "data/genomic/na12878/na12878.chr22.lean.mapped.bam",
+    "chr22":          "data/genomic/na12878/na12878.chr22.lean.mapped.bam",
+    "wes":            "data/genomic/na12878_wes/na12878_wes.chr22.bam",
+    "hg002_illumina": "data/genomic/hg002_illumina/hg002_illumina.chr22.subset1m.bam",
+    "hg002_pacbio":   "data/genomic/hg002_pacbio/hg002_pacbio.subset.bam",
 }
 
 
