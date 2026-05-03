@@ -936,52 +936,65 @@ storage. `cigars` would want an RLE-then-rANS pipeline (no
 codec match in M79); `mate_info` is an integer-tuple compound
 with no codec match.
 
-## 10.7 Integer-channel codec wiring (M86 Phase B)
+## 10.7 Integer-channel codec wiring under `signal_channels/` (v1.5 LEGACY — REMOVED in v1.6)
+
+> **Status: REMOVED in v1.6 (L4, 2026-05-03).** v1.5 and earlier wrote
+> `positions` (int64), `flags` (uint32), and `mapping_qualities`
+> (uint8) under `signal_channels/` AS WELL AS under `genomic_index/`.
+> v1.6 drops the `signal_channels/` copies — they were dead bytes
+> (no reader path actually consumed them) provisioned for an
+> aspirational "streaming reader prefers signal_channels" future that
+> contradicted MS's `spectrum_index/` pattern. Per-record integer
+> metadata is now stored exclusively under `genomic_index/`,
+> mirroring MS exactly: `<run>/genomic_index/` = per-record metadata
+> (eagerly loaded), `<run>/signal_channels/` = bulk per-base /
+> variable-length data.
+>
+> **Override behaviour in v1.6+:** Setting
+> `signal_codec_overrides[positions|flags|mapping_qualities]` raises
+> a `ValueError` (Python) / `IllegalArgumentException` (Java) /
+> `NSInvalidArgumentException` (Objective-C) at write time, with a
+> message pointing at this section.
+>
+> **Backward compatibility:** v1.6+ readers continue to read v1.5
+> files correctly — the reader path uses `genomic_index/` (which is
+> unchanged across versions). The `signal_channels/` duplicates in
+> v1.5 files are simply ignored.
+
+The remainder of this section describes the on-disk layout that v1.5
+files MAY contain under `signal_channels/` for these three channels,
+kept here for legacy decode reference. v1.6+ writers do not emit; v1.6+
+readers do not decode (the canonical source is `genomic_index/`).
 
 Integer channels under `signal_channels/` (`positions` int64,
-`flags` uint32, `mapping_qualities` uint8) accept
+`flags` uint32, `mapping_qualities` uint8) accepted
 `@compression` values of `4` (RANS_ORDER0) or `5`
 (RANS_ORDER1). When set:
 
-- The dataset is stored as a flat 1-D `UINT8` of length =
+- The dataset was stored as a flat 1-D `UINT8` of length =
   `Rans.encode()` output size, with no HDF5 filter.
-- The bytes are the rANS-coded **little-endian** byte
+- The bytes were the rANS-coded **little-endian** byte
   representation of the original integer array. For an int64
-  array of N elements, the input to the codec is `N × 8` bytes
+  array of N elements, the input to the codec was `N × 8` bytes
   in LE order; for uint32, `N × 4` bytes; for uint8, `N` bytes
   (LE serialisation is a no-op for single-byte elements).
-- The reader determines the original dtype by **channel-name
+- The reader determined the original dtype by **channel-name
   lookup**: `positions → int64`, `flags → uint32`,
-  `mapping_qualities → uint8`. There is no on-disk dtype
-  attribute; the dispatch is name-based.
+  `mapping_qualities → uint8`. No on-disk dtype attribute.
 
 Other codec ids (`6` = BASE_PACK, `7` = QUALITY_BINNED, `8` =
-NAME_TOKENIZED) are rejected on integer channels at write-time
+NAME_TOKENIZED) were rejected on integer channels at write-time
 validation — they are content-specific codecs (ACGT packing,
 Phred-bin quantisation, string tokenisation) and would not
 preserve integer values.
 
-**Read-side caveat:** The current M82-derived read path for
-per-read integer fields (`AlignedRead.position`, `.flags`,
-`.mapping_quality`) uses `genomic_index/`, not
-`signal_channels/`. M86 Phase B compression on the integer
-channels under `signal_channels/` is therefore primarily a
-**write-side file-size optimisation**; it does not currently
-affect read performance through the per-read access path.
-Direct callers of the codec-aware integer-channel helper
-(`_int_channel_array(name)` in Python and equivalents) DO
-benefit from the compressed read path. Future readers that
-prefer `signal_channels/` over `genomic_index/` (e.g.,
-streaming readers, M89 transport-layer materialisation) will
-benefit transparently.
-
-The endianness convention (little-endian) is fixed and
+The endianness convention (little-endian) was fixed and
 non-negotiable across all three implementations (Python: numpy
 dtype strings `<i8`, `<u4`, `<u1`; ObjC:
 `OSSwapHostToLittleInt64`/`htole64` etc.; Java:
 `ByteBuffer.LITTLE_ENDIAN` with `putLong`/`putInt`/`put`).
-Cross-language byte-exact fixture conformance is verified by
-the M86 Phase B test suite.
+This is preserved in the still-active `mate_info_pos` and
+`mate_info_tlen` integer-channel codec wiring under §10.9.
 
 ## 10.8 cigars channel codec wiring (M86 Phase C)
 
