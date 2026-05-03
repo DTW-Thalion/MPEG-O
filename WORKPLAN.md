@@ -111,7 +111,24 @@ as a record of what was built; current milestones use TTI-O names.
 > `docs/benchmarks/2026-05-01-chr22-byte-breakdown.md` §8.
 >
 > * **Task #84 — Richer-context M94.Z (Stage 1 + Stage 2 done
->   2026-05-02; V4 SHIPPED).**
+>   2026-05-02; Stage 3 done 2026-05-03; V4 SHIPPED across all 3 langs).**
+>
+>   **Stage 3 (Java JNI + ObjC V4 dispatch) SHIPPED 2026-05-03.** V4
+>   reaches feature parity across all 3 reference implementations:
+>   Python (ctypes), Java (JNI through `libttio_rans_jni`), and
+>   Objective-C (direct link). All three call the same deterministic
+>   `ttio_m94z_v4_encode` C entry, so the resulting M94Z V4 streams are
+>   byte-identical end-to-end across all 4 benchmark corpora — proven
+>   by the cross-language Python ↔ Java ↔ ObjC integration test
+>   `python/tests/integration/test_m94z_v4_cross_language.py` (4
+>   parametrized cases, all PASS). V4 is now the default emit format in
+>   each language when its respective native library is loaded; V1/V2
+>   read-compat preserved as the no-native fallback. Plan at
+>   `docs/superpowers/plans/2026-05-02-l3-m94z-v4-java-objc-stage3.md`.
+>   Follow-ups (out of scope, separate tasks): Java/ObjC V4 perf
+>   benchmarks, V4 empty-input handling (V3 fallback at the Python
+>   layer was deferred from Stage 2 Task 12).
+>
 >
 >   **Stage 2 (V4 CRAM 3.1 fqzcomp port) SHIPPED 2026-05-02.** The
 >   native C port of `htscodecs/fqzcomp_qual.c` lives in
