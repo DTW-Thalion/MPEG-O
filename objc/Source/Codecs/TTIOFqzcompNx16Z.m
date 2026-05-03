@@ -59,6 +59,11 @@ enum {
     kZ_MAGIC_LEN              = 4,
     kZ_VERSION                = 1,
     kZ_VERSION_V2_NATIVE      = 2,  // V2 body produced by libttio_rans
+    kZ_VERSION_V4_FQZCOMP     = 4,  // V4 CRAM 3.1 fqzcomp port (libttio_rans)
+    // V4 SAM-style flag byte (bit 4 = SAM_REVERSE; mirrors Python _SAM_REVERSE).
+    kZ_V4_SAM_REVERSE         = 0x10,
+    // V4 outer header minimum length (magic+ver+flags+nQ+nReads+rltLen+bodyLen).
+    kZ_V4_HEADER_MIN_LEN      = 4 + 1 + 1 + 8 + 8 + 4 + 4,  // 30
     kZ_CONTEXT_PARAMS_SIZE    = 8,
     kZ_HEADER_FIXED_PREFIX    = 4 + 1 + 1 + 8 + 4 + 4 + 8 + 4,  // 34
     kZ_STATE_INIT_SIZE        = 16,
@@ -1734,6 +1739,60 @@ v2_cleanup:
     int32_t dbits = kZ_DEFAULT_DBITS;
     int32_t sloc  = kZ_DEFAULT_SLOC;
 
+    // ── V4 dispatch resolution (Stage 3, Task 7) ──────────────────
+    // Priority ladder mirrors python encode() and java
+    // FqzcompNx16Z.encode(EncodeOptions): per-call options[preferV4]
+    // → env TTIO_M94Z_VERSION → default V4 (libttio_rans always linked
+    // in this build).
+    {
+        BOOL preferV4 = NO;
+        BOOL preferV4Set = NO;
+        if (options != nil) {
+            id v = options[@"preferV4"];
+            if ([v isKindOfClass:[NSNumber class]]) {
+                preferV4 = [(NSNumber *)v boolValue];
+                preferV4Set = YES;
+            }
+        }
+        if (!preferV4Set) {
+            const char *envv = getenv("TTIO_M94Z_VERSION");
+            if (envv && envv[0]) {
+                if (strcmp(envv, "4") == 0) {
+                    preferV4 = YES;
+                } else if (strcmp(envv, "1") == 0
+                           || strcmp(envv, "2") == 0
+                           || strcmp(envv, "3") == 0) {
+                    preferV4 = NO;
+                } else {
+                    preferV4 = (TTIO_HAS_NATIVE_RANS != 0);
+                }
+            } else {
+                /* Unset → V4 default when libttio_rans is linked. */
+                preferV4 = (TTIO_HAS_NATIVE_RANS != 0);
+            }
+        }
+#if TTIO_HAS_NATIVE_RANS
+        if (preferV4) {
+            free(rls); free(rcs);
+            NSInteger strategy = -1;
+            id sv = options ? options[@"v4StrategyHint"] : nil;
+            if ([sv isKindOfClass:[NSNumber class]]) {
+                strategy = [(NSNumber *)sv integerValue];
+            }
+            uint8_t padCount =
+                (uint8_t)((-(NSInteger)qualities.length) & 0x3);
+            return [self encodeV4WithQualities:qualities
+                                   readLengths:readLengths
+                                  revcompFlags:revcompFlags
+                                  strategyHint:strategy
+                                      padCount:padCount
+                                         error:error];
+        }
+#else
+        (void)preferV4;
+#endif
+    }
+
     // ── V2 native dispatch decision ────────────────────────────────
     BOOL preferNative = NO;
     BOOL preferNativeSet = NO;
@@ -1908,6 +1967,10 @@ v2_cleanup:
         return nil;
     }
     uint8_t version = p[4];
+    // ── V4 dispatch (Stage 3, Task 7: CRAM 3.1 fqzcomp via libttio_rans) ──
+    if (version == kZ_VERSION_V4_FQZCOMP) {
+        return [self decodeV4Data:data revcompFlags:revcompFlags error:error];
+    }
     // ── V2 dispatch (Task 23, option E: pure-ObjC decoder) ──
     if (version == kZ_VERSION_V2_NATIVE) {
         return z_decode_v2(data, revcompFlags, error);
@@ -2062,6 +2125,203 @@ v2_cleanup:
         @"qualities": outQ,
         @"readLengths": readLengths,
     };
+}
+
+// ── V4 native dispatch (Stage 3, Task 7) ─────────────────────────────
+//
+// V4 wraps htscodecs's fqzcomp_qual (CRAM 3.1) with an M94.Z outer
+// header (magic "M94Z", version=4). Both encode and decode go through
+// libttio_rans; the C library handles RLT deflate/inflate, header
+// packing, and the inner CRAM body. Cross-language byte-equal with
+// Python (ttio.codecs.fqzcomp_nx16_z) and Java
+// (global.thalion.ttio.codecs.FqzcompNx16Z).
+
++ (nullable NSData *)encodeV4WithQualities:(NSData *)qualities
+                                readLengths:(NSArray<NSNumber *> *)readLengths
+                               revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                               strategyHint:(NSInteger)strategyHint
+                                   padCount:(uint8_t)padCount
+                                      error:(NSError * _Nullable *)error
+{
+#if !TTIO_HAS_NATIVE_RANS
+    z_set_error(error, 300,
+        @"M94.Z V4 requires libttio_rans, which is not linked");
+    return nil;
+#else
+    if (qualities == nil) {
+        z_set_error(error, 301, @"qualities must not be nil");
+        return nil;
+    }
+    if (readLengths.count != revcompFlags.count) {
+        z_set_error(error, 302,
+            @"readLengths.count (%lu) != revcompFlags.count (%lu)",
+            (unsigned long)readLengths.count,
+            (unsigned long)revcompFlags.count);
+        return nil;
+    }
+    NSUInteger n_qual  = qualities.length;
+    NSUInteger n_reads = readLengths.count;
+
+    /* Marshal NSArray<NSNumber*> → C buffers. */
+    uint32_t *lens = NULL;
+    uint8_t  *flags = NULL;
+    if (n_reads) {
+        lens  = (uint32_t *)malloc(n_reads * sizeof(uint32_t));
+        flags = (uint8_t  *)malloc(n_reads);
+        if (!lens || !flags) {
+            free(lens); free(flags);
+            z_set_error(error, 303, @"M94.Z V4: alloc failed");
+            return nil;
+        }
+        uint64_t total = 0;
+        for (NSUInteger i = 0; i < n_reads; i++) {
+            uint32_t v = (uint32_t)[readLengths[i] unsignedLongLongValue];
+            lens[i] = v;
+            total += v;
+            flags[i] = ([revcompFlags[i] unsignedIntegerValue] & 1u)
+                         ? (uint8_t)kZ_V4_SAM_REVERSE : (uint8_t)0;
+        }
+        if (total != (uint64_t)n_qual) {
+            free(lens); free(flags);
+            z_set_error(error, 304,
+                @"sum(readLengths) (%llu) != qualities.length (%lu)",
+                (unsigned long long)total, (unsigned long)n_qual);
+            return nil;
+        }
+    }
+
+    /* Output capacity: outer header (~30) + RLT (deflated, bounded by
+     * 4*n_reads) + cram body (worst case ~ qualities + slack). Match
+     * Python's _encode_v4_native sizing. */
+    size_t out_cap = 64 + 4 * (size_t)n_reads + (size_t)n_qual * 2 + 1024;
+    uint8_t *out = (uint8_t *)malloc(out_cap);
+    if (!out) {
+        free(lens); free(flags);
+        z_set_error(error, 305, @"M94.Z V4: out buffer alloc failed");
+        return nil;
+    }
+    size_t out_len = out_cap;
+    int rc = ttio_m94z_v4_encode(
+        (const uint8_t *)qualities.bytes, (size_t)n_qual,
+        lens, (size_t)n_reads,
+        flags,
+        (int)strategyHint,
+        (uint8_t)(padCount & 0x3),
+        out, &out_len);
+    free(lens); free(flags);
+    if (rc != 0) {
+        free(out);
+        z_set_error(error, 306,
+            @"ttio_m94z_v4_encode failed (rc=%d)", rc);
+        return nil;
+    }
+    return [NSData dataWithBytesNoCopy:out length:out_len freeWhenDone:YES];
+#endif
+}
+
++ (nullable NSDictionary *)decodeV4Data:(NSData *)data
+                             revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
+                                    error:(NSError * _Nullable *)error
+{
+#if !TTIO_HAS_NATIVE_RANS
+    z_set_error(error, 310,
+        @"M94.Z V4 decode requires libttio_rans, which is not linked");
+    return nil;
+#else
+    if (data == nil) {
+        z_set_error(error, 311, @"data must not be nil");
+        return nil;
+    }
+    if (data.length < (NSUInteger)kZ_V4_HEADER_MIN_LEN) {
+        z_set_error(error, 312,
+            @"M94.Z V4: header truncated (%lu < %d)",
+            (unsigned long)data.length, kZ_V4_HEADER_MIN_LEN);
+        return nil;
+    }
+    const uint8_t *p = (const uint8_t *)data.bytes;
+    if (memcmp(p, kZ_MAGIC, 4) != 0) {
+        z_set_error(error, 313,
+            @"M94.Z V4: bad magic %02x %02x %02x %02x",
+            p[0], p[1], p[2], p[3]);
+        return nil;
+    }
+    if (p[4] != (uint8_t)kZ_VERSION_V4_FQZCOMP) {
+        z_set_error(error, 314,
+            @"M94.Z V4: expected version %d, got %d",
+            kZ_VERSION_V4_FQZCOMP, (int)p[4]);
+        return nil;
+    }
+    /* p[5] = flags (bits 4-5 = pad_count) — informational only. */
+    uint64_t numQualities = le_read_u64(p + 6);
+    uint64_t numReads     = le_read_u64(p + 14);
+
+    if (numQualities > (1ULL << 40)) {
+        z_set_error(error, 315,
+            @"M94.Z V4: implausible num_qualities %llu",
+            (unsigned long long)numQualities);
+        return nil;
+    }
+    if (numReads > (1ULL << 32)) {
+        z_set_error(error, 316,
+            @"M94.Z V4: implausible num_reads %llu",
+            (unsigned long long)numReads);
+        return nil;
+    }
+
+    NSArray<NSNumber *> *effectiveFlags = revcompFlags;
+    if (effectiveFlags == nil) {
+        NSMutableArray *zeros = [NSMutableArray arrayWithCapacity:(NSUInteger)numReads];
+        for (uint64_t i = 0; i < numReads; i++) [zeros addObject:@0];
+        effectiveFlags = zeros;
+    } else if ((uint64_t)effectiveFlags.count != numReads) {
+        z_set_error(error, 317,
+            @"revcompFlags.count %lu != numReads %llu",
+            (unsigned long)effectiveFlags.count,
+            (unsigned long long)numReads);
+        return nil;
+    }
+
+    uint32_t *lens  = NULL;
+    uint8_t  *flags = NULL;
+    if (numReads) {
+        lens  = (uint32_t *)malloc((size_t)numReads * sizeof(uint32_t));
+        flags = (uint8_t  *)malloc((size_t)numReads);
+        if (!lens || !flags) {
+            free(lens); free(flags);
+            z_set_error(error, 318, @"M94.Z V4: alloc failed");
+            return nil;
+        }
+        for (uint64_t i = 0; i < numReads; i++) {
+            flags[i] = ([effectiveFlags[(NSUInteger)i] unsignedIntegerValue] & 1u)
+                         ? (uint8_t)kZ_V4_SAM_REVERSE : (uint8_t)0;
+        }
+    }
+
+    NSMutableData *outQ = [NSMutableData dataWithLength:(NSUInteger)numQualities];
+    int rc = ttio_m94z_v4_decode(
+        p, (size_t)data.length,
+        lens, (size_t)numReads,
+        flags,
+        (uint8_t *)outQ.mutableBytes, (size_t)numQualities);
+    free(flags);
+    if (rc != 0) {
+        free(lens);
+        z_set_error(error, 319, @"ttio_m94z_v4_decode failed (rc=%d)", rc);
+        return nil;
+    }
+
+    NSMutableArray<NSNumber *> *readLengths =
+        [NSMutableArray arrayWithCapacity:(NSUInteger)numReads];
+    for (uint64_t i = 0; i < numReads; i++) {
+        [readLengths addObject:@(lens[i])];
+    }
+    free(lens);
+
+    return @{
+        @"qualities":   outQ,
+        @"readLengths": readLengths,
+    };
+#endif
 }
 
 // ── Backend introspection (Task 17, Phase B) ─────────────────────────

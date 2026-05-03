@@ -59,6 +59,14 @@
  *             [per-lane 16-bit LE chunks]
  *   No trailer.
  *
+ * Wire format V4 (version byte = 4; CRAM 3.1 fqzcomp port via libttio_rans):
+ *   Outer header  : magic "M94Z", version=4, flags (bits 4-5 = pad_count),
+ *                   num_qualities (uint64 LE), num_reads (uint64 LE),
+ *                   rlt_compressed_len (uint32 LE), cram_body_len (uint32 LE).
+ *   Body          : deflated RLT followed by htscodecs-byte-equal
+ *                   fqzcomp_qual stream (auto-tune by default).
+ *   See native/src/m94z_v4_wire.h for full layout.
+ *
  * Cross-language equivalents:
  *   Python: ttio.codecs.fqzcomp_nx16_z
  *   Java:   global.thalion.ttio.codecs.FqzcompNx16Z (M94.Z.4)
@@ -138,6 +146,42 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
 /** Convenience: decode with all-zero (forward) revcomp flags. */
 + (nullable NSDictionary *)decodeData:(NSData *)data
                                  error:(NSError * _Nullable *)error;
+
+/**
+ * Encode with explicit V4 dispatch (CRAM 3.1 fqzcomp byte-compatible).
+ *
+ * Mirrors python/src/ttio/codecs/fqzcomp_nx16_z.py::encode(prefer_v4=True)
+ * and global.thalion.ttio.codecs.FqzcompNx16Z.encode(opts.preferV4(true)).
+ *
+ * Returns an M94.Z V4 stream (version byte = 4) whose inner CRAM body
+ * is byte-equal to htscodecs's fqzcomp_qual auto-tune output. Full M94Z
+ * V4 streams are byte-equal across Python, Java, and ObjC.
+ *
+ * V4 is the default emit format when libttio_rans is linked.
+ *
+ * @param strategyHint -1 = auto-tune; 0..4 = explicit preset; default -1.
+ * @param padCount 0..3 (carried in flags bits 4-5 of the V4 outer header,
+ *                 V3 convention).
+ */
++ (nullable NSData *)encodeV4WithQualities:(NSData *)qualities
+                                readLengths:(NSArray<NSNumber *> *)readLengths
+                               revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                               strategyHint:(NSInteger)strategyHint
+                                   padCount:(uint8_t)padCount
+                                      error:(NSError * _Nullable *)error;
+
+/**
+ * Decode a V4 M94.Z stream via libttio_rans.
+ *
+ * +decodeData:revcompFlags:error: dispatches to this internally when
+ * encoded[4] == 4. Direct calls are useful for round-trip tests.
+ *
+ * Returns @{ @"qualities": NSData, @"readLengths": NSArray<NSNumber*> }
+ * on success — read lengths are recovered from the V4 deflated RLT.
+ */
++ (nullable NSDictionary *)decodeV4Data:(NSData *)data
+                             revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
+                                    error:(NSError * _Nullable *)error;
 
 /**
  * Reports which rANS backend is wired into this build.
