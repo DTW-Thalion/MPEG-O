@@ -355,15 +355,21 @@ def test_write_minimal_creates_genomic_runs_group(tmp_path: Path):
         assert "offsets" in run["genomic_index"]
         assert "chromosome_ids" in run["genomic_index"]
         assert "chromosome_names" in run["genomic_index"]
-        # Signal channels
+        # Signal channels (v1.6: positions/flags/mapping_qualities are
+        # NOT under signal_channels — they live exclusively in
+        # genomic_index/, mirroring MS's spectrum_index/ pattern).
         assert "sequences" in run["signal_channels"]
         assert "qualities" in run["signal_channels"]
         assert "cigars" in run["signal_channels"]
         assert "read_names" in run["signal_channels"]
         assert "mate_info" in run["signal_channels"]
-        assert "positions" in run["signal_channels"]
-        assert "flags" in run["signal_channels"]
-        assert "mapping_qualities" in run["signal_channels"]
+        assert "positions" not in run["signal_channels"]
+        assert "flags" not in run["signal_channels"]
+        assert "mapping_qualities" not in run["signal_channels"]
+        # … and the canonical home is genomic_index/.
+        assert "positions" in run["genomic_index"]
+        assert "flags" in run["genomic_index"]
+        assert "mapping_qualities" in run["genomic_index"]
         # _run_names CSV attribute
         names = f["study/genomic_runs"].attrs["_run_names"].decode("utf-8")
         assert names == "genomic_0001"
