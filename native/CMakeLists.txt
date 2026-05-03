@@ -26,6 +26,7 @@ add_library(ttio_rans SHARED
     src/m94z_v4_wire.c
     src/mate_info_v2.c
     src/dispatch.c
+    src/rans_o0.c
     src/threadpool.c
     src/wire_format.c
 )
@@ -189,6 +190,12 @@ target_link_libraries(test_mate_info_v2_helpers PRIVATE ttio_rans)
 target_include_directories(test_mate_info_v2_helpers PRIVATE src)
 target_compile_options(test_mate_info_v2_helpers PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME mate_info_v2_helpers COMMAND test_mate_info_v2_helpers)
+
+
+add_executable(test_rans_o0_byte_exact tests/test_rans_o0_byte_exact.c)
+target_link_libraries(test_rans_o0_byte_exact PRIVATE ttio_rans)
+target_compile_options(test_rans_o0_byte_exact PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME rans_o0_byte_exact COMMAND test_rans_o0_byte_exact)
 
 
 # Optional ThreadSanitizer build of the same test, gated by an option so

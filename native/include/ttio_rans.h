@@ -273,6 +273,34 @@ int ttio_m94z_v4_decode(
     size_t          n_qualities);
 
 /* ──────────────────────────────────────────────────────────────────────
+ * Plain rANS-O0 — byte-exact port of python/src/ttio/codecs/rans.py
+ * (order=0 path) and Java/ObjC equivalents. Used by mate_info v2
+ * substreams (NS / NP / TS / MF auto-pick), REF_DIFF v2, and
+ * NameTokenized v2.
+ *
+ * Wire format: 9-byte header + 1024-byte freq table + payload.
+ *   [order=0x00][orig_len u32 BE][payload_len u32 BE]
+ *   [256 × u32 BE freq table]
+ *   [4 × u8 final state BE][renorm bytes — read forward at decode]
+ *
+ * Algorithm: M=4096, L=2^23, b=256, state width 64 bits.
+ * ────────────────────────────────────────────────────────────────────── */
+size_t ttio_rans_o0_max_encoded_size(size_t in_len);
+
+int ttio_rans_o0_encode(
+    const uint8_t *in,
+    size_t         in_len,
+    uint8_t       *out,
+    size_t        *out_len);   /* in: capacity, out: actual size */
+
+int ttio_rans_o0_decode(
+    const uint8_t *in,
+    size_t         in_len,
+    uint8_t       *out,
+    size_t         out_capacity,
+    size_t        *out_len);   /* writes original-length on success */
+
+/* ──────────────────────────────────────────────────────────────────────
  * mate_info v2 — CRAM-style inline mate-pair encoding.
  * Spec: docs/superpowers/specs/2026-05-03-mate-info-v2-design.md
  *
