@@ -83,3 +83,7 @@ tools/benchmarks/_cache/
 native/_build/
 native/_build_tsan/
 tools/perf/htscodecs/
+
+# Perf-harness scratch outputs: benchmark JSONs, .tio files, ad-hoc
+# binaries built outside the canonical build_and_run_*.sh harnesses.
+tools/perf/_out_*/
