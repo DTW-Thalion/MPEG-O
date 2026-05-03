@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli
 
 MakeFixtures_OBJC_FILES = MakeFixtures.m
 MakeFixtures_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -61,6 +61,10 @@ TtioBamDump_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 TtioM94zV4Cli_OBJC_FILES = TtioM94zV4Cli.m
 TtioM94zV4Cli_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
 TtioM94zV4Cli_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioMateInfoV2Cli_OBJC_FILES = TtioMateInfoV2Cli.m
+TtioMateInfoV2Cli_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioMateInfoV2Cli_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 ADDITIONAL_CPPFLAGS += -I../Source
 
