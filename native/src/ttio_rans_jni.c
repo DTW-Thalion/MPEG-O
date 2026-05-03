@@ -554,3 +554,141 @@ Java_global_thalion_ttio_codecs_TtioRansNative_decodeV4Native(
     free(qual_out);
     return result;
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+ * mate_info v2 JNI bindings.
+ * Java signature:
+ *   private static native byte[] encodeMateInfoV2Native(
+ *     int[] mateChromIds, long[] matePositions, int[] templateLengths,
+ *     short[] ownChromIds, long[] ownPositions);
+ *   private static native Object[] decodeMateInfoV2Native(
+ *     byte[] encoded, short[] ownChromIds, long[] ownPositions,
+ *     int nRecords);
+ *   - return value of decode is Object[3]: int[], long[], int[]
+ *     (mate_chrom_ids, mate_positions, template_lengths)
+ *
+ * Note: ownChromIds is short[] (Java has no unsigned 16-bit primitive;
+ * we treat short bits as uint16 — the C code at native/src/ttio_rans_jni.c
+ * already uses jshortArray for the rANS contexts vector via the same
+ * convention).
+ * ────────────────────────────────────────────────────────────────────── */
+
+JNIEXPORT jbyteArray JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_encodeMateInfoV2Native(
+    JNIEnv *env, jclass cls,
+    jintArray  mate_chrom_ids,
+    jlongArray mate_positions,
+    jintArray  template_lengths,
+    jshortArray own_chrom_ids,
+    jlongArray  own_positions)
+{
+    (void)cls;
+    jsize n = (*env)->GetArrayLength(env, mate_chrom_ids);
+
+    jint  *mc = (*env)->GetIntArrayElements(env, mate_chrom_ids, NULL);
+    jlong *mp = (*env)->GetLongArrayElements(env, mate_positions, NULL);
+    jint  *ts = (*env)->GetIntArrayElements(env, template_lengths, NULL);
+    jshort *oc = (*env)->GetShortArrayElements(env, own_chrom_ids, NULL);
+    jlong  *op = (*env)->GetLongArrayElements(env, own_positions, NULL);
+    if (!mc || !mp || !ts || !oc || !op) {
+        if (mc) (*env)->ReleaseIntArrayElements(env, mate_chrom_ids, mc, JNI_ABORT);
+        if (mp) (*env)->ReleaseLongArrayElements(env, mate_positions, mp, JNI_ABORT);
+        if (ts) (*env)->ReleaseIntArrayElements(env, template_lengths, ts, JNI_ABORT);
+        if (oc) (*env)->ReleaseShortArrayElements(env, own_chrom_ids, oc, JNI_ABORT);
+        if (op) (*env)->ReleaseLongArrayElements(env, own_positions, op, JNI_ABORT);
+        jclass ex = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
+        (*env)->ThrowNew(env, ex, "GetArrayElements failed");
+        return NULL;
+    }
+
+    size_t cap = ttio_mate_info_v2_max_encoded_size((uint64_t)n);
+    uint8_t *buf = (uint8_t *)malloc(cap > 0 ? cap : 1);
+    size_t out_len = cap;
+
+    int rc = ttio_mate_info_v2_encode(
+        (const int32_t *)mc,
+        (const int64_t *)mp,
+        (const int32_t *)ts,
+        (const uint16_t *)oc,
+        (const int64_t *)op,
+        (uint64_t)n,
+        buf, &out_len);
+
+    (*env)->ReleaseIntArrayElements(env, mate_chrom_ids, mc, JNI_ABORT);
+    (*env)->ReleaseLongArrayElements(env, mate_positions, mp, JNI_ABORT);
+    (*env)->ReleaseIntArrayElements(env, template_lengths, ts, JNI_ABORT);
+    (*env)->ReleaseShortArrayElements(env, own_chrom_ids, oc, JNI_ABORT);
+    (*env)->ReleaseLongArrayElements(env, own_positions, op, JNI_ABORT);
+
+    if (rc != 0) {
+        free(buf);
+        jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException");
+        char msg[128];
+        snprintf(msg, sizeof(msg), "ttio_mate_info_v2_encode failed: %d", rc);
+        (*env)->ThrowNew(env, ex, msg);
+        return NULL;
+    }
+
+    jbyteArray result = (*env)->NewByteArray(env, (jsize)out_len);
+    (*env)->SetByteArrayRegion(env, result, 0, (jsize)out_len, (const jbyte *)buf);
+    free(buf);
+    return result;
+}
+
+JNIEXPORT jobjectArray JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_decodeMateInfoV2Native(
+    JNIEnv *env, jclass cls,
+    jbyteArray encoded,
+    jshortArray own_chrom_ids,
+    jlongArray  own_positions,
+    jint        n_records)
+{
+    (void)cls;
+    jsize enc_size = (*env)->GetArrayLength(env, encoded);
+
+    jbyte *enc = (*env)->GetByteArrayElements(env, encoded, NULL);
+    jshort *oc = (*env)->GetShortArrayElements(env, own_chrom_ids, NULL);
+    jlong  *op = (*env)->GetLongArrayElements(env, own_positions, NULL);
+
+    int32_t *out_mc = (int32_t *)malloc(n_records * sizeof(int32_t));
+    int64_t *out_mp = (int64_t *)malloc(n_records * sizeof(int64_t));
+    int32_t *out_ts = (int32_t *)malloc(n_records * sizeof(int32_t));
+
+    int rc = ttio_mate_info_v2_decode(
+        (const uint8_t *)enc, (size_t)enc_size,
+        (const uint16_t *)oc, (const int64_t *)op,
+        (uint64_t)n_records,
+        out_mc, out_mp, out_ts);
+
+    (*env)->ReleaseByteArrayElements(env, encoded, enc, JNI_ABORT);
+    (*env)->ReleaseShortArrayElements(env, own_chrom_ids, oc, JNI_ABORT);
+    (*env)->ReleaseLongArrayElements(env, own_positions, op, JNI_ABORT);
+
+    if (rc != 0) {
+        free(out_mc); free(out_mp); free(out_ts);
+        jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException");
+        char msg[128];
+        snprintf(msg, sizeof(msg), "ttio_mate_info_v2_decode failed: %d", rc);
+        (*env)->ThrowNew(env, ex, msg);
+        return NULL;
+    }
+
+    /* Build Object[3]: int[] mate_chrom_ids, long[] mate_positions, int[] template_lengths */
+    jclass object_class = (*env)->FindClass(env, "java/lang/Object");
+    jobjectArray result = (*env)->NewObjectArray(env, 3, object_class, NULL);
+
+    jintArray mc_arr = (*env)->NewIntArray(env, n_records);
+    (*env)->SetIntArrayRegion(env, mc_arr, 0, n_records, (const jint *)out_mc);
+    (*env)->SetObjectArrayElement(env, result, 0, mc_arr);
+
+    jlongArray mp_arr = (*env)->NewLongArray(env, n_records);
+    (*env)->SetLongArrayRegion(env, mp_arr, 0, n_records, (const jlong *)out_mp);
+    (*env)->SetObjectArrayElement(env, result, 1, mp_arr);
+
+    jintArray ts_arr = (*env)->NewIntArray(env, n_records);
+    (*env)->SetIntArrayRegion(env, ts_arr, 0, n_records, (const jint *)out_ts);
+    (*env)->SetObjectArrayElement(env, result, 2, ts_arr);
+
+    free(out_mc); free(out_mp); free(out_ts);
+    return result;
+}
