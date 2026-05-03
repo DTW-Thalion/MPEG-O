@@ -40,15 +40,20 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_v3_default_when_native_available():
-    """With native lib loaded and no env override, encode defaults to V3."""
+def test_v3_default_when_v4_suppressed():
+    """With native lib loaded, ``prefer_v4=False`` falls back to V3.
+
+    Post-L2.X Stage 2 the no-override default is V4, not V3 (see
+    test_m94z_v4_dispatch.py). This test verifies that explicitly
+    suppressing V4 still selects V3 over V2/V1.
+    """
     qualities, rls, rcs = _make_data()
     old_ver = os.environ.get("TTIO_M94Z_VERSION")
     old_use = os.environ.get("TTIO_M94Z_USE_NATIVE")
     try:
         os.environ.pop("TTIO_M94Z_VERSION", None)
         os.environ.pop("TTIO_M94Z_USE_NATIVE", None)
-        encoded = encode(qualities, rls, rcs)
+        encoded = encode(qualities, rls, rcs, prefer_v4=False)
     finally:
         if old_ver is not None:
             os.environ["TTIO_M94Z_VERSION"] = old_ver
@@ -59,9 +64,9 @@ def test_v3_default_when_native_available():
 
 
 def test_v3_explicit_emits_version_byte_3():
-    """``prefer_v3=True`` always selects V3 (when native available)."""
+    """``prefer_v3=True`` (with ``prefer_v4=False``) selects V3."""
     qualities, rls, rcs = _make_data(n_reads=20, read_len=64)
-    encoded = encode(qualities, rls, rcs, prefer_v3=True)
+    encoded = encode(qualities, rls, rcs, prefer_v4=False, prefer_v3=True)
     assert encoded[:4] == b"M94Z"
     assert encoded[4] == 3
 
@@ -71,7 +76,7 @@ def test_v3_roundtrip_small():
     qualities = bytes((20 + (i * 7) % 21) for i in range(500))
     read_lengths = [50] * 10
     revcomp = [0] * 10
-    enc = encode(qualities, read_lengths, revcomp, prefer_v3=True)
+    enc = encode(qualities, read_lengths, revcomp, prefer_v4=False, prefer_v3=True)
     assert enc[4] == 3
     out, dec_rls, dec_rcs = decode_with_metadata(enc)
     assert out == qualities
@@ -115,7 +120,7 @@ def test_v3_roundtrip_large():
     rls = [100] * 100
     rcs = [(i & 1) for i in range(100)]
     qualities = bytes((33 + 20 + ((i * 31) % 21)) for i in range(sum(rls)))
-    encoded = encode(qualities, rls, rcs, prefer_v3=True)
+    encoded = encode(qualities, rls, rcs, prefer_v4=False, prefer_v3=True)
     assert encoded[4] == 3
     decoded, dec_rls, _ = decode_with_metadata(encoded, revcomp_flags=rcs)
     assert decoded == qualities
@@ -127,8 +132,8 @@ def test_v3_compresses_better_than_v1_on_redundant_data():
     qualities = b"!" * 5000  # all same symbol
     rls = [5000]
     rcs = [0]
-    enc_v1 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=False)
-    enc_v3 = encode(qualities, rls, rcs, prefer_v3=True)
+    enc_v1 = encode(qualities, rls, rcs, prefer_v4=False, prefer_v3=False, prefer_native=False)
+    enc_v3 = encode(qualities, rls, rcs, prefer_v4=False, prefer_v3=True)
     # V1 carries a sidecar freq-table blob; V3 doesn't. On highly
     # redundant input V3's adaptive model should produce a smaller body.
     assert enc_v3[4] == 3
@@ -177,8 +182,8 @@ def test_v3_env_var_can_select_v1():
 def test_v3_decode_dispatches_on_version_byte():
     """`decode_with_metadata` routes V3 streams to the V3 decoder."""
     qualities, rls, rcs = _make_data()
-    enc_v3 = encode(qualities, rls, rcs, prefer_v3=True)
-    enc_v1 = encode(qualities, rls, rcs, prefer_v3=False, prefer_native=False)
+    enc_v3 = encode(qualities, rls, rcs, prefer_v4=False, prefer_v3=True)
+    enc_v1 = encode(qualities, rls, rcs, prefer_v4=False, prefer_v3=False, prefer_native=False)
     assert enc_v3[4] == 3 and enc_v1[4] == 1
     dec_v3, _, _ = decode_with_metadata(enc_v3, revcomp_flags=rcs)
     dec_v1, _, _ = decode_with_metadata(enc_v1, revcomp_flags=rcs)
