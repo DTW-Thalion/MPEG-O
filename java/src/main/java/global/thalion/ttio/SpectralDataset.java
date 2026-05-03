@@ -832,18 +832,12 @@ public class SpectralDataset implements
                     Enums.Compression.RANS_ORDER0,
                     Enums.Compression.RANS_ORDER1,
                     Enums.Compression.NAME_TOKENIZED),
-                "positions", java.util.Set.of(
-                    Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.DELTA_RANS_ORDER0),
-                "flags", java.util.Set.of(
-                    Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.DELTA_RANS_ORDER0),
-                "mapping_qualities", java.util.Set.of(
-                    Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.DELTA_RANS_ORDER0),
+                // v1.6: positions / flags / mapping_qualities REMOVED
+                // from the override surface. These per-record integer
+                // fields live only in genomic_index/ now (mirroring
+                // MS's spectrum_index/ pattern). The droppedIntChannels
+                // set below catches the keys with a clear v1.6 error
+                // pointing at genomic_index/.
                 // M86 Phase F: per-field decomposition of the M82
                 // mate_info compound dataset. The bare key "mate_info"
                 // is reserved and rejected (Binding Decision §126);
@@ -865,11 +859,25 @@ public class SpectralDataset implements
                     Enums.Compression.RANS_ORDER1,
                     Enums.Compression.DELTA_RANS_ORDER0));
         java.util.Set<String> integerChannelNames = java.util.Set.of(
-            "positions", "flags", "mapping_qualities",
             "mate_info_pos", "mate_info_tlen");
+        // v1.6: per-record integer metadata channels removed from the
+        // signal_channels/ override surface. They live exclusively
+        // under genomic_index/ now. Hard-error so callers with stale
+        // code learn immediately.
+        java.util.Set<String> droppedIntChannels = java.util.Set.of(
+            "positions", "flags", "mapping_qualities");
         for (var entry : run.signalCodecOverrides().entrySet()) {
             String chName = entry.getKey();
             Enums.Compression codec = entry.getValue();
+            if (droppedIntChannels.contains(chName)) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides[\"" + chName + "\"]: removed "
+                    + "in v1.6 — per-record integer metadata fields "
+                    + "(positions, flags, mapping_qualities) are stored "
+                    + "only under genomic_index/, not signal_channels/. "
+                    + "The override no longer applies. See "
+                    + "docs/format-spec.md §4 and §10.7.");
+            }
             // M86 Phase F Binding Decision §126 / Gotcha §143: the
             // bare "mate_info" key is reserved and rejected with a
             // message pointing at the three per-field virtual channel
@@ -1038,16 +1046,11 @@ public class SpectralDataset implements
 
             // signal_channels: 5 typed channels + 3 compound datasets.
             try (var sc = rg.createGroup("signal_channels")) {
-                // M86 Phase B: integer channels dispatch through
-                // writeIntChannelWithCodec; when the per-channel
-                // override is rANS the channel is serialised to
-                // little-endian bytes and written as flat uint8 with
-                // @compression. When the override is absent the helper
-                // delegates to the existing typed writer so byte parity
-                // with M82/Phase A/D/E files is preserved.
-                writeIntChannelWithCodec(sc, "positions",
-                    run.positions(), run.signalCompression(),
-                    resolveIntOverride(run, "positions"));
+                // v1.6: positions / flags / mapping_qualities are NOT
+                // written under signal_channels/. They live exclusively
+                // in genomic_index/, mirroring MS's spectrum_index/
+                // pattern. See docs/format-spec.md §4 and §10.7.
+                // Override-validation rejects these channel names.
                 // M86: sequences/qualities go through the codec
                 // dispatch helper; absent from the override map →
                 // existing HDF5-filter path with @compression unset.
@@ -1109,12 +1112,8 @@ public class SpectralDataset implements
                         run.qualities(), run.signalCompression(),
                         qualCodec);
                 }
-                writeIntChannelWithCodec(sc, "flags",
-                    run.flags(), run.signalCompression(),
-                    resolveIntOverride(run, "flags"));
-                writeIntChannelWithCodec(sc, "mapping_qualities",
-                    run.mappingQualities(), run.signalCompression(),
-                    resolveIntOverride(run, "mapping_qualities"));
+                // (positions / flags / mapping_qualities removed in
+                // v1.6 — see comment above and genomic_index/ writer.)
 
                 // Compound datasets: cigars + read_names (single
                 // VL_STRING). M82.4: Java now reads VL_STRING in
@@ -1922,10 +1921,11 @@ public class SpectralDataset implements
      *  _TTIO_M95_ResolveIntOverride. */
     private static final java.util.Map<String, Enums.Compression>
         V1_5_INT_DEFAULTS = java.util.Map.of(
-            "positions", Enums.Compression.DELTA_RANS_ORDER0,
-            "flags", Enums.Compression.RANS_ORDER0,
-            "mapping_qualities", Enums.Compression.RANS_ORDER0,
-            "template_lengths", Enums.Compression.RANS_ORDER0,
+            // v1.6: positions / flags / mapping_qualities / template_lengths
+            // REMOVED — these per-record integer fields are stored only
+            // under genomic_index/ (positions / flags / mapping_qualities)
+            // or inside the mate_info subgroup (template_lengths via
+            // mate_info_tlen). See docs/format-spec.md §4 and §10.7.
             "mate_info_pos", Enums.Compression.RANS_ORDER0,
             "mate_info_tlen", Enums.Compression.RANS_ORDER0,
             "mate_info_chrom", Enums.Compression.NAME_TOKENIZED
