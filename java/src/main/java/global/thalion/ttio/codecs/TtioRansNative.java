@@ -148,4 +148,50 @@ public final class TtioRansNative {
         int[][] freq, int[][] cum,
         byte[] symbols, int nSymbols,
         ContextResolver resolver);
+
+    /**
+     * Encode flat qualities to an M94.Z V4 stream via the native library.
+     *
+     * <p>Mirrors {@code ttio_m94z_v4_encode} in {@code native/include/ttio_rans.h}.
+     * Auto-tunes (CRAM 3.1) when {@code strategyHint == -1}; uses the
+     * specified preset 0..3 otherwise.
+     *
+     * @param qualities flat Phred bytes (length == sum of readLengths)
+     * @param readLengths per-read quality counts
+     * @param flags per-read SAM flags (Phase 2 strategy 1 ignores these; auto-tune
+     *              uses bit 4 = SAM_REVERSE_FLAG)
+     * @param strategyHint -1 = auto-tune (default); 0..3 = explicit preset
+     * @param padCount 0..3 (low-2 bits of the V4 flags byte)
+     * @return encoded V4 stream
+     * @throws RuntimeException if the native call returns a non-zero rc
+     */
+    public static byte[] encodeV4(byte[] qualities, int[] readLengths, int[] flags,
+                                   int strategyHint, int padCount) {
+        if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
+        return encodeV4Native(qualities, readLengths, flags, strategyHint, padCount);
+    }
+
+    /**
+     * Decode an M94.Z V4 stream via the native library.
+     *
+     * @param encoded V4 stream (must start with "M94Z" + version 4)
+     * @param numReads expected read count (decoder pre-allocates lengths array)
+     * @param numQualities expected quality count
+     * @param flags per-read SAM flags
+     * @return [qualities[], readLengths[]] as a 2-element Object[]; element 0 is
+     *         the byte[] of qualities, element 1 is the int[] of recovered
+     *         read lengths
+     */
+    public static Object[] decodeV4(byte[] encoded, int numReads, int numQualities,
+                                     int[] flags) {
+        if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
+        return decodeV4Native(encoded, numReads, numQualities, flags);
+    }
+
+    private static native byte[] encodeV4Native(byte[] qualities, int[] readLengths,
+                                                  int[] flags, int strategyHint,
+                                                  int padCount);
+
+    private static native Object[] decodeV4Native(byte[] encoded, int numReads,
+                                                    int numQualities, int[] flags);
 }
