@@ -57,6 +57,7 @@ MAGIC = b"M94Z"
 VERSION = 1
 VERSION_V2_NATIVE = 2  # M94.Z V2: body produced by libttio_rans (Task 21 wiring)
 VERSION_V3_ADAPTIVE = 3  # M94.Z V3: adaptive Range Coder (L2 / Task #82 Phase B.2)
+VERSION_V4_FQZCOMP = 4  # M94.Z V4: CRAM 3.1 fqzcomp_qual port (L2.X Stage 2)
 
 # V3 adaptive RC params (mirror native ttio_rans.h)
 ADAPTIVE_STEP: int = 16
@@ -1234,6 +1235,43 @@ if _HAVE_NATIVE_LIB:
         ctypes.c_size_t,
     ]
     _lib.ttio_rans_decode_block_adaptive_m94z.restype = ctypes.c_int
+
+    # ── L2.X V4 (CRAM 3.1 fqzcomp_qual) bindings — Stage 2 Task 11 ──────
+    # int ttio_m94z_v4_encode(
+    #     const uint8_t  *qual_in, size_t n_qualities,
+    #     const uint32_t *read_lengths, size_t n_reads,
+    #     const uint8_t  *flags,
+    #     int             strategy_hint,
+    #     uint8_t         pad_count,
+    #     uint8_t        *out, size_t *out_len);
+    _lib.ttio_m94z_v4_encode.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),     # qual_in
+        ctypes.c_size_t,                     # n_qualities
+        ctypes.POINTER(ctypes.c_uint32),    # read_lengths
+        ctypes.c_size_t,                     # n_reads
+        ctypes.POINTER(ctypes.c_uint8),     # flags
+        ctypes.c_int,                        # strategy_hint
+        ctypes.c_uint8,                      # pad_count
+        ctypes.POINTER(ctypes.c_uint8),     # out
+        ctypes.POINTER(ctypes.c_size_t),    # out_len
+    ]
+    _lib.ttio_m94z_v4_encode.restype = ctypes.c_int
+
+    # int ttio_m94z_v4_decode(
+    #     const uint8_t  *in, size_t in_len,
+    #     uint32_t       *read_lengths, size_t n_reads,
+    #     const uint8_t  *flags,
+    #     uint8_t        *out_qual, size_t n_qualities);
+    _lib.ttio_m94z_v4_decode.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),     # in
+        ctypes.c_size_t,                     # in_len
+        ctypes.POINTER(ctypes.c_uint32),    # read_lengths (out)
+        ctypes.c_size_t,                     # n_reads
+        ctypes.POINTER(ctypes.c_uint8),     # flags
+        ctypes.POINTER(ctypes.c_uint8),     # out_qual
+        ctypes.c_size_t,                     # n_qualities
+    ]
+    _lib.ttio_m94z_v4_decode.restype = ctypes.c_int
 else:
     _lib = None
     _TTIORansContextResolver = None
@@ -1807,6 +1845,184 @@ def _decode_v3_via_native(
     return bytes(out_buf), read_lengths, list(revcomp_flags)
 
 
+# ── V4 fqzcomp_qual (CRAM 3.1) encode / decode (L2.X Stage 2) ───────────
+
+
+# SAM bit 4 = SAM_REVERSE; the V4 native API consumes SAM-compatible flag
+# bytes. revcomp_flags inputs are 0/1 in this module — translate.
+_SAM_REVERSE = 0x10
+
+
+def _encode_v4_native(
+    qualities: bytes,
+    read_lengths: list[int],
+    revcomp_flags: list[int],
+    pad_count: int,
+    strategy_hint: int = -1,
+) -> bytes:
+    """V4 (CRAM 3.1 fqzcomp_qual) encode via libttio_rans.
+
+    Wraps :c:func:`ttio_m94z_v4_encode`. The native side handles header
+    packing (magic, version, RLT deflate, cram_body_len) and body
+    compression in one call.
+
+    Args:
+        qualities: concatenated Phred quality bytes (length must equal
+            ``sum(read_lengths)``).
+        read_lengths: per-read length list.
+        revcomp_flags: parallel list of 0/1; translated to SAM_REVERSE
+            (bit 4) for the native flags byte array.
+        pad_count: 0..3 (V3 convention; carried in flags bits 4-5 of
+            the V4 outer header).
+        strategy_hint: -1 = auto-tune (default), 0..4 = preset.
+    """
+    if not _HAVE_NATIVE_LIB:
+        raise RuntimeError(
+            "_encode_v4_native called but libttio_rans is not available"
+        )
+
+    n_qualities = len(qualities)
+    n_reads = len(read_lengths)
+    if len(revcomp_flags) != n_reads:
+        raise ValueError(
+            f"revcomp_flags length {len(revcomp_flags)} != "
+            f"read_lengths length {n_reads}"
+        )
+
+    # Marshal qual_in.
+    if n_qualities:
+        qual_buf = (ctypes.c_uint8 * n_qualities).from_buffer_copy(bytes(qualities))
+    else:
+        qual_buf = None
+
+    # Marshal read_lengths as uint32.
+    if n_reads:
+        _rl = array.array('I', read_lengths)
+        rl_buf = (ctypes.c_uint32 * n_reads).from_buffer(_rl)
+        # SAM-style flag bytes: bit 4 = SAM_REVERSE.
+        _flags = array.array('B', [
+            (_SAM_REVERSE if (v & 1) else 0) for v in revcomp_flags
+        ])
+        flags_buf = (ctypes.c_uint8 * n_reads).from_buffer(_flags)
+    else:
+        rl_buf = None
+        flags_buf = None
+
+    # Output capacity: V4 outer header overhead (~30 bytes) + RLT (deflated,
+    # bounded by 4*n_reads) + cram body (worst case ~ qualities + slack).
+    out_cap = 64 + 4 * n_reads + n_qualities * 2 + 1024
+    out_buf = (ctypes.c_uint8 * out_cap)()
+    out_len = ctypes.c_size_t(out_cap)
+
+    rc = _lib.ttio_m94z_v4_encode(
+        qual_buf,
+        ctypes.c_size_t(n_qualities),
+        rl_buf,
+        ctypes.c_size_t(n_reads),
+        flags_buf,
+        ctypes.c_int(strategy_hint),
+        ctypes.c_uint8(pad_count & 0x3),
+        out_buf,
+        ctypes.byref(out_len),
+    )
+    if rc != 0:
+        raise RuntimeError(f"ttio_m94z_v4_encode failed: rc={rc}")
+    return bytes(out_buf[:out_len.value])
+
+
+def _decode_v4_via_native(
+    encoded: bytes,
+    revcomp_flags: list[int] | None,
+) -> tuple[bytes, list[int], list[int]]:
+    """Decode a V4 (CRAM 3.1 fqzcomp_qual) M94.Z blob.
+
+    Pipeline:
+      1. Parse the V4 outer header inline (magic, version, num_qualities,
+         num_reads, pad_count) — needed to size the output buffers.
+      2. Allocate read_lengths[num_reads] (uint32) — the native call
+         decompresses the RLT into this array.
+      3. Translate revcomp_flags 0/1 → SAM_REVERSE bytes; default to
+         all-zero if caller passed None.
+      4. Allocate out_qual[num_qualities].
+      5. Call :c:func:`ttio_m94z_v4_decode`.
+    """
+    if not _HAVE_NATIVE_LIB:
+        raise RuntimeError(
+            "_decode_v4_via_native called but libttio_rans is not available"
+        )
+
+    # Inline parse of the V4 outer header (fields per m94z_v4_wire.h):
+    #   0..4   magic = "M94Z"
+    #   4      version = 4
+    #   5      flags  (bits 4-5 = pad_count)
+    #   6..14  num_qualities (uint64 LE)
+    #  14..22  num_reads     (uint64 LE)
+    #  22..26  rlt_compressed_len (uint32 LE) — only needed by native
+    if len(encoded) < 26:
+        raise ValueError("M94Z V4: header truncated")
+    if encoded[:4] != MAGIC:
+        raise ValueError(
+            f"M94Z V4 bad magic: {encoded[:4]!r}, expected {MAGIC!r}"
+        )
+    if encoded[4] != VERSION_V4_FQZCOMP:
+        raise ValueError(
+            f"M94Z V4: expected version {VERSION_V4_FQZCOMP}, got {encoded[4]}"
+        )
+    flags_byte = encoded[5]
+    # pad_count occupies bits 4-5 of flags (matches V3 convention; see
+    # m94z_v4_wire.h §header layout).
+    _pad_count = (flags_byte >> 4) & 0x3  # noqa: F841 — informational only
+    num_qualities = struct.unpack_from("<Q", encoded, 6)[0]
+    num_reads = struct.unpack_from("<Q", encoded, 14)[0]
+
+    if num_qualities > (1 << 40):
+        raise ValueError(
+            f"M94Z V4: implausible num_qualities {num_qualities}"
+        )
+    if num_reads > (1 << 32):
+        raise ValueError(
+            f"M94Z V4: implausible num_reads {num_reads}"
+        )
+
+    if revcomp_flags is None:
+        revcomp_flags = [0] * num_reads
+    elif len(revcomp_flags) != num_reads:
+        raise ValueError(
+            f"revcomp_flags length {len(revcomp_flags)} != "
+            f"num_reads {num_reads}"
+        )
+
+    in_buf = (ctypes.c_uint8 * len(encoded)).from_buffer_copy(bytes(encoded))
+    out_buf = (ctypes.c_uint8 * num_qualities)()
+
+    if num_reads:
+        _rl = array.array('I', [0] * num_reads)
+        rl_buf = (ctypes.c_uint32 * num_reads).from_buffer(_rl)
+        _flags = array.array('B', [
+            (_SAM_REVERSE if (v & 1) else 0) for v in revcomp_flags
+        ])
+        flags_buf = (ctypes.c_uint8 * num_reads).from_buffer(_flags)
+    else:
+        _rl = array.array('I')
+        rl_buf = None
+        flags_buf = None
+
+    rc = _lib.ttio_m94z_v4_decode(
+        in_buf,
+        ctypes.c_size_t(len(encoded)),
+        rl_buf,
+        ctypes.c_size_t(num_reads),
+        flags_buf,
+        out_buf,
+        ctypes.c_size_t(num_qualities),
+    )
+    if rc != 0:
+        raise RuntimeError(f"ttio_m94z_v4_decode failed: rc={rc}")
+
+    read_lengths = list(_rl) if num_reads else []
+    return bytes(out_buf), read_lengths, list(revcomp_flags)
+
+
 def encode(
     qualities: bytes,
     read_lengths: list[int],
@@ -1815,17 +2031,20 @@ def encode(
     context_params: ContextParams | None = None,
     prefer_native: bool | None = None,
     prefer_v3: bool | None = None,
+    prefer_v4: bool | None = None,
+    v4_strategy_hint: int = -1,
 ) -> bytes:
     """Top-level M94.Z encoder.
 
     Version dispatch (in priority order):
-      1. ``prefer_v3 is True`` → V3 (adaptive Range Coder).
-      2. ``prefer_v3 is False`` → fall back to V1/V2 based on
-         ``prefer_native``.
-      3. ``prefer_v3 is None`` (default) → consult env var
-         ``TTIO_M94Z_VERSION``: ``"3"`` → V3 (default), ``"2"`` → V2,
-         ``"1"`` → V1. If unset, **V3 is the default** when libttio_rans
-         is available; otherwise V1 (Cython / pure-Python).
+      1. ``prefer_v4 is True`` → V4 (CRAM 3.1 fqzcomp_qual port).
+      2. ``prefer_v3 is True`` → V3 (adaptive Range Coder).
+      3. Both False / fall-through → V1/V2 based on ``prefer_native``.
+      4. ``prefer_v4`` / ``prefer_v3`` are ``None`` (default) → consult
+         env var ``TTIO_M94Z_VERSION``: ``"4"`` → V4, ``"3"`` → V3,
+         ``"2"`` → V2, ``"1"`` → V1. If unset, **V4 is the default**
+         when libttio_rans is available; otherwise V1 (Cython /
+         pure-Python).
 
     Args:
         qualities: concatenated Phred quality byte stream.
@@ -1833,12 +2052,16 @@ def encode(
             len(qualities)).
         revcomp_flags: parallel list of 0/1.
         context_params: optional :class:`ContextParams`; default is
-            ``qbits=12, pbits=2, sloc=14``.
-        prefer_native: legacy V1↔V2 toggle. Ignored when V3 is selected.
+            ``qbits=12, pbits=2, sloc=14``. Ignored for V4 (CRAM
+            fqzcomp_qual uses its own internal context model).
+        prefer_native: legacy V1↔V2 toggle. Ignored when V3 / V4 selected.
         prefer_v3: explicit override for V3 encode.
+        prefer_v4: explicit override for V4 encode (takes priority).
+        v4_strategy_hint: -1 = auto-tune (default), 0..4 = preset for
+            the V4 fqzcomp_qual encoder.
 
     Returns:
-        On-wire byte stream. Version byte is 1, 2, or 3 depending on
+        On-wire byte stream. Version byte is 1, 2, 3, or 4 depending on
         the active codec path.
     """
     if not isinstance(qualities, (bytes, bytearray, memoryview)):
@@ -1863,19 +2086,37 @@ def encode(
     n_padded = n + pad_count
 
     # ── Version-selection ladder ────────────────────────────────────────
-    # Resolve prefer_v3 / prefer_native against env vars:
-    #   TTIO_M94Z_VERSION:  "3" / "2" / "1" → force that version.
+    # Resolve prefer_v4 / prefer_v3 / prefer_native against env vars:
+    #   TTIO_M94Z_VERSION:  "4" / "3" / "2" / "1" → force that version.
     #   TTIO_M94Z_USE_NATIVE (legacy): truthy → enable V2 (V1 v V2 toggle).
     env_ver = os.environ.get("TTIO_M94Z_VERSION", "").strip()
+
+    if prefer_v4 is None:
+        if env_ver == "4":
+            prefer_v4 = True
+        elif env_ver in ("1", "2", "3"):
+            prefer_v4 = False
+        else:
+            # No explicit selection — V4 is the default when native is
+            # available (CRAM 3.1 fqzcomp port; best ratio). Without the
+            # native library V4 isn't possible, so the V3/V2/V1 ladder
+            # takes over.
+            prefer_v4 = _HAVE_NATIVE_LIB
+
+    if prefer_v4 and _HAVE_NATIVE_LIB:
+        return _encode_v4_native(
+            qualities, list(read_lengths), list(revcomp_flags),
+            pad_count, strategy_hint=v4_strategy_hint,
+        )
+
     if prefer_v3 is None:
         if env_ver == "3":
             prefer_v3 = True
         elif env_ver in ("1", "2"):
             prefer_v3 = False
         else:
-            # No explicit selection — V3 is the default when native is
-            # available. Without the native library V3 isn't possible,
-            # so the legacy V1/V2 ladder takes over.
+            # No explicit selection — V3 is the next-best default when
+            # native is available (used when V4 is suppressed by caller).
             prefer_v3 = _HAVE_NATIVE_LIB
 
     if prefer_v3 and _HAVE_NATIVE_LIB:
@@ -2281,6 +2522,14 @@ def decode_with_metadata(
         raise ValueError(
             f"M94Z bad magic: {encoded[:4]!r}, expected {MAGIC!r}"
         )
+    if encoded[4] == VERSION_V4_FQZCOMP:
+        if not _HAVE_NATIVE_LIB:
+            raise RuntimeError(
+                "M94Z V4 decode requires libttio_rans (set "
+                "TTIO_RANS_LIB_PATH or install the native library)"
+            )
+        return _decode_v4_via_native(encoded, revcomp_flags)
+
     if encoded[4] == VERSION_V3_ADAPTIVE:
         if not _HAVE_NATIVE_LIB:
             raise RuntimeError(
@@ -2433,6 +2682,7 @@ __all__ = [
     "VERSION",
     "VERSION_V2_NATIVE",
     "VERSION_V3_ADAPTIVE",
+    "VERSION_V4_FQZCOMP",
     "ADAPTIVE_STEP",
     "ADAPTIVE_T_MAX",
     "L",
