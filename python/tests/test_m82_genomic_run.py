@@ -762,6 +762,46 @@ def test_opt_genomic_flag_absent_when_no_genomic_runs(tmp_path: Path):
         ds.close()
 
 
+def test_opt_no_signal_int_dups_flag_present_in_v1_6(tmp_path: Path):
+    """v1.6 flag: opt_no_signal_int_dups is set when genomic_runs are present.
+
+    Tooling can use this flag to detect v1.6+ files (where
+    signal_channels/{positions,flags,mapping_qualities} duplicates of
+    genomic_index/ are NOT written) without enumerating signal_channels.
+    """
+    from ttio.spectral_dataset import SpectralDataset
+
+    p = tmp_path / "v1_6.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i",
+        runs={},
+        genomic_runs={"genomic_0001": _make_written_run(n_reads=10)},
+    )
+    ds = SpectralDataset.open(p)
+    try:
+        assert "opt_no_signal_int_dups" in ds.feature_flags.features, (
+            "v1.6 writers must set opt_no_signal_int_dups when genomic "
+            "content is present. Got: " + str(ds.feature_flags.features)
+        )
+    finally:
+        ds.close()
+
+
+def test_opt_no_signal_int_dups_absent_for_ms_only(tmp_path: Path):
+    """opt_no_signal_int_dups only fires when genomic content is present."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    p = tmp_path / "ms_only.tio"
+    SpectralDataset.write_minimal(
+        p, title="t", isa_investigation_id="i", runs={}
+    )
+    ds = SpectralDataset.open(p)
+    try:
+        assert "opt_no_signal_int_dups" not in ds.feature_flags.features
+    finally:
+        ds.close()
+
+
 def test_random_access_uses_hyperslab(tmp_path: Path):
     """Acceptance #12: __getitem__ reads only the read's slice, not the full channel.
 

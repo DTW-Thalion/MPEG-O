@@ -682,13 +682,25 @@ public class SpectralDataset implements
             && hasAnyContextAwareCodec(genomicRuns);
         String targetVersion = anyContextAware ? "1.5"
             : (hasGenomic ? "1.4" : featureFlags.formatVersion());
-        if (hasGenomic && !featureFlags.features().contains(FeatureFlags.OPT_GENOMIC)) {
-            java.util.Set<String> withFlag =
+        // v1.6 (L4): files without signal_channels/{positions,flags,
+        // mapping_qualities} duplicates carry opt_no_signal_int_dups.
+        // Always set when genomic content is present (this writer
+        // doesn't emit the dups in v1.6).
+        if (hasGenomic) {
+            java.util.Set<String> withFlags =
                 new java.util.LinkedHashSet<>(featureFlags.features());
-            withFlag.add(FeatureFlags.OPT_GENOMIC);
-            featureFlags = new FeatureFlags(targetVersion, withFlag);
-        } else if (hasGenomic && !targetVersion.equals(featureFlags.formatVersion())) {
-            featureFlags = new FeatureFlags(targetVersion, featureFlags.features());
+            boolean changed = false;
+            if (!withFlags.contains(FeatureFlags.OPT_GENOMIC)) {
+                withFlags.add(FeatureFlags.OPT_GENOMIC);
+                changed = true;
+            }
+            if (!withFlags.contains(FeatureFlags.OPT_NO_SIGNAL_INT_DUPS)) {
+                withFlags.add(FeatureFlags.OPT_NO_SIGNAL_INT_DUPS);
+                changed = true;
+            }
+            if (changed || !targetVersion.equals(featureFlags.formatVersion())) {
+                featureFlags = new FeatureFlags(targetVersion, withFlags);
+            }
         }
 
         java.util.List<String> gNamesList = genomicRunNames != null

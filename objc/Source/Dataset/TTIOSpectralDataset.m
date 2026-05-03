@@ -2454,6 +2454,10 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
             if (![features containsObject:[TTIOFeatureFlags featureOptGenomic]]) {
                 [features addObject:[TTIOFeatureFlags featureOptGenomic]];
             }
+            // v1.6 (L4): see comment at the HDF5-fast-path equivalent.
+            if (![features containsObject:[TTIOFeatureFlags featureNoSignalIntDups]]) {
+                [features addObject:[TTIOFeatureFlags featureNoSignalIntDups]];
+            }
             formatVersion = kTTIOFormatVersionM82;
         }
         if (![root setAttributeValue:formatVersion
@@ -2907,11 +2911,19 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // if a future caller pre-populates it. Bump format_version to 1.4
     // (which implies 1.3 + 1.1 — readers gate features by flag, not
     // by version equality).
+    //
+    // v1.6 (L4): opt_no_signal_int_dups advertises that
+    // signal_channels/{positions,flags,mapping_qualities} duplicates
+    // are NOT written (canonical home is genomic_index/). Always set
+    // when genomic content is present in v1.6+ files.
     BOOL hasGenomic = genomicRuns.count > 0;
     NSString *formatVersion = kTTIOFormatVersion;
     if (hasGenomic) {
         if (![features containsObject:[TTIOFeatureFlags featureOptGenomic]]) {
             [features addObject:[TTIOFeatureFlags featureOptGenomic]];
+        }
+        if (![features containsObject:[TTIOFeatureFlags featureNoSignalIntDups]]) {
+            [features addObject:[TTIOFeatureFlags featureNoSignalIntDups]];
         }
         formatVersion = kTTIOFormatVersionM82;
     }

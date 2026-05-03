@@ -60,6 +60,15 @@ public final class FeatureFlags {
      *  that ignore the flag still parse the MS pipeline normally
      *  (genomic runs are a separate group hierarchy). @since 0.11 M82 */
     public static final String OPT_GENOMIC = "opt_genomic";
+    /** v1.2 L4 (v1.6): genomic runs in this file do NOT carry the
+     *  {@code signal_channels/{positions,flags,mapping_qualities}}
+     *  duplicates that v1.5 and earlier wrote alongside the canonical
+     *  {@code genomic_index/} copies. Tooling that wants to detect
+     *  v1.6 layout (without enumerating the {@code signal_channels/}
+     *  group) can check for this flag. Strictly additive: pre-v1.6
+     *  readers ignore unknown opt_* flags and continue to read from
+     *  {@code genomic_index/} correctly. @since v1.6 */
+    public static final String OPT_NO_SIGNAL_INT_DUPS = "opt_no_signal_int_dups";
 
     private static final Set<String> REQUIRED = Set.of(
         BASE_V1, COMPOUND_IDENTIFICATIONS, COMPOUND_QUANTIFICATIONS,
