@@ -49,8 +49,11 @@ static NSArray<NSNumber *> *makeRevcompFlags(NSUInteger nReads, BOOL alternating
     return a;
 }
 
-static void testV1DefaultEncode(void)
+static void testV1ExplicitEncode(void)
 {
+    // V4 is the default emit format when libttio_rans is linked (Stage 3).
+    // V1 must still round-trip when explicitly selected via
+    // preferV4=NO + preferNative=NO (the pure-ObjC V1 path).
     NSData *q = makeQualities(50, 80);
     NSArray *rls = makeUniformLengths(50, 80);
     NSArray *rcs = makeRevcompFlags(50, NO);
@@ -59,14 +62,16 @@ static void testV1DefaultEncode(void)
     NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
                                               readLengths:rls
                                              revcompFlags:rcs
+                                                  options:@{@"preferV4": @NO,
+                                                            @"preferNative": @NO}
                                                     error:&err];
-    PASS(enc != nil, "V1 encode (default path) succeeds");
+    PASS(enc != nil, "V1 explicit encode succeeds");
     if (!enc) return;
     PASS(enc.length > 0, "V1 encode non-empty");
     const uint8_t *bytes = (const uint8_t *)enc.bytes;
     PASS(bytes[0] == 'M' && bytes[1] == '9' && bytes[2] == '4' && bytes[3] == 'Z',
          "V1 magic bytes are M94Z");
-    PASS(bytes[4] == 1, "V1 version byte == 1 (default)");
+    PASS(bytes[4] == 1, "V1 version byte == 1 (explicit)");
 
     err = nil;
     NSDictionary *dec = [TTIOFqzcompNx16Z decodeData:enc revcompFlags:rcs error:&err];
@@ -85,12 +90,13 @@ static void testV1ExplicitNoPreferNative(void)
     NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
                                               readLengths:rls
                                              revcompFlags:rcs
-                                                  options:@{@"preferNative": @NO}
+                                                  options:@{@"preferV4": @NO,
+                                                            @"preferNative": @NO}
                                                     error:&err];
-    PASS(enc != nil, "preferNative=NO encode succeeds");
+    PASS(enc != nil, "preferV4=NO + preferNative=NO encode succeeds");
     if (!enc) return;
     const uint8_t *bytes = (const uint8_t *)enc.bytes;
-    PASS(bytes[4] == 1, "preferNative=NO forces V1 (version byte == 1)");
+    PASS(bytes[4] == 1, "preferV4=NO + preferNative=NO forces V1");
 }
 
 static void testV2NativeEncodeDecode(void)
@@ -108,10 +114,12 @@ static void testV2NativeEncodeDecode(void)
     NSArray *rcs = makeRevcompFlags(50, NO);
     NSError *err = nil;
 
-    // Baseline V1 for comparison.
+    // Baseline V1 for comparison (explicit — V4 is now the default).
     NSData *encV1 = [TTIOFqzcompNx16Z encodeWithQualities:q
                                                 readLengths:rls
                                                revcompFlags:rcs
+                                                    options:@{@"preferV4": @NO,
+                                                              @"preferNative": @NO}
                                                       error:&err];
     PASS(encV1 != nil, "V1 baseline encode succeeds");
 
@@ -119,7 +127,8 @@ static void testV2NativeEncodeDecode(void)
     NSData *encV2 = [TTIOFqzcompNx16Z encodeWithQualities:q
                                                 readLengths:rls
                                                revcompFlags:rcs
-                                                    options:@{@"preferNative": @YES}
+                                                    options:@{@"preferV4": @NO,
+                                                            @"preferNative": @YES}
                                                       error:&err];
     PASS(encV2 != nil, "V2 native encode succeeds");
     if (!encV2) {
@@ -165,7 +174,8 @@ static void testV2NativeUnaligned(void)
     NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
                                               readLengths:rls
                                              revcompFlags:rcs
-                                                  options:@{@"preferNative": @YES}
+                                                  options:@{@"preferV4": @NO,
+                                                            @"preferNative": @YES}
                                                     error:&err];
     PASS(enc != nil, "V2 unaligned encode succeeds");
     if (!enc) return;
@@ -192,7 +202,8 @@ static void testV2NativeMultiReadRevcomp(void)
     NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
                                               readLengths:rls
                                              revcompFlags:rcs
-                                                  options:@{@"preferNative": @YES}
+                                                  options:@{@"preferV4": @NO,
+                                                            @"preferNative": @YES}
                                                     error:&err];
     PASS(enc != nil, "V2 multi-read+revcomp encode succeeds");
     if (!enc) return;
@@ -217,11 +228,14 @@ static void testV1V2HeaderShape(void)
     NSData *encV1 = [TTIOFqzcompNx16Z encodeWithQualities:q
                                                 readLengths:rls
                                                revcompFlags:rcs
+                                                    options:@{@"preferV4": @NO,
+                                                              @"preferNative": @NO}
                                                       error:&err];
     NSData *encV2 = [TTIOFqzcompNx16Z encodeWithQualities:q
                                                 readLengths:rls
                                                revcompFlags:rcs
-                                                    options:@{@"preferNative": @YES}
+                                                    options:@{@"preferV4": @NO,
+                                                            @"preferNative": @YES}
                                                       error:&err];
     PASS(encV1 != nil && encV2 != nil, "V1 + V2 encode both succeed");
     if (!encV1 || !encV2) return;
@@ -262,7 +276,8 @@ static void testV2NativeStreamingRoundTrip(void)
     NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
                                               readLengths:rls
                                              revcompFlags:rcs
-                                                  options:@{@"preferNative": @YES}
+                                                  options:@{@"preferV4": @NO,
+                                                            @"preferNative": @YES}
                                                     error:&err];
     PASS(enc != nil, "V2 streaming-mode encode succeeds");
     if (enc) {
@@ -303,7 +318,8 @@ static void testV2NativeStreamingFallsBackOnUnset(void)
     NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
                                               readLengths:rls
                                              revcompFlags:rcs
-                                                  options:@{@"preferNative": @YES}
+                                                  options:@{@"preferV4": @NO,
+                                                            @"preferNative": @YES}
                                                     error:&err];
     PASS(enc != nil, "V2 encode (streaming env unset) succeeds");
     if (enc) {
@@ -322,7 +338,7 @@ static void testV2NativeStreamingFallsBackOnUnset(void)
 void testM94ZV2Dispatch(void);
 void testM94ZV2Dispatch(void)
 {
-    testV1DefaultEncode();
+    testV1ExplicitEncode();
     testV1ExplicitNoPreferNative();
     testV2NativeEncodeDecode();
     testV2NativeUnaligned();
