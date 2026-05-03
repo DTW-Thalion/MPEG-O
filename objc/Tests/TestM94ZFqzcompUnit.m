@@ -221,6 +221,10 @@ static void testM94ZFixtureRoundTrip(NSString *fname,
          "M94.Z fixture %@: decode populated qualities + readLengths", fname);
 
     // Re-encode with the same metadata; require byte-exact match.
+    // The canonical fixtures are V1 streams (magic M94Z, version 1) —
+    // see python/tests/fixtures/codecs/m94z_*.bin. v1.6 made V4 the
+    // default, so we must explicitly force V1 here for the byte-exact
+    // re-encode contract.
     NSArray *rcUsed = revcompFlags;
     if (!rcUsed) {
         NSMutableArray *zeros = [NSMutableArray arrayWithCapacity:readLengths.count];
@@ -230,6 +234,8 @@ static void testM94ZFixtureRoundTrip(NSString *fname,
     NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:qualities
                                              readLengths:readLengths
                                             revcompFlags:rcUsed
+                                                 options:@{@"preferV4": @NO,
+                                                           @"preferNative": @NO}
                                                    error:&err];
     PASS(enc != nil, "M94.Z fixture %@: re-encode of decoded data succeeds (err=%@)",
          fname, err.localizedDescription);
