@@ -293,6 +293,29 @@ HG002 PacBio HiFi). See
 `docs/benchmarks/2026-05-02-m94z-v4-stage2-results.md` for per-corpus
 B/qual numbers and the encode-wall comparison vs V3.
 
+### V4 in Java and Objective-C (Stage 3 / 2026-05-03)
+
+V4 reaches feature parity across all 3 reference implementations:
+
+| Language | V4 path | V4 default | Pre-V4 fallback |
+|---|---|---|---|
+| Python | `ctypes` -> `libttio_rans` | when `_HAVE_NATIVE_LIB` | V3 |
+| Java | JNI -> `libttio_rans_jni` -> `libttio_rans` | when `TtioRansNative.isAvailable()` | V2 |
+| Objective-C | direct link -> `libttio_rans` | when `TTIO_HAS_NATIVE_RANS` (always in this build) | V2 |
+
+All three languages produce **byte-identical** V4 output across the 4
+benchmark corpora: each one wraps the same deterministic
+`ttio_m94z_v4_encode` C entry point, so divergence is impossible by
+construction. The cross-language gates that guarantee this:
+
+- `python/tests/integration/test_m94z_v4_byte_exact.py` — Python <-> htscodecs
+- `java/.../FqzcompNx16ZV4ByteExactTest.java` — Java <-> Python
+- `objc/Tests/TestM94ZV4ByteExact.m` — ObjC <-> Python
+- `python/tests/integration/test_m94z_v4_cross_language.py` — full Python ↔ Java ↔ ObjC matrix (4 corpora x 3 languages)
+
+Per-language defaults preserve V1/V2 read-compat for legacy files; the
+V4 path is strictly additive.
+
 ### Flags byte layout
 
 ```
