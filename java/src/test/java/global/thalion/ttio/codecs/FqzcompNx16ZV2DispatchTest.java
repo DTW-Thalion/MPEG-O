@@ -53,16 +53,20 @@ final class FqzcompNx16ZV2DispatchTest {
     // ── V1 default behaviour ────────────────────────────────────────
 
     @Test
-    void v1IsDefault() {
+    void v1IsDefaultWhenV4Suppressed() {
+        // After Task 4, V4 became the default whenever JNI is loaded. This
+        // test asserts the *pre-V4* default — that with V4 explicitly
+        // suppressed and native off, the encoder produces V1.
         byte[] q = makeQualities(50, 80);
         int[] rls = fill(50, 80);
         int[] rcs = new int[50];
-        byte[] enc = FqzcompNx16Z.encode(q, rls, rcs);
+        byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(false));
         assertEquals('M', enc[0]);
         assertEquals('9', enc[1]);
         assertEquals('4', enc[2]);
         assertEquals('Z', enc[3]);
-        assertEquals(1, enc[4], "default encoder must produce V1");
+        assertEquals(1, enc[4], "with V4 + native off, encoder must produce V1");
     }
 
     @Test
@@ -70,7 +74,8 @@ final class FqzcompNx16ZV2DispatchTest {
         byte[] q = makeQualities(32, 50);
         int[] rls = fill(32, 50);
         int[] rcs = new int[32];
-        byte[] enc = FqzcompNx16Z.encode(q, rls, rcs);
+        byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(false));
         FqzcompNx16Z.DecodeResult r = FqzcompNx16Z.decode(enc, rcs);
         assertArrayEquals(q, r.qualities());
         assertArrayEquals(rls, r.readLengths());
@@ -82,8 +87,8 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(20, 30);
         int[] rcs = new int[20];
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(false));
-        assertEquals(1, enc[4], "preferNative=false must force V1");
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(false));
+        assertEquals(1, enc[4], "preferNative=false (with V4 suppressed) must force V1");
     }
 
     // ── V2 native dispatch ──────────────────────────────────────────
@@ -95,7 +100,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(10, 20);
         int[] rcs = new int[10];
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(2, enc[4], "V2 encoded version byte must be 2");
     }
 
@@ -107,7 +112,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rcs = new int[8];
 
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(2, enc[4]);
 
         FqzcompNx16Z.DecodeResult r = FqzcompNx16Z.decode(enc, rcs);
@@ -123,7 +128,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(7, 13);
         int[] rcs = new int[7];
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(2, enc[4]);
         FqzcompNx16Z.DecodeResult r = FqzcompNx16Z.decode(enc, rcs);
         assertArrayEquals(q, r.qualities());
@@ -138,7 +143,7 @@ final class FqzcompNx16ZV2DispatchTest {
         for (int i = 0; i < 100; i++) rcs[i] = (i & 1);
 
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(2, enc[4], "V2 encoded version byte");
 
         FqzcompNx16Z.DecodeResult r = FqzcompNx16Z.decode(enc, rcs);
@@ -152,9 +157,10 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(64, 100);
         int[] rcs = new int[64];
 
-        byte[] encV1 = FqzcompNx16Z.encode(q, rls, rcs);
+        byte[] encV1 = FqzcompNx16Z.encode(q, rls, rcs,
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(false));
         byte[] encV2 = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
 
         // Wire formats differ (V1 has trailer, V2 has native body).
         assertEquals(1, encV1[4]);
@@ -179,9 +185,10 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(4, 8);
         int[] rcs = new int[4];
 
-        byte[] encV1 = FqzcompNx16Z.encode(q, rls, rcs);
+        byte[] encV1 = FqzcompNx16Z.encode(q, rls, rcs,
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(false));
         byte[] encV2 = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
 
         // Both must round-trip.
         assertArrayEquals(q, FqzcompNx16Z.decode(encV1, rcs).qualities());
@@ -198,7 +205,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(8, 16);
         int[] rcs = new int[8];
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
 
         // Sanity: round-trip works.
         assertArrayEquals(q, FqzcompNx16Z.decode(enc, rcs).qualities());
@@ -220,7 +227,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = new int[]{1};
         int[] rcs = new int[]{0};
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(2, enc[4]);
         FqzcompNx16Z.DecodeResult r = FqzcompNx16Z.decode(enc, rcs);
         assertArrayEquals(q, r.qualities());
@@ -234,7 +241,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(8, 4);
         int[] rcs = new int[8];
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(2, enc[4]);
         // pad_count flag bits should be zero.
         assertEquals(0, (enc[5] >>> 4) & 0x3, "pad_count must be 0");
@@ -257,7 +264,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(8, 4);
         int[] rcs = new int[8];
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(1, enc[4],
             "preferNative=true must fall back to V1 when native lib absent");
     }
@@ -271,7 +278,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rls = fill(8, 16);
         int[] rcs = new int[8];
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
 
         // Truncate to last few bytes.
         byte[] truncated = Arrays.copyOf(enc, enc.length - 4);
@@ -299,7 +306,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rcs = new int[32];
 
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(2, enc[4]);
 
         FqzcompNx16Z.DecodeResult r =
@@ -318,7 +325,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rcs = new int[7];
 
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         assertEquals(2, enc[4]);
         FqzcompNx16Z.DecodeResult r =
             FqzcompNx16Z.decodeV2ForceNativeStreamingForTest(enc, rcs);
@@ -335,7 +342,7 @@ final class FqzcompNx16ZV2DispatchTest {
         for (int i = 0; i < 50; i++) rcs[i] = (i & 1);
 
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
         FqzcompNx16Z.DecodeResult r =
             FqzcompNx16Z.decodeV2ForceNativeStreamingForTest(enc, rcs);
         assertNotNull(r);
@@ -351,7 +358,7 @@ final class FqzcompNx16ZV2DispatchTest {
         int[] rcs = new int[20];
 
         byte[] enc = FqzcompNx16Z.encode(q, rls, rcs,
-            new FqzcompNx16Z.EncodeOptions().preferNative(true));
+            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
 
         FqzcompNx16Z.DecodeResult viaPureJava = FqzcompNx16Z.decode(enc, rcs);
         FqzcompNx16Z.DecodeResult viaStreaming =
