@@ -13,6 +13,41 @@ public API is stable from v1.0.0 onward (tagged 2026-04-23). See
 
 ## [Unreleased]
 
+### Removed — 2026-05-03 L4: signal_channels integer-field duplicates
+
+`signal_channels/{positions,flags,mapping_qualities}` no longer
+written under genomic runs. These per-record integer fields are now
+stored exclusively under `genomic_index/`, mirroring MS's
+`spectrum_index/` pattern (per-record metadata = index;
+`signal_channels/` = bulk per-base / variable-length data). The
+`signal_channels/` copies were dead bytes — no reader path consumed
+them; they were provisioned for an aspirational "streaming reader
+prefers signal_channels" future that contradicted the MS pattern and
+never landed.
+
+**Recovers ~3.87 MB on chr22 (1.77M reads).** TTI-O size on chr22
+NA12878 lean+mapped: 109,129,739 → 105,064,096 bytes.
+
+**Breaking changes (write-side only):**
+- `signal_codec_overrides[{positions,flags,mapping_qualities}]` now
+  raises (`ValueError` Python / `IllegalArgumentException` Java /
+  `NSInvalidArgumentException` Objective-C) at write time.
+- Reader helpers removed: Python `_int_channel_array`, Java
+  `intChannelArray`, Objective-C `-intChannelArrayNamed:error:`.
+
+**Backward compatibility:**
+- v1.6 readers transparently read v1.5 files (the reader path uses
+  `genomic_index/`, unchanged across versions).
+- v1.5 readers transparently read v1.6 files (`genomic_index/` is
+  populated; the missing signal_channels duplicates were never used
+  by any read path).
+
+Cross-language byte-equality preserved: M82 3×3 matrix, M89
+cross-language transport, and M94.Z V4 cross-language matrix
+(Python ↔ Java ↔ ObjC × 4 corpora) all green. Spec at
+`docs/format-spec.md` §10.7 (marked legacy / removed-in-v1.6).
+Plan at `docs/superpowers/plans/2026-05-03-drop-genomic-signal-channel-int-dups.md`.
+
 ### Performance — 2026-05-01 cross-language sweep (post-Phase-10)
 
 Five focused perf wins landed in one session, no wire-format breaks,
