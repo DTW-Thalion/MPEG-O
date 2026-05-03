@@ -157,21 +157,35 @@ def test_v4_pad_count_correct():
     assert list(lens) == lens_13
 
 
-def test_v4_empty_input_rejected():
-    """Empty input is not supported by the V4 native encoder.
+def test_v4_empty_input_cascades_to_v3():
+    """Empty input cascades from V4 to V3 transparently.
 
     The CRAM 3.1 fqzcomp_qual encoder rejects ``n_qualities == 0 ||
-    n_reads == 0`` (see native/src/fqzcomp_qual.c:1394). Empty inputs
-    should fall back to V3/V2/V1 via ``prefer_v4=False``.
+    n_reads == 0`` (see native/src/fqzcomp_qual.c:1394). v1.6 adds a
+    Python-layer fallback at the encode() entry: when ``prefer_v4=True``
+    AND ``n_qualities == 0``, the encoder cascades to V3 silently
+    (rather than raising). Callers don't have to special-case empty
+    runs.
     """
-    with pytest.raises(RuntimeError, match="ttio_m94z_v4_encode failed"):
-        encode(b"", [], [], prefer_v4=True)
-    # Empty input via the V3 fallback works:
-    out = encode(b"", [], [], prefer_v4=False, prefer_v3=True)
-    assert out[4] == 3
+    # prefer_v4=True with empty input → cascades to V3 (no exception).
+    out = encode(b"", [], [], prefer_v4=True)
+    assert out[4] == 3, (
+        f"empty input with prefer_v4=True should cascade to V3, "
+        f"got version byte {out[4]}"
+    )
     qual, lens, _ = decode_with_metadata(out, [])
     assert qual == b""
     assert list(lens) == []
+
+    # Default-dispatch (no opts) with empty input also cascades cleanly.
+    out2 = encode(b"", [], [])
+    assert out2[4] in (1, 2, 3), (
+        f"empty input default-dispatch should land on V1/V2/V3, "
+        f"got {out2[4]}"
+    )
+    qual2, lens2, _ = decode_with_metadata(out2, [])
+    assert qual2 == b""
+    assert list(lens2) == []
 
 
 def test_v4_single_read():
