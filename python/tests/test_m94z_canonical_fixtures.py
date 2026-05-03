@@ -119,7 +119,14 @@ FIXTURE_GENERATORS = [
 @pytest.mark.parametrize("fname,gen", FIXTURE_GENERATORS)
 def test_fixture_round_trips_and_matches_committed_bytes(fname, gen):
     qualities, read_lengths, revcomp_flags = gen()
-    encoded = encode(qualities, read_lengths, revcomp_flags)
+    # The committed M94.Z canonical fixtures were generated under the V3
+    # (adaptive Range Coder) wire format. Post-L2.X Stage 2 the no-override
+    # default is V4 (CRAM 3.1 fqzcomp_qual port) — so fixture generation
+    # must explicitly opt out of V4 to keep the committed bytes stable.
+    # V4 fixtures will be added in a separate task.
+    encoded = encode(
+        qualities, read_lengths, revcomp_flags, prefer_v4=False,
+    )
 
     fpath = FIXTURES_DIR / fname
     if not fpath.exists():
