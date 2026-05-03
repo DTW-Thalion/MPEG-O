@@ -126,8 +126,12 @@
                 <configuration>
                     <!-- ${argLine} expands to JaCoCo's prepare-agent
                          flags (V1, verification workplan) when JaCoCo
-                         is active; expands to empty string otherwise. -->
-                    <argLine>@{argLine} -Djava.library.path=${hdf5.native.path}</argLine>
+                         is active; expands to empty string otherwise.
+                         -Xss16m: M94.Z V4 native encoder (fqzcomp_qual.c)
+                         allocates ~2 MB fqz_model on the stack via
+                         sm_model qual[CTX_SIZE=65536]; the JVM's default
+                         512 KB thread stack overflows on the V4 path. -->
+                    <argLine>@{argLine} -Djava.library.path=${hdf5.native.path} -Xss16m</argLine>
                 </configuration>
             </plugin>
             <plugin>
