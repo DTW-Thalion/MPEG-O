@@ -286,9 +286,19 @@ as a record of what was built; current milestones use TTI-O names.
 > **#11 channel work COMPLETE.** Channels 1+2+3 all shipped (v1.7
 > mate_info v2 → v1.8 REF_DIFF v2 → v1.9 NAME_TOKENIZED v2).
 >
-> **#10 offsets-cumsum** (structural HDF5 framing, ~3.5 MB) and
-> **#13 V5 multi-stream rANS** (3-6× speedup, wire-format break) remain
-> as separate future cycles.
+> **#10 offsets-cumsum SHIPPED v1.10 2026-05-04.** Drops the redundant
+> `offsets` column from `genomic_index/`, `spectrum_index/`, and
+> `chromatogram_index/` — `offsets[i]` is mathematically derivable from
+> `cumsum(lengths[0..i])`, so storing both was pure on-disk redundancy.
+> Readers synthesize via uint64 accumulator (overflow-safe on deep WGS).
+> **chr22 savings: 3.50 MB.** Opt-out flag
+> `opt_keep_offsets_columns` (Python) / `optKeepOffsetsColumns`
+> (Java/ObjC) preserves byte-equivalent backward compat with pre-v1.10
+> readers.
+>
+> **#13 V5 multi-stream rANS** (3-6× speedup for qualities, wire-format
+> break, needs Phase 0 spec-proof per `feedback_phase_0_spec_proof`)
+> remains as a separate future cycle.
 
 ---
 
