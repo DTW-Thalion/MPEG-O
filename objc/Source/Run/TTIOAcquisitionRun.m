@@ -413,18 +413,9 @@
 
 // M24 helper — lays out /chromatograms/ with concatenated time/intensity
 // datasets and a chromatogram_index/ subgroup of parallel metadata.
+// v1.10 #10: chromatogram_index/offsets is omitted on disk; readers
+// compute it from cumsum(lengths).
 - (BOOL)writeChromatogramsToRunGroup:(id<TTIOStorageGroup>)runGroup
-                                error:(NSError **)error
-{
-    return [self writeChromatogramsToRunGroup:runGroup
-                            keepOffsetsColumn:NO error:error];
-}
-
-// v1.10 #10: when keepOffsetsColumn==YES, writes the redundant
-// chromatogram_index/offsets column for backward compat with
-// pre-v1.10 readers.
-- (BOOL)writeChromatogramsToRunGroup:(id<TTIOStorageGroup>)runGroup
-                   keepOffsetsColumn:(BOOL)keepOffsetsColumn
                                 error:(NSError **)error
 {
     NSUInteger nChroms = _chromatograms.count;
@@ -440,7 +431,6 @@
     NSMutableData *timeAll = [NSMutableData dataWithLength:totalPoints * sizeof(double)];
     NSMutableData *intAll  = [NSMutableData dataWithLength:totalPoints * sizeof(double)];
 
-    int64_t  *offsets      = calloc(nChroms, sizeof(int64_t));
     uint32_t *lengths      = calloc(nChroms, sizeof(uint32_t));
     int32_t  *types        = calloc(nChroms, sizeof(int32_t));
     double   *targetMzs    = calloc(nChroms, sizeof(double));
@@ -455,7 +445,6 @@
                c.timeArray.buffer.bytes, n * sizeof(double));
         memcpy((uint8_t *)intAll.mutableBytes + cursor * sizeof(double),
                c.intensityArray.buffer.bytes, n * sizeof(double));
-        offsets[i]      = (int64_t)cursor;
         lengths[i]      = (uint32_t)n;
         types[i]        = (int32_t)c.type;
         targetMzs[i]    = c.targetMz;
@@ -486,10 +475,6 @@
             [chromGroup createGroupNamed:@"chromatogram_index" error:error];
         if (!idx) { ok = NO; break; }
 
-        if (keepOffsetsColumn) {
-            WRITE_DS(idx, @"offsets",  TTIOPrecisionInt64,   nChroms,
-                     [NSData dataWithBytesNoCopy:offsets      length:nChroms*sizeof(int64_t)  freeWhenDone:NO]);
-        }
         WRITE_DS(idx, @"lengths",      TTIOPrecisionUInt32,  nChroms,
                  [NSData dataWithBytesNoCopy:lengths      length:nChroms*sizeof(uint32_t) freeWhenDone:NO]);
         WRITE_DS(idx, @"types",        TTIOPrecisionInt32,   nChroms,
@@ -504,7 +489,7 @@
 
     #undef WRITE_DS
 
-    free(offsets); free(lengths); free(types);
+    free(lengths); free(types);
     free(targetMzs); free(precursorMzs); free(productMzs);
     return ok;
 }

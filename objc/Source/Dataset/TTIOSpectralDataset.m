@@ -2544,8 +2544,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                   flags:run.flagsData];
     id<TTIOStorageGroup> idxG = [rg createGroupNamed:@"genomic_index" error:error];
     if (!idxG) return NO;
-    if (![idx writeToGroup:idxG keepOffsetsColumn:run.optKeepOffsetsColumns
-                     error:error]) return NO;
+    if (![idx writeToGroup:idxG error:error]) return NO;
 
     // signal_channels subgroup.
     id<TTIOStorageGroup> sc = [rg createGroupNamed:@"signal_channels" error:error];
@@ -2801,14 +2800,8 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     if (!idxG) return NO;
     if (![idxG setAttributeValue:@((int64_t)spectrumCount)
                           forName:@"count" error:error]) return NO;
-    // v1.10 #10: offsets is omitted by default — derivable from
-    // cumsum(lengths). Set optKeepOffsetsColumns to YES for
-    // byte-equivalent backward compat with pre-v1.10 readers.
-    if (run.optKeepOffsetsColumns) {
-        if (!writeIndexArrayStorage(idxG, @"offsets",
-                                     TTIOPrecisionInt64, run.offsets,
-                                     compression, error)) return NO;
-    }
+    // v1.10 #10: offsets is omitted on disk; readers derive it from
+    // cumsum(lengths).
     if (!writeIndexArrayStorage(idxG, @"lengths",
                                  TTIOPrecisionUInt32, run.lengths,
                                  compression, error)) return NO;
@@ -3024,9 +3017,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
             performSelector:@selector(initWithGroup:) withObject:idxG];
     if (!idxGAdapter) return NO;
-    if (![idx writeToGroup:idxGAdapter
-         keepOffsetsColumn:run.optKeepOffsetsColumns
-                     error:error]) return NO;
+    if (![idx writeToGroup:idxGAdapter error:error]) return NO;
 
     // signal_channels subgroup.
     TTIOHDF5Group *sc = [rg createGroupNamed:@"signal_channels" error:error];
@@ -3496,11 +3487,8 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         if (!idxG) return NO;
         if (![idxG setIntegerAttribute:@"count"
                                  value:(int64_t)spectrumCount error:error]) return NO;
-        // v1.10 #10: offsets is omitted by default — derivable.
-        if (run.optKeepOffsetsColumns) {
-            if (!writeIndexArrayDS(idxG, @"offsets",
-                                    TTIOPrecisionInt64, run.offsets, error)) return NO;
-        }
+        // v1.10 #10: offsets is omitted on disk; readers derive it
+        // from cumsum(lengths).
         if (!writeIndexArrayDS(idxG, @"lengths",
                                 TTIOPrecisionUInt32, run.lengths, error)) return NO;
         if (!writeIndexArrayDS(idxG, @"retention_times",

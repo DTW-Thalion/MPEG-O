@@ -162,21 +162,11 @@ static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error
 
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error
 {
-    return [self writeToGroup:parent keepOffsetsColumn:NO error:error];
-}
-
-- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent
-   keepOffsetsColumn:(BOOL)keepOffsetsColumn
-                error:(NSError **)error
-{
     id<TTIOStorageGroup> g = [parent createGroupNamed:@"spectrum_index" error:error];
     if (!g) return NO;
     if (![g setAttributeValue:@((int64_t)_count) forName:@"count" error:error]) return NO;
-    // v1.10 #10: offsets is omitted on disk by default; computed
-    // from cumsum(lengths) on read.
-    if (keepOffsetsColumn) {
-        if (!writeArray(g, @"offsets",      TTIOPrecisionInt64,   _offsets,          error)) return NO;
-    }
+    // v1.10 #10: offsets is omitted on disk; readers compute it from
+    // cumsum(lengths).
     if (!writeArray(g, @"lengths",          TTIOPrecisionUInt32,  _lengths,          error)) return NO;
     if (!writeArray(g, @"retention_times",  TTIOPrecisionFloat64, _retentionTimes,   error)) return NO;
     if (!writeArray(g, @"ms_levels",        TTIOPrecisionInt32,   _msLevels,         error)) return NO;

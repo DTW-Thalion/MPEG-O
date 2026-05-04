@@ -94,15 +94,6 @@
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error;
 + (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error;
 
-/** v1.10 #10 (offsets-cumsum): when keepOffsetsColumn==YES, the
- *  redundant ``offsets`` column is written for byte-equivalent
- *  backward compat with pre-v1.10 readers. NO (default, equivalent
- *  to the no-arg writeToGroup:error:) omits the column on disk;
- *  readers compute it from cumsum(lengths). */
-- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent
-   keepOffsetsColumn:(BOOL)keepOffsetsColumn
-                error:(NSError **)error;
-
 /** v0.9 M64.5-objc-java: legacy alias kept for source compatibility. */
 + (instancetype)readFromStorageGroup:(id)parent error:(NSError **)error;
 
