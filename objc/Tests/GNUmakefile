@@ -80,6 +80,7 @@ TTIOTests_OBJC_FILES = \
 	TestM94ZV4Dispatch.m \
 	TestM94ZV4ByteExact.m \
 	TestMateInfoV2.m \
+	TestMateInfoV2Dispatch.m \
 	TTIORansNativeTest.m \
 	TestM95DeltaRansUnit.m \
 	TestM87BamImporter.m \

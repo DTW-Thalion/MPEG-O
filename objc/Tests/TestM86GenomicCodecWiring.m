@@ -2365,26 +2365,31 @@ static TTIOWrittenGenomicRun *m86PhFMakeRun(
         [chroms addObject:@"chr1"];
     }
 
-    return [[TTIOWrittenGenomicRun alloc]
-        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
-                   referenceUri:@"GRCh38.p14"
-                       platform:@"ILLUMINA"
-                     sampleName:@"M86F_MATE"
-                      positions:positions
-               mappingQualities:mapqs
-                          flags:flags
-                      sequences:seq
-                      qualities:qual
-                        offsets:offsets
-                        lengths:lengths
-                         cigars:cigars
-                      readNames:names
-                mateChromosomes:m86PhFMateChroms()
-                  matePositions:m86PhFMatePositions()
-                templateLengths:m86PhFMateTlens()
-                    chromosomes:chroms
-              signalCompression:TTIOCompressionZlib
-            signalCodecOverrides:mateOverrides];
+    TTIOWrittenGenomicRun *run =
+        [[TTIOWrittenGenomicRun alloc]
+         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                    referenceUri:@"GRCh38.p14"
+                        platform:@"ILLUMINA"
+                      sampleName:@"M86F_MATE"
+                       positions:positions
+                mappingQualities:mapqs
+                           flags:flags
+                       sequences:seq
+                       qualities:qual
+                         offsets:offsets
+                         lengths:lengths
+                          cigars:cigars
+                       readNames:names
+                 mateChromosomes:m86PhFMateChroms()
+                   matePositions:m86PhFMatePositions()
+                 templateLengths:m86PhFMateTlens()
+                     chromosomes:chroms
+               signalCompression:TTIOCompressionZlib
+             signalCodecOverrides:mateOverrides];
+    // v1.7 #11: Phase F tests exercise the v1 per-field layout explicitly;
+    // opt out of inline_v2 so the mate_info subgroup path is preserved.
+    run.optDisableInlineMateInfoV2 = YES;
+    return run;
 }
 
 // Verify the on-disk mate_info link is a group (Phase F) and that

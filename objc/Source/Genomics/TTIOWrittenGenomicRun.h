@@ -89,6 +89,16 @@ NS_ASSUME_NONNULL_BEGIN
  *  never reads this path; metadata only. */
 @property (nonatomic, copy, nullable) NSString *externalReferencePath;
 
+/** v1.7 #11: when YES, the writer falls back to the M86 Phase F
+ *  per-field mate_info subgroup layout (or the M82 compound when no
+ *  per-field overrides are set). Default NO: the writer encodes via
+ *  TTIOMateInfoV2 (codec id 13) into
+ *  signal_channels/mate_info/inline_v2.
+ *
+ *  Cross-language equivalent of Python's
+ *  ``WrittenGenomicRun.opt_disable_inline_mate_info_v2``. */
+@property (nonatomic, assign) BOOL optDisableInlineMateInfoV2;
+
 @property (readonly) NSUInteger readCount;
 
 - (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode

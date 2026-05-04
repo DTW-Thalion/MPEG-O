@@ -95,6 +95,9 @@
         _embedReference        = NO;
         _referenceChromSeqs    = nil;
         _externalReferencePath = nil;
+        // v1.7 #11: default NO → writer uses inline_v2 path when
+        // native libttio_rans is linked (TTIOCompressionMateInlineV2).
+        _optDisableInlineMateInfoV2 = NO;
     }
     return self;
 }

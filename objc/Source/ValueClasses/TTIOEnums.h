@@ -54,7 +54,8 @@ typedef NS_ENUM(NSUInteger, TTIOCompression) {
     TTIOCompressionRefDiff = 9,      // v1.2 M93: reference-based sequence diff
     TTIOCompressionReserved10 = 10,   // removed — no legacy .tio files exist
     TTIOCompressionDeltaRansOrder0 = 11,  // v1.2 M95: delta + rANS for integer channels
-    TTIOCompressionFqzcompNx16Z = 12      // v1.2 M94.Z: CRAM-mimic rANS-Nx16 quality codec
+    TTIOCompressionFqzcompNx16Z = 12,     // v1.2 M94.Z: CRAM-mimic rANS-Nx16 quality codec
+    TTIOCompressionMateInlineV2 = 13      // v1.7 #11: CRAM-style inline mate-pair codec
 };
 
 typedef NS_ENUM(NSUInteger, TTIOByteOrder) {
