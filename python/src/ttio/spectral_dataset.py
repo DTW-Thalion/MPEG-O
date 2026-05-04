@@ -1053,18 +1053,28 @@ def _embed_references_for_runs(
     from .enums import Compression as _Compression, Precision as _Precision
     from .providers.hdf5 import _Group as _H5Group
 
+    from .codecs import ref_diff_v2 as _rdv2_meta
+
     needs_embed: dict[str, tuple[bytes, dict[str, bytes]]] = {}
     for run in genomic_runs.values():
         if not run.embed_reference:
             continue
         if run.reference_chrom_seqs is None:
             continue
-        # Only embed if a context-aware codec is in use on this run.
-        if not any(
+        # Embed if a context-aware codec override is set on this run,
+        # OR if the v1.8 REF_DIFF_V2 default path will be used (when the
+        # native lib is available and opt_disable_ref_diff_v2 is not set).
+        _has_context_aware_override = any(
             is_context_aware(_Compression(c))
             for c in run.signal_codec_overrides.values()
             if _is_valid_compression(c)
-        ):
+        )
+        _uses_ref_diff_v2_default = (
+            not getattr(run, "opt_disable_ref_diff_v2", False)
+            and _rdv2_meta.HAVE_NATIVE_LIB
+            and not any(c == "*" or c == "" for c in run.cigars)
+        )
+        if not (_has_context_aware_override or _uses_ref_diff_v2_default):
             continue
         md5 = _reference_md5_for_run(run)
         if run.reference_uri in needs_embed:
@@ -1138,27 +1148,24 @@ def _is_valid_compression(value: object) -> bool:
 def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
     """Write the ``sequences`` channel through the REF_DIFF codec.
 
-    REF_DIFF is **context-aware** and needs ``positions``, ``cigars``,
-    and the reference chromosome sequence. The writer:
+    v1.8+ default: when libttio_rans is loadable AND the run isn't
+    opting out AND the v1 REF_DIFF eligibility checks pass (single-
+    chromosome, all reads mapped, reference present), write
+    signal_channels/sequences as a GROUP containing a refdiff_v2
+    child dataset (@compression = 14).
 
-      1. Splits ``run.sequences`` into per-read slices via
-         ``run.offsets`` / ``run.lengths``.
-      2. Computes the reference MD5 the same way :func:`_embed_references_for_runs`
-         does (concat sorted chromosomes → md5).
-      3. Calls :func:`ttio.codecs.ref_diff.encode` and stores the
-         result as a flat uint8 dataset with ``@compression = 9``.
+    Opt-out / fallback paths:
+    - ``opt_disable_ref_diff_v2 = True``: write the existing v1 REF_DIFF
+      flat dataset (@compression = 9) or BASE_PACK fallback (@compression
+      = 6). v1 layout is also used when the native lib is unavailable or
+      eligibility checks fail (unmapped reads / no reference).
+    - Q5b = C: missing reference or unmapped reads → BASE_PACK silently.
 
-    **Single-chromosome limitation (v1.2 first pass):** This helper
-    requires that all reads in the run are aligned to a single
-    chromosome. Multi-chromosome runs are an M93.X follow-up; for
-    now they raise :class:`ValueError`.
-
-    **Fallback (Q5b = C):** When ``run.reference_chrom_seqs`` is None
-    (or doesn't cover the run's chromosome), falls back silently to
-    BASE_PACK and stamps ``@compression = 6``. The per-channel
-    ``@compression`` attribute is the source of truth — no warning,
-    no exception.
+    **Single-chromosome limitation (v1.2 first pass):** both v1 and v2
+    paths require all reads aligned to a single chromosome. Multi-
+    chromosome runs raise :class:`ValueError`.
     """
+    from .codecs import ref_diff_v2 as _rdv2
     from .codecs.ref_diff import encode as _ref_diff_encode
     from .codecs.base_pack import encode as _base_pack_encode
     from .enums import Compression as _Compression, Precision as _Precision
@@ -1184,12 +1191,60 @@ def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
 
     # M93 v1.2: REF_DIFF can't encode unmapped reads (cigar="*"). When
     # any read in the run is unmapped, fall back to BASE_PACK on the
-    # whole channel — same Q5b=C semantics as missing-reference. The
-    # M93.X follow-up will introduce a sequences_unmapped sub-channel
-    # to carry the unmapped-read bytes through BASE_PACK while mapped
-    # reads use REF_DIFF.
+    # whole channel — same Q5b=C semantics as missing-reference.
     has_unmapped = any(c == "*" or c == "" for c in run.cigars)
 
+    # v1.8 dispatch: prefer the v2 path when eligible.
+    use_v2 = (
+        not getattr(run, "opt_disable_ref_diff_v2", False)
+        and _rdv2.HAVE_NATIVE_LIB
+        and chrom_seq is not None
+        and not has_unmapped
+    )
+
+    if use_v2:
+        # v1.8 path: encode via ref_diff_v2 and write as a GROUP with
+        # a refdiff_v2 child dataset (@compression = 14).
+        positions = np.asarray(run.positions, dtype=np.int64)
+        n = len(run.cigars)
+        # Build n_reads+1 offsets array from run.offsets (n entries)
+        # and run.lengths (n entries): append the total base count.
+        offsets_arr = np.asarray(run.offsets, dtype=np.uint64)
+        if offsets_arr.shape[0] == n:
+            total_len = int(offsets_arr[-1]) + int(run.lengths[-1]) if n > 0 else 0
+            offsets_arr = np.append(offsets_arr, np.uint64(total_len))
+        elif offsets_arr.shape[0] != n + 1:
+            raise ValueError(
+                f"run.offsets must have n_reads or n_reads+1 entries; "
+                f"got {offsets_arr.shape[0]} for n={n}"
+            )
+
+        md5 = _reference_md5_for_run(run)
+        sequences_arr = np.asarray(run.sequences, dtype=np.uint8)
+        encoded = _rdv2.encode(
+            sequences_arr,
+            offsets_arr,
+            positions,
+            list(run.cigars),
+            chrom_seq,
+            md5,
+            run.reference_uri,
+            reads_per_slice=10_000,
+        )
+        arr = np.frombuffer(encoded, dtype=np.uint8)
+        seq_group = sc.create_group("sequences")
+        ds = seq_group.create_dataset(
+            "refdiff_v2",
+            _Precision.UINT8,
+            length=int(arr.shape[0]),
+            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=_Compression.NONE,
+        )
+        ds.write(arr)
+        io.write_int_attr(ds, "compression", int(_Compression.REF_DIFF_V2), dtype="<u1")
+        return
+
+    # v1 path (unchanged): flat dataset with REF_DIFF or BASE_PACK.
     if chrom_seq is None or has_unmapped:
         # Q5b = C: silent fallback to BASE_PACK on this channel.
         encoded = _base_pack_encode(raw_bytes)
