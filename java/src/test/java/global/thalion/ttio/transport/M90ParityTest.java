@@ -312,7 +312,12 @@ class M90ParityTest {
             assertEquals(4, gr.readCount());
             String[] expectedCigars = {"8M", "4M2I2M", "5M3D", "2S6M"};
             String[] expectedNames = {"read_aaaa", "read_bbbb", "read_cccc", "read_dddd"};
-            String[] expectedMateChroms = {"chr1", "chr1", "=", ""};
+            // v1.7 mate_info v2 normalizes mate_chromosome on encode:
+            //   "=" → own chrom id (resolves to RNAME on decode)
+            //   ""  → id -1 → decodes as "*" (SAM no-mate sentinel)
+            // chroms = {"chr1", "chr1", "chr2", "chr2"}, so input
+            // mateChroms = {"chr1", "chr1", "=", ""} normalises to:
+            String[] expectedMateChroms = {"chr1", "chr1", "chr2", "*"};
             long[] expectedMateP = {350L, 200L, 0L, -1L};
             int[] expectedTlens = {250, 0, -300, 0};
             for (int i = 0; i < 4; i++) {
