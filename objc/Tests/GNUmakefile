@@ -70,13 +70,8 @@ TTIOTests_OBJC_FILES = \
 	TestM83Rans.m \
 	TestM84BasePack.m \
 	TestM85Quality.m \
-	TestM85bNameTokenizer.m \
 	TestM86GenomicCodecWiring.m \
-	TestM93RefDiffUnit.m \
-	TestM93RefDiffPipeline.m \
-	TestM94ZFqzcompUnit.m \
 	TestM94ZFqzcompPerf.m \
-	TestM94ZV2Dispatch.m \
 	TestM94ZV4Dispatch.m \
 	TestM94ZV4ByteExact.m \
 	TestMateInfoV2.m \

@@ -144,67 +144,10 @@ static void testV4DefaultBareEncode(void)
     }
 }
 
-static void testV2ExplicitStillWorks(void)
-{
-    if (!nativeAvailable()) { skipIfPureObjC(__func__); return; }
-
-    // preferV4=NO + preferNative=YES selects the V2 native path.
-    NSData *q = synthQualities();
-    NSArray *rls = synthLengths();
-    NSArray *rcs = synthRevcomp();
-    NSError *err = nil;
-
-    NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
-                                            readLengths:rls
-                                           revcompFlags:rcs
-                                                options:@{@"preferV4": @NO,
-                                                          @"preferNative": @YES}
-                                                  error:&err];
-    PASS(enc != nil, "preferV4=NO + preferNative=YES encode succeeds");
-    if (!enc) return;
-    PASS(((const uint8_t *)enc.bytes)[4] == 2,
-         "preferV4=NO + preferNative=YES yields V2");
-
-    NSDictionary *dec = [TTIOFqzcompNx16Z decodeData:enc
-                                        revcompFlags:rcs
-                                               error:&err];
-    PASS(dec != nil, "V2 decode (after explicit selection) succeeds");
-    if (dec) {
-        PASS([dec[@"qualities"] isEqualToData:q],
-             "V2 explicit round-trip matches");
-    }
-}
-
-static void testV1ExplicitStillWorks(void)
-{
-    if (!nativeAvailable()) { skipIfPureObjC(__func__); return; }
-
-    // preferV4=NO + preferNative=NO selects pure-ObjC V1.
-    NSData *q = synthQualities();
-    NSArray *rls = synthLengths();
-    NSArray *rcs = synthRevcomp();
-    NSError *err = nil;
-
-    NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
-                                            readLengths:rls
-                                           revcompFlags:rcs
-                                                options:@{@"preferV4": @NO,
-                                                          @"preferNative": @NO}
-                                                  error:&err];
-    PASS(enc != nil, "preferV4=NO + preferNative=NO encode succeeds");
-    if (!enc) return;
-    PASS(((const uint8_t *)enc.bytes)[4] == 1,
-         "preferV4=NO + preferNative=NO yields V1");
-
-    NSDictionary *dec = [TTIOFqzcompNx16Z decodeData:enc
-                                        revcompFlags:rcs
-                                               error:&err];
-    PASS(dec != nil, "V1 explicit decode succeeds");
-    if (dec) {
-        PASS([dec[@"qualities"] isEqualToData:q],
-             "V1 explicit round-trip matches");
-    }
-}
+// (REMOVED v1.0 reset Phase 2c): testV2ExplicitStillWorks +
+// testV1ExplicitStillWorks asserted the encoder honoured preferV4=NO
+// requests. Phase 2c always emits V4 (preferV4=NO is ignored), so
+// these expectations no longer hold.
 
 static void testV4PadCountThirteenQualities(void)
 {
@@ -310,34 +253,9 @@ static void testV4MixedRevcompRoundtrip(void)
          "V4 mixed-revcomp recovers read lengths");
 }
 
-static void testV4SizeSanityVsV2(void)
-{
-    if (!nativeAvailable()) { skipIfPureObjC(__func__); return; }
-
-    uint8_t buf[1000];
-    for (int i = 0; i < 1000; i++) buf[i] = (uint8_t)(33 + 20 + (i * 7) % 21);
-    NSData *q = [NSData dataWithBytes:buf length:1000];
-    NSMutableArray *lens = [NSMutableArray arrayWithCapacity:10];
-    NSMutableArray *rcs  = [NSMutableArray arrayWithCapacity:10];
-    for (int i = 0; i < 10; i++) { [lens addObject:@100]; [rcs addObject:@0]; }
-
-    NSError *err = nil;
-    NSData *v4 = [TTIOFqzcompNx16Z encodeWithQualities:q
-                                           readLengths:lens
-                                          revcompFlags:rcs
-                                               options:@{@"preferV4": @YES}
-                                                 error:&err];
-    NSData *v2 = [TTIOFqzcompNx16Z encodeWithQualities:q
-                                           readLengths:lens
-                                          revcompFlags:rcs
-                                               options:@{@"preferV4": @NO,
-                                                         @"preferNative": @YES}
-                                                 error:&err];
-    PASS(v4 != nil && v2 != nil, "V4 + V2 both encode for size comparison");
-    if (!v4 || !v2) return;
-    PASS((NSInteger)v4.length <= (NSInteger)v2.length + 200,
-         "V4 not pathologically larger than V2 (≤ V2 + 200 bytes)");
-}
+// (REMOVED v1.0 reset Phase 2c): testV4SizeSanityVsV2 compared V4
+// footprint against the V2 native encoder. V2 encode was removed in
+// Phase 2c — every encode emits V4.
 
 static void testV4MagicAndMinHeaderSize(void)
 {
@@ -391,12 +309,9 @@ void testM94ZV4Dispatch(void)
     testV4SmokeRoundtrip();
     testV4DefaultWhenNativeLinked();
     testV4DefaultBareEncode();
-    testV2ExplicitStillWorks();
-    testV1ExplicitStillWorks();
     testV4PadCountThirteenQualities();
     testV4SingleRead();
     testV4MixedRevcompRoundtrip();
-    testV4SizeSanityVsV2();
     testV4MagicAndMinHeaderSize();
     testV4DecodeRejectsTamperedVersionByte();
 }

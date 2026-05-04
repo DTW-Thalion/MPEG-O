@@ -227,35 +227,11 @@ static void testNameTokV2DispatchDefaultWritesV2(void)
     ntv2dRm(path);
 }
 
-// ── Test 2: explicit signal_codec_overrides honoured ─────────────────────────
-
-static void testNameTokV2DispatchOverrideRespected(void)
-{
-    NSString *path = ntv2dTmpPath(@"override_v1");
-    ntv2dRm(path);
-
-    // Explicit override → v1 layout regardless of default.
-    TTIOWrittenGenomicRun *run = ntv2dMakeRun(
-        @{ @"read_names": @(TTIOCompressionNameTokenized) });
-    NSError *err = nil;
-    PASS(ntv2dWrite(path, run, &err),
-         "NameTokV2Dispatch #2: write succeeds (v1 explicit override) [err=%@]",
-         err.localizedDescription ?: @"<nil>");
-
-    int ot = ntv2dReadNamesObjectType(path.fileSystemRepresentation);
-    PASS(ot == (int)H5O_TYPE_DATASET,
-         "NameTokV2Dispatch #2: read_names is a flat DATASET");
-
-    PASS(ntv2dReadNamesIsUInt8(path.fileSystemRepresentation),
-         "NameTokV2Dispatch #2: explicit v1 override produces UInt8 dataset");
-
-    uint8_t cid = ntv2dReadNamesCompressionAttr(path.fileSystemRepresentation);
-    PASS(cid == (uint8_t)TTIOCompressionNameTokenized,
-         "NameTokV2Dispatch #2: read_names @compression == 8 under explicit "
-         "v1 override (got %u)", (unsigned)cid);
-
-    ntv2dRm(path);
-}
+// ── Test 2 (REMOVED v1.0 reset Phase 2c): explicit v1 NAME_TOKENIZED
+// override on read_names was the v1 codec dispatch path. Phase 2c
+// removes the v1 codec entirely — the writer now rejects the override
+// with NSInvalidArgumentException. The default v2 path is exercised
+// by Test 1 + Test 3 below.
 
 // ── Test 3: v2 default round-trip ─────────────────────────────────────────────
 
@@ -309,6 +285,5 @@ void testNameTokenizedV2Dispatch(void)
         SKIP("libttio_rans not linked — v2 dispatch tests require native lib");
     }
     testNameTokV2DispatchDefaultWritesV2();
-    testNameTokV2DispatchOverrideRespected();
     testNameTokV2DispatchRoundTripV2();
 }

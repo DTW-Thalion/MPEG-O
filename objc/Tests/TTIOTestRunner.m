@@ -73,14 +73,9 @@ extern void testM82GenomicRun(void);
 extern void testM83Rans(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
-extern void testM85bNameTokenizer(void);
 extern void testM86GenomicCodecWiring(void);
-extern void testM93RefDiffUnit(void);
-extern void testM93RefDiffPipeline(void);
-extern void testM94ZFqzcompUnit(void);
 extern void testM94ZFqzcompPerf(void);
 extern void testTtioRansNative(void);
-extern void testM94ZV2Dispatch(void);
 extern void testM94ZV4Dispatch(void);
 extern void testM94ZV4ByteExact(void);
 extern void testMateInfoV2(void);
@@ -401,25 +396,13 @@ int main(int argc, const char *argv[])
             testM85Quality();
         END_SET("M85: QUALITY_BINNED codec")
 
-        START_SET("M85B: NAME_TOKENIZED codec")
-            testM85bNameTokenizer();
-        END_SET("M85B: NAME_TOKENIZED codec")
+        // v1.0 reset Phase 2c: M85B NAME_TOKENIZED v1, M93 REF_DIFF v1
+        // unit + pipeline, M94.Z V1 unit, and M94.Z V2 dispatch test
+        // suites removed alongside the v1 codec impls.
 
         START_SET("M86: codec wiring")
             testM86GenomicCodecWiring();
         END_SET("M86: codec wiring")
-
-        START_SET("M93: REF_DIFF codec unit")
-            testM93RefDiffUnit();
-        END_SET("M93: REF_DIFF codec unit")
-
-        START_SET("M93: REF_DIFF pipeline")
-            testM93RefDiffPipeline();
-        END_SET("M93: REF_DIFF pipeline")
-
-        START_SET("M94.Z: CRAM-mimic FQZCOMP_NX16 codec unit")
-            testM94ZFqzcompUnit();
-        END_SET("M94.Z: CRAM-mimic FQZCOMP_NX16 codec unit")
 
         START_SET("M94.Z: CRAM-mimic FQZCOMP_NX16 throughput")
             testM94ZFqzcompPerf();
@@ -428,10 +411,6 @@ int main(int argc, const char *argv[])
         START_SET("Task 17: libttio_rans native backend introspection")
             testTtioRansNative();
         END_SET("Task 17: libttio_rans native backend introspection")
-
-        START_SET("M94.Z V2 native dispatch (Task 23)")
-            testM94ZV2Dispatch();
-        END_SET("M94.Z V2 native dispatch (Task 23)")
 
         START_SET("M94.Z V4 CRAM-mimic dispatch (Stage 3 Task 8)")
             testM94ZV4Dispatch();

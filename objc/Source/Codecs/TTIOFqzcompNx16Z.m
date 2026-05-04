@@ -62,8 +62,11 @@ enum {
     kZ_VERSION_V4_FQZCOMP     = 4,  // V4 CRAM 3.1 fqzcomp port (libttio_rans)
     // V4 SAM-style flag byte (bit 4 = SAM_REVERSE; mirrors Python _SAM_REVERSE).
     kZ_V4_SAM_REVERSE         = 0x10,
-    // V4 outer header minimum length (magic+ver+flags+nQ+nReads+rltLen+bodyLen).
-    kZ_V4_HEADER_MIN_LEN      = 4 + 1 + 1 + 8 + 8 + 4 + 4,  // 30
+    // V4 outer header minimum length: magic(4)+ver(1)+flags(1)+nQ(8)+
+    // nReads(8)+rltLen(4) = 26. The Phase 2c empty-run convention emits
+    // exactly 26 bytes (no body). Non-empty streams add the rlt body
+    // and the 4-byte cram_body_len field + cram body.
+    kZ_V4_HEADER_MIN_LEN      = 4 + 1 + 1 + 8 + 8 + 4,  // 26
     kZ_CONTEXT_PARAMS_SIZE    = 8,
     kZ_HEADER_FIXED_PREFIX    = 4 + 1 + 1 + 8 + 4 + 4 + 8 + 4,  // 34
     kZ_STATE_INIT_SIZE        = 16,
@@ -1734,105 +1737,48 @@ v2_cleanup:
         return nil;
     }
 
-    int32_t qbits = kZ_DEFAULT_QBITS;
-    int32_t pbits = kZ_DEFAULT_PBITS;
-    int32_t dbits = kZ_DEFAULT_DBITS;
-    int32_t sloc  = kZ_DEFAULT_SLOC;
-
-    // ── V4 dispatch resolution (Stage 3, Task 7) ──────────────────
-    // Priority ladder mirrors python encode() and java
-    // FqzcompNx16Z.encode(EncodeOptions): per-call options[preferV4]
-    // → env TTIO_M94Z_VERSION → default V4 (libttio_rans always linked
-    // in this build).
+    // v1.0 reset Phase 2c: V1/V2/V3 encode paths removed. The encoder
+    // always emits V4 (CRAM 3.1 fqzcomp_qual). Any caller-supplied
+    // preferV4=NO / preferNative=YES / TTIO_M94Z_VERSION env var that
+    // would have selected V1 or V2 is now ignored. qbits/pbits/dbits/
+    // sloc context-table parameters were only used by V1 encode and
+    // are no longer consulted.
+#if TTIO_HAS_NATIVE_RANS
+    free(rls); free(rcs);
     {
-        BOOL preferV4 = NO;
-        BOOL preferV4Set = NO;
-        if (options != nil) {
-            id v = options[@"preferV4"];
-            if ([v isKindOfClass:[NSNumber class]]) {
-                preferV4 = [(NSNumber *)v boolValue];
-                preferV4Set = YES;
-            }
+        NSInteger strategy = -1;
+        id sv = options ? options[@"v4StrategyHint"] : nil;
+        if ([sv isKindOfClass:[NSNumber class]]) {
+            strategy = [(NSNumber *)sv integerValue];
         }
-        if (!preferV4Set) {
-            const char *envv = getenv("TTIO_M94Z_VERSION");
-            if (envv && envv[0]) {
-                if (strcmp(envv, "4") == 0) {
-                    preferV4 = YES;
-                } else if (strcmp(envv, "1") == 0
-                           || strcmp(envv, "2") == 0
-                           || strcmp(envv, "3") == 0) {
-                    preferV4 = NO;
-                } else {
-                    preferV4 = (TTIO_HAS_NATIVE_RANS != 0);
-                }
-            } else {
-                /* Unset → V4 default when libttio_rans is linked. */
-                preferV4 = (TTIO_HAS_NATIVE_RANS != 0);
-            }
-        }
-#if TTIO_HAS_NATIVE_RANS
-        if (preferV4) {
-            free(rls); free(rcs);
-            NSInteger strategy = -1;
-            id sv = options ? options[@"v4StrategyHint"] : nil;
-            if ([sv isKindOfClass:[NSNumber class]]) {
-                strategy = [(NSNumber *)sv integerValue];
-            }
-            uint8_t padCount =
-                (uint8_t)((-(NSInteger)qualities.length) & 0x3);
-            return [self encodeV4WithQualities:qualities
-                                   readLengths:readLengths
-                                  revcompFlags:revcompFlags
-                                  strategyHint:strategy
-                                      padCount:padCount
-                                         error:error];
-        }
-#else
-        (void)preferV4;
-#endif
-    }
-
-    // ── V2 native dispatch decision ────────────────────────────────
-    BOOL preferNative = NO;
-    BOOL preferNativeSet = NO;
-    if (options != nil) {
-        id v = options[@"preferNative"];
-        if ([v isKindOfClass:[NSNumber class]]) {
-            preferNative = [(NSNumber *)v boolValue];
-            preferNativeSet = YES;
-        }
-    }
-    if (!preferNativeSet) {
-        const char *envc = getenv("TTIO_M94Z_USE_NATIVE");
-        if (envc && envc[0]) {
-            // Lower-case compare against "1", "true", "yes", "on".
-            // Use NSString for trimming + case-insensitive compare.
-            NSString *envStr = [[NSString stringWithUTF8String:envc]
-                stringByTrimmingCharactersInSet:
-                  [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-            NSString *lower = [envStr lowercaseString];
-            if ([lower isEqualToString:@"1"] || [lower isEqualToString:@"true"]
-                || [lower isEqualToString:@"yes"] || [lower isEqualToString:@"on"]) {
-                preferNative = YES;
-            }
-        }
-    }
-#if TTIO_HAS_NATIVE_RANS
-    if (preferNative) {
-        NSData *v2 = z_encode_v2_native(
-            (const uint8_t *)qualities.bytes, (int32_t)qualities.length,
-            readLengths,
-            rls, (int32_t)nReads, rcs,
-            qbits, pbits, dbits, sloc,
-            error);
-        free(rls); free(rcs);
-        return v2;  // nil on failure (error set by helper)
+        uint8_t padCount =
+            (uint8_t)((-(NSInteger)qualities.length) & 0x3);
+        return [self encodeV4WithQualities:qualities
+                               readLengths:readLengths
+                              revcompFlags:revcompFlags
+                              strategyHint:strategy
+                                  padCount:padCount
+                                     error:error];
     }
 #else
-    (void)preferNative;
+    free(rls); free(rcs);
+    z_set_error(error, 99,
+        @"M94.Z encode requires libttio_rans (V4 is the only "
+        @"supported encoder under v1.0); native library is not "
+        @"linked.");
+    return nil;
 #endif
+}
 
+#if 0  /* Phase 2c-removed: V1 + V2 encode bodies (dead code). */
++ (nullable NSData *)_legacy_v1v2_encode:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                  options:(NSDictionary *)options
+                                    error:(NSError * _Nullable *)error
+{
+    int32_t *rls = NULL; int8_t *rcs = NULL; NSUInteger nReads = 0;
+    int32_t qbits = 0, pbits = 0, dbits = 0, sloc = 0;
     uint8_t **streams = NULL;
     uint32_t stream_lens[4] = { 0, 0, 0, 0 };
     uint32_t state_init[4]  = { 0, 0, 0, 0 };
@@ -1938,6 +1884,7 @@ v2_cleanup:
     free(streams);
     return out;
 }
+#endif  /* Phase 2c-removed V1 + V2 encode paths. */
 
 + (nullable NSDictionary *)decodeData:(NSData *)data
                                  error:(NSError * _Nullable *)error
@@ -1967,18 +1914,30 @@ v2_cleanup:
         return nil;
     }
     uint8_t version = p[4];
-    // ── V4 dispatch (Stage 3, Task 7: CRAM 3.1 fqzcomp via libttio_rans) ──
+    // v1.0 reset Phase 2c: M94.Z V1/V2/V3 reader paths removed.
+    // Only V4 (CRAM 3.1 fqzcomp_qual) is decoded; the older flavors
+    // are rejected with a clear error so legacy files surface a
+    // re-encode hint.
     if (version == kZ_VERSION_V4_FQZCOMP) {
         return [self decodeV4Data:data revcompFlags:revcompFlags error:error];
     }
-    // ── V2 dispatch (Task 23, option E: pure-ObjC decoder) ──
-    if (version == kZ_VERSION_V2_NATIVE) {
-        return z_decode_v2(data, revcompFlags, error);
-    }
-    if (version != kZ_VERSION) {
-        z_set_error(error, 203, @"M94Z: unsupported version 0x%02x", version);
+    if (version == 1 || version == kZ_VERSION_V2_NATIVE || version == 3) {
+        z_set_error(error, 203,
+            @"FQZCOMP_NX16_Z V%u is no longer supported in v1.0; "
+            @"only V4 (CRAM 3.1 fqzcomp_qual) is decoded. "
+            @"Re-encode with v1.0+.", (unsigned)version);
         return nil;
     }
+    z_set_error(error, 203, @"M94Z: unsupported version 0x%02x", version);
+    return nil;
+}
+
+#if 0  /* v1.0 reset Phase 2c: V1 pure-ObjC decoder dead code. */
++ (nullable NSDictionary *)_legacy_v1_decode:(NSData *)data
+                                revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                       error:(NSError * _Nullable *)error
+{
+    const uint8_t *p = (const uint8_t *)data.bytes;
     // V1: re-validate full minimum length.
     if (data.length < kZ_HEADER_FIXED_PREFIX + kZ_STATE_INIT_SIZE + kZ_TRAILER_SIZE) {
         z_set_error(error, 201, @"M94Z: encoded too short (%lu bytes)",
@@ -2126,6 +2085,7 @@ v2_cleanup:
         @"readLengths": readLengths,
     };
 }
+#endif  /* Phase 2c-removed V1 pure-ObjC decoder. */
 
 // ── V4 native dispatch (Stage 3, Task 7) ─────────────────────────────
 //
@@ -2161,6 +2121,25 @@ v2_cleanup:
     }
     NSUInteger n_qual  = qualities.length;
     NSUInteger n_reads = readLengths.count;
+
+    /* Empty-run short-circuit (Phase 2c reconciliation): the native V4
+     * fqzcomp_qual core rejects zero-length inputs. Synthesise a
+     * minimal 26-byte V4 outer header so readers can still dispatch by
+     * version byte. Layout per m94z_v4_wire.h: magic(4) + version(1) +
+     * flags(1) + num_qualities(8) + num_reads(8) + rlt_compressed_len(4)
+     * = 26 bytes total. Cross-language convention shared with Python
+     * and Java. */
+    if (n_qual == 0) {
+        uint8_t hdr[26];
+        memset(hdr, 0, sizeof(hdr));
+        hdr[0] = 'M'; hdr[1] = '9'; hdr[2] = '4'; hdr[3] = 'Z';
+        hdr[4] = 4;                    /* VERSION_V4_FQZCOMP */
+        hdr[5] = (uint8_t)((padCount & 0x3) << 4);
+        /* num_qualities (LE uint64) at offset 6  — already zero */
+        /* num_reads     (LE uint64) at offset 14 — already zero */
+        /* rlt_compressed_len (LE uint32) at offset 22 — already zero */
+        return [NSData dataWithBytes:hdr length:sizeof(hdr)];
+    }
 
     /* Marshal NSArray<NSNumber*> → C buffers. */
     uint32_t *lens = NULL;
@@ -2266,6 +2245,18 @@ v2_cleanup:
             @"M94.Z V4: implausible num_reads %llu",
             (unsigned long long)numReads);
         return nil;
+    }
+
+    /* Empty-run short-circuit (Phase 2c reconciliation): the 26-byte
+     * minimal V4 header carries no body. Return empty result without
+     * dispatching to the native fqzcomp_qual core (which rejects
+     * zero-length inputs). Cross-language convention shared with
+     * Python and Java. */
+    if (numQualities == 0 && numReads == 0) {
+        return @{
+            @"qualities":   [NSData data],
+            @"readLengths": @[],
+        };
     }
 
     NSArray<NSNumber *> *effectiveFlags = revcompFlags;
