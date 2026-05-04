@@ -25,6 +25,7 @@ add_library(ttio_rans SHARED
     src/fqzcomp_qual.c
     src/m94z_v4_wire.c
     src/mate_info_v2.c
+    src/ref_diff_v2.c
     src/dispatch.c
     src/rans_o0.c
     src/threadpool.c
@@ -208,6 +209,12 @@ add_executable(test_mate_info_v2_stress tests/test_mate_info_v2_stress.c)
 target_link_libraries(test_mate_info_v2_stress PRIVATE ttio_rans)
 target_include_directories(test_mate_info_v2_stress PRIVATE src)
 add_test(NAME mate_info_v2_stress COMMAND test_mate_info_v2_stress)
+
+# #11 ref_diff v2 task 2: ACGT 2-bit + cigar count helpers + tests.
+add_executable(test_ref_diff_v2_helpers tests/test_ref_diff_v2_helpers.c)
+target_link_libraries(test_ref_diff_v2_helpers PRIVATE ttio_rans)
+target_include_directories(test_ref_diff_v2_helpers PRIVATE src)
+add_test(NAME ref_diff_v2_helpers COMMAND test_ref_diff_v2_helpers)
 
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
