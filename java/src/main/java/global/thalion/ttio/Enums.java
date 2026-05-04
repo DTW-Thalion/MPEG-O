@@ -123,7 +123,20 @@ public final class Enums {
          * {@code Compression.MATE_INLINE_V2} and ObjC
          * {@code TTIOCompressionMateInlineV2}.
          */
-        MATE_INLINE_V2
+        MATE_INLINE_V2,
+        /**
+         * Bit-packed REF_DIFF v2 codec (sequences v2, codec id 14).
+         * v1.8 default ON for the
+         * {@code signal_channels/sequences/refdiff_v2} blob when the
+         * native JNI library is available and the run is eligible
+         * (single-chromosome, all reads mapped, reference present). Opt
+         * out via
+         * {@link global.thalion.ttio.genomics.WrittenGenomicRun#optDisableRefDiffV2}.
+         * Cross-language ordinal {@code = 14} matches Python
+         * {@code Compression.REF_DIFF_V2} and ObjC
+         * {@code TTIOCompressionRefDiffV2}.
+         */
+        REF_DIFF_V2
     }
 
     /** Ion polarity for mass spectrometry. */

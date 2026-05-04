@@ -21,6 +21,72 @@ public final class RefDiffV2 {
     /** @return {@code true} iff the native JNI library loaded successfully. */
     public static boolean isAvailable() { return TtioRansNative.isAvailable(); }
 
+    /** RDF2 outer-blob magic (4 bytes). */
+    private static final byte[] RDF2_MAGIC = {'R', 'D', 'F', '2'};
+
+    /** Byte offset of the 16-byte reference MD5 in the outer blob. */
+    private static final int MD5_OFFSET = 20;
+    /** Byte offset of the 2-byte URI-length field in the outer blob. */
+    private static final int URI_LEN_OFFSET = 36;
+    /** Byte offset of the URI bytes in the outer blob (after uri_len). */
+    private static final int URI_OFFSET = 38;
+
+    /**
+     * Minimal header extracted from a {@code refdiff_v2} blob.
+     *
+     * @param referenceMd5 16-byte MD5 of the reference chromosome.
+     * @param referenceUri UTF-8 reference URI (the BAM @SQ M5 key).
+     */
+    public record BlobHeader(byte[] referenceMd5, String referenceUri) { }
+
+    /**
+     * Parse {@code referenceMd5} and {@code referenceUri} from the
+     * outer header of a {@code refdiff_v2} blob.
+     *
+     * <p>The outer header layout mirrors REF_DIFF v1 but uses magic
+     * {@code "RDF2"}:
+     * <pre>
+     *   [0:4]        magic "RDF2"
+     *   [4]          version (uint8)
+     *   [5:8]        reserved
+     *   [8:12]       num_slices (uint32 LE)
+     *   [12:20]      total_reads (uint64 LE)
+     *   [20:36]      reference_md5 (16 raw bytes)
+     *   [36:38]      uri_len (uint16 LE)
+     *   [38:38+len]  reference_uri (UTF-8)
+     * </pre>
+     *
+     * @param blob encoded blob produced by {@link #encode}
+     * @return parsed {@link BlobHeader}
+     * @throws IllegalArgumentException on bad magic or truncated header
+     */
+    public static BlobHeader parseBlobHeader(byte[] blob) {
+        if (blob == null || blob.length < URI_OFFSET) {
+            throw new IllegalArgumentException(
+                "refdiff_v2 blob too short to contain a valid header");
+        }
+        for (int i = 0; i < 4; i++) {
+            if (blob[i] != RDF2_MAGIC[i]) {
+                throw new IllegalArgumentException(
+                    "refdiff_v2 magic mismatch: expected 'RDF2', got "
+                    + (char) blob[0] + (char) blob[1]
+                    + (char) blob[2] + (char) blob[3]);
+            }
+        }
+        byte[] md5 = new byte[16];
+        System.arraycopy(blob, MD5_OFFSET, md5, 0, 16);
+        int uriLen = java.nio.ByteBuffer.wrap(blob, URI_LEN_OFFSET, 2)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            .getShort() & 0xFFFF;
+        if (blob.length < URI_OFFSET + uriLen) {
+            throw new IllegalArgumentException(
+                "refdiff_v2 blob truncated in reference_uri");
+        }
+        String uri = new String(blob, URI_OFFSET, uriLen,
+            java.nio.charset.StandardCharsets.UTF_8);
+        return new BlobHeader(md5, uri);
+    }
+
     /**
      * Encode a slice of reads to the refdiff_v2 blob.
      *
