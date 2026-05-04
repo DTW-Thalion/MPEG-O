@@ -1333,7 +1333,12 @@ Decoding is the exact inverse: cumsum the int64 array, cast to
 double, divide by the scale. The TTIO ObjC and Python encoders agree
 byte-for-byte on any input (see `test_numpress_scale_matches_objc_formula`).
 
-## 10.10 REF_DIFF codec — reference storage and pipeline integration (M93)
+## 10.10 REF_DIFF codec — reference storage and pipeline integration (M93 — v1.8 OPT-OUT only)
+
+> **v1.8 status:** This v1 layout is no longer the default. v1.8 ships
+> the REF_DIFF v2 codec (§10.10b) as the default. The v1 single-bitstream
+> layout is reachable only via
+> `WrittenGenomicRun.opt_disable_ref_diff_v2 = True`.
 
 The REF_DIFF codec (codec id `9`, M93) is the first **context-aware**
 codec in TTI-O: encoder and decoder consume sibling channels and an
@@ -1397,6 +1402,67 @@ Without a reference, the default lookup is skipped silently and the
 channel falls through to the legacy `signal_compression` path
 (BASE_PACK fallback per binding decision §80b is invoked only when
 the user had explicitly requested REF_DIFF).
+
+## 10.10b REF_DIFF v2 — bit-packed sequence diff codec (#11 v1.8, codec id 14)
+
+**Default in v1.8+.** Encodes the per-base diff stream as a 5-substream
+blob (FLAG / BS / IN / SC / ESC) instead of v1's single rANS-encoded
+bitstream. Saves ~4.5 MB on chr22 vs v1 by 2-bit-packing substitution
+and IN/SC bases (was 8-bit literals in v1).
+
+### 10.10b.1 On-disk schema
+
+`signal_channels/sequences` is a GROUP (in v1 it's a flat dataset)
+containing one child:
+
+```
+signal_channels/sequences/
+└── refdiff_v2     uint8 1-D blob, @compression = 14 (REF_DIFF_V2)
+```
+
+The `refdiff_v2` blob carries an outer container header (38 + uri_len
+bytes, magic "RDF2"), a slice index (32 bytes/entry, byte-compatible
+with v1), and per-slice bodies each with a 24-byte sub-header + 5
+rANS-O0-encoded substreams. Full wire format spec at
+`docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md` §4.
+
+### 10.10b.2 Substream taxonomy
+
+| Substream | Content | Encoding |
+|-----------|---------|----------|
+| FLAG | 1 byte per M/=/X cigar base; 0=match, 1=substitution | rANS-O0 |
+| BS | 2-bit ACGT code per FLAG=1 base (substitution) | 2-bit packed → rANS-O0 |
+| IN | 2-bit ACGT code per cigar I (insertion) base | 2-bit packed → rANS-O0 |
+| SC | 2-bit ACGT code per cigar S (soft-clip) base | 2-bit packed → rANS-O0 |
+| ESC | (stream_id, varint base_index, literal byte) per non-ACGT | rANS-O0 |
+
+### 10.10b.3 Reader/writer dispatch
+
+The reader probes the link type of `signal_channels/sequences`:
+- GROUP → v2 path (`refdiff_v2` child + this codec id 14)
+- DATASET → v1 path (codec id 9 / 6 / etc on the @compression attribute)
+
+This means v1 → v2 transition produces a structural change at the
+`sequences` link. v1.7 readers fail with "unknown link type" or
+"sequences not a dataset" depending on the implementation.
+
+### 10.10b.4 Backward compatibility
+
+v1.7 reader on v1.8 file: encounters `sequences` as a GROUP, fails to
+find a flat dataset there. Upgrade reader OR write the source file with
+`opt_disable_ref_diff_v2 = True` to keep v1 layout.
+
+v1.8 reader on v1.7 file: probes `open_group("sequences")` → KeyError →
+falls through to v1 dispatch. Transparent.
+
+### 10.10b.5 Cross-language byte-exact
+
+Encode/decode primitives are a shared C kernel in libttio_rans
+(`ttio_ref_diff_v2_encode/decode`), called by Python ctypes, Java JNI,
+and ObjC direct linkage. The encoded byte stream is byte-exact identical
+regardless of which language wrote the file. Verified by
+`python/tests/integration/test_ref_diff_v2_cross_language.py` (3 PASS
++ 1 SKIP — hg002_pacbio's BAM has SEQ=`*`).
 
 ## 10.11 FQZCOMP_NX16_Z codec — CRAM-mimic quality codec (M94.Z)
 

@@ -240,15 +240,31 @@ as a record of what was built; current milestones use TTI-O names.
 > * Last code commit: `b68e132`. Task 15 (docs/gate/changelog): this
 >   commit.
 >
-> **#11 Channel 2 (REF_DIFF v2) and Channel 3 (NameTokenized v2):**
-> deferred as separate future cycles. Current estimates:
-> * REF_DIFF v2 — additional ~3-5 MB on chr22; requires sequence-level
->   model changes; separate spec + plan.
-> * NameTokenized v2 — additional ~3-4 MB on chr22; requires redesign
->   of the name tokenization wire format to reduce HDF5 compound overhead;
->   separate spec + plan.
-> * #10 offsets-cumsum (structural HDF5 framing) and #13 V5 multi-stream
->   rANS also remain as separate cycles.
+> **#11 Channel 2 (REF_DIFF v2) SHIPPED v1.8 2026-05-03.** 14-task plan
+> executed; REF_DIFF v2 codec (REF_DIFF_V2, codec id 14) ships as default
+> sequences codec across Python/Java/ObjC. Key outcomes:
+> * **C kernel:** `native/src/ref_diff_v2.{c,h}` + rANS-O0 helpers.
+>   Entry points `ttio_ref_diff_v2_encode` / `ttio_ref_diff_v2_decode`.
+> * **5-substream wire format:** FLAG / BS / IN / SC / ESC (38 + uri_len
+>   byte container header + per-slice bodies). Spec at
+>   `docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md`.
+> * **Cross-language byte-exact gate:** 3/3 PASS + 1 SKIP (hg002_pacbio
+>   BAM has SEQ=`*`) in
+>   `python/tests/integration/test_ref_diff_v2_cross_language.py`.
+> * **chr22 compression gate (T15):** 4.314 MB savings (hard gate 2 MB,
+>   PASS). Test at
+>   `python/tests/integration/test_ref_diff_v2_compression_gate.py`.
+> * **opt-out flag:** `WrittenGenomicRun.opt_disable_ref_diff_v2`
+>   preserves v1 round-trip for v1.7 readers.
+> * Last code commit: `f4f0c38`. Task 15 (docs/gate/changelog): this
+>   commit.
+>
+> **#11 Channel 3 (NameTokenized v2):** deferred as a separate future
+> cycle. Current estimate: additional ~3-4 MB on chr22; requires redesign
+> of the name tokenization wire format to reduce HDF5 compound overhead.
+>
+> **#10 offsets-cumsum** (structural HDF5 framing) and **#13 V5
+> multi-stream rANS** also remain as separate cycles.
 
 ---
 
