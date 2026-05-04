@@ -97,6 +97,11 @@ class Compression(IntEnum):
     # @compression = 13. Defaults on at v1.7 with opt-out flag
     # WrittenGenomicRun.opt_disable_inline_mate_info_v2.
     MATE_INLINE_V2 = 13
+    # v1.8 #11: CRAM-style bit-packed sequence diff codec.
+    # Single blob at signal_channels/sequences/refdiff_v2 with
+    # @compression = 14. Defaults on at v1.8 with opt-out flag
+    # WrittenGenomicRun.opt_disable_ref_diff_v2.
+    REF_DIFF_V2 = 14
 
 
 class ByteOrder(IntEnum):

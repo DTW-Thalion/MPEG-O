@@ -94,3 +94,10 @@ class WrittenGenomicRun:
     # layout (three independent compressed streams) when v1.6 readers
     # must round-trip the file.
     opt_disable_inline_mate_info_v2: bool = False
+
+    # v1.8 #11: opt-out for CRAM-style ref_diff v2 codec.
+    # Default False — new files write the refdiff_v2 blob (codec id
+    # 14, ~3-5 MB savings on chr22). Set True to fall back to the v1
+    # REF_DIFF layout (single rANS-encoded bitstream) when v1.7 readers
+    # must round-trip the file.
+    opt_disable_ref_diff_v2: bool = False

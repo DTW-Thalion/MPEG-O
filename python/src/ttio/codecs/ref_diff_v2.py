@@ -170,3 +170,49 @@ def decode(
     if total_bases == 0:
         return np.empty(0, dtype=np.uint8), out_offsets
     return out_seq[:total_bases], out_offsets
+
+
+# Outer blob header offsets (spec §4.3 / ref_diff_v2.c):
+#   [0:4]   magic b"RDF2"
+#   [4]     version
+#   [5:8]   reserved
+#   [8:12]  n_slices (LE uint32)
+#   [12:20] n_reads  (LE uint64)
+#   [20:36] reference_md5 (16 raw bytes)
+#   [36:38] uri_len (LE uint16)
+#   [38:38+uri_len] reference_uri (UTF-8)
+_RDV2_MAGIC = b"RDF2"
+_RDV2_FIXED_HEADER = 38  # bytes before the URI payload
+
+
+class _BlobHeader:
+    """Parsed outer header from a refdiff_v2 blob."""
+    __slots__ = ("reference_md5", "reference_uri")
+
+    def __init__(self, reference_md5: bytes, reference_uri: str) -> None:
+        self.reference_md5 = reference_md5
+        self.reference_uri = reference_uri
+
+
+def parse_blob_header(encoded: bytes) -> "_BlobHeader":
+    """Parse the reference_uri and reference_md5 from a refdiff_v2 outer header.
+
+    Raises ValueError on a corrupt or truncated blob.
+    """
+    if len(encoded) < _RDV2_FIXED_HEADER:
+        raise ValueError(
+            f"refdiff_v2 blob too short ({len(encoded)} < {_RDV2_FIXED_HEADER})"
+        )
+    if encoded[:4] != _RDV2_MAGIC:
+        raise ValueError(
+            f"refdiff_v2 magic mismatch: got {encoded[:4]!r}, expected {_RDV2_MAGIC!r}"
+        )
+    reference_md5 = bytes(encoded[20:36])
+    uri_len = int.from_bytes(encoded[36:38], "little")
+    if len(encoded) < _RDV2_FIXED_HEADER + uri_len:
+        raise ValueError(
+            f"refdiff_v2 blob truncated: uri_len={uri_len} but only "
+            f"{len(encoded) - _RDV2_FIXED_HEADER} bytes remain after fixed header"
+        )
+    reference_uri = encoded[38:38 + uri_len].decode("utf-8", errors="replace")
+    return _BlobHeader(reference_md5=reference_md5, reference_uri=reference_uri)

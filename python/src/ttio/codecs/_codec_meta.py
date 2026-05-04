@@ -20,7 +20,8 @@ from ttio.enums import Compression
 # Update when adding new context-aware codecs (e.g. mate_info encoders).
 _CONTEXT_AWARE: frozenset[Compression] = frozenset(
     {
-        Compression.REF_DIFF,  # M93 — needs positions, cigars, reference
+        Compression.REF_DIFF,     # M93 — needs positions, cigars, reference
+        Compression.REF_DIFF_V2,  # v1.8 #11 — same; blob under group child
     }
 )
 

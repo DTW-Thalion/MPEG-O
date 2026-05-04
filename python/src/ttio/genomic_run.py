@@ -134,6 +134,19 @@ class GenomicRun:
         default=None, repr=False, compare=False,
     )
 
+    # v1.8 #11: cached whole-sequence decode from the refdiff_v2 blob.
+    # None = not yet probed; b"" = probed and found to be v1/BASE_PACK;
+    # non-empty bytes = decoded concatenated sequence bytes (total_bases long).
+    # Populated on first access by _sequences_is_ref_diff_v2() +
+    # _decode_ref_diff_v2_sequences(). Cache lifetime = GenomicRun instance.
+    _decoded_ref_diff_v2: "bytes | None" = field(
+        default=None, repr=False, compare=False,
+    )
+    # None = not yet probed; True/False = cached probe result.
+    _sequences_is_v2_cached: "bool | None" = field(
+        default=None, repr=False, compare=False,
+    )
+
     # ------------------------------------------------------------------
     # Sequence protocol
     # ------------------------------------------------------------------
@@ -316,10 +329,21 @@ class GenomicRun:
         uncompressed channels (no attribute or value 0) the existing
         per-slice :meth:`StorageDataset.read` path is used unchanged
         — no whole-channel materialisation, no behaviour change vs M82.
+
+        v1.8 extension: when ``name == "sequences"`` and the link at
+        signal_channels/sequences is a GROUP (refdiff_v2 layout), the
+        v2 decode path is used and the result is stored in
+        ``_decoded_ref_diff_v2`` / ``_decoded_byte_channels["sequences"]``.
         """
         cached = self._decoded_byte_channels.get(name)
         if cached is not None:
             return cached[offset:offset + count]
+
+        # v1.8 probe: for sequences, check for the group layout first.
+        if name == "sequences" and self._sequences_is_ref_diff_v2():
+            decoded = self._decode_ref_diff_v2_sequences()
+            self._decoded_byte_channels[name] = decoded
+            return decoded[offset:offset + count]
 
         ds = self._signal_dataset(name)
         codec_id = io.read_int_attr(ds, "compression", default=0) or 0
@@ -425,6 +449,106 @@ class GenomicRun:
 
         per_read = _ref_diff_decode(encoded, cigars, positions, chrom_seq)
         return b"".join(per_read)
+
+    def _sequences_is_ref_diff_v2(self) -> bool:
+        """True iff signal_channels/sequences is a GROUP containing refdiff_v2.
+
+        v1.8+ layout: sequences is a group with a refdiff_v2 child dataset
+        (@compression = 14). Result is cached via ``_sequences_is_v2_cached``.
+        """
+        if self._sequences_is_v2_cached is not None:
+            return self._sequences_is_v2_cached
+        sig = self.group.open_group("signal_channels")
+        try:
+            seq_grp = sig.open_group("sequences")
+            # It's a group — check for the refdiff_v2 child dataset.
+            try:
+                seq_grp.open_dataset("refdiff_v2")
+                result = True
+            except KeyError:
+                result = False
+        except KeyError:
+            # sequences is a dataset (v1) — not v2.
+            result = False
+        self._sequences_is_v2_cached = result
+        return result
+
+    def _decode_ref_diff_v2_sequences(self) -> bytes:
+        """Decode the refdiff_v2 blob; cache and return the flat sequence bytes.
+
+        Returns concatenated per-read sequence bytes (total_bases long) —
+        identical contract to the M82 sequences channel.
+
+        Raises:
+            RefMissingError: when the reference cannot be resolved.
+            RuntimeError: when the native lib is unavailable.
+        """
+        if self._decoded_ref_diff_v2 is not None:
+            return self._decoded_ref_diff_v2
+
+        from .codecs import ref_diff_v2 as _rdv2
+        from .genomic.reference_resolver import ReferenceResolver
+        from .acquisition_run import _native_h5py
+
+        if not _rdv2.HAVE_NATIVE_LIB:
+            raise RuntimeError(
+                "REF_DIFF_V2 decode requires libttio_rans "
+                "(set TTIO_RANS_LIB_PATH env var)"
+            )
+
+        sig = self.group.open_group("signal_channels")
+        seq_grp = sig.open_group("sequences")
+        ds = seq_grp.open_dataset("refdiff_v2")
+
+        codec_id = io.read_int_attr(ds, "compression", default=0) or 0
+        if codec_id != int(Compression.REF_DIFF_V2):
+            raise ValueError(
+                f"signal_channels/sequences/refdiff_v2: @compression={codec_id}, "
+                f"expected REF_DIFF_V2 = {int(Compression.REF_DIFF_V2)}"
+            )
+
+        blob = bytes(ds.read(offset=0, count=int(ds.length)))
+
+        # Parse the outer header to extract reference_uri and reference_md5.
+        header = _rdv2.parse_blob_header(blob)
+
+        # Resolve reference via the same chain as v1 REF_DIFF.
+        try:
+            h5_grp = _native_h5py(self.group)
+        except TypeError as exc:
+            raise RuntimeError(
+                "REF_DIFF_V2 decode requires an HDF5-backed dataset; "
+                "non-HDF5 storage providers are not yet supported."
+            ) from exc
+        h5_file = h5_grp.file
+        resolver = ReferenceResolver(h5_file)
+
+        unique_chroms = set(self.index.chromosomes)
+        if len(unique_chroms) == 0:
+            chrom = ""
+        elif len(unique_chroms) > 1:
+            raise RuntimeError(
+                "REF_DIFF_V2 v1.8 supports single-chromosome runs only; "
+                f"this run carries {sorted(unique_chroms)}."
+            )
+        else:
+            chrom = next(iter(unique_chroms))
+
+        chrom_seq = resolver.resolve(
+            uri=header.reference_uri,
+            expected_md5=header.reference_md5,
+            chromosome=chrom,
+        )
+
+        n = self.index.count
+        positions = np.asarray(self.index.positions, dtype=np.int64)
+        cigars = self._all_cigars()
+        total_bases = int(sum(self.index.lengths))
+
+        out_seq, _ = _rdv2.decode(blob, positions, cigars, chrom_seq, n, total_bases)
+        decoded = bytes(out_seq)
+        self._decoded_ref_diff_v2 = decoded
+        return decoded
 
     def _decode_fqzcomp_nx16_z_qualities(self, encoded: bytes) -> bytes:
         """Decode the ``qualities`` channel encoded with the M94.Z codec.
