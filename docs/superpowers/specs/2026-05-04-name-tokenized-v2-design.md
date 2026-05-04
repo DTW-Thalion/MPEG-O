@@ -243,8 +243,8 @@ Substream order is **fixed**:
 | 2 | POOL_IDX | 3 bits per row where FLAG ∈ {DUP, MATCH-K}, bit-packed, MSB-first → ⌈n_pool_rows × 3 / 8⌉ bytes |
 | 3 | MATCH_K | varint K per MATCH-K row, in read order |
 | 4 | COL_TYPES | emitted only if any COL or MATCH-K row exists in block: `u8 n_columns (1..255) + ⌈n_columns/8⌉ bytes column-type bitmap (bit = 0 numeric, 1 string, MSB-first within each byte)`. Empty body if block has no COL/MATCH-K rows. |
-| 5 | NUM_DELTA | column-major: column 0 across all COL+MATCH-K rows that emit a value for column 0, column 1 across all such rows, … For MATCH-K rows columns `[0, K)` are skipped (matched from pool). First emission per column is the seed value (unsigned varint); subsequent are zigzag-then-unsigned-varint deltas. |
-| 6 | DICT_CODE | column-major (same row order as NUM_DELTA), all string-column codes for COL+MATCH-K rows that emit a value for that column. Each is an unsigned varint. |
+| 5 | NUM_DELTA | row-major: for each COL row in block order, emit values for numeric cols 0..n_cols-1 in order; for each MATCH-K row, emit values for numeric cols K..n_cols-1 in order (matched cols [0,K) come from pool entry; nothing written to NUM_DELTA for matched cols). First emission per column j across the block is an unsigned varint (seed); subsequent are zigzag-then-unsigned-varint deltas. After a MATCH-K row, col_num_prev[j] for j ∈ [0,K) is set to pool entry's col j value (used to compute deltas for any later emission of col j). |
+| 6 | DICT_CODE | row-major (same walk order as NUM_DELTA), all string-column codes for COL + MATCH-K-suffix emissions. Each is an unsigned varint. |
 | 7 | DICT_LIT | for each new literal added to any string column dictionary, in the order the literal was added (which is the order the row appeared in the block × column index): `varint(byte_len) + bytes`. |
 | 8 | VERB_LIT | for each VERB row in read order: `varint(byte_len) + bytes`. |
 
