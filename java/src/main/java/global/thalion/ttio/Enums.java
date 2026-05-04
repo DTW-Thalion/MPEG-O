@@ -99,14 +99,17 @@ public final class Enums {
         BASE_PACK,
         /** Quality-score binning (Illumina-style). v0.11 M79 reservation; codec lands in M75. */
         QUALITY_BINNED,
-        /** Read-name tokenisation. v0.11 M79 reservation; codec lands in M75. */
-        NAME_TOKENIZED,
-        /** Reference-based sequence-diff codec (M93 v1.2). Context-aware:
-         *  encode/decode require positions, cigars, and a reference
-         *  chromosome alongside the raw byte stream. Pipeline plumbing
-         *  lives in {@link global.thalion.ttio.SpectralDataset}. */
-        REF_DIFF,
-        /** @deprecated Codec id 10 removed — no legacy .tio files exist. */
+        /** @deprecated Codec id 8 (NAME_TOKENIZED v1) removed in the
+         *  v1.0 reset. Slot retained as a placeholder so subsequent
+         *  ordinals match the on-disk wire format. */
+        @Deprecated
+        _RESERVED_8,
+        /** @deprecated Codec id 9 (REF_DIFF v1) removed in the v1.0
+         *  reset. Slot retained as a placeholder so subsequent ordinals
+         *  match the on-disk wire format. */
+        @Deprecated
+        _RESERVED_9,
+        /** @deprecated Codec id 10 reserved — never shipped. */
         @Deprecated
         _RESERVED_10,
         /** Delta + zigzag + varint + rANS order-0 for sorted integer channels

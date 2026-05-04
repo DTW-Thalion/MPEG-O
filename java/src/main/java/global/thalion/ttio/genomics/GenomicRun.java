@@ -87,13 +87,6 @@ public class GenomicRun
     // from signal_channels/ via codec dispatch — but those datasets no
     // longer exist in v1.6 files (they live exclusively in
     // genomic_index/). See docs/format-spec.md §10.7.
-    // M86 Phase F: combined per-field cache for the mate_info subgroup
-    // layout (Binding Decision §129). Keyed by on-disk child name
-    // ("chrom" → List<String>; "pos" → long[]; "tlen" → int[]).
-    // Separate from compoundCache (M82 path), decodedByteChannels,
-    // decodedReadNames, decodedCigars — value types differ.
-    // Mutable HashMap so the per-field accessors can populate it.
-    private final Map<String, Object> decodedMateInfo = new HashMap<>();
     // Task 13 (mate_info v2): lazy decoded triple from inline_v2 blob.
     // Null until first access to a mate field on a v2-layout file.
     private global.thalion.ttio.codecs.MateInfoV2.Triple decodedMateV2 = null;
@@ -422,13 +415,6 @@ public class GenomicRun
             // Caller of byteChannelSlice gets the bin-centre values,
             // not the original Phred bytes.
             decoded = global.thalion.ttio.codecs.Quality.decode(all);
-        } else if (codecId == global.thalion.ttio.Enums.Compression.REF_DIFF.ordinal()) {
-            // v1.0 reset Phase 2c: REF_DIFF v1 reader removed.
-            throw new IllegalStateException(
-                "REF_DIFF v1 (codec id 9) is no longer supported in "
-                + "v1.0; this file was written with an older TTI-O "
-                + "version. Re-encode with v1.0+ which uses "
-                + "REF_DIFF_V2 (codec id 14).");
         } else if (codecId == global.thalion.ttio.Enums.Compression
                 .FQZCOMP_NX16_Z.ordinal()) {
             // M94.Z v1.2: CRAM-mimic rANS-Nx16 quality codec.
@@ -610,15 +596,6 @@ public class GenomicRun
                         .NameTokenizerV2.decode(all);
                     return decodedReadNames.get(i);
                 }
-                if (codecId == global.thalion.ttio.Enums.Compression
-                        .NAME_TOKENIZED.ordinal()) {
-                    throw new IllegalStateException(
-                        "NAME_TOKENIZED v1 (codec id 8) is no longer "
-                        + "supported in v1.0; this file was written "
-                        + "with an older TTI-O version. Re-encode "
-                        + "with v1.0+ which uses NAME_TOKENIZED_V2 "
-                        + "(codec id 15).");
-                }
                 throw new IllegalStateException(
                     "signal_channel 'read_names': @compression="
                     + codecId + " is not a supported TTIO codec id "
@@ -652,10 +629,7 @@ public class GenomicRun
      *        length-prefix-concat sequence ({@code varint(len) + bytes}
      *        per CIGAR); walk the buffer to reconstruct the list.</li>
      *  </ul>
-     *
-     *  <p>v1.0 reset Phase 2c: the NAME_TOKENIZED v1 (codec id 8)
-     *  branch was removed; @compression == 8 raises
-     *  IllegalStateException. */
+     */
     private String cigarAt(int i) {
         List<String> cached = decodedCigars;
         if (cached != null) {
@@ -678,15 +652,6 @@ public class GenomicRun
                         .Rans.decode(all);
                     decodedCigars = decodeLengthPrefixConcat(decoded);
                     return decodedCigars.get(i);
-                }
-                if (codecId == global.thalion.ttio.Enums.Compression
-                        .NAME_TOKENIZED.ordinal()) {
-                    throw new IllegalStateException(
-                        "NAME_TOKENIZED v1 (codec id 8) on the cigars "
-                        + "channel is no longer supported in v1.0; "
-                        + "this file was written with an older TTI-O "
-                        + "version. Re-encode with v1.0+ using "
-                        + "RANS_ORDER0 or RANS_ORDER1 on cigars.");
                 }
                 throw new IllegalStateException(
                     "signal_channel 'cigars': @compression="
@@ -766,73 +731,6 @@ public class GenomicRun
                     "cigars rANS stream: varint overflow at offset "
                     + offset);
             }
-        }
-    }
-
-    /** M86 Phase B: return the full integer array for the named
-     *  signal channel, lazily decoded on first access.
-     *
-     *  <p>Channel-name → return type mapping (Binding Decision §115):
-     *  <ul>
-     *    <li>{@code positions} → {@code long[]} (int64 LE)</li>
-     *    <li>{@code flags} → {@code int[]} (uint32 LE)</li>
-     *    <li>{@code mapping_qualities} → {@code byte[]} (uint8)</li>
-     *  </ul>
-     *
-     *  <p>For codec-compressed channels ({@code @compression > 0}) the
-     *  whole dataset is read once on first access, decoded through
-     *  {@link global.thalion.ttio.codecs.Rans#decode}, re-interpreted
-     *  via {@link java.nio.ByteOrder#LITTLE_ENDIAN}, and cached on this
-     *  {@link GenomicRun} per Binding Decision §116. For uncompressed
-     *  channels the dataset is read directly with its natural dtype.
-     *
-     *  <p>Per Binding Decision §119 this helper is callable but is NOT
-     *  consumed by {@link #objectAtIndex(int)} — the legacy read path
-     *  for per-read integer fields uses {@link #index} (the duplicated
-     *  {@code genomic_index/} arrays). Phase B compression on
-     *  {@code signal_channels/} integer datasets is therefore a
-     *  write-side file-size optimisation; tests verify the round-trip
-     *  by calling this helper directly. */
-    // v1.6 (L4): intChannelArray removed. The helper supported reading
-    // positions/flags/mapping_qualities from signal_channels/ via codec
-    // dispatch — but those datasets no longer exist in v1.6 files. See
-    // docs/format-spec.md §10.7. The deserialiseLeBytes helper below
-    // is retained because Phase F mate_info reads still use it.
-
-    /** Re-interpret a little-endian byte buffer as the
-     *  channel's natural integer array. */
-    private static Object deserialiseLeBytes(
-            byte[] bytes,
-            global.thalion.ttio.Enums.Precision precision) {
-        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(bytes)
-            .order(java.nio.ByteOrder.LITTLE_ENDIAN);
-        switch (precision) {
-            case INT64 -> {
-                int n = bytes.length / 8;
-                long[] out = new long[n];
-                for (int i = 0; i < n; i++) out[i] = bb.getLong();
-                return out;
-            }
-            case UINT32 -> {
-                int n = bytes.length / 4;
-                int[] out = new int[n];
-                for (int i = 0; i < n; i++) out[i] = bb.getInt();
-                return out;
-            }
-            case INT32 -> {
-                // M86 Phase F: mate_info_tlen is signed int32. Same
-                // 4-byte LE re-interpret as UINT32; Java's int[] is
-                // signed so the bit pattern carries through unchanged.
-                int n = bytes.length / 4;
-                int[] out = new int[n];
-                for (int i = 0; i < n; i++) out[i] = bb.getInt();
-                return out;
-            }
-            case UINT8 -> {
-                return bytes.clone();
-            }
-            default -> throw new IllegalArgumentException(
-                "deserialiseLeBytes: unsupported precision " + precision);
         }
     }
 

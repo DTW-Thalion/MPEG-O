@@ -142,17 +142,16 @@ final class NameTokenizedV2DispatchTest {
         }
     }
 
-    // ── Test 2: explicit override on read_names is rejected ──────────
+    // ── Test 2: any explicit override on read_names is rejected ──────
     //
-    // v1.0 reset Phase 2c: signalCodecOverrides[read_names] is no
-    // longer accepted. The v1 NAME_TOKENIZED writer dispatch was
-    // removed; v2 (NAME_TOKENIZED_V2 = 15) is the auto-default and
-    // only path. Caller-side validation throws IllegalArgumentException.
+    // v1.0 reset: signalCodecOverrides[read_names] is unconditionally
+    // rejected — read_names is v2-only, no per-channel overrides are
+    // honoured.
 
     @Test
     void testReadNamesOverrideRejected(@TempDir Path tmp) {
         WrittenGenomicRun run = buildMinimalRun(
-            Map.of("read_names", Compression.NAME_TOKENIZED));
+            Map.of("read_names", Compression.RANS_ORDER0));
         Throwable thrown = assertThrows(Throwable.class,
             () -> writeRun(tmp, run, "v1_rejected.tio"));
         Throwable cause = thrown;
@@ -162,9 +161,8 @@ final class NameTokenizedV2DispatchTest {
         String msg = cause.getMessage() != null ? cause.getMessage() : "";
         assertTrue(msg.contains("read_names"),
             "rejection must name the channel; got: " + msg);
-        assertTrue(msg.contains("v1.0+") || msg.contains("Phase 2c")
-                || msg.contains("v2"),
-            "rejection should reference the v1.0+ / Phase 2c policy; got: " + msg);
+        assertTrue(msg.contains("v1.0+") || msg.contains("v2"),
+            "rejection should reference the v1.0+ / v2-only policy; got: " + msg);
     }
 
     // ── Test 3: v2 default round-trip ─────────────────────────────────

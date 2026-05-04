@@ -95,19 +95,6 @@ public class V5CodecPropertiesTest {
             });
     }
 
-    @Provide
-    Arbitrary<List<String>> arbitraryNameList() {
-        return Arbitraries.strings()
-            .ascii()
-            .ofMinLength(0)
-            .ofMaxLength(MAX_NAME_LEN)
-            // Strip control characters that break tokenization.
-            .filter(s -> s.chars().allMatch(c -> c >= 33 && c <= 126))
-            .list()
-            .ofMinSize(0)
-            .ofMaxSize(MAX_NAMES);
-    }
-
     // ── rANS ───────────────────────────────────────────────────────────────
 
     @Property
