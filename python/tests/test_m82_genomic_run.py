@@ -879,29 +879,6 @@ def test_streaming_iteration(tmp_path: Path):
         ds.close()
 
 
-def test_backward_compat_pre_m82_file():
-    """Acceptance #10: a pre-M82 .tio (no genomic_runs/) opens cleanly.
-
-    Uses an existing pre-M82 fixture from the test suite. If your test
-    suite has a fixture under tests/fixtures/ that pre-dates M82, point
-    at it here. Otherwise, skip - Task 8 synthetic equivalent covers
-    the same code path.
-    """
-    from ttio.spectral_dataset import SpectralDataset
-
-    # If you found a real pre-M82 fixture, point at it here.
-    # Otherwise, leave the placeholder path and let it skip.
-    fixture = Path(__file__).parent / "fixtures" / "<REAL_FIXTURE_NAME>.tio"
-    if not fixture.exists():
-        pytest.skip("no pre-M82 fixture available; covered by pre_m82_compat smoke test in Task 8")
-
-    ds = SpectralDataset.open(fixture)
-    try:
-        assert ds.genomic_runs == {}
-    finally:
-        ds.close()
-
-
 def test_committed_fixture_readable():
     """The committed cross-language reference fixture opens and has 100 reads."""
     from ttio.spectral_dataset import SpectralDataset

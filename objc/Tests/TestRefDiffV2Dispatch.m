@@ -219,11 +219,6 @@ static uint8_t rdv2dFlatSequencesCompressionAttr(const char *cpath)
 
 static void testRefDiffV2DispatchDefaultWritesGroup(void)
 {
-    if (![TTIORefDiffV2 nativeAvailable]) {
-        PASS(1, "RefDiffV2Dispatch #1: nativeAvailable=NO — skip");
-        return;
-    }
-
     NSString *path = rdv2dTmpPath(@"default");
     rdv2dRm(path);
 
@@ -329,11 +324,6 @@ static void testRefDiffV2DispatchNoRefWritesBasePack(void)
 
 static void testRefDiffV2DispatchRoundTripV2(void)
 {
-    if (![TTIORefDiffV2 nativeAvailable]) {
-        PASS(1, "RefDiffV2Dispatch #4: nativeAvailable=NO — skip");
-        return;
-    }
-
     NSString *path = rdv2dTmpPath(@"rt_v2");
     rdv2dRm(path);
 
@@ -414,6 +404,10 @@ static void testRefDiffV2DispatchRoundTripV1(void)
 void testRefDiffV2Dispatch(void);
 void testRefDiffV2Dispatch(void)
 {
+    if (![TTIORefDiffV2 nativeAvailable]) {
+        // Honest skip via START_SET / END_SET in TTIOTestRunner.m.
+        SKIP("libttio_rans not linked — v2 dispatch tests require native lib");
+    }
     testRefDiffV2DispatchDefaultWritesGroup();
     testRefDiffV2DispatchOptOutWritesFlatDataset();
     testRefDiffV2DispatchNoRefWritesBasePack();

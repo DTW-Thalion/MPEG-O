@@ -63,12 +63,14 @@ class FqzcompNx16ZV4ByteExactTest {
         Path lensBin  = Path.of("/tmp/" + name + "_v4_lens.bin");
         Path flagsBin = Path.of("/tmp/" + name + "_v4_flags.bin");
         Path pyOut    = Path.of("/tmp/py_" + name + "_v4.fqz");
-        if (!Files.exists(qualBin) || !Files.exists(pyOut)) {
-            // Skip cleanly if Phase 5 prep isn't done yet; Maven reports the
-            // test as passed (not skipped — JUnit's skip semantics are clunky
-            // for parameterized).
-            return;
-        }
+        // Honest skip — JUnit's Assumptions.assumeTrue produces a
+        // proper "skipped" status, unlike a silent return which reports
+        // a passing assertion that never ran.
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            Files.exists(qualBin) && Files.exists(pyOut),
+            "Phase 5 prep fixtures not on disk: " + qualBin + " or " + pyOut +
+            " (run tools/perf/htscodecs_compare.sh + " +
+            "run_v4_python_references.py first).");
 
         byte[] qualities = Files.readAllBytes(qualBin);
         byte[] lensBlob  = Files.readAllBytes(lensBin);

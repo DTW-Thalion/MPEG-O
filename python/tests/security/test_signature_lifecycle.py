@@ -114,15 +114,6 @@ class TestSignatureLifecycle:
             ds_handle = ds.ms_runs["run_0001"].group.open_group("signal_channels").open_dataset("intensity_values")
             assert verify_dataset(ds_handle, _KEY) is True
 
-    @pytest.mark.aspirational
-    def test_v3_mldsa_cross_provider(self, provider: str, tmp_path: Path) -> None:
-        """ML-DSA-87 signing is already exercised by
-        ``test_m54_1_provider_pqc.py``; this slot tracks the v0.9
-        intent of adding a per-provider check that uses the
-        SpectralDataset entry point. Marked aspirational so the
-        default-filter run skips it."""
-        pytest.skip("covered by tests/test_m54_1_provider_pqc.py — v0.9 expansion deferred")
-
     def test_unsigned_returns_notsigned(self, provider: str, tmp_path: Path) -> None:
         _maybe_skip_provider(provider)
         url = _build(provider, tmp_path)
