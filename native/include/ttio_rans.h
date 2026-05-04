@@ -26,6 +26,12 @@ extern "C" {
 #define TTIO_RANS_ERR_NS_LENGTH_MISMATCH -5   /* mate_info_v2: NS varint count != NUM_CROSS */
 #define TTIO_RANS_ERR_ESC_LENGTH_MISMATCH -6  /* ref_diff_v2: ESC count mismatch */
 #define TTIO_RANS_ERR_RESERVED_ESC_STREAM -7  /* ref_diff_v2: ESC stream_id >= 3 */
+#define TTIO_RANS_ERR_NTV2_BAD_FLAG       -8  /* name_tok_v2: invalid 2-bit FLAG */
+#define TTIO_RANS_ERR_NTV2_POOL_OOB       -9  /* name_tok_v2: pool_idx out of range */
+#define TTIO_RANS_ERR_NTV2_BAD_K          -10 /* name_tok_v2: K=0 or K>=n_cols */
+#define TTIO_RANS_ERR_NTV2_DICT_OVERFLOW  -11 /* name_tok_v2: dict code > dict size */
+#define TTIO_RANS_ERR_NTV2_BAD_VERSION    -12 /* name_tok_v2: bad container version */
+#define TTIO_RANS_ERR_NTV2_BAD_MAGIC      -13 /* name_tok_v2: magic != "NTK2" */
 
 typedef struct ttio_rans_pool ttio_rans_pool;
 
@@ -387,6 +393,38 @@ int ttio_ref_diff_v2_decode(
     uint64_t        reference_length,
     uint8_t        *out_sequences,
     uint64_t       *out_offsets);
+
+/* ──────────────────────────────────────────────────────────────────────
+ * NAME_TOKENIZED v2 — multi-substream + DUP-pool + PREFIX-MATCH codec
+ * (codec id 15). Spec:
+ *   docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md
+ *
+ * Encoded blob written to read_names HDF5 dataset with @compression = 15.
+ * Wire magic "NTK2", version 0x01.
+ *
+ * Returns 0 on success; negative TTIO_RANS_ERR_* on framing or value
+ * violations.
+ * ────────────────────────────────────────────────────────────────────── */
+
+size_t ttio_name_tok_v2_max_encoded_size(uint64_t n_reads, uint64_t total_name_bytes);
+
+/* Encodes n_reads names. names[i] is a NUL-terminated 7-bit-ASCII string.
+ * Caller allocates `out` of at least max_encoded_size bytes; *out_len
+ * is set to the actual encoded size. */
+int ttio_name_tok_v2_encode(
+    const char * const *names,
+    uint64_t            n_reads,
+    uint8_t            *out,
+    size_t             *out_len);
+
+/* Decodes a v2 stream. *out_names is malloc'd as an array of n_reads
+ * c-string pointers (each entry malloc'd separately); caller frees
+ * each entry plus the array. *out_n_reads is set. */
+int ttio_name_tok_v2_decode(
+    const uint8_t  *encoded,
+    size_t          encoded_size,
+    char         ***out_names,
+    uint64_t       *out_n_reads);
 
 #ifdef __cplusplus
 }
