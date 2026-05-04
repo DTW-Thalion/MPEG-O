@@ -104,14 +104,15 @@ class TestRunLevelSignAndVerify:
             run_group = f["/study/genomic_runs/genomic_0001"]
             sigs = sign_genomic_run(run_group, KEY)
         # Every signed dataset gets a key->sig entry.
-        # Expected: sequences, qualities + 5 index columns
-        # (offsets, lengths, positions, mapping_qualities, flags).
+        # Expected: sequences, qualities + index columns
+        # (lengths, positions, mapping_qualities, flags). v1.10 #10:
+        # offsets is no longer on disk so signing skips it.
         assert "signal_channels/sequences" in sigs
         assert "signal_channels/qualities" in sigs
         assert "genomic_index/positions" in sigs
         assert "genomic_index/mapping_qualities" in sigs
         assert "genomic_index/flags" in sigs
-        assert "genomic_index/offsets" in sigs
+        assert "genomic_index/offsets" not in sigs
         assert "genomic_index/lengths" in sigs
 
     def test_verify_returns_true_on_clean_run(self, tmp_path):

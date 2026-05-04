@@ -107,8 +107,10 @@ class TestEncryptHeaders:
             assert "mapping_qualities_encrypted" in idx
             assert "flags_encrypted" in idx
             assert "chromosomes_encrypted" in idx
-            # offsets/lengths stay plaintext (structural framing).
-            assert "offsets" in idx
+            # lengths stays plaintext (structural framing). v1.10 #10:
+            # offsets is no longer written to disk — it's computed from
+            # cumsum(lengths) on read.
+            assert "offsets" not in idx
             assert "lengths" in idx
             # opt_encrypted_au_headers feature flag set.
             features = f["/"].attrs.get("ttio_features") or ""

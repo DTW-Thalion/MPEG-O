@@ -16,6 +16,50 @@ if TYPE_CHECKING:
     from .providers.base import StorageGroup
 
 
+def _offsets_from_lengths(lengths: np.ndarray) -> np.ndarray:
+    """Synthesize per-record byte offsets from a lengths array.
+
+    ``offsets[i] = sum(lengths[0..i])``. Always uint64 to avoid the
+    overflow cliff at >4 GB on deep WGS even when the input lengths
+    array is uint32. Returns a fresh array of shape ``(n,)``; for
+    empty input returns an empty uint64 array.
+
+    v1.10 #10 (2026-05-04): canonical helper for the new on-disk
+    schema where ``offsets`` is omitted from disk and computed at
+    read time. Genomic + spectrum + chromatogram indexes share this
+    helper.
+    """
+    n = int(lengths.shape[0])
+    if n == 0:
+        return np.zeros(0, dtype=np.uint64)
+    out = np.empty(n, dtype=np.uint64)
+    out[0] = 0
+    if n > 1:
+        # Use uint64 cumsum to avoid uint32 overflow on deep WGS.
+        np.cumsum(lengths[:-1].astype(np.uint64, copy=False), out=out[1:])
+    return out
+
+
+def _read_offsets_or_cumsum(
+    idx_group: "StorageGroup",
+    lengths_dtype: type = np.uint32,
+) -> np.ndarray:
+    """Read offsets from ``idx_group`` if present, else compute from lengths.
+
+    v1.10 #10 backward-compat helper: pre-v1.10 files have
+    ``offsets`` on disk; v1.10+ files have only ``lengths`` (offsets
+    is mathematically derivable). Always returns a uint64 array.
+    """
+    if idx_group.has_child("offsets"):
+        return np.asarray(
+            idx_group.open_dataset("offsets").read(), dtype=np.uint64,
+        )
+    lengths = np.asarray(
+        idx_group.open_dataset("lengths").read(), dtype=lengths_dtype,
+    )
+    return _offsets_from_lengths(lengths)
+
+
 @dataclass(slots=True)
 class GenomicIndex:
     """Parallel per-read arrays loaded eagerly at run open time.
@@ -100,17 +144,26 @@ class GenomicIndex:
         of the M82-era ``chromosomes`` VL-string compound. The single
         compound was costing 42 MB of HDF5 fractal-heap overhead per
         chr22 .tio file (one fractal-heap block per chunk × 432 chunks).
+
+        v1.10 #10 (2026-05-04): ``offsets`` is no longer stored on
+        disk by default — it's mathematically derivable from
+        ``cumsum(lengths)``. If the column is present (pre-v1.10 file
+        OR ``opt_keep_offsets_columns=True`` writer), it's read; else
+        synthesized from lengths. Forward + backward compatible.
         """
         from ttio import _hdf5_io as io
 
-        offsets_ds = idx_group.open_dataset("offsets")
         lengths_ds = idx_group.open_dataset("lengths")
         positions_ds = idx_group.open_dataset("positions")
         mq_ds = idx_group.open_dataset("mapping_qualities")
         flags_ds = idx_group.open_dataset("flags")
 
-        offsets = np.asarray(offsets_ds.read(), dtype=np.uint64)
         lengths = np.asarray(lengths_ds.read(), dtype=np.uint32)
+        if idx_group.has_child("offsets"):
+            offsets_ds = idx_group.open_dataset("offsets")
+            offsets = np.asarray(offsets_ds.read(), dtype=np.uint64)
+        else:
+            offsets = _offsets_from_lengths(lengths)
         positions = np.asarray(positions_ds.read(), dtype=np.int64)
         mapping_qualities = np.asarray(mq_ds.read(), dtype=np.uint8)
         flags = np.asarray(flags_ds.read(), dtype=np.uint32)
@@ -133,18 +186,25 @@ class GenomicIndex:
             flags=flags,
         )
 
-    def write(self, idx_group: "StorageGroup") -> None:
+    def write(self, idx_group: "StorageGroup", *,
+              keep_offsets_column: bool = False) -> None:
         """Write all columns into ``idx_group``.
 
         L1 layout: ``chromosome_ids`` (uint16) + ``chromosome_names``
         (compound, one row per unique chromosome). Encounter-order id
         assignment — first occurrence of a name gets the next unused
         id. Cross-language byte-exact contract.
+
+        v1.10 #10: ``offsets`` column is omitted by default (computed
+        from ``cumsum(lengths)`` on read). Pass ``keep_offsets_column=
+        True`` to retain the redundant column for byte-equivalent
+        backward compat with pre-v1.10 readers.
         """
         from ttio import _hdf5_io as io
         from .enums import Precision
 
-        io._write_uint64_channel(idx_group, "offsets", self.offsets, "gzip")
+        if keep_offsets_column:
+            io._write_uint64_channel(idx_group, "offsets", self.offsets, "gzip")
         io._write_uint32_channel(idx_group, "lengths", self.lengths, "gzip")
         io._write_int64_channel(idx_group, "positions", self.positions, "gzip")
         io._write_uint8_channel(
