@@ -130,15 +130,20 @@ void testM79GenomicEnums(void)
 
     // ── 4. New compression ordinals are stable ─────────────────────
     {
-        PASS((NSUInteger)TTIOCompressionNone           == 0, "Compression.None == 0");
-        PASS((NSUInteger)TTIOCompressionZlib           == 1, "Compression.Zlib == 1");
-        PASS((NSUInteger)TTIOCompressionLZ4            == 2, "Compression.LZ4 == 2");
-        PASS((NSUInteger)TTIOCompressionNumpressDelta  == 3, "Compression.NumpressDelta == 3");
-        PASS((NSUInteger)TTIOCompressionRansOrder0     == 4, "Compression.RansOrder0 == 4");
-        PASS((NSUInteger)TTIOCompressionRansOrder1     == 5, "Compression.RansOrder1 == 5");
-        PASS((NSUInteger)TTIOCompressionBasePack       == 6, "Compression.BasePack == 6");
-        PASS((NSUInteger)TTIOCompressionQualityBinned  == 7, "Compression.QualityBinned == 7");
-        PASS((NSUInteger)TTIOCompressionNameTokenized  == 8, "Compression.NameTokenized == 8");
+        PASS((NSUInteger)TTIOCompressionNone             == 0, "Compression.None == 0");
+        PASS((NSUInteger)TTIOCompressionZlib             == 1, "Compression.Zlib == 1");
+        PASS((NSUInteger)TTIOCompressionLZ4              == 2, "Compression.LZ4 == 2");
+        PASS((NSUInteger)TTIOCompressionNumpressDelta    == 3, "Compression.NumpressDelta == 3");
+        PASS((NSUInteger)TTIOCompressionRansOrder0       == 4, "Compression.RansOrder0 == 4");
+        PASS((NSUInteger)TTIOCompressionRansOrder1       == 5, "Compression.RansOrder1 == 5");
+        PASS((NSUInteger)TTIOCompressionBasePack         == 6, "Compression.BasePack == 6");
+        PASS((NSUInteger)TTIOCompressionQualityBinned    == 7, "Compression.QualityBinned == 7");
+        // Slots 8/9/10 reserved (v1 codecs removed in v1.0 reset).
+        PASS((NSUInteger)TTIOCompressionDeltaRansOrder0  == 11, "Compression.DeltaRansOrder0 == 11");
+        PASS((NSUInteger)TTIOCompressionFqzcompNx16Z     == 12, "Compression.FqzcompNx16Z == 12");
+        PASS((NSUInteger)TTIOCompressionMateInlineV2     == 13, "Compression.MateInlineV2 == 13");
+        PASS((NSUInteger)TTIOCompressionRefDiffV2        == 14, "Compression.RefDiffV2 == 14");
+        PASS((NSUInteger)TTIOCompressionNameTokenizedV2  == 15, "Compression.NameTokenizedV2 == 15");
     }
 
     // ── 5. AcquisitionMode genomic ordinals are stable ─────────────
