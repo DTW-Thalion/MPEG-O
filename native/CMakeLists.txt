@@ -241,6 +241,12 @@ target_link_libraries(test_name_tok_v2_invariants PRIVATE ttio_rans)
 target_include_directories(test_name_tok_v2_invariants PRIVATE src)
 add_test(NAME name_tok_v2_invariants COMMAND test_name_tok_v2_invariants)
 
+# #11 ch3 task 4: stress + malformed-input tests.
+add_executable(test_name_tok_v2_stress tests/test_name_tok_v2_stress.c)
+target_link_libraries(test_name_tok_v2_stress PRIVATE ttio_rans)
+target_include_directories(test_name_tok_v2_stress PRIVATE src)
+add_test(NAME name_tok_v2_stress COMMAND test_name_tok_v2_stress)
+
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
