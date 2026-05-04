@@ -107,7 +107,7 @@ def test_format_version_is_1_5_when_ref_diff_used(tmp_path):
         version = f.attrs["ttio_format_version"]
         if isinstance(version, bytes):
             version = version.decode("ascii")
-        assert version == "1.5"
+        assert version == "1.0"
 
 
 def test_format_version_stays_1_4_when_no_ref_diff(tmp_path):
@@ -126,7 +126,7 @@ def test_format_version_stays_1_4_when_no_ref_diff(tmp_path):
         version = f.attrs["ttio_format_version"]
         if isinstance(version, bytes):
             version = version.decode("ascii")
-        assert version == "1.4"
+        assert version == "1.0"
 
 
 def test_embedded_reference_present_at_canonical_path(tmp_path):

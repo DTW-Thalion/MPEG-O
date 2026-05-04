@@ -258,15 +258,10 @@ class SpectrumIndex:
             if present("isolation_upper_offsets") else None
         )
 
-        # v1.10 #10: offsets is omitted from disk by default, computed
-        # from cumsum(lengths) on read. Pre-v1.10 files have it on disk
-        # (read directly); v1.10+ files synthesize it.
+        # v1.0: offsets is never on disk — synthesize from cumsum(lengths).
+        from .genomic_index import _offsets_from_lengths
         lengths = col("lengths", "<u4")
-        if present("offsets"):
-            offsets = col("offsets", "<u8")
-        else:
-            from .genomic_index import _offsets_from_lengths
-            offsets = _offsets_from_lengths(lengths)
+        offsets = _offsets_from_lengths(lengths)
         return cls(
             offsets=offsets,
             lengths=lengths,
@@ -745,12 +740,9 @@ def _read_chromatograms(run_group) -> list[Chromatogram]:
     int_all  = np.asarray(g.open_dataset("intensity_values").read())
     idx = g.open_group("chromatogram_index")
     lengths       = np.asarray(idx.open_dataset("lengths").read())
-    # v1.10 #10: offsets omitted by default, synthesized from cumsum.
-    if idx.has_child("offsets"):
-        offsets   = np.asarray(idx.open_dataset("offsets").read())
-    else:
-        from .genomic_index import _offsets_from_lengths
-        offsets = _offsets_from_lengths(lengths.astype(np.uint64, copy=False))
+    # v1.0: offsets always synthesized from cumsum(lengths).
+    from .genomic_index import _offsets_from_lengths
+    offsets = _offsets_from_lengths(lengths.astype(np.uint64, copy=False))
     types         = np.asarray(idx.open_dataset("types").read())
     target_mzs    = np.asarray(idx.open_dataset("target_mzs").read())
     precursor_mzs = np.asarray(idx.open_dataset("precursor_mzs").read())
@@ -778,22 +770,17 @@ def _read_chromatograms(run_group) -> list[Chromatogram]:
 
 def write_chromatograms_to_run_group(
     run_group, chromatograms: list[Chromatogram],
-    *, keep_offsets_column: bool = False,
 ) -> None:
     """Write ``chromatograms`` under ``<run>/chromatograms/``.
 
-    Does nothing when the list is empty so v0.3 readers continue to see
-    the absence of the group. v0.9 M64.5: the ``run_group`` argument
+    Does nothing when the list is empty. The ``run_group`` argument
     accepts either an ``h5py.Group`` or a
-    :class:`~ttio.providers.base.StorageGroup`. The HDF5 path keeps
-    the legacy byte layout; non-HDF5 providers route through
-    :meth:`StorageGroup.create_dataset` so the same logical data lands
-    in Memory / SQLite / Zarr backends.
+    :class:`~ttio.providers.base.StorageGroup`; non-HDF5 providers
+    route through :meth:`StorageGroup.create_dataset` so the same
+    logical data lands in Memory / SQLite / Zarr backends.
 
-    v1.10 #10 (2026-05-04): ``chromatogram_index/offsets`` is omitted
-    by default — derivable from ``cumsum(lengths)`` on read. Pass
-    ``keep_offsets_column=True`` for byte-equivalent backward compat
-    with pre-v1.10 readers.
+    ``chromatogram_index/offsets`` is never written — readers derive
+    it from ``cumsum(lengths)``.
     """
     if not chromatograms:
         return
@@ -829,8 +816,6 @@ def write_chromatograms_to_run_group(
         g.create_dataset("intensity_values", Precision.FLOAT64, total).write(int_all)
         idx = g.create_group("chromatogram_index")
         n_chrom = len(chromatograms)
-        if keep_offsets_column:
-            idx.create_dataset("offsets",   Precision.INT64,   n_chrom).write(offsets)
         idx.create_dataset("lengths",       Precision.UINT32,  n_chrom).write(lengths)
         idx.create_dataset("types",         Precision.INT32,   n_chrom).write(types)
         idx.create_dataset("target_mzs",    Precision.FLOAT64, n_chrom).write(targets)
@@ -869,8 +854,6 @@ def write_chromatograms_to_run_group(
     g.create_dataset("time_values",      data=time_all)
     g.create_dataset("intensity_values", data=int_all)
     idx = g.create_group("chromatogram_index")
-    if keep_offsets_column:
-        idx.create_dataset("offsets",   data=offsets)
     idx.create_dataset("lengths",       data=lengths)
     idx.create_dataset("types",         data=types)
     idx.create_dataset("target_mzs",    data=targets)

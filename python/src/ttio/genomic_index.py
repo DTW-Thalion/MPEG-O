@@ -40,20 +40,15 @@ def _offsets_from_lengths(lengths: np.ndarray) -> np.ndarray:
     return out
 
 
-def _read_offsets_or_cumsum(
+def _read_offsets_from_lengths_dataset(
     idx_group: "StorageGroup",
     lengths_dtype: type = np.uint32,
 ) -> np.ndarray:
-    """Read offsets from ``idx_group`` if present, else compute from lengths.
+    """Read the ``lengths`` dataset and synthesize uint64 offsets.
 
-    v1.10 #10 backward-compat helper: pre-v1.10 files have
-    ``offsets`` on disk; v1.10+ files have only ``lengths`` (offsets
-    is mathematically derivable). Always returns a uint64 array.
+    Convenience wrapper for callers that only need offsets — same as
+    open + read + ``_offsets_from_lengths`` but avoids the boilerplate.
     """
-    if idx_group.has_child("offsets"):
-        return np.asarray(
-            idx_group.open_dataset("offsets").read(), dtype=np.uint64,
-        )
     lengths = np.asarray(
         idx_group.open_dataset("lengths").read(), dtype=lengths_dtype,
     )
@@ -138,18 +133,10 @@ class GenomicIndex:
     def read(cls, idx_group: "StorageGroup") -> "GenomicIndex":
         """Load all columns from a ``genomic_index/`` StorageGroup.
 
-        L1 (Task #82 Phase B.1, 2026-05-01): chromosomes are stored as
-        a uint16 id column + compound name lookup table (sibling
-        datasets ``chromosome_ids`` and ``chromosome_names``) instead
-        of the M82-era ``chromosomes`` VL-string compound. The single
-        compound was costing 42 MB of HDF5 fractal-heap overhead per
-        chr22 .tio file (one fractal-heap block per chunk × 432 chunks).
-
-        v1.10 #10 (2026-05-04): ``offsets`` is no longer stored on
-        disk by default — it's mathematically derivable from
-        ``cumsum(lengths)``. If the column is present (pre-v1.10 file
-        OR ``opt_keep_offsets_columns=True`` writer), it's read; else
-        synthesized from lengths. Forward + backward compatible.
+        Chromosomes are stored as a uint16 id column + compound name
+        lookup table (sibling datasets ``chromosome_ids`` and
+        ``chromosome_names``). ``offsets`` is never on disk in v1.0+
+        files — it's computed from ``cumsum(lengths)`` here.
         """
         from ttio import _hdf5_io as io
 
@@ -159,11 +146,7 @@ class GenomicIndex:
         flags_ds = idx_group.open_dataset("flags")
 
         lengths = np.asarray(lengths_ds.read(), dtype=np.uint32)
-        if idx_group.has_child("offsets"):
-            offsets_ds = idx_group.open_dataset("offsets")
-            offsets = np.asarray(offsets_ds.read(), dtype=np.uint64)
-        else:
-            offsets = _offsets_from_lengths(lengths)
+        offsets = _offsets_from_lengths(lengths)
         positions = np.asarray(positions_ds.read(), dtype=np.int64)
         mapping_qualities = np.asarray(mq_ds.read(), dtype=np.uint8)
         flags = np.asarray(flags_ds.read(), dtype=np.uint32)
@@ -186,25 +169,20 @@ class GenomicIndex:
             flags=flags,
         )
 
-    def write(self, idx_group: "StorageGroup", *,
-              keep_offsets_column: bool = False) -> None:
+    def write(self, idx_group: "StorageGroup") -> None:
         """Write all columns into ``idx_group``.
 
-        L1 layout: ``chromosome_ids`` (uint16) + ``chromosome_names``
+        v1.0 layout: ``chromosome_ids`` (uint16) + ``chromosome_names``
         (compound, one row per unique chromosome). Encounter-order id
         assignment — first occurrence of a name gets the next unused
         id. Cross-language byte-exact contract.
 
-        v1.10 #10: ``offsets`` column is omitted by default (computed
-        from ``cumsum(lengths)`` on read). Pass ``keep_offsets_column=
-        True`` to retain the redundant column for byte-equivalent
-        backward compat with pre-v1.10 readers.
+        ``offsets`` is never written — readers derive from
+        ``cumsum(lengths)``.
         """
         from ttio import _hdf5_io as io
         from .enums import Precision
 
-        if keep_offsets_column:
-            io._write_uint64_channel(idx_group, "offsets", self.offsets, "gzip")
         io._write_uint32_channel(idx_group, "lengths", self.lengths, "gzip")
         io._write_int64_channel(idx_group, "positions", self.positions, "gzip")
         io._write_uint8_channel(
