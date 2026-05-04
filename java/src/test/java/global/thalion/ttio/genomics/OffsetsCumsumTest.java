@@ -14,13 +14,8 @@ import org.junit.jupiter.api.Test;
  * v1.10 #10 — offsets-cumsum unit tests for the
  * {@link GenomicIndex#offsetsFromLengths(int[])} helper.
  *
- * <p>The companion writer/reader dispatch tests live in
- * {@code RefDiffV2DispatchTest} / {@code NameTokenizedV2DispatchTest}
- * (which both write through {@code SpectralDataset.writeMinimal} with
- * {@code optKeepOffsetsColumns} flipped on or off via
- * {@code WrittenGenomicRun.withOptKeepOffsetsColumns}). This file
- * focuses on the pure helper since that's the load-bearing piece —
- * uint32→uint64 accumulator that mustn't overflow on a >4 GB
+ * <p>This file focuses on the pure helper since that's the load-bearing
+ * piece — uint32→uint64 accumulator that mustn't overflow on a >4 GB
  * genomic run even when stored {@code lengths} are uint32.</p>
  */
 public class OffsetsCumsumTest {

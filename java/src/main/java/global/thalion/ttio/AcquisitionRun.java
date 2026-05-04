@@ -491,15 +491,10 @@ public class AcquisitionRun implements
         }
     }
 
+    /** Write the chromatograms group. The mathematically redundant
+     *  {@code chromatogram_index/offsets} column is omitted; readers
+     *  synthesize it from {@code cumsum(lengths)}. */
     private void writeChromatograms(StorageGroup runGroup) {
-        writeChromatograms(runGroup, false);
-    }
-
-    /** v1.10 #10 (offsets-cumsum): when {@code keepOffsetsColumn} is
-     *  {@code true}, the redundant {@code chromatogram_index/offsets}
-     *  column is written for byte-equivalent backward compat with
-     *  pre-v1.10 readers. Default {@code false} — column omitted. */
-    private void writeChromatograms(StorageGroup runGroup, boolean keepOffsetsColumn) {
         try (StorageGroup cg = runGroup.createGroup("chromatograms")) {
             cg.setAttribute("count", (long) chromatograms.size());
 
@@ -507,7 +502,6 @@ public class AcquisitionRun implements
             int totalPoints = chromatograms.stream().mapToInt(Chromatogram::length).sum();
             double[] allTime = new double[totalPoints];
             double[] allIntensity = new double[totalPoints];
-            long[] offsets = new long[chromatograms.size()];
             int[] lengths = new int[chromatograms.size()];
             int[] types = new int[chromatograms.size()];
             double[] targetMzs = new double[chromatograms.size()];
@@ -517,7 +511,6 @@ public class AcquisitionRun implements
             int pos = 0;
             for (int i = 0; i < chromatograms.size(); i++) {
                 Chromatogram c = chromatograms.get(i);
-                offsets[i] = pos;
                 lengths[i] = c.length();
                 types[i] = c.type().ordinal();
                 targetMzs[i] = c.targetMz();
@@ -532,9 +525,6 @@ public class AcquisitionRun implements
             writeDoubleDs(cg, "intensity_values", allIntensity);
 
             try (StorageGroup idx = cg.createGroup("chromatogram_index")) {
-                if (keepOffsetsColumn) {
-                    writeLongDs(idx, "offsets", offsets);
-                }
                 writeIntDs(idx, "lengths", lengths);
                 writeIntDs(idx, "types", types);
                 writeDoubleDs(idx, "target_mzs", targetMzs);
