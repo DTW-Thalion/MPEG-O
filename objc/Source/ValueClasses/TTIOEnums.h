@@ -50,9 +50,9 @@ typedef NS_ENUM(NSUInteger, TTIOCompression) {
     TTIOCompressionRansOrder1,       // v0.11 M79: rANS order-1 entropy coder
     TTIOCompressionBasePack,         // v0.11 M79: 2-bit ACGT packed bases
     TTIOCompressionQualityBinned,    // v0.11 M79: Illumina-style quality binning
-    TTIOCompressionNameTokenized,    // v0.11 M79: read-name tokenisation
-    TTIOCompressionRefDiff = 9,      // v1.2 M93: reference-based sequence diff
-    TTIOCompressionReserved10 = 10,   // removed — no legacy .tio files exist
+    // Slots 8 (NAME_TOKENIZED v1), 9 (REF_DIFF v1), 10 reserved.
+    // The v1 codecs were removed in the v1.0 reset; v2 successors
+    // live at 13/14/15 below.
     TTIOCompressionDeltaRansOrder0 = 11,  // v1.2 M95: delta + rANS for integer channels
     TTIOCompressionFqzcompNx16Z = 12,     // v1.2 M94.Z: CRAM-mimic rANS-Nx16 quality codec
     TTIOCompressionMateInlineV2 = 13,     // v1.7 #11: CRAM-style inline mate-pair codec

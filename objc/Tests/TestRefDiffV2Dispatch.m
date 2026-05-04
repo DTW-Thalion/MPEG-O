@@ -236,56 +236,6 @@ static void testRefDiffV2DispatchDefaultWritesGroup(void)
     rdv2dRm(path);
 }
 
-// ── Test 2: no reference + REF_DIFF override → BASE_PACK flat dataset ────────
-
-// Test 2 (v1.0 reset Phase 2c): explicit REF_DIFF v1 (codec id 9)
-// override on sequences is now rejected by override-validation. The
-// writer raises NSInvalidArgumentException up front.
-static void testRefDiffV2DispatchNoRefWritesBasePack(void)
-{
-    NSString *path = rdv2dTmpPath(@"reject_v1_override");
-    rdv2dRm(path);
-
-    TTIOWrittenGenomicRun *run = rdv2dMakeRun(NO);
-    TTIOWrittenGenomicRun *runWithOverride =
-        [[TTIOWrittenGenomicRun alloc]
-         initWithAcquisitionMode:run.acquisitionMode
-                    referenceUri:run.referenceUri
-                        platform:run.platform
-                      sampleName:run.sampleName
-                       positions:run.positionsData
-                mappingQualities:run.mappingQualitiesData
-                           flags:run.flagsData
-                       sequences:run.sequencesData
-                       qualities:run.qualitiesData
-                         offsets:run.offsetsData
-                         lengths:run.lengthsData
-                          cigars:run.cigars
-                       readNames:run.readNames
-                 mateChromosomes:run.mateChromosomes
-                   matePositions:run.matePositionsData
-                 templateLengths:run.templateLengthsData
-                     chromosomes:run.chromosomes
-               signalCompression:TTIOCompressionZlib
-            signalCodecOverrides:@{ @"sequences": @(TTIOCompressionRefDiff) }];
-
-    BOOL raised = NO;
-    @try {
-        NSError *err = nil;
-        rdv2dWrite(path, runWithOverride, &err);
-    } @catch (NSException *e) {
-        raised = YES;
-        PASS([e.name isEqualToString:NSInvalidArgumentException],
-             "RefDiffV2Dispatch #2: REF_DIFF v1 override raises "
-             "NSInvalidArgumentException (got %@)", e.name);
-    }
-    PASS(raised,
-         "RefDiffV2Dispatch #2: REF_DIFF v1 override on sequences is "
-         "rejected under v1.0 reset");
-
-    rdv2dRm(path);
-}
-
 // ── Test 3: full round-trip (default v2 path) ─────────────────────────────────
 
 static void testRefDiffV2DispatchRoundTripV2(void)
@@ -335,6 +285,8 @@ void testRefDiffV2Dispatch(void)
         SKIP("libttio_rans not linked — v2 dispatch tests require native lib");
     }
     testRefDiffV2DispatchDefaultWritesGroup();
-    testRefDiffV2DispatchNoRefWritesBasePack();
+    // testRefDiffV2DispatchNoRefWritesBasePack deleted in Phase 2d —
+    // it asserted the v1 REF_DIFF override migration error, which is
+    // gone now that TTIOCompressionRefDiff was removed.
     testRefDiffV2DispatchRoundTripV2();
 }

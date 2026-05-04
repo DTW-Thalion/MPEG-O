@@ -1264,65 +1264,6 @@ static hsize_t m86PhEChannelStorageSize(const char *path, const char *channel)
 // (codec id 15) instead. The compound read-path round-trip is still
 // covered indirectly by readers materialising older fixtures.
 
-// Test 22 — NAME_TOKENIZED on sequences raises (v1.0 reset Phase 2c
-// updated message: codec id 8 is no longer accepted).
-static void testRejectNameTokenizedOnSequences(void)
-{
-    NSData *seqBytes  = m86PureACGTSequences();
-    NSData *qualBytes = m86PhredCycleQualities();
-    NSArray<NSString *> *names = m86PhEStructuredNames(kM86_NReads);
-    NSDictionary *overrides = @{
-        @"sequences": @(TTIOCompressionNameTokenized)
-    };
-    TTIOWrittenGenomicRun *run = m86PhEMakeRun(seqBytes, qualBytes, names,
-                                               overrides, TTIOCompressionZlib);
-    NSString *path = m86TmpPath("nt_bad_seq");
-    unlink(path.fileSystemRepresentation);
-
-    BOOL raised = NO;
-    NSException *captured = nil;
-    @try {
-        NSError *err = nil;
-        m86Write(path, run, &err);
-    } @catch (NSException *e) {
-        raised = YES;
-        captured = e;
-    }
-    PASS(raised,
-         "M86 PhE: NAME_TOKENIZED on 'sequences' raises NSException");
-    PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
-         "M86 PhE: bad-channel exception is NSInvalidArgumentException");
-    NSString *reason = captured ? captured.reason : @"";
-    PASS([reason rangeOfString:@"NAME_TOKENIZED"].location != NSNotFound,
-         "M86 PhE: error message names the codec (NAME_TOKENIZED)");
-    PASS([reason rangeOfString:@"sequences"].location != NSNotFound,
-         "M86 PhE: error message names the channel ('sequences')");
-    PASS([reason rangeOfString:@"v1.0"].location != NSNotFound
-         || [reason rangeOfString:@"longer supported"].location != NSNotFound,
-         "M86 PhE: v1.0 reset message indicates v1 codec is no longer "
-         "supported");
-
-    if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
-        hid_t f = H5Fopen(path.fileSystemRepresentation,
-                          H5F_ACC_RDONLY, H5P_DEFAULT);
-        BOOL hasRunSubgroup = NO;
-        if (f >= 0) {
-            hasRunSubgroup =
-                H5Lexists(f, "study/genomic_runs/genomic_0001",
-                          H5P_DEFAULT) > 0;
-            H5Fclose(f);
-        }
-        PASS(!hasRunSubgroup,
-             "M86 PhE: NAME_TOKENIZED-on-sequences leaves no "
-             "genomic_0001 subgroup");
-    } else {
-        PASS(YES,
-             "M86 PhE: NAME_TOKENIZED-on-sequences leaves no "
-             "genomic_0001 subgroup");
-    }
-
-    unlink(path.fileSystemRepresentation);
-}
 
 // Test 23 (REMOVED v1.0 reset Phase 2c): testMixedAllThreeOverrides
 // exercised BASE_PACK seq + QUALITY_BINNED qual + v1 NAME_TOKENIZED
@@ -1998,9 +1939,9 @@ void testM86GenomicCodecWiring(void)
     testMixedQualityBinnedWithRans();
     testCrossLanguageFixtureQualityBinned();
     // M86 Phase E — NAME_TOKENIZED on the read_names channel.
-    // v1.0 reset Phase 2c: most read_names v1 tests removed alongside
-    // the codec impl. Only the wrong-channel rejection survives.
-    testRejectNameTokenizedOnSequences();
+    // v1.0 reset: read_names v1 tests removed alongside the codec
+    // impl; the wrong-channel rejection assertion was deleted in
+    // Phase 2d when TTIOCompressionNameTokenized was removed.
     // v1.6: Phase B integer-channel codec wiring REMOVED. Tests of
     // testRoundTripPositionsRansOrder1 / Flags / MappingQualities /
     // SizeWinPositions / AttributeSetCorrectlyIntegerChannels /
