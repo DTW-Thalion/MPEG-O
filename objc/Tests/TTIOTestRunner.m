@@ -89,6 +89,7 @@ extern void testRefDiffV2(void);
 extern void testRefDiffV2Dispatch(void);
 extern void testNameTokenizerV2(void);
 extern void testNameTokenizedV2Dispatch(void);
+extern void testOffsetsCumsum(void);
 extern void testM95DeltaRansUnit(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
@@ -463,6 +464,10 @@ int main(int argc, const char *argv[])
         START_SET("v1.8 #11 ch3 Task 14: name_tok v2 ObjC writer/reader dispatch")
             testNameTokenizedV2Dispatch();
         END_SET("v1.8 #11 ch3 Task 14: name_tok v2 ObjC writer/reader dispatch")
+
+        START_SET("v1.10 #10: TTIOOffsetsFromLengths cumsum + uint32->uint64 overflow")
+            testOffsetsCumsum();
+        END_SET("v1.10 #10: TTIOOffsetsFromLengths cumsum + uint32->uint64 overflow")
 
         START_SET("M95: DELTA_RANS_ORDER0 codec unit")
             testM95DeltaRansUnit();
