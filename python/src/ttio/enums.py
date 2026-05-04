@@ -102,6 +102,11 @@ class Compression(IntEnum):
     # @compression = 14. Defaults on at v1.8 with opt-out flag
     # WrittenGenomicRun.opt_disable_ref_diff_v2.
     REF_DIFF_V2 = 14
+    # v1.8 #11 ch3: CRAM-style adaptive name-tokenizer codec.
+    # Single blob at signal_channels/read_names/name_tok_v2 with
+    # @compression = 15. Defaults on at v1.8 with opt-out flag
+    # WrittenGenomicRun.opt_disable_name_tokenized_v2.
+    NAME_TOKENIZED_V2 = 15
 
 
 class ByteOrder(IntEnum):

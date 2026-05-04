@@ -761,7 +761,10 @@ def test_size_win_name_tokenized(tmp_path: Path):
         chromosomes=["chr1"] * n_reads,
         signal_compression="none",
     )
-    raw_run = WrittenGenomicRun(**base_kw)
+    # opt_disable_name_tokenized_v2: keep this comparison against the M82
+    # compound layout (the historical no-override baseline). v1.8 default
+    # would also write a codec stream, defeating the size-win measurement.
+    raw_run = WrittenGenomicRun(**base_kw, opt_disable_name_tokenized_v2=True)
     nt_run = WrittenGenomicRun(
         **base_kw,
         signal_codec_overrides={"read_names": Compression.NAME_TOKENIZED},
@@ -839,6 +842,10 @@ def test_back_compat_read_names_unchanged(tmp_path: Path):
     Covers two cases: empty overrides, and overrides that touch
     only sequences/qualities. In both, read_names must remain a
     VL_STRING-in-compound dataset (the M82 layout).
+
+    v1.8 #11 ch3: opt_disable_name_tokenized_v2=True is required to
+    preserve the historical M82 compound layout — the new default is
+    the v2 codec stream.
     """
     for desc, overrides in (
         ("empty", {}),
@@ -850,6 +857,7 @@ def test_back_compat_read_names_unchanged(tmp_path: Path):
         run = _make_run(
             PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, codec_overrides=overrides,
         )
+        run.opt_disable_name_tokenized_v2 = True
         p = tmp_path / f"backcompat_{desc.replace(' ', '_').replace('+', '')}.tio"
         SpectralDataset.write_minimal(
             p, title="t", isa_investigation_id="i",
@@ -1472,6 +1480,8 @@ def test_attribute_set_correctly_cigars(tmp_path: Path, codec: Compression):
         PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, cigars,
         {"cigars": codec},
     )
+    # v1.8 #11 ch3: keep read_names as M82 compound for this assertion.
+    run.opt_disable_name_tokenized_v2 = True
     p = _write_and_open(tmp_path, run, fname=f"attr_cig_{codec.name}.tio")
     with h5py.File(p, "r") as f:
         sc = f["study/genomic_runs/genomic_0001/signal_channels"]

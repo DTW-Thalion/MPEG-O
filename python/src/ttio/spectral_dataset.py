@@ -1799,18 +1799,50 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             [{"value": c} for c in run.cigars],
             [("value", io.vl_str())],
         )
-    # M86 Phase E: schema lift for read_names. When the
-    # NAME_TOKENIZED override is set, replace the M82 compound
-    # dataset with a flat 1-D uint8 dataset of the same name
-    # carrying the codec output, plus an @compression == 8
-    # attribute (Binding Decisions §111, §113). The two layouts
-    # are mutually exclusive within a single run; readers
-    # dispatch on dataset shape (compound vs uint8). No HDF5
-    # filter is applied — codec output is high-entropy
-    # (Binding Decision §87).
-    if "read_names" in run.signal_codec_overrides:
+    # M86 Phase E + v1.8 #11 ch3: schema lift for read_names with v2 dispatch.
+    # Three layouts (mutually exclusive within a single run):
+    #
+    # - **NAME_TOKENIZED v1** (codec id 8): flat 1-D uint8 dataset
+    #   ``read_names`` with @compression == 8. Selected when the user
+    #   explicitly passes ``signal_codec_overrides["read_names"] =
+    #   Compression.NAME_TOKENIZED`` OR sets ``opt_disable_name_tokenized_v2``
+    #   AND no override is set.
+    # - **NAME_TOKENIZED v2** (codec id 15): flat 1-D uint8 dataset
+    #   ``read_names`` with @compression == 15. The v1.8 default —
+    #   selected when no override is present, ``opt_disable_name_tokenized_v2``
+    #   is False, and the native lib is available.
+    # - **M82 compound** (no codec): VL_STRING-in-compound dataset.
+    #   Selected only when the v1 fallback is requested but no override
+    #   was set (the historical no-override case).
+    #
+    # Readers dispatch on @compression value (8 vs 15) when shape is
+    # uint8, else fall through to the compound path. No HDF5 filter is
+    # applied — codec output is high-entropy (Binding Decision §87).
+    from .codecs import name_tokenizer_v2 as _nt2
+    from .enums import Precision as _Precision
+    _rn_override = run.signal_codec_overrides.get("read_names")
+    _use_rn_v2 = (
+        _rn_override is None
+        and not getattr(run, "opt_disable_name_tokenized_v2", False)
+        and _nt2.HAVE_NATIVE_LIB
+    )
+    if _use_rn_v2:
+        encoded = _nt2.encode(list(run.read_names))
+        arr = np.frombuffer(encoded, dtype=np.uint8)
+        ds = sc.create_dataset(
+            "read_names",
+            _Precision.UINT8,
+            length=int(arr.shape[0]),
+            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=_Compression.NONE,
+        )
+        ds.write(arr)
+        io.write_int_attr(
+            ds, "compression",
+            int(_Compression.NAME_TOKENIZED_V2), dtype="<u1",
+        )
+    elif _rn_override is not None:
         from .codecs import name_tokenizer as _nt
-        from .enums import Precision as _Precision
         encoded = _nt.encode(list(run.read_names))
         arr = np.frombuffer(encoded, dtype=np.uint8)
         ds = sc.create_dataset(
