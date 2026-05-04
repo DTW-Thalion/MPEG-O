@@ -108,3 +108,11 @@ class WrittenGenomicRun:
     # NAME_TOKENIZED layout (rANS-O0 over flat tokenised stream) when
     # v1.7 readers must round-trip the file.
     opt_disable_name_tokenized_v2: bool = False
+
+    # v1.10 #10: opt-out for offsets-cumsum drop. Default False — new
+    # files omit the redundant `genomic_index/offsets` column (offsets[i]
+    # is computed from `cumsum(lengths)` on read). Set True to keep the
+    # offsets column on disk for byte-equivalent backward compat with
+    # pre-v1.10 readers. Symmetric flag controls `spectrum_index/offsets`
+    # and `chromatogram_index/offsets` on the MS side.
+    opt_keep_offsets_columns: bool = False

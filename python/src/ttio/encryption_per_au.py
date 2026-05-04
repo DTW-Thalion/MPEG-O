@@ -391,8 +391,8 @@ def encrypt_per_au(
             sig = run_group.open_group("signal_channels")
             idx = run_group.open_group("spectrum_index")
 
-            offsets = np.asarray(idx.open_dataset("offsets").read(),
-                                    dtype="<u8")
+            from .genomic_index import _read_offsets_or_cumsum
+            offsets = _read_offsets_or_cumsum(idx)
             lengths = np.asarray(idx.open_dataset("lengths").read(),
                                     dtype="<u4")
 
@@ -470,9 +470,8 @@ def encrypt_per_au(
                     continue
                 g_sig = g_group.open_group("signal_channels")
                 g_idx = g_group.open_group("genomic_index")
-                g_offsets = np.asarray(
-                    g_idx.open_dataset("offsets").read(), dtype="<u8",
-                )
+                from .genomic_index import _read_offsets_or_cumsum
+                g_offsets = _read_offsets_or_cumsum(g_idx)
                 g_lengths = np.asarray(
                     g_idx.open_dataset("lengths").read(), dtype="<u4",
                 )
@@ -724,9 +723,8 @@ def encrypt_per_au_by_region(
                 continue
             g_sig = g_group.open_group("signal_channels")
             g_idx = g_group.open_group("genomic_index")
-            g_offsets = np.asarray(
-                g_idx.open_dataset("offsets").read(), dtype="<u8",
-            )
+            from .genomic_index import _read_offsets_or_cumsum
+            g_offsets = _read_offsets_or_cumsum(g_idx)
             g_lengths = np.asarray(
                 g_idx.open_dataset("lengths").read(), dtype="<u4",
             )

@@ -135,8 +135,9 @@ class TestPerAuEncryptionWithHeaders:
                                 "precursor_mzs", "precursor_charges",
                                 "base_peak_intensities"):
                 assert plain_name not in idx
-            # Offsets/lengths stay plaintext (structural).
-            assert "offsets" in idx
+            # lengths stays plaintext (structural). v1.10 #10: offsets
+            # is no longer written on disk; it's computed from cumsum.
+            assert "offsets" not in idx
             assert "lengths" in idx
             features_json = f.attrs.get("ttio_features", b"[]")
             if isinstance(features_json, bytes):

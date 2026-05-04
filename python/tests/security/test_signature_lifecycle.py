@@ -132,14 +132,18 @@ class TestSignatureLifecycle:
 
     def test_provenance_chain_signing(self, provider: str, tmp_path: Path) -> None:
         """Signature primitive works on an arbitrary StorageDataset —
-        here we sign the spectrum_index ``offsets`` dataset to stand
-        in for provenance-blob signing on every backend."""
+        here we sign the spectrum_index ``lengths`` dataset to stand
+        in for provenance-blob signing on every backend.
+
+        v1.10 #10: switched from ``offsets`` to ``lengths`` since
+        ``offsets`` is no longer written on disk by default.
+        """
         _maybe_skip_provider(provider)
         url = _build(provider, tmp_path)
         with SpectralDataset.open(url, writable=True) as ds:
             idx_group = ds.ms_runs["run_0001"].group.open_group("spectrum_index")
-            offsets_ds = idx_group.open_dataset("offsets")
-            sig = sign_dataset(offsets_ds, _KEY)
+            lengths_ds = idx_group.open_dataset("lengths")
+            sig = sign_dataset(lengths_ds, _KEY)
             assert sig.startswith("v2:")
-            assert verify_dataset(offsets_ds, _KEY) is True
-            assert verify_dataset(offsets_ds, b"\xbb" * 32) is False
+            assert verify_dataset(lengths_ds, _KEY) is True
+            assert verify_dataset(lengths_ds, b"\xbb" * 32) is False

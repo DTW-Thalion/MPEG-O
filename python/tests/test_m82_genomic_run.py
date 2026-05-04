@@ -357,7 +357,10 @@ def test_write_minimal_creates_genomic_runs_group(tmp_path: Path):
         # ``chromosome_names`` (compound) instead of a single
         # VL-string compound — the old layout cost 42 MB of HDF5
         # fractal-heap overhead per chr22 file.
-        assert "offsets" in run["genomic_index"]
+        # v1.10 #10 (2026-05-04): ``offsets`` is no longer stored on disk;
+        # it's computed from cumsum(lengths) at read time.
+        assert "offsets" not in run["genomic_index"]
+        assert "lengths" in run["genomic_index"]
         assert "chromosome_ids" in run["genomic_index"]
         assert "chromosome_names" in run["genomic_index"]
         # Signal channels (v1.6: positions/flags/mapping_qualities are
