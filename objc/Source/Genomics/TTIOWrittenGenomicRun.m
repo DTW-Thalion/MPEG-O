@@ -95,15 +95,6 @@
         _embedReference        = NO;
         _referenceChromSeqs    = nil;
         _externalReferencePath = nil;
-        // v1.7 #11: default NO → writer uses inline_v2 path when
-        // native libttio_rans is linked (TTIOCompressionMateInlineV2).
-        _optDisableInlineMateInfoV2 = NO;
-        // v1.8 #11: default NO → writer uses refdiff_v2 group layout
-        // when native libttio_rans is linked and run is eligible.
-        _optDisableRefDiffV2 = NO;
-        // v1.8 #11 ch3: default NO → writer emits NAME_TOKENIZED_V2
-        // (codec id 15) for read_names when native libttio_rans is linked.
-        _optDisableNameTokenizedV2 = NO;
     }
     return self;
 }

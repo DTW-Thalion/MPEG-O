@@ -4,13 +4,14 @@
 //   python/tests/test_mate_info_v2_dispatch.py     (Task 12)
 //   java/src/test/java/.../MateInfoV2DispatchTest.java (Task 13)
 //
+// v1.0 reset: the inline-mate-info v2 opt-out flag was removed. The
+// writer always emits the inline_v2 codec when libttio_rans is linked.
+//
 // Verifies:
-//   * By default (nativeAvailable && !optDisableInlineMateInfoV2) the writer
-//     encodes via inline_v2 (HDF5 group with @compression=13 on inline_v2 ds).
-//   * When optDisableInlineMateInfoV2=YES the writer falls back to the M82
-//     compound dataset (mate_info is a Dataset, not a Group).
-//   * signalCodecOverrides[mate_info_*] raise NSInvalidArgumentException when
-//     v2 is active, and are accepted when v2 is disabled.
+//   * Default (nativeAvailable) the writer encodes via inline_v2
+//     (HDF5 group with @compression=13 on inline_v2 ds).
+//   * signalCodecOverrides[mate_info_*] raise NSInvalidArgumentException
+//     because v2 is always active when the native lib is linked.
 //   * Full round-trip via TTIOSpectralDataset returns correct mate fields.
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
@@ -41,8 +42,7 @@ static void v2dRm(NSString *p)
 
 /** Build a small 3-read genomic run suitable for mate-info dispatch tests.
  *  Chromosomes: chr1/chr1/chr2.  Mates: chr1/chr2/* (unmapped). */
-static TTIOWrittenGenomicRun *v2dMakeRun(BOOL disableInlineV2,
-                                          NSDictionary *overrides)
+static TTIOWrittenGenomicRun *v2dMakeRun(NSDictionary *overrides)
 {
     NSUInteger n = 3;
     NSUInteger L = 8;
@@ -88,7 +88,6 @@ static TTIOWrittenGenomicRun *v2dMakeRun(BOOL disableInlineV2,
                      chromosomes:chroms
                signalCompression:TTIOCompressionNone
             signalCodecOverrides:(overrides ?: @{})];
-    run.optDisableInlineMateInfoV2 = disableInlineV2;
     return run;
 }
 
@@ -152,7 +151,7 @@ static void testDefaultWritesInlineV2(void)
     NSString *path = v2dTmpPath(@"default.tio");
     v2dRm(path);
 
-    TTIOWrittenGenomicRun *run = v2dMakeRun(NO, nil);  // opt-out = NO (default)
+    TTIOWrittenGenomicRun *run = v2dMakeRun(nil);
     NSError *err = nil;
     PASS(v2dWrite(path, run, &err), "MIV2Dispatch #1: write succeeds (native)");
 
@@ -169,26 +168,7 @@ static void testDefaultWritesInlineV2(void)
     v2dRm(path);
 }
 
-// ── Test 2: opt-out falls back to M82 compound ────────────────────────────────
-
-static void testOptOutWritesV1Layout(void)
-{
-    NSString *path = v2dTmpPath(@"optout.tio");
-    v2dRm(path);
-
-    TTIOWrittenGenomicRun *run = v2dMakeRun(YES, nil);  // opt-out = YES
-    NSError *err = nil;
-    PASS(v2dWrite(path, run, &err), "MIV2Dispatch #2: write succeeds (v1 opt-out)");
-
-    // HDF5 inspection: mate_info must be a DATASET (M82 compound).
-    H5G_obj_t ot = v2dMateInfoObjectType(path.fileSystemRepresentation);
-    PASS(ot == H5O_TYPE_DATASET,
-         "MIV2Dispatch #2: signal_channels/mate_info is a DATASET (M82 compound)");
-
-    v2dRm(path);
-}
-
-// ── Test 3: mate_info_* overrides rejected when v2 active ────────────────────
+// ── Test 2: mate_info_* overrides rejected (v2 always active) ────────────────
 
 static void testSignalCodecOverridesRejectedWhenV2Active(void)
 {
@@ -196,7 +176,7 @@ static void testSignalCodecOverridesRejectedWhenV2Active(void)
     v2dRm(path);
 
     NSDictionary *overrides = @{@"mate_info_chrom": @(TTIOCompressionRansOrder1)};
-    TTIOWrittenGenomicRun *run = v2dMakeRun(NO, overrides);  // opt-out = NO
+    TTIOWrittenGenomicRun *run = v2dMakeRun(overrides);
 
     BOOL raised = NO;
     NSException *captured = nil;
@@ -207,80 +187,53 @@ static void testSignalCodecOverridesRejectedWhenV2Active(void)
         raised = YES;
         captured = e;
     }
-    PASS(raised, "MIV2Dispatch #3: mate_info_* override raises NSException when v2 active");
+    PASS(raised, "MIV2Dispatch #2: mate_info_* override raises NSException when v2 active");
     PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
-         "MIV2Dispatch #3: exception is NSInvalidArgumentException");
-    PASS(captured && [captured.reason rangeOfString:@"optDisableInlineMateInfoV2"].location
-         != NSNotFound,
-         "MIV2Dispatch #3: exception mentions optDisableInlineMateInfoV2");
+         "MIV2Dispatch #2: exception is NSInvalidArgumentException");
 
     v2dRm(path);
 }
 
-// ── Test 4: mate_info_* overrides allowed when v2 disabled ───────────────────
-
-static void testSignalCodecOverridesAllowedWhenV2Disabled(void)
-{
-    NSString *path = v2dTmpPath(@"allow.tio");
-    v2dRm(path);
-
-    NSDictionary *overrides = @{@"mate_info_chrom": @(TTIOCompressionRansOrder1)};
-    TTIOWrittenGenomicRun *run = v2dMakeRun(YES, overrides);  // opt-out = YES
-
-    NSError *err = nil;
-    BOOL ok = NO;
-    BOOL raised = NO;
-    @try {
-        ok = v2dWrite(path, run, &err);
-    } @catch (NSException *e) {
-        raised = YES;
-    }
-    PASS(!raised, "MIV2Dispatch #4: mate_info_* override does NOT raise when v2 disabled");
-    PASS(ok, "MIV2Dispatch #4: write succeeds with mate_info_* override + opt-out");
-
-    v2dRm(path);
-}
-
-// ── Test 5: full round-trip via SpectralDataset (default = v2) ───────────────
+// ── Test 3: full round-trip via SpectralDataset (default = v2) ───────────────
 
 static void testV2RoundTripDefault(void)
 {
     NSString *path = v2dTmpPath(@"rt.tio");
     v2dRm(path);
 
-    TTIOWrittenGenomicRun *run = v2dMakeRun(NO, nil);
+    TTIOWrittenGenomicRun *run = v2dMakeRun(nil);
     NSError *err = nil;
-    PASS(v2dWrite(path, run, &err), "MIV2Dispatch #5: write succeeds");
+    PASS(v2dWrite(path, run, &err), "MIV2Dispatch #3: write succeeds");
 
     TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    PASS(ds != nil, "MIV2Dispatch #5: dataset re-opens");
+    PASS(ds != nil, "MIV2Dispatch #3: dataset re-opens");
 
     TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    PASS(gr != nil && gr.readCount == 3, "MIV2Dispatch #5: 3 reads round-trip");
+    PASS(gr != nil && gr.readCount == 3, "MIV2Dispatch #3: 3 reads round-trip");
 
     TTIOAlignedRead *r0 = [gr readAtIndex:0 error:&err];
     TTIOAlignedRead *r1 = [gr readAtIndex:1 error:&err];
     TTIOAlignedRead *r2 = [gr readAtIndex:2 error:&err];
-    PASS(r0 && r1 && r2, "MIV2Dispatch #5: all 3 reads materialise");
+    PASS(r0 && r1 && r2, "MIV2Dispatch #3: all 3 reads materialise");
 
     // Mate chromosomes: input was @[@"chr1", @"chr2", @"*"].
     // v2 encodes chr1→id0, chr2→id1, *→-1.  Decoder returns the
     // chromosome name string (or "*" for -1).
     PASS([r0.mateChromosome isEqualToString:@"chr1"],
-         "MIV2Dispatch #5: r0.mateChromosome == 'chr1'");
+         "MIV2Dispatch #3: r0.mateChromosome == 'chr1'");
     PASS([r1.mateChromosome isEqualToString:@"chr2"],
-         "MIV2Dispatch #5: r1.mateChromosome == 'chr2'");
+         "MIV2Dispatch #3: r1.mateChromosome == 'chr2'");
     PASS([r2.mateChromosome isEqualToString:@"*"],
-         "MIV2Dispatch #5: r2.mateChromosome == '*' (unmapped)");
+         "MIV2Dispatch #3: r2.mateChromosome == '*' (unmapped)");
 
     // Mate positions: {150, 250, -1}
     PASS(r0.matePosition == 150 && r1.matePosition == 250 && r2.matePosition == -1,
-         "MIV2Dispatch #5: matePositions round-trip");
+         "MIV2Dispatch #3: matePositions round-trip");
 
     // Template lengths: {100, -200, 0}
     PASS(r0.templateLength == 100 && r1.templateLength == -200
          && r2.templateLength == 0,
-         "MIV2Dispatch #5: templateLengths round-trip");
+         "MIV2Dispatch #3: templateLengths round-trip");
 
     [ds closeFile];
     v2dRm(path);
@@ -296,8 +249,6 @@ void testMateInfoV2Dispatch(void)
         SKIP("libttio_rans not linked — v2 dispatch tests require native lib");
     }
     testDefaultWritesInlineV2();
-    testOptOutWritesV1Layout();
     testSignalCodecOverridesRejectedWhenV2Active();
-    testSignalCodecOverridesAllowedWhenV2Disabled();
     testV2RoundTripDefault();
 }

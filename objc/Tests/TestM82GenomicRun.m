@@ -374,9 +374,6 @@ static TTIOWrittenGenomicRun *makeWrittenGenomicRun(NSUInteger nReads, BOOL pair
                  templateLengths:tlensData
                      chromosomes:chroms
                signalCompression:TTIOCompressionZlib];
-    // v1.7 #11: these M82 tests exercise the v1/M82 format; opt out of
-    // inline_v2 so the on-disk layout and sentinel values are unchanged.
-    run.optDisableInlineMateInfoV2 = YES;
     return run;
 }
 
@@ -421,8 +418,11 @@ static void testBasicRoundTrip100Reads(void)
     PASS([r0.cigar isEqualToString:@"150M"], "M82: cigar[0] = 150M");
     PASS(r0.sequence.length == 150, "M82: sequence[0] length = 150");
     PASS(r0.flags == 0, "M82: flags[0] = 0");
-    PASS([r0.mateChromosome isEqualToString:@""],
-         "M82: mateChromosome[0] sentinel");
+    // v1.0 reset: the v2 inline mate codec normalises the unmapped
+    // sentinel to "*" (chrom_id == -1).  The input mateChromosomes[0]
+    // was "" (unpaired in makeWrittenGenomicRun(N, NO)).
+    PASS([r0.mateChromosome isEqualToString:@"*"],
+         "M82: mateChromosome[0] unmapped sentinel ('*' under v2 inline)");
     PASS(r0.matePosition == -1, "M82: matePosition[0] sentinel");
 
     TTIOAlignedRead *r99 = [gr readAtIndex:99 error:&err];
@@ -585,9 +585,6 @@ static void testEmptyRun(void)
                 templateLengths:[NSData data]
                     chromosomes:@[]
               signalCompression:TTIOCompressionZlib];
-    // v1.7 #11: empty-run tests exercise M82 format; opt out of inline_v2.
-    empty.optDisableInlineMateInfoV2 = YES;
-
     NSError *err = nil;
     BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
                                                   title:@"t"

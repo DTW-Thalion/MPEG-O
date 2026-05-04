@@ -91,9 +91,6 @@ static TTIOWrittenGenomicRun *makeM90GenomicRun(NSDictionary<NSString *, NSNumbe
                      chromosomes:chroms
                signalCompression:TTIOCompressionNone
             signalCodecOverrides:(codecOverrides ?: @{})];
-    // v1.7 #11: M90 tests assert exact sentinel strings (e.g. ""); opt out
-    // of inline_v2 so the v1 compound path preserves the original values.
-    run.optDisableInlineMateInfoV2 = YES;
     return run;
 }
 

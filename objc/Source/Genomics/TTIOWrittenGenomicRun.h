@@ -89,38 +89,6 @@ NS_ASSUME_NONNULL_BEGIN
  *  never reads this path; metadata only. */
 @property (nonatomic, copy, nullable) NSString *externalReferencePath;
 
-/** v1.7 #11: when YES, the writer falls back to the M86 Phase F
- *  per-field mate_info subgroup layout (or the M82 compound when no
- *  per-field overrides are set). Default NO: the writer encodes via
- *  TTIOMateInfoV2 (codec id 13) into
- *  signal_channels/mate_info/inline_v2.
- *
- *  Cross-language equivalent of Python's
- *  ``WrittenGenomicRun.opt_disable_inline_mate_info_v2``. */
-@property (nonatomic, assign) BOOL optDisableInlineMateInfoV2;
-
-/** v1.8 #11: when YES, the writer falls back to the v1 REF_DIFF flat
- *  dataset layout (@compression=9) for signal_channels/sequences.
- *  Default NO: when the native lib is linked AND the run is eligible
- *  (reference present, all reads mapped, single chromosome), the writer
- *  encodes via TTIORefDiffV2 (codec id 14) and writes sequences as a
- *  GROUP containing a refdiff_v2 child dataset.
- *
- *  Cross-language equivalent of Python's
- *  ``WrittenGenomicRun.opt_disable_ref_diff_v2``. */
-@property (nonatomic, assign) BOOL optDisableRefDiffV2;
-
-/** v1.8 #11 ch3: when YES, the writer falls back to the M82 compound
- *  read_names layout (or the v1 NAME_TOKENIZED codec if explicitly
- *  selected via signalCodecOverrides[@"read_names"]). Default NO: when
- *  the native lib is linked, the writer encodes via TTIONameTokenizerV2
- *  (codec id 15) and writes read_names as a flat 1-D uint8 dataset
- *  with @compression=15.
- *
- *  Cross-language equivalent of Python's
- *  ``WrittenGenomicRun.opt_disable_name_tokenized_v2``. */
-@property (nonatomic, assign) BOOL optDisableNameTokenizedV2;
-
 @property (readonly) NSUInteger readCount;
 
 - (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode
