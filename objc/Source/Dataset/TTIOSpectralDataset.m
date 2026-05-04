@@ -31,6 +31,7 @@
 #import "Codecs/TTIOFqzcompNx16Z.h"             // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"                // M95 v1.2
 #import "Codecs/TTIOMateInfoV2.h"               // v1.7 #11: inline mate-pair codec
+#import "Codecs/TTIORefDiffV2.h"               // v1.8 #11: bit-packed ref-diff v2
 #import <hdf5.h>
 #include <openssl/md5.h>                          // M93 v1.2 ref MD5
 
@@ -49,12 +50,14 @@
 #  define TTIO_HOST_TO_LE64(x) htole64(x)
 #endif
 
-// Forward declarations — needed because mate_info write paths call
-// functions defined later in the file.
+// Forward declarations — needed because mate_info and ref_diff v2 write
+// paths call functions defined later in the file.
 @class TTIOWrittenGenomicRun;
 static NSNumber *_TTIO_M95_ResolveIntOverride(TTIOWrittenGenomicRun *run,
                                                NSString *channel);
 static BOOL _TTIO_M94_RunIsV15Candidate(TTIOWrittenGenomicRun *run);
+static BOOL _TTIO_V18_UseRefDiffV2(TTIOWrittenGenomicRun *run);
+static NSNumber *_TTIO_M93_DefaultSequencesCodec(TTIOWrittenGenomicRun *run);
 
 // Internal SPI surfaced by TTIOAcquisitionRun for the dataset-level
 // decrypt lifecycle. Not part of the public header.
@@ -2001,7 +2004,9 @@ static BOOL _TTIO_M93_EmbedReferences(TTIOHDF5Group *study,
     for (TTIOWrittenGenomicRun *run in [genomicRuns objectEnumerator]) {
         if (!run.embedReference) continue;
         if (run.referenceChromSeqs == nil) continue;
-        // Only embed when a context-aware codec is actually selected.
+        // Embed when a context-aware codec is selected (explicit override or
+        // v1.5 auto-default), or when the v1.8 refdiff_v2 default path will
+        // be used (v2 eligible + not opted out).
         BOOL ctxAware = NO;
         for (NSNumber *codec in [run.signalCodecOverrides objectEnumerator]) {
             if ((TTIOCompression)[codec unsignedIntegerValue]
@@ -2010,6 +2015,13 @@ static BOOL _TTIO_M93_EmbedReferences(TTIOHDF5Group *study,
                 break;
             }
         }
+        // v1.5 auto-default: if no override and referenceChromSeqs is set,
+        // _TTIO_M93_DefaultSequencesCodec will select REF_DIFF.
+        if (!ctxAware && _TTIO_M93_DefaultSequencesCodec(run) != nil) {
+            ctxAware = YES;
+        }
+        // v1.8 #11: also embed when the v2 auto-default path is active.
+        if (!ctxAware) ctxAware = _TTIO_V18_UseRefDiffV2(run);
         if (!ctxAware) continue;
 
         NSData *md5 = _TTIO_M93_ReferenceMD5ForRun(run);
@@ -2193,6 +2205,163 @@ static NSNumber *_TTIO_M93_DefaultSequencesCodec(TTIOWrittenGenomicRun *run)
     if (run.signalCompression != TTIOCompressionZlib) return nil;
     if (run.referenceChromSeqs == nil) return nil;
     return @(TTIOCompressionRefDiff);
+}
+
+// ── v1.8 #11: ref_diff v2 writer helpers ────────────────────────────────────
+//
+// When eligible (native lib + reference + all reads mapped + opt-not-disabled),
+// the writer creates signal_channels/sequences as a GROUP containing a
+// single child dataset "refdiff_v2" carrying the encoded blob
+// @compression=14.  On opt-out or ineligibility the existing
+// _TTIO_M93_WriteRefDiffSequences path is used unchanged.
+
+/** Returns YES when the v2 path should be used for sequences. */
+static BOOL _TTIO_V18_UseRefDiffV2(TTIOWrittenGenomicRun *run)
+{
+    if (run.optDisableRefDiffV2) return NO;
+    if (![TTIORefDiffV2 nativeAvailable]) return NO;
+    if (run.referenceChromSeqs == nil) return NO;
+    // Reject runs that have any unmapped read (cigar == "*" or "").
+    for (NSString *c in run.cigars) {
+        if (c.length == 0 || [c isEqualToString:@"*"]) return NO;
+    }
+    return YES;
+}
+
+/** Build the n_reads+1 offsets array required by TTIORefDiffV2.encode.
+ *  run.offsetsData contains n_reads uint64 entries; we append
+ *  offsets[n-1] + lengths[n-1] as the sentinel. */
+static NSData *_TTIO_V18_BuildOffsetsPlusOne(TTIOWrittenGenomicRun *run)
+{
+    NSUInteger n = run.readCount;
+    NSMutableData *out =
+        [NSMutableData dataWithLength:(n + 1) * sizeof(uint64_t)];
+    const uint64_t *src = (const uint64_t *)run.offsetsData.bytes;
+    uint64_t *dst = (uint64_t *)out.mutableBytes;
+    for (NSUInteger i = 0; i < n; i++) dst[i] = src[i];
+    if (n > 0) {
+        const uint32_t *lens = (const uint32_t *)run.lengthsData.bytes;
+        dst[n] = src[n - 1] + (uint64_t)lens[n - 1];
+    } else {
+        dst[0] = 0;
+    }
+    return out;
+}
+
+/** HDF5 fast path: write signal_channels/sequences as a GROUP with a
+ *  refdiff_v2 child dataset @compression=14.  Falls back (with a silent
+ *  BASE_PACK path) via _TTIO_M93_WriteRefDiffSequences when the C
+ *  encoder returns nil. */
+static BOOL _TTIO_V18_WriteRefDiffV2SequencesHDF5(TTIOHDF5Group *sc,
+                                                    TTIOWrittenGenomicRun *run,
+                                                    NSError **error)
+{
+    // Resolve single-chromosome reference (same logic as v1 path).
+    NSString *chrom = nil;
+    NSData *chromSeq =
+        _TTIO_M93_ResolveSingleChromForRun(run, &chrom, error);
+    if (!chromSeq && error && *error) return NO;
+    if (chromSeq == nil) {
+        // No reference: fall back to v1 path (BASE_PACK).
+        return _TTIO_M93_WriteRefDiffSequences(sc, run, error);
+    }
+
+    NSData *offsets = _TTIO_V18_BuildOffsetsPlusOne(run);
+    NSData *md5 = _TTIO_M93_ReferenceMD5ForRun(run);
+
+    NSError *encErr = nil;
+    NSData *encoded =
+        [TTIORefDiffV2 encodeSequences:run.sequencesData
+                               offsets:offsets
+                             positions:run.positionsData
+                          cigarStrings:run.cigars
+                             reference:chromSeq
+                          referenceMd5:md5
+                          referenceUri:run.referenceUri ?: @""
+                         readsPerSlice:10000
+                                 error:&encErr];
+    if (!encoded) {
+        // Encode failed — fall back to v1 path so the write still succeeds.
+        return _TTIO_M93_WriteRefDiffSequences(sc, run, error);
+    }
+
+    // Create signal_channels/sequences as a GROUP.
+    TTIOHDF5Group *seqGrp = [sc createGroupNamed:@"sequences" error:error];
+    if (!seqGrp) return NO;
+
+    TTIOHDF5Dataset *ds = [seqGrp createDatasetNamed:@"refdiff_v2"
+                                            precision:TTIOPrecisionUInt8
+                                               length:encoded.length
+                                            chunkSize:65536
+                                          compression:TTIOCompressionNone
+                                     compressionLevel:0
+                                                error:error];
+    if (!ds) return NO;
+    if (![ds writeData:encoded error:error]) return NO;
+    return _TTIO_M86_WriteUInt8Attribute([ds datasetId], "compression",
+                                         (uint8_t)TTIOCompressionRefDiffV2,
+                                         error);
+}
+
+/** Storage-protocol path: twin of _TTIO_V18_WriteRefDiffV2SequencesHDF5. */
+static BOOL _TTIO_V18_WriteRefDiffV2SequencesStorage(id<TTIOStorageGroup> sc,
+                                                       TTIOWrittenGenomicRun *run,
+                                                       NSError **error)
+{
+    NSString *chrom = nil;
+    NSData *chromSeq =
+        _TTIO_M93_ResolveSingleChromForRun(run, &chrom, error);
+    if (!chromSeq && error && *error) return NO;
+    if (chromSeq == nil) {
+        // No reference: fall through to the existing BASE_PACK path via
+        // _TTIO_M86_WriteByteChannelStorage with no override.
+        return _TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
+                                                  run.sequencesData,
+                                                  TTIOCompressionBasePack,
+                                                  @(TTIOCompressionBasePack),
+                                                  error);
+    }
+
+    NSData *offsets = _TTIO_V18_BuildOffsetsPlusOne(run);
+    NSData *md5 = _TTIO_M93_ReferenceMD5ForRun(run);
+
+    NSError *encErr = nil;
+    NSData *encoded =
+        [TTIORefDiffV2 encodeSequences:run.sequencesData
+                               offsets:offsets
+                             positions:run.positionsData
+                          cigarStrings:run.cigars
+                             reference:chromSeq
+                          referenceMd5:md5
+                          referenceUri:run.referenceUri ?: @""
+                         readsPerSlice:10000
+                                 error:&encErr];
+    if (!encoded) {
+        // Fall back to plain sequences with BASE_PACK.
+        return _TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
+                                                  run.sequencesData,
+                                                  TTIOCompressionBasePack,
+                                                  @(TTIOCompressionBasePack),
+                                                  error);
+    }
+
+    // Create signal_channels/sequences as a GROUP.
+    id<TTIOStorageGroup> seqGrp = [sc createGroupNamed:@"sequences" error:error];
+    if (!seqGrp) return NO;
+
+    id<TTIOStorageDataset> ds =
+        [seqGrp createDatasetNamed:@"refdiff_v2"
+                          precision:TTIOPrecisionUInt8
+                             length:encoded.length
+                          chunkSize:65536
+                        compression:TTIOCompressionNone
+                   compressionLevel:0
+                              error:error];
+    if (!ds) return NO;
+    if (![ds writeAll:encoded error:error]) return NO;
+    return [ds setAttributeValue:@((uint8_t)TTIOCompressionRefDiffV2)
+                         forName:@"compression"
+                           error:error];
 }
 
 /** v1.5 default codec for qualities (M94 Q5a=B): when caller supplied
@@ -2396,11 +2565,23 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // genomic_index/, mirroring MS's spectrum_index/ pattern. See
     // docs/format-spec.md §4 and §10.7. Override-validation rejects
     // these channel names.
-    // M86: sequences/qualities through codec-aware byte-channel writer.
-    if (!_TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
-                                           run.sequencesData, codec,
-                                           run.signalCodecOverrides[@"sequences"],
-                                           error)) return NO;
+    // v1.8 #11: sequences dispatch — prefer refdiff_v2 group layout when
+    // eligible; fall through to the M86 byte-channel writer otherwise.
+    {
+        NSNumber *seqOvr = run.signalCodecOverrides[@"sequences"];
+        if (seqOvr == nil) seqOvr = _TTIO_M93_DefaultSequencesCodec(run);
+        if (_TTIO_V18_UseRefDiffV2(run) &&
+            (seqOvr == nil ||
+             (TTIOCompression)[seqOvr unsignedIntegerValue]
+                 == TTIOCompressionRefDiff)) {
+            if (!_TTIO_V18_WriteRefDiffV2SequencesStorage(sc, run, error)) return NO;
+        } else {
+            if (!_TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
+                                                   run.sequencesData, codec,
+                                                   seqOvr,
+                                                   error)) return NO;
+        }
+    }
     if (!_TTIO_M86_WriteByteChannelStorage(sc, @"qualities",
                                            run.qualitiesData, codec,
                                            run.signalCodecOverrides[@"qualities"],
@@ -2840,15 +3021,25 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // genomic_index/, mirroring MS's spectrum_index/ pattern. See
     // docs/format-spec.md §4 and §10.7.
     TTIOCompression codec = run.signalCompression;
-    // sequences (uint8) — codec-aware. M93 v1.2: when the override
-    // (or v1.5 auto-default) selects REF_DIFF, dispatch to the
-    // context-aware encoder; otherwise fall through to the M86 byte-
-    // channel writer.
+    // sequences (uint8) — codec-aware.
+    // v1.8 #11: when the v2 path is eligible (native lib + reference +
+    // no unmapped reads + opt-not-disabled), write sequences as a GROUP
+    // with a refdiff_v2 child dataset (@compression=14). This supersedes
+    // the v1 REF_DIFF flat-dataset path for default writes.
+    // M93 v1.2: when the override (or v1.5 auto-default) selects REF_DIFF
+    // but v2 is NOT active, dispatch to the context-aware v1 encoder.
+    // Otherwise fall through to the M86 byte-channel writer.
     NSNumber *seqOverride = run.signalCodecOverrides[@"sequences"];
     if (seqOverride == nil) {
         seqOverride = _TTIO_M93_DefaultSequencesCodec(run);
     }
-    if (seqOverride != nil &&
+    if (_TTIO_V18_UseRefDiffV2(run) &&
+        (seqOverride == nil ||
+         (TTIOCompression)[seqOverride unsignedIntegerValue]
+             == TTIOCompressionRefDiff)) {
+        // v1.8 #11: group layout with refdiff_v2 child @compression=14.
+        if (!_TTIO_V18_WriteRefDiffV2SequencesHDF5(sc, run, error)) return NO;
+    } else if (seqOverride != nil &&
         (TTIOCompression)[seqOverride unsignedIntegerValue]
             == TTIOCompressionRefDiff) {
         if (!_TTIO_M93_WriteRefDiffSequences(sc, run, error)) return NO;

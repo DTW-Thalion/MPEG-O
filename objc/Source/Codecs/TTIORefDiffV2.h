@@ -22,6 +22,9 @@ extern NSString *const TTIORefDiffV2ErrorDomain;
 
 @interface TTIORefDiffV2 : NSObject
 
+/// YES when libttio_rans is linked and the v2 codec functions are available.
++ (BOOL)nativeAvailable;
+
 /// Encode a slice of reads to the refdiff_v2 blob.
 ///
 /// All NSData inputs are interpreted as parallel typed arrays:
