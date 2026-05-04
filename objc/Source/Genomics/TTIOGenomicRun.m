@@ -10,8 +10,10 @@
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"   // M86 Phase D
-#import "Codecs/TTIONameTokenizer.h"   // M86 Phase E
-#import "Codecs/TTIORefDiff.h"            // M93 v1.2
+// v1.0 reset Phase 2c: TTIONameTokenizer (v1, codec id 8) and
+// TTIORefDiff (v1, codec id 9) impl files removed. Reader paths
+// rejected with NSError; v2 codec headers used for the surviving
+// reader dispatch.
 #import "Codecs/TTIOFqzcompNx16Z.h"        // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"           // M95 v1.2
 #import "Codecs/TTIOReferenceResolver.h"  // M93 v1.2
@@ -335,9 +337,16 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         case 7: // TTIOCompressionQualityBinned (M86 Phase D)
             decoded = TTIOQualityDecode(encoded, &decErr);
             break;
-        case 9: // TTIOCompressionRefDiff (M93 v1.2)
-            decoded = [self _ttio_m93_decodeRefDiff:encoded error:&decErr];
-            break;
+        case 9: // TTIOCompressionRefDiff (v1 — removed in Phase 2c)
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2020
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"REF_DIFF v1 (codec id 9) is no longer "
+                           @"supported in v1.0; file was written with "
+                           @"an older TTI-O version. Re-encode with "
+                           @"v1.0+ which uses REF_DIFF_V2 (codec id "
+                           @"14)."}];
+            return nil;
         case 11: // TTIOCompressionDeltaRansOrder0 (M95 v1.2)
             decoded = TTIODeltaRansDecode(encoded, &decErr);
             break;
@@ -369,121 +378,10 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return [decoded subdataWithRange:NSMakeRange(from, to - from)];
 }
 
-// M93 v1.2: REF_DIFF decode helper. Reads the codec header to discover
-// the reference URI + MD5, resolves the chromosome via TTIOReferenceResolver
-// (embedded → REF_PATH external → NSError), gathers the run's per-read
-// CIGARs + positions, and concatenates the decoder's per-read NSDatas
-// into a single flat byte buffer matching the M82 sequences-channel
-// contract.
-- (NSData *)_ttio_m93_decodeRefDiff:(NSData *)encoded
-                                error:(NSError **)error
-{
-    NSError *headerErr = nil;
-    NSUInteger headerEnd = 0;
-    TTIORefDiffCodecHeader *h = [TTIORefDiffCodecHeader
-        headerFromData:encoded bytesConsumed:&headerEnd error:&headerErr];
-    if (!h) {
-        if (error) *error = headerErr;
-        return nil;
-    }
-
-    // Locate the file root for the resolver. Required for embedded
-    // /study/references/<uri>/. Fall back to nil + REF_PATH only when
-    // we cannot navigate up (non-HDF5 backend).
-    TTIOHDF5Group *rootHDF5 = nil;
-    if ([_group respondsToSelector:@selector(unwrap)]) {
-        TTIOHDF5Group *runG = [(id)_group performSelector:@selector(unwrap)];
-        hid_t fid = H5Iget_file_id([runG groupId]);
-        if (fid >= 0) {
-            hid_t rootId = H5Gopen2(fid, "/", H5P_DEFAULT);
-            if (rootId >= 0) {
-                rootHDF5 = [[TTIOHDF5Group alloc] initWithGroupId:rootId
-                                                          retainer:nil];
-            }
-            H5Idec_ref(fid);
-        }
-    }
-
-    TTIOReferenceResolver *resolver = [[TTIOReferenceResolver alloc]
-        initWithRootGroup:rootHDF5
-    externalReferencePath:nil];
-
-    // Single-chromosome v1.2 limitation: collect unique chromosomes.
-    NSMutableSet<NSString *> *unique = [NSMutableSet set];
-    for (NSUInteger i = 0; i < _index.count; i++) {
-        NSString *c = [_index chromosomeAt:i];
-        if (c.length) [unique addObject:c];
-    }
-    NSString *chrom = unique.count == 1 ? [unique anyObject] : @"";
-    if (unique.count > 1) {
-        if (error) *error = [NSError
-            errorWithDomain:@"TTIOGenomicRun" code:2090
-                   userInfo:@{NSLocalizedDescriptionKey:
-                       [NSString stringWithFormat:
-                            @"REF_DIFF v1.2 first pass supports single-"
-                            @"chromosome runs only; this run carries %lu "
-                            @"distinct chromosomes. Multi-chromosome "
-                            @"support is an M93.X follow-up.",
-                            (unsigned long)unique.count]}];
-        return nil;
-    }
-
-    NSError *resolveErr = nil;
-    NSData *chromSeq = [resolver resolveURI:h.referenceURI
-                                expectedMD5:h.referenceMD5
-                                 chromosome:chrom
-                                      error:&resolveErr];
-    if (!chromSeq) {
-        if (error) *error = resolveErr;
-        return nil;
-    }
-
-    // Gather the cigars list. Trigger -cigarAtIndex:0 once to populate
-    // _decodedCigars when the cigars channel uses the codec path; for
-    // the compound layout fall back to manual enumeration.
-    NSMutableArray<NSString *> *cigars = nil;
-    if (_index.count > 0) {
-        NSError *cigErr = nil;
-        (void)[self cigarAtIndex:0 error:&cigErr];
-    }
-    if (_decodedCigars != nil) {
-        cigars = [NSMutableArray arrayWithArray:_decodedCigars];
-    } else {
-        cigars = [NSMutableArray arrayWithCapacity:_index.count];
-        for (NSUInteger i = 0; i < _index.count; i++) {
-            NSError *cigErr = nil;
-            NSString *cig = [self cigarAtIndex:i error:&cigErr];
-            if (!cig) {
-                if (error) *error = cigErr;
-                return nil;
-            }
-            [cigars addObject:cig];
-        }
-    }
-
-    // Pack positions into a contiguous int64 LE NSData (host LE on
-    // x86/ARM; the codec consumes raw int64_t pointers).
-    NSMutableData *positions = [NSMutableData
-        dataWithLength:_index.count * sizeof(int64_t)];
-    int64_t *pp = (int64_t *)positions.mutableBytes;
-    for (NSUInteger i = 0; i < _index.count; i++) {
-        pp[i] = [_index positionAt:i];
-    }
-
-    NSError *decErr = nil;
-    NSArray<NSData *> *perRead = [TTIORefDiff decodeData:encoded
-                                                    cigars:cigars
-                                                 positions:positions
-                                        referenceChromSeq:chromSeq
-                                                      error:&decErr];
-    if (!perRead) {
-        if (error) *error = decErr;
-        return nil;
-    }
-    NSMutableData *flat = [NSMutableData data];
-    for (NSData *d in perRead) [flat appendData:d];
-    return flat;
-}
+// v1.0 reset Phase 2c: _ttio_m93_decodeRefDiff (v1 REF_DIFF reader)
+// removed alongside TTIORefDiff codec impl. The byte-channel codec
+// dispatcher above raises a clear NSError when @compression == 9 is
+// encountered on legacy files.
 
 // M94.Z v1.2: FQZCOMP_NX16_Z (CRAM-mimic rANS-Nx16) decode helper.
 // Same plumbing as the old NX16: revcomp_flags from run.flags & 16,
@@ -566,8 +464,21 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         } else {
             codec_id = _ttio_m86_read_compression_attr_protocol(ds);
         }
-        if (codec_id != (uint8_t)8 /* NAME_TOKENIZED */
-            && codec_id != (uint8_t)15 /* NAME_TOKENIZED_V2 */) {
+        // v1.0 reset Phase 2c: NAME_TOKENIZED v1 (codec id 8) reader
+        // path removed — reject with a clear error so legacy files
+        // surface a re-encode hint instead of silently mis-decoding.
+        if (codec_id == (uint8_t)8 /* NAME_TOKENIZED v1 */) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2041
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"NAME_TOKENIZED v1 (codec id 8) is no "
+                           @"longer supported in v1.0; file was "
+                           @"written with an older TTI-O version. "
+                           @"Re-encode with v1.0+ which uses "
+                           @"NAME_TOKENIZED_V2 (codec id 15)."}];
+            return nil;
+        }
+        if (codec_id != (uint8_t)15 /* NAME_TOKENIZED_V2 */) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOGenomicRun" code:2041
                        userInfo:@{NSLocalizedDescriptionKey:
@@ -575,28 +486,35 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
                                 @"signal_channel 'read_names': "
                                 @"@compression=%u is not a supported "
                                 @"TTIO codec id for the read_names "
-                                @"channel (only NAME_TOKENIZED = 8 and "
-                                @"NAME_TOKENIZED_V2 = 15 are recognised)",
+                                @"channel (only NAME_TOKENIZED_V2 = "
+                                @"15 is recognised under v1.0)",
                                 (unsigned)codec_id]}];
             return nil;
         }
         id allRaw = [ds readAll:error];
         if (![allRaw isKindOfClass:[NSData class]]) return nil;
         NSData *encoded = (NSData *)allRaw;
-        NSArray<NSString *> *decoded = nil;
-        NSError *decErr = nil;
-        if (codec_id == (uint8_t)15) {
-            // v1.8 #11 ch3: name_tok_v2 codec output (NTK2 magic).
-            decoded = [TTIONameTokenizerV2 decodeData:encoded error:&decErr];
-        } else {
-            decoded = TTIONameTokenizerDecode(encoded, &decErr);
+        // Empty-run short-circuit: zero-length blob → empty list.
+        if (encoded.length == 0) {
+            _decodedReadNames = @[];
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2040
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"read_names index %lu out of range "
+                                @"[0, 0) — empty read_names blob",
+                                (unsigned long)i]}];
+            return nil;
         }
+        NSError *decErr = nil;
+        NSArray<NSString *> *decoded =
+            [TTIONameTokenizerV2 decodeData:encoded error:&decErr];
         if (decoded == nil) {
             if (error) *error = decErr ?: [NSError
                 errorWithDomain:@"TTIOGenomicRun" code:2042
                        userInfo:@{NSLocalizedDescriptionKey:
                            @"signal_channel 'read_names' "
-                           @"NAME_TOKENIZED/v2 decode failed"}];
+                           @"NAME_TOKENIZED_V2 decode failed"}];
             return nil;
         }
         _decodedReadNames = [decoded copy];
@@ -614,30 +532,17 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         return _decodedReadNames[i];
     }
 
-    // Compound path (M82, no override).
-    TTIOCompoundField *vlValue =
-        [TTIOCompoundField fieldWithName:@"value"
-                                    kind:TTIOCompoundFieldKindVLString];
-    NSArray *names = [self compoundRowsNamed:@"read_names"
-                                       field:vlValue
-                                       error:error];
-    if (!names) return nil;
-    if (i >= names.count) {
-        if (error) *error = [NSError
-            errorWithDomain:@"TTIOGenomicRun" code:2044
-                   userInfo:@{NSLocalizedDescriptionKey:
-                       [NSString stringWithFormat:
-                            @"read_names index %lu out of range [0, %lu)",
-                            (unsigned long)i,
-                            (unsigned long)names.count]}];
-        return nil;
-    }
-    id nameV = names[i][@"value"];
-    if ([nameV isKindOfClass:[NSData class]]) {
-        return [[NSString alloc] initWithData:nameV
-                                      encoding:NSUTF8StringEncoding];
-    }
-    return (NSString *)nameV;
+    // v1.0 reset Phase 2c: M82 read_names compound layout removed.
+    // A non-UInt8 read_names dataset is from an older TTI-O version.
+    if (error) *error = [NSError
+        errorWithDomain:@"TTIOGenomicRun" code:2044
+               userInfo:@{NSLocalizedDescriptionKey:
+                   @"signal_channels/read_names is a compound layout "
+                   @"(M82 / VL-string). The compound layout is no "
+                   @"longer supported in v1.0; file was written with "
+                   @"an older TTI-O version. Re-encode with v1.0+ "
+                   @"which uses NAME_TOKENIZED_V2 (codec id 15)."}];
+    return nil;
 }
 
 // M86 Phase C: unsigned LEB128 varint reader for the cigars rANS
@@ -795,19 +700,17 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
                 off += (size_t)len;
             }
             _decodedCigars = [out copy];
-        } else if (codec_id == (uint8_t)8 /* NAME_TOKENIZED */) {
-            NSError *decErr = nil;
-            NSArray<NSString *> *decoded =
-                TTIONameTokenizerDecode(encoded, &decErr);
-            if (decoded == nil) {
-                if (error) *error = decErr ?: [NSError
-                    errorWithDomain:@"TTIOGenomicRun" code:2065
-                           userInfo:@{NSLocalizedDescriptionKey:
-                               @"signal_channel 'cigars' "
-                               @"NAME_TOKENIZED decode failed"}];
-                return nil;
-            }
-            _decodedCigars = [decoded copy];
+        } else if (codec_id == (uint8_t)8 /* NAME_TOKENIZED v1 */) {
+            // v1.0 reset Phase 2c: NAME_TOKENIZED v1 reader removed.
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2065
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"NAME_TOKENIZED v1 (codec id 8) is no "
+                           @"longer supported in v1.0; cigars dataset "
+                           @"was written with an older TTI-O version. "
+                           @"Re-encode with v1.0+ which uses RANS "
+                           @"on the cigars channel."}];
+            return nil;
         } else {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOGenomicRun" code:2066
@@ -816,9 +719,9 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
                                 @"signal_channel 'cigars': "
                                 @"@compression=%u is not a supported "
                                 @"TTIO codec id for the cigars channel "
-                                @"(only RANS_ORDER0 = 4, RANS_ORDER1 = "
-                                @"5, and NAME_TOKENIZED = 8 are "
-                                @"recognised)",
+                                @"(only RANS_ORDER0 = 4 and "
+                                @"RANS_ORDER1 = 5 are recognised "
+                                @"under v1.0)",
                                 (unsigned)codec_id]}];
             return nil;
         }
@@ -1308,12 +1211,13 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return YES;
 }
 
-// M86 Phase F: lazily decode the mate_info chrom field from the Phase F
-// subgroup. Caches in _decodedMateInfo[@"chrom"] and returns
-// NSArray<NSString *>. Routes through Phase C cigars helpers for the
-// rANS path (length-prefix-concat) and TTIONameTokenizerDecode for
-// the NAME_TOKENIZED path. For un-overridden chrom fields the dataset
-// is a compound with VL_STRING value field — read whole and extract.
+// v1.0 reset Phase 2c: _decodeMateChromOrError + _decodeMateIntField
+// (per-field subgroup decoders) are no longer reachable — the per-
+// read accessors above reject anything but the inline_v2 layout. The
+// implementations are wrapped in #if 0 so the file structure stays
+// recognisable for future readers; remove in Phase 2d alongside the
+// _RESERVED_10 enum slot cleanup.
+#if 0
 - (NSArray<NSString *> *)_decodeMateChromOrError:(NSError **)error
 {
     NSArray<NSString *> *cached = _decodedMateInfo[@"chrom"];
@@ -1426,20 +1330,18 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
             _decodedMateInfo[@"chrom"] = [out copy];
             return _decodedMateInfo[@"chrom"];
         }
-        if (codec_id == (uint8_t)8 /* NAME_TOKENIZED */) {
-            NSError *decErr = nil;
-            NSArray<NSString *> *decoded =
-                TTIONameTokenizerDecode(encoded, &decErr);
-            if (decoded == nil) {
-                if (error) *error = decErr ?: [NSError
-                    errorWithDomain:@"TTIOGenomicRun" code:2074
-                           userInfo:@{NSLocalizedDescriptionKey:
-                               @"signal_channel 'mate_info/chrom' "
-                               @"NAME_TOKENIZED decode failed"}];
-                return nil;
-            }
-            _decodedMateInfo[@"chrom"] = [decoded copy];
-            return _decodedMateInfo[@"chrom"];
+        if (codec_id == (uint8_t)8 /* NAME_TOKENIZED v1 */) {
+            // v1.0 reset Phase 2c: NAME_TOKENIZED v1 reader removed.
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOGenomicRun" code:2074
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"NAME_TOKENIZED v1 (codec id 8) is no "
+                           @"longer supported in v1.0; "
+                           @"mate_info/chrom dataset was written with "
+                           @"an older TTI-O version. Re-encode with "
+                           @"v1.0+ which uses the inline_v2 mate_info "
+                           @"layout (codec id 13)."}];
+            return nil;
         }
         if (error) *error = [NSError
             errorWithDomain:@"TTIOGenomicRun" code:2075
@@ -1447,9 +1349,9 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
                        [NSString stringWithFormat:
                             @"signal_channel 'mate_info/chrom': "
                             @"@compression=%u is not a supported TTIO "
-                            @"codec id (only RANS_ORDER0 = 4, "
-                            @"RANS_ORDER1 = 5, and NAME_TOKENIZED = 8 "
-                            @"are recognised for this channel)",
+                            @"codec id (only RANS_ORDER0 = 4 and "
+                            @"RANS_ORDER1 = 5 are recognised under "
+                            @"v1.0)",
                             (unsigned)codec_id]}];
         return nil;
     }
@@ -1579,9 +1481,24 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
                     // future shape validation.
     return _decodedMateInfo[name];
 }
+#endif  /* Phase 2c-removed: _decodeMateChromOrError + _decodeMateIntField */
 
-// v1.7 #11 / M86 Phase F: per-read accessors for the three mate fields. Each
-// dispatches: inline_v2 first (v1.7), then Phase-F subgroup, then M82 compound.
+// v1.0 reset Phase 2c: per-read mate-field accessors recognise only
+// the inline_v2 layout (v1.7 codec id 13). The Phase F per-field
+// subgroup (linkType 1) and M82 compound (linkType 0) layouts are
+// rejected with a clear NSError directing callers at the v2 codec.
+static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
+{
+    if (error) *error = [NSError
+        errorWithDomain:@"TTIOGenomicRun" code:2080
+               userInfo:@{NSLocalizedDescriptionKey:
+                   @"signal_channels/mate_info layout is not the "
+                   @"inline_v2 codec (id 13). The Phase F per-field "
+                   @"subgroup and M82 compound layouts are no longer "
+                   @"supported in v1.0; file was written with an "
+                   @"older TTI-O version. Re-encode with v1.0+."}];
+}
+
 - (NSString *)_mateChromAtIndex:(NSUInteger)i error:(NSError **)error
 {
     if ([self _mateInfoIsInlineV2]) {
@@ -1590,41 +1507,8 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
         if (!chroms || i >= chroms.count) return nil;
         return chroms[i];
     }
-    if ([self _mateInfoIsSubgroup]) {
-        NSArray<NSString *> *chroms = [self _decodeMateChromOrError:error];
-        if (!chroms) return nil;
-        if (i >= chroms.count) return nil;
-        return chroms[i];
-    }
-    // M82 compound path — read whole-and-cache via _compoundCache,
-    // mirroring the original -readAtIndex: block.
-    NSArray *mates = _compoundCache[@"mate_info"];
-    if (!mates) {
-        NSArray *mateFields = @[
-            [TTIOCompoundField fieldWithName:@"chrom" kind:TTIOCompoundFieldKindVLString],
-            [TTIOCompoundField fieldWithName:@"pos"   kind:TTIOCompoundFieldKindInt64],
-            [TTIOCompoundField fieldWithName:@"tlen"  kind:TTIOCompoundFieldKindInt64],
-        ];
-        id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:error];
-        if (!sig) return nil;
-        if ([sig respondsToSelector:@selector(unwrap)]) {
-            TTIOHDF5Group *h5 = [(id)sig performSelector:@selector(unwrap)];
-            mates = [TTIOCompoundIO readGenericFromGroup:h5
-                                             datasetNamed:@"mate_info"
-                                                   fields:mateFields
-                                                    error:error];
-        } else {
-            id<TTIOStorageDataset> ds = [sig openDatasetNamed:@"mate_info" error:error];
-            if (ds) mates = [ds readAll:error];
-        }
-        if (!mates) return nil;
-        _compoundCache[@"mate_info"] = mates;
-    }
-    if (i >= mates.count) return nil;
-    id mcv = mates[i][@"chrom"];
-    return [mcv isKindOfClass:[NSData class]]
-        ? [[NSString alloc] initWithData:mcv encoding:NSUTF8StringEncoding]
-        : (NSString *)(mcv ?: @"");
+    _ttio_v17_reject_legacy_mate_layout(error);
+    return nil;
 }
 
 - (int64_t)_matePosAtIndex:(NSUInteger)i error:(NSError **)error
@@ -1638,31 +1522,8 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
         int64_t v; memcpy(&v, (const int64_t *)bytes.bytes + i, sizeof(int64_t));
         return v;
     }
-    if ([self _mateInfoIsSubgroup]) {
-        NSData *bytes = [self _decodeMateIntField:@"pos"
-                                          elemSize:sizeof(int64_t)
-                                             error:error];
-        if (!bytes) return 0;
-        NSUInteger n = bytes.length / sizeof(int64_t);
-        if (i >= n) return 0;
-        const int64_t *src = (const int64_t *)bytes.bytes;
-        // Bytes are LE; on x86/ARM (LE host) memcpy gives the right value.
-        int64_t v;
-        memcpy(&v, &src[i], sizeof(int64_t));
-        return v;
-    }
-    // M82 compound path.
-    NSArray *mates = _compoundCache[@"mate_info"];
-    if (!mates) {
-        // Force population via -_mateChromAtIndex: side-effect; reuses
-        // the same compound-cache fill. (Discarded return; we just
-        // need the cache populated.)
-        NSError *gErr = nil;
-        (void)[self _mateChromAtIndex:0 error:&gErr];
-        mates = _compoundCache[@"mate_info"];
-    }
-    if (!mates || i >= mates.count) return 0;
-    return [mates[i][@"pos"] longLongValue];
+    _ttio_v17_reject_legacy_mate_layout(error);
+    return 0;
 }
 
 - (int32_t)_mateTlenAtIndex:(NSUInteger)i error:(NSError **)error
@@ -1676,26 +1537,8 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
         int32_t v; memcpy(&v, (const int32_t *)bytes.bytes + i, sizeof(int32_t));
         return v;
     }
-    if ([self _mateInfoIsSubgroup]) {
-        NSData *bytes = [self _decodeMateIntField:@"tlen"
-                                          elemSize:sizeof(int32_t)
-                                             error:error];
-        if (!bytes) return 0;
-        NSUInteger n = bytes.length / sizeof(int32_t);
-        if (i >= n) return 0;
-        const int32_t *src = (const int32_t *)bytes.bytes;
-        int32_t v;
-        memcpy(&v, &src[i], sizeof(int32_t));
-        return v;
-    }
-    NSArray *mates = _compoundCache[@"mate_info"];
-    if (!mates) {
-        NSError *gErr = nil;
-        (void)[self _mateChromAtIndex:0 error:&gErr];
-        mates = _compoundCache[@"mate_info"];
-    }
-    if (!mates || i >= mates.count) return 0;
-    return (int32_t)[mates[i][@"tlen"] integerValue];
+    _ttio_v17_reject_legacy_mate_layout(error);
+    return 0;
 }
 
 - (TTIOAlignedRead *)readAtIndex:(NSUInteger)i error:(NSError **)error

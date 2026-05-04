@@ -238,14 +238,14 @@ static void testRefDiffV2DispatchDefaultWritesGroup(void)
 
 // ── Test 2: no reference + REF_DIFF override → BASE_PACK flat dataset ────────
 
+// Test 2 (v1.0 reset Phase 2c): explicit REF_DIFF v1 (codec id 9)
+// override on sequences is now rejected by override-validation. The
+// writer raises NSInvalidArgumentException up front.
 static void testRefDiffV2DispatchNoRefWritesBasePack(void)
 {
-    NSString *path = rdv2dTmpPath(@"noref");
+    NSString *path = rdv2dTmpPath(@"reject_v1_override");
     rdv2dRm(path);
 
-    // No reference → v2 not eligible (referenceChromSeqs == nil), so
-    // the writer falls through to the v1 REF_DIFF path which itself
-    // falls back to BASE_PACK when no reference is present (Q5b = C).
     TTIOWrittenGenomicRun *run = rdv2dMakeRun(NO);
     TTIOWrittenGenomicRun *runWithOverride =
         [[TTIOWrittenGenomicRun alloc]
@@ -268,20 +268,20 @@ static void testRefDiffV2DispatchNoRefWritesBasePack(void)
                      chromosomes:run.chromosomes
                signalCompression:TTIOCompressionZlib
             signalCodecOverrides:@{ @"sequences": @(TTIOCompressionRefDiff) }];
-    // No referenceChromSeqs → v2 not eligible → v1 fallback → BASE_PACK.
 
-    NSError *err = nil;
-    PASS(rdv2dWrite(path, runWithOverride, &err),
-         "RefDiffV2Dispatch #2: write succeeds (REF_DIFF override + no ref)");
-
-    int ot = rdv2dSequencesObjectType(path.fileSystemRepresentation);
-    PASS(ot == (int)H5O_TYPE_DATASET,
-         "RefDiffV2Dispatch #2: signal_channels/sequences is a DATASET (fallback)");
-
-    uint8_t cid = rdv2dFlatSequencesCompressionAttr(path.fileSystemRepresentation);
-    PASS(cid == (uint8_t)TTIOCompressionBasePack,
-         "RefDiffV2Dispatch #2: flat sequences @compression == 6 (BASE_PACK fallback, got %u)",
-         (unsigned)cid);
+    BOOL raised = NO;
+    @try {
+        NSError *err = nil;
+        rdv2dWrite(path, runWithOverride, &err);
+    } @catch (NSException *e) {
+        raised = YES;
+        PASS([e.name isEqualToString:NSInvalidArgumentException],
+             "RefDiffV2Dispatch #2: REF_DIFF v1 override raises "
+             "NSInvalidArgumentException (got %@)", e.name);
+    }
+    PASS(raised,
+         "RefDiffV2Dispatch #2: REF_DIFF v1 override on sequences is "
+         "rejected under v1.0 reset");
 
     rdv2dRm(path);
 }
