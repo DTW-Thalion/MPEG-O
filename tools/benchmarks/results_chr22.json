@@ -1,8 +1,8 @@
 [
   {
-    "dataset": "chr22_na12878",
-    "bam_input_bytes": 175235266,
-    "started_at_unix": 1777406318.0703974,
+    "dataset": "chr22_na12878_mapped",
+    "bam_input_bytes": 151415812,
+    "started_at_unix": 1777911683.8869455,
     "host": {
       "hostname": "TTI-PC-0001",
       "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
@@ -15,30 +15,30 @@
         "compress": {
           "format_name": "bam",
           "operation": "compress",
-          "wall_seconds": 6.121929494000028,
-          "output_size_bytes": 175235346,
+          "wall_seconds": 5.343727857999966,
+          "output_size_bytes": 151415870,
           "command": [
             "/usr/bin/samtools",
             "view",
             "-b",
             "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/bam/chr22_na12878.bam",
-            "/home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.bam"
+            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_mapped/bam/chr22_na12878_mapped.bam",
+            "/home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.lean.mapped.bam"
           ],
           "notes": "samtools view -b (BGZF re-pack)"
         },
         "decompress": {
           "format_name": "bam",
           "operation": "decompress",
-          "wall_seconds": 1.7928446269999085,
-          "output_size_bytes": 800253342,
+          "wall_seconds": 1.2014839639999764,
+          "output_size_bytes": 490328416,
           "command": [
             "/usr/bin/samtools",
             "view",
             "-h",
             "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/bam/chr22_na12878.bam.dump.sam",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/bam/chr22_na12878.bam"
+            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_mapped/bam/chr22_na12878_mapped.bam.dump.sam",
+            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_mapped/bam/chr22_na12878_mapped.bam"
           ],
           "notes": ""
         }
@@ -47,8 +47,8 @@
         "compress": {
           "format_name": "cram",
           "operation": "compress",
-          "wall_seconds": 3.791027952000036,
-          "output_size_bytes": 284996850,
+          "wall_seconds": 3.037552431999984,
+          "output_size_bytes": 86094472,
           "command": [
             "/usr/bin/samtools",
             "view",
@@ -60,16 +60,16 @@
             "--output-fmt-option",
             "embed_ref=0",
             "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/cram/chr22_na12878.cram",
-            "/home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.bam"
+            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_mapped/cram/chr22_na12878_mapped.cram",
+            "/home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.lean.mapped.bam"
           ],
           "notes": "CRAM 3.1, no embedded reference"
         },
         "decompress": {
           "format_name": "cram",
           "operation": "decompress",
-          "wall_seconds": 2.362508205999916,
-          "output_size_bytes": 800179901,
+          "wall_seconds": 1.6993029889999889,
+          "output_size_bytes": 519528262,
           "command": [
             "/usr/bin/samtools",
             "view",
@@ -77,8 +77,8 @@
             "-T",
             "/home/toddw/TTI-O/data/genomic/reference/hs37.chr22.fa",
             "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/cram/chr22_na12878.cram.dump.sam",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/cram/chr22_na12878.cram"
+            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_mapped/cram/chr22_na12878_mapped.cram.dump.sam",
+            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_mapped/cram/chr22_na12878_mapped.cram"
           ],
           "notes": ""
         }
@@ -87,63 +87,22 @@
         "compress": {
           "format_name": "ttio",
           "operation": "compress",
-          "wall_seconds": 44.65506083399998,
-          "output_size_bytes": 236658579,
+          "wall_seconds": 17.854568256999983,
+          "output_size_bytes": 85760471,
           "command": [
             "<in-process: BamReader.to_genomic_run + SpectralDataset.write_minimal>"
           ],
-          "notes": "Python reference path. Codecs: BASE_PACK on sequences, RANS_ORDER0 on qualities, RANS_ORDER1 on cigars, NAME_TOKENIZED on read_names + mate_info_chrom. Lossless throughout."
+          "notes": "Python reference path, v1.10 default codec stack: REF_DIFF_V2 (id 14) on sequences (falls back to BASE_PACK if ref load fails), FQZCOMP_NX16_Z V4 (V4/CRAM 3.1 fqzcomp byte-equal) on qualities, RANS_ORDER1 on cigars, NAME_TOKENIZED_V2 (id 15) on read_names, MATE_INLINE_V2 (id 13) on mate_info. v1.10 #10 drops genomic_index/spectrum_index/chromatogram_index offsets columns. Lossless throughout."
         },
         "decompress": {
           "format_name": "ttio",
           "operation": "decompress",
-          "wall_seconds": 125.52436047599997,
-          "output_size_bytes": 76851654,
+          "wall_seconds": 16.711150132999933,
+          "output_size_bytes": 76212588,
           "command": [
             "<in-process: SpectralDataset.open + per-read AlignedRead access>"
           ],
-          "notes": "Touched 1,781,125 reads to force lazy decode of every channel."
-        }
-      },
-      "genie": {
-        "compress": {
-          "format_name": "genie",
-          "operation": "compress",
-          "wall_seconds": 7.690294693999931,
-          "output_size_bytes": 106609375,
-          "command": [
-            "/usr/bin/samtools",
-            "view",
-            "-h",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/genie/chr22_na12878.sam",
-            "/home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.bam",
-            "&&",
-            "/home/toddw/genie/install/bin/genie",
-            "run",
-            "-i",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/genie/chr22_na12878.sam",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/genie/chr22_na12878.mgb",
-            "-f"
-          ],
-          "notes": "MPEG-G via Genie (default profile). BAM\u2192SAM intermediate (1.69s) + genie run (6.00s); SAM removed after."
-        },
-        "decompress": {
-          "format_name": "genie",
-          "operation": "decompress",
-          "wall_seconds": 3.483178041999963,
-          "output_size_bytes": 467459531,
-          "command": [
-            "/home/toddw/genie/install/bin/genie",
-            "run",
-            "-i",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/genie/chr22_na12878.mgb",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878/genie/chr22_na12878.genie.dump.sam",
-            "-f"
-          ],
-          "notes": ""
+          "notes": "Touched 1,766,433 reads to force lazy decode of every channel."
         }
       }
     }

@@ -2,7 +2,7 @@
   {
     "dataset": "chr22_na12878_lean",
     "bam_input_bytes": 152310575,
-    "started_at_unix": 1777407629.5166807,
+    "started_at_unix": 1777911846.4539735,
     "host": {
       "hostname": "TTI-PC-0001",
       "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
@@ -15,7 +15,7 @@
         "compress": {
           "format_name": "bam",
           "operation": "compress",
-          "wall_seconds": 5.35376295399999,
+          "wall_seconds": 5.347230889999992,
           "output_size_bytes": 152310634,
           "command": [
             "/usr/bin/samtools",
@@ -30,7 +30,7 @@
         "decompress": {
           "format_name": "bam",
           "operation": "decompress",
-          "wall_seconds": 1.210897689000035,
+          "wall_seconds": 1.2102071589999923,
           "output_size_bytes": 494375794,
           "command": [
             "/usr/bin/samtools",
@@ -47,7 +47,7 @@
         "compress": {
           "format_name": "cram",
           "operation": "compress",
-          "wall_seconds": 2.9726230320000013,
+          "wall_seconds": 2.9876006519998555,
           "output_size_bytes": 86668311,
           "command": [
             "/usr/bin/samtools",
@@ -68,7 +68,7 @@
         "decompress": {
           "format_name": "cram",
           "operation": "decompress",
-          "wall_seconds": 1.6870198899999878,
+          "wall_seconds": 1.6874184139999215,
           "output_size_bytes": 523506657,
           "command": [
             "/usr/bin/samtools",
@@ -87,212 +87,22 @@
         "compress": {
           "format_name": "ttio",
           "operation": "compress",
-          "wall_seconds": 45.153664757,
-          "output_size_bytes": 216886844,
+          "wall_seconds": 18.836621795000156,
+          "output_size_bytes": 125260387,
           "command": [
             "<in-process: BamReader.to_genomic_run + SpectralDataset.write_minimal>"
           ],
-          "notes": "Python reference path. Codecs: BASE_PACK on sequences, RANS_ORDER0 on qualities, RANS_ORDER1 on cigars, NAME_TOKENIZED on read_names + mate_info_chrom. Lossless throughout."
+          "notes": "Python reference path, v1.10 default codec stack: REF_DIFF_V2 (id 14) on sequences (falls back to BASE_PACK if ref load fails), FQZCOMP_NX16_Z V4 (V4/CRAM 3.1 fqzcomp byte-equal) on qualities, RANS_ORDER1 on cigars, NAME_TOKENIZED_V2 (id 15) on read_names, MATE_INLINE_V2 (id 13) on mate_info. v1.10 #10 drops genomic_index/spectrum_index/chromatogram_index offsets columns. Lossless throughout."
         },
         "decompress": {
           "format_name": "ttio",
           "operation": "decompress",
-          "wall_seconds": 125.66691603600003,
+          "wall_seconds": 17.43480186900001,
           "output_size_bytes": 76851654,
           "command": [
             "<in-process: SpectralDataset.open + per-read AlignedRead access>"
           ],
           "notes": "Touched 1,781,125 reads to force lazy decode of every channel."
-        }
-      },
-      "genie": {
-        "compress": {
-          "format_name": "genie",
-          "operation": "compress",
-          "wall_seconds": 6.904636471999993,
-          "output_size_bytes": 106609375,
-          "command": [
-            "/usr/bin/samtools",
-            "view",
-            "-h",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_lean/genie/chr22_na12878_lean.sam",
-            "/home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.lean.bam",
-            "&&",
-            "/home/toddw/genie/install/bin/genie",
-            "run",
-            "-i",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_lean/genie/chr22_na12878_lean.sam",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_lean/genie/chr22_na12878_lean.mgb",
-            "-f"
-          ],
-          "notes": "MPEG-G via Genie (default profile). BAM\u2192SAM intermediate (1.09s) + genie run (5.82s); SAM removed after."
-        },
-        "decompress": {
-          "format_name": "genie",
-          "operation": "decompress",
-          "wall_seconds": 3.5806668970000146,
-          "output_size_bytes": 467459531,
-          "command": [
-            "/home/toddw/genie/install/bin/genie",
-            "run",
-            "-i",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_lean/genie/chr22_na12878_lean.mgb",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/chr22_na12878_lean/genie/chr22_na12878_lean.genie.dump.sam",
-            "-f"
-          ],
-          "notes": ""
-        }
-      }
-    }
-  },
-  {
-    "dataset": "synthetic_mixed_chrom",
-    "bam_input_bytes": 713004,
-    "started_at_unix": 1777407822.698036,
-    "host": {
-      "hostname": "TTI-PC-0001",
-      "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
-      "python": "3.12.3",
-      "samtools": "samtools 1.19.2",
-      "ttio": "1.2.0"
-    },
-    "formats": {
-      "bam": {
-        "compress": {
-          "format_name": "bam",
-          "operation": "compress",
-          "wall_seconds": 0.10197720199994365,
-          "output_size_bytes": 713043,
-          "command": [
-            "/usr/bin/samtools",
-            "view",
-            "-b",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/bam/synthetic_mixed_chrom.bam",
-            "/home/toddw/TTI-O/data/genomic/synthetic/mixed_chrom.bam"
-          ],
-          "notes": "samtools view -b (BGZF re-pack)"
-        },
-        "decompress": {
-          "format_name": "bam",
-          "operation": "decompress",
-          "wall_seconds": 0.014304966000054264,
-          "output_size_bytes": 4065460,
-          "command": [
-            "/usr/bin/samtools",
-            "view",
-            "-h",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/bam/synthetic_mixed_chrom.bam.dump.sam",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/bam/synthetic_mixed_chrom.bam"
-          ],
-          "notes": ""
-        }
-      },
-      "cram": {
-        "compress": {
-          "format_name": "cram",
-          "operation": "compress",
-          "wall_seconds": 3.111729017000016,
-          "output_size_bytes": 482005,
-          "command": [
-            "/usr/bin/samtools",
-            "view",
-            "-C",
-            "-T",
-            "/home/toddw/TTI-O/data/genomic/synthetic/mixed_chrom.fa",
-            "--output-fmt-option",
-            "version=3.1",
-            "--output-fmt-option",
-            "embed_ref=0",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/cram/synthetic_mixed_chrom.cram",
-            "/home/toddw/TTI-O/data/genomic/synthetic/mixed_chrom.bam"
-          ],
-          "notes": "CRAM 3.1, no embedded reference"
-        },
-        "decompress": {
-          "format_name": "cram",
-          "operation": "decompress",
-          "wall_seconds": 1.198808303000078,
-          "output_size_bytes": 6704187,
-          "command": [
-            "/usr/bin/samtools",
-            "view",
-            "-h",
-            "-T",
-            "/home/toddw/TTI-O/data/genomic/synthetic/mixed_chrom.fa",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/cram/synthetic_mixed_chrom.cram.dump.sam",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/cram/synthetic_mixed_chrom.cram"
-          ],
-          "notes": ""
-        }
-      },
-      "ttio": {
-        "compress": {
-          "format_name": "ttio",
-          "operation": "compress",
-          "wall_seconds": 0.27475600700006453,
-          "output_size_bytes": 1283056,
-          "command": [
-            "<in-process: BamReader.to_genomic_run + SpectralDataset.write_minimal>"
-          ],
-          "notes": "Python reference path. Codecs: BASE_PACK on sequences, RANS_ORDER0 on qualities, RANS_ORDER1 on cigars, NAME_TOKENIZED on read_names + mate_info_chrom. Lossless throughout."
-        },
-        "decompress": {
-          "format_name": "ttio",
-          "operation": "decompress",
-          "wall_seconds": 1.0087431199999628,
-          "output_size_bytes": 560195,
-          "command": [
-            "<in-process: SpectralDataset.open + per-read AlignedRead access>"
-          ],
-          "notes": "Touched 16,000 reads to force lazy decode of every channel."
-        }
-      },
-      "genie": {
-        "compress": {
-          "format_name": "genie",
-          "operation": "compress",
-          "wall_seconds": 0.08022113800006991,
-          "output_size_bytes": 645834,
-          "command": [
-            "/usr/bin/samtools",
-            "view",
-            "-h",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.sam",
-            "/home/toddw/TTI-O/data/genomic/synthetic/mixed_chrom.bam",
-            "&&",
-            "/home/toddw/genie/install/bin/genie",
-            "run",
-            "-i",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.sam",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.mgb",
-            "-f"
-          ],
-          "notes": "MPEG-G via Genie (default profile). BAM\u2192SAM intermediate (0.01s) + genie run (0.07s); SAM removed after."
-        },
-        "decompress": {
-          "format_name": "genie",
-          "operation": "decompress",
-          "wall_seconds": 0.049449370000047566,
-          "output_size_bytes": 3832206,
-          "command": [
-            "/home/toddw/genie/install/bin/genie",
-            "run",
-            "-i",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.mgb",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.genie.dump.sam",
-            "-f"
-          ],
-          "notes": ""
         }
       }
     }

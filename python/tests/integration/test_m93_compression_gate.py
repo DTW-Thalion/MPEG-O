@@ -1,18 +1,16 @@
-"""M93 compression-gate integration test.
+"""End-to-end TTI-O / CRAM 3.1 compression-ratio acceptance gate.
 
-With M94.Z (FQZCOMP_NX16_Z, CRAM-mimic) and M95 (DELTA_RANS_ORDER0 +
-structural) shipped, this test serves as the v1.2.0 acceptance gate:
-TTI-O lossless within 1.15× of CRAM 3.1 on the chr22 mapped-only
-fixture.
+History: this file started life as the M93 REF_DIFF v1 gate (≤2.5×
+CRAM), tightened to the v1.2.0 1.15× target after M94.Z + M95 shipped,
+and after #11 (mate_info v2 / REF_DIFF v2 / NAME_TOKENIZED v2) plus
+#10 (offsets-cumsum) the v1.10 default stack actually produces TTI-O
+files **slightly smaller than CRAM 3.1** on chr22 (~0.996×). The 1.15×
+ceiling is now far above measured behavior; the test serves as a
+regression bound — TTI-O must stay within 1.10× of CRAM going forward,
+which is generous against measurement noise (run-to-run jitter, BAM
+re-pack overhead) but catches any major codec regression.
 
-For M93 alone, the gate is relaxed to **≤2.5×** CRAM 3.1 — the M93
-contribution closes ~10–15% of the gap on this dataset (45 MB BASE_PACK
-sequences → 5 MB REF_DIFF + ~50 MB embedded reference). The bigger
-wins come from M94 (qualities ~110 MB → ~55 MB) and M95 (integer
-channels ~17 MB → ~3 MB + structural HDF5 overhead reduction).
-
-The test is **skipped** when the chr22 mapped-only fixture is not on
-disk (e.g. fresh checkout without the DVC pull). Run with::
+Skipped when the chr22 mapped-only fixture is not on disk. Run with::
 
     pytest python/tests/integration/test_m93_compression_gate.py -v
 """
@@ -29,12 +27,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CHR22_BAM = REPO_ROOT / "data" / "genomic" / "na12878" / "na12878.chr22.lean.mapped.bam"
 CHR22_REF = REPO_ROOT / "data" / "genomic" / "reference" / "hs37.chr22.fa"
 
-# M93 acceptance gate (relaxed). M94 + M95 will tighten this to 1.15×.
-M93_RATIO_CEILING = 2.5
-
-# v1.2.0 final acceptance gate — only enforce when M94 + M95 marker files exist.
-V1_2_0_RATIO_CEILING = 1.15
-V1_2_0_MARKER = REPO_ROOT / "python" / "src" / "ttio" / "codecs" / "fqzcomp_nx16_z.py"
+# Regression ceiling for the v1.10 codec stack. Measured at v1.10
+# default (REF_DIFF_V2 + FQZCOMP_NX16_Z V4 + NAME_TOKENIZED_V2 +
+# MATE_INLINE_V2 + #10 offsets-cumsum) is ~0.996× CRAM 3.1 on chr22
+# NA12878 lean+mapped. 1.10× is generous head-room for measurement
+# noise; tighten if a future release demonstrates lower variance.
+RATIO_CEILING = 1.10
 
 
 pytestmark = pytest.mark.skipif(
@@ -69,31 +67,23 @@ def _ttio_size(bam: Path, ref: Path, work_dir: Path) -> int:
     return result.output_size_bytes
 
 
-def test_m93_compression_within_ratio(tmp_path):
+def test_chr22_compression_ratio(tmp_path):
     cram_bytes = _samtools_cram_size(CHR22_BAM, CHR22_REF, tmp_path)
     ttio_bytes = _ttio_size(CHR22_BAM, CHR22_REF, tmp_path)
     ratio = ttio_bytes / cram_bytes
 
     print(
-        f"\n[m93 gate] chr22 mapped-only: CRAM 3.1 = {cram_bytes / 1e6:.2f} MB, "
+        f"\n[chr22 ratio gate] mapped-only: "
+        f"CRAM 3.1 = {cram_bytes / 1e6:.2f} MB, "
         f"TTI-O = {ttio_bytes / 1e6:.2f} MB → ratio {ratio:.3f}× "
-        f"(M93 ceiling {M93_RATIO_CEILING}×; v1.2.0 ceiling {V1_2_0_RATIO_CEILING}×)"
+        f"(ceiling {RATIO_CEILING}×; expected ~0.996× at v1.10 default)"
     )
 
-    if V1_2_0_MARKER.exists():
-        # M94 has shipped — enforce the v1.2.0 final gate.
-        ceiling = V1_2_0_RATIO_CEILING
-        gate_label = "v1.2.0 final"
-    else:
-        # M93 only — enforce the relaxed gate.
-        ceiling = M93_RATIO_CEILING
-        gate_label = "M93 (M94/M95 not yet shipped)"
-
-    assert ratio <= ceiling, (
-        f"TTI-O / CRAM ratio {ratio:.3f}× exceeds {gate_label} ceiling "
-        f"{ceiling:.2f}×. Pre-M93 baseline was ~2.5×; if you've recently "
-        f"changed the codec stack and the ratio went UP, investigate before "
-        f"committing."
+    assert ratio <= RATIO_CEILING, (
+        f"TTI-O / CRAM ratio {ratio:.3f}× exceeds {RATIO_CEILING:.2f}× "
+        f"ceiling. v1.10 default measured ~0.996×; if you've recently "
+        f"changed the codec stack and the ratio went UP, investigate "
+        f"before committing."
     )
 
 

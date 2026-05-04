@@ -202,14 +202,18 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
     from ttio.importers.bam import BamReader
     from dataclasses import replace
 
+    # v1.10 — let the v2 codecs default themselves. Setting
+    # signal_codec_overrides[sequences|read_names] to the v1 codec ids
+    # (REF_DIFF=9, NAME_TOKENIZED=8) BYPASSES the v1.8 / v1.9 dispatch
+    # that picks REF_DIFF_V2 (id 14) and NAME_TOKENIZED_V2 (id 15) by
+    # default. Pre-v1.10 versions of this harness pinned id 8 / id 9
+    # explicitly, which silently disabled v2 wins (~4 MB on chr22).
+    # Cigars stays on RANS_ORDER1 per WORKPLAN — v2 has no equivalent.
+    # Qualities at FQZCOMP_NX16_Z (id 12) dispatches to V4 native when
+    # the lib is loaded.
     codec_overrides = {
-        "sequences":          Compression.REF_DIFF,           # M93 v1.2 — was BASE_PACK
-        "qualities":          Compression.FQZCOMP_NX16_Z,     # M94.Z (CRAM-mimic)
+        "qualities":          Compression.FQZCOMP_NX16_Z,
         "cigars":             Compression.RANS_ORDER1,
-        "read_names":         Compression.NAME_TOKENIZED,
-        # v1.7 Task #12: mate_info_chrom removed — mate_info is now
-        # encoded as a single inline_v2 blob (codec id 13) by default
-        # via WrittenGenomicRun.opt_disable_inline_mate_info_v2 = False.
     }
 
     t0 = time.perf_counter()
@@ -260,12 +264,13 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
         output_size_bytes=out_path.stat().st_size,
         command=["<in-process: BamReader.to_genomic_run + SpectralDataset.write_minimal>"],
         notes=(
-            "Python reference path. Codecs (v1.7 / M93+M94.Z+#11 stack): "
-            "REF_DIFF on sequences (falls back to BASE_PACK if ref load fails), "
-            "FQZCOMP_NX16_Z "
-            f"({_quality_codec_label}) on qualities, RANS_ORDER1 on "
-            "cigars, NAME_TOKENIZED on read_names, MATE_INLINE_V2 on "
-            "mate_info. Lossless throughout."
+            "Python reference path, v1.10 default codec stack: "
+            "REF_DIFF_V2 (id 14) on sequences (falls back to BASE_PACK if "
+            "ref load fails), FQZCOMP_NX16_Z V4 "
+            f"({_quality_codec_label}) on qualities, RANS_ORDER1 on cigars, "
+            "NAME_TOKENIZED_V2 (id 15) on read_names, MATE_INLINE_V2 (id 13) "
+            "on mate_info. v1.10 #10 drops genomic_index/spectrum_index/"
+            "chromatogram_index offsets columns. Lossless throughout."
         ),
     )
 
