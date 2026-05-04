@@ -28,24 +28,19 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Task 13 — Java writer/reader dispatch tests for ref_diff v2.
+ * v1.0 — Java writer/reader dispatch tests for ref_diff v2.
  *
- * <p>Mirrors Python {@code test_ref_diff_v2_dispatch.py}. Five tests:
+ * <p>Mirrors Python {@code test_ref_diff_v2_dispatch.py}. Three tests:
  * <ol>
- *   <li>Default v1.8 write produces {@code signal_channels/sequences} as a GROUP
+ *   <li>Default v1.0 write produces {@code signal_channels/sequences} as a GROUP
  *       containing {@code refdiff_v2} dataset with {@code @compression == 14}
  *       (REF_DIFF_V2).</li>
- *   <li>Opt-out writes v1 layout: {@code sequences} is a flat Dataset with
- *       {@code @compression} in {9, 6}.</li>
  *   <li>Unmapped reads (any cigar="*") prevent v2 → flat BASE_PACK.</li>
- *   <li>v1 round-trip via opt-out: sequences read back correctly.</li>
  *   <li>v2 default round-trip: sequence bytes read back correctly.</li>
  * </ol>
  *
  * <p>All tests skip when the native JNI library is unavailable
  * ({@link RefDiffV2#isAvailable()} returns false).
- *
- * @since v1.8 (Task 13 ref_diff v2)
  */
 final class RefDiffV2DispatchTest {
 
@@ -75,15 +70,13 @@ final class RefDiffV2DispatchTest {
      * Build a minimal run with N=50 fully-mapped records.
      * Sequences are exact copies of the reference (0% sub rate).
      * Reference is embedded under "22".
-     *
-     * @param optOut when true, sets {@code optDisableRefDiffV2=true}
      */
-    private static WrittenGenomicRun buildMinimalRun(boolean optOut) {
-        return buildMinimalRunWithCigars(optOut, null);
+    private static WrittenGenomicRun buildMinimalRun() {
+        return buildMinimalRunWithCigars(null);
     }
 
     private static WrittenGenomicRun buildMinimalRunWithCigars(
-            boolean optOut, List<String> cigarsOverride) {
+            List<String> cigarsOverride) {
         byte[] refSeq = buildReference();
         Map<String, byte[]> chromSeqs = Map.of("22", refSeq);
 
@@ -129,21 +122,15 @@ final class RefDiffV2DispatchTest {
 
         // Use ZLIB as the default signalCompression so the v1.5 auto-default
         // (referenceChromSeqs != null → seqCodec = REF_DIFF → writeSequencesRefDiff)
-        // kicks in, which is then further branched by optDisableRefDiffV2.
-        // This mirrors how real genomic files are written.
-        WrittenGenomicRun run = new WrittenGenomicRun(
+        // kicks in. v2 is the only writer path in v1.0.
+        return new WrittenGenomicRun(
             AcquisitionMode.GENOMIC_WGS, "GRCh38.dispatch_test", "ILLUMINA",
             "DISP_TEST",
             positions, mapqs, flags, seq, qual, offsets, lengths,
             cigars, readNames, mateChromosomes, matePositions,
             templateLengths, chromosomes,
             Compression.ZLIB, Map.of(), List.of(),
-            true, chromSeqs, null,
-            false, false, false);  // optDisable Inline/RefDiff/NameTok V2 = all false
-        if (optOut) {
-            run = run.withOptDisableRefDiffV2(true);
-        }
-        return run;
+            true, chromSeqs, null);
     }
 
     private static Path writeRun(Path tmp, WrittenGenomicRun run,
@@ -156,12 +143,12 @@ final class RefDiffV2DispatchTest {
         return file;
     }
 
-    // ── Test 1: default v1.8 write produces refdiff_v2 group layout ───
+    // ── Test 1: default v1.0 write produces refdiff_v2 group layout ───
 
     @Test
     @EnabledIf("isNativeAvailable")
     void testDefaultWritesRefDiffV2(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun(false);
+        WrittenGenomicRun run = buildMinimalRun();
         Path file = writeRun(tmp, run, "default_v2.tio");
         try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
              Hdf5Group root = f.rootGroup();
@@ -171,7 +158,7 @@ final class RefDiffV2DispatchTest {
              Hdf5Group sc   = rg.openGroup("signal_channels");
              Hdf5Group seqGrp = sc.openGroup("sequences")) {
             assertTrue(seqGrp.hasChild("refdiff_v2"),
-                "v1.8 default must write sequences as a GROUP with "
+                "v1.0 default must write sequences as a GROUP with "
                 + "refdiff_v2 child; children: " + seqGrp);
             try (Hdf5Dataset blobDs = seqGrp.openDataset("refdiff_v2")) {
                 long compressionAttr = blobDs.readIntegerAttribute(
@@ -187,35 +174,7 @@ final class RefDiffV2DispatchTest {
         }
     }
 
-    // ── Test 2: opt-out writes v1 flat dataset ─────────────────────────
-
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void testOptOutWritesV1Layout(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun(true);  // opt-out
-        Path file = writeRun(tmp, run, "optout_v1.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg   = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc   = rg.openGroup("signal_channels")) {
-            // sequences must be a Dataset (not a Group) under opt-out.
-            try (Hdf5Dataset seqDs = sc.openDataset("sequences")) {
-                long compressionAttr = seqDs.readIntegerAttribute(
-                    "compression", -1L);
-                assertTrue(
-                    compressionAttr == Compression.REF_DIFF.ordinal()
-                    || compressionAttr == Compression.BASE_PACK.ordinal(),
-                    "@compression must be REF_DIFF (9) or BASE_PACK (6) "
-                    + "under opt-out, got " + compressionAttr);
-                assertEquals(Enums.Precision.UINT8, seqDs.getPrecision(),
-                    "opt-out sequences must be UINT8");
-            }
-        }
-    }
-
-    // ── Test 3: unmapped reads prevent v2 → flat BASE_PACK ────────────
+    // ── Test 2: unmapped reads prevent v2 → flat BASE_PACK ────────────
 
     @Test
     @EnabledIf("isNativeAvailable")
@@ -225,8 +184,7 @@ final class RefDiffV2DispatchTest {
         for (int i = 0; i < N; i++) {
             cigarsWithUnmapped.add(i == 10 ? "*" : READ_LEN + "M");
         }
-        WrittenGenomicRun run = buildMinimalRunWithCigars(
-            false, cigarsWithUnmapped);
+        WrittenGenomicRun run = buildMinimalRunWithCigars(cigarsWithUnmapped);
         Path file = writeRun(tmp, run, "unmapped.tio");
 
         try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
@@ -247,41 +205,12 @@ final class RefDiffV2DispatchTest {
         }
     }
 
-    // ── Test 4: v1 round-trip via opt-out ─────────────────────────────
-
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void testV1RoundTripViaOptOut(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun(true);  // opt-out
-        byte[] expectedSeq = run.sequences().clone();
-        Path file = writeRun(tmp, run, "v1_rt.tio");
-
-        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertNotNull(gr, "genomic_0001 must exist");
-            assertEquals(N, gr.readCount(), "read count must match");
-
-            byte[] reconstructed = new byte[TOTAL];
-            int pos = 0;
-            for (int i = 0; i < N; i++) {
-                AlignedRead rec = gr.readAt(i);
-                byte[] seqBytes = rec.sequence()
-                    .getBytes(StandardCharsets.US_ASCII);
-                System.arraycopy(seqBytes, 0, reconstructed, pos,
-                    seqBytes.length);
-                pos += seqBytes.length;
-            }
-            assertArrayEquals(expectedSeq, reconstructed,
-                "v1 opt-out round-trip: sequence bytes must match");
-        }
-    }
-
-    // ── Test 5: v2 default round-trip ─────────────────────────────────
+    // ── Test 3: v2 default round-trip ─────────────────────────────────
 
     @Test
     @EnabledIf("isNativeAvailable")
     void testV2RoundTripDefault(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun(false);  // v2 default
+        WrittenGenomicRun run = buildMinimalRun();
         byte[] expectedSeq = run.sequences().clone();
         Path file = writeRun(tmp, run, "v2_rt.tio");
 

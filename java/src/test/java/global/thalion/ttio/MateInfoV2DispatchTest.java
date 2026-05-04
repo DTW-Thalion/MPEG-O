@@ -15,7 +15,6 @@ import global.thalion.ttio.hdf5.Hdf5Dataset;
 import global.thalion.ttio.hdf5.Hdf5File;
 import global.thalion.ttio.hdf5.Hdf5Group;
 
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,24 +27,19 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Task 13 — Java writer/reader dispatch tests for mate_info v2.
+ * v1.0 — Java writer/reader dispatch tests for mate_info v2.
  *
- * <p>Mirrors Python {@code test_mate_info_v2_dispatch.py}. Five tests:
+ * <p>Mirrors Python {@code test_mate_info_v2_dispatch.py}. Three tests:
  * <ol>
- *   <li>Default v1.7 write produces {@code inline_v2} dataset with
+ *   <li>Default v1.0 write produces {@code inline_v2} dataset with
  *       {@code @compression == 13} (MATE_INLINE_V2).</li>
- *   <li>Opt-out writes v1 layout (chrom/pos/tlen child datasets,
- *       no {@code inline_v2}).</li>
  *   <li>{@code signal_codec_overrides[mate_info_*]} rejected when v2 active
- *       (IllegalArgumentException pointing at optDisableInlineMateInfoV2).</li>
- *   <li>{@code signal_codec_overrides[mate_info_*]} allowed when v2 disabled.</li>
+ *       (the only path in v1.0).</li>
  *   <li>v2 round-trip: write + read → mate triple equals input.</li>
  * </ol>
  *
  * <p>All tests skip when the native JNI library is unavailable
  * ({@link MateInfoV2#isAvailable()} returns false).
- *
- * @since v1.7 (Task 13)
  */
 final class MateInfoV2DispatchTest {
 
@@ -67,11 +61,6 @@ final class MateInfoV2DispatchTest {
 
     private static WrittenGenomicRun buildMinimalRun(
             Map<String, Compression> overrides) {
-        return buildMinimalRunOptOut(overrides, false);
-    }
-
-    private static WrittenGenomicRun buildMinimalRunOptOut(
-            Map<String, Compression> overrides, boolean optOut) {
         byte[] seq  = new byte[TOTAL];
         for (int i = 0; i < TOTAL; i++) seq[i] = (byte) 'A';
         byte[] qual = new byte[TOTAL];
@@ -101,7 +90,6 @@ final class MateInfoV2DispatchTest {
         long[] matePositions = new long[N];
         int[]  templateLengths = new int[N];
 
-        long rngSeed = 12345L;
         for (int i = 0; i < N; i++) {
             int d = i % 10;
             if (d < 8) {
@@ -123,7 +111,7 @@ final class MateInfoV2DispatchTest {
             }
         }
 
-        WrittenGenomicRun run = new WrittenGenomicRun(
+        return new WrittenGenomicRun(
             AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA",
             "DISP_TEST",
             positions, mapqs, flags, seq, qual, offsets, lengths,
@@ -131,10 +119,6 @@ final class MateInfoV2DispatchTest {
             templateLengths, chromosomes,
             Compression.NONE,
             overrides);
-        if (optOut) {
-            run = run.withOptDisableInlineMateInfoV2(true);
-        }
-        return run;
     }
 
     private static Path writeRun(Path tmp, WrittenGenomicRun run,
@@ -147,7 +131,7 @@ final class MateInfoV2DispatchTest {
         return file;
     }
 
-    // ── Test 1: default v1.7 write produces inline_v2 ───────────────
+    // ── Test 1: default v1.0 write produces inline_v2 ───────────────
 
     @Test
     @EnabledIf("isNativeAvailable")
@@ -162,14 +146,14 @@ final class MateInfoV2DispatchTest {
              Hdf5Group sc   = rg.openGroup("signal_channels");
              Hdf5Group mi   = sc.openGroup("mate_info")) {
             assertTrue(mi.hasChild("inline_v2"),
-                "v1.7 default should write inline_v2 dataset; "
+                "v1.0 default should write inline_v2 dataset; "
                 + "children: " + mi);
             assertFalse(mi.hasChild("chrom"),
-                "v1.7 default must NOT write v1 chrom child dataset");
+                "v1.0 default must NOT write v1 chrom child dataset");
             assertFalse(mi.hasChild("pos"),
-                "v1.7 default must NOT write v1 pos child dataset");
+                "v1.0 default must NOT write v1 pos child dataset");
             assertFalse(mi.hasChild("tlen"),
-                "v1.7 default must NOT write v1 tlen child dataset");
+                "v1.0 default must NOT write v1 tlen child dataset");
             try (Hdf5Dataset blobDs = mi.openDataset("inline_v2")) {
                 long compressionAttr = blobDs.readIntegerAttribute(
                     "compression", -1L);
@@ -186,85 +170,28 @@ final class MateInfoV2DispatchTest {
         }
     }
 
-    // ── Test 2: opt-out writes v1 layout ────────────────────────────
+    // ── Test 2: signal_codec_overrides[mate_info_*] rejected (v2 is the only path)
 
     @Test
     @EnabledIf("isNativeAvailable")
-    void optOutWritesV1Layout(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun()
-            .withOptDisableInlineMateInfoV2(true);
-        Path file = writeRun(tmp, run, "optout_v1.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg   = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc   = rg.openGroup("signal_channels")) {
-            // With no mate_info_* override and opt-out, the M82
-            // compound path is used: mate_info is a dataset, not a group.
-            assertFalse(sc.hasChild("inline_v2"),
-                "opt-out must NOT write a top-level inline_v2");
-            // mate_info should exist as a compound dataset (M82 path).
-            // We verify it's openable as a dataset, not a group.
-            try (Hdf5Dataset miDs = sc.openDataset("mate_info")) {
-                assertNotEquals(Enums.Precision.UINT8, miDs.getPrecision(),
-                    "opt-out mate_info must be compound (not UINT8)");
-                assertFalse(miDs.hasAttribute("compression"),
-                    "opt-out M82 compound must not carry @compression");
-            }
-        }
-    }
-
-    // ── Test 3: signal_codec_overrides[mate_info_*] rejected when v2 active
-
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void signalCodecOverridesRejectedWhenV2Active(@TempDir Path tmp) {
-        // mate_info_pos override while v2 is the default (opt-out=false).
+    void signalCodecOverridesRejected(@TempDir Path tmp) {
+        // mate_info_pos override is rejected outright in v1.0 — v2 is
+        // the only supported path.
         WrittenGenomicRun run = buildMinimalRun(
             Map.of("mate_info_pos", Compression.RANS_ORDER0));
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
             () -> writeRun(tmp, run, "rejected_override.tio"),
-            "mate_info_* overrides must be rejected when v2 is active");
+            "mate_info_* overrides must be rejected in v1.0");
         String msg = ex.getMessage();
         assertNotNull(msg, "exception must have a message");
-        assertTrue(msg.contains("optDisableInlineMateInfoV2")
-                || msg.contains("opt_disable_inline_mate_info_v2")
-                || msg.contains("withOptDisableInlineMateInfoV2"),
-            "error must point at the opt-out flag; got: " + msg);
         assertTrue(msg.contains("mate_info_pos"),
             "error must name the channel; got: " + msg);
+        assertTrue(msg.contains("v2") || msg.contains("inline_v2"),
+            "error must mention v2/inline_v2; got: " + msg);
     }
 
-    // ── Test 4: signal_codec_overrides[mate_info_*] allowed under opt-out
-
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void signalCodecOverridesAllowedWhenV2Disabled(@TempDir Path tmp) {
-        // mate_info_pos override with opt-out=true (v1 path).
-        WrittenGenomicRun run = buildMinimalRunOptOut(
-            Map.of("mate_info_pos", Compression.RANS_ORDER0), true);
-        // Should write without throwing.
-        Path file = writeRun(tmp, run, "v1_override_ok.tio");
-        assertTrue(file.toFile().exists(),
-            "file should be written without error when v2 disabled");
-        // Verify the v1 subgroup layout was written.
-        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg   = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc   = rg.openGroup("signal_channels");
-             Hdf5Group mi   = sc.openGroup("mate_info");
-             Hdf5Dataset posDs = mi.openDataset("pos")) {
-            assertEquals(Compression.RANS_ORDER0.ordinal(),
-                posDs.readIntegerAttribute("compression", -1L),
-                "pos @compression must be RANS_ORDER0 when override active");
-        }
-    }
-
-    // ── Test 5: v2 round-trip — mate triple read back correctly ──────
+    // ── Test 3: v2 round-trip — mate triple read back correctly ──────
 
     @Test
     @EnabledIf("isNativeAvailable")
