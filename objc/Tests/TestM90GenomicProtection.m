@@ -313,8 +313,9 @@ static void testM90_2SignGenomicRunSignsAllSeven(void)
          "M90.2: signal_channels/sequences signed");
     PASS(sigs[@"signal_channels/qualities"] != nil,
          "M90.2: signal_channels/qualities signed");
-    PASS(sigs[@"genomic_index/offsets"] != nil,
-         "M90.2: genomic_index/offsets signed");
+    // v1.10 #10: offsets is no longer written on disk, so it isn't signed.
+    PASS(sigs[@"genomic_index/offsets"] == nil,
+         "M90.2: genomic_index/offsets absent (v1.10 #10)");
     PASS(sigs[@"genomic_index/lengths"] != nil,
          "M90.2: genomic_index/lengths signed");
     PASS(sigs[@"genomic_index/positions"] != nil,

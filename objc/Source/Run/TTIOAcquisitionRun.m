@@ -1,6 +1,7 @@
 #import "TTIOAcquisitionRun.h"
 #import "TTIOInstrumentConfig.h"
 #import "TTIOSpectrumIndex.h"
+#import "Genomics/TTIOGenomicIndex.h"  // TTIOOffsetsFromLengths (v1.10 #10)
 #import "Spectra/TTIOSpectrum.h"
 #import "Spectra/TTIOMassSpectrum.h"
 #import "Spectra/TTIONMRSpectrum.h"
@@ -415,6 +416,17 @@
 - (BOOL)writeChromatogramsToRunGroup:(id<TTIOStorageGroup>)runGroup
                                 error:(NSError **)error
 {
+    return [self writeChromatogramsToRunGroup:runGroup
+                            keepOffsetsColumn:NO error:error];
+}
+
+// v1.10 #10: when keepOffsetsColumn==YES, writes the redundant
+// chromatogram_index/offsets column for backward compat with
+// pre-v1.10 readers.
+- (BOOL)writeChromatogramsToRunGroup:(id<TTIOStorageGroup>)runGroup
+                   keepOffsetsColumn:(BOOL)keepOffsetsColumn
+                                error:(NSError **)error
+{
     NSUInteger nChroms = _chromatograms.count;
     id<TTIOStorageGroup> chromGroup =
         [runGroup createGroupNamed:@"chromatograms" error:error];
@@ -474,8 +486,10 @@
             [chromGroup createGroupNamed:@"chromatogram_index" error:error];
         if (!idx) { ok = NO; break; }
 
-        WRITE_DS(idx, @"offsets",      TTIOPrecisionInt64,   nChroms,
-                 [NSData dataWithBytesNoCopy:offsets      length:nChroms*sizeof(int64_t)  freeWhenDone:NO]);
+        if (keepOffsetsColumn) {
+            WRITE_DS(idx, @"offsets",  TTIOPrecisionInt64,   nChroms,
+                     [NSData dataWithBytesNoCopy:offsets      length:nChroms*sizeof(int64_t)  freeWhenDone:NO]);
+        }
         WRITE_DS(idx, @"lengths",      TTIOPrecisionUInt32,  nChroms,
                  [NSData dataWithBytesNoCopy:lengths      length:nChroms*sizeof(uint32_t) freeWhenDone:NO]);
         WRITE_DS(idx, @"types",        TTIOPrecisionInt32,   nChroms,
@@ -751,13 +765,20 @@
     id<TTIOStorageGroup> idxGroup = [chromGroup openGroupNamed:@"chromatogram_index" error:NULL];
     if (!idxGroup) return @[];
 
-    NSData *offsetsData   = [[idxGroup openDatasetNamed:@"offsets" error:NULL] readAll:NULL];
     NSData *lengthsData   = [[idxGroup openDatasetNamed:@"lengths" error:NULL] readAll:NULL];
+    if (!lengthsData) return @[];
+    // v1.10 #10: offsets is omitted from disk by default; synthesize.
+    NSData *offsetsData;
+    if ([idxGroup hasChildNamed:@"offsets"]) {
+        offsetsData = [[idxGroup openDatasetNamed:@"offsets" error:NULL] readAll:NULL];
+    } else {
+        offsetsData = TTIOOffsetsFromLengths(lengthsData);
+    }
     NSData *typesData     = [[idxGroup openDatasetNamed:@"types" error:NULL] readAll:NULL];
     NSData *targetData    = [[idxGroup openDatasetNamed:@"target_mzs" error:NULL] readAll:NULL];
     NSData *precursorData = [[idxGroup openDatasetNamed:@"precursor_mzs" error:NULL] readAll:NULL];
     NSData *productData   = [[idxGroup openDatasetNamed:@"product_mzs" error:NULL] readAll:NULL];
-    if (!offsetsData || !lengthsData || !typesData ||
+    if (!offsetsData || !typesData ||
         !targetData || !precursorData || !productData) return @[];
 
     const int64_t  *offsets      = offsetsData.bytes;

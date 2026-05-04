@@ -57,9 +57,22 @@
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
                 error:(NSError **)error;
 
+/** v1.10 #10 (offsets-cumsum): when keepOffsetsColumn==YES the
+ *  redundant ``offsets`` column is written for byte-equivalent
+ *  backward compat with pre-v1.10 readers. NO (default) omits the
+ *  column on disk; readers compute it from cumsum(lengths). */
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
+   keepOffsetsColumn:(BOOL)keepOffsetsColumn
+                error:(NSError **)error;
+
 + (instancetype)readFromGroup:(id<TTIOStorageGroup>)group
                          error:(NSError **)error;
 
 @end
+
+/** v1.10 #10 helper: synthesize per-record byte offsets from a uint32
+ *  lengths array. offsets[i] = sum(lengths[0..i]), produced as a
+ *  uint64 NSData blob. Empty input returns 0-byte NSData. */
+extern NSData *TTIOOffsetsFromLengths(NSData *lengths);
 
 #endif
