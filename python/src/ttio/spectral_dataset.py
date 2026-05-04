@@ -720,46 +720,18 @@ class SpectralDataset:
             runs = split_ms
             genomic_runs = split_g
 
-        # M74 Slice E: if any run carries the four optional
-        # activation/isolation columns, advertise the
-        # opt_ms2_activation_detail feature flag and bump the format
-        # version to 1.3 so readers know to look for them. Files without
-        # M74 content keep the legacy 1.1 layout so existing byte-parity
-        # tests continue to pass.
+        # v1.0 single format-version stamp. Readers gate optional
+        # features by the feature-flag list (opt_*), not by version
+        # equality, so per-feature version bumps are unnecessary.
         any_m74 = any(
             run.activation_methods is not None for run in runs.values()
         )
         if features is None and any_m74:
             feature_list = feature_list + ["opt_ms2_activation_detail"]
-        format_version = "1.3" if any_m74 else "1.1"
-
-        # M82: opt_genomic feature flag + version bump when genomic_runs present.
         has_genomic = bool(genomic_runs)
-        # M82: opt_genomic is the canonical advertisement of genomic content.
-        # Add it whenever genomic_runs is non-empty, even if the caller supplied
-        # their own features list (idempotent — no duplicate if already present).
         if has_genomic and "opt_genomic" not in feature_list:
             feature_list = feature_list + ["opt_genomic"]
-        # v1.6 (L4): files written by this codebase no longer carry
-        # signal_channels/{positions,flags,mapping_qualities} duplicates
-        # of the genomic_index/ index. Always set the flag when genomic
-        # content is present so tooling can detect v1.6+ layout cheaply
-        # (without enumerating signal_channels/). Pre-v1.6 readers
-        # ignore unknown opt_* flags.
-        if has_genomic and "opt_no_signal_int_dups" not in feature_list:
-            feature_list = feature_list + ["opt_no_signal_int_dups"]
-        # M82: bump to 1.4 when genomic content present. 1.4 implies 1.3 (M74)
-        # implies 1.1 (base). Readers gate features by feature flag list, not by
-        # version equality.
-        if has_genomic:
-            format_version = "1.4"
-
-        # M93/M94 v1.2: bump to 1.5 ONLY when at least one genomic_run
-        # uses a v1.5 codec (REF_DIFF, FQZCOMP_NX16_Z). M82-only writes
-        # stay at 1.4 to preserve byte-parity with existing M82/M86
-        # fixtures.
-        if has_genomic and _any_v1_5_codec(genomic_runs):
-            format_version = "1.5"
+        format_version = "1.0"
 
         # HDF5 fast path keeps the legacy byte layout (fixed-length
         # string attrs, padded compound types) so existing tests and

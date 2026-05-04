@@ -5,8 +5,8 @@ main entry point.
 """
 from __future__ import annotations
 
-__version__ = "1.2.0"
-FORMAT_VERSION = "1.5"  # M93 v1.2: REF_DIFF codec + reference embed group
+__version__ = "1.0.0"
+FORMAT_VERSION = "1.0"
 
 from .enums import (
     AcquisitionMode,

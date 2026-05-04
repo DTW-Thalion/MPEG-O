@@ -673,34 +673,20 @@ public class SpectralDataset implements
             List<Quantification> quantifications,
             List<ProvenanceRecord> provenanceRecords,
             FeatureFlags featureFlags) {
-        // M82.3: opt_genomic + format_version 1.4 when genomic content present.
+        // v1.0 single format-version stamp. Readers gate optional
+        // features by the feature-flag list (opt_*), not by version
+        // equality.
         boolean hasGenomic = genomicRuns != null && !genomicRuns.isEmpty();
-        // M93 v1.2: bump to 1.5 ONLY when at least one genomic_run uses a
-        // context-aware codec (currently REF_DIFF). M82-only writes stay
-        // at 1.4 to preserve byte-parity with existing M82/M86 fixtures.
-        boolean anyContextAware = hasGenomic
-            && hasAnyContextAwareCodec(genomicRuns);
-        String targetVersion = anyContextAware ? "1.5"
-            : (hasGenomic ? "1.4" : featureFlags.formatVersion());
-        // v1.6 (L4): files without signal_channels/{positions,flags,
-        // mapping_qualities} duplicates carry opt_no_signal_int_dups.
-        // Always set when genomic content is present (this writer
-        // doesn't emit the dups in v1.6).
+        String targetVersion = "1.0";
         if (hasGenomic) {
             java.util.Set<String> withFlags =
                 new java.util.LinkedHashSet<>(featureFlags.features());
-            boolean changed = false;
             if (!withFlags.contains(FeatureFlags.OPT_GENOMIC)) {
                 withFlags.add(FeatureFlags.OPT_GENOMIC);
-                changed = true;
             }
-            if (!withFlags.contains(FeatureFlags.OPT_NO_SIGNAL_INT_DUPS)) {
-                withFlags.add(FeatureFlags.OPT_NO_SIGNAL_INT_DUPS);
-                changed = true;
-            }
-            if (changed || !targetVersion.equals(featureFlags.formatVersion())) {
-                featureFlags = new FeatureFlags(targetVersion, withFlags);
-            }
+            featureFlags = new FeatureFlags(targetVersion, withFlags);
+        } else if (!targetVersion.equals(featureFlags.formatVersion())) {
+            featureFlags = new FeatureFlags(targetVersion, featureFlags.features());
         }
 
         java.util.List<String> gNamesList = genomicRunNames != null

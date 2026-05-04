@@ -67,18 +67,9 @@ static NSNumber *_TTIO_M93_DefaultSequencesCodec(TTIOWrittenGenomicRun *run);
 - (BOOL)reattachSignalHandlesFromGroup:(id<TTIOStorageGroup>)channels error:(NSError **)error;
 @end
 
-// v0.2 format version emitted by this writer.
-static NSString *const kTTIOFormatVersion = @"1.1";
-
-// v0.12 M74: version bumped when the file carries
-// opt_ms2_activation_detail (i.e. any run's spectrum_index has the
-// four optional activation/isolation columns).
-static NSString *const kTTIOFormatVersionM74 = @"1.3";
-static NSString *const kTTIOFormatVersionM82 = @"1.4";
-// M93 v1.2: bumped only when at least one genomic_run uses a context-
-// aware codec (currently REF_DIFF). M82-only writes stay at 1.4 to
-// preserve byte-parity with existing tests.
-static NSString *const kTTIOFormatVersionM93 = @"1.5";
+// v1.0 single format-version stamp. Readers gate optional features
+// by the feature-flag list (opt_*), not by version equality.
+static NSString *const kTTIOFormatVersion = @"1.0";
 
 /** v0.12 M74 Slice E: scan the ms_runs dict for any run whose
  *  spectrum_index carries the four optional activation/isolation
@@ -1771,8 +1762,7 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
     if (anyM74) {
         [features addObject:[TTIOFeatureFlags featureMS2ActivationDetail]];
     }
-    NSString *formatVersion = anyM74 ? kTTIOFormatVersionM74 : kTTIOFormatVersion;
-    if (![root setAttributeValue:formatVersion
+    if (![root setAttributeValue:kTTIOFormatVersion
                          forName:@"ttio_format_version" error:error]) {
         [provider close]; return NO;
     }
@@ -2910,18 +2900,12 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
             [TTIOFeatureFlags featureNativeMSImageCube],
         ] mutableCopy];
         BOOL hasGenomic = genomicRuns.count > 0;
-        NSString *formatVersion = kTTIOFormatVersion;
         if (hasGenomic) {
             if (![features containsObject:[TTIOFeatureFlags featureOptGenomic]]) {
                 [features addObject:[TTIOFeatureFlags featureOptGenomic]];
             }
-            // v1.6 (L4): see comment at the HDF5-fast-path equivalent.
-            if (![features containsObject:[TTIOFeatureFlags featureNoSignalIntDups]]) {
-                [features addObject:[TTIOFeatureFlags featureNoSignalIntDups]];
-            }
-            formatVersion = kTTIOFormatVersionM82;
         }
-        if (![root setAttributeValue:formatVersion
+        if (![root setAttributeValue:kTTIOFormatVersion
                               forName:@"ttio_format_version" error:error]) return NO;
         NSData *featJSON = [NSJSONSerialization dataWithJSONObject:features options:0 error:NULL];
         NSString *featStr = [[NSString alloc] initWithData:featJSON encoding:NSUTF8StringEncoding];
@@ -3414,45 +3398,14 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // (which implies 1.3 + 1.1 — readers gate features by flag, not
     // by version equality).
     //
-    // v1.6 (L4): opt_no_signal_int_dups advertises that
-    // signal_channels/{positions,flags,mapping_qualities} duplicates
-    // are NOT written (canonical home is genomic_index/). Always set
-    // when genomic content is present in v1.6+ files.
     BOOL hasGenomic = genomicRuns.count > 0;
-    NSString *formatVersion = kTTIOFormatVersion;
     if (hasGenomic) {
         if (![features containsObject:[TTIOFeatureFlags featureOptGenomic]]) {
             [features addObject:[TTIOFeatureFlags featureOptGenomic]];
         }
-        if (![features containsObject:[TTIOFeatureFlags featureNoSignalIntDups]]) {
-            [features addObject:[TTIOFeatureFlags featureNoSignalIntDups]];
-        }
-        formatVersion = kTTIOFormatVersionM82;
     }
-    // M93/M94.Z v1.2: bump to 1.5 when at least one run uses ANY v1.5
-    // codec (REF_DIFF on sequences or FQZCOMP_NX16_Z on qualities), either
-    // explicitly OR via the auto-default. We also check the auto-default
-    // helpers so the version stamp reflects the codec actually written.
-    BOOL anyV15 = _TTIO_M94_AnyV15Codec(genomicRuns);
-    if (!anyV15 && hasGenomic) {
-        for (TTIOWrittenGenomicRun *r in [genomicRuns objectEnumerator]) {
-            NSNumber *seqBox = _TTIO_M93_DefaultSequencesCodec(r);
-            if (seqBox != nil && (TTIOCompression)[seqBox unsignedIntegerValue]
-                                   == TTIOCompressionRefDiff) {
-                anyV15 = YES;
-                break;
-            }
-            NSNumber *qBox = _TTIO_M94_DefaultQualitiesCodec(r);
-            if (qBox != nil && (TTIOCompression)[qBox unsignedIntegerValue]
-                                 == TTIOCompressionFqzcompNx16Z) {
-                anyV15 = YES;
-                break;
-            }
-        }
-    }
-    if (anyV15) formatVersion = kTTIOFormatVersionM93;
 
-    if (![TTIOFeatureFlags writeFormatVersion:formatVersion
+    if (![TTIOFeatureFlags writeFormatVersion:kTTIOFormatVersion
                                       features:features
                                         toRoot:root
                                          error:error]) return NO;
