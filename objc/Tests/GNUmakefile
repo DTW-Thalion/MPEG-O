@@ -84,6 +84,7 @@ TTIOTests_OBJC_FILES = \
 	TestRefDiffV2.m \
 	TestRefDiffV2Dispatch.m \
 	TestNameTokenizerV2.m \
+	TestNameTokenizedV2Dispatch.m \
 	TTIORansNativeTest.m \
 	TestM95DeltaRansUnit.m \
 	TestM87BamImporter.m \

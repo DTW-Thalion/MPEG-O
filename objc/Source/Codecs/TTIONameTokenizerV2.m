@@ -19,6 +19,10 @@ NSString *const TTIONameTokenizerV2ErrorDomain = @"global.thalion.ttio.NameToken
 
 @implementation TTIONameTokenizerV2
 
++ (BOOL)nativeAvailable {
+    return TTIO_HAS_NATIVE_RANS ? YES : NO;
+}
+
 + (NSData *)encodeNames:(NSArray<NSString *> *)names {
 #if !TTIO_HAS_NATIVE_RANS
     [NSException raise:NSInternalInconsistencyException

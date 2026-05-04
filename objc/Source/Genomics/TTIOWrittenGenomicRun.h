@@ -110,6 +110,17 @@ NS_ASSUME_NONNULL_BEGIN
  *  ``WrittenGenomicRun.opt_disable_ref_diff_v2``. */
 @property (nonatomic, assign) BOOL optDisableRefDiffV2;
 
+/** v1.8 #11 ch3: when YES, the writer falls back to the M82 compound
+ *  read_names layout (or the v1 NAME_TOKENIZED codec if explicitly
+ *  selected via signalCodecOverrides[@"read_names"]). Default NO: when
+ *  the native lib is linked, the writer encodes via TTIONameTokenizerV2
+ *  (codec id 15) and writes read_names as a flat 1-D uint8 dataset
+ *  with @compression=15.
+ *
+ *  Cross-language equivalent of Python's
+ *  ``WrittenGenomicRun.opt_disable_name_tokenized_v2``. */
+@property (nonatomic, assign) BOOL optDisableNameTokenizedV2;
+
 @property (readonly) NSUInteger readCount;
 
 - (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode

@@ -97,10 +97,11 @@ def _write_python_source(path: Path) -> Path:
         # blob format (Task #12) has not been wired into those tools yet.
         # Opt out so the cross-language transport test keeps using v1.
         opt_disable_inline_mate_info_v2=True,
-        # v1.8 #11 ch3 Task #12: Java/ObjC dispatch tasks haven't run yet
-        # in this commit. Once they have, the read_names channel will be
-        # readable via the v2 codec everywhere; until then keep the M82
-        # compound layout for the cross-language transport matrix.
+        # v1.8 #11 ch3 Task #12: Java's TransportEncodeCli loads
+        # libttio_rans (the C lib) but not libttio_rans_jni (the JNI
+        # shim that exposes decodeNameTokV2Native). Until the
+        # transport CLIs grow JNI dependency awareness, keep the
+        # M82 compound layout for the cross-language transport matrix.
         opt_disable_name_tokenized_v2=True,
     )
     SpectralDataset.write_minimal(
