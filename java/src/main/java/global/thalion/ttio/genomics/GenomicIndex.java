@@ -107,30 +107,11 @@ public final class GenomicIndex {
     // ── Disk I/O via the StorageGroup protocol ─────────────────────
 
     /** Write this index into {@code idxGroup} (typically created via
-     *  {@code parent.createGroup("genomic_index")}).
-     *
-     *  <p>v1.10 #10: equivalent to
-     *  {@link #writeTo(StorageGroup, boolean) writeTo(idxGroup, false)} —
-     *  omits the redundant {@code offsets} column (computed from
-     *  {@code cumsum(lengths)} on read).</p>
+     *  {@code parent.createGroup("genomic_index")}). The mathematically
+     *  redundant {@code offsets} column is omitted; readers synthesize
+     *  it from {@code cumsum(lengths)}.
      */
     public void writeTo(StorageGroup idxGroup) {
-        writeTo(idxGroup, false);
-    }
-
-    /** Write this index into {@code idxGroup} with optional offsets
-     *  retention.
-     *
-     *  <p>v1.10 #10 (offsets-cumsum): when {@code keepOffsetsColumn} is
-     *  {@code true}, the (mathematically redundant) {@code offsets}
-     *  column is written for byte-equivalent backward compat with
-     *  pre-v1.10 readers. Default {@code false} — omitted on disk and
-     *  computed from {@code cumsum(lengths)} on read.</p>
-     */
-    public void writeTo(StorageGroup idxGroup, boolean keepOffsetsColumn) {
-        if (keepOffsetsColumn) {
-            writeLongs(idxGroup, "offsets",      Precision.UINT64, offsets);
-        }
         writeInts (idxGroup, "lengths",          Precision.UINT32, lengths);
         writeLongs(idxGroup, "positions",        Precision.INT64,  positions);
         writeBytes(idxGroup, "mapping_qualities", Precision.UINT8, mappingQualities);

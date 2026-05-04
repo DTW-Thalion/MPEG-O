@@ -108,7 +108,7 @@ final class RefDiffPipelineTest {
             positions, mapqs, flags, sequences, qualities, offsets, lengths,
             cigars, readNames, mateChroms, matePos, tlens, chroms,
             Compression.ZLIB, overrides, List.of(),
-            embed, chromSeqs, null, false, false, false, false);
+            embed, chromSeqs, null, false, false, false);
     }
 
     private static WrittenGenomicRun buildM82OnlyRun() {

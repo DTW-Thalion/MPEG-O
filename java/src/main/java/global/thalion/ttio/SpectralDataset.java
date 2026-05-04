@@ -1058,7 +1058,7 @@ public class SpectralDataset implements
                 run.offsets(), run.lengths(), run.chromosomes(),
                 run.positions(), run.mappingQualities(), run.flags());
             try (var ig = rg.createGroup("genomic_index")) {
-                idx.writeTo(ig, run.optKeepOffsetsColumns());
+                idx.writeTo(ig);
             }
 
             // signal_channels: 5 typed channels + 3 compound datasets.

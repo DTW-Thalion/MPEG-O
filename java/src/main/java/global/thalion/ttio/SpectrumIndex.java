@@ -169,25 +169,12 @@ public class SpectrumIndex {
      *  <p>v0.7 M44: parameter type relaxed to {@link StorageGroup} so the
      *  index can be written through any provider (HDF5, SQLite, Memory).</p>
      *
-     *  <p>v1.10 #10: equivalent to {@link #writeTo(StorageGroup, boolean)
-     *  writeTo(runGroup, false)} — omits the redundant {@code offsets}
-     *  column.</p> */
+     *  <p>The mathematically redundant {@code offsets} column is omitted;
+     *  readers synthesize it from {@code cumsum(lengths)}.</p> */
     public void writeTo(StorageGroup runGroup) {
-        writeTo(runGroup, false);
-    }
-
-    /** v1.10 #10 (offsets-cumsum) overload. When {@code keepOffsetsColumn}
-     *  is {@code true}, the (mathematically redundant) {@code offsets}
-     *  column is written for byte-equivalent backward compat with
-     *  pre-v1.10 readers. Default {@code false} — column omitted on disk
-     *  and computed from {@code cumsum(lengths)} on read. */
-    public void writeTo(StorageGroup runGroup, boolean keepOffsetsColumn) {
         try (StorageGroup idx = runGroup.createGroup("spectrum_index")) {
             idx.setAttribute("count", (long) count);
 
-            if (keepOffsetsColumn) {
-                writeDataset(idx, "offsets", Precision.INT64, offsets);
-            }
             writeDataset(idx, "lengths", Precision.UINT32, lengths);
             writeDataset(idx, "retention_times", Precision.FLOAT64, retentionTimes);
             writeDataset(idx, "ms_levels", Precision.INT32, msLevels);
