@@ -143,9 +143,6 @@ static TTIOWrittenGenomicRun *buildRefDiffRun(NSString *refUri,
     } else {
         r.referenceChromSeqs = nil;
     }
-    // v1.8 #11: these M93 tests assert the v1 REF_DIFF flat-dataset layout
-    // (@compression=9). Disable the v2 group path so layout assertions hold.
-    r.optDisableRefDiffV2 = YES;
     return r;
 }
 

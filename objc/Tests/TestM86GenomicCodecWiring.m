@@ -1281,69 +1281,13 @@ static hsize_t m86PhEChannelStorageSize(const char *path, const char *channel)
     return sz;
 }
 
-// Test 19 — NAME_TOKENIZED storage is significantly smaller than the
-// M82 VL_STRING compound. The HDF5 VL_STRING compound stores its
-// primary chunk plus a separate global heap holding the variable-
-// length payloads; H5Dget_storage_size reports only the primary
-// chunk and misses the heap. The realistic comparison is the total
-// file-size delta between the two writes (mirrors Python's
-// test_size_win_name_tokenized — HANDOFF.md §6.1 "the exact ratio
-// depends on HDF5 VL_STRING overhead; just verify it's a meaningful
-// win"). Target: NAME_TOKENIZED < 50% of the M82 footprint.
-static void testSizeWinNameTokenized(void)
-{
-    // v1.8 #11 ch3: opt out so the M82 compound layout is preserved
-    // for the size-win comparison. The new v1.8 default would emit
-    // a v2 codec stream, defeating the measurement.
-    TTIOWrittenGenomicRun *raw = m86PhEMakeLargeRun(@{}, TTIOCompressionNone);
-    raw.optDisableNameTokenizedV2 = YES;
-    TTIOWrittenGenomicRun *nt  = m86PhEMakeLargeRun(
-        @{ @"read_names": @(TTIOCompressionNameTokenized) },
-        TTIOCompressionNone);
-
-    NSString *rawPath = m86TmpPath("nt_sw_raw");
-    NSString *ntPath  = m86TmpPath("nt_sw_nt");
-    unlink(rawPath.fileSystemRepresentation);
-    unlink(ntPath.fileSystemRepresentation);
-
-    NSError *err = nil;
-    PASS(m86Write(rawPath, raw, &err),
-         "M86 PhE size-win: raw read_names compound write succeeds");
-    PASS(m86Write(ntPath,  nt,  &err),
-         "M86 PhE size-win: NAME_TOKENIZED read_names write succeeds");
-
-    NSDictionary *rawAttrs = [[NSFileManager defaultManager]
-        attributesOfItemAtPath:rawPath error:nil];
-    NSDictionary *ntAttrs  = [[NSFileManager defaultManager]
-        attributesOfItemAtPath:ntPath error:nil];
-    unsigned long long rawFileSize = [rawAttrs[NSFileSize] unsignedLongLongValue];
-    unsigned long long ntFileSize  = [ntAttrs[NSFileSize]  unsignedLongLongValue];
-    PASS(rawFileSize > 0 && ntFileSize > 0,
-         "M86 PhE size-win: both files non-empty "
-         "(raw=%llu, nt=%llu)", rawFileSize, ntFileSize);
-
-    // The two files differ only in the read_names channel (both
-    // written with TTIOCompressionNone for parity with the Python
-    // baseline). Footprint attributable to read_names = the codec
-    // stream plus the bytes saved by switching layouts.
-    hsize_t ntCodecBytes = m86PhEChannelStorageSize(
-        ntPath.fileSystemRepresentation, "read_names");
-    PASS(ntCodecBytes > 0,
-         "M86 PhE size-win: NAME_TOKENIZED dataset non-empty "
-         "(nt_codec=%llu)", (unsigned long long)ntCodecBytes);
-
-    long long saved = (long long)rawFileSize - (long long)ntFileSize;
-    unsigned long long m82Footprint = ntCodecBytes + (saved > 0 ? saved : 0);
-    double ratio = (double)ntCodecBytes / (double)m82Footprint;
-    PASS(ratio < 0.50,
-         "M86 PhE size-win: NAME_TOKENIZED / M82-footprint ratio %.3f "
-         "< 0.50 (codec=%llu bytes, m82_footprint=%llu bytes, "
-         "saved=%lld bytes)",
-         ratio, (unsigned long long)ntCodecBytes, m82Footprint, saved);
-
-    unlink(rawPath.fileSystemRepresentation);
-    unlink(ntPath.fileSystemRepresentation);
-}
+// Test 19 (REMOVED v1.0 reset): testSizeWinNameTokenized compared the
+// v1 NAME_TOKENIZED codec footprint against the M82 VL_STRING compound
+// baseline. Phase 2b removed the name-tokenized v2 opt-out,
+// so the M82 compound baseline can no longer be produced for this
+// comparison. The size-win property is now covered by the cross-
+// language fixtures (testCrossLanguageFixtureNameTokenized) and the
+// Python/Java size-ratio gates.
 
 // Test 20 — read_names dataset is 1-D uint8 with @compression == 8.
 static void testAttributeSetCorrectlyNameTokenized(void)
@@ -1401,63 +1345,12 @@ static void testAttributeSetCorrectlyNameTokenized(void)
     unlink(path.fileSystemRepresentation);
 }
 
-// Test 21 — without override, read_names is still compound (M82).
-static void testBackCompatReadNamesUnchanged(void)
-{
-    NSData *seqBytes  = m86PureACGTSequences();
-    NSData *qualBytes = m86PhredCycleQualities();
-    NSArray<NSString *> *names = m86PhEStructuredNames(kM86_NReads);
-    // Empty overrides — should leave read_names as the M82 compound.
-    TTIOWrittenGenomicRun *run = m86PhEMakeRun(seqBytes, qualBytes, names,
-                                               @{}, TTIOCompressionZlib);
-    // v1.8 #11 ch3: opt out so the M82 compound layout is preserved
-    // (the new v1.8 default emits the v2 codec stream).
-    run.optDisableNameTokenizedV2 = YES;
-    NSString *path = m86TmpPath("nt_bc");
-    unlink(path.fileSystemRepresentation);
-
-    NSError *err = nil;
-    PASS(m86Write(path, run, &err),
-         "M86 PhE back-compat: empty-overrides write succeeds");
-
-    // Open underlying H5 file; verify read_names is COMPOUND
-    // (not H5T_INTEGER) and carries no @compression attribute.
-    hid_t f = H5Fopen(path.fileSystemRepresentation,
-                      H5F_ACC_RDONLY, H5P_DEFAULT);
-    hid_t did = H5Dopen2(f,
-        "study/genomic_runs/genomic_0001/signal_channels/read_names",
-        H5P_DEFAULT);
-    PASS(did >= 0, "M86 PhE back-compat: read_names dataset exists");
-    hid_t htype = H5Dget_type(did);
-    H5T_class_t cls = H5Tget_class(htype);
-    PASS(cls == H5T_COMPOUND,
-         "M86 PhE back-compat: read_names dataset class is H5T_COMPOUND "
-         "(got %d) — no schema lift without override", (int)cls);
-    PASS(H5Aexists(did, "compression") <= 0,
-         "M86 PhE back-compat: compound read_names carries NO "
-         "@compression attribute");
-    H5Tclose(htype);
-    if (did >= 0) H5Dclose(did);
-    if (f   >= 0) H5Fclose(f);
-
-    // Round-trip via the existing M82 compound read path.
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
-                                                                error:&err];
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    BOOL allMatch = YES;
-    for (NSUInteger i = 0; i < kM86_NReads; i++) {
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
-        if (r == nil) { allMatch = NO; break; }
-        if (![r.readName isEqualToString:names[i]]) {
-            allMatch = NO; break;
-        }
-    }
-    PASS(allMatch,
-         "M86 PhE back-compat: M82 compound read_names round-trips "
-         "byte-exact via the existing read path");
-
-    unlink(path.fileSystemRepresentation);
-}
+// Test 21 (REMOVED v1.0 reset): testBackCompatReadNamesUnchanged
+// asserted that without an override, read_names stays as the M82
+// VL_STRING compound. Phase 2b removed the name-tokenized v2
+// opt-out, so the new default writes the NAME_TOKENIZED_V2 codec
+// (codec id 15) instead. The compound read-path round-trip is still
+// covered indirectly by readers materialising older fixtures.
 
 // Test 22 — NAME_TOKENIZED on sequences raises with the rationale.
 //
@@ -2037,9 +1930,6 @@ static void testAttributeSetCorrectlyCigars(void)
         TTIOWrittenGenomicRun *run = m86PhCMakeRun(seqBytes, qualBytes,
                                                     cigars, nil, overrides,
                                                     TTIOCompressionZlib);
-        // v1.8 #11 ch3: keep read_names as M82 compound for the
-        // "only cigars has @compression" assertion below.
-        run.optDisableNameTokenizedV2 = YES;
         NSString *path = m86TmpPath("phc_cig_attr");
         unlink(path.fileSystemRepresentation);
 
@@ -2081,13 +1971,21 @@ static void testAttributeSetCorrectlyCigars(void)
             path.fileSystemRepresentation, "sequences");
         uint8_t qualAttr = m86ReadCompressionAttr(
             path.fileSystemRepresentation, "qualities");
-        // read_names stays compound under no override, so the helper
-        // returns 254 (sentinel for "absent attribute"). Same for
-        // sequences and qualities.
-        PASS(namesAttr == 254 && seqAttr == 254 && qualAttr == 254,
-             "M86 PhC attr/%s: only cigars carries @compression; "
-             "read_names/sequences/qualities have no attribute",
-             labels[k]);
+        // v1.0 reset: with no override, read_names is encoded via
+        // NAME_TOKENIZED_V2 (codec id 15) when libttio_rans is linked,
+        // otherwise it falls back to the M82 compound (no @compression
+        // attribute → helper returns 254). sequences/qualities never
+        // carry @compression without an override.
+        BOOL namesIsV2OrCompound =
+            (namesAttr == (uint8_t)TTIOCompressionNameTokenizedV2)
+            || (namesAttr == 254);
+        PASS(namesIsV2OrCompound && seqAttr == 254 && qualAttr == 254,
+             "M86 PhC attr/%s: only cigars carries an override @compression; "
+             "read_names is NAME_TOKENIZED_V2 (15) or compound (no attr); "
+             "sequences/qualities have no attribute "
+             "(names=%u, seq=%u, qual=%u)",
+             labels[k], (unsigned)namesAttr,
+             (unsigned)seqAttr, (unsigned)qualAttr);
 
         unlink(path.fileSystemRepresentation);
     }
@@ -2336,72 +2234,6 @@ static NSData *m86PhFMateTlens(void)
     return out;
 }
 
-// Build a 100-read run with the Phase F mate distributions and
-// arbitrary mate_info overrides. Other channels use the M82 baseline
-// (no overrides) so the fixture isolates the mate_info schema-lift.
-static TTIOWrittenGenomicRun *m86PhFMakeRun(
-    NSDictionary<NSString *, NSNumber *> *mateOverrides)
-{
-    NSUInteger n = kM86F_NReads;
-    NSUInteger total = n * kM86_ReadLen;
-    NSMutableData *seq = [NSMutableData dataWithLength:total];
-    uint8_t *sp = (uint8_t *)seq.mutableBytes;
-    static const uint8_t cycle[4] = {'A', 'C', 'G', 'T'};
-    for (NSUInteger i = 0; i < total; i++) sp[i] = cycle[i % 4];
-    NSMutableData *qual = [NSMutableData dataWithLength:total];
-    uint8_t *qp = (uint8_t *)qual.mutableBytes;
-    for (NSUInteger i = 0; i < total; i++) qp[i] = (uint8_t)(30 + (i % 11));
-
-    NSMutableData *positions = [NSMutableData dataWithLength:n * sizeof(int64_t)];
-    int64_t *pp = (int64_t *)positions.mutableBytes;
-    for (NSUInteger i = 0; i < n; i++) pp[i] = (int64_t)(i * 1000);
-    NSMutableData *mapqs = [NSMutableData dataWithLength:n * sizeof(uint8_t)];
-    uint8_t *mq = (uint8_t *)mapqs.mutableBytes;
-    for (NSUInteger i = 0; i < n; i++) mq[i] = 60;
-    NSMutableData *flags = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
-    NSMutableData *offsets = [NSMutableData dataWithLength:n * sizeof(uint64_t)];
-    uint64_t *op = (uint64_t *)offsets.mutableBytes;
-    for (NSUInteger i = 0; i < n; i++) op[i] = (uint64_t)(i * kM86_ReadLen);
-    NSMutableData *lengths = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
-    uint32_t *lp = (uint32_t *)lengths.mutableBytes;
-    for (NSUInteger i = 0; i < n; i++) lp[i] = (uint32_t)kM86_ReadLen;
-
-    NSMutableArray<NSString *> *cigars = [NSMutableArray arrayWithCapacity:n];
-    NSMutableArray<NSString *> *names  = [NSMutableArray arrayWithCapacity:n];
-    NSMutableArray<NSString *> *chroms = [NSMutableArray arrayWithCapacity:n];
-    for (NSUInteger i = 0; i < n; i++) {
-        [cigars addObject:@"100M"];
-        [names  addObject:[NSString stringWithFormat:@"r%lu", (unsigned long)i]];
-        [chroms addObject:@"chr1"];
-    }
-
-    TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
-         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
-                    referenceUri:@"GRCh38.p14"
-                        platform:@"ILLUMINA"
-                      sampleName:@"M86F_MATE"
-                       positions:positions
-                mappingQualities:mapqs
-                           flags:flags
-                       sequences:seq
-                       qualities:qual
-                         offsets:offsets
-                         lengths:lengths
-                          cigars:cigars
-                       readNames:names
-                 mateChromosomes:m86PhFMateChroms()
-                   matePositions:m86PhFMatePositions()
-                 templateLengths:m86PhFMateTlens()
-                     chromosomes:chroms
-               signalCompression:TTIOCompressionZlib
-             signalCodecOverrides:mateOverrides];
-    // v1.7 #11: Phase F tests exercise the v1 per-field layout explicitly;
-    // opt out of inline_v2 so the mate_info subgroup path is preserved.
-    run.optDisableInlineMateInfoV2 = YES;
-    return run;
-}
-
 // Verify the on-disk mate_info link is a group (Phase F) and that
 // the named child dataset has the expected @compression value.
 static BOOL m86PhFMateChildHasCompression(const char *path,
@@ -2446,380 +2278,18 @@ static BOOL m86PhFMateInfoIsGroup(const char *path)
     return isGroup;
 }
 
-static BOOL m86PhFMateInfoIsDataset(const char *path)
-{
-    hid_t f = H5Fopen(path, H5F_ACC_RDONLY, H5P_DEFAULT);
-    if (f < 0) return NO;
-    H5O_info_t info;
-    herr_t s = H5Oget_info_by_name(f,
-        "study/genomic_runs/genomic_0001/signal_channels/mate_info",
-        &info, H5P_DEFAULT);
-    BOOL isDataset = (s >= 0 && info.type == H5O_TYPE_DATASET);
-    H5Fclose(f);
-    return isDataset;
-}
+// Tests 48-55 (REMOVED v1.0 reset): testRoundTripMateChromNameTokenized,
+// testRoundTripMatePosRans, testRoundTripMateTlenRans,
+// testRoundTripMateAllThree, testRoundTripMatePartial,
+// testBackCompatMateInfoUnchanged, testRejectBareMateInfoKey,
+// testRejectWrongCodecOnMatePos. All eight tests exercised the v1 Phase F
+// per-field mate_info_* writer-side override paths. Phase 2b removed the
+// inline-mate-info v2 opt-out, so the writer always emits the inline_v2
+// codec when libttio_rans is linked, and any mate_info_* override raises
+// NSInvalidArgumentException up front. The cross-language fixture
+// test below remains, exercising the v1 layout via a Python-built fixture
+// on disk through the reader path.
 
-// Test 48 — round-trip mate_info_chrom = NAME_TOKENIZED
-static void testRoundTripMateChromNameTokenized(void)
-{
-    NSDictionary *overrides = @{
-        @"mate_info_chrom": @(TTIOCompressionNameTokenized),
-    };
-    TTIOWrittenGenomicRun *run = m86PhFMakeRun(overrides);
-    NSString *path = m86TmpPath("phf_chrom_nt");
-    unlink(path.fileSystemRepresentation);
-
-    NSError *err = nil;
-    PASS(m86Write(path, run, &err),
-         "M86 PhF chrom-NT: write succeeds");
-    PASS(m86PhFMateInfoIsGroup(path.fileSystemRepresentation),
-         "M86 PhF chrom-NT: mate_info link is a group (Phase F)");
-    uint8_t actual = 0;
-    PASS(m86PhFMateChildHasCompression(path.fileSystemRepresentation,
-                                        "chrom",
-                                        (uint8_t)TTIOCompressionNameTokenized,
-                                        &actual),
-         "M86 PhF chrom-NT: chrom @compression == 8 (got %u)",
-         (unsigned)actual);
-
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    PASS(gr.readCount == kM86F_NReads,
-         "M86 PhF chrom-NT: readCount round-trips");
-    NSArray<NSString *> *expectedChroms = m86PhFMateChroms();
-    NSData *expectedPos = m86PhFMatePositions();
-    NSData *expectedTlen = m86PhFMateTlens();
-    const int64_t *epos = (const int64_t *)expectedPos.bytes;
-    const int32_t *etl  = (const int32_t *)expectedTlen.bytes;
-    BOOL allMatch = YES;
-    for (NSUInteger i = 0; i < kM86F_NReads; i++) {
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
-        if (r == nil) { allMatch = NO; break; }
-        if (![r.mateChromosome isEqualToString:expectedChroms[i]]) allMatch = NO;
-        if (r.matePosition != epos[i])     allMatch = NO;
-        if (r.templateLength != etl[i])    allMatch = NO;
-    }
-    PASS(allMatch,
-         "M86 PhF chrom-NT: all 100 mate fields round-trip byte-exact");
-
-    unlink(path.fileSystemRepresentation);
-}
-
-// Test 49 — round-trip mate_info_pos = RANS_ORDER1
-static void testRoundTripMatePosRans(void)
-{
-    NSDictionary *overrides = @{
-        @"mate_info_pos": @(TTIOCompressionRansOrder1),
-    };
-    TTIOWrittenGenomicRun *run = m86PhFMakeRun(overrides);
-    NSString *path = m86TmpPath("phf_pos_rans");
-    unlink(path.fileSystemRepresentation);
-
-    NSError *err = nil;
-    PASS(m86Write(path, run, &err),
-         "M86 PhF pos-rANS1: write succeeds");
-    PASS(m86PhFMateInfoIsGroup(path.fileSystemRepresentation),
-         "M86 PhF pos-rANS1: mate_info link is a group (Phase F)");
-    uint8_t actual = 0;
-    PASS(m86PhFMateChildHasCompression(path.fileSystemRepresentation,
-                                        "pos",
-                                        (uint8_t)TTIOCompressionRansOrder1,
-                                        &actual),
-         "M86 PhF pos-rANS1: pos @compression == 5 (got %u)",
-         (unsigned)actual);
-
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    NSData *expectedPos = m86PhFMatePositions();
-    const int64_t *epos = (const int64_t *)expectedPos.bytes;
-    BOOL allMatch = YES;
-    for (NSUInteger i = 0; i < kM86F_NReads; i++) {
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
-        if (r == nil) { allMatch = NO; break; }
-        if (r.matePosition != epos[i]) allMatch = NO;
-    }
-    PASS(allMatch,
-         "M86 PhF pos-rANS1: all 100 mate positions round-trip byte-exact");
-
-    unlink(path.fileSystemRepresentation);
-}
-
-// Test 50 — round-trip mate_info_tlen = RANS_ORDER1
-static void testRoundTripMateTlenRans(void)
-{
-    NSDictionary *overrides = @{
-        @"mate_info_tlen": @(TTIOCompressionRansOrder1),
-    };
-    TTIOWrittenGenomicRun *run = m86PhFMakeRun(overrides);
-    NSString *path = m86TmpPath("phf_tlen_rans");
-    unlink(path.fileSystemRepresentation);
-
-    NSError *err = nil;
-    PASS(m86Write(path, run, &err),
-         "M86 PhF tlen-rANS1: write succeeds");
-    PASS(m86PhFMateInfoIsGroup(path.fileSystemRepresentation),
-         "M86 PhF tlen-rANS1: mate_info link is a group (Phase F)");
-    uint8_t actual = 0;
-    PASS(m86PhFMateChildHasCompression(path.fileSystemRepresentation,
-                                        "tlen",
-                                        (uint8_t)TTIOCompressionRansOrder1,
-                                        &actual),
-         "M86 PhF tlen-rANS1: tlen @compression == 5 (got %u)",
-         (unsigned)actual);
-
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    NSData *expectedTlen = m86PhFMateTlens();
-    const int32_t *etl = (const int32_t *)expectedTlen.bytes;
-    BOOL allMatch = YES;
-    for (NSUInteger i = 0; i < kM86F_NReads; i++) {
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
-        if (r == nil) { allMatch = NO; break; }
-        if (r.templateLength != etl[i]) allMatch = NO;
-    }
-    PASS(allMatch,
-         "M86 PhF tlen-rANS1: all 100 template lengths round-trip byte-exact");
-
-    unlink(path.fileSystemRepresentation);
-}
-
-// Test 51 — all three mate fields overridden
-static void testRoundTripMateAllThree(void)
-{
-    NSDictionary *overrides = @{
-        @"mate_info_chrom": @(TTIOCompressionNameTokenized),
-        @"mate_info_pos":   @(TTIOCompressionRansOrder1),
-        @"mate_info_tlen":  @(TTIOCompressionRansOrder1),
-    };
-    TTIOWrittenGenomicRun *run = m86PhFMakeRun(overrides);
-    NSString *path = m86TmpPath("phf_all3");
-    unlink(path.fileSystemRepresentation);
-
-    NSError *err = nil;
-    PASS(m86Write(path, run, &err),
-         "M86 PhF all-3: write succeeds");
-    PASS(m86PhFMateInfoIsGroup(path.fileSystemRepresentation),
-         "M86 PhF all-3: mate_info link is a group (Phase F)");
-    uint8_t a1 = 0, a2 = 0, a3 = 0;
-    PASS(m86PhFMateChildHasCompression(path.fileSystemRepresentation,
-                                        "chrom",
-                                        (uint8_t)TTIOCompressionNameTokenized,
-                                        &a1)
-         && m86PhFMateChildHasCompression(path.fileSystemRepresentation,
-                                          "pos",
-                                          (uint8_t)TTIOCompressionRansOrder1,
-                                          &a2)
-         && m86PhFMateChildHasCompression(path.fileSystemRepresentation,
-                                          "tlen",
-                                          (uint8_t)TTIOCompressionRansOrder1,
-                                          &a3),
-         "M86 PhF all-3: chrom@8, pos@5, tlen@5 (got %u/%u/%u)",
-         (unsigned)a1, (unsigned)a2, (unsigned)a3);
-
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    NSArray<NSString *> *expectedChroms = m86PhFMateChroms();
-    NSData *expectedPos = m86PhFMatePositions();
-    NSData *expectedTlen = m86PhFMateTlens();
-    const int64_t *epos = (const int64_t *)expectedPos.bytes;
-    const int32_t *etl  = (const int32_t *)expectedTlen.bytes;
-    BOOL allMatch = YES;
-    for (NSUInteger i = 0; i < kM86F_NReads; i++) {
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
-        if (r == nil) { allMatch = NO; break; }
-        if (![r.mateChromosome isEqualToString:expectedChroms[i]]) allMatch = NO;
-        if (r.matePosition != epos[i])     allMatch = NO;
-        if (r.templateLength != etl[i])    allMatch = NO;
-    }
-    PASS(allMatch,
-         "M86 PhF all-3: all 100 mate fields round-trip byte-exact with "
-         "all three concurrent codec overrides");
-
-    unlink(path.fileSystemRepresentation);
-}
-
-// Test 52 — partial override: only chrom is overridden; pos/tlen
-// stay at natural dtype inside the subgroup (no @compression).
-static void testRoundTripMatePartial(void)
-{
-    NSDictionary *overrides = @{
-        @"mate_info_chrom": @(TTIOCompressionNameTokenized),
-    };
-    TTIOWrittenGenomicRun *run = m86PhFMakeRun(overrides);
-    NSString *path = m86TmpPath("phf_partial");
-    unlink(path.fileSystemRepresentation);
-
-    NSError *err = nil;
-    PASS(m86Write(path, run, &err),
-         "M86 PhF partial: write (chrom-only override) succeeds");
-    PASS(m86PhFMateInfoIsGroup(path.fileSystemRepresentation),
-         "M86 PhF partial: mate_info link is a group (subgroup created "
-         "even on a single override)");
-
-    // chrom should have @compression == 8; pos and tlen should be the
-    // natural dtypes (INT64 / INT32) with NO @compression attribute.
-    uint8_t actual = 0;
-    PASS(m86PhFMateChildHasCompression(path.fileSystemRepresentation,
-                                        "chrom",
-                                        (uint8_t)TTIOCompressionNameTokenized,
-                                        &actual),
-         "M86 PhF partial: chrom @compression == 8 (got %u)",
-         (unsigned)actual);
-
-    hid_t f = H5Fopen(path.fileSystemRepresentation, H5F_ACC_RDONLY, H5P_DEFAULT);
-    hid_t posDs = H5Dopen2(f,
-        "study/genomic_runs/genomic_0001/signal_channels/mate_info/pos",
-        H5P_DEFAULT);
-    hid_t tlenDs = H5Dopen2(f,
-        "study/genomic_runs/genomic_0001/signal_channels/mate_info/tlen",
-        H5P_DEFAULT);
-    PASS(posDs >= 0 && tlenDs >= 0,
-         "M86 PhF partial: pos and tlen child datasets exist");
-    PASS(H5Aexists(posDs, "compression") <= 0,
-         "M86 PhF partial: pos carries NO @compression (natural-dtype path)");
-    PASS(H5Aexists(tlenDs, "compression") <= 0,
-         "M86 PhF partial: tlen carries NO @compression (natural-dtype path)");
-    if (posDs >= 0)  H5Dclose(posDs);
-    if (tlenDs >= 0) H5Dclose(tlenDs);
-    if (f >= 0)      H5Fclose(f);
-
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    NSArray<NSString *> *expectedChroms = m86PhFMateChroms();
-    NSData *expectedPos = m86PhFMatePositions();
-    NSData *expectedTlen = m86PhFMateTlens();
-    const int64_t *epos = (const int64_t *)expectedPos.bytes;
-    const int32_t *etl  = (const int32_t *)expectedTlen.bytes;
-    BOOL allMatch = YES;
-    for (NSUInteger i = 0; i < kM86F_NReads; i++) {
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
-        if (r == nil) { allMatch = NO; break; }
-        if (![r.mateChromosome isEqualToString:expectedChroms[i]]) allMatch = NO;
-        if (r.matePosition != epos[i])     allMatch = NO;
-        if (r.templateLength != etl[i])    allMatch = NO;
-    }
-    PASS(allMatch,
-         "M86 PhF partial: all 100 mate fields round-trip — chrom via "
-         "NAME_TOKENIZED dispatch, pos+tlen via natural-dtype HDF5 read");
-
-    unlink(path.fileSystemRepresentation);
-}
-
-// Test 53 — back-compat: no mate_info_* override → still M82 compound
-static void testBackCompatMateInfoUnchanged(void)
-{
-    TTIOWrittenGenomicRun *run = m86PhFMakeRun(@{});
-    NSString *path = m86TmpPath("phf_backcompat");
-    unlink(path.fileSystemRepresentation);
-
-    NSError *err = nil;
-    PASS(m86Write(path, run, &err),
-         "M86 PhF back-compat: empty mate overrides write succeeds");
-    PASS(m86PhFMateInfoIsDataset(path.fileSystemRepresentation),
-         "M86 PhF back-compat: mate_info link is a DATASET (M82 compound)");
-
-    hid_t f = H5Fopen(path.fileSystemRepresentation,
-                      H5F_ACC_RDONLY, H5P_DEFAULT);
-    hid_t did = H5Dopen2(f,
-        "study/genomic_runs/genomic_0001/signal_channels/mate_info",
-        H5P_DEFAULT);
-    hid_t htype = H5Dget_type(did);
-    H5T_class_t cls = H5Tget_class(htype);
-    PASS(cls == H5T_COMPOUND,
-         "M86 PhF back-compat: mate_info dataset is H5T_COMPOUND (got %d)",
-         (int)cls);
-    H5Tclose(htype);
-    if (did >= 0) H5Dclose(did);
-    if (f >= 0)   H5Fclose(f);
-
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    NSArray<NSString *> *expectedChroms = m86PhFMateChroms();
-    NSData *expectedPos = m86PhFMatePositions();
-    NSData *expectedTlen = m86PhFMateTlens();
-    const int64_t *epos = (const int64_t *)expectedPos.bytes;
-    const int32_t *etl  = (const int32_t *)expectedTlen.bytes;
-    BOOL allMatch = YES;
-    for (NSUInteger i = 0; i < kM86F_NReads; i++) {
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&err];
-        if (r == nil) { allMatch = NO; break; }
-        if (![r.mateChromosome isEqualToString:expectedChroms[i]]) allMatch = NO;
-        if (r.matePosition != epos[i])     allMatch = NO;
-        if (r.templateLength != etl[i])    allMatch = NO;
-    }
-    PASS(allMatch,
-         "M86 PhF back-compat: M82 compound mate_info round-trips byte-"
-         "exact via the link-type dispatch's compound fall-through");
-
-    unlink(path.fileSystemRepresentation);
-}
-
-// Test 54 — bare 'mate_info' key is rejected with a Phase F-aware
-// error message naming all three per-field keys.
-static void testRejectBareMateInfoKey(void)
-{
-    NSDictionary *overrides = @{
-        @"mate_info": @(TTIOCompressionRansOrder1),
-    };
-    TTIOWrittenGenomicRun *run = m86PhFMakeRun(overrides);
-    NSString *path = m86TmpPath("phf_bare_bad");
-    unlink(path.fileSystemRepresentation);
-
-    BOOL raised = NO;
-    NSException *captured = nil;
-    @try {
-        NSError *err = nil;
-        m86Write(path, run, &err);
-    } @catch (NSException *e) {
-        raised = YES;
-        captured = e;
-    }
-    PASS(raised, "M86 PhF: bare 'mate_info' key raises NSException");
-    PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
-         "M86 PhF: bare-key exception is NSInvalidArgumentException");
-    NSString *reason = captured ? captured.reason : @"";
-    PASS([reason rangeOfString:@"mate_info_chrom"].location != NSNotFound,
-         "M86 PhF: bare-key error message names mate_info_chrom");
-    PASS([reason rangeOfString:@"mate_info_pos"].location != NSNotFound,
-         "M86 PhF: bare-key error message names mate_info_pos");
-    PASS([reason rangeOfString:@"mate_info_tlen"].location != NSNotFound,
-         "M86 PhF: bare-key error message names mate_info_tlen");
-
-    unlink(path.fileSystemRepresentation);
-}
-
-// Test 55 — wrong codec on mate_info_pos rejected (NAME_TOKENIZED on int field).
-static void testRejectWrongCodecOnMatePos(void)
-{
-    NSDictionary *overrides = @{
-        @"mate_info_pos": @(TTIOCompressionNameTokenized),
-    };
-    TTIOWrittenGenomicRun *run = m86PhFMakeRun(overrides);
-    NSString *path = m86TmpPath("phf_pos_nt_bad");
-    unlink(path.fileSystemRepresentation);
-
-    BOOL raised = NO;
-    NSException *captured = nil;
-    @try {
-        NSError *err = nil;
-        m86Write(path, run, &err);
-    } @catch (NSException *e) {
-        raised = YES;
-        captured = e;
-    }
-    PASS(raised,
-         "M86 PhF: NAME_TOKENIZED on mate_info_pos raises NSException");
-    PASS(captured && [captured.name isEqualToString:NSInvalidArgumentException],
-         "M86 PhF: pos-NT exception is NSInvalidArgumentException");
-    NSString *reason = captured ? captured.reason : @"";
-    PASS([reason rangeOfString:@"NAME_TOKENIZED"].location != NSNotFound
-         || [reason rangeOfString:@"NameTokenized"].location != NSNotFound,
-         "M86 PhF: pos-NT error message names the codec");
-    PASS([reason rangeOfString:@"mate_info_pos"].location != NSNotFound,
-         "M86 PhF: pos-NT error message names the channel");
-
-    unlink(path.fileSystemRepresentation);
-}
 static void testCrossLanguageFixtureMateInfoFull(void)
 {
     NSString *path = @"/home/toddw/TTI-O/objc/Tests/Fixtures/genomic/"
@@ -2998,10 +2468,11 @@ void testM86GenomicCodecWiring(void)
     testMixedQualityBinnedWithRans();
     testCrossLanguageFixtureQualityBinned();
     // M86 Phase E — NAME_TOKENIZED on the read_names channel.
+    // v1.0 reset: testSizeWinNameTokenized + testBackCompatReadNamesUnchanged
+    // removed (Phase 2b dropped the name-tokenized v2 opt-out, so the
+    // M82 compound baseline is no longer producible — both tests required it).
     testRoundTripReadNamesNameTokenized();
-    testSizeWinNameTokenized();
     testAttributeSetCorrectlyNameTokenized();
-    testBackCompatReadNamesUnchanged();
     testRejectNameTokenizedOnSequences();
     testMixedAllThreeOverrides();
     testCrossLanguageFixtureNameTokenized();
@@ -3027,17 +2498,11 @@ void testM86GenomicCodecWiring(void)
     // dropped integer-channel keys).
     testCrossLanguageFixtureCigarsRans();
     testCrossLanguageFixtureCigarsNameTokenized();
-    // M86 Phase F — mate_info per-field decomposition. Mirrors
-    // Python tests #48–#56 + the cross-language fixture.
-    testRoundTripMateChromNameTokenized();
-    testRoundTripMatePosRans();
-    testRoundTripMateTlenRans();
-    testRoundTripMateAllThree();
-    testRoundTripMatePartial();
-    testBackCompatMateInfoUnchanged();
-    testRejectBareMateInfoKey();
-    testRejectWrongCodecOnMatePos();
-    // v1.6: testRoundTripFullTenOverrides removed (same reason).
+    // M86 Phase F — mate_info per-field decomposition.
+    // v1.0 reset: writer-side tests #48–#55 removed (Phase 2b dropped
+    // the inline-mate-info v2 opt-out, so the v1 per-field mate_info_*
+    // override path is no longer reachable). The cross-language fixture
+    // below still exercises the v1 reader path.
     testCrossLanguageFixtureMateInfoFull();
     // v1.6: contract tests for the removed dual-write.
     testV16RejectsPositionsOverride();

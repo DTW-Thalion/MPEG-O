@@ -1361,17 +1361,19 @@ static BOOL _TTIO_M95_HasMateOverridesOrDefaults(TTIOWrittenGenomicRun *run)
 }
 
 /** v1.7 #11: returns YES when the inline_v2 path should be used.
- *  Requires native libttio_rans AND opt-out flag == NO. */
+ *  Requires native libttio_rans AND a non-empty run. (v1.0 reset:
+ *  opt-out flag removed; empty runs still take the M82 compound
+ *  fallback because the inline_v2 encoder requires n > 0.) */
 static BOOL _TTIO_V17_UseMateInlineV2(TTIOWrittenGenomicRun *run)
 {
-    return !run.optDisableInlineMateInfoV2 && [TTIOMateInfoV2 nativeAvailable];
+    if (run.readCount == 0) return NO;
+    return [TTIOMateInfoV2 nativeAvailable];
 }
 
 /** v1.7 #11: reject mate_info_* per-field overrides when the
- *  inline_v2 codec is active. Raises NSInvalidArgumentException
- *  pointing at optDisableInlineMateInfoV2. Called after the standard
- *  _TTIO_M86_ValidateOverrides check so baseline unknown-channel
- *  errors are already handled. */
+ *  inline_v2 codec is active. Raises NSInvalidArgumentException.
+ *  Called after the standard _TTIO_M86_ValidateOverrides check so
+ *  baseline unknown-channel errors are already handled. */
 static void _TTIO_V17_ValidateMateInfoV2Overrides(TTIOWrittenGenomicRun *run)
 {
     if (!_TTIO_V17_UseMateInlineV2(run)) return;
@@ -1386,11 +1388,10 @@ static void _TTIO_V17_ValidateMateInfoV2Overrides(TTIOWrittenGenomicRun *run)
         if ([mateKeys containsObject:chName]) {
             [NSException raise:NSInvalidArgumentException
                         format:@"signalCodecOverrides['%@']: per-field "
-                               @"mate_info_* overrides are disallowed when "
-                               @"the v1.7 inline_v2 codec is active. Set "
-                               @"optDisableInlineMateInfoV2 = YES on "
-                               @"TTIOWrittenGenomicRun to use the v1 "
-                               @"per-field layout instead.",
+                               @"mate_info_* overrides are disallowed "
+                               @"under the v1.0 reset — the writer always "
+                               @"emits the inline_v2 codec when the native "
+                               @"libttio_rans is linked.",
                                chName];
         }
     }
@@ -2206,10 +2207,10 @@ static NSNumber *_TTIO_M93_DefaultSequencesCodec(TTIOWrittenGenomicRun *run)
 // @compression=14.  On opt-out or ineligibility the existing
 // _TTIO_M93_WriteRefDiffSequences path is used unchanged.
 
-/** Returns YES when the v2 path should be used for sequences. */
+/** Returns YES when the v2 path should be used for sequences.
+ *  (v1.0 reset: opt-out flag removed.) */
 static BOOL _TTIO_V18_UseRefDiffV2(TTIOWrittenGenomicRun *run)
 {
-    if (run.optDisableRefDiffV2) return NO;
     if (![TTIORefDiffV2 nativeAvailable]) return NO;
     if (run.referenceChromSeqs == nil) return NO;
     // Reject runs that have any unmapped read (cigar == "*" or "").
@@ -2624,19 +2625,18 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     }
 
     // M86 Phase E + v1.8 #11 ch3: schema lift for read_names with v2
-    // dispatch on the provider/storage path. Three layouts (mutually
-    // exclusive):
+    // dispatch on the provider/storage path. Two layouts (mutually
+    // exclusive) under the v1.0 reset:
     //
     // - NAME_TOKENIZED v1 (codec id 8): flat uint8 dataset.
     //   Selected when signalCodecOverrides[@"read_names"] is set (v1).
     // - NAME_TOKENIZED v2 (codec id 15): flat uint8 dataset.
-    //   The v1.8 default — selected when no override is present,
-    //   optDisableNameTokenizedV2 == NO, and the native lib is linked.
-    // - M82 compound: VL_STRING-in-compound dataset. Selected when
-    //   opt-out is set and no override is present.
+    //   The default — selected when no override is present and the
+    //   native lib is linked. Falls back to the M82 compound when the
+    //   native lib is absent.
     NSNumber *readNamesOverride = run.signalCodecOverrides[@"read_names"];
     BOOL useReadNamesV2 = (readNamesOverride == nil)
-        && !run.optDisableNameTokenizedV2
+        && run.readCount > 0
         && [TTIONameTokenizerV2 nativeAvailable];
     if (useReadNamesV2) {
         NSData *encoded = [TTIONameTokenizerV2 encodeNames:run.readNames];
@@ -3132,18 +3132,17 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     }
 
     // M86 Phase E + v1.8 #11 ch3: schema lift for read_names with v2
-    // dispatch. Three layouts (mutually exclusive):
+    // dispatch. Two layouts (mutually exclusive) under the v1.0 reset:
     //
     // - NAME_TOKENIZED v1 (codec id 8): flat uint8 dataset.
     //   Selected when signalCodecOverrides[@"read_names"] is set (v1).
     // - NAME_TOKENIZED v2 (codec id 15): flat uint8 dataset.
-    //   The v1.8 default — selected when no override is present,
-    //   optDisableNameTokenizedV2 == NO, and the native lib is linked.
-    // - M82 compound: VL_STRING-in-compound dataset. Selected when
-    //   opt-out is set and no override is present.
+    //   The default — selected when no override is present and the
+    //   native lib is linked. Falls back to the M82 compound when the
+    //   native lib is absent.
     NSNumber *readNamesOverride = run.signalCodecOverrides[@"read_names"];
     BOOL useReadNamesV2 = (readNamesOverride == nil)
-        && !run.optDisableNameTokenizedV2
+        && run.readCount > 0
         && [TTIONameTokenizerV2 nativeAvailable];
     if (useReadNamesV2) {
         NSData *encoded = [TTIONameTokenizerV2 encodeNames:run.readNames];

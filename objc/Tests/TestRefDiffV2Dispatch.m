@@ -4,16 +4,16 @@
 //   python/tests/test_ref_diff_v2_dispatch.py  (Task 12)
 //   java/.../RefDiffV2DispatchTest.java         (Task 13)
 //
+// v1.0 reset: the ref-diff v2 opt-out flag was removed. The writer
+// always emits the refdiff_v2 codec when libttio_rans is linked AND
+// the run is eligible (reference present, all reads mapped).
+//
 // Verifies:
-//   1. Default v1.8 write produces signal_channels/sequences as a GROUP
+//   1. Default write produces signal_channels/sequences as a GROUP
 //      containing a refdiff_v2 child dataset @compression=14.
-//   2. optDisableRefDiffV2 = YES falls back to v1 flat dataset
-//      (sequences is a dataset, not a group).
-//   3. optDisableRefDiffV2 = YES + no reference: sequences is a BASE_PACK
-//      flat dataset (@compression=6).
-//   4. Full round-trip via TTIOSpectralDataset (default path): sequences
-//      round-trip correct.
-//   5. Full round-trip via TTIOSpectralDataset (opt-out path): sequences
+//   2. No reference + REF_DIFF override: v2 not eligible (no ref), so
+//      sequences becomes a BASE_PACK flat dataset (@compression=6).
+//   3. Full round-trip via TTIOSpectralDataset (default path): sequences
 //      round-trip correct.
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
@@ -53,9 +53,8 @@ static NSData *rdv2dRef(void)
 
 /** Build a minimal 5-read single-chromosome run for dispatch tests.
  *  All reads aligned to chr22, 10 bp each, cigar "10M", positions 1-5.
- *  referenceChromSeqs is set when embedRef == YES. */
-static TTIOWrittenGenomicRun *rdv2dMakeRun(BOOL disableRefDiffV2,
-                                            BOOL hasReference)
+ *  referenceChromSeqs is set when hasReference == YES. */
+static TTIOWrittenGenomicRun *rdv2dMakeRun(BOOL hasReference)
 {
     NSUInteger n = 5;
     NSUInteger L = 10;
@@ -124,8 +123,6 @@ static TTIOWrittenGenomicRun *rdv2dMakeRun(BOOL disableRefDiffV2,
                      chromosomes:chroms
                signalCompression:TTIOCompressionZlib
             signalCodecOverrides:@{}];
-
-    run.optDisableRefDiffV2 = disableRefDiffV2;
 
     if (hasReference) {
         run.referenceChromSeqs = @{ @"22": rdv2dRef() };
@@ -222,7 +219,7 @@ static void testRefDiffV2DispatchDefaultWritesGroup(void)
     NSString *path = rdv2dTmpPath(@"default");
     rdv2dRm(path);
 
-    TTIOWrittenGenomicRun *run = rdv2dMakeRun(NO, YES);
+    TTIOWrittenGenomicRun *run = rdv2dMakeRun(YES);
     NSError *err = nil;
     PASS(rdv2dWrite(path, run, &err),
          "RefDiffV2Dispatch #1: write succeeds (native, v2 default)");
@@ -239,47 +236,17 @@ static void testRefDiffV2DispatchDefaultWritesGroup(void)
     rdv2dRm(path);
 }
 
-// ── Test 2: opt-out falls back to v1 flat dataset ────────────────────────────
-
-static void testRefDiffV2DispatchOptOutWritesFlatDataset(void)
-{
-    NSString *path = rdv2dTmpPath(@"optout");
-    rdv2dRm(path);
-
-    TTIOWrittenGenomicRun *run = rdv2dMakeRun(YES, YES);  // opt-out = YES
-    NSError *err = nil;
-    PASS(rdv2dWrite(path, run, &err),
-         "RefDiffV2Dispatch #2: write succeeds (v1 opt-out)");
-
-    int ot = rdv2dSequencesObjectType(path.fileSystemRepresentation);
-    PASS(ot == (int)H5O_TYPE_DATASET,
-         "RefDiffV2Dispatch #2: signal_channels/sequences is a DATASET (v1 flat)");
-
-    // v1 REF_DIFF path: @compression should be 9 (REF_DIFF) since referenceChromSeqs set.
-    uint8_t cid = rdv2dFlatSequencesCompressionAttr(path.fileSystemRepresentation);
-    PASS(cid == (uint8_t)TTIOCompressionRefDiff,
-         "RefDiffV2Dispatch #2: flat sequences @compression == 9 (v1 REF_DIFF, got %u)",
-         (unsigned)cid);
-
-    rdv2dRm(path);
-}
-
-// ── Test 3: opt-out + no reference → BASE_PACK flat dataset ─────────────────
+// ── Test 2: no reference + REF_DIFF override → BASE_PACK flat dataset ────────
 
 static void testRefDiffV2DispatchNoRefWritesBasePack(void)
 {
     NSString *path = rdv2dTmpPath(@"noref");
     rdv2dRm(path);
 
-    TTIOWrittenGenomicRun *run = rdv2dMakeRun(YES, NO);  // opt-out, no ref
-    // Ensure the codec override selects REF_DIFF so the v1 path is exercised
-    // with no-ref fallback (Q5b = C → BASE_PACK).
-    // Without codec override and without reference, the run uses Zlib
-    // (no v1.5 auto-default since no referenceChromSeqs). Let's force
-    // the REF_DIFF override so the fallback is observable.
-    // Actually with opt-out + no reference the v1.5 auto-default also
-    // won't fire (nil referenceChromSeqs). The writer uses Zlib.
-    // Use a signalCodecOverride of REF_DIFF to trigger the v1 path + fallback.
+    // No reference → v2 not eligible (referenceChromSeqs == nil), so
+    // the writer falls through to the v1 REF_DIFF path which itself
+    // falls back to BASE_PACK when no reference is present (Q5b = C).
+    TTIOWrittenGenomicRun *run = rdv2dMakeRun(NO);
     TTIOWrittenGenomicRun *runWithOverride =
         [[TTIOWrittenGenomicRun alloc]
          initWithAcquisitionMode:run.acquisitionMode
@@ -301,41 +268,40 @@ static void testRefDiffV2DispatchNoRefWritesBasePack(void)
                      chromosomes:run.chromosomes
                signalCompression:TTIOCompressionZlib
             signalCodecOverrides:@{ @"sequences": @(TTIOCompressionRefDiff) }];
-    runWithOverride.optDisableRefDiffV2 = YES;
-    // No referenceChromSeqs → v1 fallback → BASE_PACK.
+    // No referenceChromSeqs → v2 not eligible → v1 fallback → BASE_PACK.
 
     NSError *err = nil;
     PASS(rdv2dWrite(path, runWithOverride, &err),
-         "RefDiffV2Dispatch #3: write succeeds (REF_DIFF override + no ref)");
+         "RefDiffV2Dispatch #2: write succeeds (REF_DIFF override + no ref)");
 
     int ot = rdv2dSequencesObjectType(path.fileSystemRepresentation);
     PASS(ot == (int)H5O_TYPE_DATASET,
-         "RefDiffV2Dispatch #3: signal_channels/sequences is a DATASET (fallback)");
+         "RefDiffV2Dispatch #2: signal_channels/sequences is a DATASET (fallback)");
 
     uint8_t cid = rdv2dFlatSequencesCompressionAttr(path.fileSystemRepresentation);
     PASS(cid == (uint8_t)TTIOCompressionBasePack,
-         "RefDiffV2Dispatch #3: flat sequences @compression == 6 (BASE_PACK fallback, got %u)",
+         "RefDiffV2Dispatch #2: flat sequences @compression == 6 (BASE_PACK fallback, got %u)",
          (unsigned)cid);
 
     rdv2dRm(path);
 }
 
-// ── Test 4: full round-trip (default v2 path) ─────────────────────────────────
+// ── Test 3: full round-trip (default v2 path) ─────────────────────────────────
 
 static void testRefDiffV2DispatchRoundTripV2(void)
 {
     NSString *path = rdv2dTmpPath(@"rt_v2");
     rdv2dRm(path);
 
-    TTIOWrittenGenomicRun *run = rdv2dMakeRun(NO, YES);
+    TTIOWrittenGenomicRun *run = rdv2dMakeRun(YES);
     NSError *err = nil;
-    PASS(rdv2dWrite(path, run, &err), "RefDiffV2Dispatch #4: write succeeds");
+    PASS(rdv2dWrite(path, run, &err), "RefDiffV2Dispatch #3: write succeeds");
 
     TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    PASS(ds != nil, "RefDiffV2Dispatch #4: dataset re-opens");
+    PASS(ds != nil, "RefDiffV2Dispatch #3: dataset re-opens");
 
     TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    PASS(gr != nil && gr.readCount == 5, "RefDiffV2Dispatch #4: 5 reads round-trip");
+    PASS(gr != nil && gr.readCount == 5, "RefDiffV2Dispatch #3: 5 reads round-trip");
 
     BOOL allCorrect = YES;
     NSString *firstSeq = nil;
@@ -350,47 +316,7 @@ static void testRefDiffV2DispatchRoundTripV2(void)
         }
     }
     PASS(allCorrect,
-         "RefDiffV2Dispatch #4: all 5 reads decode to 'ACGTACGTAC' (v2 round-trip) "
-         "[r0=%@ err=%@]",
-         firstSeq ?: @"<nil>",
-         firstErr.localizedDescription ?: @"<no err>");
-
-    [ds closeFile];
-    rdv2dRm(path);
-}
-
-// ── Test 5: full round-trip (opt-out v1 path) ─────────────────────────────────
-
-static void testRefDiffV2DispatchRoundTripV1(void)
-{
-    NSString *path = rdv2dTmpPath(@"rt_v1");
-    rdv2dRm(path);
-
-    TTIOWrittenGenomicRun *run = rdv2dMakeRun(YES, YES);  // opt-out
-    NSError *err = nil;
-    PASS(rdv2dWrite(path, run, &err),
-         "RefDiffV2Dispatch #5: write succeeds (v1 opt-out)");
-
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    PASS(ds != nil, "RefDiffV2Dispatch #5: dataset re-opens");
-
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    PASS(gr != nil && gr.readCount == 5, "RefDiffV2Dispatch #5: 5 reads round-trip");
-
-    BOOL allCorrect = YES;
-    NSString *firstSeq = nil;
-    NSError *firstErr = nil;
-    for (NSUInteger i = 0; i < 5; i++) {
-        NSError *rErr = nil;
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&rErr];
-        if (i == 0) { firstSeq = r ? r.sequence : nil; firstErr = rErr; }
-        if (!r || ![r.sequence isEqualToString:@"ACGTACGTAC"]) {
-            allCorrect = NO;
-            break;
-        }
-    }
-    PASS(allCorrect,
-         "RefDiffV2Dispatch #5: all 5 reads decode to 'ACGTACGTAC' (v1 opt-out round-trip) "
+         "RefDiffV2Dispatch #3: all 5 reads decode to 'ACGTACGTAC' (v2 round-trip) "
          "[r0=%@ err=%@]",
          firstSeq ?: @"<nil>",
          firstErr.localizedDescription ?: @"<no err>");
@@ -409,8 +335,6 @@ void testRefDiffV2Dispatch(void)
         SKIP("libttio_rans not linked — v2 dispatch tests require native lib");
     }
     testRefDiffV2DispatchDefaultWritesGroup();
-    testRefDiffV2DispatchOptOutWritesFlatDataset();
     testRefDiffV2DispatchNoRefWritesBasePack();
     testRefDiffV2DispatchRoundTripV2();
-    testRefDiffV2DispatchRoundTripV1();
 }

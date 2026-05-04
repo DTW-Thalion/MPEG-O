@@ -4,15 +4,16 @@
 //   python/tests/test_name_tok_v2_dispatch.py  (Task 12)
 //   java/.../NameTokenizedV2DispatchTest.java   (Task 13)
 //
+// v1.0 reset: the name-tokenized v2 opt-out flag was removed. The
+// writer always emits the NAME_TOKENIZED_V2 codec when libttio_rans
+// is linked and no signalCodecOverrides[@"read_names"] is supplied.
+//
 // Verifies:
-//   1. Default v1.8 write produces signal_channels/read_names flat dataset
+//   1. Default write produces signal_channels/read_names flat dataset
 //      with @compression == 15 (NAME_TOKENIZED_V2).
-//   2. optDisableNameTokenizedV2 = YES + no override falls back to M82
-//      compound layout (no @compression attribute).
-//   3. signalCodecOverrides[@"read_names"] = NAME_TOKENIZED writes v1
-//      flat dataset @compression == 8 regardless of opt flag.
-//   4. v1 opt-out round-trip (M82 compound): names recovered.
-//   5. v2 default round-trip: names recovered byte-exact.
+//   2. signalCodecOverrides[@"read_names"] = NAME_TOKENIZED writes v1
+//      flat dataset @compression == 8 (explicit override beats default).
+//   3. v2 default round-trip: names recovered byte-exact.
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
@@ -41,10 +42,9 @@ static void ntv2dRm(NSString *p)
 }
 
 /** Build a minimal 100-read run with Illumina-style structured names that
- *  exercise the v2 column-aware tokeniser. Disables refdiff_v2 + inline_v2
- *  so the test is focused on read_names dispatch. */
-static TTIOWrittenGenomicRun *ntv2dMakeRun(BOOL optDisableV2,
-                                            NSDictionary *codecOverrides)
+ *  exercise the v2 column-aware tokeniser. No reference is set, so the
+ *  refdiff_v2 path is naturally ineligible (focuses test on read_names). */
+static TTIOWrittenGenomicRun *ntv2dMakeRun(NSDictionary *codecOverrides)
 {
     NSUInteger n = 100;
     NSUInteger L = 50;
@@ -121,11 +121,6 @@ static TTIOWrittenGenomicRun *ntv2dMakeRun(BOOL optDisableV2,
                      chromosomes:chroms
                signalCompression:TTIOCompressionNone
             signalCodecOverrides:(codecOverrides ?: @{})];
-
-    // Focus on read_names: opt out of inline_v2 + refdiff_v2 paths.
-    run.optDisableInlineMateInfoV2 = YES;
-    run.optDisableRefDiffV2        = YES;
-    run.optDisableNameTokenizedV2  = optDisableV2;
 
     return run;
 }
@@ -211,7 +206,7 @@ static void testNameTokV2DispatchDefaultWritesV2(void)
     NSString *path = ntv2dTmpPath(@"default");
     ntv2dRm(path);
 
-    TTIOWrittenGenomicRun *run = ntv2dMakeRun(NO, nil);
+    TTIOWrittenGenomicRun *run = ntv2dMakeRun(nil);
     NSError *err = nil;
     PASS(ntv2dWrite(path, run, &err),
          "NameTokV2Dispatch #1: write succeeds (native, v2 default) [err=%@]",
@@ -232,124 +227,55 @@ static void testNameTokV2DispatchDefaultWritesV2(void)
     ntv2dRm(path);
 }
 
-// ── Test 2: opt-out + no override falls back to M82 compound ─────────────────
-
-static void testNameTokV2DispatchOptOutWritesV1(void)
-{
-    NSString *path = ntv2dTmpPath(@"optout");
-    ntv2dRm(path);
-
-    TTIOWrittenGenomicRun *run = ntv2dMakeRun(YES, nil);
-    NSError *err = nil;
-    PASS(ntv2dWrite(path, run, &err),
-         "NameTokV2Dispatch #2: write succeeds (opt-out, no override) [err=%@]",
-         err.localizedDescription ?: @"<nil>");
-
-    int ot = ntv2dReadNamesObjectType(path.fileSystemRepresentation);
-    PASS(ot == (int)H5O_TYPE_DATASET,
-         "NameTokV2Dispatch #2: read_names is a DATASET (M82 compound)");
-
-    // M82 compound: not uint8, no @compression attribute.
-    PASS(!ntv2dReadNamesIsUInt8(path.fileSystemRepresentation),
-         "NameTokV2Dispatch #2: opt-out without override remains compound, "
-         "not lifted to uint8");
-
-    uint8_t cid = ntv2dReadNamesCompressionAttr(path.fileSystemRepresentation);
-    PASS(cid == 254 /* attr absent */,
-         "NameTokV2Dispatch #2: M82 compound has no @compression attribute (got %u)",
-         (unsigned)cid);
-
-    ntv2dRm(path);
-}
-
-// ── Test 3: explicit signal_codec_overrides honoured ─────────────────────────
+// ── Test 2: explicit signal_codec_overrides honoured ─────────────────────────
 
 static void testNameTokV2DispatchOverrideRespected(void)
 {
     NSString *path = ntv2dTmpPath(@"override_v1");
     ntv2dRm(path);
 
-    // Explicit override → v1 layout regardless of opt flag.
-    TTIOWrittenGenomicRun *run = ntv2dMakeRun(NO,
+    // Explicit override → v1 layout regardless of default.
+    TTIOWrittenGenomicRun *run = ntv2dMakeRun(
         @{ @"read_names": @(TTIOCompressionNameTokenized) });
     NSError *err = nil;
     PASS(ntv2dWrite(path, run, &err),
-         "NameTokV2Dispatch #3: write succeeds (v1 explicit override) [err=%@]",
+         "NameTokV2Dispatch #2: write succeeds (v1 explicit override) [err=%@]",
          err.localizedDescription ?: @"<nil>");
 
     int ot = ntv2dReadNamesObjectType(path.fileSystemRepresentation);
     PASS(ot == (int)H5O_TYPE_DATASET,
-         "NameTokV2Dispatch #3: read_names is a flat DATASET");
+         "NameTokV2Dispatch #2: read_names is a flat DATASET");
 
     PASS(ntv2dReadNamesIsUInt8(path.fileSystemRepresentation),
-         "NameTokV2Dispatch #3: explicit v1 override produces UInt8 dataset");
+         "NameTokV2Dispatch #2: explicit v1 override produces UInt8 dataset");
 
     uint8_t cid = ntv2dReadNamesCompressionAttr(path.fileSystemRepresentation);
     PASS(cid == (uint8_t)TTIOCompressionNameTokenized,
-         "NameTokV2Dispatch #3: read_names @compression == 8 under explicit "
+         "NameTokV2Dispatch #2: read_names @compression == 8 under explicit "
          "v1 override (got %u)", (unsigned)cid);
 
     ntv2dRm(path);
 }
 
-// ── Test 4: v1 opt-out round-trip (M82 compound) ─────────────────────────────
-
-static void testNameTokV2DispatchRoundTripV1(void)
-{
-    NSString *path = ntv2dTmpPath(@"rt_v1");
-    ntv2dRm(path);
-
-    TTIOWrittenGenomicRun *run = ntv2dMakeRun(YES, nil);
-    NSArray *expectedNames = [run.readNames copy];
-    NSError *err = nil;
-    PASS(ntv2dWrite(path, run, &err),
-         "NameTokV2Dispatch #4: write succeeds (v1 opt-out)");
-
-    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    PASS(ds != nil, "NameTokV2Dispatch #4: dataset re-opens");
-
-    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
-    PASS(gr != nil && gr.readCount == 100,
-         "NameTokV2Dispatch #4: 100 reads round-trip");
-
-    BOOL allCorrect = YES;
-    NSString *firstName = nil;
-    for (NSUInteger i = 0; i < 100; i++) {
-        NSError *rErr = nil;
-        TTIOAlignedRead *r = [gr readAtIndex:i error:&rErr];
-        if (i == 0) firstName = r ? r.readName : nil;
-        if (!r || ![r.readName isEqualToString:expectedNames[i]]) {
-            allCorrect = NO;
-            break;
-        }
-    }
-    PASS(allCorrect,
-         "NameTokV2Dispatch #4: all 100 read names round-trip (v1 opt-out) "
-         "[r0=%@]", firstName ?: @"<nil>");
-
-    [ds closeFile];
-    ntv2dRm(path);
-}
-
-// ── Test 5: v2 default round-trip ─────────────────────────────────────────────
+// ── Test 3: v2 default round-trip ─────────────────────────────────────────────
 
 static void testNameTokV2DispatchRoundTripV2(void)
 {
     NSString *path = ntv2dTmpPath(@"rt_v2");
     ntv2dRm(path);
 
-    TTIOWrittenGenomicRun *run = ntv2dMakeRun(NO, nil);
+    TTIOWrittenGenomicRun *run = ntv2dMakeRun(nil);
     NSArray *expectedNames = [run.readNames copy];
     NSError *err = nil;
     PASS(ntv2dWrite(path, run, &err),
-         "NameTokV2Dispatch #5: write succeeds");
+         "NameTokV2Dispatch #3: write succeeds");
 
     TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-    PASS(ds != nil, "NameTokV2Dispatch #5: dataset re-opens");
+    PASS(ds != nil, "NameTokV2Dispatch #3: dataset re-opens");
 
     TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
     PASS(gr != nil && gr.readCount == 100,
-         "NameTokV2Dispatch #5: 100 reads round-trip");
+         "NameTokV2Dispatch #3: 100 reads round-trip");
 
     BOOL allCorrect = YES;
     NSString *firstName = nil;
@@ -364,7 +290,7 @@ static void testNameTokV2DispatchRoundTripV2(void)
         }
     }
     PASS(allCorrect,
-         "NameTokV2Dispatch #5: all 100 read names round-trip (v2 default) "
+         "NameTokV2Dispatch #3: all 100 read names round-trip (v2 default) "
          "[r0=%@ err=%@]",
          firstName ?: @"<nil>",
          firstErr.localizedDescription ?: @"<no err>");
@@ -383,8 +309,6 @@ void testNameTokenizedV2Dispatch(void)
         SKIP("libttio_rans not linked — v2 dispatch tests require native lib");
     }
     testNameTokV2DispatchDefaultWritesV2();
-    testNameTokV2DispatchOptOutWritesV1();
     testNameTokV2DispatchOverrideRespected();
-    testNameTokV2DispatchRoundTripV1();
     testNameTokV2DispatchRoundTripV2();
 }
