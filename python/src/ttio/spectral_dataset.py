@@ -857,12 +857,6 @@ class WrittenRun:
     # results in no /chromatograms/ group, preserving byte parity with
     # v0.3 files written by callers that don't supply chromatograms.
     chromatograms: list = field(default_factory=list)  # list[Chromatogram]
-    # v1.10 #10: opt-out for offsets-cumsum drop. Default False — new
-    # files omit `spectrum_index/offsets` and `chromatogram_index/offsets`
-    # (computed from `cumsum(lengths)` on read). Set True to keep the
-    # offsets columns on disk for byte-equivalent backward compat with
-    # pre-v1.10 readers.
-    opt_keep_offsets_columns: bool = False
 
 
 def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
@@ -896,9 +890,7 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
 
     idx = g.create_group("spectrum_index")
     io.write_int_attr(idx, "count", int(run.offsets.shape[0]))
-    # v1.10 #10: offsets is omitted by default — derivable from
-    # cumsum(lengths). opt_keep_offsets_columns = True keeps it for
-    # byte-equivalent backward compat with pre-v1.10 readers.
+    # v1.0: offsets is never written — readers derive from cumsum(lengths).
     columns: list[tuple[str, np.ndarray, str]] = [
         ("lengths", run.lengths, "<u4"),
         ("retention_times", run.retention_times, "<f8"),
@@ -908,8 +900,6 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
         ("precursor_charges", run.precursor_charges, "<i4"),
         ("base_peak_intensities", run.base_peak_intensities, "<f8"),
     ]
-    if getattr(run, "opt_keep_offsets_columns", False):
-        columns.insert(0, ("offsets", run.offsets, "<u8"))
     # M74 schema-gating: only emit the four optional columns when all
     # four are supplied. The opt_ms2_activation_detail feature flag is
     # the author-level gate; this block translates that gate into
@@ -956,10 +946,7 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
     # M24: chromatograms
     if run.chromatograms:
         from .acquisition_run import write_chromatograms_to_run_group
-        write_chromatograms_to_run_group(
-            g, run.chromatograms,
-            keep_offsets_column=getattr(run, "opt_keep_offsets_columns", False),
-        )
+        write_chromatograms_to_run_group(g, run.chromatograms)
 
 
 # M93 v1.2 — context-aware codec / reference-embed helpers.
@@ -1605,8 +1592,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         flags=run.flags,
     )
     idx_group = rg.create_group("genomic_index")
-    idx.write(idx_group, keep_offsets_column=getattr(
-        run, "opt_keep_offsets_columns", False))
+    idx.write(idx_group)
 
     # Signal channels — these honour run.signal_compression by default;
     # M86 lets per-channel overrides route sequences/qualities through

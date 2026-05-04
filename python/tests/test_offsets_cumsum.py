@@ -19,7 +19,6 @@ import pytest
 from ttio.genomic_index import (
     GenomicIndex,
     _offsets_from_lengths,
-    _read_offsets_or_cumsum,
 )
 
 
@@ -112,58 +111,11 @@ def test_offsets_from_lengths_overflow_safe_uint32_to_uint64():
     assert total == 3 * (2**31), f"expected 3*2^31, got {total}"
 
 
-# ── _read_offsets_or_cumsum helper (provider integration) ─────────────────
-
-
-def test_read_offsets_or_cumsum_present_uses_disk(tmp_path):
-    """Pre-v1.10 file with offsets-on-disk: helper reads them directly."""
-    from ttio.providers.hdf5 import Hdf5Provider
-    path = tmp_path / "with_offsets.h5"
-    with Hdf5Provider.open(str(path), mode="w") as p:
-        idx = p.root_group().create_group("genomic_index")
-        # Hand-write offsets that don't equal cumsum to prove the read
-        # path uses what's on disk, not the synthesized values.
-        offsets = idx.create_dataset(
-            "offsets",
-            from_str := __import__("ttio.enums", fromlist=["Precision"]).Precision.UINT64,
-            length=4,
-        )
-        offsets.write(np.array([0, 999, 999, 999], dtype=np.uint64))
-        lengths = idx.create_dataset("lengths", from_str.__class__.UINT32 if False
-                                     else __import__("ttio.enums",
-                                                     fromlist=["Precision"]).Precision.UINT32,
-                                     length=4)
-        lengths.write(np.array([100, 100, 100, 100], dtype=np.uint32))
-
-    with Hdf5Provider.open(str(path), mode="r") as p:
-        idx = p.root_group().open_group("genomic_index")
-        out = _read_offsets_or_cumsum(idx)
-    # Bogus disk values returned verbatim — proves we read disk, not cumsum
-    assert out.tolist() == [0, 999, 999, 999]
-
-
-def test_read_offsets_or_cumsum_absent_synthesizes(tmp_path):
-    """v1.10+ file without offsets-on-disk: helper computes cumsum."""
-    from ttio.providers.hdf5 import Hdf5Provider
-    from ttio.enums import Precision
-    path = tmp_path / "no_offsets.h5"
-    with Hdf5Provider.open(str(path), mode="w") as p:
-        idx = p.root_group().create_group("genomic_index")
-        lengths = idx.create_dataset("lengths", Precision.UINT32, length=4)
-        lengths.write(np.array([100, 50, 75, 100], dtype=np.uint32))
-
-    with Hdf5Provider.open(str(path), mode="r") as p:
-        idx = p.root_group().open_group("genomic_index")
-        out = _read_offsets_or_cumsum(idx)
-    assert out.tolist() == [0, 100, 150, 225]
-    assert out.dtype == np.uint64
-
-
-# ── End-to-end: WrittenGenomicRun.opt_keep_offsets_columns dispatch ──────
+# ── End-to-end ───────────────────────────────────────────────────────────
 
 
 def test_default_writer_omits_offsets(tmp_path):
-    """v1.10 default — offsets dataset must not appear on disk."""
+    """v1.0: offsets dataset is never on disk."""
     from ttio import SpectralDataset
     out = tmp_path / "default.tio"
     SpectralDataset.write_minimal(
@@ -176,28 +128,8 @@ def test_default_writer_omits_offsets(tmp_path):
         assert "lengths" in idx
 
 
-def test_opt_keep_offsets_writer_writes_offsets(tmp_path):
-    """opt_keep_offsets_columns=True: backward-compat path keeps it."""
-    from ttio import SpectralDataset
-    run = replace(_make_genomic_run(), opt_keep_offsets_columns=True)
-    out = tmp_path / "keep.tio"
-    SpectralDataset.write_minimal(
-        path=str(out), title="t", isa_investigation_id="i",
-        runs={}, genomic_runs={"chr1": run},
-    )
-    with h5py.File(out, "r") as f:
-        idx = f["study/genomic_runs/chr1/genomic_index"]
-        assert "offsets" in idx
-        assert "lengths" in idx
-        # Disk offsets must equal cumsum(lengths).
-        offsets = idx["offsets"][:]
-        lengths = idx["lengths"][:]
-        expected = _offsets_from_lengths(lengths.astype(np.uint32))
-        np.testing.assert_array_equal(offsets, expected)
-
-
 def test_default_writer_round_trip_via_genomic_index_read(tmp_path):
-    """Read-back must produce GenomicIndex with correct offsets."""
+    """Read-back produces GenomicIndex with correct synthesized offsets."""
     from ttio import SpectralDataset
     out = tmp_path / "rt.tio"
     src_run = _make_genomic_run(n_reads=20)
@@ -207,37 +139,8 @@ def test_default_writer_round_trip_via_genomic_index_read(tmp_path):
     )
     with SpectralDataset.open(str(out)) as ds:
         gr = ds.genomic_runs["chr1"]
-        # genomic_index attached to the run loads eagerly.
-        idx = gr.index  # cached GenomicIndex per genomic_run.py
+        idx = gr.index
         np.testing.assert_array_equal(idx.lengths, src_run.lengths)
         np.testing.assert_array_equal(idx.offsets, src_run.offsets)
-        # And those offsets must match the cumsum invariant.
         np.testing.assert_array_equal(
             idx.offsets, _offsets_from_lengths(idx.lengths))
-
-
-def test_opt_keep_offsets_round_trip_byte_identical_results(tmp_path):
-    """Both writer paths must produce GenomicIndex.read identical
-    `offsets` values — the only on-disk difference is the column's
-    presence vs absence. This protects against a synthesizer/disk
-    drift bug."""
-    from ttio import SpectralDataset
-    src = _make_genomic_run(n_reads=15)
-    src_keep = replace(src, opt_keep_offsets_columns=True)
-
-    p_default = tmp_path / "default.tio"
-    p_keep = tmp_path / "keep.tio"
-    SpectralDataset.write_minimal(
-        path=str(p_default), title="t", isa_investigation_id="i",
-        runs={}, genomic_runs={"chr1": src},
-    )
-    SpectralDataset.write_minimal(
-        path=str(p_keep), title="t", isa_investigation_id="i",
-        runs={}, genomic_runs={"chr1": src_keep},
-    )
-
-    with SpectralDataset.open(str(p_default)) as ds_d, \
-         SpectralDataset.open(str(p_keep)) as ds_k:
-        offs_default = ds_d.genomic_runs["chr1"].index.offsets
-        offs_keep = ds_k.genomic_runs["chr1"].index.offsets
-        np.testing.assert_array_equal(offs_default, offs_keep)
