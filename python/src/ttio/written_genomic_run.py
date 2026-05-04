@@ -87,24 +87,3 @@ class WrittenGenomicRun:
     # decoder fallback when the embedded reference is absent. The
     # writer never reads this path; it is metadata only.
     external_reference_path: Path | None = None
-
-    # v1.7 #11: opt-out for CRAM-style inline mate-pair codec.
-    # Default False — new files write the inline_v2 blob (codec id
-    # 13, ~7 MB savings on chr22). Set True to fall back to the v1
-    # layout (three independent compressed streams) when v1.6 readers
-    # must round-trip the file.
-    opt_disable_inline_mate_info_v2: bool = False
-
-    # v1.8 #11: opt-out for CRAM-style ref_diff v2 codec.
-    # Default False — new files write the refdiff_v2 blob (codec id
-    # 14, ~3-5 MB savings on chr22). Set True to fall back to the v1
-    # REF_DIFF layout (single rANS-encoded bitstream) when v1.7 readers
-    # must round-trip the file.
-    opt_disable_ref_diff_v2: bool = False
-
-    # v1.8 #11 ch3: opt-out for CRAM-style adaptive name-tokenizer v2 codec.
-    # Default False — new files write the name_tok_v2 blob (codec id
-    # 15, ~3-4 MB savings on chr22). Set True to fall back to the v1
-    # NAME_TOKENIZED layout (rANS-O0 over flat tokenised stream) when
-    # v1.7 readers must round-trip the file.
-    opt_disable_name_tokenized_v2: bool = False

@@ -1035,15 +1035,14 @@ def _embed_references_for_runs(
             continue
         # Embed if a context-aware codec override is set on this run,
         # OR if the v1.8 REF_DIFF_V2 default path will be used (when the
-        # native lib is available and opt_disable_ref_diff_v2 is not set).
+        # native lib is available).
         _has_context_aware_override = any(
             is_context_aware(_Compression(c))
             for c in run.signal_codec_overrides.values()
             if _is_valid_compression(c)
         )
         _uses_ref_diff_v2_default = (
-            not getattr(run, "opt_disable_ref_diff_v2", False)
-            and _rdv2_meta.HAVE_NATIVE_LIB
+            _rdv2_meta.HAVE_NATIVE_LIB
             and not any(c == "*" or c == "" for c in run.cigars)
         )
         if not (_has_context_aware_override or _uses_ref_diff_v2_default):
@@ -1126,10 +1125,8 @@ def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
     signal_channels/sequences as a GROUP containing a refdiff_v2
     child dataset (@compression = 14).
 
-    Opt-out / fallback paths:
-    - ``opt_disable_ref_diff_v2 = True``: write the existing v1 REF_DIFF
-      flat dataset (@compression = 9) or BASE_PACK fallback (@compression
-      = 6). v1 layout is also used when the native lib is unavailable or
+    Fallback paths:
+    - v1 layout is used when the native lib is unavailable or
       eligibility checks fail (unmapped reads / no reference).
     - Q5b = C: missing reference or unmapped reads → BASE_PACK silently.
 
@@ -1168,8 +1165,7 @@ def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
 
     # v1.8 dispatch: prefer the v2 path when eligible.
     use_v2 = (
-        not getattr(run, "opt_disable_ref_diff_v2", False)
-        and _rdv2.HAVE_NATIVE_LIB
+        _rdv2.HAVE_NATIVE_LIB
         and chrom_seq is not None
         and not has_unmapped
     )
@@ -1415,20 +1411,15 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 f"signal_channels/. The override no longer applies. "
                 f"See docs/format-spec.md §4 and §10.7."
             )
-        # v1.7 #11: per-field mate_info_* overrides are disallowed
-        # when the inline_v2 codec is active (the default in v1.7+).
-        # Set opt_disable_inline_mate_info_v2 = True to use the v1
-        # layout with per-field overrides.
+        # v1.7 #11: per-field mate_info_* overrides are disallowed —
+        # the inline_v2 codec encodes all three fields together.
         if ch_name in ("mate_info_chrom", "mate_info_pos", "mate_info_tlen"):
-            if not getattr(run, "opt_disable_inline_mate_info_v2", False):
-                raise ValueError(
-                    f"signal_codec_overrides[{ch_name!r}]: per-field "
-                    "mate_info_* overrides are disallowed when the "
-                    "v1.7 inline_v2 codec is active. Set "
-                    "opt_disable_inline_mate_info_v2=True on "
-                    "WrittenGenomicRun to use the v1 layout "
-                    "(three independent compressed streams)."
-                )
+            raise ValueError(
+                f"signal_codec_overrides[{ch_name!r}]: per-field "
+                "mate_info_* overrides are disallowed — the v1.7+ "
+                "inline_v2 codec encodes all three mate fields into "
+                "a single blob with no per-field codec choice."
+            )
         # M86 Phase F Binding Decision §126 / Gotcha §143: the bare
         # "mate_info" key is reserved and rejected with a message
         # pointing at the three per-field names. Without the
@@ -1777,15 +1768,14 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # - **NAME_TOKENIZED v1** (codec id 8): flat 1-D uint8 dataset
     #   ``read_names`` with @compression == 8. Selected when the user
     #   explicitly passes ``signal_codec_overrides["read_names"] =
-    #   Compression.NAME_TOKENIZED`` OR sets ``opt_disable_name_tokenized_v2``
-    #   AND no override is set.
+    #   Compression.NAME_TOKENIZED``.
     # - **NAME_TOKENIZED v2** (codec id 15): flat 1-D uint8 dataset
     #   ``read_names`` with @compression == 15. The v1.8 default —
-    #   selected when no override is present, ``opt_disable_name_tokenized_v2``
-    #   is False, and the native lib is available.
+    #   selected when no override is present and the native lib is
+    #   available.
     # - **M82 compound** (no codec): VL_STRING-in-compound dataset.
-    #   Selected only when the v1 fallback is requested but no override
-    #   was set (the historical no-override case).
+    #   Selected only when no override is set and the native lib is
+    #   unavailable (technical fallback).
     #
     # Readers dispatch on @compression value (8 vs 15) when shape is
     # uint8, else fall through to the compound path. No HDF5 filter is
@@ -1795,7 +1785,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     _rn_override = run.signal_codec_overrides.get("read_names")
     _use_rn_v2 = (
         _rn_override is None
-        and not getattr(run, "opt_disable_name_tokenized_v2", False)
         and _nt2.HAVE_NATIVE_LIB
     )
     if _use_rn_v2:
@@ -1836,17 +1825,13 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             [{"value": n} for n in run.read_names],
             [("value", io.vl_str())],
         )
-    # v1.7 #11: mate_info dispatch. Default path (opt_disable_inline_mate_info_v2
-    # == False AND native lib available): encode all three mate fields into a
-    # single inline_v2 blob (codec id 13) written under
-    # signal_channels/mate_info/inline_v2. Fallback v1 path (opt-out or no
-    # native lib): M86 Phase F subgroup with per-field datasets, or M82
-    # compound when no per-field overrides are set.
+    # v1.7 #11: mate_info dispatch. Default path (native lib available):
+    # encode all three mate fields into a single inline_v2 blob (codec id
+    # 13) written under signal_channels/mate_info/inline_v2. Fallback v1
+    # path (no native lib): M82 compound (per-field overrides are
+    # rejected at validation time).
     from .codecs import mate_info_v2 as _miv2
-    _use_v2 = (
-        not getattr(run, "opt_disable_inline_mate_info_v2", False)
-        and _miv2.HAVE_NATIVE_LIB
-    )
+    _use_v2 = _miv2.HAVE_NATIVE_LIB
     if _use_v2:
         _write_mate_info_inline_v2(sc, run)
     else:

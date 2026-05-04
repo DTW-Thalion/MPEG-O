@@ -2,10 +2,8 @@
 
 Verifies:
 1. Default v1.8 write produces read_names @compression == 15 (NAME_TOKENIZED_V2).
-2. opt_disable_name_tokenized_v2 = True falls back to v1 NAME_TOKENIZED layout.
-3. Explicit signal_codec_overrides[read_names]=NAME_TOKENIZED honoured.
-4. v1 round-trip via opt-out.
-5. v2 default round-trip: names recovered.
+2. Explicit signal_codec_overrides[read_names]=NAME_TOKENIZED honoured.
+3. v2 default round-trip: names recovered.
 """
 from __future__ import annotations
 
@@ -56,10 +54,6 @@ def _build_minimal_run(**extra):
         template_lengths=np.zeros(N, dtype=np.int32),
         chromosomes=["chr1"] * N,
         signal_compression="none",
-        # Disable refdiff_v2 / inline_v2 so the test focuses on read_names
-        # without dragging in the other v2 codecs.
-        opt_disable_ref_diff_v2=True,
-        opt_disable_inline_mate_info_v2=True,
         **extra,
     )
 
@@ -102,32 +96,7 @@ def test_default_writes_v2(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------- #
-# Test 2: opt_disable_name_tokenized_v2 falls back to v1 layout
-# --------------------------------------------------------------------------- #
-
-def test_opt_out_writes_v1(tmp_path: Path):
-    """opt_disable_name_tokenized_v2 = True still writes the v1 codec because
-    the historical no-override path emitted M82 compound but the user-explicit
-    fallback through this flag is documented to mean v1 layout. We accept
-    either: M82 compound or v1 NAME_TOKENIZED — both are pre-v1.8 readers."""
-    run = _build_minimal_run(opt_disable_name_tokenized_v2=True)
-    out = _write_run(tmp_path, run, fname="v1_optout.tio")
-
-    with h5py.File(out, "r") as f:
-        rn = f["study/genomic_runs/r0/signal_channels/read_names"]
-        # When opt-out and no override, the writer falls through to the
-        # historical M82 compound layout (no codec). This is the expected
-        # back-compat path that pre-v1.8 readers understand.
-        assert rn.dtype.kind == "V", (
-            f"opt-out without override should write M82 compound; "
-            f"got dtype kind {rn.dtype.kind!r}"
-        )
-        # No @compression attribute on the M82 compound.
-        assert "compression" not in rn.attrs
-
-
-# --------------------------------------------------------------------------- #
-# Test 3: signal_codec_overrides[read_names]=NAME_TOKENIZED honoured
+# Test 2: signal_codec_overrides[read_names]=NAME_TOKENIZED honoured
 # --------------------------------------------------------------------------- #
 
 def test_signal_codec_overrides_respected(tmp_path: Path):
@@ -152,32 +121,7 @@ def test_signal_codec_overrides_respected(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------- #
-# Test 4: v1 round-trip via opt-out (M82 compound)
-# --------------------------------------------------------------------------- #
-
-def test_v1_round_trip_via_opt_out(tmp_path: Path):
-    """Round-trip via opt-out path (M82 compound): names recovered."""
-    from ttio.spectral_dataset import SpectralDataset
-
-    run = _build_minimal_run(opt_disable_name_tokenized_v2=True)
-    expected_names = list(run.read_names)
-    out = _write_run(tmp_path, run, fname="v1_rt.tio")
-
-    ds = SpectralDataset.open(out)
-    try:
-        gr = ds.genomic_runs["r0"]
-        assert len(gr) == N
-        for i in range(N):
-            assert gr[i].read_name == expected_names[i], (
-                f"read {i}: expected {expected_names[i]!r}, "
-                f"got {gr[i].read_name!r}"
-            )
-    finally:
-        ds.close()
-
-
-# --------------------------------------------------------------------------- #
-# Test 5: v2 default round-trip
+# Test 3: v2 default round-trip
 # --------------------------------------------------------------------------- #
 
 def test_v2_round_trip_default(tmp_path: Path):

@@ -5,9 +5,8 @@ Spec: docs/superpowers/specs/2026-05-03-mate-info-v2-design.md
 Encoded blob written as signal_channels/mate_info/inline_v2 uint8
 dataset with @compression = 13 (MATE_INLINE_V2). Requires
 TTIO_RANS_LIB_PATH to point at a built libttio_rans.so;
-without it, HAVE_NATIVE_LIB is False and v2 write/read is
-disabled (use opt_disable_inline_mate_info_v2 = True to fall back
-to v1).
+without it, HAVE_NATIVE_LIB is False and the writer falls back to
+the v1 M82 compound layout.
 """
 from __future__ import annotations
 
@@ -91,8 +90,8 @@ def encode(
     if not HAVE_NATIVE_LIB:
         raise RuntimeError(
             "mate_info_v2.encode requires libttio_rans (set "
-            "TTIO_RANS_LIB_PATH); set opt_disable_inline_mate_info_v2 "
-            "= True on WrittenGenomicRun to fall back to v1.")
+            "TTIO_RANS_LIB_PATH); the writer falls back to the v1 "
+            "M82 compound layout automatically.")
 
     mc = np.ascontiguousarray(mate_chrom_ids, dtype=np.int32)
     mp = np.ascontiguousarray(mate_positions, dtype=np.int64)

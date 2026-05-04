@@ -2,10 +2,9 @@
 
 Verifies:
 1. Default v1.7 write produces inline_v2 blob (not v1 streams).
-2. opt_disable_inline_mate_info_v2 = True falls back to v1 compound.
-3. signal_codec_overrides[mate_info_*] rejected when v2 active.
-4. signal_codec_overrides[mate_info_*] allowed when v2 disabled (opt-out).
-5. v2 round-trip: mate_chromosome / mate_position / template_length match.
+2. signal_codec_overrides[mate_info_*] rejected (per-field
+   overrides incompatible with the inline v2 blob).
+3. v2 round-trip: mate_chromosome / mate_position / template_length match.
 """
 from __future__ import annotations
 
@@ -120,56 +119,22 @@ def test_default_writes_inline_v2(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Test 2: opt-out falls back to v1 compound
+# Test 2: signal_codec_overrides[mate_info_*] always rejected
 # ---------------------------------------------------------------------------
 
-def test_opt_out_writes_v1_compound(tmp_path: Path):
-    """opt_disable_inline_mate_info_v2 = True falls back to M82 compound."""
-    run = _build_minimal_run(opt_disable_inline_mate_info_v2=True)
-    out = _write_run(tmp_path, run)
-
-    import h5py
-    with h5py.File(out, "r") as f:
-        sc = f["study/genomic_runs/r0/signal_channels"]
-        # M82 compound: mate_info must be a dataset, NOT a group
-        import h5py as _h5
-        assert isinstance(sc["mate_info"], _h5.Dataset), (
-            "opt-out should produce M82 compound dataset, not a group"
-        )
-        assert "inline_v2" not in sc["mate_info"].id.get_name(sc.id).decode(
-            "ascii", errors="replace"
-        ) if False else True  # can't navigate into a dataset; presence check is enough
-
-
-# ---------------------------------------------------------------------------
-# Test 3: signal_codec_overrides[mate_info_*] rejected when v2 active
-# ---------------------------------------------------------------------------
-
-def test_signal_codec_overrides_rejected_when_v2_active(tmp_path: Path):
-    """signal_codec_overrides['mate_info_pos'] rejected when v2 default active."""
+def test_signal_codec_overrides_rejected(tmp_path: Path):
+    """signal_codec_overrides['mate_info_pos'] rejected — per-field
+    overrides are incompatible with the inline v2 blob (the only
+    mate_info codec from v1.0 onward)."""
     run = _build_minimal_run(
         signal_codec_overrides={"mate_info_pos": Compression.RANS_ORDER0}
     )
-    with pytest.raises(ValueError, match="opt_disable_inline_mate_info_v2"):
+    with pytest.raises(ValueError, match="mate_info_"):
         _write_run(tmp_path, run)
 
 
 # ---------------------------------------------------------------------------
-# Test 4: signal_codec_overrides[mate_info_*] allowed under opt-out
-# ---------------------------------------------------------------------------
-
-def test_signal_codec_overrides_allowed_when_v2_disabled(tmp_path: Path):
-    """signal_codec_overrides['mate_info_pos'] allowed when v2 is disabled."""
-    run = _build_minimal_run(
-        opt_disable_inline_mate_info_v2=True,
-        signal_codec_overrides={"mate_info_pos": Compression.RANS_ORDER0},
-    )
-    out = _write_run(tmp_path, run, fname="v1_override.tio")
-    assert out.exists(), "file should have been written without error"
-
-
-# ---------------------------------------------------------------------------
-# Test 5: v2 round-trip equivalence via the SpectralDataset reader
+# Test 3: v2 round-trip equivalence via the SpectralDataset reader
 # ---------------------------------------------------------------------------
 
 def test_v2_round_trip_default(tmp_path: Path):

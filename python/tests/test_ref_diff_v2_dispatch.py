@@ -2,10 +2,8 @@
 
 Verifies:
 1. Default v1.8 write produces refdiff_v2 group layout.
-2. opt_disable_ref_diff_v2 = True falls back to v1 flat dataset.
-3. Unmapped reads fall back to BASE_PACK (v2 not eligible).
-4. v1 round-trip via opt-out.
-5. v2 default round-trip: sequence bytes match.
+2. Unmapped reads fall back to BASE_PACK (v2 not eligible).
+3. v2 default round-trip: sequence bytes match.
 """
 from __future__ import annotations
 
@@ -118,31 +116,7 @@ def test_default_writes_refdiff_v2(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Test 2: opt-out falls back to v1 flat dataset
-# ---------------------------------------------------------------------------
-
-def test_opt_out_writes_v1_layout(tmp_path: Path):
-    """opt_disable_ref_diff_v2 = True falls back to v1 flat dataset."""
-    run = _build_minimal_run(opt_disable_ref_diff_v2=True)
-    out = _write_run(tmp_path, run, fname="v1_optout.tio")
-
-    import h5py
-    with h5py.File(out, "r") as f:
-        seq = f["study/genomic_runs/r0/signal_channels/sequences"]
-        assert isinstance(seq, h5py.Dataset), (
-            "opt-out should write sequences as flat Dataset, "
-            "got: " + str(type(seq))
-        )
-        assert int(seq.attrs["compression"]) in (
-            int(Compression.REF_DIFF), int(Compression.BASE_PACK)
-        ), (
-            f"@compression must be REF_DIFF (9) or BASE_PACK (6), "
-            f"got {seq.attrs['compression']}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Test 3: unmapped reads fall back to BASE_PACK (v2 not eligible)
+# Test 2: unmapped reads fall back to BASE_PACK (v2 not eligible)
 # ---------------------------------------------------------------------------
 
 def test_unmapped_reads_skip_v2(tmp_path: Path):
@@ -166,42 +140,7 @@ def test_unmapped_reads_skip_v2(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Test 4: v1 round-trip via opt-out (BASE_PACK fallback — no ref needed)
-# ---------------------------------------------------------------------------
-
-def test_v1_round_trip_via_opt_out(tmp_path: Path):
-    """Round-trip a v1 opt-out file with BASE_PACK (no reference needed).
-
-    With opt_disable_ref_diff_v2 = True and no reference the writer
-    falls back to BASE_PACK (codec id 6). The reader reads it back via
-    the existing v1 flat-dataset path.
-    """
-    from ttio.spectral_dataset import SpectralDataset
-
-    # Build run without reference → BASE_PACK (v1 fallback, no REF_DIFF).
-    run = _build_minimal_run(opt_disable_ref_diff_v2=True)
-    # Override to drop the reference so the v1 fallback uses BASE_PACK.
-    run.reference_chrom_seqs = None
-    run.embed_reference = False
-    expected_seq = bytes(run.sequences.tobytes())
-    out = _write_run(tmp_path, run, fname="v1_rt.tio")
-
-    ds = SpectralDataset.open(out)
-    try:
-        grun = ds.genomic_runs["r0"]
-        assert len(grun) == N
-        reconstructed = bytearray()
-        for i in range(N):
-            record = grun[i]
-            seq = record.sequence
-            reconstructed.extend(seq.encode("ascii") if isinstance(seq, str) else bytes(seq))
-        assert bytes(reconstructed) == expected_seq
-    finally:
-        ds.close()
-
-
-# ---------------------------------------------------------------------------
-# Test 5: v2 default round-trip
+# Test 3: v2 default round-trip
 # ---------------------------------------------------------------------------
 
 def test_v2_round_trip_default(tmp_path: Path):
