@@ -183,7 +183,10 @@ class GenomicRunTest {
             assertEquals("150M", r0.cigar());
             assertEquals(150, r0.sequence().length());
             assertEquals(0, r0.flags());
-            assertEquals("", r0.mateChromosome());
+            // v1.7 mate_info v2 normalizes "" / "*" inputs to "*" on read
+            // (id=-1 sentinel; SpectralDataset.writeMateInfoV2 normalizes,
+            // GenomicRun.mateChromAt decodes id=-1 → "*").
+            assertEquals("*", r0.mateChromosome());
             assertEquals(-1L, r0.matePosition());
 
             AlignedRead r99 = gr.readAt(99);
