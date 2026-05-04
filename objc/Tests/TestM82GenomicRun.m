@@ -667,7 +667,7 @@ static void testRandomAccessRead(void)
 
 // ── Cross-language fixture read (M82.1 Python → M82.2 ObjC) ────────
 //
-// v1.0 reset Phase 2c: the legacy m82_100reads.tio fixture stores
+// the legacy m82_100reads.tio fixture stores
 // read_names in the M82 VL-string compound layout, which the v1.0
 // reader rejects. The dataset header still opens (run-level metadata
 // is intact) but per-read access fails on first readAtIndex:. Phase 3

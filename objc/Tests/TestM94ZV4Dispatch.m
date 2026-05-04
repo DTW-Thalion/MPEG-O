@@ -144,11 +144,6 @@ static void testV4DefaultBareEncode(void)
     }
 }
 
-// (REMOVED v1.0 reset Phase 2c): testV2ExplicitStillWorks +
-// testV1ExplicitStillWorks asserted the encoder honoured preferV4=NO
-// requests. Phase 2c always emits V4 (preferV4=NO is ignored), so
-// these expectations no longer hold.
-
 static void testV4PadCountThirteenQualities(void)
 {
     if (!nativeAvailable()) { skipIfPureObjC(__func__); return; }
@@ -252,10 +247,6 @@ static void testV4MixedRevcompRoundtrip(void)
     PASS([dec[@"readLengths"] isEqualToArray:lens],
          "V4 mixed-revcomp recovers read lengths");
 }
-
-// (REMOVED v1.0 reset Phase 2c): testV4SizeSanityVsV2 compared V4
-// footprint against the V2 native encoder. V2 encode was removed in
-// Phase 2c — every encode emits V4.
 
 static void testV4MagicAndMinHeaderSize(void)
 {

@@ -132,7 +132,7 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
     static NSDictionary *d = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        // v1.0 reset Phase 2c: REF_DIFF v1 (id 9) removed from
+        // REF_DIFF v1 (id 9) removed from
         // sequences override surface — use the default (refdiff_v2) or
         // RANS / BASE_PACK on sequences. NAME_TOKENIZED v1 (id 8) is
         // similarly removed from read_names; default is name_tok_v2.
@@ -149,7 +149,7 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @(TTIOCompressionFqzcompNx16Z),  // M94.Z v1.2
         ]];
         NSSet *nameAllowed = [NSSet set];
-        // v1.0 reset Phase 2c: cigars accepts only the rANS codec
+        // cigars accepts only the rANS codec
         // pair operating on a length-prefix-concat byte stream of the
         // CIGAR strings (varint(len)+bytes per CIGAR — §2.5 / Gotcha
         // §139). NAME_TOKENIZED v1 (id 8) was removed in Phase 2c;
@@ -173,7 +173,7 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @(TTIOCompressionRansOrder1),
             @(TTIOCompressionDeltaRansOrder0),  // M95: delta + rANS
         ]];
-        // v1.0 reset Phase 2c: mate_info_chrom shares cigars' allowed
+        // mate_info_chrom shares cigars' allowed
         // set (rANS pair via length-prefix-concat). NAME_TOKENIZED v1
         // (id 8) removed in Phase 2c. The integer fields
         // mate_info_pos / mate_info_tlen mirror the existing integer
@@ -195,24 +195,6 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
         };
     });
     return d;
-}
-
-/** M86 Phase B: integer channel names. Used by validation to dispatch
- *  on wrong-content error messages (Binding Decision §117). M86 Phase F:
- *  mate_info_pos and mate_info_tlen join this set so the int-channel
- *  wrong-codec messaging fires for them too (Binding Decision §130). */
-static NSSet<NSString *> *_TTIO_M86_IntegerChannelNames(void)
-{
-    static NSSet *s = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        // v1.6: positions / flags / mapping_qualities removed — they
-        // live only in genomic_index/ now.
-        s = [NSSet setWithArray:@[
-            @"mate_info_pos", @"mate_info_tlen",
-        ]];
-    });
-    return s;
 }
 
 /** v1.6 (L4): per-record integer metadata channels no longer accept
@@ -240,7 +222,6 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
     NSSet *allowedChans = _TTIO_M86_AllowedOverrideChannels();
     NSDictionary<NSString *, NSSet<NSNumber *> *> *allowedByChan =
         _TTIO_M86_AllowedOverrideCodecsByChannel();
-    NSSet<NSString *> *intChannels = _TTIO_M86_IntegerChannelNames();
     NSSet<NSString *> *droppedIntChannels = _TTIO_M86_DroppedIntChannels();
     for (NSString *chName in overrides) {
         // v1.6 (L4): per-record integer metadata channels removed from
@@ -365,7 +346,7 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
                                    @"(allowed: RansOrder0, RansOrder1)",
                                    chName, codecBox, chName];
             }
-            // v1.0 reset Phase 2c: mate_info_chrom shares cigars'
+            // mate_info_chrom shares cigars'
             // allowed set ({RANS_ORDER0, RANS_ORDER1}) — NAME_TOKENIZED
             // v1 (id 8) was dropped. Wrong-content rejection mirrors
             // cigars' messaging — chromosome names are short ASCII
@@ -397,44 +378,6 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
                                        @"Use RANS_ORDER0 or RANS_ORDER1 "
                                        @"on 'mate_info_chrom'.",
                                        chName];
-                }
-                [NSException raise:NSInvalidArgumentException
-                            format:@"signalCodecOverrides['%@']: codec %@ "
-                                   @"not supported on the '%@' channel "
-                                   @"(allowed: RansOrder0, RansOrder1)",
-                                   chName, codecBox, chName];
-            }
-            // M86 Phase B Binding Decision §117: explicit messages for
-            // wrong-content codecs on integer channels (positions,
-            // flags, mapping_qualities). Each message names the codec,
-            // the channel, and explains why the codec does not preserve
-            // integer values.
-            if ([intChannels containsObject:chName]) {
-                if (codec == TTIOCompressionBasePack) {
-                    [NSException raise:NSInvalidArgumentException
-                                format:@"signalCodecOverrides['%@']: codec "
-                                       @"BASE_PACK is not valid on the "
-                                       @"'%@' channel — BASE_PACK 2-bit-"
-                                       @"packs ACGT sequence bytes and "
-                                       @"would silently corrupt the "
-                                       @"integer values stored on this "
-                                       @"channel. Use RANS_ORDER0 or "
-                                       @"RANS_ORDER1 on '%@'.",
-                                       chName, chName, chName];
-                }
-                if (codec == TTIOCompressionQualityBinned) {
-                    [NSException raise:NSInvalidArgumentException
-                                format:@"signalCodecOverrides['%@']: codec "
-                                       @"QUALITY_BINNED is not valid on "
-                                       @"the '%@' channel — "
-                                       @"QUALITY_BINNED quantises Phred "
-                                       @"quality scores onto an 8-bin "
-                                       @"centre table and would silently "
-                                       @"destroy the integer values "
-                                       @"stored on this channel. Use "
-                                       @"RANS_ORDER0 or RANS_ORDER1 on "
-                                       @"'%@'.",
-                                       chName, chName, chName];
                 }
                 [NSException raise:NSInvalidArgumentException
                             format:@"signalCodecOverrides['%@']: codec %@ "
@@ -496,7 +439,7 @@ static void _TTIO_M86_VarintWrite(NSMutableData *out, uint64_t value)
 
 /** M86 Phase C: encode a list of CIGAR strings via the selected codec.
  *
- *  v1.0 reset Phase 2c: only the rANS pair is accepted —
+ *  only the rANS pair is accepted —
  *  NAME_TOKENIZED v1 (codec id 8) was removed.
  *
  *  RANS_ORDER0 / RANS_ORDER1: serialise the list as length-prefix-
@@ -922,7 +865,7 @@ static BOOL _TTIO_V17_UseMateInlineV2(TTIOWrittenGenomicRun *run)
     return [TTIOMateInfoV2 nativeAvailable];
 }
 
-/** v1.0 reset Phase 2c: reject mate_info_* per-field overrides
+/** reject mate_info_* per-field overrides
  *  unconditionally — the per-field subgroup writer was deleted, so
  *  inline_v2 is the only mate_info layout under v1.0. Called after
  *  the standard _TTIO_M86_ValidateOverrides check so baseline
@@ -1520,7 +1463,7 @@ static BOOL _TTIO_M93_EmbedReferences(TTIOHDF5Group *study,
     for (TTIOWrittenGenomicRun *run in [genomicRuns objectEnumerator]) {
         if (!run.embedReference) continue;
         if (run.referenceChromSeqs == nil) continue;
-        // v1.0 reset Phase 2c: embed when the v1.8 refdiff_v2 default
+        // embed when the v1.8 refdiff_v2 default
         // path is eligible. The v1 REF_DIFF override and its v1.5
         // auto-default are gone.
         if (!_TTIO_V18_UseRefDiffV2(run)) continue;
@@ -1633,7 +1576,7 @@ static NSData *_TTIO_M93_ResolveSingleChromForRun(TTIOWrittenGenomicRun *run,
     return seq;
 }
 
-// v1.0 reset Phase 2c: v1 REF_DIFF (codec id 9) writer path removed.
+// v1 REF_DIFF (codec id 9) writer path removed.
 // _TTIO_M93_WriteRefDiffSequences / _TTIO_M93_PerReadSequences /
 // _TTIO_M93_DefaultSequencesCodec deleted alongside it. The default
 // reference-aware path is now refdiff_v2 (id 14) — see the
@@ -1691,7 +1634,7 @@ static BOOL _TTIO_V18_WriteRefDiffV2SequencesHDF5(TTIOHDF5Group *sc,
                                                     TTIOWrittenGenomicRun *run,
                                                     NSError **error)
 {
-    // v1.0 reset Phase 2c: v1 REF_DIFF fallback removed. When v2 is
+    // v1 REF_DIFF fallback removed. When v2 is
     // ineligible (no covering reference, encode failure) we fall back
     // to BASE_PACK on the flat sequences buffer — same content the v1
     // path used as its own fallback.
@@ -1984,7 +1927,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // genomic_index/, mirroring MS's spectrum_index/ pattern. See
     // docs/format-spec.md §4 and §10.7. Override-validation rejects
     // these channel names.
-    // v1.0 reset Phase 2c: sequences dispatch — prefer refdiff_v2
+    // sequences dispatch — prefer refdiff_v2
     // group layout when eligible (no override + native lib +
     // reference + all reads mapped); otherwise fall through to the
     // M86 byte-channel writer with whatever explicit override the
@@ -2051,7 +1994,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         if (!cigarDs || ![cigarDs writeAll:cigarRows error:error]) return NO;
     }
 
-    // v1.0 reset Phase 2c: read_names always written via
+    // read_names always written via
     // NAME_TOKENIZED_V2 (codec id 15) when libttio_rans is linked.
     // The v1 NAME_TOKENIZED override (id 8) and the M82 compound
     // fallback are gone. Empty-run short-circuit writes a zero-length
@@ -2091,7 +2034,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                forName:@"compression"
                                  error:error]) return NO;
     } else {
-        // v1.0 reset Phase 2c: native lib unavailable and run is
+        // native lib unavailable and run is
         // non-empty — no v1 NAME_TOKENIZED fallback exists.
         [NSException raise:NSInternalInconsistencyException
                     format:@"NAME_TOKENIZED_V2 codec requires the "
@@ -2101,7 +2044,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                            @"$TTIO_NATIVE_LIB_DIR."];
     }
 
-    // v1.0 reset Phase 2c: mate_info always emitted as the inline_v2
+    // mate_info always emitted as the inline_v2
     // codec (id 13) when libttio_rans is linked. The Phase F per-
     // field subgroup writer and the M82 compound fallback are gone.
     // Empty-run short-circuit OMITS the mate_info group entirely
@@ -2433,7 +2376,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // genomic_index/, mirroring MS's spectrum_index/ pattern. See
     // docs/format-spec.md §4 and §10.7.
     TTIOCompression codec = run.signalCompression;
-    // v1.0 reset Phase 2c: sequences dispatch — prefer refdiff_v2
+    // sequences dispatch — prefer refdiff_v2
     // group layout when eligible (no override + native lib +
     // reference + all reads mapped); otherwise fall through to the
     // M86 byte-channel writer with whatever explicit override the
@@ -2516,7 +2459,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                       fields:vlValueField error:error]) return NO;
     }
 
-    // v1.0 reset Phase 2c: read_names always written via
+    // read_names always written via
     // NAME_TOKENIZED_V2 (codec id 15). The v1 NAME_TOKENIZED override
     // (id 8) and the M82 compound fallback are gone. Empty-run
     // short-circuit writes a zero-length uint8 dataset with
@@ -2556,7 +2499,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                            (uint8_t)TTIOCompressionNameTokenizedV2,
                                            error)) return NO;
     } else {
-        // v1.0 reset Phase 2c: native lib unavailable and run is
+        // native lib unavailable and run is
         // non-empty — no v1 NAME_TOKENIZED fallback exists.
         [NSException raise:NSInternalInconsistencyException
                     format:@"NAME_TOKENIZED_V2 codec requires the "
@@ -2566,7 +2509,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                            @"$TTIO_NATIVE_LIB_DIR."];
     }
 
-    // v1.0 reset Phase 2c: mate_info always emitted as the inline_v2
+    // mate_info always emitted as the inline_v2
     // codec (id 13). The Phase F per-field subgroup writer and the
     // M82 compound fallback are gone. Empty-run short-circuit OMITS
     // the mate_info group entirely (cross-language convention shared

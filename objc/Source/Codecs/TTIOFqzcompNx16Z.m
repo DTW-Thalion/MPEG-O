@@ -1737,12 +1737,9 @@ v2_cleanup:
         return nil;
     }
 
-    // v1.0 reset Phase 2c: V1/V2/V3 encode paths removed. The encoder
-    // always emits V4 (CRAM 3.1 fqzcomp_qual). Any caller-supplied
-    // preferV4=NO / preferNative=YES / TTIO_M94Z_VERSION env var that
-    // would have selected V1 or V2 is now ignored. qbits/pbits/dbits/
-    // sloc context-table parameters were only used by V1 encode and
-    // are no longer consulted.
+    // The encoder always emits V4 (CRAM 3.1 fqzcomp_qual). The
+    // qbits/pbits/dbits/sloc context-table parameters in `options`
+    // are accepted for API compatibility but ignored on the V4 path.
 #if TTIO_HAS_NATIVE_RANS
     free(rls); free(rcs);
     {
@@ -1770,121 +1767,6 @@ v2_cleanup:
 #endif
 }
 
-#if 0  /* Phase 2c-removed: V1 + V2 encode bodies (dead code). */
-+ (nullable NSData *)_legacy_v1v2_encode:(NSData *)qualities
-                              readLengths:(NSArray<NSNumber *> *)readLengths
-                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
-                                  options:(NSDictionary *)options
-                                    error:(NSError * _Nullable *)error
-{
-    int32_t *rls = NULL; int8_t *rcs = NULL; NSUInteger nReads = 0;
-    int32_t qbits = 0, pbits = 0, dbits = 0, sloc = 0;
-    uint8_t **streams = NULL;
-    uint32_t stream_lens[4] = { 0, 0, 0, 0 };
-    uint32_t state_init[4]  = { 0, 0, 0, 0 };
-    uint32_t state_final[4] = { 0, 0, 0, 0 };
-    uint32_t *active_ctxs = NULL;
-    uint16_t **freq_tables = NULL;
-    size_t n_active = 0;
-
-    int rc = z_encode_full(
-        (const uint8_t *)qualities.bytes, (int32_t)qualities.length,
-        rls, (int32_t)nReads, rcs,
-        qbits, pbits, sloc,
-        &streams, stream_lens,
-        state_init, state_final,
-        &active_ctxs, &freq_tables, &n_active,
-        error);
-    free(rls);
-    free(rcs);
-    if (rc != 0) return nil;
-
-    int32_t n = (int32_t)qualities.length;
-    int32_t pad_count = (-n) & 3;
-
-    // Build the deflated read-length-table sidecar.
-    NSData *rlt = z_encode_read_lengths(readLengths);
-    if (!rlt) {
-        z_set_error(error, 104, @"M94Z: rlt deflate failed");
-        for (int s = 0; s < 4; s++) free(streams[s]);
-        free(streams);
-        free(active_ctxs);
-        for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
-        free(freq_tables);
-        return nil;
-    }
-
-    // Build the deflated freq-tables sidecar.
-    NSData *ft_blob = z_serialize_freq_tables(active_ctxs, n_active,
-                                                freq_tables, sloc);
-    free(active_ctxs);
-    for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
-    free(freq_tables);
-    if (!ft_blob) {
-        z_set_error(error, 105, @"M94Z: freq_tables deflate failed");
-        for (int s = 0; s < 4; s++) free(streams[s]);
-        free(streams);
-        return nil;
-    }
-
-    // Compute body size.
-    NSUInteger body_size = 16;
-    for (int s = 0; s < 4; s++) body_size += stream_lens[s];
-
-    NSUInteger header_size = (NSUInteger)kZ_HEADER_FIXED_PREFIX
-                               + (NSUInteger)rlt.length
-                               + (NSUInteger)ft_blob.length
-                               + (NSUInteger)kZ_STATE_INIT_SIZE;
-
-    NSUInteger total_size = header_size + body_size + (NSUInteger)kZ_TRAILER_SIZE;
-    NSMutableData *out = [NSMutableData dataWithLength:total_size];
-    uint8_t *p = (uint8_t *)out.mutableBytes;
-
-    uint8_t flagsByte = (uint8_t)((pad_count & 0x3) << 4);
-
-    memcpy(p, kZ_MAGIC, 4); p += 4;
-    *p++ = (uint8_t)kZ_VERSION;
-    *p++ = flagsByte;
-    le_pack_u64(p, (uint64_t)qualities.length); p += 8;
-    le_pack_u32(p, (uint32_t)nReads);          p += 4;
-    le_pack_u32(p, (uint32_t)rlt.length);      p += 4;
-    // context_params (8 bytes): qbits, pbits, dbits, sloc, 4 pad
-    *p++ = (uint8_t)(qbits & 0xFF);
-    *p++ = (uint8_t)(pbits & 0xFF);
-    *p++ = (uint8_t)(dbits & 0xFF);
-    *p++ = (uint8_t)(sloc  & 0xFF);
-    memset(p, 0, 4); p += 4;
-    le_pack_u32(p, (uint32_t)ft_blob.length); p += 4;
-    if (rlt.length) memcpy(p, rlt.bytes, rlt.length);
-    p += rlt.length;
-    if (ft_blob.length) memcpy(p, ft_blob.bytes, ft_blob.length);
-    p += ft_blob.length;
-    le_pack_u32(p +  0, state_init[0]);
-    le_pack_u32(p +  4, state_init[1]);
-    le_pack_u32(p +  8, state_init[2]);
-    le_pack_u32(p + 12, state_init[3]);
-    p += 16;
-    // Body: 16 bytes substream lengths, then concatenated streams.
-    le_pack_u32(p +  0, stream_lens[0]);
-    le_pack_u32(p +  4, stream_lens[1]);
-    le_pack_u32(p +  8, stream_lens[2]);
-    le_pack_u32(p + 12, stream_lens[3]);
-    p += 16;
-    for (int s = 0; s < 4; s++) {
-        if (stream_lens[s]) memcpy(p, streams[s], stream_lens[s]);
-        p += stream_lens[s];
-    }
-    // Trailer.
-    le_pack_u32(p +  0, state_final[0]);
-    le_pack_u32(p +  4, state_final[1]);
-    le_pack_u32(p +  8, state_final[2]);
-    le_pack_u32(p + 12, state_final[3]);
-
-    for (int s = 0; s < 4; s++) free(streams[s]);
-    free(streams);
-    return out;
-}
-#endif  /* Phase 2c-removed V1 + V2 encode paths. */
 
 + (nullable NSDictionary *)decodeData:(NSData *)data
                                  error:(NSError * _Nullable *)error
@@ -1914,7 +1796,6 @@ v2_cleanup:
         return nil;
     }
     uint8_t version = p[4];
-    // v1.0 reset Phase 2c: M94.Z V1/V2/V3 reader paths removed.
     // Only V4 (CRAM 3.1 fqzcomp_qual) is decoded; the older flavors
     // are rejected with a clear error so legacy files surface a
     // re-encode hint.
@@ -1932,160 +1813,6 @@ v2_cleanup:
     return nil;
 }
 
-#if 0  /* v1.0 reset Phase 2c: V1 pure-ObjC decoder dead code. */
-+ (nullable NSDictionary *)_legacy_v1_decode:(NSData *)data
-                                revcompFlags:(NSArray<NSNumber *> *)revcompFlags
-                                       error:(NSError * _Nullable *)error
-{
-    const uint8_t *p = (const uint8_t *)data.bytes;
-    // V1: re-validate full minimum length.
-    if (data.length < kZ_HEADER_FIXED_PREFIX + kZ_STATE_INIT_SIZE + kZ_TRAILER_SIZE) {
-        z_set_error(error, 201, @"M94Z: encoded too short (%lu bytes)",
-                    (unsigned long)data.length);
-        return nil;
-    }
-    uint8_t flags = p[5];
-    uint64_t numQ = le_read_u64(p + 6);
-    uint32_t numR = le_read_u32(p + 14);
-    uint32_t rlt_len = le_read_u32(p + 18);
-    int32_t qbits = (int32_t)p[22];
-    int32_t pbits = (int32_t)p[23];
-    // dbits = p[24]; ignored (must be 0 for v1)
-    int32_t sloc  = (int32_t)p[25];
-    // p[26..29] reserved/pad
-    uint32_t ft_len = le_read_u32(p + 30);
-
-    int32_t pad_count = (flags >> 4) & 0x3;
-
-    NSUInteger header_end = (NSUInteger)kZ_HEADER_FIXED_PREFIX
-                              + (NSUInteger)rlt_len
-                              + (NSUInteger)ft_len
-                              + (NSUInteger)kZ_STATE_INIT_SIZE;
-    if (data.length < header_end + kZ_TRAILER_SIZE) {
-        z_set_error(error, 204,
-            @"M94Z: header size %lu + trailer exceeds data length %lu",
-            (unsigned long)header_end, (unsigned long)data.length);
-        return nil;
-    }
-    NSData *rltData    = [data subdataWithRange:NSMakeRange(34, rlt_len)];
-    NSData *ftBlobData = [data subdataWithRange:NSMakeRange(34 + rlt_len, ft_len)];
-    uint32_t state_init[4];
-    state_init[0] = le_read_u32(p + 34 + rlt_len + ft_len + 0);
-    state_init[1] = le_read_u32(p + 34 + rlt_len + ft_len + 4);
-    state_init[2] = le_read_u32(p + 34 + rlt_len + ft_len + 8);
-    state_init[3] = le_read_u32(p + 34 + rlt_len + ft_len + 12);
-
-    NSError *rltErr = nil;
-    NSArray<NSNumber *> *readLengths = z_decode_read_lengths(rltData, numR, &rltErr);
-    if (!readLengths) {
-        if (error) *error = rltErr;
-        return nil;
-    }
-
-    if (revcompFlags == nil) {
-        NSMutableArray *zeros = [NSMutableArray arrayWithCapacity:numR];
-        for (uint32_t i = 0; i < numR; i++) [zeros addObject:@0];
-        revcompFlags = zeros;
-    } else if (revcompFlags.count != numR) {
-        z_set_error(error, 210,
-            @"revcompFlags.count %lu != num_reads %u",
-            (unsigned long)revcompFlags.count, numR);
-        return nil;
-    }
-
-    uint64_t n_padded64 = numQ + (uint64_t)pad_count;
-    if (n_padded64 & 3) {
-        z_set_error(error, 211,
-            @"M94Z: n_padded %llu not a multiple of 4 (numQ=%llu, pad=%d)",
-            (unsigned long long)n_padded64, (unsigned long long)numQ, pad_count);
-        return nil;
-    }
-    int32_t n_padded = (int32_t)n_padded64;
-
-    // Body parse.
-    NSUInteger trailerOff = data.length - kZ_TRAILER_SIZE;
-    if (trailerOff < header_end) {
-        z_set_error(error, 212, @"M94Z: trailer overlaps header");
-        return nil;
-    }
-    if (trailerOff - header_end < 16) {
-        z_set_error(error, 213, @"M94Z: body too short for substream lengths");
-        return nil;
-    }
-    uint32_t sub_lens[4];
-    sub_lens[0] = le_read_u32(p + header_end + 0);
-    sub_lens[1] = le_read_u32(p + header_end + 4);
-    sub_lens[2] = le_read_u32(p + header_end + 8);
-    sub_lens[3] = le_read_u32(p + header_end + 12);
-    NSUInteger body_payload_off = header_end + 16;
-    NSUInteger want_payload = (NSUInteger)sub_lens[0] + sub_lens[1]
-                              + sub_lens[2] + sub_lens[3];
-    if (body_payload_off + want_payload != trailerOff) {
-        z_set_error(error, 214,
-            @"M94Z: substream length sum %lu != body payload len %lu",
-            (unsigned long)want_payload,
-            (unsigned long)(trailerOff - body_payload_off));
-        return nil;
-    }
-    const uint8_t *streams[4];
-    NSUInteger cursor = body_payload_off;
-    for (int s = 0; s < 4; s++) {
-        streams[s] = p + cursor;
-        cursor += sub_lens[s];
-    }
-
-    uint32_t state_final[4];
-    state_final[0] = le_read_u32(p + trailerOff + 0);
-    state_final[1] = le_read_u32(p + trailerOff + 4);
-    state_final[2] = le_read_u32(p + trailerOff + 8);
-    state_final[3] = le_read_u32(p + trailerOff + 12);
-
-    // Deserialize freq tables.
-    size_t n_active = 0;
-    uint32_t *active_ctxs = NULL;
-    uint16_t **freq_tables = NULL;
-    NSError *ftErr = nil;
-    if (z_deserialize_freq_tables(ftBlobData, &n_active, &active_ctxs,
-                                    &freq_tables, &ftErr) != 0) {
-        if (error) *error = ftErr;
-        return nil;
-    }
-
-    // Build read-length / revcomp arrays.
-    int32_t *rls = (int32_t *)malloc(sizeof(int32_t) * (numR ?: 1));
-    int8_t  *rcs = (int8_t  *)malloc(sizeof(int8_t)  * (numR ?: 1));
-    if (!rls || !rcs) {
-        free(rls); free(rcs);
-        free(active_ctxs);
-        for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
-        free(freq_tables);
-        z_set_error(error, 215, @"alloc failed");
-        return nil;
-    }
-    for (uint32_t i = 0; i < numR; i++) {
-        rls[i] = (int32_t)[readLengths[i] unsignedLongLongValue];
-        rcs[i] = ([revcompFlags[i] unsignedIntegerValue] & 1u) ? 1 : 0;
-    }
-
-    NSMutableData *outQ = [NSMutableData dataWithLength:(NSUInteger)numQ];
-    int rc = z_decode_full(streams, sub_lens, state_init, state_final,
-                              (int32_t)numQ, n_padded,
-                              rls, (int32_t)numR, rcs,
-                              active_ctxs, freq_tables, n_active,
-                              qbits, pbits, sloc,
-                              (uint8_t *)outQ.mutableBytes, error);
-    free(rls); free(rcs);
-    free(active_ctxs);
-    for (size_t i = 0; i < n_active; i++) free(freq_tables[i]);
-    free(freq_tables);
-    if (rc != 0) return nil;
-
-    return @{
-        @"qualities": outQ,
-        @"readLengths": readLengths,
-    };
-}
-#endif  /* Phase 2c-removed V1 pure-ObjC decoder. */
 
 // ── V4 native dispatch (Stage 3, Task 7) ─────────────────────────────
 //

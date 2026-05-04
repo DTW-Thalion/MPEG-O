@@ -441,7 +441,7 @@ public class GenomicRun
         return out;
     }
 
-    // v1.0 reset Phase 2c: decodeRefDiffSequences removed — the v1
+    // decodeRefDiffSequences removed — the v1
     // REF_DIFF reader is no longer supported. Files written with the
     // v1 codec (@compression == 9) raise IllegalStateException at
     // byteChannelSlice (see codec dispatch above).
@@ -556,7 +556,7 @@ public class GenomicRun
         return decodedCigars;
     }
 
-    /** v1.0 reset Phase 2c: return the read name at index {@code i}.
+    /** return the read name at index {@code i}.
      *
      *  <p>Only the NAME_TOKENIZED_V2 (codec id 15) layout is supported
      *  in v1.0+. Legacy v1 layouts raise {@code IllegalStateException}:
@@ -807,11 +807,11 @@ public class GenomicRun
         }
     }
 
-    // v1.0 reset Phase 2c: isMateInfoSubgroup removed — the M86
+    // isMateInfoSubgroup removed — the M86
     // Phase F per-field subgroup reader is no longer reached. The
     // mate accessors below short-circuit to inline_v2 or throw.
 
-    /** v1.0 reset Phase 2c: return the mate chromosome at index
+    /** return the mate chromosome at index
      *  {@code i}. Only the inline_v2 blob layout is supported now;
      *  the M86 Phase F per-field subgroup and the M82 compound layout
      *  raise {@code IllegalStateException}. */
@@ -828,7 +828,7 @@ public class GenomicRun
         throw mateInfoLegacyLayoutError();
     }
 
-    /** v1.0 reset Phase 2c: return the mate position at index
+    /** return the mate position at index
      *  {@code i}. Inline_v2 only — see {@link #mateChromAt}. */
     private long matePosAt(int i) {
         if (isMateInfoInlineV2()) {
@@ -838,7 +838,7 @@ public class GenomicRun
         throw mateInfoLegacyLayoutError();
     }
 
-    /** v1.0 reset Phase 2c: return the template length at index
+    /** return the template length at index
      *  {@code i}. Inline_v2 only — see {@link #mateChromAt}. */
     private int mateTlenAt(int i) {
         if (isMateInfoInlineV2()) {
@@ -861,7 +861,7 @@ public class GenomicRun
             + "signal_channels/mate_info/inline_v2.");
     }
 
-    // v1.0 reset Phase 2c: decodeMateChrom + decodeMateIntField +
+    // decodeMateChrom + decodeMateIntField +
     // decodeLengthPrefixConcatMate removed — the M86 Phase F per-
     // field subgroup readers are gone. Only the v2 inline_v2 blob
     // path survives via _decodeMateV2.

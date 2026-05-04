@@ -396,7 +396,7 @@ int main(int argc, const char *argv[])
             testM85Quality();
         END_SET("M85: QUALITY_BINNED codec")
 
-        // v1.0 reset Phase 2c: M85B NAME_TOKENIZED v1, M93 REF_DIFF v1
+        // M85B NAME_TOKENIZED v1, M93 REF_DIFF v1
         // unit + pipeline, M94.Z V1 unit, and M94.Z V2 dispatch test
         // suites removed alongside the v1 codec impls.
 

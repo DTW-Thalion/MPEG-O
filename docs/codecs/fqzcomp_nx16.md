@@ -1,10 +1,16 @@
 # TTI-O M94 — FQZCOMP_NX16 Codec
 
-> **Status:** shipping in v1.2.0 (M94). Reference implementation in
-> Python (Cython-accelerated), normative implementation in
-> Objective-C, parity implementation in Java. All three produce
-> byte-identical encoded streams for the eight canonical conformance
-> vectors. Applies to genomic-`qualities` channels; codec id `10`.
+> **REMOVED in v1.0.** FQZCOMP_NX16 (the M94 v1 codec at slot 10)
+> was removed before v1.0 shipped. The `qualities` channel uses
+> [FQZCOMP_NX16_Z](fqzcomp_nx16_z.md) (codec id 12, V4 internal
+> flavour — a CRAM 3.1 fqzcomp_qual port) as the only supported
+> quality-score encoding. This document is retained as historical
+> reference for the M94 algorithm.
+
+> **Historical status:** an early v1.2.0 (M94) clean-room
+> implementation. Codec id 10; never shipped to a public release
+> and superseded by FQZCOMP_NX16_Z (id 12) which proved to match
+> CRAM 3.1 byte counts more closely.
 
 This document specifies the FQZCOMP_NX16 codec used by TTI-O for
 lossless quality-score compression. It is a clean-room

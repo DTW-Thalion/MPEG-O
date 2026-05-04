@@ -1144,12 +1144,6 @@ static TTIOWrittenGenomicRun *m86PhEMakeRun(
             signalCodecOverrides:codecOverrides];
 }
 
-// Test 18 (REMOVED v1.0 reset Phase 2c): testRoundTripReadNamesNameTokenized
-// exercised the v1 NAME_TOKENIZED override path on read_names. The v1 codec
-// was deleted in Phase 2c — write-side override-validation now rejects
-// codec id 8 on read_names. The default writer emits NAME_TOKENIZED_V2
-// (codec id 15), exercised by testNameTokenizedV2Dispatch.
-
 /** Build a 1000-read run with structured Illumina names for the
  *  size-win test. */
 static TTIOWrittenGenomicRun *m86PhEMakeLargeRun(
@@ -1243,37 +1237,6 @@ static hsize_t m86PhEChannelStorageSize(const char *path, const char *channel)
     H5Fclose(f);
     return sz;
 }
-
-// Test 19 (REMOVED v1.0 reset): testSizeWinNameTokenized compared the
-// v1 NAME_TOKENIZED codec footprint against the M82 VL_STRING compound
-// baseline. Phase 2b removed the name-tokenized v2 opt-out,
-// so the M82 compound baseline can no longer be produced for this
-// comparison. The size-win property is now covered by the cross-
-// language fixtures (testCrossLanguageFixtureNameTokenized) and the
-// Python/Java size-ratio gates.
-
-// Test 20 (REMOVED v1.0 reset Phase 2c): testAttributeSetCorrectlyNameTokenized
-// asserted @compression == 8 on the read_names dataset under the v1
-// NAME_TOKENIZED override. v2 dispatch's @compression == 15 attribute
-// is covered by testNameTokenizedV2Dispatch.
-
-// Test 21 (REMOVED v1.0 reset): testBackCompatReadNamesUnchanged
-// asserted that without an override, read_names stays as the M82
-// VL_STRING compound. Phase 2b removed the name-tokenized v2
-// opt-out, so the new default writes the NAME_TOKENIZED_V2 codec
-// (codec id 15) instead. The compound read-path round-trip is still
-// covered indirectly by readers materialising older fixtures.
-
-
-// Test 23 (REMOVED v1.0 reset Phase 2c): testMixedAllThreeOverrides
-// exercised BASE_PACK seq + QUALITY_BINNED qual + v1 NAME_TOKENIZED
-// rn. Equivalent v2 stack coverage lives in testNameTokenizedV2Dispatch
-// + testMixedAllThreeOverrides equivalents in M86 PhA/D suites.
-
-// (REMOVED v1.0 reset Phase 2c): testCrossLanguageFixtureNameTokenized
-// consumed the v1 NAME_TOKENIZED .tio fixture which Phase 2c deletes.
-// Phase 3 will produce a v2 fixture and re-introduce the cross-language
-// coverage at that point.
 
 // ════════════════════════════════════════════════════════════════════
 // M86 Phase C — rANS + NAME_TOKENIZED on the cigars channel.
@@ -1467,16 +1430,6 @@ static void testRoundTripCigarsRansOrder1(void)
     unlink(path.fileSystemRepresentation);
 }
 
-// Tests 34, 35 (REMOVED v1.0 reset Phase 2c): cigars+NAME_TOKENIZED
-// round-trip tests exercised the v1 codec id 8 on the cigars channel.
-// Phase 2c removed NAME_TOKENIZED v1 from the cigars allowed-codec
-// set (only RANS_ORDER0 / RANS_ORDER1 remain).
-
-// Tests 36, 37 (REMOVED v1.0 reset Phase 2c): testSizeComparisonCigarsCodecs
-// + testSizeWinCigarsUniform compared cigars+NAME_TOKENIZED footprint
-// against rANS / no-override baselines. NAME_TOKENIZED v1 was removed
-// from the cigars allowed-codec set in Phase 2c.
-
 // Test 38 — verify @compression attribute correctness on the cigars
 // dataset under each accepted codec override.
 static void testAttributeSetCorrectlyCigars(void)
@@ -1486,7 +1439,7 @@ static void testAttributeSetCorrectlyCigars(void)
     NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:kM86_NReads];
     for (NSUInteger i = 0; i < kM86_NReads; i++) [cigars addObject:@"100M"];
 
-    // v1.0 reset Phase 2c: NAME_TOKENIZED v1 removed from cigars
+    // NAME_TOKENIZED v1 removed from cigars
     // allowed-codec set; only the rANS pair remains.
     const TTIOCompression codecs[2] = {
         TTIOCompressionRansOrder0,
@@ -1710,10 +1663,6 @@ static void testCrossLanguageFixtureCigarsRans(void)
          "(5, got %u)", (unsigned)cigarsA);
 }
 
-// (REMOVED v1.0 reset Phase 2c): testCrossLanguageFixtureCigarsNameTokenized
-// consumed the v1 cigars+NAME_TOKENIZED .tio fixture. The fixture and
-// codec id 8 dispatch on the cigars channel were removed in Phase 2c.
-
 // ── M86 Phase F — mate_info per-field decomposition ─────────────────
 //
 // Schema-lift wiring: when ANY of mate_info_chrom, mate_info_pos,
@@ -1805,24 +1754,6 @@ static BOOL m86PhFMateInfoIsGroup(const char *path)
     H5Fclose(f);
     return isGroup;
 }
-
-// Tests 48-55 (REMOVED v1.0 reset): testRoundTripMateChromNameTokenized,
-// testRoundTripMatePosRans, testRoundTripMateTlenRans,
-// testRoundTripMateAllThree, testRoundTripMatePartial,
-// testBackCompatMateInfoUnchanged, testRejectBareMateInfoKey,
-// testRejectWrongCodecOnMatePos. All eight tests exercised the v1 Phase F
-// per-field mate_info_* writer-side override paths. Phase 2b removed the
-// inline-mate-info v2 opt-out, so the writer always emits the inline_v2
-// codec when libttio_rans is linked, and any mate_info_* override raises
-// NSInvalidArgumentException up front. The cross-language fixture
-// test below remains, exercising the v1 layout via a Python-built fixture
-// on disk through the reader path.
-
-// (REMOVED v1.0 reset Phase 2c): testCrossLanguageFixtureMateInfoFull
-// consumed the v1 mate_info per-field subgroup fixture. Phase 2c
-// removed the per-field subgroup reader path; only the inline_v2
-// mate_info codec (id 13) is decoded under v1.0. Phase 3 will produce
-// a v2 fixture and re-introduce equivalent cross-language coverage.
 
 // ── v1.6: Phase B integer-channel codec wiring REMOVED ──────────────
 //
@@ -1951,14 +1882,14 @@ void testM86GenomicCodecWiring(void)
     // genomic_index/, mirroring MS's spectrum_index/ pattern). See
     // docs/format-spec.md §4 and §10.7.
     // M86 Phase C — rANS on the cigars channel.
-    // v1.0 reset Phase 2c: NAME_TOKENIZED v1 cigars tests removed.
+    // NAME_TOKENIZED v1 cigars tests removed.
     testRoundTripCigarsRansOrder1();
     testAttributeSetCorrectlyCigars();
     testBackCompatCigarsUnchanged();
     testRejectBasePackOnCigars();
     testCrossLanguageFixtureCigarsRans();
     // M86 Phase F — mate_info per-field decomposition.
-    // v1.0 reset Phase 2c: cross-language fixture removed alongside the
+    // cross-language fixture removed alongside the
     // per-field subgroup writer/reader paths.
     // v1.6: contract tests for the removed dual-write.
     testV16RejectsPositionsOverride();

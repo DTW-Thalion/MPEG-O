@@ -1,9 +1,15 @@
 # TTI-O M85 Phase B — NAME_TOKENIZED Codec
 
-> **Status:** shipped (M85 Phase B, 2026-04-26). Reference
-> implementation in Python, normative implementation in
-> Objective-C, parity implementation in Java. All three produce
-> byte-identical encoded streams for the four canonical
+> **REMOVED in v1.0.** The NAME_TOKENIZED v1 codec (codec id 8)
+> was removed in the v1.0 reset. The `read_names` channel now
+> uses [NAME_TOKENIZED v2](name_tokenizer_v2.md) (codec id 15)
+> as the only supported encoding. This document is retained as
+> historical reference for the v1 algorithm.
+
+> **Historical status:** shipped (M85 Phase B, 2026-04-26).
+> Reference implementation in Python, normative implementation
+> in Objective-C, parity implementation in Java. All three
+> produced byte-identical encoded streams for the four canonical
 > conformance vectors.
 
 This document specifies the NAME_TOKENIZED codec used by TTI-O
