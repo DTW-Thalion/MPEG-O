@@ -149,11 +149,6 @@ static uint8_t v2dInlineV2CompressionAttr(const char *cpath)
 
 static void testDefaultWritesInlineV2(void)
 {
-    if (![TTIOMateInfoV2 nativeAvailable]) {
-        PASS(1, "MIV2Dispatch #1: nativeAvailable=NO — skip (native lib absent)");
-        return;
-    }
-
     NSString *path = v2dTmpPath(@"default.tio");
     v2dRm(path);
 
@@ -197,11 +192,6 @@ static void testOptOutWritesV1Layout(void)
 
 static void testSignalCodecOverridesRejectedWhenV2Active(void)
 {
-    if (![TTIOMateInfoV2 nativeAvailable]) {
-        PASS(1, "MIV2Dispatch #3: nativeAvailable=NO — skip (native lib absent)");
-        return;
-    }
-
     NSString *path = v2dTmpPath(@"reject.tio");
     v2dRm(path);
 
@@ -255,11 +245,6 @@ static void testSignalCodecOverridesAllowedWhenV2Disabled(void)
 
 static void testV2RoundTripDefault(void)
 {
-    if (![TTIOMateInfoV2 nativeAvailable]) {
-        PASS(1, "MIV2Dispatch #5: nativeAvailable=NO — skip (native lib absent)");
-        return;
-    }
-
     NSString *path = v2dTmpPath(@"rt.tio");
     v2dRm(path);
 
@@ -305,6 +290,11 @@ static void testV2RoundTripDefault(void)
 
 void testMateInfoV2Dispatch(void)
 {
+    if (![TTIOMateInfoV2 nativeAvailable]) {
+        // Honest skip — propagates to enclosing START_SET / END_SET in
+        // TTIOTestRunner.m as "Skipped set:" rather than a vacuous PASS.
+        SKIP("libttio_rans not linked — v2 dispatch tests require native lib");
+    }
     testDefaultWritesInlineV2();
     testOptOutWritesV1Layout();
     testSignalCodecOverridesRejectedWhenV2Active();

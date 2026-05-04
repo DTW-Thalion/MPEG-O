@@ -208,11 +208,6 @@ static BOOL ntv2dReadNamesIsUInt8(const char *cpath)
 
 static void testNameTokV2DispatchDefaultWritesV2(void)
 {
-    if (![TTIONameTokenizerV2 nativeAvailable]) {
-        PASS(1, "NameTokV2Dispatch #1: nativeAvailable=NO — skip");
-        return;
-    }
-
     NSString *path = ntv2dTmpPath(@"default");
     ntv2dRm(path);
 
@@ -340,11 +335,6 @@ static void testNameTokV2DispatchRoundTripV1(void)
 
 static void testNameTokV2DispatchRoundTripV2(void)
 {
-    if (![TTIONameTokenizerV2 nativeAvailable]) {
-        PASS(1, "NameTokV2Dispatch #5: nativeAvailable=NO — skip");
-        return;
-    }
-
     NSString *path = ntv2dTmpPath(@"rt_v2");
     ntv2dRm(path);
 
@@ -388,6 +378,10 @@ static void testNameTokV2DispatchRoundTripV2(void)
 void testNameTokenizedV2Dispatch(void);
 void testNameTokenizedV2Dispatch(void)
 {
+    if (![TTIONameTokenizerV2 nativeAvailable]) {
+        // Honest skip via START_SET / END_SET in TTIOTestRunner.m.
+        SKIP("libttio_rans not linked — v2 dispatch tests require native lib");
+    }
     testNameTokV2DispatchDefaultWritesV2();
     testNameTokV2DispatchOptOutWritesV1();
     testNameTokV2DispatchOverrideRespected();
