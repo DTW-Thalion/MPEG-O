@@ -235,6 +235,12 @@ target_link_libraries(test_name_tok_v2_helpers PRIVATE ttio_rans)
 target_include_directories(test_name_tok_v2_helpers PRIVATE src)
 add_test(NAME name_tok_v2_helpers COMMAND test_name_tok_v2_helpers)
 
+# #11 ch3 task 3: name_tok_v2 encoder + decoder + invariants.
+add_executable(test_name_tok_v2_invariants tests/test_name_tok_v2_invariants.c)
+target_link_libraries(test_name_tok_v2_invariants PRIVATE ttio_rans)
+target_include_directories(test_name_tok_v2_invariants PRIVATE src)
+add_test(NAME name_tok_v2_invariants COMMAND test_name_tok_v2_invariants)
+
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
