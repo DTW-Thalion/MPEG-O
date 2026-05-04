@@ -11,6 +11,57 @@ public API is stable from v1.0.0 onward (tagged 2026-04-23). See
 
 ---
 
+## [v1.8] — 2026-05-03 — REF_DIFF v2 (#11 channel 2)
+
+### Added
+
+- **REF_DIFF v2 codec** (`REF_DIFF_V2 = 14`): CRAM-style bit-packed
+  sequence diff encoding via shared C kernel in libttio_rans.
+  5-substream decomposition (FLAG / BS / IN / SC / ESC): FLAG marks
+  match vs substitution per aligned base; BS/IN/SC carry 2-bit ACGT
+  codes for substitutions / insertions / soft-clips; ESC handles
+  non-ACGT bases. 2-bit ACGT packing replaces v1's 8-bit literals
+  for substitution + insertion + soft-clip bases. **Saves ~4.3 MB** on
+  chr22 NA12878 lean+mapped vs v1.7.
+- **`opt_disable_ref_diff_v2` opt-out flag** on `WrittenGenomicRun`
+  (Python/Java/ObjC). Default `False` — set `True` to fall back to the
+  v1 REF_DIFF layout (single rANS-encoded bitstream, @compression=9).
+- **`signal_channels/sequences/refdiff_v2`** new on-disk path: the
+  `sequences` link is a GROUP in v1.8 (was a flat dataset in v1.7),
+  with `refdiff_v2` as the child dataset @compression=14.
+- **Compression gate test** at
+  `python/tests/integration/test_ref_diff_v2_compression_gate.py`:
+  chr22 savings hard gate (>= 2 MB). Measured result: 4.314 MB PASS.
+- **Benchmark doc** at
+  `docs/benchmarks/2026-05-03-ref-diff-v2-results.md`.
+
+### Changed
+
+- New files now write `signal_channels/sequences` as a GROUP by default.
+  **v1.7 readers fail on v1.8 files** because they encounter `sequences`
+  as a GROUP rather than a flat dataset; either upgrade the reader or
+  write with the opt-out flag to keep the v1 layout.
+- Format spec §10.10 marked **v1.8 OPT-OUT only**. New §10.10b
+  documents the v2 wire format, substream taxonomy, GROUP/DATASET
+  reader dispatch, backward compatibility, and cross-language byte-exact
+  guarantee.
+
+### Cross-language byte-exact gate
+
+3/3 PASS (chr22, WES, hg002_illumina) + 1 SKIP (hg002_pacbio — BAM has
+SEQ=`*`). The shared-C-kernel pattern eliminates cross-language encoding
+drift — verified via SHA-256 hash comparison in
+`python/tests/integration/test_ref_diff_v2_cross_language.py`.
+
+### References
+
+- Spec: `docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md`
+- Plan: `docs/superpowers/plans/2026-05-03-ref-diff-v2.md`
+- Benchmarks: `docs/benchmarks/2026-05-03-ref-diff-v2-results.md`
+- Format spec: `docs/format-spec.md` §10.10b
+
+---
+
 ## [v1.7] — 2026-05-03 — mate_info v2 (#11 channel 1)
 
 ### Added
