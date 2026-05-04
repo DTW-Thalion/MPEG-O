@@ -10,7 +10,7 @@
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"   // M86 Phase D
-// v1.0 reset Phase 2c: TTIONameTokenizer (v1, codec id 8) and
+// TTIONameTokenizer (v1, codec id 8) and
 // TTIORefDiff (v1, codec id 9) impl files removed. Reader paths
 // rejected with NSError; v2 codec headers used for the surviving
 // reader dispatch.
@@ -378,7 +378,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return [decoded subdataWithRange:NSMakeRange(from, to - from)];
 }
 
-// v1.0 reset Phase 2c: _ttio_m93_decodeRefDiff (v1 REF_DIFF reader)
+// _ttio_m93_decodeRefDiff (v1 REF_DIFF reader)
 // removed alongside TTIORefDiff codec impl. The byte-channel codec
 // dispatcher above raises a clear NSError when @compression == 9 is
 // encountered on legacy files.
@@ -464,7 +464,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         } else {
             codec_id = _ttio_m86_read_compression_attr_protocol(ds);
         }
-        // v1.0 reset Phase 2c: NAME_TOKENIZED v1 (codec id 8) reader
+        // NAME_TOKENIZED v1 (codec id 8) reader
         // path removed — reject with a clear error so legacy files
         // surface a re-encode hint instead of silently mis-decoding.
         if (codec_id == (uint8_t)8 /* NAME_TOKENIZED v1 */) {
@@ -532,7 +532,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         return _decodedReadNames[i];
     }
 
-    // v1.0 reset Phase 2c: M82 read_names compound layout removed.
+    // M82 read_names compound layout removed.
     // A non-UInt8 read_names dataset is from an older TTI-O version.
     if (error) *error = [NSError
         errorWithDomain:@"TTIOGenomicRun" code:2044
@@ -701,7 +701,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
             }
             _decodedCigars = [out copy];
         } else if (codec_id == (uint8_t)8 /* NAME_TOKENIZED v1 */) {
-            // v1.0 reset Phase 2c: NAME_TOKENIZED v1 reader removed.
+            // NAME_TOKENIZED v1 reader removed.
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOGenomicRun" code:2065
                        userInfo:@{NSLocalizedDescriptionKey:
@@ -1211,7 +1211,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return YES;
 }
 
-// v1.0 reset Phase 2c: per-read mate-field accessors recognise only
+// per-read mate-field accessors recognise only
 // the inline_v2 layout (v1.7 codec id 13). The Phase F per-field
 // subgroup (linkType 1) and M82 compound (linkType 0) layouts are
 // rejected with a clear NSError directing callers at the v2 codec.

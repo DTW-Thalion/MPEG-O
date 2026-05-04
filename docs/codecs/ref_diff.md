@@ -1,10 +1,15 @@
 # TTI-O M93 — REF_DIFF Codec
 
-> **Status:** shipping in v1.2.0 (M93). Reference implementation in
-> Python, normative implementation in Objective-C, parity implementation
-> in Java. All three produce byte-identical encoded streams for the
-> four canonical conformance vectors and round-trip every input
-> exactly. Applies to genomic-`sequences` channels; codec id `9`.
+> **REMOVED in v1.0.** The REF_DIFF v1 codec (codec id 9) was
+> removed in the v1.0 reset. The `sequences` channel now uses
+> [REF_DIFF v2](ref_diff_v2.md) (codec id 14) as the only
+> supported reference-based encoding. This document is retained
+> as historical reference for the v1 slice-based wire format.
+
+> **Historical status:** shipped in v1.2.0 (M93). Reference
+> implementation in Python, normative implementation in
+> Objective-C, parity implementation in Java. Applied to
+> genomic-`sequences` channels; codec id `9`.
 
 This document specifies the REF_DIFF codec used by TTI-O for
 reference-based compression of aligned genomic sequence channels.

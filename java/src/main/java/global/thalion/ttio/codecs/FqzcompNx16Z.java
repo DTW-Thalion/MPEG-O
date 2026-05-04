@@ -853,7 +853,7 @@ public final class FqzcompNx16Z {
         int n = qualities.length;
         int padCount = (-n) & 3;
 
-        // v1.0 reset Phase 2c: only V4 (CRAM 3.1 fqzcomp_qual) is
+        // only V4 (CRAM 3.1 fqzcomp_qual) is
         // emitted now. The V1 (pure-Java) and V2 (libttio_rans body)
         // encoder dispatch paths were removed. The opts.preferV4 and
         // opts.preferNative knobs are accepted for API compatibility
@@ -1017,7 +1017,7 @@ public final class FqzcompNx16Z {
         if (versionByte == VERSION_V4_FQZCOMP) {
             return decodeV4Internal(encoded, revcompFlags);
         }
-        // v1.0 reset Phase 2c: V1 (pure-Java rANS-Nx16) and V2
+        // V1 (pure-Java rANS-Nx16) and V2
         // (libttio_rans body) decoder dispatch removed. Files written
         // with those internal flavours are no longer decodable; callers
         // must re-encode through V4 (CRAM 3.1 fqzcomp_qual).

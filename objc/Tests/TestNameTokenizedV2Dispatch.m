@@ -227,12 +227,6 @@ static void testNameTokV2DispatchDefaultWritesV2(void)
     ntv2dRm(path);
 }
 
-// ── Test 2 (REMOVED v1.0 reset Phase 2c): explicit v1 NAME_TOKENIZED
-// override on read_names was the v1 codec dispatch path. Phase 2c
-// removes the v1 codec entirely — the writer now rejects the override
-// with NSInvalidArgumentException. The default v2 path is exercised
-// by Test 1 + Test 3 below.
-
 // ── Test 3: v2 default round-trip ─────────────────────────────────────────────
 
 static void testNameTokV2DispatchRoundTripV2(void)

@@ -806,7 +806,7 @@ public class SpectralDataset implements
         // Runs BEFORE any group/dataset is created so the file is
         // untouched on a bad override (Gotcha §96 — no half-written run).
         //
-        // v1.0 reset Phase 2c: read_names + mate_info_* + cigars
+        // read_names + mate_info_* + cigars
         // NAME_TOKENIZED entries removed. read_names is now v2-only
         // (no override surface — v2 is the auto-default and only path).
         // mate_info is v2-only (inline_v2 blob; the v1 per-field
@@ -836,7 +836,7 @@ public class SpectralDataset implements
                 // MS's spectrum_index/ pattern). The droppedIntChannels
                 // set below catches the keys with a clear v1.6 error
                 // pointing at genomic_index/.
-                // v1.0 reset Phase 2c: read_names + mate_info_* keys
+                // read_names + mate_info_* keys
                 // removed entirely from the override surface (rejected
                 // below by the unconditional reject branches and the
                 // generic "channel not supported" branch).
@@ -858,7 +858,7 @@ public class SpectralDataset implements
                     + "The override no longer applies. See "
                     + "docs/format-spec.md §4 and §10.7.");
             }
-            // v1.0 reset Phase 2c: mate_info v2 (inline_v2) is the only
+            // mate_info v2 (inline_v2) is the only
             // path; the v1 per-field override surface is gone. Reject
             // mate_info_* keys unconditionally — there is no longer a
             // writer code path that honours them.
@@ -872,7 +872,7 @@ public class SpectralDataset implements
                     + "override keys (mate_info_chrom / mate_info_pos "
                     + "/ mate_info_tlen) were removed in Phase 2c.");
             }
-            // v1.0 reset Phase 2c: read_names is v2-only. Reject any
+            // read_names is v2-only. Reject any
             // override on read_names (the v1 NAME_TOKENIZED writer
             // dispatch was removed; v2 is the auto-default and only
             // supported codec).
@@ -885,7 +885,7 @@ public class SpectralDataset implements
                     + "with the native libttio_rans library to use "
                     + "the v2 codec.");
             }
-            // v1.0 reset Phase 2c: the bare "mate_info" key is
+            // the bare "mate_info" key is
             // rejected; mate_info is v2-only (inline_v2 blob), with
             // no per-field override surface.
             if ("mate_info".equals(chName)) {
@@ -1054,7 +1054,7 @@ public class SpectralDataset implements
                 // is present, replace the M82 compound dataset with a
                 // flat 1-D uint8 dataset of the same name carrying the
                 // codec output, plus an @compression attribute (Binding
-                // Decisions §120-§122). v1.0 reset Phase 2c: only rANS
+                // Decisions §120-§122). only rANS
                 // codecs accepted now (the v1 NAME_TOKENIZED branch was
                 // removed). Two codec ids supported:
                 //   * RANS_ORDER0 / RANS_ORDER1: serialise the CIGAR
@@ -1089,7 +1089,7 @@ public class SpectralDataset implements
                 } else {
                     writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
                 }
-                // v1.0 reset Phase 2c: read_names is v2-only.
+                // read_names is v2-only.
                 // - readCount == 0: short-circuit, write a zero-length
                 //   uint8 dataset with @compression=15 so readers see a
                 //   present-but-empty channel without needing the native
@@ -1147,7 +1147,7 @@ public class SpectralDataset implements
                     }
                 }
 
-                // v1.0 reset Phase 2c: mate_info is v2-only (inline_v2
+                // mate_info is v2-only (inline_v2
                 // blob). The v1 per-field subgroup writer and the M82
                 // compound fallback were removed. Empty runs OMIT the
                 // mate_info group entirely (cross-language convention
@@ -1339,7 +1339,7 @@ public class SpectralDataset implements
         }
     }
 
-    // v1.0 reset Phase 2c: writeMateInfoSubgroup + writeMateIntField
+    // writeMateInfoSubgroup + writeMateIntField
     // were removed — the mate_info v1 per-field subgroup writer no
     // longer has a code path. mate_info is v2-only (inline_v2 blob)
     // in v1.0+; non-empty runs without the native lib raise
@@ -1586,7 +1586,7 @@ public class SpectralDataset implements
             return;
         }
 
-        // v1.0 reset Phase 2c: the v1 REF_DIFF (codec id 9) writer
+        // the v1 REF_DIFF (codec id 9) writer
         // path was removed. When v2 cannot be used (chromSeq null,
         // unmapped reads, or native lib unavailable), fall back to
         // BASE_PACK on this channel. No v1 REF_DIFF dispatch remains.
@@ -1723,7 +1723,7 @@ public class SpectralDataset implements
      *  through M83 rANS at the matching order. ASCII-only per the SAM
      *  spec; non-ASCII input throws {@link IllegalArgumentException}.
      *
-     *  <p>v1.0 reset Phase 2c: the NAME_TOKENIZED branch was removed
+     *  <p>the NAME_TOKENIZED branch was removed
      *  (the v1 codec is gone). Override-validation rejects
      *  NAME_TOKENIZED on cigars upfront with a clear "no longer
      *  supported" message. */
