@@ -173,7 +173,7 @@ Parallel 1-D datasets, one per field. All datasets have length
 
 | Dataset               | Type            | Semantics                              |
 |-----------------------|-----------------|----------------------------------------|
-| `offsets`             | uint64[N]       | Starting element in signal channel     |
+| `offsets`             | uint64[N]       | **OPT-OUT in v1.10+** — see §4a; computed from `cumsum(lengths)` on read |
 | `lengths`             | uint32[N]       | Number of elements per spectrum        |
 | `retention_times`     | float64[N]      | Scan time in seconds                   |
 | `ms_levels`           | int32[N]        | MS level (1, 2, …); 0 for non-MS       |
@@ -182,6 +182,23 @@ Parallel 1-D datasets, one per field. All datasets have length
 | `precursor_charges`   | int32[N]        | Precursor charge state; 0 if unknown   |
 | `base_peak_intensities`| float64[N]     | Max intensity per spectrum             |
 | `headers`             | compound[N]     | Optional `opt_compound_headers` view   |
+
+### 4a. `offsets` redundancy elimination (v1.10 #10)
+
+`offsets[i]` is mathematically `sum(lengths[0..i])`, so storing
+both `offsets` and `lengths` was pure on-disk redundancy. v1.10+
+writers omit the `offsets` column from `spectrum_index/`,
+`chromatogram_index/`, and `genomic_index/` by default. Readers
+synthesize `offsets` from `cumsum(lengths)` at load time using a
+uint64 accumulator (overflow-safe on >4 GB genomic runs even when
+`lengths` is uint32).
+
+The opt-out flag `WrittenRun.opt_keep_offsets_columns` (Python),
+`WrittenRun#optKeepOffsetsColumns` (Java),
+`TTIOWrittenRun.optKeepOffsetsColumns` (ObjC) — same flag for
+both genomic and MS — restores the redundant column for byte-
+equivalent backward compat with pre-v1.10 readers. Pre-v1.10
+readers cannot open v1.10-default files.
 
 All parallel datasets are chunked (chunk = 1024) and `zlib -6`
 compressed. `@count` (int64) on the `spectrum_index/` group mirrors

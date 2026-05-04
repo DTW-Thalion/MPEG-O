@@ -11,6 +11,49 @@ public API is stable from v1.0.0 onward (tagged 2026-04-23). See
 
 ---
 
+## [v1.10] — 2026-05-04 — offsets-cumsum (#10)
+
+### Changed
+
+- **Drop redundant `offsets` columns** from `genomic_index/`,
+  `spectrum_index/`, and `chromatogram_index/`. `offsets[i]` is
+  mathematically `sum(lengths[0..i])` and was pure on-disk
+  redundancy. Readers compute `offsets` from `cumsum(lengths)` at
+  load time using a uint64 accumulator (avoids the >4 GB overflow
+  cliff on deep WGS even when stored lengths are uint32). **Saves
+  3.50 MB on chr22 NA12878 lean+mapped** end-to-end.
+- New helpers: Python `_offsets_from_lengths(lengths)` /
+  `_read_offsets_or_cumsum(idx_group)` in `ttio.genomic_index`;
+  Java `GenomicIndex.offsetsFromLengths(int[])`; ObjC
+  `TTIOOffsetsFromLengths(NSData *lengths)` (declared in
+  `Genomics/TTIOGenomicIndex.h`).
+
+### Added
+
+- **`opt_keep_offsets_columns` opt-out flag** on `WrittenGenomicRun`
+  and `WrittenRun` (Python/Java/ObjC). Default `False` — new files
+  omit the columns. When `True`, the writer keeps `offsets` on disk
+  for byte-equivalent backward compat with pre-v1.10 readers
+  (genomic_index + spectrum_index + chromatogram_index, all three
+  governed by the same flag).
+
+### Compatibility
+
+- Pre-v1.10 readers cannot read v1.10 default files (they raise
+  "missing dataset 'offsets'" at load time). Set
+  `opt_keep_offsets_columns=True` to write a v1.10 file that's
+  readable by any prior reader.
+- v1.10+ readers transparently handle both layouts: present-on-disk
+  offsets are read directly; absent offsets are synthesized from
+  `cumsum(lengths)`.
+
+### v1.10 still-open follow-ups
+
+- **#13 V5 multi-stream rANS** (3-6× speedup for the qualities
+  channel, wire-format break, needs spec-proof phase): defer.
+
+---
+
 ## [v1.9] — 2026-05-04 — NAME_TOKENIZED v2 (#11 channel 3)
 
 ### Added
