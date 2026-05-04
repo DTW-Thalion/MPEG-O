@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,6 +27,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Cython / Java.
  */
 final class FqzcompNx16ZUnitTest {
+
+    /** Matches @EnabledIf signature: a no-arg method returning boolean. */
+    static boolean isNativeAvailable() {
+        return TtioRansNative.isAvailable();
+    }
 
     // ── Helpers ─────────────────────────────────────────────────────
 
@@ -122,8 +128,11 @@ final class FqzcompNx16ZUnitTest {
     }
 
     // ── Round-trip smoke tests ──────────────────────────────────────
+    // Phase 2c: encode() requires the native libttio_rans library
+    // (only V4 is emitted in v1.0+); these tests are JNI-gated.
 
     @Test
+    @EnabledIf("isNativeAvailable")
     void roundTripAllQ40Smoke() {
         byte[] qualities = "IIIIIIIIII".getBytes(StandardCharsets.US_ASCII);
         int[] readLengths = {10};
@@ -135,6 +144,7 @@ final class FqzcompNx16ZUnitTest {
     }
 
     @Test
+    @EnabledIf("isNativeAvailable")
     void roundTripSingleByte() {
         byte[] qualities = "I".getBytes(StandardCharsets.US_ASCII);
         int[] readLengths = {1};
@@ -145,6 +155,7 @@ final class FqzcompNx16ZUnitTest {
     }
 
     @Test
+    @EnabledIf("isNativeAvailable")
     void roundTripPaddingNonMultipleOf4() {
         byte[] qualities = "IIIII".getBytes(StandardCharsets.US_ASCII);
         int[] readLengths = {5};
@@ -155,6 +166,7 @@ final class FqzcompNx16ZUnitTest {
     }
 
     @Test
+    @EnabledIf("isNativeAvailable")
     void roundTripMultiReadVaried() {
         byte[] qualities = ("AAAAAAAAAA"
                           + "BBBBBBBBBB"
@@ -262,60 +274,13 @@ final class FqzcompNx16ZUnitTest {
         return new FixtureInputs(q, new int[]{50_000}, new int[]{0});
     }
 
-    private static void assertFixture(String name, FixtureInputs in)
-            throws IOException {
-        byte[] expected = loadFixture(name);
-        // Canonical fixtures are V1 byte-equality; explicitly suppress the
-        // V4 (CRAM 3.1 fqzcomp) and V2 (libttio_rans body) dispatch paths
-        // so the encoder follows the pure-Java V1 codec.
-        FqzcompNx16Z.EncodeOptions opts = new FqzcompNx16Z.EncodeOptions()
-            .preferV4(false).preferNative(false);
-        byte[] encoded = FqzcompNx16Z.encode(
-            in.qualities(), in.readLengths(), in.revcompFlags(), opts);
-        assertArrayEquals(expected, encoded,
-            name + ": Java encode() must match Python fixture byte-exact "
-            + "(got " + encoded.length + " bytes vs "
-            + expected.length + " expected)");
-        FqzcompNx16Z.DecodeResult dec = FqzcompNx16Z.decode(
-            expected, in.revcompFlags());
-        assertArrayEquals(in.qualities(), dec.qualities(),
-            name + ": Java decode() must reconstruct qualities byte-exact");
-        assertArrayEquals(in.readLengths(), dec.readLengths(),
-            name + ": Java decode() must reconstruct read_lengths");
-    }
-
-    @Test
-    void canonicalFixtureA() throws IOException {
-        assertFixture("m94z_a.bin", fixtureA());
-    }
-
-    @Test
-    void canonicalFixtureB() throws IOException {
-        assertFixture("m94z_b.bin", fixtureB());
-    }
-
-    @Test
-    void canonicalFixtureC() throws IOException {
-        assertFixture("m94z_c.bin", fixtureC());
-    }
-
-    @Test
-    void canonicalFixtureD() throws IOException {
-        assertFixture("m94z_d.bin", fixtureD());
-    }
-
-    @Test
-    void canonicalFixtureF() throws IOException {
-        assertFixture("m94z_f.bin", fixtureF());
-    }
-
-    @Test
-    void canonicalFixtureG() throws IOException {
-        assertFixture("m94z_g.bin", fixtureG());
-    }
-
-    @Test
-    void canonicalFixtureH() throws IOException {
-        assertFixture("m94z_h.bin", fixtureH());
-    }
+    // canonicalFixtureA..H — REMOVED in Phase 2c.
+    //
+    // The canonical fixtures pinned the V1 (pure-Java) byte-exact
+    // encoding; the V1 encoder dispatch path was deleted. V4
+    // (CRAM 3.1 fqzcomp_qual) byte-exact tests live in
+    // FqzcompNx16ZV4ByteExactTest; the V4 corpus + tooling under
+    // /tmp/py_*_v4.fqz pin the v1.0+ wire format. The V1 fixture
+    // files (m94z_*.bin) are kept on disk for now — Phase 3
+    // regenerates the corpus.
 }

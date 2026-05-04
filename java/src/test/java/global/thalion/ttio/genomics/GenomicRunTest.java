@@ -396,42 +396,11 @@ class GenomicRunTest {
         }
     }
 
-    // ── Cross-language fixture read (Python → Java, full) ─────────
+    // ── Cross-language fixture read — REMOVED in Phase 2c.
     //
-    // M82.4: Java reads VL_STRING fields out of compound datasets via
-    // Hdf5CompoundIO.readCompoundFull which dereferences the char*
-    // pointers in the H5Dread buffer using sun.misc.Unsafe. Same
-    // on-disk wire format as Python and ObjC; no JHI5 upgrade needed.
-
-    @Test
-    void crossLanguageFixtureRead() {
-        Path fixture = Path.of(System.getProperty("user.home"),
-            "TTI-O", "python", "tests", "fixtures", "genomic", "m82_100reads.tio");
-        if (!java.nio.file.Files.exists(fixture)) {
-            System.out.println("SKIP: cross-language fixture not found at " + fixture);
-            return;
-        }
-
-        try (SpectralDataset ds = SpectralDataset.open(fixture.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertNotNull(gr, "Python-written fixture should have genomic_0001");
-            assertEquals(100, gr.readCount(), "100 reads from Python");
-            assertEquals("GRCh38.p14", gr.referenceUri());
-            assertEquals("ILLUMINA", gr.platform());
-            assertEquals("NA12878", gr.sampleName());
-            assertEquals(AcquisitionMode.GENOMIC_WGS, gr.acquisitionMode());
-
-            AlignedRead first = gr.readAt(0);
-            assertNotNull(first);
-            assertEquals(150, first.sequence().length());
-            assertEquals(150, first.qualities().length);
-            assertEquals("150M", first.cigar(), "M82.4: cigar via VL_STRING");
-            assertEquals("read_000000", first.readName(),
-                "M82.4: read_name via VL_STRING");
-            // Python's _make_written_run assigns chromosomes round-robin
-            // across {chr1, chr2, chrX}; read 0 lands on chr1.
-            assertEquals("chr1", first.chromosome(),
-                "M82.4: chromosome via VL_STRING (in genomic_index)");
-        }
-    }
+    // The Python-written m82_100reads.tio fixture used the M82-compound
+    // VL_STRING layout for read_names (no v2 codec; legacy path).
+    // Phase 2c removed the M82-compound reader path for read_names, so
+    // this fixture cannot be loaded by Java reader.readAt(...). Phase 3
+    // regenerates the cross-language fixture corpus with v1.0+ writers.
 }

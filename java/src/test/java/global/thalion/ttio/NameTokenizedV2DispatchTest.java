@@ -142,31 +142,29 @@ final class NameTokenizedV2DispatchTest {
         }
     }
 
-    // ── Test 2: explicit signal_codec_overrides[read_names] = v1 codec ─
+    // ── Test 2: explicit override on read_names is rejected ──────────
+    //
+    // v1.0 reset Phase 2c: signalCodecOverrides[read_names] is no
+    // longer accepted. The v1 NAME_TOKENIZED writer dispatch was
+    // removed; v2 (NAME_TOKENIZED_V2 = 15) is the auto-default and
+    // only path. Caller-side validation throws IllegalArgumentException.
 
     @Test
-    @EnabledIf("isNativeAvailable")
-    void testSignalCodecOverridesRespected(@TempDir Path tmp) {
-        // Explicit override → v1 layout regardless of v2 default.
+    void testReadNamesOverrideRejected(@TempDir Path tmp) {
         WrittenGenomicRun run = buildMinimalRun(
             Map.of("read_names", Compression.NAME_TOKENIZED));
-        Path file = writeRun(tmp, run, "v1_explicit.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg   = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc   = rg.openGroup("signal_channels");
-             Hdf5Dataset rnDs = sc.openDataset("read_names")) {
-            assertEquals(Enums.Precision.UINT8, rnDs.getPrecision(),
-                "explicit v1 NAME_TOKENIZED override must produce UINT8");
-            long compressionAttr = rnDs.readIntegerAttribute(
-                "compression", -1L);
-            assertEquals(Compression.NAME_TOKENIZED.ordinal(),
-                compressionAttr,
-                "@compression must be NAME_TOKENIZED = 8 under explicit "
-                + "override, got " + compressionAttr);
+        Throwable thrown = assertThrows(Throwable.class,
+            () -> writeRun(tmp, run, "v1_rejected.tio"));
+        Throwable cause = thrown;
+        while (cause.getCause() != null && !(cause instanceof IllegalArgumentException)) {
+            cause = cause.getCause();
         }
+        String msg = cause.getMessage() != null ? cause.getMessage() : "";
+        assertTrue(msg.contains("read_names"),
+            "rejection must name the channel; got: " + msg);
+        assertTrue(msg.contains("v1.0+") || msg.contains("Phase 2c")
+                || msg.contains("v2"),
+            "rejection should reference the v1.0+ / Phase 2c policy; got: " + msg);
     }
 
     // ── Test 3: v2 default round-trip ─────────────────────────────────

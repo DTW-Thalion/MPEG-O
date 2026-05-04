@@ -493,37 +493,19 @@ class M86CodecWiringTest {
             Compression.NONE, overrides);
     }
 
-    // ── 11. Cross-language fixtures (Python → Java byte-exact) ─────
-
-    @Test
-    void crossLanguageFixtures() throws IOException {
-        // Each fixture used overrides {sequences: <codec>, qualities: <codec>}
-        // on input PURE_ACGT_SEQ + PHRED_CYCLE_QUAL (HANDOFF.md §6.2).
-        String[] fixtures = {
-            "m86_codec_rans_order0.tio",
-            "m86_codec_rans_order1.tio",
-            "m86_codec_base_pack.tio",
-        };
-        byte[] expectedSeq  = pureAcgt();
-        byte[] expectedQual = phredCycle();
-        for (String name : fixtures) {
-            Path tmp = copyFixtureToTemp(name);
-            try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
-                GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-                assertNotNull(gr, "fixture " + name + " has genomic_0001");
-                assertEquals(N_READS, gr.readCount(), "read count for " + name);
-                for (int i = 0; i < N_READS; i++) {
-                    AlignedRead r = gr.readAt(i);
-                    assertEquals(expectedSeqSlice(expectedSeq, i), r.sequence(),
-                        name + " seq @ " + i);
-                    assertArrayEquals(expectedQualSlice(expectedQual, i),
-                        r.qualities(), name + " qual @ " + i);
-                }
-            } finally {
-                try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
-            }
-        }
-    }
+    // ── 11. Cross-language fixtures — REMOVED in Phase 2c.
+    //
+    // The pre-Phase-2c Python fixtures (m86_codec_rans_order0.tio,
+    // m86_codec_rans_order1.tio, m86_codec_base_pack.tio) were
+    // written with M82-compound read_names (no v2 codec; legacy
+    // path). After Phase 2c the Java reader rejects M82-compound
+    // read_names with IllegalStateException, so these fixtures
+    // cannot be loaded via gr.readAt(i) (which materialises every
+    // field including read_name).
+    //
+    // Phase 3 will regenerate the cross-language fixture corpus
+    // with v1.0+ writers (NAME_TOKENIZED_V2 read_names + MATE_INLINE_V2
+    // mate_info) and re-introduce these tests.
 
     // ── 12. Phase D: round-trip qualities via QUALITY_BINNED (centres) ──
 
@@ -736,34 +718,19 @@ class M86CodecWiringTest {
     }
 
     // ── 18. Phase D: cross-language fixture (Python → Java) ────────
-
+    //    REMOVED in Phase 2c — same M82-compound-read_names rationale
+    //    as #11 above. Phase 3 regenerates the fixture with v2
+    //    read_names. The on-disk @compression attribute checks for
+    //    sequences + qualities still pass without going through
+    //    gr.readAt(i); they're moved to a tighter test that opens the
+    //    HDF5 dataset directly without materialising AlignedReads.
     @Test
-    void crossLanguageFixtureQualityBinned() throws IOException {
-        // Phase D fixture: BASE_PACK on sequences + QUALITY_BINNED on
-        // qualities. Qualities buffer is bin centres so the lossy
-        // codec round-trip is byte-exact and the cross-language
-        // comparison is meaningful.
-        byte[] expectedSeq  = pureAcgt();
-        byte[] expectedQual = qualBinCentre();
+    void crossLanguageFixtureQualityBinnedAttrsOnly() throws IOException {
+        // Tighter form: only verify the on-disk @compression attributes
+        // for sequences + qualities. Skips gr.readAt(i) (which would
+        // touch the M82-compound read_names and fail in Phase 2c).
         Path tmp = copyFixtureToTemp("m86_codec_quality_binned.tio");
-        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertNotNull(gr, "fixture has genomic_0001");
-            assertEquals(N_READS, gr.readCount(),
-                "fixture read count");
-            for (int i = 0; i < N_READS; i++) {
-                AlignedRead r = gr.readAt(i);
-                assertEquals(expectedSeqSlice(expectedSeq, i), r.sequence(),
-                    "QB fixture seq @ " + i);
-                assertArrayEquals(expectedQualSlice(expectedQual, i),
-                    r.qualities(), "QB fixture qual @ " + i);
-            }
-        } finally {
-            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
-        }
-        // Verify channel @compression attributes match the fixture spec.
-        Path tmp2 = copyFixtureToTemp("m86_codec_quality_binned.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
+        try (Hdf5File f = Hdf5File.openReadOnly(tmp.toString());
              Hdf5Group root = f.rootGroup();
              Hdf5Group study = root.openGroup("study");
              Hdf5Group gRuns = study.openGroup("genomic_runs");
@@ -778,77 +745,16 @@ class M86CodecWiringTest {
                 qualDs.readIntegerAttribute("compression", -1L),
                 "fixture qualities @compression == QUALITY_BINNED (7)");
         } finally {
-            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
+            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
         }
     }
 
-    // ── 19. Phase E: round-trip read_names via NAME_TOKENIZED ──────
-
-    @Test
-    void roundTripReadNamesNameTokenized(@TempDir Path tmp) {
-        // Structured Illumina-style names round-trip byte-exact via
-        // NAME_TOKENIZED (lossless codec — M85 Phase B §1).
-        List<String> names = illuminaNames(N_READS);
-        WrittenGenomicRun run = makeRunWithNames(pureAcgt(), phredCycle(), names,
-            Map.of("read_names", Compression.NAME_TOKENIZED));
-        Path file = writeRun(tmp, run, "rn-nt.tio");
-        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertEquals(N_READS, gr.readCount());
-            byte[] seq  = pureAcgt();
-            byte[] qual = phredCycle();
-            for (int i = 0; i < N_READS; i++) {
-                AlignedRead r = gr.readAt(i);
-                assertEquals(names.get(i), r.readName(),
-                    "NAME_TOKENIZED round-trip @ read " + i);
-                // Sequences/qualities (no override) unchanged path.
-                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
-                    "sequences (no override) @ read " + i);
-                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
-                    "qualities (no override) @ read " + i);
-            }
-        }
-    }
-
-    // ── 20. Phase E: @compression == 8 set on read_names dataset ───
-
-    @Test
-    void attributeSetCorrectlyNameTokenized(@TempDir Path tmp) {
-        // Schema lift: read_names becomes 1-D uint8 (not compound) and
-        // carries @compression == 8. Other byte channels are untouched
-        // by this override.
-        WrittenGenomicRun run = makeRunWithNames(pureAcgt(), phredCycle(),
-            illuminaNames(N_READS),
-            Map.of("read_names", Compression.NAME_TOKENIZED));
-        Path file = writeRun(tmp, run, "rn-nt-attr.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset rnDs   = sc.openDataset("read_names");
-             Hdf5Dataset seqDs  = sc.openDataset("sequences");
-             Hdf5Dataset qualDs = sc.openDataset("qualities")) {
-            // Schema-lift dispatch: precision UINT8, not compound.
-            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
-                rnDs.getPrecision(),
-                "read_names must be 1-D uint8 under NAME_TOKENIZED, "
-                + "not compound");
-            // @compression carries the codec id.
-            assertTrue(rnDs.hasAttribute("compression"),
-                "read_names must carry @compression");
-            long val = rnDs.readIntegerAttribute("compression", -1L);
-            assertEquals(Compression.NAME_TOKENIZED.ordinal(), val,
-                "@compression value must be NAME_TOKENIZED ordinal");
-            assertEquals(8L, val, "NAME_TOKENIZED is M79 codec id 8");
-            // Other channels untouched by this override.
-            assertFalse(seqDs.hasAttribute("compression"),
-                "sequences must have no @compression attribute");
-            assertFalse(qualDs.hasAttribute("compression"),
-                "qualities must have no @compression attribute");
-        }
-    }
+    // ── 19/20. Phase E: round-trip + attribute tests for NAME_TOKENIZED
+    //    on read_names — REMOVED in Phase 2c.
+    //
+    // The v1 NAME_TOKENIZED override on read_names is now rejected
+    // outright. The v2 path (NAME_TOKENIZED_V2 = 15) is exercised by
+    // NameTokenizedV2DispatchTest. ────────────────────────────────────
 
     // ── 22. Phase E: reject NAME_TOKENIZED on sequences/qualities ──
 
@@ -896,63 +802,12 @@ class M86CodecWiringTest {
             "qualities error must name the channel; got: " + msgQ);
     }
 
-    // ── 24. Phase E: mixed all three overrides ─────────────────────
-
-    @Test
-    void mixedAllThreeOverrides(@TempDir Path tmp) {
-        // sequences=BASE_PACK + qualities=QUALITY_BINNED + read_names=
-        // NAME_TOKENIZED simultaneously. Verifies the on-disk
-        // @compression attributes for all three channels and that all
-        // three round-trip correctly (with QUALITY_BINNED's bin-centre
-        // inputs preserving byte-exact qualities).
-        byte[] seq  = pureAcgt();
-        byte[] qual = qualBinCentre();
-        List<String> names = illuminaNames(N_READS);
-        WrittenGenomicRun run = makeRunWithNames(seq, qual, names,
-            Map.of("sequences", Compression.BASE_PACK,
-                   "qualities", Compression.QUALITY_BINNED,
-                   "read_names", Compression.NAME_TOKENIZED));
-        Path file = writeRun(tmp, run, "mixed-all-three.tio");
-
-        // Verify all three channels carry their respective codec ids.
-        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset seqDs  = sc.openDataset("sequences");
-             Hdf5Dataset qualDs = sc.openDataset("qualities");
-             Hdf5Dataset rnDs   = sc.openDataset("read_names")) {
-            assertEquals(Compression.BASE_PACK.ordinal(),
-                seqDs.readIntegerAttribute("compression", -1L),
-                "sequences @compression == BASE_PACK (6)");
-            assertEquals(Compression.QUALITY_BINNED.ordinal(),
-                qualDs.readIntegerAttribute("compression", -1L),
-                "qualities @compression == QUALITY_BINNED (7)");
-            assertEquals(Compression.NAME_TOKENIZED.ordinal(),
-                rnDs.readIntegerAttribute("compression", -1L),
-                "read_names @compression == NAME_TOKENIZED (8)");
-            // read_names must be the lifted 1-D uint8 layout.
-            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
-                rnDs.getPrecision(),
-                "read_names must be 1-D uint8 under NAME_TOKENIZED");
-        }
-
-        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertEquals(N_READS, gr.readCount());
-            for (int i = 0; i < N_READS; i++) {
-                AlignedRead r = gr.readAt(i);
-                assertEquals(expectedSeqSlice(seq, i), r.sequence(),
-                    "mixed BASE_PACK seq @ read " + i);
-                assertArrayEquals(expectedQualSlice(qual, i), r.qualities(),
-                    "mixed QUALITY_BINNED qual @ read " + i);
-                assertEquals(names.get(i), r.readName(),
-                    "mixed NAME_TOKENIZED read_name @ read " + i);
-            }
-        }
-    }
+    // ── 24. Phase E: mixed all three overrides — REMOVED in Phase 2c.
+    //
+    // The v1 NAME_TOKENIZED override on read_names is now rejected;
+    // the v2 (auto-default) flow is exercised by NameTokenizedV2DispatchTest.
+    // The combined sequences=BASE_PACK + qualities=QUALITY_BINNED case
+    // is covered by the per-codec round-trip tests above. ────────────
 
 
     // ── v1.6: Phase B integer-channel codec wiring REMOVED ──────────
@@ -1020,48 +875,12 @@ class M86CodecWiringTest {
         }
     }
 
-    // ── 25. Phase E: cross-language fixture (Python → Java) ────────
-
-    @Test
-    void crossLanguageFixtureNameTokenized() throws IOException {
-        // Phase E fixture: NAME_TOKENIZED on read_names with structured
-        // Illumina-style names. Sequences/qualities use the default
-        // (non-codec) HDF5 path on the Python side too, so we only
-        // assert the read_name round-trip matches the deterministic
-        // generator.
-        List<String> expectedNames = illuminaNames(N_READS);
-        Path tmp = copyFixtureToTemp("m86_codec_name_tokenized.tio");
-        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertNotNull(gr, "fixture has genomic_0001");
-            assertEquals(N_READS, gr.readCount(), "fixture read count");
-            for (int i = 0; i < N_READS; i++) {
-                AlignedRead r = gr.readAt(i);
-                assertEquals(expectedNames.get(i), r.readName(),
-                    "NAME_TOKENIZED fixture read_name @ " + i);
-            }
-        } finally {
-            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
-        }
-        // Verify the on-disk schema-lift layout (uint8 + @compression == 8).
-        Path tmp2 = copyFixtureToTemp("m86_codec_name_tokenized.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset rnDs = sc.openDataset("read_names")) {
-            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
-                rnDs.getPrecision(),
-                "fixture read_names must be 1-D uint8 (schema-lifted)");
-            assertEquals(Compression.NAME_TOKENIZED.ordinal(),
-                rnDs.readIntegerAttribute("compression", -1L),
-                "fixture read_names @compression == NAME_TOKENIZED (8)");
-        } finally {
-            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
-        }
-    }
+    // ── 25. Phase E: cross-language NAME_TOKENIZED fixture — REMOVED.
+    //
+    // The Phase E v1 fixture (`m86_codec_name_tokenized.tio`) used the
+    // v1 NAME_TOKENIZED codec which was deleted in Phase 2c. The
+    // Python regenerator is also gone. v1.0+ cross-language fixtures
+    // for read_names land in Phase 3 (regen + cross-lang gate). ──────
 
     // ── M86 Phase C helpers ────────────────────────────────────────
 
@@ -1177,201 +996,54 @@ class M86CodecWiringTest {
         }
     }
 
-    // ── 36. Phase C: round-trip cigars via NAME_TOKENIZED (uniform) ─
-
+    // ── 36/37. Phase C: NAME_TOKENIZED on cigars — REMOVED in Phase 2c.
+    //
+    // The v1 NAME_TOKENIZED writer dispatch for cigars was removed;
+    // override-validation now rejects cigars=NAME_TOKENIZED upfront.
+    // RANS_ORDER0 / RANS_ORDER1 remain the only override codecs for
+    // the cigars channel.
     @Test
-    void roundTripCigarsNameTokenizedUniform(@TempDir Path tmp) {
-        // Uniform CIGARs trigger NAME_TOKENIZED's columnar mode — the
-        // wire stream is tiny (1-entry dict + delta=0). For N_READS=10
-        // reads of "100M" the encoded stream is < 50 bytes (mirrors
-        // the Python test on the same N_READS).
-        WrittenGenomicRun run = makeRun(pureAcgt(), phredCycle(),
-            Map.of("cigars", Compression.NAME_TOKENIZED));
-        Path file = writeRun(tmp, run, "cg-nt-uniform.tio");
-        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertEquals(N_READS, gr.readCount());
-            for (int i = 0; i < N_READS; i++) {
-                AlignedRead r = gr.readAt(i);
-                assertEquals("100M", r.cigar(),
-                    "NAME_TOKENIZED uniform cigars round-trip @ read " + i);
-            }
-        }
-        // Confirm the NAME_TOKENIZED dataset is small (columnar win).
-        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
-            long bytes = cgDs.getLength();
-            assertTrue(bytes < 50,
-                "NAME_TOKENIZED on " + N_READS + " uniform CIGARs "
-                + "should be < 50 bytes; got " + bytes);
-        }
+    void rejectNameTokenizedOnCigars(@TempDir Path tmp) {
+        IllegalArgumentException ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> {
+                WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
+                    Map.of("cigars", Compression.NAME_TOKENIZED));
+                writeRun(tmp, bad, "bad-nt-cg.tio");
+            });
+        String msg = ex.getMessage();
+        assertNotNull(msg, "exception must have a message");
+        assertTrue(msg.contains("NAME_TOKENIZED"),
+            "error must name the codec; got: " + msg);
+        assertTrue(msg.contains("cigars"),
+            "error must name the channel; got: " + msg);
+        assertTrue(msg.contains("Phase 2c") || msg.contains("v1.0"),
+            "error must reference the v1.0 / Phase 2c policy; got: " + msg);
     }
 
-    // ── 37. Phase C: round-trip cigars via NAME_TOKENIZED (mixed) ───
+    // ── 38. Phase C: size comparison — REMOVED in Phase 2c.
+    //
+    // Original test compared M82 baseline / RANS_ORDER1 /
+    // NAME_TOKENIZED on the realistic mixed-CIGAR input. After
+    // Phase 2c only RANS_ORDER0 / RANS_ORDER1 remain on the cigars
+    // override surface; the §1.2 selection guidance is moot. Size
+    // sanity for rANS is asserted in the round-trip test #35.
 
-    @Test
-    void roundTripCigarsNameTokenizedMixed(@TempDir Path tmp) {
-        // NAME_TOKENIZED on mixed CIGARs falls back to verbatim mode —
-        // round-trip is still correct (lossless), but compression is
-        // poor (~size of raw bytes). This test verifies correctness of
-        // the verbatim fallback; sizeComparisonCigarsCodecs covers
-        // the size implications.
-        int n = 1000, len = 100;
-        WrittenGenomicRun run = mixedCigarRun(n, len,
-            Map.of("cigars", Compression.NAME_TOKENIZED));
-        Path file = writeRun(tmp, run, "cg-nt-mixed.tio");
-        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertEquals(n, gr.readCount());
-            for (int i = 0; i < n; i++) {
-                AlignedRead r = gr.readAt(i);
-                int mod = i % 10;
-                String expected = (mod < 8) ? "100M"
-                                : (mod == 8) ? "99M1D" : "50M50S";
-                assertEquals(expected, r.cigar(),
-                    "NAME_TOKENIZED mixed cigars round-trip @ read " + i);
-            }
-        }
-    }
-
-    // ── 38. Phase C: size comparison — three codec paths ───────────
-
-    @Test
-    void sizeComparisonCigarsCodecs(@TempDir Path tmp) {
-        // Demonstrates §1.2's selection guidance: on the realistic
-        // mixed-CIGAR input, RANS_ORDER1 wins (3-5×), NAME_TOKENIZED
-        // falls back to verbatim (essentially raw bytes), and the
-        // M82 compound has the largest HDF5 footprint. Print the three
-        // sizes so the comparison is visible in test output.
-        int n = 1000, len = 100;
-        WrittenGenomicRun base = mixedCigarRun(n, len, Map.of());
-        WrittenGenomicRun rans = mixedCigarRun(n, len,
-            Map.of("cigars", Compression.RANS_ORDER1));
-        WrittenGenomicRun nt   = mixedCigarRun(n, len,
-            Map.of("cigars", Compression.NAME_TOKENIZED));
-
-        Path baseFile = writeRun(tmp, base, "cg-size-base.tio");
-        Path ransFile = writeRun(tmp, rans, "cg-size-rans.tio");
-        Path ntFile   = writeRun(tmp, nt,   "cg-size-nt.tio");
-
-        long ransBytes;
-        long ntBytes;
-        try (Hdf5File f = Hdf5File.openReadOnly(ransFile.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
-            ransBytes = cgDs.getLength();
-        }
-        try (Hdf5File f = Hdf5File.openReadOnly(ntFile.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
-            ntBytes = cgDs.getLength();
-        }
-        // The M82 compound stores VL_STRING payloads on the global
-        // heap — Dataset.getLength() doesn't see them. Compare against
-        // total file size as a workable proxy for the §1.2 ordering.
-        long baseFileSize;
-        try {
-            baseFileSize = Files.size(baseFile);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        System.out.printf(
-            "[M86 Phase C] cigars size on 1000-read mixed input: "
-            + "RANS_ORDER1=%d, NAME_TOKENIZED=%d, M82-baseline-file=%d%n",
-            ransBytes, ntBytes, baseFileSize);
-
-        // §1.2 ordering: RANS_ORDER1 < NAME_TOKENIZED on mixed input.
-        assertTrue(ransBytes < ntBytes,
-            "RANS_ORDER1 (" + ransBytes + ") should be smaller than "
-            + "NAME_TOKENIZED (" + ntBytes + ") on mixed input");
-        // RANS_ORDER1 is a meaningful win over the M82 baseline file.
-        // NAME_TOKENIZED on mixed input falls back to verbatim and is
-        // essentially raw — Python measured ~5307 bytes vs ~18334 for
-        // the no-override path. Java should match the rANS number
-        // (byte-identical via M83 conformance).
-        assertTrue(ransBytes < 2000,
-            "RANS_ORDER1 cigars on 1000-read mixed input expected to "
-            + "compress to ~1100 bytes; got " + ransBytes);
-    }
-
-    // ── 39. Phase C: NAME_TOKENIZED columnar size win on uniform ───
-
-    @Test
-    void sizeWinCigarsUniform(@TempDir Path tmp) {
-        // 1000 × "100M" — the columnar-mode sweet spot for
-        // NAME_TOKENIZED (1-entry dict + delta=0; ~2 bytes/read).
-        // RANS_ORDER1 collapses the repeating-byte stream to
-        // near-entropy-zero. Both codecs decisively beat the raw
-        // length-prefix-concat baseline (5 bytes/read = 5000 bytes
-        // for 1000 reads). Mirrors Python's measurement —
-        // ordering between rANS and NAME_TOKENIZED is not asserted
-        // (depends on rANS frequency-table overhead vs NT's
-        // per-read overhead).
-        int n = 1000, len = 100;
-        WrittenGenomicRun rans = uniformCigarRun(n, len,
-            Map.of("cigars", Compression.RANS_ORDER1));
-        WrittenGenomicRun nt   = uniformCigarRun(n, len,
-            Map.of("cigars", Compression.NAME_TOKENIZED));
-
-        Path ransFile = writeRun(tmp, rans, "cg-uniform-rans.tio");
-        Path ntFile   = writeRun(tmp, nt,   "cg-uniform-nt.tio");
-
-        long ransBytes, ntBytes;
-        try (Hdf5File f = Hdf5File.openReadOnly(ransFile.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
-            ransBytes = cgDs.getLength();
-        }
-        try (Hdf5File f = Hdf5File.openReadOnly(ntFile.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
-            ntBytes = cgDs.getLength();
-        }
-
-        long rawConcat = 1000L * 5L;  // varint(3) + "100M" per CIGAR
-        assertTrue(ntBytes < rawConcat * 0.5,
-            "NAME_TOKENIZED uniform-cigars wire = " + ntBytes
-            + " bytes (target < " + (long)(rawConcat * 0.5)
-            + " = 50% of raw length-prefix-concat = " + rawConcat
-            + " bytes)");
-        assertTrue(ransBytes < rawConcat,
-            "RANS_ORDER1 uniform-cigars wire = " + ransBytes
-            + " bytes must beat raw concat (" + rawConcat + ")");
-    }
+    // ── 39. Phase C: NAME_TOKENIZED columnar size win — REMOVED. ──
+    //
+    // Same Phase 2c rationale as #38; rANS-only world.
 
     // ── 40. Phase C: @compression set correctly on cigars dataset ──
 
     @Test
     void attributeSetCorrectlyCigars(@TempDir Path tmp) {
-        // All three accepted codecs produce a 1-D uint8 dataset with
+        // Both accepted codecs produce a 1-D uint8 dataset with
         // @compression == codec_id. Other compound channels (read_names,
-        // mate_info) are untouched.
+        // mate_info) are untouched. Phase 2c: NAME_TOKENIZED dropped
+        // from the cigars override surface.
         for (Compression codec : new Compression[]{
                 Compression.RANS_ORDER0,
-                Compression.RANS_ORDER1,
-                Compression.NAME_TOKENIZED}) {
+                Compression.RANS_ORDER1}) {
             WrittenGenomicRun run = makeRun(pureAcgt(), phredCycle(),
                 Map.of("cigars", codec));
             Path file = writeRun(tmp, run, "cg-attr-" + codec.name() + ".tio");
@@ -1401,21 +1073,17 @@ class M86CodecWiringTest {
     void backCompatCigarsUnchanged(@TempDir Path tmp) {
         // No cigars override → cigars stays as M82 compound. Two cases:
         // empty overrides, and overrides on other channels only.
+        // Phase 2c: read_names override surface is gone — case[1] now
+        // exercises sequences-only override.
+        @SuppressWarnings({"unchecked", "rawtypes"})
         Map<String, Compression>[] cases = new Map[]{
             Map.of(),
-            Map.of("read_names", Compression.NAME_TOKENIZED,
-                   "sequences", Compression.BASE_PACK),
+            Map.of("sequences", Compression.BASE_PACK),
         };
-        String[] descs = {"empty", "rn+seq"};
+        String[] descs = {"empty", "seq"};
         for (int c = 0; c < cases.length; c++) {
             Map<String, Compression> overrides = cases[c];
-            WrittenGenomicRun run;
-            if (overrides.containsKey("read_names")) {
-                run = makeRunWithNames(pureAcgt(), phredCycle(),
-                    illuminaNames(N_READS), overrides);
-            } else {
-                run = makeRun(pureAcgt(), phredCycle(), overrides);
-            }
+            WrittenGenomicRun run = makeRun(pureAcgt(), phredCycle(), overrides);
             Path file = writeRun(tmp, run, "cg-backcompat-" + descs[c] + ".tio");
             try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
                  Hdf5Group root = f.rootGroup();
@@ -1484,35 +1152,14 @@ class M86CodecWiringTest {
             "QB error must name the channel; got: " + msgQ);
     }
 
-    // ── 44. Phase C: cross-language fixture (rANS) ─────────────────
-
+    // ── 44. Phase C: cross-language rANS cigars fixture — REMOVED
+    //    in Phase 2c (M82-compound-read_names rationale; see #11).
+    //    The on-disk attribute check is preserved in a tighter form
+    //    that doesn't materialise AlignedReads.
     @Test
-    void crossLanguageFixtureCigarsRans() throws IOException {
-        // Python writer fixture: 100-read run with mixed CIGARs (§6.4
-        // pattern: 80% "100M" + 10% "99M1D" + 10% "50M50S") under
-        // {"cigars": RANS_ORDER1}. Java reader recovers each CIGAR
-        // byte-exact through the M83 rANS decode + length-prefix-concat
-        // walk.
-        int n = 100;
+    void crossLanguageFixtureCigarsRansAttrsOnly() throws IOException {
         Path tmp = copyFixtureToTemp("m86_codec_cigars_rans.tio");
-        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertNotNull(gr, "fixture has genomic_0001");
-            assertEquals(n, gr.readCount(), "fixture read count");
-            for (int i = 0; i < n; i++) {
-                AlignedRead r = gr.readAt(i);
-                int mod = i % 10;
-                String expected = (mod < 8) ? "100M"
-                                : (mod == 8) ? "99M1D" : "50M50S";
-                assertEquals(expected, r.cigar(),
-                    "rANS fixture cigar @ " + i);
-            }
-        } finally {
-            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
-        }
-        // Verify the on-disk schema-lift layout (uint8 + @compression == 5).
-        Path tmp2 = copyFixtureToTemp("m86_codec_cigars_rans.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
+        try (Hdf5File f = Hdf5File.openReadOnly(tmp.toString());
              Hdf5Group root = f.rootGroup();
              Hdf5Group study = root.openGroup("study");
              Hdf5Group gRuns = study.openGroup("genomic_runs");
@@ -1526,150 +1173,27 @@ class M86CodecWiringTest {
                 cgDs.readIntegerAttribute("compression", -1L),
                 "fixture cigars @compression == RANS_ORDER1 (5)");
         } finally {
-            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
-        }
-    }
-
-    // ── 45. Phase C: cross-language fixture (NAME_TOKENIZED) ───────
-
-    @Test
-    void crossLanguageFixtureCigarsNameTokenized() throws IOException {
-        // Python writer fixture: 100-read run with all-uniform CIGARs
-        // (["100M"] * 100) under {"cigars": NAME_TOKENIZED}. The
-        // NAME_TOKENIZED columnar mode produces a tiny (~30 byte)
-        // stream that the Java decoder reverses to recover the
-        // original CIGAR list.
-        int n = 100;
-        Path tmp = copyFixtureToTemp("m86_codec_cigars_name_tokenized.tio");
-        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertNotNull(gr, "fixture has genomic_0001");
-            assertEquals(n, gr.readCount(), "fixture read count");
-            for (int i = 0; i < n; i++) {
-                AlignedRead r = gr.readAt(i);
-                assertEquals("100M", r.cigar(),
-                    "NAME_TOKENIZED fixture cigar @ " + i);
-            }
-        } finally {
             try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
         }
-        // Verify the on-disk schema-lift layout (uint8 + @compression == 8).
-        Path tmp2 = copyFixtureToTemp("m86_codec_cigars_name_tokenized.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Dataset cgDs = sc.openDataset("cigars")) {
-            assertEquals(global.thalion.ttio.Enums.Precision.UINT8,
-                cgDs.getPrecision(),
-                "fixture cigars must be 1-D uint8 (schema-lifted)");
-            assertEquals(Compression.NAME_TOKENIZED.ordinal(),
-                cgDs.readIntegerAttribute("compression", -1L),
-                "fixture cigars @compression == NAME_TOKENIZED (8)");
-        } finally {
-            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
-        }
     }
+
+    // ── 45. Phase C: cross-language NAME_TOKENIZED cigars fixture —
+    //    REMOVED in Phase 2c.
+    //
+    // The Phase C v1 fixture (`m86_codec_cigars_name_tokenized.tio`)
+    // used the v1 NAME_TOKENIZED codec which was deleted in Phase 2c.
+    // The Python regenerator is also gone. v1.0+ cross-language
+    // fixtures for cigars+rANS still apply (#44 above).
 
     // ════════════════════════════════════════════════════════════════
     // M86 Phase F — mate_info per-field decomposition
     // ════════════════════════════════════════════════════════════════
 
-    /** Phase F: 100-read mate distribution per HANDOFF.md §6.4.
-     *  90% chr1, 5% chr2, 3% chrX, 2% "*" (unmapped). */
-    private static List<String> phaseFMateChroms() {
-        List<String> out = new ArrayList<>(100);
-        for (int i = 0; i < 90; i++) out.add("chr1");
-        for (int i = 0; i < 5;  i++) out.add("chr2");
-        for (int i = 0; i < 3;  i++) out.add("chrX");
-        for (int i = 0; i < 2;  i++) out.add("*");
-        return out;
-    }
-
-    /** Phase F: monotonic positions for paired mates, -1 for "*". */
-    private static long[] phaseFMatePositions() {
-        List<String> chroms = phaseFMateChroms();
-        long[] out = new long[100];
-        for (int i = 0; i < 100; i++) {
-            out[i] = "*".equals(chroms.get(i)) ? -1L : (long) (i * 100 + 500);
-        }
-        return out;
-    }
-
-    /** Phase F: insert sizes around 350 for paired, 0 for "*". */
-    private static int[] phaseFMateTlens() {
-        List<String> chroms = phaseFMateChroms();
-        int[] out = new int[100];
-        for (int i = 0; i < 100; i++) {
-            out[i] = "*".equals(chroms.get(i)) ? 0 : (350 + (i % 11) - 5);
-        }
-        return out;
-    }
-
-    // ── Phase F mate_info v1 round-trip / reject tests removed in
-    //    v1.0 reset Phase 2b: the v1 per-field codec surface is no
-    //    longer reachable through the public writer API
-    //    (mate_info_* overrides are rejected outright when the v2
-    //    native lib is available). The v1.0 dispatch tests live in
-    //    MateInfoV2DispatchTest. ────────────────────────────────────
-
-    // ── Phase F: cross-language fixture ─────────────────────────────
-
-    @Test
-    void crossLanguageFixtureMateInfoFull() throws IOException {
-        // Python writer fixture: 100-read run with the realistic Phase F
-        // mate distribution (90% chr1, 5% chr2, 3% chrX, 2% "*"),
-        // overridden with NAME_TOKENIZED on chrom and RANS_ORDER1 on
-        // pos and tlen. Java reader recovers each value byte-exact via
-        // the Phase F subgroup + per-field codec dispatch.
-        Path tmp = copyFixtureToTemp("m86_codec_mate_info_full.tio");
-        try (SpectralDataset ds = SpectralDataset.open(tmp.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertNotNull(gr, "fixture has genomic_0001");
-            assertEquals(100, gr.readCount(), "fixture read count");
-            List<String> expectedChroms = phaseFMateChroms();
-            long[] expectedPos          = phaseFMatePositions();
-            int[]  expectedTlen         = phaseFMateTlens();
-            for (int i = 0; i < 100; i++) {
-                AlignedRead r = gr.readAt(i);
-                assertEquals(expectedChroms.get(i), r.mateChromosome(),
-                    "fixture mate chrom @ read " + i);
-                assertEquals(expectedPos[i], r.matePosition(),
-                    "fixture mate pos @ read " + i);
-                assertEquals(expectedTlen[i], r.templateLength(),
-                    "fixture mate tlen @ read " + i);
-            }
-        } finally {
-            try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
-        }
-        // Verify on-disk subgroup layout.
-        Path tmp2 = copyFixtureToTemp("m86_codec_mate_info_full.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(tmp2.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg    = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc    = rg.openGroup("signal_channels");
-             Hdf5Group mi    = sc.openGroup("mate_info")) {
-            try (Hdf5Dataset chDs = mi.openDataset("chrom")) {
-                assertEquals(Compression.NAME_TOKENIZED.ordinal(),
-                    chDs.readIntegerAttribute("compression", -1L),
-                    "fixture chrom @compression == NAME_TOKENIZED (8)");
-            }
-            try (Hdf5Dataset poDs = mi.openDataset("pos")) {
-                assertEquals(Compression.RANS_ORDER1.ordinal(),
-                    poDs.readIntegerAttribute("compression", -1L),
-                    "fixture pos @compression == RANS_ORDER1 (5)");
-            }
-            try (Hdf5Dataset tlDs = mi.openDataset("tlen")) {
-                assertEquals(Compression.RANS_ORDER1.ordinal(),
-                    tlDs.readIntegerAttribute("compression", -1L),
-                    "fixture tlen @compression == RANS_ORDER1 (5)");
-            }
-        } finally {
-            try { Files.deleteIfExists(tmp2); } catch (IOException ignored) {}
-        }
-    }
+    // ── Phase F mate_info v1 round-trip / reject tests + Phase F
+    //    cross-language fixture (`m86_codec_mate_info_full.tio`) +
+    //    phaseFMate* helpers — REMOVED in Phase 2c.
+    //
+    // The v1 mate_info per-field subgroup writer is gone; the v2
+    // dispatch tests live in MateInfoV2DispatchTest. The Python
+    // regenerator and the .tio fixture are also being deleted.
 }

@@ -11,10 +11,16 @@
 package global.thalion.ttio.codecs;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FqzcompNx16ZPerfTest {
+
+    /** Phase 2c: encode() requires the native library. */
+    static boolean isNativeAvailable() {
+        return TtioRansNative.isAvailable();
+    }
 
     private static byte[] buildVariedQualities(int n) {
         byte[] out = new byte[n];
@@ -28,6 +34,7 @@ class FqzcompNx16ZPerfTest {
     }
 
     @Test
+    @EnabledIf("isNativeAvailable")
     void encodeAndDecodeThroughput() {
         final int nReads = 100_000;
         final int readLen = 100;
