@@ -222,6 +222,12 @@ target_link_libraries(test_ref_diff_v2_invariants PRIVATE ttio_rans)
 target_include_directories(test_ref_diff_v2_invariants PRIVATE src)
 add_test(NAME ref_diff_v2_invariants COMMAND test_ref_diff_v2_invariants)
 
+# #11 ref_diff v2 task 4: parameterized stress (3 sizes x 6 patterns) + I2 invariant.
+add_executable(test_ref_diff_v2_stress tests/test_ref_diff_v2_stress.c)
+target_link_libraries(test_ref_diff_v2_stress PRIVATE ttio_rans)
+target_include_directories(test_ref_diff_v2_stress PRIVATE src)
+add_test(NAME ref_diff_v2_stress COMMAND test_ref_diff_v2_stress)
+
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
 # the default ctest run remains fast and portable.  Enable with:
