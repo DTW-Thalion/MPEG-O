@@ -107,9 +107,30 @@ public final class GenomicIndex {
     // ── Disk I/O via the StorageGroup protocol ─────────────────────
 
     /** Write this index into {@code idxGroup} (typically created via
-     *  {@code parent.createGroup("genomic_index")}). */
+     *  {@code parent.createGroup("genomic_index")}).
+     *
+     *  <p>v1.10 #10: equivalent to
+     *  {@link #writeTo(StorageGroup, boolean) writeTo(idxGroup, false)} —
+     *  omits the redundant {@code offsets} column (computed from
+     *  {@code cumsum(lengths)} on read).</p>
+     */
     public void writeTo(StorageGroup idxGroup) {
-        writeLongs(idxGroup, "offsets",          Precision.UINT64, offsets);
+        writeTo(idxGroup, false);
+    }
+
+    /** Write this index into {@code idxGroup} with optional offsets
+     *  retention.
+     *
+     *  <p>v1.10 #10 (offsets-cumsum): when {@code keepOffsetsColumn} is
+     *  {@code true}, the (mathematically redundant) {@code offsets}
+     *  column is written for byte-equivalent backward compat with
+     *  pre-v1.10 readers. Default {@code false} — omitted on disk and
+     *  computed from {@code cumsum(lengths)} on read.</p>
+     */
+    public void writeTo(StorageGroup idxGroup, boolean keepOffsetsColumn) {
+        if (keepOffsetsColumn) {
+            writeLongs(idxGroup, "offsets",      Precision.UINT64, offsets);
+        }
         writeInts (idxGroup, "lengths",          Precision.UINT32, lengths);
         writeLongs(idxGroup, "positions",        Precision.INT64,  positions);
         writeBytes(idxGroup, "mapping_qualities", Precision.UINT8, mappingQualities);
@@ -167,11 +188,20 @@ public final class GenomicIndex {
     }
 
     /** Read a {@link GenomicIndex} from an existing {@code genomic_index/}
-     *  group (typically opened via {@code parent.openGroup("genomic_index")}). */
+     *  group (typically opened via {@code parent.openGroup("genomic_index")}).
+     *
+     *  <p>v1.10 #10 (2026-05-04): {@code offsets} is no longer stored
+     *  on disk by default — it's mathematically derivable from
+     *  {@code cumsum(lengths)}. Reader handles both layouts: pre-v1.10
+     *  files have the column on disk (read directly); v1.10+ files
+     *  synthesize it from lengths. Always uint64.</p>
+     */
     @SuppressWarnings("unchecked")
     public static GenomicIndex readFrom(StorageGroup idxGroup) {
-        long[]  offsets   = readLongs(idxGroup, "offsets");
         int[]   lengths   = readInts (idxGroup, "lengths");
+        long[]  offsets   = idxGroup.hasChild("offsets")
+            ? readLongs(idxGroup, "offsets")
+            : offsetsFromLengths(lengths);
         long[]  positions = readLongs(idxGroup, "positions");
         byte[]  mapqs     = readBytes(idxGroup, "mapping_qualities");
         int[]   flags     = readInts (idxGroup, "flags");
@@ -256,5 +286,26 @@ public final class GenomicIndex {
         try (StorageDataset ds = g.openDataset(name)) {
             return (byte[]) ds.readAll();
         }
+    }
+
+    /**
+     * v1.10 #10 helper: synthesize per-record byte offsets from a
+     * lengths array. {@code offsets[i] = sum(lengths[0..i])}, returned
+     * as a {@code long[]} (i.e. uint64) to avoid the >4 GB overflow
+     * cliff on deep WGS even though the input lengths are uint32.
+     *
+     * <p>Empty input returns {@code new long[0]}.</p>
+     */
+    public static long[] offsetsFromLengths(int[] lengths) {
+        long[] out = new long[lengths.length];
+        if (lengths.length == 0) return out;
+        out[0] = 0L;
+        long acc = 0L;
+        for (int i = 1; i < lengths.length; i++) {
+            // Mask up the int to its uint32 value before adding to long.
+            acc += ((long) lengths[i - 1]) & 0xFFFFFFFFL;
+            out[i] = acc;
+        }
+        return out;
     }
 }

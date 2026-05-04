@@ -376,8 +376,12 @@ public final class PerAUFile {
              StorageGroup sig = run.openGroup("signal_channels");
              StorageGroup idx = run.openGroup("spectrum_index")) {
 
-            long[] offsets = readLongs(idx, "offsets");
             int[] lengths = readInts(idx, "lengths");
+            // v1.10 #10: offsets is no longer stored on disk by default;
+            // synthesize from cumsum(lengths). Pre-v1.10 files have it.
+            long[] offsets = idx.hasChild("offsets")
+                ? readLongs(idx, "offsets")
+                : global.thalion.ttio.genomics.GenomicIndex.offsetsFromLengths(lengths);
 
             String rawNames = (String) sig.getAttribute("channel_names");
             List<String> channelNames = splitNames(rawNames);
@@ -468,8 +472,12 @@ public final class PerAUFile {
              StorageGroup sig = run.openGroup("signal_channels");
              StorageGroup idx = run.openGroup("genomic_index")) {
 
-            long[] offsets = readLongs(idx, "offsets");
             int[] lengths = readInts(idx, "lengths");
+            // v1.10 #10: offsets is no longer stored on disk by default;
+            // synthesize from cumsum(lengths). Pre-v1.10 files have it.
+            long[] offsets = idx.hasChild("offsets")
+                ? readLongs(idx, "offsets")
+                : global.thalion.ttio.genomics.GenomicIndex.offsetsFromLengths(lengths);
 
             for (String cname : new String[]{"sequences", "qualities"}) {
                 if (!sig.hasChild(cname)) continue;
@@ -525,8 +533,12 @@ public final class PerAUFile {
              StorageGroup sig = run.openGroup("signal_channels");
              StorageGroup idx = run.openGroup("genomic_index")) {
 
-            long[] offsets = readLongs(idx, "offsets");
             int[] lengths = readInts(idx, "lengths");
+            // v1.10 #10: offsets is no longer stored on disk by default;
+            // synthesize from cumsum(lengths). Pre-v1.10 files have it.
+            long[] offsets = idx.hasChild("offsets")
+                ? readLongs(idx, "offsets")
+                : global.thalion.ttio.genomics.GenomicIndex.offsetsFromLengths(lengths);
             List<String> chromosomes = readChromosomes(idx);
 
             if (runSignalEncrypt) {

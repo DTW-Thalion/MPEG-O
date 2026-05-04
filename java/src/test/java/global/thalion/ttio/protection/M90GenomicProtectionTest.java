@@ -280,7 +280,8 @@ class M90GenomicProtectionTest {
         assertTrue(sigs.containsKey("genomic_index/positions"));
         assertTrue(sigs.containsKey("genomic_index/mapping_qualities"));
         assertTrue(sigs.containsKey("genomic_index/flags"));
-        assertTrue(sigs.containsKey("genomic_index/offsets"));
+        // v1.10 #10: offsets no longer written on disk → not signed.
+        assertFalse(sigs.containsKey("genomic_index/offsets"));
         assertTrue(sigs.containsKey("genomic_index/lengths"));
     }
 

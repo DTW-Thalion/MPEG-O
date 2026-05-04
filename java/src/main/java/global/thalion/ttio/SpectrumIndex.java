@@ -9,6 +9,7 @@ import global.thalion.ttio.Enums.ActivationMethod;
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.Enums.Polarity;
 import global.thalion.ttio.Enums.Precision;
+import global.thalion.ttio.genomics.GenomicIndex;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
@@ -166,12 +167,27 @@ public class SpectrumIndex {
     /** Write this index to a storage group (creates spectrum_index/ subgroup).
      *
      *  <p>v0.7 M44: parameter type relaxed to {@link StorageGroup} so the
-     *  index can be written through any provider (HDF5, SQLite, Memory).</p> */
+     *  index can be written through any provider (HDF5, SQLite, Memory).</p>
+     *
+     *  <p>v1.10 #10: equivalent to {@link #writeTo(StorageGroup, boolean)
+     *  writeTo(runGroup, false)} — omits the redundant {@code offsets}
+     *  column.</p> */
     public void writeTo(StorageGroup runGroup) {
+        writeTo(runGroup, false);
+    }
+
+    /** v1.10 #10 (offsets-cumsum) overload. When {@code keepOffsetsColumn}
+     *  is {@code true}, the (mathematically redundant) {@code offsets}
+     *  column is written for byte-equivalent backward compat with
+     *  pre-v1.10 readers. Default {@code false} — column omitted on disk
+     *  and computed from {@code cumsum(lengths)} on read. */
+    public void writeTo(StorageGroup runGroup, boolean keepOffsetsColumn) {
         try (StorageGroup idx = runGroup.createGroup("spectrum_index")) {
             idx.setAttribute("count", (long) count);
 
-            writeDataset(idx, "offsets", Precision.INT64, offsets);
+            if (keepOffsetsColumn) {
+                writeDataset(idx, "offsets", Precision.INT64, offsets);
+            }
             writeDataset(idx, "lengths", Precision.UINT32, lengths);
             writeDataset(idx, "retention_times", Precision.FLOAT64, retentionTimes);
             writeDataset(idx, "ms_levels", Precision.INT32, msLevels);
@@ -198,8 +214,13 @@ public class SpectrumIndex {
         try (StorageGroup idx = runGroup.openGroup("spectrum_index")) {
             int count = ((Number) idx.getAttribute("count")).intValue();
 
-            long[] offsets = readLongs(idx, "offsets");
+            // v1.10 #10: offsets is omitted from disk by default and
+            // computed from cumsum(lengths) at read time. Pre-v1.10
+            // files have it on disk (read directly).
             int[] lengths = readInts(idx, "lengths");
+            long[] offsets = idx.hasChild("offsets")
+                ? readLongs(idx, "offsets")
+                : GenomicIndex.offsetsFromLengths(lengths);
             double[] retentionTimes = readDoubles(idx, "retention_times");
             int[] msLevels = readInts(idx, "ms_levels");
             int[] polarities = readInts(idx, "polarities");

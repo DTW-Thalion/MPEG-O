@@ -492,6 +492,14 @@ public class AcquisitionRun implements
     }
 
     private void writeChromatograms(StorageGroup runGroup) {
+        writeChromatograms(runGroup, false);
+    }
+
+    /** v1.10 #10 (offsets-cumsum): when {@code keepOffsetsColumn} is
+     *  {@code true}, the redundant {@code chromatogram_index/offsets}
+     *  column is written for byte-equivalent backward compat with
+     *  pre-v1.10 readers. Default {@code false} — column omitted. */
+    private void writeChromatograms(StorageGroup runGroup, boolean keepOffsetsColumn) {
         try (StorageGroup cg = runGroup.createGroup("chromatograms")) {
             cg.setAttribute("count", (long) chromatograms.size());
 
@@ -524,7 +532,9 @@ public class AcquisitionRun implements
             writeDoubleDs(cg, "intensity_values", allIntensity);
 
             try (StorageGroup idx = cg.createGroup("chromatogram_index")) {
-                writeLongDs(idx, "offsets", offsets);
+                if (keepOffsetsColumn) {
+                    writeLongDs(idx, "offsets", offsets);
+                }
                 writeIntDs(idx, "lengths", lengths);
                 writeIntDs(idx, "types", types);
                 writeDoubleDs(idx, "target_mzs", targetMzs);
@@ -543,8 +553,13 @@ public class AcquisitionRun implements
             double[] allIntensity = readDoubleDs(cg, "intensity_values");
 
             try (StorageGroup idx = cg.openGroup("chromatogram_index")) {
-                long[] offsets = readLongDs(idx, "offsets");
                 int[] lengths = readIntDs(idx, "lengths");
+                // v1.10 #10: offsets omitted from disk by default;
+                // synthesize from cumsum(lengths). Pre-v1.10 files have
+                // the column on disk (read directly).
+                long[] offsets = idx.hasChild("offsets")
+                    ? readLongDs(idx, "offsets")
+                    : global.thalion.ttio.genomics.GenomicIndex.offsetsFromLengths(lengths);
                 int[] types = readIntDs(idx, "types");
                 double[] targetMzs = readDoubleDs(idx, "target_mzs");
                 double[] precursorMzs = readDoubleDs(idx, "precursor_mzs");
