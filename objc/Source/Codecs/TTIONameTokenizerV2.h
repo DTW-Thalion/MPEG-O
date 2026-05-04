@@ -22,6 +22,9 @@ extern NSString *const TTIONameTokenizerV2ErrorDomain;
 
 @interface TTIONameTokenizerV2 : NSObject
 
+/// YES when libttio_rans is linked and the v2 codec functions are available.
++ (BOOL)nativeAvailable;
+
 /// Encode an ordered list of ASCII read names to a NAME_TOKENIZED v2 blob.
 + (NSData *)encodeNames:(NSArray<NSString *> *)names;
 

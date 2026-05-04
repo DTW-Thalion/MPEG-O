@@ -1292,7 +1292,11 @@ static hsize_t m86PhEChannelStorageSize(const char *path, const char *channel)
 // win"). Target: NAME_TOKENIZED < 50% of the M82 footprint.
 static void testSizeWinNameTokenized(void)
 {
+    // v1.8 #11 ch3: opt out so the M82 compound layout is preserved
+    // for the size-win comparison. The new v1.8 default would emit
+    // a v2 codec stream, defeating the measurement.
     TTIOWrittenGenomicRun *raw = m86PhEMakeLargeRun(@{}, TTIOCompressionNone);
+    raw.optDisableNameTokenizedV2 = YES;
     TTIOWrittenGenomicRun *nt  = m86PhEMakeLargeRun(
         @{ @"read_names": @(TTIOCompressionNameTokenized) },
         TTIOCompressionNone);
@@ -1406,6 +1410,9 @@ static void testBackCompatReadNamesUnchanged(void)
     // Empty overrides — should leave read_names as the M82 compound.
     TTIOWrittenGenomicRun *run = m86PhEMakeRun(seqBytes, qualBytes, names,
                                                @{}, TTIOCompressionZlib);
+    // v1.8 #11 ch3: opt out so the M82 compound layout is preserved
+    // (the new v1.8 default emits the v2 codec stream).
+    run.optDisableNameTokenizedV2 = YES;
     NSString *path = m86TmpPath("nt_bc");
     unlink(path.fileSystemRepresentation);
 
@@ -2030,6 +2037,9 @@ static void testAttributeSetCorrectlyCigars(void)
         TTIOWrittenGenomicRun *run = m86PhCMakeRun(seqBytes, qualBytes,
                                                     cigars, nil, overrides,
                                                     TTIOCompressionZlib);
+        // v1.8 #11 ch3: keep read_names as M82 compound for the
+        // "only cigars has @compression" assertion below.
+        run.optDisableNameTokenizedV2 = YES;
         NSString *path = m86TmpPath("phc_cig_attr");
         unlink(path.fileSystemRepresentation);
 

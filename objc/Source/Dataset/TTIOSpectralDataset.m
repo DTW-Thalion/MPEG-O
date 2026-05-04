@@ -32,6 +32,7 @@
 #import "Codecs/TTIODeltaRans.h"                // M95 v1.2
 #import "Codecs/TTIOMateInfoV2.h"               // v1.7 #11: inline mate-pair codec
 #import "Codecs/TTIORefDiffV2.h"               // v1.8 #11: bit-packed ref-diff v2
+#import "Codecs/TTIONameTokenizerV2.h"          // v1.8 #11 ch3: adaptive name-tokenizer v2
 #import <hdf5.h>
 #include <openssl/md5.h>                          // M93 v1.2 ref MD5
 
@@ -2632,13 +2633,44 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         if (!cigarDs || ![cigarDs writeAll:cigarRows error:error]) return NO;
     }
 
-    // M86 Phase E: schema lift for read_names on the provider/storage
-    // path (memory:// / sqlite:// / zarr://). Same dispatch as the
-    // HDF5 fast path above. The protocol's setAttributeValue:forName:
-    // boxes the @compression attribute as NSNumber → int64 in the
-    // HDF5 backend; non-HDF5 backends store the integer directly.
+    // M86 Phase E + v1.8 #11 ch3: schema lift for read_names with v2
+    // dispatch on the provider/storage path. Three layouts (mutually
+    // exclusive):
+    //
+    // - NAME_TOKENIZED v1 (codec id 8): flat uint8 dataset.
+    //   Selected when signalCodecOverrides[@"read_names"] is set (v1).
+    // - NAME_TOKENIZED v2 (codec id 15): flat uint8 dataset.
+    //   The v1.8 default — selected when no override is present,
+    //   optDisableNameTokenizedV2 == NO, and the native lib is linked.
+    // - M82 compound: VL_STRING-in-compound dataset. Selected when
+    //   opt-out is set and no override is present.
     NSNumber *readNamesOverride = run.signalCodecOverrides[@"read_names"];
-    if (readNamesOverride != nil) {
+    BOOL useReadNamesV2 = (readNamesOverride == nil)
+        && !run.optDisableNameTokenizedV2
+        && [TTIONameTokenizerV2 nativeAvailable];
+    if (useReadNamesV2) {
+        NSData *encoded = [TTIONameTokenizerV2 encodeNames:run.readNames];
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2032
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"v1.8 #11 ch3: NAME_TOKENIZED_V2 encode of "
+                           @"read_names returned nil"}];
+            return NO;
+        }
+        id<TTIOStorageDataset> nameDs = [sc createDatasetNamed:@"read_names"
+                                                     precision:TTIOPrecisionUInt8
+                                                        length:encoded.length
+                                                     chunkSize:65536
+                                                   compression:TTIOCompressionNone
+                                              compressionLevel:0
+                                                         error:error];
+        if (!nameDs) return NO;
+        if (![nameDs writeAll:encoded error:error]) return NO;
+        if (![nameDs setAttributeValue:@((uint8_t)TTIOCompressionNameTokenizedV2)
+                               forName:@"compression"
+                                 error:error]) return NO;
+    } else if (readNamesOverride != nil) {
         NSData *encoded = TTIONameTokenizerEncode(run.readNames);
         if (!encoded) {
             if (error) *error = [NSError
@@ -3116,17 +3148,43 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                       fields:vlValueField error:error]) return NO;
     }
 
-    // M86 Phase E: schema lift for read_names. When the
-    // NAME_TOKENIZED override is set, replace the M82 compound
-    // dataset with a flat 1-D uint8 dataset of the same name
-    // carrying the codec output, plus an @compression == 8
-    // attribute (Binding Decisions §111, §113). The two layouts
-    // are mutually exclusive within a single run; readers
-    // dispatch on dataset shape (compound vs uint8). No HDF5
-    // filter is applied — codec output is high-entropy
-    // (Binding Decision §87).
+    // M86 Phase E + v1.8 #11 ch3: schema lift for read_names with v2
+    // dispatch. Three layouts (mutually exclusive):
+    //
+    // - NAME_TOKENIZED v1 (codec id 8): flat uint8 dataset.
+    //   Selected when signalCodecOverrides[@"read_names"] is set (v1).
+    // - NAME_TOKENIZED v2 (codec id 15): flat uint8 dataset.
+    //   The v1.8 default — selected when no override is present,
+    //   optDisableNameTokenizedV2 == NO, and the native lib is linked.
+    // - M82 compound: VL_STRING-in-compound dataset. Selected when
+    //   opt-out is set and no override is present.
     NSNumber *readNamesOverride = run.signalCodecOverrides[@"read_names"];
-    if (readNamesOverride != nil) {
+    BOOL useReadNamesV2 = (readNamesOverride == nil)
+        && !run.optDisableNameTokenizedV2
+        && [TTIONameTokenizerV2 nativeAvailable];
+    if (useReadNamesV2) {
+        NSData *encoded = [TTIONameTokenizerV2 encodeNames:run.readNames];
+        if (!encoded) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2032
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           @"v1.8 #11 ch3: NAME_TOKENIZED_V2 encode of "
+                           @"read_names returned nil"}];
+            return NO;
+        }
+        TTIOHDF5Dataset *nameDs = [sc createDatasetNamed:@"read_names"
+                                               precision:TTIOPrecisionUInt8
+                                                  length:encoded.length
+                                               chunkSize:65536
+                                             compression:TTIOCompressionNone
+                                        compressionLevel:0
+                                                   error:error];
+        if (!nameDs) return NO;
+        if (![nameDs writeData:encoded error:error]) return NO;
+        if (!_TTIO_M86_WriteUInt8Attribute([nameDs datasetId], "compression",
+                                           (uint8_t)TTIOCompressionNameTokenizedV2,
+                                           error)) return NO;
+    } else if (readNamesOverride != nil) {
         NSData *encoded = TTIONameTokenizerEncode(run.readNames);
         if (!encoded) {
             if (error) *error = [NSError

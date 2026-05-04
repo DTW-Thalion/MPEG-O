@@ -17,6 +17,7 @@
 #import "Codecs/TTIOReferenceResolver.h"  // M93 v1.2
 #import "Codecs/TTIOMateInfoV2.h"          // v1.7 #11: inline mate-pair codec
 #import "Codecs/TTIORefDiffV2.h"          // v1.8 #11: bit-packed ref-diff v2
+#import "Codecs/TTIONameTokenizerV2.h"     // v1.8 #11 ch3: adaptive name-tokenizer v2
 #import <hdf5.h>
 
 @implementation TTIOGenomicRun {
@@ -565,7 +566,8 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         } else {
             codec_id = _ttio_m86_read_compression_attr_protocol(ds);
         }
-        if (codec_id != (uint8_t)8 /* NAME_TOKENIZED */) {
+        if (codec_id != (uint8_t)8 /* NAME_TOKENIZED */
+            && codec_id != (uint8_t)15 /* NAME_TOKENIZED_V2 */) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOGenomicRun" code:2041
                        userInfo:@{NSLocalizedDescriptionKey:
@@ -573,22 +575,28 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
                                 @"signal_channel 'read_names': "
                                 @"@compression=%u is not a supported "
                                 @"TTIO codec id for the read_names "
-                                @"channel (only NAME_TOKENIZED = 8 is "
-                                @"recognised)",
+                                @"channel (only NAME_TOKENIZED = 8 and "
+                                @"NAME_TOKENIZED_V2 = 15 are recognised)",
                                 (unsigned)codec_id]}];
             return nil;
         }
         id allRaw = [ds readAll:error];
         if (![allRaw isKindOfClass:[NSData class]]) return nil;
         NSData *encoded = (NSData *)allRaw;
+        NSArray<NSString *> *decoded = nil;
         NSError *decErr = nil;
-        NSArray<NSString *> *decoded = TTIONameTokenizerDecode(encoded, &decErr);
+        if (codec_id == (uint8_t)15) {
+            // v1.8 #11 ch3: name_tok_v2 codec output (NTK2 magic).
+            decoded = [TTIONameTokenizerV2 decodeData:encoded error:&decErr];
+        } else {
+            decoded = TTIONameTokenizerDecode(encoded, &decErr);
+        }
         if (decoded == nil) {
             if (error) *error = decErr ?: [NSError
                 errorWithDomain:@"TTIOGenomicRun" code:2042
                        userInfo:@{NSLocalizedDescriptionKey:
                            @"signal_channel 'read_names' "
-                           @"NAME_TOKENIZED decode failed"}];
+                           @"NAME_TOKENIZED/v2 decode failed"}];
             return nil;
         }
         _decodedReadNames = [decoded copy];
