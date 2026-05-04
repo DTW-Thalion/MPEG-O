@@ -2,7 +2,7 @@
   {
     "dataset": "synthetic_mixed_chrom",
     "bam_input_bytes": 713004,
-    "started_at_unix": 1777406274.6918778,
+    "started_at_unix": 1777911894.4574516,
     "host": {
       "hostname": "TTI-PC-0001",
       "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
@@ -15,7 +15,7 @@
         "compress": {
           "format_name": "bam",
           "operation": "compress",
-          "wall_seconds": 0.026668139999969753,
+          "wall_seconds": 0.028117629999997007,
           "output_size_bytes": 713043,
           "command": [
             "/usr/bin/samtools",
@@ -30,7 +30,7 @@
         "decompress": {
           "format_name": "bam",
           "operation": "decompress",
-          "wall_seconds": 0.012697553000066364,
+          "wall_seconds": 0.013543497999989995,
           "output_size_bytes": 4065460,
           "command": [
             "/usr/bin/samtools",
@@ -47,7 +47,7 @@
         "compress": {
           "format_name": "cram",
           "operation": "compress",
-          "wall_seconds": 3.2529725100000633,
+          "wall_seconds": 3.1820794110001316,
           "output_size_bytes": 482005,
           "command": [
             "/usr/bin/samtools",
@@ -68,7 +68,7 @@
         "decompress": {
           "format_name": "cram",
           "operation": "decompress",
-          "wall_seconds": 1.19299105399989,
+          "wall_seconds": 1.192681845000152,
           "output_size_bytes": 6704187,
           "command": [
             "/usr/bin/samtools",
@@ -85,65 +85,7 @@
       },
       "ttio": {
         "compress": {
-          "format_name": "ttio",
-          "operation": "compress",
-          "wall_seconds": 0.2901501119999921,
-          "output_size_bytes": 1439312,
-          "command": [
-            "<in-process: BamReader.to_genomic_run + SpectralDataset.write_minimal>"
-          ],
-          "notes": "Python reference path. Codecs: BASE_PACK on sequences, RANS_ORDER0 on qualities, RANS_ORDER1 on cigars, NAME_TOKENIZED on read_names + mate_info_chrom. Lossless throughout."
-        },
-        "decompress": {
-          "format_name": "ttio",
-          "operation": "decompress",
-          "wall_seconds": 1.052022093000005,
-          "output_size_bytes": 560195,
-          "command": [
-            "<in-process: SpectralDataset.open + per-read AlignedRead access>"
-          ],
-          "notes": "Touched 16,000 reads to force lazy decode of every channel."
-        }
-      },
-      "genie": {
-        "compress": {
-          "format_name": "genie",
-          "operation": "compress",
-          "wall_seconds": 0.0846960260000742,
-          "output_size_bytes": 645834,
-          "command": [
-            "/usr/bin/samtools",
-            "view",
-            "-h",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.sam",
-            "/home/toddw/TTI-O/data/genomic/synthetic/mixed_chrom.bam",
-            "&&",
-            "/home/toddw/genie/install/bin/genie",
-            "run",
-            "-i",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.sam",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.mgb",
-            "-f"
-          ],
-          "notes": "MPEG-G via Genie (default profile). BAM\u2192SAM intermediate (0.01s) + genie run (0.07s); SAM removed after."
-        },
-        "decompress": {
-          "format_name": "genie",
-          "operation": "decompress",
-          "wall_seconds": 0.04959066700007497,
-          "output_size_bytes": 3832206,
-          "command": [
-            "/home/toddw/genie/install/bin/genie",
-            "run",
-            "-i",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.mgb",
-            "-o",
-            "/home/toddw/TTI-O/tools/benchmarks/_work/synthetic_mixed_chrom/genie/synthetic_mixed_chrom.genie.dump.sam",
-            "-f"
-          ],
-          "notes": ""
+          "error": "REF_DIFF v1.2 first pass supports single-chromosome runs only; this run carries reads on chromosomes ['chr1', 'chr10', 'chr19', 'chr21', 'chr22', 'chrM', 'chrX', 'chrY']. Multi-chromosome support is an M93.X follow-up \u2014 split into per-chromosome runs as a workaround."
         }
       }
     }
