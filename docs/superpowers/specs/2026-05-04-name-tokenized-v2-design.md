@@ -406,12 +406,20 @@ files (HDF5 framing included for fairness). Test fails CI if savings <
   - Python: `WrittenGenomicRun.opt_disable_name_tokenized_v2`
   - Java: `WrittenGenomicRun.optDisableNameTokenizedV2`
   - ObjC: `TTIOWrittenGenomicRun.optDisableNameTokenizedV2`
-- When opt-out flag is True, writer emits codec id 8 (v1) instead.
-- Reader auto-detects codec id from `@compression` attr (codec id 8 →
-  v1 path, codec id 15 → v2 path).
+- Writer dispatch is three-way:
+  1. Default (no override, no opt-out, native lib loaded): codec id 15.
+  2. Explicit `signal_codec_overrides[read_names] = NAME_TOKENIZED`:
+     codec id 8 (v1 NAME_TOKENIZED, M86 Phase E flat schema-lift).
+  3. Opt-out (`opt_disable_name_tokenized_v2 = True`) AND no override:
+     pre-v1.9 default = M82 compound (VL_STRING-in-compound dataset, no
+     codec). This preserves byte-equivalent behavior for callers that
+     relied on the pre-v1.9 default.
+- Reader auto-detects via `@compression` attr on the dataset (codec id
+  8 → v1 path, codec id 15 → v2 path) when shape is uint8; M82 compound
+  layout is detected by dtype = compound-with-VL-string-field.
 - v1.x readers (pre-v1.9) cannot read codec id 15 streams; they raise
   "unknown codec id" at read time. v1.x → v1.9 forward-compat is
-  read-only via the opt-out flag (writer can downgrade to v1).
+  read-only via the opt-out flag (writer downgrades to M82 compound).
 
 ## 12. Forever-frozen wire constants
 

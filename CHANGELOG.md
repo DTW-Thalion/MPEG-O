@@ -11,6 +11,58 @@ public API is stable from v1.0.0 onward (tagged 2026-04-23). See
 
 ---
 
+## [v1.9] — 2026-05-04 — NAME_TOKENIZED v2 (#11 channel 3)
+
+### Added
+
+- **NAME_TOKENIZED v2 codec** (`NAME_TOKENIZED_V2 = 15`):
+  multi-substream + DUP-pool (N=8) + PREFIX-MATCH ladder + per-block
+  reset (4096 reads) for the `read_names` channel. Shared C kernel in
+  libttio_rans (`native/src/name_tok_v2.{c,h}`); language wrappers via
+  Python ctypes, Java JNI, ObjC direct-link all produce byte-identical
+  output. Wire format: 8 substreams (FLAG / POOL_IDX / MATCH_K /
+  COL_TYPES / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT), each
+  auto-picked between rANS-O0 and raw passthrough (smallest wins).
+  Magic "NTK2", container version `0x01`. **Saves 67.76 MB on chr22
+  NA12878 lean+mapped** end-to-end (~63 MB from removing the M82
+  VL-string compound layout's fractal-heap overhead plus ~4 MB of
+  codec-algorithm savings).
+- **`opt_disable_name_tokenized_v2` opt-out flag** on
+  `WrittenGenomicRun` (Python/Java/ObjC). Default `False`. When
+  `True` (and no override is set), writer falls back to the
+  pre-v1.9 default M82 VL-string compound for `read_names` —
+  byte-equivalent layout for v1.x reader compatibility.
+- **Three-way `read_names` writer dispatch:** v1.9 default →
+  NAME_TOKENIZED v2 (codec id 15); explicit
+  `signal_codec_overrides[read_names] = NAME_TOKENIZED` → v1
+  NAME_TOKENIZED (codec id 8, M86 Phase E flat schema-lift); opt-out
+  AND no override → M82 compound. Reader auto-detects via
+  `@compression` attribute on the dataset.
+- Format spec §10.6b (NAME_TOKENIZED v2 wire format) and codec doc
+  `docs/codecs/name_tokenizer_v2.md`.
+
+### Cross-language byte-exact gate
+
+12 SHA-256 byte-equality assertions PASS across 4 corpora × 3
+languages (chr22, NA12878 WES, HG002 Illumina 2×250, HG002 PacBio
+HiFi). Verified in
+`python/tests/integration/test_name_tok_v2_cross_language.py`.
+
+### Hard compression gate
+
+`python/tests/integration/test_name_tok_v2_compression_gate.py`
+enforces ≥ 3 MB chr22 savings vs the pre-v1.9 default. Measured:
+67.76 MB (gate floor 3 MB).
+
+### v1.9 still-open follow-ups (#11 closed)
+
+- **#10 offsets-cumsum** (~3.5 MB structural HDF5 framing): defer to
+  a separate cycle.
+- **#13 V5 multi-stream rANS** (3-6× speedup, wire-format break,
+  needs spec-proof phase): defer.
+
+---
+
 ## [v1.8] — 2026-05-03 — REF_DIFF v2 (#11 channel 2)
 
 ### Added

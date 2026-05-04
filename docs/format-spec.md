@@ -897,30 +897,76 @@ M83/M84 codecs, which produce non-sliceable byte streams. The
 memory cost is one decoded channel per open run instance —
 acceptable for typical sequencing workloads.
 
-## 10.6 `read_names` schema lift under NAME_TOKENIZED (M86 Phase E)
+## 10.6 `read_names` schema lift under NAME_TOKENIZED (M86 Phase E + v1.9 #11 ch3)
 
-`signal_channels/read_names` has two on-disk layouts depending
-on whether the M85-Phase-B NAME_TOKENIZED codec was selected at
-write time via `signal_codec_overrides`:
+`signal_channels/read_names` has THREE on-disk layouts depending
+on the writer configuration:
 
-- **No override (M82 default):** compound dataset of shape
-  `[n_reads]` with field `{value: VL_STRING}`. Backward
-  compatible with M82 readers.
-- **NAME_TOKENIZED override active:** flat 1-D `UINT8` dataset
-  of length = `name_tokenizer.encode()` output size, with the
-  `@compression` attribute set to `8`. The dataset bytes are
-  the self-contained NAME_TOKENIZED stream specified in
-  `docs/codecs/name_tokenizer.md` §2. **No HDF5 filter** is
-  applied (the codec output is high-entropy).
+- **No override AND opt-out (`opt_disable_name_tokenized_v2 =
+  True`):** compound dataset of shape `[n_reads]` with field
+  `{value: VL_STRING}` (M82 default). Backward compatible with
+  M82 readers.
+- **`signal_codec_overrides[read_names] = NAME_TOKENIZED`:**
+  flat 1-D `UINT8` dataset with `@compression = 8`. Dataset
+  bytes are the self-contained NAME_TOKENIZED v1 stream from
+  `docs/codecs/name_tokenizer.md` §2. **No HDF5 filter applied.**
+- **Default (no override, no opt-out, native lib loaded):** flat
+  1-D `UINT8` dataset with `@compression = 15` (NAME_TOKENIZED
+  v2). Dataset bytes are the v2 stream from §10.6b below. **No
+  HDF5 filter applied.**
 
-The two layouts are mutually exclusive within a single run and
-share the same dataset name. Readers MUST dispatch on dataset
-shape — a compound dataset uses the M82 read path; a 1-D
-`UINT8` dataset requires the codec dispatch path. The
-`@compression` attribute is the canonical secondary signal: if
-present and equal to `8`, decode through `name_tokenizer`. If
-present with any other value, the dataset is malformed (no
-other codec applies to `read_names` in M86 Phase E).
+The three layouts are mutually exclusive within a single run.
+Readers MUST dispatch on dataset shape — a compound dataset uses
+the M82 read path; a 1-D `UINT8` dataset requires the codec
+dispatch path. The `@compression` attribute is the canonical
+secondary signal: `8` → decode through `name_tokenizer` v1, `15`
+→ decode through `name_tokenizer_v2`. Other values are malformed.
+
+## 10.6b `NAME_TOKENIZED` v2 wire format (codec id 15, v1.9)
+
+NAME_TOKENIZED v2 is a multi-substream + DUP-pool + PREFIX-MATCH
+codec for read names. Wire magic `NTK2`, container version
+`0x01`. Default for the `read_names` channel in v1.9+. Spec at
+`docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md`
+(§4 has the authoritative byte-level layout).
+
+Summary:
+
+```
+Container header (12 + 4·n_blocks bytes):
+  4 bytes "NTK2" magic
+  1 byte version = 0x01
+  1 byte flags (bit 0 = empty stream)
+  4 bytes n_reads u32 LE
+  2 bytes n_blocks u16 LE (≤ 65535)
+  n_blocks × 4 bytes block_offset[i] u32 LE
+    (offset of block i body relative to start of first block)
+
+Per block (≤ 4096 reads):
+  4 bytes block_n_reads u32 LE
+  4 bytes block_body_len u32 LE
+  block body: 8 substreams in fixed order, each prefixed by:
+    4 bytes substream_body_len u32 LE
+    1 byte mode (0x00 raw, 0x01 rANS-O0)
+    body bytes
+```
+
+Substream order: FLAG (2-bit per read), POOL_IDX (3-bit per
+DUP/MATCH row), MATCH_K (varint per MATCH row), COL_TYPES
+(per-block column-type bitmap), NUM_DELTA (numeric column
+deltas), DICT_CODE (string column codes), DICT_LIT (string
+column literals), VERB_LIT (verbatim escape rows). All
+emissions row-major within NUM_DELTA / DICT_CODE.
+
+Reader auto-picks the per-substream mode (0x00 raw vs 0x01
+rANS-O0) and dispatches accordingly. Block boundaries are
+independently decodable; the block-offset table enables O(1)
+seek to any block's body.
+
+**Pre-v1.9 reader behaviour:** Files with `@compression = 15`
+are unreadable by pre-v1.9 readers — they raise "unknown codec
+id" at read time. v1.x → v1.9 forward-compat is read-only via
+the opt-out flag (writer downgrades to M82 compound).
 
 **Pre-M86-Phase-E reader behaviour:** A v0.12 file with the
 override is **unreadable** by pre-M86 readers — they expect

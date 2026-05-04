@@ -259,12 +259,36 @@ as a record of what was built; current milestones use TTI-O names.
 > * Last code commit: `f4f0c38`. Task 15 (docs/gate/changelog): this
 >   commit.
 >
-> **#11 Channel 3 (NameTokenized v2):** deferred as a separate future
-> cycle. Current estimate: additional ~3-4 MB on chr22; requires redesign
-> of the name tokenization wire format to reduce HDF5 compound overhead.
+> **#11 Channel 3 (NameTokenized v2) SHIPPED v1.9 2026-05-04.** 16-task
+> plan executed; NAME_TOKENIZED v2 codec (NAME_TOKENIZED_V2, codec id 15)
+> ships as default `read_names` codec across Python/Java/ObjC. Key
+> outcomes:
+> * **C kernel:** `native/src/name_tok_v2.{c,h}` (~1370 lines).
+>   Entry points `ttio_name_tok_v2_encode` / `_decode`. Multi-substream
+>   + DUP-pool (N=8) + PREFIX-MATCH + per-block reset (4096 reads).
+> * **8-substream wire format:** FLAG / POOL_IDX / MATCH_K / COL_TYPES
+>   / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT, each auto-picked
+>   rANS-O0 vs raw. Spec at
+>   `docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md`.
+> * **Phase 0 prototype** at `tools/perf/name_tok_v2_prototype/`
+>   validated the algorithm + chr22 ≥ 3 MB savings gate before any C
+>   work, per `feedback_phase_0_spec_proof`.
+> * **Cross-language byte-exact gate:** 12/12 PASS (4 corpora × 3
+>   languages) in
+>   `python/tests/integration/test_name_tok_v2_cross_language.py`.
+> * **chr22 compression gate (T15):** 67.76 MB savings vs pre-v1.9
+>   default (gate floor 3 MB, PASS). Test at
+>   `python/tests/integration/test_name_tok_v2_compression_gate.py`.
+> * **Three-way writer dispatch:** v2 default, v1 via override, M82
+>   compound via opt-out for v1.x reader compat.
+> * **opt-out flag:** `WrittenGenomicRun.opt_disable_name_tokenized_v2`.
 >
-> **#10 offsets-cumsum** (structural HDF5 framing) and **#13 V5
-> multi-stream rANS** also remain as separate cycles.
+> **#11 channel work COMPLETE.** Channels 1+2+3 all shipped (v1.7
+> mate_info v2 → v1.8 REF_DIFF v2 → v1.9 NAME_TOKENIZED v2).
+>
+> **#10 offsets-cumsum** (structural HDF5 framing, ~3.5 MB) and
+> **#13 V5 multi-stream rANS** (3-6× speedup, wire-format break) remain
+> as separate future cycles.
 
 ---
 
