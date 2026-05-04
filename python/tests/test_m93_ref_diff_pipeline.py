@@ -229,22 +229,20 @@ def test_ref_missing_at_read_raises(tmp_path):
 
 def test_default_v1_5_applies_ref_diff_when_no_override_and_ref_present(tmp_path):
     """Q5a=B: empty signal_codec_overrides + signal_compression="gzip"
-    + reference_chrom_seqs provided → sequences gets REF_DIFF (id 9)
-    automatically when opt_disable_ref_diff_v2 = True (v1.8 opt-out).
-    No feature flag required.
+    + reference_chrom_seqs provided → sequences gets a ref-aware codec
+    automatically. No feature flag required.
 
-    NOTE: In v1.8+ the *default* is REF_DIFF_V2 (id 14, a group layout).
-    This test pins the v1.7 / v1.5 behaviour by setting
-    opt_disable_ref_diff_v2 = True so the auto-default falls through to
-    the v1 flat-dataset path (REF_DIFF id 9). The invariant being tested
-    — that the writer auto-selects a ref-aware codec when a reference is
-    provided — remains valid; only the codec id changes in the v1.8 default.
+    The writer picks REF_DIFF_V2 (id 14, group layout with refdiff_v2
+    child) when libttio_rans is available; otherwise it falls back to
+    REF_DIFF (id 9, flat dataset). The invariant being tested — that
+    the writer auto-selects a ref-aware codec when a reference is
+    provided — holds in both cases.
     """
     from dataclasses import replace
 
     run = _build_ref_diff_run()
-    # Drop the explicit override AND force v1 layout so we can assert id == 9.
-    run = replace(run, signal_codec_overrides={}, opt_disable_ref_diff_v2=True)
+    # Drop the explicit override so the auto-default kicks in.
+    run = replace(run, signal_codec_overrides={})
 
     path = tmp_path / "default_codec.tio"
     SpectralDataset.write_minimal(
@@ -254,10 +252,21 @@ def test_default_v1_5_applies_ref_diff_when_no_override_and_ref_present(tmp_path
         runs={"run_0001": run},
     )
     with h5py.File(path, "r") as f:
-        seqs_ds = f["/study/genomic_runs/run_0001/signal_channels/sequences"]
-        assert int(seqs_ds.attrs["compression"]) == int(Compression.REF_DIFF), (
-            f"expected REF_DIFF (9), got {int(seqs_ds.attrs['compression'])}"
-        )
+        seqs = f["/study/genomic_runs/run_0001/signal_channels/sequences"]
+        if isinstance(seqs, h5py.Group):
+            # v2 path (native lib available): refdiff_v2 child dataset
+            # carries @compression == REF_DIFF_V2.
+            child = seqs["refdiff_v2"]
+            assert int(child.attrs["compression"]) == int(Compression.REF_DIFF_V2), (
+                f"expected REF_DIFF_V2 ({int(Compression.REF_DIFF_V2)}), "
+                f"got {int(child.attrs['compression'])}"
+            )
+        else:
+            # v1 path (native lib unavailable): flat dataset with REF_DIFF.
+            assert int(seqs.attrs["compression"]) == int(Compression.REF_DIFF), (
+                f"expected REF_DIFF ({int(Compression.REF_DIFF)}), "
+                f"got {int(seqs.attrs['compression'])}"
+            )
 
 
 def test_default_v1_5_skipped_when_no_reference(tmp_path):

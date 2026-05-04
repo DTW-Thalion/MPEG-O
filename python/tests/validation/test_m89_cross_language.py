@@ -92,17 +92,6 @@ def _write_python_source(path: Path) -> Path:
         mate_positions=np.full(n_reads, -1, dtype=np.int64),
         template_lengths=np.zeros(n_reads, dtype=np.int32),
         chromosomes=list(_FIXTURE_CHROMOSOMES),
-        # v1.7 Task #12: ObjC/Java transport CLIs read the v1 mate_info
-        # subgroup layout (chrom/pos/tlen child datasets). The inline_v2
-        # blob format (Task #12) has not been wired into those tools yet.
-        # Opt out so the cross-language transport test keeps using v1.
-        opt_disable_inline_mate_info_v2=True,
-        # v1.8 #11 ch3 Task #12: Java's TransportEncodeCli loads
-        # libttio_rans (the C lib) but not libttio_rans_jni (the JNI
-        # shim that exposes decodeNameTokV2Native). Until the
-        # transport CLIs grow JNI dependency awareness, keep the
-        # M82 compound layout for the cross-language transport matrix.
-        opt_disable_name_tokenized_v2=True,
     )
     SpectralDataset.write_minimal(
         path,

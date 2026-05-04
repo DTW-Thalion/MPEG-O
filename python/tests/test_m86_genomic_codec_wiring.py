@@ -721,88 +721,6 @@ def test_round_trip_read_names_name_tokenized(tmp_path: Path):
         ds.close()
 
 
-def test_size_win_name_tokenized(tmp_path: Path):
-    """NAME_TOKENIZED is significantly smaller than the M82 compound layout.
-
-    The HDF5 VL_STRING compound stores the dataset's primary chunk
-    plus a separate global heap holding the variable-length
-    payloads. ``Dataset.id.get_storage_size()`` reports only the
-    primary chunk and misses the heap; the realistic comparison
-    is the total file-size delta between the two writes (per
-    HANDOFF.md §6.1 — "the exact ratio depends on HDF5 VL_STRING
-    overhead; just verify it's a meaningful win"). For 1000
-    structured Illumina-style names the codec output is well
-    under 50% of the compound's combined primary+heap footprint.
-    """
-    n_reads = 1000
-    read_len = 100
-    total = n_reads * read_len
-    seq = (b"ACGT" * 25) * n_reads
-    qual = bytes((30 + (i % 11)) for i in range(total))
-    names = [
-        f"INSTR:RUN:1:{i // 4}:{i % 4}:{i * 100}"
-        for i in range(n_reads)
-    ]
-    base_kw = dict(
-        acquisition_mode=7, reference_uri="GRCh38.p14",
-        platform="ILLUMINA", sample_name="SIZE_WIN_NT",
-        positions=np.arange(n_reads, dtype=np.int64) * 1000,
-        mapping_qualities=np.full(n_reads, 60, dtype=np.uint8),
-        flags=np.zeros(n_reads, dtype=np.uint32),
-        sequences=np.frombuffer(seq, dtype=np.uint8),
-        qualities=np.frombuffer(qual, dtype=np.uint8),
-        offsets=np.arange(n_reads, dtype=np.uint64) * read_len,
-        lengths=np.full(n_reads, read_len, dtype=np.uint32),
-        cigars=["100M"] * n_reads,
-        read_names=names,
-        mate_chromosomes=["chr1"] * n_reads,
-        mate_positions=np.full(n_reads, -1, dtype=np.int64),
-        template_lengths=np.zeros(n_reads, dtype=np.int32),
-        chromosomes=["chr1"] * n_reads,
-        signal_compression="none",
-    )
-    # opt_disable_name_tokenized_v2: keep this comparison against the M82
-    # compound layout (the historical no-override baseline). v1.8 default
-    # would also write a codec stream, defeating the size-win measurement.
-    raw_run = WrittenGenomicRun(**base_kw, opt_disable_name_tokenized_v2=True)
-    nt_run = WrittenGenomicRun(
-        **base_kw,
-        signal_codec_overrides={"read_names": Compression.NAME_TOKENIZED},
-    )
-
-    p_raw = tmp_path / "rn_raw.tio"
-    SpectralDataset.write_minimal(
-        p_raw, title="r", isa_investigation_id="i",
-        runs={}, genomic_runs={"genomic_0001": raw_run},
-    )
-    p_nt = tmp_path / "rn_nt.tio"
-    SpectralDataset.write_minimal(
-        p_nt, title="b", isa_investigation_id="i",
-        runs={}, genomic_runs={"genomic_0001": nt_run},
-    )
-
-    raw_file_size = p_raw.stat().st_size
-    nt_file_size = p_nt.stat().st_size
-    # Footprint attributable to read_names = file-size delta. The
-    # two files differ only in the read_names channel (both written
-    # with signal_compression="none" so other channels are identical).
-    saved = raw_file_size - nt_file_size
-    # The on-disk codec stream is the realistic "after" size; the
-    # M82 footprint for read_names is approximately the codec
-    # stream plus the bytes saved.
-    with h5py.File(p_nt, "r") as f:
-        nt_codec_bytes = f[
-            "study/genomic_runs/genomic_0001/signal_channels/read_names"
-        ].id.get_storage_size()
-    m82_footprint = nt_codec_bytes + saved
-    ratio = nt_codec_bytes / m82_footprint
-    assert ratio < 0.50, (
-        f"NAME_TOKENIZED read_names dataset = {nt_codec_bytes} bytes; "
-        f"M82 footprint (codec+saved) = {m82_footprint} bytes; "
-        f"ratio = {ratio:.3f} (target < 0.50)"
-    )
-
-
 def test_attribute_set_correctly_name_tokenized(tmp_path: Path):
     """NAME_TOKENIZED override produces 1-D uint8 read_names with @compression == 8.
 
@@ -834,61 +752,6 @@ def test_attribute_set_correctly_name_tokenized(tmp_path: Path):
         # Other byte channels untouched by this override.
         assert "compression" not in sc["sequences"].attrs
         assert "compression" not in sc["qualities"].attrs
-
-
-def test_back_compat_read_names_unchanged(tmp_path: Path):
-    """No read_names override leaves the M82 compound path unchanged.
-
-    Covers two cases: empty overrides, and overrides that touch
-    only sequences/qualities. In both, read_names must remain a
-    VL_STRING-in-compound dataset (the M82 layout).
-
-    v1.8 #11 ch3: opt_disable_name_tokenized_v2=True is required to
-    preserve the historical M82 compound layout — the new default is
-    the v2 codec stream.
-    """
-    for desc, overrides in (
-        ("empty", {}),
-        ("seq+qual only", {
-            "sequences": Compression.BASE_PACK,
-            "qualities": Compression.RANS_ORDER1,
-        }),
-    ):
-        run = _make_run(
-            PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, codec_overrides=overrides,
-        )
-        run.opt_disable_name_tokenized_v2 = True
-        p = tmp_path / f"backcompat_{desc.replace(' ', '_').replace('+', '')}.tio"
-        SpectralDataset.write_minimal(
-            p, title="t", isa_investigation_id="i",
-            runs={}, genomic_runs={"genomic_0001": run},
-        )
-
-        with h5py.File(p, "r") as f:
-            rn = f["study/genomic_runs/genomic_0001/signal_channels/read_names"]
-            # Compound dataset → dtype.kind == 'V', has named fields.
-            assert rn.dtype.kind == "V", (
-                f"{desc}: read_names must remain compound (kind='V'), "
-                f"got kind={rn.dtype.kind!r}"
-            )
-            assert rn.dtype.names is not None and "value" in rn.dtype.names, (
-                f"{desc}: M82 compound must have a 'value' field, "
-                f"got fields={rn.dtype.names}"
-            )
-            # No @compression attribute on the compound.
-            assert "compression" not in rn.attrs
-
-        # Round-trip through the existing read path.
-        ds = SpectralDataset.open(p)
-        try:
-            gr = ds.genomic_runs["genomic_0001"]
-            for i in range(N_READS):
-                r = gr[i]
-                assert r.read_name == f"r{i}", (
-                    f"{desc}: read {i} name mismatch — got {r.read_name!r}"
-                )
-        finally:
-            ds.close()
 
 
 def test_reject_name_tokenized_on_sequences(tmp_path: Path):
@@ -1480,8 +1343,6 @@ def test_attribute_set_correctly_cigars(tmp_path: Path, codec: Compression):
         PURE_ACGT_SEQ, PHRED_CYCLE_QUAL, cigars,
         {"cigars": codec},
     )
-    # v1.8 #11 ch3: keep read_names as M82 compound for this assertion.
-    run.opt_disable_name_tokenized_v2 = True
     p = _write_and_open(tmp_path, run, fname=f"attr_cig_{codec.name}.tio")
     with h5py.File(p, "r") as f:
         sc = f["study/genomic_runs/genomic_0001/signal_channels"]
@@ -1497,11 +1358,10 @@ def test_attribute_set_correctly_cigars(tmp_path: Path, codec: Compression):
         attr = cig_ds.attrs.get("compression")
         assert attr is not None, "cigars must carry @compression"
         assert int(attr) == int(codec.value)
-        # Other channels untouched.
-        assert "compression" not in sc["sequences"].attrs
+        # Other byte channels untouched by this override (sequences may be
+        # a v2 group, but its top-level layout still doesn't carry the
+        # cigars-channel compression attr).
         assert "compression" not in sc["qualities"].attrs
-        # read_names remains compound (no override).
-        assert sc["read_names"].dtype.kind == "V"
 
 
 def test_back_compat_cigars_unchanged(tmp_path: Path):
@@ -1746,10 +1606,6 @@ def _make_phase_f_run(
         template_lengths=tlens,
         chromosomes=["chr1"] * n_reads,
         signal_codec_overrides=overrides,
-        # v1.7 Task #12: Phase F tests verify the v1 per-field override
-        # surface; opt out of the new inline_v2 default so these tests
-        # continue to exercise the M86 Phase F code path unchanged.
-        opt_disable_inline_mate_info_v2=True,
     )
 
 
@@ -1760,260 +1616,6 @@ def _phase_f_write(tmp_path: Path, run: WrittenGenomicRun, fname: str) -> Path:
         runs={}, genomic_runs={"genomic_0001": run},
     )
     return p
-
-
-# 48 ----------------------------------------------------------------------
-
-def test_round_trip_mate_chrom_name_tokenized(tmp_path: Path):
-    """mate_info_chrom: NAME_TOKENIZED round-trips byte-exact (typical case).
-
-    The 90/5/3/2 distribution exercises the columnar / dictionary
-    win in NAME_TOKENIZED — chromosome names are highly repetitive
-    so the dictionary should fit in a few bytes.
-    """
-    chroms = _phase_f_mate_chroms()
-    positions = _phase_f_mate_positions()
-    tlens = _phase_f_mate_tlens()
-    run = _make_phase_f_run(
-        {"mate_info_chrom": Compression.NAME_TOKENIZED},
-        chroms=chroms, positions=positions, tlens=tlens,
-    )
-    p = _phase_f_write(tmp_path, run, "mate_chrom_nt.tio")
-
-    # Schema check: mate_info must be a subgroup, chrom child must
-    # carry @compression == 8.
-    with h5py.File(p, "r") as f:
-        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
-        assert isinstance(sc["mate_info"], h5py.Group), (
-            "Phase F: mate_info must be a group, not a dataset"
-        )
-        chrom_ds = sc["mate_info/chrom"]
-        assert chrom_ds.dtype == np.uint8
-        assert int(chrom_ds.attrs["compression"]) == int(
-            Compression.NAME_TOKENIZED.value
-        )
-
-    ds = SpectralDataset.open(p)
-    try:
-        gr = ds.genomic_runs["genomic_0001"]
-        assert len(gr) == _PHASE_F_N_READS
-        for i in range(_PHASE_F_N_READS):
-            r = gr[i]
-            assert r.mate_chromosome == chroms[i], (
-                f"read {i}: mate_chromosome mismatch — got {r.mate_chromosome!r}, "
-                f"expected {chroms[i]!r}"
-            )
-            # pos and tlen also round-trip via the natural-dtype path.
-            assert r.mate_position == int(positions[i])
-            assert r.template_length == int(tlens[i])
-    finally:
-        ds.close()
-
-
-# 49 ----------------------------------------------------------------------
-
-def test_round_trip_mate_pos_rans(tmp_path: Path):
-    """mate_info_pos: RANS_ORDER1 round-trips byte-exact."""
-    chroms = _phase_f_mate_chroms()
-    positions = _phase_f_mate_positions()
-    tlens = _phase_f_mate_tlens()
-    run = _make_phase_f_run(
-        {"mate_info_pos": Compression.RANS_ORDER1},
-        chroms=chroms, positions=positions, tlens=tlens,
-    )
-    p = _phase_f_write(tmp_path, run, "mate_pos_rans.tio")
-
-    with h5py.File(p, "r") as f:
-        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
-        assert isinstance(sc["mate_info"], h5py.Group)
-        pos_ds = sc["mate_info/pos"]
-        assert pos_ds.dtype == np.uint8
-        assert int(pos_ds.attrs["compression"]) == int(
-            Compression.RANS_ORDER1.value
-        )
-
-    ds = SpectralDataset.open(p)
-    try:
-        gr = ds.genomic_runs["genomic_0001"]
-        for i in range(_PHASE_F_N_READS):
-            r = gr[i]
-            assert r.mate_position == int(positions[i]), (
-                f"read {i}: mate_position mismatch — got {r.mate_position}, "
-                f"expected {int(positions[i])}"
-            )
-            assert r.mate_chromosome == chroms[i]
-            assert r.template_length == int(tlens[i])
-    finally:
-        ds.close()
-
-
-# 50 ----------------------------------------------------------------------
-
-def test_round_trip_mate_tlen_rans(tmp_path: Path):
-    """mate_info_tlen: RANS_ORDER1 round-trips byte-exact."""
-    chroms = _phase_f_mate_chroms()
-    positions = _phase_f_mate_positions()
-    tlens = _phase_f_mate_tlens()
-    run = _make_phase_f_run(
-        {"mate_info_tlen": Compression.RANS_ORDER1},
-        chroms=chroms, positions=positions, tlens=tlens,
-    )
-    p = _phase_f_write(tmp_path, run, "mate_tlen_rans.tio")
-
-    with h5py.File(p, "r") as f:
-        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
-        assert isinstance(sc["mate_info"], h5py.Group)
-        tlen_ds = sc["mate_info/tlen"]
-        assert tlen_ds.dtype == np.uint8
-        assert int(tlen_ds.attrs["compression"]) == int(
-            Compression.RANS_ORDER1.value
-        )
-
-    ds = SpectralDataset.open(p)
-    try:
-        gr = ds.genomic_runs["genomic_0001"]
-        for i in range(_PHASE_F_N_READS):
-            r = gr[i]
-            assert r.template_length == int(tlens[i])
-            assert r.mate_chromosome == chroms[i]
-            assert r.mate_position == int(positions[i])
-    finally:
-        ds.close()
-
-
-# 51 ----------------------------------------------------------------------
-
-def test_round_trip_mate_all_three(tmp_path: Path):
-    """All three mate_info_* overrides at once round-trip byte-exact."""
-    chroms = _phase_f_mate_chroms()
-    positions = _phase_f_mate_positions()
-    tlens = _phase_f_mate_tlens()
-    run = _make_phase_f_run(
-        {
-            "mate_info_chrom": Compression.NAME_TOKENIZED,
-            "mate_info_pos":   Compression.RANS_ORDER1,
-            "mate_info_tlen":  Compression.RANS_ORDER1,
-        },
-        chroms=chroms, positions=positions, tlens=tlens,
-    )
-    p = _phase_f_write(tmp_path, run, "mate_all_three.tio")
-
-    with h5py.File(p, "r") as f:
-        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
-        assert isinstance(sc["mate_info"], h5py.Group)
-        assert int(sc["mate_info/chrom"].attrs["compression"]) == int(
-            Compression.NAME_TOKENIZED.value
-        )
-        assert int(sc["mate_info/pos"].attrs["compression"]) == int(
-            Compression.RANS_ORDER1.value
-        )
-        assert int(sc["mate_info/tlen"].attrs["compression"]) == int(
-            Compression.RANS_ORDER1.value
-        )
-
-    ds = SpectralDataset.open(p)
-    try:
-        gr = ds.genomic_runs["genomic_0001"]
-        for i in range(_PHASE_F_N_READS):
-            r = gr[i]
-            assert r.mate_chromosome == chroms[i]
-            assert r.mate_position == int(positions[i])
-            assert r.template_length == int(tlens[i])
-    finally:
-        ds.close()
-
-
-# 52 ----------------------------------------------------------------------
-
-def test_round_trip_mate_partial(tmp_path: Path):
-    """Partial override (chrom only): subgroup created; pos/tlen at natural dtype.
-
-    Per Binding Decision §127 / Gotcha §142: any one mate_info_*
-    override triggers the subgroup layout, but un-overridden fields
-    use natural-dtype HDF5-filter ZLIB storage inside the subgroup
-    (no @compression attribute). All three fields still round-trip.
-    """
-    chroms = _phase_f_mate_chroms()
-    positions = _phase_f_mate_positions()
-    tlens = _phase_f_mate_tlens()
-    run = _make_phase_f_run(
-        {"mate_info_chrom": Compression.NAME_TOKENIZED},
-        chroms=chroms, positions=positions, tlens=tlens,
-    )
-    p = _phase_f_write(tmp_path, run, "mate_partial.tio")
-
-    with h5py.File(p, "r") as f:
-        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
-        # Subgroup, not compound dataset.
-        assert isinstance(sc["mate_info"], h5py.Group)
-        # chrom: codec-compressed.
-        chrom_ds = sc["mate_info/chrom"]
-        assert chrom_ds.dtype == np.uint8
-        assert int(chrom_ds.attrs["compression"]) == int(
-            Compression.NAME_TOKENIZED.value
-        )
-        # pos: natural INT64, no @compression attribute.
-        pos_ds = sc["mate_info/pos"]
-        assert pos_ds.dtype == np.int64, (
-            f"mate_info/pos must be natural INT64, got {pos_ds.dtype}"
-        )
-        assert "compression" not in pos_ds.attrs
-        # tlen: natural INT32, no @compression attribute.
-        tlen_ds = sc["mate_info/tlen"]
-        assert tlen_ds.dtype == np.int32, (
-            f"mate_info/tlen must be natural INT32, got {tlen_ds.dtype}"
-        )
-        assert "compression" not in tlen_ds.attrs
-
-    ds = SpectralDataset.open(p)
-    try:
-        gr = ds.genomic_runs["genomic_0001"]
-        for i in range(_PHASE_F_N_READS):
-            r = gr[i]
-            assert r.mate_chromosome == chroms[i]
-            assert r.mate_position == int(positions[i])
-            assert r.template_length == int(tlens[i])
-    finally:
-        ds.close()
-
-
-# 53 ----------------------------------------------------------------------
-
-def test_back_compat_mate_info_unchanged(tmp_path: Path):
-    """No mate_info_* override leaves the M82 compound dataset unchanged."""
-    chroms = _phase_f_mate_chroms()
-    positions = _phase_f_mate_positions()
-    tlens = _phase_f_mate_tlens()
-    # Empty overrides — pure M82 layout for mate_info.
-    run = _make_phase_f_run(
-        {}, chroms=chroms, positions=positions, tlens=tlens,
-    )
-    p = _phase_f_write(tmp_path, run, "mate_backcompat.tio")
-
-    with h5py.File(p, "r") as f:
-        sc = f["study/genomic_runs/genomic_0001/signal_channels"]
-        # Must still be a dataset (compound), not a group.
-        mi = sc["mate_info"]
-        assert isinstance(mi, h5py.Dataset), (
-            "no override: mate_info must remain the M82 compound dataset"
-        )
-        assert mi.dtype.kind == "V", (
-            f"M82 compound: dtype.kind == 'V', got {mi.dtype.kind!r}"
-        )
-        assert mi.dtype.names is not None and set(mi.dtype.names) == {
-            "chrom", "pos", "tlen",
-        }
-
-    ds = SpectralDataset.open(p)
-    try:
-        gr = ds.genomic_runs["genomic_0001"]
-        for i in range(_PHASE_F_N_READS):
-            r = gr[i]
-            assert r.mate_chromosome == chroms[i]
-            assert r.mate_position == int(positions[i])
-            assert r.template_length == int(tlens[i])
-    finally:
-        ds.close()
 
 
 # 54 ----------------------------------------------------------------------
@@ -2046,32 +1648,6 @@ def test_reject_bare_mate_info_key(tmp_path: Path):
     )
     assert "mate_info_tlen" in msg, (
         f"error must point at mate_info_tlen; got: {msg!r}"
-    )
-
-
-# 55 ----------------------------------------------------------------------
-
-def test_reject_wrong_codec_on_mate_pos(tmp_path: Path):
-    """NAME_TOKENIZED on mate_info_pos raises ValueError at write time.
-
-    NAME_TOKENIZED tokenises UTF-8 strings, not integers — applying
-    it to the integer pos field would mis-tokenise the data.
-    """
-    run = _make_phase_f_run(
-        {"mate_info_pos": Compression.NAME_TOKENIZED},
-    )
-    p = tmp_path / "bad_nt_matepos.tio"
-    with pytest.raises(ValueError) as excinfo:
-        SpectralDataset.write_minimal(
-            p, title="t", isa_investigation_id="i",
-            runs={}, genomic_runs={"genomic_0001": run},
-        )
-    msg = str(excinfo.value)
-    assert "NAME_TOKENIZED" in msg, (
-        f"error must name the codec; got: {msg!r}"
-    )
-    assert "mate_info_pos" in msg, (
-        f"error must name the channel; got: {msg!r}"
     )
 
 

@@ -54,11 +54,6 @@ def _make_genomic_dataset(path: Path) -> Path:
         mate_positions=np.array([350, 200, 0, -1], dtype=np.int64),
         template_lengths=np.array([250, 0, -300, 0], dtype=np.int32),
         chromosomes=["chr1", "chr1", "chr2", "chr2"],
-        # v1.7 Task #12: opt out of inline_v2 so the M90.9 transport
-        # round-trip test can verify the v1 compound layout with "=" and ""
-        # preserved verbatim (the v2 codec normalises these to actual chrom
-        # names and "*" respectively).
-        opt_disable_inline_mate_info_v2=True,
     )
     SpectralDataset.write_minimal(
         path,
