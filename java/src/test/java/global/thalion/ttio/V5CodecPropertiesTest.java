@@ -1,7 +1,6 @@
 package global.thalion.ttio;
 
 import global.thalion.ttio.codecs.BasePack;
-import global.thalion.ttio.codecs.NameTokenizer;
 import global.thalion.ttio.codecs.Quality;
 import global.thalion.ttio.codecs.Rans;
 
@@ -32,9 +31,6 @@ import java.util.List;
  *   <li>{@link BasePack#encode(byte[])} / {@link BasePack#decode(byte[])}
  *       — round-trips ANY byte sequence losslessly via the sidecar
  *       mask (M84 binding decision §81).</li>
- *   <li>{@link NameTokenizer#encode(List)} /
- *       {@link NameTokenizer#decode(byte[])} — round-trips any list of
- *       printable-ASCII strings.</li>
  *   <li>{@link Quality#encode(byte[])} / {@link Quality#decode(byte[])}
  *       — lossy bin-quantised round-trip; per-byte error bounded by
  *       the Illumina-8 worst case (215 = 255 − 40).</li>
@@ -165,21 +161,9 @@ public class V5CodecPropertiesTest {
         return Arrays.equals(decoded, data);
     }
 
-    // ── NAME_TOKENIZED ────────────────────────────────────────────────────
-
-    @Property
-    boolean nameTokenizedRoundTrip(@ForAll("arbitraryNameList") List<String> names) {
-        byte[] encoded = NameTokenizer.encode(names);
-        List<String> decoded = NameTokenizer.decode(encoded);
-        return decoded.equals(names);
-    }
-
-    @Property
-    boolean nameTokenizedEmptyListRoundTrip() {
-        byte[] encoded = NameTokenizer.encode(new ArrayList<>());
-        List<String> decoded = NameTokenizer.decode(encoded);
-        return decoded.isEmpty();
-    }
+    // ── NAME_TOKENIZED — removed in Phase 2c (v1 codec id 8 deleted) ────
+    // The v2 codec (NameTokenizerV2, codec id 15) is exercised by
+    // NameTokenizerV2Test; no jqwik property suite here yet.
 
     // ── QUALITY_BINNED ────────────────────────────────────────────────────
 

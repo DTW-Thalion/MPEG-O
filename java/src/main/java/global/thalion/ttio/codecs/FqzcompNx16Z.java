@@ -774,7 +774,9 @@ public final class FqzcompNx16Z {
             throw new IllegalStateException(
                 "decodeV4Internal called but libttio_rans_jni not loaded");
         }
-        if (encoded.length < 30 || encoded[0] != 'M' || encoded[1] != '9'
+        // Minimum stream is the 26-byte empty-V4 header (Phase 2c
+        // empty-run convention shared with Python + ObjC).
+        if (encoded.length < 26 || encoded[0] != 'M' || encoded[1] != '9'
             || encoded[2] != '4' || encoded[3] != 'Z' || encoded[4] != 4) {
             throw new IllegalArgumentException("not an M94.Z V4 stream");
         }
@@ -787,6 +789,13 @@ public final class FqzcompNx16Z {
         }
         int nQual  = (int) numQual;
         int nReads = (int) numReads;
+        // Empty-run short-circuit (Phase 2c reconciliation): the 26-byte
+        // minimal V4 header carries no body; return empty result without
+        // dispatching to the native fqzcomp_qual core (which rejects
+        // zero-length inputs).
+        if (nQual == 0 && nReads == 0) {
+            return new DecodeResult(new byte[0], new int[0]);
+        }
         if (revcompFlags == null) revcompFlags = new int[nReads];
         if (revcompFlags.length != nReads) {
             throw new IllegalArgumentException(
@@ -843,50 +852,57 @@ public final class FqzcompNx16Z {
 
         int n = qualities.length;
         int padCount = (-n) & 3;
+
+        // v1.0 reset Phase 2c: only V4 (CRAM 3.1 fqzcomp_qual) is
+        // emitted now. The V1 (pure-Java) and V2 (libttio_rans body)
+        // encoder dispatch paths were removed. The opts.preferV4 and
+        // opts.preferNative knobs are accepted for API compatibility
+        // but only the V4 path is exercised. Requires libttio_rans_jni
+        // to be loaded; raises IllegalStateException otherwise.
+        if (!TtioRansNative.isAvailable()) {
+            throw new IllegalStateException(
+                "FQZCOMP_NX16_Z encode requires the native libttio_rans "
+                + "library to be linked. Build with -Dttio.native=true "
+                + "or install the native package. (The V1 / V2 encoder "
+                + "fallback paths were removed in Phase 2c — only V4 "
+                + "(CRAM 3.1 fqzcomp_qual) is emitted in v1.0+.)");
+        }
+        // Empty-run short-circuit (Phase 2c reconciliation): the native
+        // V4 fqzcomp_qual core rejects zero-length inputs. Synthesise a
+        // minimal 26-byte V4 outer header so readers can still dispatch
+        // by version byte. Layout per m94z_v4_wire.h: magic(4) +
+        // version(1) + flags(1) + num_qualities(8) + num_reads(8) +
+        // rlt_compressed_len(4) = 26 bytes total. Cross-language
+        // convention shared with Python and ObjC.
+        if (n == 0) {
+            byte[] hdr = new byte[26];
+            hdr[0] = 'M'; hdr[1] = '9'; hdr[2] = '4'; hdr[3] = 'Z';
+            hdr[4] = 4;                       // VERSION_V4_FQZCOMP
+            hdr[5] = (byte) ((padCount & 0x3) << 4);
+            // num_qualities (LE uint64) at offset 6 — already zero
+            // num_reads     (LE uint64) at offset 14 — already zero
+            // rlt_compressed_len (LE uint32) at offset 22 — already zero
+            return hdr;
+        }
+        int strategy = (opts != null && opts.v4StrategyHint != null)
+            ? opts.v4StrategyHint : -1;
+        return encodeV4Internal(qualities, readLengths, revcompFlags,
+                                 strategy, padCount);
+    }
+
+    /** v1.0 reset Phase 2c: dead-code body of the pre-V4 encoder.
+     *  Kept as a static final no-op to satisfy refs to internal
+     *  helpers (normaliseToTotal, buildContextSeq, etc.) that the
+     *  V4 path doesn't need; will be removed in a follow-up dead-
+     *  helper sweep. The original V1 + V2 encoder bodies follow
+     *  but are unreachable from the public encode() entry point. */
+    @SuppressWarnings({"unused", "PMD"})
+    private static byte[] _encodeV1V2Removed_dead(
+            byte[] qualities, int[] readLengths, int[] revcompFlags,
+            ContextParams params, EncodeOptions opts) {
+        int n = qualities.length;
+        int padCount = (-n) & 3;
         int nPadded = n + padCount;
-
-        // ── V4 (CRAM 3.1 fqzcomp) dispatch decision ─────────────────
-        // V4 is the new default whenever libttio_rans_jni is loaded.
-        // Per-call opts.preferV4 wins; otherwise consult the
-        // TTIO_M94Z_VERSION env var; otherwise default to V4 if JNI
-        // is available. preferV4=FALSE forces the pre-V4 (V1/V2) path.
-        Boolean preferV4 = (opts != null) ? opts.preferV4 : null;
-        if (preferV4 == null) {
-            String env = System.getenv(ENV_VERSION_OVERRIDE);
-            if ("4".equals(env)) {
-                preferV4 = Boolean.TRUE;
-            } else if (env != null
-                && (env.equals("1") || env.equals("2") || env.equals("3"))) {
-                preferV4 = Boolean.FALSE;
-            } else {
-                preferV4 = TtioRansNative.isAvailable();
-            }
-        }
-        if (preferV4 && TtioRansNative.isAvailable()) {
-            int strategy = (opts != null && opts.v4StrategyHint != null)
-                ? opts.v4StrategyHint : -1;
-            return encodeV4Internal(qualities, readLengths, revcompFlags,
-                                     strategy, padCount);
-        }
-
-        // ── V2 native dispatch decision ─────────────────────────────
-        boolean preferNative;
-        if (opts != null && opts.preferNative != null) {
-            preferNative = opts.preferNative;
-        } else {
-            String envVal = System.getenv("TTIO_M94Z_USE_NATIVE");
-            if (envVal == null) {
-                preferNative = false;
-            } else {
-                String v = envVal.trim().toLowerCase(java.util.Locale.ROOT);
-                preferNative = v.equals("1") || v.equals("true")
-                    || v.equals("yes") || v.equals("on");
-            }
-        }
-        if (preferNative && TtioRansNative.isAvailable()) {
-            return encodeV2Native(qualities, readLengths, revcompFlags,
-                                   params, n, nPadded, padCount);
-        }
 
         // Pad qualities to nPadded with sym=0 — drops the per-iteration
         // {@code (i < n) ? qualities[i] : 0} branch from both pass 1
@@ -1174,9 +1190,30 @@ public final class FqzcompNx16Z {
         if (versionByte == VERSION_V4_FQZCOMP) {
             return decodeV4Internal(encoded, revcompFlags);
         }
-        if (versionByte == VERSION_V2_NATIVE) {
-            return decodeV2(encoded, revcompFlags);
+        // v1.0 reset Phase 2c: V1 (pure-Java rANS-Nx16) and V2
+        // (libttio_rans body) decoder dispatch removed. Files written
+        // with those internal flavours are no longer decodable; callers
+        // must re-encode through V4 (CRAM 3.1 fqzcomp_qual).
+        if (versionByte == VERSION || versionByte == VERSION_V2_NATIVE
+                || versionByte == 3 /* V3 = adaptive Range Coder */) {
+            throw new IllegalStateException(
+                "FQZCOMP_NX16_Z V1/V2/V3 are no longer supported in "
+                + "v1.0; only V4 (CRAM 3.1 fqzcomp_qual) is decoded. "
+                + "Re-encode the file with v1.0+. (Got version byte "
+                + versionByte + ".)");
         }
+        throw new IllegalArgumentException(
+            "M94Z unsupported version byte: " + versionByte
+            + " (only V4 = 4 is recognised in v1.0+)");
+    }
+
+    /** v1.0 reset Phase 2c: dead-code body of the pre-V4 decoder.
+     *  The V1 body that follows is unreachable from the public
+     *  decode() entry point; will be removed in a follow-up dead-
+     *  helper sweep. */
+    @SuppressWarnings({"unused", "PMD"})
+    private static DecodeResult _decodeV1V2Removed_dead(
+            byte[] encoded, int[] revcompFlags) {
         HeaderUnpack hu = unpackCodecHeader(encoded);
         CodecHeader header = hu.header;
         int headerSize = hu.bytesConsumed;

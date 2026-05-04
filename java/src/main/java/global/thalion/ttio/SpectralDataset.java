@@ -799,24 +799,27 @@ public class SpectralDataset implements
             WrittenGenomicRun run) {
         // M86 Phase D/E/B: per-channel allowed-codec map (Gotcha §119).
         // Sequences accepts RANS+BASE_PACK; qualities additionally
-        // accepts QUALITY_BINNED. Phase E adds read_names which only
-        // accepts NAME_TOKENIZED (Binding Decision §113). Phase B adds
+        // accepts QUALITY_BINNED. Phase B adds
         // positions/flags/mapping_qualities which accept ONLY the rANS
-        // codecs (Binding Decision §117 — BASE_PACK / QUALITY_BINNED /
-        // NAME_TOKENIZED would silently corrupt the integer values).
+        // codecs (Binding Decision §117 — BASE_PACK / QUALITY_BINNED
+        // would silently corrupt the integer values).
         // Runs BEFORE any group/dataset is created so the file is
         // untouched on a bad override (Gotcha §96 — no half-written run).
+        //
+        // v1.0 reset Phase 2c: read_names + mate_info_* + cigars
+        // NAME_TOKENIZED entries removed. read_names is now v2-only
+        // (no override surface — v2 is the auto-default and only path).
+        // mate_info is v2-only (inline_v2 blob; the v1 per-field
+        // subgroup writer is gone). cigars retains rANS only; the v1
+        // NAME_TOKENIZED codec was deleted. REF_DIFF (id 9) override
+        // for sequences was also deleted — REF_DIFF_V2 is the
+        // auto-default when a reference is available.
         java.util.Map<String, java.util.Set<Enums.Compression>>
             allowedCodecsByChannel = java.util.Map.of(
                 "sequences", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
                     Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.BASE_PACK,
-                    // M93 v1.2: REF_DIFF is context-aware. Caller-side
-                    // validation here only checks codec applicability;
-                    // the writer plumbs positions, cigars, and
-                    // referenceChromSeqs through to RefDiff.encode().
-                    Enums.Compression.REF_DIFF),
+                    Enums.Compression.BASE_PACK),
                 "qualities", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
                     Enums.Compression.RANS_ORDER1,
@@ -824,40 +827,20 @@ public class SpectralDataset implements
                     Enums.Compression.QUALITY_BINNED,
                     // M94.Z v1.2: CRAM-mimic rANS-Nx16 quality codec.
                     Enums.Compression.FQZCOMP_NX16_Z),
-                "read_names", java.util.Set.of(
-                    Enums.Compression.NAME_TOKENIZED),
                 "cigars", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.NAME_TOKENIZED),
+                    Enums.Compression.RANS_ORDER1));
                 // v1.6: positions / flags / mapping_qualities REMOVED
                 // from the override surface. These per-record integer
                 // fields live only in genomic_index/ now (mirroring
                 // MS's spectrum_index/ pattern). The droppedIntChannels
                 // set below catches the keys with a clear v1.6 error
                 // pointing at genomic_index/.
-                // M86 Phase F: per-field decomposition of the M82
-                // mate_info compound dataset. The bare key "mate_info"
-                // is reserved and rejected (Binding Decision §126);
-                // callers must use the three per-field virtual channel
-                // names. The chrom field accepts the same codec set as
-                // cigars (Binding Decision §130). The pos and tlen
-                // fields are integer channels and accept the same
-                // codec set as positions/flags (§117 generalised).
-                "mate_info_chrom", java.util.Set.of(
-                    Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.NAME_TOKENIZED),
-                "mate_info_pos", java.util.Set.of(
-                    Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.DELTA_RANS_ORDER0),
-                "mate_info_tlen", java.util.Set.of(
-                    Enums.Compression.RANS_ORDER0,
-                    Enums.Compression.RANS_ORDER1,
-                    Enums.Compression.DELTA_RANS_ORDER0));
-        java.util.Set<String> integerChannelNames = java.util.Set.of(
-            "mate_info_pos", "mate_info_tlen");
+                // v1.0 reset Phase 2c: read_names + mate_info_* keys
+                // removed entirely from the override surface (rejected
+                // below by the unconditional reject branches and the
+                // generic "channel not supported" branch).
+        java.util.Set<String> integerChannelNames = java.util.Set.of();
         // v1.6: per-record integer metadata channels removed from the
         // signal_channels/ override surface. They live exclusively
         // under genomic_index/ now. Hard-error so callers with stale
@@ -876,46 +859,79 @@ public class SpectralDataset implements
                     + "The override no longer applies. See "
                     + "docs/format-spec.md §4 and §10.7.");
             }
-            // v1.0 reset Phase 2b: mate_info v2 (inline_v2) is the only
-            // path; the v1 per-field override surface no longer reaches
-            // a writer code path. Reject mate_info_* keys outright when
-            // the native lib is available — they cannot be honoured.
-            if (global.thalion.ttio.codecs.MateInfoV2.isAvailable()
-                    && (chName.equals("mate_info_chrom")
-                        || chName.equals("mate_info_pos")
-                        || chName.equals("mate_info_tlen"))) {
+            // v1.0 reset Phase 2c: mate_info v2 (inline_v2) is the only
+            // path; the v1 per-field override surface is gone. Reject
+            // mate_info_* keys unconditionally — there is no longer a
+            // writer code path that honours them.
+            if (chName.equals("mate_info_chrom")
+                    || chName.equals("mate_info_pos")
+                    || chName.equals("mate_info_tlen")) {
                 throw new IllegalArgumentException(
                     "signalCodecOverrides['" + chName + "']: "
                     + "mate_info v2 (inline_v2 blob) is the only "
-                    + "supported path; the v1 per-field override keys "
-                    + "(mate_info_chrom / mate_info_pos / mate_info_tlen) "
-                    + "are no longer active.");
+                    + "supported path in v1.0+; the v1 per-field "
+                    + "override keys (mate_info_chrom / mate_info_pos "
+                    + "/ mate_info_tlen) were removed in Phase 2c.");
             }
-            // M86 Phase F Binding Decision §126 / Gotcha §143: the
-            // bare "mate_info" key is reserved and rejected with a
-            // message pointing at the three per-field virtual channel
-            // names. Without this explicit reject, the bare key would
-            // fall through to the generic "channel not supported"
-            // branch and the caller would not learn about the per-
-            // field surface.
+            // v1.0 reset Phase 2c: read_names is v2-only. Reject any
+            // override on read_names (the v1 NAME_TOKENIZED writer
+            // dispatch was removed; v2 is the auto-default and only
+            // supported codec).
+            if ("read_names".equals(chName)) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides['read_names']: read_names is "
+                    + "v2-only in v1.0+ (NAME_TOKENIZED_V2 = 15, the "
+                    + "auto-default). The v1 NAME_TOKENIZED override "
+                    + "(codec id 8) was removed in Phase 2c. Build "
+                    + "with the native libttio_rans library to use "
+                    + "the v2 codec.");
+            }
+            // v1.0 reset Phase 2c: REF_DIFF v1 (codec id 9) writer
+            // dispatch removed. Sequences auto-defaults to REF_DIFF_V2
+            // when a reference is available; explicit REF_DIFF override
+            // is no longer honoured.
+            if ("sequences".equals(chName)
+                    && codec == Enums.Compression.REF_DIFF) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides['sequences']: codec REF_DIFF "
+                    + "(v1, codec id 9) is no longer supported in v1.0+; "
+                    + "the v1 codec was removed in Phase 2c. The "
+                    + "REF_DIFF_V2 path (codec id 14) is selected "
+                    + "automatically when a reference is available; "
+                    + "build with the native libttio_rans library to "
+                    + "enable it.");
+            }
+            // v1.0 reset Phase 2c: NAME_TOKENIZED v1 (codec id 8)
+            // writer dispatch removed for the cigars channel. cigars
+            // accepts only rANS now.
+            if ("cigars".equals(chName)
+                    && codec == Enums.Compression.NAME_TOKENIZED) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides['cigars']: codec "
+                    + "NAME_TOKENIZED (v1, codec id 8) is no longer "
+                    + "supported in v1.0+; the v1 codec was removed "
+                    + "in Phase 2c. Use RANS_ORDER0 or RANS_ORDER1 on "
+                    + "the cigars channel instead.");
+            }
+            // v1.0 reset Phase 2c: the bare "mate_info" key is
+            // rejected; mate_info is v2-only (inline_v2 blob), with
+            // no per-field override surface.
             if ("mate_info".equals(chName)) {
                 throw new IllegalArgumentException(
-                    "signalCodecOverrides['mate_info']: the bare "
-                    + "'mate_info' key is reserved and rejected — "
-                    + "mate_info is decomposed at the per-field level "
-                    + "in M86 Phase F. Use one or more of the three "
-                    + "per-field virtual channel names instead: "
-                    + "'mate_info_chrom', 'mate_info_pos', "
-                    + "'mate_info_tlen'. See docs/format-spec.md §10.9.");
+                    "signalCodecOverrides['mate_info']: the 'mate_info' "
+                    + "key is rejected — mate_info is v2-only "
+                    + "(inline_v2 blob, codec id 13) in v1.0+. The v1 "
+                    + "per-field override surface (mate_info_chrom, "
+                    + "mate_info_pos, mate_info_tlen) was removed in "
+                    + "Phase 2c.");
             }
             if (!allowedCodecsByChannel.containsKey(chName)) {
                 throw new IllegalArgumentException(
                     "signalCodecOverrides: channel '" + chName
-                    + "' not supported (only sequences, qualities, "
-                    + "read_names, cigars, positions, flags, "
-                    + "mapping_qualities, mate_info_chrom, "
-                    + "mate_info_pos, and mate_info_tlen can use "
-                    + "TTIO codecs)");
+                    + "' not supported (in v1.0+ only sequences, "
+                    + "qualities, and cigars accept overrides; "
+                    + "read_names + mate_info are v2-only with no "
+                    + "override surface)");
             }
             java.util.Set<Enums.Compression> allowed =
                 allowedCodecsByChannel.get(chName);
@@ -941,7 +957,11 @@ public class SpectralDataset implements
                 // (sequences|qualities, NAME_TOKENIZED) — names the
                 // codec, the channel, and the wrong-input-type
                 // rationale (codec tokenises UTF-8 strings, not
-                // binary byte streams).
+                // binary byte streams). Phase 2c: NAME_TOKENIZED v1
+                // codec is gone; the message still flags the
+                // wrong-channel pairing first so callers using the
+                // legacy enum value see a clear error before they
+                // hit the "v1 codec removed" reject.
                 if (codec == Enums.Compression.NAME_TOKENIZED
                         && ("sequences".equals(chName)
                             || "qualities".equals(chName))) {
@@ -952,12 +972,11 @@ public class SpectralDataset implements
                         + "tokenises UTF-8 read name strings (digit "
                         + "runs vs string runs), not binary byte "
                         + "streams like ACGT sequence bytes or Phred "
-                        + "quality scores. Applying it to '" + chName
-                        + "' would mis-tokenise the data and fall "
-                        + "back to verbatim, producing nonsensical "
-                        + "compression. Use the 'read_names' channel "
-                        + "for NAME_TOKENIZED, or RANS_ORDER0/"
-                        + "RANS_ORDER1/BASE_PACK on '" + chName + "'.");
+                        + "quality scores. Use RANS_ORDER0/RANS_ORDER1/"
+                        + "BASE_PACK on '" + chName + "'. (Note: the "
+                        + "v1 NAME_TOKENIZED codec was removed in "
+                        + "Phase 2c; read_names auto-defaults to "
+                        + "NAME_TOKENIZED_V2 in v1.0+.)");
                 }
                 // Phase B Binding Decision §117: explicit messages for
                 // wrong-content codecs on integer channels. Each names
@@ -1001,13 +1020,11 @@ public class SpectralDataset implements
                 // strings are 7-bit ASCII per the SAM spec; BASE_PACK
                 // assumes ACGT bytes and QUALITY_BINNED assumes Phred
                 // values, so either would silently corrupt the CIGARs.
-                //
-                // M86 Phase F Binding Decision §130: mate_info_chrom
-                // shares the same codec set as cigars (both are list
-                // of structured ASCII strings), so reuse the same
-                // wrong-content rejection messages.
-                if ("cigars".equals(chName)
-                        || "mate_info_chrom".equals(chName)) {
+                // Phase 2c: NAME_TOKENIZED v1 codec removed, so cigars
+                // accepts only rANS now; the recommendation here drops
+                // NAME_TOKENIZED. mate_info_chrom is rejected upfront
+                // (mate_info subgroup writer is gone in Phase 2c).
+                if ("cigars".equals(chName)) {
                     if (codec == Enums.Compression.BASE_PACK) {
                         throw new IllegalArgumentException(
                             "signalCodecOverrides['" + chName + "']: codec "
@@ -1015,9 +1032,8 @@ public class SpectralDataset implements
                             + chName + "' channel — BASE_PACK 2-bit-packs "
                             + "ACGT sequence bytes and would silently "
                             + "corrupt the structured ASCII strings stored "
-                            + "on this channel. Use RANS_ORDER0, "
-                            + "RANS_ORDER1, or NAME_TOKENIZED on '"
-                            + chName + "'.");
+                            + "on this channel. Use RANS_ORDER0 or "
+                            + "RANS_ORDER1 on '" + chName + "'.");
                     }
                     if (codec == Enums.Compression.QUALITY_BINNED) {
                         throw new IllegalArgumentException(
@@ -1027,9 +1043,8 @@ public class SpectralDataset implements
                             + "quantises Phred quality scores onto an "
                             + "8-bin centre table and would silently "
                             + "destroy the structured ASCII strings stored "
-                            + "on this channel. Use RANS_ORDER0, "
-                            + "RANS_ORDER1, or NAME_TOKENIZED on '"
-                            + chName + "'.");
+                            + "on this channel. Use RANS_ORDER0 or "
+                            + "RANS_ORDER1 on '" + chName + "'.");
                     }
                 }
                 throw new IllegalArgumentException(
@@ -1139,20 +1154,19 @@ public class SpectralDataset implements
                 // is present, replace the M82 compound dataset with a
                 // flat 1-D uint8 dataset of the same name carrying the
                 // codec output, plus an @compression attribute (Binding
-                // Decisions §120-§122). Three codec ids are supported:
+                // Decisions §120-§122). v1.0 reset Phase 2c: only rANS
+                // codecs accepted now (the v1 NAME_TOKENIZED branch was
+                // removed). Two codec ids supported:
                 //   * RANS_ORDER0 / RANS_ORDER1: serialise the CIGAR
                 //     list[String] via length-prefix-concat
                 //     (varint(asciiLen) + asciiBytes per CIGAR — §2.5
                 //     of the Phase C plan), then encode through M83
-                //     rANS. Per Gotcha §139 this is NOT NAME_TOKENIZED's
-                //     verbatim format then rANS-encoded.
-                //   * NAME_TOKENIZED: pass the list[String] directly
-                //     to NameTokenizer.encode (the codec already
-                //     handles list[str] input).
-                // The two layouts are mutually exclusive within a
-                // single run; readers dispatch on dataset shape and the
-                // @compression attribute. No HDF5 filter is applied —
-                // codec output is high-entropy (Binding Decision §87).
+                //     rANS.
+                // The two layouts (override vs M82 compound) are
+                // mutually exclusive within a single run; readers
+                // dispatch on dataset shape and the @compression
+                // attribute. No HDF5 filter is applied — codec output
+                // is high-entropy (Binding Decision §87).
                 if (run.signalCodecOverrides().containsKey("cigars")) {
                     Enums.Compression cigarsCodec =
                         run.signalCodecOverrides().get("cigars");
@@ -1175,26 +1189,44 @@ public class SpectralDataset implements
                 } else {
                     writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
                 }
-                // M86 Phase E + v1.8 #11 ch3: schema lift for read_names
-                // with v2 dispatch. Three layouts (mutually exclusive):
-                //
-                // - NAME_TOKENIZED v1 (codec id 8): flat uint8 dataset.
-                //   Selected when signalCodecOverrides["read_names"] ==
-                //   NAME_TOKENIZED is explicit.
-                // - NAME_TOKENIZED v2 (codec id 15): flat uint8 dataset.
-                //   The v1.0 default — selected when no override is
-                //   present and the native lib is available.
-                // - M82 compound: VL_STRING-in-compound dataset. Selected
-                //   when no override is present and the native lib is
-                //   unavailable.
-                //
-                // Readers dispatch on @compression value (8 vs 15) when
-                // shape is uint8, else fall through to the compound path.
-                Enums.Compression rnOverride =
-                    run.signalCodecOverrides().get("read_names");
-                boolean useRnV2 = rnOverride == null
-                    && global.thalion.ttio.codecs.NameTokenizerV2.isAvailable();
-                if (useRnV2) {
+                // v1.0 reset Phase 2c: read_names is v2-only.
+                // - readCount == 0: short-circuit, write a zero-length
+                //   uint8 dataset with @compression=15 so readers see a
+                //   present-but-empty channel without needing the native
+                //   library. Cross-language convention shared with Python
+                //   and ObjC writers (uniform with the regular layout —
+                //   just length 0).
+                // - readCount > 0 && native lib available: encode via
+                //   NameTokenizerV2 → uint8 dataset with @compression == 15.
+                // - readCount > 0 && native lib unavailable: throw
+                //   IllegalStateException (no fallback in v1.0+; the v1
+                //   M82-compound and v1 NAME_TOKENIZED paths were removed
+                //   in Phase 2c).
+                if (run.readCount() == 0) {
+                    global.thalion.ttio.providers.StorageDataset emptyRn;
+                    try {
+                        emptyRn = sc.createDataset("read_names",
+                            Enums.Precision.UINT8, 0,
+                            0, Enums.Compression.NONE, 0);
+                    } catch (UnsupportedOperationException e) {
+                        emptyRn = sc.createDataset("read_names",
+                            Enums.Precision.UINT8, 0,
+                            0, Enums.Compression.NONE, 0);
+                    }
+                    try (var closeMe = emptyRn) {
+                        closeMe.setAttribute("compression",
+                            codecIdFor(Enums.Compression.NAME_TOKENIZED_V2));
+                    }
+                } else if (!global.thalion.ttio.codecs.NameTokenizerV2.isAvailable()) {
+                    throw new IllegalStateException(
+                        "NAME_TOKENIZED_V2 codec requires the native "
+                        + "libttio_rans library to be linked. Build with "
+                        + "-Dttio.native=true or install the native "
+                        + "package. (The v1 NAME_TOKENIZED codec and the "
+                        + "M82 compound fallback were both removed in "
+                        + "Phase 2c — there is no non-native code path "
+                        + "for read_names with readCount > 0.)");
+                } else {
                     byte[] encoded =
                         global.thalion.ttio.codecs.NameTokenizerV2
                             .encode(run.readNames());
@@ -1213,89 +1245,27 @@ public class SpectralDataset implements
                         closeMe.setAttribute("compression",
                             codecIdFor(Enums.Compression.NAME_TOKENIZED_V2));
                     }
-                } else if (rnOverride != null) {
-                    byte[] encoded =
-                        global.thalion.ttio.codecs.NameTokenizer
-                            .encode(run.readNames());
-                    global.thalion.ttio.providers.StorageDataset rnDs;
-                    try {
-                        rnDs = sc.createDataset("read_names",
-                            Enums.Precision.UINT8, encoded.length,
-                            65536, Enums.Compression.NONE, 0);
-                    } catch (UnsupportedOperationException e) {
-                        rnDs = sc.createDataset("read_names",
-                            Enums.Precision.UINT8, encoded.length,
-                            0, Enums.Compression.NONE, 0);
-                    }
-                    try (var closeMe = rnDs) {
-                        closeMe.writeAll(encoded);
-                        closeMe.setAttribute("compression",
-                            codecIdFor(Enums.Compression.NAME_TOKENIZED));
-                    }
-                } else {
-                    writeCompoundOneCol(sc, "read_names", vlField,
-                        run.readNames());
                 }
 
-                // v1.0 reset Phase 2b: when the native library is
-                // available, write the inline_v2 blob to
-                // signal_channels/mate_info/inline_v2 plus a
-                // chrom_names compound sidecar (for mate-only chroms
-                // not in the own-read chromosome set).
-                // When the native library is unavailable, fall through
-                // to the legacy path (M86 Phase F subgroup or M82
-                // compound).
-                boolean nativeAvailableForV2 =
-                    global.thalion.ttio.codecs.MateInfoV2.isAvailable();
-                if (nativeAvailableForV2) {
-                    writeMateInfoV2(sc, run);
+                // v1.0 reset Phase 2c: mate_info is v2-only (inline_v2
+                // blob). The v1 per-field subgroup writer and the M82
+                // compound fallback were removed. Empty runs OMIT the
+                // mate_info group entirely (cross-language convention
+                // shared with Python; ObjC was reconciled to the same).
+                // Readers treat an absent group as "no mate info".
+                if (run.readCount() == 0) {
+                    // Omit the group — readers handle absence as no mates.
+                } else if (!global.thalion.ttio.codecs.MateInfoV2.isAvailable()) {
+                    throw new IllegalStateException(
+                        "MATE_INLINE_V2 codec requires the native "
+                        + "libttio_rans library to be linked. Build with "
+                        + "-Dttio.native=true or install the native "
+                        + "package. (The v1 mate_info per-field subgroup "
+                        + "and M82 compound paths were both removed in "
+                        + "Phase 2c — there is no non-native code path "
+                        + "for mate_info with readCount > 0.)");
                 } else {
-                    // M86 Phase F: schema lift for mate_info. When ANY of
-                    // the three per-field overrides (mate_info_chrom /
-                    // mate_info_pos / mate_info_tlen) is in
-                    // signalCodecOverrides, the writer creates a subgroup
-                    // signal_channels/mate_info/ containing three child
-                    // datasets (chrom, pos, tlen) and dispatches each
-                    // child independently — codec-compressed if the per-
-                    // field override is set, natural-dtype HDF5 ZLIB if
-                    // not (Binding Decisions §125, §127). Partial
-                    // overrides allowed (Gotcha §142). When NO mate_info_*
-                    // override is set, the existing M82 compound write
-                    // path is used unchanged for byte parity with pre-
-                    // Phase-F files.
-                    java.util.Map<String, Enums.Compression> mateOverrides =
-                        new java.util.LinkedHashMap<>();
-                    for (String k : new String[]{"mate_info_chrom",
-                            "mate_info_pos", "mate_info_tlen"}) {
-                        Enums.Compression resolved = resolveIntOverride(run, k);
-                        if (resolved != null) {
-                            mateOverrides.put(k, resolved);
-                        }
-                    }
-                    if (!mateOverrides.isEmpty()) {
-                        writeMateInfoSubgroup(sc, run, mateOverrides);
-                    } else {
-                        // mate_info: chrom (VL_STRING) + pos (int64) + tlen (int64).
-                        List<global.thalion.ttio.providers.CompoundField> mateFields = List.of(
-                            new global.thalion.ttio.providers.CompoundField("chrom",
-                                global.thalion.ttio.providers.CompoundField.Kind.VL_STRING),
-                            new global.thalion.ttio.providers.CompoundField("pos",
-                                global.thalion.ttio.providers.CompoundField.Kind.INT64),
-                            new global.thalion.ttio.providers.CompoundField("tlen",
-                                global.thalion.ttio.providers.CompoundField.Kind.INT64));
-                        List<Object[]> mateRows = new ArrayList<>(run.readCount());
-                        for (int i = 0; i < run.readCount(); i++) {
-                            mateRows.add(new Object[]{
-                                run.mateChromosomes().get(i),
-                                run.matePositions()[i],
-                                (long) run.templateLengths()[i],
-                            });
-                        }
-                        try (var ds = sc.createCompoundDataset("mate_info", mateFields,
-                                                                 mateRows.size())) {
-                            ds.writeAll(mateRows);
-                        }
-                    }
+                    writeMateInfoV2(sc, run);
                 }
             }
 
@@ -1469,196 +1439,11 @@ public class SpectralDataset implements
         }
     }
 
-    /** M86 Phase F: write the mate_info subgroup with per-field codec
-     *  dispatch. Triggered when any of the three per-field override
-     *  keys is in {@code run.signalCodecOverrides}. Creates a subgroup
-     *  {@code signal_channels/mate_info/} containing three child
-     *  datasets (chrom, pos, tlen). Each field is independently codec-
-     *  compressible: fields with an override are written as flat 1-D
-     *  uint8 with the codec output and {@code @compression} attribute
-     *  (no HDF5 filter — Binding Decision §87); fields without an
-     *  override use their natural dtype with HDF5 ZLIB filter inside
-     *  the subgroup (Binding Decision §127, partial overrides allowed).
-     *
-     *  <p>The chrom field's serialisation matches Phase C cigars:
-     *  NAME_TOKENIZED takes the {@code List<String>} directly; rANS
-     *  uses length-prefix-concat ({@code varint(len) + ASCII bytes}
-     *  per chrom).
-     *
-     *  <p>The pos and tlen fields' serialisation matches Phase B
-     *  integer channels: rANS over the LE byte representation of the
-     *  typed array ({@code <i8} for pos, {@code <i4} for tlen). */
-    private static void writeMateInfoSubgroup(
-            global.thalion.ttio.providers.StorageGroup sc,
-            WrittenGenomicRun run,
-            java.util.Map<String, Enums.Compression> overrides) {
-        try (var mateGroup = sc.createGroup("mate_info")) {
-            // ---- chrom field ------------------------------------
-            List<String> chroms = run.mateChromosomes();
-            Enums.Compression chromCodec = overrides.get("mate_info_chrom");
-            if (chromCodec == null) {
-                // Natural dtype (VL_STRING-in-compound) inside the
-                // subgroup. Mirrors the cigars/read_names compound
-                // writer used elsewhere in this class.
-                List<global.thalion.ttio.providers.CompoundField> vlField = List.of(
-                    new global.thalion.ttio.providers.CompoundField("value",
-                        global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
-                writeCompoundOneCol(mateGroup, "chrom", vlField, chroms);
-            } else {
-                byte[] encoded;
-                if (chromCodec == Enums.Compression.NAME_TOKENIZED) {
-                    encoded = global.thalion.ttio.codecs.NameTokenizer
-                        .encode(chroms);
-                } else if (chromCodec == Enums.Compression.RANS_ORDER0
-                        || chromCodec == Enums.Compression.RANS_ORDER1) {
-                    java.io.ByteArrayOutputStream buf =
-                        new java.io.ByteArrayOutputStream();
-                    for (int idx = 0; idx < chroms.size(); idx++) {
-                        String c = chroms.get(idx);
-                        if (c == null) {
-                            throw new IllegalArgumentException(
-                                "signalCodecOverrides['mate_info_chrom']: "
-                                + "chrom at index " + idx + " is null");
-                        }
-                        for (int j = 0; j < c.length(); j++) {
-                            if (c.charAt(j) > 0x7F) {
-                                throw new IllegalArgumentException(
-                                    "signalCodecOverrides['mate_info_chrom']: "
-                                    + "chrom at index " + idx + " contains "
-                                    + "non-ASCII bytes");
-                            }
-                        }
-                        byte[] payload = c.getBytes(
-                            java.nio.charset.StandardCharsets.US_ASCII);
-                        writeUnsignedVarint(buf, payload.length);
-                        buf.write(payload, 0, payload.length);
-                    }
-                    int order = (chromCodec == Enums.Compression.RANS_ORDER0)
-                        ? 0 : 1;
-                    encoded = global.thalion.ttio.codecs.Rans
-                        .encode(buf.toByteArray(), order);
-                } else {
-                    // Defensive — caller-side validation rejects this.
-                    throw new IllegalArgumentException(
-                        "writeMateInfoSubgroup: unsupported chrom codec "
-                        + chromCodec);
-                }
-                global.thalion.ttio.providers.StorageDataset chDs;
-                try {
-                    chDs = mateGroup.createDataset("chrom",
-                        Enums.Precision.UINT8, encoded.length,
-                        65536, Enums.Compression.NONE, 0);
-                } catch (UnsupportedOperationException e) {
-                    chDs = mateGroup.createDataset("chrom",
-                        Enums.Precision.UINT8, encoded.length,
-                        0, Enums.Compression.NONE, 0);
-                }
-                try (var closeMe = chDs) {
-                    closeMe.writeAll(encoded);
-                    closeMe.setAttribute("compression",
-                        codecIdFor(chromCodec));
-                }
-            }
-
-            // ---- pos field --------------------------------------
-            writeMateIntField(mateGroup, "pos",
-                run.matePositions(), Enums.Precision.INT64,
-                overrides.get("mate_info_pos"));
-
-            // ---- tlen field -------------------------------------
-            writeMateIntField(mateGroup, "tlen",
-                run.templateLengths(), Enums.Precision.INT32,
-                overrides.get("mate_info_tlen"));
-        }
-    }
-
-    /** M86 Phase F helper: write one of the integer mate fields (pos
-     *  or tlen) with optional codec dispatch. Mirrors the Phase B
-     *  integer-channel write contract: when {@code codec} is null the
-     *  array is written at its natural integer precision with HDF5
-     *  ZLIB. When {@code codec} is RANS_ORDER0 or RANS_ORDER1, the LE
-     *  byte representation of the array is encoded through M83 rANS
-     *  and written as a flat unfiltered uint8 dataset with
-     *  {@code @compression} carrying the codec id. */
-    private static void writeMateIntField(
-            global.thalion.ttio.providers.StorageGroup mateGroup,
-            String name, Object data,
-            Enums.Precision naturalPrecision,
-            Enums.Compression codec) {
-        if (codec == null) {
-            // Natural-dtype write with HDF5 ZLIB filter inside the
-            // subgroup. Goes through the typed writer.
-            int len;
-            if (data instanceof long[] a)      len = a.length;
-            else if (data instanceof int[] a)  len = a.length;
-            else throw new IllegalArgumentException(
-                "writeMateIntField: unsupported data type "
-                + data.getClass().getName());
-            global.thalion.ttio.providers.StorageDataset ds;
-            try {
-                ds = mateGroup.createDataset(name, naturalPrecision,
-                    len, 65536, Enums.Compression.ZLIB, 6);
-            } catch (UnsupportedOperationException e) {
-                ds = mateGroup.createDataset(name, naturalPrecision,
-                    len, 0, Enums.Compression.NONE, 0);
-            }
-            try (var closeMe = ds) { closeMe.writeAll(data); }
-            return;
-        }
-        if (codec != Enums.Compression.RANS_ORDER0
-                && codec != Enums.Compression.RANS_ORDER1
-                && codec != Enums.Compression.DELTA_RANS_ORDER0) {
-            // Defensive — caller-side validation rejects this first.
-            throw new IllegalArgumentException(
-                "writeMateIntField: unsupported codec " + codec
-                + " on integer mate field '" + name + "'");
-        }
-        // Serialise array → little-endian byte buffer (mirrors §118).
-        byte[] leBytes;
-        int elemSize;
-        if (naturalPrecision == Enums.Precision.INT64) {
-            long[] arr = (long[]) data;
-            java.nio.ByteBuffer bb = java.nio.ByteBuffer
-                .allocate(arr.length * 8)
-                .order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            for (long v : arr) bb.putLong(v);
-            leBytes = bb.array();
-            elemSize = 8;
-        } else if (naturalPrecision == Enums.Precision.INT32) {
-            int[] arr = (int[]) data;
-            java.nio.ByteBuffer bb = java.nio.ByteBuffer
-                .allocate(arr.length * 4)
-                .order(java.nio.ByteOrder.LITTLE_ENDIAN);
-            for (int v : arr) bb.putInt(v);
-            leBytes = bb.array();
-            elemSize = 4;
-        } else {
-            throw new IllegalArgumentException(
-                "writeMateIntField: unsupported precision "
-                + naturalPrecision);
-        }
-        byte[] encoded;
-        if (codec == Enums.Compression.DELTA_RANS_ORDER0) {
-            encoded = global.thalion.ttio.codecs.DeltaRans
-                .encode(leBytes, elemSize);
-        } else {
-            int order = (codec == Enums.Compression.RANS_ORDER0) ? 0 : 1;
-            encoded = global.thalion.ttio.codecs.Rans
-                .encode(leBytes, order);
-        }
-        global.thalion.ttio.providers.StorageDataset ds;
-        try {
-            ds = mateGroup.createDataset(name, Enums.Precision.UINT8,
-                encoded.length, 65536, Enums.Compression.NONE, 0);
-        } catch (UnsupportedOperationException e) {
-            ds = mateGroup.createDataset(name, Enums.Precision.UINT8,
-                encoded.length, 0, Enums.Compression.NONE, 0);
-        }
-        try (var closeMe = ds) {
-            closeMe.writeAll(encoded);
-            closeMe.setAttribute("compression", codecIdFor(codec));
-        }
-    }
+    // v1.0 reset Phase 2c: writeMateInfoSubgroup + writeMateIntField
+    // were removed — the mate_info v1 per-field subgroup writer no
+    // longer has a code path. mate_info is v2-only (inline_v2 blob)
+    // in v1.0+; non-empty runs without the native lib raise
+    // IllegalStateException at the call site (see writeGenomicRunSubtree).
 
     // ── M93 v1.2 / M94 v1.2 — v1.5 codec dispatch ────────────────────
 
@@ -1932,30 +1717,12 @@ public class SpectralDataset implements
             return;
         }
 
-        // v1 path (unchanged): flat dataset with REF_DIFF or BASE_PACK.
-        byte[] encoded;
-        int codecId;
-        if (chromSeq == null || hasUnmapped) {
-            // Q5b=C: silent fallback to BASE_PACK on this channel.
-            encoded = global.thalion.ttio.codecs.BasePack.encode(rawBytes);
-            codecId = Enums.Compression.BASE_PACK.ordinal();
-        } else {
-            // Split sequences into per-read slices using offsets/lengths.
-            java.util.List<byte[]> perRead =
-                new java.util.ArrayList<>(run.readCount());
-            for (int i = 0; i < run.readCount(); i++) {
-                int off = (int) run.offsets()[i];
-                int len = run.lengths()[i];
-                byte[] slice = new byte[len];
-                System.arraycopy(rawBytes, off, slice, 0, len);
-                perRead.add(slice);
-            }
-            byte[] md5 = referenceMd5ForRun(run);
-            encoded = global.thalion.ttio.codecs.RefDiff.encode(
-                perRead, run.cigars(), run.positions(),
-                chromSeq, md5, run.referenceUri());
-            codecId = Enums.Compression.REF_DIFF.ordinal();
-        }
+        // v1.0 reset Phase 2c: the v1 REF_DIFF (codec id 9) writer
+        // path was removed. When v2 cannot be used (chromSeq null,
+        // unmapped reads, or native lib unavailable), fall back to
+        // BASE_PACK on this channel. No v1 REF_DIFF dispatch remains.
+        byte[] encoded = global.thalion.ttio.codecs.BasePack.encode(rawBytes);
+        int codecId = Enums.Compression.BASE_PACK.ordinal();
 
         global.thalion.ttio.providers.StorageDataset ds;
         try {
@@ -2077,8 +1844,8 @@ public class SpectralDataset implements
         return codec.ordinal();
     }
 
-    /** M86 Phase C: encode a {@code List<String>} of CIGARs through one
-     *  of the three accepted codec paths.
+    /** M86 Phase C: encode a {@code List<String>} of CIGARs through
+     *  the rANS codec path.
      *
      *  <p>For {@link Enums.Compression#RANS_ORDER0} and
      *  {@link Enums.Compression#RANS_ORDER1} the list is first
@@ -2087,21 +1854,13 @@ public class SpectralDataset implements
      *  through M83 rANS at the matching order. ASCII-only per the SAM
      *  spec; non-ASCII input throws {@link IllegalArgumentException}.
      *
-     *  <p>For {@link Enums.Compression#NAME_TOKENIZED} the list is
-     *  passed directly to
-     *  {@link global.thalion.ttio.codecs.NameTokenizer#encode} which
-     *  already handles {@code List<String>} input.
-     *
-     *  <p>Per Gotcha §139 the rANS path uses raw length-prefix-concat
-     *  directly — NOT NAME_TOKENIZED's verbatim format then rANS-
-     *  encoded. The two encodings would produce different byte streams
-     *  for the same input. */
+     *  <p>v1.0 reset Phase 2c: the NAME_TOKENIZED branch was removed
+     *  (the v1 codec is gone). Override-validation rejects
+     *  NAME_TOKENIZED on cigars upfront with a clear "no longer
+     *  supported" message. */
     private static byte[] encodeCigars(
             List<String> cigars,
             Enums.Compression codec) {
-        if (codec == Enums.Compression.NAME_TOKENIZED) {
-            return global.thalion.ttio.codecs.NameTokenizer.encode(cigars);
-        }
         if (codec != Enums.Compression.RANS_ORDER0
                 && codec != Enums.Compression.RANS_ORDER1) {
             // Defensive — caller-side validation rejects this first.
@@ -2132,11 +1891,10 @@ public class SpectralDataset implements
         return global.thalion.ttio.codecs.Rans.encode(buf.toByteArray(), order);
     }
 
-    /** Unsigned LEB128 varint writer matching the encoding used by the
-     *  {@link global.thalion.ttio.codecs.NameTokenizer} verbatim path —
-     *  low 7 bits per byte, top bit set on continuation, terminated by
-     *  the first byte with the top bit clear. The cigars rANS path
-     *  serialises each entry as {@code varint(asciiLen) + asciiBytes}. */
+    /** Unsigned LEB128 varint writer — low 7 bits per byte, top bit
+     *  set on continuation, terminated by the first byte with the
+     *  top bit clear. The cigars rANS path serialises each entry as
+     *  {@code varint(asciiLen) + asciiBytes}. */
     private static void writeUnsignedVarint(
             java.io.ByteArrayOutputStream out, long n) {
         if (n < 0) {
@@ -2202,18 +1960,10 @@ public class SpectralDataset implements
         return false;
     }
 
-    /** M95 v1.2: resolve the codec override for an integer channel.
-     *  Returns the explicit override if present, the v1.5 auto-default
-     *  when the run is a v1.5 candidate with ZLIB base compression, or
-     *  {@code null} for the uncompressed typed-writer path. */
-    private static Enums.Compression resolveIntOverride(
-            WrittenGenomicRun run, String channel) {
-        Enums.Compression ovr = run.signalCodecOverrides().get(channel);
-        if (ovr != null) return ovr;
-        if (run.signalCompression() != Enums.Compression.ZLIB) return null;
-        if (!isV15Candidate(run)) return null;
-        return V1_5_INT_DEFAULTS.get(channel);
-    }
+    // v1.0 reset Phase 2c: resolveIntOverride was removed — its only
+    // call site was the v1 mate_info per-field subgroup writer which
+    // is gone. The V1_5_INT_DEFAULTS map is now empty and unused; it
+    // is retained as a compile-time placeholder only.
 
     /** M86 Phase B: write an integer signal channel, optionally through
      *  a TTI-O rANS codec. When {@code codecOverride} is {@code null}

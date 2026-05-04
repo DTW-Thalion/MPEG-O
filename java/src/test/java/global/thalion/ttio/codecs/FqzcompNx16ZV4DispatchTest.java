@@ -76,27 +76,11 @@ final class FqzcompNx16ZV4DispatchTest {
         assertArrayEquals(SYNTH_QUALITIES, r.qualities());
     }
 
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void v2ExplicitStillWorks() {
-        FqzcompNx16Z.EncodeOptions opts = new FqzcompNx16Z.EncodeOptions()
-            .preferV4(false).preferNative(true);
-        byte[] out = FqzcompNx16Z.encode(SYNTH_QUALITIES, SYNTH_LENS, SYNTH_REVCOMP, opts);
-        assertEquals(2, out[4], "preferV4=false + preferNative=true must produce V2");
-        FqzcompNx16Z.DecodeResult r = FqzcompNx16Z.decode(out, SYNTH_REVCOMP);
-        assertArrayEquals(SYNTH_QUALITIES, r.qualities());
-    }
-
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void v1ExplicitStillWorks() {
-        FqzcompNx16Z.EncodeOptions opts = new FqzcompNx16Z.EncodeOptions()
-            .preferV4(false).preferNative(false);
-        byte[] out = FqzcompNx16Z.encode(SYNTH_QUALITIES, SYNTH_LENS, SYNTH_REVCOMP, opts);
-        assertEquals(1, out[4], "preferV4=false + preferNative=false must produce V1");
-        FqzcompNx16Z.DecodeResult r = FqzcompNx16Z.decode(out, SYNTH_REVCOMP);
-        assertArrayEquals(SYNTH_QUALITIES, r.qualities());
-    }
+    // v2ExplicitStillWorks and v1ExplicitStillWorks — REMOVED in
+    // Phase 2c. The V1 / V2 encoder dispatch paths were deleted; only
+    // V4 (CRAM 3.1 fqzcomp_qual) is emitted in v1.0+. The opts knobs
+    // (preferV4=false, preferNative=true) are accepted for API
+    // compatibility but always go V4.
 
     @Test
     @EnabledIf("isNativeAvailable")
@@ -161,25 +145,7 @@ final class FqzcompNx16ZV4DispatchTest {
         assertArrayEquals(lens, r.readLengths());
     }
 
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void v4SizeSanityVsV2() {
-        // Both V4 and V2 should produce reasonable encodings on synthetic
-        // data; we only assert V4 is not pathologically larger than V2.
-        // Allow a 200-byte slack for header overhead differences.
-        byte[] qual = new byte[1000];
-        for (int i = 0; i < 1000; i++) qual[i] = (byte) (33 + 20 + (i * 7) % 21);
-        int[] lens = new int[10];
-        int[] rev = new int[10];
-        for (int i = 0; i < 10; i++) lens[i] = 100;
-
-        byte[] v4 = FqzcompNx16Z.encode(qual, lens, rev,
-            new FqzcompNx16Z.EncodeOptions().preferV4(true));
-        byte[] v2 = FqzcompNx16Z.encode(qual, lens, rev,
-            new FqzcompNx16Z.EncodeOptions().preferV4(false).preferNative(true));
-        assertTrue(v4.length <= v2.length + 200,
-            "V4=" + v4.length + " bytes vs V2=" + v2.length + " bytes");
-    }
+    // v4SizeSanityVsV2 — REMOVED in Phase 2c (V2 path is gone).
 
     @Test
     @EnabledIf("isNativeAvailable")
@@ -201,9 +167,8 @@ final class FqzcompNx16ZV4DispatchTest {
     @Test
     @EnabledIf("isNativeAvailable")
     void v4DecodeRejectsTamperedVersionByte() {
-        // V4 stream with version byte rewritten to 2 must fail to decode
-        // via the V2 path (the body is fqzcomp, not the libttio_rans-block
-        // V2 codec).
+        // V4 stream with version byte rewritten to 2 must fail to
+        // decode — V2 is no longer a recognised version (Phase 2c).
         FqzcompNx16Z.EncodeOptions opts = new FqzcompNx16Z.EncodeOptions().preferV4(true);
         byte[] v4 = FqzcompNx16Z.encode(SYNTH_QUALITIES, SYNTH_LENS, SYNTH_REVCOMP, opts);
         v4[4] = 2;  // Tamper version byte.
@@ -211,7 +176,6 @@ final class FqzcompNx16ZV4DispatchTest {
         try {
             FqzcompNx16Z.decode(v4, SYNTH_REVCOMP);
         } catch (RuntimeException expected) {
-            // V2 decoder will fail to parse the V4 body — expected.
             threw = true;
         }
         assertTrue(threw, "decode of V4 blob with version byte rewritten to 2 must throw");

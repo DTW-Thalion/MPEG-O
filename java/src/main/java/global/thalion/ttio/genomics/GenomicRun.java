@@ -353,8 +353,7 @@ public class GenomicRun
      *  {@code signal_channels/sequences} is a GROUP containing a
      *  {@code refdiff_v2} child dataset (v1.8 layout).
      *
-     *  <p>Uses the same try-openGroup pattern as
-     *  {@link #isMateInfoSubgroup()} (Binding Decision §128): an
+     *  <p>Uses a try-openGroup pattern (Binding Decision §128): an
      *  exception from {@code openGroup} means it's a dataset, not a
      *  group. Result is cached in {@link #sequencesIsV2Cached}. */
     private boolean isSequencesRefDiffV2() {
@@ -424,11 +423,12 @@ public class GenomicRun
             // not the original Phred bytes.
             decoded = global.thalion.ttio.codecs.Quality.decode(all);
         } else if (codecId == global.thalion.ttio.Enums.Compression.REF_DIFF.ordinal()) {
-            // M93 v1.2: REF_DIFF is context-aware. Resolve the
-            // reference via ReferenceResolver, then decode the per-
-            // read slices and concatenate into the M82 contract: a
-            // flat uint8 byte stream the same length as sum(lengths).
-            decoded = decodeRefDiffSequences(all);
+            // v1.0 reset Phase 2c: REF_DIFF v1 reader removed.
+            throw new IllegalStateException(
+                "REF_DIFF v1 (codec id 9) is no longer supported in "
+                + "v1.0; this file was written with an older TTI-O "
+                + "version. Re-encode with v1.0+ which uses "
+                + "REF_DIFF_V2 (codec id 14).");
         } else if (codecId == global.thalion.ttio.Enums.Compression
                 .FQZCOMP_NX16_Z.ordinal()) {
             // M94.Z v1.2: CRAM-mimic rANS-Nx16 quality codec.
@@ -455,71 +455,10 @@ public class GenomicRun
         return out;
     }
 
-    /** M93 v1.2: decode the {@code sequences} channel encoded with the
-     *  REF_DIFF codec. Returns the concatenated per-read sequence bytes
-     *  — same shape and dtype contract as the M82 sequences channel
-     *  (uint8 1-D byte stream of total length sum(lengths)).
-     *
-     *  @throws global.thalion.ttio.codecs.RefMissingException when the
-     *      reference can't be resolved. */
-    private byte[] decodeRefDiffSequences(byte[] encoded) {
-        global.thalion.ttio.codecs.RefDiff.HeaderUnpack hu =
-            global.thalion.ttio.codecs.RefDiff.unpackCodecHeader(encoded);
-        // ReferenceResolver wants an Hdf5File; the writer always
-        // embeds at /study/references/<uri>/ in the same file.
-        global.thalion.ttio.hdf5.Hdf5Group h5g = global.thalion.ttio.providers
-            .Hdf5Provider.tryUnwrapHdf5Group(runGroup);
-        if (h5g == null) {
-            throw new RuntimeException(
-                "REF_DIFF decode requires an HDF5-backed dataset; "
-                + "non-HDF5 storage providers are not yet supported.");
-        }
-        global.thalion.ttio.hdf5.Hdf5File h5File = h5g.owningFile();
-        global.thalion.ttio.codecs.ReferenceResolver resolver =
-            new global.thalion.ttio.codecs.ReferenceResolver(h5File);
-
-        // Single-chromosome runs only (v1.2 first pass).
-        java.util.Set<String> uniqueChroms =
-            new java.util.LinkedHashSet<>();
-        for (int i = 0; i < index.count(); i++) {
-            uniqueChroms.add(index.chromosomeAt(i));
-        }
-        String chrom;
-        if (uniqueChroms.isEmpty()) {
-            chrom = "";
-        } else if (uniqueChroms.size() > 1) {
-            throw new RuntimeException(
-                "REF_DIFF v1.2 first pass supports single-chromosome "
-                + "runs only; this run carries " + uniqueChroms
-                + ". Multi-chromosome support is an M93.X follow-up.");
-        } else {
-            chrom = uniqueChroms.iterator().next();
-        }
-        byte[] chromSeq = resolver.resolve(
-            hu.header().referenceUri(),
-            hu.header().referenceMd5(),
-            chrom);
-
-        // Gather per-read positions + cigars for the slice walk.
-        long[] positions = new long[index.count()];
-        for (int i = 0; i < index.count(); i++) {
-            positions[i] = index.positionAt(i);
-        }
-        java.util.List<String> cigars = allCigars();
-
-        java.util.List<byte[]> perRead = global.thalion.ttio.codecs
-            .RefDiff.decode(encoded, cigars, positions, chromSeq);
-        // Concat into the flat M82 contract.
-        int total = 0;
-        for (byte[] p : perRead) total += p.length;
-        byte[] out = new byte[total];
-        int off = 0;
-        for (byte[] p : perRead) {
-            System.arraycopy(p, 0, out, off, p.length);
-            off += p.length;
-        }
-        return out;
-    }
+    // v1.0 reset Phase 2c: decodeRefDiffSequences removed — the v1
+    // REF_DIFF reader is no longer supported. Files written with the
+    // v1 codec (@compression == 9) raise IllegalStateException at
+    // byteChannelSlice (see codec dispatch above).
 
     /** Task 13 (ref_diff v2): decode the {@code signal_channels/sequences/refdiff_v2}
      *  blob. Returns the concatenated per-read sequence bytes (total_bases long) —
@@ -631,27 +570,26 @@ public class GenomicRun
         return decodedCigars;
     }
 
-    /** M86 Phase E: return the read name at index {@code i}, dispatching
-     *  on dataset shape (Binding Decisions §111, §112).
+    /** v1.0 reset Phase 2c: return the read name at index {@code i}.
      *
-     *  <p>Two on-disk layouts:
+     *  <p>Only the NAME_TOKENIZED_V2 (codec id 15) layout is supported
+     *  in v1.0+. Legacy v1 layouts raise {@code IllegalStateException}:
      *  <ul>
-     *    <li><b>M82 compound</b> (no override): VL_STRING-in-compound
-     *        dataset, read whole-and-cache via {@link #compoundRows}.</li>
-     *    <li><b>NAME_TOKENIZED</b> (override active): flat 1-D uint8
-     *        dataset. The whole channel is read, decoded once via
-     *        {@link global.thalion.ttio.codecs.NameTokenizer#decode},
-     *        and cached as a {@code List<String>} on this instance per
-     *        Binding Decision §114 (separate from
-     *        {@link #decodedByteChannels}).</li>
+     *    <li>flat uint8 + {@code @compression == NAME_TOKENIZED (8)} →
+     *        v1 codec rejected, see message.</li>
+     *    <li>VL-string compound dataset (M82 layout) → also rejected;
+     *        the v1.0 writer produces flat uint8 v2 only.</li>
      *  </ul>
      *
-     *  <p>Dispatch is on the dataset's
-     *  {@link StorageDataset#precision()} — {@code Precision.UINT8}
-     *  routes through the codec path; {@code null} (the marker for a
-     *  compound dataset on the Hdf5Provider adapter) falls through to
-     *  the M82 compound path. */
+     *  <p>If {@code readCount == 0} the writer emits an empty group
+     *  (no child datasets); this method short-circuits there. */
     private String readNameAt(int i) {
+        if (index.count() == 0) {
+            // Defensive: read at index 0 on an empty run is an
+            // out-of-range error caught upstream; return-empty-string
+            // here keeps the codepath safe.
+            return "";
+        }
         List<String> cached = decodedReadNames;
         if (cached != null) {
             return cached.get(i);
@@ -664,14 +602,6 @@ public class GenomicRun
                 long codecId = (codecAttr instanceof Number n)
                     ? n.longValue() : 0L;
                 if (codecId == global.thalion.ttio.Enums.Compression
-                        .NAME_TOKENIZED.ordinal()) {
-                    long total = ds.shape()[0];
-                    byte[] all = (byte[]) ds.readSlice(0L, total);
-                    decodedReadNames = global.thalion.ttio.codecs
-                        .NameTokenizer.decode(all);
-                    return decodedReadNames.get(i);
-                }
-                if (codecId == global.thalion.ttio.Enums.Compression
                         .NAME_TOKENIZED_V2.ordinal()) {
                     // v1.8 #11 ch3: name_tok_v2 codec output (NTK2 magic).
                     long total = ds.shape()[0];
@@ -680,16 +610,32 @@ public class GenomicRun
                         .NameTokenizerV2.decode(all);
                     return decodedReadNames.get(i);
                 }
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .NAME_TOKENIZED.ordinal()) {
+                    throw new IllegalStateException(
+                        "NAME_TOKENIZED v1 (codec id 8) is no longer "
+                        + "supported in v1.0; this file was written "
+                        + "with an older TTI-O version. Re-encode "
+                        + "with v1.0+ which uses NAME_TOKENIZED_V2 "
+                        + "(codec id 15).");
+                }
                 throw new IllegalStateException(
                     "signal_channel 'read_names': @compression="
                     + codecId + " is not a supported TTIO codec id "
-                    + "for the read_names channel (only NAME_TOKENIZED "
-                    + "= 8 and NAME_TOKENIZED_V2 = 15 are recognised)");
+                    + "for the read_names channel (only "
+                    + "NAME_TOKENIZED_V2 = 15 is recognised in v1.0+)");
             }
         }
-        // Compound path (M82, no override).
-        List<Object[]> rows = compoundRows("read_names");
-        return stringFromCompound(rows.get(i)[0]);
+        // Compound (M82 VL_STRING) path was removed in Phase 2c — the
+        // v1.0+ writer always emits a flat uint8 dataset (or an empty
+        // group for readCount == 0). Files with the M82 compound were
+        // produced by older writers; reject with a clear message.
+        throw new IllegalStateException(
+            "signal_channels/read_names is a compound (VL_STRING) "
+            + "dataset — that legacy M82 layout was removed in "
+            + "Phase 2c (v1.0 reset). Re-encode the file with v1.0+ "
+            + "which writes read_names as NAME_TOKENIZED_V2 (codec "
+            + "id 15) on a flat uint8 dataset.");
     }
 
     /** M86 Phase C: return the cigar string at index {@code i},
@@ -699,26 +645,17 @@ public class GenomicRun
      *  <ul>
      *    <li><b>M82 compound</b> (no override): VL_STRING-in-compound
      *        dataset, read whole-and-cache via {@link #compoundRows}.</li>
-     *    <li><b>TTIO codec</b> (override active): flat 1-D uint8
+     *    <li><b>rANS codec</b> (override active): flat 1-D uint8
      *        dataset. The whole channel is read, decoded once, and
      *        cached as a {@code List<String>} on this instance per
-     *        Binding Decision §123 (separate from
-     *        {@link #decodedReadNames} per Option A from the Phase C
-     *        plan §2.3).
-     *      <ul>
-     *        <li>RANS_ORDER0 / RANS_ORDER1: decoded byte buffer is a
-     *            length-prefix-concat sequence ({@code varint(len) +
-     *            bytes} per CIGAR). Walk the buffer to reconstruct
-     *            the {@code List<String>}.</li>
-     *        <li>NAME_TOKENIZED: pass the bytes through
-     *            {@link global.thalion.ttio.codecs.NameTokenizer#decode}
-     *            directly.</li>
-     *      </ul>
-     *    </li>
+     *        Binding Decision §123. The decoded byte buffer is a
+     *        length-prefix-concat sequence ({@code varint(len) + bytes}
+     *        per CIGAR); walk the buffer to reconstruct the list.</li>
      *  </ul>
      *
-     *  <p>Per Gotcha §139 the rANS path uses raw length-prefix-concat
-     *  (NOT NAME_TOKENIZED's verbatim format then rANS-encoded). */
+     *  <p>v1.0 reset Phase 2c: the NAME_TOKENIZED v1 (codec id 8)
+     *  branch was removed; @compression == 8 raises
+     *  IllegalStateException. */
     private String cigarAt(int i) {
         List<String> cached = decodedCigars;
         if (cached != null) {
@@ -744,16 +681,18 @@ public class GenomicRun
                 }
                 if (codecId == global.thalion.ttio.Enums.Compression
                         .NAME_TOKENIZED.ordinal()) {
-                    decodedCigars = global.thalion.ttio.codecs
-                        .NameTokenizer.decode(all);
-                    return decodedCigars.get(i);
+                    throw new IllegalStateException(
+                        "NAME_TOKENIZED v1 (codec id 8) on the cigars "
+                        + "channel is no longer supported in v1.0; "
+                        + "this file was written with an older TTI-O "
+                        + "version. Re-encode with v1.0+ using "
+                        + "RANS_ORDER0 or RANS_ORDER1 on cigars.");
                 }
                 throw new IllegalStateException(
                     "signal_channel 'cigars': @compression="
                     + codecId + " is not a supported TTIO codec id "
-                    + "for the cigars channel (only RANS_ORDER0 = 4, "
-                    + "RANS_ORDER1 = 5, and NAME_TOKENIZED = 8 are "
-                    + "recognised)");
+                    + "for the cigars channel (only RANS_ORDER0 = 4 "
+                    + "and RANS_ORDER1 = 5 are recognised in v1.0+)");
             }
         }
         // Compound path (M82, no override).
@@ -970,55 +909,15 @@ public class GenomicRun
         }
     }
 
-    /** M86 Phase F: true iff {@code signal_channels/mate_info} is a
-     *  group (Phase F layout) rather than a dataset (M82 compound
-     *  layout). Per Binding Decision §128 / Gotcha §141, dispatch is
-     *  on HDF5 link type, NOT on the {@code @compression} attribute
-     *  presence on the bare link.
-     *
-     *  <p>The HDF5 link-type query in Java is
-     *  {@code H5.H5Oget_info_by_name(parentId, "mate_info", flags)}
-     *  whose returned {@code H5O_info_t.type} field can be compared
-     *  to {@link hdf.hdf5lib.HDF5Constants#H5O_TYPE_GROUP} vs
-     *  {@link hdf.hdf5lib.HDF5Constants#H5O_TYPE_DATASET}. Because
-     *  {@code GenomicRun} is provider-abstract (HDF5 / SQLite /
-     *  Zarr / memory), this helper instead uses the StorageGroup
-     *  protocol's {@code openGroup} as the link-type query — it
-     *  raises an exception when the named child is a dataset (the
-     *  HDF5 binding's {@code H5Gopen} call fails with a negative
-     *  return on a dataset, surfaced as
-     *  {@link global.thalion.ttio.hdf5.Hdf5Errors.GroupOpenException}
-     *  by the adapter). This mirrors the Python implementation's
-     *  {@code try/except KeyError on h5py.Group} pattern. */
-    private boolean isMateInfoSubgroup() {
-        ensureSignalChannels();
-        if (!signalChannels.hasChild("mate_info")) {
-            return false;
-        }
-        try (StorageGroup g = signalChannels.openGroup("mate_info")) {
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
+    // v1.0 reset Phase 2c: isMateInfoSubgroup removed — the M86
+    // Phase F per-field subgroup reader is no longer reached. The
+    // mate accessors below short-circuit to inline_v2 or throw.
 
-    /** M86 Phase F: return the mate chromosome at index {@code i},
-     *  dispatching on {@code signal_channels/mate_info} link type
-     *  (Binding Decision §128).
-     *
-     *  <ul>
-     *    <li><b>M82 compound</b> (no override): COMPOUND[n_reads]
-     *        dataset with three fields. Read whole-and-cache via the
-     *        existing {@link #compoundRows} helper, then return the
-     *        per-read entry.</li>
-     *    <li><b>Phase F subgroup</b> (any mate_info_* override): GROUP
-     *        containing three child datasets. Decode the chrom child
-     *        on first access (cached in
-     *        {@code decodedMateInfo["chrom"]} per Binding Decision
-     *        §129) and return entry [i].</li>
-     *  </ul> */
+    /** v1.0 reset Phase 2c: return the mate chromosome at index
+     *  {@code i}. Only the inline_v2 blob layout is supported now;
+     *  the M86 Phase F per-field subgroup and the M82 compound layout
+     *  raise {@code IllegalStateException}. */
     private String mateChromAt(int i) {
-        // Task 13: v2 inline_v2 path — check first.
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             int mateChromId = decodedMateV2.mateChromIds[i];
@@ -1028,210 +927,46 @@ public class GenomicRun
             }
             return "*";  // defensive fallback
         }
-        if (isMateInfoSubgroup()) {
-            return decodeMateChrom().get(i);
-        }
-        // M82 compound path.
-        List<Object[]> rows = compoundRows("mate_info");
-        return stringFromCompound(rows.get(i)[0]);
+        throw mateInfoLegacyLayoutError();
     }
 
-    /** M86 Phase F: return the mate position at index {@code i},
-     *  dispatching on the mate_info link type (Binding Decision §128). */
+    /** v1.0 reset Phase 2c: return the mate position at index
+     *  {@code i}. Inline_v2 only — see {@link #mateChromAt}. */
     private long matePosAt(int i) {
-        // Task 13: v2 path.
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             return decodedMateV2.matePositions[i];
         }
-        if (isMateInfoSubgroup()) {
-            long[] arr = (long[]) decodeMateIntField(
-                "pos", global.thalion.ttio.Enums.Precision.INT64);
-            return arr[i];
-        }
-        List<Object[]> rows = compoundRows("mate_info");
-        return ((Number) rows.get(i)[1]).longValue();
+        throw mateInfoLegacyLayoutError();
     }
 
-    /** M86 Phase F: return the template length at index {@code i},
-     *  dispatching on the mate_info link type (Binding Decision §128). */
+    /** v1.0 reset Phase 2c: return the template length at index
+     *  {@code i}. Inline_v2 only — see {@link #mateChromAt}. */
     private int mateTlenAt(int i) {
-        // Task 13: v2 path.
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             return decodedMateV2.templateLengths[i];
         }
-        if (isMateInfoSubgroup()) {
-            int[] arr = (int[]) decodeMateIntField(
-                "tlen", global.thalion.ttio.Enums.Precision.INT32);
-            return arr[i];
-        }
-        List<Object[]> rows = compoundRows("mate_info");
-        return ((Number) rows.get(i)[2]).intValue();
+        throw mateInfoLegacyLayoutError();
     }
 
-    /** M86 Phase F: lazily decode the chrom field from the Phase F
-     *  subgroup, caching the result in
-     *  {@code decodedMateInfo["chrom"]} (Binding Decision §129).
-     *  Dispatches on the chrom child dataset's precision and
-     *  {@code @compression} attribute:
-     *  <ul>
-     *    <li>UINT8 + {@code @compression == NAME_TOKENIZED (8)}:
-     *        decoded via {@link global.thalion.ttio.codecs.NameTokenizer#decode}.</li>
-     *    <li>UINT8 + {@code @compression == RANS_ORDER0|1 (4|5)}:
-     *        decoded via M83 rANS, then walked as length-prefix-concat
-     *        ({@code varint(len) + ASCII bytes} per chrom).</li>
-     *    <li>Compound (no codec): un-overridden field stored at its
-     *        natural VL_STRING dtype with HDF5 ZLIB; read whole and
-     *        extract the values.</li>
-     *  </ul> */
-    @SuppressWarnings("unchecked")
-    private List<String> decodeMateChrom() {
-        Object cached = decodedMateInfo.get("chrom");
-        if (cached != null) return (List<String>) cached;
-
-        ensureSignalChannels();
-        try (StorageGroup mateGroup = signalChannels.openGroup("mate_info");
-             StorageDataset ds = mateGroup.openDataset("chrom")) {
-            global.thalion.ttio.Enums.Precision p = ds.precision();
-            if (p == global.thalion.ttio.Enums.Precision.UINT8) {
-                Object codecAttr = ds.getAttribute("compression");
-                long codecId = (codecAttr instanceof Number n)
-                    ? n.longValue() : 0L;
-                long total = ds.shape()[0];
-                byte[] all = (byte[]) ds.readSlice(0L, total);
-                List<String> out;
-                if (codecId == global.thalion.ttio.Enums.Compression
-                        .RANS_ORDER0.ordinal()
-                    || codecId == global.thalion.ttio.Enums.Compression
-                        .RANS_ORDER1.ordinal()) {
-                    byte[] decoded = global.thalion.ttio.codecs
-                        .Rans.decode(all);
-                    out = decodeLengthPrefixConcatMate(decoded);
-                } else if (codecId == global.thalion.ttio.Enums.Compression
-                        .NAME_TOKENIZED.ordinal()) {
-                    out = global.thalion.ttio.codecs
-                        .NameTokenizer.decode(all);
-                } else {
-                    throw new IllegalStateException(
-                        "signal_channel 'mate_info/chrom': @compression="
-                        + codecId + " is not a supported TTIO codec id "
-                        + "(only RANS_ORDER0 = 4, RANS_ORDER1 = 5, and "
-                        + "NAME_TOKENIZED = 8 are recognised for this "
-                        + "channel)");
-                }
-                decodedMateInfo.put("chrom", out);
-                return out;
-            }
-            // Natural-dtype (compound VL_STRING) path — un-overridden
-            // field inside the subgroup. Read whole as compound rows.
-            @SuppressWarnings("unchecked")
-            List<Object[]> rows = (List<Object[]>) ds.readAll();
-            List<String> out = new ArrayList<>(rows.size());
-            for (Object[] r : rows) out.add(stringFromCompound(r[0]));
-            decodedMateInfo.put("chrom", out);
-            return out;
-        }
+    /** Common error for legacy mate_info layouts (M86 Phase F
+     *  per-field subgroup or M82 compound). Both were removed in
+     *  Phase 2c; only the v2 inline_v2 blob is read. */
+    private static IllegalStateException mateInfoLegacyLayoutError() {
+        return new IllegalStateException(
+            "signal_channels/mate_info legacy layout (M86 Phase F "
+            + "per-field subgroup or M82 compound dataset) is no "
+            + "longer supported in v1.0; this file was written with "
+            + "an older TTI-O version. Re-encode with v1.0+ which "
+            + "uses MATE_INLINE_V2 (codec id 13) at "
+            + "signal_channels/mate_info/inline_v2.");
     }
 
-    /** M86 Phase F: lazily decode an integer mate field (pos or tlen)
-     *  from the Phase F subgroup, caching the result in
-     *  {@code decodedMateInfo[name]} (Binding Decision §129).
-     *  Dispatches on dataset precision and {@code @compression}:
-     *  <ul>
-     *    <li>UINT8 + {@code @compression == RANS_ORDER0|1}: decoded
-     *        via M83 rANS, then re-interpreted as the natural integer
-     *        precision via {@link java.nio.ByteOrder#LITTLE_ENDIAN}.</li>
-     *    <li>Natural-dtype (INT64 / INT32, no override): read directly
-     *        with the typed reader inside the subgroup.</li>
-     *  </ul> */
-    private Object decodeMateIntField(String name,
-            global.thalion.ttio.Enums.Precision naturalPrecision) {
-        Object cached = decodedMateInfo.get(name);
-        if (cached != null) return cached;
-
-        ensureSignalChannels();
-        try (StorageGroup mateGroup = signalChannels.openGroup("mate_info");
-             StorageDataset ds = mateGroup.openDataset(name)) {
-            global.thalion.ttio.Enums.Precision p = ds.precision();
-            if (p == global.thalion.ttio.Enums.Precision.UINT8) {
-                Object codecAttr = ds.getAttribute("compression");
-                long codecId = (codecAttr instanceof Number n)
-                    ? n.longValue() : 0L;
-                if (codecId == global.thalion.ttio.Enums.Compression
-                        .RANS_ORDER0.ordinal()
-                    || codecId == global.thalion.ttio.Enums.Compression
-                        .RANS_ORDER1.ordinal()) {
-                    long total = ds.shape()[0];
-                    byte[] all = (byte[]) ds.readSlice(0L, total);
-                    byte[] decoded = global.thalion.ttio.codecs
-                        .Rans.decode(all);
-                    Object arr = deserialiseLeBytes(decoded, naturalPrecision);
-                    decodedMateInfo.put(name, arr);
-                    return arr;
-                }
-                if (codecId == global.thalion.ttio.Enums.Compression
-                        .DELTA_RANS_ORDER0.ordinal()) {
-                    long total = ds.shape()[0];
-                    byte[] all = (byte[]) ds.readSlice(0L, total);
-                    byte[] decoded = global.thalion.ttio.codecs
-                        .DeltaRans.decode(all);
-                    Object arr = deserialiseLeBytes(decoded, naturalPrecision);
-                    decodedMateInfo.put(name, arr);
-                    return arr;
-                }
-                throw new IllegalStateException(
-                    "signal_channel 'mate_info/" + name + "': @compression="
-                    + codecId + " is not a supported TTIO codec id for "
-                    + "an integer mate field (RANS_ORDER0 = 4, "
-                    + "RANS_ORDER1 = 5, DELTA_RANS_ORDER0 = 11)");
-            }
-            // Natural-dtype path — read the typed dataset directly.
-            Object arr = ds.readAll();
-            decodedMateInfo.put(name, arr);
-            return arr;
-        }
-    }
-
-    /** M86 Phase F: walk a length-prefix-concat byte buffer back into
-     *  a list of ASCII chrom strings. Mirrors {@link #decodeLengthPrefixConcat}
-     *  used by the cigars rANS path; kept as a separate copy so the
-     *  error messages name the chrom channel. */
-    private static List<String> decodeLengthPrefixConcatMate(byte[] buf) {
-        List<String> out = new ArrayList<>();
-        int offset = 0;
-        int n = buf.length;
-        long[] tmp = new long[1];
-        while (offset < n) {
-            offset = readUnsignedVarint(buf, offset, tmp);
-            long lengthL = tmp[0];
-            if (lengthL < 0 || lengthL > Integer.MAX_VALUE) {
-                throw new IllegalArgumentException(
-                    "mate_info_chrom rANS stream: length-prefix-concat "
-                    + "entry length " + lengthL + " out of int range");
-            }
-            int length = (int) lengthL;
-            if (offset + length > n) {
-                throw new IllegalArgumentException(
-                    "mate_info_chrom rANS stream: length-prefix-concat "
-                    + "entry runs off end of decoded buffer (offset="
-                    + offset + ", length=" + length
-                    + ", buffer_size=" + n + ")");
-            }
-            for (int k = 0; k < length; k++) {
-                int b = Byte.toUnsignedInt(buf[offset + k]);
-                if (b > 0x7F) {
-                    throw new IllegalArgumentException(
-                        "mate_info_chrom rANS stream: entry contains "
-                        + "non-ASCII bytes");
-                }
-            }
-            out.add(new String(buf, offset, length,
-                StandardCharsets.US_ASCII));
-            offset += length;
-        }
-        return out;
-    }
+    // v1.0 reset Phase 2c: decodeMateChrom + decodeMateIntField +
+    // decodeLengthPrefixConcatMate removed — the M86 Phase F per-
+    // field subgroup readers are gone. Only the v2 inline_v2 blob
+    // path survives via _decodeMateV2.
 
     @SuppressWarnings("unchecked")
     private List<Object[]> compoundRows(String name) {
