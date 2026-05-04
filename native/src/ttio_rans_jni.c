@@ -692,3 +692,177 @@ Java_global_thalion_ttio_codecs_TtioRansNative_decodeMateInfoV2Native(
     free(out_mc); free(out_mp); free(out_ts);
     return result;
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+ * REF_DIFF v2 JNI bindings.
+ * Java signature:
+ *   private static native byte[] encodeRefDiffV2Native(
+ *     byte[] sequences, long[] offsets, long[] positions,
+ *     String[] cigarStrings, byte[] reference, byte[] referenceMd5,
+ *     String referenceUri, int readsPerSlice);
+ *   private static native Object[] decodeRefDiffV2Native(
+ *     byte[] encoded, long[] positions, String[] cigarStrings,
+ *     byte[] reference, int nReads, long totalBases);
+ *   - return value of decode is Object[2]: byte[] sequences, long[] offsets
+ * ────────────────────────────────────────────────────────────────────── */
+
+JNIEXPORT jbyteArray JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_encodeRefDiffV2Native(
+    JNIEnv *env, jclass cls,
+    jbyteArray  sequences_arr,
+    jlongArray  offsets_arr,
+    jlongArray  positions_arr,
+    jobjectArray cigar_strings_arr,
+    jbyteArray  reference_arr,
+    jbyteArray  reference_md5_arr,
+    jstring     reference_uri_str,
+    jint        reads_per_slice)
+{
+    (void)cls;
+    jsize n = (*env)->GetArrayLength(env, positions_arr);
+    jsize ref_len = (*env)->GetArrayLength(env, reference_arr);
+
+    jbyte  *seq = (*env)->GetByteArrayElements(env, sequences_arr, NULL);
+    jlong  *off = (*env)->GetLongArrayElements(env, offsets_arr, NULL);
+    jlong  *pos = (*env)->GetLongArrayElements(env, positions_arr, NULL);
+    jbyte  *ref = (*env)->GetByteArrayElements(env, reference_arr, NULL);
+    jbyte  *md5 = (*env)->GetByteArrayElements(env, reference_md5_arr, NULL);
+    const char *uri = (*env)->GetStringUTFChars(env, reference_uri_str, NULL);
+
+    /* Marshal cigar_strings[] → const char ** (kept alive until call returns). */
+    const char **cigars = (const char **)malloc(n > 0 ? n * sizeof(const char *) : 1);
+    jstring *cigar_jstrings = (jstring *)malloc(n > 0 ? n * sizeof(jstring) : 1);
+    if (!cigars || !cigar_jstrings) {
+        free(cigars); free(cigar_jstrings);
+        (*env)->ReleaseByteArrayElements(env, sequences_arr, seq, JNI_ABORT);
+        (*env)->ReleaseLongArrayElements(env, offsets_arr, off, JNI_ABORT);
+        (*env)->ReleaseLongArrayElements(env, positions_arr, pos, JNI_ABORT);
+        (*env)->ReleaseByteArrayElements(env, reference_arr, ref, JNI_ABORT);
+        (*env)->ReleaseByteArrayElements(env, reference_md5_arr, md5, JNI_ABORT);
+        (*env)->ReleaseStringUTFChars(env, reference_uri_str, uri);
+        jclass ex = (*env)->FindClass(env, "java/lang/OutOfMemoryError");
+        (*env)->ThrowNew(env, ex, "marshal cigars failed");
+        return NULL;
+    }
+    for (jsize i = 0; i < n; i++) {
+        cigar_jstrings[i] = (jstring)(*env)->GetObjectArrayElement(env, cigar_strings_arr, i);
+        cigars[i] = (*env)->GetStringUTFChars(env, cigar_jstrings[i], NULL);
+    }
+
+    ttio_ref_diff_v2_input in = {
+        .sequences = (const uint8_t *)seq,
+        .offsets = (const uint64_t *)off,
+        .positions = (const int64_t *)pos,
+        .cigar_strings = cigars,
+        .n_reads = (uint64_t)n,
+        .reference = (const uint8_t *)ref,
+        .reference_length = (uint64_t)ref_len,
+        .reads_per_slice = (uint64_t)reads_per_slice,
+        .reference_md5 = (const uint8_t *)md5,
+        .reference_uri = uri,
+    };
+
+    size_t cap = ttio_ref_diff_v2_max_encoded_size((uint64_t)n,
+        n > 0 ? (uint64_t)off[n] : 0);
+    uint8_t *buf = (uint8_t *)malloc(cap > 0 ? cap : 1);
+    size_t out_len = cap;
+    int rc = ttio_ref_diff_v2_encode(&in, buf, &out_len);
+
+    /* Release cigar string refs */
+    for (jsize i = 0; i < n; i++) {
+        (*env)->ReleaseStringUTFChars(env, cigar_jstrings[i], cigars[i]);
+        (*env)->DeleteLocalRef(env, cigar_jstrings[i]);
+    }
+    free(cigars); free(cigar_jstrings);
+
+    (*env)->ReleaseByteArrayElements(env, sequences_arr, seq, JNI_ABORT);
+    (*env)->ReleaseLongArrayElements(env, offsets_arr, off, JNI_ABORT);
+    (*env)->ReleaseLongArrayElements(env, positions_arr, pos, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, reference_arr, ref, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, reference_md5_arr, md5, JNI_ABORT);
+    (*env)->ReleaseStringUTFChars(env, reference_uri_str, uri);
+
+    if (rc != 0) {
+        free(buf);
+        jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException");
+        char msg[128];
+        snprintf(msg, sizeof(msg), "ttio_ref_diff_v2_encode failed: %d", rc);
+        (*env)->ThrowNew(env, ex, msg);
+        return NULL;
+    }
+
+    jbyteArray result = (*env)->NewByteArray(env, (jsize)out_len);
+    (*env)->SetByteArrayRegion(env, result, 0, (jsize)out_len, (const jbyte *)buf);
+    free(buf);
+    return result;
+}
+
+JNIEXPORT jobjectArray JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_decodeRefDiffV2Native(
+    JNIEnv *env, jclass cls,
+    jbyteArray  encoded_arr,
+    jlongArray  positions_arr,
+    jobjectArray cigar_strings_arr,
+    jbyteArray  reference_arr,
+    jint        n_reads,
+    jlong       total_bases)
+{
+    (void)cls;
+    jsize enc_size = (*env)->GetArrayLength(env, encoded_arr);
+    jsize ref_len = (*env)->GetArrayLength(env, reference_arr);
+
+    jbyte *enc = (*env)->GetByteArrayElements(env, encoded_arr, NULL);
+    jlong *pos = (*env)->GetLongArrayElements(env, positions_arr, NULL);
+    jbyte *ref = (*env)->GetByteArrayElements(env, reference_arr, NULL);
+
+    const char **cigars = (const char **)malloc(n_reads > 0 ? n_reads * sizeof(const char *) : 1);
+    jstring *cigar_jstrings = (jstring *)malloc(n_reads > 0 ? n_reads * sizeof(jstring) : 1);
+    for (jint i = 0; i < n_reads; i++) {
+        cigar_jstrings[i] = (jstring)(*env)->GetObjectArrayElement(env, cigar_strings_arr, i);
+        cigars[i] = (*env)->GetStringUTFChars(env, cigar_jstrings[i], NULL);
+    }
+
+    uint8_t  *out_seq = (uint8_t *)malloc(total_bases > 0 ? (size_t)total_bases : 1);
+    uint64_t *out_off = (uint64_t *)malloc((n_reads + 1) * sizeof(uint64_t));
+
+    int rc = ttio_ref_diff_v2_decode(
+        (const uint8_t *)enc, (size_t)enc_size,
+        (const int64_t *)pos, cigars,
+        (uint64_t)n_reads,
+        (const uint8_t *)ref, (uint64_t)ref_len,
+        out_seq, out_off);
+
+    for (jint i = 0; i < n_reads; i++) {
+        (*env)->ReleaseStringUTFChars(env, cigar_jstrings[i], cigars[i]);
+        (*env)->DeleteLocalRef(env, cigar_jstrings[i]);
+    }
+    free(cigars); free(cigar_jstrings);
+
+    (*env)->ReleaseByteArrayElements(env, encoded_arr, enc, JNI_ABORT);
+    (*env)->ReleaseLongArrayElements(env, positions_arr, pos, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, reference_arr, ref, JNI_ABORT);
+
+    if (rc != 0) {
+        free(out_seq); free(out_off);
+        jclass ex = (*env)->FindClass(env, "java/lang/RuntimeException");
+        char msg[128];
+        snprintf(msg, sizeof(msg), "ttio_ref_diff_v2_decode failed: %d", rc);
+        (*env)->ThrowNew(env, ex, msg);
+        return NULL;
+    }
+
+    /* Build Object[2]: byte[] sequences, long[] offsets */
+    jclass object_class = (*env)->FindClass(env, "java/lang/Object");
+    jobjectArray result = (*env)->NewObjectArray(env, 2, object_class, NULL);
+
+    jbyteArray seq_arr = (*env)->NewByteArray(env, (jsize)total_bases);
+    (*env)->SetByteArrayRegion(env, seq_arr, 0, (jsize)total_bases, (const jbyte *)out_seq);
+    (*env)->SetObjectArrayElement(env, result, 0, seq_arr);
+
+    jlongArray off_arr = (*env)->NewLongArray(env, n_reads + 1);
+    (*env)->SetLongArrayRegion(env, off_arr, 0, n_reads + 1, (const jlong *)out_off);
+    (*env)->SetObjectArrayElement(env, result, 1, off_arr);
+
+    free(out_seq); free(out_off);
+    return result;
+}

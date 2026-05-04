@@ -233,4 +233,47 @@ public final class TtioRansNative {
 
     private static native Object[] decodeMateInfoV2Native(
         byte[] encoded, short[] ownChromIds, long[] ownPositions, int nRecords);
+
+    /**
+     * Encode a slice of reads via libttio_rans (ref_diff v2).
+     */
+    public static byte[] encodeRefDiffV2(
+            byte[]   sequences,
+            long[]   offsets,
+            long[]   positions,
+            String[] cigarStrings,
+            byte[]   reference,
+            byte[]   referenceMd5,
+            String   referenceUri,
+            int      readsPerSlice) {
+        if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
+        return encodeRefDiffV2Native(sequences, offsets, positions,
+                                      cigarStrings, reference, referenceMd5,
+                                      referenceUri, readsPerSlice);
+    }
+
+    /**
+     * Decode a refdiff_v2 blob.
+     * @return Object[2]: byte[] sequences, long[] offsets
+     */
+    public static Object[] decodeRefDiffV2(
+            byte[]   encoded,
+            long[]   positions,
+            String[] cigarStrings,
+            byte[]   reference,
+            int      nReads,
+            long     totalBases) {
+        if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
+        return decodeRefDiffV2Native(encoded, positions, cigarStrings,
+                                      reference, nReads, totalBases);
+    }
+
+    private static native byte[] encodeRefDiffV2Native(
+        byte[] sequences, long[] offsets, long[] positions,
+        String[] cigarStrings, byte[] reference, byte[] referenceMd5,
+        String referenceUri, int readsPerSlice);
+
+    private static native Object[] decodeRefDiffV2Native(
+        byte[] encoded, long[] positions, String[] cigarStrings,
+        byte[] reference, int nReads, long totalBases);
 }
