@@ -177,29 +177,32 @@ final class RefDiffPipelineTest {
         }
     }
 
-    // ── 2. Format version is 1.5 when REF_DIFF used ─────────────────
+    // ── 2. Format version is unified "1.0" with REF_DIFF ────────────
+    //
+    // v1.0 reset: @ttio_format_version is stamped as "1.0" regardless of
+    // which optional codecs run. Behavior is gated on @ttio_features.
 
     @Test
-    void formatVersionIs15WhenRefDiff(@TempDir Path tmp) {
+    void formatVersionIs10WhenRefDiff(@TempDir Path tmp) {
         WrittenGenomicRun run = buildRefDiffRun("test-ref-uri", null, true);
         Path file = writeRun(tmp, "fv15.tio", Map.of("run_0001", run));
         try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
              Hdf5Group root = f.rootGroup()) {
             String version = root.readStringAttribute("ttio_format_version");
-            assertEquals("1.5", version);
+            assertEquals("1.0", version);
         }
     }
 
-    // ── 3. Format version stays 1.4 with M82-only writes ────────────
+    // ── 3. Format version stays unified "1.0" with M82-only writes ──
 
     @Test
-    void formatVersionStays14WithoutRefDiff(@TempDir Path tmp) {
+    void formatVersionIs10WithoutRefDiff(@TempDir Path tmp) {
         WrittenGenomicRun run = buildM82OnlyRun();
         Path file = writeRun(tmp, "fv14.tio", Map.of("run_0001", run));
         try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
              Hdf5Group root = f.rootGroup()) {
             String version = root.readStringAttribute("ttio_format_version");
-            assertEquals("1.4", version);
+            assertEquals("1.0", version);
         }
     }
 

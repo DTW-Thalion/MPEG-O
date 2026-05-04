@@ -248,13 +248,13 @@ void testSpectrumIndexM74RoundTrip(void)
     }
 }
 
-// -------- M74 Slice E: feature flag + format version bump --------
+// -------- M74 Slice E: feature flag (v1.0 unified version) --------
 //
 // Writing a dataset whose runs carry the four optional M74 columns must
-// advertise `opt_ms2_activation_detail` in @ttio_features and bump
-// @ttio_format_version from "1.1" to "1.3". Legacy datasets (no M74
-// columns) must keep the original "1.1" layout so existing byte-parity
-// tests survive.
+// advertise `opt_ms2_activation_detail` in @ttio_features. v1.0 reset:
+// @ttio_format_version is a single "1.0" stamp regardless of which
+// optional columns / features are present; readers gate behavior on the
+// @ttio_features list, not per-feature version equality.
 
 static TTIOMassSpectrum *m74SliceEMakeSpec(int msLevel,
                                              TTIOActivationMethod m,
@@ -317,7 +317,7 @@ void testSpectralDatasetM74FeatureFlag(void)
     unlink([legacyPath fileSystemRepresentation]);
     unlink([m74Path fileSystemRepresentation]);
 
-    // ---- Legacy dataset: no M74 content, keeps format "1.1" ----
+    // ---- Legacy dataset: no M74 content, stamps unified "1.0" ----
     @autoreleasepool {
         TTIOSpectralDataset *ds =
             [[TTIOSpectralDataset alloc] initWithTitle:@"legacy"
@@ -336,8 +336,8 @@ void testSpectralDatasetM74FeatureFlag(void)
         TTIOHDF5Group *root = [f rootGroup];
         NSString *version = [TTIOFeatureFlags formatVersionForRoot:root];
         NSArray *features = [TTIOFeatureFlags featuresForRoot:root];
-        PASS([version isEqualToString:@"1.1"],
-             "Slice E: legacy file keeps format version 1.1");
+        PASS([version isEqualToString:@"1.0"],
+             "Slice E: legacy file stamps unified format version 1.0");
         PASS(![features containsObject:@"opt_ms2_activation_detail"],
              "Slice E: legacy file does not advertise opt_ms2_activation_detail");
         [f close];
@@ -362,8 +362,8 @@ void testSpectralDatasetM74FeatureFlag(void)
         TTIOHDF5Group *root = [f rootGroup];
         NSString *version = [TTIOFeatureFlags formatVersionForRoot:root];
         NSArray *features = [TTIOFeatureFlags featuresForRoot:root];
-        PASS([version isEqualToString:@"1.3"],
-             "Slice E: M74 file bumps format version to 1.3");
+        PASS([version isEqualToString:@"1.0"],
+             "Slice E: M74 file stamps unified format version 1.0");
         PASS([features containsObject:[TTIOFeatureFlags featureMS2ActivationDetail]],
              "Slice E: M74 file advertises opt_ms2_activation_detail");
         PASS([TTIOFeatureFlags root:root
