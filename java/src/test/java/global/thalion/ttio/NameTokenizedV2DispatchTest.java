@@ -27,24 +27,20 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Task 12 (#11 ch3) — Java writer/reader dispatch tests for NAME_TOKENIZED v2.
+ * v1.0 — Java writer/reader dispatch tests for NAME_TOKENIZED v2.
  *
- * <p>Mirrors Python {@code test_name_tok_v2_dispatch.py}. Five tests:
+ * <p>Mirrors Python {@code test_name_tok_v2_dispatch.py}. Three tests:
  * <ol>
- *   <li>Default v1.8 write produces {@code signal_channels/read_names} flat
+ *   <li>Default v1.0 write produces {@code signal_channels/read_names} flat
  *       dataset with {@code @compression == 15} (NAME_TOKENIZED_V2).</li>
- *   <li>Opt-out (no override) writes the M82 compound layout (no codec).</li>
  *   <li>Explicit {@code signalCodecOverrides[read_names]=NAME_TOKENIZED}
  *       writes v1 layout with {@code @compression == 8}.</li>
- *   <li>v1 opt-out round-trip: names recovered from M82 compound.</li>
  *   <li>v2 default round-trip: names recovered byte-exact via
  *       {@link NameTokenizerV2}.</li>
  * </ol>
  *
  * <p>All tests skip when the native JNI library is unavailable
  * ({@link NameTokenizerV2#isAvailable()} returns false).
- *
- * @since v1.8 (Task 12 #11 ch3 NAME_TOKENIZED v2)
  */
 final class NameTokenizedV2DispatchTest {
 
@@ -61,11 +57,9 @@ final class NameTokenizedV2DispatchTest {
      * Build a minimal run with N=100 records and Illumina-style structured
      * names that exercise the v2 column-aware tokeniser.
      *
-     * @param optDisableV2 when true, sets {@code optDisableNameTokenizedV2=true}
      * @param overrides    signal codec overrides (use Map.of() for default)
      */
     private static WrittenGenomicRun buildMinimalRun(
-            boolean optDisableV2,
             Map<String, Compression> overrides) {
         long[] positions = new long[N];
         for (int i = 0; i < N; i++) positions[i] = (long) i * 1000L;
@@ -103,18 +97,14 @@ final class NameTokenizedV2DispatchTest {
             templateLengths[i] = 0;
         }
 
-        // signalCompression=NONE so other channels don't need filters; opt
-        // out of inline_v2 + ref_diff_v2 to keep the test focused on read_names.
-        WrittenGenomicRun run = new WrittenGenomicRun(
+        // signalCompression=NONE so other channels don't need filters.
+        return new WrittenGenomicRun(
             AcquisitionMode.GENOMIC_WGS, "GRCh38.dispatch_test", "ILLUMINA",
             "NT_DISP_TEST",
             positions, mapqs, flags, seq, qual, offsets, lengths,
             cigars, readNames, mateChromosomes, matePositions,
             templateLengths, chromosomes,
-            Compression.NONE, overrides, List.of(),
-            false, null, null,
-            true, true, optDisableV2);  // optDisable Inline/RefDiff = true; NameTok configurable
-        return run;
+            Compression.NONE, overrides);
     }
 
     private static Path writeRun(Path tmp, WrittenGenomicRun run,
@@ -127,12 +117,12 @@ final class NameTokenizedV2DispatchTest {
         return file;
     }
 
-    // ── Test 1: default v1.8 write produces NAME_TOKENIZED_V2 dataset ──
+    // ── Test 1: default v1.0 write produces NAME_TOKENIZED_V2 dataset ──
 
     @Test
     @EnabledIf("isNativeAvailable")
     void testDefaultWritesV2(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun(false, Map.of());
+        WrittenGenomicRun run = buildMinimalRun(Map.of());
         Path file = writeRun(tmp, run, "default_v2.tio");
         try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
              Hdf5Group root = f.rootGroup();
@@ -142,7 +132,7 @@ final class NameTokenizedV2DispatchTest {
              Hdf5Group sc   = rg.openGroup("signal_channels");
              Hdf5Dataset rnDs = sc.openDataset("read_names")) {
             assertEquals(Enums.Precision.UINT8, rnDs.getPrecision(),
-                "v1.8 default read_names must be UINT8");
+                "v1.0 default read_names must be UINT8");
             long compressionAttr = rnDs.readIntegerAttribute(
                 "compression", -1L);
             assertEquals(Compression.NAME_TOKENIZED_V2.ordinal(),
@@ -152,36 +142,13 @@ final class NameTokenizedV2DispatchTest {
         }
     }
 
-    // ── Test 2: opt-out + no override writes M82 compound layout ──────
-
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void testOptOutWritesV1(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun(true, Map.of());
-        Path file = writeRun(tmp, run, "v1_optout.tio");
-        try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
-             Hdf5Group root = f.rootGroup();
-             Hdf5Group study = root.openGroup("study");
-             Hdf5Group gRuns = study.openGroup("genomic_runs");
-             Hdf5Group rg   = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc   = rg.openGroup("signal_channels");
-             Hdf5Dataset rnDs = sc.openDataset("read_names")) {
-            // M82 compound: precision is null (compound dataset marker).
-            assertNotEquals(Enums.Precision.UINT8, rnDs.getPrecision(),
-                "opt-out without override must remain compound, "
-                + "not lifted to uint8");
-            assertFalse(rnDs.hasAttribute("compression"),
-                "M82 compound must not carry @compression");
-        }
-    }
-
-    // ── Test 3: explicit signal_codec_overrides[read_names] = v1 codec ─
+    // ── Test 2: explicit signal_codec_overrides[read_names] = v1 codec ─
 
     @Test
     @EnabledIf("isNativeAvailable")
     void testSignalCodecOverridesRespected(@TempDir Path tmp) {
-        // Explicit override → v1 layout regardless of opt flag.
-        WrittenGenomicRun run = buildMinimalRun(false,
+        // Explicit override → v1 layout regardless of v2 default.
+        WrittenGenomicRun run = buildMinimalRun(
             Map.of("read_names", Compression.NAME_TOKENIZED));
         Path file = writeRun(tmp, run, "v1_explicit.tio");
         try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
@@ -202,33 +169,12 @@ final class NameTokenizedV2DispatchTest {
         }
     }
 
-    // ── Test 4: v1 opt-out round-trip ─────────────────────────────────
-
-    @Test
-    @EnabledIf("isNativeAvailable")
-    void testV1RoundTripViaOptOut(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun(true, Map.of());
-        List<String> expectedNames = new ArrayList<>(run.readNames());
-        Path file = writeRun(tmp, run, "v1_rt.tio");
-
-        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
-            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
-            assertNotNull(gr, "genomic_0001 must exist");
-            assertEquals(N, gr.readCount(), "read count must match");
-            for (int i = 0; i < N; i++) {
-                AlignedRead rec = gr.readAt(i);
-                assertEquals(expectedNames.get(i), rec.readName(),
-                    "v1 opt-out: name at " + i + " must match");
-            }
-        }
-    }
-
-    // ── Test 5: v2 default round-trip ─────────────────────────────────
+    // ── Test 3: v2 default round-trip ─────────────────────────────────
 
     @Test
     @EnabledIf("isNativeAvailable")
     void testV2RoundTripDefault(@TempDir Path tmp) {
-        WrittenGenomicRun run = buildMinimalRun(false, Map.of());
+        WrittenGenomicRun run = buildMinimalRun(Map.of());
         List<String> expectedNames = new ArrayList<>(run.readNames());
         Path file = writeRun(tmp, run, "v2_rt.tio");
 

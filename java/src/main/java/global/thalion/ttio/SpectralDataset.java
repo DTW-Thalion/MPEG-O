@@ -876,24 +876,20 @@ public class SpectralDataset implements
                     + "The override no longer applies. See "
                     + "docs/format-spec.md §4 and §10.7.");
             }
-            // Task 13 (mate_info v2): when inline_v2 is the active
-            // path (default), mate_info_* override keys are rejected
-            // with a message pointing at optDisableInlineMateInfoV2.
-            // The v1 per-field overrides only apply under opt-out.
-            if (!run.optDisableInlineMateInfoV2()
-                    && global.thalion.ttio.codecs.MateInfoV2.isAvailable()
+            // v1.0 reset Phase 2b: mate_info v2 (inline_v2) is the only
+            // path; the v1 per-field override surface no longer reaches
+            // a writer code path. Reject mate_info_* keys outright when
+            // the native lib is available — they cannot be honoured.
+            if (global.thalion.ttio.codecs.MateInfoV2.isAvailable()
                     && (chName.equals("mate_info_chrom")
                         || chName.equals("mate_info_pos")
                         || chName.equals("mate_info_tlen"))) {
                 throw new IllegalArgumentException(
                     "signalCodecOverrides['" + chName + "']: "
-                    + "mate_info v2 (inline_v2 blob) is the default "
-                    + "in v1.7 and the per-field override keys "
+                    + "mate_info v2 (inline_v2 blob) is the only "
+                    + "supported path; the v1 per-field override keys "
                     + "(mate_info_chrom / mate_info_pos / mate_info_tlen) "
-                    + "are not active. To use v1 per-field overrides, "
-                    + "opt out of v2 by calling "
-                    + ".withOptDisableInlineMateInfoV2(true) on the "
-                    + "WrittenGenomicRun before writing.");
+                    + "are no longer active.");
             }
             // M86 Phase F Binding Decision §126 / Gotcha §143: the
             // bare "mate_info" key is reserved and rejected with a
@@ -1186,18 +1182,17 @@ public class SpectralDataset implements
                 //   Selected when signalCodecOverrides["read_names"] ==
                 //   NAME_TOKENIZED is explicit.
                 // - NAME_TOKENIZED v2 (codec id 15): flat uint8 dataset.
-                //   The v1.8 default — selected when no override is
-                //   present, optDisableNameTokenizedV2 == false, and the
-                //   native lib is available.
+                //   The v1.0 default — selected when no override is
+                //   present and the native lib is available.
                 // - M82 compound: VL_STRING-in-compound dataset. Selected
-                //   when opt-out is set and no override is present.
+                //   when no override is present and the native lib is
+                //   unavailable.
                 //
                 // Readers dispatch on @compression value (8 vs 15) when
                 // shape is uint8, else fall through to the compound path.
                 Enums.Compression rnOverride =
                     run.signalCodecOverrides().get("read_names");
                 boolean useRnV2 = rnOverride == null
-                    && !run.optDisableNameTokenizedV2()
                     && global.thalion.ttio.codecs.NameTokenizerV2.isAvailable();
                 if (useRnV2) {
                     byte[] encoded =
@@ -1242,18 +1237,17 @@ public class SpectralDataset implements
                         run.readNames());
                 }
 
-                // Task 13 (mate_info v2): when the native library is
-                // available AND the caller has not opted out, write the
-                // v1.7 inline_v2 blob to
+                // v1.0 reset Phase 2b: when the native library is
+                // available, write the inline_v2 blob to
                 // signal_channels/mate_info/inline_v2 plus a
                 // chrom_names compound sidecar (for mate-only chroms
                 // not in the own-read chromosome set).
-                // When the run opts out (optDisableInlineMateInfoV2=true)
-                // or the native library is unavailable, fall through to
-                // the legacy path (M86 Phase F subgroup or M82 compound).
+                // When the native library is unavailable, fall through
+                // to the legacy path (M86 Phase F subgroup or M82
+                // compound).
                 boolean nativeAvailableForV2 =
                     global.thalion.ttio.codecs.MateInfoV2.isAvailable();
-                if (!run.optDisableInlineMateInfoV2() && nativeAvailableForV2) {
+                if (nativeAvailableForV2) {
                     writeMateInfoV2(sc, run);
                 } else {
                     // M86 Phase F: schema lift for mate_info. When ANY of
@@ -1834,17 +1828,16 @@ public class SpectralDataset implements
      *  is context-aware: it needs positions, cigars, and the reference
      *  chromosome sequence in addition to the raw byte stream.
      *
-     *  <p><b>v1.8 default (REF_DIFF_V2):</b> when the native JNI library
-     *  is available AND {@code run.optDisableRefDiffV2()} is {@code false}
-     *  AND the run is eligible (single-chromosome, all reads mapped,
-     *  reference present), writes {@code signal_channels/sequences} as a
-     *  GROUP containing a {@code refdiff_v2} child dataset
-     *  ({@code @compression = 14}). Mirrors Python's v1.8 default path.
+     *  <p><b>v1.0 default (REF_DIFF_V2):</b> when the native JNI library
+     *  is available AND the run is eligible (single-chromosome, all
+     *  reads mapped, reference present), writes
+     *  {@code signal_channels/sequences} as a GROUP containing a
+     *  {@code refdiff_v2} child dataset ({@code @compression = 14}).
      *
-     *  <p><b>v1 path (REF_DIFF, codec id 9):</b> when opt-out is set or
-     *  the native library is unavailable or eligibility checks fail —
-     *  writes {@code signal_channels/sequences} as a flat uint8 dataset
-     *  with {@code @compression = 9} (or BASE_PACK = 6 on fallback).
+     *  <p><b>v1 path (REF_DIFF, codec id 9):</b> when the native library
+     *  is unavailable or eligibility checks fail — writes
+     *  {@code signal_channels/sequences} as a flat uint8 dataset with
+     *  {@code @compression = 9} (or BASE_PACK = 6 on fallback).
      *
      *  <p><b>Single-chromosome limitation (v1.2 first pass):</b> all
      *  reads must align to a single chromosome. Multi-chrom is M93.X.
@@ -1887,9 +1880,8 @@ public class SpectralDataset implements
             }
         }
 
-        // v1.8 dispatch: prefer the v2 path when eligible.
-        boolean useV2 = !run.optDisableRefDiffV2()
-            && global.thalion.ttio.codecs.RefDiffV2.isAvailable()
+        // v1.0 reset Phase 2b: prefer the v2 path when eligible.
+        boolean useV2 = global.thalion.ttio.codecs.RefDiffV2.isAvailable()
             && chromSeq != null
             && !hasUnmapped;
 

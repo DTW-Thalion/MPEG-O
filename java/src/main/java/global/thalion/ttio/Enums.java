@@ -116,9 +116,8 @@ public final class Enums {
         FQZCOMP_NX16_Z,
         /**
          * CRAM-style inline mate-pair encoding (mate_info v2, codec id 13).
-         * v1.7 default ON for the {@code signal_channels/mate_info/inline_v2}
-         * blob. Opt out via
-         * {@link global.thalion.ttio.genomics.WrittenGenomicRun#optDisableInlineMateInfoV2}.
+         * v1.0 default ON for the {@code signal_channels/mate_info/inline_v2}
+         * blob when the native JNI library is available.
          * Cross-language ordinal {@code = 13} matches Python
          * {@code Compression.MATE_INLINE_V2} and ObjC
          * {@code TTIOCompressionMateInlineV2}.
@@ -126,12 +125,10 @@ public final class Enums {
         MATE_INLINE_V2,
         /**
          * Bit-packed REF_DIFF v2 codec (sequences v2, codec id 14).
-         * v1.8 default ON for the
+         * v1.0 default ON for the
          * {@code signal_channels/sequences/refdiff_v2} blob when the
          * native JNI library is available and the run is eligible
-         * (single-chromosome, all reads mapped, reference present). Opt
-         * out via
-         * {@link global.thalion.ttio.genomics.WrittenGenomicRun#optDisableRefDiffV2}.
+         * (single-chromosome, all reads mapped, reference present).
          * Cross-language ordinal {@code = 14} matches Python
          * {@code Compression.REF_DIFF_V2} and ObjC
          * {@code TTIOCompressionRefDiffV2}.
@@ -139,10 +136,9 @@ public final class Enums {
         REF_DIFF_V2,
         /**
          * CRAM-style adaptive name-tokenizer v2 codec (codec id 15).
-         * v1.8 default ON for the
+         * v1.0 default ON for the
          * {@code signal_channels/read_names} blob when the native JNI
-         * library is available. Opt out via
-         * {@link global.thalion.ttio.genomics.WrittenGenomicRun#optDisableNameTokenizedV2}.
+         * library is available.
          * Cross-language ordinal {@code = 15} matches Python
          * {@code Compression.NAME_TOKENIZED_V2} and ObjC
          * {@code TTIOCompressionNameTokenizedV2}.

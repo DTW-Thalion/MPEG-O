@@ -92,38 +92,6 @@ import java.util.Objects;
  *                           {@code null}; not yet honoured by Java
  *                           writers (kept for symmetry with Python /
  *                           ObjC).
- * @param optDisableInlineMateInfoV2 Task 13 (mate_info v2): when
- *                           {@code false} (default), the writer
- *                           produces the v1.7 inline_v2 layout
- *                           ({@code signal_channels/mate_info/inline_v2}
- *                           blob, {@code @compression=13}) when the
- *                           native JNI library is available. Set to
- *                           {@code true} to opt out and preserve the
- *                           pre-v1.7 v1 layout (chrom/pos/tlen child
- *                           datasets), e.g. when v1.6 round-trip is
- *                           required or signal_codec_overrides for
- *                           {@code mate_info_*} keys are needed.
- * @param optDisableRefDiffV2 Task 13 (ref_diff v2): when {@code false}
- *                           (default), the writer produces the v1.8
- *                           {@code signal_channels/sequences/refdiff_v2}
- *                           group layout ({@code @compression=14}) when
- *                           the native JNI library is available and the
- *                           run is eligible (single-chromosome, all reads
- *                           mapped, reference present). Set to
- *                           {@code true} to opt out and preserve the
- *                           pre-v1.8 v1 flat dataset layout (REF_DIFF
- *                           codec id 9), e.g. when v1.7 round-trip is
- *                           required.
- * @param optDisableNameTokenizedV2 Task 12 (#11 ch3, name_tok_v2): when
- *                           {@code false} (default), the writer produces
- *                           the v1.8 {@code signal_channels/read_names}
- *                           flat dataset with @compression=15 when the
- *                           native JNI library is available. Set to
- *                           {@code true} to opt out and preserve the
- *                           pre-v1.8 M82 compound layout (or v1
- *                           NAME_TOKENIZED if explicitly overridden via
- *                           {@code signalCodecOverrides}), e.g. when
- *                           v1.7 round-trip is required.
  */
 public record WrittenGenomicRun(
     AcquisitionMode acquisitionMode,
@@ -148,10 +116,7 @@ public record WrittenGenomicRun(
     List<ProvenanceRecord> provenanceRecords,
     boolean embedReference,
     Map<String, byte[]> referenceChromSeqs,
-    Path externalReferencePath,
-    boolean optDisableInlineMateInfoV2,
-    boolean optDisableRefDiffV2,
-    boolean optDisableNameTokenizedV2
+    Path externalReferencePath
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -206,7 +171,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, Map.of(), List.of(),
-             false, null, null, false, false, false);
+             false, null, null);
     }
 
     /**
@@ -241,7 +206,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, List.of(),
-             false, null, null, false, false, false);
+             false, null, null);
     }
 
     /**
@@ -277,7 +242,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, provenanceRecords,
-             false, null, null, false, false, false);
+             false, null, null);
     }
 
     /**
@@ -294,64 +259,7 @@ public record WrittenGenomicRun(
             offsets, lengths, cigars, readNames, mateChromosomes,
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
-            embed, chromSeqs, externalPath,
-            optDisableInlineMateInfoV2, optDisableRefDiffV2,
-            optDisableNameTokenizedV2);
-    }
-
-    /**
-     * Task 13 (mate_info v2) builder. Returns a new instance with
-     * {@link #optDisableInlineMateInfoV2} replaced. Builder-style
-     * convenience for callers that want to opt out of the v1.7
-     * inline_v2 default (e.g. to preserve v1 layout for cross-version
-     * round-trip tests, or to use {@code mate_info_*} signal_codec_overrides).
-     */
-    public WrittenGenomicRun withOptDisableInlineMateInfoV2(boolean disable) {
-        return new WrittenGenomicRun(
-            acquisitionMode, referenceUri, platform, sampleName,
-            positions, mappingQualities, flags, sequences, qualities,
-            offsets, lengths, cigars, readNames, mateChromosomes,
-            matePositions, templateLengths, chromosomes,
-            signalCompression, signalCodecOverrides, provenanceRecords,
-            embedReference, referenceChromSeqs, externalReferencePath,
-            disable, optDisableRefDiffV2, optDisableNameTokenizedV2);
-    }
-
-    /**
-     * Task 13 (ref_diff v2) builder. Returns a new instance with
-     * {@link #optDisableRefDiffV2} replaced. Builder-style convenience
-     * for callers that want to opt out of the v1.8
-     * {@code signal_channels/sequences/refdiff_v2} default (e.g. to
-     * preserve v1 layout for cross-version round-trip tests).
-     */
-    public WrittenGenomicRun withOptDisableRefDiffV2(boolean disable) {
-        return new WrittenGenomicRun(
-            acquisitionMode, referenceUri, platform, sampleName,
-            positions, mappingQualities, flags, sequences, qualities,
-            offsets, lengths, cigars, readNames, mateChromosomes,
-            matePositions, templateLengths, chromosomes,
-            signalCompression, signalCodecOverrides, provenanceRecords,
-            embedReference, referenceChromSeqs, externalReferencePath,
-            optDisableInlineMateInfoV2, disable, optDisableNameTokenizedV2);
-    }
-
-    /**
-     * Task 12 (#11 ch3, name_tok_v2) builder. Returns a new instance with
-     * {@link #optDisableNameTokenizedV2} replaced. Builder-style
-     * convenience for callers that want to opt out of the v1.8 default
-     * read_names codec (e.g. to preserve M82 compound layout for
-     * cross-version round-trip tests, or to use the v1 NAME_TOKENIZED
-     * codec via {@code signalCodecOverrides["read_names"]}).
-     */
-    public WrittenGenomicRun withOptDisableNameTokenizedV2(boolean disable) {
-        return new WrittenGenomicRun(
-            acquisitionMode, referenceUri, platform, sampleName,
-            positions, mappingQualities, flags, sequences, qualities,
-            offsets, lengths, cigars, readNames, mateChromosomes,
-            matePositions, templateLengths, chromosomes,
-            signalCompression, signalCodecOverrides, provenanceRecords,
-            embedReference, referenceChromSeqs, externalReferencePath,
-            optDisableInlineMateInfoV2, optDisableRefDiffV2, disable);
+            embed, chromSeqs, externalPath);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */
