@@ -7,6 +7,7 @@
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOCompoundField.h"
 #import "Dataset/TTIOCompoundIO.h"
+#import "Genomics/TTIOGenomicIndex.h"  // TTIOOffsetsFromLengths (v1.10 #10)
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "ValueClasses/TTIOEnums.h"
@@ -611,13 +612,22 @@ static NSData *decryptChannelWithDispatch(
             id<TTIOStorageGroup> idx = [run openGroupNamed:@"spectrum_index" error:error];
             if (!sig || !idx) return NO;
 
-            id<TTIOStorageDataset> offsDs = [idx openDatasetNamed:@"offsets" error:error];
             id<TTIOStorageDataset> lensDs = [idx openDatasetNamed:@"lengths" error:error];
-            if (!offsDs || !lensDs) return NO;
-            NSData *offsetsData = [offsDs readAll:error];
+            if (!lensDs) return NO;
             NSData *lengthsData = [lensDs readAll:error];
-            if (!offsetsData || !lengthsData) return NO;
-            NSUInteger count = offsetsData.length / 8;
+            if (!lengthsData) return NO;
+            // v1.10 #10: offsets is omitted from disk by default;
+            // synthesize from cumsum(lengths). Pre-v1.10 files have it.
+            NSData *offsetsData;
+            if ([idx hasChildNamed:@"offsets"]) {
+                id<TTIOStorageDataset> offsDs = [idx openDatasetNamed:@"offsets" error:error];
+                if (!offsDs) return NO;
+                offsetsData = [offsDs readAll:error];
+                if (!offsetsData) return NO;
+            } else {
+                offsetsData = TTIOOffsetsFromLengths(lengthsData);
+            }
+            NSUInteger count = lengthsData.length / 4;
             const uint64_t *offsets = (const uint64_t *)offsetsData.bytes;
             const uint32_t *lengths = (const uint32_t *)lengthsData.bytes;
 
@@ -728,15 +738,24 @@ static NSData *decryptChannelWithDispatch(
                     [gRun openGroupNamed:@"genomic_index" error:error];
                 if (!gSig || !gIdx) return NO;
 
-                id<TTIOStorageDataset> gOffsDs =
-                    [gIdx openDatasetNamed:@"offsets" error:error];
                 id<TTIOStorageDataset> gLensDs =
                     [gIdx openDatasetNamed:@"lengths" error:error];
-                if (!gOffsDs || !gLensDs) return NO;
-                NSData *gOffsetsData = [gOffsDs readAll:error];
+                if (!gLensDs) return NO;
                 NSData *gLengthsData = [gLensDs readAll:error];
-                if (!gOffsetsData || !gLengthsData) return NO;
-                NSUInteger gCount = gOffsetsData.length / 8;
+                if (!gLengthsData) return NO;
+                // v1.10 #10: synthesize offsets from cumsum(lengths)
+                // when the column is absent (default for v1.10+ files).
+                NSData *gOffsetsData;
+                if ([gIdx hasChildNamed:@"offsets"]) {
+                    id<TTIOStorageDataset> gOffsDs =
+                        [gIdx openDatasetNamed:@"offsets" error:error];
+                    if (!gOffsDs) return NO;
+                    gOffsetsData = [gOffsDs readAll:error];
+                    if (!gOffsetsData) return NO;
+                } else {
+                    gOffsetsData = TTIOOffsetsFromLengths(gLengthsData);
+                }
+                NSUInteger gCount = gLengthsData.length / 4;
                 const uint64_t *gOffsets = (const uint64_t *)gOffsetsData.bytes;
                 const uint32_t *gLengths = (const uint32_t *)gLengthsData.bytes;
 
@@ -1032,15 +1051,23 @@ static NSData *decryptChannelWithDispatch(
             TTIOHDF5Group *hdf5GIdx =
                 [hdf5GRun openGroupNamed:@"genomic_index" error:NULL];
 
-            id<TTIOStorageDataset> gOffsDs =
-                [gIdx openDatasetNamed:@"offsets" error:error];
             id<TTIOStorageDataset> gLensDs =
                 [gIdx openDatasetNamed:@"lengths" error:error];
-            if (!gOffsDs || !gLensDs) return NO;
-            NSData *gOffsetsData = [gOffsDs readAll:error];
+            if (!gLensDs) return NO;
             NSData *gLengthsData = [gLensDs readAll:error];
-            if (!gOffsetsData || !gLengthsData) return NO;
-            NSUInteger gCount = gOffsetsData.length / 8;
+            if (!gLengthsData) return NO;
+            // v1.10 #10: synthesize offsets when absent.
+            NSData *gOffsetsData;
+            if ([gIdx hasChildNamed:@"offsets"]) {
+                id<TTIOStorageDataset> gOffsDs =
+                    [gIdx openDatasetNamed:@"offsets" error:error];
+                if (!gOffsDs) return NO;
+                gOffsetsData = [gOffsDs readAll:error];
+                if (!gOffsetsData) return NO;
+            } else {
+                gOffsetsData = TTIOOffsetsFromLengths(gLengthsData);
+            }
+            NSUInteger gCount = gLengthsData.length / 4;
             const uint64_t *gOffsets = (const uint64_t *)gOffsetsData.bytes;
             const uint32_t *gLengths = (const uint32_t *)gLengthsData.bytes;
 

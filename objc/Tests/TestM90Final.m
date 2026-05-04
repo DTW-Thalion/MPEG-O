@@ -183,9 +183,10 @@ static void testM90_11HeadersStripsPlaintext(void)
          "M90.11: flags_encrypted blob present");
     PASS([idx hasChildNamed:@"chromosomes_encrypted"],
          "M90.11: chromosomes_encrypted blob present");
-    // offsets/lengths stay plaintext (structural framing).
-    PASS([idx hasChildNamed:@"offsets"],
-         "M90.11: offsets stays plaintext");
+    // lengths stays plaintext (structural framing). v1.10 #10:
+    // offsets is no longer written on disk; computed from cumsum.
+    PASS(![idx hasChildNamed:@"offsets"],
+         "M90.11: offsets absent (v1.10 #10)");
     PASS([idx hasChildNamed:@"lengths"],
          "M90.11: lengths stays plaintext");
 

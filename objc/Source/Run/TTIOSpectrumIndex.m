@@ -3,6 +3,7 @@
 #import "ValueClasses/TTIOIsolationWindow.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import "HDF5/TTIOHDF5Types.h"
+#import "Genomics/TTIOGenomicIndex.h"  // TTIOOffsetsFromLengths (v1.10 #10)
 
 @implementation TTIOSpectrumIndex
 {
@@ -161,10 +162,21 @@ static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error
 
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error
 {
+    return [self writeToGroup:parent keepOffsetsColumn:NO error:error];
+}
+
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent
+   keepOffsetsColumn:(BOOL)keepOffsetsColumn
+                error:(NSError **)error
+{
     id<TTIOStorageGroup> g = [parent createGroupNamed:@"spectrum_index" error:error];
     if (!g) return NO;
     if (![g setAttributeValue:@((int64_t)_count) forName:@"count" error:error]) return NO;
-    if (!writeArray(g, @"offsets",          TTIOPrecisionInt64,   _offsets,          error)) return NO;
+    // v1.10 #10: offsets is omitted on disk by default; computed
+    // from cumsum(lengths) on read.
+    if (keepOffsetsColumn) {
+        if (!writeArray(g, @"offsets",      TTIOPrecisionInt64,   _offsets,          error)) return NO;
+    }
     if (!writeArray(g, @"lengths",          TTIOPrecisionUInt32,  _lengths,          error)) return NO;
     if (!writeArray(g, @"retention_times",  TTIOPrecisionFloat64, _retentionTimes,   error)) return NO;
     if (!writeArray(g, @"ms_levels",        TTIOPrecisionInt32,   _msLevels,         error)) return NO;
@@ -188,15 +200,24 @@ static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error
 {
     id<TTIOStorageGroup> g = [parent openGroupNamed:@"spectrum_index" error:error];
     if (!g) return nil;
-    NSData *offsets = readArray(g, @"offsets", error);
     NSData *lengths = readArray(g, @"lengths", error);
+    if (!lengths) return nil;
+    // v1.10 #10: offsets is omitted from disk by default; synthesize
+    // from cumsum(lengths). Pre-v1.10 files have it on disk.
+    NSData *offsets;
+    if ([g hasChildNamed:@"offsets"]) {
+        offsets = readArray(g, @"offsets", error);
+        if (!offsets) return nil;
+    } else {
+        offsets = TTIOOffsetsFromLengths(lengths);
+    }
     NSData *rts     = readArray(g, @"retention_times", error);
     NSData *ml      = readArray(g, @"ms_levels", error);
     NSData *pol     = readArray(g, @"polarities", error);
     NSData *pmz     = readArray(g, @"precursor_mzs", error);
     NSData *pc      = readArray(g, @"precursor_charges", error);
     NSData *bp      = readArray(g, @"base_peak_intensities", error);
-    if (!offsets || !lengths || !rts || !ml || !pol || !pmz || !pc || !bp) return nil;
+    if (!rts || !ml || !pol || !pmz || !pc || !bp) return nil;
     // M74 schema-gating: probe for the four optional columns.
     NSData *am = nil, *itm = nil, *ilo = nil, *iup = nil;
     if ([g hasChildNamed:@"activation_methods"]) {

@@ -5,6 +5,28 @@
 #import "HDF5/TTIOHDF5Group.h"
 #import "Dataset/TTIOCompoundIO.h"
 
+/* v1.10 #10 helper: synthesize per-record byte offsets from a uint32
+ * lengths array. offsets[i] = sum(lengths[0..i]), produced as a uint64
+ * NSData blob to avoid the >4 GB overflow cliff on deep WGS even when
+ * the input lengths are uint32. Empty input returns 0-byte NSData. */
+NSData *TTIOOffsetsFromLengths(NSData *lengths)
+{
+    NSUInteger n = lengths.length / sizeof(uint32_t);
+    if (n == 0) {
+        return [NSData data];
+    }
+    const uint32_t *lenBuf = (const uint32_t *)lengths.bytes;
+    NSMutableData *out = [NSMutableData dataWithLength:n * sizeof(uint64_t)];
+    uint64_t *outBuf = (uint64_t *)out.mutableBytes;
+    outBuf[0] = 0;
+    uint64_t acc = 0;
+    for (NSUInteger i = 1; i < n; i++) {
+        acc += (uint64_t)lenBuf[i - 1];
+        outBuf[i] = acc;
+    }
+    return out;
+}
+
 @implementation TTIOGenomicIndex {
     NSData *_offsetsData;
     NSData *_lengthsData;
@@ -131,8 +153,20 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
 
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    // 5 typed numeric channels, gzip+chunked.
-    if (!writeTypedChannel(group, @"offsets",           TTIOPrecisionUInt64, _offsetsData,          error)) return NO;
+    return [self writeToGroup:group keepOffsetsColumn:NO error:error];
+}
+
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
+   keepOffsetsColumn:(BOOL)keepOffsetsColumn
+                error:(NSError **)error
+{
+    // v1.10 #10 (offsets-cumsum): offsets is omitted from disk by
+    // default — derivable from cumsum(lengths). When
+    // keepOffsetsColumn==YES, the redundant column is written for
+    // byte-equivalent backward compat with pre-v1.10 readers.
+    if (keepOffsetsColumn) {
+        if (!writeTypedChannel(group, @"offsets",       TTIOPrecisionUInt64, _offsetsData,          error)) return NO;
+    }
     if (!writeTypedChannel(group, @"lengths",           TTIOPrecisionUInt32, _lengthsData,          error)) return NO;
     if (!writeTypedChannel(group, @"positions",         TTIOPrecisionInt64,  _positionsData,        error)) return NO;
     if (!writeTypedChannel(group, @"mapping_qualities", TTIOPrecisionUInt8,  _mappingQualitiesData, error)) return NO;
@@ -191,10 +225,17 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
 + (instancetype)readFromGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
     NSError *cerr = nil;
-    NSData *offsets   = readTypedChannel(group, @"offsets",           &cerr);
-    if (!offsets)   { if (error) *error = cerr; return nil; }
     NSData *lengths   = readTypedChannel(group, @"lengths",           &cerr);
     if (!lengths)   { if (error) *error = cerr; return nil; }
+    // v1.10 #10: offsets is omitted from disk by default — synthesize
+    // from cumsum(lengths). Pre-v1.10 files have it on disk.
+    NSData *offsets;
+    if ([group hasChildNamed:@"offsets"]) {
+        offsets = readTypedChannel(group, @"offsets",           &cerr);
+        if (!offsets)   { if (error) *error = cerr; return nil; }
+    } else {
+        offsets = TTIOOffsetsFromLengths(lengths);
+    }
     NSData *positions = readTypedChannel(group, @"positions",         &cerr);
     if (!positions) { if (error) *error = cerr; return nil; }
     NSData *mapqs     = readTypedChannel(group, @"mapping_qualities", &cerr);
