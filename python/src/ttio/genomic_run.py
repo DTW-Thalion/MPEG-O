@@ -646,10 +646,17 @@ class GenomicRun:
                 all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
                 self._decoded_read_names = _name_tok.decode(all_bytes)
                 return self._decoded_read_names[i]
+            if codec_id == int(Compression.NAME_TOKENIZED_V2):
+                # v1.8 #11 ch3: name_tok_v2 codec output (NTK2 magic).
+                from .codecs import name_tokenizer_v2 as _nt2
+                all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+                self._decoded_read_names = _nt2.decode(all_bytes)
+                return self._decoded_read_names[i]
             raise ValueError(
                 f"signal_channel 'read_names': @compression={codec_id} "
                 "is not a supported TTIO codec id for the read_names "
-                "channel (only NAME_TOKENIZED = 8 is recognised)"
+                "channel (only NAME_TOKENIZED = 8 and "
+                "NAME_TOKENIZED_V2 = 15 are recognised)"
             )
 
         # Compound path (M82, no override).
