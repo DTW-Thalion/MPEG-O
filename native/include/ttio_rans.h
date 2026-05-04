@@ -24,6 +24,8 @@ extern "C" {
 #define TTIO_RANS_ERR_CORRUPT -3
 #define TTIO_RANS_ERR_RESERVED_MF        -4   /* mate_info_v2: MF value 3 seen */
 #define TTIO_RANS_ERR_NS_LENGTH_MISMATCH -5   /* mate_info_v2: NS varint count != NUM_CROSS */
+#define TTIO_RANS_ERR_ESC_LENGTH_MISMATCH -6  /* ref_diff_v2: ESC count mismatch */
+#define TTIO_RANS_ERR_RESERVED_ESC_STREAM -7  /* ref_diff_v2: ESC stream_id >= 3 */
 
 typedef struct ttio_rans_pool ttio_rans_pool;
 
@@ -342,6 +344,49 @@ int ttio_mate_info_v2_decode(
     int32_t        *out_mate_chrom_ids,
     int64_t        *out_mate_positions,
     int32_t        *out_template_lengths);
+
+/* ──────────────────────────────────────────────────────────────────────
+ * REF_DIFF v2 — CRAM-style bit-packed sequence diff codec (codec id 14).
+ * Spec: docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md
+ *
+ * Encoded blob written as signal_channels/sequences/refdiff_v2 with
+ * @compression = 14. Outer container preserves v1 slice index;
+ * each slice body is a 24-byte sub-header + 5 rANS-O0-encoded
+ * substreams (FLAG / BS / IN / SC / ESC).
+ *
+ * Returns 0 on success; negative TTIO_RANS_ERR_* on framing,
+ * length, or reserved-value violations.
+ * ────────────────────────────────────────────────────────────────────── */
+typedef struct {
+    const uint8_t  *sequences;        /* concatenated ACGTN bytes */
+    const uint64_t *offsets;          /* n_reads + 1 entries */
+    const int64_t  *positions;        /* 1-based reference position */
+    const char    **cigar_strings;    /* per-read CIGAR */
+    uint64_t        n_reads;
+    const uint8_t  *reference;        /* reference chrom bytes */
+    uint64_t        reference_length;
+    uint64_t        reads_per_slice;  /* default 10000 */
+    const uint8_t  *reference_md5;   /* 16 bytes */
+    const char     *reference_uri;   /* UTF-8 nul-terminated */
+} ttio_ref_diff_v2_input;
+
+size_t ttio_ref_diff_v2_max_encoded_size(uint64_t n_reads, uint64_t total_bases);
+
+int ttio_ref_diff_v2_encode(
+    const ttio_ref_diff_v2_input *in,
+    uint8_t *out,
+    size_t  *out_len);
+
+int ttio_ref_diff_v2_decode(
+    const uint8_t  *encoded,
+    size_t          encoded_size,
+    const int64_t  *positions,
+    const char    **cigar_strings,
+    uint64_t        n_reads,
+    const uint8_t  *reference,
+    uint64_t        reference_length,
+    uint8_t        *out_sequences,
+    uint64_t       *out_offsets);
 
 #ifdef __cplusplus
 }
