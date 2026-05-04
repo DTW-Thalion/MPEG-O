@@ -1744,7 +1744,12 @@ class M86CodecWiringTest {
     }
 
     /** Build a 100-read run with the realistic Phase F mate distribution.
-     *  Mirrors Python {@code _make_phase_f_run}. */
+     *  Mirrors Python {@code _make_phase_f_run}.
+     *
+     *  <p>Task 13 (mate_info v2): always opts out of the v1.7 inline_v2
+     *  default via {@link WrittenGenomicRun#withOptDisableInlineMateInfoV2}.
+     *  Phase F tests exercise the v1 per-field codec surface; the new
+     *  dispatch tests (MateInfoV2DispatchTest) cover the v2 path. */
     private static WrittenGenomicRun makePhaseFRun(
             Map<String, Compression> overrides) {
         int n = 100;
@@ -1783,7 +1788,9 @@ class M86CodecWiringTest {
             positions, mapqs, flags, seq, qual, offsets, lengths,
             cigars, readNames, mateChroms, matePos, tlens, chroms,
             Compression.NONE,
-            overrides == null ? Map.of() : overrides);
+            overrides == null ? Map.of() : overrides)
+            // Task 13: opt out so v1 per-field paths remain exercisable.
+            .withOptDisableInlineMateInfoV2(true);
     }
 
     // ── 46. Phase F: round-trip mate_info_chrom via NAME_TOKENIZED ──

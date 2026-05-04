@@ -890,6 +890,25 @@ public class SpectralDataset implements
                     + "The override no longer applies. See "
                     + "docs/format-spec.md §4 and §10.7.");
             }
+            // Task 13 (mate_info v2): when inline_v2 is the active
+            // path (default), mate_info_* override keys are rejected
+            // with a message pointing at optDisableInlineMateInfoV2.
+            // The v1 per-field overrides only apply under opt-out.
+            if (!run.optDisableInlineMateInfoV2()
+                    && global.thalion.ttio.codecs.MateInfoV2.isAvailable()
+                    && (chName.equals("mate_info_chrom")
+                        || chName.equals("mate_info_pos")
+                        || chName.equals("mate_info_tlen"))) {
+                throw new IllegalArgumentException(
+                    "signalCodecOverrides['" + chName + "']: "
+                    + "mate_info v2 (inline_v2 blob) is the default "
+                    + "in v1.7 and the per-field override keys "
+                    + "(mate_info_chrom / mate_info_pos / mate_info_tlen) "
+                    + "are not active. To use v1 per-field overrides, "
+                    + "opt out of v2 by calling "
+                    + ".withOptDisableInlineMateInfoV2(true) on the "
+                    + "WrittenGenomicRun before writing.");
+            }
             // M86 Phase F Binding Decision §126 / Gotcha §143: the
             // bare "mate_info" key is reserved and rejected with a
             // message pointing at the three per-field virtual channel
@@ -1207,50 +1226,65 @@ public class SpectralDataset implements
                         run.readNames());
                 }
 
-                // M86 Phase F: schema lift for mate_info. When ANY of
-                // the three per-field overrides (mate_info_chrom /
-                // mate_info_pos / mate_info_tlen) is in
-                // signalCodecOverrides, the writer creates a subgroup
-                // signal_channels/mate_info/ containing three child
-                // datasets (chrom, pos, tlen) and dispatches each
-                // child independently — codec-compressed if the per-
-                // field override is set, natural-dtype HDF5 ZLIB if
-                // not (Binding Decisions §125, §127). Partial
-                // overrides allowed (Gotcha §142). When NO mate_info_*
-                // override is set, the existing M82 compound write
-                // path is used unchanged for byte parity with pre-
-                // Phase-F files.
-                java.util.Map<String, Enums.Compression> mateOverrides =
-                    new java.util.LinkedHashMap<>();
-                for (String k : new String[]{"mate_info_chrom",
-                        "mate_info_pos", "mate_info_tlen"}) {
-                    Enums.Compression resolved = resolveIntOverride(run, k);
-                    if (resolved != null) {
-                        mateOverrides.put(k, resolved);
-                    }
-                }
-                if (!mateOverrides.isEmpty()) {
-                    writeMateInfoSubgroup(sc, run, mateOverrides);
+                // Task 13 (mate_info v2): when the native library is
+                // available AND the caller has not opted out, write the
+                // v1.7 inline_v2 blob to
+                // signal_channels/mate_info/inline_v2 plus a
+                // chrom_names compound sidecar (for mate-only chroms
+                // not in the own-read chromosome set).
+                // When the run opts out (optDisableInlineMateInfoV2=true)
+                // or the native library is unavailable, fall through to
+                // the legacy path (M86 Phase F subgroup or M82 compound).
+                boolean nativeAvailableForV2 =
+                    global.thalion.ttio.codecs.MateInfoV2.isAvailable();
+                if (!run.optDisableInlineMateInfoV2() && nativeAvailableForV2) {
+                    writeMateInfoV2(sc, run);
                 } else {
-                    // mate_info: chrom (VL_STRING) + pos (int64) + tlen (int64).
-                    List<global.thalion.ttio.providers.CompoundField> mateFields = List.of(
-                        new global.thalion.ttio.providers.CompoundField("chrom",
-                            global.thalion.ttio.providers.CompoundField.Kind.VL_STRING),
-                        new global.thalion.ttio.providers.CompoundField("pos",
-                            global.thalion.ttio.providers.CompoundField.Kind.INT64),
-                        new global.thalion.ttio.providers.CompoundField("tlen",
-                            global.thalion.ttio.providers.CompoundField.Kind.INT64));
-                    List<Object[]> mateRows = new ArrayList<>(run.readCount());
-                    for (int i = 0; i < run.readCount(); i++) {
-                        mateRows.add(new Object[]{
-                            run.mateChromosomes().get(i),
-                            run.matePositions()[i],
-                            (long) run.templateLengths()[i],
-                        });
+                    // M86 Phase F: schema lift for mate_info. When ANY of
+                    // the three per-field overrides (mate_info_chrom /
+                    // mate_info_pos / mate_info_tlen) is in
+                    // signalCodecOverrides, the writer creates a subgroup
+                    // signal_channels/mate_info/ containing three child
+                    // datasets (chrom, pos, tlen) and dispatches each
+                    // child independently — codec-compressed if the per-
+                    // field override is set, natural-dtype HDF5 ZLIB if
+                    // not (Binding Decisions §125, §127). Partial
+                    // overrides allowed (Gotcha §142). When NO mate_info_*
+                    // override is set, the existing M82 compound write
+                    // path is used unchanged for byte parity with pre-
+                    // Phase-F files.
+                    java.util.Map<String, Enums.Compression> mateOverrides =
+                        new java.util.LinkedHashMap<>();
+                    for (String k : new String[]{"mate_info_chrom",
+                            "mate_info_pos", "mate_info_tlen"}) {
+                        Enums.Compression resolved = resolveIntOverride(run, k);
+                        if (resolved != null) {
+                            mateOverrides.put(k, resolved);
+                        }
                     }
-                    try (var ds = sc.createCompoundDataset("mate_info", mateFields,
-                                                             mateRows.size())) {
-                        ds.writeAll(mateRows);
+                    if (!mateOverrides.isEmpty()) {
+                        writeMateInfoSubgroup(sc, run, mateOverrides);
+                    } else {
+                        // mate_info: chrom (VL_STRING) + pos (int64) + tlen (int64).
+                        List<global.thalion.ttio.providers.CompoundField> mateFields = List.of(
+                            new global.thalion.ttio.providers.CompoundField("chrom",
+                                global.thalion.ttio.providers.CompoundField.Kind.VL_STRING),
+                            new global.thalion.ttio.providers.CompoundField("pos",
+                                global.thalion.ttio.providers.CompoundField.Kind.INT64),
+                            new global.thalion.ttio.providers.CompoundField("tlen",
+                                global.thalion.ttio.providers.CompoundField.Kind.INT64));
+                        List<Object[]> mateRows = new ArrayList<>(run.readCount());
+                        for (int i = 0; i < run.readCount(); i++) {
+                            mateRows.add(new Object[]{
+                                run.mateChromosomes().get(i),
+                                run.matePositions()[i],
+                                (long) run.templateLengths()[i],
+                            });
+                        }
+                        try (var ds = sc.createCompoundDataset("mate_info", mateFields,
+                                                                 mateRows.size())) {
+                            ds.writeAll(mateRows);
+                        }
                     }
                 }
             }
@@ -1308,6 +1342,121 @@ public class SpectralDataset implements
                 .append("}");
         }
         return json.append("]").toString();
+    }
+
+    /** Task 13 (mate_info v2): write the CRAM-style inline_v2 blob.
+     *
+     *  <p>Creates a subgroup {@code signal_channels/mate_info/} containing:
+     *  <ul>
+     *    <li>{@code inline_v2} — uint8 1-D dataset (the encoded blob),
+     *        {@code @compression = 13} (MATE_INLINE_V2).</li>
+     *    <li>{@code chrom_names} — compound[(name, VL_STRING)] sidecar
+     *        mapping chrom_id integers (used inside the blob) back to
+     *        chromosome name strings. One row per chrom in encounter
+     *        order (own chroms first, then mate-only chroms). Row index
+     *        == chrom_id used in the blob. {@code mate_chrom_id == -1}
+     *        means unmapped (RNEXT='*'); no sidecar row for that sentinel.</li>
+     *  </ul>
+     *
+     *  <p>Chrom-id encoding: own chromosomes are indexed by encounter
+     *  order from {@code run.chromosomes()} (same as the genomic_index
+     *  chromosome_ids). Mate chromosomes that reference a chrom not in
+     *  the own set extend the table; {@code "*"} is mapped to -1 and
+     *  never gets a sidecar row; {@code ""} (unpaired) is also -1.
+     *
+     *  <p>Own chrom ids come from the GenomicIndex encounter-order map
+     *  and are passed as {@code short[]} (Java's closest to uint16;
+     *  (short)0xFFFF for the unmapped sentinel). */
+    private static void writeMateInfoV2(
+            global.thalion.ttio.providers.StorageGroup sc,
+            WrittenGenomicRun run) {
+        int n = run.readCount();
+
+        // Build encounter-order chrom table, starting from own chroms.
+        // The GenomicIndex writer uses the same encounter order; we
+        // replicate it here so chrom_ids are consistent on the read side.
+        java.util.LinkedHashMap<String, Integer> chromToId =
+            new java.util.LinkedHashMap<>();
+        for (String chr : run.chromosomes()) {
+            if (!chromToId.containsKey(chr)) {
+                chromToId.put(chr, chromToId.size());
+            }
+        }
+        // Extend with mate-only chroms (non-'*', non-'', non-'=').
+        for (String mc : run.mateChromosomes()) {
+            if (mc == null || mc.isEmpty() || "*".equals(mc)) continue;
+            if (!chromToId.containsKey(mc)) {
+                chromToId.put(mc, chromToId.size());
+            }
+        }
+
+        // Build typed arrays for encode.
+        short[] ownChromIds   = new short[n];
+        long[]  ownPositions  = new long[n];
+        int[]   mateChromIds  = new int[n];
+        long[]  matePositions = new long[n];
+        int[]   templateLens  = new int[n];
+
+        for (int i = 0; i < n; i++) {
+            // Own chrom id from table (unmapped own → 0xFFFF).
+            String ownChr = run.chromosomes().get(i);
+            Integer ownId = chromToId.get(ownChr);
+            ownChromIds[i] = (ownId == null) ? (short) 0xFFFF
+                           : ownId.shortValue();
+            ownPositions[i] = run.positions()[i];
+
+            // Mate chrom id: '*'/'' → -1; '=' → own chrom id.
+            String mc = run.mateChromosomes().get(i);
+            if (mc == null || mc.isEmpty() || "*".equals(mc)) {
+                mateChromIds[i] = -1;
+            } else if ("=".equals(mc)) {
+                mateChromIds[i] = (ownId == null) ? -1 : ownId;
+            } else {
+                Integer mcId = chromToId.get(mc);
+                mateChromIds[i] = (mcId == null) ? -1 : mcId;
+            }
+            matePositions[i] = run.matePositions()[i];
+            templateLens[i]  = run.templateLengths()[i];
+        }
+
+        // Encode to the inline_v2 blob via the native JNI library.
+        byte[] blob = global.thalion.ttio.codecs.MateInfoV2.encode(
+            mateChromIds, matePositions, templateLens,
+            ownChromIds, ownPositions);
+
+        // Write the mate_info group with inline_v2 + chrom_names.
+        try (var mateGroup = sc.createGroup("mate_info")) {
+            // Write inline_v2 blob dataset.
+            global.thalion.ttio.providers.StorageDataset blobDs;
+            try {
+                blobDs = mateGroup.createDataset("inline_v2",
+                    Enums.Precision.UINT8, blob.length,
+                    65536, Enums.Compression.NONE, 0);
+            } catch (UnsupportedOperationException e) {
+                blobDs = mateGroup.createDataset("inline_v2",
+                    Enums.Precision.UINT8, blob.length,
+                    0, Enums.Compression.NONE, 0);
+            }
+            try (var closeMe = blobDs) {
+                closeMe.writeAll(blob);
+                closeMe.setAttribute("compression",
+                    codecIdFor(Enums.Compression.MATE_INLINE_V2));
+            }
+
+            // Write chrom_names sidecar compound[(name, VL_STRING)].
+            // One row per chrom in encounter order (row index == chrom_id).
+            List<global.thalion.ttio.providers.CompoundField> nameFields = List.of(
+                new global.thalion.ttio.providers.CompoundField("name",
+                    global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
+            List<Object[]> nameRows = new ArrayList<>(chromToId.size());
+            for (String chromName : chromToId.keySet()) {
+                nameRows.add(new Object[]{ chromName });
+            }
+            try (var ds = mateGroup.createCompoundDataset(
+                    "chrom_names", nameFields, nameRows.size())) {
+                ds.writeAll(nameRows);
+            }
+        }
     }
 
     /** M86 Phase F: write the mate_info subgroup with per-field codec
@@ -1930,7 +2079,19 @@ public class SpectralDataset implements
      *  When the run is a v1.5 candidate and the caller has not set an
      *  explicit override for a given integer channel, the writer applies
      *  these defaults. Mirrors Python's DEFAULT_CODECS_V1_5 / ObjC's
-     *  _TTIO_M95_ResolveIntOverride. */
+     *  _TTIO_M95_ResolveIntOverride.
+     *
+     *  <p>v1.7 (Task 13): mate_info_pos / mate_info_tlen / mate_info_chrom
+     *  REMOVED from this map. When the native library is available and
+     *  the run has not opted out, the v2 inline_v2 blob replaces the
+     *  v1 per-field datasets entirely. The per-field auto-defaults would
+     *  never be reached on the v2 path; on the opt-out (v1) path, the
+     *  callers that need these overrides pass them explicitly via
+     *  signalCodecOverrides. Keeping them here would produce stale
+     *  v1-style files when the native library is absent, which is
+     *  incorrect: v2 is the default and the opt-out path uses whatever
+     *  the caller provides in signalCodecOverrides (empty → M82 compound).
+     */
     private static final java.util.Map<String, Enums.Compression>
         V1_5_INT_DEFAULTS = java.util.Map.of(
             // v1.6: positions / flags / mapping_qualities / template_lengths
@@ -1938,9 +2099,8 @@ public class SpectralDataset implements
             // under genomic_index/ (positions / flags / mapping_qualities)
             // or inside the mate_info subgroup (template_lengths via
             // mate_info_tlen). See docs/format-spec.md §4 and §10.7.
-            "mate_info_pos", Enums.Compression.RANS_ORDER0,
-            "mate_info_tlen", Enums.Compression.RANS_ORDER0,
-            "mate_info_chrom", Enums.Compression.NAME_TOKENIZED
+            // v1.7 (Task 13): mate_info_pos / mate_info_tlen /
+            // mate_info_chrom also removed (see Javadoc above).
         );
 
     /** M95 v1.2: return {@code true} when the run will produce a v1.5
