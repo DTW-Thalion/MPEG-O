@@ -11,6 +11,66 @@ public API is stable from v1.0.0 onward (tagged 2026-04-23). See
 
 ---
 
+## [v1.7] — 2026-05-03 — mate_info v2 (#11 channel 1)
+
+### Added
+
+- **mate_info v2 codec** (`MATE_INLINE_V2 = 13`): CRAM-style inline
+  mate-pair encoding via shared C kernel in libttio_rans. 4-substream
+  decomposition (MF / NS / NP / TS) exploits SAM mate-pair invariants
+  (~87% of records are SAME_CHROM_NEARBY — one-byte MF flag + small
+  zigzag-varint delta). **Saves ~6.8 MB** on chr22 NA12878 lean+mapped
+  vs the v1.6 per-field layout (full-stack context); **47.9 MB** vs the
+  M82 compound baseline in the isolation gate.
+- **`opt_disable_inline_mate_info_v2` opt-out flag** on
+  `WrittenGenomicRun` (Python/Java/ObjC). Default `False` — set `True`
+  to fall back to the v1 layout when v1.6 readers must round-trip the
+  file.
+- **`signal_channels/mate_info/inline_v2` + `chrom_names` sidecar**:
+  new on-disk layout with `@compression=13`. The `chrom_names` compound
+  dataset (one `(name, VL_STRING)` row per chrom_id, encounter order)
+  preserves mate-only chrom strings absent from
+  `genomic_index/chromosome_names` — necessary because mate chromosomes
+  can reference chroms that no own-read uses.
+- **`ttio_mate_info_v2_encode` / `ttio_mate_info_v2_decode`** public C
+  library entry points in `native/src/mate_info_v2.{c,h}`; called by
+  Python ctypes, Java JNI, and ObjC direct link.
+- **Compression gate test** at
+  `python/tests/integration/test_mate_info_v2_compression_gate.py`:
+  chr22 savings hard gate (>= 5 MB). Measured result: 47.922 MB PASS.
+- **Benchmark doc** at
+  `docs/benchmarks/2026-05-03-mate-info-v2-results.md`.
+
+### Changed
+
+- New files now write `signal_channels/mate_info/inline_v2` by default
+  when `TTIO_RANS_LIB_PATH` is set. **v1.6 readers fail with "unknown
+  compression id 13" on v1.7 files**; either upgrade the reader or
+  write with the opt-out flag to keep the v1 layout.
+- `signal_codec_overrides[mate_info_chrom / mate_info_pos /
+  mate_info_tlen]` keys are rejected at write time when
+  `opt_disable_inline_mate_info_v2 == False` (the default). Use the
+  opt-out flag to restore per-field override access.
+- Format spec §10.9 marked **v1.7 OPT-OUT only**. New §10.9b
+  documents the inline_v2 layout, chrom_names sidecar, reader
+  dependency order, backward compatibility, and cross-language
+  byte-exact guarantee.
+
+### Cross-language byte-exact gate
+
+12/12 PASS (4 corpora × Python ↔ Java ↔ ObjC). The shared-C-kernel
+pattern eliminates cross-language encoding drift — verified via
+SHA-256 hash comparison.
+
+### References
+
+- Spec: `docs/superpowers/specs/2026-05-03-mate-info-v2-design.md`
+- Plan: `docs/superpowers/plans/2026-05-03-mate-info-v2.md`
+- Benchmarks: `docs/benchmarks/2026-05-03-mate-info-v2-results.md`
+- Format spec: `docs/format-spec.md` §10.9b
+
+---
+
 ## [Unreleased]
 
 ### Removed — 2026-05-03 L4: signal_channels integer-field duplicates
