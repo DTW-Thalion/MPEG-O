@@ -153,20 +153,8 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
 
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
-    return [self writeToGroup:group keepOffsetsColumn:NO error:error];
-}
-
-- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
-   keepOffsetsColumn:(BOOL)keepOffsetsColumn
-                error:(NSError **)error
-{
-    // v1.10 #10 (offsets-cumsum): offsets is omitted from disk by
-    // default — derivable from cumsum(lengths). When
-    // keepOffsetsColumn==YES, the redundant column is written for
-    // byte-equivalent backward compat with pre-v1.10 readers.
-    if (keepOffsetsColumn) {
-        if (!writeTypedChannel(group, @"offsets",       TTIOPrecisionUInt64, _offsetsData,          error)) return NO;
-    }
+    // v1.10 #10 (offsets-cumsum): the redundant ``offsets`` column is
+    // omitted on disk — readers derive it from cumsum(lengths).
     if (!writeTypedChannel(group, @"lengths",           TTIOPrecisionUInt32, _lengthsData,          error)) return NO;
     if (!writeTypedChannel(group, @"positions",         TTIOPrecisionInt64,  _positionsData,        error)) return NO;
     if (!writeTypedChannel(group, @"mapping_qualities", TTIOPrecisionUInt8,  _mappingQualitiesData, error)) return NO;

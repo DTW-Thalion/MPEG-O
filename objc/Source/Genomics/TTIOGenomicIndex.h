@@ -57,14 +57,6 @@
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
                 error:(NSError **)error;
 
-/** v1.10 #10 (offsets-cumsum): when keepOffsetsColumn==YES the
- *  redundant ``offsets`` column is written for byte-equivalent
- *  backward compat with pre-v1.10 readers. NO (default) omits the
- *  column on disk; readers compute it from cumsum(lengths). */
-- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
-   keepOffsetsColumn:(BOOL)keepOffsetsColumn
-                error:(NSError **)error;
-
 + (instancetype)readFromGroup:(id<TTIOStorageGroup>)group
                          error:(NSError **)error;
 

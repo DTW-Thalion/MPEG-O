@@ -64,13 +64,6 @@ NS_ASSUME_NONNULL_BEGIN
  *  byte-parity with pre-v0.6 files. */
 @property (nonatomic, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
 
-/** v1.10 #10 (offsets-cumsum) opt-out for MS spectrum_index +
- *  chromatogram_index. Default NO — new files omit the redundant
- *  ``offsets`` column (computed from ``cumsum(lengths)`` on read).
- *  Set to YES to keep the column on disk for byte-equivalent
- *  backward compat with pre-v1.10 readers. */
-@property (nonatomic, assign) BOOL optKeepOffsetsColumns;
-
 - (instancetype)initWithSpectrumClassName:(NSString *)spectrumClassName
                           acquisitionMode:(int64_t)acquisitionMode
                               channelData:(NSDictionary<NSString *, NSData *> *)channelData

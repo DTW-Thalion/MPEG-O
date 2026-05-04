@@ -121,15 +121,6 @@ NS_ASSUME_NONNULL_BEGIN
  *  ``WrittenGenomicRun.opt_disable_name_tokenized_v2``. */
 @property (nonatomic, assign) BOOL optDisableNameTokenizedV2;
 
-/** v1.10 #10 (offsets-cumsum) opt-out. Default NO — new files omit
- *  the redundant ``genomic_index/offsets`` column (offsets[i] is
- *  computed from ``cumsum(lengths)`` on read). Set to YES to keep
- *  the offsets column on disk for byte-equivalent backward compat
- *  with pre-v1.10 readers. Cross-language equivalent of Python's
- *  ``WrittenGenomicRun.opt_keep_offsets_columns`` and Java's
- *  ``WrittenGenomicRun#optKeepOffsetsColumns``. */
-@property (nonatomic, assign) BOOL optKeepOffsetsColumns;
-
 @property (readonly) NSUInteger readCount;
 
 - (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode
