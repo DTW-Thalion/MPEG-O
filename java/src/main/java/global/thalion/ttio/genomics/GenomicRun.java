@@ -98,6 +98,14 @@ public class GenomicRun
     // Null until first access to a mate field on a v2-layout file.
     private global.thalion.ttio.codecs.MateInfoV2.Triple decodedMateV2 = null;
     // Resolved chrom name table for the v2 path: index → chrom name.
+    // Task 13 (ref_diff v2): lazy decoded flat byte stream from the
+    // signal_channels/sequences/refdiff_v2 blob. Null until first access
+    // on a v1.8-layout file. Separate from decodedByteChannels["sequences"]
+    // because the source is a group child, not the sequences dataset.
+    private byte[] decodedRefDiffV2 = null;
+    // Tri-state cache for isSequencesRefDiffV2(): null = not yet probed,
+    // TRUE/FALSE = result. Avoids repeated group-open on every byteChannelSlice call.
+    private Boolean sequencesIsV2Cached = null;
     private List<String> mateV2ChromNames = null;
 
     private int cursor = 0;  // Streamable
@@ -322,6 +330,8 @@ public class GenomicRun
         if (sequencesDs != null) { sequencesDs.close(); sequencesDs = null; }
         if (qualitiesDs != null) { qualitiesDs.close(); qualitiesDs = null; }
         if (signalChannels != null) { signalChannels.close(); signalChannels = null; }
+        sequencesIsV2Cached = null;
+        decodedRefDiffV2 = null;
     }
 
     // ── Internal helpers ───────────────────────────────────────────
@@ -329,9 +339,42 @@ public class GenomicRun
     private void ensureSignalChannels() {
         if (signalChannels == null) {
             signalChannels = runGroup.openGroup("signal_channels");
-            sequencesDs = signalChannels.openDataset("sequences");
+            // v1.8 (ref_diff v2): sequences may be a GROUP rather than a
+            // dataset. Probe and leave sequencesDs null when it's a group;
+            // the byteChannelSlice dispatch will route via isSequencesRefDiffV2().
+            if (!isSequencesRefDiffV2()) {
+                sequencesDs = signalChannels.openDataset("sequences");
+            }
             qualitiesDs = signalChannels.openDataset("qualities");
         }
+    }
+
+    /** Task 13 (ref_diff v2): return {@code true} iff
+     *  {@code signal_channels/sequences} is a GROUP containing a
+     *  {@code refdiff_v2} child dataset (v1.8 layout).
+     *
+     *  <p>Uses the same try-openGroup pattern as
+     *  {@link #isMateInfoSubgroup()} (Binding Decision §128): an
+     *  exception from {@code openGroup} means it's a dataset, not a
+     *  group. Result is cached in {@link #sequencesIsV2Cached}. */
+    private boolean isSequencesRefDiffV2() {
+        if (sequencesIsV2Cached != null) return sequencesIsV2Cached;
+        // Ensure signal_channels is open before probing.
+        if (signalChannels == null) {
+            signalChannels = runGroup.openGroup("signal_channels");
+        }
+        if (!signalChannels.hasChild("sequences")) {
+            sequencesIsV2Cached = false;
+            return false;
+        }
+        try (StorageGroup seqGrp = signalChannels.openGroup("sequences")) {
+            // It's a group — check for the refdiff_v2 child dataset.
+            sequencesIsV2Cached = seqGrp.hasChild("refdiff_v2");
+        } catch (Exception e) {
+            // sequences is a dataset (v1) — not v2.
+            sequencesIsV2Cached = false;
+        }
+        return sequencesIsV2Cached;
     }
 
     /** M86: slice {@code count} bytes starting at {@code offset} from a
@@ -347,6 +390,14 @@ public class GenomicRun
         if (cached != null) {
             byte[] out = new byte[count];
             System.arraycopy(cached, (int) offset, out, 0, count);
+            return out;
+        }
+        // v1.8 probe: for sequences, check for the group layout first.
+        if ("sequences".equals(name) && isSequencesRefDiffV2()) {
+            byte[] decoded = decodeRefDiffV2Sequences();
+            decodedByteChannels.put(name, decoded);
+            byte[] out = new byte[count];
+            System.arraycopy(decoded, (int) offset, out, 0, count);
             return out;
         }
         StorageDataset ds = "sequences".equals(name) ? sequencesDs
@@ -468,6 +519,98 @@ public class GenomicRun
             off += p.length;
         }
         return out;
+    }
+
+    /** Task 13 (ref_diff v2): decode the {@code signal_channels/sequences/refdiff_v2}
+     *  blob. Returns the concatenated per-read sequence bytes (total_bases long) —
+     *  same contract as the M82 sequences channel.
+     *
+     *  <p>Caches the result in {@link #decodedRefDiffV2}; subsequent calls
+     *  return the cached array.
+     *
+     *  @throws RuntimeException when the native JNI library is unavailable.
+     *  @throws global.thalion.ttio.codecs.RefMissingException when the reference
+     *      cannot be resolved. */
+    @SuppressWarnings("unchecked")
+    private byte[] decodeRefDiffV2Sequences() {
+        if (decodedRefDiffV2 != null) return decodedRefDiffV2;
+
+        if (!global.thalion.ttio.codecs.RefDiffV2.isAvailable()) {
+            throw new RuntimeException(
+                "REF_DIFF_V2 decode requires the native JNI library "
+                + "(libttio_rans). Set -Djava.library.path to the "
+                + "directory containing the library.");
+        }
+
+        ensureSignalChannels();
+        byte[] blob;
+        try (StorageGroup seqGrp = signalChannels.openGroup("sequences");
+             StorageDataset blobDs = seqGrp.openDataset("refdiff_v2")) {
+            // Validate @compression attribute.
+            Object codecAttr = blobDs.getAttribute("compression");
+            long codecId = (codecAttr instanceof Number n) ? n.longValue() : -1L;
+            if (codecId != global.thalion.ttio.Enums.Compression.REF_DIFF_V2.ordinal()) {
+                throw new IllegalStateException(
+                    "signal_channels/sequences/refdiff_v2: @compression="
+                    + codecId + ", expected REF_DIFF_V2 = "
+                    + global.thalion.ttio.Enums.Compression.REF_DIFF_V2.ordinal());
+            }
+            long total = blobDs.shape()[0];
+            blob = (byte[]) blobDs.readSlice(0L, total);
+        }
+
+        // Parse the outer header to extract reference_uri and reference_md5.
+        global.thalion.ttio.codecs.RefDiffV2.BlobHeader header =
+            global.thalion.ttio.codecs.RefDiffV2.parseBlobHeader(blob);
+
+        // Resolve reference via ReferenceResolver (same chain as v1 REF_DIFF).
+        global.thalion.ttio.hdf5.Hdf5Group h5g = global.thalion.ttio.providers
+            .Hdf5Provider.tryUnwrapHdf5Group(runGroup);
+        if (h5g == null) {
+            throw new RuntimeException(
+                "REF_DIFF_V2 decode requires an HDF5-backed dataset; "
+                + "non-HDF5 storage providers are not yet supported.");
+        }
+        global.thalion.ttio.hdf5.Hdf5File h5File = h5g.owningFile();
+        global.thalion.ttio.codecs.ReferenceResolver resolver =
+            new global.thalion.ttio.codecs.ReferenceResolver(h5File);
+
+        // Single-chromosome runs only (v1.8 first pass).
+        java.util.Set<String> uniqueChroms = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < index.count(); i++) {
+            uniqueChroms.add(index.chromosomeAt(i));
+        }
+        String chrom;
+        if (uniqueChroms.isEmpty()) {
+            chrom = "";
+        } else if (uniqueChroms.size() > 1) {
+            throw new RuntimeException(
+                "REF_DIFF_V2 v1.8 supports single-chromosome runs only; "
+                + "this run carries " + uniqueChroms + ".");
+        } else {
+            chrom = uniqueChroms.iterator().next();
+        }
+
+        byte[] chromSeq = resolver.resolve(
+            header.referenceUri(),
+            header.referenceMd5(),
+            chrom);
+
+        // Decode via the native JNI library.
+        int n = index.count();
+        long[] positions = new long[n];
+        for (int i = 0; i < n; i++) positions[i] = index.positionAt(i);
+        String[] cigarArr = allCigars().toArray(new String[0]);
+        long totalBases = 0;
+        for (int i = 0; i < n; i++) totalBases += index.lengthAt(i);
+
+        global.thalion.ttio.codecs.RefDiffV2.Pair result =
+            global.thalion.ttio.codecs.RefDiffV2.decode(
+                blob, positions, cigarArr, chromSeq,
+                n, totalBases);
+
+        decodedRefDiffV2 = result.sequences;
+        return decodedRefDiffV2;
     }
 
     /** Return the full list of CIGAR strings for this run. Honours the

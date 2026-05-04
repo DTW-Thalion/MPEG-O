@@ -103,6 +103,17 @@ import java.util.Objects;
  *                           datasets), e.g. when v1.6 round-trip is
  *                           required or signal_codec_overrides for
  *                           {@code mate_info_*} keys are needed.
+ * @param optDisableRefDiffV2 Task 13 (ref_diff v2): when {@code false}
+ *                           (default), the writer produces the v1.8
+ *                           {@code signal_channels/sequences/refdiff_v2}
+ *                           group layout ({@code @compression=14}) when
+ *                           the native JNI library is available and the
+ *                           run is eligible (single-chromosome, all reads
+ *                           mapped, reference present). Set to
+ *                           {@code true} to opt out and preserve the
+ *                           pre-v1.8 v1 flat dataset layout (REF_DIFF
+ *                           codec id 9), e.g. when v1.7 round-trip is
+ *                           required.
  */
 public record WrittenGenomicRun(
     AcquisitionMode acquisitionMode,
@@ -128,7 +139,8 @@ public record WrittenGenomicRun(
     boolean embedReference,
     Map<String, byte[]> referenceChromSeqs,
     Path externalReferencePath,
-    boolean optDisableInlineMateInfoV2
+    boolean optDisableInlineMateInfoV2,
+    boolean optDisableRefDiffV2
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -183,7 +195,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, Map.of(), List.of(),
-             false, null, null, false);
+             false, null, null, false, false);
     }
 
     /**
@@ -218,7 +230,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, List.of(),
-             false, null, null, false);
+             false, null, null, false, false);
     }
 
     /**
@@ -254,7 +266,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, provenanceRecords,
-             false, null, null, false);
+             false, null, null, false, false);
     }
 
     /**
@@ -272,7 +284,7 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embed, chromSeqs, externalPath,
-            optDisableInlineMateInfoV2);
+            optDisableInlineMateInfoV2, optDisableRefDiffV2);
     }
 
     /**
@@ -290,7 +302,25 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            disable);
+            disable, optDisableRefDiffV2);
+    }
+
+    /**
+     * Task 13 (ref_diff v2) builder. Returns a new instance with
+     * {@link #optDisableRefDiffV2} replaced. Builder-style convenience
+     * for callers that want to opt out of the v1.8
+     * {@code signal_channels/sequences/refdiff_v2} default (e.g. to
+     * preserve v1 layout for cross-version round-trip tests).
+     */
+    public WrittenGenomicRun withOptDisableRefDiffV2(boolean disable) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            optDisableInlineMateInfoV2, disable);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

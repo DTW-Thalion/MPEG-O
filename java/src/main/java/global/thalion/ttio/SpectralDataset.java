@@ -1712,7 +1712,7 @@ public class SpectralDataset implements
         for (WrittenGenomicRun run : genomicRuns) {
             if (!run.embedReference()) continue;
             if (run.referenceChromSeqs() == null) continue;
-            // Only embed when REF_DIFF will actually be applied.
+            // Only embed when REF_DIFF (v1 or v2) will actually be applied.
             boolean hasRefDiff = false;
             for (Enums.Compression c : run.signalCodecOverrides().values()) {
                 if (c == Enums.Compression.REF_DIFF) {
@@ -1723,7 +1723,7 @@ public class SpectralDataset implements
             if (!hasRefDiff
                 && run.signalCompression() == Enums.Compression.ZLIB
                 && !run.signalCodecOverrides().containsKey("sequences")) {
-                hasRefDiff = true;  // v1.5 auto-default
+                hasRefDiff = true;  // v1.5 auto-default (REF_DIFF or REF_DIFF_V2)
             }
             if (!hasRefDiff) continue;
 
@@ -1816,24 +1816,27 @@ public class SpectralDataset implements
      *
      *  <p>Mirrors Python's {@code _write_sequences_ref_diff}. REF_DIFF
      *  is context-aware: it needs positions, cigars, and the reference
-     *  chromosome sequence in addition to the raw byte stream. The
-     *  writer:
-     *  <ol>
-     *    <li>Splits {@code run.sequences} into per-read slices via
-     *        {@code run.offsets} / {@code run.lengths}.</li>
-     *    <li>Computes the reference MD5 the same way as the embed
-     *        helper.</li>
-     *    <li>Calls {@link global.thalion.ttio.codecs.RefDiff#encode}
-     *        and stores the result as a flat uint8 dataset with
-     *        {@code @compression = 9}.</li>
-     *  </ol>
+     *  chromosome sequence in addition to the raw byte stream.
+     *
+     *  <p><b>v1.8 default (REF_DIFF_V2):</b> when the native JNI library
+     *  is available AND {@code run.optDisableRefDiffV2()} is {@code false}
+     *  AND the run is eligible (single-chromosome, all reads mapped,
+     *  reference present), writes {@code signal_channels/sequences} as a
+     *  GROUP containing a {@code refdiff_v2} child dataset
+     *  ({@code @compression = 14}). Mirrors Python's v1.8 default path.
+     *
+     *  <p><b>v1 path (REF_DIFF, codec id 9):</b> when opt-out is set or
+     *  the native library is unavailable or eligibility checks fail —
+     *  writes {@code signal_channels/sequences} as a flat uint8 dataset
+     *  with {@code @compression = 9} (or BASE_PACK = 6 on fallback).
      *
      *  <p><b>Single-chromosome limitation (v1.2 first pass):</b> all
      *  reads must align to a single chromosome. Multi-chrom is M93.X.
      *
      *  <p><b>Fallback (Q5b=C):</b> when {@code referenceChromSeqs} is
-     *  null (or doesn't cover the run's chromosome), falls back silently
-     *  to BASE_PACK and stamps {@code @compression = 6}. */
+     *  null (or doesn't cover the run's chromosome) OR any read has
+     *  cigar="*", falls back silently to BASE_PACK
+     *  ({@code @compression = 6}). */
     private static void writeSequencesRefDiff(
             global.thalion.ttio.providers.StorageGroup sc,
             WrittenGenomicRun run) {
@@ -1856,9 +1859,75 @@ public class SpectralDataset implements
         }
 
         byte[] rawBytes = run.sequences();
+
+        // M93 v1.2: REF_DIFF can't encode unmapped reads (cigar="*").
+        // When any read is unmapped, fall back to BASE_PACK on the whole
+        // channel — same Q5b=C semantics as missing reference.
+        boolean hasUnmapped = false;
+        for (String c : run.cigars()) {
+            if ("*".equals(c) || c == null || c.isEmpty()) {
+                hasUnmapped = true;
+                break;
+            }
+        }
+
+        // v1.8 dispatch: prefer the v2 path when eligible.
+        boolean useV2 = !run.optDisableRefDiffV2()
+            && global.thalion.ttio.codecs.RefDiffV2.isAvailable()
+            && chromSeq != null
+            && !hasUnmapped;
+
+        if (useV2) {
+            // v1.8 path: encode via RefDiffV2 and write as a GROUP with
+            // a refdiff_v2 child dataset (@compression = 14).
+            byte[] md5 = referenceMd5ForRun(run);
+            int n = run.readCount();
+            // Build n_reads+1 offsets from run.offsets (n entries) + total.
+            long[] offsets64 = run.offsets();
+            long[] offsets64n1;
+            if (offsets64.length == n) {
+                // run.offsets has exactly n entries; append total length.
+                long totalBases = n > 0
+                    ? offsets64[n - 1] + run.lengths()[n - 1]
+                    : 0L;
+                offsets64n1 = java.util.Arrays.copyOf(offsets64, n + 1);
+                offsets64n1[n] = totalBases;
+            } else if (offsets64.length == n + 1) {
+                offsets64n1 = offsets64;
+            } else {
+                throw new IllegalArgumentException(
+                    "run.offsets must have n_reads or n_reads+1 entries; "
+                    + "got " + offsets64.length + " for n=" + n);
+            }
+            String[] cigarArr = run.cigars().toArray(new String[0]);
+            byte[] encoded = global.thalion.ttio.codecs.RefDiffV2.encode(
+                rawBytes, offsets64n1, run.positions(),
+                cigarArr, chromSeq, md5, run.referenceUri(),
+                10_000);
+            try (var seqGroup = sc.createGroup("sequences")) {
+                global.thalion.ttio.providers.StorageDataset blobDs;
+                try {
+                    blobDs = seqGroup.createDataset("refdiff_v2",
+                        Enums.Precision.UINT8, encoded.length,
+                        65536, Enums.Compression.NONE, 0);
+                } catch (UnsupportedOperationException e) {
+                    blobDs = seqGroup.createDataset("refdiff_v2",
+                        Enums.Precision.UINT8, encoded.length,
+                        0, Enums.Compression.NONE, 0);
+                }
+                try (var closeMe = blobDs) {
+                    closeMe.writeAll(encoded);
+                    closeMe.setAttribute("compression",
+                        codecIdFor(Enums.Compression.REF_DIFF_V2));
+                }
+            }
+            return;
+        }
+
+        // v1 path (unchanged): flat dataset with REF_DIFF or BASE_PACK.
         byte[] encoded;
         int codecId;
-        if (chromSeq == null) {
+        if (chromSeq == null || hasUnmapped) {
             // Q5b=C: silent fallback to BASE_PACK on this channel.
             encoded = global.thalion.ttio.codecs.BasePack.encode(rawBytes);
             codecId = Enums.Compression.BASE_PACK.ordinal();
