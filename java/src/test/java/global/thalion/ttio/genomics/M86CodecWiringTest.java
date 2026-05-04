@@ -756,51 +756,10 @@ class M86CodecWiringTest {
     // outright. The v2 path (NAME_TOKENIZED_V2 = 15) is exercised by
     // NameTokenizedV2DispatchTest. ────────────────────────────────────
 
-    // ── 22. Phase E: reject NAME_TOKENIZED on sequences/qualities ──
-
-    @Test
-    void rejectNameTokenizedOnSequences(@TempDir Path tmp) {
-        // Per Binding Decision §113: NAME_TOKENIZED tokenises UTF-8
-        // strings, not binary byte streams. Validation throws
-        // IllegalArgumentException at write time; the message must
-        // name the codec, the channel, and explain the wrong-input-
-        // type rationale. Mentions read_names so the user knows
-        // where the codec *does* belong.
-        IllegalArgumentException ex = assertThrows(
-            IllegalArgumentException.class,
-            () -> {
-                WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
-                    Map.of("sequences", Compression.NAME_TOKENIZED));
-                writeRun(tmp, bad, "bad-nt-seq.tio");
-            });
-        String msg = ex.getMessage();
-        assertNotNull(msg, "exception must have a message");
-        assertTrue(msg.contains("NAME_TOKENIZED"),
-            "error must name the codec; got: " + msg);
-        assertTrue(msg.contains("sequences"),
-            "error must name the channel; got: " + msg);
-        assertTrue(msg.contains("tokenises UTF-8"),
-            "error must explain that NAME_TOKENIZED tokenises UTF-8; got: " + msg);
-        assertTrue(msg.contains("read_names")
-                && msg.contains("NAME_TOKENIZED"),
-            "error must point at the read_names channel for "
-            + "NAME_TOKENIZED; got: " + msg);
-
-        // Same check for the qualities channel (also forbidden).
-        IllegalArgumentException exQ = assertThrows(
-            IllegalArgumentException.class,
-            () -> {
-                WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
-                    Map.of("qualities", Compression.NAME_TOKENIZED));
-                writeRun(tmp, bad, "bad-nt-qual.tio");
-            });
-        String msgQ = exQ.getMessage();
-        assertNotNull(msgQ, "exception must have a message");
-        assertTrue(msgQ.contains("NAME_TOKENIZED"),
-            "qualities error must name the codec; got: " + msgQ);
-        assertTrue(msgQ.contains("qualities"),
-            "qualities error must name the channel; got: " + msgQ);
-    }
+    // ── 22. Phase E: reject NAME_TOKENIZED on sequences/qualities —
+    //    REMOVED in Phase 2d. The Compression.NAME_TOKENIZED enum slot
+    //    was deleted alongside the wrong-input-type reject branch; the
+    //    integer codec id 8 simply fails enum lookup at the boundary.
 
     // ── 24. Phase E: mixed all three overrides — REMOVED in Phase 2c.
     //
@@ -996,30 +955,11 @@ class M86CodecWiringTest {
         }
     }
 
-    // ── 36/37. Phase C: NAME_TOKENIZED on cigars — REMOVED in Phase 2c.
+    // ── 36/37. Phase C: NAME_TOKENIZED on cigars — REMOVED in Phase 2d.
     //
-    // The v1 NAME_TOKENIZED writer dispatch for cigars was removed;
-    // override-validation now rejects cigars=NAME_TOKENIZED upfront.
-    // RANS_ORDER0 / RANS_ORDER1 remain the only override codecs for
-    // the cigars channel.
-    @Test
-    void rejectNameTokenizedOnCigars(@TempDir Path tmp) {
-        IllegalArgumentException ex = assertThrows(
-            IllegalArgumentException.class,
-            () -> {
-                WrittenGenomicRun bad = makeRun(pureAcgt(), phredCycle(),
-                    Map.of("cigars", Compression.NAME_TOKENIZED));
-                writeRun(tmp, bad, "bad-nt-cg.tio");
-            });
-        String msg = ex.getMessage();
-        assertNotNull(msg, "exception must have a message");
-        assertTrue(msg.contains("NAME_TOKENIZED"),
-            "error must name the codec; got: " + msg);
-        assertTrue(msg.contains("cigars"),
-            "error must name the channel; got: " + msg);
-        assertTrue(msg.contains("Phase 2c") || msg.contains("v1.0"),
-            "error must reference the v1.0 / Phase 2c policy; got: " + msg);
-    }
+    // The Compression.NAME_TOKENIZED enum slot was deleted; the codec
+    // id 8 simply fails enum lookup at the boundary. Cigars accepts
+    // RANS_ORDER0 / RANS_ORDER1 only.
 
     // ── 38. Phase C: size comparison — REMOVED in Phase 2c.
     //

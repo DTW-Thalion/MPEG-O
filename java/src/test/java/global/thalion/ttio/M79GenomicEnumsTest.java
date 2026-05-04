@@ -160,7 +160,16 @@ public class M79GenomicEnumsTest {
         assertEquals(5, Compression.RANS_ORDER1.ordinal());
         assertEquals(6, Compression.BASE_PACK.ordinal());
         assertEquals(7, Compression.QUALITY_BINNED.ordinal());
-        assertEquals(8, Compression.NAME_TOKENIZED.ordinal());
+        // Slot 8 (NAME_TOKENIZED v1) and 9 (REF_DIFF v1) removed in
+        // the v1.0 reset; placeholders preserve subsequent ordinals.
+        assertEquals(8, Compression._RESERVED_8.ordinal());
+        assertEquals(9, Compression._RESERVED_9.ordinal());
+        assertEquals(10, Compression._RESERVED_10.ordinal());
+        assertEquals(11, Compression.DELTA_RANS_ORDER0.ordinal());
+        assertEquals(12, Compression.FQZCOMP_NX16_Z.ordinal());
+        assertEquals(13, Compression.MATE_INLINE_V2.ordinal());
+        assertEquals(14, Compression.REF_DIFF_V2.ordinal());
+        assertEquals(15, Compression.NAME_TOKENIZED_V2.ordinal());
     }
 
     @Test
@@ -178,8 +187,7 @@ public class M79GenomicEnumsTest {
         StorageGroup root = w.rootGroup();
         for (Compression c : new Compression[]{
                 Compression.RANS_ORDER0, Compression.RANS_ORDER1,
-                Compression.BASE_PACK, Compression.QUALITY_BINNED,
-                Compression.NAME_TOKENIZED}) {
+                Compression.BASE_PACK, Compression.QUALITY_BINNED}) {
             root.setAttribute("codec_" + c.name(), (long) c.ordinal());
         }
         w.close();
@@ -189,8 +197,7 @@ public class M79GenomicEnumsTest {
         StorageGroup root2 = r.rootGroup();
         for (Compression c : new Compression[]{
                 Compression.RANS_ORDER0, Compression.RANS_ORDER1,
-                Compression.BASE_PACK, Compression.QUALITY_BINNED,
-                Compression.NAME_TOKENIZED}) {
+                Compression.BASE_PACK, Compression.QUALITY_BINNED}) {
             Object v = root2.getAttribute("codec_" + c.name());
             assertEquals(c.ordinal(),
                     ((Number) v).intValue(),
