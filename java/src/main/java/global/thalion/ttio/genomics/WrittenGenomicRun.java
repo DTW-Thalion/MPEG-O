@@ -114,6 +114,16 @@ import java.util.Objects;
  *                           pre-v1.8 v1 flat dataset layout (REF_DIFF
  *                           codec id 9), e.g. when v1.7 round-trip is
  *                           required.
+ * @param optDisableNameTokenizedV2 Task 12 (#11 ch3, name_tok_v2): when
+ *                           {@code false} (default), the writer produces
+ *                           the v1.8 {@code signal_channels/read_names}
+ *                           flat dataset with @compression=15 when the
+ *                           native JNI library is available. Set to
+ *                           {@code true} to opt out and preserve the
+ *                           pre-v1.8 M82 compound layout (or v1
+ *                           NAME_TOKENIZED if explicitly overridden via
+ *                           {@code signalCodecOverrides}), e.g. when
+ *                           v1.7 round-trip is required.
  */
 public record WrittenGenomicRun(
     AcquisitionMode acquisitionMode,
@@ -140,7 +150,8 @@ public record WrittenGenomicRun(
     Map<String, byte[]> referenceChromSeqs,
     Path externalReferencePath,
     boolean optDisableInlineMateInfoV2,
-    boolean optDisableRefDiffV2
+    boolean optDisableRefDiffV2,
+    boolean optDisableNameTokenizedV2
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -195,7 +206,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, Map.of(), List.of(),
-             false, null, null, false, false);
+             false, null, null, false, false, false);
     }
 
     /**
@@ -230,7 +241,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, List.of(),
-             false, null, null, false, false);
+             false, null, null, false, false, false);
     }
 
     /**
@@ -266,7 +277,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, provenanceRecords,
-             false, null, null, false, false);
+             false, null, null, false, false, false);
     }
 
     /**
@@ -284,7 +295,8 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embed, chromSeqs, externalPath,
-            optDisableInlineMateInfoV2, optDisableRefDiffV2);
+            optDisableInlineMateInfoV2, optDisableRefDiffV2,
+            optDisableNameTokenizedV2);
     }
 
     /**
@@ -302,7 +314,7 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            disable, optDisableRefDiffV2);
+            disable, optDisableRefDiffV2, optDisableNameTokenizedV2);
     }
 
     /**
@@ -320,7 +332,26 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            optDisableInlineMateInfoV2, disable);
+            optDisableInlineMateInfoV2, disable, optDisableNameTokenizedV2);
+    }
+
+    /**
+     * Task 12 (#11 ch3, name_tok_v2) builder. Returns a new instance with
+     * {@link #optDisableNameTokenizedV2} replaced. Builder-style
+     * convenience for callers that want to opt out of the v1.8 default
+     * read_names codec (e.g. to preserve M82 compound layout for
+     * cross-version round-trip tests, or to use the v1 NAME_TOKENIZED
+     * codec via {@code signalCodecOverrides["read_names"]}).
+     */
+    public WrittenGenomicRun withOptDisableNameTokenizedV2(boolean disable) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            optDisableInlineMateInfoV2, optDisableRefDiffV2, disable);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

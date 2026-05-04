@@ -51,4 +51,7 @@ public final class NameTokenizerV2 {
     public static String getBackendName() {
         return "native-jni";
     }
+
+    /** @return {@code true} iff the libttio_rans JNI library is loadable. */
+    public static boolean isAvailable() { return TtioRansNative.isAvailable(); }
 }

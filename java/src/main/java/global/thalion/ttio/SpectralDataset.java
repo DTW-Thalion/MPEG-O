@@ -1193,16 +1193,46 @@ public class SpectralDataset implements
                 } else {
                     writeCompoundOneCol(sc, "cigars", vlField, run.cigars());
                 }
-                // M86 Phase E: schema lift for read_names. When the
-                // NAME_TOKENIZED override is set, replace the M82
-                // compound dataset with a flat 1-D uint8 dataset of
-                // the same name carrying the codec output, plus an
-                // @compression == 8 attribute (Binding Decisions
-                // §111, §113). The two layouts are mutually exclusive
-                // within a single run; readers dispatch on dataset
-                // shape (compound vs uint8). No HDF5 filter is applied
-                // — codec output is high-entropy (Binding Decision §87).
-                if (run.signalCodecOverrides().containsKey("read_names")) {
+                // M86 Phase E + v1.8 #11 ch3: schema lift for read_names
+                // with v2 dispatch. Three layouts (mutually exclusive):
+                //
+                // - NAME_TOKENIZED v1 (codec id 8): flat uint8 dataset.
+                //   Selected when signalCodecOverrides["read_names"] ==
+                //   NAME_TOKENIZED is explicit.
+                // - NAME_TOKENIZED v2 (codec id 15): flat uint8 dataset.
+                //   The v1.8 default — selected when no override is
+                //   present, optDisableNameTokenizedV2 == false, and the
+                //   native lib is available.
+                // - M82 compound: VL_STRING-in-compound dataset. Selected
+                //   when opt-out is set and no override is present.
+                //
+                // Readers dispatch on @compression value (8 vs 15) when
+                // shape is uint8, else fall through to the compound path.
+                Enums.Compression rnOverride =
+                    run.signalCodecOverrides().get("read_names");
+                boolean useRnV2 = rnOverride == null
+                    && !run.optDisableNameTokenizedV2()
+                    && global.thalion.ttio.codecs.NameTokenizerV2.isAvailable();
+                if (useRnV2) {
+                    byte[] encoded =
+                        global.thalion.ttio.codecs.NameTokenizerV2
+                            .encode(run.readNames());
+                    global.thalion.ttio.providers.StorageDataset rnDs;
+                    try {
+                        rnDs = sc.createDataset("read_names",
+                            Enums.Precision.UINT8, encoded.length,
+                            65536, Enums.Compression.NONE, 0);
+                    } catch (UnsupportedOperationException e) {
+                        rnDs = sc.createDataset("read_names",
+                            Enums.Precision.UINT8, encoded.length,
+                            0, Enums.Compression.NONE, 0);
+                    }
+                    try (var closeMe = rnDs) {
+                        closeMe.writeAll(encoded);
+                        closeMe.setAttribute("compression",
+                            codecIdFor(Enums.Compression.NAME_TOKENIZED_V2));
+                    }
+                } else if (rnOverride != null) {
                     byte[] encoded =
                         global.thalion.ttio.codecs.NameTokenizer
                             .encode(run.readNames());

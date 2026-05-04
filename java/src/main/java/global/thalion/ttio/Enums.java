@@ -136,7 +136,18 @@ public final class Enums {
          * {@code Compression.REF_DIFF_V2} and ObjC
          * {@code TTIOCompressionRefDiffV2}.
          */
-        REF_DIFF_V2
+        REF_DIFF_V2,
+        /**
+         * CRAM-style adaptive name-tokenizer v2 codec (codec id 15).
+         * v1.8 default ON for the
+         * {@code signal_channels/read_names} blob when the native JNI
+         * library is available. Opt out via
+         * {@link global.thalion.ttio.genomics.WrittenGenomicRun#optDisableNameTokenizedV2}.
+         * Cross-language ordinal {@code = 15} matches Python
+         * {@code Compression.NAME_TOKENIZED_V2} and ObjC
+         * {@code TTIOCompressionNameTokenizedV2}.
+         */
+        NAME_TOKENIZED_V2
     }
 
     /** Ion polarity for mass spectrometry. */
