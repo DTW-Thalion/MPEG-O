@@ -151,7 +151,8 @@ public record WrittenGenomicRun(
     Path externalReferencePath,
     boolean optDisableInlineMateInfoV2,
     boolean optDisableRefDiffV2,
-    boolean optDisableNameTokenizedV2
+    boolean optDisableNameTokenizedV2,
+    boolean optKeepOffsetsColumns
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -206,7 +207,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, Map.of(), List.of(),
-             false, null, null, false, false, false);
+             false, null, null, false, false, false, false);
     }
 
     /**
@@ -241,7 +242,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, List.of(),
-             false, null, null, false, false, false);
+             false, null, null, false, false, false, false);
     }
 
     /**
@@ -277,7 +278,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, provenanceRecords,
-             false, null, null, false, false, false);
+             false, null, null, false, false, false, false);
     }
 
     /**
@@ -296,7 +297,7 @@ public record WrittenGenomicRun(
             signalCompression, signalCodecOverrides, provenanceRecords,
             embed, chromSeqs, externalPath,
             optDisableInlineMateInfoV2, optDisableRefDiffV2,
-            optDisableNameTokenizedV2);
+            optDisableNameTokenizedV2, optKeepOffsetsColumns);
     }
 
     /**
@@ -314,7 +315,7 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            disable, optDisableRefDiffV2, optDisableNameTokenizedV2);
+            disable, optDisableRefDiffV2, optDisableNameTokenizedV2, optKeepOffsetsColumns);
     }
 
     /**
@@ -332,7 +333,7 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            optDisableInlineMateInfoV2, disable, optDisableNameTokenizedV2);
+            optDisableInlineMateInfoV2, disable, optDisableNameTokenizedV2, optKeepOffsetsColumns);
     }
 
     /**
@@ -351,7 +352,28 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            optDisableInlineMateInfoV2, optDisableRefDiffV2, disable);
+            optDisableInlineMateInfoV2, optDisableRefDiffV2, disable,
+            optKeepOffsetsColumns);
+    }
+
+    /**
+     * v1.10 #10 (offsets-cumsum) builder. Returns a new instance with
+     * {@link #optKeepOffsetsColumns} replaced. When {@code true} the
+     * writer keeps the (redundant) {@code offsets} column on disk for
+     * byte-equivalent backward compat with pre-v1.10 readers; when
+     * {@code false} (default) {@code offsets} is omitted and computed
+     * from {@code cumsum(lengths)} on read.
+     */
+    public WrittenGenomicRun withOptKeepOffsetsColumns(boolean keep) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            optDisableInlineMateInfoV2, optDisableRefDiffV2,
+            optDisableNameTokenizedV2, keep);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

@@ -113,7 +113,7 @@ final class NameTokenizedV2DispatchTest {
             templateLengths, chromosomes,
             Compression.NONE, overrides, List.of(),
             false, null, null,
-            true, true, optDisableV2);  // optDisable Inline / RefDiff = true; NameTok configurable
+            true, true, optDisableV2, false);  // optDisable Inline/RefDiff = true; NameTok configurable; optKeepOffsets = false
         return run;
     }
 

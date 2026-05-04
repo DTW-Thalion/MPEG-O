@@ -165,8 +165,10 @@ class M90FinalTest {
             assertTrue(idx.hasChild("mapping_qualities_encrypted"));
             assertTrue(idx.hasChild("flags_encrypted"));
             assertTrue(idx.hasChild("chromosomes_encrypted"));
-            // offsets/lengths stay plaintext (structural framing).
-            assertTrue(idx.hasChild("offsets"));
+            // lengths stays plaintext (structural framing). v1.10 #10:
+            // offsets is no longer written on disk; computed from
+            // cumsum(lengths) on read.
+            assertFalse(idx.hasChild("offsets"));
             assertTrue(idx.hasChild("lengths"));
         }
         FeatureFlags flags;
