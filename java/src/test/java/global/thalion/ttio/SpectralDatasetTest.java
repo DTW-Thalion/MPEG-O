@@ -305,7 +305,7 @@ class SpectralDatasetTest {
 
         try (SpectralDataset ds = SpectralDataset.open(path)) {
             assertFalse(ds.featureFlags().isV1Legacy());
-            assertEquals("1.1", ds.featureFlags().formatVersion());
+            assertEquals("1.0", ds.featureFlags().formatVersion());
             assertTrue(ds.featureFlags().has(FeatureFlags.BASE_V1));
             assertTrue(ds.featureFlags().has(FeatureFlags.OPT_DIGITAL_SIGNATURES));
             assertFalse(ds.featureFlags().has(FeatureFlags.OPT_KEY_ROTATION));
@@ -719,14 +719,15 @@ class SpectralDatasetTest {
     }
 
     @Test
-    void m74FileBumpsFormatVersionAndAdvertisesFlag() {
+    void m74FileAdvertisesFlag() {
         // Slice E: when SpectralDataset.create() is called with a run
-        // whose SpectrumIndex carries M74 columns, the writer must bump
-        // @ttio_format_version from "1.1" to "1.3" and include
-        // opt_ms2_activation_detail in @ttio_features. Legacy runs
-        // (no M74 columns) keep the original "1.1" layout.
+        // whose SpectrumIndex carries M74 columns, the writer must
+        // include opt_ms2_activation_detail in @ttio_features. v1.0 reset:
+        // @ttio_format_version is a single "1.0" stamp regardless of
+        // optional columns; readers gate behavior on @ttio_features, not
+        // per-feature version equality.
 
-        // Legacy path: no M74 columns => version 1.1, flag absent.
+        // Legacy path: no M74 columns => version 1.0, flag absent.
         String legacyPath = tempDir.resolve("slice_e_legacy.tio").toString();
         int n = 2, points = 4;
         SpectrumIndex legacy = makeLegacyIndex(n, points);
@@ -741,11 +742,11 @@ class SpectralDatasetTest {
             assertNotNull(ds);
         }
         try (SpectralDataset ds = SpectralDataset.open(legacyPath)) {
-            assertEquals("1.1", ds.featureFlags().formatVersion());
+            assertEquals("1.0", ds.featureFlags().formatVersion());
             assertFalse(ds.featureFlags().has(FeatureFlags.OPT_MS2_ACTIVATION_DETAIL));
         }
 
-        // M74 path: run has activation/isolation columns => version 1.3 + flag.
+        // M74 path: run has activation/isolation columns => unified "1.0" + flag.
         String m74Path = tempDir.resolve("slice_e_m74.tio").toString();
         SpectrumIndex base = makeLegacyIndex(n, points);
         int[] acts = { ActivationMethod.NONE.intValue(),
@@ -769,7 +770,7 @@ class SpectralDatasetTest {
             assertNotNull(ds);
         }
         try (SpectralDataset ds = SpectralDataset.open(m74Path)) {
-            assertEquals("1.3", ds.featureFlags().formatVersion());
+            assertEquals("1.0", ds.featureFlags().formatVersion());
             assertTrue(ds.featureFlags().has(FeatureFlags.OPT_MS2_ACTIVATION_DETAIL));
             SpectrumIndex got = ds.msRuns().get("run_0001").spectrumIndex();
             assertNotNull(got.activationMethods());

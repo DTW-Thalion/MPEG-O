@@ -223,7 +223,7 @@ void testMilestone11(void)
         TTIOHDF5Group *root = [f rootGroup];
         NSString *fv = [TTIOFeatureFlags formatVersionForRoot:root];
         NSArray *features = [TTIOFeatureFlags featuresForRoot:root];
-        PASS([fv isEqualToString:@"1.1"], "format version is 1.1");
+        PASS([fv isEqualToString:@"1.0"], "format version is 1.0");
         PASS([features containsObject:@"base_v1"], "features: base_v1");
         PASS([features containsObject:@"compound_identifications"],
              "features: compound_identifications");

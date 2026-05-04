@@ -149,7 +149,7 @@ static TTIOWrittenGenomicRun *buildRefDiffRun(NSString *refUri,
     return r;
 }
 
-// M82-only run (no codec override) — used to verify format-version stays 1.4.
+// M82-only run (no codec override) — used to verify format-version is "1.0".
 static TTIOWrittenGenomicRun *buildM82OnlyRun(void)
 {
     NSUInteger n = 3;
@@ -274,8 +274,8 @@ static void testFormatVersionIs1_5WhenRefDiffUsed(void)
                               provenanceRecords:@[]
                                           error:&err];
     NSString *v = readRootStringAttr(path, @"ttio_format_version");
-    PASS([v isEqualToString:@"1.5"],
-         "M93: format_version is '1.5' when REF_DIFF used (got '%@')", v);
+    PASS([v isEqualToString:@"1.0"],
+         "v1.0 reset: format_version is unified '1.0' when REF_DIFF used (got '%@')", v);
     [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 }
 
@@ -294,8 +294,8 @@ static void testFormatVersionStaysAt1_4ForM82Only(void)
                               provenanceRecords:@[]
                                           error:&err];
     NSString *v = readRootStringAttr(path, @"ttio_format_version");
-    PASS([v isEqualToString:@"1.4"],
-         "M93: format_version stays '1.4' when only M82 codecs (got '%@')", v);
+    PASS([v isEqualToString:@"1.0"],
+         "v1.0 reset: format_version is unified '1.0' even for M82-only runs (got '%@')", v);
     [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 }
 
