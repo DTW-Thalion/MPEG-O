@@ -70,26 +70,31 @@ static TTIOWrittenGenomicRun *makeM90GenomicRun(NSDictionary<NSString *, NSNumbe
     int32_t tl[4] = {250, 0, -300, 0};
     NSData *tlenData = [NSData dataWithBytes:tl length:sizeof(tl)];
 
-    return [[TTIOWrittenGenomicRun alloc]
-        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
-                   referenceUri:@"GRCh38.p14"
-                       platform:@"ILLUMINA"
-                     sampleName:@"NA12878"
-                      positions:positionsData
-               mappingQualities:mqData
-                          flags:flagsData
-                      sequences:seqData
-                      qualities:qualData
-                        offsets:offsetsData
-                        lengths:lengthsData
-                         cigars:cigars
-                      readNames:names
-                mateChromosomes:mateChroms
-                  matePositions:matePosData
-                templateLengths:tlenData
-                    chromosomes:chroms
-              signalCompression:TTIOCompressionNone
-           signalCodecOverrides:(codecOverrides ?: @{})];
+    TTIOWrittenGenomicRun *run =
+        [[TTIOWrittenGenomicRun alloc]
+         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                    referenceUri:@"GRCh38.p14"
+                        platform:@"ILLUMINA"
+                      sampleName:@"NA12878"
+                       positions:positionsData
+                mappingQualities:mqData
+                           flags:flagsData
+                       sequences:seqData
+                       qualities:qualData
+                         offsets:offsetsData
+                         lengths:lengthsData
+                          cigars:cigars
+                       readNames:names
+                 mateChromosomes:mateChroms
+                   matePositions:matePosData
+                 templateLengths:tlenData
+                     chromosomes:chroms
+               signalCompression:TTIOCompressionNone
+            signalCodecOverrides:(codecOverrides ?: @{})];
+    // v1.7 #11: M90 tests assert exact sentinel strings (e.g. ""); opt out
+    // of inline_v2 so the v1 compound path preserves the original values.
+    run.optDisableInlineMateInfoV2 = YES;
+    return run;
 }
 
 static void testM90_9_AUMateExtensionRoundTrip(void)
@@ -195,9 +200,14 @@ static void testM90_9_RoundTripCompoundFields(void)
     PASS([r0.readName isEqualToString:@"read_aaaa"]
          && [r3.readName isEqualToString:@"read_dddd"],
          "M90.9: read_names round-trip");
+    // v1.7 #11: After a transport round-trip the TTIOTransportReader
+    // reconstructs a fresh TTIOWrittenGenomicRun (no opt-out flag) which is
+    // re-serialised via inline_v2.  The v2 codec normalises:
+    //   ""  (v1 unmapped sentinel) → "*"
+    //   "=" (same-chrom shorthand) → resolved chromosome name ("chr2" for r2)
     PASS([r0.mateChromosome isEqualToString:@"chr1"]
-         && [r2.mateChromosome isEqualToString:@"="]
-         && [r3.mateChromosome isEqualToString:@""],
+         && [r2.mateChromosome isEqualToString:@"chr2"]
+         && [r3.mateChromosome isEqualToString:@"*"],
          "M90.9: mate_chromosomes round-trip");
     PASS(r0.matePosition == 350 && r1.matePosition == 200
          && r2.matePosition == 0 && r3.matePosition == -1,

@@ -22,6 +22,11 @@ extern NSString *const TTIOMateInfoV2ErrorDomain;
 
 @interface TTIOMateInfoV2 : NSObject
 
+/// Returns YES when libttio_rans is linked and the encode/decode
+/// symbols are available at runtime. Tests guard on this before
+/// exercising the dispatch path.
++ (BOOL)nativeAvailable;
+
 /// Encode a mate triple to the inline_v2 blob.
 ///
 /// All NSData inputs are interpreted as parallel arrays of the noted

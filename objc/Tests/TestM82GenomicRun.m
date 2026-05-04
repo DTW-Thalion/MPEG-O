@@ -354,25 +354,30 @@ static TTIOWrittenGenomicRun *makeWrittenGenomicRun(NSUInteger nReads, BOOL pair
         tlens[i]   = paired ? 200 : 0;
     }
 
-    return [[TTIOWrittenGenomicRun alloc]
-        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
-                   referenceUri:@"GRCh38.p14"
-                       platform:@"ILLUMINA"
-                     sampleName:@"NA12878"
-                      positions:positionsData
-               mappingQualities:mapqsData
-                          flags:flagsData
-                      sequences:sequencesData
-                      qualities:qualitiesData
-                        offsets:offsetsData
-                        lengths:lengthsData
-                         cigars:cigars
-                      readNames:names
-                mateChromosomes:mateChroms
-                  matePositions:matePosData
-                templateLengths:tlensData
-                    chromosomes:chroms
-              signalCompression:TTIOCompressionZlib];
+    TTIOWrittenGenomicRun *run =
+        [[TTIOWrittenGenomicRun alloc]
+         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                    referenceUri:@"GRCh38.p14"
+                        platform:@"ILLUMINA"
+                      sampleName:@"NA12878"
+                       positions:positionsData
+                mappingQualities:mapqsData
+                           flags:flagsData
+                       sequences:sequencesData
+                       qualities:qualitiesData
+                         offsets:offsetsData
+                         lengths:lengthsData
+                          cigars:cigars
+                       readNames:names
+                 mateChromosomes:mateChroms
+                   matePositions:matePosData
+                 templateLengths:tlensData
+                     chromosomes:chroms
+               signalCompression:TTIOCompressionZlib];
+    // v1.7 #11: these M82 tests exercise the v1/M82 format; opt out of
+    // inline_v2 so the on-disk layout and sentinel values are unchanged.
+    run.optDisableInlineMateInfoV2 = YES;
+    return run;
 }
 
 // ── Acceptance #1 — 100-read round-trip via HDF5 ──────────────────
@@ -580,6 +585,8 @@ static void testEmptyRun(void)
                 templateLengths:[NSData data]
                     chromosomes:@[]
               signalCompression:TTIOCompressionZlib];
+    // v1.7 #11: empty-run tests exercise M82 format; opt out of inline_v2.
+    empty.optDisableInlineMateInfoV2 = YES;
 
     NSError *err = nil;
     BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path

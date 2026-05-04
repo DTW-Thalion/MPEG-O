@@ -15,6 +15,7 @@
 #import "Codecs/TTIOFqzcompNx16Z.h"        // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"           // M95 v1.2
 #import "Codecs/TTIOReferenceResolver.h"  // M93 v1.2
+#import "Codecs/TTIOMateInfoV2.h"          // v1.7 #11: inline mate-pair codec
 #import <hdf5.h>
 
 @implementation TTIOGenomicRun {
@@ -870,7 +871,8 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
 - (BOOL)_mateInfoIsSubgroup
 {
     if (_mateInfoLinkType >= 0) {
-        return _mateInfoLinkType == 1;
+        // linkType 0 = compound, 1 = Phase-F subgroup, 2 = inline_v2 subgroup.
+        return _mateInfoLinkType >= 1;
     }
     id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
     if (!sig) {
@@ -884,32 +886,192 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
             H5O_info_t info;
             herr_t s = H5Oget_info_by_name([hg groupId], "mate_info",
                                            &info, H5P_DEFAULT);
+            if (s >= 0 && info.type == H5O_TYPE_GROUP) {
+                // It is a group. Probe further for inline_v2 dataset.
+                TTIOHDF5Group *mateGrp = [hg openGroupNamed:@"mate_info" error:NULL];
+                if (mateGrp) {
+                    H5O_info_t dsInfo;
+                    herr_t s2 = H5Oget_info_by_name([mateGrp groupId],
+                                                    "inline_v2", &dsInfo,
+                                                    H5P_DEFAULT);
+                    if (s2 >= 0 && dsInfo.type == H5O_TYPE_DATASET) {
+                        _mateInfoLinkType = 2;  // v1.7 inline_v2
+                        return YES;
+                    }
+                }
+                _mateInfoLinkType = 1;  // Phase-F per-field subgroup
+                return YES;
+            }
             if (s >= 0) {
-                _mateInfoLinkType =
-                    (info.type == H5O_TYPE_GROUP) ? 1 : 0;
-                return _mateInfoLinkType == 1;
+                _mateInfoLinkType = 0;  // dataset = M82 compound
+                return NO;
             }
         }
         // H5Oget_info_by_name failed — assume compound (legacy default).
         _mateInfoLinkType = 0;
         return NO;
     }
-    // Storage-protocol path: try openGroupNamed first; if it succeeds
-    // and the link is a dataset the protocol's adapter typically
-    // returns nil for openGroupNamed. Different providers behave
-    // slightly differently here; for robustness probe openGroupNamed
-    // first and treat success as Phase F. (The cross-language
-    // conformance fixture only covers HDF5; provider-path Phase F
-    // round-trips through the same mate_info dispatch but byte-exact
-    // parity isn't asserted.)
+    // Storage-protocol path: try openGroupNamed first.
     NSError *gErr = nil;
     id<TTIOStorageGroup> sub = [sig openGroupNamed:@"mate_info" error:&gErr];
     if (sub != nil) {
-        _mateInfoLinkType = 1;
+        // Probe for inline_v2 child dataset.
+        NSError *dsErr = nil;
+        id<TTIOStorageDataset> inlineDs =
+            [sub openDatasetNamed:@"inline_v2" error:&dsErr];
+        if (inlineDs != nil) {
+            _mateInfoLinkType = 2;
+        } else {
+            _mateInfoLinkType = 1;
+        }
         return YES;
     }
     _mateInfoLinkType = 0;
     return NO;
+}
+
+/** v1.7 #11: YES when signal_channels/mate_info/inline_v2 exists. */
+- (BOOL)_mateInfoIsInlineV2
+{
+    // Force probe if not yet done.
+    (void)[self _mateInfoIsSubgroup];
+    return _mateInfoLinkType == 2;
+}
+
+/** v1.7 #11: decode the inline_v2 blob; populate _decodedMateInfo with
+ *  "chrom" (NSArray<NSString *>), "pos" (NSData int64), "tlen" (NSData int32).
+ *  Returns NO + error on failure. Caches on success. */
+- (BOOL)_decodeMateInfoInlineV2:(NSError **)error
+{
+    // Already cached?
+    if (_decodedMateInfo[@"chrom"]) return YES;
+
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:error];
+    if (!sig) return NO;
+
+    // Open the mate_info group.
+    TTIOHDF5Group *mateH5 = nil;
+    id<TTIOStorageGroup> mateProt = nil;
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        mateH5 = [hg openGroupNamed:@"mate_info" error:error];
+        if (!mateH5) return NO;
+    } else {
+        mateProt = [sig openGroupNamed:@"mate_info" error:error];
+        if (!mateProt) return NO;
+    }
+
+    // Read the inline_v2 blob.
+    NSData *blob = nil;
+    if (mateH5) {
+        TTIOHDF5Dataset *ds = [mateH5 openDatasetNamed:@"inline_v2" error:error];
+        if (!ds) return NO;
+        id raw = [ds readDataWithError:error];
+        if (![raw isKindOfClass:[NSData class]]) return NO;
+        blob = (NSData *)raw;
+    } else {
+        id<TTIOStorageDataset> ds = [mateProt openDatasetNamed:@"inline_v2" error:error];
+        if (!ds) return NO;
+        id raw = [ds readAll:error];
+        if (![raw isKindOfClass:[NSData class]]) return NO;
+        blob = (NSData *)raw;
+    }
+
+    NSUInteger n = _index.count;
+
+    // Build own_chrom_ids using encounter-order (must match writer).
+    NSMutableData *ownChromIds =
+        [NSMutableData dataWithLength:n * sizeof(uint16_t)];
+    uint16_t *ownIdsPtr = (uint16_t *)ownChromIds.mutableBytes;
+    NSMutableDictionary<NSString *, NSNumber *> *nameToId =
+        [NSMutableDictionary dictionaryWithCapacity:32];
+    for (NSUInteger i = 0; i < n; i++) {
+        NSString *name = [_index chromosomeAt:i];
+        NSNumber *existingId = nameToId[name];
+        if (existingId == nil) {
+            NSUInteger newId = nameToId.count;
+            nameToId[name] = @(newId);
+            ownIdsPtr[i] = (uint16_t)newId;
+        } else {
+            ownIdsPtr[i] = (uint16_t)[existingId unsignedIntegerValue];
+        }
+    }
+
+    // Build own_positions from index.
+    NSMutableData *ownPositions =
+        [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    int64_t *posPtr = (int64_t *)ownPositions.mutableBytes;
+    for (NSUInteger i = 0; i < n; i++) {
+        posPtr[i] = [_index positionAt:i];
+    }
+
+    // Decode via TTIOMateInfoV2.
+    NSData *outMc = nil, *outMp = nil, *outTs = nil;
+    NSError *decErr = nil;
+    BOOL ok = [TTIOMateInfoV2 decodeData:blob
+                             ownChromIds:ownChromIds
+                            ownPositions:ownPositions
+                               nRecords:n
+                        outMateChromIds:&outMc
+                       outMatePositions:&outMp
+                     outTemplateLengths:&outTs
+                                  error:&decErr];
+    if (!ok) {
+        if (error) *error = decErr ?: [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2090
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"v1.7 inline_v2 decode failed"}];
+        return NO;
+    }
+
+    // Read the chrom_names sidecar compound to resolve mate chrom ids → names.
+    NSArray *chromNameRows = nil;
+    TTIOCompoundField *nameField =
+        [TTIOCompoundField fieldWithName:@"name"
+                                    kind:TTIOCompoundFieldKindVLString];
+    if (mateH5) {
+        chromNameRows = [TTIOCompoundIO readGenericFromGroup:mateH5
+                                                datasetNamed:@"chrom_names"
+                                                      fields:@[nameField]
+                                                       error:error];
+    } else {
+        id<TTIOStorageDataset> namesDs =
+            [mateProt openDatasetNamed:@"chrom_names" error:error];
+        if (namesDs) chromNameRows = [namesDs readAll:error];
+    }
+    if (!chromNameRows) return NO;
+
+    // Build chrom_id → name table (row index = chrom_id).
+    NSMutableArray<NSString *> *chromNamesById =
+        [NSMutableArray arrayWithCapacity:chromNameRows.count];
+    for (NSDictionary *row in chromNameRows) {
+        id v = row[@"name"];
+        NSString *s = [v isKindOfClass:[NSData class]]
+            ? [[NSString alloc] initWithData:v encoding:NSUTF8StringEncoding]
+            : (NSString *)v;
+        [chromNamesById addObject:s ?: @""];
+    }
+
+    // Convert mate_chrom_ids (int32, -1=unmapped) back to chromosome name strings.
+    const int32_t *mcPtr = (const int32_t *)outMc.bytes;
+    NSMutableArray<NSString *> *mateChroms =
+        [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        int32_t iv = mcPtr[i];
+        if (iv == -1) {
+            [mateChroms addObject:@"*"];
+        } else if (iv >= 0 && (NSUInteger)iv < chromNamesById.count) {
+            [mateChroms addObject:chromNamesById[iv]];
+        } else {
+            [mateChroms addObject:
+                [NSString stringWithFormat:@"chr_id_%d", iv]];
+        }
+    }
+
+    _decodedMateInfo[@"chrom"] = [mateChroms copy];
+    _decodedMateInfo[@"pos"]   = outMp;
+    _decodedMateInfo[@"tlen"]  = outTs;
+    return YES;
 }
 
 // M86 Phase F: lazily decode the mate_info chrom field from the Phase F
@@ -1184,13 +1346,16 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return _decodedMateInfo[name];
 }
 
-// M86 Phase F: per-read accessors for the three mate fields. Each
-// dispatches on the link-type query (group = Phase F subgroup vs
-// dataset = M82 compound) and routes through either the per-field
-// decode helper (Phase F) or the existing _compoundCache[@"mate_info"]
-// path (M82). Used by -readAtIndex: in place of the M82 mate-block.
+// v1.7 #11 / M86 Phase F: per-read accessors for the three mate fields. Each
+// dispatches: inline_v2 first (v1.7), then Phase-F subgroup, then M82 compound.
 - (NSString *)_mateChromAtIndex:(NSUInteger)i error:(NSError **)error
 {
+    if ([self _mateInfoIsInlineV2]) {
+        if (![self _decodeMateInfoInlineV2:error]) return nil;
+        NSArray<NSString *> *chroms = _decodedMateInfo[@"chrom"];
+        if (!chroms || i >= chroms.count) return nil;
+        return chroms[i];
+    }
     if ([self _mateInfoIsSubgroup]) {
         NSArray<NSString *> *chroms = [self _decodeMateChromOrError:error];
         if (!chroms) return nil;
@@ -1230,6 +1395,15 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
 
 - (int64_t)_matePosAtIndex:(NSUInteger)i error:(NSError **)error
 {
+    if ([self _mateInfoIsInlineV2]) {
+        if (![self _decodeMateInfoInlineV2:error]) return 0;
+        NSData *bytes = _decodedMateInfo[@"pos"];
+        if (!bytes) return 0;
+        NSUInteger n = bytes.length / sizeof(int64_t);
+        if (i >= n) return 0;
+        int64_t v; memcpy(&v, (const int64_t *)bytes.bytes + i, sizeof(int64_t));
+        return v;
+    }
     if ([self _mateInfoIsSubgroup]) {
         NSData *bytes = [self _decodeMateIntField:@"pos"
                                           elemSize:sizeof(int64_t)
@@ -1259,6 +1433,15 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
 
 - (int32_t)_mateTlenAtIndex:(NSUInteger)i error:(NSError **)error
 {
+    if ([self _mateInfoIsInlineV2]) {
+        if (![self _decodeMateInfoInlineV2:error]) return 0;
+        NSData *bytes = _decodedMateInfo[@"tlen"];
+        if (!bytes) return 0;
+        NSUInteger n = bytes.length / sizeof(int32_t);
+        if (i >= n) return 0;
+        int32_t v; memcpy(&v, (const int32_t *)bytes.bytes + i, sizeof(int32_t));
+        return v;
+    }
     if ([self _mateInfoIsSubgroup]) {
         NSData *bytes = [self _decodeMateIntField:@"tlen"
                                           elemSize:sizeof(int32_t)

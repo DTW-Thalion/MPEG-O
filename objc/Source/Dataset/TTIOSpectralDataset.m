@@ -30,6 +30,7 @@
 #import "Codecs/TTIORefDiff.h"                 // M93 v1.2
 #import "Codecs/TTIOFqzcompNx16Z.h"             // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"                // M95 v1.2
+#import "Codecs/TTIOMateInfoV2.h"               // v1.7 #11: inline mate-pair codec
 #import <hdf5.h>
 #include <openssl/md5.h>                          // M93 v1.2 ref MD5
 
@@ -1364,6 +1365,244 @@ static BOOL _TTIO_M95_HasMateOverridesOrDefaults(TTIOWrittenGenomicRun *run)
         || _TTIO_M95_ResolveIntOverride(run, @"mate_info_tlen") != nil;
 }
 
+/** v1.7 #11: returns YES when the inline_v2 path should be used.
+ *  Requires native libttio_rans AND opt-out flag == NO. */
+static BOOL _TTIO_V17_UseMateInlineV2(TTIOWrittenGenomicRun *run)
+{
+    return !run.optDisableInlineMateInfoV2 && [TTIOMateInfoV2 nativeAvailable];
+}
+
+/** v1.7 #11: reject mate_info_* per-field overrides when the
+ *  inline_v2 codec is active. Raises NSInvalidArgumentException
+ *  pointing at optDisableInlineMateInfoV2. Called after the standard
+ *  _TTIO_M86_ValidateOverrides check so baseline unknown-channel
+ *  errors are already handled. */
+static void _TTIO_V17_ValidateMateInfoV2Overrides(TTIOWrittenGenomicRun *run)
+{
+    if (!_TTIO_V17_UseMateInlineV2(run)) return;
+    static NSSet<NSString *> *mateKeys = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        mateKeys = [NSSet setWithArray:@[
+            @"mate_info_chrom", @"mate_info_pos", @"mate_info_tlen",
+        ]];
+    });
+    for (NSString *chName in run.signalCodecOverrides) {
+        if ([mateKeys containsObject:chName]) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"signalCodecOverrides['%@']: per-field "
+                               @"mate_info_* overrides are disallowed when "
+                               @"the v1.7 inline_v2 codec is active. Set "
+                               @"optDisableInlineMateInfoV2 = YES on "
+                               @"TTIOWrittenGenomicRun to use the v1 "
+                               @"per-field layout instead.",
+                               chName];
+        }
+    }
+}
+
+// ── v1.7 #11: inline_v2 writer helpers ──────────────────────────────
+//
+// Build the chrom_id table (encounter-order on own chromosomes, extended
+// with mate-only chroms), encode via TTIOMateInfoV2, and write:
+//   signal_channels/mate_info/inline_v2   — uint8 dataset @compression=13
+//   signal_channels/mate_info/chrom_names — compound (name:VL_STRING)
+//
+// Two variants: HDF5 fast path (TTIOHDF5Group *) and storage-protocol
+// path (id<TTIOStorageGroup>).
+
+/** Build the chrom_id map (encounter-order). Fills ownChromIds (uint16)
+ *  and mateChromIds (int32: -1 for '*', own-chrom-id for '=', else
+ *  chrom_id from encounter-ordered table extended with mate-only entries).
+ *  Also fills chromNamesInOrder with the full chrom_id → name table. */
+static BOOL _TTIO_V17_BuildChromTables(TTIOWrittenGenomicRun *run,
+                                        NSData * _Nonnull * _Nonnull ownChromIdsOut,
+                                        NSData * _Nonnull * _Nonnull mateChromIdsOut,
+                                        NSMutableArray<NSString *> * _Nonnull * _Nonnull chromNamesOut)
+{
+    NSUInteger n = run.readCount;
+
+    // Build encounter-ordered chrom_id table from own chromosomes.
+    NSMutableDictionary<NSString *, NSNumber *> *nameToId =
+        [NSMutableDictionary dictionaryWithCapacity:32];
+    NSMutableArray<NSString *> *chromNames = [NSMutableArray arrayWithCapacity:32];
+
+    NSMutableData *ownChromIdsData =
+        [NSMutableData dataWithLength:n * sizeof(uint16_t)];
+    uint16_t *ownIds = (uint16_t *)ownChromIdsData.mutableBytes;
+
+    NSArray<NSString *> *ownChroms = run.chromosomes;
+    for (NSUInteger i = 0; i < n; i++) {
+        NSString *name = ownChroms[i];
+        NSNumber *existingId = nameToId[name];
+        if (existingId == nil) {
+            NSUInteger newId = chromNames.count;
+            nameToId[name] = @(newId);
+            [chromNames addObject:name];
+            ownIds[i] = (uint16_t)newId;
+        } else {
+            ownIds[i] = (uint16_t)[existingId unsignedIntegerValue];
+        }
+    }
+
+    // Build mate_chrom_ids, extending nameToId/chromNames for mate-only chroms.
+    NSMutableData *mateChromIdsData =
+        [NSMutableData dataWithLength:n * sizeof(int32_t)];
+    int32_t *mateIds = (int32_t *)mateChromIdsData.mutableBytes;
+
+    NSArray<NSString *> *mateChroms = run.mateChromosomes;
+    for (NSUInteger i = 0; i < n; i++) {
+        NSString *name = mateChroms[i];
+        if ([name isEqualToString:@"*"] || name == nil || name.length == 0) {
+            mateIds[i] = -1;
+        } else if ([name isEqualToString:@"="]) {
+            // '=' means mate is on the same chrom as this read.
+            mateIds[i] = (int32_t)ownIds[i];
+        } else {
+            NSNumber *existingId = nameToId[name];
+            if (existingId == nil) {
+                NSUInteger newId = chromNames.count;
+                nameToId[name] = @(newId);
+                [chromNames addObject:name];
+                mateIds[i] = (int32_t)newId;
+            } else {
+                mateIds[i] = (int32_t)[existingId unsignedIntegerValue];
+            }
+        }
+    }
+
+    *ownChromIdsOut  = ownChromIdsData;
+    *mateChromIdsOut = mateChromIdsData;
+    *chromNamesOut   = chromNames;
+    return YES;
+}
+
+/** HDF5 fast path: write the inline_v2 group with the blob and chrom_names
+ *  sidecar into signal_channels/mate_info/. */
+static BOOL _TTIO_V17_WriteMateInfoInlineV2HDF5(TTIOHDF5Group *sc,
+                                                  TTIOWrittenGenomicRun *run,
+                                                  NSError **error)
+{
+    NSData *ownChromIds = nil, *mateChromIds = nil;
+    NSMutableArray<NSString *> *chromNames = nil;
+    if (!_TTIO_V17_BuildChromTables(run, &ownChromIds, &mateChromIds, &chromNames)) {
+        if (error) *error = [NSError errorWithDomain:@"TTIOSpectralDatasetErrorDomain"
+                                                code:2100
+                                            userInfo:@{NSLocalizedDescriptionKey:
+                                                @"v1.7 inline_v2: chrom table build failed"}];
+        return NO;
+    }
+
+    NSError *encErr = nil;
+    NSData *blob = [TTIOMateInfoV2 encodeMateChromIds:mateChromIds
+                                        matePositions:run.matePositionsData
+                                      templateLengths:run.templateLengthsData
+                                          ownChromIds:ownChromIds
+                                         ownPositions:run.positionsData
+                                                error:&encErr];
+    if (!blob) {
+        if (error) *error = encErr ?: [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2101
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"v1.7 inline_v2: TTIOMateInfoV2 encode failed"}];
+        return NO;
+    }
+
+    TTIOHDF5Group *mateGrp = [sc createGroupNamed:@"mate_info" error:error];
+    if (!mateGrp) return NO;
+
+    // Write the inline_v2 blob as uint8 dataset with @compression = 13.
+    TTIOHDF5Dataset *ds = [mateGrp createDatasetNamed:@"inline_v2"
+                                             precision:TTIOPrecisionUInt8
+                                                length:blob.length
+                                             chunkSize:65536
+                                           compression:TTIOCompressionNone
+                                      compressionLevel:0
+                                                 error:error];
+    if (!ds) return NO;
+    if (![ds writeData:blob error:error]) return NO;
+    if (!_TTIO_M86_WriteUInt8Attribute([ds datasetId], "compression",
+                                       (uint8_t)TTIOCompressionMateInlineV2,
+                                       error)) return NO;
+
+    // Write the chrom_names compound sidecar (name:VL_STRING), row index = chrom_id.
+    NSArray *vlNameField = @[
+        [TTIOCompoundField fieldWithName:@"name"
+                                    kind:TTIOCompoundFieldKindVLString]
+    ];
+    NSMutableArray *rows = [NSMutableArray arrayWithCapacity:chromNames.count];
+    for (NSString *cn in chromNames) [rows addObject:@{@"name": cn}];
+    if (![TTIOCompoundIO writeGeneric:rows
+                             intoGroup:mateGrp datasetNamed:@"chrom_names"
+                                 fields:vlNameField error:error]) return NO;
+
+    return YES;
+}
+
+/** Storage-protocol path: twin of _TTIO_V17_WriteMateInfoInlineV2HDF5. */
+static BOOL _TTIO_V17_WriteMateInfoInlineV2Storage(id<TTIOStorageGroup> sc,
+                                                    TTIOWrittenGenomicRun *run,
+                                                    NSError **error)
+{
+    NSData *ownChromIds = nil, *mateChromIds = nil;
+    NSMutableArray<NSString *> *chromNames = nil;
+    if (!_TTIO_V17_BuildChromTables(run, &ownChromIds, &mateChromIds, &chromNames)) {
+        if (error) *error = [NSError errorWithDomain:@"TTIOSpectralDatasetErrorDomain"
+                                                code:2100
+                                            userInfo:@{NSLocalizedDescriptionKey:
+                                                @"v1.7 inline_v2: chrom table build failed"}];
+        return NO;
+    }
+
+    NSError *encErr = nil;
+    NSData *blob = [TTIOMateInfoV2 encodeMateChromIds:mateChromIds
+                                        matePositions:run.matePositionsData
+                                      templateLengths:run.templateLengthsData
+                                          ownChromIds:ownChromIds
+                                         ownPositions:run.positionsData
+                                                error:&encErr];
+    if (!blob) {
+        if (error) *error = encErr ?: [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2101
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"v1.7 inline_v2: TTIOMateInfoV2 encode failed"}];
+        return NO;
+    }
+
+    id<TTIOStorageGroup> mateGrp = [sc createGroupNamed:@"mate_info" error:error];
+    if (!mateGrp) return NO;
+
+    // Write the inline_v2 blob.
+    id<TTIOStorageDataset> ds = [mateGrp createDatasetNamed:@"inline_v2"
+                                                  precision:TTIOPrecisionUInt8
+                                                     length:blob.length
+                                                  chunkSize:65536
+                                                compression:TTIOCompressionNone
+                                           compressionLevel:0
+                                                      error:error];
+    if (!ds) return NO;
+    if (![ds writeAll:blob error:error]) return NO;
+    if (![ds setAttributeValue:@((uint8_t)TTIOCompressionMateInlineV2)
+                        forName:@"compression"
+                          error:error]) return NO;
+
+    // Write the chrom_names compound sidecar.
+    NSArray *vlNameField = @[
+        [TTIOCompoundField fieldWithName:@"name"
+                                    kind:TTIOCompoundFieldKindVLString]
+    ];
+    NSMutableArray *rows = [NSMutableArray arrayWithCapacity:chromNames.count];
+    for (NSString *cn in chromNames) [rows addObject:@{@"name": cn}];
+    id<TTIOStorageDataset> namesDs =
+        [mateGrp createCompoundDatasetNamed:@"chrom_names"
+                                      fields:vlNameField
+                                       count:rows.count
+                                       error:error];
+    if (!namesDs || ![namesDs writeAll:rows error:error]) return NO;
+
+    return YES;
+}
+
 @implementation TTIOSpectralDataset
 {
     TTIOHDF5File     *_file;       // retained while alive for lazy reads
@@ -2113,6 +2352,8 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // M86: validate signal-channel codec overrides before any
     // mutation. Same fail-fast contract as the HDF5 fast path.
     _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
+    // v1.7 #11: reject per-field mate_info_* overrides when inline_v2 active.
+    _TTIO_V17_ValidateMateInfoV2Overrides(run);
 
     id<TTIOStorageGroup> rg = [parent createGroupNamed:name error:error];
     if (!rg) return NO;
@@ -2248,12 +2489,13 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         if (!nameDs || ![nameDs writeAll:nameRows error:error]) return NO;
     }
 
-    // M86 Phase F: schema lift for mate_info on the provider path.
-    // Same dispatch as the HDF5 fast path above: when ANY of the
-    // three per-field overrides (or M95 auto-defaults) is set, route
-    // through the subgroup writer; otherwise preserve the M82 compound
-    // write.
-    if (_TTIO_M95_HasMateOverridesOrDefaults(run)) {
+    // v1.7 #11: mate_info dispatch. Default when native lib is linked:
+    // encode via TTIOMateInfoV2 into signal_channels/mate_info/inline_v2
+    // (codec id 13) + chrom_names sidecar. Fallback (opt-out or no lib):
+    // M86 Phase F per-field subgroup when overrides present, else M82 compound.
+    if (_TTIO_V17_UseMateInlineV2(run)) {
+        if (!_TTIO_V17_WriteMateInfoInlineV2Storage(sc, run, error)) return NO;
+    } else if (_TTIO_M95_HasMateOverridesOrDefaults(run)) {
         if (!_TTIO_M86F_WriteMateInfoSubgroupStorage(sc, run, error)) return NO;
     } else {
         NSArray *mateFields = @[
@@ -2531,6 +2773,8 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // mutation. Raises NSInvalidArgumentException on programmer
     // error; the file is left untouched.
     _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
+    // v1.7 #11: reject per-field mate_info_* overrides when inline_v2 active.
+    _TTIO_V17_ValidateMateInfoV2Overrides(run);
 
     TTIOHDF5Group *rg = [parent createGroupNamed:name error:error];
     if (!rg) return NO;
@@ -2723,12 +2967,13 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 
     // M86 Phase F: schema lift for mate_info. When ANY of the three
     // per-field overrides is set the writer creates a subgroup
-    // signal_channels/mate_info/ containing three child datasets
-    // (Binding Decisions §125-§128). Per-field dispatch routes through
-    // _TTIO_M86F_WriteMateInfoSubgroup. When NO mate_info_* override
-    // (or M95 auto-default) is set the M82 compound write path is
-    // preserved unchanged for byte parity with pre-Phase-F files.
-    if (_TTIO_M95_HasMateOverridesOrDefaults(run)) {
+    // v1.7 #11: mate_info dispatch. Default when native lib is linked:
+    // encode via TTIOMateInfoV2 into signal_channels/mate_info/inline_v2
+    // (codec id 13) + chrom_names sidecar. Fallback (opt-out or no lib):
+    // M86 Phase F per-field subgroup when overrides present, else M82 compound.
+    if (_TTIO_V17_UseMateInlineV2(run)) {
+        if (!_TTIO_V17_WriteMateInfoInlineV2HDF5(sc, run, error)) return NO;
+    } else if (_TTIO_M95_HasMateOverridesOrDefaults(run)) {
         if (!_TTIO_M86F_WriteMateInfoSubgroup(sc, run, error)) return NO;
     } else {
         // mate_info compound: chrom (VL str) + pos (int64) + tlen (int32 → boxed as int64 via VLString-or-int64 schema).

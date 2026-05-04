@@ -29,6 +29,10 @@ static NSString *_mivErrorMessage(int rc) {
 
 @implementation TTIOMateInfoV2
 
++ (BOOL)nativeAvailable {
+    return TTIO_HAS_NATIVE_RANS ? YES : NO;
+}
+
 + (nullable NSData *)encodeMateChromIds:(NSData *)mateChromIds
                           matePositions:(NSData *)matePositions
                         templateLengths:(NSData *)templateLengths

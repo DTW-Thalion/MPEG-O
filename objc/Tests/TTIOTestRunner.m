@@ -84,6 +84,7 @@ extern void testM94ZV2Dispatch(void);
 extern void testM94ZV4Dispatch(void);
 extern void testM94ZV4ByteExact(void);
 extern void testMateInfoV2(void);
+extern void testMateInfoV2Dispatch(void);
 extern void testM95DeltaRansUnit(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
@@ -438,6 +439,10 @@ int main(int argc, const char *argv[])
         START_SET("mate_info v2 codec round-trip + invalid-input")
             testMateInfoV2();
         END_SET("mate_info v2 codec round-trip + invalid-input")
+
+        START_SET("v1.7 #11 Task 14: mate_info v2 ObjC writer/reader dispatch")
+            testMateInfoV2Dispatch();
+        END_SET("v1.7 #11 Task 14: mate_info v2 ObjC writer/reader dispatch")
 
         START_SET("M95: DELTA_RANS_ORDER0 codec unit")
             testM95DeltaRansUnit();
