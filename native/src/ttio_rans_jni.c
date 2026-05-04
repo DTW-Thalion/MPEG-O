@@ -866,3 +866,77 @@ Java_global_thalion_ttio_codecs_TtioRansNative_decodeRefDiffV2Native(
     free(out_seq); free(out_off);
     return result;
 }
+
+/* ----- NAME_TOKENIZED v2 (codec id 15) JNI bindings ----- */
+
+JNIEXPORT jbyteArray JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_encodeNameTokV2Native(
+    JNIEnv *env, jclass cls, jobjectArray names_jarr) {
+    (void)cls;
+    jsize n = (*env)->GetArrayLength(env, names_jarr);
+    jsize alloc_n = n > 0 ? n : 1;
+    const char **c_names = (const char **)malloc(sizeof(char*) * alloc_n);
+    if (!c_names) {
+        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/OutOfMemoryError"), "JNI alloc");
+        return NULL;
+    }
+    jstring *jstrs = (jstring*)malloc(sizeof(jstring) * alloc_n);
+    if (!jstrs) {
+        free(c_names);
+        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/OutOfMemoryError"), "JNI alloc");
+        return NULL;
+    }
+    size_t total = 0;
+    for (jsize i = 0; i < n; i++) {
+        jstrs[i] = (jstring)(*env)->GetObjectArrayElement(env, names_jarr, i);
+        c_names[i] = (*env)->GetStringUTFChars(env, jstrs[i], NULL);
+        total += strlen(c_names[i]);
+    }
+    size_t cap = ttio_name_tok_v2_max_encoded_size((uint64_t)n, (uint64_t)total);
+    uint8_t *out = (uint8_t*)malloc(cap);
+    size_t out_len = cap;
+    int rc = ttio_name_tok_v2_encode(c_names, (uint64_t)n, out, &out_len);
+    for (jsize i = 0; i < n; i++) {
+        (*env)->ReleaseStringUTFChars(env, jstrs[i], c_names[i]);
+    }
+    free(c_names); free(jstrs);
+    if (rc != 0) {
+        free(out);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "name_tok_v2 encode rc=%d", rc);
+        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/RuntimeException"), msg);
+        return NULL;
+    }
+    jbyteArray jout = (*env)->NewByteArray(env, (jsize)out_len);
+    (*env)->SetByteArrayRegion(env, jout, 0, (jsize)out_len, (const jbyte*)out);
+    free(out);
+    return jout;
+}
+
+JNIEXPORT jobjectArray JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_decodeNameTokV2Native(
+    JNIEnv *env, jclass cls, jbyteArray blob_jarr) {
+    (void)cls;
+    jsize blob_len = (*env)->GetArrayLength(env, blob_jarr);
+    jbyte *blob = (*env)->GetByteArrayElements(env, blob_jarr, NULL);
+    char **out_names = NULL;
+    uint64_t out_n = 0;
+    int rc = ttio_name_tok_v2_decode((const uint8_t*)blob, (size_t)blob_len, &out_names, &out_n);
+    (*env)->ReleaseByteArrayElements(env, blob_jarr, blob, JNI_ABORT);
+    if (rc != 0) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "name_tok_v2 decode rc=%d", rc);
+        (*env)->ThrowNew(env, (*env)->FindClass(env, "java/lang/RuntimeException"), msg);
+        return NULL;
+    }
+    jclass strcls = (*env)->FindClass(env, "java/lang/String");
+    jobjectArray jout = (*env)->NewObjectArray(env, (jsize)out_n, strcls, NULL);
+    for (uint64_t i = 0; i < out_n; i++) {
+        jstring js = (*env)->NewStringUTF(env, out_names[i]);
+        (*env)->SetObjectArrayElement(env, jout, (jsize)i, js);
+        (*env)->DeleteLocalRef(env, js);
+        free(out_names[i]);
+    }
+    free(out_names);
+    return jout;
+}

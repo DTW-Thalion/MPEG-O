@@ -276,4 +276,23 @@ public final class TtioRansNative {
     private static native Object[] decodeRefDiffV2Native(
         byte[] encoded, long[] positions, String[] cigarStrings,
         byte[] reference, int nReads, long totalBases);
+
+    /**
+     * Encode a list of read names to a NAME_TOKENIZED v2 (codec id 15) blob.
+     *
+     * @param names ASCII read names; UTF-8 marshalling matches the C entry's
+     *              {@code const char * const *} contract
+     * @return encoded blob (starts with magic {@code "NTK2"})
+     * @throws RuntimeException on native error (rc != 0)
+     */
+    public static native byte[] encodeNameTokV2Native(String[] names);
+
+    /**
+     * Decode a NAME_TOKENIZED v2 (codec id 15) blob to read names.
+     *
+     * @param blob encoded blob produced by {@link #encodeNameTokV2Native}
+     * @return recovered read names in original order
+     * @throws RuntimeException on native error (rc != 0)
+     */
+    public static native String[] decodeNameTokV2Native(byte[] blob);
 }
