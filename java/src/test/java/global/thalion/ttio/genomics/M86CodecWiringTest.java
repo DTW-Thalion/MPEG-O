@@ -831,7 +831,11 @@ class M86CodecWiringTest {
             names.add(String.format("INSTR:RUN:1:%d:%d:%d",
                 i / 4, i % 4, i * 100));
         }
-        WrittenGenomicRun raw = bigRunWithNames(n, len, seq, qual, names, Map.of());
+        // v1.8 #11 ch3: opt out so the M82 compound layout is preserved
+        // for the size-win comparison. The new v1.8 default would also
+        // emit a codec stream, defeating the measurement.
+        WrittenGenomicRun raw = bigRunWithNames(n, len, seq, qual, names, Map.of())
+            .withOptDisableNameTokenizedV2(true);
         WrittenGenomicRun nt  = bigRunWithNames(n, len, seq, qual, names,
             Map.of("read_names", Compression.NAME_TOKENIZED));
 
@@ -955,7 +959,10 @@ class M86CodecWiringTest {
         };
         String[] descs = {"empty", "seq+qual"};
         for (int c = 0; c < cases.length; c++) {
-            WrittenGenomicRun run = makeRun(pureAcgt(), phredCycle(), cases[c]);
+            // v1.8 #11 ch3: opt out so the M82 compound layout is
+            // preserved (the new v1.8 default emits the v2 codec stream).
+            WrittenGenomicRun run = makeRun(pureAcgt(), phredCycle(), cases[c])
+                .withOptDisableNameTokenizedV2(true);
             Path file = writeRun(tmp, run, "backcompat-" + descs[c] + ".tio");
             // Inspect the on-disk shape: read_names must NOT be uint8
             // (it's the M82 compound), and must not carry @compression.

@@ -139,7 +139,7 @@ final class RefDiffV2DispatchTest {
             templateLengths, chromosomes,
             Compression.ZLIB, Map.of(), List.of(),
             true, chromSeqs, null,
-            false, false);  // optDisableInlineMateInfoV2=false, optDisableRefDiffV2=false
+            false, false, false);  // optDisable Inline / RefDiff / NameTok V2 = false
         if (optOut) {
             run = run.withOptDisableRefDiffV2(true);
         }

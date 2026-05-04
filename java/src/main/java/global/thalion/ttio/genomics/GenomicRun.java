@@ -671,11 +671,20 @@ public class GenomicRun
                         .NameTokenizer.decode(all);
                     return decodedReadNames.get(i);
                 }
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .NAME_TOKENIZED_V2.ordinal()) {
+                    // v1.8 #11 ch3: name_tok_v2 codec output (NTK2 magic).
+                    long total = ds.shape()[0];
+                    byte[] all = (byte[]) ds.readSlice(0L, total);
+                    decodedReadNames = global.thalion.ttio.codecs
+                        .NameTokenizerV2.decode(all);
+                    return decodedReadNames.get(i);
+                }
                 throw new IllegalStateException(
                     "signal_channel 'read_names': @compression="
                     + codecId + " is not a supported TTIO codec id "
                     + "for the read_names channel (only NAME_TOKENIZED "
-                    + "= 8 is recognised)");
+                    + "= 8 and NAME_TOKENIZED_V2 = 15 are recognised)");
             }
         }
         // Compound path (M82, no override).
