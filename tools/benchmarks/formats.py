@@ -207,7 +207,9 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
         "qualities":          Compression.FQZCOMP_NX16_Z,     # M94.Z (CRAM-mimic)
         "cigars":             Compression.RANS_ORDER1,
         "read_names":         Compression.NAME_TOKENIZED,
-        "mate_info_chrom":    Compression.NAME_TOKENIZED,
+        # v1.7 Task #12: mate_info_chrom removed — mate_info is now
+        # encoded as a single inline_v2 blob (codec id 13) by default
+        # via WrittenGenomicRun.opt_disable_inline_mate_info_v2 = False.
     }
 
     t0 = time.perf_counter()
@@ -258,12 +260,12 @@ def ttio_compress(bam_path: Path, ref_fasta: Path, out_path: Path) -> Result:
         output_size_bytes=out_path.stat().st_size,
         command=["<in-process: BamReader.to_genomic_run + SpectralDataset.write_minimal>"],
         notes=(
-            "Python reference path. Codecs (v1.2 / M93 + M94.Z stack): "
-            "REF_DIFF on sequences (with embedded reference; falls "
-            "back to BASE_PACK if ref load fails), FQZCOMP_NX16_Z "
+            "Python reference path. Codecs (v1.7 / M93+M94.Z+#11 stack): "
+            "REF_DIFF on sequences (falls back to BASE_PACK if ref load fails), "
+            "FQZCOMP_NX16_Z "
             f"({_quality_codec_label}) on qualities, RANS_ORDER1 on "
-            "cigars, NAME_TOKENIZED on read_names + mate_info_chrom. "
-            "Lossless throughout."
+            "cigars, NAME_TOKENIZED on read_names, MATE_INLINE_V2 on "
+            "mate_info. Lossless throughout."
         ),
     )
 

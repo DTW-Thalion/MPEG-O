@@ -1388,6 +1388,20 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 f"signal_channels/. The override no longer applies. "
                 f"See docs/format-spec.md §4 and §10.7."
             )
+        # v1.7 #11: per-field mate_info_* overrides are disallowed
+        # when the inline_v2 codec is active (the default in v1.7+).
+        # Set opt_disable_inline_mate_info_v2 = True to use the v1
+        # layout with per-field overrides.
+        if ch_name in ("mate_info_chrom", "mate_info_pos", "mate_info_tlen"):
+            if not getattr(run, "opt_disable_inline_mate_info_v2", False):
+                raise ValueError(
+                    f"signal_codec_overrides[{ch_name!r}]: per-field "
+                    "mate_info_* overrides are disallowed when the "
+                    "v1.7 inline_v2 codec is active. Set "
+                    "opt_disable_inline_mate_info_v2=True on "
+                    "WrittenGenomicRun to use the v1 layout "
+                    "(three independent compressed streams)."
+                )
         # M86 Phase F Binding Decision §126 / Gotcha §143: the bare
         # "mate_info" key is reserved and rejected with a message
         # pointing at the three per-field names. Without the
@@ -1763,41 +1777,47 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             [{"value": n} for n in run.read_names],
             [("value", io.vl_str())],
         )
-    # M86 Phase F: schema lift for mate_info. When ANY of the three
-    # per-field overrides (mate_info_chrom / mate_info_pos /
-    # mate_info_tlen) is in signal_codec_overrides, the writer
-    # creates a subgroup ``signal_channels/mate_info/`` containing
-    # three child datasets (chrom, pos, tlen) and dispatches each
-    # child independently — codec-compressed if the per-field
-    # override is set, natural-dtype HDF5-filter ZLIB if not
-    # (Binding Decision §125, §127). Partial overrides allowed
-    # (Gotcha §142). When NO mate_info_* override is set, the
-    # existing M82 compound write path is used unchanged for byte
-    # parity with pre-Phase-F files.
-    _mate_override_keys = {
-        "mate_info_chrom", "mate_info_pos", "mate_info_tlen",
-    }
-    _mate_overrides = {}
-    for k in _mate_override_keys:
-        _resolved = _resolve_int_override(k)
-        if _resolved is not None:
-            _mate_overrides[k] = _resolved
-    if _mate_overrides:
-        _write_mate_info_subgroup(sc, run, _mate_overrides)
+    # v1.7 #11: mate_info dispatch. Default path (opt_disable_inline_mate_info_v2
+    # == False AND native lib available): encode all three mate fields into a
+    # single inline_v2 blob (codec id 13) written under
+    # signal_channels/mate_info/inline_v2. Fallback v1 path (opt-out or no
+    # native lib): M86 Phase F subgroup with per-field datasets, or M82
+    # compound when no per-field overrides are set.
+    from .codecs import mate_info_v2 as _miv2
+    _use_v2 = (
+        not getattr(run, "opt_disable_inline_mate_info_v2", False)
+        and _miv2.HAVE_NATIVE_LIB
+    )
+    if _use_v2:
+        _write_mate_info_inline_v2(sc, run)
     else:
-        io.write_compound_dataset(
-            sc,
-            "mate_info",
-            [
-                {"chrom": mc, "pos": int(mp), "tlen": int(tl)}
-                for mc, mp, tl in zip(
-                    run.mate_chromosomes,
-                    run.mate_positions,
-                    run.template_lengths,
-                )
-            ],
-            [("chrom", io.vl_str()), ("pos", "<i8"), ("tlen", "<i4")],
-        )
+        # v1 path: M86 Phase F per-field subgroup if overrides present,
+        # else M82 compound (no mate_info_* override keys when v2 is
+        # disabled — validation above already blocked them when v2 active).
+        _mate_override_keys = {
+            "mate_info_chrom", "mate_info_pos", "mate_info_tlen",
+        }
+        _mate_overrides = {}
+        for k in _mate_override_keys:
+            _resolved = _resolve_int_override(k)
+            if _resolved is not None:
+                _mate_overrides[k] = _resolved
+        if _mate_overrides:
+            _write_mate_info_subgroup(sc, run, _mate_overrides)
+        else:
+            io.write_compound_dataset(
+                sc,
+                "mate_info",
+                [
+                    {"chrom": mc, "pos": int(mp), "tlen": int(tl)}
+                    for mc, mp, tl in zip(
+                        run.mate_chromosomes,
+                        run.mate_positions,
+                        run.template_lengths,
+                    )
+                ],
+                [("chrom", io.vl_str()), ("pos", "<i8"), ("tlen", "<i4")],
+            )
 
     # Per-run provenance — same pattern as _write_run.
     if run.provenance_records:
@@ -1970,6 +1990,114 @@ def _write_mate_int_field(
     )
     ds.write(arr_u8)
     io.write_int_attr(ds, "compression", int(codec_enum), dtype="<u1")
+
+
+def _build_chrom_id_table(chromosomes: list[str]) -> "tuple[np.ndarray, dict[str, int]]":
+    """Encounter-order chrom_id assignment matching the L1 contract.
+
+    Returns (uint16 array of chrom_ids per record, dict name -> id).
+    Uses 0xFFFF for unmapped records ('*' or empty string).
+    """
+    name_to_id: dict[str, int] = {}
+    ids = np.empty(len(chromosomes), dtype=np.uint16)
+    for i, name in enumerate(chromosomes):
+        if name == "*" or not name:
+            ids[i] = 0xFFFF
+            continue
+        if name not in name_to_id:
+            name_to_id[name] = len(name_to_id)
+        ids[i] = name_to_id[name]
+    return ids, name_to_id
+
+
+def _resolve_mate_chrom_ids(
+    mate_chromosomes: list[str],
+    own_chrom_ids: "np.ndarray",
+    name_to_id: "dict[str, int]",
+) -> "np.ndarray":
+    """Map mate chromosome names to int32 ids; -1 for '*'.
+
+    Uses the same encounter-order dict as own_chrom_ids; extends the
+    dict if a mate references a chrom that never appears as own
+    (rare cross-chrom case). The '=' SAM shortcut is resolved to the
+    record's own chrom_id. name_to_id is copied and not mutated.
+    """
+    n = len(mate_chromosomes)
+    out = np.empty(n, dtype=np.int32)
+    local_map = dict(name_to_id)
+    for i, name in enumerate(mate_chromosomes):
+        if name == "*" or not name:
+            out[i] = -1
+        elif name == "=":
+            own = own_chrom_ids[i]
+            out[i] = -1 if own == 0xFFFF else int(own)
+        else:
+            if name not in local_map:
+                local_map[name] = len(local_map)
+            out[i] = local_map[name]
+    return out
+
+
+def _write_mate_info_inline_v2(sc, run: "WrittenGenomicRun") -> None:
+    """v1.7+ inline_v2 writer per spec §4.
+
+    Encodes the full mate triple via libttio_rans (the cross-language
+    byte-exact codec from T11) and writes the result as a single
+    uint8 blob at signal_channels/mate_info/inline_v2.
+
+    Also writes signal_channels/mate_info/chrom_names — a compound
+    dataset mapping chrom_id (uint16) → name (VL_STRING). This covers
+    mate-only chromosomes (e.g. a cross-chromosome mate on a chrom that
+    no own-read lands on) which are absent from genomic_index/chromosome_names.
+    The reader uses this table to resolve mate_chrom_ids returned by
+    ttio_mate_info_v2_decode back to string names.
+    """
+    from .codecs import mate_info_v2 as _miv2
+    from .enums import Compression as _Compression, Precision as _Precision
+
+    own_chrom_ids, name_to_id = _build_chrom_id_table(run.chromosomes)
+    mate_chrom_ids = _resolve_mate_chrom_ids(
+        run.mate_chromosomes, own_chrom_ids, name_to_id)
+
+    # After _resolve_mate_chrom_ids, name_to_id may have been extended
+    # for mate-only chroms. Reconstruct the full ordered list from the
+    # (possibly extended) local map used by _resolve_mate_chrom_ids.
+    # Since _resolve_mate_chrom_ids uses a copy, we rebuild from scratch.
+    full_name_to_id: dict[str, int] = dict(name_to_id)
+    for name in run.mate_chromosomes:
+        if name and name not in ("*", "=") and name not in full_name_to_id:
+            full_name_to_id[name] = len(full_name_to_id)
+    chrom_names_in_order = sorted(full_name_to_id.keys(),
+                                  key=lambda n: full_name_to_id[n])
+
+    encoded = _miv2.encode(
+        mate_chrom_ids=mate_chrom_ids,
+        mate_positions=np.asarray(run.mate_positions, dtype=np.int64),
+        template_lengths=np.asarray(run.template_lengths, dtype=np.int32),
+        own_chrom_ids=own_chrom_ids,
+        own_positions=np.asarray(run.positions, dtype=np.int64),
+    )
+    arr = np.frombuffer(encoded, dtype=np.uint8)
+
+    mate_group = sc.create_group("mate_info")
+    ds = mate_group.create_dataset(
+        "inline_v2",
+        _Precision.UINT8,
+        length=int(arr.shape[0]),
+        chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+        compression=_Compression.NONE,
+    )
+    ds.write(arr)
+    io.write_int_attr(ds, "compression",
+                      int(_Compression.MATE_INLINE_V2), dtype="<u1")
+
+    # Write the full chrom_id → name lookup table (encounter-order, id = row index).
+    io.write_compound_dataset(
+        mate_group,
+        "chrom_names",
+        [{"name": n} for n in chrom_names_in_order],
+        [("name", io.vl_str())],
+    )
 
 
 def _write_identifications(study: h5py.Group, records: list[Identification]) -> None:

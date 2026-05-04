@@ -127,7 +127,12 @@ def _make_written_run(
         mate_positions = positions + 200
         template_lengths = np.full(n_reads, 200, dtype=np.int32)
     else:
-        mate_chroms = ["" for _ in range(n_reads)]
+        # v1.7 Task #12: use SAM-convention "*" for unmapped mates.
+        # The M82 compound layout preserved "" verbatim; the v2
+        # inline_v2 codec normalises "" and "*" both to unmapped (-1),
+        # and decodes back as "*". Using "*" here keeps the
+        # round-trip assertion simple and matches SAM §1.4.
+        mate_chroms = ["*" for _ in range(n_reads)]
         mate_positions = np.full(n_reads, -1, dtype=np.int64)
         template_lengths = np.zeros(n_reads, dtype=np.int32)
 
@@ -496,8 +501,8 @@ def test_basic_roundtrip_100_reads(tmp_path: Path):
             assert read.mapping_quality == int(written.mapping_qualities[i])
             # Flags
             assert read.flags == int(written.flags[i])
-            # Mate (unpaired in this test)
-            assert read.mate_chromosome == ""
+            # Mate (unpaired in this test) — v1.7 v2 codec returns "*"
+            assert read.mate_chromosome == "*"
             assert read.mate_position == -1
             assert read.template_length == 0
     finally:

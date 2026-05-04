@@ -850,6 +850,13 @@ class TransportReader:
                                    if gd["template_lengths"]
                                    else np.zeros(n, dtype=np.int32)),
                 chromosomes=list(gd["chromosomes"]),
+                # v1.7 Task #12: the transport wire format preserves
+                # mate_chromosomes verbatim (including "=" and "").
+                # The v2 inline_v2 codec normalises these to actual chrom
+                # names and "*" respectively, which would break the
+                # transport round-trip contract. Keep v1 layout until the
+                # transport protocol is updated to carry v2 blobs natively.
+                opt_disable_inline_mate_info_v2=True,
             )
 
         path = SpectralDataset.write_minimal(
