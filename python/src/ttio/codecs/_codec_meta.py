@@ -18,10 +18,13 @@ from ttio.enums import Compression
 
 # Codecs that take (channel_bytes, **context) at encode/decode time.
 # Update when adding new context-aware codecs (e.g. mate_info encoders).
+#
+# v1.0 reset (Phase 2c): Compression.REF_DIFF (v1, codec id 9) removed —
+# readers reject @compression == 9 with a clear error. Only the v1.8
+# REF_DIFF_V2 path (codec id 14) remains.
 _CONTEXT_AWARE: frozenset[Compression] = frozenset(
     {
-        Compression.REF_DIFF,     # M93 — needs positions, cigars, reference
-        Compression.REF_DIFF_V2,  # v1.8 #11 — same; blob under group child
+        Compression.REF_DIFF_V2,  # v1.8 #11 — needs positions, cigars, reference
     }
 )
 

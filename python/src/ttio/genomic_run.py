@@ -25,9 +25,13 @@ from . import _hdf5_io as io
 # these, every per-read lazy decode call invokes
 # ``importlib._handle_fromlist`` — measured at ~6% of decode wall
 # (~9s on chr22) when these were inside the per-read methods.
-from .codecs import name_tokenizer as _name_tok
+#
+# v1.0 reset (Phase 2c): the v1 ``name_tokenizer`` codec was removed.
+# The ULEB128 varint primitives (used by the cigars rANS schema-lift
+# reader to walk the length-prefix-concat byte stream) live in the
+# shared :mod:`ttio.codecs._varint` helper.
 from .codecs.rans import decode as _rans_decode
-from .codecs.name_tokenizer import _varint_decode as _name_tok_varint_decode
+from .codecs._varint import varint_decode as _varint_decode
 
 
 # v1.6 (L4): _INTEGER_CHANNEL_DTYPES removed. The dict only ever
@@ -367,15 +371,16 @@ class GenomicRun:
             from .codecs.quality import decode as _dec
             decoded = _dec(all_bytes)
         elif codec_id == int(Compression.REF_DIFF):
-            # M93 v1.2: REF_DIFF is context-aware. The sequences blob
-            # carries a codec header naming the reference URI + md5; we
-            # resolve via :class:`ReferenceResolver` (embedded → external
-            # → RefMissingError per Q5c = A) and feed the per-read CIGARs
-            # + positions to the decoder. The decoder returns
-            # ``list[bytes]`` (one per read); we concat into the M82
-            # contract: a flat uint8 byte stream the same length as
-            # ``sum(lengths)``.
-            decoded = self._decode_ref_diff_sequences(all_bytes)
+            # v1.0 reset (Phase 2c): the v1 REF_DIFF (codec id 9)
+            # decoder was removed; readers reject these files with a
+            # clear migration message pointing at REF_DIFF_V2.
+            raise ValueError(
+                "signal_channel 'sequences': @compression=9 "
+                "(REF_DIFF v1) is no longer supported in v1.0; this "
+                "file was written with an older TTI-O version. "
+                "Re-encode with v1.0+ which uses REF_DIFF_V2 (codec "
+                "id 14)."
+            )
         elif codec_id == int(Compression.FQZCOMP_NX16_Z):
             # M94.Z v1.2: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16). Same
             # plumbing as v1: codec carries read_lengths inside its
@@ -389,66 +394,6 @@ class GenomicRun:
             )
         self._decoded_byte_channels[name] = decoded
         return decoded[offset:offset + count]
-
-    def _decode_ref_diff_sequences(self, encoded: bytes) -> bytes:
-        """Decode the ``sequences`` channel encoded with the M93 REF_DIFF codec.
-
-        Returns the concatenated per-read sequence bytes — same shape and
-        dtype contract as the M82 ``sequences`` channel
-        (``uint8`` 1-D byte stream of total length ``sum(lengths)``).
-
-        Raises:
-            RefMissingError: when the reference can't be resolved.
-        """
-        from .codecs.ref_diff import (
-            decode as _ref_diff_decode,
-            unpack_codec_header as _unpack_header,
-        )
-        from .genomic.reference_resolver import ReferenceResolver
-        from .acquisition_run import _native_h5py
-
-        # Pull the URI + md5 out of the codec header so the resolver
-        # can verify against /study/references/<uri>/.
-        header, _ = _unpack_header(encoded)
-
-        # ReferenceResolver wants a native h5py.File handle; the writer
-        # always embeds at /study/references/<uri>/ in the same file.
-        try:
-            h5_grp = _native_h5py(self.group)
-        except TypeError as exc:
-            raise RuntimeError(
-                "REF_DIFF decode requires an HDF5-backed dataset; "
-                "non-HDF5 storage providers are not yet supported."
-            ) from exc
-        h5_file = h5_grp.file
-        resolver = ReferenceResolver(h5_file)
-
-        # Single-chromosome runs only (v1.2 first pass — write side
-        # rejects multi-chrom too).
-        unique_chroms = set(self.index.chromosomes)
-        if len(unique_chroms) == 0:
-            chrom = ""  # empty run; resolver will likely fail
-        elif len(unique_chroms) > 1:
-            raise RuntimeError(
-                "REF_DIFF v1.2 first pass supports single-chromosome "
-                f"runs only; this run carries {sorted(unique_chroms)}. "
-                "Multi-chromosome support is an M93.X follow-up."
-            )
-        else:
-            chrom = next(iter(unique_chroms))
-
-        chrom_seq = resolver.resolve(
-            uri=header.reference_uri,
-            expected_md5=header.reference_md5,
-            chromosome=chrom,
-        )
-
-        # Gather per-read positions + cigars for the slice walk.
-        positions = [int(p) for p in self.index.positions]
-        cigars = self._all_cigars()
-
-        per_read = _ref_diff_decode(encoded, cigars, positions, chrom_seq)
-        return b"".join(per_read)
 
     def _sequences_is_ref_diff_v2(self) -> bool:
         """True iff signal_channels/sequences is a GROUP containing refdiff_v2.
@@ -613,22 +558,14 @@ class GenomicRun:
         return self._compound_cache[name]
 
     def _read_name_at(self, i: int) -> str:
-        """Return the read name at index ``i``, dispatching on shape.
+        """Return the read name at index ``i``.
 
-        M86 Phase E: read_names has two on-disk layouts (Binding
-        Decisions §111, §112):
-
-        - **M82 compound** (no override): VL_STRING-in-compound
-          dataset, read whole-and-cache via :meth:`_compound`.
-        - **NAME_TOKENIZED** (override active): flat 1-D uint8
-          dataset, decoded once on first access and cached as a
-          ``list[str]`` on this :class:`GenomicRun` instance per
-          Binding Decision §114.
-
-        Dispatch is on dataset shape — a 1-D uint8 dataset routes
-        through the codec path; anything else falls through to the
-        compound path. The :attr:`_decoded_read_names` cache holds
-        the entire decoded list across calls.
+        v1.0 reset (Phase 2c): read_names is always a flat 1-D uint8
+        dataset encoded with NAME_TOKENIZED_V2 (codec id 15). The v1
+        NAME_TOKENIZED (codec id 8) decoder and the M82 compound
+        fallback were both removed; readers reject the v1 layout
+        with a clear migration error. Decoded names are cached as a
+        ``list[str]`` on this :class:`GenomicRun` instance.
         """
         cached = self._decoded_read_names
         if cached is not None:
@@ -637,31 +574,35 @@ class GenomicRun:
         sig = self.group.open_group("signal_channels")
         ds = sig.open_dataset("read_names")
 
-        # Shape dispatch: precision == UINT8 → codec path; otherwise
-        # the dataset is the M82 compound (precision is None for
-        # compound datasets, since they have no scalar Precision).
-        if ds.precision == Precision.UINT8:
-            codec_id = io.read_int_attr(ds, "compression", default=0) or 0
-            if codec_id == int(Compression.NAME_TOKENIZED):
-                all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
-                self._decoded_read_names = _name_tok.decode(all_bytes)
-                return self._decoded_read_names[i]
-            if codec_id == int(Compression.NAME_TOKENIZED_V2):
-                # v1.8 #11 ch3: name_tok_v2 codec output (NTK2 magic).
-                from .codecs import name_tokenizer_v2 as _nt2
-                all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
-                self._decoded_read_names = _nt2.decode(all_bytes)
-                return self._decoded_read_names[i]
+        if ds.precision != Precision.UINT8:
             raise ValueError(
-                f"signal_channel 'read_names': @compression={codec_id} "
-                "is not a supported TTIO codec id for the read_names "
-                "channel (only NAME_TOKENIZED = 8 and "
-                "NAME_TOKENIZED_V2 = 15 are recognised)"
+                "signal_channel 'read_names': dataset is not a flat "
+                "uint8 codec stream — the v1.0 reader requires the "
+                "NAME_TOKENIZED_V2 layout. The legacy M82 compound "
+                "VL-string layout is no longer supported; this file "
+                "was written with an older TTI-O version. Re-encode "
+                "with v1.0+."
             )
 
-        # Compound path (M82, no override).
-        names = self._compound("read_names")
-        return names[i]["value"]
+        codec_id = io.read_int_attr(ds, "compression", default=0) or 0
+        if codec_id == int(Compression.NAME_TOKENIZED):
+            raise ValueError(
+                "signal_channel 'read_names': @compression=8 "
+                "(NAME_TOKENIZED v1) is no longer supported in v1.0; "
+                "this file was written with an older TTI-O version. "
+                "Re-encode with v1.0+ which uses NAME_TOKENIZED_V2 "
+                "(codec id 15)."
+            )
+        if codec_id == int(Compression.NAME_TOKENIZED_V2):
+            from .codecs import name_tokenizer_v2 as _nt2
+            all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+            self._decoded_read_names = _nt2.decode(all_bytes)
+            return self._decoded_read_names[i]
+        raise ValueError(
+            f"signal_channel 'read_names': @compression={codec_id} "
+            "is not a supported TTIO codec id for the read_names "
+            "channel (only NAME_TOKENIZED_V2 = 15 is recognised)"
+        )
 
     def _cigar_at(self, i: int) -> str:
         """Return the cigar string at index ``i``, dispatching on shape.
@@ -671,18 +612,17 @@ class GenomicRun:
 
         - **M82 compound** (no override): VL_STRING-in-compound
           dataset, read whole-and-cache via :meth:`_compound`.
-        - **TTIO codec** (override active): flat 1-D uint8
-          dataset, decoded once on first access and cached as a
-          ``list[str]`` on this :class:`GenomicRun` instance per
-          Binding Decision §123. Three codec ids are recognised:
+        - **rANS codec** (override active): flat 1-D uint8 dataset
+          carrying a length-prefix-concat byte stream
+          (``varint(len) + bytes`` per CIGAR — §2.5 of the Phase C
+          plan / format-spec §10.6 extended). Decoded once on first
+          access and cached as a ``list[str]`` per Binding Decision
+          §123. Two codec ids are recognised: ``RANS_ORDER0`` (4)
+          and ``RANS_ORDER1`` (5).
 
-          * ``RANS_ORDER0`` (4) and ``RANS_ORDER1`` (5): the
-            decoded byte buffer is a length-prefix-concat sequence
-            (``varint(len) + bytes`` per CIGAR — §2.5 of the
-            Phase C plan / format-spec §10.6 extended). Walk the
-            buffer to reconstruct the ``list[str]``.
-          * ``NAME_TOKENIZED`` (8): pass the bytes through the
-            codec's ``decode(bytes) -> list[str]`` API directly.
+        v1.0 reset (Phase 2c): the v1 ``NAME_TOKENIZED`` (codec id 8)
+        cigars decoder was removed; readers reject these files with a
+        clear migration error.
 
         Dispatch is on dataset shape — a 1-D uint8 dataset routes
         through the codec path; anything else (compound) falls
@@ -704,7 +644,7 @@ class GenomicRun:
                 int(Compression.RANS_ORDER1),
             ):
                 decoded = _rans_decode(all_bytes)
-                _vd = _name_tok_varint_decode
+                _vd = _varint_decode
                 # Walk the length-prefix-concat byte stream — the
                 # mirror of the writer's serialisation contract
                 # (§2.5). Each entry is varint(len) + len bytes
@@ -733,14 +673,18 @@ class GenomicRun:
                 self._decoded_cigars = out
                 return out[i]
             if codec_id == int(Compression.NAME_TOKENIZED):
-                _nt = _name_tok
-                self._decoded_cigars = _nt.decode(all_bytes)
-                return self._decoded_cigars[i]
+                raise ValueError(
+                    "signal_channel 'cigars': @compression=8 "
+                    "(NAME_TOKENIZED v1) is no longer supported in "
+                    "v1.0; this file was written with an older TTI-O "
+                    "version. Re-encode with v1.0+ which uses "
+                    "RANS_ORDER0/RANS_ORDER1 for the cigars channel."
+                )
             raise ValueError(
                 f"signal_channel 'cigars': @compression={codec_id} "
                 "is not a supported TTIO codec id for the cigars "
-                "channel (only RANS_ORDER0 = 4, RANS_ORDER1 = 5, "
-                "and NAME_TOKENIZED = 8 are recognised)"
+                "channel (only RANS_ORDER0 = 4 and RANS_ORDER1 = 5 "
+                "are recognised)"
             )
 
         # Compound path (M82, no override).
@@ -861,145 +805,54 @@ class GenomicRun:
         self._decoded_mate_info["inline_v2"] = True  # marker for round-trip cache
         return self._decoded_mate_info
 
-    def _decode_mate_chrom(self):
-        """Lazily decode the chrom field from the Phase F subgroup.
+    def _raise_unsupported_mate_layout(self) -> None:
+        """Raise a clear migration error for any non-inline_v2 mate_info layout.
 
-        Populates ``_decoded_mate_info["chrom"]`` with a
-        ``list[str]`` and returns it.
+        v1.0 reset (Phase 2c): the M86 Phase F per-field subgroup
+        layout (with chrom / pos / tlen child datasets) and the
+        legacy M82 compound dataset layout were both removed. Only
+        the v1.7+ inline_v2 BLOB path under
+        ``signal_channels/mate_info/inline_v2`` (codec id 13) is
+        decoded; everything else surfaces a clear error so callers
+        learn they need to re-encode with v1.0+.
         """
-        cached = self._decoded_mate_info.get("chrom")
-        if cached is not None:
-            return cached
-
-        sig = self.group.open_group("signal_channels")
-        mate_group = sig.open_group("mate_info")
-
-        # Dispatch on dataset shape inside the subgroup. Per the
-        # writer (§5.2), an overridden chrom field is a flat 1-D
-        # uint8 dataset with @compression; an un-overridden chrom
-        # is a compound (VL_STRING) dataset with no attribute.
-        ds = mate_group.open_dataset("chrom")
-        if ds.precision == Precision.UINT8:
-            codec_id = io.read_int_attr(ds, "compression", default=0) or 0
-            all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
-            if codec_id in (
-                int(Compression.RANS_ORDER0),
-                int(Compression.RANS_ORDER1),
-            ):
-                _vd = _name_tok_varint_decode
-                decoded = _rans_decode(all_bytes)
-                out: list[str] = []
-                offset = 0
-                n = len(decoded)
-                while offset < n:
-                    length, offset = _vd(decoded, offset)
-                    if offset + length > n:
-                        raise ValueError(
-                            "mate_info_chrom rANS stream: length-prefix-"
-                            "concat entry runs off end of decoded buffer "
-                            f"(offset={offset}, length={length}, "
-                            f"buffer_size={n})"
-                        )
-                    payload = decoded[offset:offset + length]
-                    offset += length
-                    try:
-                        out.append(payload.decode("ascii"))
-                    except UnicodeDecodeError as exc:
-                        raise ValueError(
-                            "mate_info_chrom rANS stream: entry contains "
-                            "non-ASCII bytes"
-                        ) from exc
-                self._decoded_mate_info["chrom"] = out
-                return out
-            if codec_id == int(Compression.NAME_TOKENIZED):
-                _nt = _name_tok
-                out = _nt.decode(all_bytes)
-                self._decoded_mate_info["chrom"] = out
-                return out
-            raise ValueError(
-                f"signal_channel 'mate_info/chrom': "
-                f"@compression={codec_id} is not a supported TTIO codec id "
-                "(only RANS_ORDER0 = 4, RANS_ORDER1 = 5, and "
-                "NAME_TOKENIZED = 8 are recognised for this channel)"
-            )
-
-        # Natural dtype (compound VL_STRING) — un-overridden field
-        # inside the subgroup. Read whole and extract the values.
-        out = [r["value"] for r in io.read_compound_dataset(mate_group, "chrom")]
-        self._decoded_mate_info["chrom"] = out
-        return out
-
-    def _decode_mate_int_field(
-        self, name: str, dtype_str: str
-    ) -> "np.ndarray":
-        """Lazily decode a Phase F integer mate field (pos or tlen).
-
-        Populates ``_decoded_mate_info[name]`` with a typed numpy
-        array and returns it. ``name`` is the on-disk child name
-        (``"pos"`` or ``"tlen"``); ``dtype_str`` is the natural
-        integer dtype (``"<i8"`` or ``"<i4"``).
-        """
-        cached = self._decoded_mate_info.get(name)
-        if cached is not None:
-            return cached
-
-        sig = self.group.open_group("signal_channels")
-        mate_group = sig.open_group("mate_info")
-        ds = mate_group.open_dataset(name)
-
-
-        if ds.precision == Precision.UINT8:
-            codec_id = io.read_int_attr(ds, "compression", default=0) or 0
-            if codec_id in (
-                int(Compression.RANS_ORDER0),
-                int(Compression.RANS_ORDER1),
-            ):
-                from .codecs.rans import decode as _dec
-                all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
-                decoded_bytes = _dec(all_bytes)
-                arr = np.frombuffer(decoded_bytes, dtype=dtype_str)
-                self._decoded_mate_info[name] = arr
-                return arr
-            raise ValueError(
-                f"signal_channel 'mate_info/{name}': "
-                f"@compression={codec_id} is not a supported TTIO codec id "
-                "for an integer mate field (only RANS_ORDER0 = 4 and "
-                "RANS_ORDER1 = 5 are recognised)"
-            )
-
-        # Natural-dtype path — read the typed dataset directly and
-        # re-interpret to the canonical LE dtype to keep the value
-        # type uniform with the codec path.
-        raw = bytes(np.asarray(ds.read(offset=0, count=int(ds.length))).tobytes())
-        arr = np.frombuffer(raw, dtype=dtype_str)
-        self._decoded_mate_info[name] = arr
-        return arr
+        raise ValueError(
+            "signal_channels/mate_info: legacy layout detected — "
+            "the v1.0 reader requires the inline_v2 blob "
+            "(signal_channels/mate_info/inline_v2 with @compression=13). "
+            "The M86 Phase F per-field subgroup (chrom/pos/tlen) and "
+            "the M82 compound dataset layouts were removed in v1.0. "
+            "This file was written with an older TTI-O version; "
+            "re-encode with v1.0+ to use MATE_INLINE_V2."
+        )
 
     def _mate_chrom_at(self, i: int) -> str:
-        """Return the mate chromosome at index ``i``, dispatching on layout.
+        """Return the mate chromosome at index ``i``.
 
-        v1.7+ inline_v2 path checked first; falls back to Phase F subgroup
-        or M82 compound (Binding Decisions §125, §128, Gotcha §141).
+        v1.0 reset (Phase 2c): only the v1.7+ inline_v2 layout is
+        supported. Any other layout raises ValueError.
         """
         if self._mate_info_is_inline_v2():
             return self._decode_mate_inline_v2()["chrom"][i]
-        if self._mate_info_is_subgroup():
-            return self._decode_mate_chrom()[i]
-        # M82 compound path.
-        return self._compound("mate_info")[i]["chrom"]
+        self._raise_unsupported_mate_layout()
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _mate_pos_at(self, i: int) -> int:
-        """Return the mate position at index ``i``, dispatching on layout."""
+        """Return the mate position at index ``i``.
+
+        v1.0 reset (Phase 2c): inline_v2 is the only supported layout.
+        """
         if self._mate_info_is_inline_v2():
             return int(self._decode_mate_inline_v2()["pos"][i])
-        if self._mate_info_is_subgroup():
-            return int(self._decode_mate_int_field("pos", "<i8")[i])
-        return int(self._compound("mate_info")[i]["pos"])
+        self._raise_unsupported_mate_layout()
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _mate_tlen_at(self, i: int) -> int:
-        """Return the template length at index ``i``, dispatching on layout."""
+        """Return the template length at index ``i``.
+
+        v1.0 reset (Phase 2c): inline_v2 is the only supported layout.
+        """
         if self._mate_info_is_inline_v2():
             return int(self._decode_mate_inline_v2()["tlen"][i])
-        if self._mate_info_is_subgroup():
-            return int(self._decode_mate_int_field("tlen", "<i4")[i])
-        return int(self._compound("mate_info")[i]["tlen"])
+        self._raise_unsupported_mate_layout()
+        raise AssertionError("unreachable")  # pragma: no cover

@@ -64,19 +64,8 @@ def test_v4_default_when_native():
     assert out[4] == 4
 
 
-def test_v3_explicit_still_works():
-    """``prefer_v3=True`` (with ``prefer_v4=False``) selects V3."""
-    out = encode(
-        SYNTH_QUALITIES, SYNTH_READ_LENS, SYNTH_REVCOMP,
-        prefer_v4=False, prefer_v3=True,
-    )
-    assert out[4] == 3
-    qual, _, _ = decode_with_metadata(out, SYNTH_REVCOMP)
-    assert qual == SYNTH_QUALITIES
-
-
 def test_env_var_v4_selects_v4():
-    """``TTIO_M94Z_VERSION=4`` forces V4."""
+    """``TTIO_M94Z_VERSION=4`` forces V4 (the only supported version in v1.0)."""
     old_ver = os.environ.get("TTIO_M94Z_VERSION")
     try:
         os.environ["TTIO_M94Z_VERSION"] = "4"
@@ -89,54 +78,18 @@ def test_env_var_v4_selects_v4():
     assert out[4] == 4
 
 
-def test_env_var_v3_selects_v3():
-    """``TTIO_M94Z_VERSION=3`` overrides the V4 default."""
-    old_ver = os.environ.get("TTIO_M94Z_VERSION")
-    try:
-        os.environ["TTIO_M94Z_VERSION"] = "3"
-        out = encode(SYNTH_QUALITIES, SYNTH_READ_LENS, SYNTH_REVCOMP)
-    finally:
-        if old_ver is None:
-            os.environ.pop("TTIO_M94Z_VERSION", None)
-        else:
-            os.environ["TTIO_M94Z_VERSION"] = old_ver
-    assert out[4] == 3
-
-
-def test_v4_size_sanity_vs_v3():
-    """Loose sanity: V4 is in the same ballpark as V3 on Illumina-like input.
-
-    This is a sanity check, not a strict requirement — V4 may compress
-    slightly worse on some pathological inputs. Tolerance: 100 bytes.
-    """
-    rng = __import__("random").Random(0xBEEF)
-    n_reads = 200
-    read_len = 101
-    quals = bytearray()
-    for _ in range(n_reads * read_len):
-        q = max(20, min(40, int(rng.gauss(30, 5))))
-        quals.append(q + 33)
-    qualities = bytes(quals)
-    read_lens = [read_len] * n_reads
-    revcomp = [0] * n_reads
-    v3 = encode(qualities, read_lens, revcomp, prefer_v4=False, prefer_v3=True)
-    v4 = encode(qualities, read_lens, revcomp, prefer_v4=True)
-    assert v3[4] == 3
-    assert v4[4] == 4
-    assert len(v4) <= len(v3) + 100, (
-        f"V4 unexpectedly larger than V3 by >100 bytes: V4={len(v4)} V3={len(v3)}"
-    )
+# v1.0 reset (Phase 2c): V1/V2/V3 encoders were removed. Tests that
+# exercised V3 explicitly (via prefer_v3=True or TTIO_M94Z_VERSION=3)
+# and the V4-vs-V3 size-sanity comparison are no longer applicable —
+# V4 is the only encoded version.
 
 
 def test_v4_v3_cross_decode_fails():
     """A V4-encoded stream tampered to version=3 must fail to decode.
 
-    The V3 decoder expects a V3 outer-header layout entirely different
-    from V4's. The decode path tries to zlib-decompress a read-length
-    table that doesn't exist at that offset, so the raised exception
-    can be ValueError, RuntimeError, or zlib.error — any non-success
-    path is acceptable here (we only assert that V4 bytes don't accidentally
-    decode as V3).
+    v1.0 reset (Phase 2c): V3 reader headers were removed; the decoder
+    now surfaces a clear "V1/V2/V3 no longer supported" message when a
+    V4 blob's version byte is tampered to 3.
     """
     v4 = encode(SYNTH_QUALITIES, SYNTH_READ_LENS, SYNTH_REVCOMP, prefer_v4=True)
     assert v4[4] == 4
@@ -157,31 +110,28 @@ def test_v4_pad_count_correct():
     assert list(lens) == lens_13
 
 
-def test_v4_empty_input_cascades_to_v3():
-    """Empty input cascades from V4 to V3 transparently.
+def test_v4_empty_input_short_circuits_to_minimal_v4_header(tmp_path):
+    """v1.0 reset (Phase 2c): empty input synthesises a minimal V4 header.
 
     The CRAM 3.1 fqzcomp_qual encoder rejects ``n_qualities == 0 ||
-    n_reads == 0`` (see native/src/fqzcomp_qual.c:1394). v1.6 adds a
-    Python-layer fallback at the encode() entry: when ``prefer_v4=True``
-    AND ``n_qualities == 0``, the encoder cascades to V3 silently
-    (rather than raising). Callers don't have to special-case empty
-    runs.
+    n_reads == 0``. With V1/V2/V3 cascade fallbacks removed, the
+    encoder now synthesises a 26-byte V4-tagged header for empty
+    input so readers can still detect the version uniformly. Decode
+    short-circuits to ``(b"", [], revcomp_flags)``.
     """
-    # prefer_v4=True with empty input → cascades to V3 (no exception).
     out = encode(b"", [], [], prefer_v4=True)
-    assert out[4] == 3, (
-        f"empty input with prefer_v4=True should cascade to V3, "
-        f"got version byte {out[4]}"
+    assert out[4] == 4, (
+        f"empty input must produce a V4-tagged header, got version "
+        f"byte {out[4]}"
     )
     qual, lens, _ = decode_with_metadata(out, [])
     assert qual == b""
     assert list(lens) == []
 
-    # Default-dispatch (no opts) with empty input also cascades cleanly.
+    # Default-dispatch (no opts) with empty input also produces V4.
     out2 = encode(b"", [], [])
-    assert out2[4] in (1, 2, 3), (
-        f"empty input default-dispatch should land on V1/V2/V3, "
-        f"got {out2[4]}"
+    assert out2[4] == 4, (
+        f"empty input default-dispatch must produce V4, got {out2[4]}"
     )
     qual2, lens2, _ = decode_with_metadata(out2, [])
     assert qual2 == b""

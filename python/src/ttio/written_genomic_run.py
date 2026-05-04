@@ -60,11 +60,12 @@ class WrittenGenomicRun:
     # existing signal_compression string path.
     signal_codec_overrides: dict[str, Compression] = field(default_factory=dict)
 
-    # M93 v1.2 — reference embed for the REF_DIFF codec on the
-    # ``sequences`` channel. When ``embed_reference=True`` AND a
-    # REF_DIFF override is set on ``sequences``, the writer embeds
-    # the chromosome sequences provided in ``reference_chrom_seqs``
-    # at ``/study/references/<reference_uri>/`` in the output file.
+    # M93 v1.2 — reference embed for the REF_DIFF_V2 codec on the
+    # ``sequences`` channel. When ``embed_reference=True`` AND
+    # ``reference_chrom_seqs`` is provided AND the REF_DIFF_V2
+    # default applies (signal_compression="gzip", reference present),
+    # the writer embeds the chromosome sequences at
+    # ``/study/references/<reference_uri>/`` in the output file.
     # When ``embed_reference=False`` (the default since L3, Task #82
     # Phase B.1, 2026-05-01), the writer records ``reference_uri``
     # and ``reference_md5`` only and expects the reader to resolve
@@ -74,13 +75,17 @@ class WrittenGenomicRun:
     # (external reference) and to drop the ~10 MB chr22 reference
     # blob from the v1.2.0 chr22 benchmark; users who want
     # self-contained files set ``embed_reference=True`` explicitly.
+    #
+    # v1.0 reset (Phase 2c): the v1 REF_DIFF (codec id 9) writer was
+    # removed; sequences default to REF_DIFF_V2 (codec id 14).
     embed_reference: bool = False
 
     # Mapping ``chromosome_name → uppercase ACGTN bytes``, supplied at
     # write time for any chromosome that has at least one read aligned
-    # to it. Required when ``embed_reference=True`` and REF_DIFF is
-    # selected on the ``sequences`` channel; otherwise REF_DIFF falls
-    # back to BASE_PACK per design spec Q5b.
+    # to it. Required when ``embed_reference=True`` so the v1.8
+    # REF_DIFF_V2 writer can resolve the per-read diff against the
+    # per-chromosome reference; if absent, the writer falls back to
+    # BASE_PACK on the sequences channel (Q5b = C).
     reference_chrom_seqs: dict[str, bytes] | None = None
 
     # External reference path stamped into the file's metadata for

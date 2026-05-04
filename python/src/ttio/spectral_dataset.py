@@ -954,25 +954,24 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
 def _any_v1_5_codec(
     genomic_runs: "Mapping[str, WrittenGenomicRun] | None",
 ) -> bool:
-    """Return True if any run carries a v1.5 codec (REF_DIFF or FQZCOMP_NX16_Z).
+    """Return True if any run carries a v1.5 codec (REF_DIFF_V2 or FQZCOMP_NX16_Z).
 
     Used to gate the format-version bump from 1.4 → 1.5: only files that
     actually exercise an M93+ codec get the new version string, so
     M82-only writes preserve byte-parity with existing fixtures.
 
-    M93 registered REF_DIFF as v1.5; M94.Z adds FQZCOMP_NX16_Z. Both are
-    v1.5 codecs even though only REF_DIFF is "context-aware" in the M93
-    sense (consumes sibling channels via the M86 pipeline hook).
-    FQZCOMP_NX16_Z carries its sibling-channel metadata
-    (``read_lengths``/``revcomp_flags``) inside the codec wire format,
-    so it does not register as context-aware in :mod:`._codec_meta`,
-    but it IS a v1.5 codec for format-version-gating purposes.
+    v1.0 reset (Phase 2c): the v1 REF_DIFF (codec id 9) implementation was
+    removed; only REF_DIFF_V2 (codec id 14) and FQZCOMP_NX16_Z (codec id 12)
+    register as v1.5 codecs for the format-version gate. FQZCOMP_NX16_Z
+    carries its sibling-channel metadata (``read_lengths`` / ``revcomp_flags``)
+    inside the codec wire format, so it is not "context-aware" in the
+    :mod:`._codec_meta` sense — but it IS a v1.5 codec for the gate.
     """
     if not genomic_runs:
         return False
     from .enums import Compression as _Compression
     _V1_5_CODECS = frozenset({
-        _Compression.REF_DIFF,         # M93
+        _Compression.REF_DIFF_V2,      # v1.8 #11
         _Compression.FQZCOMP_NX16_Z,   # M94.Z (CRAM-mimic rANS-Nx16)
     })
     for run in genomic_runs.values():
@@ -1116,26 +1115,25 @@ def _is_valid_compression(value: object) -> bool:
         return False
 
 
-def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
-    """Write the ``sequences`` channel through the REF_DIFF codec.
+def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
+    """Write the ``sequences`` channel through the REF_DIFF_V2 codec.
 
-    v1.8+ default: when libttio_rans is loadable AND the run isn't
-    opting out AND the v1 REF_DIFF eligibility checks pass (single-
-    chromosome, all reads mapped, reference present), write
-    signal_channels/sequences as a GROUP containing a refdiff_v2
-    child dataset (@compression = 14).
+    v1.0 reset (Phase 2c): the v1 REF_DIFF (codec id 9) writer was
+    removed. The v2 path (codec id 14) is now the only reference-diff
+    sequences writer.
 
-    Fallback paths:
-    - v1 layout is used when the native lib is unavailable or
-      eligibility checks fail (unmapped reads / no reference).
-    - Q5b = C: missing reference or unmapped reads → BASE_PACK silently.
+    Eligibility: requires libttio_rans loadable, a single-chromosome
+    run, all reads mapped (no ``cigar=="*"``), and a reference present.
+    When any precondition fails, falls back to BASE_PACK on a flat
+    dataset (Q5b = C) — same fallback semantics as the original v1.5
+    REF_DIFF path. The fallback uses the canonical, codec-free
+    sequences dataset layout.
 
-    **Single-chromosome limitation (v1.2 first pass):** both v1 and v2
-    paths require all reads aligned to a single chromosome. Multi-
-    chromosome runs raise :class:`ValueError`.
+    **Single-chromosome limitation (v1.8 first pass):** REF_DIFF_V2
+    requires all reads aligned to a single chromosome. Multi-chromosome
+    runs raise :class:`ValueError`.
     """
     from .codecs import ref_diff_v2 as _rdv2
-    from .codecs.ref_diff import encode as _ref_diff_encode
     from .codecs.base_pack import encode as _base_pack_encode
     from .enums import Compression as _Compression, Precision as _Precision
 
@@ -1147,9 +1145,9 @@ def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
             chrom_seq = None
         elif len(unique_chroms) > 1:
             raise ValueError(
-                "REF_DIFF v1.2 first pass supports single-chromosome runs only; "
+                "REF_DIFF_V2 v1.8 supports single-chromosome runs only; "
                 f"this run carries reads on chromosomes {sorted(unique_chroms)}. "
-                "Multi-chromosome support is an M93.X follow-up — split into "
+                "Multi-chromosome support is a follow-up — split into "
                 "per-chromosome runs as a workaround."
             )
         else:
@@ -1158,12 +1156,11 @@ def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
 
     raw_bytes = bytes(run.sequences.tobytes())
 
-    # M93 v1.2: REF_DIFF can't encode unmapped reads (cigar="*"). When
-    # any read in the run is unmapped, fall back to BASE_PACK on the
-    # whole channel — same Q5b=C semantics as missing-reference.
+    # REF_DIFF_V2 cannot encode unmapped reads (cigar="*"). When any
+    # read in the run is unmapped, fall back to BASE_PACK on the whole
+    # channel — same Q5b=C semantics as missing-reference.
     has_unmapped = any(c == "*" or c == "" for c in run.cigars)
 
-    # v1.8 dispatch: prefer the v2 path when eligible.
     use_v2 = (
         _rdv2.HAVE_NATIVE_LIB
         and chrom_seq is not None
@@ -1212,25 +1209,9 @@ def _write_sequences_ref_diff(sc, run: WrittenGenomicRun) -> None:
         io.write_int_attr(ds, "compression", int(_Compression.REF_DIFF_V2), dtype="<u1")
         return
 
-    # v1 path (unchanged): flat dataset with REF_DIFF or BASE_PACK.
-    if chrom_seq is None or has_unmapped:
-        # Q5b = C: silent fallback to BASE_PACK on this channel.
-        encoded = _base_pack_encode(raw_bytes)
-        codec_id = int(_Compression.BASE_PACK)
-    else:
-        # Split sequences into per-read slices using offsets/lengths.
-        offsets = [int(o) for o in run.offsets]
-        lengths = [int(l) for l in run.lengths]
-        per_read: list[bytes] = []
-        for off, ln in zip(offsets, lengths):
-            per_read.append(raw_bytes[off:off + ln])
-        positions = [int(p) for p in run.positions]
-        cigars = list(run.cigars)
-        md5 = _reference_md5_for_run(run)
-        encoded = _ref_diff_encode(
-            per_read, cigars, positions, chrom_seq, md5, run.reference_uri,
-        )
-        codec_id = int(_Compression.REF_DIFF)
+    # Fallback: flat dataset with BASE_PACK (Q5b = C).
+    encoded = _base_pack_encode(raw_bytes)
+    codec_id = int(_Compression.BASE_PACK)
 
     arr = np.frombuffer(encoded, dtype=np.uint8)
     ds = sc.create_dataset(
@@ -1316,16 +1297,15 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # whitelist is a caller error and must surface immediately
     # (Binding Decision §88).
     from .enums import Compression as _Compression
+    # v1.0 reset (Phase 2c): the v1 REF_DIFF (codec id 9) and v1
+    # NAME_TOKENIZED (codec id 8) implementations were removed. They
+    # are no longer accepted on any channel; the explicit-reject branch
+    # below produces a clear error pointing at the v2 replacements.
     _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL = {
         "sequences": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
             _Compression.BASE_PACK,
-            # M93 v1.2: reference-based diff. Context-aware codec —
-            # the writer plumbs positions, cigars, and the reference
-            # sequences through to ref_diff.encode(); per-channel
-            # validation here only checks codec applicability.
-            _Compression.REF_DIFF,
         }),
         "qualities": frozenset({
             _Compression.RANS_ORDER0,
@@ -1336,26 +1316,20 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             # own read_lengths + needs revcomp_flags from run.flags & 16.
             _Compression.FQZCOMP_NX16_Z,
         }),
-        # M86 Phase E: NAME_TOKENIZED is only valid on read_names
-        # (Binding Decision §113). The codec tokenises UTF-8 strings
-        # and would mis-tokenise binary byte streams like sequences/
-        # qualities. The other byte-channel codecs are not valid here
-        # because the source data is list[str], not bytes.
-        "read_names": frozenset({
-            _Compression.NAME_TOKENIZED,
-        }),
-        # M86 Phase C: cigars accepts THREE codecs (Binding Decisions
-        # §120, §121, §122). The rANS pair operate on a length-prefix-
+        # v1.0 reset (Phase 2c): NAME_TOKENIZED v1 was removed. The
+        # read_names channel is auto-encoded with NAME_TOKENIZED_V2
+        # (codec id 15) by default; no explicit override is supported.
+        "read_names": frozenset(),
+        # M86 Phase C: cigars accepts the rANS pair on a length-prefix-
         # concat byte stream of the CIGAR strings (varint(len) + bytes
-        # per CIGAR); NAME_TOKENIZED operates on the list[str] directly
-        # via its own columnar/verbatim wire format. BASE_PACK and
-        # QUALITY_BINNED are wrong-content (CIGARs are not ACGT bytes
-        # nor Phred values) and are explicitly rejected with named
-        # error messages below.
+        # per CIGAR). BASE_PACK and QUALITY_BINNED are wrong-content
+        # (CIGARs are not ACGT bytes nor Phred values) and are
+        # explicitly rejected with named error messages below.
+        # v1.0 reset (Phase 2c): NAME_TOKENIZED v1 was removed; cigars
+        # via the v1 tokeniser is no longer supported.
         "cigars": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
-            _Compression.NAME_TOKENIZED,
         }),
         # v1.6: positions / flags / mapping_qualities REMOVED from the
         # override surface. These per-record integer fields live only
@@ -1376,7 +1350,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         "mate_info_chrom": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
-            _Compression.NAME_TOKENIZED,
         }),
         "mate_info_pos": frozenset({
             _Compression.RANS_ORDER0,
@@ -1452,6 +1425,28 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             ) from exc
         allowed = _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL[ch_name]
         if codec_enum not in allowed:
+            # v1.0 reset (Phase 2c): the v1 NAME_TOKENIZED (codec id 8)
+            # and REF_DIFF (codec id 9) implementations were removed.
+            # Surface a clear, named error pointing at the v2 successors.
+            if codec_enum == _Compression.NAME_TOKENIZED:
+                raise ValueError(
+                    f"signal_codec_overrides['{ch_name}']: codec "
+                    "NAME_TOKENIZED (id 8) is no longer supported in "
+                    "v1.0 — the v1 read-name tokeniser was removed. "
+                    "The read_names channel is auto-encoded with "
+                    "NAME_TOKENIZED_V2 (codec id 15) when no override "
+                    "is set; per-channel overrides for read_names are "
+                    "no longer accepted."
+                )
+            if codec_enum == _Compression.REF_DIFF:
+                raise ValueError(
+                    f"signal_codec_overrides['{ch_name}']: codec "
+                    "REF_DIFF (id 9) is no longer supported in v1.0 — "
+                    "the v1 reference-diff sequences codec was removed. "
+                    "The sequences channel is auto-encoded with "
+                    "REF_DIFF_V2 (codec id 14) when a reference is "
+                    "available; explicit overrides are not required."
+                )
             # Phase D Binding Decision §110: explicit message for the
             # (sequences, QUALITY_BINNED) category error — naming the
             # codec, the channel, and the lossy-quantisation rationale.
@@ -1468,26 +1463,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                     "sequence via Phred-bin quantisation. Use the "
                     "'qualities' channel for QUALITY_BINNED, or "
                     "RANS_ORDER0/RANS_ORDER1/BASE_PACK on sequences."
-                )
-            # Phase E Binding Decision §113: explicit message for
-            # (sequences|qualities, NAME_TOKENIZED) — naming the
-            # codec, the channel, and the wrong-input-type rationale.
-            if (
-                codec_enum == _Compression.NAME_TOKENIZED
-                and ch_name in ("sequences", "qualities")
-            ):
-                raise ValueError(
-                    f"signal_codec_overrides['{ch_name}']: codec "
-                    f"NAME_TOKENIZED is not valid on the '{ch_name}' "
-                    "channel — NAME_TOKENIZED tokenises UTF-8 read "
-                    "name strings (digit runs vs string runs), not "
-                    "binary byte streams like ACGT sequence bytes or "
-                    "Phred quality scores. Applying it to "
-                    f"'{ch_name}' would mis-tokenise the data and "
-                    "fall back to verbatim, producing nonsensical "
-                    "compression. Use the 'read_names' channel for "
-                    "NAME_TOKENIZED, or RANS_ORDER0/RANS_ORDER1/"
-                    f"BASE_PACK on '{ch_name}'."
                 )
             # Phase B Binding Decision §117: explicit messages for
             # the wrong-content codecs on integer channels. Each
@@ -1513,16 +1488,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                         "integer values stored on this channel. Use "
                         f"RANS_ORDER0 or RANS_ORDER1 on '{ch_name}'."
                     )
-                if codec_enum == _Compression.NAME_TOKENIZED:
-                    raise ValueError(
-                        f"signal_codec_overrides['{ch_name}']: codec "
-                        f"NAME_TOKENIZED is not valid on the "
-                        f"'{ch_name}' channel — NAME_TOKENIZED "
-                        "tokenises UTF-8 read-name strings and would "
-                        "mis-tokenise the integer values stored on "
-                        f"this channel. Use RANS_ORDER0 or "
-                        f"RANS_ORDER1 on '{ch_name}'."
-                    )
             # Phase C Binding Decisions §120, §121: explicit messages
             # for the wrong-content codecs on the cigars channel. The
             # cigars channel holds variable-length ASCII CIGAR strings
@@ -1542,8 +1507,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                         "channel — BASE_PACK 2-bit-packs ACGT sequence "
                         "bytes and would silently corrupt the structured "
                         "ASCII strings stored on this channel. Use "
-                        f"RANS_ORDER0, RANS_ORDER1, or NAME_TOKENIZED on "
-                        f"'{ch_name}'."
+                        f"RANS_ORDER0 or RANS_ORDER1 on '{ch_name}'."
                     )
                 if codec_enum == _Compression.QUALITY_BINNED:
                     raise ValueError(
@@ -1553,8 +1517,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                         "quality scores onto an 8-bin centre table and "
                         "would silently destroy the structured ASCII "
                         "strings stored on this channel. Use "
-                        f"RANS_ORDER0, RANS_ORDER1, or NAME_TOKENIZED on "
-                        f"'{ch_name}'."
+                        f"RANS_ORDER0 or RANS_ORDER1 on '{ch_name}'."
                     )
             raise ValueError(
                 f"signal_codec_overrides['{ch_name}']: codec {codec!r} "
@@ -1595,11 +1558,14 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # raw byte stream. Dispatch on a special branch when the override
     # selects it; everything else falls through to the existing helper.
     _seq_codec = run.signal_codec_overrides.get("sequences")
-    # v1.5 default codec lookup (Q5a=B, no feature flag): when caller
-    # has not selected a per-channel codec AND signal_compression is the
-    # "auto-pick best lossless" gzip default AND a reference is available,
-    # apply REF_DIFF. The REF_DIFF branch below handles BASE_PACK
-    # fallback (Q5b=C) when ref is absent.
+    # v1.0 reset (Phase 2c): the v1 REF_DIFF (codec id 9) writer was
+    # removed. The default codec lookup now resolves to REF_DIFF_V2
+    # (codec id 14) when caller has not selected a per-channel codec
+    # AND signal_compression is the "auto-pick best lossless" gzip
+    # default AND a reference is available. The
+    # _write_sequences_ref_diff_v2 helper handles BASE_PACK fallback
+    # (Q5b=C) when the v2 native lib is unavailable / single-chrom
+    # check fails / unmapped reads are present.
     if (
         _seq_codec is None
         and run.signal_compression == "gzip"
@@ -1615,7 +1581,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # auto-default (Q5a=B): when signal_compression="gzip" AND empty
     # qualities override AND the run is ALREADY a v1.5 candidate (i.e.
     # at least one v1.5 codec is active on this run, whether through an
-    # explicit override or the REF_DIFF auto-default we just resolved
+    # explicit override or the REF_DIFF_V2 auto-default we just resolved
     # for sequences), use FQZCOMP_NX16_Z.
     #
     # The "v1.5 candidate" gate preserves byte-parity for pure-M82
@@ -1629,18 +1595,18 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         and run.signal_compression == "gzip"
     ):
         # Detect v1.5 candidacy: any explicit override is a v1.5 codec,
-        # or the sequences channel is going through REF_DIFF (resolved
+        # or the sequences channel is going through REF_DIFF_V2 (resolved
         # above into _seq_codec).
         if (_seq_codec is not None
                 and _is_valid_compression(_seq_codec)
-                and _Compression(_seq_codec) == _Compression.REF_DIFF):
+                and _Compression(_seq_codec) == _Compression.REF_DIFF_V2):
             _is_v1_5_candidate = True
         else:
             for _ovr in run.signal_codec_overrides.values():
                 if _is_valid_compression(_ovr):
                     _ce = _Compression(_ovr)
                     if _ce in (
-                        _Compression.REF_DIFF,
+                        _Compression.REF_DIFF_V2,
                         _Compression.FQZCOMP_NX16_Z,
                         _Compression.DELTA_RANS_ORDER0,
                     ):
@@ -1651,17 +1617,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _default = default_codec_for("qualities")
             if _default is not None:
                 _qual_codec = _default
-
-    def _resolve_int_override(channel: str):
-        ovr = run.signal_codec_overrides.get(channel)
-        if ovr is not None:
-            return ovr
-        if _is_v1_5_candidate:
-            from .genomic._default_codecs import default_codec_for
-            d = default_codec_for(channel)
-            if d is not None:
-                return d
-        return None
 
     # v1.6: positions / flags / mapping_qualities are NOT written
     # under signal_channels/. They live exclusively in genomic_index/,
@@ -1674,9 +1629,9 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     if (
         _seq_codec is not None
         and _is_valid_compression(_seq_codec)
-        and _Compression(_seq_codec) == _Compression.REF_DIFF
+        and _Compression(_seq_codec) == _Compression.REF_DIFF_V2
     ):
-        _write_sequences_ref_diff(sc, run)
+        _write_sequences_ref_diff_v2(sc, run)
     else:
         io._write_byte_channel_with_codec(
             sc, "sequences", run.sequences, run.signal_compression,
@@ -1699,9 +1654,12 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # present the writer replaces the M82 compound dataset with a
     # flat 1-D uint8 dataset of the same name carrying the codec
     # output, plus an @compression attribute (Binding Decisions
-    # §120-§122). Three codec choices are supported (rANS uses a
-    # length-prefix-concat byte stream over the CIGAR list; the
-    # NAME_TOKENIZED codec consumes the list[str] directly).
+    # §120-§122). The rANS pair operate on a length-prefix-concat
+    # byte stream over the CIGAR list (varint(len) + bytes per
+    # CIGAR).
+    #
+    # v1.0 reset (Phase 2c): the v1 NAME_TOKENIZED (codec id 8) writer
+    # branch was removed.
     if "cigars" in run.signal_codec_overrides:
         from .enums import Precision as _Precision
         cigars_codec = _Compression(
@@ -1712,7 +1670,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _Compression.RANS_ORDER1,
         ):
             from .codecs.rans import encode as _rans_enc
-            from .codecs.name_tokenizer import _varint_encode as _ve
+            from .codecs._varint import varint_encode as _ve
             # Validate ASCII early so non-ASCII surfaces a clear
             # error before we touch the file (§2.5 contract).
             buf = bytearray()
@@ -1734,9 +1692,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 else 1
             )
             encoded = _rans_enc(bytes(buf), order=order)
-        elif cigars_codec == _Compression.NAME_TOKENIZED:
-            from .codecs import name_tokenizer as _nt
-            encoded = _nt.encode(list(run.cigars))
         else:  # pragma: no cover — validation above rejects this
             raise ValueError(
                 f"signal_codec_overrides['cigars']: codec "
@@ -1762,32 +1717,42 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             [{"value": c} for c in run.cigars],
             [("value", io.vl_str())],
         )
-    # M86 Phase E + v1.8 #11 ch3: schema lift for read_names with v2 dispatch.
-    # Three layouts (mutually exclusive within a single run):
+    # v1.0 reset (Phase 2c) — read_names is always written via the
+    # NAME_TOKENIZED_V2 codec (codec id 15) when there is at least one
+    # read. The v1 NAME_TOKENIZED writer (codec id 8) and the M82
+    # compound fallback were both removed; per-channel overrides for
+    # read_names are no longer accepted (validation rejects them
+    # earlier in this function).
     #
-    # - **NAME_TOKENIZED v1** (codec id 8): flat 1-D uint8 dataset
-    #   ``read_names`` with @compression == 8. Selected when the user
-    #   explicitly passes ``signal_codec_overrides["read_names"] =
-    #   Compression.NAME_TOKENIZED``.
-    # - **NAME_TOKENIZED v2** (codec id 15): flat 1-D uint8 dataset
-    #   ``read_names`` with @compression == 15. The v1.8 default —
-    #   selected when no override is present and the native lib is
-    #   available.
-    # - **M82 compound** (no codec): VL_STRING-in-compound dataset.
-    #   Selected only when no override is set and the native lib is
-    #   unavailable (technical fallback).
-    #
-    # Readers dispatch on @compression value (8 vs 15) when shape is
-    # uint8, else fall through to the compound path. No HDF5 filter is
-    # applied — codec output is high-entropy (Binding Decision §87).
+    # Empty-run case: the writer short-circuits and writes a placeholder
+    # NAME_TOKENIZED_V2-tagged empty dataset so readers can detect the
+    # layout uniformly. When there are reads but the native library is
+    # unavailable, raise a clear RuntimeError pointing at the install
+    # path.
     from .codecs import name_tokenizer_v2 as _nt2
     from .enums import Precision as _Precision
-    _rn_override = run.signal_codec_overrides.get("read_names")
-    _use_rn_v2 = (
-        _rn_override is None
-        and _nt2.HAVE_NATIVE_LIB
-    )
-    if _use_rn_v2:
+    if len(run.read_names) == 0:
+        # Short-circuit: write a zero-length uint8 dataset tagged with
+        # the v2 codec id so readers dispatch to the v2 path uniformly.
+        ds = sc.create_dataset(
+            "read_names",
+            _Precision.UINT8,
+            length=0,
+            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+            compression=_Compression.NONE,
+        )
+        io.write_int_attr(
+            ds, "compression",
+            int(_Compression.NAME_TOKENIZED_V2), dtype="<u1",
+        )
+    else:
+        if not _nt2.HAVE_NATIVE_LIB:
+            raise RuntimeError(
+                "NAME_TOKENIZED_V2 codec requires the native libttio_rans "
+                "library. Install via 'pip install ttio[native]' or build "
+                "from source with --with-native (set TTIO_RANS_LIB_PATH if "
+                "the library is at a non-default location)."
+            )
         encoded = _nt2.encode(list(run.read_names))
         arr = np.frombuffer(encoded, dtype=np.uint8)
         ds = sc.create_dataset(
@@ -1802,238 +1767,32 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             ds, "compression",
             int(_Compression.NAME_TOKENIZED_V2), dtype="<u1",
         )
-    elif _rn_override is not None:
-        from .codecs import name_tokenizer as _nt
-        encoded = _nt.encode(list(run.read_names))
-        arr = np.frombuffer(encoded, dtype=np.uint8)
-        ds = sc.create_dataset(
-            "read_names",
-            _Precision.UINT8,
-            length=int(arr.shape[0]),
-            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-            compression=_Compression.NONE,
-        )
-        ds.write(arr)
-        io.write_int_attr(
-            ds, "compression",
-            int(_Compression.NAME_TOKENIZED), dtype="<u1",
-        )
-    else:
-        io.write_compound_dataset(
-            sc,
-            "read_names",
-            [{"value": n} for n in run.read_names],
-            [("value", io.vl_str())],
-        )
-    # v1.7 #11: mate_info dispatch. Default path (native lib available):
-    # encode all three mate fields into a single inline_v2 blob (codec id
-    # 13) written under signal_channels/mate_info/inline_v2. Fallback v1
-    # path (no native lib): M82 compound (per-field overrides are
-    # rejected at validation time).
+    # v1.0 reset (Phase 2c) — mate_info is always written via the
+    # inline_v2 codec (codec id 13) under
+    # signal_channels/mate_info/inline_v2. The v1 per-field subgroup
+    # writer (M86 Phase F) and the M82 compound fallback were both
+    # removed; per-field mate_info_* overrides are rejected earlier
+    # in this function.
+    #
+    # Empty-run case: if there are no reads, no mate_info group is
+    # emitted (the reader treats absence as "no mates"). When there
+    # are reads but the native library is unavailable, raise a clear
+    # RuntimeError pointing at the install path.
     from .codecs import mate_info_v2 as _miv2
-    _use_v2 = _miv2.HAVE_NATIVE_LIB
-    if _use_v2:
-        _write_mate_info_inline_v2(sc, run)
-    else:
-        # v1 path: M86 Phase F per-field subgroup if overrides present,
-        # else M82 compound (no mate_info_* override keys when v2 is
-        # disabled — validation above already blocked them when v2 active).
-        _mate_override_keys = {
-            "mate_info_chrom", "mate_info_pos", "mate_info_tlen",
-        }
-        _mate_overrides = {}
-        for k in _mate_override_keys:
-            _resolved = _resolve_int_override(k)
-            if _resolved is not None:
-                _mate_overrides[k] = _resolved
-        if _mate_overrides:
-            _write_mate_info_subgroup(sc, run, _mate_overrides)
-        else:
-            io.write_compound_dataset(
-                sc,
-                "mate_info",
-                [
-                    {"chrom": mc, "pos": int(mp), "tlen": int(tl)}
-                    for mc, mp, tl in zip(
-                        run.mate_chromosomes,
-                        run.mate_positions,
-                        run.template_lengths,
-                    )
-                ],
-                [("chrom", io.vl_str()), ("pos", "<i8"), ("tlen", "<i4")],
+    if len(run.mate_chromosomes) > 0:
+        if not _miv2.HAVE_NATIVE_LIB:
+            raise RuntimeError(
+                "MATE_INLINE_V2 codec requires the native libttio_rans "
+                "library. Install via 'pip install ttio[native]' or build "
+                "from source with --with-native (set TTIO_RANS_LIB_PATH if "
+                "the library is at a non-default location)."
             )
+        _write_mate_info_inline_v2(sc, run)
 
     # Per-run provenance — same pattern as _write_run.
     if run.provenance_records:
         prov = rg.create_group("provenance")
         _write_provenance(prov, run.provenance_records, dataset_name="steps")
-
-
-def _write_mate_info_subgroup(
-    sc,
-    run: WrittenGenomicRun,
-    overrides: dict[str, Any],
-) -> None:
-    """M86 Phase F: write the mate_info subgroup with per-field codec dispatch.
-
-    Triggered when any of the three per-field override keys is in
-    ``run.signal_codec_overrides``. Creates a subgroup
-    ``signal_channels/mate_info/`` containing three child datasets
-    (``chrom``, ``pos``, ``tlen``). Each field is independently
-    codec-compressible: fields with an override are written as flat
-    1-D uint8 with the codec output and ``@compression`` attribute
-    (no HDF5 filter — Binding Decision §87); fields without an
-    override use their natural dtype with HDF5 ZLIB filter inside
-    the subgroup (Binding Decision §127, partial overrides allowed).
-
-    The chrom field's serialisation matches Phase C cigars:
-    NAME_TOKENIZED takes the list directly; rANS uses
-    length-prefix-concat (varint(len) + ASCII bytes per chrom).
-
-    The pos and tlen fields' serialisation matches Phase B integer
-    channels: rANS over the LE byte representation of the typed
-    array (``<i8`` for pos, ``<i4`` for tlen).
-    """
-    from .enums import Compression as _Compression, Precision as _Precision
-
-    mate_group = sc.create_group("mate_info")
-
-    # ---- chrom field ---------------------------------------------------
-    chroms = list(run.mate_chromosomes)
-    chrom_codec = overrides.get("mate_info_chrom")
-    if chrom_codec is None:
-        # Natural dtype (VL_STRING) with HDF5 ZLIB filter.
-        io.write_compound_dataset(
-            mate_group,
-            "chrom",
-            [{"value": c} for c in chroms],
-            [("value", io.vl_str())],
-        )
-    else:
-        chrom_codec = _Compression(chrom_codec)
-        if chrom_codec in (
-            _Compression.RANS_ORDER0,
-            _Compression.RANS_ORDER1,
-        ):
-            from .codecs.rans import encode as _rans_enc
-            from .codecs.name_tokenizer import _varint_encode as _ve
-            buf = bytearray()
-            for idx, c in enumerate(chroms):
-                try:
-                    payload = c.encode("ascii")
-                except UnicodeEncodeError as exc:
-                    raise ValueError(
-                        "signal_codec_overrides['mate_info_chrom']: "
-                        f"chrom at index {idx} contains non-ASCII bytes"
-                    ) from exc
-                buf.extend(_ve(len(payload)))
-                buf.extend(payload)
-            order = (
-                0
-                if chrom_codec == _Compression.RANS_ORDER0
-                else 1
-            )
-            encoded = _rans_enc(bytes(buf), order=order)
-        elif chrom_codec == _Compression.NAME_TOKENIZED:
-            from .codecs import name_tokenizer as _nt
-            encoded = _nt.encode(chroms)
-        else:  # pragma: no cover — validation rejects this
-            raise ValueError(
-                "signal_codec_overrides['mate_info_chrom']: codec "
-                f"{chrom_codec!r} is not supported"
-            )
-        arr = np.frombuffer(encoded, dtype=np.uint8)
-        ds = mate_group.create_dataset(
-            "chrom",
-            _Precision.UINT8,
-            length=int(arr.shape[0]),
-            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-            compression=_Compression.NONE,
-        )
-        ds.write(arr)
-        io.write_int_attr(
-            ds, "compression", int(chrom_codec), dtype="<u1"
-        )
-
-    # ---- pos field -----------------------------------------------------
-    pos_arr = np.asarray(run.mate_positions).astype("<i8", copy=False)
-    pos_codec = overrides.get("mate_info_pos")
-    _write_mate_int_field(
-        mate_group, "pos", pos_arr, "<i8", _Precision.INT64, pos_codec,
-    )
-
-    # ---- tlen field ----------------------------------------------------
-    tlen_arr = np.asarray(run.template_lengths).astype("<i4", copy=False)
-    tlen_codec = overrides.get("mate_info_tlen")
-    _write_mate_int_field(
-        mate_group, "tlen", tlen_arr, "<i4", _Precision.INT32, tlen_codec,
-    )
-
-
-def _write_mate_int_field(
-    mate_group,
-    name: str,
-    arr: np.ndarray,
-    dtype_str: str,
-    natural_precision: Any,
-    codec: Any,
-) -> None:
-    """Write one of the integer mate fields (pos or tlen) with optional codec.
-
-    Mirrors the Phase B integer-channel write contract: when ``codec``
-    is ``None``, the array is written at its natural integer
-    precision with HDF5 ZLIB. When ``codec`` is RANS_ORDER0 or
-    RANS_ORDER1, the LE byte representation of the array is encoded
-    through the M83 rANS codec and written as a flat unfiltered uint8
-    dataset with ``@compression`` carrying the codec id.
-    """
-    from .enums import Compression as _Compression, Precision as _Precision
-
-    if codec is None:
-        # Natural-dtype write with HDF5 ZLIB filter inside the subgroup.
-        ds = mate_group.create_dataset(
-            name,
-            natural_precision,
-            length=int(arr.shape[0]),
-            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-            compression=_Compression.ZLIB,
-            compression_level=6,
-        )
-        ds.write(arr)
-        return
-
-    codec_enum = _Compression(codec)
-    if codec_enum not in (
-        _Compression.RANS_ORDER0,
-        _Compression.RANS_ORDER1,
-        _Compression.DELTA_RANS_ORDER0,
-    ):  # pragma: no cover — validation rejects this
-        raise ValueError(
-            f"signal_codec_overrides['mate_info_{name}']: codec "
-            f"{codec!r} is not supported (only RANS_ORDER0, "
-            "RANS_ORDER1, and DELTA_RANS_ORDER0 are valid for "
-            "the integer mate fields)"
-        )
-
-    le_bytes = bytes(np.ascontiguousarray(arr).tobytes())
-    if codec_enum == _Compression.DELTA_RANS_ORDER0:
-        from .codecs.delta_rans import encode as _dra_enc
-        elem_size = {"<i8": 8, "<i4": 4, "<u4": 4, "<u1": 1}[dtype_str]
-        encoded = _dra_enc(le_bytes, element_size=elem_size)
-    else:
-        from .codecs.rans import encode as _enc
-        order = 0 if codec_enum == _Compression.RANS_ORDER0 else 1
-        encoded = _enc(le_bytes, order=order)
-    arr_u8 = np.frombuffer(encoded, dtype=np.uint8)
-    ds = mate_group.create_dataset(
-        name,
-        _Precision.UINT8,
-        length=int(arr_u8.shape[0]),
-        chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-        compression=_Compression.NONE,
-    )
-    ds.write(arr_u8)
-    io.write_int_attr(ds, "compression", int(codec_enum), dtype="<u1")
 
 
 def _build_chrom_id_table(chromosomes: list[str]) -> "tuple[np.ndarray, dict[str, int]]":

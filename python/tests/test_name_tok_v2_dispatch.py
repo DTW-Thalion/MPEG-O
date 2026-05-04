@@ -96,28 +96,21 @@ def test_default_writes_v2(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------- #
-# Test 2: signal_codec_overrides[read_names]=NAME_TOKENIZED honoured
+# Test 2: signal_codec_overrides[read_names]=NAME_TOKENIZED is rejected (v1.0)
 # --------------------------------------------------------------------------- #
 
-def test_signal_codec_overrides_respected(tmp_path: Path):
-    """Explicit signal_codec_overrides[read_names]=NAME_TOKENIZED writes v1 layout."""
+def test_signal_codec_overrides_v1_name_tokenized_rejected(tmp_path: Path):
+    """v1.0 reset (Phase 2c): explicit NAME_TOKENIZED v1 override is rejected.
+
+    The v1 NAME_TOKENIZED writer was removed; per-channel overrides for
+    read_names are no longer accepted at all (the v2 default is
+    auto-applied when no override is set).
+    """
     run = _build_minimal_run(
         signal_codec_overrides={"read_names": Compression.NAME_TOKENIZED},
     )
-    out = _write_run(tmp_path, run, fname="v1_explicit.tio")
-
-    with h5py.File(out, "r") as f:
-        rn = f["study/genomic_runs/r0/signal_channels/read_names"]
-        assert isinstance(rn, h5py.Dataset)
-        assert rn.dtype == np.uint8, (
-            f"v1 NAME_TOKENIZED override should produce uint8 dataset, "
-            f"got {rn.dtype}"
-        )
-        assert int(rn.attrs["compression"]) == int(Compression.NAME_TOKENIZED), (
-            f"@compression must be NAME_TOKENIZED = "
-            f"{int(Compression.NAME_TOKENIZED)}, got "
-            f"{rn.attrs['compression']}"
-        )
+    with pytest.raises(ValueError, match="NAME_TOKENIZED"):
+        _write_run(tmp_path, run, fname="v1_rejected.tio")
 
 
 # --------------------------------------------------------------------------- #

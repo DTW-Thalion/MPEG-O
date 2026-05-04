@@ -11,11 +11,13 @@ Codecs covered:
   round-trip for any byte sequence.
 * ``base_pack.encode`` / ``base_pack.decode`` — lossless round-trip
   for any ``ACGT``-only byte sequence; raises on non-ACGT input.
-* ``name_tokenizer.encode`` / ``name_tokenizer.decode`` — lossless
-  round-trip for any list of printable-ASCII strings.
 * ``quality.encode`` / ``quality.decode`` — lossy bin-quantised
   round-trip; per-byte error bounded by the half-width of the bin
   containing the original value.
+
+The v1 ``name_tokenizer`` codec was removed in the v1.0 reset
+(Phase 2c); the v2 NAME_TOKENIZED codec is exercised by
+``test_name_tokenizer_v2_native.py``.
 
 CI default: ``--hypothesis-seed=0`` (deterministic) with the default
 of 200 examples per property to keep CI under 2 minutes total.
@@ -36,7 +38,7 @@ import pytest
 hypothesis = pytest.importorskip("hypothesis")
 from hypothesis import given, strategies as st, settings, HealthCheck
 
-from ttio.codecs import rans, base_pack, name_tokenizer, quality
+from ttio.codecs import rans, base_pack, quality
 
 
 # Cap example size so each property completes in < 5 seconds even
@@ -146,42 +148,6 @@ def test_base_pack_round_trip_any_bytes(data: bytes) -> None:
     encoded = base_pack.encode(data)
     decoded = base_pack.decode(encoded)
     assert decoded == data
-
-
-# ---------------------------------------------------------------------------
-# NAME_TOKENIZED — round-trip any list of printable-ASCII strings
-# ---------------------------------------------------------------------------
-
-
-_name_strategy = st.lists(
-    st.text(
-        alphabet=st.characters(min_codepoint=33, max_codepoint=126),
-        min_size=0, max_size=_MAX_NAME_LEN,
-    ),
-    min_size=0, max_size=_MAX_NAMES,
-)
-
-
-@_settings
-@given(names=_name_strategy)
-def test_name_tokenized_round_trip(names: list[str]) -> None:
-    """NAME_TOKENIZED round-trips any list of printable-ASCII strings."""
-    encoded = name_tokenizer.encode(names)
-    decoded = name_tokenizer.decode(encoded)
-    assert decoded == names
-
-
-@_settings
-@given(names=_name_strategy)
-def test_name_tokenized_empty_list_is_handled(names: list[str]) -> None:
-    """NAME_TOKENIZED accepts an empty list and round-trips it.
-
-    Hypothesis already covers empty via min_size=0; this is a
-    redundant explicit case to ensure it doesn't slip through.
-    """
-    if not names:
-        encoded = name_tokenizer.encode([])
-        assert name_tokenizer.decode(encoded) == []
 
 
 # ---------------------------------------------------------------------------
