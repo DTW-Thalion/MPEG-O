@@ -96,25 +96,7 @@ def test_default_writes_v2(tmp_path: Path):
 
 
 # --------------------------------------------------------------------------- #
-# Test 2: signal_codec_overrides[read_names]=NAME_TOKENIZED is rejected (v1.0)
-# --------------------------------------------------------------------------- #
-
-def test_signal_codec_overrides_v1_name_tokenized_rejected(tmp_path: Path):
-    """v1.0 reset (Phase 2c): explicit NAME_TOKENIZED v1 override is rejected.
-
-    The v1 NAME_TOKENIZED writer was removed; per-channel overrides for
-    read_names are no longer accepted at all (the v2 default is
-    auto-applied when no override is set).
-    """
-    run = _build_minimal_run(
-        signal_codec_overrides={"read_names": Compression.NAME_TOKENIZED},
-    )
-    with pytest.raises(ValueError, match="NAME_TOKENIZED"):
-        _write_run(tmp_path, run, fname="v1_rejected.tio")
-
-
-# --------------------------------------------------------------------------- #
-# Test 3: v2 default round-trip
+# Test 2: v2 default round-trip
 # --------------------------------------------------------------------------- #
 
 def test_v2_round_trip_default(tmp_path: Path):

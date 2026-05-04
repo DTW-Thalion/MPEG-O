@@ -693,34 +693,6 @@ def _make_run_with_names(
     return run
 
 
-def test_reject_name_tokenized_on_any_channel(tmp_path: Path):
-    """v1.0 reset (Phase 2c): NAME_TOKENIZED v1 is rejected on every channel.
-
-    The override-validation path now surfaces a single named error
-    pointing at NAME_TOKENIZED_V2 (codec id 15) regardless of which
-    channel the legacy codec was set on. Verifies the rejection on
-    sequences, qualities, AND read_names (which used to accept it).
-    """
-    for channel in ("sequences", "qualities", "read_names"):
-        run = _make_run(
-            PURE_ACGT_SEQ, PHRED_CYCLE_QUAL,
-            {channel: Compression.NAME_TOKENIZED},
-        )
-        p = tmp_path / f"bad_nt_{channel}.tio"
-        with pytest.raises(ValueError) as excinfo:
-            SpectralDataset.write_minimal(
-                p, title="t", isa_investigation_id="i",
-                runs={}, genomic_runs={"genomic_0001": run},
-            )
-        msg = str(excinfo.value)
-        assert "NAME_TOKENIZED" in msg, (
-            f"{channel}: error must name the codec; got: {msg!r}"
-        )
-        assert "v1.0" in msg or "NAME_TOKENIZED_V2" in msg, (
-            f"{channel}: error must point at the v2 successor; got: {msg!r}"
-        )
-
-
 
 
 # ----------------------------------------------------------------------

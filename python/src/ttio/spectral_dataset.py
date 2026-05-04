@@ -1287,20 +1287,11 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         parent = _H5Group(parent)
 
     # M86: validate any per-channel codec overrides before we touch
-    # the file. Phase A/D/E covered the three byte/string channels
-    # (sequences, qualities, read_names). Phase B (Binding Decision
-    # §117) extends the override map to the three integer channels
-    # (positions, flags, mapping_qualities), each of which accepts
-    # only the rANS codecs — BASE_PACK / QUALITY_BINNED /
-    # NAME_TOKENIZED are wrong-content for integer fields and would
-    # silently corrupt the data. Anything outside the per-channel
-    # whitelist is a caller error and must surface immediately
-    # (Binding Decision §88).
+    # the file. The override surface covers the four byte/string
+    # channels (sequences, qualities, read_names, cigars). Anything
+    # outside the per-channel whitelist is a caller error and must
+    # surface immediately (Binding Decision §88).
     from .enums import Compression as _Compression
-    # v1.0 reset (Phase 2c): the v1 REF_DIFF (codec id 9) and v1
-    # NAME_TOKENIZED (codec id 8) implementations were removed. They
-    # are no longer accepted on any channel; the explicit-reject branch
-    # below produces a clear error pointing at the v2 replacements.
     _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL = {
         "sequences": frozenset({
             _Compression.RANS_ORDER0,
@@ -1316,58 +1307,19 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             # own read_lengths + needs revcomp_flags from run.flags & 16.
             _Compression.FQZCOMP_NX16_Z,
         }),
-        # v1.0 reset (Phase 2c): NAME_TOKENIZED v1 was removed. The
-        # read_names channel is auto-encoded with NAME_TOKENIZED_V2
-        # (codec id 15) by default; no explicit override is supported.
+        # v1.0 reset: read_names is auto-encoded with NAME_TOKENIZED_V2
+        # (codec id 15); no explicit override is supported.
         "read_names": frozenset(),
         # M86 Phase C: cigars accepts the rANS pair on a length-prefix-
         # concat byte stream of the CIGAR strings (varint(len) + bytes
         # per CIGAR). BASE_PACK and QUALITY_BINNED are wrong-content
         # (CIGARs are not ACGT bytes nor Phred values) and are
         # explicitly rejected with named error messages below.
-        # v1.0 reset (Phase 2c): NAME_TOKENIZED v1 was removed; cigars
-        # via the v1 tokeniser is no longer supported.
         "cigars": frozenset({
             _Compression.RANS_ORDER0,
             _Compression.RANS_ORDER1,
         }),
-        # v1.6: positions / flags / mapping_qualities REMOVED from the
-        # override surface. These per-record integer fields live only
-        # in genomic_index/ now. See _DROPPED_INT_CHANNELS below for
-        # the explicit reject path. (M86 Phase B integer-channel
-        # codec wiring under signal_channels/ was a write-side
-        # optimisation per former format-spec §10.7 — no reader ever
-        # consumed those bytes; the genomic_index/ copy is canonical.)
-        # M86 Phase F: per-field decomposition of the M82 mate_info
-        # compound dataset. The bare key "mate_info" is reserved and
-        # rejected (Binding Decision §126); callers must use the
-        # three per-field virtual channel names. The chrom field
-        # accepts the same codec set as the cigars channel (Phase C
-        # / Binding Decision §130) — it's a list of structured
-        # ASCII strings. The pos and tlen fields are integer
-        # channels and accept the same codec set as positions/flags
-        # (Binding Decision §117 generalised).
-        "mate_info_chrom": frozenset({
-            _Compression.RANS_ORDER0,
-            _Compression.RANS_ORDER1,
-        }),
-        "mate_info_pos": frozenset({
-            _Compression.RANS_ORDER0,
-            _Compression.RANS_ORDER1,
-            _Compression.DELTA_RANS_ORDER0,
-        }),
-        "mate_info_tlen": frozenset({
-            _Compression.RANS_ORDER0,
-            _Compression.RANS_ORDER1,
-            _Compression.DELTA_RANS_ORDER0,
-        }),
     }
-    _INTEGER_CHANNEL_NAMES = frozenset(
-        {"mate_info_pos", "mate_info_tlen"}
-    )
-    _MATE_INFO_FIELD_NAMES = frozenset(
-        {"mate_info_chrom", "mate_info_pos", "mate_info_tlen"}
-    )
     # v1.6: per-record integer metadata channels removed from the
     # signal_channels/ override surface. They live exclusively in
     # genomic_index/ now (see comment above). Hard-error so callers
@@ -1412,9 +1364,8 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         if ch_name not in _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL:
             raise ValueError(
                 f"signal_codec_overrides: channel '{ch_name}' not supported "
-                f"(only sequences, qualities, read_names, cigars, "
-                f"positions, flags, mapping_qualities, mate_info_chrom, "
-                f"mate_info_pos, and mate_info_tlen can use TTIO codecs)"
+                f"(only sequences, qualities, read_names, and cigars "
+                f"can use TTIO codecs)"
             )
         try:
             codec_enum = _Compression(codec)
@@ -1425,28 +1376,6 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             ) from exc
         allowed = _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL[ch_name]
         if codec_enum not in allowed:
-            # v1.0 reset (Phase 2c): the v1 NAME_TOKENIZED (codec id 8)
-            # and REF_DIFF (codec id 9) implementations were removed.
-            # Surface a clear, named error pointing at the v2 successors.
-            if codec_enum == _Compression.NAME_TOKENIZED:
-                raise ValueError(
-                    f"signal_codec_overrides['{ch_name}']: codec "
-                    "NAME_TOKENIZED (id 8) is no longer supported in "
-                    "v1.0 — the v1 read-name tokeniser was removed. "
-                    "The read_names channel is auto-encoded with "
-                    "NAME_TOKENIZED_V2 (codec id 15) when no override "
-                    "is set; per-channel overrides for read_names are "
-                    "no longer accepted."
-                )
-            if codec_enum == _Compression.REF_DIFF:
-                raise ValueError(
-                    f"signal_codec_overrides['{ch_name}']: codec "
-                    "REF_DIFF (id 9) is no longer supported in v1.0 — "
-                    "the v1 reference-diff sequences codec was removed. "
-                    "The sequences channel is auto-encoded with "
-                    "REF_DIFF_V2 (codec id 14) when a reference is "
-                    "available; explicit overrides are not required."
-                )
             # Phase D Binding Decision §110: explicit message for the
             # (sequences, QUALITY_BINNED) category error — naming the
             # codec, the channel, and the lossy-quantisation rationale.
@@ -1464,42 +1393,13 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                     "'qualities' channel for QUALITY_BINNED, or "
                     "RANS_ORDER0/RANS_ORDER1/BASE_PACK on sequences."
                 )
-            # Phase B Binding Decision §117: explicit messages for
-            # the wrong-content codecs on integer channels. Each
-            # message names the codec, the channel, and explains
-            # why the codec does not preserve integer values.
-            if ch_name in _INTEGER_CHANNEL_NAMES:
-                if codec_enum == _Compression.BASE_PACK:
-                    raise ValueError(
-                        f"signal_codec_overrides['{ch_name}']: codec "
-                        f"BASE_PACK is not valid on the '{ch_name}' "
-                        "channel — BASE_PACK 2-bit-packs ACGT sequence "
-                        f"bytes and would silently corrupt the integer "
-                        "values stored on this channel. Use "
-                        f"RANS_ORDER0 or RANS_ORDER1 on '{ch_name}'."
-                    )
-                if codec_enum == _Compression.QUALITY_BINNED:
-                    raise ValueError(
-                        f"signal_codec_overrides['{ch_name}']: codec "
-                        f"QUALITY_BINNED is not valid on the "
-                        f"'{ch_name}' channel — QUALITY_BINNED "
-                        "quantises Phred quality scores onto an 8-bin "
-                        f"centre table and would silently destroy the "
-                        "integer values stored on this channel. Use "
-                        f"RANS_ORDER0 or RANS_ORDER1 on '{ch_name}'."
-                    )
             # Phase C Binding Decisions §120, §121: explicit messages
             # for the wrong-content codecs on the cigars channel. The
             # cigars channel holds variable-length ASCII CIGAR strings
             # — neither ACGT bytes (BASE_PACK) nor Phred quality
             # values (QUALITY_BINNED) match. The error names the
             # codec, the channel, and the wrong-content rationale.
-            #
-            # Phase F: mate_info_chrom shares the same codec rules as
-            # cigars (Binding Decision §130) — both are list[str] of
-            # structured ASCII content. Reuse the same wrong-content
-            # rejection messages for the same reason.
-            if ch_name in ("cigars", "mate_info_chrom"):
+            if ch_name == "cigars":
                 if codec_enum == _Compression.BASE_PACK:
                     raise ValueError(
                         f"signal_codec_overrides['{ch_name}']: codec "
