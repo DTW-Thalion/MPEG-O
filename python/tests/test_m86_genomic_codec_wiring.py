@@ -1736,6 +1736,10 @@ def _make_phase_f_run(
         template_lengths=tlens,
         chromosomes=["chr1"] * n_reads,
         signal_codec_overrides=overrides,
+        # v1.7 Task #12: Phase F tests verify the v1 per-field override
+        # surface; opt out of the new inline_v2 default so these tests
+        # continue to exercise the M86 Phase F code path unchanged.
+        opt_disable_inline_mate_info_v2=True,
     )
 
 

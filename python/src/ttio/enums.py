@@ -92,6 +92,11 @@ class Compression(IntEnum):
     # frequency tables, L=2^15, B=16, N=4, bit-pack 15-bit context.
     # Sole quality codec for the qualities channel; wire magic ``M94Z``.
     FQZCOMP_NX16_Z = 12
+    # v1.7 #11: CRAM-style inline mate-pair encoding.
+    # Single blob at signal_channels/mate_info/inline_v2 with
+    # @compression = 13. Defaults on at v1.7 with opt-out flag
+    # WrittenGenomicRun.opt_disable_inline_mate_info_v2.
+    MATE_INLINE_V2 = 13
 
 
 class ByteOrder(IntEnum):

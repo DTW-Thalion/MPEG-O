@@ -9,6 +9,12 @@ FQZCOMP_NX16_Z``. M95 added the integer channels — REMOVED in v1.6
 (positions / flags / mapping_qualities now live exclusively under
 genomic_index/, mirroring MS's spectrum_index/ pattern).
 
+v1.7: mate_info_chrom / pos / tlen REMOVED — the three per-field
+streams are superseded by the single inline_v2 blob (codec id 13,
+MATE_INLINE_V2). Setting any mate_info_* key in
+signal_codec_overrides triggers an error pointing at
+opt_disable_inline_mate_info_v2.
+
 Cross-language: ObjC ``TTIODefaultCodecsV15``; Java
 ``codecs.DefaultCodecsV15``.
 """
@@ -25,12 +31,14 @@ from ttio.enums import Compression
 # REMOVED — these per-record integer fields are stored only under
 # genomic_index/ (positions / flags / mapping_qualities) or inside
 # the mate_info subgroup (template_lengths via mate_info_tlen).
+#
+# v1.7: mate_info_chrom / pos / tlen REMOVED — encoded together as
+# a single inline_v2 blob via codec id 13. Setting any mate_info_*
+# key in signal_codec_overrides triggers an error unless
+# opt_disable_inline_mate_info_v2 = True.
 DEFAULT_CODECS_V1_5: dict[str, Compression] = {
     "sequences": Compression.REF_DIFF,
     "qualities": Compression.FQZCOMP_NX16_Z,
-    "mate_info_pos": Compression.RANS_ORDER0,
-    "mate_info_tlen": Compression.RANS_ORDER0,
-    "mate_info_chrom": Compression.NAME_TOKENIZED,
 }
 
 

@@ -87,3 +87,10 @@ class WrittenGenomicRun:
     # decoder fallback when the embedded reference is absent. The
     # writer never reads this path; it is metadata only.
     external_reference_path: Path | None = None
+
+    # v1.7 #11: opt-out for CRAM-style inline mate-pair codec.
+    # Default False — new files write the inline_v2 blob (codec id
+    # 13, ~7 MB savings on chr22). Set True to fall back to the v1
+    # layout (three independent compressed streams) when v1.6 readers
+    # must round-trip the file.
+    opt_disable_inline_mate_info_v2: bool = False

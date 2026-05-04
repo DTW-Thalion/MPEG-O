@@ -644,6 +644,92 @@ class GenomicRun:
             self._mate_info_subgroup_cached = False
         return self._mate_info_subgroup_cached
 
+    def _mate_info_is_inline_v2(self) -> bool:
+        """True iff signal_channels/mate_info/inline_v2 exists.
+
+        v1.7+ inline-v2 layout. Implies _mate_info_is_subgroup() == True.
+        Result is cached via _decoded_mate_info sentinel key.
+        """
+        if not self._mate_info_is_subgroup():
+            return False
+        cached = self._decoded_mate_info.get("_is_inline_v2")
+        if cached is not None:
+            return cached
+        sig = self.group.open_group("signal_channels")
+        mate_group = sig.open_group("mate_info")
+        try:
+            mate_group.open_dataset("inline_v2")
+            result = True
+        except KeyError:
+            result = False
+        self._decoded_mate_info["_is_inline_v2"] = result
+        return result
+
+    def _decode_mate_inline_v2(self) -> "dict[str, Any]":
+        """Decode the inline_v2 blob; cache all three fields together.
+
+        Returns the _decoded_mate_info dict populated with keys:
+        'chrom' (list[str]), 'pos' (np.int64 array), 'tlen' (np.int32
+        array). Reader-side dependency: own_positions and own_chrom_ids
+        reconstructed from genomic_index; chrom name resolution uses
+        the mate_info/chrom_names table written alongside the blob.
+        """
+        if "inline_v2" in self._decoded_mate_info:
+            return self._decoded_mate_info
+
+        from .codecs import mate_info_v2 as _miv2
+
+        sig = self.group.open_group("signal_channels")
+        mate_group = sig.open_group("mate_info")
+        ds = mate_group.open_dataset("inline_v2")
+        blob = bytes(np.asarray(ds.read(offset=0, count=int(ds.length))).tobytes())
+
+        n = self.index.count
+        own_positions = np.asarray(self.index.positions, dtype=np.int64)
+
+        # Build own_chrom_ids (uint16) from the index chromosomes list
+        # using encounter-order assignment — same as the writer.
+        name_to_id: dict[str, int] = {}
+        own_chrom_ids = np.empty(n, dtype=np.uint16)
+        for i, name in enumerate(self.index.chromosomes):
+            if name == "*" or not name:
+                own_chrom_ids[i] = 0xFFFF
+            else:
+                if name not in name_to_id:
+                    name_to_id[name] = len(name_to_id)
+                own_chrom_ids[i] = name_to_id[name]
+
+        mc, mp, ts = _miv2.decode(blob, own_chrom_ids, own_positions,
+                                   n_records=n)
+
+        # Read the full chrom_id → name table written by the writer.
+        # This covers mate-only chromosomes absent from genomic_index.
+        chrom_name_rows = io.read_compound_dataset(mate_group, "chrom_names")
+        chrom_names_by_id: list[str] = []
+        for row in chrom_name_rows:
+            v = row["name"]
+            chrom_names_by_id.append(
+                v.decode("utf-8") if isinstance(v, bytes) else v
+            )
+
+        # Convert mc (int32 ids, -1 = unmapped) back to mate_chromosomes list[str].
+        mate_chromosomes: list[str] = []
+        for v in mc:
+            iv = int(v)
+            if iv == -1:
+                mate_chromosomes.append("*")
+            elif 0 <= iv < len(chrom_names_by_id):
+                mate_chromosomes.append(chrom_names_by_id[iv])
+            else:
+                # Should not happen in well-formed files.
+                mate_chromosomes.append(f"chr_id_{iv}")
+
+        self._decoded_mate_info["chrom"] = mate_chromosomes
+        self._decoded_mate_info["pos"] = mp
+        self._decoded_mate_info["tlen"] = ts
+        self._decoded_mate_info["inline_v2"] = True  # marker for round-trip cache
+        return self._decoded_mate_info
+
     def _decode_mate_chrom(self):
         """Lazily decode the chrom field from the Phase F subgroup.
 
@@ -761,17 +847,11 @@ class GenomicRun:
     def _mate_chrom_at(self, i: int) -> str:
         """Return the mate chromosome at index ``i``, dispatching on layout.
 
-        M86 Phase F: ``signal_channels/mate_info`` has two on-disk
-        layouts (Binding Decisions §125, §128, Gotcha §141):
-
-        - **M82 compound** (no override): COMPOUND[n_reads] dataset
-          with three fields. Read whole-and-cache via the existing
-          :meth:`_compound` helper, then return the per-read entry.
-        - **Phase F subgroup** (any mate_info_* override): GROUP
-          containing three child datasets. Decode the chrom child
-          on first access (cached in ``_decoded_mate_info["chrom"]``)
-          and return entry [i].
+        v1.7+ inline_v2 path checked first; falls back to Phase F subgroup
+        or M82 compound (Binding Decisions §125, §128, Gotcha §141).
         """
+        if self._mate_info_is_inline_v2():
+            return self._decode_mate_inline_v2()["chrom"][i]
         if self._mate_info_is_subgroup():
             return self._decode_mate_chrom()[i]
         # M82 compound path.
@@ -779,12 +859,16 @@ class GenomicRun:
 
     def _mate_pos_at(self, i: int) -> int:
         """Return the mate position at index ``i``, dispatching on layout."""
+        if self._mate_info_is_inline_v2():
+            return int(self._decode_mate_inline_v2()["pos"][i])
         if self._mate_info_is_subgroup():
             return int(self._decode_mate_int_field("pos", "<i8")[i])
         return int(self._compound("mate_info")[i]["pos"])
 
     def _mate_tlen_at(self, i: int) -> int:
         """Return the template length at index ``i``, dispatching on layout."""
+        if self._mate_info_is_inline_v2():
+            return int(self._decode_mate_inline_v2()["tlen"][i])
         if self._mate_info_is_subgroup():
             return int(self._decode_mate_int_field("tlen", "<i4")[i])
         return int(self._compound("mate_info")[i]["tlen"])
