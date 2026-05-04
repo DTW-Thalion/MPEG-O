@@ -16,6 +16,7 @@
 #import "Codecs/TTIODeltaRans.h"           // M95 v1.2
 #import "Codecs/TTIOReferenceResolver.h"  // M93 v1.2
 #import "Codecs/TTIOMateInfoV2.h"          // v1.7 #11: inline mate-pair codec
+#import "Codecs/TTIORefDiffV2.h"          // v1.8 #11: bit-packed ref-diff v2
 #import <hdf5.h>
 
 @implementation TTIOGenomicRun {
@@ -80,6 +81,14 @@
     // dataset; 1 = Phase F subgroup. Probed once via H5Oget_info_by_name
     // on first mate-field access (Binding Decision §128, Gotcha §141).
     int8_t _mateInfoLinkType;
+    // v1.8 #11: cached link-type query result for
+    // signal_channels/sequences. -1 = not yet probed; 0 = flat dataset
+    // (v1 REF_DIFF / BASE_PACK / rANS / uncompressed); 1 = GROUP (v1.8
+    // refdiff_v2 layout). Probed once on first sequences access.
+    int8_t _sequencesLinkType;
+    // v1.8 #11: decoded flat sequence bytes from the refdiff_v2 blob.
+    // Populated on first access when _sequencesLinkType == 1.
+    NSData *_decodedRefDiffV2Sequences;
 }
 
 - (NSUInteger)readCount { return _index.count; }
@@ -108,6 +117,7 @@
         _decodedByteChannels = [NSMutableDictionary dictionary];
         _decodedMateInfo     = [NSMutableDictionary dictionary];
         _mateInfoLinkType    = -1;  // not yet probed
+        _sequencesLinkType   = -1;  // not yet probed
     }
     return self;
 }
@@ -254,11 +264,26 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
 // channel is decoded on first access and cached on the GenomicRun
 // instance. For uncompressed channels the existing per-slice
 // HDF5 hyperslab read path is preserved unchanged.
+//
+// v1.8 #11: for the sequences channel, probe whether signal_channels/sequences
+// is a GROUP (refdiff_v2 layout) and decode via TTIORefDiffV2 when true.
 - (NSData *)byteChannelSliceNamed:(NSString *)name
                             offset:(NSUInteger)offset
                              count:(NSUInteger)count
                              error:(NSError **)error
 {
+    // v1.8 #11: refdiff_v2 group layout probe for sequences channel.
+    if ([name isEqualToString:@"sequences"] && [self _sequencesIsRefDiffV2]) {
+        NSData *decoded = _decodedRefDiffV2Sequences;
+        if (!decoded) {
+            decoded = [self _decodeRefDiffV2Sequences:error];
+            if (!decoded) return nil;
+        }
+        NSUInteger from = MIN(offset, decoded.length);
+        NSUInteger to   = MIN(from + count, decoded.length);
+        return [decoded subdataWithRange:NSMakeRange(from, to - from)];
+    }
+
     NSData *cached = _decodedByteChannels[name];
     if (cached) {
         NSUInteger from = MIN(offset, cached.length);
@@ -936,6 +961,207 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     // Force probe if not yet done.
     (void)[self _mateInfoIsSubgroup];
     return _mateInfoLinkType == 2;
+}
+
+// ── v1.8 #11: sequences GROUP probe + refdiff_v2 decoder ─────────────────────
+
+/** v1.8 #11: probe whether signal_channels/sequences is a GROUP (refdiff_v2
+ *  layout) or a flat dataset (all v1 layouts). Cached on first call. */
+- (BOOL)_sequencesIsRefDiffV2
+{
+    if (_sequencesLinkType >= 0) return _sequencesLinkType == 1;
+
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if (!sig) {
+        _sequencesLinkType = 0;
+        return NO;
+    }
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        H5O_info_t info;
+        memset(&info, 0, sizeof(info));
+        herr_t s = H5Oget_info_by_name([hg groupId], "sequences",
+                                       &info, H5P_DEFAULT);
+        if (s >= 0 && info.type == H5O_TYPE_GROUP) {
+            _sequencesLinkType = 1;
+            return YES;
+        }
+        _sequencesLinkType = 0;
+        return NO;
+    }
+    // Storage-protocol path: try openGroupNamed first.
+    NSError *gErr = nil;
+    id<TTIOStorageGroup> sub = [sig openGroupNamed:@"sequences" error:&gErr];
+    if (sub != nil) {
+        _sequencesLinkType = 1;
+        return YES;
+    }
+    _sequencesLinkType = 0;
+    return NO;
+}
+
+/** v1.8 #11: decode the refdiff_v2 blob into flat sequence bytes; cache
+ *  the result in _decodedRefDiffV2Sequences. Returns nil + error on
+ *  failure. Resolves the reference via TTIOReferenceResolver.
+ *
+ *  Blob header layout (from Python spec):
+ *    [0:4]    magic "RDF2"
+ *    [12:20]  n_reads (LE uint64)
+ *    [20:36]  reference_md5 (16 bytes)
+ *    [36:38]  uri_len (LE uint16)
+ *    [38:38+uri_len] reference_uri (UTF-8)
+ */
+- (NSData *)_decodeRefDiffV2Sequences:(NSError **)error
+{
+    if (_decodedRefDiffV2Sequences) return _decodedRefDiffV2Sequences;
+
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:error];
+    if (!sig) return nil;
+
+    // Open the sequences GROUP and the refdiff_v2 dataset inside it.
+    NSData *blob = nil;
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        TTIOHDF5Group *seqGrp = [hg openGroupNamed:@"sequences" error:error];
+        if (!seqGrp) return nil;
+        TTIOHDF5Dataset *ds = [seqGrp openDatasetNamed:@"refdiff_v2" error:error];
+        if (!ds) return nil;
+        id raw = [ds readDataWithError:error];
+        if (![raw isKindOfClass:[NSData class]]) return nil;
+        blob = (NSData *)raw;
+    } else {
+        id<TTIOStorageGroup> seqGrp = [sig openGroupNamed:@"sequences" error:error];
+        if (!seqGrp) return nil;
+        id<TTIOStorageDataset> ds = [seqGrp openDatasetNamed:@"refdiff_v2" error:error];
+        if (!ds) return nil;
+        id raw = [ds readAll:error];
+        if (![raw isKindOfClass:[NSData class]]) return nil;
+        blob = (NSData *)raw;
+    }
+
+    // Parse the blob header to extract reference_uri and reference_md5.
+    // Header layout: [0:4] "RDF2" magic, [20:36] md5, [36:38] uri_len LE,
+    // [38:38+uri_len] uri UTF-8.
+    const uint8_t *blobBytes = (const uint8_t *)blob.bytes;
+    NSUInteger blobLen = blob.length;
+    if (blobLen < 38) {
+        if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:2094
+                                           userInfo:@{NSLocalizedDescriptionKey:
+                                               @"refdiff_v2 blob too short to parse header"}];
+        return nil;
+    }
+    if (memcmp(blobBytes, "RDF2", 4) != 0) {
+        if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:2094
+                                           userInfo:@{NSLocalizedDescriptionKey:
+                                               @"refdiff_v2 blob magic mismatch (expected 'RDF2')"}];
+        return nil;
+    }
+    NSData *blobMD5 = [NSData dataWithBytes:blobBytes + 20 length:16];
+    uint16_t uriLen = 0;
+    memcpy(&uriLen, blobBytes + 36, 2);
+    // uriLen is LE uint16
+    if (blobLen < (NSUInteger)(38 + uriLen)) {
+        if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:2094
+                                           userInfo:@{NSLocalizedDescriptionKey:
+                                               @"refdiff_v2 blob truncated (uri)"}];
+        return nil;
+    }
+    NSString *blobURI = [[NSString alloc] initWithBytes:blobBytes + 38
+                                                  length:uriLen
+                                               encoding:NSUTF8StringEncoding]
+                        ?: @"";
+
+    // Resolve reference sequence via embedded /study/references/ or external path.
+    TTIOHDF5Group *rootHDF5 = nil;
+    if ([_group respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *runG = [(id)_group performSelector:@selector(unwrap)];
+        hid_t fid = H5Iget_file_id([runG groupId]);
+        if (fid >= 0) {
+            hid_t rootId = H5Gopen2(fid, "/", H5P_DEFAULT);
+            if (rootId >= 0) {
+                rootHDF5 = [[TTIOHDF5Group alloc] initWithGroupId:rootId
+                                                          retainer:nil];
+            }
+            H5Idec_ref(fid);
+        }
+    }
+    TTIOReferenceResolver *resolver = [[TTIOReferenceResolver alloc]
+        initWithRootGroup:rootHDF5
+    externalReferencePath:nil];
+
+    // Single-chromosome constraint (same as v1).
+    NSMutableSet<NSString *> *unique = [NSMutableSet set];
+    for (NSUInteger i = 0; i < _index.count; i++) {
+        NSString *c = [_index chromosomeAt:i];
+        if (c.length) [unique addObject:c];
+    }
+    if (unique.count != 1) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2095
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"refdiff_v2 decode: expected single-chromosome "
+                            @"run, got %lu chromosomes",
+                            (unsigned long)unique.count]}];
+        return nil;
+    }
+    NSString *chrom = [unique anyObject];
+    NSError *resolveErr = nil;
+    NSData *ref = [resolver resolveURI:blobURI
+                           expectedMD5:blobMD5
+                            chromosome:chrom
+                                 error:&resolveErr];
+    if (!ref) {
+        if (error) *error = resolveErr;
+        return nil;
+    }
+
+    NSUInteger n = _index.count;
+    NSUInteger totalBases = 0;
+    for (NSUInteger i = 0; i < n; i++) totalBases += [_index lengthAt:i];
+
+    // Build positions array from the index.
+    NSMutableData *positions = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    int64_t *posPtr = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < n; i++) posPtr[i] = [_index positionAt:i];
+
+    // Build cigars list — trigger cigarAtIndex:0 to populate _decodedCigars
+    // when the cigars channel uses the codec path (same as v1 path).
+    NSMutableArray<NSString *> *cigars = nil;
+    if (n > 0) {
+        NSError *cigErr = nil;
+        (void)[self cigarAtIndex:0 error:&cigErr];
+    }
+    if (_decodedCigars != nil) {
+        cigars = [NSMutableArray arrayWithArray:_decodedCigars];
+    } else {
+        cigars = [NSMutableArray arrayWithCapacity:n];
+        for (NSUInteger i = 0; i < n; i++) {
+            NSError *cigErr = nil;
+            NSString *cig = [self cigarAtIndex:i error:&cigErr];
+            if (!cig) {
+                if (error) *error = cigErr;
+                return nil;
+            }
+            [cigars addObject:cig];
+        }
+    }
+
+    NSData *outSeq = nil;
+    NSData *outOff = nil;
+    BOOL ok = [TTIORefDiffV2 decodeData:blob
+                              positions:positions
+                           cigarStrings:cigars
+                              reference:ref
+                                 nReads:n
+                             totalBases:totalBases
+                           outSequences:&outSeq
+                             outOffsets:&outOff
+                                  error:error];
+    if (!ok) return nil;
+
+    _decodedRefDiffV2Sequences = outSeq;
+    return _decodedRefDiffV2Sequences;
 }
 
 /** v1.7 #11: decode the inline_v2 blob; populate _decodedMateInfo with

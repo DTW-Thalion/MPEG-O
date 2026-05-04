@@ -86,6 +86,7 @@ extern void testM94ZV4ByteExact(void);
 extern void testMateInfoV2(void);
 extern void testMateInfoV2Dispatch(void);
 extern void testRefDiffV2(void);
+extern void testRefDiffV2Dispatch(void);
 extern void testM95DeltaRansUnit(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
@@ -448,6 +449,10 @@ int main(int argc, const char *argv[])
         START_SET("ref_diff v2 codec round-trip + invalid-input")
             testRefDiffV2();
         END_SET("ref_diff v2 codec round-trip + invalid-input")
+
+        START_SET("v1.8 #11 Task 14: ref_diff v2 ObjC writer/reader dispatch")
+            testRefDiffV2Dispatch();
+        END_SET("v1.8 #11 Task 14: ref_diff v2 ObjC writer/reader dispatch")
 
         START_SET("M95: DELTA_RANS_ORDER0 codec unit")
             testM95DeltaRansUnit();

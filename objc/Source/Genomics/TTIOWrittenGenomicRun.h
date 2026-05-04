@@ -99,6 +99,17 @@ NS_ASSUME_NONNULL_BEGIN
  *  ``WrittenGenomicRun.opt_disable_inline_mate_info_v2``. */
 @property (nonatomic, assign) BOOL optDisableInlineMateInfoV2;
 
+/** v1.8 #11: when YES, the writer falls back to the v1 REF_DIFF flat
+ *  dataset layout (@compression=9) for signal_channels/sequences.
+ *  Default NO: when the native lib is linked AND the run is eligible
+ *  (reference present, all reads mapped, single chromosome), the writer
+ *  encodes via TTIORefDiffV2 (codec id 14) and writes sequences as a
+ *  GROUP containing a refdiff_v2 child dataset.
+ *
+ *  Cross-language equivalent of Python's
+ *  ``WrittenGenomicRun.opt_disable_ref_diff_v2``. */
+@property (nonatomic, assign) BOOL optDisableRefDiffV2;
+
 @property (readonly) NSUInteger readCount;
 
 - (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode

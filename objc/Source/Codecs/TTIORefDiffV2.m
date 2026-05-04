@@ -29,6 +29,10 @@ static NSString *_rdv2ErrorMessage(int rc) {
 
 @implementation TTIORefDiffV2
 
++ (BOOL)nativeAvailable {
+    return TTIO_HAS_NATIVE_RANS ? YES : NO;
+}
+
 + (nullable NSData *)encodeSequences:(NSData *)sequences
                               offsets:(NSData *)offsets
                             positions:(NSData *)positions
