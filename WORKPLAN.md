@@ -216,6 +216,39 @@ as a record of what was built; current milestones use TTI-O names.
 > `[Unreleased]`, do not interleave with M-series):
 > * [`docs/verification-workplan.md`](docs/verification-workplan.md) — **V-series** (V1-V9 + P1-P4 perf follow-ups; mostly complete as of 2026-04-27).
 > * [`docs/coverage-workplan.md`](docs/coverage-workplan.md) — **C-series** (C1-C8, coverage debt repayment; targets Python ≥92%, Java ≥88%, ObjC ≥85% line coverage).
+>
+> **#11 codec engineering — Channel 1 (mate_info) SHIPPED v1.7
+> 2026-05-03.** 14-task plan executed; mate_info v2 codec (MATE_INLINE_V2,
+> codec id 13) ships as default across Python/Java/ObjC. Key outcomes:
+> * **C kernel:** `native/src/mate_info_v2.{c,h}` + rANS-O0 helpers
+>   in `native/src/rans_o0.c`. Entry points
+>   `ttio_mate_info_v2_encode` / `ttio_mate_info_v2_decode`.
+> * **4-substream wire format:** MF / NS / NP / TS (34-byte container
+>   header + auto-pick rANS-O0). Spec at
+>   `docs/superpowers/specs/2026-05-03-mate-info-v2-design.md`.
+> * **Cross-language byte-exact gate:** 12/12 PASS (4 corpora ×
+>   Python ↔ Java ↔ ObjC) in
+>   `python/tests/integration/test_mate_info_v2_cross_language.py`.
+> * **chr22 compression gate (T15):** 47.922 MB savings (hard gate 5 MB,
+>   PASS). Test at
+>   `python/tests/integration/test_mate_info_v2_compression_gate.py`.
+> * **chrom_names sidecar:** `signal_channels/mate_info/chrom_names`
+>   compound dataset (encounter-order, own first) preserves mate-only
+>   chroms absent from `genomic_index/chromosome_names`.
+> * **opt-out flag:** `WrittenGenomicRun.opt_disable_inline_mate_info_v2`
+>   preserves v1 round-trip for v1.6 readers.
+> * Last code commit: `b68e132`. Task 15 (docs/gate/changelog): this
+>   commit.
+>
+> **#11 Channel 2 (REF_DIFF v2) and Channel 3 (NameTokenized v2):**
+> deferred as separate future cycles. Current estimates:
+> * REF_DIFF v2 — additional ~3-5 MB on chr22; requires sequence-level
+>   model changes; separate spec + plan.
+> * NameTokenized v2 — additional ~3-4 MB on chr22; requires redesign
+>   of the name tokenization wire format to reduce HDF5 compound overhead;
+>   separate spec + plan.
+> * #10 offsets-cumsum (structural HDF5 framing) and #13 V5 multi-stream
+>   rANS also remain as separate cycles.
 
 ---
 

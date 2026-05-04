@@ -1098,7 +1098,14 @@ will fail when they hit the flat-uint8 layout. Discipline
 matches M80 / M82 / M86 Phase A/E (write-forward, no
 back-compat shim).
 
-## 10.9 mate_info per-field decomposition (M86 Phase F)
+## 10.9 mate_info per-field decomposition (M86 Phase F — v1.7 OPT-OUT only)
+
+> **v1.7 status:** This v1 layout is no longer the default. v1.7 ships
+> the inline_v2 codec (§10.9b) as the default. The v1 per-field
+> decomposition is reachable only via
+> `WrittenGenomicRun.opt_disable_inline_mate_info_v2 = True`
+> (Python) / `optDisableInlineMateInfoV2 = YES` (ObjC) /
+> `.optDisableInlineMateInfoV2(true)` (Java).
 
 The mate_info channel under `signal_channels/` has TWO on-disk
 layouts depending on whether any `mate_info_*` per-field
@@ -1212,6 +1219,97 @@ stream to a few bytes regardless of read count. The
 NAME_TOKENIZED path is the default recommendation for
 `mate_info_chrom`; the rANS path is available for unusual
 inputs (e.g. heavily-fragmented chromosome assignments).
+
+## 10.9b mate_info v2 inline codec (#11 v1.7, codec id 13)
+
+**Default in v1.7+.** Encodes the full mate triple (mate_chrom_id,
+mate_pos, tlen) as a single CRAM-style inline blob exploiting SAM
+mate-pair invariants. Saves ~6.8 MB on chr22 vs the v1 per-field
+layout from §10.9 (full-stack context); ~47.9 MB vs the M82 compound
+baseline in the isolation gate (see
+`docs/benchmarks/2026-05-03-mate-info-v2-results.md`).
+
+### 10.9b.1 On-disk schema
+
+Two sibling datasets under `signal_channels/mate_info/`:
+
+```
+signal_channels/mate_info/
+├── inline_v2     uint8 1-D blob, @compression = 13 (MATE_INLINE_V2)
+└── chrom_names   compound[(name, VL_STRING)], one row per chrom_id
+```
+
+The `inline_v2` blob carries a 34-byte container header + 4 substreams
+(MF / NS / NP / TS); full wire format spec at
+`docs/superpowers/specs/2026-05-03-mate-info-v2-design.md` §4.
+
+The `chrom_names` sidecar is a compound dataset that maps chrom_ids
+(row index) to chromosome names. **This is necessary because mate
+chromosomes can reference chroms that no own-read uses** (e.g. a
+properly aligned read on chr22 with a cross-chrom mate on chr11
+where no other read aligns to chr11). The L1 `genomic_index/chromosome_names`
+table only covers chroms that appear as own_chrom; mate-only chroms
+would be lost without `chrom_names`.
+
+The chrom_id assignment is encounter-order over `(own_chromosomes ∪
+mate_chromosomes)`, with own chroms enumerated first. The `'='`
+SAM shortcut is canonicalised at write time to the record's own
+chrom_id; `'*'` maps to -1.
+
+The 4-substream container wire format:
+
+| Substream | Content | Encoding |
+|-----------|---------|----------|
+| MF | Per-record mate-flag (0=SAME_CHROM_NEARBY, 1=SAME_CHROM_FAR, 2=NO_MATE, 3=DIFF_CHROM) | raw-pack or rANS-O0 (auto-pick) |
+| NS | Chrom_id for DIFF_CHROM records (0 elsewhere) | varint + rANS-O0 auto-pick |
+| NP | Mate_pos: zigzag-varint delta for SAME_CHROM_NEARBY, absolute for DIFF_CHROM; 0 for others | varint + rANS-O0 auto-pick |
+| TS | Template_length (zigzag-varint); 0 for NO_MATE | varint + rANS-O0 auto-pick |
+
+Container header (34 bytes): 4-byte magic `b"MIv2"` + 1-byte version
+`\x01` + 1-byte flags `\x00` + 4 × uint64 LE substream byte lengths.
+
+### 10.9b.2 Reader-side dependency
+
+Decoding `inline_v2` requires `genomic_index/positions` and
+`genomic_index/chromosome_ids` to be loaded first. The decoder needs
+own_pos and own_chrom_id per record to reconstruct mate_pos for
+SAME_CHROM records (which use a delta encoding) and to validate the
+MF taxonomy.
+
+Readers must enforce this read order; the v1.7+ Python/Java/ObjC
+implementations do so transparently.
+
+### 10.9b.3 Backward compatibility
+
+A v1.6 reader on a v1.7 file fails with "unknown compression id 13"
+when it encounters the `inline_v2` dataset. The user must upgrade
+the reader OR write the source file with
+`opt_disable_inline_mate_info_v2 = True` to keep the v1 layout
+from §10.9.
+
+A v1.7 reader on a v1.6 file finds no `inline_v2` dataset and falls
+through to the v1 layout transparently — the reader dispatches on
+whether the subgroup contains `inline_v2` before checking for the
+v1 per-field children.
+
+### 10.9b.4 signal_codec_overrides interaction
+
+Setting `signal_codec_overrides[mate_info_chrom / mate_info_pos /
+mate_info_tlen]` when `opt_disable_inline_mate_info_v2 == False`
+raises a write-time error pointing at the opt-out flag. The v1
+per-field codec dispatch from §10.9 is only available under the
+opt-out path.
+
+### 10.9b.5 Cross-language byte-exact
+
+The encode/decode primitives are implemented as a shared C kernel
+in libttio_rans (`ttio_mate_info_v2_encode` / `ttio_mate_info_v2_decode`
+entry points in `native/src/mate_info_v2.{c,h}`). All three language
+implementations (Python ctypes, Java JNI, ObjC direct link) call
+the same C functions, so the encoded byte stream is byte-exact
+identical regardless of which language wrote the file. Verified at
+test time by `python/tests/integration/test_mate_info_v2_cross_language.py`
+(4 corpora × 3 languages = 12 byte-exact assertions, all PASS).
 
 ### Precision additions (M79, v0.11)
 
