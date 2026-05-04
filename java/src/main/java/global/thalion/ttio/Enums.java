@@ -113,7 +113,17 @@ public final class Enums {
          *  (M95 v1.2, codec id 11). */
         DELTA_RANS_ORDER0,
         /** CRAM-mimic rANS-Nx16 quality codec (M94.Z v1.2, codec id 12). */
-        FQZCOMP_NX16_Z
+        FQZCOMP_NX16_Z,
+        /**
+         * CRAM-style inline mate-pair encoding (mate_info v2, codec id 13).
+         * v1.7 default ON for the {@code signal_channels/mate_info/inline_v2}
+         * blob. Opt out via
+         * {@link global.thalion.ttio.genomics.WrittenGenomicRun#optDisableInlineMateInfoV2}.
+         * Cross-language ordinal {@code = 13} matches Python
+         * {@code Compression.MATE_INLINE_V2} and ObjC
+         * {@code TTIOCompressionMateInlineV2}.
+         */
+        MATE_INLINE_V2
     }
 
     /** Ion polarity for mass spectrometry. */

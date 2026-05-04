@@ -92,6 +92,17 @@ import java.util.Objects;
  *                           {@code null}; not yet honoured by Java
  *                           writers (kept for symmetry with Python /
  *                           ObjC).
+ * @param optDisableInlineMateInfoV2 Task 13 (mate_info v2): when
+ *                           {@code false} (default), the writer
+ *                           produces the v1.7 inline_v2 layout
+ *                           ({@code signal_channels/mate_info/inline_v2}
+ *                           blob, {@code @compression=13}) when the
+ *                           native JNI library is available. Set to
+ *                           {@code true} to opt out and preserve the
+ *                           pre-v1.7 v1 layout (chrom/pos/tlen child
+ *                           datasets), e.g. when v1.6 round-trip is
+ *                           required or signal_codec_overrides for
+ *                           {@code mate_info_*} keys are needed.
  */
 public record WrittenGenomicRun(
     AcquisitionMode acquisitionMode,
@@ -116,7 +127,8 @@ public record WrittenGenomicRun(
     List<ProvenanceRecord> provenanceRecords,
     boolean embedReference,
     Map<String, byte[]> referenceChromSeqs,
-    Path externalReferencePath
+    Path externalReferencePath,
+    boolean optDisableInlineMateInfoV2
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -171,7 +183,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, Map.of(), List.of(),
-             false, null, null);
+             false, null, null, false);
     }
 
     /**
@@ -206,7 +218,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, List.of(),
-             false, null, null);
+             false, null, null, false);
     }
 
     /**
@@ -242,7 +254,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, provenanceRecords,
-             false, null, null);
+             false, null, null, false);
     }
 
     /**
@@ -259,7 +271,26 @@ public record WrittenGenomicRun(
             offsets, lengths, cigars, readNames, mateChromosomes,
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
-            embed, chromSeqs, externalPath);
+            embed, chromSeqs, externalPath,
+            optDisableInlineMateInfoV2);
+    }
+
+    /**
+     * Task 13 (mate_info v2) builder. Returns a new instance with
+     * {@link #optDisableInlineMateInfoV2} replaced. Builder-style
+     * convenience for callers that want to opt out of the v1.7
+     * inline_v2 default (e.g. to preserve v1 layout for cross-version
+     * round-trip tests, or to use {@code mate_info_*} signal_codec_overrides).
+     */
+    public WrittenGenomicRun withOptDisableInlineMateInfoV2(boolean disable) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            disable);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

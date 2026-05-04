@@ -94,6 +94,11 @@ public class GenomicRun
     // decodedReadNames, decodedCigars — value types differ.
     // Mutable HashMap so the per-field accessors can populate it.
     private final Map<String, Object> decodedMateInfo = new HashMap<>();
+    // Task 13 (mate_info v2): lazy decoded triple from inline_v2 blob.
+    // Null until first access to a mate field on a v2-layout file.
+    private global.thalion.ttio.codecs.MateInfoV2.Triple decodedMateV2 = null;
+    // Resolved chrom name table for the v2 path: index → chrom name.
+    private List<String> mateV2ChromNames = null;
 
     private int cursor = 0;  // Streamable
 
@@ -742,6 +747,77 @@ public class GenomicRun
 
     // ── M86 Phase F: mate_info per-field dispatch ──────────────────
 
+    /** Task 13 (mate_info v2): true iff
+     *  {@code signal_channels/mate_info/inline_v2} exists (v1.7 layout).
+     *  Called first in the mate accessor dispatch chain; when true,
+     *  {@link #_decodeMateV2()} is used instead of the Phase F subgroup
+     *  or M82 compound paths. */
+    private boolean isMateInfoInlineV2() {
+        ensureSignalChannels();
+        if (!signalChannels.hasChild("mate_info")) return false;
+        try (StorageGroup mateGrp = signalChannels.openGroup("mate_info")) {
+            return mateGrp.hasChild("inline_v2");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Task 13: lazily decode the inline_v2 blob + chrom_names sidecar.
+     *  Caches the result in {@link #decodedMateV2} and
+     *  {@link #mateV2ChromNames}. */
+    @SuppressWarnings("unchecked")
+    private void _decodeMateV2() {
+        if (decodedMateV2 != null) return;
+        ensureSignalChannels();
+        try (StorageGroup mateGrp = signalChannels.openGroup("mate_info")) {
+            // Read the blob.
+            byte[] blob;
+            try (StorageDataset blobDs = mateGrp.openDataset("inline_v2")) {
+                long total = blobDs.shape()[0];
+                blob = (byte[]) blobDs.readSlice(0L, total);
+            }
+            // Read chrom_names sidecar.
+            List<Object[]> nameRows;
+            try (StorageDataset nameDs = mateGrp.openDataset("chrom_names")) {
+                nameRows = (List<Object[]>) nameDs.readAll();
+            }
+            List<String> chromTable = new ArrayList<>(nameRows.size());
+            for (Object[] row : nameRows) {
+                Object v = row[0];
+                if (v instanceof byte[] b) {
+                    chromTable.add(new String(b, StandardCharsets.UTF_8));
+                } else {
+                    chromTable.add(v == null ? "" : v.toString());
+                }
+            }
+            mateV2ChromNames = chromTable;
+            // Build own_chrom_ids and own_positions from the index.
+            int n = index.count();
+            // Resolve own chrom_ids: rebuild the encounter-order table
+            // from index.chromosomeAt() in the same order as the writer.
+            // We need the actual uint16 ids, which the writer derived
+            // from the chromToId map. The chrom_names sidecar begins
+            // with own chroms in encounter order (writer guarantees this).
+            // Re-derive the id-per-read from the sidecar table.
+            java.util.LinkedHashMap<String, Integer> nameToId =
+                new java.util.LinkedHashMap<>();
+            for (int j = 0; j < chromTable.size(); j++) {
+                nameToId.put(chromTable.get(j), j);
+            }
+            short[] ownChromIds = new short[n];
+            long[]  ownPositions = new long[n];
+            for (int i = 0; i < n; i++) {
+                String chr = index.chromosomeAt(i);
+                Integer id = nameToId.get(chr);
+                ownChromIds[i] = (id == null) ? (short) 0xFFFF
+                               : id.shortValue();
+                ownPositions[i] = index.positionAt(i);
+            }
+            decodedMateV2 = global.thalion.ttio.codecs.MateInfoV2.decode(
+                blob, ownChromIds, ownPositions, n);
+        }
+    }
+
     /** M86 Phase F: true iff {@code signal_channels/mate_info} is a
      *  group (Phase F layout) rather than a dataset (M82 compound
      *  layout). Per Binding Decision §128 / Gotcha §141, dispatch is
@@ -790,6 +866,16 @@ public class GenomicRun
      *        §129) and return entry [i].</li>
      *  </ul> */
     private String mateChromAt(int i) {
+        // Task 13: v2 inline_v2 path — check first.
+        if (isMateInfoInlineV2()) {
+            _decodeMateV2();
+            int mateChromId = decodedMateV2.mateChromIds[i];
+            if (mateChromId == -1) return "*";
+            if (mateV2ChromNames != null && mateChromId < mateV2ChromNames.size()) {
+                return mateV2ChromNames.get(mateChromId);
+            }
+            return "*";  // defensive fallback
+        }
         if (isMateInfoSubgroup()) {
             return decodeMateChrom().get(i);
         }
@@ -801,6 +887,11 @@ public class GenomicRun
     /** M86 Phase F: return the mate position at index {@code i},
      *  dispatching on the mate_info link type (Binding Decision §128). */
     private long matePosAt(int i) {
+        // Task 13: v2 path.
+        if (isMateInfoInlineV2()) {
+            _decodeMateV2();
+            return decodedMateV2.matePositions[i];
+        }
         if (isMateInfoSubgroup()) {
             long[] arr = (long[]) decodeMateIntField(
                 "pos", global.thalion.ttio.Enums.Precision.INT64);
@@ -813,6 +904,11 @@ public class GenomicRun
     /** M86 Phase F: return the template length at index {@code i},
      *  dispatching on the mate_info link type (Binding Decision §128). */
     private int mateTlenAt(int i) {
+        // Task 13: v2 path.
+        if (isMateInfoInlineV2()) {
+            _decodeMateV2();
+            return decodedMateV2.templateLengths[i];
+        }
         if (isMateInfoSubgroup()) {
             int[] arr = (int[]) decodeMateIntField(
                 "tlen", global.thalion.ttio.Enums.Precision.INT32);
