@@ -82,10 +82,9 @@ class Compression(IntEnum):
     RANS_ORDER1 = 5
     BASE_PACK = 6
     QUALITY_BINNED = 7
-    NAME_TOKENIZED = 8
-    # v1.2 M93: reference-based sequence diff (context-aware — receives
-    # positions, cigars, ref_resolver alongside the channel bytes).
-    REF_DIFF = 9
+    # Slots 8 (NAME_TOKENIZED v1) and 9 (REF_DIFF v1) removed in the
+    # v1.0 reset (Phase 2d). v2 successors live at slots 14/15.
+    # Slot 10 was reserved for an experimental codec that never shipped.
     # v1.2 M95: delta + zigzag + varint + rANS order-0 — sorted integer channels.
     DELTA_RANS_ORDER0 = 11
     # v1.2 M94.Z: CRAM-mimic rANS-Nx16 quality codec. Static-per-block

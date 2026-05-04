@@ -370,17 +370,6 @@ class GenomicRun:
             # decode is deterministic from the wire stream).
             from .codecs.quality import decode as _dec
             decoded = _dec(all_bytes)
-        elif codec_id == int(Compression.REF_DIFF):
-            # v1.0 reset (Phase 2c): the v1 REF_DIFF (codec id 9)
-            # decoder was removed; readers reject these files with a
-            # clear migration message pointing at REF_DIFF_V2.
-            raise ValueError(
-                "signal_channel 'sequences': @compression=9 "
-                "(REF_DIFF v1) is no longer supported in v1.0; this "
-                "file was written with an older TTI-O version. "
-                "Re-encode with v1.0+ which uses REF_DIFF_V2 (codec "
-                "id 14)."
-            )
         elif codec_id == int(Compression.FQZCOMP_NX16_Z):
             # M94.Z v1.2: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16). Same
             # plumbing as v1: codec carries read_lengths inside its
@@ -585,14 +574,6 @@ class GenomicRun:
             )
 
         codec_id = io.read_int_attr(ds, "compression", default=0) or 0
-        if codec_id == int(Compression.NAME_TOKENIZED):
-            raise ValueError(
-                "signal_channel 'read_names': @compression=8 "
-                "(NAME_TOKENIZED v1) is no longer supported in v1.0; "
-                "this file was written with an older TTI-O version. "
-                "Re-encode with v1.0+ which uses NAME_TOKENIZED_V2 "
-                "(codec id 15)."
-            )
         if codec_id == int(Compression.NAME_TOKENIZED_V2):
             from .codecs import name_tokenizer_v2 as _nt2
             all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
@@ -619,10 +600,6 @@ class GenomicRun:
           access and cached as a ``list[str]`` per Binding Decision
           §123. Two codec ids are recognised: ``RANS_ORDER0`` (4)
           and ``RANS_ORDER1`` (5).
-
-        v1.0 reset (Phase 2c): the v1 ``NAME_TOKENIZED`` (codec id 8)
-        cigars decoder was removed; readers reject these files with a
-        clear migration error.
 
         Dispatch is on dataset shape — a 1-D uint8 dataset routes
         through the codec path; anything else (compound) falls
@@ -672,14 +649,6 @@ class GenomicRun:
                         ) from exc
                 self._decoded_cigars = out
                 return out[i]
-            if codec_id == int(Compression.NAME_TOKENIZED):
-                raise ValueError(
-                    "signal_channel 'cigars': @compression=8 "
-                    "(NAME_TOKENIZED v1) is no longer supported in "
-                    "v1.0; this file was written with an older TTI-O "
-                    "version. Re-encode with v1.0+ which uses "
-                    "RANS_ORDER0/RANS_ORDER1 for the cigars channel."
-                )
             raise ValueError(
                 f"signal_channel 'cigars': @compression={codec_id} "
                 "is not a supported TTIO codec id for the cigars "

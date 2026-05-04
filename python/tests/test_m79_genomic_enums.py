@@ -103,28 +103,28 @@ def test_uint8_partial_read(provider: str, tmp_path: Path) -> None:
 
 
 def test_compression_enum_values() -> None:
-    """All M79+ reserved compression IDs. On-disk integers — must
-    not drift. ID 10 is intentionally absent (FQZCOMP_NX16 v1 was
-    deleted in Phase A 2026-04-30; the slot is reserved)."""
+    """All compression IDs in v1.0. On-disk integers — must not drift.
+    Slots 8 (NAME_TOKENIZED v1), 9 (REF_DIFF v1), and 10
+    (FQZCOMP_NX16 v1) are intentionally absent — all three legacy v1
+    codecs were removed in the v1.0 reset (Phases 2c/2d). Their v2
+    successors live at 13/14/15."""
     # M79 (v0.11) — base codec set
     assert Compression.RANS_ORDER0.value == 4
     assert Compression.RANS_ORDER1.value == 5
     assert Compression.BASE_PACK.value == 6
     assert Compression.QUALITY_BINNED.value == 7
-    assert Compression.NAME_TOKENIZED.value == 8
-    # v1.2 codec stack
-    assert Compression.REF_DIFF.value == 9
-    # 10 reserved — FQZCOMP_NX16 v1 was deleted in Phase A
+    # 8/9/10 reserved (v1 codecs removed in v1.0 reset)
     assert Compression.DELTA_RANS_ORDER0.value == 11
     assert Compression.FQZCOMP_NX16_Z.value == 12
     # v1.7+ #11 channels
     assert Compression.MATE_INLINE_V2.value == 13      # v1.7 ch1
     assert Compression.REF_DIFF_V2.value == 14         # v1.8 ch2
     assert Compression.NAME_TOKENIZED_V2.value == 15   # v1.9 ch3
-    # ID 10 must remain unmapped: Compression(10) raises
+    # IDs 8, 9, 10 must remain unmapped
     import pytest as _pytest
-    with _pytest.raises(ValueError):
-        Compression(10)
+    for unmapped in (8, 9, 10):
+        with _pytest.raises(ValueError):
+            Compression(unmapped)
 
 
 @pytest.mark.parametrize("codec", [
@@ -132,8 +132,6 @@ def test_compression_enum_values() -> None:
     Compression.RANS_ORDER1,
     Compression.BASE_PACK,
     Compression.QUALITY_BINNED,
-    Compression.NAME_TOKENIZED,
-    Compression.REF_DIFF,
     Compression.DELTA_RANS_ORDER0,
     Compression.FQZCOMP_NX16_Z,
     Compression.MATE_INLINE_V2,
