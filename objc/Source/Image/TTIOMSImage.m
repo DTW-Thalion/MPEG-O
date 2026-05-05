@@ -1,3 +1,20 @@
+/*
+ * TTIOMSImage.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOMSImage
+ * Inherits From: TTIOSpectralDataset : NSObject
+ * Conforms To:   TTIOEncryptable (inherited)
+ * Declared In:   Image/TTIOMSImage.h
+ *
+ * Mass-spectrometry imaging dataset (3-D cube of float64 spectral
+ * profiles per pixel). Persists under /study/image_cube/ with
+ * tile-aligned chunking; auto-detects the legacy /image_cube path
+ * on read.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOMSImage.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"

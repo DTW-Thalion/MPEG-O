@@ -1,3 +1,18 @@
+/*
+ * TTIORamanImage.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIORamanImage
+ * Inherits From: TTIOSpectralDataset : NSObject
+ * Conforms To:   TTIOEncryptable (inherited)
+ * Declared In:   Image/TTIORamanImage.h
+ *
+ * Raman imaging dataset. 3-D cube + shared 1-D wavenumbers axis;
+ * persists under /study/raman_image_cube/.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIORamanImage.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
