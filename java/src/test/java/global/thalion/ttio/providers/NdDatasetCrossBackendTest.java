@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * M45's goal is to prove the provider protocol is ready to absorb
  * that refactor without silent correctness bugs.</p>
  *
- * @since 0.7
+ *
  */
 class NdDatasetCrossBackendTest {
 

@@ -13,7 +13,7 @@ package global.thalion.ttio.importers;
  * {@code TTIOMzMLReaderErrorParseFailed} and Python
  * {@code MzMLParseError}.</p>
  *
- * @since 0.7
+ *
  */
 public final class MzMLParseException extends TtioReaderException {
     private static final long serialVersionUID = 1L;

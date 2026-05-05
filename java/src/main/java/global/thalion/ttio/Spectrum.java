@@ -29,7 +29,7 @@ import java.util.Map;
  * {@code TTIOSpectrum}, Python
  * {@code ttio.spectrum.Spectrum}.</p>
  *
- * @since 0.6
+ *
  */
 public class Spectrum {
     private final Map<String, SignalArray> signalArrays;

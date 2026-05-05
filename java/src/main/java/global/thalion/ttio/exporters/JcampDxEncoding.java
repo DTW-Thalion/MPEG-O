@@ -15,7 +15,7 @@ package global.thalion.ttio.exporters;
  * {@code TTIOJcampDxEncoding} &middot; Python {@code encoding="..."}
  * keyword on {@code ttio.exporters.jcamp_dx.write_*_spectrum}.</p>
  *
- * @since 0.12
+ *
  */
 public enum JcampDxEncoding {
     AFFN, PAC, SQZ, DIF;

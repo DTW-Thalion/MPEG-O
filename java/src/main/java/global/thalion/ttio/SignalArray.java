@@ -25,7 +25,7 @@ import java.util.*;
  * Python: {@code ttio.signal_array.SignalArray}<br>
  * Objective-C: {@code TTIOSignalArray}</p>
  *
- * @since 0.6
+ *
  */
 public class SignalArray implements CVAnnotatable {
     private final Object buffer;  // float[], double[], int[], long[], or byte[]

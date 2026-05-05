@@ -19,7 +19,7 @@ import java.util.Map;
  * {@code TTIOIRSpectrum}, Python
  * {@code ttio.ir_spectrum.IRSpectrum}.</p>
  *
- * @since 0.11
+ *
  */
 public class IRSpectrum extends Spectrum {
     private final IRMode mode;

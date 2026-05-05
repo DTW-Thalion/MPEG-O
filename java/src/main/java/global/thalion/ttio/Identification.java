@@ -24,7 +24,7 @@ import java.util.List;
  * @param confidenceScore  Score in {@code [0.0, 1.0]}.
  * @param evidenceChain    Ordered list of free-form evidence strings
  *                         (typically CV accession references).
- * @since 0.6
+ *
  */
 public record Identification(
     String runName,

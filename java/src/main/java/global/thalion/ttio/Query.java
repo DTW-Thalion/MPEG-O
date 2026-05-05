@@ -15,7 +15,7 @@ import java.util.List;
  * <p><b>Cross-language equivalents:</b> Objective-C {@code TTIOQuery},
  * Python {@code ttio.query.Query}.</p>
  *
- * @since 0.6
+ *
  */
 public final class Query {
 

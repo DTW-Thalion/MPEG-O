@@ -31,7 +31,7 @@ import java.util.Map;
  * Python: {@code ttio.exporters.mztab} &middot;
  * Objective-C: {@code TTIOMzTabWriter}</p>
  *
- * @since 0.9
+ *
  */
 public final class MzTabWriter {
 

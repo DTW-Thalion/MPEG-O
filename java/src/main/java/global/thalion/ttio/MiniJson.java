@@ -19,7 +19,7 @@ import java.util.Map;
  * <p>Not a general-purpose JSON library. Kept in-tree to avoid pulling
  * Jackson/Gson into the dependency tree for one attribute parser.</p>
  *
- * @since 0.5
+ *
  */
 public final class MiniJson {
 
@@ -85,14 +85,14 @@ public final class MiniJson {
 
     /** Alias of {@link #encode} with a naming convention that matches
      *  the Python {@code json.dumps} / ObjC {@code NSJSONSerialization}
-     *  counterparts used by the ZarrProvider family. @since 0.8 */
+     *  counterparts used by the ZarrProvider family. */
     public static String serialise(Object v) { return encode(v); }
 
     /** Generic parse entry point — returns the value as a nested
      *  {@code Map} / {@code List} / {@code Number} / {@code Boolean} /
      *  {@code String} / {@code null}. Complements the type-specific
      *  {@link #parseArrayOfObjects}, {@link #parseStringMap}, and
-     *  {@link #parseArrayOfStrings} helpers. @since 0.8 */
+     *  {@link #parseArrayOfStrings} helpers. */
     public static Object parse(String blob) {
         if (blob == null || blob.isEmpty()) return null;
         Parser p = new Parser(blob);

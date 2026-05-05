@@ -18,7 +18,7 @@ import java.nio.file.Path;
  * {@code ttio.importers.sam.SamReader}, Objective-C
  * {@code TTIOSamReader}.</p>
  *
- * @since 0.12 (M87)
+ * (M87)
  */
 public class SamReader extends BamReader {
     public SamReader(Path path) { super(path); }

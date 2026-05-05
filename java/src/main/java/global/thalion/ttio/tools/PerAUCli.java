@@ -1,5 +1,5 @@
 /*
- * TTI-O Java Implementation — v1.0 per-AU encryption CLI.
+ * TTI-O Java Implementation — per-AU encryption CLI.
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.tools;
@@ -50,7 +50,7 @@ import java.util.TreeMap;
  * Precision enum: {@code 0=f4, 1=f8, 2=i4, 3=i8, 4=u4, 6=u1, 9=u8,
  * 0xFF=opaque bytes (e.g. JSON-encoded au_headers)}.
  *
- * @since 1.0
+ *
  */
 public final class PerAUCli {
 

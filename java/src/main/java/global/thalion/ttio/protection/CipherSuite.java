@@ -45,7 +45,7 @@ import java.util.Map;
  * <p><b>Cross-language equivalents:</b> ObjC {@code TTIOCipherSuite},
  * Python {@code ttio.cipher_suite}.</p>
  *
- * @since 0.7
+ *
  */
 public final class CipherSuite {
 
@@ -79,7 +79,7 @@ public final class CipherSuite {
         Status status,
         String notes,
         /** KEM / Signature: private (decaps / signing) key length in
-         *  bytes. {@code 0} for symmetric algorithms. @since 0.8 */
+         *  bytes. {@code 0} for symmetric algorithms. */
         int privateKeySize
     ) {
         /** Shorthand for symmetric entries (keeps the M48 ctor shape
@@ -202,7 +202,7 @@ public final class CipherSuite {
     /** Raise {@link InvalidKeyException} if {@code key} is not the
      *  right length for {@code algorithm}'s <b>public</b> key (KEM
      *  encapsulation / signature verification). Symmetric algorithms
-     *  raise. @since 0.8 */
+     *  raise. */
     public static void validatePublicKey(String algorithm, byte[] key) {
         Entry e = requireActive(algorithm);
         if (e.category != Category.KEM && e.category != Category.SIGNATURE) {
@@ -218,7 +218,7 @@ public final class CipherSuite {
 
     /** Raise {@link InvalidKeyException} if {@code key} is not the
      *  right length for {@code algorithm}'s <b>private</b> key (KEM
-     *  decapsulation / signing). Symmetric algorithms raise. @since 0.8 */
+     *  decapsulation / signing). Symmetric algorithms raise. */
     public static void validatePrivateKey(String algorithm, byte[] key) {
         Entry e = requireActive(algorithm);
         if (e.category != Category.KEM && e.category != Category.SIGNATURE) {
@@ -237,7 +237,7 @@ public final class CipherSuite {
     }
 
     /** @return asymmetric public-key length in bytes. Raises for
-     *          symmetric algorithms. @since 0.8 */
+     *          symmetric algorithms. */
     public static int publicKeySize(String algorithm) {
         Entry e = require(algorithm);
         if (e.category != Category.KEM && e.category != Category.SIGNATURE) {
@@ -248,7 +248,7 @@ public final class CipherSuite {
     }
 
     /** @return asymmetric private-key length in bytes. Raises for
-     *          symmetric algorithms. @since 0.8 */
+     *          symmetric algorithms. */
     public static int privateKeySize(String algorithm) {
         Entry e = require(algorithm);
         if (e.category != Category.KEM && e.category != Category.SIGNATURE) {

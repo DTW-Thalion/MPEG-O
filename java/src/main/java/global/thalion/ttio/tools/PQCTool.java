@@ -24,7 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Cross-language PQC conformance CLI — v0.8 M54.
+ * Cross-language PQC conformance CLI
  *
  * <p>Invoked by the cross-language conformance harness
  * ({@code python/tests/test_m54_pqc_conformance.py}) via
@@ -47,7 +47,7 @@ import java.nio.file.Path;
  *   <li>{@code hdf5-verify FILE DATASET_PATH PK_IN} (exit 0/1/2)</li>
  * </ul>
  *
- * @since 0.8
+ *
  */
 public final class PQCTool {
 

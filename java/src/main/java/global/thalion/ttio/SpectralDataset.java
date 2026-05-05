@@ -40,7 +40,7 @@ import java.util.*;
  * {@code TTIOSpectralDataset}, Python
  * {@code ttio.spectral_dataset.SpectralDataset}.</p>
  *
- * @since 0.6
+ *
  */
 public class SpectralDataset implements
         global.thalion.ttio.protocols.Encryptable,

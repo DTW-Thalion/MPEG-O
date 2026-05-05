@@ -16,7 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Bruker timsTOF {@code .d} importer — v0.8 M53.
+ * Bruker timsTOF {@code .d} importer
  *
  * <p>Bruker's {@code .d} directory holds two files:
  * <ul>
@@ -46,7 +46,7 @@ import java.util.Map;
  * {@code ttio.importers.bruker_tdf}, Objective-C
  * {@code TTIOBrukerTDFReader}.</p>
  *
- * @since 0.8
+ *
  */
 public final class BrukerTDFReader {
 

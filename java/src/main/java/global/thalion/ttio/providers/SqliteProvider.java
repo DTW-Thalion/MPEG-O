@@ -36,7 +36,7 @@ import java.util.*;
  *   <li>Python: {@code ttio.providers.sqlite.SqliteProvider}</li>
  * </ul>
  *
- * @since 0.6
+ *
  */
 public final class SqliteProvider implements StorageProvider {
 

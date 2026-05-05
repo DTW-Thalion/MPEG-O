@@ -21,7 +21,7 @@ import java.util.List;
  * returning empty strings for VL slots (see {@link global.thalion.ttio.SpectralDataset}
  * for the read-path rationale).
  *
- * @since 0.6
+ *
  */
 public final class Hdf5CompoundIO {
 

@@ -43,7 +43,7 @@ import java.util.Map;
  * <p><b>Cross-language equivalents:</b> Python {@code ttio.importers.bam.BamReader},
  * Objective-C {@code TTIOBamReader}.</p>
  *
- * @since 0.12 (M87)
+ * (M87)
  */
 public class BamReader {
 

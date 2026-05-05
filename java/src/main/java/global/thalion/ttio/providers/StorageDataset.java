@@ -25,7 +25,7 @@ import java.util.Map;
  * {@code TTIOStorageDataset}, Python
  * {@code ttio.providers.base.StorageDataset}.</p>
  *
- * @since 0.6
+ *
  */
 public interface StorageDataset extends AutoCloseable {
 
@@ -152,7 +152,7 @@ public interface StorageDataset extends AutoCloseable {
         return canonicaliseCompoundRows(readRows(), fields);
     }
 
-    /** @since 0.7 — helper exposed for providers that want to override
+    /** — helper exposed for providers that want to override
      *  {@link #readCanonicalBytes()} but share the compound path. */
     static byte[] canonicaliseCompoundRows(List<Map<String, Object>> rows,
                                             List<CompoundField> fields) {
@@ -217,7 +217,7 @@ public interface StorageDataset extends AutoCloseable {
         }
     }
 
-    /** @since 0.7 — helper for the primitive canonical path. */
+    /** — helper for the primitive canonical path. */
     static byte[] canonicalisePrimitive(Object raw, Precision p) {
         if (p == null) {
             throw new IllegalStateException(

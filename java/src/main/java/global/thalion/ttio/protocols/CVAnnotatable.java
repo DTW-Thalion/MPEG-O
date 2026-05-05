@@ -23,7 +23,7 @@ import java.util.List;
  * <p><b>API status:</b> Stable (conformers may change; the protocol
  * is frozen for v0.6).</p>
  *
- * @since 0.6
+ *
  */
 public interface CVAnnotatable {
 

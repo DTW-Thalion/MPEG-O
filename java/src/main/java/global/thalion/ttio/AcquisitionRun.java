@@ -34,7 +34,7 @@ import java.util.*;
  * {@code TTIOAcquisitionRun}, Python
  * {@code ttio.acquisition_run.AcquisitionRun}.</p>
  *
- * @since 0.6
+ *
  */
 public class AcquisitionRun implements
         global.thalion.ttio.protocols.Indexable<Spectrum>,

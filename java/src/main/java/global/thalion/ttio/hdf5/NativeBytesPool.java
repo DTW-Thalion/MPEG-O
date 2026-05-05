@@ -21,7 +21,7 @@ import java.util.List;
  * <p>{@link #close()} must run after {@code H5Dwrite} so the native
  * memory stays valid for the duration of the write.</p>
  *
- * @since 1.0
+ *
  */
 public final class NativeBytesPool implements AutoCloseable {
 

@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>Python: {@code ttio.providers.memory.MemoryProvider}</li>
  * </ul>
  *
- * @since 0.6
+ *
  */
 public final class MemoryProvider implements StorageProvider {
 

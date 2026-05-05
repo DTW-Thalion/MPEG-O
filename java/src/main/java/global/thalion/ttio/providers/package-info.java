@@ -18,6 +18,6 @@
  * <p><b>API status:</b> Stable (Provisional per M39 — may change
  * before v1.0).</p>
  *
- * @since 0.6
+ *
  */
 package global.thalion.ttio.providers;

@@ -39,7 +39,7 @@ import java.util.TreeSet;
  * {@code ttio.transport.encrypted}, Objective-C
  * {@code TTIOEncryptedTransport}.
  *
- * @since 1.0
+ *
  */
 public final class EncryptedTransport {
 

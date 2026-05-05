@@ -36,7 +36,7 @@ import java.util.Objects;
  * {@code ttio.importers.cram.CramReader},
  * Objective-C {@code TTIOCramReader}.</p>
  *
- * @since 0.13 (M88)
+ * (M88)
  */
 public class CramReader extends BamReader {
 

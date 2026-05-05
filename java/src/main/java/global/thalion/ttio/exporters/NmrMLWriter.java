@@ -24,7 +24,7 @@ import java.util.Base64;
  * Objective-C: {@code TTIONmrMLWriter} &middot;
  * Python: {@code ttio.exporters.nmrml}</p>
  *
- * @since 0.6
+ *
  */
 public final class NmrMLWriter {
 

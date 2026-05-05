@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * v0.7 M48 — CipherSuite catalog + algorithm= parameter plumbing.
  *
- * @since 0.7
+ *
  */
 class CipherSuiteTest {
 

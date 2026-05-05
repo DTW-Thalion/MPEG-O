@@ -26,7 +26,7 @@ import global.thalion.ttio.Enums.Precision;
  * @param precision   Numeric precision.
  * @param compression Compression algorithm.
  * @param byteOrder   Byte order on disk.
- * @since 0.6
+ *
  */
 public record EncodingSpec(
     Precision precision,

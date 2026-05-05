@@ -27,7 +27,7 @@ import java.util.Map;
  * {@code TTIOStreamWriter}, Python
  * {@code ttio.stream_writer.StreamWriter}.</p>
  *
- * @since 0.6
+ *
  */
 public final class StreamWriter implements AutoCloseable {
 

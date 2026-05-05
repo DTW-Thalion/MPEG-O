@@ -18,7 +18,7 @@ package global.thalion.ttio;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOEnums.h}, Python {@code ttio.enums}.</p>
  *
- * @since 0.6
+ *
  */
 public final class Enums {
 

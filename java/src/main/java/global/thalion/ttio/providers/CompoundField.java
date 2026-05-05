@@ -14,7 +14,7 @@ package global.thalion.ttio.providers;
  * {@code TTIOCompoundField}, Python
  * {@code ttio.providers.base.CompoundField}.</p>
  *
- * @since 0.6
+ *
  */
 public record CompoundField(String name, Kind kind) {
 

@@ -12,6 +12,6 @@
  * See {@code docs/api-review-v0.6.md} for the three-language parity
  * table.</p>
  *
- * @since 0.6
+ *
  */
 package global.thalion.ttio.protocols;

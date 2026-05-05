@@ -13,7 +13,7 @@ import java.util.*;
  * {@code @ttio_format_version = "1.1"}
  * {@code @ttio_features = JSON array of feature strings}
  *
- * @since 0.5
+ *
  */
 public final class FeatureFlags {
     // Required features (must refuse if unrecognized)
@@ -34,11 +34,11 @@ public final class FeatureFlags {
     public static final String OPT_ANONYMIZED = "opt_anonymized";
     /** v0.8 M49: file uses post-quantum crypto (ML-KEM-1024 and/or
      *  ML-DSA-87). Opt-flag — a reader without PQC can still open the
-     *  file and read unencrypted datasets. @since 0.8 */
+     *  file and read unencrypted datasets. */
     public static final String OPT_PQC_PREVIEW = "opt_pqc_preview";
-    /** v1.0: channels encrypted per Access Unit. @since 1.0 */
+    /** v1.0: channels encrypted per Access Unit. */
     public static final String OPT_PER_AU_ENCRYPTION = "opt_per_au_encryption";
-    /** v1.0: AU semantic header encrypted. @since 1.0 */
+    /** v1.0: AU semantic header encrypted. */
     public static final String OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers";
     /** v1.0 M90.4: per-AU encryption keyed by chromosome (region-based).
      *  Set in addition to {@link #OPT_PER_AU_ENCRYPTION} when a file
@@ -46,19 +46,19 @@ public final class FeatureFlags {
      *  Clear AUs encode as a {@code <channel>_segments} row with
      *  empty IV/tag and plaintext bytes in the ciphertext slot;
      *  encrypted AUs use the standard 12/16-byte AES-GCM layout.
-     *  @since 1.0 M90.4 */
+     * M90.4 */
     public static final String OPT_REGION_KEYED_ENCRYPTION = "opt_region_keyed_encryption";
     /** v0.12.0 M74: {@code spectrum_index} carries four optional
      *  parallel columns recording MS/MS activation method and precursor
      *  isolation window. Files that set this flag are written with
      *  format version {@code "1.3"}; pre-M74 readers that ignore the
-     *  flag still parse the base columns. @since 0.12 */
+     *  flag still parse the base columns. */
     public static final String OPT_MS2_ACTIVATION_DETAIL = "opt_ms2_activation_detail";
     /** v0.11 M82: file contains one or more genomic runs under
      *  {@code /study/genomic_runs/}. Files that set this flag are
      *  written with format version {@code "1.4"}; pre-M82 readers
      *  that ignore the flag still parse the MS pipeline normally
-     *  (genomic runs are a separate group hierarchy). @since 0.11 M82 */
+     *  (genomic runs are a separate group hierarchy). M82 */
     public static final String OPT_GENOMIC = "opt_genomic";
     /** v1.2 L4 (v1.6): genomic runs in this file do NOT carry the
      *  {@code signal_channels/{positions,flags,mapping_qualities}}
@@ -67,7 +67,7 @@ public final class FeatureFlags {
      *  v1.6 layout (without enumerating the {@code signal_channels/}
      *  group) can check for this flag. Strictly additive: pre-v1.6
      *  readers ignore unknown opt_* flags and continue to read from
-     *  {@code genomic_index/} correctly. @since v1.6 */
+     *  {@code genomic_index/} correctly. */
     public static final String OPT_NO_SIGNAL_INT_DUPS = "opt_no_signal_int_dups";
 
     private static final Set<String> REQUIRED = Set.of(

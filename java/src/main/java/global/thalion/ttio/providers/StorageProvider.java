@@ -27,7 +27,7 @@ package global.thalion.ttio.providers;
  * {@code TTIOStorageProvider}, Python
  * {@code ttio.providers.base.StorageProvider}.</p>
  *
- * @since 0.6
+ *
  */
 public interface StorageProvider extends AutoCloseable {
 

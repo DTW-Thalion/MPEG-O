@@ -20,7 +20,7 @@ import javax.crypto.spec.SecretKeySpec;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOEncryptionManager}, Python {@code ttio.encryption}.</p>
  *
- * @since 0.6
+ *
  */
 public final class EncryptionManager {
 
@@ -60,7 +60,7 @@ public final class EncryptionManager {
      * Only {@code "aes-256-gcm"} is active in v0.7; reserved suites
      * raise {@link CipherSuite.UnsupportedAlgorithmException}.
      *
-     * @since 0.7
+     *
      */
     public static EncryptResult encrypt(byte[] plaintext, byte[] key,
                                          String algorithm) {
@@ -107,7 +107,7 @@ public final class EncryptionManager {
      * Decrypt with the named cipher suite. v0.7 M48: algorithm
      * selection via {@link CipherSuite}.
      *
-     * @since 0.7
+     *
      */
     public static byte[] decrypt(byte[] ciphertext, byte[] iv, byte[] tag,
                                    byte[] key, String algorithm) {
@@ -191,12 +191,12 @@ public final class EncryptionManager {
     private static final int WK_HEADER_LEN = 11;
     private static final int V11_BLOB_LEN = KEY_BYTES + IV_BYTES + TAG_BYTES; // 60
 
-    /** ML-KEM-1024 ciphertext length (FIPS 203). @since 0.8 */
+    /** ML-KEM-1024 ciphertext length (FIPS 203). */
     public static final int MLKEM_CT_LEN = 1568;
-    /** ML-KEM envelope metadata = kem_ct || aes_iv || aes_tag. @since 0.8 */
+    /** ML-KEM envelope metadata = kem_ct || aes_iv || aes_tag. */
     public static final int MLKEM_METADATA_LEN =
             MLKEM_CT_LEN + IV_BYTES + TAG_BYTES;  // 1596
-    /** Total on-disk ML-KEM wrapped-key blob size. @since 0.8 */
+    /** Total on-disk ML-KEM wrapped-key blob size. */
     public static final int MLKEM_BLOB_LEN =
             WK_HEADER_LEN + MLKEM_METADATA_LEN + KEY_BYTES;  // 1639
 
@@ -217,7 +217,7 @@ public final class EncryptionManager {
      * @param legacyV1 when {@code true}, emits the 60-byte v1.1 layout
      *                 for regression fixtures; callers targeting
      *                 production should use {@link #wrapKey(byte[], byte[])}.
-     * @since 0.7
+     *
      */
     public static byte[] wrapKey(byte[] dek, byte[] kek, boolean legacyV1) {
         return wrapKey(dek, kek, legacyV1, "aes-256-gcm");
@@ -230,7 +230,7 @@ public final class EncryptionManager {
      * 32-byte symmetric for AES-GCM, 1568-byte ML-KEM public key for
      * ML-KEM.
      *
-     * @since 0.7
+     *
      */
     public static byte[] wrapKey(byte[] dek, byte[] kek, boolean legacyV1,
                                    String algorithm) {
@@ -284,7 +284,7 @@ public final class EncryptionManager {
      * (where the reader must already know it's holding the
      * decapsulation private key, not a symmetric AES KEK).
      *
-     * @since 0.8
+     *
      */
     public static byte[] unwrapKey(byte[] wrappedBlob, byte[] kek,
                                     String algorithm) {
@@ -328,7 +328,7 @@ public final class EncryptionManager {
     /**
      * Pack a v1.2 wrapped-key blob. Public for cross-language interop
      * tests (M51) and for algorithm-specific wrappers introduced in M48.
-     * @since 0.7
+     *
      */
     public static byte[] packBlobV2(int algorithmId, byte[] ciphertext,
                                     byte[] metadata) {
@@ -351,14 +351,14 @@ public final class EncryptionManager {
         return out;
     }
 
-    /** Parsed v1.2 wrapped-key blob fields. @since 0.7 */
+    /** Parsed v1.2 wrapped-key blob fields. */
     public record WrappedBlobV2(int algorithmId, byte[] metadata,
                                  byte[] ciphertext) {}
 
     /**
      * Unpack a v1.2 wrapped-key blob.
      * @throws IllegalArgumentException if the magic or layout is malformed.
-     * @since 0.7
+     *
      */
     public static WrappedBlobV2 unpackBlobV2(byte[] blob) {
         if (blob.length < WK_HEADER_LEN) {

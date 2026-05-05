@@ -23,7 +23,7 @@ package global.thalion.ttio;
  * @param sourceType   Ionization source type.
  * @param analyzerType Mass analyzer type.
  * @param detectorType Detector type.
- * @since 0.6
+ *
  */
 public record InstrumentConfig(
     String manufacturer, String model, String serialNumber,

@@ -42,7 +42,7 @@ import java.util.UUID;
  * Python: {@code ttio.exporters.imzml} &middot;
  * Objective-C: {@code TTIOImzMLWriter}</p>
  *
- * @since 0.9
+ *
  */
 public final class ImzMLWriter {
 

@@ -20,7 +20,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * mzTab importer — v0.9 M60.
+ * mzTab importer
  *
  * <p>Tab-separated text reader that maps PSM / PRT / SML rows into
  * {@link Identification} and {@link Quantification} records suitable
@@ -40,7 +40,7 @@ import java.util.regex.Pattern;
  * {@code ttio.importers.mztab}, Objective-C
  * {@code TTIOMzTabReader}.</p>
  *
- * @since 0.9
+ *
  */
 public final class MzTabReader {
 

@@ -20,7 +20,7 @@ import java.util.List;
  * {@code TTIOStorageGroup}, Python
  * {@code ttio.providers.base.StorageGroup}.</p>
  *
- * @since 0.6
+ *
  */
 public interface StorageGroup extends AutoCloseable {
 

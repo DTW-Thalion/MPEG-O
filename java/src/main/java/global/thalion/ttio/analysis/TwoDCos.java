@@ -27,7 +27,7 @@ import global.thalion.ttio.TwoDimensionalCorrelationSpectrum;
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.analysis.two_d_cos}, Objective-C {@code TTIOTwoDCos}.</p>
  *
- * @since 0.12.0
+ *
  */
 public final class TwoDCos {
 

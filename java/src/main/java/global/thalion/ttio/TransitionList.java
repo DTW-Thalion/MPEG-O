@@ -17,7 +17,7 @@ import java.util.List;
  * {@code TTIOTransitionList}, Python
  * {@code ttio.transition_list.TransitionList}.</p>
  *
- * @since 0.6
+ *
  */
 public record TransitionList(List<Transition> transitions) {
 
