@@ -45,7 +45,7 @@ class Feature:
 
     Notes
     -----
-    API status: Provisional (v0.12.0 M78).
+    API status: Provisional ().
 
     Cross-language equivalents
     --------------------------

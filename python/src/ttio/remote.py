@@ -1,4 +1,4 @@
-"""Cloud-native ``.tio`` access via fsspec (Milestone 20).
+"""Cloud-native ``.tio`` access via fsspec ().
 
 The remote path is deliberately thin: ``fsspec.open(url, "rb")`` returns
 a seekable byte stream that supports HTTP range requests (for

@@ -13,9 +13,9 @@ needs a self-describing length prefix.
 from __future__ import annotations
 
 
-#: Pre-computed single-byte varints for 0..127 (the hot path —
-#: small lengths dominate in real CIGAR / chrom data). Each value
-#: is its own LEB128 byte since 0..127 has no continuation bit.
+# Pre-computed single-byte varints for 0..127 (the hot path —
+# small lengths dominate in real CIGAR / chrom data). Each value
+# is its own LEB128 byte since 0..127 has no continuation bit.
 _VARINT_SMALL: tuple[bytes, ...] = tuple(bytes([i]) for i in range(128))
 
 

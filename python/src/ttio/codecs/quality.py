@@ -55,15 +55,15 @@ import struct
 
 # ── Wire-format constants ──────────────────────────────────────────
 
-#: Version byte — first byte of every QUALITY_BINNED stream.
+# Version byte — first byte of every QUALITY_BINNED stream.
 VERSION: int = 0x00
 
-#: Scheme id for Illumina-8 — second byte of every stream. v0 of
-#: this codec defines this single scheme; future schemes (NCBI 4-bin,
-#: Bonfield variable-width, etc.) would get distinct scheme_ids.
+# Scheme id for Illumina-8 — second byte of every stream. v0 of
+# this codec defines this single scheme; future schemes (NCBI 4-bin,
+# Bonfield variable-width, etc.) would get distinct scheme_ids.
 SCHEME_ILLUMINA_8: int = 0x00
 
-#: Header bytes: 1 (version) + 1 (scheme_id) + 4 (orig_len) = 6.
+# Header bytes: 1 (version) + 1 (scheme_id) + 4 (orig_len) = 6.
 HEADER_LEN: int = 6
 
 
@@ -117,18 +117,18 @@ def _build_centre_table() -> bytes:
 _BIN_INDEX_TABLE: bytes = _build_bin_index_table()
 _CENTRE_TABLE: bytes = _build_centre_table()
 
-#: Two 256-entry ``bytes.translate`` tables for fast decode:
-#: ``_HI_TO_CENTRE[b]`` = bin centre for the high nibble of byte b;
-#: ``_LO_TO_CENTRE[b]`` = bin centre for the low nibble of byte b.
-#: The decoder runs ``body.translate`` twice (once per table — both
-#: in C, both O(len(body))) then interleaves the two output streams
-#: via ``bytearray[0::2] = hi; bytearray[1::2] = lo`` slice
-#: assignment, which is also C-driven. This combination is roughly
-#: an order of magnitude faster than a per-byte Python loop on
-#: multi-MiB inputs. Nibbles 8..15 are unreachable from a
-#: well-formed stream (the encoder only produces 0..7); we map them
-#: to centre 0, mirroring the encoder's "trust the producer"
-#: policy from binding decision §92.
+# Two 256-entry ``bytes.translate`` tables for fast decode:
+# ``_HI_TO_CENTRE[b]`` = bin centre for the high nibble of byte b;
+# ``_LO_TO_CENTRE[b]`` = bin centre for the low nibble of byte b.
+# The decoder runs ``body.translate`` twice (once per table — both
+# in C, both O(len(body))) then interleaves the two output streams
+# via ``bytearray[0::2] = hi; bytearray[1::2] = lo`` slice
+# assignment, which is also C-driven. This combination is roughly
+# an order of magnitude faster than a per-byte Python loop on
+# multi-MiB inputs. Nibbles 8..15 are unreachable from a
+# well-formed stream (the encoder only produces 0..7); we map them
+# to centre 0, mirroring the encoder's "trust the producer"
+# policy from binding decision §92.
 def _build_nibble_tables() -> tuple[bytes, bytes]:
     centres = (0, 5, 15, 22, 27, 32, 37, 40)
     hi = bytearray(256)

@@ -79,7 +79,7 @@ class GenomicRun:
     # @compression attribute names a TTIO codec (rANS / BASE_PACK).
     # Codec output is byte-stream non-sliceable, so the whole channel
     # is decoded once on first access and the decoded buffer is
-    # sliced from memory thereafter (Binding Decision §89). Cache
+    # sliced from memory thereafter (). Cache
     # lifetime is the GenomicRun instance — re-opening the file
     # incurs the decode cost again (Gotcha §101).
     _decoded_byte_channels: dict[str, bytes] = field(
@@ -90,7 +90,7 @@ class GenomicRun:
     # ``list[str]`` because the codec returns the decoded names
     # already split into per-read entries (different value type from
     # ``_decoded_byte_channels``, which holds raw concatenated
-    # bytes). Per Binding Decision §114 the two caches are kept
+    # bytes). Per the two caches are kept
     # separate. ``None`` until first access; when populated, the
     # whole list is materialised in memory (a few hundred MB for
     # 10M reads — acceptable for typical genomic workloads, see
@@ -104,7 +104,7 @@ class GenomicRun:
     # codec paths produce per-read string entries — the rANS path
     # walks varint-length-prefix entries inside the decoded byte
     # buffer, and NAME_TOKENIZED returns ``list[str]`` directly.
-    # Per Binding Decision §123 (Option A from §2.3) this cache is
+    # Per (Option A from §2.3) this cache is
     # **separate** from ``_decoded_read_names`` — the lower-risk
     # choice that does not touch shipped Phase E code. A future
     # generalisation (Option B) could fold both into a
@@ -115,7 +115,7 @@ class GenomicRun:
         default=None, repr=False, compare=False,
     )
     # M86 Phase F: combined per-field cache for the mate_info subgroup
-    # layout (Binding Decision §129, Gotcha §144). Held as a single
+    # layout (Gotcha §144). Held as a single
     # ``dict[str, Any]`` keyed by field name (``"chrom"`` →
     # list[str]; ``"pos"`` → np.ndarray int64; ``"tlen"`` →
     # np.ndarray int32) because the three fields have three different
@@ -219,7 +219,7 @@ class GenomicRun:
         qualities = self._byte_channel_slice("qualities", offset, length)
 
         # Compound / codec-lifted channels — dispatch on dataset
-        # shape (M86 Phases C and E). The compound path delegates
+        # shape (Phases C and E). The compound path delegates
         # to ``_compound`` (whole-dataset cached), the codec path
         # decodes once and caches ``list[str]``.
         cigar = self._cigar_at(i)
@@ -667,7 +667,7 @@ class GenomicRun:
     def _mate_info_is_subgroup(self) -> bool:
         """True iff ``signal_channels/mate_info`` is a group (Phase F).
 
-        Per Binding Decision §128 / Gotcha §141, dispatch is on HDF5
+        Per / Gotcha §141, dispatch is on HDF5
         link type, NOT on ``@compression`` attribute presence on the
         bare link. The StorageGroup protocol's ``open_group`` raises
         ``KeyError`` when the named child is a dataset (verified in

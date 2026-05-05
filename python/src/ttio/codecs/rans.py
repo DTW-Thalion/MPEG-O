@@ -60,29 +60,29 @@ except ImportError:  # pragma: no cover — Cython optional
 
 # ── Algorithm constants ─────────────────────────────────────────────
 
-#: Total of normalised frequency table.  Power of two so that ``x % M``
-#: reduces to ``x & (M - 1)`` and the encoder can use a single shift.
+# Total of normalised frequency table.  Power of two so that ``x % M``
+# reduces to ``x & (M - 1)`` and the encoder can use a single shift.
 M: int = 1 << 12  # 4096
 
-#: Number of bits to shift for the modulo / divide by M operations.
+# Number of bits to shift for the modulo / divide by M operations.
 M_BITS: int = 12
 
-#: Lower bound of the encoder state range.
+# Lower bound of the encoder state range.
 L: int = 1 << 23
 
-#: I/O width — encoder emits 8 bits at a time (one byte).
+# I/O width — encoder emits 8 bits at a time (one byte).
 B_BITS: int = 8
 B: int = 1 << B_BITS  # 256
 
-#: Upper bound of the encoder state range — exclusive.
-#: ``state_max == b * L``; while ``x >= x_max(s)`` the encoder must
-#: renormalise (emit a byte) before encoding symbol s.
+# Upper bound of the encoder state range — exclusive.
+# ``state_max == b * L``; while ``x >= x_max(s)`` the encoder must
+# renormalise (emit a byte) before encoding symbol s.
 STATE_MAX: int = B * L  # 2**31
 
-#: Mask for ``x % M`` (M is a power of two).
+# Mask for ``x % M`` (M is a power of two).
 M_MASK: int = M - 1
 
-#: Header bytes: 1 (order) + 4 (orig_len) + 4 (payload_len) = 9.
+# Header bytes: 1 (order) + 4 (orig_len) + 4 (payload_len) = 9.
 HEADER_LEN: int = 9
 
 
@@ -92,7 +92,7 @@ HEADER_LEN: int = 9
 def _normalise_freqs(cnt: List[int]) -> List[int]:
     """Normalise a 256-element count vector to sum exactly to ``M``.
 
-    Deterministic across languages (Binding Decision §78):
+    Deterministic across languages ():
 
       1. Proportional scale: ``f[s] = max(1, cnt[s] * M // total)``
          when ``cnt[s] > 0``, else 0.

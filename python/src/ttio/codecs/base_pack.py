@@ -51,21 +51,21 @@ import struct
 
 # ── Wire-format constants ──────────────────────────────────────────
 
-#: Version byte — first byte of every BASE_PACK stream.
+# Version byte — first byte of every BASE_PACK stream.
 VERSION: int = 0x00
 
-#: Header bytes: 1 (version) + 4 (orig_len) + 4 (packed_len) +
-#: 4 (mask_count) = 13.
+# Header bytes: 1 (version) + 4 (orig_len) + 4 (packed_len) +
+# 4 (mask_count) = 13.
 HEADER_LEN: int = 13
 
-#: Mask entry size: uint32 BE position + uint8 original byte.
+# Mask entry size: uint32 BE position + uint8 original byte.
 MASK_ENTRY_LEN: int = 5
 
 # ── Pack lookup tables ─────────────────────────────────────────────
 
-#: 256-entry ``bytes.translate`` table mapping every input byte to a
-#: 2-bit slot value: A→0, C→1, G→2, T→3, every other byte → 0
-#: (the placeholder written into the body for non-ACGT slots).
+# 256-entry ``bytes.translate`` table mapping every input byte to a
+# 2-bit slot value: A→0, C→1, G→2, T→3, every other byte → 0
+# (the placeholder written into the body for non-ACGT slots).
 def _build_translate_table() -> bytes:
     tbl = bytearray(256)  # default 0 — placeholder for non-ACGT
     tbl[ord("A")] = 0b00
@@ -75,9 +75,9 @@ def _build_translate_table() -> bytes:
     return bytes(tbl)
 
 
-#: Companion table for non-ACGT detection: ACGT bytes map to 0x00,
-#: every other byte to 0x01. A single ``b"\x01" in marks`` check
-#: tells us whether any mask entries are needed.
+# Companion table for non-ACGT detection: ACGT bytes map to 0x00,
+# every other byte to 0x01. A single ``b"\x01" in marks`` check
+# tells us whether any mask entries are needed.
 def _build_mark_table() -> bytes:
     tbl = bytearray(b"\x01" * 256)
     tbl[ord("A")] = 0x00
@@ -90,14 +90,14 @@ def _build_mark_table() -> bytes:
 _PACK_TRANSLATE: bytes = _build_translate_table()
 _MARK_TRANSLATE: bytes = _build_mark_table()
 
-#: 4-entry table mapping 2-bit slot values back to ASCII bytes.
+# 4-entry table mapping 2-bit slot values back to ASCII bytes.
 _UNPACK_TABLE: bytes = b"ACGT"
 
-#: 256-entry decode lookup: each body byte maps to its 4-byte ACGT
-#: expansion (high two bits → first base, low two bits → fourth).
-#: Used by :func:`decode` to unpack the body in a single C-driven
-#: ``b"".join(...)`` over a list comprehension, which is several
-#: times faster than a per-slot Python shift-and-mask loop.
+# 256-entry decode lookup: each body byte maps to its 4-byte ACGT
+# expansion (high two bits → first base, low two bits → fourth).
+# Used by :func:`decode` to unpack the body in a single C-driven
+# ``b"".join(...)`` over a list comprehension, which is several
+# times faster than a per-slot Python shift-and-mask loop.
 _UNPACK_BYTE_TABLE: tuple[bytes, ...] = tuple(
     bytes(
         (

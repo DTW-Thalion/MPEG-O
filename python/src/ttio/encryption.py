@@ -37,7 +37,7 @@ AES_IV_LEN = 12
 AES_TAG_LEN = 16
 ALGORITHM_NAME = "AES-256-GCM"
 
-# v0.7 M48: default algorithm identifier used by the cipher_suite
+# default algorithm identifier used by the cipher_suite
 # catalog. Pre-v0.7 code hardcoded the constants above; new code paths
 # go through :mod:`ttio.cipher_suite` so the algorithm is a
 # parameter, not an invariant.
@@ -74,7 +74,7 @@ def encrypt_bytes(
     """Encrypt ``plaintext`` with the named AEAD cipher.
     Returns ciphertext/iv/tag tuple.
 
-    v0.7 M48: the algorithm is a parameter, not an invariant. Key and
+    : the algorithm is a parameter, not an invariant. Key and
     nonce lengths come from :mod:`ttio.cipher_suite`. Passing an
     unsupported algorithm raises
     :class:`~ttio.cipher_suite.UnsupportedAlgorithmError`.
@@ -114,7 +114,7 @@ def decrypt_bytes(
 ) -> bytes:
     """Decrypt a sealed blob with the named AEAD cipher. Raises on
     authentication failure. Key / IV / tag lengths dispatched via
-    :mod:`ttio.cipher_suite` (v0.7 M48)."""
+    :mod:`ttio.cipher_suite` ()."""
     from . import cipher_suite
     cipher_suite.validate_key(algorithm, key)
     nonce_len = cipher_suite.nonce_length(algorithm)
@@ -145,7 +145,7 @@ def read_encrypted_channel(
     little-endian float64, matching the ObjC writer). Raises ``KeyError`` if
     the channel is not encrypted in this group.
 
-    v0.9 M64.5 phase B: ``channels_group`` may be an ``h5py.Group``
+    phase B: ``channels_group`` may be an ``h5py.Group``
     (legacy fast path) or a :class:`StorageGroup`. The HDF5-backed
     StorageGroup unwraps to the native h5py path; non-HDF5 providers
     route through the protocol's ``open_dataset().read()`` and
@@ -204,7 +204,7 @@ def _encrypt_intensity_in_signal_group(
     :meth:`~ttio.acquisition_run.AcquisitionRun.encrypt_with_key`
     (group API, which avoids re-opening the file).
 
-    v0.9 M64.5 phase B: ``sig`` may be an ``h5py.Group`` or a
+    phase B: ``sig`` may be an ``h5py.Group`` or a
     :class:`StorageGroup`; non-HDF5 providers route through
     StorageGroup primitives.
 
@@ -314,7 +314,7 @@ def encrypt_intensity_channel_in_group(
 
     Use this variant when the caller already holds an open file handle
     (e.g. via :class:`~ttio.spectral_dataset.SpectralDataset`) and
-    cannot open the file a second time. v0.9 M64.5 phase B: accepts
+    cannot open the file a second time. phase B: accepts
     either an ``h5py.Group`` or a :class:`StorageGroup` so non-HDF5
     providers also encrypt in place.
 
