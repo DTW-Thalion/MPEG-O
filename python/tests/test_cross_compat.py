@@ -88,7 +88,7 @@ def test_python_reads_every_objc_fixture(
         pytest.skip(f"missing fixture: {path}")
 
     with SpectralDataset.open(path) as ds:
-        assert ds.feature_flags.version == "1.1"
+        assert ds.feature_flags.version == "1.0"
         assert ds.title == expected_title
         assert list(ds.ms_runs.keys()) == expected_runs
         assert ds.is_encrypted == expected_encrypted

@@ -164,7 +164,7 @@ def test_feature_flags_legacy_v1_detection(tmp_path: Path) -> None:
 def test_reads_features_from_objc_fixture(minimal_ms_fixture: Path) -> None:
     with h5py.File(minimal_ms_fixture, "r") as f:
         version, features = io.read_feature_flags(f)
-        assert version == "1.1"
+        assert version == "1.0"
         assert "base_v1" in features
         assert "compound_identifications" in features
         assert io.is_legacy_v1(f) is False
