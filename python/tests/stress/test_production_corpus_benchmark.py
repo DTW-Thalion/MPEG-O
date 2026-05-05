@@ -101,24 +101,7 @@ if os.environ.get("TTIO_INCLUDE_FULL_CORPUS") == "1":
 @pytest.mark.parametrize("label,bam_relpath,region", _CORPORA)
 def test_production_corpus_decode_cycle(
     label: str, bam_relpath: str, region: str | None, tmp_path: Path,
-    request: pytest.FixtureRequest,
 ) -> None:
-    # NAME_TOKENIZED_V2 corruption bug exposed by this benchmark on
-    # the hg002_illumina corpus: mixed Illumina flowcell prefixes
-    # (D00360 + HISEQ1 + others) trigger "corrupt encoded blob" on
-    # decode at a small (~94 names, 50 unique) input boundary. The
-    # other 4 production corpora pass cleanly. Minimal failing
-    # fixture saved at python/tests/fixtures/codecs/name_tok_v2_corrupt_94.txt
-    # for later codec debugging. Marked xfail here so the benchmark
-    # remains green while the codec fix is open.
-    if label == "hg002_illumina_subset1m":
-        request.node.add_marker(
-            pytest.mark.xfail(
-                strict=True,
-                reason="NAME_TOKENIZED_V2 corrupts mixed-flowcell read "
-                       "names — see fixtures/codecs/name_tok_v2_corrupt_94.txt",
-            )
-        )
     """End-to-end: BAM → .tio → decode-each-read. Records every leg."""
     bam_path = _DATA / bam_relpath
     if not bam_path.is_file():

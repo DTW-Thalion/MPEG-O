@@ -918,11 +918,29 @@ static int decode_block(const uint8_t *block_body, size_t block_body_size,
             if (pi >= pool_len) { rc = TTIO_RANS_ERR_NTV2_POOL_OOB; goto out; }
             if (!block_has_cols) { rc = TTIO_RANS_ERR_CORRUPT; goto out; }
             const ntv2_pool_entry *pe = &pool[pi];
-            if (pe->n_tokens != block_n_cols) {
-                rc = TTIO_RANS_ERR_CORRUPT; goto out;
-            }
-            if (K == 0 || K >= pe->n_tokens) {
+            /* MATCH only references the first K tokens of the pool
+             * entry — the suffix [K, block_n_cols) is read from the
+             * substreams. Pool entries with different total token
+             * counts (e.g. VERB rows whose name tokenises to a
+             * different number of tokens because of an internal
+             * digit run) are valid match targets as long as their
+             * first K tokens align with the block's column shape.
+             *
+             * The encoder permits MATCH against pool entries with
+             * any n_tokens ≥ K, so the decoder must too. The
+             * stricter check that previously lived here
+             * (`pe->n_tokens != block_n_cols`) was incorrect and
+             * surfaced as ERR_CORRUPT on real Illumina BAM input
+             * with mixed flowcell prefixes (e.g. ``H2YHMBCXX`` vs
+             * ``H2YT5BCXX``: the first tokenises to 3 tokens,
+             * the second to 5 because of the internal ``5``). See
+             * python/tests/fixtures/codecs/name_tok_v2_corrupt_94.txt.
+             */
+            if (K == 0 || K > pe->n_tokens) {
                 rc = TTIO_RANS_ERR_NTV2_BAD_K; goto out;
+            }
+            if (K > block_n_cols) {
+                rc = TTIO_RANS_ERR_CORRUPT; goto out;
             }
             for (uint32_t j = 0; j < K; j++) {
                 int pt = (pe->types[j] == NTV2_TOK_NUM) ? 0 : 1;

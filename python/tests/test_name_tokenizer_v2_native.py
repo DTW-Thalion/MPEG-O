@@ -49,6 +49,43 @@ def test_pacbio_style():
     assert nt2.decode(nt2.encode(names)) == names
 
 
+def test_mixed_flowcell_token_count_regression():
+    """Regression for the MATCH-against-mismatched-shape decoder bug.
+
+    Real Illumina BAMs interleave reads from multiple flowcells, e.g.
+    ``H2YHMBCXX`` (tokenises to 3 tokens: H, 2, YHMBCXX) vs
+    ``H2YT5BCXX`` (5 tokens: H, 2, YT, 5, BCXX). Names from the two
+    flowcells therefore have different token counts, but the encoder
+    can still emit MATCH against pool entries with non-matching
+    n_tokens (the wire MATCH only references the prefix [0, K)).
+
+    Before 2026-05-05, the decoder rejected ``pe->n_tokens !=
+    block_n_cols`` outright, surfacing as ``ERR_CORRUPT`` on
+    real-world Illumina input. The fix relaxes both checks to allow
+    K up to ``min(pe->n_tokens, block_n_cols)``.
+
+    Minimal reproducer below was bisected from a 1M-read
+    hg002_illumina chr22 BAM; the full fixture lives at
+    ``python/tests/fixtures/codecs/name_tok_v2_corrupt_94.txt``.
+    """
+    names = [
+        # Mix of D00360:9X:H2YxxBCXX (3-token flowcell) +
+        # HISEQ1:93:H2YHMBCXX (3-token) + an H2YT5BCXX (5-token)
+        # entry — different tokenisations within one block.
+        "D00360:95:H2YWMBCXX:2:1213:17352:18092",
+        "HISEQ1:93:H2YHMBCXX:1:2202:4763:64420",
+        "HISEQ1:93:H2YHMBCXX:1:1206:13897:93103",
+        "HISEQ1:93:H2YHMBCXX:1:2203:2668:89475",
+        "HISEQ1:93:H2YHMBCXX:1:1116:6313:10288",
+        "HISEQ1:93:H2YHMBCXX:1:2202:4763:64420",
+        "HISEQ1:93:H2YHMBCXX:1:2203:2668:89475",
+        "HISEQ1:93:H2YHMBCXX:1:1206:13897:93103",
+        "D00360:94:H2YT5BCXX:1:1106:5954:62428",
+        "D00360:96:H2YLYBCXX:2:1201:13160:88531",
+    ]
+    assert nt2.decode(nt2.encode(names)) == names
+
+
 def test_bad_magic_raises():
     with pytest.raises(RuntimeError, match="magic|name_tok_v2"):
         nt2.decode(b"XXXX" + b"\x01\x00" + b"\x00" * 6)
