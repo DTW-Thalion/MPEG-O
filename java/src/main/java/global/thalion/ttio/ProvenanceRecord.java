@@ -24,7 +24,7 @@ import java.util.Map;
  * @param parameters    Software-specific processing parameters.
  * @param inputRefs     URIs/identifiers of input entities.
  * @param outputRefs    URIs/identifiers of output entities.
- * @since 0.6
+ *
  */
 public record ProvenanceRecord(
     long timestampUnix,

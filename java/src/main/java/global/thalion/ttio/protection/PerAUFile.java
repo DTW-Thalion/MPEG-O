@@ -47,7 +47,7 @@ import java.util.Map;
  * {@code ttio.encryption_per_au.encrypt_per_au / decrypt_per_au},
  * Objective-C {@code TTIOPerAUFile}.
  *
- * @since 1.0
+ *
  */
 public final class PerAUFile {
 

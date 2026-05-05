@@ -18,7 +18,7 @@ package global.thalion.ttio.protocols;
  * {@code ttio.protocols.Streamable}.</p>
  *
  * @param <T> element type
- * @since 0.6
+ *
  */
 public interface Streamable<T> {
 

@@ -28,7 +28,7 @@ import java.util.zip.Inflater;
  * Objective-C: {@code TTIOMzMLReader} &middot;
  * Python: {@code ttio.importers.mzml}</p>
  *
- * @since 0.6
+ *
  */
 public class MzMLReader {
 

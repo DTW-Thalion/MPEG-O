@@ -23,7 +23,7 @@ import java.util.*;
  *       {@code register_provider}) — idiomatic for Python packaging.</li>
  * </ul>
  *
- * @since 0.6
+ *
  */
 public final class ProviderRegistry {
 

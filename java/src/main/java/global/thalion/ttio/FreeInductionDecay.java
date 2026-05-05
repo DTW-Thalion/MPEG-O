@@ -22,7 +22,7 @@ import global.thalion.ttio.Enums.*;
  * {@code TTIOFreeInductionDecay}, Python
  * {@code ttio.fid.FreeInductionDecay}.</p>
  *
- * @since 0.6
+ *
  */
 public class FreeInductionDecay extends SignalArray {
     private final int scanCount;

@@ -41,7 +41,7 @@ import java.util.Set;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOJcampDxReader}, Python {@code ttio.importers.jcamp_dx}.</p>
  *
- * @since 0.11
+ *
  */
 public final class JcampDxReader {
 

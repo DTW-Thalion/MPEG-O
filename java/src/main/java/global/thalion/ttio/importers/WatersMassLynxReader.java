@@ -13,7 +13,7 @@ import java.util.*;
 import java.util.stream.Stream;
 
 /**
- * Waters MassLynx {@code .raw} directory importer — v0.9 M63.
+ * Waters MassLynx {@code .raw} directory importer
  *
  * <p>Delegates to the user-installed {@code masslynxraw} converter (a
  * proprietary Waters tool). The converter reads a {@code .raw}
@@ -36,7 +36,7 @@ import java.util.stream.Stream;
  * Objective-C: {@code TTIOWatersMassLynxReader} &middot;
  * Python: {@code ttio.importers.waters_masslynx}</p>
  *
- * @since 0.9
+ *
  */
 public final class WatersMassLynxReader {
 

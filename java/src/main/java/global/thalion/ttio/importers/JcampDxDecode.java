@@ -21,7 +21,7 @@ import java.util.Map;
  * {@code TTIOJcampDxDecode}, Python
  * {@code ttio.importers._jcamp_decode}.</p>
  *
- * @since 0.11.1
+ *
  */
 public final class JcampDxDecode {
 

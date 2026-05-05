@@ -47,7 +47,7 @@ import java.util.Set;
  * {@code ttio.exporters.bam.BamWriter},
  * Objective-C {@code TTIOBamWriter}.</p>
  *
- * @since 0.13 (M88)
+ * (M88)
  */
 public class BamWriter {
 

@@ -21,7 +21,7 @@ import global.thalion.ttio.Enums.EncryptionLevel;
  * {@code TTIOEncryptable}, Python
  * {@code ttio.protocols.Encryptable}.</p>
  *
- * @since 0.6
+ *
  */
 public interface Encryptable {
 

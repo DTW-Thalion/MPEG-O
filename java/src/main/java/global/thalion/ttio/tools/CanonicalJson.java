@@ -29,7 +29,7 @@ import java.util.TreeMap;
  *       backslash-u escapes except for C0 control chars).</li>
  * </ul>
  *
- * @since 0.7
+ *
  */
 public final class CanonicalJson {
 

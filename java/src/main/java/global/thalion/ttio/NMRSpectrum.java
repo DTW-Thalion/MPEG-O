@@ -17,7 +17,7 @@ import java.util.Map;
  * {@code TTIONMRSpectrum}, Python
  * {@code ttio.nmr_spectrum.NMRSpectrum}.</p>
  *
- * @since 0.6
+ *
  */
 public class NMRSpectrum extends Spectrum {
     private final String nucleusType;

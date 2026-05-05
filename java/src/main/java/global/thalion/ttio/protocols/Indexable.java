@@ -24,7 +24,7 @@ import java.util.List;
  * {@code ttio.protocols.Indexable}.</p>
  *
  * @param <T> element type
- * @since 0.6
+ *
  */
 public interface Indexable<T> {
 

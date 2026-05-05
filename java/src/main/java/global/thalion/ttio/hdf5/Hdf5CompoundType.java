@@ -18,7 +18,7 @@ import java.util.List;
  * Owns the compound type id and every auxiliary VL string type id;
  * all are released in {@link #close()}.
  *
- * @since 0.6
+ *
  */
 public class Hdf5CompoundType implements AutoCloseable {
 

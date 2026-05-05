@@ -16,7 +16,7 @@ package global.thalion.ttio.protection;
  * {@code TTIOVerifier}, Python
  * {@code ttio.verifier.Verifier}.</p>
  *
- * @since 0.6
+ *
  */
 public final class Verifier {
 

@@ -24,7 +24,7 @@ import java.util.Map;
  * {@code ttio.access_policy.AccessPolicy}.</p>
  *
  * @param policy Arbitrary key/value policy payload.
- * @since 0.6
+ *
  */
 public record AccessPolicy(Map<String, Object> policy) {
     /**

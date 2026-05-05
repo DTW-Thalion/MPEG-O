@@ -23,7 +23,7 @@ import java.util.Objects;
  * {@code ttio.exporters.cram.CramWriter},
  * Objective-C {@code TTIOCramWriter}.</p>
  *
- * @since 0.13 (M88)
+ * (M88)
  */
 public class CramWriter extends BamWriter {
 

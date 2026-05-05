@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Behavioural tests for SqliteProvider.
  * Mirrors the Python test_sqlite_provider.py test suite (24 tests).
  *
- * @since 0.6
+ *
  */
 class SqliteProviderTest {
 

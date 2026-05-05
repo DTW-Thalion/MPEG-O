@@ -42,7 +42,7 @@ import java.util.List;
  *
  * <p>Usage: {@code mvn exec:java -Dexec.mainClass=global.thalion.ttio.tools.TtioVerify -Dexec.args="path/to.tio"}</p>
  *
- * @since 0.9
+ *
  */
 public final class TtioVerify {
 

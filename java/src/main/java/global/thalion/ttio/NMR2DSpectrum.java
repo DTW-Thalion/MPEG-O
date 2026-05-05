@@ -17,7 +17,7 @@ import java.util.Map;
  * {@code TTIONMR2DSpectrum}, Python
  * {@code ttio.nmr_2d.NMR2DSpectrum}.</p>
  *
- * @since 0.6
+ *
  */
 public class NMR2DSpectrum extends Spectrum {
     private final double[] intensityMatrix;

@@ -21,7 +21,7 @@ import java.util.List;
  * {@code TTIOProvenanceable}, Python
  * {@code ttio.protocols.Provenanceable}.</p>
  *
- * @since 0.6
+ *
  */
 public interface Provenanceable {
 

@@ -1,5 +1,5 @@
 /*
- * TTI-O Java Implementation — v0.10 M68.5 (parity backfill).
+ * TTI-O Java Implementation5 (parity backfill).
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.transport;

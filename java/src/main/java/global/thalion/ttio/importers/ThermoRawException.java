@@ -13,7 +13,7 @@ package global.thalion.ttio.importers;
  * <p>Corresponds to ObjC error code {@code TTIOThermoRawErrorConvert}
  * and Python {@code ThermoRawError}.</p>
  *
- * @since 0.7
+ *
  */
 public final class ThermoRawException extends TtioReaderException {
     private static final long serialVersionUID = 1L;

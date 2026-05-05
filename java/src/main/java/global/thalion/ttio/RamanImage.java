@@ -28,7 +28,7 @@ import java.util.List;
  * {@code TTIORamanImage}, Python
  * {@code ttio.raman_image.RamanImage}.</p>
  *
- * @since 0.11
+ *
  */
 public class RamanImage {
 

@@ -36,7 +36,7 @@ import java.util.TreeMap;
  * element on its own indented line (matches Python
  * {@code json.dumps(sort_keys=True, indent=2)}); trailing newline.</p>
  *
- * @since 0.12 (M87)
+ * (M87)
  */
 public final class BamDump {
 

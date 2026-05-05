@@ -17,7 +17,7 @@ import java.util.Map;
  * {@code TTIOUVVisSpectrum}, Python
  * {@code ttio.uv_vis_spectrum.UVVisSpectrum}.</p>
  *
- * @since 0.11.1
+ *
  */
 public class UVVisSpectrum extends Spectrum {
     private final double pathLengthCm;

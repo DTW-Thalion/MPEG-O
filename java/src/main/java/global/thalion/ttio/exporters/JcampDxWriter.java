@@ -35,7 +35,7 @@ import java.nio.file.Path;
  * Objective-C: {@code TTIOJcampDxWriter} &middot;
  * Python: {@code ttio.exporters.jcamp_dx}</p>
  *
- * @since 0.11
+ *
  */
 public final class JcampDxWriter {
 

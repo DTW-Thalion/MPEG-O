@@ -26,7 +26,7 @@ import java.util.List;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOIRImage}, Python {@code ttio.ir_image.IRImage}.</p>
  *
- * @since 0.11
+ *
  */
 public class IRImage {
 

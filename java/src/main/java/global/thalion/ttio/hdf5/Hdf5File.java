@@ -23,7 +23,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * block readers; writers are exclusive. When the native HDF5 library is
  * not thread-safe, readers are promoted to the write (exclusive) lock.</p>
  *
- * @since 0.5
+ *
  */
 public class Hdf5File implements AutoCloseable {
 

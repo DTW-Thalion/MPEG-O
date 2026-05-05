@@ -77,7 +77,7 @@ public final class TransportWriter implements AutoCloseable {
      *  {@link global.thalion.ttio.protection.EncryptedTransport} so it
      *  can set FLAG_ENCRYPTED / FLAG_ENCRYPTED_HEADER on AUs.
      *
-     *  @since 1.0
+     *
      */
     public void emitRawPacket(PacketType type, int flags, int datasetId,
                                 long auSequence, byte[] payload) throws IOException {
@@ -241,7 +241,7 @@ public final class TransportWriter implements AutoCloseable {
      *  emitted; the caller is responsible for stream framing
      *  (writeStreamHeader / writeEndOfStream).</p>
      *
-     *  @since 0.11 (M89.2)
+     * (M89.2)
      */
     public void writeGenomicRun(int datasetId, String name, GenomicRun run)
             throws IOException {

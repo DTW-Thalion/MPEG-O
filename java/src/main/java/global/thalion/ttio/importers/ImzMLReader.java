@@ -23,7 +23,7 @@ import java.util.HexFormat;
 import java.util.List;
 
 /**
- * imzML + .ibd importer — v0.9 M59.
+ * imzML + .ibd importer
  *
  * <p>imzML is the dominant interchange format for mass-spectrometry
  * imaging. The format is a pair of files:
@@ -53,7 +53,7 @@ import java.util.List;
  * {@code ttio.importers.imzml}, Objective-C
  * {@code TTIOImzMLReader}.</p>
  *
- * @since 0.9
+ *
  */
 public final class ImzMLReader {
 

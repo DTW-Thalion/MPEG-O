@@ -20,7 +20,7 @@ import hdf.hdf5lib.exceptions.HDF5LibraryException;
  * derived from it. All public methods acquire the appropriate lock from
  * the owning file.</p>
  *
- * @since 0.5
+ *
  */
 public class Hdf5Group implements AutoCloseable {
 

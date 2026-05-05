@@ -40,7 +40,7 @@ import java.util.TreeMap;
  *   <li>{@code 2} — open/read failure.</li>
  * </ul>
  *
- * @since 0.7
+ *
  */
 public final class DumpIdentifications {
 

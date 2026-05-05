@@ -37,7 +37,7 @@ import java.util.List;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOMSImage}, Python {@code ttio.ms_image.MSImage}.</p>
  *
- * @since 0.6
+ *
  */
 public class MSImage {
 

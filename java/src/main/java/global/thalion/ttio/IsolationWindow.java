@@ -20,7 +20,7 @@ package global.thalion.ttio;
  * {@code TTIOIsolationWindow}, Python
  * {@code ttio.isolation_window.IsolationWindow}.</p>
  *
- * @since 1.1
+ *
  */
 public record IsolationWindow(double targetMz, double lowerOffset,
                               double upperOffset) {

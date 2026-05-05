@@ -28,7 +28,7 @@ import java.util.*;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOAnonymizer}, Python {@code ttio.anonymization}.</p>
  *
- * @since 0.6
+ *
  */
 public class Anonymizer {
 

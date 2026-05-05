@@ -18,7 +18,7 @@ package global.thalion.ttio;
  * {@code TTIOValueRange}, Python
  * {@code ttio.value_range.ValueRange}.</p>
  *
- * @since 0.6
+ *
  */
 public record ValueRange(double minimum, double maximum) {
 

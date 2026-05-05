@@ -29,7 +29,7 @@ import java.util.List;
  * <p>Usage:
  * {@code java -cp ... global.thalion.ttio.tools.TtioWriteGenomicFixture <out-path>}</p>
  *
- * @since 0.11 M82.4
+ * M82.4
  */
 public final class TtioWriteGenomicFixture {
 

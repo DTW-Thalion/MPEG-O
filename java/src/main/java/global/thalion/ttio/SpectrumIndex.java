@@ -28,7 +28,7 @@ import global.thalion.ttio.providers.StorageGroup;
  * {@code TTIOSpectrumIndex}, Python
  * {@code ttio.acquisition_run.SpectrumIndex}.</p>
  *
- * @since 0.6
+ *
  */
 public class SpectrumIndex {
 

@@ -20,7 +20,7 @@ import java.util.Map;
  * {@code TTIOMassSpectrum}, Python
  * {@code ttio.mass_spectrum.MassSpectrum}.</p>
  *
- * @since 0.6
+ *
  */
 public class MassSpectrum extends Spectrum {
     private final int msLevel;

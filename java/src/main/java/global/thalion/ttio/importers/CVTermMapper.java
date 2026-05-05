@@ -18,7 +18,7 @@ import java.util.Map;
  * Objective-C: {@code TTIOCVTermMapper} &middot;
  * Python: {@code ttio.importers.cv_term_mapper}</p>
  *
- * @since 0.6
+ *
  */
 public final class CVTermMapper {
     private CVTermMapper() {}

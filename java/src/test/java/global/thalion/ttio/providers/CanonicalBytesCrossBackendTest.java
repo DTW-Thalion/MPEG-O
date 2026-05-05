@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * pin that invariant by writing the same logical data through each
  * provider and asserting the byte streams match.</p>
  *
- * @since 0.7
+ *
  */
 class CanonicalBytesCrossBackendTest {
 

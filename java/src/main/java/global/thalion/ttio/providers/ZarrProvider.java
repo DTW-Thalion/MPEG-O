@@ -70,7 +70,7 @@ import java.util.stream.Stream;
  * ttio.providers.zarr.ZarrProvider}, Objective-C {@code
  * TTIOZarrProvider}.</p>
  *
- * @since 0.8
+ *
  * @implNote Zarr v3 format (migrated from v2 in v0.9+).
  */
 public final class ZarrProvider implements StorageProvider {

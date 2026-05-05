@@ -35,7 +35,7 @@ import java.util.zip.Inflater;
  * Objective-C: {@code TTIONmrMLReader} &middot;
  * Python: {@code ttio.importers.nmrml}</p>
  *
- * @since 0.6
+ *
  */
 public final class NmrMLReader {
 

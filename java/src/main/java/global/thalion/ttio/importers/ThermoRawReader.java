@@ -37,7 +37,7 @@ import java.util.stream.Stream;
  * ThermoRawFileParser is a future milestone in ObjC) &middot;
  * Python: {@code ttio.importers.thermo_raw} (M38 shipped)</p>
  *
- * @since 0.6
+ *
  */
 public final class ThermoRawReader {
 

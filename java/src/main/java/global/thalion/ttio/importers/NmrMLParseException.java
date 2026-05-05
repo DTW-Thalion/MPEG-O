@@ -12,7 +12,7 @@ package global.thalion.ttio.importers;
  * {@code TTIONmrMLReaderErrorParseFailed} and Python
  * {@code NmrMLParseError}.</p>
  *
- * @since 0.7
+ *
  */
 public final class NmrMLParseException extends TtioReaderException {
     private static final long serialVersionUID = 1L;

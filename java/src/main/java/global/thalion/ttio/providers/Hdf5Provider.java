@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
  *   <li>Python: {@code ttio.providers.hdf5.Hdf5Provider}</li>
  * </ul>
  *
- * @since 0.6
+ *
  */
 public final class Hdf5Provider implements StorageProvider {
 
@@ -79,7 +79,7 @@ public final class Hdf5Provider implements StorageProvider {
      *  of the underlying HDF5 handle; the caller must keep the
      *  {@code Hdf5Group} alive for as long as the adapter is used.
      *
-     *  @since 0.7 */
+     * */
     public static StorageGroup adapterForGroup(Hdf5Group group) {
         return new Hdf5GroupAdapter(group, /*ownsNative=*/false);
     }
@@ -88,7 +88,7 @@ public final class Hdf5Provider implements StorageProvider {
      *  {@link StorageDataset}. Same non-owning semantics as
      *  {@link #adapterForGroup}.
      *
-     *  @since 0.7 */
+     * */
     public static StorageDataset adapterForDataset(Hdf5Dataset dataset,
                                                      String name) {
         return new Hdf5DatasetAdapter(dataset, name, null, /*ownsNative=*/false);

@@ -21,7 +21,7 @@ import global.thalion.ttio.Enums.SamplingMode;
  * @param unit          Unit label (e.g. {@code "m/z"}).
  * @param valueRange    Numeric bounds, or {@code null} when unknown.
  * @param samplingMode  Whether samples are regularly spaced.
- * @since 0.6
+ *
  */
 public record AxisDescriptor(
     String name,

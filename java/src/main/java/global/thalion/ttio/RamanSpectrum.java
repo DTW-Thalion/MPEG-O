@@ -17,7 +17,7 @@ import java.util.Map;
  * {@code TTIORamanSpectrum}, Python
  * {@code ttio.raman_spectrum.RamanSpectrum}.</p>
  *
- * @since 0.11
+ *
  */
 public class RamanSpectrum extends Spectrum {
     private final double excitationWavelengthNm;

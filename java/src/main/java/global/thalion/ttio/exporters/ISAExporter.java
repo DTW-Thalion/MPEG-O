@@ -23,7 +23,7 @@ import java.util.Map;
  * Objective-C: {@code TTIOISAExporter} &middot;
  * Python: {@code ttio.exporters.isa}</p>
  *
- * @since 0.6
+ *
  */
 public final class ISAExporter {
 

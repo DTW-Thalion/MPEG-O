@@ -29,7 +29,7 @@ import java.util.zip.Deflater;
  * Objective-C: {@code TTIOMzMLWriter} &middot;
  * Python: {@code ttio.exporters.mzml}</p>
  *
- * @since 0.6
+ *
  */
 public final class MzMLWriter {
 

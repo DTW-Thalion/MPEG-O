@@ -27,7 +27,7 @@ package global.thalion.ttio;
  *   <li>Python: {@code ttio._numpress}</li>
  * </ul>
  *
- * @since 0.6
+ *
  */
 public final class NumpressCodec {
 

@@ -21,7 +21,7 @@ import java.io.IOException;
  * {@code TTIOMzMLReaderErrorDomain} (and siblings); Python
  * {@code MzMLParseError(ValueError)} &amp; sibling classes.</p>
  *
- * @since 0.7
+ *
  */
 public class TtioReaderException extends IOException {
     private static final long serialVersionUID = 1L;

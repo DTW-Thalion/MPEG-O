@@ -36,7 +36,7 @@ import javax.crypto.spec.SecretKeySpec;
  * {@code ttio.encryption_per_au}, Objective-C
  * {@code TTIOPerAUEncryption}.
  *
- * @since 1.0
+ *
  */
 public final class PerAUEncryption {
 

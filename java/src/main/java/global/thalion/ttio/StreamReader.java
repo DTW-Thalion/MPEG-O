@@ -15,7 +15,7 @@ import global.thalion.ttio.providers.Hdf5Provider;
  * {@code TTIOStreamReader}, Python
  * {@code ttio.stream_reader.StreamReader}.</p>
  *
- * @since 0.6
+ *
  */
 public final class StreamReader implements AutoCloseable {
 

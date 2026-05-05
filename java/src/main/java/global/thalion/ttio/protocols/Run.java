@@ -33,7 +33,7 @@ import java.util.List;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIORun}, Python {@code ttio.protocols.run.Run}.</p>
  *
- * @since 0.11
+ *
  */
 public interface Run {
 

@@ -20,7 +20,7 @@ import java.util.Map;
  * {@code TTIOChromatogram}, Python
  * {@code ttio.chromatogram.Chromatogram}.</p>
  *
- * @since 0.6
+ *
  */
 public class Chromatogram extends Spectrum {
     private final ChromatogramType type;

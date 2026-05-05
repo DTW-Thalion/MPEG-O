@@ -20,7 +20,7 @@ import java.util.*;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOKeyRotationManager}, Python {@code ttio.key_rotation}.</p>
  *
- * @since 0.6
+ *
  */
 public class KeyRotationManager {
 

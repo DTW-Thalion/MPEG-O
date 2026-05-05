@@ -19,7 +19,7 @@ package global.thalion.ttio;
  * @param abundance           Measured abundance.
  * @param normalizationMethod Normalization method; may be {@code null}
  *                            or empty when unnormalized.
- * @since 0.6
+ *
  */
 public record Quantification(
     String chemicalEntity,

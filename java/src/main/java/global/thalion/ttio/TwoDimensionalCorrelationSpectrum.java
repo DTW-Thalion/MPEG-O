@@ -19,7 +19,7 @@ import java.util.Map;
  * {@code TTIOTwoDimensionalCorrelationSpectrum}, Python
  * {@code ttio.two_dimensional_correlation_spectrum.TwoDimensionalCorrelationSpectrum}.</p>
  *
- * @since 0.11.1
+ *
  */
 public class TwoDimensionalCorrelationSpectrum extends Spectrum {
     private final double[] synchronousMatrix;

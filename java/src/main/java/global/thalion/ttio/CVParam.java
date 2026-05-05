@@ -26,7 +26,7 @@ package global.thalion.ttio;
  * @param name        Human-readable label.
  * @param value       Optional free-form value; empty string when none.
  * @param unit        Optional unit accession; {@code null} when none.
- * @since 0.6
+ *
  */
 public record CVParam(
     String ontologyRef,

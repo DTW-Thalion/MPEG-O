@@ -23,14 +23,14 @@ import javax.crypto.spec.SecretKeySpec;
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOSignatureManager}, Python {@code ttio.signatures}.</p>
  *
- * @since 0.6
+ *
  */
 public final class SignatureManager {
 
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final int KEY_BYTES = 32;
     private static final String V2_PREFIX = "v2:";
-    /** Post-quantum signature prefix (ML-DSA-87). @since 0.8 */
+    /** Post-quantum signature prefix (ML-DSA-87). */
     public static final String V3_PREFIX = "v3:";
 
     private SignatureManager() {}
@@ -85,7 +85,7 @@ public final class SignatureManager {
      *
      * @throws CipherSuite.UnsupportedAlgorithmException for unknown
      *         algorithm names.
-     * @since 0.8
+     *
      */
     public static String sign(byte[] data, byte[] key, String algorithm) {
         if ("hmac-sha256".equals(algorithm)) {
@@ -113,7 +113,7 @@ public final class SignatureManager {
      * @param signature  stored signature string (with prefix)
      * @param key        HMAC key (32 bytes) or ML-DSA-87 public key
      *                   (2592 bytes), depending on {@code algorithm}.
-     * @since 0.8
+     *
      */
     public static boolean verify(byte[] data, String signature, byte[] key,
                                   String algorithm) {
@@ -277,7 +277,7 @@ public final class SignatureManager {
      *  {@code ttio.signatures.sign_genomic_run}, Objective-C
      *  {@code TTIOSignatureManager#signGenomicRun:}.
      *
-     *  @since 1.0 M90.2
+     * M90.2
      */
     public static Map<String, String> signGenomicRun(
             StorageGroup runGroup, byte[] key, String algorithm) {
@@ -328,7 +328,7 @@ public final class SignatureManager {
      *  — that's intentional, since a partial-signature run is not a
      *  fully-signed run. Datasets that don't exist on disk are skipped.
      *
-     *  @since 1.0 M90.2
+     * M90.2
      */
     public static boolean verifyGenomicRun(
             StorageGroup runGroup, byte[] key, String algorithm) {

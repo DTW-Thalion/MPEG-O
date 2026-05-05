@@ -1,5 +1,5 @@
 /*
- * TTI-O Java Implementation - v0.10 M68.5 + v0.11 M89.3.
+ * TTI-O Java Implementation5 + v0.11 M89.3.
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.transport;

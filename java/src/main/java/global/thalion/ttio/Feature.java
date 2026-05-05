@@ -38,7 +38,7 @@ import java.util.Map;
  * @param evidenceRefs           References that support this feature
  *                               (e.g. SME_ID values for metabolomics,
  *                               spectra_ref entries for proteomics).
- * @since 0.12
+ *
  */
 public record Feature(
     String featureId,

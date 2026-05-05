@@ -43,7 +43,7 @@ import org.bouncycastle.pqc.crypto.mlkem.MLKEMExtractor;
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.pqc}, Objective-C {@code TTIOCipherSuite+PQC} category.</p>
  *
- * @since 0.8
+ *
  */
 public final class PostQuantumCrypto {
 
