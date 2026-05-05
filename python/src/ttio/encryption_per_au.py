@@ -731,7 +731,7 @@ def encrypt_per_au_by_region(
             chromosomes = _read_chromosomes(g_idx)
 
             # Signal-channel encryption runs in two cases:
-            #   (a) caller supplied chromosome keys (M90.4 path)
+            #   (a) caller supplied chromosome keys (path)
             #   (b) caller supplied an empty key_map (M90.4 no-op
             #       behaviour: file gets opt_per_au_encryption with
             #       all-clear segments)

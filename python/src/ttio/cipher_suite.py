@@ -1,16 +1,16 @@
-"""Cipher-suite catalog and algorithm-dispatched parameter helpers (v0.7 M48).
+"""Cipher-suite catalog and algorithm-dispatched parameter helpers ().
 
 Pre-v0.7, encryption / signing / key-wrap APIs accepted an implicit
 fixed algorithm (AES-256-GCM for bulk, HMAC-SHA256 for signatures,
 AES-KW-style wrap for KEK). Key sizes and nonce lengths were
 hardcoded module-level constants.
 
-v0.7 M48 generalises the public API with an ``algorithm=`` keyword
+generalises the public API with an ``algorithm=`` keyword
 parameter backed by this catalog. The intent was to shape the
 parameter hole so M49's post-quantum binding is a pure plug-in — no
 API change — once ML-KEM-1024 / ML-DSA-87 are ready.
 
-v0.8 M49 activates the post-quantum entries. ``"ml-kem-1024"`` (FIPS
+activates the post-quantum entries. ``"ml-kem-1024"`` (FIPS
 203) and ``"ml-dsa-87"`` (FIPS 204) transition from
 ``status="reserved"`` to ``status="active"``. Activation requires
 the optional ``[pqc]`` extra (``pip install 'ttio[pqc]'`` pulls in
@@ -87,7 +87,7 @@ _CATALOG: dict[str, _Entry] = {
         nonce_size=0,
         tag_size=0,               # ciphertext length is 1568, handled at the blob layer
         status="active",
-        notes="NIST FIPS 203 ML-KEM-1024. v0.8 M49; requires [pqc] extra "
+        notes="NIST FIPS 203 ML-KEM-1024.; requires [pqc] extra "
               "(liboqs-python + liboqs ≥ 0.14). Java path is Bouncy Castle "
               "(org.bouncycastle:bcprov-jdk18on ≥ 1.79).",
     ),
@@ -109,7 +109,7 @@ _CATALOG: dict[str, _Entry] = {
         nonce_size=0,
         tag_size=4627,            # ML-DSA-87 signature size
         status="active",
-        notes="NIST FIPS 204 ML-DSA-87. v0.8 M49; requires [pqc] extra on "
+        notes="NIST FIPS 204 ML-DSA-87.; requires [pqc] extra on "
               "Python / ObjC (liboqs), Bouncy Castle on Java. Emits v3: "
               "signature-attribute prefix.",
     ),

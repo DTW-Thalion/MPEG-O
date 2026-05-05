@@ -33,7 +33,7 @@ class Precision(IntEnum):
     Cross-language: ObjC ``TTIOPrecision`` · Java
     ``Enums.Precision``.
 
-    Appendix B Gap 7: ``Precision`` is a pure enum. The HDF5 type
+    : ``Precision`` is a pure enum. The HDF5 type
     mapping (``H5T_NATIVE_DOUBLE`` &c.) lives in
     ``ttio.providers.hdf5`` so non-HDF5 providers (SQLite, Memory,
     future Zarr) can import ``Precision`` without pulling HDF5
@@ -47,9 +47,9 @@ class Precision(IntEnum):
     INT64 = 3
     UINT32 = 4
     COMPLEX128 = 5
-    UINT8 = 6           # v0.11 M79: genomic quality scores + packed bases
+    UINT8 = 6           # genomic quality scores + packed bases
     UINT16 = 7          # v1.2.0 L1 (Task #82): genomic_index/chromosome_ids
-    UINT64 = 9          # v0.11 M82: genomic index offsets (8 reserved for INT8)
+    UINT64 = 9          # genomic index offsets (8 reserved for INT8)
 
     def numpy_dtype(self) -> str:
         """Return the little-endian NumPy dtype string for this precision."""
@@ -77,7 +77,7 @@ class Compression(IntEnum):
     ZLIB = 1
     LZ4 = 2
     NUMPRESS_DELTA = 3
-    # v0.11 M79: genomic codecs (clean-room implementations land in M75+).
+    # genomic codecs (clean-room implementations land in M75+).
     RANS_ORDER0 = 4
     RANS_ORDER1 = 5
     BASE_PACK = 6
@@ -85,9 +85,9 @@ class Compression(IntEnum):
     # Slots 8 (NAME_TOKENIZED v1) and 9 (REF_DIFF v1) removed in the
     # v1.0 reset (Phase 2d). v2 successors live at slots 14/15.
     # Slot 10 was reserved for an experimental codec that never shipped.
-    # v1.2 M95: delta + zigzag + varint + rANS order-0 — sorted integer channels.
+    # delta + zigzag + varint + rANS order-0 — sorted integer channels.
     DELTA_RANS_ORDER0 = 11
-    # v1.2 M94.Z: CRAM-mimic rANS-Nx16 quality codec. Static-per-block
+    #.Z: CRAM-mimic rANS-Nx16 quality codec. Static-per-block
     # frequency tables, L=2^15, B=16, N=4, bit-pack 15-bit context.
     # Sole quality codec for the qualities channel; wire magic ``M94Z``.
     FQZCOMP_NX16_Z = 12
@@ -157,8 +157,8 @@ class AcquisitionMode(IntEnum):
     NMR_1D = 4
     NMR_2D = 5
     IMAGING = 6
-    GENOMIC_WGS = 7   # v0.11 M79: whole-genome sequencing
-    GENOMIC_WES = 8   # v0.11 M79: whole-exome sequencing
+    GENOMIC_WGS = 7   # whole-genome sequencing
+    GENOMIC_WES = 8   # whole-exome sequencing
 
 
 class IRMode(IntEnum):

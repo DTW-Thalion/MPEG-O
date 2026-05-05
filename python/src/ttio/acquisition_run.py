@@ -33,7 +33,7 @@ from .value_range import ValueRange
 
 
 def _wrap_hdf5_group(obj: object) -> StorageGroup:
-    """v0.7 M44 helper: adapt an h5py.Group (legacy caller) to a
+    """helper: adapt an h5py.Group (legacy caller) to a
     :class:`StorageGroup` view. Pass-through for StorageGroup inputs."""
     if isinstance(obj, StorageGroup):
         return obj
@@ -96,18 +96,18 @@ class SpectrumIndex:
     base_peak_intensities : numpy.ndarray
         Base-peak intensity for each spectrum.
     activation_methods : numpy.ndarray | None
-        (M74, optional) Activation method int value per spectrum; see
+        (optional) Activation method int value per spectrum; see
         :class:`~ttio.enums.ActivationMethod`. Present only when the
         file was written with the ``opt_ms2_activation_detail`` feature
         flag; absent columns indicate MS1-only or legacy files.
     isolation_target_mzs : numpy.ndarray | None
-        (M74, optional) Target m/z of the isolation window per spectrum.
+        (optional) Target m/z of the isolation window per spectrum.
         Zero when no isolation applied.
     isolation_lower_offsets : numpy.ndarray | None
-        (M74, optional) Lower offset of the isolation window per
+        (optional) Lower offset of the isolation window per
         spectrum. Zero when no isolation applied.
     isolation_upper_offsets : numpy.ndarray | None
-        (M74, optional) Upper offset of the isolation window per
+        (optional) Upper offset of the isolation window per
         spectrum. Zero when no isolation applied.
 
     Notes
@@ -217,7 +217,7 @@ class SpectrumIndex:
     def read(cls, idx_group: StorageGroup | "h5py.Group") -> "SpectrumIndex":
         """Load all index columns.
 
-        Accepts either a :class:`StorageGroup` (v0.7 M44 protocol path)
+        Accepts either a :class:`StorageGroup` (protocol path)
         or an :class:`h5py.Group` (legacy). The h5py path is retained
         via ``_native_h5py`` so existing callers that dereferenced
         child groups with ``group["spectrum_index"]`` continue to work.
@@ -304,7 +304,7 @@ class AcquisitionRun:
     """
 
     name: str
-    group: StorageGroup  # v0.7 M44: was h5py.Group; wrap legacy callers via _wrap_hdf5_group.
+    group: StorageGroup  # was h5py.Group; wrap legacy callers via _wrap_hdf5_group.
     spectrum_class: str
     acquisition_mode: AcquisitionMode
     index: SpectrumIndex
@@ -312,14 +312,14 @@ class AcquisitionRun:
     instrument_config: InstrumentConfig
     nucleus_type: str = ""
     provenance_json: str = ""
-    # v0.11 M79: top-level modality string. Read-side only — write-side
+    # top-level modality string. Read-side only — write-side
     # support arrives with GenomicRun in M74. Defaults to mass-spec for
     # backward-compat with files written by v0.10 and earlier (which
     # didn't carry the attribute at all).
     modality: str = "mass_spectrometry"
     # M24: chromatogram traces. Empty list on v0.3 files (group absent).
     chromatograms: list[Chromatogram] = field(default_factory=list)
-    # v0.7 M44: signal cache holds protocol datasets, not h5py.Dataset.
+    # signal cache holds protocol datasets, not h5py.Dataset.
     _signal_cache: dict[str, StorageDataset] = field(default_factory=dict, repr=False)
     # M21: eagerly decoded Numpress-delta channels, keyed by channel
     # name. When present, :meth:`_materialize_spectrum` slices from
@@ -344,11 +344,11 @@ class AcquisitionRun:
 
     @classmethod
     def open(cls, group: StorageGroup | "h5py.Group", name: str) -> "AcquisitionRun":
-        """Open a run from a storage-provider group (v0.7 M44, v0.9 M64.5).
+        """Open a run from a storage-provider group .
 
         Accepts either a :class:`StorageGroup` (protocol path) or an
         :class:`h5py.Group` (legacy path — wrapped transparently via
-        :class:`~ttio.providers.hdf5._Group`). v0.9 M64.5 made every
+        :class:`~ttio.providers.hdf5._Group`). made every
         cold-path read route through the StorageGroup protocol so
         Memory / SQLite / Zarr backends work without touching h5py.
         """
@@ -403,7 +403,7 @@ class AcquisitionRun:
 
         return cls(
             name=name,
-            group=sgroup,  # v0.7 M44: StorageGroup protocol value.
+            group=sgroup,  # StorageGroup protocol value.
             spectrum_class=spectrum_class,
             acquisition_mode=AcquisitionMode(mode_raw),
             index=idx,
@@ -432,7 +432,7 @@ class AcquisitionRun:
         falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2
         files (no per-run provenance of any kind) return an empty list.
         """
-        # v0.7 M44: cold-path — cast to native h5py handle for the
+        # cold-path — cast to native h5py handle for the
         # compound-provenance reader, which uses the h5py typed-read
         # API directly. Protocol-native compound reads are a v0.8
         # follow-up.
@@ -557,7 +557,7 @@ class AcquisitionRun:
                 "context; call via a run obtained from SpectralDataset.open"
             )
         from .encryption import encrypt_intensity_channel_in_group
-        # v0.9 M64.5 phase B: the in-place encrypter now accepts either
+        # phase B: the in-place encrypter now accepts either
         # h5py.Group or StorageGroup, so route through the protocol —
         # works on Memory / SQLite / Zarr backends without
         # _native_h5py.
@@ -586,7 +586,7 @@ class AcquisitionRun:
                 "context; call via a run obtained from SpectralDataset.open"
             )
         from .encryption import read_encrypted_channel
-        # v0.9 M64.5 phase B: read_encrypted_channel accepts both h5py
+        # phase B: read_encrypted_channel accepts both h5py
         # and StorageGroup; no native unwrap needed.
         sig_group = self.group.open_group("signal_channels")
         arr = read_encrypted_channel(sig_group, "intensity", key, dtype="<f8")
@@ -603,7 +603,7 @@ class AcquisitionRun:
 
     def _signal_dataset(self, channel: str) -> StorageDataset:
         """Resolve ``channel`` to its ``<channel>_values`` StorageDataset
-        (v0.7 M44). Cached across calls; missing channels raise
+        (). Cached across calls; missing channels raise
         :class:`KeyError` so :meth:`_materialize_spectrum` can skip."""
         ds = self._signal_cache.get(channel)
         if ds is not None:
@@ -633,7 +633,7 @@ class AcquisitionRun:
                     ds = self._signal_dataset(c)
                 except KeyError:
                     continue
-                # v0.7 M44: read through the storage protocol, not
+                # read through the storage protocol, not
                 # h5py slicing. Works uniformly across Hdf5/Memory/
                 # Sqlite providers — the cross-backend byte-identity
                 # tests in M43 guarantee equivalence.
@@ -726,7 +726,7 @@ def _read_chromatograms(run_group) -> list[Chromatogram]:
     """Read ``<run>/chromatograms/`` into a list of :class:`Chromatogram`.
 
     Accepts either an ``h5py.Group`` or a :class:`StorageGroup`
-    (v0.9 M64.5). Returns an empty list when the group is absent
+    (). Returns an empty list when the group is absent
     (v0.3 backward compat).
     """
     sgroup = _wrap_hdf5_group(run_group)

@@ -79,7 +79,7 @@ class SpectralDataset:
     """
 
     path: Path
-    # ``file`` is the legacy h5py handle. v0.9 M64.5: when the dataset
+    # ``file`` is the legacy h5py handle.: when the dataset
     # was opened via a non-HDF5 provider (memory/sqlite/zarr) this is
     # ``None`` and call sites must use :attr:`provider` instead. New
     # code paths route through the StorageGroup protocol.
@@ -159,7 +159,7 @@ class SpectralDataset:
                 fileobj.close()
                 raise
 
-        # v0.9 M64.5: URL scheme detection routes non-HDF5 providers
+        # URL scheme detection routes non-HDF5 providers
         # (``memory://...``, ``sqlite://...``, ``dir://...``) through
         # the storage protocol. Bare paths still open via HDF5 for
         # byte-parity with pre-M64.5 files.
@@ -680,7 +680,7 @@ class SpectralDataset:
         Parameters
         ----------
         provider
-            v0.9 M64.5: which storage backend to write through. The
+            : which storage backend to write through. The
             string ``"hdf5"`` (default) keeps byte-for-byte parity with
             pre-M64.5 files. Other values dispatch through
             :func:`open_provider` — ``"memory"``, ``"sqlite"``,
@@ -838,7 +838,7 @@ class WrittenRun:
     precursor_mzs: np.ndarray
     precursor_charges: np.ndarray
     base_peak_intensities: np.ndarray
-    # v0.11 M74: optional parallel per-spectrum arrays. Writer emits the
+    # optional parallel per-spectrum arrays. Writer emits the
     # four datasets only when all four are non-None (schema-gating per
     # the opt_ms2_activation_detail feature flag).
     activation_methods: np.ndarray | None = None
@@ -847,13 +847,13 @@ class WrittenRun:
     isolation_upper_offsets: np.ndarray | None = None
     nucleus_type: str = ""
     provenance_records: list[ProvenanceRecord] = field(default_factory=list)
-    # v0.3 M21: signal compression codec. Valid values are the strings
+    # signal compression codec. Valid values are the strings
     # recognised by :func:`ttio._hdf5_io.write_signal_channel` plus
     # the TTIO-level ``"numpress_delta"`` codec, which transforms the
     # float64 buffer into an int64 first-difference array and stores
     # the fixed-point scaling factor on the signal_channels group.
     signal_compression: str = "gzip"
-    # v0.4 M24: optional chromatogram traces for this run. Empty list
+    # optional chromatogram traces for this run. Empty list
     # results in no /chromatograms/ group, preserving byte parity with
     # v0.3 files written by callers that don't supply chromatograms.
     chromatograms: list = field(default_factory=list)  # list[Chromatogram]
@@ -1290,7 +1290,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # the file. The override surface covers the four byte/string
     # channels (sequences, qualities, read_names, cigars). Anything
     # outside the per-channel whitelist is a caller error and must
-    # surface immediately (Binding Decision §88).
+    # surface immediately ().
     from .enums import Compression as _Compression
     _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL = {
         "sequences": frozenset({
@@ -1345,7 +1345,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 "inline_v2 codec encodes all three mate fields into "
                 "a single blob with no per-field codec choice."
             )
-        # M86 Phase F Binding Decision §126 / Gotcha §143: the bare
+        # M86 Phase F / Gotcha §143: the bare
         # "mate_info" key is reserved and rejected with a message
         # pointing at the three per-field names. Without the
         # explicit reject, the bare key would fall through to the
@@ -1376,7 +1376,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             ) from exc
         allowed = _ALLOWED_OVERRIDE_CODECS_BY_CHANNEL[ch_name]
         if codec_enum not in allowed:
-            # Phase D Binding Decision §110: explicit message for the
+            # Phase D : explicit message for the
             # (sequences, QUALITY_BINNED) category error — naming the
             # codec, the channel, and the lossy-quantisation rationale.
             if (
@@ -1670,7 +1670,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # v1.0 reset (Phase 2c) — mate_info is always written via the
     # inline_v2 codec (codec id 13) under
     # signal_channels/mate_info/inline_v2. The v1 per-field subgroup
-    # writer (M86 Phase F) and the M82 compound fallback were both
+    # writer (Phase F) and the M82 compound fallback were both
     # removed; per-field mate_info_* overrides are rejected earlier
     # in this function.
     #

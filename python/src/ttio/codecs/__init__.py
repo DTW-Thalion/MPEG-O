@@ -6,7 +6,7 @@ literature. No third-party codec library source code is consulted.
 Codecs:
     rans              — rANS order-0 and order-1 entropy coding (Duda 2014)
     base_pack         — 2-bit nucleotide packing + sidecar mask (M84)
-    quality           — Phred score quantisation (M85 Phase A)
+    quality           — Phred score quantisation (Phase A)
     fqzcomp_nx16_z    — CRAM 3.1 fqzcomp_qual port (v1.5 / V4)
     mate_info_v2      — CRAM-style inline mate-pair encoding (v1.7, codec id 13)
     ref_diff_v2       — CRAM-style bit-packed sequence diff (v1.8, codec id 14)

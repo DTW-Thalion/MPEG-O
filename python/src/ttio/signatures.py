@@ -36,8 +36,7 @@ import numpy as np
 SIGNATURE_ATTR = "ttio_signature"
 PROVENANCE_SIGNATURE_ATTR = "provenance_signature"
 SIGNATURE_V2_PREFIX = "v2:"
-SIGNATURE_V3_PREFIX = "v3:"  # ML-DSA-87, v0.8 M49
-
+SIGNATURE_V3_PREFIX = "v3:"  # ML-DSA-87,
 
 def hmac_sha256(data: bytes, key: bytes) -> bytes:
     """Return the raw 32-byte HMAC-SHA256 MAC."""
@@ -69,7 +68,7 @@ def _dataset_native_bytes(dataset: h5py.Dataset) -> bytes:
 def _dataset_canonical_bytes(dataset: h5py.Dataset) -> bytes:
     """Return the canonical little-endian byte stream for ``dataset`` (v2).
 
-    v0.7 M43: this helper now delegates to the storage-provider
+    : this helper now delegates to the storage-provider
     protocol's :meth:`StorageDataset.read_canonical_bytes`, so the byte
     stream is guaranteed bit-identical across HDF5, Memory, and SQLite
     backends — a file signed through any provider verifies through any
@@ -90,17 +89,17 @@ def sign_dataset(
 
     For ``algorithm="hmac-sha256"`` (default) ``key`` is a shared secret
     and the output is ``"v2:" + base64(hmac)``. For
-    ``algorithm="ml-dsa-87"`` (v0.8 M49) ``key`` is the 4896-byte
+    ``algorithm="ml-dsa-87"`` () ``key`` is the 4896-byte
     ML-DSA-87 signing private key and the output is
     ``"v3:" + base64(signature)``. Use :func:`verify_dataset` to
     validate; it dispatches on the stored prefix.
 
-    v0.9 M64.5 phase B: ``dataset`` may be either an ``h5py.Dataset``
+    phase B: ``dataset`` may be either an ``h5py.Dataset``
     (legacy fast path) or a :class:`StorageDataset` from any provider.
     Non-h5py inputs delegate to :func:`sign_storage_dataset` so the
     same signature ends up on Memory / SQLite / Zarr backends.
 
-    v0.8 M49: ML-DSA-87 requires the ``[pqc]`` optional extra (Python /
+    : ML-DSA-87 requires the ``[pqc]`` optional extra (Python /
     ObjC backend is ``liboqs``; Java uses Bouncy Castle — see
     :file:`docs/pqc.md`).
     """
@@ -139,7 +138,7 @@ def verify_dataset(
     timing-safe comparison for HMAC; ML-DSA verification itself runs
     in constant time via liboqs.
 
-    v0.9 M64.5 phase B: ``dataset`` may be either an ``h5py.Dataset``
+    phase B: ``dataset`` may be either an ``h5py.Dataset``
     or a :class:`StorageDataset`; non-h5py inputs delegate to
     :func:`verify_storage_dataset`.
 
@@ -299,7 +298,7 @@ def verify_genomic_run(
     return True
 
 
-# ── Provider-agnostic sign / verify (v0.8 M54.1) ─────────────────────────
+# ── Provider-agnostic sign / verify () ─────────────────────────
 
 
 def sign_storage_dataset(
@@ -320,7 +319,7 @@ def sign_storage_dataset(
     must support ``set_attribute("ttio_signature", str)`` — every
     shipping provider does.
 
-    @since 0.8 (v0.8 M54.1)
+    @since 0.8 ()
     """
     from . import cipher_suite
     canonical = dataset.read_canonical_bytes()
@@ -355,7 +354,7 @@ def verify_storage_dataset(
     :class:`~ttio.cipher_suite.UnsupportedAlgorithmError` so silent
     acceptance of a wrong-scheme file is impossible.
 
-    @since 0.8 (v0.8 M54.1)
+    @since 0.8 ()
     """
     from . import cipher_suite
     if not dataset.has_attribute(SIGNATURE_ATTR):

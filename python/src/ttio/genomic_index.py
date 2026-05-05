@@ -93,7 +93,7 @@ class GenomicIndex:
 
     Cross-language equivalents
     --------------------------
-    Objective-C: ``TTIOGenomicIndex`` (M82.2 — to be implemented) ·
+    Objective-C: ``TTIOGenomicIndex`` (— to be implemented) ·
     Java: ``global.thalion.ttio.genomics.GenomicIndex`` (M82.3 — to
     be implemented).
     """

@@ -1,4 +1,4 @@
-"""Milestone 28 — Spectral anonymization.
+"""Spectral anonymization.
 
 Applies caller-selected policies to a :class:`SpectralDataset` and
 writes a **new** ``.tio`` file. The original is never modified.
@@ -111,7 +111,7 @@ def anonymize(
     """Apply ``policy`` to ``source`` and write a new ``.tio`` to ``output_path``.
 
     The source dataset must be open for reading. The original is not
-    modified. v0.9 M64.5 phase B: the optional ``provider`` kwarg is
+    modified. phase B: the optional ``provider`` kwarg is
     threaded through to :meth:`SpectralDataset.write_minimal` so the
     anonymized output can land on any registered backend
     (``"hdf5"`` / ``"memory"`` / ``"sqlite"`` / ``"zarr"``).

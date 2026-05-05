@@ -1,4 +1,4 @@
-"""Milestone 25 — envelope encryption + key rotation.
+"""envelope encryption + key rotation.
 
 Mirrors the Objective-C ``TTIOKeyRotationManager``. The wrapping
 primitive is AES-256-GCM (matching :mod:`ttio.encryption`). A DEK
@@ -111,7 +111,7 @@ def _root_group(target: Any):
     """Return a StorageGroup for the rotation target.
 
     Accepts: ``h5py.File`` (legacy), :class:`StorageProvider`,
-    :class:`SpectralDataset` (uses its provider). v0.9 M64.5 phase C.
+    :class:`SpectralDataset` (uses its provider). phase C.
     """
     from .providers.base import StorageGroup, StorageProvider
     from .providers.hdf5 import _Group as _Hdf5Group
@@ -258,7 +258,7 @@ def _unpack_blob(raw: bytes) -> SealedBlob:
     return _unpack_aes_gcm_blob(raw)
 
 
-# ML-KEM-1024 envelope blob layout (v0.8 M49). Inside the v1.2 frame:
+# ML-KEM-1024 envelope blob layout (). Inside the v1.2 frame:
 #
 #   algorithm_id = 0x0001
 #   metadata     = kem_ct(1568) || aes_iv(12) || aes_tag(16)     = 1596 bytes
@@ -331,7 +331,7 @@ def _wrap_dek(
     (AES-256-GCM); pass ``legacy_v1=True`` to emit the 60-byte v1.1
     layout for cross-version regression fixtures.
 
-    ``algorithm`` selects the wrap primitive. Supported in v0.8 M49:
+    ``algorithm`` selects the wrap primitive. Supported in:
 
     * ``"aes-256-gcm"`` — ``kek`` is a 32-byte symmetric key.
     * ``"ml-kem-1024"`` — ``kek`` is a 1568-byte ML-KEM encapsulation
@@ -491,7 +491,7 @@ def _get_string_attr(ki, name: str, default: str = "") -> str:
 def has_envelope_encryption(f: Any) -> bool:
     """True iff ``/protection/key_info/dek_wrapped`` is present.
 
-    v0.9 M64.5 phase C: ``f`` may be ``h5py.File``, a
+    phase C: ``f`` may be ``h5py.File``, a
     :class:`StorageProvider`, or a :class:`SpectralDataset`.
     """
     ki = _key_info_group(f, create=False)
@@ -582,7 +582,7 @@ def enable_envelope_encryption(
     * ``"aes-256-gcm"`` — ``kek`` is a 32-byte symmetric key.
     * ``"ml-kem-1024"`` — ``kek`` is a 1568-byte ML-KEM *public* key.
       This writes the ``opt_pqc_preview`` feature flag onto the file
-      (v0.8 M49).
+      ().
     """
     _validate_kek_for_wrap(algorithm, kek)
     dek = os.urandom(AES_KEY_LEN)
@@ -638,7 +638,7 @@ def rotate_key(
 
     Signal datasets are not touched, so the cost is O(1) in file size.
 
-    v0.8 M49: ``new_algorithm`` may differ from ``algorithm`` to migrate
+    : ``new_algorithm`` may differ from ``algorithm`` to migrate
     a file from classical AES-256-GCM to ML-KEM-1024 (or back). When
     ``new_algorithm`` is omitted, the wrap stays on the same primitive.
     """

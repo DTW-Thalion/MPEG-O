@@ -28,7 +28,7 @@ from typing import Any, Iterable, Sequence, Union
 import h5py
 import numpy as np
 
-# v0.9 M64.5: the IO helpers below accept either a raw h5py object
+# the IO helpers below accept either a raw h5py object
 # (legacy, byte-parity path) or a StorageGroup / StorageDataset from
 # the provider abstraction. For HDF5-backed providers we unwrap back
 # to h5py so on-disk layout is unchanged. For Memory/SQLite/Zarr the
@@ -609,7 +609,7 @@ def _write_byte_channel_with_codec(
     and written as an unfiltered uint8 dataset whose ``@compression``
     attribute holds the codec id (so the read path can dispatch on it).
 
-    Per Binding Decision §87, codec-compressed datasets carry NO HDF5
+    Per codec-compressed datasets carry NO HDF5
     filter — the codec output is high-entropy and double-compression
     would waste CPU for negative size benefit.
     """
@@ -635,7 +635,7 @@ def _write_byte_channel_with_codec(
     elif codec_override == Compression.QUALITY_BINNED:
         # Phase D: Illumina-8 Phred bin quantisation. Lossy by
         # construction — caller has already been validated to apply
-        # this only to the qualities channel (per Binding Decision §108).
+        # this only to the qualities channel ().
         from .codecs.quality import encode as _enc
         encoded = _enc(raw)
     else:
@@ -689,7 +689,7 @@ def _write_int64_channel(
 
 # M86 Phase B: per-channel integer dtypes for the int↔byte
 # serialisation contract. Determined by **channel name lookup**
-# (Binding Decision §115), not by an on-disk attribute. The reader
+# (), not by an on-disk attribute. The reader
 # uses the same map to interpret the decoded byte buffer back to
 # the channel's natural integer dtype.
 _INTEGER_CHANNEL_DTYPES = {
@@ -721,11 +721,11 @@ def _write_int_channel_with_codec(
     whose ``@compression`` attribute holds the codec id.
 
     The dtype of the original array is determined by **channel name
-    lookup** (Binding Decision §115); the reader recovers the
+    lookup** (); the reader recovers the
     original dtype the same way, so no extra on-disk attribute is
     needed beyond ``@compression``.
 
-    Per Binding Decision §87, codec-compressed datasets carry NO
+    Per codec-compressed datasets carry NO
     HDF5 filter — the codec output is high-entropy and the HDF5
     filter would waste CPU for negative size benefit.
     """
