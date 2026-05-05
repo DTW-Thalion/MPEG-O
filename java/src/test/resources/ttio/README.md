@@ -1,4 +1,4 @@
-# Reference `.tio` fixtures (v0.2.0)
+# Reference `.tio` fixtures (v1.0.0)
 
 Deterministic reference files produced by `objc/Tools/MakeFixtures`.
 Third-party reader implementations (Python, Rust, Go, …) can smoke-
@@ -44,7 +44,7 @@ verification — it is public.
 
 All fixtures satisfy:
 
-- Root `@ttio_format_version == "1.1"`
+- Root `@ttio_format_version == "1.0"`
 - Root `@ttio_features` is a JSON array of strings including
   `base_v1`, `compound_identifications`, `compound_quantifications`,
   `compound_provenance`, `opt_compound_headers`,

@@ -26,7 +26,7 @@ from ttio.codecs import ref_diff_v2 as rdv2
 
 REPO = Path("/home/toddw/TTI-O")
 NATIVE_LIB_DIR = REPO / "native" / "_build"
-JAVA_JAR = REPO / "java" / "target" / "ttio-1.2.0.jar"
+JAVA_JAR = REPO / "java" / "target" / "ttio-1.0.0.jar"
 OBJC_CLI = REPO / "objc" / "Tools" / "obj" / "TtioRefDiffV2Cli"
 REFERENCE_FASTA = REPO / "data" / "genomic" / "reference" / "hs37.chr22.fa"
 

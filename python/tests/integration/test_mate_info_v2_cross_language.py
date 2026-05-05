@@ -26,7 +26,7 @@ from ttio.codecs import mate_info_v2 as miv2
 
 REPO = Path("/home/toddw/TTI-O")
 NATIVE_LIB_DIR = REPO / "native" / "_build"
-JAVA_JAR = REPO / "java" / "target" / "ttio-1.2.0.jar"
+JAVA_JAR = REPO / "java" / "target" / "ttio-1.0.0.jar"
 OBJC_CLI = REPO / "objc" / "Tools" / "obj" / "TtioMateInfoV2Cli"
 
 CORPORA = [

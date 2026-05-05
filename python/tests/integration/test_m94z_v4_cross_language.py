@@ -32,7 +32,7 @@ from ttio.importers.bam import BamReader
 
 REPO = Path("/home/toddw/TTI-O")
 NATIVE_LIB_DIR = REPO / "native" / "_build"
-JAVA_JAR = REPO / "java" / "target" / "ttio-1.2.0.jar"
+JAVA_JAR = REPO / "java" / "target" / "ttio-1.0.0.jar"
 OBJC_CLI = REPO / "objc" / "Tools" / "obj" / "TtioM94zV4Cli"
 OBJC_LIBS = REPO / "objc" / "Source" / "obj"
 
