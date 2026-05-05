@@ -70,6 +70,23 @@ class ImportResult:
     quantifications: list[Quantification] = field(default_factory=list)
     provenance: list[ProvenanceRecord] = field(default_factory=list)
     source_file: str = ""
+    # nmrML acquisition-parameter fields. Populated by the nmrML
+    # reader when present in the source file; zero / empty when the
+    # file does not declare them. Cross-language convention: these
+    # belong on the import result rather than on each ImportedSpectrum
+    # because they are run-level metadata, not per-spectrum.
+    spectrometer_frequency_mhz: float = 0.0
+    number_of_scans: int = 0
+    # nmrML free induction decay arrays. When the source file carries
+    # ``<fidData byteFormat="complex128">`` the reader decodes the
+    # interleaved real / imaginary float64 stream and exposes the two
+    # halves here. Zero-length arrays when no FID is present.
+    fid_real: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype=np.float64)
+    )
+    fid_imag: np.ndarray = field(
+        default_factory=lambda: np.zeros(0, dtype=np.float64)
+    )
 
     def __iter__(self) -> Iterator[ImportedSpectrum]:
         yield from self.ms_spectra
