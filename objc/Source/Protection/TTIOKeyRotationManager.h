@@ -6,8 +6,6 @@
 @class TTIOHDF5File;
 
 /**
- * <heading>TTIOKeyRotationManager</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em>
  * Protection/TTIOKeyRotationManager.h</p>

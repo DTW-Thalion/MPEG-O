@@ -20,8 +20,6 @@
 @protocol TTIOStorageProvider;
 
 /**
- * <heading>TTIOSpectralDataset</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> TTIOEncryptable</p>
  * <p><em>Declared In:</em> Dataset/TTIOSpectralDataset.h</p>

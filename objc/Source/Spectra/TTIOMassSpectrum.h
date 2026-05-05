@@ -9,8 +9,6 @@
 @class TTIOSignalArray;
 
 /**
- * <heading>TTIOMassSpectrum</heading>
- *
  * <p><em>Inherits From:</em> TTIOSpectrum : NSObject</p>
  * <p><em>Declared In:</em> Spectra/TTIOMassSpectrum.h</p>
  *

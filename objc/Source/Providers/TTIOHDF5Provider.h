@@ -12,15 +12,13 @@
 @class TTIOCompoundField;
 
 /**
- * <heading>TTIOHDF5Provider</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> TTIOStorageProvider, NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOHDF5Provider.h</p>
  *
  * <p>HDF5 storage provider. Adapter over the existing
  * <code>TTIOHDF5File</code> / <code>TTIOHDF5Group</code> /
- * <code>TTIOHDF5Dataset</code> layer &mdash; no behavioural change.
+ * <code>TTIOHDF5Dataset</code> layer &#8212; no behavioural change.
  * Registers for both <code>file://</code> and bare-path URLs via
  * <code>+load</code>.</p>
  *

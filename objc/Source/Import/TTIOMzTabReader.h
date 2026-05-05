@@ -15,8 +15,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOMzTabImport</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOMzTabReader.h</p>
@@ -27,9 +25,9 @@ NS_ASSUME_NONNULL_BEGIN
  * line:</p>
  *
  * <ul>
- *  <li><code>"1.0"</code> &rarr; proteomics dialect (PSM/PRT
+ *  <li><code>"1.0"</code> &#8594; proteomics dialect (PSM/PRT
  *      sections).</li>
- *  <li><code>"2.0.0-M"</code> &rarr; metabolomics dialect (SML
+ *  <li><code>"2.0.0-M"</code> &#8594; metabolomics dialect (SML
  *      section).</li>
  * </ul>
  */
@@ -53,8 +51,6 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /**
- * <heading>TTIOMzTabReader</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOMzTabReader.h</p>
@@ -77,7 +73,7 @@ NS_ASSUME_NONNULL_BEGIN
  *      spectrum reference (<code>ms_run[N]:scan=K</code>), best
  *      search-engine score, search engine name + PSM_ID as evidence
  *      chain.</li>
- *  <li>PRT rows: protein abundance per assay column &rarr;
+ *  <li>PRT rows: protein abundance per assay column &#8594;
  *      quantifications.</li>
  *  <li>SML rows: metabolite database identifier + abundance per
  *      study-variable column.</li>

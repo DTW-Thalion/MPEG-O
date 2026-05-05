@@ -11,8 +11,6 @@
 @class TTIOCompoundField;
 
 /**
- * <heading>TTIOCompoundIO</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Dataset/TTIOCompoundIO.h</p>
  *

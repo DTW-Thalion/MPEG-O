@@ -13,8 +13,6 @@
 @class TTIOSpectralDataset;
 
 /**
- * <heading>TTIOISAExporter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOISAExporter.h</p>
@@ -25,29 +23,29 @@
  * emitted:</p>
  *
  * <ul>
- *  <li><code>i_investigation.txt</code> &mdash; one row per
+ *  <li><code>i_investigation.txt</code> &#8212; one row per
  *      Investigation metadata field.</li>
- *  <li><code>s_study.txt</code> &mdash; one row per sample (=
+ *  <li><code>s_study.txt</code> &#8212; one row per sample (=
  *      acquisition run).</li>
- *  <li><code>a_assay_ms.txt</code> &mdash; one row per assay (=
+ *  <li><code>a_assay_ms.txt</code> &#8212; one row per assay (=
  *      acquisition run).</li>
- *  <li><code>investigation.json</code> &mdash; ISA-JSON (single file
+ *  <li><code>investigation.json</code> &#8212; ISA-JSON (single file
  *      per investigation).</li>
  * </ul>
  *
  * <p><strong>Mapping:</strong></p>
  * <ul>
- *  <li><code>dataset.title</code> &rarr; Investigation Title /
+ *  <li><code>dataset.title</code> &#8594; Investigation Title /
  *      Study Title.</li>
- *  <li><code>dataset.isaInvestigationId</code> &rarr; Investigation
+ *  <li><code>dataset.isaInvestigationId</code> &#8594; Investigation
  *      Identifier.</li>
- *  <li>Each <code>TTIOAcquisitionRun</code> &rarr; one Study sample
+ *  <li>Each <code>TTIOAcquisitionRun</code> &#8594; one Study sample
  *      + one Assay row.</li>
- *  <li><code>InstrumentConfig</code> &rarr; Assay technology
+ *  <li><code>InstrumentConfig</code> &#8594; Assay technology
  *      platform / model.</li>
- *  <li>Provenance chain &rarr; Protocol REF / Parameter Value
+ *  <li>Provenance chain &#8594; Protocol REF / Parameter Value
  *      cells.</li>
- *  <li>Chromatograms &rarr; Derived Data File cells (names
+ *  <li>Chromatograms &#8594; Derived Data File cells (names
  *      only).</li>
  * </ul>
  *

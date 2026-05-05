@@ -16,8 +16,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOBamReader</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOBamReader.h</p>
@@ -31,7 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
  * (<code>https://samtools.github.io/hts-specs</code>).</p>
  *
  * <p>The subprocess approach mirrors the Bruker timsTOF importer.
- * <code>samtools</code> is a runtime dependency only &mdash;
+ * <code>samtools</code> is a runtime dependency only &#8212;
  * instantiating <code>TTIOBamReader</code> succeeds on systems
  * without <code>samtools</code>; only
  * <code>-toGenomicRunWithName:region:sampleName:error:</code> requires

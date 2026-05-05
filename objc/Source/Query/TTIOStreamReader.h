@@ -7,8 +7,6 @@
 @class TTIOHDF5File;
 
 /**
- * <heading>TTIOStreamReader</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Query/TTIOStreamReader.h</p>

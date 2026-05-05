@@ -12,8 +12,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOMzTabWriteResult</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOMzTabWriter.h</p>
@@ -34,8 +32,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 
 /**
- * <heading>TTIOMzTabWriter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOMzTabWriter.h</p>

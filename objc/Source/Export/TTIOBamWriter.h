@@ -16,8 +16,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOBamWriter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOBamWriter.h</p>
@@ -27,18 +25,18 @@ NS_ASSUME_NONNULL_BEGIN
  * as SAM text and piping that text via stdin to the user-installed
  * <code>samtools</code> binary (<code>samtools view -bS -</code>,
  * optionally piped through <code>samtools sort -O bam</code>).
- * Subprocess-only &mdash; no htslib linkage; SAM line layout follows
+ * Subprocess-only &#8212; no htslib linkage; SAM line layout follows
  * the public SAMv1 specification.</p>
  *
  * <p><strong>Quality byte encoding:</strong>
  * <code>TTIOBamReader</code> stores SAM's QUAL field bytes verbatim
- * into <code>WrittenGenomicRun.qualitiesData</code> &mdash; the
+ * into <code>WrittenGenomicRun.qualitiesData</code> &#8212; the
  * buffer holds <em>ASCII Phred+33</em> characters (so a Phred-40
  * score is stored as the byte value 73, the ASCII code for
  * <code>'I'</code>). This writer mirrors that convention: each
  * <code>qualities[i]</code> byte is written directly as the SAM
  * QUAL character with no arithmetic adjustment. The pair is
- * therefore lossless byte-for-byte across read &rarr; write
+ * therefore lossless byte-for-byte across read &#8594; write
  * round-trip.</p>
  *
  * <p><strong>API status:</strong> Provisional.</p>

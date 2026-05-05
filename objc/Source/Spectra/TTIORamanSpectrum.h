@@ -6,8 +6,6 @@
 @class TTIOSignalArray;
 
 /**
- * <heading>TTIORamanSpectrum</heading>
- *
  * <p><em>Inherits From:</em> TTIOSpectrum : NSObject</p>
  * <p><em>Declared In:</em> Spectra/TTIORamanSpectrum.h</p>
  *

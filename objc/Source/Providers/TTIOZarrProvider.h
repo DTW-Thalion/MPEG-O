@@ -8,8 +8,6 @@
 #import "TTIOStorageProtocols.h"
 
 /**
- * <heading>TTIOZarrProvider</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> TTIOStorageProvider, NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOZarrProvider.h</p>

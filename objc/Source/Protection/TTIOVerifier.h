@@ -18,8 +18,6 @@ typedef NS_ENUM(NSUInteger, TTIOVerificationStatus) {
 };
 
 /**
- * <heading>TTIOVerifier</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Protection/TTIOVerifier.h</p>
  *

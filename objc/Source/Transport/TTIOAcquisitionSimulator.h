@@ -10,8 +10,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOAcquisitionSimulator</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Transport/TTIOAcquisitionSimulator.h</p>

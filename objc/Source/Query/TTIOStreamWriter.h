@@ -8,8 +8,6 @@
 @class TTIOInstrumentConfig;
 
 /**
- * <heading>TTIOStreamWriter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Query/TTIOStreamWriter.h</p>
@@ -20,7 +18,7 @@
  * <p>Spectra accumulate in an in-memory buffer until
  * <code>-flushWithError:</code> is called. On each flush the file is
  * rewritten so that the run group reflects every spectrum buffered so
- * far &mdash; the file remains a valid <code>.tio</code> after each
+ * far &#8212; the file remains a valid <code>.tio</code> after each
  * flush, satisfying the streaming-write acceptance criterion. Calling
  * <code>-flushAndCloseWithError:</code> performs one final flush and
  * tears down.</p>

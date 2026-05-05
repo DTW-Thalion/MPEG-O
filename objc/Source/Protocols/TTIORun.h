@@ -8,8 +8,6 @@
 @class TTIOProvenanceRecord;
 
 /**
- * <heading>TTIORun</heading>
- *
  * <p><em>Conforms To:</em> TTIOIndexable, NSObject</p>
  * <p><em>Declared In:</em> Protocols/TTIORun.h</p>
  *

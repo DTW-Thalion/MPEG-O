@@ -13,8 +13,6 @@
 #import "ValueClasses/TTIOCVParam.h"
 
 /**
- * <heading>TTIOCVTermMapper</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOCVTermMapper.h</p>

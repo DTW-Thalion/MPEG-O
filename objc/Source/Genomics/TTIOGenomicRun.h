@@ -12,8 +12,6 @@
 @protocol TTIOStorageGroup;
 
 /**
- * <heading>TTIOGenomicRun</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> TTIOIndexable, TTIORun</p>
  * <p><em>Declared In:</em> Genomics/TTIOGenomicRun.h</p>

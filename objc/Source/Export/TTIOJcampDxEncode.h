@@ -5,8 +5,6 @@
 #import "TTIOJcampDxEncoding.h"
 
 /**
- * <heading>TTIOJcampDxEncode (free-function module)</heading>
- *
  * <p><em>Declared In:</em> Export/TTIOJcampDxEncode.h</p>
  *
  * <p>JCAMP-DX 5.01 compressed-XYDATA encoder
@@ -14,7 +12,7 @@
  * <code>ttio.exporters._jcamp_encode</code> and Java
  * <code>global.thalion.ttio.exporters.JcampDxEncode</code>. The
  * conformance fixtures under <code>conformance/jcamp_dx/</code> are
- * the gate &mdash; if this encoder and the Python / Java encoders
+ * the gate &#8212; if this encoder and the Python / Java encoders
  * diverge, one of them is wrong.</p>
  *
  * <p>Private implementation detail of

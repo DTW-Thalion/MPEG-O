@@ -9,8 +9,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOWrittenGenomicRun</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Genomics/TTIOWrittenGenomicRun.h</p>
  *

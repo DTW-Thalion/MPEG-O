@@ -21,8 +21,6 @@
 @class TTIOAccessPolicy;
 
 /**
- * <heading>TTIOAcquisitionRun</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> TTIOIndexable, TTIOStreamable,
  * TTIOProvenanceable, TTIOEncryptable, TTIORun</p>

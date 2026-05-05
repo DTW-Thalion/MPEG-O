@@ -13,8 +13,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOFeature</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSCopying</p>
  * <p><em>Declared In:</em> Dataset/TTIOFeature.h</p>

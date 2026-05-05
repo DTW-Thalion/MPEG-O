@@ -7,14 +7,12 @@
 @class TTIOHDF5Group;
 
 /**
- * <heading>TTIORamanImage</heading>
- *
  * <p><em>Inherits From:</em> TTIOSpectralDataset : NSObject</p>
  * <p><em>Conforms To:</em> TTIOEncryptable (inherited)</p>
  * <p><em>Declared In:</em> Image/TTIORamanImage.h</p>
  *
  * <p>Raman imaging / mapping dataset: a
- * <code>width &times; height</code> grid of pixels, each pixel a
+ * <code>width &#215; height</code> grid of pixels, each pixel a
  * spectral profile of <code>spectralPoints</code> float64 values
  * indexed by a shared 1-D <code>wavenumbers</code> array
  * (cm<sup>-1</sup>). Mirrors <code>TTIOMSImage</code>'s composition

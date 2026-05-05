@@ -11,8 +11,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOCanonicalBytes</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOCanonicalBytes.h</p>
@@ -30,7 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
  *      little-endian.</li>
  * </ul>
  *
- * <p>Usable independently &mdash; tests and byte-parity tooling walk
+ * <p>Usable independently &#8212; tests and byte-parity tooling walk
  * rows with the same layout.</p>
  *
  * <p><strong>API status:</strong> Stable.</p>

@@ -6,8 +6,6 @@
 @class TTIOSpectrum;
 
 /**
- * <heading>TTIOJcampDxReader</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOJcampDxReader.h</p>
@@ -22,9 +20,9 @@
  * accepted:</p>
  *
  * <ul>
- *  <li><strong>AFFN (fast path)</strong> &mdash; one (X, Y) pair per
+ *  <li><strong>AFFN (fast path)</strong> &#8212; one (X, Y) pair per
  *      line, free-format decimals.</li>
- *  <li><strong>PAC / SQZ / DIF / DUP</strong> &mdash; JCAMP-DX 5.01
+ *  <li><strong>PAC / SQZ / DIF / DUP</strong> &#8212; JCAMP-DX 5.01
  *      §5.9 character-encoded Y-stream (delegated to
  *      <code>TTIOJcampDxDecode</code>). Requires
  *      <code>FIRSTX</code> / <code>LASTX</code> /

@@ -9,8 +9,6 @@
 #import "TTIOStorageProtocols.h"
 
 /**
- * <heading>TTIOSqliteProvider</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> TTIOStorageProvider, NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOSqliteProvider.h</p>

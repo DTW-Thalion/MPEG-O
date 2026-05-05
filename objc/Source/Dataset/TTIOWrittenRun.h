@@ -16,8 +16,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOWrittenRun</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Dataset/TTIOWrittenRun.h</p>
  *

@@ -4,8 +4,6 @@
 #import <Foundation/Foundation.h>
 
 /**
- * <heading>TTIOAlignedRead</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSCopying</p>
  * <p><em>Declared In:</em> Genomics/TTIOAlignedRead.h</p>

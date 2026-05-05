@@ -4,8 +4,6 @@
 #import <Foundation/Foundation.h>
 
 /**
- * <heading>TTIOQuantification</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSCopying</p>
  * <p><em>Declared In:</em> Dataset/TTIOQuantification.h</p>

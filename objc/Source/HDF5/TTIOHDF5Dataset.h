@@ -6,8 +6,6 @@
 #import "ValueClasses/TTIOEnums.h"
 
 /**
- * <heading>TTIOHDF5Dataset</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> HDF5/TTIOHDF5Dataset.h</p>
  *

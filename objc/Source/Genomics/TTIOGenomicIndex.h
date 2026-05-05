@@ -6,8 +6,6 @@
 @protocol TTIOStorageGroup;
 
 /**
- * <heading>TTIOGenomicIndex</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Genomics/TTIOGenomicIndex.h</p>
  *

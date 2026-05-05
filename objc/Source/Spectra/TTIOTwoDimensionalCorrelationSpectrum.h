@@ -6,17 +6,15 @@
 @class TTIOAxisDescriptor;
 
 /**
- * <heading>TTIOTwoDimensionalCorrelationSpectrum</heading>
- *
  * <p><em>Inherits From:</em> TTIOSpectrum : NSObject</p>
  * <p><em>Declared In:</em>
  * Spectra/TTIOTwoDimensionalCorrelationSpectrum.h</p>
  *
  * <p>Noda 2-D correlation spectrum (2D-COS): a synchronous
  * (in-phase) and an asynchronous (quadrature) rank-2 correlation
- * matrix keyed on a single spectral-variable axis (&nu;<sub>1</sub>
- * == &nu;<sub>2</sub>). Both matrices are
- * <code>matrixSize &times; matrixSize</code> row-major float64
+ * matrix keyed on a single spectral-variable axis (&#957;<sub>1</sub>
+ * == &#957;<sub>2</sub>). Both matrices are
+ * <code>matrixSize &#215; matrixSize</code> row-major float64
  * buffers.</p>
  *
  * <p><strong>API status:</strong> Stable.</p>
@@ -36,7 +34,7 @@
 @property (readonly, copy) NSData *asynchronousMatrix;
 
 /** <code>n</code> such that both matrices are
- *  <code>n &times; n</code>. */
+ *  <code>n &#215; n</code>. */
 @property (readonly) NSUInteger matrixSize;
 
 /** Shared spectral-variable axis (F<sub>1</sub> = F<sub>2</sub>). */

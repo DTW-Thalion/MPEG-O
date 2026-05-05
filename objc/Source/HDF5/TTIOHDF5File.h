@@ -6,8 +6,6 @@
 @class TTIOHDF5Group;
 
 /**
- * <heading>TTIOHDF5File</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> HDF5/TTIOHDF5File.h</p>
  *

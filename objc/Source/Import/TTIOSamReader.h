@@ -13,16 +13,14 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOSamReader</heading>
- *
  * <p><em>Inherits From:</em> TTIOBamReader : NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOSamReader.h</p>
  *
  * <p>Convenience wrapper for SAM (Sequence Alignment/Map) text input.
- * Functionally identical to <code>TTIOBamReader</code> &mdash;
+ * Functionally identical to <code>TTIOBamReader</code> &#8212;
  * <code>samtools</code> auto-detects SAM vs BAM from magic bytes
- * &mdash; but kept as a separate class for API clarity at call sites
+ * &#8212; but kept as a separate class for API clarity at call sites
  * that explicitly handle SAM text input.</p>
  *
  * <p><strong>API status:</strong> Provisional.</p>

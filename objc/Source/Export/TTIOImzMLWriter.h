@@ -9,8 +9,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOImzMLWriteResult</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOImzMLWriter.h</p>
@@ -30,8 +28,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 
 /**
- * <heading>TTIOImzMLWriter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOImzMLWriter.h</p>

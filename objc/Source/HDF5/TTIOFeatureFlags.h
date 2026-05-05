@@ -7,8 +7,6 @@
 @class TTIOHDF5Group;
 
 /**
- * <heading>TTIOFeatureFlags</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> HDF5/TTIOFeatureFlags.h</p>
  *

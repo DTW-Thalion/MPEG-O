@@ -13,8 +13,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOCramWriter</heading>
- *
  * <p><em>Inherits From:</em> TTIOBamWriter : NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOCramWriter.h</p>
@@ -49,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithPath:(NSString *)path
               referenceFasta:(NSString *)referenceFasta;
 
-/** Disabled &mdash; CRAM writes always need a reference. */
+/** Disabled &#8212; CRAM writes always need a reference. */
 - (instancetype)initWithPath:(NSString *)path NS_UNAVAILABLE;
 
 @end

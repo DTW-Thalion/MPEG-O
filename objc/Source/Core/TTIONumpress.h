@@ -4,8 +4,6 @@
 #import <Foundation/Foundation.h>
 
 /**
- * <heading>TTIONumpress</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Core/TTIONumpress.h</p>
  *
