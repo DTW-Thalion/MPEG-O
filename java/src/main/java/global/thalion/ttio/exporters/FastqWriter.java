@@ -5,6 +5,8 @@
  */
 package global.thalion.ttio.exporters;
 
+import global.thalion.ttio.genomics.AlignedRead;
+import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 
 import java.io.ByteArrayOutputStream;
@@ -124,5 +126,77 @@ public final class FastqWriter {
                 out.write(body);
             }
         }
+    }
+
+    /**
+     * Write a read-side {@link GenomicRun} to FASTQ.
+     *
+     * <p>Used by the FASTQ-from-{@code .tio} export path: open a
+     * {@link global.thalion.ttio.SpectralDataset SpectralDataset}, pull
+     * the {@link GenomicRun} out of
+     * {@link global.thalion.ttio.SpectralDataset#genomicRuns()
+     * genomicRuns()}, then re-serialise to FASTQ.</p>
+     */
+    public static void write(
+        GenomicRun run, Path path,
+        Boolean gzipOutput, int phredOffset
+    ) throws IOException {
+        if (phredOffset != 33 && phredOffset != 64) {
+            throw new IllegalArgumentException(
+                "phredOffset must be 33 or 64 (got " + phredOffset + ")"
+            );
+        }
+        boolean gz = gzipOutput != null
+            ? gzipOutput
+            : path.getFileName().toString().toLowerCase().endsWith(".gz");
+
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < run.readCount(); i++) {
+            AlignedRead r = run.readAt(i);
+            byte[] seq = r.sequence().getBytes(StandardCharsets.US_ASCII);
+            byte[] qual = r.qualities() != null ? r.qualities().clone() : new byte[0];
+            for (int j = 0; j < qual.length; j++) {
+                if ((qual[j] & 0xFF) == QUAL_UNKNOWN_BYTE) {
+                    qual[j] = PHRED33_FILL;
+                }
+            }
+            if (qual.length == 0 && seq.length > 0) {
+                qual = new byte[seq.length];
+                java.util.Arrays.fill(qual, PHRED33_FILL);
+            }
+            if (phredOffset == 64) {
+                for (int j = 0; j < qual.length; j++) {
+                    qual[j] = (byte) ((qual[j] & 0xFF) + 31);
+                }
+            }
+            String name = r.readName();
+            if (seen.contains(name)) name = name + "#" + i;
+            seen.add(name);
+            buf.write('@');
+            buf.write(name.getBytes(StandardCharsets.UTF_8));
+            buf.write('\n');
+            buf.write(seq);
+            buf.write('\n');
+            buf.write('+');
+            buf.write('\n');
+            buf.write(qual);
+            buf.write('\n');
+        }
+        byte[] body = buf.toByteArray();
+
+        if (gz) {
+            try (OutputStream out = new GZIPOutputStream(Files.newOutputStream(path))) {
+                out.write(body);
+            }
+        } else {
+            try (OutputStream out = Files.newOutputStream(path)) {
+                out.write(body);
+            }
+        }
+    }
+
+    public static void write(GenomicRun run, Path path) throws IOException {
+        write(run, path, null, 33);
     }
 }

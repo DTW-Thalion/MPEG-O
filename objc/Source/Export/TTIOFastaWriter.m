@@ -17,6 +17,8 @@
 #import "TTIOFastaWriter.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOAlignedRead.h"
 
 #import <zlib.h>
 
@@ -165,6 +167,32 @@ static BOOL write_records(NSArray<NSString *> *names,
         [outNames addObject:name];
         NSData *slice = [NSData dataWithBytes:seqBytes + offsets[i] length:lengths[i]];
         [outSeqs addObject:slice];
+    }
+    return write_records(outNames, outSeqs, path, lineWidth, gzipOutput,
+                         writeFai, error);
+}
+
++ (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+                  toPath:(NSString *)path
+               lineWidth:(NSUInteger)lineWidth
+              gzipOutput:(int)gzipOutput
+                writeFai:(BOOL)writeFai
+                   error:(NSError **)error
+{
+    NSUInteger n = [run count];
+    NSMutableArray<NSString *> *outNames = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray<NSData *> *outSeqs = [NSMutableArray arrayWithCapacity:n];
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
+    for (NSUInteger i = 0; i < n; i++) {
+        TTIOAlignedRead *r = (TTIOAlignedRead *)[run objectAtIndex:i];
+        NSString *name = r.readName;
+        if ([seen containsObject:name]) {
+            name = [NSString stringWithFormat:@"%@#%lu", name, (unsigned long)i];
+        }
+        [seen addObject:name];
+        [outNames addObject:name];
+        NSData *seq = [r.sequence dataUsingEncoding:NSASCIIStringEncoding];
+        [outSeqs addObject:(seq ?: [NSData data])];
     }
     return write_records(outNames, outSeqs, path, lineWidth, gzipOutput,
                          writeFai, error);

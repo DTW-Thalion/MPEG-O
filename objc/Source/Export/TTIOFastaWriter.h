@@ -10,6 +10,7 @@
 
 @class TTIOReferenceImport;
 @class TTIOWrittenGenomicRun;
+@class TTIOGenomicRun;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -58,8 +59,8 @@ extern const NSUInteger TTIOFastaWriterDefaultLineWidth;
                  error:(NSError **)error;
 
 /**
- * Write a genomic run as FASTA. Each read becomes one record
- * (quality bytes are discarded).
+ * Write a write-side genomic run as FASTA. Each read becomes one
+ * record (quality bytes are discarded).
  */
 + (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
           toPath:(NSString *)path
@@ -67,6 +68,17 @@ extern const NSUInteger TTIOFastaWriterDefaultLineWidth;
       gzipOutput:(int)gzipOutput
         writeFai:(BOOL)writeFai
            error:(NSError **)error;
+
+/**
+ * Write a read-side <code>TTIOGenomicRun</code> as FASTA. Used by
+ * the FASTA-from-<code>.tio</code> export path.
+ */
++ (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+                  toPath:(NSString *)path
+               lineWidth:(NSUInteger)lineWidth
+              gzipOutput:(int)gzipOutput
+                writeFai:(BOOL)writeFai
+                   error:(NSError **)error;
 
 @end
 

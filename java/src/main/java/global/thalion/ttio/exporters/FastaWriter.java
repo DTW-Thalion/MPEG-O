@@ -5,8 +5,11 @@
  */
 package global.thalion.ttio.exporters;
 
+import global.thalion.ttio.genomics.AlignedRead;
+import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
+import java.nio.charset.StandardCharsets;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -99,6 +102,35 @@ public final class FastaWriter {
     }
 
     public static void writeRun(WrittenGenomicRun run, Path path) throws IOException {
+        writeRun(run, path, DEFAULT_LINE_WIDTH, null, true);
+    }
+
+    /**
+     * Write a read-side {@link GenomicRun} to FASTA.
+     *
+     * <p>Used by the FASTA-from-{@code .tio} export path: open a
+     * {@link global.thalion.ttio.SpectralDataset SpectralDataset}, pull a
+     * {@link GenomicRun} out of {@link
+     * global.thalion.ttio.SpectralDataset#genomicRuns() genomicRuns()},
+     * then re-serialise to FASTA. Quality bytes are discarded.</p>
+     */
+    public static void writeRun(
+        GenomicRun run, Path path,
+        int lineWidth, Boolean gzipOutput, boolean writeFai
+    ) throws IOException {
+        List<Record> records = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < run.readCount(); i++) {
+            AlignedRead r = run.readAt(i);
+            String name = r.readName();
+            if (seen.contains(name)) name = name + "#" + i;
+            seen.add(name);
+            records.add(new Record(name, r.sequence().getBytes(StandardCharsets.US_ASCII)));
+        }
+        writeRecords(records, path, lineWidth, gzipOutput, writeFai);
+    }
+
+    public static void writeRun(GenomicRun run, Path path) throws IOException {
         writeRun(run, path, DEFAULT_LINE_WIDTH, null, true);
     }
 

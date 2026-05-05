@@ -16,6 +16,8 @@
  */
 #import "TTIOFastqWriter.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOAlignedRead.h"
 
 #import <zlib.h>
 
@@ -98,6 +100,102 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
         [body appendBytes:&lf length:1];
         if (len > 0) {
             [body appendBytes:seqBytes + off length:len];
+        }
+        [body appendBytes:&lf length:1];
+        uint8_t plus = '+';
+        [body appendBytes:&plus length:1];
+        [body appendBytes:&lf length:1];
+        [body appendData:qualSlice];
+        [body appendBytes:&lf length:1];
+    }
+
+    if (gz) {
+        gzFile gf = gzopen([path fileSystemRepresentation], "wb");
+        if (gf == NULL) {
+            if (error) {
+                *error = [NSError errorWithDomain:kErrDom code:2
+                                         userInfo:@{ NSLocalizedDescriptionKey :
+                                                     [NSString stringWithFormat:@"could not open %@ for writing", path] }];
+            }
+            return NO;
+        }
+        int written = gzwrite(gf, body.bytes, (unsigned)body.length);
+        gzclose(gf);
+        if (written != (int)body.length) {
+            if (error) {
+                *error = [NSError errorWithDomain:kErrDom code:3
+                                         userInfo:@{ NSLocalizedDescriptionKey :
+                                                     [NSString stringWithFormat:@"short gzip write to %@", path] }];
+            }
+            return NO;
+        }
+        return YES;
+    }
+    return [body writeToFile:path options:NSDataWritingAtomic error:error];
+}
+
++ (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+                  toPath:(NSString *)path
+              gzipOutput:(int)gzipOutput
+             phredOffset:(uint8_t)phredOffset
+                   error:(NSError **)error
+{
+    if (phredOffset != 33 && phredOffset != 64) {
+        if (error) {
+            *error = [NSError errorWithDomain:kErrDom code:1
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"phredOffset must be 33 or 64 (got %u)",
+                                                  (unsigned)phredOffset] }];
+        }
+        return NO;
+    }
+    BOOL gz;
+    if (gzipOutput == 0) {
+        gz = [path.lowercaseString hasSuffix:@".gz"];
+    } else {
+        gz = (gzipOutput == 1);
+    }
+
+    NSUInteger n = [run count];
+    NSMutableData *body = [NSMutableData dataWithCapacity:64 * 1024];
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
+    for (NSUInteger i = 0; i < n; i++) {
+        TTIOAlignedRead *r = (TTIOAlignedRead *)[run objectAtIndex:i];
+        NSData *seqData = [r.sequence dataUsingEncoding:NSASCIIStringEncoding] ?: [NSData data];
+        NSData *qualSrc = r.qualities ?: [NSData data];
+        NSUInteger len = seqData.length;
+        // Build qual slice with sentinel mapping + phred shift.
+        NSMutableData *qualSlice = [NSMutableData dataWithCapacity:len];
+        if (qualSrc.length >= len && len > 0) {
+            const uint8_t *src = qualSrc.bytes;
+            uint8_t *out = malloc(len);
+            for (NSUInteger j = 0; j < len; j++) {
+                uint8_t b = src[j];
+                if (b == kQualUnknownByte) b = kPhred33Fill;
+                if (phredOffset == 64) b = (uint8_t)((b + 31) & 0xFF);
+                out[j] = b;
+            }
+            [qualSlice appendBytes:out length:len];
+            free(out);
+        } else if (len > 0) {
+            uint8_t fill = (phredOffset == 64) ? (uint8_t)('!' + 31) : kPhred33Fill;
+            uint8_t *out = malloc(len);
+            memset(out, fill, len);
+            [qualSlice appendBytes:out length:len];
+            free(out);
+        }
+        NSString *name = r.readName;
+        if ([seen containsObject:name]) {
+            name = [NSString stringWithFormat:@"%@#%lu", name, (unsigned long)i];
+        }
+        [seen addObject:name];
+        uint8_t at = '@';
+        [body appendBytes:&at length:1];
+        [body appendData:[name dataUsingEncoding:NSUTF8StringEncoding]];
+        uint8_t lf = '\n';
+        [body appendBytes:&lf length:1];
+        if (len > 0) {
+            [body appendData:seqData];
         }
         [body appendBytes:&lf length:1];
         uint8_t plus = '+';
