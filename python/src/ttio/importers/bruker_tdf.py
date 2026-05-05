@@ -342,9 +342,15 @@ def _build_run(ot: Any, frame_ids: np.ndarray,
             int_buf[dst_start:dst_end] = intensity_col[src_start:src_end]
             im_buf[dst_start:dst_end] = im_col[src_start:src_end]
 
-    # Per-spectrum retention time.
-    rts = np.asarray([ot.frame2retention_time(int(f)) for f in frame_ids.tolist()],
-                     dtype=np.float64)
+    # Per-spectrum retention time. opentimspy >= 1.2 always returns a
+    # 1-D ndarray from ``frame2retention_time`` even for scalar input;
+    # wrapping per-frame returns in a list comprehension produced a
+    # ``(n, 1)`` 2-D buffer that the writer rejects. Pass the whole
+    # frame_ids array at once for a single 1-D return.
+    rts = np.asarray(
+        ot.frame2retention_time(frame_ids.astype(np.int64)),
+        dtype=np.float64,
+    ).ravel()
     ms_levels = np.full(n, 1 if acquisition_mode == 0 else 2, dtype=np.int32)
     polarities = np.zeros(n, dtype=np.int32)
     precursor_mzs = np.zeros(n, dtype=np.float64)
