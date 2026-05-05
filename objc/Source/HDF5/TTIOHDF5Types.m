@@ -1,3 +1,16 @@
+/*
+ * TTIOHDF5Types.m
+ * TTI-O Objective-C Implementation
+ *
+ * Declared In:   HDF5/TTIOHDF5Types.h
+ *
+ * Maps TTIOPrecision values to native HDF5 type ids and element
+ * sizes. The Complex128 mapping returns a caller-owned compound
+ * type id; primitive types return builtin H5T_NATIVE_* ids.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOHDF5Types.h"
 
 NSUInteger TTIOPrecisionElementSize(TTIOPrecision precision)

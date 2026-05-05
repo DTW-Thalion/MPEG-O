@@ -1,3 +1,19 @@
+/*
+ * TTIOHDF5File.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOHDF5File
+ * Inherits From: NSObject
+ * Declared In:   HDF5/TTIOHDF5File.h
+ *
+ * Thin Cocoa wrapper around an HDF5 file handle. Owns a
+ * pthread_rwlock_t so that derived TTIOHDF5Group / TTIOHDF5Dataset
+ * objects can serialise concurrent access. Supports filesystem
+ * paths and S3 URLs (via libhdf5's ROS3 VFD).
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOHDF5File.h"
 #import "TTIOHDF5Group.h"
 #import "TTIOHDF5Errors.h"

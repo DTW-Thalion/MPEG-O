@@ -3,12 +3,19 @@
 
 #import <Foundation/Foundation.h>
 
-/**
- * Attribute helpers live as methods on TTIOHDF5Group (setStringAttribute:...,
- * stringAttributeNamed:...). This header exists as a placeholder so the
- * milestone file inventory matches WORKPLAN.md and to leave room for a
- * fuller attribute object if a later milestone needs one (e.g. typed
- * compound attributes for instrument metadata).
+/*
+ * TTIOHDF5Attribute.h
+ *
+ * Reserved header for a future typed-attribute object. Attribute
+ * helpers currently live as methods on TTIOHDF5Group
+ * (-setStringAttribute:value:error:, -stringAttributeNamed:error:,
+ * -setIntegerAttribute:value:error:, etc.). This header is retained
+ * as a placeholder so that adding richer attribute objects later
+ * (e.g. typed compound attributes for instrument metadata) does not
+ * require a public-API break.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 
 #endif
