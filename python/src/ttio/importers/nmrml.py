@@ -50,6 +50,10 @@ def read(path: str | Path) -> ImportResult:
         nmr_spectra=state.spectra,
         nucleus_type=state.nucleus_type,
         source_file=str(path),
+        spectrometer_frequency_mhz=state.spectrometer_frequency_mhz,
+        number_of_scans=state.number_of_scans,
+        fid_real=state.fid_real,
+        fid_imag=state.fid_imag,
     )
 
 
@@ -66,6 +70,10 @@ class _State:
         "capturing_text", "text_buf",
         "current_x_axis", "current_y_axis", "current_index",
         "current_number_of_data_points",
+        # FID capture state — only populated when a fidData element
+        # appears with byteFormat="complex128".
+        "in_fid_data", "fid_compressed", "fid_byte_format",
+        "fid_real", "fid_imag",
     )
 
     def __init__(self) -> None:
@@ -87,6 +95,11 @@ class _State:
         self.current_y_axis: np.ndarray | None = None
         self.current_index = 0
         self.current_number_of_data_points = 0
+        self.in_fid_data = False
+        self.fid_compressed = False
+        self.fid_byte_format = ""
+        self.fid_real: np.ndarray = np.zeros(0, dtype=np.float64)
+        self.fid_imag: np.ndarray = np.zeros(0, dtype=np.float64)
 
 
 # ------------------------------------------------------------------ parsing ---
@@ -165,7 +178,13 @@ def _handle_start(state: _State, tag: str, elem: Any) -> None:
         state.text_buf.clear()
         return
     if tag == "fidData":
-        # Minimal port: accept and skip the content.
+        # Capture the base64 FID content + byte format so the end-tag
+        # handler can decode the interleaved (real, imag) stream into
+        # the state.fid_{real,imag} arrays exposed on ImportResult.
+        state.in_fid_data = True
+        comp = attrs.get("compressed", "")
+        state.fid_compressed = comp in ("true", "zlib")
+        state.fid_byte_format = attrs.get("byteFormat", "")
         state.capturing_text = True
         state.text_buf.clear()
         return
@@ -248,6 +267,27 @@ def _handle_end(state: _State, tag: str, elem: Any) -> None:
         state.in_spectrum1d = False
         return
     if tag == "fidData":
+        # Decode the interleaved (real, imag) float64 stream when the
+        # source declares ``byteFormat="complex128"``. Other formats
+        # are accepted but not decoded; a future milestone may add
+        # float32 support if a real fixture demands it.
+        if state.capturing_text:
+            state.text_buf.append(elem.text or "")
+        if state.in_fid_data and state.fid_byte_format == "complex128":
+            payload_text = "".join(state.text_buf).strip()
+            if payload_text:
+                raw = decode_base64(payload_text, zlib_compressed=state.fid_compressed)
+                interleaved = np.frombuffer(raw, dtype="<f8").astype(
+                    np.float64, copy=True,
+                )
+                # Pairs are (real, imag). Splitting on stride 2 yields
+                # the two halves; the test fixture uses
+                # ``np.stack([real, imag], axis=1).reshape(-1)`` so
+                # this matches verbatim.
+                if interleaved.size >= 2 and interleaved.size % 2 == 0:
+                    state.fid_real = interleaved[0::2].copy()
+                    state.fid_imag = interleaved[1::2].copy()
+        state.in_fid_data = False
         state.capturing_text = False
         state.text_buf.clear()
         return

@@ -284,7 +284,6 @@ def test_nmrml_reader_handles_y_only_external_form(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 @pytest.mark.aspirational
-@pytest.mark.xfail(strict=True, reason="ImportResult.build_runs drops FID arrays — v0.9+ work")
 def test_complex128_fid_round_trip(tmp_path: Path) -> None:
     """Complex FID (real + imag) survives the full pipeline."""
     n = 64
@@ -316,7 +315,6 @@ def test_complex128_fid_round_trip(tmp_path: Path) -> None:
 
 
 @pytest.mark.aspirational
-@pytest.mark.xfail(strict=True, reason="NMRSpectrum has no frequency field — v0.9+ work")
 def test_spectrometer_frequency_round_trip(tmp_path: Path, synthetic_nmrml) -> None:
     """Spectrometer frequency parsed on read survives a re-export."""
     src, _, _ = synthetic_nmrml
@@ -325,7 +323,6 @@ def test_spectrometer_frequency_round_trip(tmp_path: Path, synthetic_nmrml) -> N
 
 
 @pytest.mark.aspirational
-@pytest.mark.xfail(strict=True, reason="numberOfScans not propagated through WrittenRun — v0.9+")
 def test_number_of_scans_round_trip(tmp_path: Path, synthetic_nmrml) -> None:
     """numberOfScans survives import → ttio → re-export → re-import."""
     src, _, _ = synthetic_nmrml
