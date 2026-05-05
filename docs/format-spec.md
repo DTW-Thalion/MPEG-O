@@ -875,36 +875,21 @@ M83/M84 codecs, which produce non-sliceable byte streams. The
 memory cost is one decoded channel per open run instance —
 acceptable for typical sequencing workloads.
 
-## 10.6 `read_names` schema lift under NAME_TOKENIZED (M86 Phase E + v1.9 #11 ch3)
+## 10.6 `read_names` channel layout
 
-`signal_channels/read_names` has THREE on-disk layouts depending
-on the writer configuration:
+`signal_channels/read_names` is a flat 1-D `UINT8` dataset with
+`@compression = 15` (NAME_TOKENIZED_V2). Dataset bytes are the v2
+stream specified in §10.6b. **No HDF5 filter applied.**
 
-- **No override AND opt-out (`opt_disable_name_tokenized_v2 =
-  True`):** compound dataset of shape `[n_reads]` with field
-  `{value: VL_STRING}` (M82 default). Backward compatible with
-  M82 readers.
-- **`signal_codec_overrides[read_names] = NAME_TOKENIZED`:**
-  flat 1-D `UINT8` dataset with `@compression = 8`. Dataset
-  bytes are the self-contained NAME_TOKENIZED v1 stream from
-  `docs/codecs/name_tokenizer.md` §2. **No HDF5 filter applied.**
-- **Default (no override, no opt-out, native lib loaded):** flat
-  1-D `UINT8` dataset with `@compression = 15` (NAME_TOKENIZED
-  v2). Dataset bytes are the v2 stream from §10.6b below. **No
-  HDF5 filter applied.**
+A v1.0 reader rejects any other layout (including the M82
+compound `{value: VL_STRING}` and the v1 NAME_TOKENIZED
+`@compression = 8` flat-byte layout) with a v1.0 migration error.
 
-The three layouts are mutually exclusive within a single run.
-Readers MUST dispatch on dataset shape — a compound dataset uses
-the M82 read path; a 1-D `UINT8` dataset requires the codec
-dispatch path. The `@compression` attribute is the canonical
-secondary signal: `8` → decode through `name_tokenizer` v1, `15`
-→ decode through `name_tokenizer_v2`. Other values are malformed.
+## 10.6b `NAME_TOKENIZED_V2` wire format (codec id 15)
 
-## 10.6b `NAME_TOKENIZED` v2 wire format (codec id 15, v1.9)
-
-NAME_TOKENIZED v2 is a multi-substream + DUP-pool + PREFIX-MATCH
+NAME_TOKENIZED_V2 is a multi-substream + DUP-pool + PREFIX-MATCH
 codec for read names. Wire magic `NTK2`, container version
-`0x01`. Default for the `read_names` channel in v1.9+. Spec at
+`0x01`. Default for the `read_names` channel. Spec at
 `docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md`
 (§4 has the authoritative byte-level layout).
 
@@ -960,99 +945,47 @@ storage. `cigars` would want an RLE-then-rANS pipeline (no
 codec match in M79); `mate_info` is an integer-tuple compound
 with no codec match.
 
-## 10.7 Integer-channel codec wiring under `signal_channels/` (v1.5 LEGACY — REMOVED in v1.6)
+## 10.7 Integer-channel serialisation contract
 
-> **Status: REMOVED in v1.6 (L4, 2026-05-03).** v1.5 and earlier wrote
-> `positions` (int64), `flags` (uint32), and `mapping_qualities`
-> (uint8) under `signal_channels/` AS WELL AS under `genomic_index/`.
-> v1.6 drops the `signal_channels/` copies — they were dead bytes
-> (no reader path actually consumed them) provisioned for an
-> aspirational "streaming reader prefers signal_channels" future that
-> contradicted MS's `spectrum_index/` pattern. Per-record integer
-> metadata is now stored exclusively under `genomic_index/`,
-> mirroring MS exactly: `<run>/genomic_index/` = per-record metadata
-> (eagerly loaded), `<run>/signal_channels/` = bulk per-base /
-> variable-length data.
->
-> **Override behaviour in v1.6+:** Setting
-> `signal_codec_overrides[positions|flags|mapping_qualities]` raises
-> a `ValueError` (Python) / `IllegalArgumentException` (Java) /
-> `NSInvalidArgumentException` (Objective-C) at write time, with a
-> message pointing at this section.
->
-> **Backward compatibility:** v1.6+ readers continue to read v1.5
-> files correctly — the reader path uses `genomic_index/` (which is
-> unchanged across versions). The `signal_channels/` duplicates in
-> v1.5 files are simply ignored.
+The per-record integer channels (`positions` int64, `flags` uint32,
+`mapping_qualities` uint8) are stored exclusively under
+`genomic_index/`, mirroring the MS modality's `spectrum_index/`
+pattern: per-record metadata is eagerly loaded; `signal_channels/`
+holds bulk per-base / variable-length data only.
 
-The remainder of this section describes the on-disk layout that v1.5
-files MAY contain under `signal_channels/` for these three channels,
-kept here for legacy decode reference. v1.6+ writers do not emit; v1.6+
-readers do not decode (the canonical source is `genomic_index/`).
+`signal_codec_overrides[positions|flags|mapping_qualities]` is
+rejected at write time with a `ValueError` (Python) /
+`IllegalArgumentException` (Java) / `NSInvalidArgumentException`
+(Objective-C) — these channels have no `signal_channels/` presence
+to override.
 
-Integer channels under `signal_channels/` (`positions` int64,
-`flags` uint32, `mapping_qualities` uint8) accepted
-`@compression` values of `4` (RANS_ORDER0) or `5`
-(RANS_ORDER1). When set:
+When integer arrays appear inside other codec wire formats (e.g.
+the MATE_INLINE_V2 NS / NP / TS substreams; the cigars channel's
+length-prefix-concat stream), they are serialised in **little-endian
+byte order**:
 
-- The dataset was stored as a flat 1-D `UINT8` of length =
-  `Rans.encode()` output size, with no HDF5 filter.
-- The bytes were the rANS-coded **little-endian** byte
-  representation of the original integer array. For an int64
-  array of N elements, the input to the codec was `N × 8` bytes
-  in LE order; for uint32, `N × 4` bytes; for uint8, `N` bytes
-  (LE serialisation is a no-op for single-byte elements).
-- The reader determined the original dtype by **channel-name
-  lookup**: `positions → int64`, `flags → uint32`,
-  `mapping_qualities → uint8`. No on-disk dtype attribute.
+- Python: numpy dtype strings `<i8`, `<u4`, `<u1`.
+- Objective-C: `OSSwapHostToLittleInt64` / `htole32` etc.
+- Java: `ByteBuffer.LITTLE_ENDIAN` with `putLong` / `putInt` / `put`.
 
-Other codec ids (`6` = BASE_PACK, `7` = QUALITY_BINNED, `8` =
-NAME_TOKENIZED) were rejected on integer channels at write-time
-validation — they are content-specific codecs (ACGT packing,
-Phred-bin quantisation, string tokenisation) and would not
-preserve integer values.
+LE is fixed and non-negotiable across all three implementations;
+codec wire formats that embed integer values rely on this contract.
 
-The endianness convention (little-endian) was fixed and
-non-negotiable across all three implementations (Python: numpy
-dtype strings `<i8`, `<u4`, `<u1`; ObjC:
-`OSSwapHostToLittleInt64`/`htole64` etc.; Java:
-`ByteBuffer.LITTLE_ENDIAN` with `putLong`/`putInt`/`put`).
-This is preserved in the still-active `mate_info_pos` and
-`mate_info_tlen` integer-channel codec wiring under §10.9.
+## 10.8 `cigars` channel codec wiring
 
-## 10.8 cigars channel codec wiring (M86 Phase C)
-
-The `cigars` channel under `signal_channels/` accepts THREE
-codec choices via `@compression`. Each uses the same
-schema-lift pattern as `read_names` (compound → flat 1-D
-uint8) but with three possible decode paths.
+The `cigars` channel under `signal_channels/` accepts the rANS
+entropy coders (codec ids `4` = RANS_ORDER0 and `5` = RANS_ORDER1)
+via `@compression`. The default is `RANS_ORDER1`.
 
 ### 10.8.1 On-disk schema
 
-**No override (M82 default):** compound dataset of shape
-`[n_reads]` with field `{value: VL_STRING}`. Backward
-compatible with M82 readers.
-
-**Override active (any of the three accepted codecs):** flat
-1-D `UINT8` dataset of length = encoded byte count, with
-`@compression` attribute set to the codec id. **No HDF5
-filter** is applied.
-
-| `@compression` | Codec          | Decode path |
-|----------------|----------------|-------------|
-| `4`            | RANS_ORDER0    | `Rans.decode(stream)` → walk varint-length-prefix entries → `list[str]` |
-| `5`            | RANS_ORDER1    | same as above |
-| `8`            | NAME_TOKENIZED | `NameTokenizer.decode(stream)` → `list[str]` (codec's own self-describing wire format) |
-
-The same dataset name (`cigars`) is used in all three cases;
-the `@compression` value disambiguates the decode path. A
-1-D `UINT8` dataset with an `@compression` value not in
-{4, 5, 8} is malformed.
+Flat 1-D `UINT8` dataset of length = encoded byte count, with
+`@compression` set to `4` or `5`. **No HDF5 filter** is applied.
+A `@compression` value outside `{4, 5}` is malformed.
 
 ### 10.8.2 The rANS-on-cigars serialisation contract
 
-When the override is `RANS_ORDER0` or `RANS_ORDER1`, the
-encoder serialises the `list[str]` of CIGARs to a flat byte
+The encoder serialises the `list[str]` of CIGARs to a flat byte
 stream using length-prefix concatenation:
 
 ```
@@ -1061,196 +994,44 @@ For each cigar in cigars:
     emit cigar.encode('ascii')
 ```
 
-Varints are unsigned LEB128 (low 7 bits + continuation
-flag — same as M85 Phase B's NAME_TOKENIZED varints). The
-serialised buffer is then encoded via `Rans.encode(buf,
-order)`. The decoder reverses: `Rans.decode(stream)` → byte
-buffer → walk varint-length-prefix entries until exhausted.
+Varints are unsigned LEB128 (low 7 bits + continuation flag). The
+serialised buffer is then encoded via `Rans.encode(buf, order)`.
+The decoder reverses: `Rans.decode(stream)` → byte buffer → walk
+varint-length-prefix entries until exhausted.
 
-CIGAR strings are 7-bit ASCII per the SAM spec; encoders
-reject non-ASCII input.
+CIGAR strings are 7-bit ASCII per the SAM spec; encoders reject
+non-ASCII input.
 
-This is **wire-level distinct from NAME_TOKENIZED's verbatim
-mode** (which has a 7-byte NAME_TOKENIZED header before the
-length-prefix entries). The rANS-on-cigars path uses raw
-length-prefix-concat directly because rANS's own
-self-contained header already records the original byte
-count.
+### 10.8.3 Empirical compression
 
-### 10.8.3 Codec selection guidance
+Measured byte-identical across Python / ObjC / Java on a 1000-read
+mixed-CIGAR corpus:
 
-Different CIGAR distributions favour different codecs:
+- M82 compound (no override): ~18–29 KB depending on HDF5 filter.
+- `RANS_ORDER1`: **1111 bytes** (~17× smaller than the M82 baseline).
 
-| Workload                              | Best choice      |
-|---------------------------------------|------------------|
-| All reads identical CIGAR (synthetic) | `NAME_TOKENIZED` |
-| Tiny dataset (< 100 reads), uniform   | `NAME_TOKENIZED` |
-| **Mixed token-count (real WGS)**      | **`RANS_ORDER1`** |
-| Large dataset (> 1000 reads)          | **`RANS_ORDER1`** |
-| Unknown / general default             | **`RANS_ORDER1`** |
+rANS exploits byte-level repetition over the limited CIGAR
+alphabet (digits 0–9 + the operator letters `MIDNSHP=X`), so the
+codec is robust across uniform-CIGAR and mixed-CIGAR inputs.
 
-NAME_TOKENIZED's columnar mode wins big on uniform-CIGAR
-inputs (single dictionary entry + delta=0 numeric column
-gives ~2 bytes per read). But mixed token-count input (real
-WGS data with indels and clips) sends NAME_TOKENIZED to its
-verbatim fallback mode — essentially raw bytes with a tiny
-header, no compression.
+## 10.9 `mate_info` channel layout
 
-**rANS is the recommended default for real data** because it
-exploits byte-level repetition over the limited CIGAR
-alphabet (digits 0-9 + ~9 operator letters MIDNSHP=X)
-regardless of token-count uniformity. Empirical numbers
-(measured byte-identical across Python / ObjC / Java via
-M83 + M85B conformance, 1000-read mixed CIGARs):
+The `mate_info` channel is encoded via MATE_INLINE_V2 (codec id
+13) — see §10.9b for the wire format.
 
-- M82 compound (no override): ~18-29 KB depending on HDF5
-  filter behaviour.
-- NAME_TOKENIZED (verbatim mode kicks in): **5307 bytes**.
-- RANS_ORDER1: **1111 bytes** (~17× smaller than baseline).
+The per-field per-record `signal_codec_overrides[mate_info_chrom |
+mate_info_pos | mate_info_tlen]` keys are rejected at write time
+with a `ValueError` pointing at this section: under v1.0 the v1
+M86 Phase F per-field subgroup decomposition is gone, and the bare
+key `"mate_info"` is also rejected (use the inline v2 codec
+default, or write a custom decode path against the on-disk inline
+blob).
 
-### 10.8.4 Read-side dispatch
+## 10.9b mate_info v2 inline codec (codec id 13)
 
-Readers MUST inspect dataset shape (compound vs 1-D uint8)
-before assuming the M82 layout. If 1-D uint8, dispatch on
-`@compression`:
-- 4 or 5: `Rans.decode` then walk varint-length-prefix.
-- 8: `NameTokenizer.decode`.
-- Other or absent: malformed (raise).
-
-Pre-M86-Phase-C readers that hard-code the compound layout
-will fail when they hit the flat-uint8 layout. Discipline
-matches M80 / M82 / M86 Phase A/E (write-forward, no
-back-compat shim).
-
-## 10.9 mate_info per-field decomposition (M86 Phase F — v1.7 OPT-OUT only)
-
-> **v1.7 status:** This v1 layout is no longer the default. v1.7 ships
-> the inline_v2 codec (§10.9b) as the default. The v1 per-field
-> decomposition is reachable only via
-> `WrittenGenomicRun.opt_disable_inline_mate_info_v2 = True`
-> (Python) / `optDisableInlineMateInfoV2 = YES` (ObjC) /
-> `.optDisableInlineMateInfoV2(true)` (Java).
-
-The mate_info channel under `signal_channels/` has TWO on-disk
-layouts depending on whether any `mate_info_*` per-field
-override is set in `signal_codec_overrides`.
-
-### 10.9.1 On-disk schema
-
-**No override (M82 default):** COMPOUND dataset of shape
-`[n_reads]` with three fields:
-
-```
-signal_channels/mate_info: COMPOUND[n_reads] {
-    chrom: VL_STRING,
-    pos:   INT64,
-    tlen:  INT32
-}
-```
-
-Backward compatible with M82 readers.
-
-**Any mate_info_* override active:** SUBGROUP containing three
-child datasets:
-
-```
-signal_channels/mate_info/             # GROUP, not dataset
-    chrom: <one of three layouts>
-        VL_STRING[n_reads]  (HDF5 ZLIB)        # if no chrom override
-        UINT8[encoded_len]  @compression=4|5   # if rANS chrom override
-        UINT8[encoded_len]  @compression=8     # if NAME_TOK chrom override
-    pos:   <one of two layouts>
-        INT64[n_reads]      (HDF5 ZLIB)        # if no pos override
-        UINT8[encoded_len]  @compression=4|5   # if rANS pos override
-    tlen:  <one of two layouts>
-        INT32[n_reads]      (HDF5 ZLIB)        # if no tlen override
-        UINT8[encoded_len]  @compression=4|5   # if rANS tlen override
-```
-
-The `mate_info` link type (group vs dataset) is the primary
-read-side dispatch signal. Each per-field child dataset
-carries its own `@compression` attribute (or lacks one,
-indicating natural-dtype storage). Partial overrides are
-allowed: any one of the three per-field overrides triggers
-the subgroup layout, and un-overridden fields use natural-
-dtype HDF5 ZLIB storage inside the subgroup.
-
-### 10.9.2 API: per-field virtual channel names
-
-The override is exposed as three flat-dict keys in
-`signal_codec_overrides`:
-
-| Key                | Allowed codecs                          |
-|--------------------|------------------------------------------|
-| `mate_info_chrom`  | RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED |
-| `mate_info_pos`    | RANS_ORDER0, RANS_ORDER1                 |
-| `mate_info_tlen`   | RANS_ORDER0, RANS_ORDER1                 |
-
-The bare key `"mate_info"` is **rejected** at write-time
-validation with a message pointing at the three per-field
-keys. (NAME_TOKENIZED is wrong-content for the integer fields
-pos and tlen; BASE_PACK and QUALITY_BINNED are wrong-content
-for all three.)
-
-### 10.9.3 Per-field serialisation contracts
-
-The `chrom` field's rANS path uses **length-prefix-concat
-serialisation** (the same contract as the cigars channel
-from §10.8.2): each chrom is emitted as `varint(len) +
-ascii bytes`, the concatenated buffer is fed to
-`Rans.encode(buf, order)`. The NAME_TOKENIZED path calls
-`NameTokenizer.encode(chroms)` directly.
-
-The `pos` (int64) and `tlen` (int32) fields' rANS paths use
-the **integer-channel LE byte serialisation** from §10.7:
-each array is converted to little-endian byte representation
-(`<i8` for pos, `<i4` for tlen), concatenated, then fed to
-`Rans.encode(buf, order)`. The reader interprets the decoded
-bytes via the channel-name → dtype lookup (`pos → int64`,
-`tlen → int32`).
-
-### 10.9.4 Read-side dispatch
-
-Readers MUST inspect the `signal_channels/mate_info` link
-type before assuming the M82 layout:
-
-- `H5O_TYPE_DATASET` (or equivalent): M82 compound path.
-  Existing read code unchanged.
-- `H5O_TYPE_GROUP`: Phase F subgroup path. For each requested
-  field, open the child dataset and dispatch on
-  `@compression`:
-  - `0` (no attribute): read directly as the natural dtype
-    (VL_STRING for chrom; INT64 for pos; INT32 for tlen).
-  - `4`/`5`: read all bytes; `Rans.decode`; for chrom, walk
-    varint-length-prefix to recover `list[str]`; for pos/tlen,
-    interpret bytes as the natural dtype (LE).
-  - `8` (chrom only): `NameTokenizer.decode` → `list[str]`.
-
-Pre-M86-Phase-F readers that hard-code the compound layout
-will fail when they hit the subgroup. Discipline matches
-M80 / M82 / M86 Phase A/E/C (write-forward, no back-compat
-shim).
-
-### 10.9.5 Why the chrom field commonly wins big with NAME_TOKENIZED
-
-Mate chromosome alphabets are tiny in practice — typically
-fewer than 30 distinct values across the whole run
-(`chr1`..`chr22`, `chrX`, `chrY`, `chrM`, plus `*` for
-unmapped mates). For paired sequencing data where most mates
-are on the same chromosome as the read, the columnar
-dictionary is a one-or-two-entry win that crushes the chrom
-stream to a few bytes regardless of read count. The
-NAME_TOKENIZED path is the default recommendation for
-`mate_info_chrom`; the rANS path is available for unusual
-inputs (e.g. heavily-fragmented chromosome assignments).
-
-## 10.9b mate_info v2 inline codec (#11 v1.7, codec id 13)
-
-**Default in v1.7+.** Encodes the full mate triple (mate_chrom_id,
-mate_pos, tlen) as a single CRAM-style inline blob exploiting SAM
-mate-pair invariants. Saves ~6.8 MB on chr22 vs the v1 per-field
-layout from §10.9 (full-stack context); ~47.9 MB vs the M82 compound
-baseline in the isolation gate (see
+Encodes the full mate triple (mate_chrom_id, mate_pos, tlen) as a
+single CRAM-style inline blob exploiting SAM mate-pair invariants.
+Saves ~47.9 MB on chr22 vs the M82 compound baseline (see
 `docs/benchmarks/2026-05-03-mate-info-v2-results.md`).
 
 ### 10.9b.1 On-disk schema
@@ -1357,24 +1138,19 @@ Decoding is the exact inverse: cumsum the int64 array, cast to
 double, divide by the scale. The TTIO ObjC and Python encoders agree
 byte-for-byte on any input (see `test_numpress_scale_matches_objc_formula`).
 
-## 10.10 REF_DIFF codec — reference storage and pipeline integration (M93 — v1.8 OPT-OUT only)
+## 10.10 `sequences` channel reference storage
 
-> **v1.8 status:** This v1 layout is no longer the default. v1.8 ships
-> the REF_DIFF v2 codec (§10.10b) as the default. The v1 single-bitstream
-> layout is reachable only via
-> `WrittenGenomicRun.opt_disable_ref_diff_v2 = True`.
-
-The REF_DIFF codec (codec id `9`, M93) is the first **context-aware**
-codec in TTI-O: encoder and decoder consume sibling channels and an
-external reference resolver alongside the channel bytes. This section
-documents the on-disk layout that supports it; the codec algorithm
-and wire format are specified in `docs/codecs/ref_diff.md`.
+REF_DIFF_V2 (codec id 14) is **context-aware** — encoder and
+decoder consume sibling channels (`positions`, `cigars`) and an
+external reference resolver alongside the channel bytes. This
+section documents the on-disk layout for the embedded reference;
+the codec wire format is in §10.10b.
 
 ### Reference storage group `/study/references/<reference_uri>/`
 
 When `WrittenGenomicRun.embed_reference == True` (the default) and
-the run uses REF_DIFF on its `sequences` channel, the writer embeds
-the covered chromosome sequences at:
+the run uses REF_DIFF_V2 on its `sequences` channel, the writer
+embeds the covered chromosome sequences at:
 
 ```
 /study/references/<reference_uri>/
@@ -1388,46 +1164,22 @@ the covered chromosome sequences at:
                      (zlib-compressed)
 ```
 
-**Auto-deduplication** (binding decision §80b): when multiple runs
-in the same `.tio` file share a `reference_uri`, the writer embeds
-the reference at this path **once**. Subsequent runs that name the
-same URI link by reference; their `@reference_uri` attribute matches
-the embedded group's URI. A second run with the same URI but a
-different MD5 raises `ValueError` at write time — the URI–MD5 binding
-is one-to-one within a file.
+**Auto-deduplication:** when multiple runs in the same `.tio` file
+share a `reference_uri`, the writer embeds the reference at this
+path **once**. Subsequent runs that name the same URI link by
+reference; their `@reference_uri` attribute matches the embedded
+group's URI. A second run with the same URI but a different MD5
+raises `ValueError` at write time — the URI–MD5 binding is
+one-to-one within a file.
 
-### Sequences channel under REF_DIFF
+### Default codec selection
 
-The `signal_channels/sequences` dataset under
-`/study/genomic_runs/<run>/` carries `@compression == 9` and a flat
-1-D `uint8` body (the rANS-encoded slice bodies + slice index +
-codec header — see `docs/codecs/ref_diff.md`). The dataset has **no
-HDF5 filter applied** (binding decision §87 — codec output is high-
-entropy, double-compression is a CPU loss).
+When a run provides `reference_chrom_seqs` (or otherwise resolves a
+reference via the supplied resolver) AND `signal_codec_overrides` is
+empty for `sequences`, the writer auto-applies REF_DIFF_V2 (§10.10b).
+Without a reference, the channel falls through to BASE_PACK.
 
-### Format-version gating
-
-The presence of any REF_DIFF-encoded run bumps `@ttio_format_version`
-on the root from `"1.4"` (M82) to `"1.5"` (M93). M82-only files
-written by v1.2 implementations stay at `"1.4"` for byte-parity with
-existing M82 fixture-based regression tests. v1.1.x readers reject
-1.5 files at the format-version check (existing M82 schema gate; no
-new logic).
-
-### Default codec selection (Q5a = B, no feature flag)
-
-When a run has `signal_compression="gzip"` (the default) AND
-`signal_codec_overrides` is empty AND `reference_chrom_seqs` is
-provided, the v1.5 default-codecs table (see
-`python/src/ttio/genomic/_default_codecs.py` and language
-equivalents) auto-applies REF_DIFF on the `sequences` channel.
-
-Without a reference, the default lookup is skipped silently and the
-channel falls through to the legacy `signal_compression` path
-(BASE_PACK fallback per binding decision §80b is invoked only when
-the user had explicitly requested REF_DIFF).
-
-## 10.10b REF_DIFF v2 — bit-packed sequence diff codec (#11 v1.8, codec id 14)
+## 10.10b REF_DIFF_V2 — bit-packed sequence diff codec (codec id 14)
 
 **Default in v1.8+.** Encodes the per-base diff stream as a 5-substream
 blob (FLAG / BS / IN / SC / ESC) instead of v1's single rANS-encoded
@@ -1488,57 +1240,30 @@ regardless of which language wrote the file. Verified by
 `python/tests/integration/test_ref_diff_v2_cross_language.py` (3 PASS
 + 1 SKIP — hg002_pacbio's BAM has SEQ=`*`).
 
-## 10.11 FQZCOMP_NX16_Z codec — CRAM-mimic quality codec (M94.Z)
+## 10.11 FQZCOMP_NX16_Z codec — CRAM-mimic quality codec
 
-The FQZCOMP_NX16_Z codec (codec id `12`, M94.Z) is the v1.5 default
-codec for the `qualities` channel. It is a clean-room implementation of
-CRAM 3.1's `rANS-Nx16` discipline (htscodecs master) — see
+FQZCOMP_NX16_Z (codec id `12`) is the v1.0 default codec for the
+`qualities` channel. Magic `M94Z`, V4 wire format. Clean-room
+implementation of CRAM 3.1's `rANS-Nx16` discipline; see
 `docs/codecs/fqzcomp_nx16_z.md` for the full algorithm and wire
-format and
-`docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md` for the
-design proof.
-
-### Coexistence with M94 v1
-
-Codec id `10` (FQZCOMP_NX16, M94 v1, magic `FQZN`) and codec id `12`
-(FQZCOMP_NX16_Z, M94.Z, magic `M94Z`) coexist in the codebase. The
-on-disk `@compression` attribute carries the codec id; the reader
-dispatches by attribute and (defensively) by magic. **Existing v1.1.x
-M94 v1 fixtures and in-flight files continue to decode unchanged** —
-v1.2 readers retain the M94 v1 decoder path. New files written under
-the v1.5 default codec stack use id `12` for the `qualities` channel.
-
-There is no automatic migration from id `10` to id `12`; rewriting an
-existing M94 v1 file to M94.Z is a roundtrip decode-then-encode
-operation at the application layer.
+format.
 
 ### On-disk schema
 
 The `signal_channels/qualities` dataset under
 `/study/genomic_runs/<run>/` carries `@compression == 12` and a flat
-1-D `uint8` body (the M94.Z codec stream — header + body + trailer as
-specified in `docs/codecs/fqzcomp_nx16_z.md` §2). The dataset has **no
-HDF5 filter applied** (binding decision §87 — codec output is
-high-entropy, double-compression is a CPU loss).
-
-### Format-version gating
-
-The presence of any FQZCOMP_NX16_Z-encoded run participates in the
-v1.5 candidacy check alongside REF_DIFF (codec id `9`) and
-FQZCOMP_NX16 (codec id `10`): if any of those three codecs is in use
-on a run, `@ttio_format_version` on the root is bumped from `"1.4"`
-(M82) to `"1.5"`. M82-only files without any of the three v1.5
-codecs stay at `"1.4"` for byte-parity with existing M82 fixture-based
-regression tests.
+1-D `uint8` body (the M94.Z V4 codec stream — header + body as
+specified in `docs/codecs/fqzcomp_nx16_z.md` §2). The dataset has
+**no HDF5 filter applied** — codec output is high-entropy and
+double-compression is a CPU loss.
 
 ### Default codec selection
 
-When a run has `signal_compression="gzip"` (the default) AND the
-`signal_codec_overrides["qualities"]` slot is empty AND the run
-already qualifies as v1.5 (i.e. another v1.5 codec is already in
-use on the run, e.g. REF_DIFF on `sequences`), the v1.5 default
-codecs table auto-applies FQZCOMP_NX16_Z on the `qualities`
-channel. M94 v1 (id `10`) is no longer auto-selected for new files.
+When a run has empty `signal_codec_overrides["qualities"]`, the
+writer auto-applies FQZCOMP_NX16_Z. Override values
+RANS_ORDER0 / RANS_ORDER1 / QUALITY_BINNED are accepted on the
+`qualities` channel; BASE_PACK and the v2 codecs (13/14/15) are
+rejected as wrong-content.
 
 ## 11. Backward compatibility
 
