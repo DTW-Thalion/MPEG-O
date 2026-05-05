@@ -1,4 +1,17 @@
 /*
+ * TTIOCramReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOCramReader
+ * Inherits From: TTIOBamReader : NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOCramReader.h
+ *
+ * CRAM importer. Subclass of TTIOBamReader with a required
+ * reference-FASTA argument; injects --reference into the samtools
+ * view command line so the reference-compressed sequence bytes can
+ * be decoded.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOCramReader.h"

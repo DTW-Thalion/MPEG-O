@@ -1,4 +1,16 @@
 /*
+ * TTIONmrMLReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIONmrMLReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIONmrMLReader.h
+ *
+ * SAX-based nmrML parser. Emits TTIOFreeInductionDecay objects per
+ * <fidData> element and a TTIOSpectralDataset whose single NMR run
+ * holds every parsed <spectrum1D> as an TTIONMRSpectrum.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *

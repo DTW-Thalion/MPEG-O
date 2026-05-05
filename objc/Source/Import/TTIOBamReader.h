@@ -16,32 +16,40 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * SAM/BAM importer — v0.12 M87.
+ * <heading>TTIOBamReader</heading>
  *
- * Wraps the user-installed ``samtools`` binary as a subprocess (via
- * ``NSTask``) to read SAM and BAM (Sequence Alignment/Map) files into
- * :class:`TTIOWrittenGenomicRun` instances. No htslib source is linked
- * or consulted; SAM/BAM format parsing is from the public SAMv1
- * specification (https://samtools.github.io/hts-specs).
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOBamReader.h</p>
  *
- * The subprocess approach mirrors the M53 Bruker timsTOF importer.
- * ``samtools`` is a runtime dependency only — instantiating
- * ``TTIOBamReader`` succeeds on systems without samtools; only
- * :meth:`-toGenomicRunWithName:region:sampleName:error:` requires the
- * binary on PATH (Binding Decision §135). The first such call probes
- * ``samtools --version`` via NSTask; missing or broken installations
- * fail with an NSError whose message includes apt / brew / conda
- * install hints.
+ * <p>SAM/BAM importer. Wraps the user-installed
+ * <code>samtools</code> binary as a subprocess (via
+ * <code>NSTask</code>) to read SAM and BAM (Sequence Alignment/Map)
+ * files into <code>TTIOWrittenGenomicRun</code> instances. No htslib
+ * source is linked or consulted; SAM/BAM format parsing is from the
+ * public SAMv1 specification
+ * (<code>https://samtools.github.io/hts-specs</code>).</p>
  *
- * samtools auto-detects SAM vs BAM format from magic bytes; a single
- * parser handles both formats. The companion :class:`TTIOSamReader`
- * exists as a discoverable convenience alias.
+ * <p>The subprocess approach mirrors the Bruker timsTOF importer.
+ * <code>samtools</code> is a runtime dependency only &mdash;
+ * instantiating <code>TTIOBamReader</code> succeeds on systems
+ * without <code>samtools</code>; only
+ * <code>-toGenomicRunWithName:region:sampleName:error:</code> requires
+ * the binary on <code>PATH</code>. The first such call probes
+ * <code>samtools --version</code> via <code>NSTask</code>; missing or
+ * broken installations fail with an <code>NSError</code> whose
+ * message includes apt / brew / conda install hints.</p>
  *
- * API status: Provisional (v0.12 M87).
+ * <p><code>samtools</code> auto-detects SAM vs BAM format from magic
+ * bytes; a single parser handles both formats. The companion
+ * <code>TTIOSamReader</code> exists as a discoverable convenience
+ * alias.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.importers.bam.BamReader
- *   Java:   global.thalion.ttio.importers.BamReader
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers.bam.BamReader</code><br/>
+ * Java: <code>global.thalion.ttio.importers.BamReader</code></p>
  */
 @interface TTIOBamReader : NSObject
 
@@ -54,8 +62,8 @@ NS_ASSUME_NONNULL_BEGIN
  *  ``@PG`` line becomes one :class:`TTIOProvenanceRecord` whose
  *  ``software`` is the ``PN:`` field and whose ``parameters`` carry
  *  the ``CL:``, ``ID:``, ``VN:``, ``PP:`` fields verbatim.
- *  ``timestampUnix`` is taken from the input file's mtime since SAM
- *  has no per-record timestamps (HANDOFF §2.4).
+ *  <code>timestampUnix</code> is taken from the input file's mtime
+ *  since SAM has no per-record timestamps.
  *
  *  Empty (not nil) before the first successful call, and replaced
  *  on each call. Companion to the cross-language ``provenance_count``
@@ -63,7 +71,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
 
 /** Construct a reader for the SAM/BAM file at @a path. Does NOT require
- *  samtools at construction time per Binding Decision §135. */
+ *  <code>samtools</code> at construction time. */
 - (instancetype)initWithPath:(NSString *)path;
 
 /** Read the SAM/BAM and return a write-side genomic run.

@@ -1,4 +1,17 @@
 /*
+ * TTIOMzTabReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOMzTabImport, TTIOMzTabReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOMzTabReader.h
+ *
+ * mzTab tab-separated text reader. Maps PSM/PRT/SML rows to
+ * TTIOIdentification and TTIOQuantification records suitable for an
+ * .tio compound identification / quantification dataset; mode
+ * dispatches on the MTD mzTab-version line.
+ *
  * Licensed under the Apache License, Version 2.0.
  * SPDX-License-Identifier: Apache-2.0
  */

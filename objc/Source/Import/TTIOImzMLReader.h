@@ -13,13 +13,21 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * One pixel's worth of parsed imzML data: spatial coordinates plus the
- * mass-spectrometry intensity / m/z arrays that came out of the .ibd
- * binary at the offsets named in the .imzML XML.
+ * <heading>TTIOImzMLPixelSpectrum</heading>
  *
- * In continuous mode every pixel's `mzArray` aliases the same shared
- * NSData (allocated once for the run) — the v0.9 Python reference
- * implementation makes the same guarantee.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOImzMLReader.h</p>
+ *
+ * <p>One pixel's worth of parsed imzML data: spatial coordinates
+ * plus the mass-spectrometry intensity / m/z arrays that came out of
+ * the <code>.ibd</code> binary at the offsets named in the
+ * <code>.imzML</code> XML.</p>
+ *
+ * <p>In continuous mode every pixel's <code>mzArray</code> aliases
+ * the same shared <code>NSData</code> (allocated once for the run)
+ * &mdash; the Python reference implementation makes the same
+ * guarantee.</p>
  */
 @interface TTIOImzMLPixelSpectrum : NSObject
 
@@ -33,13 +41,21 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) NSUInteger mzCount;
 
 /**
- * v0.9+: public initializer for callers that construct pixel spectra
- * from in-memory buffers (e.g. TTIOImzMLWriter, tests). The importer
- * itself uses a private init; this one accepts equal-length float64
- * mz + intensity NSData buffers and derives mzCount.
+ * Public initialiser for callers that construct pixel spectra from
+ * in-memory buffers (for example <code>TTIOImzMLWriter</code> or
+ * tests). The importer itself uses a private init; this one accepts
+ * equal-length float64 mz + intensity <code>NSData</code> buffers and
+ * derives <code>mzCount</code>.
  *
- * Returns nil + error when mzArray / intensityArray aren't both
- * non-zero multiples of 8 bytes, or when their element counts differ.
+ * @param x              X coordinate of the pixel.
+ * @param y              Y coordinate of the pixel.
+ * @param z              Z coordinate of the pixel.
+ * @param mzArray        Float64 m/z buffer.
+ * @param intensityArray Float64 intensity buffer of equal length.
+ * @param error          Out-parameter populated when array sizes are
+ *                       invalid or unequal.
+ * @return An initialised pixel spectrum, or <code>nil</code> on
+ *         malformed input.
  */
 - (nullable instancetype)initWithX:(NSInteger)x
                                   y:(NSInteger)y
@@ -51,8 +67,14 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /**
- * Result of parsing an imzML + .ibd pair. Pure value object; the
- * importer does no I/O beyond construction.
+ * <heading>TTIOImzMLImport</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOImzMLReader.h</p>
+ *
+ * <p>Result of parsing an imzML + .ibd pair. Pure value object; the
+ * importer does no I/O beyond construction.</p>
  */
 @interface TTIOImzMLImport : NSObject
 
@@ -73,35 +95,61 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /**
- * imzML + .ibd importer — v0.9 M59.
+ * <heading>TTIOImzMLReader</heading>
  *
- * imzML is the dominant interchange format for mass-spectrometry
- * imaging. Two files:
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOImzMLReader.h</p>
  *
- *   - `<stem>.imzML` — XML metadata mirroring mzML, with each
- *     `<spectrum>` carrying an external offset / external array
- *     length / external encoded length cvParam triple.
- *   - `<stem>.ibd`   — concatenated binary mass / intensity arrays
- *     prefixed by a 16-byte UUID that must match the
- *     `IMS:1000042 universally unique identifier` cvParam in the
- *     metadata (HANDOFF gotcha 49).
+ * <p>imzML + .ibd importer. imzML is the dominant interchange format
+ * for mass-spectrometry imaging. Two files:</p>
  *
- * Modes:
- *   - "continuous" (`IMS:1000030`) — single shared m/z array stored
- *     once; per-pixel intensity arrays follow.
- *   - "processed"  (`IMS:1000031`) — per-pixel m/z + intensity.
+ * <ul>
+ *  <li><code>&lt;stem&gt;.imzML</code> &mdash; XML metadata
+ *      mirroring mzML, with each <code>&lt;spectrum&gt;</code>
+ *      carrying an external offset / external array length /
+ *      external encoded length cvParam triple.</li>
+ *  <li><code>&lt;stem&gt;.ibd</code> &mdash; concatenated binary
+ *      mass / intensity arrays prefixed by a 16-byte UUID that must
+ *      match the
+ *      <code>IMS:1000042 universally unique identifier</code>
+ *      cvParam in the metadata.</li>
+ * </ul>
  *
- * On malformed input the reader returns nil and populates `error`
- * with a descriptive `NSError` in `TTIOImzMLReaderErrorDomain`.
+ * <p><strong>Modes:</strong></p>
+ * <ul>
+ *  <li><code>"continuous"</code> (<code>IMS:1000030</code>) &mdash;
+ *      single shared m/z array stored once; per-pixel intensity
+ *      arrays follow.</li>
+ *  <li><code>"processed"</code> (<code>IMS:1000031</code>) &mdash;
+ *      per-pixel m/z + intensity.</li>
+ * </ul>
  *
- * Cross-language equivalents:
- *   Python: ttio.importers.imzml
- *   Java:   global.thalion.ttio.importers.ImzMLReader
+ * <p>On malformed input the reader returns <code>nil</code> and
+ * populates <code>error</code> with a descriptive
+ * <code>NSError</code> in
+ * <code>TTIOImzMLReaderErrorDomain</code>.</p>
+ *
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers.imzml</code><br/>
+ * Java: <code>global.thalion.ttio.importers.ImzMLReader</code></p>
  */
 @interface TTIOImzMLReader : NSObject
 
-/** Read an imzML + .ibd pair. If `ibdPath` is nil, the sibling
- *  `<stem>.ibd` is used. */
+/**
+ * Reads an imzML + .ibd pair.
+ *
+ * @param imzmlPath Path to the <code>.imzML</code> XML metadata
+ *                  file.
+ * @param ibdPath   Path to the <code>.ibd</code> binary, or
+ *                  <code>nil</code> to use the sibling
+ *                  <code>&lt;stem&gt;.ibd</code>.
+ * @param error     Out-parameter populated on failure.
+ * @return A populated <code>TTIOImzMLImport</code>, or
+ *         <code>nil</code> on failure.
+ */
 + (nullable TTIOImzMLImport *)readFromImzMLPath:(NSString *)imzmlPath
                                          ibdPath:(nullable NSString *)ibdPath
                                            error:(NSError **)error;

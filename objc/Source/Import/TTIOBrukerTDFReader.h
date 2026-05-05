@@ -12,7 +12,17 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/** SQLite-level metadata snapshot — no binary extraction required. */
+/**
+ * <heading>TTIOBrukerTDFMetadata</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOBrukerTDFReader.h</p>
+ *
+ * <p>SQLite-level metadata snapshot of a Bruker timsTOF
+ * <code>.d</code> directory &mdash; no binary extraction
+ * required.</p>
+ */
 @interface TTIOBrukerTDFMetadata : NSObject
 @property (nonatomic, readonly) NSInteger frameCount;
 @property (nonatomic, readonly) NSInteger ms1FrameCount;
@@ -27,27 +37,39 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /**
- * Bruker timsTOF `.d` importer — v0.8 M53.
+ * <heading>TTIOBrukerTDFReader</heading>
  *
- * The `.d` directory holds two files:
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOBrukerTDFReader.h</p>
  *
- *   - `analysis.tdf` — a plain SQLite database with metadata tables
- *     (`Frames`, `GlobalMetadata`, `Properties`, `Precursors`, ...).
- *   - `analysis.tdf_bin` or `analysis.tdf_raw` — a binary blob with
- *     ZSTD-compressed frame data and a scan-to-ion index.
+ * <p>Bruker timsTOF <code>.d</code> directory importer.</p>
  *
- * This ObjC reader consumes the SQLite metadata directly via
- * `libsqlite3` (already linked for TTIOSqliteProvider). Binary frame
- * decompression delegates to the Python
- * `ttio.importers.bruker_tdf_cli` tool via `NSTask`, matching the
- * Java `BrukerTDFReader` pattern. A native port of the frame decoder
- * (ZSTD + Bruker's scan-to-ion index) is a v0.9 concern.
+ * <p>The <code>.d</code> directory holds two files:</p>
  *
- * API status: Provisional (v0.8 M53).
+ * <ul>
+ *  <li><code>analysis.tdf</code> &mdash; a plain SQLite database with
+ *      metadata tables (<code>Frames</code>,
+ *      <code>GlobalMetadata</code>, <code>Properties</code>,
+ *      <code>Precursors</code>, ...).</li>
+ *  <li><code>analysis.tdf_bin</code> or
+ *      <code>analysis.tdf_raw</code> &mdash; a binary blob with
+ *      ZSTD-compressed frame data and a scan-to-ion index.</li>
+ * </ul>
  *
- * Cross-language equivalents:
- *   Python: ttio.importers.bruker_tdf
- *   Java:   global.thalion.ttio.importers.BrukerTDFReader
+ * <p>This ObjC reader consumes the SQLite metadata directly via
+ * <code>libsqlite3</code> (already linked for
+ * <code>TTIOSqliteProvider</code>). Binary frame decompression
+ * delegates to the Python <code>ttio.importers.bruker_tdf_cli</code>
+ * tool via <code>NSTask</code>, matching the Java
+ * <code>BrukerTDFReader</code> pattern.</p>
+ *
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers.bruker_tdf</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.importers.BrukerTDFReader</code></p>
  */
 @interface TTIOBrukerTDFReader : NSObject
 

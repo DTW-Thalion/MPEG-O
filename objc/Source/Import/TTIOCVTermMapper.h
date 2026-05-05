@@ -13,26 +13,40 @@
 #import "ValueClasses/TTIOCVParam.h"
 
 /**
- * Maps PSI-MS controlled-vocabulary accessions to TTIO model values.
+ * <heading>TTIOCVTermMapper</heading>
  *
- * The PSI-MS OBO (https://www.psidev.info/psi-ms.obo) defines thousands
- * of accessions. TTIOCVTermMapper hardcodes mappings for the ~50 terms
- * needed to import a typical mzML file, covering data types, compression,
- * array roles, MS level, polarity, scan window, TIC/base peak, retention
- * time, and precursor information. Unknown accessions are passed through
- * as raw TTIOCVParam objects so ontology annotations survive the
- * round-trip even when TTIO does not interpret them directly.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOCVTermMapper.h</p>
  *
- * Sentinel return values:
- *   - -precisionForAccession: returns TTIOPrecisionFloat64 for unknown
- *   - -compressionForAccession: returns TTIOCompressionNone for unknown
- *   - -signalArrayNameForAccession: returns nil for unknown
+ * <p>Maps PSI-MS controlled-vocabulary accessions to TTIO model
+ * values. The PSI-MS OBO
+ * (<code>https://www.psidev.info/psi-ms.obo</code>) defines thousands
+ * of accessions; <code>TTIOCVTermMapper</code> hardcodes mappings for
+ * the ~50 terms needed to import a typical mzML file, covering data
+ * types, compression, array roles, MS level, polarity, scan window,
+ * TIC / base peak, retention time, and precursor information.
+ * Unknown accessions are passed through as raw
+ * <code>TTIOCVParam</code> objects so ontology annotations survive
+ * the round-trip even when TTIO does not interpret them
+ * directly.</p>
  *
- * API status: Stable.
+ * <p><strong>Sentinel return values:</strong></p>
+ * <ul>
+ *  <li><code>+precisionForAccession:</code> returns
+ *      <code>TTIOPrecisionFloat64</code> for unknown.</li>
+ *  <li><code>+compressionForAccession:</code> returns
+ *      <code>TTIOCompressionNone</code> for unknown.</li>
+ *  <li><code>+signalArrayNameForAccession:</code> returns
+ *      <code>nil</code> for unknown.</li>
+ * </ul>
  *
- * Cross-language equivalents:
- *   Python: ttio.importers.cv_term_mapper
- *   Java:   global.thalion.ttio.importers.CVTermMapper
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers.cv_term_mapper</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.importers.CVTermMapper</code></p>
  */
 @interface TTIOCVTermMapper : NSObject
 
@@ -70,7 +84,7 @@
 + (BOOL)isTotalIonChromatogramAccession:(NSString *)acc;     // MS:1000235
 + (BOOL)isSelectedReactionMonitoringAccession:(NSString *)acc;// MS:1001473
 
-#pragma mark - M74: MS/MS activation-method accessions
+#pragma mark - MS/MS activation-method accessions
 
 /** Resolve a PSI-MS activation-method accession to a value from the
  *  TTIOActivationMethod enum. Returns TTIOActivationMethodNone for any
@@ -90,13 +104,13 @@
  *  as the `name=".."` attribute in the emitted cvParam. */
 + (NSString *)activationNameForMethod:(TTIOActivationMethod)method;
 
-#pragma mark - M74: isolation-window cvParam accessions
+#pragma mark - Isolation-window cvParam accessions
 
 + (BOOL)isIsolationWindowTargetMzAccession:(NSString *)acc;  // MS:1000827
 + (BOOL)isIsolationWindowLowerOffsetAccession:(NSString *)acc; // MS:1000828
 + (BOOL)isIsolationWindowUpperOffsetAccession:(NSString *)acc; // MS:1000829
 
-#pragma mark - nmrCV accessions (Milestone 13)
+#pragma mark - nmrCV accessions
 
 + (BOOL)isSpectrometerFrequencyAccession:(NSString *)acc; // NMR:1000001
 + (BOOL)isNucleusAccession:(NSString *)acc;               // NMR:1000002

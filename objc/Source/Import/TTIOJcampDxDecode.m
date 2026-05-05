@@ -1,3 +1,19 @@
+/*
+ * TTIOJcampDxDecode.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOJcampDxDecode
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOJcampDxDecode.h
+ *
+ * JCAMP-DX 5.01 §5.9 compressed-XYDATA decoder (SQZ / DIF / DUP /
+ * PAC). Consulted by TTIOJcampDxReader when a compression sentinel
+ * is detected in the Y-stream.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOJcampDxDecode.h"
 #import "HDF5/TTIOHDF5Errors.h"
 

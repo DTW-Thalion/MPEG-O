@@ -1,4 +1,17 @@
 /*
+ * TTIOWatersMassLynxReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOWatersMassLynxReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOWatersMassLynxReader.h
+ *
+ * Waters MassLynx .raw directory importer. Delegates conversion to
+ * the user-installed masslynxraw binary via NSTask; the resulting
+ * mzML is parsed via TTIOMzMLReader. No Waters proprietary code is
+ * compiled into libTTIO.
+ *
  * Licensed under the Apache License, Version 2.0.
  * SPDX-License-Identifier: Apache-2.0
  */
