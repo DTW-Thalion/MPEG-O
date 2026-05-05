@@ -4,40 +4,87 @@
 #import <Foundation/Foundation.h>
 
 /**
- * One aligned sequencing read — the genomic analogue of TTIOMassSpectrum.
+ * <heading>TTIOAlignedRead</heading>
  *
- * Immutable value object materialised by TTIOGenomicRun from the signal
- * channels under /study/genomic_runs/<name>/signal_channels/. No HDF5
- * I/O on this class directly.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSCopying</p>
+ * <p><em>Declared In:</em> Genomics/TTIOAlignedRead.h</p>
  *
- * API status: Stable (M82.2).
+ * <p>One aligned sequencing read — the genomic analogue of
+ * <code>TTIOMassSpectrum</code>. Immutable value object materialised
+ * by <code>TTIOGenomicRun</code> from the signal channels under
+ * <code>/study/genomic_runs/&lt;name&gt;/signal_channels/</code>.
+ * The class itself does not perform any storage I/O.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.aligned_read.AlignedRead
- *   Java:   global.thalion.ttio.genomics.AlignedRead
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.aligned_read.AlignedRead</code><br/>
+ * Java: <code>global.thalion.ttio.genomics.AlignedRead</code></p>
  */
 @interface TTIOAlignedRead : NSObject <NSCopying>
 
-@property (nonatomic, readonly, copy)   NSString *readName;
-@property (nonatomic, readonly, copy)   NSString *chromosome;
-@property (nonatomic, readonly)         int64_t   position;
-@property (nonatomic, readonly)         uint8_t   mappingQuality;
-@property (nonatomic, readonly, copy)   NSString *cigar;
-@property (nonatomic, readonly, copy)   NSString *sequence;
-@property (nonatomic, readonly, copy)   NSData   *qualities;
-@property (nonatomic, readonly)         uint32_t  flags;
-@property (nonatomic, readonly, copy)   NSString *mateChromosome;
-@property (nonatomic, readonly)         int64_t   matePosition;
-@property (nonatomic, readonly)         int32_t   templateLength;
+/** Read identifier as it appears in the source SAM/BAM. */
+@property (nonatomic, readonly, copy) NSString *readName;
 
-// Convenience SAM flag accessors
+/** Reference chromosome name; <code>@"*"</code> for unmapped reads. */
+@property (nonatomic, readonly, copy) NSString *chromosome;
+
+/** Zero-based mapping position; <code>-1</code> for unmapped. */
+@property (nonatomic, readonly) int64_t position;
+
+/** SAM mapping quality (Phred-scaled). */
+@property (nonatomic, readonly) uint8_t mappingQuality;
+
+/** CIGAR string. */
+@property (nonatomic, readonly, copy) NSString *cigar;
+
+/** Read sequence (uppercase ACGT[N] / IUPAC). */
+@property (nonatomic, readonly, copy) NSString *sequence;
+
+/** Per-base Phred quality scores. */
+@property (nonatomic, readonly, copy) NSData *qualities;
+
+/** SAM flags bit-field. */
+@property (nonatomic, readonly) uint32_t flags;
+
+/** Mate's reference chromosome. */
+@property (nonatomic, readonly, copy) NSString *mateChromosome;
+
+/** Mate's mapping position. */
+@property (nonatomic, readonly) int64_t matePosition;
+
+/** Template length (TLEN). */
+@property (nonatomic, readonly) int32_t templateLength;
+
+/** @return <code>YES</code> if the read is mapped (SAM flag 0x4
+ *          not set). */
 - (BOOL)isMapped;
+
+/** @return <code>YES</code> if the read is part of a paired
+ *          alignment (SAM flag 0x1). */
 - (BOOL)isPaired;
+
+/** @return <code>YES</code> if the read is reverse-complemented
+ *          (SAM flag 0x10). */
 - (BOOL)isReverse;
+
+/** @return <code>YES</code> if this is a secondary alignment
+ *          (SAM flag 0x100). */
 - (BOOL)isSecondary;
+
+/** @return <code>YES</code> if this is a supplementary alignment
+ *          (SAM flag 0x800). */
 - (BOOL)isSupplementary;
+
+/** @return Number of bases in the sequence. */
 - (NSUInteger)readLength;
 
+/**
+ * Designated initialiser.
+ *
+ * @return An initialised aligned read.
+ */
 - (instancetype)initWithReadName:(NSString *)readName
                       chromosome:(NSString *)chromosome
                         position:(int64_t)position

@@ -1,3 +1,19 @@
+/*
+ * TTIOWrittenGenomicRun.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOWrittenGenomicRun
+ * Inherits From: NSObject
+ * Declared In:   Genomics/TTIOWrittenGenomicRun.h
+ *
+ * Write-side container for a single genomic run. Pure data class —
+ * accessors plus the two designated initialisers. The writer
+ * (TTIOSpectralDataset) consumes these to produce the on-disk
+ * channel layout described in docs/format-spec.md §10.4-§10.10.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOWrittenGenomicRun.h"
 
 @implementation TTIOWrittenGenomicRun

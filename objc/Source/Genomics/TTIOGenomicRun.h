@@ -12,99 +12,151 @@
 @protocol TTIOStorageGroup;
 
 /**
- * Lazy view over one /study/genomic_runs/<name>/ group.
+ * <heading>TTIOGenomicRun</heading>
  *
- * Materialises TTIOAlignedRead objects on demand from the signal
- * channels. The TTIOGenomicIndex is loaded eagerly at open time for
- * cheap filtering and offset lookups; the heavy signal channels
- * (sequences, qualities, plus 3 compounds) stay lazy on disk.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> TTIOIndexable, TTIORun</p>
+ * <p><em>Declared In:</em> Genomics/TTIOGenomicRun.h</p>
  *
- * Genomic analogue of TTIOAcquisitionRun.
+ * <p>Lazy view over one
+ * <code>/study/genomic_runs/&lt;name&gt;/</code> group.
+ * Materialises <code>TTIOAlignedRead</code> objects on demand from
+ * the signal channels. The <code>TTIOGenomicIndex</code> is loaded
+ * eagerly at open time for cheap filtering and offset lookups; the
+ * heavy signal channels (sequences, qualities, plus the inline
+ * codec channels) stay lazy on disk.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.genomic_run.GenomicRun
- *   Java:   global.thalion.ttio.genomics.GenomicRun
+ * <p>Genomic analogue of <code>TTIOAcquisitionRun</code>; both
+ * conform to <code>TTIORun</code> so cross-modality code can
+ * iterate uniformly via <code>-objectAtIndex:</code> /
+ * <code>-count</code>.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.genomic_run.GenomicRun</code><br/>
+ * Java: <code>global.thalion.ttio.genomics.GenomicRun</code></p>
  */
 @interface TTIOGenomicRun : NSObject <TTIOIndexable, TTIORun>
 
+/** Run identifier as stored in the .tio file (e.g.
+ *  <code>@"genomic_0001"</code>). */
 @property (readonly, copy) NSString *name;
+
+/** Acquisition mode (typically
+ *  <code>TTIOAcquisitionModeGenomicWGS</code> or
+ *  <code>WES</code>). */
 @property (readonly) TTIOAcquisitionMode acquisitionMode;
+
+/** Omics modality identifier (typically
+ *  <code>@"genomic_sequencing"</code>). */
 @property (readonly, copy) NSString *modality;
+
+/** URI of the reference genome (e.g. <code>@"GRCh38.p14"</code>). */
 @property (readonly, copy) NSString *referenceUri;
+
+/** Sequencing platform (e.g. <code>@"ILLUMINA"</code>). */
 @property (readonly, copy) NSString *platform;
+
+/** Sample identifier. */
 @property (readonly, copy) NSString *sampleName;
+
+/** Per-read index loaded eagerly at open. */
 @property (readonly, strong) TTIOGenomicIndex *index;
 
+/** @return Number of reads in the run. */
 - (NSUInteger)readCount;
 
-/** Phase 1 TTIORun + TTIOIndexable conformance. -count returns the
- *  same value as -readCount; -objectAtIndex: returns the
- *  TTIOAlignedRead at ``index`` (or nil on error / out-of-range,
- *  matching the lenient TTIOIndexable contract used by
- *  TTIOAcquisitionRun). */
+/** @return <code>readCount</code> (TTIOIndexable conformance). */
 - (NSUInteger)count;
+
+/**
+ * @param index Zero-based read position.
+ * @return The <code>TTIOAlignedRead</code> at <code>index</code>,
+ *         or <code>nil</code> on error / out-of-range.
+ */
 - (id)objectAtIndex:(NSUInteger)index;
 
-/** Phase 1: per-run provenance records in insertion order. Reads
- *  the ``<run>/provenance/steps`` compound dataset written by
- *  +[TTIOSpectralDataset writeGenomicRun:toGroup:name:error:] when
- *  the WrittenGenomicRun carried any. Returns ``@[]`` for runs
- *  without provenance — closes the M91 read-side cross-modality
- *  query gap. */
+/**
+ * @return Per-run provenance records in insertion order, read from
+ *         <code>&lt;run&gt;/provenance/steps</code>. Empty array
+ *         when the run carries no provenance.
+ */
 - (NSArray<TTIOProvenanceRecord *> *)provenanceChain;
 
-/** Materialise the read at `index`. Returns nil and sets *error on
- *  invalid index or I/O failure. */
+/**
+ * Materialises the read at <code>index</code>.
+ *
+ * @param index Zero-based read position.
+ * @param error Out-parameter populated on failure.
+ * @return The aligned read, or <code>nil</code> on failure.
+ */
 - (TTIOAlignedRead *)readAtIndex:(NSUInteger)index
-                            error:(NSError **)error;
+                           error:(NSError **)error;
 
-/** Return the read name at `index`. Dispatches on the on-disk
- *  read_names dataset shape (M86 Phase E):
- *    - Compound `{value: VL_STRING}`: existing M82 read path.
- *    - Flat 1-D uint8 with `@compression == 8`: NAME_TOKENIZED
- *      decode-once-and-cache. The decoded list is materialised on
- *      first call and held for the lifetime of this run instance
- *      per Binding Decision §114. */
+/**
+ * Returns the read name at <code>index</code>. Decodes from the
+ * NAME_TOKENIZED_V2 stream stored under the
+ * <code>signal_channels/read_names</code> dataset; the decoded
+ * list is materialised on first call and cached for the lifetime
+ * of this run instance.
+ *
+ * @param index Zero-based read position.
+ * @param error Out-parameter populated on failure.
+ * @return The read name, or <code>nil</code> on failure.
+ */
 - (NSString *)readNameAtIndex:(NSUInteger)index
-                         error:(NSError **)error;
+                        error:(NSError **)error;
 
-/** Return the CIGAR string at `index`. Dispatches on the on-disk
- *  cigars dataset shape (M86 Phase C):
- *    - Compound `{value: VL_STRING}`: existing M82 read path.
- *    - Flat 1-D uint8 with `@compression`:
- *        * `4` (RANS_ORDER0) or `5` (RANS_ORDER1): TTIORansDecode
- *          then walk varint(len)+bytes per CIGAR.
- *        * `8` (NAME_TOKENIZED): TTIONameTokenizerDecode directly.
- *      Decoded list is materialised on first call and held for the
- *      lifetime of this run instance per Binding Decision §123 — a
- *      separate cache from `_decodedReadNames` since the two
- *      channels have independent dispatch shapes. */
+/**
+ * Returns the CIGAR string at <code>index</code>. Decodes the
+ * cigars channel (rANS-O0 or rANS-O1, length-prefix-concat
+ * varint+bytes); the decoded list is materialised on first call
+ * and cached for the lifetime of this run instance.
+ *
+ * @param index Zero-based read position.
+ * @param error Out-parameter populated on failure.
+ * @return The CIGAR string, or <code>nil</code> on failure.
+ */
 - (NSString *)cigarAtIndex:(NSUInteger)index
                      error:(NSError **)error;
 
-/** Reads on `chromosome` whose mapping position is in [start, end). */
+/**
+ * @param chromosome Reference chromosome.
+ * @param start      Inclusive lower bound on position.
+ * @param end        Exclusive upper bound on position.
+ * @return Reads on <code>chromosome</code> whose mapping position
+ *         is in <code>[start, end)</code>.
+ */
 - (NSArray<TTIOAlignedRead *> *)readsInRegion:(NSString *)chromosome
-                                          start:(int64_t)start
-                                            end:(int64_t)end;
+                                        start:(int64_t)start
+                                          end:(int64_t)end;
 
-// v1.6 (L4): -intChannelArrayNamed:error: REMOVED. The helper supported
-// reading positions/flags/mapping_qualities from signal_channels/ via
-// codec dispatch — but those datasets no longer exist in v1.6 files
-// (they live exclusively in genomic_index/, accessed via
-// self.index.{positions,mappingQualities,flags}). See
-// docs/format-spec.md §10.7.
-
-/** Open an existing /study/genomic_runs/<name>/ group. The caller
- *  resolves the run group and passes it as `runGroup`. */
+/**
+ * Opens an existing
+ * <code>/study/genomic_runs/&lt;name&gt;/</code> group. The caller
+ * resolves the run group and passes it as <code>runGroup</code>.
+ *
+ * @param runGroup The run sub-group.
+ * @param name     Run name.
+ * @param error    Out-parameter populated on failure.
+ * @return The opened run, or <code>nil</code> on failure.
+ */
 + (instancetype)openFromGroup:(id<TTIOStorageGroup>)runGroup
-                          name:(NSString *)name
-                         error:(NSError **)error;
+                         name:(NSString *)name
+                        error:(NSError **)error;
 
-/** M90.10: return the M86 codec id (TTIOCompression value) declared
- *  on the named signal channel via its `@compression` attribute, or
- *  0 (NONE) if the attribute is absent. The transport writer probes
- *  this for sequences/qualities to decide whether each per-AU slice
- *  should be re-encoded with that codec on the wire. */
+/**
+ * Returns the codec id (<code>TTIOCompression</code> value) declared
+ * on the named signal channel via its <code>@compression</code>
+ * attribute, or <code>0</code> (NONE) when the attribute is absent.
+ * The transport writer probes this for sequences / qualities to
+ * decide whether each per-AU slice should be re-encoded with that
+ * codec on the wire.
+ *
+ * @param name Signal-channel dataset name.
+ * @return Codec id, or <code>0</code> when no codec is declared.
+ */
 - (uint8_t)wireCompressionForChannel:(NSString *)name;
 
 @end
